@@ -881,6 +881,18 @@ button.color-swatch:hover { border-color: var(--text); }
 #xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff; }
 #xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff, inset 2px 0 0 #fff; }
 #xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff, inset -2px 0 0 #fff; }
+/* Mean ± std crystallite-size summary under the analysis peak table */
+.size-summary {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.7;
+}
+.size-summary b { color: var(--accent); }
+.size-summary .ss-n { color: var(--muted); font-size: 12px; }
+
 /* ✕ delete button — bare glyph, no border/background; padding keeps a clickable hitbox */
 #xrdPeakTableWrap .peak-row .peak-del {
   visibility: hidden;

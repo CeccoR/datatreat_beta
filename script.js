@@ -2730,7 +2730,7 @@ function nextColor(existingFiles){
     renderPeakTable();
   }
 
-  function renderPeakTable(){ renderAnalysisTable(); renderFitTable(); }
+  function renderPeakTable(){ renderAnalysisTable(); renderFitTable(); renderXrdSizeTable(); }
 
   // Classic (peak-search) table: 2θ, rel intensity, prominence, classic FWHM, size.
   // With a standard selected, size is shown both without and with correction.
@@ -2759,6 +2759,15 @@ function nextColor(existingFiles){
       html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td><td>${sizeRawCell}</td>${corrCell}<td style="text-align:right"><button class="peak-del" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">✕</button></td></tr>`;
     });
     html+='</tbody></table>';
+    // Mean ± std crystallite size for this sample, shown right under the peak table
+    const st = sampleSizeStats(curIdx);
+    if (st.isStd){
+      html += '<div class="size-summary">Standard sample — crystallite size not computed.</div>';
+    } else {
+      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b> <span class="ss-n">(n = ${st.rawN})</span>`;
+      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b> <span class="ss-n">(n = ${st.corrN})</span>`;
+      html += '</div>';
+    }
     wrap.innerHTML=html;
 
     wrap.querySelectorAll('.peak-row').forEach(row=>{
@@ -2833,6 +2842,52 @@ function nextColor(existingFiles){
     });
   }
   const fmtCell = v => isFinite(v) ? v.toFixed(1) : '—';
+
+  // Mean / sample-std of the classic crystallite sizes across a sample's kept peaks.
+  // Returns {rawN, rawMean, rawStd, corrN, corrMean, corrStd, isStd, showCorr}.
+  function sampleSizeStats(i){
+    const pr = processed[i];
+    const isStd = files[i] && files[i].name === standardName;
+    const showCorr = !!standardName && !isStd;
+    const raw = [], corr = [];
+    if (pr && !isStd){
+      const fp = getFileParams(i);
+      pr.peaks.filter(p=>!p.removed).forEach(pk=>{
+        const s = sizeRaw(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda);
+        if (isFinite(s)) raw.push(s);
+        if (showCorr){ const sc = sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda); if (isFinite(sc)) corr.push(sc); }
+      });
+    }
+    return {
+      isStd, showCorr,
+      rawN: raw.length,  rawMean: raw.length?meanArr(raw):NaN,  rawStd: raw.length>1?stdArr(raw):NaN,
+      corrN: corr.length, corrMean: corr.length?meanArr(corr):NaN, corrStd: corr.length>1?stdArr(corr):NaN,
+    };
+  }
+  // "mean ± std" (or just "mean" for n=1, "—" for none)
+  function fmtMeanStd(mean, std, n){
+    if (!isFinite(mean)) return '—';
+    if (n >= 2 && isFinite(std)) return `${mean.toFixed(1)} ± ${std.toFixed(1)}`;
+    return mean.toFixed(1);
+  }
+
+  // Results card: per-sample mean crystallite size (classic method), half-page width.
+  function renderXrdSizeTable(){
+    const wrap = document.getElementById('xrdSizeTableWrap');
+    if (!wrap) return;
+    if (!files.length || !processed.length){ wrap.innerHTML=''; return; }
+    const anyStd = !!standardName;
+    let html = '<table><thead><tr><th>Sample</th><th>n</th><th>Size (nm)</th>' + (anyStd?'<th>Size corr. (nm)</th>':'') + '</tr></thead><tbody>';
+    files.forEach((f,i)=>{
+      const st = sampleSizeStats(i);
+      const sizeCell = st.isStd ? '<span style="color:var(--muted)">standard</span>' : fmtMeanStd(st.rawMean, st.rawStd, st.rawN);
+      const corrCell = anyStd ? `<td>${st.isStd ? '—' : fmtMeanStd(st.corrMean, st.corrStd, st.corrN)}</td>` : '';
+      const nCell = st.isStd ? '—' : st.rawN;
+      html += `<tr><td class="fname" title="${f.label.replace(/"/g,'&quot;')}">${f.label}</td><td>${nCell}</td><td>${sizeCell}</td>${corrCell}</tr>`;
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
 
   // Per-field shared/per-sample toggles (one segmented control per editable field)
   const TOGGLE_FIELD = { xrdModeN:'N', xrdModeBl:'blWin', xrdModeH:'pkHeight', xrdModeP:'pkProm', xrdModeD:'pkDist', xrdModeK:'K', xrdModeL:'lambda' };
