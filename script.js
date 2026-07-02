@@ -2756,7 +2756,7 @@ function nextColor(existingFiles){
       const sizeRawCell = isStd ? '—' : fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda));
       const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
       const sel = panels.a.sel!=null && Math.abs(pk.pos-panels.a.sel)<1e-9 ? ' selected' : '';
-      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td><td>${sizeRawCell}</td>${corrCell}<td style="text-align:right"><button class="peak-del" data-det="${pk.detPos}" title="Remove peak">✕</button></td></tr>`;
+      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td><td>${sizeRawCell}</td>${corrCell}<td style="text-align:right"><button class="peak-del" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">✕</button></td></tr>`;
     });
     html+='</tbody></table>';
     wrap.innerHTML=html;
@@ -2774,8 +2774,14 @@ function nextColor(existingFiles){
       btn.addEventListener('click', e=>{
         e.stopPropagation();
         const det = parseFloat(btn.dataset.det);
-        if (!removedPeaks[curIdx]) removedPeaks[curIdx] = [];
-        if (!removedPeaks[curIdx].some(v=>Math.abs(v-det)<1e-6)) removedPeaks[curIdx].push(det);
+        if (btn.dataset.manual === '1'){
+          // Manual peaks are deleted permanently: drop them from manualPeaks so the
+          // removal is independent of the peak-search params (which reset removedPeaks).
+          if (manualPeaks[curIdx]) manualPeaks[curIdx] = manualPeaks[curIdx].filter(v=>Math.abs(v-det) >= 1e-6);
+        } else {
+          if (!removedPeaks[curIdx]) removedPeaks[curIdx] = [];
+          if (!removedPeaks[curIdx].some(v=>Math.abs(v-det)<1e-6)) removedPeaks[curIdx].push(det);
+        }
         reprocessOne(curIdx); updateXrdAnalysis(true); updateXrdFitting(true); renderPeakTable();
       });
     });
