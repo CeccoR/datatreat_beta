@@ -291,6 +291,26 @@ function csvLine(vals){ return csvJoin(vals) + '\n'; }
   fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; });
 })();
 
+/* =========================================================
+   THEME (dark default / light)
+========================================================= */
+(function initTheme(){
+  const root = document.documentElement;
+  const btn = document.getElementById('themeToggle');
+  function apply(theme){
+    const light = theme === 'light';
+    root.classList.toggle('theme-light', light);
+    if (btn){ btn.textContent = light ? '☀' : '🌙'; btn.title = light ? 'Switch to dark theme' : 'Switch to light theme'; }
+    try { localStorage.setItem('datatreat-theme', theme); } catch(e){}
+  }
+  let saved = 'dark';
+  try { saved = localStorage.getItem('datatreat-theme') || 'dark'; } catch(e){}
+  apply(saved === 'light' ? 'light' : 'dark');
+  if (btn) btn.addEventListener('click', ()=>{
+    apply(root.classList.contains('theme-light') ? 'dark' : 'light');
+  });
+})();
+
 function downloadBlob(filename, text){
   const blob = new Blob([text], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
@@ -1668,6 +1688,9 @@ function nextColor(existingFiles){
   const PEAK_BASE = '#3f9d54';   // darker green, base
   const PEAK_HOVER = '#5fcf6a';  // brighter green, transient hover
   const PEAK_SEL  = '#ffffff';   // white, permanent selection
+  const FWHM_BASE  = '#b5292c';  // dark red, base (contrasts both themes)
+  const FWHM_HOVER = '#ff5a5a';  // brighter red, transient hover
+  const FWHM_SEL   = '#ff0000';  // pure red, permanent selection
   // Per-panel selection/hover state — the Analysis table talks only to the Analysis
   // plot, the Fitting table only to the Fitting plot.
   const panels = {
@@ -1904,6 +1927,22 @@ function nextColor(existingFiles){
     if (y[r] > half) return NaN; // no right crossing
     const xr = (y[r]===y[r-1]) ? x[r] : x[r-1] + (half-y[r-1])/(y[r]-y[r-1])*(x[r]-x[r-1]);
     return Math.abs(xr - xl);
+  }
+
+  // Same half-maximum construction as computeFWHM, but returns the geometry needed
+  // to draw the horizontal FWHM marker: left/right crossings, half-height and the
+  // refined apex index. Returns null when no clean crossing exists on both sides.
+  function fwhmGeom(x, y, idx0){
+    const idx = refineIdx(y, idx0, 3);
+    const half = y[idx] / 2;
+    if (!(half > 0)) return null;
+    let l = idx; while (l > 0 && y[l] > half) l--;
+    if (y[l] > half) return null;
+    const xl = (y[l+1]===y[l]) ? x[l] : x[l] + (half-y[l])/(y[l+1]-y[l])*(x[l+1]-x[l]);
+    let r = idx; while (r < y.length-1 && y[r] > half) r++;
+    if (y[r] > half) return null;
+    const xr = (y[r]===y[r-1]) ? x[r] : x[r-1] + (half-y[r-1])/(y[r]-y[r-1])*(x[r]-x[r-1]);
+    return { xl, xr, half, idx };
   }
 
   /* ---------- True Kα1/Kα2 doublet deconvolution (pseudo-Voigt profile fit) ---------- */
@@ -2458,14 +2497,25 @@ function nextColor(existingFiles){
     plot.line(f.x, pr.smoothed.map(v=>v/mx), '#3aa0ff', 1.4);
     plot.line(dense, baseD.map(v=>v/mx),     '#ff9933', 1.2);
     const drawnPos = [];
+    const peakMarks = [], fwhmMarks = [];
     for (const pk of pr.peaks){
       if (pk.removed) continue;
       if (drawnPos.some(v=>Math.abs(v-pk.pos)<1e-9)) continue;
       drawnPos.push(pk.pos);
       plot.vline(pk.pos, PEAK_BASE, false);
+      peakMarks.push({pos:pk.pos});
+      // Horizontal FWHM marker at half-maximum height (on the smoothed, baseline-subtracted profile)
+      const gm = fwhmGeom(f.x, pr.subtracted, pk.idx);
+      if (gm){
+        const yDisp = (pr.baseline[gm.idx] + gm.half) / mx;
+        fwhmMarks.push({pos:pk.pos, x0:gm.xl, x1:gm.xr, y:yDisp});
+      }
     }
     anaPlot = plot;
-    plot._onView = ()=> applySelectionHighlight();
+    plot._peakMarks = peakMarks;
+    plot._fwhmMarks = fwhmMarks;
+    plot._onView = ()=>{ refreshMarks(plot,'a'); applySelectionHighlight(); };
+    refreshMarks(plot,'a');
     applySelectionHighlight();
   }
 
@@ -2507,13 +2557,18 @@ function nextColor(existingFiles){
     // Analysis peak-search positions (initial state).
     const markPos = doFit ? sf.fits.map(fp=>fp.pos) : pr.peaks.filter(pk=>!pk.removed).map(pk=>pk.pos);
     const drawnPos = [];
+    const peakMarks = [];
     for (const pos of markPos){
       if (drawnPos.some(v=>Math.abs(v-pos)<1e-9)) continue;
       drawnPos.push(pos);
       plot.vline(pos, PEAK_BASE, false);
+      peakMarks.push({pos});
     }
     fitPlot = plot;
-    plot._onView = ()=>{ if (residPlot){ residPlot.xmin=plot.xmin; residPlot.xmax=plot.xmax; residPlot._refresh(); } applySelectionHighlight(); };
+    plot._peakMarks = peakMarks;
+    plot._fwhmMarks = [];
+    plot._onView = ()=>{ if (residPlot){ residPlot.xmin=plot.xmin; residPlot.xmax=plot.xmax; residPlot._refresh(); } refreshMarks(plot,'f'); applySelectionHighlight(); };
+    refreshMarks(plot,'f');
     applySelectionHighlight();
 
     ['xrdLegBl','xrdLegFit','xrdLegKa1','xrdLegKa2'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display=doFit?'':'none'; });
@@ -2553,20 +2608,81 @@ function nextColor(existingFiles){
 
   const nearestLine = (lines, pos)=>{ let best=null,bd=Infinity; if(pos!=null) for(const el of lines){ const d=Math.abs(el._value-pos); if(d<bd){bd=d;best=el;} } return bd<0.6?best:null; };
 
-  // Recolour one panel's plot vlines from its own selection/hover state.
+  // Recolour one panel's peak vlines AND their FWHM markers from its selection/hover.
   function highlightPanel(key){
     const P = panels[key], plot = P.plot(); if (!plot) return;
-    const lines = [...plot.gOverlay.querySelectorAll('line')].filter(el=>el._value!==undefined);
-    const selEl = nearestLine(lines, P.sel);
-    const hovEl = nearestLine(lines, P.hov);
-    lines.forEach(el=>{
+    const all = [...plot.gOverlay.querySelectorAll('line')];
+    const peakLines = all.filter(el=>el._value!==undefined && !el._fwhm && !el._hit);
+    const fwhmSegs  = all.filter(el=>el._fwhm && !el._hit);
+    const selEl = nearestLine(peakLines, P.sel);
+    const hovEl = nearestLine(peakLines, P.hov);
+    peakLines.forEach(el=>{
       if (el===selEl){ el.setAttribute('stroke',PEAK_SEL); el.setAttribute('stroke-width',1.8); }
       else if (el===hovEl){ el.setAttribute('stroke',PEAK_HOVER); el.setAttribute('stroke-width',1.8); }
       else { el.setAttribute('stroke',PEAK_BASE); el.setAttribute('stroke-width',1); }
     });
+    // FWHM markers mirror the peak state (matched by shared _value = peak position)
+    fwhmSegs.forEach(el=>{
+      const isSel = selEl && Math.abs(el._value - selEl._value) < 1e-9;
+      const isHov = hovEl && Math.abs(el._value - hovEl._value) < 1e-9;
+      if (isSel){ el.setAttribute('stroke',FWHM_SEL); el.setAttribute('stroke-width',4); }
+      else if (isHov){ el.setAttribute('stroke',FWHM_HOVER); el.setAttribute('stroke-width',4); }
+      else { el.setAttribute('stroke',FWHM_BASE); el.setAttribute('stroke-width',2.2); }
+    });
   }
   // Refresh both plots' highlights (used after a full redraw)
   function applySelectionHighlight(){ highlightPanel('a'); highlightPanel('f'); }
+
+  // Twin invisible thick "hit" line as a hover listener (à la Tauc draggable bars),
+  // so peaks and FWHM markers have a fat, responsive target. Scheduled clear on leave
+  // is cancelled by any enter within the same frame, avoiding flicker when the pointer
+  // slides between a peak's vertical hit line and its horizontal FWHM hit line.
+  let markHoverRAF = null;
+  function addMarkHover(el, key, pos){
+    el.addEventListener('pointerenter', ()=>{
+      const plot = panels[key].plot();
+      if (!plot || plot._mode) return;            // pan/zoom armed
+      if (key==='a' && addMode) return;           // placing a manual peak
+      if (markHoverRAF){ cancelAnimationFrame(markHoverRAF); markHoverRAF=null; }
+      setHoverPanel(key, pos);
+    });
+    el.addEventListener('pointerleave', ()=>{
+      if (markHoverRAF) cancelAnimationFrame(markHoverRAF);
+      markHoverRAF = requestAnimationFrame(()=>{ markHoverRAF=null; setHoverPanel(key, null); });
+    });
+  }
+  // (Re)build the interactive overlay marks for a plot: visible FWHM segments plus the
+  // invisible thick hit lines for both peaks and FWHM markers. Called after every
+  // axis redraw (via _onView) since gOverlay is cleared on each refresh.
+  function buildInteractiveMarks(plot, key){
+    if (!plot) return;
+    const g = plot.gOverlay;
+    g.querySelectorAll('.xrd-mark').forEach(e=>e.remove());
+    const xlo = Math.min(plot.xmin, plot.xmax), xhi = Math.max(plot.xmin, plot.xmax);
+    // FWHM markers (visible dark-red segment + horizontal hit line)
+    (plot._fwhmMarks || []).forEach(mk=>{
+      const y  = plot.py(mk.y);
+      const xa = plot.px(mk.x0), xb = plot.px(mk.x1);
+      const seg = svgEl('line',{x1:xa,x2:xb,y1:y,y2:y,stroke:FWHM_BASE,'stroke-width':2.2,'stroke-linecap':'round','pointer-events':'none','class':'xrd-mark'});
+      seg._fwhm = true; seg._value = mk.pos;
+      g.appendChild(seg);
+      const hit = svgEl('line',{x1:xa,x2:xb,y1:y,y2:y,stroke:'transparent','stroke-width':16,'cursor':'pointer','class':'xrd-mark'});
+      hit._hit = true;
+      addMarkHover(hit, key, mk.pos);
+      g.appendChild(hit);
+    });
+    // Peak hit lines (invisible, full-height, vertical)
+    const {h} = plot.size(); const m = plot.margin;
+    (plot._peakMarks || []).forEach(mk=>{
+      if (mk.pos < xlo || mk.pos > xhi) return;
+      const px = plot.px(mk.pos);
+      const hit = svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'pointer','class':'xrd-mark'});
+      hit._hit = true;
+      addMarkHover(hit, key, mk.pos);
+      g.appendChild(hit);
+    });
+  }
+  function refreshMarks(plot, key){ buildInteractiveMarks(plot, key); }
 
   // Toggle the transient 'hovering' class on the row nearest that panel's hover pos.
   function updateRowHoverPanel(key){
@@ -3044,24 +3160,14 @@ function nextColor(existingFiles){
 
   // Plot-side peak hover + click-to-select (mirror of the table interaction).
   // Bound once per SVG; acts only when no pan/zoom tool is armed and not adding a peak.
+  // Peak/FWHM hover is handled by per-mark invisible hit lines (see buildInteractiveMarks);
+  // here we only bind click-to-(de)select, which reads the current hover position.
   function attachPeakInteractions(svgEl, key){
     const isAnalysis = key==='a';
     const blocked = (plot)=> !plot || plot._mode || (isAnalysis && addMode);
-    const nearestVline = (plot, clientX)=>{
-      const lines=[...plot.gOverlay.querySelectorAll('line')].filter(el=>el._value!==undefined);
-      const cx = clientX - svgEl.getBoundingClientRect().left;
-      let best=null, bd=Infinity;
-      for (const el of lines){ const d=Math.abs(plot.px(el._value)-cx); if(d<bd){bd=d;best=el;} }
-      return (best && bd<8) ? best._value : null;
-    };
-    svgEl.addEventListener('pointermove', e=>{
-      const plot = svgEl._plot; if (blocked(plot)){ return; }
-      setHoverPanel(key, nearestVline(plot, e.clientX));
-    });
-    svgEl.addEventListener('pointerleave', ()=>{ setHoverPanel(key, null); });
     svgEl.addEventListener('click', ()=>{
       const plot = svgEl._plot; if (blocked(plot)) return;
-      if (panels[key].hov!=null) selectPanel(key, panels[key].hov); // clicked a peak → (de)select it
+      if (panels[key].hov!=null) selectPanel(key, panels[key].hov); // clicked a peak/FWHM → (de)select it
       else clearSelection(key);                                     // clicked empty area → deselect
     });
   }
