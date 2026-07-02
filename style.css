@@ -1,0 +1,924 @@
+:root {
+  --bg: #0e1316;
+  --panel: #161f24;
+  --panel2: #11171b;
+  --line: #26343b;
+  --text: #dfe8ea;
+  --muted: #7f97a0;
+  --accent: #ffb454;
+  --accent2: #d98fd1;
+  --good: #7fd17f;
+  --warn: #ffb454;
+  --bad: #ff6b6b;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+header h1 {
+  font-size: 16px;
+  margin: 0 16px 0 0;
+  font-weight: 600;
+  color: var(--accent);
+}
+nav button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.15s, border-color 0.15s;
+}
+#nav {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  align-items: center;
+}
+nav button:not(.nav-settings):not(.active):hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--panel2);
+}
+nav button.active {
+  background: var(--accent);
+  color: #06131f;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+nav button.nav-settings {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: bold;
+  padding: 7px 11px;
+  border-radius: 50%;
+  border-color: var(--line);
+  color: var(--muted);
+}
+nav button.nav-settings:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--panel2);
+}
+nav button.nav-settings.active {
+  color: #06131f;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.home-settings-link {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s, color 0.15s;
+}
+.home-settings-link:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+.settings-tab.active {
+  display: block;
+  padding-top: 40px;
+}
+main {
+  padding: 18px;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+.tab {
+  display: none;
+}
+.tab.active {
+  display: block;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.col {
+  flex: 1;
+  min-width: 260px;
+}
+h2 {
+  margin-top: 0;
+  font-size: 18px;
+  color: var(--text);
+}
+h3 {
+  font-size: 14px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+label {
+  font-size: 13px;
+  color: var(--muted);
+  display: block;
+  margin: 8px 0 4px;
+}
+input[type="text"],
+input[type="number"],
+input[type="datetime-local"],
+select {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--text);
+  font-size: 13px;
+}
+input[type="file"] {
+  font-size: 13px;
+  color: var(--muted);
+}
+button.btn {
+  background: var(--accent);
+  color: #06131f;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+button.btn.secondary {
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+button.btn.small {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+button.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: none;
+}
+td input {
+  width: 90px;
+  padding: 3px 5px;
+}
+td input.label-input {
+  width: 100%;
+  min-width: 120px;
+}
+.pill {
+  display: inline-block;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 6px;
+}
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+svg.plot {
+  width: 100%;
+  height: 640px;
+  background: var(--panel2);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  touch-action: none;
+}
+.legend {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 14px;
+}
+.legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  display: inline-block;
+  margin-right: 5px;
+}
+.alert {
+  padding: 8px 36px 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin: 8px 0;
+  position: relative;
+}
+.alert-dismiss {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: normal;
+  color: inherit;
+  line-height: 1;
+  opacity: 0;
+  transition: font-weight 0s, opacity 0.15s;
+}
+.alert:hover .alert-dismiss { opacity: 1; }
+.alert-dismiss:hover { font-weight: bold; }
+.alert.warn {
+  background: #3a2c0f;
+  color: var(--warn);
+  border: 1px solid #5a430f;
+}
+.alert.good {
+  background: #0f3a26;
+  color: var(--good);
+  border: 1px solid #1c5a3c;
+}
+.alert.bad {
+  background: #3a1212;
+  color: var(--bad);
+  border: 1px solid #5a1c1c;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.stat {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.stat b {
+  color: var(--accent);
+}
+.viewswitch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+}
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.home-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px 22px 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.home-card:hover {
+  border-color: var(--accent);
+  background: var(--panel2);
+}
+.home-card h3 {
+  color: var(--accent);
+  font-size: 15px;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+.home-card p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.6;
+}
+footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 30px 0;
+}
+
+/* ===== Shared file dropzone ===== */
+.dropzone {
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--panel2);
+  transition: border-color 0.15s, background 0.15s;
+}
+.dropzone:hover {
+  border-color: var(--accent);
+}
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: #1a2433;
+}
+.dropzone .dz-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+.dropzone .dz-title {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.dropzone .dz-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.dropzone input[type="file"] {
+  display: none;
+}
+
+/* ===== Unified file list ===== */
+.file-row .file-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  visibility: hidden;
+  white-space: nowrap;
+}
+.file-row:hover .file-actions {
+  visibility: visible;
+}
+.file-actions button {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: color 0.1s, border-color 0.1s;
+}
+.file-actions button:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.file-actions button.del:hover {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+th .remove-all {
+  font-weight: 700;
+}
+td.fname {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ===== Palette picker button (in FILE header) ===== */
+button.palette-pick-btn {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1.5px solid var(--muted);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: conic-gradient(
+    #3aa0ff 0 25%, #ff7a59 25% 50%, #5fcf6a 50% 75%, #d050ff 75%
+  );
+}
+button.palette-pick-btn:hover { border-color: var(--text); }
+
+/* ===== Palette picker popup ===== */
+.pp-popup {
+  position: fixed;
+  z-index: 9999;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  width: 244px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.65);
+  user-select: none;
+}
+.pp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.pp-row:hover { background: var(--panel2); }
+.pp-name {
+  font-size: 11px;
+  color: var(--muted);
+  width: 66px;
+  flex-shrink: 0;
+}
+.pp-swatches { display: flex; gap: 2px; flex: 1; }
+.pp-swatch { flex: 1; height: 14px; border-radius: 2px; }
+
+button.color-swatch {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 3px;
+  cursor: pointer;
+  vertical-align: middle;
+  margin-right: 5px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+button.color-swatch:hover { border-color: var(--text); }
+
+/* ===== Custom Color Picker popup ===== */
+.cp-popup {
+  position: fixed;
+  z-index: 9999;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  width: 252px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.65);
+  user-select: none;
+}
+.cp-map {
+  width: 100%;
+  height: 152px;
+  border-radius: 6px;
+  position: relative;
+  cursor: crosshair;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.cp-cursor {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
+  position: absolute;
+  transform: translate(-50%,-50%);
+  pointer-events: none;
+}
+.cp-hue {
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);
+  position: relative;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+.cp-hue-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%,-50%);
+  pointer-events: none;
+}
+.cp-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cp-preview {
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.cp-hex-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 8px;
+}
+.cp-hex-wrap > span { color: var(--muted); font-size: 12px; }
+.cp-hex {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 12px;
+  font-family: monospace;
+  width: 0;
+  flex: 1;
+  padding: 0;
+  text-transform: uppercase;
+}
+.cp-rgb { margin-bottom: 10px; }
+.cp-rgb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.cp-rgb-row > span {
+  font-size: 11px;
+  color: var(--muted);
+  width: 10px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.cp-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--cp-grad, var(--line));
+  cursor: pointer;
+  outline: none;
+  border: none;
+}
+.cp-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(0,0,0,0.22);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+.cp-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--cp-grad, var(--line));
+}
+.cp-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(0,0,0,0.22);
+  cursor: pointer;
+}
+.cp-popup input[type="number"].cp-num {
+  width: 56px;
+  text-align: center;
+  font-size: 11px;
+  padding: 3px 4px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.cp-presets {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+}
+.cp-preset {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.1s, border-color 0.1s;
+}
+.cp-preset:hover { transform: scale(1.25); border-color: rgba(255,255,255,0.5); }
+
+/* ===== Plot wrapper with side download button ===== */
+.plot-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+/* While a pan/zoom tool is armed, block text selection across the whole plot */
+.plot-wrap.tool-armed, .plot-wrap.tool-armed * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.plot-wrap .plot {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.plot-btn-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+.plot-wrap:hover .plot-btn-col {
+  opacity: 1;
+}
+.plot-dl-btn {
+  flex-shrink: 0;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+  overflow: visible;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.plot-tool-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.plot-tool-btn {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+  overflow: visible;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.plot-tool-btn:hover,
+.plot-dl-btn:hover {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  background: transparent !important;
+}
+.plot-tool-btn.active,
+.plot-dl-btn.active {
+  border: 1px solid var(--accent) !important;
+  background: var(--accent) !important;
+  color: #06131f !important;
+}
+
+/* ===== Sample navigation arrows ===== */
+.nav-arrow {
+  padding: 3px 10px;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 6px;
+}
+.plot-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+  margin: 0;
+}
+/* Remove top margin on first label in parameter panels */
+.col > label:first-child,
+.col > label:first-of-type {
+  margin-top: 0;
+}
+
+/* ===== Chart titles in results ===== */
+.chart-title {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+  margin: 0 0 6px;
+}
+
+/* ===== Instruction block ===== */
+.instr-block {
+  max-width: 100%;
+  background: var(--panel2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  padding: 10px 14px;
+  margin: 6px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ===== Table wrapper box (file lists, param tables) ===== */
+.table-wrap-box {
+  background: var(--panel2);
+  border-radius: 8px;
+  padding: 0 8px 8px;
+  margin-top: 10px;
+}
+.table-wrap-box table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* ===== EPR pending table ===== */
+.pending-table th,
+.pending-table td {
+  border-bottom: 1px solid #6b4d1a;
+  color: var(--warn);
+}
+.pending-row .file-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  visibility: hidden;
+  white-space: nowrap;
+}
+.pending-row:hover .file-actions {
+  visibility: visible;
+}
+.file-actions .pending-del,
+.file-actions .pending-del-all {
+  background: transparent;
+  border-color: #6b4d1a;
+  color: var(--warn);
+}
+.file-actions .pending-del-all {
+  font-weight: 700;
+}
+.file-actions .pending-del:hover,
+.file-actions .pending-del-all:hover {
+  color: var(--bad);
+  border-color: var(--bad);
+  background: transparent;
+}
+
+/* ===== Tauc Eg summary table ===== */
+#taucEgTableWrap { overflow: hidden; }
+#taucEgTableWrap table { font-size: 11px; table-layout: fixed; width: 100%; }
+#taucEgTableWrap th,
+#taucEgTableWrap td { font-size: 11px; white-space: nowrap; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; }
+#taucEgTableWrap td:nth-child(2),
+#taucEgTableWrap td:nth-child(3) { text-align: center; }
+
+/* ===== XRD shared/per-sample segmented toggle ===== */
+.xrd-seg { display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+.xrd-seg button { font-size:11px; padding:2px 7px; background:transparent; border:none; color:var(--muted); cursor:pointer; line-height:1.6; }
+.xrd-seg button.active { background:var(--accent); color:#fff; }
+.xrd-seg button:hover:not(.active) { background:var(--panel2); }
+
+/* Inline field + all/one toggle row (toggle matches the input height) */
+.field-row { display:flex; gap:5px; align-items:stretch; }
+.field-row > input, .field-row > select { flex:1; min-width:0; }
+.field-row .xrd-seg { flex:0 0 auto; }
+/* Compact, understated all/one toggle — narrow so the input keeps its width */
+.mode-seg { border-color:var(--line); border-radius:6px; background:transparent; }
+.field-row .mode-seg button { display:flex; align-items:center; padding:0 6px; font-size:10px; letter-spacing:.02em; color:var(--muted); background:transparent; }
+.field-row .mode-seg button.active { background:var(--panel2); color:var(--text); font-weight:600; }
+.field-row .mode-seg button:hover:not(.active) { background:var(--panel2); color:var(--text); }
+/* Two half-width sub-panels side by side */
+.field-half { display:flex; gap:10px; }
+.field-half > div { flex:1; min-width:0; }
+
+/* ===== XRD peak table box ===== */
+.peak-box {
+  margin-top: 16px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px 14px;
+}
+.peak-box-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.peak-box-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: .02em;
+}
+.peak-reset-btn {
+  padding: 3px 12px !important;
+  font-size: 12px;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+#xrdPeakTableWrap table, #xrdFitTableWrap table { width: 100%; }
+#xrdPeakTableWrap .peak-row, #xrdFitTableWrap .peak-row { transition: background 0.1s; cursor: pointer; }
+#xrdPeakTableWrap .peak-row:hover, #xrdFitTableWrap .peak-row:hover { background: var(--panel); }
+/* Manually added peaks: neutral grey tint (order matters: before hovering/selected) */
+#xrdPeakTableWrap .peak-row.manual-peak, #xrdFitTableWrap .peak-row.manual-peak { background: rgba(160, 170, 185, 0.14); }
+#xrdPeakTableWrap .peak-row.manual-peak:hover, #xrdFitTableWrap .peak-row.manual-peak:hover { background: rgba(160, 170, 185, 0.22); }
+/* Temporary hover link (row↔peak): green, coherent with the hovered peak colour */
+#xrdPeakTableWrap .peak-row.hovering, #xrdFitTableWrap .peak-row.hovering,
+#xrdPeakTableWrap .peak-row.manual-peak.hovering, #xrdFitTableWrap .peak-row.manual-peak.hovering { background: rgba(95, 207, 106, 0.20); }
+/* Persistent selection: keep the normal background, add a uniform white outline.
+   Applied per-cell (top+bottom on every cell, left on the first, right on the last)
+   so the rectangle is even all around with no internal lines. */
+#xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff; }
+#xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff, inset 2px 0 0 #fff; }
+#xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff, inset -2px 0 0 #fff; }
+/* ✕ delete button — compact so it does not make analysis rows taller than fitting rows */
+#xrdPeakTableWrap .peak-row .peak-del {
+  visibility: hidden;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 5px;
+  padding: 0 6px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.1s, border-color 0.1s;
+}
+#xrdPeakTableWrap .peak-row:hover .peak-del { visibility: visible; }
+#xrdPeakTableWrap .peak-row .peak-del:hover {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+/* Add-peak mode toggle button */
+#xrdAddPeak.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ===== XRD fit hyperparameters modal ===== */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px 22px; width: min(420px, 92vw); max-height: 90vh; overflow: auto;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.modal-box label { display: block; margin-top: 12px; }
+
+/* ===== XRD fit progress bar ===== */
+#xrdFitProgWrap { height:6px; background:var(--panel2); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
+#xrdFitProgBar { height:100%; width:0; background:var(--accent); transition:width .08s linear; }

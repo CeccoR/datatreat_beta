@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>DataTreat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header>
+    <h1 style="font-size:19px">⎍ DataTreat</h1>
+    <nav id="nav">
+      <button data-tab="home" class="active">Home</button>
+      <button data-tab="tauc">DRS UV-Vis</button>
+      <button data-tab="xrd">XRPD</button>
+      <button data-tab="gc">GC</button>
+      <button data-tab="epr">EPR</button>
+      <button data-tab="settings" class="nav-settings">⚙</button>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- ============ HOME ============ -->
+    <section class="tab active" id="tab-home">
+      <div class="card">
+        <h2>Pick your technique.</h2>
+        <p class="hint" style="margin-bottom:18px">Analyze your data.</p>
+        <div class="home-grid">
+          <div class="home-card" data-go="tauc">
+            <h3>DRS UV-Vis</h3>
+            <p>Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (Eg) can be inferred through Tauc Plot analysis.</p>
+          </div>
+          <div class="home-card" data-go="xrd">
+            <h3>XRPD</h3>
+            <p>X-Ray Powder Diffraction. Diffractograms comparison, smoothing, and normalization.</p>
+          </div>
+          <div class="home-card" data-go="gc">
+            <h3>GC</h3>
+            <p>Gas Chromatography for H₂ production rate assessment.</p>
+          </div>
+          <div class="home-card" data-go="epr">
+            <h3>EPR</h3>
+            <p>Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.</p>
+          </div>
+        </div>
+        <div style="margin-top:18px;text-align:right">
+          <button data-tab="settings" class="home-settings-link">⚙ Settings</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="tab settings-tab" id="tab-settings">
+      <div class="card" style="max-width:480px;margin:0 auto">
+        <h2>Settings</h2>
+        <h3 style="margin:0 0 6px">Plot export</h3>
+        <div class="instr-block">Download format applied to all plot export buttons.</div>
+        <label style="margin-top:0">Format</label>
+        <select id="settingPlotFmt">
+          <option value="png" selected>PNG</option>
+          <option value="svg">SVG</option>
+          <option value="jpeg">JPEG</option>
+          <option value="webp">WebP</option>
+        </select>
+        <h3 style="margin:20px 0 6px">CSV export</h3>
+        <div class="instr-block">Decimal and field separator cannot both be set to comma.</div>
+        <label style="margin-top:0">Decimal separator</label>
+        <select id="settingDecimal">
+          <option value="." selected>. (point)</option>
+          <option value=",">, (comma)</option>
+        </select>
+        <label style="margin-top:14px">Field separator</label>
+        <select id="settingField">
+          <option value="	">Tab</option>
+          <option value=";" selected>; (semicolon)</option>
+          <option value=",">, (comma)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- ============ TAUC ============ -->
+    <section class="tab" id="tab-tauc">
+      <div class="card">
+        <h2>DRS UV-Vis</h2>
+        <div class="instr-block" style="max-width:100%">Compatible with Cary 5000 Instrument. Upload files with two columns: wavelength (nm) and Kubelka-Munk computed absorbance F(R).</div>
+        <div class="dropzone" id="taucDropzone">
+          <div class="dz-icon">⤒</div>
+          <div class="dz-title">Drag here your files, or click to select them.</div>
+          <div class="dz-hint">.csv, .txt</div>
+          <input type="file" id="taucFiles" multiple accept=".csv,.txt" style="display:none">
+        </div>
+        <div id="taucAlerts"></div>
+        <div id="taucFileTableWrap"></div>
+      </div>
+
+      <div class="card" id="taucWorkspace" style="display:none">
+        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta). Eg is extracted from both the x-axis intersection and the baseline intersection of the regression line.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <button class="btn secondary nav-arrow" id="taucPrev">‹</button>
+          <span id="taucIdx" class="pill" style="margin:0">1/1</span>
+          <button class="btn secondary nav-arrow" id="taucNext">›</button>
+          <span class="plot-subtitle" id="taucCurrentLabel">—</span>
+        </div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col" style="flex:2;min-width:520px">
+            <div class="plot-wrap">
+              <svg class="plot" id="taucSvg"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="taucSvg" data-dl-name="Tauc_sample.svg" data-dl-legend="taucLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div class="legend" id="taucLegend">
+              <span><i style="background:#ffffff"></i>original</span>
+              <span><i style="background:#3aa0ff"></i>smoothed</span>
+              <span><i style="background:#5fcf6a"></i>derivative</span>
+              <span><i style="background:#ff5050"></i>Tauc linear region</span>
+              <span><i style="background:#d050ff"></i>baseline</span>
+            </div>
+            <div id="taucAlert"></div>
+          </div>
+          <div class="col" style="min-width:280px;align-self:flex-start">
+            <label>Tauc exponent (0.5 for indirect semiconductors, 2 for direct semiconductors)</label>
+            <select id="taucA">
+              <option value="0.5" selected>0.5</option>
+              <option value="2">2</option>
+            </select>
+            <label>[F(R)hν]<sup id="taucNExp">0.5</sup> smoothing window</label>
+            <input type="number" id="taucN" value="1" min="1">
+            <label>Derivative smoothing window</label>
+            <input type="number" id="taucN2" value="10" min="1">
+            <label>Tauc linear region regression window</label>
+            <input type="number" id="taucM" value="50" min="2">
+            <div class="stat">RMSE: <b id="taucRMSE1">-</b></div>
+            <div class="stat">R²: <b id="taucR21">-</b></div>
+            <label>Baseline regression window</label>
+            <input type="number" id="taucM2" value="50" min="2">
+            <div class="stat">RMSE: <b id="taucRMSE2">-</b></div>
+            <div class="stat">R²: <b id="taucR22">-</b></div>
+            <div class="stat" style="margin-top:10px">Eg (x-axis): <b id="taucEg">-</b></div>
+            <div class="stat" style="margin-top:6px">Eg (baseline): <b id="taucEgInt">-</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="taucResults" style="display:none">
+        <h3 style="margin:0 0 12px">RESULTS</h3>
+        <p class="chart-title">Kubelka-Munk Function</p>
+        <div class="plot-wrap">
+          <svg class="plot" id="taucResSvg0" style="height:640px"></svg>
+          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg0" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+        </div>
+        <div id="taucResLegend0" class="legend" style="margin-bottom:18px"></div>
+        <p class="chart-title">Tauc Plot</p>
+        <div class="plot-wrap">
+          <svg class="plot" id="taucResSvg1" style="height:640px"></svg>
+          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg1" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+        </div>
+        <div id="taucResLegend1" class="legend" style="margin-bottom:18px"></div>
+        <p class="chart-title" id="taucBarTitle" style="margin-bottom:8px">Energy Band Gap</p>
+        <div class="row" style="align-items:flex-start;gap:16px">
+          <div class="col" style="flex:2;min-width:520px">
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvg2" style="height:640px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg2" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div id="taucBarAlert"></div>
+            <div id="taucResLegend2" class="legend"></div>
+          </div>
+          <div class="col" style="flex:1;min-width:280px;background:var(--panel2);padding:8px 12px;border-radius:4px;align-self:flex-start">
+            <div style="text-transform:none" id="taucEgTableWrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="taucExportCard" style="display:none">
+        <button class="btn" id="taucExportBtn" style="width:100%">Export CSV</button>
+        <div id="taucDownloads" style="margin-top:10px"></div>
+      </div>
+    </section>
+
+    <!-- ============ XRD ============ -->
+    <section class="tab" id="tab-xrd">
+      <div class="card">
+        <h2>XRPD</h2>
+        <div class="instr-block" style="max-width:100%">Compatible with XPERT diffractometer. Accepts PANalytical XML format files.</div>
+        <div class="dropzone" id="xrdDropzone">
+          <div class="dz-icon">⤒</div>
+          <div class="dz-title">Drag here your files, or click to select them.</div>
+          <div class="dz-hint">.xrdml, .xml</div>
+          <input type="file" id="xrdFiles" multiple accept=".xrdml,.xml" style="display:none">
+        </div>
+        <div id="xrdAlerts"></div>
+        <div id="xrdFileTableWrap"></div>
+      </div>
+      <div class="card" id="xrdWorkspace" style="display:none">
+        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (contains the whole Kα₁+Kα₂ doublet). K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². The table shows size both without and (if a standard is set) with this correction. The Kα₂-deconvolved profile fit lives in the <b>Fitting</b> panel below.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <button class="btn secondary nav-arrow" id="xrdPrev">&#8249;</button>
+          <span id="xrdIdx" class="pill" style="margin:0">1/1</span>
+          <button class="btn secondary nav-arrow" id="xrdNext">&#8250;</button>
+          <span class="plot-subtitle" id="xrdCurrentLabel">—</span>
+        </div>
+        <div class="row" style="align-items:stretch">
+          <div class="col" style="flex:2;min-width:0">
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdSvg" style="height:460px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSvg" data-dl-name="XRPD_sample.svg"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div class="legend">
+              <span><i style="background:#6a7585"></i>raw</span>
+              <span><i style="background:#3aa0ff"></i>smoothed</span>
+              <span><i style="background:#ff9933"></i>baseline</span>
+              <span><i style="background:#5fcf6a"></i>peaks</span>
+            </div>
+          </div>
+          <div class="col" style="min-width:280px;align-self:flex-start;display:flex;flex-direction:column;gap:11px">
+            <div class="field-half">
+              <div><label>Normalization</label>
+                <select id="xrdNorm"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select></div>
+              <div><label>Instrumental standard</label>
+                <select id="xrdStandard"><option value="">None</option></select></div>
+            </div>
+            <div><label>Smoothing window (pts)</label>
+              <div class="field-row"><input type="number" id="xrdSmooth" value="10" min="1">
+                <div class="xrd-seg mode-seg" id="xrdModeN"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
+            <div><label>Baseline SNIP window (pts)</label>
+              <div class="field-row"><input type="number" id="xrdBlWin" value="150" min="1">
+                <div class="xrd-seg mode-seg" id="xrdModeBl"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
+            <div class="field-half">
+              <div><label>Peak min. height (%)</label>
+                <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkHeight" value="5">
+                  <div class="xrd-seg mode-seg" id="xrdModeH"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
+              <div><label>Peak min. prom. (%)</label>
+                <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkProm" value="3">
+                  <div class="xrd-seg mode-seg" id="xrdModeP"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
+            </div>
+            <div><label>Peak min. distance (degrees 2&#952;)</label>
+              <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkDist" value="0.3">
+                <div class="xrd-seg mode-seg" id="xrdModeD"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
+            <div class="field-half">
+              <div><label>Shape factor K</label>
+                <div class="field-row"><input type="text" inputmode="decimal" id="xrdK" value="0.9">
+                  <div class="xrd-seg mode-seg" id="xrdModeK"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
+              <div><label>&#955; (&#8491;)</label>
+                <div class="field-row"><input type="text" inputmode="decimal" id="xrdLambda" value="1.5406">
+                  <div class="xrd-seg mode-seg" id="xrdModeL"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
+            </div>
+            <button class="btn secondary" id="xrdAddPeak" style="width:100%;padding:7px 9px">+ Add peak</button>
+          </div>
+        </div>
+        <div class="peak-box" id="xrdPeakBox">
+          <div class="peak-box-head">
+            <span class="peak-box-title">Detected peaks (classic) — <span id="xrdPkLabel">—</span></span>
+            <button class="btn secondary peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
+          </div>
+          <div id="xrdPeakTableWrap"></div>
+        </div>
+      </div>
+
+      <div class="card" id="xrdFitCard" style="display:none">
+        <h3 style="margin:0 0 0">FITTING</h3>
+        <div class="instr-block">Cu Kα₂-deconvolved whole-pattern fit. The raw pattern (open circles) and the peaks inherited from the Analysis peak search are shown; press <b>Fit sample</b>/<b>Fit all</b> to fit a sum of Kα₁/Kα₂ doublets (Kα₁ + ½·Kα₂ at +Δ2θ) plus a polynomial background, all refined together (Levenberg–Marquardt). Profile, asymmetry and other hyperparameters are in <i>Sample fit settings</i>. By default each fit restarts from the SNIP baseline and the current peak search (manual peaks kept); a setting lets it instead continue from the last fit. A chosen <b>standard</b> (LaB₆…) is fitted with the FCJ axial-divergence kernel via <b>Fit standard</b> to calibrate the instrument geometry. The fitted doublet, its Kα₁/Kα₂ components and the residual (with Rwp) appear once a fit exists.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <button class="btn secondary nav-arrow" id="xrdFitPrev">&#8249;</button>
+          <span id="xrdFitIdx" class="pill" style="margin:0">1/1</span>
+          <button class="btn secondary nav-arrow" id="xrdFitNext">&#8250;</button>
+          <span class="plot-subtitle" id="xrdFitLabel">—</span>
+        </div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col" style="flex:2;min-width:0">
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdFitSvg" style="height:420px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSvg" data-dl-name="XRPD_fit.svg"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div class="legend">
+              <span><i style="background:#6a7585"></i>raw</span>
+              <span id="xrdLegBl"><i style="background:#ff9933"></i>baseline</span>
+              <span id="xrdLegFit"><i style="background:#ff5050"></i>doublet fit</span>
+              <span id="xrdLegKa1"><i style="background:#b07cff"></i>Kα₁ component</span>
+              <span id="xrdLegKa2"><i style="background:#5fb0d0"></i>Kα₂ component</span>
+              <span><i style="background:#5fcf6a"></i>peaks</span>
+            </div>
+            <div id="xrdResidBlock">
+              <div class="plot-wrap" style="margin-top:6px;padding-right:40px">
+                <svg class="plot" id="xrdResidSvg" style="height:90px"></svg>
+              </div>
+              <div class="legend"><span id="xrdResidCaption" style="color:var(--muted);font-size:11px">Fit residual (doublet fit − signal)</span></div>
+            </div>
+          </div>
+          <div class="col" style="min-width:260px;align-self:flex-start">
+            <div style="display:flex;gap:8px">
+              <button class="btn" id="xrdFitSampleBtn" style="flex:1">Fit sample</button>
+              <button class="btn" id="xrdFitAllBtn" style="flex:1">Fit all</button>
+            </div>
+            <button class="btn secondary" id="xrdFitSettings" style="margin-top:8px;width:100%">Sample fit settings…</button>
+            <div id="xrdFitProgWrap" style="display:none;margin-top:6px"><div id="xrdFitProgBar"></div></div>
+            <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px"></div>
+            <button class="btn" id="xrdFitStdBtn" style="width:100%">Fit standard (calibrate S/L, H/L)</button>
+            <button class="btn secondary" id="xrdStdSettings" style="margin-top:8px;width:100%">Standard fit settings…</button>
+            <small id="xrdStdHint" style="color:var(--muted);display:block;margin-top:6px">Enabled only when the current sample is the chosen instrumental standard.</small>
+          </div>
+        </div>
+        <div class="peak-box" id="xrdFitPeakBox">
+          <div class="peak-box-head">
+            <span class="peak-box-title">Fitted peaks — <span id="xrdFitPkLabel">—</span></span>
+          </div>
+          <div id="xrdFitTableWrap"></div>
+        </div>
+      </div>
+
+      <div class="card" id="xrdResults" style="display:none">
+        <h3 style="margin:0 0 12px">RESULTS</h3>
+        <div class="row" style="align-items:flex-start;gap:16px">
+          <div class="col" style="flex:1;min-width:320px">
+            <p class="chart-title">Analysis — smoothed, baseline subtracted</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdResSvg" style="height:560px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResSvg" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div id="xrdResLegend" class="legend"></div>
+          </div>
+          <div class="col" style="flex:1;min-width:320px">
+            <p class="chart-title">Fitting — model, baseline subtracted</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdResFitSvg" style="height:560px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div id="xrdResFitLegend" class="legend"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="xrdExportCard" style="display:none">
+        <button class="btn" id="xrdSave" style="width:100%">Export CSV</button>
+        <div id="xrdDownloads" style="margin-top:10px"></div>
+      </div>
+      <div id="xrdFitModal" class="modal-backdrop" style="display:none">
+        <div class="modal-box">
+          <h3 style="margin:0 0 4px">Sample fit — hyperparameters</h3>
+          <p style="color:var(--muted);font-size:12px;margin:0 0 10px">Whole-pattern least-squares: Σ Kα₁/Kα₂ doublets + polynomial background, Levenberg–Marquardt. Multi-start over profile shape (5) × initial width 1–5× FWHM (5) = 25 starts, then a final refinement pass on <b>all</b> points. Used by <b>Fit sample</b> and <b>Fit all</b>.</p>
+          <label>Peak profile</label>
+          <select id="xrdHpProfile">
+            <option value="voigt">True Voigt (σ, γ)</option>
+            <option value="pv" selected>Pseudo-Voigt (FWHM, η)</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+            <input type="checkbox" id="xrdHpAsym" style="width:auto;margin:0"> Enable peak asymmetry
+          </label>
+          <div id="xrdHpAsymOpts">
+            <label>Asymmetry model</label>
+            <select id="xrdHpAsymMode">
+              <option value="split" selected>Split (per-peak, fitted)</option>
+              <option value="fcj">Axial divergence (FCJ)</option>
+            </select>
+            <div id="xrdHpFcj" style="display:none">
+              <label>S/L (sample / radius)</label>
+              <input type="text" id="xrdHpSL" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
+              <label>H/L (slit / radius)</label>
+              <input type="text" id="xrdHpHL" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
+              <small style="color:var(--muted);display:block;margin-top:4px">Fixed instrumental geometry applied to samples. Refine these by running <b>Fit standard</b> on your LaB₆ (or other) standard — the calibrated value is written back here automatically.</small>
+            </div>
+          </div>
+          <label>Background polynomial degree</label>
+          <input type="number" id="xrdHpDeg" value="4" min="0" max="12">
+          <label>Max iterations</label>
+          <input type="number" id="xrdHpIter" value="80" min="5" max="2000">
+          <label>Convergence tolerance (relative)</label>
+          <input type="text" inputmode="decimal" id="xrdHpTol" value="1e-12">
+          <label>Initial LM damping λ₀</label>
+          <input type="text" inputmode="decimal" id="xrdHpLambda" value="1e-3">
+          <label>Background→SNIP anchor (0 = off)</label>
+          <input type="text" inputmode="decimal" id="xrdHpBgAnchor" value="0.3">
+          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+            <input type="checkbox" id="xrdHpFromCurrent" style="width:auto;margin:0"> Restart fit from current fit (instead of SNIP + peak search)
+          </label>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn" id="xrdHpApply" style="flex:1">Apply</button>
+            <button class="btn secondary" id="xrdHpClose" style="flex:1">Close</button>
+          </div>
+        </div>
+      </div>
+      <div id="xrdStdModal" class="modal-backdrop" style="display:none">
+        <div class="modal-box">
+          <h3 style="margin:0 0 4px">Standard fit — instrument calibration</h3>
+          <p style="color:var(--muted);font-size:12px;margin:0 0 10px">Fits the file chosen as <b>Instrumental standard</b> with axial-divergence (FCJ) asymmetry, refining a single geometry parameter <b>G = S/L = H/L</b>. Multi-start over shape × initial width (25 starts, each refining G) + a final all-points pass; expect ~1 min. The result is written back to the sample fit settings and reused on all samples.</p>
+          <label>Peak profile</label>
+          <select id="xrdStdProfile">
+            <option value="voigt" selected>True Voigt (σ, γ)</option>
+            <option value="pv">Pseudo-Voigt (FWHM, η)</option>
+          </select>
+          <label>Calibrated geometry G = S/L = H/L</label>
+          <input type="text" id="xrdStdG" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
+          <small style="color:var(--muted);display:block;margin:4px 0">Updated automatically after each standard fit (refined within [0.001, 0.1]).</small>
+          <label>Background polynomial degree</label>
+          <input type="number" id="xrdStdDeg" value="4" min="0" max="12">
+          <label>Max iterations</label>
+          <input type="number" id="xrdStdIter" value="60" min="5" max="2000">
+          <label>Convergence tolerance (relative)</label>
+          <input type="text" inputmode="decimal" id="xrdStdTol" value="1e-12">
+          <label>Initial LM damping λ₀</label>
+          <input type="text" inputmode="decimal" id="xrdStdLambda" value="1e-3">
+          <label>Background→SNIP anchor (0 = off)</label>
+          <input type="text" inputmode="decimal" id="xrdStdBgAnchor" value="0.3">
+          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+            <input type="checkbox" id="xrdStdFromCurrent" style="width:auto;margin:0"> Restart fit from current fit (instead of SNIP + peak search)
+          </label>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn" id="xrdStdApply" style="flex:1">Apply</button>
+            <button class="btn secondary" id="xrdStdClose" style="flex:1">Close</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ GC ============ -->
+    <section class="tab" id="tab-gc">
+      <div class="card">
+        <h2>GC</h2>
+        <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) (%Mol)" column.</div>
+        <div class="dropzone" id="gcDropzone">
+          <div class="dz-icon">⤒</div>
+          <div class="dz-title">Drag here your files, or click to select them.</div>
+          <div class="dz-hint">.csv</div>
+          <input type="file" id="gcFiles" multiple accept=".csv" style="display:none">
+        </div>
+        <div id="gcAlerts"></div>
+        <div id="gcFileTableWrap"></div>
+        <div id="gcLightAlert"></div>
+        <div id="gcParamTableWrap"></div>
+      </div>
+
+      <!-- Plots card -->
+      <div class="card" id="gcResults" style="display:none">
+        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <div class="instr-block">Set catalyst mass (m), carrier gas flow rate (Q), and the light-on time for each sample. Define the integration interval to compute mean H₂ production rates. The white vertical lines mark the selected boundaries.</div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col" style="flex:2;min-width:520px">
+            <p class="chart-title">H₂ Production</p>
+            <div class="plot-wrap" style="margin-bottom:6px">
+              <svg class="plot" id="gcSvg1" style="height:305px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg1" data-dl-name="GC_H2_rate.svg" data-dl-legend="gcLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div class="plot-wrap">
+              <svg class="plot" id="gcSvg2" style="height:305px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg2" data-dl-name="GC_H2_cumulative.svg" data-dl-legend="gcLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div id="gcLegend" class="legend" style="margin-top:8px"></div>
+          </div>
+          <div class="col" style="min-width:200px;align-self:flex-start;padding-top:26px">
+            <label>Interval start (h)</label>
+            <input type="number" id="gcPlateauStart" value="0" min="0" step="0.5">
+            <label>Interval end (h)</label>
+            <input type="number" id="gcPlateauEnd" value="24" min="0" step="0.5">
+          </div>
+        </div>
+      </div>
+
+      <!-- Bar chart + Summary card -->
+      <div class="card" id="gcResultsBar" style="display:none">
+        <h3 style="margin:0 0 12px">RESULTS</h3>
+        <div class="row" style="align-items:flex-start;gap:16px">
+          <div class="col" style="flex:2;min-width:520px">
+            <div class="plot-wrap">
+              <svg class="plot" id="gcSvgBar" style="height:640px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvgBar" data-dl-name="GC_results.svg"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+          </div>
+          <div class="col" style="flex:1;min-width:220px;background:var(--panel2);padding:12px;border-radius:4px;align-self:flex-start">
+            <div style="font-size:13px" id="gcPlateauTableWrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="gcExportCard" style="display:none">
+        <button class="btn" id="gcSaveCsv" style="width:100%">Export CSV</button>
+        <div id="gcDownloads" style="margin-top:10px"></div>
+      </div>
+    </section>
+
+    <!-- ============ EPR ============ -->
+    <section class="tab" id="tab-epr">
+      <div class="card">
+        <h2>EPR</h2>
+        <div class="instr-block" style="max-width:100%">Compatible with Bruker EPR spectrometers (BES3T format). Upload paired .DTA and .DSC files: both are required for each sample. Pairs are matched by filename stem.</div>
+        <div class="dropzone" id="eprDropzone">
+          <div class="dz-icon">⤒</div>
+          <div class="dz-title">Drag here your files, or click to select them.</div>
+          <div class="dz-hint">.DTA / .DSC (Bruker BES3T pairs)</div>
+          <input type="file" id="eprFiles" multiple accept=".dta,.DTA,.dsc,.DSC" style="display:none">
+        </div>
+        <div id="eprAlerts"></div>
+        <div id="eprPendingWrap"></div>
+        <div id="eprFileTableWrap"></div>
+      </div>
+      <div class="card" id="eprWorkspace" style="display:none">
+        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <div class="instr-block">Spectra are normalized and stacked for visual comparison. Adjust the smoothing window and normalization mode as needed.</div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col" style="flex:2;min-width:520px">
+            <div class="plot-wrap">
+              <svg class="plot" id="eprSvg" style="height:640px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="eprSvg" data-dl-name="EPR.svg" data-dl-legend="eprLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+            </div>
+            <div id="eprLegend" class="legend"></div>
+          </div>
+          <div class="col" style="min-width:260px;align-self:flex-start">
+            <label>Normalization</label>
+            <select id="eprNorm">
+              <option value="global">Global (max of all)</option>
+              <option value="local">Local (max of each)</option>
+            </select>
+            <label>Smoothing points</label>
+            <input type="number" id="eprSmooth" value="10" min="1">
+          </div>
+        </div>
+      </div>
+      <div class="card" id="eprExportCard" style="display:none">
+        <button class="btn" id="eprSave" style="width:100%">Export CSV</button>
+        <div id="eprDownloads" style="margin-top:10px"></div>
+      </div>
+    </section>
+
+    <footer>DataTreat — open source · all processing runs in your browser, no data is sent to any server.</footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
