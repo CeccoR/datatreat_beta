@@ -291,26 +291,6 @@ function csvLine(vals){ return csvJoin(vals) + '\n'; }
   fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; });
 })();
 
-/* =========================================================
-   THEME (dark default / light)
-========================================================= */
-(function initTheme(){
-  const root = document.documentElement;
-  const btn = document.getElementById('themeToggle');
-  function apply(theme){
-    const light = theme === 'light';
-    root.classList.toggle('theme-light', light);
-    if (btn){ btn.textContent = light ? '☀' : '🌙'; btn.title = light ? 'Switch to dark theme' : 'Switch to light theme'; }
-    try { localStorage.setItem('datatreat-theme', theme); } catch(e){}
-  }
-  let saved = 'dark';
-  try { saved = localStorage.getItem('datatreat-theme') || 'dark'; } catch(e){}
-  apply(saved === 'light' ? 'light' : 'dark');
-  if (btn) btn.addEventListener('click', ()=>{
-    apply(root.classList.contains('theme-light') ? 'dark' : 'light');
-  });
-})();
-
 function downloadBlob(filename, text){
   const blob = new Blob([text], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
@@ -1688,7 +1668,7 @@ function nextColor(existingFiles){
   const PEAK_BASE = '#3f9d54';   // darker green, base
   const PEAK_HOVER = '#5fcf6a';  // brighter green, transient hover
   const PEAK_SEL  = '#ffffff';   // white, permanent selection
-  const FWHM_BASE  = '#b5292c';  // dark red, base (contrasts both themes)
+  const FWHM_BASE  = '#b5292c';  // dark red, base (contrasts with the dark background)
   const FWHM_HOVER = '#ff5a5a';  // brighter red, transient hover
   const FWHM_SEL   = '#ff0000';  // pure red, permanent selection
   // Per-panel selection/hover state — the Analysis table talks only to the Analysis

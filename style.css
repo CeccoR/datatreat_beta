@@ -10,37 +10,7 @@
   --good: #7fd17f;
   --warn: #ffb454;
   --bad: #ff6b6b;
-  /* Plot axis colors (themed) */
-  --plot-grid: #262c35;
-  --plot-tick: #93a0b0;
-  --plot-border: #3a414c;
-  --plot-label: #c4ccd6;
 }
-
-/* ===== Light theme ===== */
-:root.theme-light {
-  --bg: #f4f6f8;
-  --panel: #ffffff;
-  --panel2: #eef1f4;
-  --line: #d4dae0;
-  --text: #1b242b;
-  --muted: #5f6b73;
-  --accent: #e0871a;
-  --accent2: #b45faa;
-  --good: #2f9e44;
-  --warn: #c77800;
-  --bad: #d64545;
-  --plot-grid: #e3e7eb;
-  --plot-tick: #5a6470;
-  --plot-border: #b6bec6;
-  --plot-label: #333b42;
-}
-
-/* Themed plot axis elements (CSS overrides the inline presentation attributes) */
-.plot-grid { stroke: var(--plot-grid); }
-.plot-tick { fill: var(--plot-tick); }
-.plot-border { stroke: var(--plot-border); }
-.plot-label { fill: var(--plot-label); }
 
 * {
   box-sizing: border-box;
@@ -95,22 +65,8 @@ nav button.active {
   border-color: var(--accent);
   font-weight: 600;
 }
-nav button.nav-theme {
-  margin-left: auto;
-  font-size: 15px;
-  padding: 7px 10px;
-  border-radius: 50%;
-  border-color: var(--line);
-  color: var(--muted);
-  line-height: 1;
-}
-nav button.nav-theme:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--panel2);
-}
 nav button.nav-settings {
-  margin-left: 0;
+  margin-left: auto;
   font-size: 15px;
   font-weight: bold;
   padding: 7px 11px;
