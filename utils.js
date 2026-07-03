@@ -694,6 +694,16 @@ function setTabLoaded(tab, has){
 function sizeHomeTiles(){
   const cards = [...document.querySelectorAll('.home-card')];
   if (!cards.length || cards[0].getBoundingClientRect().height <= 0) return; // hidden
+  // On narrow screens a plain CSS layout (small fixed tile) is used instead — clear
+  // any inline sizing so those rules apply.
+  if (window.innerWidth <= 600){
+    cards.forEach(c=>{
+      c.style.height = ''; c.style.paddingLeft = '';
+      const ic = c.querySelector('.home-card-icon');
+      ic.style.left = ''; ic.style.width = ''; ic.style.height = '';
+    });
+    return;
+  }
   const GAP = 16, CAP = 120, B = 1; // B = card border width (kept out of the insets)
   // inset from the padding box so the visible top/bottom (via centering) and left
   // gaps are equal once the 1px border is accounted for.

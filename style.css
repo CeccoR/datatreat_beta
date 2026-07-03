@@ -347,6 +347,11 @@ svg.plot {
   grid-template-columns: repeat(2, 1fr);
   gap: 14px;
 }
+/* Narrow screens: single column (icon/card overrides live after the base rules
+   below so they win by source order). */
+@media (max-width: 600px) {
+  .home-grid { grid-template-columns: 1fr; }
+}
 .home-card {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -386,6 +391,16 @@ svg.plot {
 .home-card-text {
   flex: 1;
   min-width: 0;
+}
+/* Narrow screens: simple fixed small tile in flow (JS 90%-sizing is skipped) */
+@media (max-width: 600px) {
+  .home-card { padding: 16px; gap: 14px; }
+  .home-card-icon {
+    position: static;
+    transform: none;
+    width: 54px;
+    height: 54px;
+  }
 }
 .home-card-text {
   flex: 1;
