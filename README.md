@@ -19,7 +19,16 @@ git clone https://github.com/CeccoR/datatreat.git
 cd datatreat
 ```
 
-Then open `index.html` in any modern browser (Chrome, Firefox, Safari, Edge). No server or build step required.
+The app is built from native ES modules, so browsers block loading it directly
+via `file://`. Serve the folder over a local HTTP server instead (still no build
+step and no dependencies):
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000` in any modern browser (Chrome, Firefox,
+Safari, Edge). Any other static server works too (e.g. `npx serve`).
 
 ### Settings
 
