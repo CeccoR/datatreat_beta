@@ -538,7 +538,14 @@
     <footer>DataTreat — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
-  <script src="script.js"></script>
+  <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
+       each analysis module is its own file and can be added independently. -->
+  <script type="module" src="utils.js"></script>
+  <script type="module" src="plot.js"></script>
+  <script type="module" src="tauc.js"></script>
+  <script type="module" src="xrd.js"></script>
+  <script type="module" src="epr.js"></script>
+  <script type="module" src="gc.js"></script>
 </body>
 
 </html>

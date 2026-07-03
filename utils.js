@@ -1,0 +1,632 @@
+/* =========================================================
+   GENERIC UTILITIES
+========================================================= */
+const COLORS = [
+  '#3aa0ff','#ff7a59','#5fcf6a','#d050ff','#ffcc4d','#ff5050','#4dd0e1','#c0ca33','#9575cd','#f06292',
+  '#ff9800','#00bcd4','#8bc34a','#e91e63','#00897b','#ff5722','#1565c0','#f9a825','#6a1b9a','#558b2f',
+  '#bf360c','#006064','#4527a0','#2e7d32','#ad1457','#0277bd','#6d4c41','#37474f','#e53935','#039be5',
+  '#7b1fa2','#43a047','#fb8c00','#00838f','#c62828','#1976d2',
+];
+function colorOf(i){return COLORS[i % COLORS.length];}
+
+/* =========================================================
+   CUSTOM COLOR PICKER
+========================================================= */
+const CP_PRESETS = [
+  '#e74c3c','#e67e22','#f39c12','#f1c40f','#2ecc71','#1abc9c',
+  '#3498db','#2980b9','#9b59b6','#8e44ad','#e91e63','#c2185b',
+  '#ff6b6b','#ffa94d','#ffe066','#8ce99a','#63e6be','#74c0fc',
+  '#da77f2','#f783ac','#ffb347','#a5d8ff','#b197fc','#ffd43b',
+  '#c0392b','#bf360c','#d35400','#7d3c98','#1565c0','#006064',
+  '#ffffff','#bdc3c7','#95a5a6','#7f8c8d','#34495e','#2c3e50',
+];
+function _hexToRgb(hex){
+  hex = hex.replace(/^#/,'');
+  if (hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+  const n = parseInt(hex,16);
+  return {r:(n>>16)&255, g:(n>>8)&255, b:n&255};
+}
+function _rgbToHex(r,g,b){
+  return '#'+[r,g,b].map(v=>Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,'0')).join('');
+}
+function _rgbToHsv(r,g,b){
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+  let h=0, s=max===0?0:d/max, v=max;
+  if(d){
+    if(max===r) h=((g-b)/d+6)%6;
+    else if(max===g) h=(b-r)/d+2;
+    else h=(r-g)/d+4;
+    h/=6;
+  }
+  return {h,s,v};
+}
+function _hsvToRgb(h,s,v){
+  const i=Math.floor(h*6), f=h*6-i, p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  let r,g,b;
+  switch(i%6){
+    case 0:r=v;g=t;b=p;break; case 1:r=q;g=v;b=p;break;
+    case 2:r=p;g=v;b=t;break; case 3:r=p;g=q;b=v;break;
+    case 4:r=t;g=p;b=v;break; default:r=v;g=p;b=q;break;
+  }
+  return {r:Math.round(r*255),g:Math.round(g*255),b:Math.round(b*255)};
+}
+
+class ColorPickerUI {
+  constructor(){
+    this._onChange = null;
+    this._hsv = {h:0,s:1,v:1};
+    this._anchorBtn = null;
+    this._build();
+    document.addEventListener('pointerdown', e=>{
+      if (this._el.style.display==='none') return;
+      if (!this._el.contains(e.target) && e.target !== this._anchorBtn)
+        this.close();
+    }, true);
+  }
+  _build(){
+    const el = document.createElement('div');
+    el.className = 'cp-popup';
+    el.style.display = 'none';
+    el.innerHTML = `
+      <div class="cp-map"><div class="cp-cursor"></div></div>
+      <div class="cp-hue"><div class="cp-hue-thumb"></div></div>
+      <div class="cp-bottom">
+        <div class="cp-preview"></div>
+        <div class="cp-hex-wrap"><span>#</span><input class="cp-hex" type="text" maxlength="6" spellcheck="false" autocomplete="off"></div>
+      </div>
+      <div class="cp-rgb">
+        <div class="cp-rgb-row"><span>R</span><input type="range" class="cp-slider cp-r-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
+        <div class="cp-rgb-row"><span>G</span><input type="range" class="cp-slider cp-g-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
+        <div class="cp-rgb-row"><span>B</span><input type="range" class="cp-slider cp-b-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
+      </div>
+      <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>`;
+    document.body.appendChild(el);
+    this._el = el;
+    this._map = el.querySelector('.cp-map');
+    this._cursor = el.querySelector('.cp-cursor');
+    this._hue = el.querySelector('.cp-hue');
+    this._hueThumb = el.querySelector('.cp-hue-thumb');
+    this._preview = el.querySelector('.cp-preview');
+    this._hexIn = el.querySelector('.cp-hex');
+    this._rSl = el.querySelector('.cp-r-sl');
+    this._gSl = el.querySelector('.cp-g-sl');
+    this._bSl = el.querySelector('.cp-b-sl');
+    const nums = el.querySelectorAll('.cp-num');
+    this._rNum = nums[0]; this._gNum = nums[1]; this._bNum = nums[2];
+
+    // 2D map — pointer drag
+    const onMapMove = e=>{
+      const r = this._map.getBoundingClientRect();
+      this._hsv.s = Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+      this._hsv.v = Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height));
+      this._emit();
+    };
+    this._map.addEventListener('pointerdown', e=>{
+      e.preventDefault(); this._map.setPointerCapture(e.pointerId); onMapMove(e);
+      this._map.addEventListener('pointermove', onMapMove);
+      this._map.addEventListener('pointerup', ()=>this._map.removeEventListener('pointermove', onMapMove), {once:true});
+    });
+
+    // Hue slider — pointer drag
+    const onHueMove = e=>{
+      const r = this._hue.getBoundingClientRect();
+      this._hsv.h = Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+      this._emit();
+    };
+    this._hue.addEventListener('pointerdown', e=>{
+      e.preventDefault(); this._hue.setPointerCapture(e.pointerId); onHueMove(e);
+      this._hue.addEventListener('pointermove', onHueMove);
+      this._hue.addEventListener('pointerup', ()=>this._hue.removeEventListener('pointermove', onHueMove), {once:true});
+    });
+
+    // RGB range sliders
+    const onSlider = ()=>{
+      this._hsv = _rgbToHsv(+this._rSl.value, +this._gSl.value, +this._bSl.value);
+      this._emit();
+    };
+    [this._rSl, this._gSl, this._bSl].forEach(s=>s.addEventListener('input', onSlider));
+
+    // RGB number inputs
+    const onNum = ()=>{
+      const clamp = v=>Math.max(0,Math.min(255,+v||0));
+      this._hsv = _rgbToHsv(clamp(this._rNum.value), clamp(this._gNum.value), clamp(this._bNum.value));
+      this._emit();
+    };
+    [this._rNum, this._gNum, this._bNum].forEach(n=>n.addEventListener('change', onNum));
+
+    // Hex input
+    this._hexIn.addEventListener('input', ()=>{
+      const v = this._hexIn.value.replace(/[^0-9a-fA-F]/g,'');
+      if (v.length===6 || v.length===3){
+        this._hsv = _rgbToHsv(...Object.values(_hexToRgb('#'+v)));
+        this._updateUI(true);
+        if (this._onChange) this._onChange(_rgbToHex(...Object.values(_hsvToRgb(this._hsv.h,this._hsv.s,this._hsv.v))));
+      }
+    });
+
+    // Preset swatches
+    el.querySelectorAll('.cp-preset').forEach(p=>p.addEventListener('click', ()=>{
+      this._hsv = _rgbToHsv(...Object.values(_hexToRgb(p.dataset.color)));
+      this._emit();
+    }));
+  }
+
+  _emit(){
+    this._updateUI(false);
+    const {r,g,b} = _hsvToRgb(this._hsv.h, this._hsv.s, this._hsv.v);
+    if (this._onChange) this._onChange(_rgbToHex(r,g,b));
+  }
+
+  _updateUI(skipHex){
+    const {h,s,v} = this._hsv;
+    const {r,g,b} = _hsvToRgb(h,s,v);
+    const hex = _rgbToHex(r,g,b);
+    const hueColor = `hsl(${Math.round(h*360)},100%,50%)`;
+    this._map.style.background = `linear-gradient(to bottom,transparent,#000),linear-gradient(to right,#fff,${hueColor})`;
+    this._cursor.style.left = (s*100)+'%';
+    this._cursor.style.top = ((1-v)*100)+'%';
+    this._hueThumb.style.left = (h*100)+'%';
+    this._preview.style.background = hex;
+    if (!skipHex) this._hexIn.value = hex.slice(1).toUpperCase();
+    this._rSl.value = r; this._gSl.value = g; this._bSl.value = b;
+    this._rNum.value = r; this._gNum.value = g; this._bNum.value = b;
+    this._rSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(0,${g},${b}),rgb(255,${g},${b}))`);
+    this._gSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(${r},0,${b}),rgb(${r},255,${b}))`);
+    this._bSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(${r},${g},0),rgb(${r},${g},255))`);
+  }
+
+  open(anchorBtn, currentColor, onChange){
+    this._anchorBtn = anchorBtn;
+    this._onChange = onChange;
+    this._hsv = _rgbToHsv(...Object.values(_hexToRgb(currentColor)));
+    this._updateUI(false);
+    this._el.style.display = 'block';
+    const rect = anchorBtn.getBoundingClientRect();
+    const pw = this._el.offsetWidth || 260, ph = this._el.offsetHeight || 430;
+    let left = rect.right + 10, top = rect.top - 4;
+    if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
+    if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+    this._el.style.left = Math.max(8,left)+'px';
+    this._el.style.top = Math.max(8,top)+'px';
+  }
+
+  close(){
+    this._el.style.display = 'none';
+    this._onChange = null;
+    this._anchorBtn = null;
+  }
+}
+
+const colorPickerUI = new ColorPickerUI();
+
+/* =========================================================
+   PALETTE PICKER
+========================================================= */
+const CP_PALETTES = [
+  { name: 'DataTreat',    colors: ['#3aa0ff','#ff7a59','#5fcf6a','#d050ff','#ffcc4d','#ff5050','#4dd0e1','#c0ca33','#9575cd','#f06292'] },
+  { name: 'Tableau',      colors: ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac'] },
+  { name: 'D3 Cat10',     colors: ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf'] },
+  { name: 'Okabe-Ito',    colors: ['#e69f00','#56b4e9','#009e73','#f0e442','#0072b2','#d55e00','#cc79a7','#000000'] },
+  { name: 'Set1',         colors: ['#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00','#a65628','#f781bf','#999999'] },
+  { name: 'Set2',         colors: ['#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3'] },
+  { name: 'Pastel',       colors: ['#fbb4ae','#b3cde3','#ccebc5','#decbe4','#fed9a6','#ffffcc','#e5d8bd','#fddaec','#f2f2f2'] },
+];
+
+class PalettePickerUI {
+  constructor(){
+    this._onChange = null;
+    this._anchorBtn = null;
+    this._build();
+    document.addEventListener('pointerdown', e=>{
+      if (this._el.style.display==='none') return;
+      if (!this._el.contains(e.target) && e.target !== this._anchorBtn) this.close();
+    }, true);
+  }
+  _build(){
+    const el = document.createElement('div');
+    el.className = 'pp-popup';
+    el.style.display = 'none';
+    el.innerHTML = CP_PALETTES.map((p,i)=>{
+      const swatches = Array.from({length:12}, (_,k)=>
+        `<span class="pp-swatch" style="background:${p.colors[k%p.colors.length]}"></span>`).join('');
+      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${p.name}</span><div class="pp-swatches">${swatches}</div></div>`;
+    }).join('');
+    document.body.appendChild(el);
+    this._el = el;
+    el.querySelectorAll('.pp-row').forEach(row=>{
+      row.addEventListener('click', ()=>{
+        if (this._onChange) this._onChange(CP_PALETTES[+row.dataset.idx].colors);
+        this.close();
+      });
+    });
+  }
+  open(anchorBtn, onChange){
+    this._anchorBtn = anchorBtn;
+    this._onChange = onChange;
+    this._el.style.display = 'block';
+    const rect = anchorBtn.getBoundingClientRect();
+    const pw = this._el.offsetWidth || 236, ph = this._el.offsetHeight || 260;
+    let left = rect.right + 10, top = rect.top - 4;
+    if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
+    if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+    this._el.style.left = Math.max(8,left)+'px';
+    this._el.style.top = Math.max(8,top)+'px';
+  }
+  close(){ this._el.style.display='none'; this._onChange=null; this._anchorBtn=null; }
+}
+
+const palettePickerUI = new PalettePickerUI();
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+const settings = { decimal: '.', field: ';', plotFmt: 'png' };
+
+function fmtNum(v, decimals){
+  if (!isFinite(v)) return '';
+  return v.toFixed(decimals).replace('.', settings.decimal);
+}
+function csvJoin(vals){ return vals.join(settings.field); }
+function csvLine(vals){ return csvJoin(vals) + '\n'; }
+
+(function initSettings(){
+  const decSel = document.getElementById('settingDecimal');
+  const fldSel = document.getElementById('settingField');
+
+  function validate(){
+    const d = decSel.value, f = fldSel.value;
+    if (d === ',' && f === ','){
+      // revert whichever was just changed to a safe default
+      if (settings.decimal === ',') decSel.value = '.';
+      else fldSel.value = ';';
+    }
+    settings.decimal = decSel.value;
+    settings.field   = fldSel.value;
+  }
+
+  decSel.addEventListener('change', validate);
+  fldSel.addEventListener('change', validate);
+  const fmtSel = document.getElementById('settingPlotFmt');
+  fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; });
+})();
+
+function downloadBlob(filename, text){
+  const blob = new Blob([text], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
+}
+function makeDownloadLink(container, filename, text, label){
+  const b = document.createElement('button');
+  b.className = 'btn secondary small';
+  b.style.marginRight = '8px'; b.style.marginBottom='6px';
+  b.textContent = label || ('Download ' + filename);
+  b.onclick = ()=>downloadBlob(filename, text);
+  container.appendChild(b);
+}
+
+function parseNumber(s, decSepIsComma){
+  if (s === undefined || s === null) return NaN;
+  s = String(s).trim();
+  if (decSepIsComma) s = s.replace(',', '.');
+  return parseFloat(s);
+}
+
+function detectDelim(line){
+  const counts = {';':0, ',':0, '\t':0};
+  for (const c of line){ if (counts.hasOwnProperty(c)) counts[c]++; }
+  let best=';', bestN=-1;
+  for (const k in counts){ if (counts[k]>bestN){bestN=counts[k]; best=k;} }
+  return bestN>0 ? best : ',';
+}
+
+function splitCSVLine(line, delim){
+  return line.split(delim).map(s=>s.trim().replace(/^"|"$/g,''));
+}
+
+/* =========================================================
+   SHARED FILE DROPZONE
+========================================================= */
+function setupDropzone(dropzoneId, inputId, onFiles){
+  const dz = document.getElementById(dropzoneId);
+  const input = document.getElementById(inputId);
+  if (!dz || !input) return;
+
+  dz.addEventListener('click', ()=> input.click());
+
+  input.addEventListener('change', ()=>{
+    if (input.files.length) {
+      const fileArr = Array.from(input.files);
+      input.value = ''; // reset before async processing so same file can be re-added after removal
+      onFiles(fileArr);
+    }
+  });
+
+  ['dragenter','dragover'].forEach(evt=>{
+    dz.addEventListener(evt, e=>{
+      e.preventDefault(); e.stopPropagation();
+      dz.classList.add('dragover');
+    });
+  });
+  ['dragleave','dragend'].forEach(evt=>{
+    dz.addEventListener(evt, e=>{
+      e.preventDefault(); e.stopPropagation();
+      dz.classList.remove('dragover');
+    });
+  });
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); e.stopPropagation();
+    dz.classList.remove('dragover');
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length) onFiles(dt.files);
+  });
+}
+
+/* =========================================================
+   UNIFIED FILE LIST RENDERER
+   files: array of objects with at least {name, label}
+   callbacks: {onRemove(i), onMoveUp(i), onMoveDown(i), onLabelChange(i, newLabel)}
+   extraCols: optional array of {header, render(file,i)} for additional columns
+========================================================= */
+function renderUnifiedFileList(containerId, files, callbacks, extraCols){
+  const wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  if (!files.length){ wrap.innerHTML=''; return; }
+
+  const ec = extraCols || [];
+  const phantomBtns = `<button style="opacity:0;pointer-events:none">↑</button><button style="opacity:0;pointer-events:none">↓</button>`;
+  // colgroup: FILE=40%, LABEL+extraCols share remaining 40%, actions=20%
+  let colgroup = `<colgroup><col style="width:40%">`;
+  for (let i = 0; i < 1 + ec.length; i++) colgroup += `<col>`;
+  colgroup += `<col style="width:20%"></colgroup>`;
+  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>LABEL</th>`;
+  ec.forEach(c=> html += `<th>${c.header}</th>`);
+  html += `<th><div class="file-actions" style="display:flex;gap:4px;align-items:center;visibility:visible;white-space:nowrap">${phantomBtns}<button class="remove-all del" title="Remove all">✕</button></div></th></tr></thead><tbody>`;
+
+  files.forEach((f, i)=>{
+    const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
+    html += `<tr class="file-row" data-i="${i}">`;
+    html += `<td class="fname" title="${f.name}">${swatch}${f.name}</td>`;
+    html += `<td><input class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
+    ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
+    html += `<td><div class="file-actions">`;
+    if (i > 0) html += `<button class="move-up" data-i="${i}" title="Move up">↑</button>`;
+    else html += `<button disabled style="opacity:.2" title="Move up">↑</button>`;
+    if (i < files.length-1) html += `<button class="move-dn" data-i="${i}" title="Move down">↓</button>`;
+    else html += `<button disabled style="opacity:.2" title="Move down">↓</button>`;
+    html += `<button class="del" data-i="${i}" title="Remove">✕</button>`;
+    html += `</div></td></tr>`;
+  });
+  html += `</tbody></table></div>`;
+  wrap.innerHTML = html;
+
+  wrap.querySelector('.remove-all').addEventListener('click', ()=>{
+    if (callbacks.onRemoveAll) callbacks.onRemoveAll();
+  });
+  const palBtn = wrap.querySelector('.palette-pick-btn');
+  if (palBtn) palBtn.addEventListener('click', e=>{
+    e.stopPropagation();
+    palettePickerUI.open(palBtn, colors=>{
+      if (callbacks.onPaletteChange) callbacks.onPaletteChange(colors);
+    });
+  });
+  wrap.querySelectorAll('.color-swatch').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      colorPickerUI.open(btn, btn.dataset.color, color=>{
+        btn.style.background = color;
+        btn.dataset.color = color;
+        if (callbacks.onColorChange) callbacks.onColorChange(+btn.dataset.i, color);
+      });
+    });
+  });
+  wrap.querySelectorAll('.file-label').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      if (callbacks.onLabelChange) callbacks.onLabelChange(+e.target.dataset.i, e.target.value);
+    });
+  });
+  wrap.querySelectorAll('.move-up').forEach(btn=>{
+    btn.addEventListener('click', e=>{ if (callbacks.onMoveUp) callbacks.onMoveUp(+e.target.dataset.i); });
+  });
+  wrap.querySelectorAll('.move-dn').forEach(btn=>{
+    btn.addEventListener('click', e=>{ if (callbacks.onMoveDown) callbacks.onMoveDown(+e.target.dataset.i); });
+  });
+  wrap.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.target.dataset.i); });
+  });
+}
+
+function linspace(a,b,n){
+  if (n<=1) return [a];
+  const out = new Array(n);
+  for (let i=0;i<n;i++) out[i] = a + (b-a)*i/(n-1);
+  return out;
+}
+function interpLinear(xs, ys, xq){
+  const n = xs.length;
+  const out = new Array(xq.length).fill(NaN);
+  for (let i=0;i<xq.length;i++){
+    const x = xq[i];
+    if (x < xs[0] || x > xs[n-1]) continue;
+    let lo=0, hi=n-1;
+    while (hi-lo>1){
+      const mid=(lo+hi)>>1;
+      if (xs[mid] <= x) lo=mid; else hi=mid;
+    }
+    const x0=xs[lo], x1=xs[hi], y0=ys[lo], y1=ys[hi];
+    out[i] = (x1===x0) ? y0 : y0 + (y1-y0)*(x-x0)/(x1-x0);
+  }
+  return out;
+}
+function movingAverage(y, N){
+  N = Math.max(1, Math.round(N));
+  if (N<=1) return y.slice();
+  const n = y.length;
+  const out = new Array(n);
+  for (let i=0;i<n;i++){
+    let lo = i - Math.floor((N-1)/2);
+    let hi = i + Math.ceil((N-1)/2);
+    lo = Math.max(0, lo); hi = Math.min(n-1, hi);
+    let s=0,c=0;
+    for (let k=lo;k<=hi;k++){ s+=y[k]; c++; }
+    out[i] = s/c;
+  }
+  return out;
+}
+function gradientArr(y, x){
+  const n = y.length; const out = new Array(n);
+  for (let i=0;i<n;i++){
+    if (i===0) out[i] = (y[1]-y[0])/(x[1]-x[0]);
+    else if (i===n-1) out[i] = (y[n-1]-y[n-2])/(x[n-1]-x[n-2]);
+    else out[i] = (y[i+1]-y[i-1])/(x[i+1]-x[i-1]);
+  }
+  return out;
+}
+function cumtrapz(x, y){
+  const n=x.length; const out=new Array(n); out[0]=0;
+  for (let i=1;i<n;i++){
+    out[i] = out[i-1] + 0.5*(y[i]+y[i-1])*(x[i]-x[i-1]);
+  }
+  return out;
+}
+function meanArr(a){ return a.reduce((s,v)=>s+v,0)/a.length; }
+function stdArr(a){
+  if (a.length<2) return 0;
+  const m = meanArr(a);
+  const v = a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1);
+  return Math.sqrt(v);
+}
+function maxArr(a){ return a.reduce((m,v)=> isFinite(v)&&v>m?v:m, -Infinity); }
+function minArr(a){ return a.reduce((m,v)=> isFinite(v)&&v<m?v:m, Infinity); }
+
+function fitLinear(x,y){
+  const n = x.length;
+  if (n<2) return {slope:NaN,intercept:NaN,rmse:Infinity,R2:NaN,varM:NaN,varB:NaN,covMB:NaN};
+  let sx=0,sy=0,sxx=0,sxy=0;
+  for (let i=0;i<n;i++){ sx+=x[i]; sy+=y[i]; sxx+=x[i]*x[i]; sxy+=x[i]*y[i]; }
+  const meanX = sx/n, meanY = sy/n;
+  const Sxx = sxx - n*meanX*meanX;
+  const Sxy = sxy - n*meanX*meanY;
+  const slope = Sxy/Sxx;
+  const intercept = meanY - slope*meanX;
+  let ssres=0;
+  for (let i=0;i<n;i++){ const r = y[i]-(slope*x[i]+intercept); ssres += r*r; }
+  const rmse = Math.sqrt(ssres/n);
+  let sstot=0; for (let i=0;i<n;i++){ sstot += (y[i]-meanY)*(y[i]-meanY); }
+  const R2 = sstot===0 ? 1 : 1 - ssres/sstot;
+  const dof = Math.max(1, n-2);
+  const sigma2 = ssres/dof;
+  const XtX00 = sxx, XtX01 = sx, XtX11 = n;
+  const det = XtX00*XtX11 - XtX01*XtX01;
+  let varM=NaN, varB=NaN, covMB=NaN;
+  if (Math.abs(det) > 1e-12){
+    const inv00 = XtX11/det, inv01 = -XtX01/det, inv11 = XtX00/det;
+    varM = sigma2*inv00; varB = sigma2*inv11; covMB = sigma2*inv01;
+  }
+  return {slope, intercept, rmse, R2, varM, varB, covMB};
+}
+
+function betacf(x,a,b){
+  const MAXIT=200, EPS=3e-16, FPMIN=1e-300;
+  let qab=a+b, qap=a+1, qam=a-1;
+  let c=1, d=1-qab*x/qap;
+  if (Math.abs(d)<FPMIN) d=FPMIN;
+  d=1/d; let h=d;
+  for (let m=1;m<=MAXIT;m++){
+    const m2=2*m;
+    let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if (Math.abs(d)<FPMIN) d=FPMIN;
+    c=1+aa/c; if (Math.abs(c)<FPMIN) c=FPMIN;
+    d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if (Math.abs(d)<FPMIN) d=FPMIN;
+    c=1+aa/c; if (Math.abs(c)<FPMIN) c=FPMIN;
+    d=1/d; const del=d*c; h*=del;
+    if (Math.abs(del-1)<EPS) break;
+  }
+  return h;
+}
+function logGamma(x){
+  const g=7, c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if (x<0.5) return Math.log(Math.PI/Math.sin(Math.PI*x)) - logGamma(1-x);
+  x-=1; let a=c[0]; const t=x+g+0.5;
+  for (let i=1;i<g+2;i++) a+=c[i]/(x+i);
+  return 0.5*Math.log(2*Math.PI)+(x+0.5)*Math.log(t)-t+Math.log(a);
+}
+function betainc(x,a,b){
+  if (x<=0) return 0; if (x>=1) return 1;
+  const bt = Math.exp(logGamma(a+b)-logGamma(a)-logGamma(b)+a*Math.log(x)+b*Math.log(1-x));
+  if (x < (a+1)/(a+b+2)) return bt*betacf(x,a,b)/a;
+  return 1 - bt*betacf(1-x,b,a)/b;
+}
+function tcdf(t, df){
+  const x = df/(df+t*t);
+  const p = betainc(x, df/2, 0.5);
+  return t>0 ? 1-0.5*p : 0.5*p;
+}
+function tinv(p, df){
+  let lo=0, hi=1000;
+  for (let i=0;i<100;i++){
+    const mid=(lo+hi)/2;
+    const cp = tcdf(mid, df);
+    if (cp < p) lo=mid; else hi=mid;
+  }
+  return (lo+hi)/2;
+}
+
+/* tab navigation */
+document.getElementById('nav').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-tab]');
+  if (!btn) return;
+  goTab(btn.dataset.tab);
+});
+document.querySelectorAll('.home-card').forEach(c=>{
+  c.addEventListener('click', ()=>goTab(c.dataset.go));
+});
+document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
+  c.addEventListener('click', ()=>goTab(c.dataset.tab));
+});
+const VALID_TABS = ['home','tauc','xrd','gc','epr','settings'];
+function goTab(tab, fromHash){
+  if (!VALID_TABS.includes(tab)) tab = 'home';
+  document.querySelectorAll('#nav button').forEach(b=>{
+    const on = b.dataset.tab===tab;
+    b.classList.toggle('active', on);
+    if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
+  // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
+  if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
+}
+// Deep-link support: honour the initial hash and react to hash changes / back-forward
+window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
+(function initHashRoute(){
+  const t = location.hash.slice(1);
+  if (t && VALID_TABS.includes(t)) goTab(t, true);
+})();
+
+/* =========================================================
+   ALERT HELPERS
+========================================================= */
+function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidFn, dismissWarnFn){
+  const makeX = fn => `<button class="alert-dismiss" onclick="${fn||"this.closest('.alert').remove()"}" title="Dismiss">✕</button>`;
+  let html = '';
+  if (invalidNames.length)
+    html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidFn) + '</div>';
+  if (warnNames.length)
+    html += '<div class="alert warn">⚠ ' + (warnHeader || 'Non-standard format — verify these files:') + '<br>' + warnNames.join('<br>') + makeX(dismissWarnFn) + '</div>';
+  return html;
+}
+
+function nextColor(existingFiles){
+  const used = new Set(existingFiles.map(f=>f.color));
+  for (let i=0; i<COLORS.length*2; i++){ const c=colorOf(i); if (!used.has(c)) return c; }
+  return colorOf(existingFiles.length);
+}
+
+
+export {
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, buildAlertsHtml, nextColor
+};
