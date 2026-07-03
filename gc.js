@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor } from './utils.js';
+import { fmtNum, csvLine, downloadBlob, makeDownloadLink, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -99,6 +99,7 @@ import { Plot } from './plot.js';
   }
 
   function afterFilesChange(){
+    setTabLoaded('gc', files.length);
     renderUnifiedFileList('gcFileTableWrap', files, fileCallbacks());
     renderGcParamTable();
     if (files.length){

@@ -955,3 +955,81 @@ button.color-swatch:hover { border-color: var(--text); }
 /* ===== XRD fit progress bar ===== */
 #xrdFitProgWrap { height:6px; background:var(--panel2); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
 #xrdFitProgBar { height:100%; width:0; background:var(--accent); transition:width .08s linear; }
+
+/* ===== Home-card technique icons ===== */
+.home-card .tech-icon {
+  width: 46px;
+  height: 26px;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* ===== "Data loaded" dot on nav tabs ===== */
+#nav button { position: relative; }
+#nav button.has-data::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 2px var(--panel);
+}
+#nav button.nav-settings.has-data::after { display: none; }
+
+/* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
+.legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }
+.legend i.mk-dot { width: 9px; height: 9px; border-radius: 50%; }
+.legend i.mk-box { width: 11px; height: 11px; border-radius: 2px; }
+
+/* ===== Dropzone loading state ===== */
+.dropzone { position: relative; }
+.dropzone.dz-loading { pointer-events: none; }
+.dropzone.dz-loading .dz-icon,
+.dropzone.dz-loading .dz-title,
+.dropzone.dz-loading .dz-hint { opacity: 0.2; }
+.dropzone.dz-loading::before {
+  content: '';
+  position: absolute;
+  left: calc(50% - 48px);
+  top: calc(50% - 8px);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  animation: dz-spin 0.7s linear infinite;
+}
+.dropzone.dz-loading::after {
+  content: 'Loading…';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+@keyframes dz-spin { to { transform: rotate(360deg); } }
+
+/* ===== Collapsible instruction blocks ===== */
+.instr-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 6px 0 4px;
+  letter-spacing: 0.02em;
+}
+.instr-head:hover { color: var(--accent); }
+.instr-chevron { font-size: 10px; transition: transform 0.15s; }
+.instr-head.collapsed .instr-chevron { transform: rotate(-90deg); }

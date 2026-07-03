@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor } from './utils.js';
+import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -131,6 +131,7 @@ import { Plot } from './plot.js';
   });
 
   function afterFilesChange(){
+    setTabLoaded('epr', files.length);
     renderUnifiedFileList('eprFileTableWrap', files, fileCallbacks());
     if (files.length){
       document.getElementById('eprWorkspace').style.display='block';

@@ -334,13 +334,23 @@ function setupDropzone(dropzoneId, inputId, onFiles){
   const input = document.getElementById(inputId);
   if (!dz || !input) return;
 
-  dz.addEventListener('click', ()=> input.click());
+  // Show a "Loading…" state on the dropzone while onFiles (async parsing) runs,
+  // so large XRDML files or big batches don't look like a frozen UI.
+  const runFiles = (files)=>{
+    dz.classList.add('dz-loading');
+    let ret;
+    try { ret = onFiles(files); } finally {
+      Promise.resolve(ret).finally(()=> dz.classList.remove('dz-loading'));
+    }
+  };
+
+  dz.addEventListener('click', ()=>{ if (!dz.classList.contains('dz-loading')) input.click(); });
 
   input.addEventListener('change', ()=>{
     if (input.files.length) {
       const fileArr = Array.from(input.files);
       input.value = ''; // reset before async processing so same file can be re-added after removal
-      onFiles(fileArr);
+      runFiles(fileArr);
     }
   });
 
@@ -360,7 +370,7 @@ function setupDropzone(dropzoneId, inputId, onFiles){
     e.preventDefault(); e.stopPropagation();
     dz.classList.remove('dragover');
     const dt = e.dataTransfer;
-    if (dt && dt.files && dt.files.length) onFiles(dt.files);
+    if (dt && dt.files && dt.files.length) runFiles(dt.files);
   });
 }
 
@@ -589,6 +599,7 @@ document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
 const VALID_TABS = ['home','tauc','xrd','gc','epr','settings'];
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', settings:'DataTreat · Settings' };
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
   document.querySelectorAll('#nav button').forEach(b=>{
@@ -599,6 +610,12 @@ function goTab(tab, fromHash){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
   // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
   if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
+  document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
+}
+// Mark a module's nav tab with a "data loaded" dot (called by each module on file changes)
+function setTabLoaded(tab, has){
+  const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
+  if (btn) btn.classList.toggle('has-data', !!has);
 }
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
 window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
@@ -626,7 +643,35 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
+/* =========================================================
+   COLLAPSIBLE INSTRUCTION BLOCKS
+   Each .instr-block gets a clickable "Instructions" header; open by default,
+   the collapsed choice is remembered per block in localStorage.
+========================================================= */
+(function initInstrCollapse(){
+  document.querySelectorAll('.instr-block').forEach((block, i)=>{
+    const section = block.closest('section.tab');
+    const key = 'datatreat-instr-' + (section ? section.id : 's') + '-' + i;
+    const head = document.createElement('div');
+    head.className = 'instr-head';
+    head.setAttribute('role', 'button');
+    head.tabIndex = 0;
+    head.innerHTML = '<span class="instr-chevron" aria-hidden="true">▾</span><span>Instructions</span>';
+    block.parentNode.insertBefore(head, block);
+    let collapsed = false;
+    try { collapsed = localStorage.getItem(key) === 'collapsed'; } catch(e){}
+    const apply = ()=>{
+      block.style.display = collapsed ? 'none' : '';
+      head.classList.toggle('collapsed', collapsed);
+      head.setAttribute('aria-expanded', String(!collapsed));
+    };
+    apply();
+    const toggle = ()=>{ collapsed = !collapsed; try { localStorage.setItem(key, collapsed ? 'collapsed' : 'open'); } catch(e){} apply(); };
+    head.addEventListener('click', toggle);
+    head.addEventListener('keydown', e=>{ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(); } });
+  });
+})();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, buildAlertsHtml, nextColor
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, buildAlertsHtml, nextColor
 };

@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor } from './utils.js';
+import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -93,6 +93,7 @@ import { Plot } from './plot.js';
   });
 
   function afterFilesChange(){
+    setTabLoaded('tauc', files.length);
     renderUnifiedFileList('taucFileTableWrap', files, fileCallbacks());
     if (files.length) setupAnalysis();
     else {
@@ -407,7 +408,7 @@ import { Plot } from './plot.js';
         plot2.tickLabel(xc, files[k].label);
       }
       plot2.attachTools(barSvg.closest('.plot-wrap'));
-      leg2.innerHTML=`<span><i style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i style="background:#ff7a59"></i>Eg (baseline)</span>`;
+      leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
     }
     // Align the table panel with the first visible content in the left col
     const _leftCol = barSvg.closest('.col');

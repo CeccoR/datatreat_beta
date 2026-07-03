@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor } from './utils.js';
+import { settings, fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-core.js';
 
@@ -144,6 +144,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
   }
 
   function afterFilesChange(){
+    setTabLoaded('xrd', files.length);
     renderUnifiedFileList('xrdFileTableWrap', files, fileCallbacks());
     if (files.length){
       document.getElementById('xrdWorkspace').style.display='block';
