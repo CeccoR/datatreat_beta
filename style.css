@@ -976,7 +976,8 @@ button.color-swatch:hover { border-color: var(--text); }
 
 /* ===== "Data loaded" dot on nav tabs — subtle dot after the name, inheriting the
    text colour so it tracks hover/active states ===== */
-#nav button.has-data {
+/* Module tabs always reserve the dot slot so their width is constant */
+#nav button.has-dot-slot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -988,8 +989,10 @@ button.color-swatch:hover { border-color: var(--text); }
   flex-shrink: 0;
   display: block;
   color: inherit;
+  opacity: 0;
+  transition: opacity 0.12s;
 }
-#nav button.nav-settings .tab-dot { display: none; }
+#nav button.has-data .tab-dot { opacity: 1; }
 
 /* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
 .legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }

@@ -664,25 +664,25 @@ document.addEventListener('keydown', e=>{
   const did = isUndo ? st.performUndo() : st.performRedo();
   if (did) e.preventDefault();
 });
-// Mark a module's nav tab with a "data loaded" dot (a perfectly round SVG circle
-// that inherits the tab's text colour, called by each module on file changes)
+// Give every module tab a permanent (invisible) round SVG dot so its slot is
+// always reserved — the tab width never changes when the badge appears.
+(function initTabDots(){
+  ['tauc','xrd','gc','epr'].forEach(tab=>{
+    const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
+    if (!btn || btn.querySelector('.tab-dot')) return;
+    btn.classList.add('has-dot-slot');
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    dot.setAttribute('class', 'tab-dot');
+    dot.setAttribute('viewBox', '0 0 10 10');
+    dot.setAttribute('aria-hidden', 'true');
+    dot.innerHTML = '<circle cx="5" cy="5" r="4.2" fill="currentColor"/>';
+    btn.appendChild(dot);
+  });
+})();
+// Toggle the "data loaded" dot's visibility (the slot is already reserved).
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
-  if (!btn) return;
-  btn.classList.toggle('has-data', !!has);
-  let dot = btn.querySelector('.tab-dot');
-  if (has){
-    if (!dot){
-      dot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      dot.setAttribute('class', 'tab-dot');
-      dot.setAttribute('viewBox', '0 0 10 10');
-      dot.setAttribute('aria-hidden', 'true');
-      dot.innerHTML = '<circle cx="5" cy="5" r="4.2" fill="currentColor"/>';
-      btn.appendChild(dot);
-    }
-  } else if (dot){
-    dot.remove();
-  }
+  if (btn) btn.classList.toggle('has-data', !!has);
 }
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
 window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
