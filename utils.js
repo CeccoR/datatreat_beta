@@ -664,10 +664,25 @@ document.addEventListener('keydown', e=>{
   const did = isUndo ? st.performUndo() : st.performRedo();
   if (did) e.preventDefault();
 });
-// Mark a module's nav tab with a "data loaded" dot (called by each module on file changes)
+// Mark a module's nav tab with a "data loaded" dot (a perfectly round SVG circle
+// that inherits the tab's text colour, called by each module on file changes)
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
-  if (btn) btn.classList.toggle('has-data', !!has);
+  if (!btn) return;
+  btn.classList.toggle('has-data', !!has);
+  let dot = btn.querySelector('.tab-dot');
+  if (has){
+    if (!dot){
+      dot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      dot.setAttribute('class', 'tab-dot');
+      dot.setAttribute('viewBox', '0 0 10 10');
+      dot.setAttribute('aria-hidden', 'true');
+      dot.innerHTML = '<circle cx="5" cy="5" r="4.2" fill="currentColor"/>';
+      btn.appendChild(dot);
+    }
+  } else if (dot){
+    dot.remove();
+  }
 }
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
 window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });

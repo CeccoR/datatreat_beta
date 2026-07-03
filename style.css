@@ -981,16 +981,15 @@ button.color-swatch:hover { border-color: var(--text); }
   align-items: center;
   justify-content: center;
 }
-#nav button.has-data::after {
-  content: '';
+.tab-dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  background: currentColor;
   margin-left: 9px;
   flex-shrink: 0;
+  display: block;
+  color: inherit;
 }
-#nav button.nav-settings.has-data::after { display: none; }
+#nav button.nav-settings .tab-dot { display: none; }
 
 /* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
 .legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }
