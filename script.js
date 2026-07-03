@@ -588,10 +588,20 @@ document.querySelectorAll('.home-card').forEach(c=>{
 document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
-function goTab(tab){
+const VALID_TABS = ['home','tauc','xrd','gc','epr','settings'];
+function goTab(tab, fromHash){
+  if (!VALID_TABS.includes(tab)) tab = 'home';
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
+  // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
+  if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
 }
+// Deep-link support: honour the initial hash and react to hash changes / back-forward
+window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
+(function initHashRoute(){
+  const t = location.hash.slice(1);
+  if (t && VALID_TABS.includes(t)) goTab(t, true);
+})();
 
 /* =========================================================
    SVG PLOT HELPER (shared)
