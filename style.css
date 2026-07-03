@@ -356,18 +356,18 @@ svg.plot {
   transition: border-color 0.15s, background 0.15s;
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  align-items: center;
   gap: 16px;
 }
 .home-card:hover {
   border-color: var(--accent);
   background: var(--panel2);
 }
-/* Square icon tile on the left, spanning the full card height (DataTreat-logo style) */
+/* Compact square icon tile on the left (DataTreat-logo style) */
 .home-card-icon {
   flex-shrink: 0;
-  align-self: stretch;
-  aspect-ratio: 1 / 1;
+  width: 58px;
+  height: 58px;
   background: #0e1316;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -376,7 +376,7 @@ svg.plot {
   justify-content: center;
 }
 .home-card-icon .tech-icon {
-  width: 64%;
+  width: 62%;
   height: auto;
   color: var(--accent);
   display: block;
