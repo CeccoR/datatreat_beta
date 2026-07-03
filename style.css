@@ -351,16 +351,43 @@ svg.plot {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 22px 22px 20px;
+  padding: 18px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 16px;
 }
 .home-card:hover {
   border-color: var(--accent);
   background: var(--panel2);
+}
+/* Square icon tile on the left, spanning the full card height (DataTreat-logo style) */
+.home-card-icon {
+  flex-shrink: 0;
+  align-self: stretch;
+  aspect-ratio: 1 / 1;
+  background: #0e1316;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-card-icon .tech-icon {
+  width: 64%;
+  height: auto;
+  color: var(--accent);
+  display: block;
+}
+.home-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
 }
 .home-card h3 {
   color: var(--accent);
@@ -965,32 +992,24 @@ button.color-swatch:hover { border-color: var(--text); }
 #xrdFitProgWrap { height:6px; background:var(--panel2); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
 #xrdFitProgBar { height:100%; width:0; background:var(--accent); transition:width .08s linear; }
 
-/* ===== Home-card technique icons ===== */
-.home-card .tech-icon {
-  width: 46px;
-  height: 26px;
-  color: var(--accent);
-  display: block;
-  margin-bottom: 2px;
-}
 
 /* ===== "Data loaded" dot on nav tabs — subtle dot after the name, inheriting the
    text colour so it tracks hover/active states ===== */
-/* Module tabs always reserve the dot slot so their width is constant */
-#nav button.has-dot-slot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
+/* The dot is absolutely positioned so the tab keeps its un-badged size; it sits
+   midway in the right padding (≈ halfway between the last letter and the edge),
+   vertically centered. */
+#nav button.has-dot-slot { position: relative; }
 .tab-dot {
+  position: absolute;
+  top: 50%;
+  right: 3.5px;
+  transform: translateY(-50%);
   width: 7px;
   height: 7px;
-  margin-left: 9px;
-  flex-shrink: 0;
-  display: block;
   color: inherit;
   opacity: 0;
   transition: opacity 0.12s;
+  pointer-events: none;
 }
 #nav button.has-data .tab-dot { opacity: 1; }
 
