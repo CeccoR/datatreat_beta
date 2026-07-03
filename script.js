@@ -591,7 +591,11 @@ document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
 const VALID_TABS = ['home','tauc','xrd','gc','epr','settings'];
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
-  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.querySelectorAll('#nav button').forEach(b=>{
+    const on = b.dataset.tab===tab;
+    b.classList.toggle('active', on);
+    if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
   // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
   if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
