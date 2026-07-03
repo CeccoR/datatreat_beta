@@ -644,31 +644,34 @@ function nextColor(existingFiles){
 }
 
 /* =========================================================
-   COLLAPSIBLE INSTRUCTION BLOCKS
-   Each .instr-block gets a clickable "Instructions" header; open by default,
-   the collapsed choice is remembered per block in localStorage.
+   COLLAPSIBLE INSTRUCTIONS
+   Each .instr-block is toggled by a small info icon placed next to the card's
+   title. Open by default; the collapsed choice is remembered per block.
 ========================================================= */
 (function initInstrCollapse(){
+  const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
   document.querySelectorAll('.instr-block').forEach((block, i)=>{
     const section = block.closest('section.tab');
     const key = 'datatreat-instr-' + (section ? section.id : 's') + '-' + i;
-    const head = document.createElement('div');
-    head.className = 'instr-head';
-    head.setAttribute('role', 'button');
-    head.tabIndex = 0;
-    head.innerHTML = '<span class="instr-chevron" aria-hidden="true">▾</span><span>Instructions</span>';
-    block.parentNode.insertBefore(head, block);
+    // Attach the toggle to the nearest preceding heading; fall back to inline.
+    let heading = block.previousElementSibling;
+    while (heading && !/^H[1-3]$/.test(heading.tagName)) heading = heading.previousElementSibling;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'instr-info';
+    btn.setAttribute('aria-label', 'Toggle instructions');
+    btn.innerHTML = INFO_SVG;
+    if (heading) heading.appendChild(btn);
+    else block.parentNode.insertBefore(btn, block);
     let collapsed = false;
     try { collapsed = localStorage.getItem(key) === 'collapsed'; } catch(e){}
     const apply = ()=>{
       block.style.display = collapsed ? 'none' : '';
-      head.classList.toggle('collapsed', collapsed);
-      head.setAttribute('aria-expanded', String(!collapsed));
+      btn.classList.toggle('active', !collapsed); // highlighted while instructions are shown
+      btn.setAttribute('aria-expanded', String(!collapsed));
     };
     apply();
-    const toggle = ()=>{ collapsed = !collapsed; try { localStorage.setItem(key, collapsed ? 'collapsed' : 'open'); } catch(e){} apply(); };
-    head.addEventListener('click', toggle);
-    head.addEventListener('keydown', e=>{ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(); } });
+    btn.addEventListener('click', ()=>{ collapsed = !collapsed; try { localStorage.setItem(key, collapsed ? 'collapsed' : 'open'); } catch(e){} apply(); });
   });
 })();
 

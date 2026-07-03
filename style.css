@@ -965,18 +965,17 @@ button.color-swatch:hover { border-color: var(--text); }
   margin-bottom: 2px;
 }
 
-/* ===== "Data loaded" dot on nav tabs ===== */
-#nav button { position: relative; }
+/* ===== "Data loaded" dot on nav tabs — subtle dot after the name, inheriting the
+   text colour so it tracks hover/active states ===== */
 #nav button.has-data::after {
   content: '';
-  position: absolute;
-  top: 5px;
-  right: 6px;
-  width: 7px;
-  height: 7px;
+  display: inline-block;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: var(--good);
-  box-shadow: 0 0 0 2px var(--panel);
+  background: currentColor;
+  margin-left: 9px;
+  vertical-align: middle;
 }
 #nav button.nav-settings.has-data::after { display: none; }
 
@@ -1017,19 +1016,18 @@ button.color-swatch:hover { border-color: var(--text); }
 }
 @keyframes dz-spin { to { transform: rotate(360deg); } }
 
-/* ===== Collapsible instruction blocks ===== */
-.instr-head {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+/* ===== Collapsible instructions: an info icon next to the card title ===== */
+.instr-info {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 0 8px;
   cursor: pointer;
-  user-select: none;
-  font-size: 12px;
-  font-weight: 600;
   color: var(--muted);
-  margin: 6px 0 4px;
-  letter-spacing: 0.02em;
+  vertical-align: middle;
+  line-height: 0;
+  transition: color 0.15s;
 }
-.instr-head:hover { color: var(--accent); }
-.instr-chevron { font-size: 10px; transition: transform 0.15s; }
-.instr-head.collapsed .instr-chevron { transform: rotate(-90deg); }
+.instr-info svg { display: block; width: 15px; height: 15px; }
+.instr-info:hover { color: var(--accent); }
+.instr-info.active { color: var(--accent); }
