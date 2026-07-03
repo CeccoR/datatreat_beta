@@ -613,6 +613,7 @@ function goTab(tab, fromHash){
   // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
   if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
+  if (tab === 'home') requestAnimationFrame(sizeHomeTiles); // re-fit tiles after any resize while away
 }
 
 /* =========================================================
@@ -684,6 +685,44 @@ function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
   if (btn) btn.classList.toggle('has-data', !!has);
 }
+
+// Size each home card so its square icon tile spans 90% of the (common) card
+// height, centered, with equal top/bottom/left insets. The tile is absolutely
+// positioned (so it can't inflate the height); a few passes converge on a shared
+// height H that fits the tallest description. A cap keeps it from running away
+// when a narrow text column would otherwise grow unbounded.
+function sizeHomeTiles(){
+  const cards = [...document.querySelectorAll('.home-card')];
+  if (!cards.length || cards[0].getBoundingClientRect().height <= 0) return; // hidden
+  const GAP = 16, CAP = 120, B = 1; // B = card border width (kept out of the insets)
+  // inset from the padding box so the visible top/bottom (via centering) and left
+  // gaps are equal once the 1px border is accounted for.
+  const insetOf = (H, tile)=> (H - 2*B - tile) / 2;
+  let H = 100;
+  for (let pass=0; pass<6; pass++){
+    const tile = Math.min(CAP, 0.9*H);
+    const padLeft = insetOf(H, tile) + tile + GAP;
+    let maxText = 0;
+    cards.forEach(c=>{
+      c.style.height = 'auto';
+      c.style.paddingLeft = padLeft + 'px';
+      maxText = Math.max(maxText, c.querySelector('.home-card-text').getBoundingClientRect().height);
+    });
+    H = Math.max(tile, maxText) / 0.9;
+  }
+  const tile = Math.min(CAP, 0.9*H), inset = insetOf(H, tile), padLeft = inset + tile + GAP;
+  cards.forEach(c=>{
+    c.style.height = H.toFixed(2) + 'px';
+    c.style.paddingLeft = padLeft.toFixed(2) + 'px';
+    const ic = c.querySelector('.home-card-icon');
+    ic.style.left = inset.toFixed(2) + 'px';
+    ic.style.width = tile.toFixed(2) + 'px';
+    ic.style.height = tile.toFixed(2) + 'px';
+  });
+}
+requestAnimationFrame(sizeHomeTiles);
+window.addEventListener('load', sizeHomeTiles);
+window.addEventListener('resize', ()=>requestAnimationFrame(sizeHomeTiles));
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
 window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
 (function initHashRoute(){

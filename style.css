@@ -354,20 +354,22 @@ svg.plot {
   padding: 18px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
+  position: relative;
   display: flex;
-  flex-direction: row;
   align-items: center;
-  gap: 16px;
+  padding: 0 18px 0 18px; /* height + left padding set by JS (sizeHomeTiles) */
 }
 .home-card:hover {
   border-color: var(--accent);
   background: var(--panel2);
 }
-/* Compact square icon tile on the left (DataTreat-logo style) */
+/* Square icon tile on the left (DataTreat-logo style). Absolutely positioned so it
+   never drives the card height; its side (90% of card height) and equal
+   top/bottom/left insets are set by JS. */
 .home-card-icon {
-  flex-shrink: 0;
-  width: 58px;
-  height: 58px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   background: #0e1316;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -380,6 +382,10 @@ svg.plot {
   height: auto;
   color: var(--accent);
   display: block;
+}
+.home-card-text {
+  flex: 1;
+  min-width: 0;
 }
 .home-card-text {
   flex: 1;
