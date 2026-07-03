@@ -1698,6 +1698,28 @@ function nextColor(existingFiles){
   // Shared param values (defaults)
   const shared = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
 
+  // Persist only these XRD analysis defaults across sessions (per user's choice):
+  // normalization, smoothing, SNIP baseline window, K and λ — NOT the peak-search fields.
+  const XRD_STORE_KEY = 'datatreat-xrd-params';
+  const XRD_PERSIST_FIELDS = ['N','blWin','K','lambda'];
+  function saveXrdParams(){
+    try {
+      const data = { norm: document.getElementById('xrdNorm').value };
+      XRD_PERSIST_FIELDS.forEach(k=>{ data[k] = shared[k]; });
+      localStorage.setItem(XRD_STORE_KEY, JSON.stringify(data));
+    } catch(e){}
+  }
+  function loadXrdParams(){
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(XRD_STORE_KEY) || 'null'); } catch(e){}
+    if (!data) return;
+    XRD_PERSIST_FIELDS.forEach(k=>{ if (typeof data[k]==='number' && isFinite(data[k])) shared[k] = data[k]; });
+    const normSel = document.getElementById('xrdNorm');
+    if (normSel && (data.norm==='global' || data.norm==='local')) normSel.value = data.norm;
+    // Reflect the restored defaults in the (still empty) input fields
+    XRD_PERSIST_FIELDS.forEach(k=>{ const el = document.getElementById(FIELD_INPUT[k]); if (el) el.value = shared[k]; });
+  }
+
   // Per-sample param overrides (indexed by file idx)
   let perParams = []; // array of {N, blWin, pkHeight, pkProm, pkDist, K, lambda}
 
@@ -1836,6 +1858,9 @@ function nextColor(existingFiles){
     const p = getFileParams(curIdx);
     for (const key in FIELD_INPUT) document.getElementById(FIELD_INPUT[key]).value = p[key];
   }
+
+  // Restore persisted XRD analysis defaults (norm, smoothing, baseline, K, λ) at startup
+  loadXrdParams();
 
   // SNIP baseline: iteratively clip peaks downward
   function computeBaseline(y, halfWin){
@@ -2918,6 +2943,7 @@ function nextColor(existingFiles){
   // Param change listeners — store then reprocess
   ['xrdNorm'].forEach(id=>{
     document.getElementById(id).addEventListener('input', ()=>{
+      saveXrdParams();
       if (files.length){ updateXrdResults(); }
     });
   });
@@ -3065,6 +3091,7 @@ function nextColor(existingFiles){
     const apply = ()=>{
       if (!files.length) return;
       readInputsToStore();
+      saveXrdParams(); // persist the whitelisted analysis defaults (norm/N/blWin/K/λ)
       writeStoreToInputs();
       if (isSizeOnly){ renderPeakTable(); return; } // only the Scherrer size changes
       // Peak deletions reset only when this peak-search field changes
