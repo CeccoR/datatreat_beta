@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded } from './utils.js';
+import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -35,12 +35,32 @@ import { Plot } from './plot.js';
       },
       onMoveUp(i){ if(i>0){[files[i-1],files[i]]=[files[i],files[i-1]]; rebuildTaucAlerts(); afterFilesChange();} },
       onMoveDown(i){ if(i<files.length-1){[files[i],files[i+1]]=[files[i+1],files[i]]; rebuildTaucAlerts(); afterFilesChange();} },
-      onLabelChange(i, v){ files[i].label=v; updateTaucResults(); },
-      onColorChange(i, v){ files[i].color=v; updateTaucResults(); },
+      onLabelChange(i, v){ files[i].label=v; updateTaucResults(); hist.commit(); },
+      onColorChange(i, v){ files[i].color=v; updateTaucResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
       onRemoveAll(){ files.length=0; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; vlines={}; rebuildTaucAlerts(); afterFilesChange(); },
     };
   }
+
+  /* ---- Undo/redo: snapshot the reversible state (file order/labels/colors,
+     the draggable line positions and the analysis parameters). Raw spectra
+     arrays are shared by reference; only metadata is cloned. ---- */
+  const TAUC_PARAM_IDS = ['taucA','taucN','taucN2','taucM','taucM2'];
+  function taucSnapshot(){
+    return {
+      files: files.map(f=>({...f})),
+      vlines: {...vlines},
+      params: TAUC_PARAM_IDS.reduce((o,id)=>{ o[id]=document.getElementById(id).value; return o; }, {}),
+    };
+  }
+  function taucRestore(s){
+    files = s.files.map(f=>({...f}));
+    vlines = {...s.vlines};
+    for (const id of TAUC_PARAM_IDS) document.getElementById(id).value = s.params[id];
+    document.getElementById('taucNExp').textContent = document.getElementById('taucA').value;
+    afterFilesChange();
+  }
+  const hist = registerHistory('tauc', taucSnapshot, taucRestore);
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
     const existing = new Set(files.map(f=>f.name));
@@ -101,6 +121,7 @@ import { Plot } from './plot.js';
       document.getElementById('taucResults').style.display='none';
       document.getElementById('taucExportCard').style.display='none';
     }
+    hist.commit(); // baseline + file add/remove/reorder/palette
   }
 
   // Energy axis is just 1240/λ — each file stays on its own native grid
@@ -266,10 +287,10 @@ import { Plot } from './plot.js';
     document.getElementById('taucEg').textContent = isFinite(res.Eg) ? (isFinite(res.EgErr) ? `${res.Eg.toFixed(3)} ± ${res.EgErr.toFixed(3)} eV` : `${res.Eg.toFixed(3)} eV`) : '-';
     document.getElementById('taucEgInt').textContent = isFinite(res.EgInt) ? (isFinite(res.EgIntErr) ? `${res.EgInt.toFixed(3)} ± ${res.EgIntErr.toFixed(3)} eV` : `${res.EgInt.toFixed(3)} eV`) : '-';
 
-    plot.vline(vlines.v1, '#ff5050', true, v=>{vlines.v1=v; throttledUpdate();}, v=>{vlines.v1=v; updateTaucView(true);});
-    plot.vline(vlines.v2, '#ff5050', true, v=>{vlines.v2=v; throttledUpdate();}, v=>{vlines.v2=v; updateTaucView(true);});
-    plot.vline(vlines.v3, '#d050ff', true, v=>{vlines.v3=v; throttledUpdate();}, v=>{vlines.v3=v; updateTaucView(true);});
-    plot.vline(vlines.v4, '#d050ff', true, v=>{vlines.v4=v; throttledUpdate();}, v=>{vlines.v4=v; updateTaucView(true);});
+    plot.vline(vlines.v1, '#ff5050', true, v=>{vlines.v1=v; throttledUpdate();}, v=>{vlines.v1=v; updateTaucView(true); hist.commit();});
+    plot.vline(vlines.v2, '#ff5050', true, v=>{vlines.v2=v; throttledUpdate();}, v=>{vlines.v2=v; updateTaucView(true); hist.commit();});
+    plot.vline(vlines.v3, '#d050ff', true, v=>{vlines.v3=v; throttledUpdate();}, v=>{vlines.v3=v; updateTaucView(true); hist.commit();});
+    plot.vline(vlines.v4, '#d050ff', true, v=>{vlines.v4=v; throttledUpdate();}, v=>{vlines.v4=v; updateTaucView(true); hist.commit();});
 
     updateTaucResults();
   }
@@ -291,10 +312,13 @@ import { Plot } from './plot.js';
   // Live param updates — keep the current zoom (except when changing the
   // exponent, which rescales the y-axis, so a full reset is clearer there)
   ['taucA','taucN','taucN2','taucM','taucM2'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', ()=>{
-      if (id==='taucA') document.getElementById('taucNExp').textContent = document.getElementById('taucA').value;
+    const el = document.getElementById(id);
+    el.addEventListener('input', ()=>{
+      if (id==='taucA') document.getElementById('taucNExp').textContent = el.value;
       if(plot) updateTaucView(id!=='taucA');
     });
+    // Commit one undo step per completed edit (on change/blur, not each keystroke)
+    el.addEventListener('change', ()=>{ if (files.length) hist.commit(); });
   });
 
   document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; updateTaucView(); };

@@ -600,8 +600,10 @@ document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
 });
 const VALID_TABS = ['home','tauc','xrd','gc','epr','settings'];
 const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', settings:'DataTreat · Settings' };
+let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
+  _activeTab = tab;
   document.querySelectorAll('#nav button').forEach(b=>{
     const on = b.dataset.tab===tab;
     b.classList.toggle('active', on);
@@ -612,6 +614,56 @@ function goTab(tab, fromHash){
   if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
 }
+
+/* =========================================================
+   UNDO / REDO — per-module snapshot stacks (command pattern)
+   A module registers a snapshot()/restore() pair; it calls checkpoint()
+   just before a reversible change. Ctrl/⌘+Z undoes, Ctrl/⌘+Y (or ⇧+Z)
+   redoes, acting on the module of the currently active tab.
+========================================================= */
+class UndoStack {
+  constructor(snapshot, restore, limit=80){
+    this._snap = snapshot; this._restore = restore; this._limit = limit;
+    this.states = []; this.index = -1; this._busy = false;
+  }
+  // Record the CURRENT state (called after a reversible change, and once as baseline).
+  commit(){
+    if (this._busy) return;
+    const snap = this._snap();
+    const cur = this.index >= 0 ? this.states[this.index] : null;
+    // Skip commits that don't actually change anything (avoids dead undo steps).
+    if (cur && JSON.stringify(cur) === JSON.stringify(snap)) return;
+    // Drop any redo branch, then append the new state.
+    if (this.index < this.states.length - 1) this.states.length = this.index + 1;
+    this.states.push(snap);
+    if (this.states.length > this._limit) this.states.shift();
+    this.index = this.states.length - 1;
+  }
+  _apply(i){ this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; } }
+  performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
+  performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
+  reset(){ this.states.length = 0; this.index = -1; }
+}
+const _histories = {};
+function registerHistory(key, snapshot, restore){
+  const st = new UndoStack(snapshot, restore);
+  _histories[key] = st;
+  return st;
+}
+document.addEventListener('keydown', e=>{
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  const isUndo = k==='z' && !e.shiftKey;
+  const isRedo = k==='y' || (k==='z' && e.shiftKey);
+  if (!isUndo && !isRedo) return;
+  // Let the browser handle native text undo while editing a field
+  const el = document.activeElement, tag = el && el.tagName;
+  if (tag==='INPUT' || tag==='TEXTAREA' || (el && el.isContentEditable)) return;
+  const st = _histories[_activeTab];
+  if (!st) return;
+  const did = isUndo ? st.performUndo() : st.performRedo();
+  if (did) e.preventDefault();
+});
 // Mark a module's nav tab with a "data loaded" dot (called by each module on file changes)
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
@@ -676,5 +728,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, buildAlertsHtml, nextColor
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, registerHistory, buildAlertsHtml, nextColor
 };

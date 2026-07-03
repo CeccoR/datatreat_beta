@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded } from './utils.js';
+import { fmtNum, csvLine, downloadBlob, makeDownloadLink, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -52,8 +52,8 @@ import { Plot } from './plot.js';
           afterFilesChange();
         }
       },
-      onLabelChange(i, v){ files[i].label=v; computeAndRenderGc(); },
-      onColorChange(i, v){ files[i].color=v; computeAndRenderGc(); },
+      onLabelChange(i, v){ files[i].label=v; computeAndRenderGc(); hist.commit(); },
+      onColorChange(i, v){ files[i].color=v; computeAndRenderGc(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
       onRemoveAll(){ files.length=0; ms.length=0; Qs.length=0; lightOnDates.length=0; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); document.getElementById('gcLightAlert').innerHTML=''; afterFilesChange(); },
     };
@@ -113,7 +113,29 @@ import { Plot } from './plot.js';
       rebuildGcAlerts();
       document.getElementById('gcLightAlert').innerHTML = '';
     }
+    hist.commit();
   }
+
+  /* ---- Undo/redo: file order/labels/colours, per-sample m/Q/light-on and the
+     integration interval. Injection data arrays are shared by reference. ---- */
+  function gcSnapshot(){
+    return {
+      files: files.map(f=>({...f})),
+      ms: ms.slice(), Qs: Qs.slice(),
+      lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
+      plateauStart, plateauEnd,
+    };
+  }
+  function gcRestore(s){
+    files = s.files.map(f=>({...f}));
+    ms = s.ms.slice(); Qs = s.Qs.slice();
+    lightOnDates = s.lightOnDates.map(t=> t!=null ? new Date(t) : null);
+    plateauStart = s.plateauStart; plateauEnd = s.plateauEnd;
+    document.getElementById('gcPlateauStart').value = plateauStart;
+    document.getElementById('gcPlateauEnd').value = plateauEnd;
+    afterFilesChange();
+  }
+  const hist = registerHistory('gc', gcSnapshot, gcRestore);
 
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
@@ -131,23 +153,29 @@ import { Plot } from './plot.js';
     });
     html += `</tbody></table></div>`;
     wrap.innerHTML = html;
-    wrap.querySelectorAll('.gcM').forEach(inp=>inp.addEventListener('input', e=>{
-      const v=+e.target.value; if (v>=0.001) ms[+e.target.dataset.i]=v; computeAndRenderGc();
-    }));
-    wrap.querySelectorAll('.gcQ').forEach(inp=>inp.addEventListener('input', e=>{
-      const v=+e.target.value; if (v>=0.001) Qs[+e.target.dataset.i]=v; computeAndRenderGc();
-    }));
-    wrap.querySelectorAll('.gcDate').forEach(inp=>inp.addEventListener('input', e=>{
-      lightOnDates[+e.target.dataset.i]=new Date(e.target.value); computeAndRenderGc();
-    }));
+    const commit = ()=>{ if (files.length) hist.commit(); };
+    wrap.querySelectorAll('.gcM').forEach(inp=>{
+      inp.addEventListener('input', e=>{ const v=+e.target.value; if (v>=0.001) ms[+e.target.dataset.i]=v; computeAndRenderGc(); });
+      inp.addEventListener('change', commit);
+    });
+    wrap.querySelectorAll('.gcQ').forEach(inp=>{
+      inp.addEventListener('input', e=>{ const v=+e.target.value; if (v>=0.001) Qs[+e.target.dataset.i]=v; computeAndRenderGc(); });
+      inp.addEventListener('change', commit);
+    });
+    wrap.querySelectorAll('.gcDate').forEach(inp=>{
+      inp.addEventListener('input', e=>{ lightOnDates[+e.target.dataset.i]=new Date(e.target.value); computeAndRenderGc(); });
+      inp.addEventListener('change', commit);
+    });
   }
 
   ['gcPlateauStart','gcPlateauEnd'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', ()=>{
+    const el = document.getElementById(id);
+    el.addEventListener('input', ()=>{
       plateauStart = +document.getElementById('gcPlateauStart').value;
       plateauEnd   = +document.getElementById('gcPlateauEnd').value;
       if (dataTables.length) updateRegression();
     });
+    el.addEventListener('change', ()=>{ if (files.length) hist.commit(); });
   });
 
   function computeAndRenderGc(){

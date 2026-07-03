@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded } from './utils.js';
+import { settings, fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-core.js';
 
@@ -84,8 +84,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
       onRemove(i){ files.splice(i,1); perParams.splice(i,1); processed.splice(i,1); manualPeaks.splice(i,1); removedPeaks.splice(i,1); savedFits.splice(i,1); afterFilesChange(); },
       onMoveUp(i){ if(i>0){[files[i-1],files[i]]=[files[i],files[i-1]]; [perParams[i-1],perParams[i]]=[perParams[i],perParams[i-1]]; [processed[i-1],processed[i]]=[processed[i],processed[i-1]]; [manualPeaks[i-1],manualPeaks[i]]=[manualPeaks[i],manualPeaks[i-1]]; [removedPeaks[i-1],removedPeaks[i]]=[removedPeaks[i],removedPeaks[i-1]]; [savedFits[i-1],savedFits[i]]=[savedFits[i],savedFits[i-1]]; afterFilesChange();} },
       onMoveDown(i){ if(i<files.length-1){[files[i],files[i+1]]=[files[i+1],files[i]]; [perParams[i],perParams[i+1]]=[perParams[i+1],perParams[i]]; [processed[i],processed[i+1]]=[processed[i+1],processed[i]]; [manualPeaks[i],manualPeaks[i+1]]=[manualPeaks[i+1],manualPeaks[i]]; [removedPeaks[i],removedPeaks[i+1]]=[removedPeaks[i+1],removedPeaks[i]]; [savedFits[i],savedFits[i+1]]=[savedFits[i+1],savedFits[i]]; afterFilesChange();} },
-      onLabelChange(i, v){ files[i].label=v; renderPeakTable(); updateXrdResults(); },
-      onColorChange(i, v){ files[i].color=v; updateXrdResults(); },
+      onLabelChange(i, v){ files[i].label=v; renderPeakTable(); updateXrdResults(); hist.commit(); },
+      onColorChange(i, v){ files[i].color=v; updateXrdResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
       onRemoveAll(){ files.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; savedFits=[]; panels.a.sel=panels.a.hov=panels.f.sel=panels.f.hov=null; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
     };
@@ -161,7 +161,45 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
     } else {
       ['xrdWorkspace','xrdFitCard','xrdResults','xrdExportCard'].forEach(id=>{ document.getElementById(id).style.display='none'; });
     }
+    hist.commit(); // baseline + file add/remove/reorder/palette
   }
+
+  /* ---- Undo/redo: snapshot the reversible analysis state. Raw patterns (x/y)
+     are shared by reference; the per-file params, peaks, order, labels, colours,
+     standard and fits are captured so any change can be stepped back. ---- */
+  function xrdSnapshot(){
+    return {
+      files: files.map(f=>({...f})),
+      perParams: perParams.map(p=>({...p})),
+      manualPeaks: manualPeaks.map(a=>a.slice()),
+      removedPeaks: removedPeaks.map(a=>a.slice()),
+      savedFits: savedFits.map(sf=> sf ? {fits:sf.fits, baseline:sf.baseline, rwp:sf.rwp} : null),
+      shared: {...shared},
+      paramMode: {...paramMode},
+      standardName, curIdx,
+      norm: document.getElementById('xrdNorm').value,
+    };
+  }
+  function xrdRestore(s){
+    files = s.files.map(f=>({...f}));
+    perParams = s.perParams.map(p=>({...p}));
+    manualPeaks = s.manualPeaks.map(a=>a.slice());
+    removedPeaks = s.removedPeaks.map(a=>a.slice());
+    savedFits = s.savedFits.map(sf=> sf ? {fits:sf.fits, baseline:sf.baseline, rwp:sf.rwp} : null);
+    Object.assign(shared, s.shared);
+    Object.assign(paramMode, s.paramMode);
+    standardName = s.standardName;
+    curIdx = Math.min(s.curIdx, Math.max(0, files.length-1));
+    document.getElementById('xrdNorm').value = s.norm;
+    syncModeButtons();
+    afterFilesChange();
+  }
+  function syncModeButtons(){
+    Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
+      document.querySelectorAll('#'+tid+' button').forEach(btn=> btn.classList.toggle('active', btn.dataset.m === paramMode[key]));
+    });
+  }
+  const hist = registerHistory('xrd', xrdSnapshot, xrdRestore);
 
   // Get params for a specific file index (respects per-field shared/per mode)
   function getFileParams(i){
@@ -739,6 +777,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
           if (!removedPeaks[curIdx].some(v=>Math.abs(v-det)<1e-6)) removedPeaks[curIdx].push(det);
         }
         reprocessOne(curIdx); updateXrdAnalysis(true); updateXrdFitting(true); renderPeakTable();
+        hist.commit();
       });
     });
   }
@@ -848,6 +887,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
         // 'per' doesn't lose the displayed number
         if (btn.dataset.m==='per'){ if(!perParams[curIdx]) perParams[curIdx]={}; if(perParams[curIdx][key]===undefined) perParams[curIdx][key]=shared[key]; }
         writeStoreToInputs();
+        if (files.length) hist.commit();
       });
     });
   });
@@ -856,7 +896,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
   ['xrdNorm'].forEach(id=>{
     document.getElementById(id).addEventListener('input', ()=>{
       saveXrdParams();
-      if (files.length){ updateXrdResults(); }
+      if (files.length){ updateXrdResults(); hist.commit(); }
     });
   });
   // Fit hyperparameters modal
@@ -1012,6 +1052,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
       if(btn){ btn.disabled=false; btn.textContent=lbl; }
       fitBusy=false;
       updateXrdFitting(true); updateXrdResults(); renderPeakTable();
+      hist.commit(); // a completed fit is an undoable step
     }
   }
   const standardIdx = ()=> files.findIndex(f=>f.name===standardName);
@@ -1025,7 +1066,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
   // Instrumental standard changes size columns + enables the standard-fit buttons
   document.getElementById('xrdStandard').addEventListener('change', e=>{
     standardName = e.target.value;
-    if (files.length){ updateStdButtons(); renderPeakTable(); }
+    if (files.length){ updateStdButtons(); renderPeakTable(); hist.commit(); }
   });
   ['xrdSmooth','xrdBlWin','xrdPkHeight','xrdPkProm','xrdPkDist','xrdK','xrdLambda'].forEach(id=>{
     const el = document.getElementById(id);
@@ -1037,7 +1078,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
       readInputsToStore();
       saveXrdParams(); // persist the whitelisted analysis defaults (norm/N/blWin/K/λ)
       writeStoreToInputs();
-      if (isSizeOnly){ renderPeakTable(); return; } // only the Scherrer size changes
+      if (isSizeOnly){ renderPeakTable(); hist.commit(); return; } // only the Scherrer size changes
       // Peak deletions reset only when this peak-search field changes
       if (isPeakSearch){
         if (paramMode[key]==='shared') removedPeaks = removedPeaks.map(()=>[]);
@@ -1047,6 +1088,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
       updateXrdAnalysis(true);      // analysis is live
       updateXrdFitting(true);       // refresh inherited peaks / initial state (keeps last fit)
       updateXrdResults();
+      hist.commit();
     };
     el.addEventListener('change', apply);
     el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
@@ -1088,6 +1130,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
     updateXrdAnalysis(true);
     updateXrdFitting(true);
     renderPeakTable();
+    hist.commit();
   };
 
   /* ---------- Add-peak mode ---------- */
@@ -1140,6 +1183,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
     updateXrdAnalysis(true);
     updateXrdFitting(true);
     renderPeakTable();
+    hist.commit();
   }
 
   addBtn.onclick = ()=>{ if (files.length) setAddMode(!addMode); };
