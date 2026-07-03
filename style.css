@@ -37,6 +37,15 @@ header h1 {
   margin: 0 16px 0 0;
   font-weight: 600;
   color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo-mark {
+  width: 23px;
+  height: 23px;
+  display: block;
+  flex-shrink: 0;
 }
 nav button {
   background: transparent;
@@ -967,15 +976,19 @@ button.color-swatch:hover { border-color: var(--text); }
 
 /* ===== "Data loaded" dot on nav tabs — subtle dot after the name, inheriting the
    text colour so it tracks hover/active states ===== */
+#nav button.has-data {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 #nav button.has-data::after {
   content: '';
-  display: inline-block;
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: currentColor;
   margin-left: 9px;
-  vertical-align: middle;
+  flex-shrink: 0;
 }
 #nav button.nav-settings.has-data::after { display: none; }
 
@@ -1031,3 +1044,8 @@ button.color-swatch:hover { border-color: var(--text); }
 .instr-info svg { display: block; width: 15px; height: 15px; }
 .instr-info:hover { color: var(--accent); }
 .instr-info.active { color: var(--accent); }
+/* Center the info icon vertically with the card title (falls back to vertical-align) */
+h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
+  display: inline-flex;
+  align-items: center;
+}
