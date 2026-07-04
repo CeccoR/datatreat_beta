@@ -10,6 +10,15 @@ Open DataTreat directly in your browser — no download needed:
 
 **[https://ceccor.github.io/datatreat/](https://ceccor.github.io/datatreat/)**
 
+### Install as an app (offline use)
+
+DataTreat is a Progressive Web App. When opened over HTTPS (the link above) or
+`http://localhost`, your browser offers an **Install** option (address-bar icon,
+or *⋮ → Install / Add to Home Screen*). Once installed it runs in its own window
+and, thanks to a cache-first service worker, **works fully offline** — ideal for
+a lab bench with no network. All computation already runs on-device, so nothing
+else is needed. To pick up a new version, just reopen it while online.
+
 ### Run Locally
 
 If you prefer to run it offline, clone the repository:

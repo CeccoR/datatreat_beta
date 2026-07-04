@@ -1,0 +1,19 @@
+{
+  "name": "DataTreat",
+  "short_name": "DataTreat",
+  "description": "Browser-based scientific data analysis for spectroscopy and chromatography (DRS UV-Vis, XRPD, GC, EPR). All processing runs locally; works offline.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e1316",
+  "theme_color": "#0e1316",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,7 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="7" fill="#0e1316"/>
-  <!-- stylised spectrum: baseline + two peaks -->
-  <path d="M4 24 L9 24 L12 10 L15 24 L20 24 L23 15 L26 24 L28 24"
-        fill="none" stroke="#ffb454" stroke-width="2"
-        stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M5 23 H12 V9 H20 V23 H27" fill="none" stroke="#ffb454"
+        stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

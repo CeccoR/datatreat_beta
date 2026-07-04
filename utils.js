@@ -298,6 +298,61 @@ function downloadBlob(filename, text){
   a.href = url; a.download = filename; document.body.appendChild(a); a.click();
   setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
 }
+// --- Minimal ZIP writer (store / no compression) -------------------------
+// Bundles a list of {name, text} entries into a single .zip Blob. Pure client
+// side, no dependencies. Uses the "stored" method so no deflate is needed.
+const _CRC_TABLE = (()=>{
+  const t = new Uint32Array(256);
+  for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); t[n]=c>>>0; }
+  return t;
+})();
+function _crc32(bytes){
+  let c = 0xFFFFFFFF;
+  for (let i=0;i<bytes.length;i++) c = _CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipBlob(entries){
+  const enc = new TextEncoder();
+  const chunks = [];   // file-data + local headers, concatenated
+  const central = [];  // central-directory records
+  let offset = 0;
+  const u16 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF]);
+  const u32 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF, (v>>>16)&0xFF, (v>>>24)&0xFF]);
+  for (const e of entries){
+    const nameBytes = enc.encode(e.name);
+    const data = enc.encode(e.text);
+    const crc = _crc32(data);
+    const local = [
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0),
+      nameBytes, data
+    ];
+    local.forEach(b=>chunks.push(b));
+    const localSize = 30 + nameBytes.length + data.length;
+    central.push([
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length),
+      u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBytes
+    ]);
+    offset += localSize;
+  }
+  const centralStart = offset;
+  const centralParts = [];
+  central.forEach(rec=>{ rec.forEach(b=>centralParts.push(b)); });
+  const centralSize = central.reduce((s,rec)=> s + rec.reduce((a,b)=>a+b.length,0), 0);
+  const end = [
+    u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length),
+    u32(centralSize), u32(centralStart), u16(0)
+  ];
+  return new Blob([...chunks, ...centralParts, ...end], {type:'application/zip'});
+}
+function downloadZip(filename, entries){
+  const url = URL.createObjectURL(zipBlob(entries));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
+}
+
 function makeDownloadLink(container, filename, text, label){
   const b = document.createElement('button');
   b.className = 'btn secondary small';
@@ -334,13 +389,23 @@ function setupDropzone(dropzoneId, inputId, onFiles){
   const input = document.getElementById(inputId);
   if (!dz || !input) return;
 
-  dz.addEventListener('click', ()=> input.click());
+  // Show a "Loading…" state on the dropzone while onFiles (async parsing) runs,
+  // so large XRDML files or big batches don't look like a frozen UI.
+  const runFiles = (files)=>{
+    dz.classList.add('dz-loading');
+    let ret;
+    try { ret = onFiles(files); } finally {
+      Promise.resolve(ret).finally(()=> dz.classList.remove('dz-loading'));
+    }
+  };
+
+  dz.addEventListener('click', ()=>{ if (!dz.classList.contains('dz-loading')) input.click(); });
 
   input.addEventListener('change', ()=>{
     if (input.files.length) {
       const fileArr = Array.from(input.files);
       input.value = ''; // reset before async processing so same file can be re-added after removal
-      onFiles(fileArr);
+      runFiles(fileArr);
     }
   });
 
@@ -360,14 +425,15 @@ function setupDropzone(dropzoneId, inputId, onFiles){
     e.preventDefault(); e.stopPropagation();
     dz.classList.remove('dragover');
     const dt = e.dataTransfer;
-    if (dt && dt.files && dt.files.length) onFiles(dt.files);
+    if (dt && dt.files && dt.files.length) runFiles(dt.files);
   });
 }
 
 /* =========================================================
    UNIFIED FILE LIST RENDERER
    files: array of objects with at least {name, label}
-   callbacks: {onRemove(i), onMoveUp(i), onMoveDown(i), onLabelChange(i, newLabel)}
+   callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel),
+               onColorChange(i,color), onPaletteChange(colors)}
    extraCols: optional array of {header, render(file,i)} for additional columns
 ========================================================= */
 function renderUnifiedFileList(containerId, files, callbacks, extraCols){
@@ -376,28 +442,25 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   if (!files.length){ wrap.innerHTML=''; return; }
 
   const ec = extraCols || [];
-  const phantomBtns = `<button style="opacity:0;pointer-events:none">↑</button><button style="opacity:0;pointer-events:none">↓</button>`;
-  // colgroup: FILE=40%, LABEL+extraCols share remaining 40%, actions=20%
-  let colgroup = `<colgroup><col style="width:40%">`;
-  for (let i = 0; i < 1 + ec.length; i++) colgroup += `<col>`;
-  colgroup += `<col style="width:20%"></colgroup>`;
-  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>LABEL</th>`;
-  ec.forEach(c=> html += `<th>${c.header}</th>`);
-  html += `<th><div class="file-actions" style="display:flex;gap:4px;align-items:center;visibility:visible;white-space:nowrap">${phantomBtns}<button class="remove-all del" title="Remove all">✕</button></div></th></tr></thead><tbody>`;
+  // colgroup: drag 5%, FILE 45%, LABEL 45%, extraCols (auto), actions 5%
+  let colgroup = `<colgroup><col style="width:5%"><col style="width:45%"><col style="width:45%">`;
+  for (let i = 0; i < ec.length; i++) colgroup += `<col>`;
+  colgroup += `<col style="width:5%"></colgroup>`;
+  const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
+
+  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>SAMPLE LABEL</th>`;
+  ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
+  html += `<th style="text-align:right"><button class="remove-all del-bare" title="Remove all">✕</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
     html += `<tr class="file-row" data-i="${i}">`;
+    html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
     html += `<td class="fname" title="${f.name}">${swatch}${f.name}</td>`;
-    html += `<td><input class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
+    html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td><div class="file-actions">`;
-    if (i > 0) html += `<button class="move-up" data-i="${i}" title="Move up">↑</button>`;
-    else html += `<button disabled style="opacity:.2" title="Move up">↑</button>`;
-    if (i < files.length-1) html += `<button class="move-dn" data-i="${i}" title="Move down">↓</button>`;
-    else html += `<button disabled style="opacity:.2" title="Move down">↓</button>`;
-    html += `<button class="del" data-i="${i}" title="Remove">✕</button>`;
-    html += `</div></td></tr>`;
+    html += `<td style="text-align:right"><button class="del del-bare row-del" data-i="${i}" title="Remove">✕</button></td>`;
+    html += `</tr>`;
   });
   html += `</tbody></table></div>`;
   wrap.innerHTML = html;
@@ -427,14 +490,44 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
       if (callbacks.onLabelChange) callbacks.onLabelChange(+e.target.dataset.i, e.target.value);
     });
   });
-  wrap.querySelectorAll('.move-up').forEach(btn=>{
-    btn.addEventListener('click', e=>{ if (callbacks.onMoveUp) callbacks.onMoveUp(+e.target.dataset.i); });
-  });
-  wrap.querySelectorAll('.move-dn').forEach(btn=>{
-    btn.addEventListener('click', e=>{ if (callbacks.onMoveDown) callbacks.onMoveDown(+e.target.dataset.i); });
-  });
-  wrap.querySelectorAll('.del').forEach(btn=>{
+  wrap.querySelectorAll('.row-del').forEach(btn=>{
     btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.target.dataset.i); });
+  });
+
+  // Drag-to-reorder via pointer events (works with both mouse and touch): grab the
+  // handle and drag the row over another; the row under the pointer is the target.
+  const rows = [...wrap.querySelectorAll('.file-row')];
+  const rowAtY = (y)=>{
+    for (const r of rows){ const b=r.getBoundingClientRect(); if (y>=b.top && y<=b.bottom) return r; }
+    // beyond the last row → drop at the end
+    if (rows.length){ const last=rows[rows.length-1].getBoundingClientRect(); if (y>last.bottom) return rows[rows.length-1]; }
+    return null;
+  };
+  let drag = null; // { from }
+  rows.forEach(row=>{
+    const handle = row.querySelector('.drag-handle');
+    handle.addEventListener('pointerdown', e=>{
+      e.preventDefault();
+      drag = { from: +row.dataset.i };
+      row.classList.add('dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch(_){}
+    });
+    handle.addEventListener('pointermove', e=>{
+      if (!drag) return;
+      const target = rowAtY(e.clientY);
+      rows.forEach(r=> r.classList.toggle('drag-over', r===target && +r.dataset.i!==drag.from));
+    });
+    const finish = (e)=>{
+      if (!drag) return;
+      const target = rowAtY(e.clientY);
+      const to = target ? +target.dataset.i : null;
+      const from = drag.from;
+      rows.forEach(r=> r.classList.remove('drag-over', 'dragging'));
+      drag = null;
+      if (to!=null && to!==from && callbacks.onReorder) callbacks.onReorder(from, to);
+    };
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', ()=>{ rows.forEach(r=> r.classList.remove('drag-over','dragging')); drag = null; });
   });
 }
 
@@ -589,8 +682,11 @@ document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
 const VALID_TABS = ['home','tauc','xrd','gc','epr','settings'];
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', settings:'DataTreat · Settings' };
+let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
+  _activeTab = tab;
   document.querySelectorAll('#nav button').forEach(b=>{
     const on = b.dataset.tab===tab;
     b.classList.toggle('active', on);
@@ -599,7 +695,127 @@ function goTab(tab, fromHash){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
   // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
   if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
+  document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
+  if (tab === 'home') requestAnimationFrame(sizeHomeTiles); // re-fit tiles after any resize while away
 }
+
+/* =========================================================
+   UNDO / REDO — per-module snapshot stacks (command pattern)
+   A module registers a snapshot()/restore() pair; it calls checkpoint()
+   just before a reversible change. Ctrl/⌘+Z undoes, Ctrl/⌘+Y (or ⇧+Z)
+   redoes, acting on the module of the currently active tab.
+========================================================= */
+class UndoStack {
+  constructor(snapshot, restore, limit=80){
+    this._snap = snapshot; this._restore = restore; this._limit = limit;
+    this.states = []; this.index = -1; this._busy = false;
+  }
+  // Record the CURRENT state (called after a reversible change, and once as baseline).
+  commit(){
+    if (this._busy) return;
+    const snap = this._snap();
+    const cur = this.index >= 0 ? this.states[this.index] : null;
+    // Skip commits that don't actually change anything (avoids dead undo steps).
+    if (cur && JSON.stringify(cur) === JSON.stringify(snap)) return;
+    // Drop any redo branch, then append the new state.
+    if (this.index < this.states.length - 1) this.states.length = this.index + 1;
+    this.states.push(snap);
+    if (this.states.length > this._limit) this.states.shift();
+    this.index = this.states.length - 1;
+  }
+  _apply(i){ this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; } }
+  performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
+  performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
+  reset(){ this.states.length = 0; this.index = -1; }
+}
+const _histories = {};
+function registerHistory(key, snapshot, restore){
+  const st = new UndoStack(snapshot, restore);
+  _histories[key] = st;
+  return st;
+}
+document.addEventListener('keydown', e=>{
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  const isUndo = k==='z' && !e.shiftKey;
+  const isRedo = k==='y' || (k==='z' && e.shiftKey);
+  if (!isUndo && !isRedo) return;
+  // Let the browser handle native text undo while editing a field
+  const el = document.activeElement, tag = el && el.tagName;
+  if (tag==='INPUT' || tag==='TEXTAREA' || (el && el.isContentEditable)) return;
+  const st = _histories[_activeTab];
+  if (!st) return;
+  const did = isUndo ? st.performUndo() : st.performRedo();
+  if (did) e.preventDefault();
+});
+// Give every module tab a permanent (invisible) round SVG dot so its slot is
+// always reserved — the tab width never changes when the badge appears.
+(function initTabDots(){
+  ['tauc','xrd','gc','epr'].forEach(tab=>{
+    const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
+    if (!btn || btn.querySelector('.tab-dot')) return;
+    btn.classList.add('has-dot-slot');
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    dot.setAttribute('class', 'tab-dot');
+    dot.setAttribute('viewBox', '0 0 10 10');
+    dot.setAttribute('aria-hidden', 'true');
+    dot.innerHTML = '<circle cx="5" cy="5" r="4.2" fill="currentColor"/>';
+    btn.appendChild(dot);
+  });
+})();
+// Toggle the "data loaded" dot's visibility (the slot is already reserved).
+function setTabLoaded(tab, has){
+  const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
+  if (btn) btn.classList.toggle('has-data', !!has);
+}
+
+// Size each home card so its square icon tile spans 90% of the (common) card
+// height, centered, with equal top/bottom/left insets. The tile is absolutely
+// positioned (so it can't inflate the height); a few passes converge on a shared
+// height H that fits the tallest description. A cap keeps it from running away
+// when a narrow text column would otherwise grow unbounded.
+function sizeHomeTiles(){
+  const cards = [...document.querySelectorAll('.home-card')];
+  if (!cards.length || cards[0].getBoundingClientRect().height <= 0) return; // hidden
+  // On narrow screens a plain CSS layout (small fixed tile) is used instead — clear
+  // any inline sizing so those rules apply.
+  if (window.innerWidth <= 600){
+    cards.forEach(c=>{
+      c.style.height = ''; c.style.paddingLeft = '';
+      const ic = c.querySelector('.home-card-icon');
+      ic.style.left = ''; ic.style.width = ''; ic.style.height = '';
+    });
+    return;
+  }
+  const GAP = 16, CAP = 120, B = 1; // B = card border width (kept out of the insets)
+  // inset from the padding box so the visible top/bottom (via centering) and left
+  // gaps are equal once the 1px border is accounted for.
+  const insetOf = (H, tile)=> (H - 2*B - tile) / 2;
+  let H = 100;
+  for (let pass=0; pass<6; pass++){
+    const tile = Math.min(CAP, 0.9*H);
+    const padLeft = insetOf(H, tile) + tile + GAP;
+    let maxText = 0;
+    cards.forEach(c=>{
+      c.style.height = 'auto';
+      c.style.paddingLeft = padLeft + 'px';
+      maxText = Math.max(maxText, c.querySelector('.home-card-text').getBoundingClientRect().height);
+    });
+    H = Math.max(tile, maxText) / 0.9;
+  }
+  const tile = Math.min(CAP, 0.9*H), inset = insetOf(H, tile), padLeft = inset + tile + GAP;
+  cards.forEach(c=>{
+    c.style.height = H.toFixed(2) + 'px';
+    c.style.paddingLeft = padLeft.toFixed(2) + 'px';
+    const ic = c.querySelector('.home-card-icon');
+    ic.style.left = inset.toFixed(2) + 'px';
+    ic.style.width = tile.toFixed(2) + 'px';
+    ic.style.height = tile.toFixed(2) + 'px';
+  });
+}
+requestAnimationFrame(sizeHomeTiles);
+window.addEventListener('load', sizeHomeTiles);
+window.addEventListener('resize', ()=>requestAnimationFrame(sizeHomeTiles));
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
 window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
 (function initHashRoute(){
@@ -626,7 +842,38 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
+/* =========================================================
+   COLLAPSIBLE INSTRUCTIONS
+   Each .instr-block is toggled by a small info icon placed next to the card's
+   title. Open by default; the collapsed choice is remembered per block.
+========================================================= */
+(function initInstrCollapse(){
+  const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
+  document.querySelectorAll('.instr-block').forEach((block, i)=>{
+    const section = block.closest('section.tab');
+    const key = 'datatreat-instr-' + (section ? section.id : 's') + '-' + i;
+    // Attach the toggle to the nearest preceding heading; fall back to inline.
+    let heading = block.previousElementSibling;
+    while (heading && !/^H[1-3]$/.test(heading.tagName)) heading = heading.previousElementSibling;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'instr-info';
+    btn.setAttribute('aria-label', 'Toggle instructions');
+    btn.innerHTML = INFO_SVG;
+    if (heading) heading.appendChild(btn);
+    else block.parentNode.insertBefore(btn, block);
+    let collapsed = false;
+    try { collapsed = localStorage.getItem(key) === 'collapsed'; } catch(e){}
+    const apply = ()=>{
+      block.style.display = collapsed ? 'none' : '';
+      btn.classList.toggle('active', !collapsed); // highlighted while instructions are shown
+      btn.setAttribute('aria-expanded', String(!collapsed));
+    };
+    apply();
+    btn.addEventListener('click', ()=>{ collapsed = !collapsed; try { localStorage.setItem(key, collapsed ? 'collapsed' : 'open'); } catch(e){} apply(); });
+  });
+})();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, buildAlertsHtml, nextColor
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, registerHistory, buildAlertsHtml, nextColor
 };

@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor } from './utils.js';
+import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -33,14 +33,33 @@ import { Plot } from './plot.js';
         rebuildTaucAlerts();
         afterFilesChange();
       },
-      onMoveUp(i){ if(i>0){[files[i-1],files[i]]=[files[i],files[i-1]]; rebuildTaucAlerts(); afterFilesChange();} },
-      onMoveDown(i){ if(i<files.length-1){[files[i],files[i+1]]=[files[i+1],files[i]]; rebuildTaucAlerts(); afterFilesChange();} },
-      onLabelChange(i, v){ files[i].label=v; updateTaucResults(); },
-      onColorChange(i, v){ files[i].color=v; updateTaucResults(); },
+      onReorder(from, to){ const [x]=files.splice(from,1); files.splice(to,0,x); rebuildTaucAlerts(); afterFilesChange(); },
+      onLabelChange(i, v){ files[i].label=v; updateTaucResults(); hist.commit(); },
+      onColorChange(i, v){ files[i].color=v; updateTaucResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
       onRemoveAll(){ files.length=0; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; vlines={}; rebuildTaucAlerts(); afterFilesChange(); },
     };
   }
+
+  /* ---- Undo/redo: snapshot the reversible state (file order/labels/colors,
+     the draggable line positions and the analysis parameters). Raw spectra
+     arrays are shared by reference; only metadata is cloned. ---- */
+  const TAUC_PARAM_IDS = ['taucA','taucN','taucN2','taucM','taucM2'];
+  function taucSnapshot(){
+    return {
+      files: files.map(f=>({...f})),
+      vlines: {...vlines},
+      params: TAUC_PARAM_IDS.reduce((o,id)=>{ o[id]=document.getElementById(id).value; return o; }, {}),
+    };
+  }
+  function taucRestore(s){
+    files = s.files.map(f=>({...f}));
+    vlines = {...s.vlines};
+    for (const id of TAUC_PARAM_IDS) document.getElementById(id).value = s.params[id];
+    document.getElementById('taucNExp').textContent = document.getElementById('taucA').value;
+    afterFilesChange();
+  }
+  const hist = registerHistory('tauc', taucSnapshot, taucRestore);
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
     const existing = new Set(files.map(f=>f.name));
@@ -93,6 +112,7 @@ import { Plot } from './plot.js';
   });
 
   function afterFilesChange(){
+    setTabLoaded('tauc', files.length);
     renderUnifiedFileList('taucFileTableWrap', files, fileCallbacks());
     if (files.length) setupAnalysis();
     else {
@@ -100,6 +120,7 @@ import { Plot } from './plot.js';
       document.getElementById('taucResults').style.display='none';
       document.getElementById('taucExportCard').style.display='none';
     }
+    hist.commit(); // baseline + file add/remove/reorder/palette
   }
 
   // Energy axis is just 1240/λ — each file stays on its own native grid
@@ -265,10 +286,10 @@ import { Plot } from './plot.js';
     document.getElementById('taucEg').textContent = isFinite(res.Eg) ? (isFinite(res.EgErr) ? `${res.Eg.toFixed(3)} ± ${res.EgErr.toFixed(3)} eV` : `${res.Eg.toFixed(3)} eV`) : '-';
     document.getElementById('taucEgInt').textContent = isFinite(res.EgInt) ? (isFinite(res.EgIntErr) ? `${res.EgInt.toFixed(3)} ± ${res.EgIntErr.toFixed(3)} eV` : `${res.EgInt.toFixed(3)} eV`) : '-';
 
-    plot.vline(vlines.v1, '#ff5050', true, v=>{vlines.v1=v; throttledUpdate();}, v=>{vlines.v1=v; updateTaucView(true);});
-    plot.vline(vlines.v2, '#ff5050', true, v=>{vlines.v2=v; throttledUpdate();}, v=>{vlines.v2=v; updateTaucView(true);});
-    plot.vline(vlines.v3, '#d050ff', true, v=>{vlines.v3=v; throttledUpdate();}, v=>{vlines.v3=v; updateTaucView(true);});
-    plot.vline(vlines.v4, '#d050ff', true, v=>{vlines.v4=v; throttledUpdate();}, v=>{vlines.v4=v; updateTaucView(true);});
+    plot.vline(vlines.v1, '#ff5050', true, v=>{vlines.v1=v; throttledUpdate();}, v=>{vlines.v1=v; updateTaucView(true); hist.commit();});
+    plot.vline(vlines.v2, '#ff5050', true, v=>{vlines.v2=v; throttledUpdate();}, v=>{vlines.v2=v; updateTaucView(true); hist.commit();});
+    plot.vline(vlines.v3, '#d050ff', true, v=>{vlines.v3=v; throttledUpdate();}, v=>{vlines.v3=v; updateTaucView(true); hist.commit();});
+    plot.vline(vlines.v4, '#d050ff', true, v=>{vlines.v4=v; throttledUpdate();}, v=>{vlines.v4=v; updateTaucView(true); hist.commit();});
 
     updateTaucResults();
   }
@@ -290,10 +311,13 @@ import { Plot } from './plot.js';
   // Live param updates — keep the current zoom (except when changing the
   // exponent, which rescales the y-axis, so a full reset is clearer there)
   ['taucA','taucN','taucN2','taucM','taucM2'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', ()=>{
-      if (id==='taucA') document.getElementById('taucNExp').textContent = document.getElementById('taucA').value;
+    const el = document.getElementById(id);
+    el.addEventListener('input', ()=>{
+      if (id==='taucA') document.getElementById('taucNExp').textContent = el.value;
       if(plot) updateTaucView(id!=='taucA');
     });
+    // Commit one undo step per completed edit (on change/blur, not each keystroke)
+    el.addEventListener('change', ()=>{ if (files.length) hist.commit(); });
   });
 
   document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; updateTaucView(); };
@@ -302,7 +326,7 @@ import { Plot } from './plot.js';
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
-    let html = '<table><colgroup><col style="width:44%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th rowspan="2">Label</th><th colspan="2" style="text-align:center">E<sub>g</sub> (eV)</th></tr><tr><th style="text-align:center">x-axis</th><th style="text-align:center">baseline</th></tr></thead><tbody>';
+    let html = '<table><colgroup><col style="width:44%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th rowspan="2">Sample</th><th colspan="2" style="text-align:center">E<sub>g</sub> (eV)</th></tr><tr><th style="text-align:center">x-axis</th><th style="text-align:center">baseline</th></tr></thead><tbody>';
     bestRegsAll.forEach(r=>{
       const egNeg = isFinite(r.Eg) && r.Eg < 0;
       const egiNeg = isFinite(r.EgInt) && r.EgInt < 0;
@@ -407,7 +431,7 @@ import { Plot } from './plot.js';
         plot2.tickLabel(xc, files[k].label);
       }
       plot2.attachTools(barSvg.closest('.plot-wrap'));
-      leg2.innerHTML=`<span><i style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i style="background:#ff7a59"></i>Eg (baseline)</span>`;
+      leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
     }
     // Align the table panel with the first visible content in the left col
     const _leftCol = barSvg.closest('.col');
@@ -450,14 +474,14 @@ import { Plot } from './plot.js';
     downloadBlob('FRhva.csv', t2);
     makeDownloadLink(wrap, 'FRhva.csv', t2, 'FRhva.csv');
     // regressions.csv
-    let t3 = csvLine(['Label','m1','Var_m1','m2','Var_m2','q1','Var_q1','q2','Var_q2','Cov_mq1','Cov_mq2']);
+    let t3 = csvLine(['Sample','m1','Var_m1','m2','Var_m2','q1','Var_q1','q2','Var_q2','Cov_mq1','Cov_mq2']);
     bestRegsAll.forEach(r=>{
       t3 += csvLine([r.label, fmtNum(r.regs.slope,8), fmtNum(r.regs.varM,8), fmtNum(r.regs2.slope,8), fmtNum(r.regs2.varM,8), fmtNum(r.regs.intercept,8), fmtNum(r.regs.varB,8), fmtNum(r.regs2.intercept,8), fmtNum(r.regs2.varB,8), fmtNum(r.regs.covMB,8), fmtNum(r.regs2.covMB,8)]);
     });
     downloadBlob('regressions.csv', t3);
     makeDownloadLink(wrap, 'regressions.csv', t3, 'regressions.csv');
     // Eg_values.csv
-    let t4 = csvLine(['Label','Eg','Eg_err','Eg_int','Eg_int_err']);
+    let t4 = csvLine(['Sample','Eg','Eg_err','Eg_int','Eg_int_err']);
     bestRegsAll.forEach(r=>{ t4 += csvLine([r.label, fmtNum(r.Eg,6), fmtNum(r.EgErr,6), fmtNum(r.EgInt,6), fmtNum(r.EgIntErr,6)]); });
     downloadBlob('Eg_values.csv', t4);
     makeDownloadLink(wrap, 'Eg_values.csv', t4, 'Eg_values.csv');

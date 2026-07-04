@@ -59,7 +59,8 @@ class Plot{
     this.gAxes = svgEl('g',{'class':'plot-gaxes'});
     this.gData = svgEl('g',{'class':'plot-gdata','clip-path':`url(#${this._clipId})`});
     this.gOverlay = svgEl('g',{'class':'plot-goverlay','clip-path':`url(#${this._clipId})`});
-    this.svg.appendChild(defs); this.svg.appendChild(this.gAxes); this.svg.appendChild(this.gData); this.svg.appendChild(this.gOverlay);
+    this.gCross = svgEl('g',{'class':'plot-cross','pointer-events':'none'});
+    this.svg.appendChild(defs); this.svg.appendChild(this.gAxes); this.svg.appendChild(this.gData); this.svg.appendChild(this.gOverlay); this.svg.appendChild(this.gCross);
     this.svg._plot = this;
     this._stored = [];
     this._mode = null;
@@ -189,14 +190,23 @@ class Plot{
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1,y2:y1,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1:y2,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
   }
-  tickLabel(xv, text){
-    const entry = {type:'ticklabel', xv, text};
+  tickLabel(xv, text, rot){
+    const entry = {type:'ticklabel', xv, text, rot: rot||0};
     this._stored.push(entry);
     return this._renderTickLabel(entry);
   }
   _renderTickLabel(entry){
     const {h}=this.size(); const m=this.margin;
-    const t = svgEl('text',{x:this.px(entry.xv), y:h-m.b+28, 'font-size':10, fill:'#93a0b0', 'text-anchor':'middle', 'class':'plot-tick'});
+    const x = this.px(entry.xv);
+    if (entry.rot){
+      // Tilted labels: anchor at the tick's right end so long names don't overlap
+      const y = h-m.b+14;
+      const t = svgEl('text',{x, y, 'font-size':10, fill:'#93a0b0', 'text-anchor':'end', 'class':'plot-tick', transform:`rotate(-${entry.rot} ${x} ${y})`});
+      t.textContent = entry.text;
+      this.gAxes.appendChild(t);
+      return t;
+    }
+    const t = svgEl('text',{x, y:h-m.b+28, 'font-size':10, fill:'#93a0b0', 'text-anchor':'middle', 'class':'plot-tick'});
     t.textContent = entry.text;
     this.gAxes.appendChild(t);
     return t;
@@ -298,6 +308,27 @@ class Plot{
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
     this.setMode(this._mode || null);
   }
+  _clearCrosshair(){ if (this.gCross) this.gCross.innerHTML=''; }
+  // Draw a thin crosshair + a coordinate readout at the pointer (data coordinates via invX/invY)
+  _drawCrosshair(clientX, clientY){
+    if (!this.gCross) return;
+    const {w,h}=this.size(); const m=this.margin;
+    const rect=this.svg.getBoundingClientRect();
+    const cx=clientX-rect.left, cy=clientY-rect.top;
+    if (cx<m.l || cx>w-m.r || cy<m.t || cy>h-m.b){ this._clearCrosshair(); return; }
+    const xv=this.invX(cx), yv=this.invY(cy);
+    const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
+    this.gCross.innerHTML='';
+    const add=(tag,at)=>{ this.gCross.appendChild(svgEl(tag,at)); };
+    add('line',{x1:cx,x2:cx,y1:m.t,y2:h-m.b,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75});
+    add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75});
+    const nearRight = cx > w - m.r - 140;
+    const tx = nearRight ? m.l+8 : w-m.r-8;
+    const anchor = nearRight ? 'start' : 'end';
+    const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':anchor,fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace'});
+    t.textContent = `x ${fmt(xv)}   y ${fmt(yv)}`;
+    this.gCross.appendChild(t);
+  }
   _initInteraction(){
     // View-only plots (e.g. the residual strip) get no pan/zoom interaction at all.
     if (this._opts.noInteraction) return;
@@ -336,6 +367,7 @@ class Plot{
         P.xmin=pan.xmin-dx; P.xmax=pan.xmax-dx;
         P.ymin=pan.ymin+dy; P.ymax=pan.ymax+dy;
         P._refresh();
+        P._clearCrosshair();
       } else if (P._mode === 'zoom' && zoomStart && zoomRect){
         const svgRect = svg.getBoundingClientRect();
         const cx=e.clientX-svgRect.left, cy=e.clientY-svgRect.top;
@@ -343,8 +375,13 @@ class Plot{
         zoomRect.setAttribute('y', Math.min(cy,zoomStart.cy));
         zoomRect.setAttribute('width', Math.abs(cx-zoomStart.cx));
         zoomRect.setAttribute('height', Math.abs(cy-zoomStart.cy));
+      } else if (P._mode){
+        P._clearCrosshair(); // pan/zoom tool armed → no position readout
+      } else {
+        P._drawCrosshair(e.clientX, e.clientY); // hover readout (no tool active)
       }
     });
+    svg.addEventListener('pointerleave', ()=>{ const P = svg._plot; if (P) P._clearCrosshair(); });
 
     const endDrag = ()=>{ pan=null; zoomStart=null; if (zoomRect){ zoomRect.remove(); zoomRect=null; } };
 
@@ -410,7 +447,7 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView){
   } else {
     workSvg = svgNode.cloneNode(true);
   }
-  workSvg.querySelectorAll('.plot-goverlay').forEach(el=>{ while(el.firstChild) el.removeChild(el.firstChild); });
+  workSvg.querySelectorAll('.plot-goverlay, .plot-cross').forEach(el=>{ while(el.firstChild) el.removeChild(el.firstChild); });
 
   workSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   workSvg.setAttribute('font-family', 'Arial, sans-serif');

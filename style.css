@@ -37,6 +37,15 @@ header h1 {
   margin: 0 16px 0 0;
   font-weight: 600;
   color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo-mark {
+  width: 23px;
+  height: 23px;
+  display: block;
+  flex-shrink: 0;
 }
 nav button {
   background: transparent;
@@ -176,6 +185,14 @@ input[type="file"] {
   font-size: 13px;
   color: var(--muted);
 }
+/* Dark-theme the native date/time picker and force its calendar icon white */
+input[type="datetime-local"] { color-scheme: dark; }
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1); /* → pure white regardless of the base glyph */
+  opacity: 0.85;
+  cursor: pointer;
+}
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 button.btn {
   background: var(--accent);
   color: #06131f;
@@ -338,20 +355,68 @@ svg.plot {
   grid-template-columns: repeat(2, 1fr);
   gap: 14px;
 }
+/* Narrow screens: single column (icon/card overrides live after the base rules
+   below so they win by source order). */
+@media (max-width: 600px) {
+  .home-grid { grid-template-columns: 1fr; }
+}
 .home-card {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 22px 22px 20px;
+  padding: 18px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  padding: 0 18px 0 18px; /* height + left padding set by JS (sizeHomeTiles) */
 }
 .home-card:hover {
   border-color: var(--accent);
   background: var(--panel2);
+}
+/* Square icon tile on the left (DataTreat-logo style). Absolutely positioned so it
+   never drives the card height; its side (90% of card height) and equal
+   top/bottom/left insets are set by JS. */
+.home-card-icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #0e1316;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-card-icon .tech-icon {
+  width: 62%;
+  height: auto;
+  color: var(--accent);
+  display: block;
+}
+.home-card-text {
+  flex: 1;
+  min-width: 0;
+}
+/* Narrow screens: simple fixed small tile in flow (JS 90%-sizing is skipped) */
+@media (max-width: 600px) {
+  .home-card { padding: 16px; gap: 14px; }
+  .home-card-icon {
+    position: static;
+    transform: none;
+    width: 54px;
+    height: 54px;
+  }
+}
+.home-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
 }
 .home-card h3 {
   color: var(--accent);
@@ -420,38 +485,37 @@ footer a:hover {
 }
 
 /* ===== Unified file list ===== */
-.file-row .file-actions {
-  display: flex;
-  gap: 4px;
+/* Drag handle (leftmost column): a plain grip; only the cursor changes on hover */
+.drag-cell { text-align: left; padding-left: 4px; padding-right: 0; }
+.drag-handle {
+  display: inline-flex;
   align-items: center;
-  visibility: hidden;
-  white-space: nowrap;
-}
-.file-row:hover .file-actions {
-  visibility: visible;
-}
-.file-actions button {
-  background: var(--panel2);
-  border: 1px solid var(--line);
+  justify-content: center;
   color: var(--muted);
-  border-radius: 5px;
-  padding: 2px 7px;
+  cursor: grab;
+  padding: 2px;
+  touch-action: none; /* let touch drag the row instead of scrolling */
+}
+.drag-handle:active { cursor: grabbing; }
+.grip-icon { width: 15px; height: 15px; display: block; }
+.file-row.dragging { opacity: 0.45; }
+.file-row.drag-over td { box-shadow: inset 0 2px 0 var(--accent); } /* drop indicator */
+/* Bare remove / remove-all buttons: just the ✕ glyph, no border/background */
+.del-bare {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  color: var(--muted);
   font-size: 13px;
+  line-height: 1;
   cursor: pointer;
-  line-height: 1.4;
-  transition: color 0.1s, border-color 0.1s;
+  transition: color 0.1s;
 }
-.file-actions button:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.file-actions button.del:hover {
-  color: var(--bad);
-  border-color: var(--bad);
-}
-th .remove-all {
-  font-weight: 700;
-}
+.del-bare:hover { color: var(--bad); }
+th .remove-all { font-weight: 700; }
+/* Row remove appears on row hover (unchanged behaviour) */
+.file-row .row-del { visibility: hidden; }
+.file-row:hover .row-del { visibility: visible; }
 td.fname {
   color: var(--muted);
   font-size: 12px;
@@ -819,6 +883,15 @@ button.color-swatch:hover { border-color: var(--text); }
 .pending-row:hover .file-actions {
   visibility: visible;
 }
+.pending-row .file-actions button {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: color 0.1s, border-color 0.1s;
+}
 .file-actions .pending-del,
 .file-actions .pending-del-all {
   background: transparent;
@@ -955,3 +1028,82 @@ button.color-swatch:hover { border-color: var(--text); }
 /* ===== XRD fit progress bar ===== */
 #xrdFitProgWrap { height:6px; background:var(--panel2); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
 #xrdFitProgBar { height:100%; width:0; background:var(--accent); transition:width .08s linear; }
+
+
+/* ===== "Data loaded" dot on nav tabs — subtle dot after the name, inheriting the
+   text colour so it tracks hover/active states ===== */
+/* The dot is absolutely positioned so the tab keeps its un-badged size; it sits
+   midway in the right padding (≈ halfway between the last letter and the edge),
+   vertically centered. */
+#nav button.has-dot-slot { position: relative; }
+.tab-dot {
+  position: absolute;
+  top: 50%;
+  right: 3.5px;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  color: inherit;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+#nav button.has-data .tab-dot { opacity: 1; }
+
+/* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
+.legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }
+.legend i.mk-dot { width: 9px; height: 9px; border-radius: 50%; }
+.legend i.mk-box { width: 11px; height: 11px; border-radius: 2px; }
+
+/* ===== Dropzone loading state ===== */
+.dropzone { position: relative; }
+.dropzone.dz-loading { pointer-events: none; }
+.dropzone.dz-loading .dz-icon,
+.dropzone.dz-loading .dz-title,
+.dropzone.dz-loading .dz-hint { opacity: 0.2; }
+.dropzone.dz-loading::before {
+  content: '';
+  position: absolute;
+  left: calc(50% - 48px);
+  top: calc(50% - 8px);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  animation: dz-spin 0.7s linear infinite;
+}
+.dropzone.dz-loading::after {
+  content: 'Loading…';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+@keyframes dz-spin { to { transform: rotate(360deg); } }
+
+/* ===== Collapsible instructions: an info icon next to the card title ===== */
+.instr-info {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 0 8px;
+  cursor: pointer;
+  color: var(--muted);
+  vertical-align: middle;
+  line-height: 0;
+  transition: color 0.15s;
+}
+.instr-info svg { display: block; width: 15px; height: 15px; }
+.instr-info:hover { color: var(--accent); }
+.instr-info.active { color: var(--accent); }
+/* Center the info icon vertically with the card title (falls back to vertical-align) */
+h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
+  display: inline-flex;
+  align-items: center;
+}

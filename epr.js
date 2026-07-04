@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor } from './utils.js';
+import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -23,10 +23,9 @@ import { Plot } from './plot.js';
         rebuildAlerts();
         afterFilesChange();
       },
-      onMoveUp(i){ if(i>0){[files[i-1],files[i]]=[files[i],files[i-1]]; afterFilesChange();} },
-      onMoveDown(i){ if(i<files.length-1){[files[i],files[i+1]]=[files[i+1],files[i]]; afterFilesChange();} },
-      onLabelChange(i, v){ files[i].label=v; updateEpr(); },
-      onColorChange(i, v){ files[i].color=v; updateEpr(); },
+      onReorder(from, to){ const [x]=files.splice(from,1); files.splice(to,0,x); afterFilesChange(); },
+      onLabelChange(i, v){ files[i].label=v; updateEpr(); hist.commit(); },
+      onColorChange(i, v){ files[i].color=v; updateEpr(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
       onRemoveAll(){ files.length=0; pending={}; loadAlerts=''; uploadAlerts=''; rebuildAlerts(); afterFilesChange(); },
     };
@@ -131,6 +130,7 @@ import { Plot } from './plot.js';
   });
 
   function afterFilesChange(){
+    setTabLoaded('epr', files.length);
     renderUnifiedFileList('eprFileTableWrap', files, fileCallbacks());
     if (files.length){
       document.getElementById('eprWorkspace').style.display='block';
@@ -141,7 +141,24 @@ import { Plot } from './plot.js';
       document.getElementById('eprExportCard').style.display='none';
       rebuildAlerts();
     }
+    hist.commit();
   }
+
+  /* ---- Undo/redo: file order/labels/colours + normalization & smoothing ---- */
+  function eprSnapshot(){
+    return {
+      files: files.map(f=>({...f})),
+      norm: document.getElementById('eprNorm').value,
+      smooth: document.getElementById('eprSmooth').value,
+    };
+  }
+  function eprRestore(s){
+    files = s.files.map(f=>({...f}));
+    document.getElementById('eprNorm').value = s.norm;
+    document.getElementById('eprSmooth').value = s.smooth;
+    afterFilesChange();
+  }
+  const hist = registerHistory('epr', eprSnapshot, eprRestore);
 
   function updateEpr(){
     if (!files.length) return;
@@ -171,7 +188,9 @@ import { Plot } from './plot.js';
   }
 
   ['eprNorm','eprSmooth'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', ()=>{ if(files.length) updateEpr(); });
+    const el = document.getElementById(id);
+    el.addEventListener('input', ()=>{ if(files.length) updateEpr(); });
+    el.addEventListener('change', ()=>{ if(files.length) hist.commit(); });
   });
   window._eprRedraw = ()=>{ if (files.length) updateEpr(); };
 
