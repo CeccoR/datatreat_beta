@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -1315,9 +1315,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       });
       t+=csvLine(row);
     }
-    downloadBlob('xrd_output.csv', t);
-    const wrap=document.getElementById('xrdDownloads'); wrap.innerHTML='';
-    makeDownloadLink(wrap,'xrd_output.csv',t,'xrd_output.csv');
+    const entries = [];              // {name, text} collected into a single zip
+    entries.push({name:'xrd_output.csv', text:t});
     // Crystallite size (classic) — per-sample summary (mean ± std, matching the table)
     {
       const anyStd = !!standardName;
@@ -1337,27 +1336,40 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         );
         ct += csvLine(row);
       });
-      downloadBlob('crystallite_size_classic.csv', ct);
-      makeDownloadLink(wrap,'crystallite_size_classic.csv',ct,'crystallite_size_classic.csv');
+      entries.push({name:'crystallite_size_classic.csv', text:ct});
     }
-    // Per-sample peak list CSVs (excluding peaks removed in the table)
+    // Dedicated standard CSV: its peaks and measured FWHM (instrumental profile).
+    // Crystallite size is meaningless for the standard, so only the FWHM is listed.
+    if (standardName){
+      const si = files.findIndex(f=>f.name===standardName);
+      const pr = si>=0 ? processed[si] : null;
+      if (pr){
+        const pks = pr.peaks.filter(pk=>!pk.removed);
+        const maxH=Math.max(...pks.map(pk=>pk.height))||1;
+        let st=csvLine(['2Theta','RelIntensity','FWHM_deg']);
+        pks.forEach(pk=>{
+          st+=csvLine([fmtNum(pk.pos,6), fmtNum(pk.height/maxH,6),
+                       isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'']);
+        });
+        entries.push({name:'standard_'+files[si].label+'.csv', text:st});
+      }
+    }
+    // Per-sample peak list CSVs (excluding the standard and peaks removed in the table)
     processed.forEach((pr,k)=>{
+      if (files[k].name === standardName) return; // standard has its own dedicated CSV
       const pks = pr.peaks.filter(pk=>!pk.removed);
       if (!pks.length) return;
-      const isStd = files[k].name === standardName;
       const kp = getFileParams(k);
       const maxH=Math.max(...pks.map(pk=>pk.height))||1;
       let pt=csvLine(['2Theta','RelIntensity','FWHM_deg','Size_nm','Size_corr_nm']);
       pks.forEach(pk=>{
-        const Draw = isStd ? NaN : sizeRaw(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
-        const Dcorr= isStd ? NaN : sizeCorr(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
+        const Draw = sizeRaw(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
+        const Dcorr= sizeCorr(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
         pt+=csvLine([fmtNum(pk.pos,6),fmtNum(pk.height/maxH,6),
                      isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'',
                      isFinite(Draw)?fmtNum(Draw,3):'', isFinite(Dcorr)?fmtNum(Dcorr,3):'']);
       });
-      const fname=files[k].label+'_peaks.csv';
-      downloadBlob(fname, pt);
-      makeDownloadLink(wrap, fname, pt, fname);
+      entries.push({name:files[k].label+'_peaks.csv', text:pt});
     });
     // Per-sample last-fit CSVs: observed + fit total and its components (bkgnd, Kα1, Kα2)
     files.forEach((f,k)=>{
@@ -1370,10 +1382,16 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         ft += csvLine([fmtNum(f.x[j],6), fmtNum(f.y[j],6), fmtNum(bg+rec.full[j],6),
                        fmtNum(bg,6), fmtNum(ka1,6), fmtNum(ka2,6)]);
       }
-      const fn=f.label+'_fit.csv';
-      downloadBlob(fn, ft);
-      makeDownloadLink(wrap, fn, ft, fn);
+      entries.push({name:f.label+'_fit.csv', text:ft});
     });
+    // Bundle every CSV into a single downloadable zip
+    downloadZip('xrd_export.zip', entries);
+    const wrap=document.getElementById('xrdDownloads'); wrap.innerHTML='';
+    const b=document.createElement('button');
+    b.className='btn secondary small'; b.style.marginRight='8px'; b.style.marginBottom='6px';
+    b.textContent='Download xrd_export.zip';
+    b.onclick=()=>downloadZip('xrd_export.zip', entries);
+    wrap.appendChild(b);
   };
 })();
 

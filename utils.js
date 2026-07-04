@@ -298,6 +298,61 @@ function downloadBlob(filename, text){
   a.href = url; a.download = filename; document.body.appendChild(a); a.click();
   setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
 }
+// --- Minimal ZIP writer (store / no compression) -------------------------
+// Bundles a list of {name, text} entries into a single .zip Blob. Pure client
+// side, no dependencies. Uses the "stored" method so no deflate is needed.
+const _CRC_TABLE = (()=>{
+  const t = new Uint32Array(256);
+  for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); t[n]=c>>>0; }
+  return t;
+})();
+function _crc32(bytes){
+  let c = 0xFFFFFFFF;
+  for (let i=0;i<bytes.length;i++) c = _CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipBlob(entries){
+  const enc = new TextEncoder();
+  const chunks = [];   // file-data + local headers, concatenated
+  const central = [];  // central-directory records
+  let offset = 0;
+  const u16 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF]);
+  const u32 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF, (v>>>16)&0xFF, (v>>>24)&0xFF]);
+  for (const e of entries){
+    const nameBytes = enc.encode(e.name);
+    const data = enc.encode(e.text);
+    const crc = _crc32(data);
+    const local = [
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0),
+      nameBytes, data
+    ];
+    local.forEach(b=>chunks.push(b));
+    const localSize = 30 + nameBytes.length + data.length;
+    central.push([
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length),
+      u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBytes
+    ]);
+    offset += localSize;
+  }
+  const centralStart = offset;
+  const centralParts = [];
+  central.forEach(rec=>{ rec.forEach(b=>centralParts.push(b)); });
+  const centralSize = central.reduce((s,rec)=> s + rec.reduce((a,b)=>a+b.length,0), 0);
+  const end = [
+    u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length),
+    u32(centralSize), u32(centralStart), u16(0)
+  ];
+  return new Blob([...chunks, ...centralParts, ...end], {type:'application/zip'});
+}
+function downloadZip(filename, entries){
+  const url = URL.createObjectURL(zipBlob(entries));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
+}
+
 function makeDownloadLink(container, filename, text, label){
   const b = document.createElement('button');
   b.className = 'btn secondary small';
@@ -820,5 +875,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, registerHistory, buildAlertsHtml, nextColor
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, registerHistory, buildAlertsHtml, nextColor
 };
