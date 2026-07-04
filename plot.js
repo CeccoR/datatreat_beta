@@ -320,12 +320,12 @@ class Plot{
     const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
     this.gCross.innerHTML='';
     const add=(tag,at)=>{ this.gCross.appendChild(svgEl(tag,at)); };
-    add('line',{x1:cx,x2:cx,y1:m.t,y2:h-m.b,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75});
-    add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75});
+    add('line',{x1:cx,x2:cx,y1:m.t,y2:h-m.b,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
+    add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
     const nearRight = cx > w - m.r - 140;
     const tx = nearRight ? m.l+8 : w-m.r-8;
     const anchor = nearRight ? 'start' : 'end';
-    const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':anchor,fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace'});
+    const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':anchor,fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
     t.textContent = `x ${fmt(xv)}   y ${fmt(yv)}`;
     this.gCross.appendChild(t);
   }

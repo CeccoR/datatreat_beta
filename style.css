@@ -10,7 +10,58 @@
   --good: #7fd17f;
   --warn: #ffb454;
   --bad: #ff6b6b;
+  --on-accent: #06131f;      /* text drawn on top of the accent fill */
+  --icon-tile: #0e1316;      /* home-card square icon tile background */
+  --sel-inset: #ffffff;      /* selected peak-row highlight border */
+  --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
+  --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
+  --alert-bad-bg:  #3a1212;  --alert-bad-line:  #5a1c1c;
+  --pending-line: #6b4d1a;
+  /* Plot chrome (axes/grid/labels/crosshair) — themed via .plot-* classes below */
+  --plot-border: #3a414c;
+  --plot-grid: #262c35;
+  --plot-tick: #93a0b0;
+  --plot-label: #c4ccd6;
+  --plot-cross: #c4ccd6;
+  --plot-readout: #f0f4f6;
+  --plot-readout-halo: #0b0f12;
 }
+/* ===== Light theme ===== */
+:root[data-theme="light"] {
+  --bg: #f3f5f6;
+  --panel: #ffffff;
+  --panel2: #eceff1;
+  --line: #d2d9dd;
+  --text: #1a2327;
+  --muted: #56676f;
+  --accent: #b96a10;
+  --accent2: #9c4b93;
+  --good: #2e8b4e;
+  --warn: #a9670a;
+  --bad: #cc3b3b;
+  --on-accent: #ffffff;
+  --icon-tile: #f3f5f6;
+  --sel-inset: #b96a10;
+  --alert-warn-bg: #fbf1dd;  --alert-warn-line: #e4c583;
+  --alert-good-bg: #e2f4ea;  --alert-good-line: #9dd3b3;
+  --alert-bad-bg:  #fbe6e6;  --alert-bad-line:  #eaa9a9;
+  --pending-line: #e4c583;
+  --plot-border: #c2ccd2;
+  --plot-grid: #e5eaed;
+  --plot-tick: #56676f;
+  --plot-label: #33424a;
+  --plot-cross: #56676f;
+  --plot-readout: #1a2327;
+  --plot-readout-halo: #ffffff;
+}
+/* Plot chrome follows the theme. CSS beats SVG presentation attributes, so these
+   override the fills/strokes plot.js sets inline — no JS changes needed. */
+.plot-border { stroke: var(--plot-border); }
+.plot-grid   { stroke: var(--plot-grid); }
+.plot-tick   { fill: var(--plot-tick); }
+.plot-label  { fill: var(--plot-label); }
+.plot-crosshair { stroke: var(--plot-cross); }
+.plot-readout { fill: var(--plot-readout); stroke: var(--plot-readout-halo); }
 
 * {
   box-sizing: border-box;
@@ -71,29 +122,40 @@ nav button:not(.nav-settings):not(.active):hover {
 }
 nav button.active {
   background: var(--accent);
-  color: #06131f;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 600;
 }
-nav button.nav-settings {
-  margin-left: auto;
+/* Circular icon buttons on the right of the nav (sessions, theme, settings) */
+nav button.nav-icon {
   font-size: 15px;
   font-weight: bold;
-  padding: 7px 11px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   border-color: var(--line);
   color: var(--muted);
+  flex-shrink: 0;
 }
-nav button.nav-settings:hover {
+nav button.nav-right { margin-left: auto; }
+nav button.nav-icon:hover {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--panel2);
 }
-nav button.nav-settings.active {
-  color: #06131f;
+nav button.nav-icon.active {
+  color: var(--on-accent);
   border-color: var(--accent);
   background: var(--accent);
 }
+/* Show only the icon matching the current theme */
+.theme-icon-light { display: none; }
+:root[data-theme="light"] .theme-icon-dark { display: none; }
+:root[data-theme="light"] .theme-icon-light { display: inline; }
 .home-settings-link {
   background: none;
   border: none;
@@ -195,7 +257,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 button.btn {
   background: var(--accent);
-  color: #06131f;
+  color: var(--on-accent);
   border: none;
   border-radius: 8px;
   padding: 9px 16px;
@@ -314,19 +376,19 @@ svg.plot {
 .alert:hover .alert-dismiss { opacity: 1; }
 .alert-dismiss:hover { font-weight: bold; }
 .alert.warn {
-  background: #3a2c0f;
+  background: var(--alert-warn-bg);
   color: var(--warn);
-  border: 1px solid #5a430f;
+  border: 1px solid var(--alert-warn-line);
 }
 .alert.good {
-  background: #0f3a26;
+  background: var(--alert-good-bg);
   color: var(--good);
-  border: 1px solid #1c5a3c;
+  border: 1px solid var(--alert-good-line);
 }
 .alert.bad {
-  background: #3a1212;
+  background: var(--alert-bad-bg);
   color: var(--bad);
-  border: 1px solid #5a1c1c;
+  border: 1px solid var(--alert-bad-line);
 }
 .grid2 {
   display: grid;
@@ -383,7 +445,7 @@ svg.plot {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background: #0e1316;
+  background: var(--icon-tile);
   border: 1px solid var(--line);
   border-radius: 12px;
   display: flex;
@@ -812,7 +874,7 @@ button.color-swatch:hover { border-color: var(--text); }
 .plot-dl-btn.active {
   border: 1px solid var(--accent) !important;
   background: var(--accent) !important;
-  color: #06131f !important;
+  color: var(--on-accent) !important;
 }
 
 /* ===== Sample navigation arrows ===== */
@@ -870,7 +932,7 @@ button.color-swatch:hover { border-color: var(--text); }
 /* ===== EPR pending table ===== */
 .pending-table th,
 .pending-table td {
-  border-bottom: 1px solid #6b4d1a;
+  border-bottom: 1px solid var(--pending-line);
   color: var(--warn);
 }
 .pending-row .file-actions {
@@ -895,7 +957,7 @@ button.color-swatch:hover { border-color: var(--text); }
 .file-actions .pending-del,
 .file-actions .pending-del-all {
   background: transparent;
-  border-color: #6b4d1a;
+  border-color: var(--pending-line);
   color: var(--warn);
 }
 .file-actions .pending-del-all {
@@ -973,9 +1035,9 @@ button.color-swatch:hover { border-color: var(--text); }
 /* Persistent selection: keep the normal background, add a uniform white outline.
    Applied per-cell (top+bottom on every cell, left on the first, right on the last)
    so the rectangle is even all around with no internal lines. */
-#xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff; }
-#xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff, inset 2px 0 0 #fff; }
-#xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff, inset -2px 0 0 #fff; }
+#xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset); }
+#xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset 2px 0 0 var(--sel-inset); }
+#xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
 /* Mean ± std crystallite-size summary under the analysis peak table */
 .size-summary {
   margin-top: 12px;

@@ -681,8 +681,8 @@ document.querySelectorAll('.home-card').forEach(c=>{
 document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
-const VALID_TABS = ['home','tauc','xrd','gc','epr','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', settings:'DataTreat · Settings' };
+const VALID_TABS = ['home','tauc','xrd','gc','epr','sessions','settings'];
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sessions:'DataTreat · Sessions', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -767,6 +767,58 @@ document.addEventListener('keydown', e=>{
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
   if (btn) btn.classList.toggle('has-data', !!has);
+}
+// Does a module currently hold loaded data? (drives the replace-on-open confirm)
+function moduleHasData(mod){
+  const btn = document.querySelector('#nav button[data-tab="'+mod+'"]');
+  return !!(btn && btn.classList.contains('has-data'));
+}
+
+/* =========================================================
+   THEME — light / dark, remembered, defaulting to the OS preference.
+   The initial attribute is set by an inline <head> script (no flash); here we
+   wire the header toggle and the settings selector, and persist the choice.
+========================================================= */
+const THEME_KEY = 'datatreat-theme';
+function currentTheme(){ return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
+function applyTheme(theme, persist){
+  theme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  if (persist){ try { localStorage.setItem(THEME_KEY, theme); } catch(e){} }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
+  const sel = document.getElementById('settingTheme');
+  if (sel) sel.value = theme;
+}
+(function initTheme(){
+  applyTheme(currentTheme(), false); // sync meta + settings select to the pre-painted attribute
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.addEventListener('click', ()=> applyTheme(currentTheme()==='light' ? 'dark' : 'light', true));
+  document.addEventListener('change', e=>{ if (e.target && e.target.id==='settingTheme') applyTheme(e.target.value, true); });
+  // Follow OS changes only while the user hasn't made an explicit choice
+  if (window.matchMedia){
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ev=>{
+      let saved=null; try { saved = localStorage.getItem(THEME_KEY); } catch(e){}
+      if (!saved) applyTheme(ev.matches ? 'light' : 'dark', false);
+    });
+  }
+})();
+
+/* Module state access for the session manager: reuse each module's registered
+   undo snapshot()/restore() as the canonical serialize/deserialize. */
+const MODULES = ['tauc','xrd','gc','epr'];
+const MODULE_LABELS = { tauc:'DRS UV-Vis', xrd:'XRPD', gc:'GC', epr:'EPR' };
+function getModuleState(mod){
+  const st = _histories[mod];
+  return st ? st._snap() : null;
+}
+function restoreModuleState(mod, state){
+  const st = _histories[mod];
+  if (!st) return;
+  st._busy = true;
+  try { st._restore(state); } finally { st._busy = false; }
+  st.reset();
+  st.commit(); // fresh baseline so undo/redo start clean from the loaded session
 }
 
 // Size each home card so its square icon tile spans 90% of the (common) card
@@ -875,5 +927,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, registerHistory, buildAlertsHtml, nextColor
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, applyTheme, currentTheme
 };
