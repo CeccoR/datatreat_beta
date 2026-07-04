@@ -893,6 +893,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     });
     html += '</tbody></table>';
     wrap.innerHTML = html;
+    // Match the table width to the analysis plot's svg (which is narrower than the
+    // column by the plot's button gutter). Measure after layout so it stays exact.
+    requestAnimationFrame(()=>{
+      const svg = document.getElementById('xrdResSvg');
+      if (svg && svg.clientWidth) wrap.style.width = svg.clientWidth + 'px';
+    });
   }
 
   // Per-field shared/per-sample toggles (one segmented control per editable field)
@@ -1292,25 +1298,24 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   document.getElementById('xrdSave').onclick = ()=>{
     if (!files.length) return;
     const norm = document.getElementById('xrdNorm').value;
-    // Main diffraction data CSV (baseline-subtracted, normalised, all samples)
-    let Y = processed.map(pr=>pr.subtracted.slice());
-    // The standard never participates in global/local normalization; it is always
-    // divided by its own max. Non-standard samples share the global max (over
-    // non-standard samples only) or are locally normalized.
-    const nonStd = files.map((f,k)=>f.name!==standardName ? k : -1).filter(k=>k>=0);
-    const gmax = Math.max(1, ...nonStd.map(k=>maxArr(Y[k])));
-    Y = Y.map((y,k)=>{
-      if (files[k].name===standardName || norm==='local'){ const mx=maxArr(y)||1; return y.map(v=>v/mx); }
-      return y.map(v=>v/gmax);
+    // Main diffraction data CSV (baseline-subtracted, normalised). The standard is
+    // excluded here — it has its own dedicated CSV — and never participates in the
+    // global/local normalization: non-standard samples share the global max.
+    const cols = files.map((f,k)=>({f,k})).filter(o=>o.f.name!==standardName);
+    const gmax = Math.max(1, ...cols.map(o=>maxArr(processed[o.k].subtracted)));
+    const Ycol = cols.map(o=>{
+      const y = processed[o.k].subtracted;
+      const mx = norm==='local' ? (maxArr(y)||1) : gmax;
+      return y.map(v=>v/mx);
     });
     // Each sample keeps its own 2θ axis → one (2Theta, intensity) column pair per sample
-    const header=[]; files.forEach(f=>header.push('2Theta_'+f.label, f.label));
+    const header=[]; cols.forEach(o=>header.push('2Theta_'+o.f.label, o.f.label));
     let t=csvLine(header);
-    const maxLen=Math.max(...files.map(f=>f.x.length));
+    const maxLen = cols.length ? Math.max(...cols.map(o=>o.f.x.length)) : 0;
     for (let i=0;i<maxLen;i++){
       const row=[];
-      files.forEach((f,k)=>{
-        if (i<f.x.length) row.push(fmtNum(f.x[i],6), fmtNum(Y[k][i],6));
+      cols.forEach((o,c)=>{
+        if (i<o.f.x.length) row.push(fmtNum(o.f.x[i],6), fmtNum(Ycol[c][i],6));
         else row.push('','');
       });
       t+=csvLine(row);
