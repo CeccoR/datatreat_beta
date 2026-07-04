@@ -439,30 +439,40 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.target.dataset.i); });
   });
 
-  // Drag-to-reorder (grab the handle, drag the row onto another)
-  let dragSrc = null;
-  wrap.querySelectorAll('.file-row').forEach(row=>{
+  // Drag-to-reorder via pointer events (works with both mouse and touch): grab the
+  // handle and drag the row over another; the row under the pointer is the target.
+  const rows = [...wrap.querySelectorAll('.file-row')];
+  const rowAtY = (y)=>{
+    for (const r of rows){ const b=r.getBoundingClientRect(); if (y>=b.top && y<=b.bottom) return r; }
+    // beyond the last row → drop at the end
+    if (rows.length){ const last=rows[rows.length-1].getBoundingClientRect(); if (y>last.bottom) return rows[rows.length-1]; }
+    return null;
+  };
+  let drag = null; // { from }
+  rows.forEach(row=>{
     const handle = row.querySelector('.drag-handle');
-    handle.addEventListener('mousedown', ()=> row.setAttribute('draggable', 'true'));
-    row.addEventListener('dragstart', e=>{
-      dragSrc = +row.dataset.i; row.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      try { e.dataTransfer.setData('text/plain', String(dragSrc)); } catch(_){}
+    handle.addEventListener('pointerdown', e=>{
+      e.preventDefault();
+      drag = { from: +row.dataset.i };
+      row.classList.add('dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch(_){}
     });
-    row.addEventListener('dragend', ()=>{
-      row.removeAttribute('draggable'); row.classList.remove('dragging');
-      wrap.querySelectorAll('.drag-over').forEach(r=>r.classList.remove('drag-over'));
-      dragSrc = null;
+    handle.addEventListener('pointermove', e=>{
+      if (!drag) return;
+      const target = rowAtY(e.clientY);
+      rows.forEach(r=> r.classList.toggle('drag-over', r===target && +r.dataset.i!==drag.from));
     });
-    row.addEventListener('dragover', e=>{ if (dragSrc!=null){ e.preventDefault(); e.dataTransfer.dropEffect='move'; } });
-    row.addEventListener('dragenter', ()=>{ if (dragSrc!=null && +row.dataset.i!==dragSrc) row.classList.add('drag-over'); });
-    row.addEventListener('dragleave', ()=> row.classList.remove('drag-over'));
-    row.addEventListener('drop', e=>{
-      e.preventDefault(); row.classList.remove('drag-over');
-      const to = +row.dataset.i;
-      if (dragSrc!=null && dragSrc!==to && callbacks.onReorder) callbacks.onReorder(dragSrc, to);
-      dragSrc = null;
-    });
+    const finish = (e)=>{
+      if (!drag) return;
+      const target = rowAtY(e.clientY);
+      const to = target ? +target.dataset.i : null;
+      const from = drag.from;
+      rows.forEach(r=> r.classList.remove('drag-over', 'dragging'));
+      drag = null;
+      if (to!=null && to!==from && callbacks.onReorder) callbacks.onReorder(from, to);
+    };
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', ()=>{ rows.forEach(r=> r.classList.remove('drag-over','dragging')); drag = null; });
   });
 }
 

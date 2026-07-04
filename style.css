@@ -494,6 +494,7 @@ footer a:hover {
   color: var(--muted);
   cursor: grab;
   padding: 2px;
+  touch-action: none; /* let touch drag the row instead of scrolling */
 }
 .drag-handle:active { cursor: grabbing; }
 .grip-icon { width: 15px; height: 15px; display: block; }
