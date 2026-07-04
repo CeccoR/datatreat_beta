@@ -136,7 +136,7 @@ import { Plot } from './plot.js';
     if (!files.length){ wrap.innerHTML=''; return; }
     // Columns: Label 40%, m 10%, Q 10%, date 20%, warning 20%
     const cg = `<colgroup><col style="width:40%"><col style="width:10%"><col style="width:10%"><col style="width:20%"><col style="width:20%"></colgroup>`;
-    let html = `<div class="table-wrap-box"><table>${cg}<thead><tr><th>Label</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
+    let html = `<div class="table-wrap-box"><table>${cg}<thead><tr><th>Sample</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
     files.forEach((f,i)=>{
       html += `<tr>
         <td class="fname" title="${f.label}">${f.label}</td>
@@ -266,7 +266,7 @@ import { Plot } from './plot.js';
 
   function renderPlateauTable(){
     const wrap = document.getElementById('gcPlateauTableWrap');
-    let html = '<table><thead><tr><th>Label</th><th>Mean integral rate (mmol/h/g)</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Sample</th><th>Mean integral rate (mmol/h/g)</th></tr></thead><tbody>';
     costResults.forEach(c=> html += `<tr><td>${c.label}</td><td>${isFinite(c.cost)?c.cost.toFixed(4):'-'}</td></tr>`);
     html += '</tbody></table>';
     wrap.innerHTML = html;
@@ -308,7 +308,7 @@ import { Plot } from './plot.js';
       downloadBlob(d.label+'_output.csv', t);
       makeDownloadLink(wrap, d.label+'_output.csv', t, d.label+'_output.csv');
     });
-    let t2 = csvLine(['Label','Mean integral rate (mmol/h/g)','Interval duration (h)']);
+    let t2 = csvLine(['Sample','Mean integral rate (mmol/h/g)','Interval duration (h)']);
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
     downloadBlob('H2_rates.csv', t2);
     makeDownloadLink(wrap, 'H2_rates.csv', t2, 'H2_rates.csv');

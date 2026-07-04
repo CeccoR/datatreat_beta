@@ -755,7 +755,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!pks.length){ wrap.innerHTML='<p style="color:var(--muted);margin:6px 0">No peaks found with current parameters.</p>'; return; }
     const maxH = Math.max(...pks.map(p=>p.height));
     const showCorr = !!standardName && !isStd;
-    let html='<table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th><th>Size (nm)</th>'+(showCorr?'<th>Size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
+    let html='<table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th><th>Crystallite size (nm)</th>'+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
     pks.forEach((pk,i)=>{
       const fwhm = pk.fwhmClassic;
       const sizeRawCell = isStd ? '—' : fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda));
@@ -830,7 +830,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     let selIdx=-1, selBd=Infinity;
     if (panels.f.sel!=null) fits.forEach((pk,i)=>{ const d=Math.abs(pk.pos-panels.f.sel); if(d<selBd){selBd=d;selIdx=i;} });
     if (selBd>=0.6) selIdx=-1;
-    let html='<table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th><th>Size (nm)</th>'+(showCorr?'<th>Size corr. (nm)</th>':'')+'</tr></thead><tbody>';
+    let html='<table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th><th>Crystallite size (nm)</th>'+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'</tr></thead><tbody>';
     fits.forEach((pk,i)=>{
       const sizeRawCell = isStd ? '—' : fmtCell(sizeRaw(pk.fwhm, pk.pos, fp.K, fp.lambda));
       const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(pk.fwhm, pk.pos, fp.K, fp.lambda))}</td>` : '';
@@ -883,13 +883,17 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!wrap) return;
     if (!files.length || !processed.length){ wrap.innerHTML=''; return; }
     const anyStd = !!standardName;
-    let html = '<table><thead><tr><th>Sample</th><th>n</th><th>Size (nm)</th>' + (anyStd?'<th>Size corr. (nm)</th>':'') + '</tr></thead><tbody>';
+    // Sample 70%, the size column(s) share the remaining 30%
+    const cg = anyStd
+      ? '<colgroup><col style="width:70%"><col style="width:15%"><col style="width:15%"></colgroup>'
+      : '<colgroup><col style="width:70%"><col style="width:30%"></colgroup>';
+    let html = '<table>'+cg+'<thead><tr><th>Sample</th><th>Crystallite size (nm)</th>' + (anyStd?'<th>Crystallite size corr. (nm)</th>':'') + '</tr></thead><tbody>';
     files.forEach((f,i)=>{
       if (f.name === standardName) return; // standard excluded from results
       const st = sampleSizeStats(i);
       const sizeCell = fmtMeanStd(st.rawMean, st.rawStd, st.rawN);
       const corrCell = anyStd ? `<td>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)}</td>` : '';
-      html += `<tr><td class="fname" title="${f.label.replace(/"/g,'&quot;')}">${f.label}</td><td>${st.rawN}</td><td>${sizeCell}</td>${corrCell}</tr>`;
+      html += `<tr><td class="fname" title="${f.label.replace(/"/g,'&quot;')}">${f.label}</td><td>${sizeCell}</td>${corrCell}</tr>`;
     });
     html += '</tbody></table>';
     wrap.innerHTML = html;
@@ -1325,13 +1329,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // Crystallite size (classic) — per-sample summary (mean ± std, matching the table)
     {
       const anyStd = !!standardName;
-      const head = ['Sample','n','Size_nm','Size_std_nm'].concat(anyStd ? ['Size_corr_nm','Size_corr_std_nm'] : []);
+      const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
       let ct = csvLine(head);
       files.forEach((f,k)=>{
         const st = sampleSizeStats(k);
         const row = [
           f.label,
-          st.isStd ? '' : st.rawN,
           st.isStd ? 'standard' : (isFinite(st.rawMean) ? fmtNum(st.rawMean,2) : ''),
           (!st.isStd && st.rawN>1 && isFinite(st.rawStd)) ? fmtNum(st.rawStd,2) : '',
         ];
@@ -1366,7 +1369,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       if (!pks.length) return;
       const kp = getFileParams(k);
       const maxH=Math.max(...pks.map(pk=>pk.height))||1;
-      let pt=csvLine(['2Theta','RelIntensity','FWHM_deg','Size_nm','Size_corr_nm']);
+      let pt=csvLine(['2Theta','RelIntensity','FWHM_deg','Crystallite_size_nm','Crystallite_size_corr_nm']);
       pks.forEach(pk=>{
         const Draw = sizeRaw(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
         const Dcorr= sizeCorr(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);

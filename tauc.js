@@ -326,7 +326,7 @@ import { Plot } from './plot.js';
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
-    let html = '<table><colgroup><col style="width:44%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th rowspan="2">Label</th><th colspan="2" style="text-align:center">E<sub>g</sub> (eV)</th></tr><tr><th style="text-align:center">x-axis</th><th style="text-align:center">baseline</th></tr></thead><tbody>';
+    let html = '<table><colgroup><col style="width:44%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th rowspan="2">Sample</th><th colspan="2" style="text-align:center">E<sub>g</sub> (eV)</th></tr><tr><th style="text-align:center">x-axis</th><th style="text-align:center">baseline</th></tr></thead><tbody>';
     bestRegsAll.forEach(r=>{
       const egNeg = isFinite(r.Eg) && r.Eg < 0;
       const egiNeg = isFinite(r.EgInt) && r.EgInt < 0;
@@ -474,14 +474,14 @@ import { Plot } from './plot.js';
     downloadBlob('FRhva.csv', t2);
     makeDownloadLink(wrap, 'FRhva.csv', t2, 'FRhva.csv');
     // regressions.csv
-    let t3 = csvLine(['Label','m1','Var_m1','m2','Var_m2','q1','Var_q1','q2','Var_q2','Cov_mq1','Cov_mq2']);
+    let t3 = csvLine(['Sample','m1','Var_m1','m2','Var_m2','q1','Var_q1','q2','Var_q2','Cov_mq1','Cov_mq2']);
     bestRegsAll.forEach(r=>{
       t3 += csvLine([r.label, fmtNum(r.regs.slope,8), fmtNum(r.regs.varM,8), fmtNum(r.regs2.slope,8), fmtNum(r.regs2.varM,8), fmtNum(r.regs.intercept,8), fmtNum(r.regs.varB,8), fmtNum(r.regs2.intercept,8), fmtNum(r.regs2.varB,8), fmtNum(r.regs.covMB,8), fmtNum(r.regs2.covMB,8)]);
     });
     downloadBlob('regressions.csv', t3);
     makeDownloadLink(wrap, 'regressions.csv', t3, 'regressions.csv');
     // Eg_values.csv
-    let t4 = csvLine(['Label','Eg','Eg_err','Eg_int','Eg_int_err']);
+    let t4 = csvLine(['Sample','Eg','Eg_err','Eg_int','Eg_int_err']);
     bestRegsAll.forEach(r=>{ t4 += csvLine([r.label, fmtNum(r.Eg,6), fmtNum(r.EgErr,6), fmtNum(r.EgInt,6), fmtNum(r.EgIntErr,6)]); });
     downloadBlob('Eg_values.csv', t4);
     makeDownloadLink(wrap, 'Eg_values.csv', t4, 'Eg_values.csv');
