@@ -126,6 +126,13 @@ nav button.active {
   border-color: var(--accent);
   font-weight: 600;
 }
+/* Saved-sessions table: keep columns usable on narrow screens by letting the
+   table scroll horizontally instead of collapsing. */
+.sess-table-box { overflow-x: auto; }
+.sess-table { min-width: 620px; }
+@media (max-width: 600px) {
+  .sess-table .btn.small { padding: 5px 8px; }
+}
 /* Module section header: title left, floppy save button right, aligned to title */
 .section-head {
   display: flex;
