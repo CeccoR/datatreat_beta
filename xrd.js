@@ -1,6 +1,6 @@
 import { settings, fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
 import { svgEl, Plot } from './plot.js';
-import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-core.js';
+import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
 /* =========================================================
    XRD MODULE
@@ -386,17 +386,36 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
     processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks};
   }
 
-  // Instrumental FWHM (deg) at a given 2θ, linearly interpolated from the
-  // selected standard's measured peaks (0 when no standard is set)
+  // Caglioti instrumental resolution: FWHM² = U·tan²θ + V·tanθ + W (θ = Bragg angle).
+  // Least-squares fit [U,V,W] to the standard's measured peaks (needs ≥3 peaks).
+  function fitCaglioti(pts){
+    if (pts.length < 3) return null;
+    const A=[[0,0,0],[0,0,0],[0,0,0]], b=[0,0,0];
+    for (const p of pts){
+      const t=Math.tan(p.th), x=[t*t, t, 1], y=p.b*p.b;
+      for (let i=0;i<3;i++){ b[i]+=x[i]*y; for (let j=0;j<3;j++) A[i][j]+=x[i]*x[j]; }
+    }
+    const uvw = solveLinear(A, b);
+    return (uvw && uvw.every(isFinite)) ? uvw : null;
+  }
+  // Instrumental FWHM (deg) at any 2θ from the selected standard, via the Caglioti
+  // fit (evaluable at arbitrary angles, incl. between/beyond the standard's peaks).
+  // Falls back to piecewise-linear interpolation when fewer than 3 standard peaks.
   function instrBeta(twoTheta){
     if (!standardName) return 0;
     const si = files.findIndex(f=>f.name===standardName);
     if (si < 0 || !processed[si]) return 0;
     const pts = processed[si].peaks
       .filter(p=>!p.removed && isFinite(p.fwhm))
-      .map(p=>({x:p.pos, b:p.fwhm}))
+      .map(p=>({x:p.pos, th:(p.pos/2)*Math.PI/180, b:p.fwhm}))
       .sort((a,b)=>a.x-b.x);
     if (!pts.length) return 0;
+    const uvw = fitCaglioti(pts);
+    if (uvw){
+      const t = Math.tan((twoTheta/2)*Math.PI/180);
+      return Math.sqrt(Math.max(0, uvw[0]*t*t + uvw[1]*t + uvw[2]));
+    }
+    // Fallback (<3 peaks): linear interpolation / clamp
     if (twoTheta <= pts[0].x) return pts[0].b;
     if (twoTheta >= pts[pts.length-1].x) return pts[pts.length-1].b;
     for (let k=0; k<pts.length-1; k++){
@@ -676,22 +695,24 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
   // (un-offset) trace on its own x axis; null entries (e.g. no fit) are skipped.
   function drawStackedResults(svgId, legendId, curves){
     const norm = document.getElementById('xrdNorm').value;
-    const n = files.length, baseOf = k => -k * 1.1;
-    let Y = curves.map(c=>c ? c.slice() : null);
-    if (norm === 'local'){
-      Y = Y.map((y,k)=> y ? y.map(v=>v/(maxArr(y)||1)+baseOf(k)+0.05) : null);
-    } else {
-      const gmax = Math.max(1, ...Y.filter(Boolean).map(maxArr));
-      Y = Y.map((y,k)=> y ? y.map(v=>v/gmax+baseOf(k)+0.05) : null);
-    }
+    // The instrumental standard is excluded from the results entirely and from the
+    // global/local normalization; only non-standard samples with a curve are shown.
+    const shown = [];
+    files.forEach((f,k)=>{ if (f.name!==standardName && curves[k]) shown.push(k); });
+    const n = shown.length, baseOf = j => -j * 1.1;
+    const gmax = Math.max(1, ...shown.map(k=>maxArr(curves[k])));
     const plot = new Plot(document.getElementById(svgId), {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById(legendId); legend.innerHTML='';
-    const [ux0, ux1] = unionRange();
-    plot.setRange(ux0, ux1, baseOf(n-1), baseOf(0)+1.1);
+    let lo=Infinity, hi=-Infinity;
+    shown.forEach(k=>{ lo=Math.min(lo, files[k].x[0]); hi=Math.max(hi, files[k].x[files[k].x.length-1]); });
+    if (!isFinite(lo)){ [lo,hi]=unionRange(); }
+    plot.setRange(lo, hi, baseOf(Math.max(0,n-1)), baseOf(0)+1.1);
     plot.drawAxes();
-    Y.forEach((y,k)=>{
-      if (!y) return;
+    shown.forEach((k, j)=>{
+      const raw = curves[k];
+      const mx = norm==='local' ? (maxArr(raw)||1) : gmax;
+      const y = raw.map(v=> v/mx + baseOf(j) + 0.05);
       plot.line(files[k].x, y, files[k].color, 1.3);
       const s=document.createElement('span');
       s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`;
@@ -864,11 +885,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
     const anyStd = !!standardName;
     let html = '<table><thead><tr><th>Sample</th><th>n</th><th>Size (nm)</th>' + (anyStd?'<th>Size corr. (nm)</th>':'') + '</tr></thead><tbody>';
     files.forEach((f,i)=>{
+      if (f.name === standardName) return; // standard excluded from results
       const st = sampleSizeStats(i);
-      const sizeCell = st.isStd ? '<span style="color:var(--muted)">standard</span>' : fmtMeanStd(st.rawMean, st.rawStd, st.rawN);
-      const corrCell = anyStd ? `<td>${st.isStd ? '—' : fmtMeanStd(st.corrMean, st.corrStd, st.corrN)}</td>` : '';
-      const nCell = st.isStd ? '—' : st.rawN;
-      html += `<tr><td class="fname" title="${f.label.replace(/"/g,'&quot;')}">${f.label}</td><td>${nCell}</td><td>${sizeCell}</td>${corrCell}</tr>`;
+      const sizeCell = fmtMeanStd(st.rawMean, st.rawStd, st.rawN);
+      const corrCell = anyStd ? `<td>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)}</td>` : '';
+      html += `<tr><td class="fname" title="${f.label.replace(/"/g,'&quot;')}">${f.label}</td><td>${st.rawN}</td><td>${sizeCell}</td>${corrCell}</tr>`;
     });
     html += '</tbody></table>';
     wrap.innerHTML = html;
@@ -876,17 +897,36 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
 
   // Per-field shared/per-sample toggles (one segmented control per editable field)
   const TOGGLE_FIELD = { xrdModeN:'N', xrdModeBl:'blWin', xrdModeH:'pkHeight', xrdModeP:'pkProm', xrdModeD:'pkDist', xrdModeK:'K', xrdModeL:'lambda' };
+  const SIZE_ONLY = new Set(['K','lambda']);
   Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
     document.querySelectorAll('#'+tid+' button').forEach(btn=>{
       btn.addEventListener('click', ()=>{
+        if (btn.classList.contains('active')) return; // no-op if already in this mode
         document.querySelectorAll('#'+tid+' button').forEach(b=>b.classList.remove('active'));
         btn.classList.add('active');
+        // The value currently displayed on the graph for this field
+        const cur = getFileParams(curIdx)[key];
         paramMode[key] = btn.dataset.m;
-        // Seed a per-sample override from the current shared value so switching to
-        // 'per' doesn't lose the displayed number
-        if (btn.dataset.m==='per'){ if(!perParams[curIdx]) perParams[curIdx]={}; if(perParams[curIdx][key]===undefined) perParams[curIdx][key]=shared[key]; }
+        if (btn.dataset.m==='shared'){
+          // Switching to "all": every sample takes the currently displayed value
+          shared[key] = cur;
+        } else {
+          // Switching to "one": keep the displayed value on this sample only;
+          // other samples' per-sample values are left untouched
+          if(!perParams[curIdx]) perParams[curIdx]={};
+          perParams[curIdx][key] = cur;
+        }
         writeStoreToInputs();
-        if (files.length) hist.commit();
+        if (files.length){
+          if (!SIZE_ONLY.has(key)){
+            if (btn.dataset.m==='shared') reprocessAll(); else reprocessOne(curIdx);
+            updateXrdAnalysis(true);
+            updateXrdFitting(true);
+          }
+          updateXrdResults();
+          renderPeakTable();
+          hist.commit();
+        }
       });
     });
   });
@@ -1254,8 +1294,15 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
     const norm = document.getElementById('xrdNorm').value;
     // Main diffraction data CSV (baseline-subtracted, normalised, all samples)
     let Y = processed.map(pr=>pr.subtracted.slice());
-    if (norm==='local') Y=Y.map(y=>{ const mx=maxArr(y)||1; return y.map(v=>v/mx); });
-    else { const gmax=Math.max(...Y.map(maxArr))||1; Y=Y.map(y=>y.map(v=>v/gmax)); }
+    // The standard never participates in global/local normalization; it is always
+    // divided by its own max. Non-standard samples share the global max (over
+    // non-standard samples only) or are locally normalized.
+    const nonStd = files.map((f,k)=>f.name!==standardName ? k : -1).filter(k=>k>=0);
+    const gmax = Math.max(1, ...nonStd.map(k=>maxArr(Y[k])));
+    Y = Y.map((y,k)=>{
+      if (files[k].name===standardName || norm==='local'){ const mx=maxArr(y)||1; return y.map(v=>v/mx); }
+      return y.map(v=>v/gmax);
+    });
     // Each sample keeps its own 2θ axis → one (2Theta, intensity) column pair per sample
     const header=[]; files.forEach(f=>header.push('2Theta_'+f.label, f.label));
     let t=csvLine(header);
