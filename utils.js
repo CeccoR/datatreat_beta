@@ -448,8 +448,8 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   colgroup += `<col style="width:5%"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
-  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>Sample label</th>`;
-  ec.forEach(c=> html += `<th>${c.header}</th>`);
+  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>SAMPLE LABEL</th>`;
+  ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
   html += `<th style="text-align:right"><button class="remove-all del-bare" title="Remove all">✕</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
