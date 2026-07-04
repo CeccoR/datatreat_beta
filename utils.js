@@ -377,7 +377,8 @@ function setupDropzone(dropzoneId, inputId, onFiles){
 /* =========================================================
    UNIFIED FILE LIST RENDERER
    files: array of objects with at least {name, label}
-   callbacks: {onRemove(i), onMoveUp(i), onMoveDown(i), onLabelChange(i, newLabel)}
+   callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel),
+               onColorChange(i,color), onPaletteChange(colors)}
    extraCols: optional array of {header, render(file,i)} for additional columns
 ========================================================= */
 function renderUnifiedFileList(containerId, files, callbacks, extraCols){
@@ -386,28 +387,25 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   if (!files.length){ wrap.innerHTML=''; return; }
 
   const ec = extraCols || [];
-  const phantomBtns = `<button style="opacity:0;pointer-events:none">↑</button><button style="opacity:0;pointer-events:none">↓</button>`;
-  // colgroup: FILE=40%, LABEL+extraCols share remaining 40%, actions=20%
-  let colgroup = `<colgroup><col style="width:40%">`;
+  // colgroup: drag handle (fixed), FILE, LABEL+extraCols, actions (fixed, right)
+  let colgroup = `<colgroup><col style="width:28px"><col style="width:38%">`;
   for (let i = 0; i < 1 + ec.length; i++) colgroup += `<col>`;
-  colgroup += `<col style="width:20%"></colgroup>`;
-  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>LABEL</th>`;
+  colgroup += `<col style="width:40px"></colgroup>`;
+  const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
+
+  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>LABEL</th>`;
   ec.forEach(c=> html += `<th>${c.header}</th>`);
-  html += `<th><div class="file-actions" style="display:flex;gap:4px;align-items:center;visibility:visible;white-space:nowrap">${phantomBtns}<button class="remove-all del" title="Remove all">✕</button></div></th></tr></thead><tbody>`;
+  html += `<th style="text-align:right"><button class="remove-all del-bare" title="Remove all">✕</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
     html += `<tr class="file-row" data-i="${i}">`;
+    html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
     html += `<td class="fname" title="${f.name}">${swatch}${f.name}</td>`;
-    html += `<td><input class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
+    html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td><div class="file-actions">`;
-    if (i > 0) html += `<button class="move-up" data-i="${i}" title="Move up">↑</button>`;
-    else html += `<button disabled style="opacity:.2" title="Move up">↑</button>`;
-    if (i < files.length-1) html += `<button class="move-dn" data-i="${i}" title="Move down">↓</button>`;
-    else html += `<button disabled style="opacity:.2" title="Move down">↓</button>`;
-    html += `<button class="del" data-i="${i}" title="Remove">✕</button>`;
-    html += `</div></td></tr>`;
+    html += `<td style="text-align:right"><button class="del del-bare row-del" data-i="${i}" title="Remove">✕</button></td>`;
+    html += `</tr>`;
   });
   html += `</tbody></table></div>`;
   wrap.innerHTML = html;
@@ -437,14 +435,34 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
       if (callbacks.onLabelChange) callbacks.onLabelChange(+e.target.dataset.i, e.target.value);
     });
   });
-  wrap.querySelectorAll('.move-up').forEach(btn=>{
-    btn.addEventListener('click', e=>{ if (callbacks.onMoveUp) callbacks.onMoveUp(+e.target.dataset.i); });
-  });
-  wrap.querySelectorAll('.move-dn').forEach(btn=>{
-    btn.addEventListener('click', e=>{ if (callbacks.onMoveDown) callbacks.onMoveDown(+e.target.dataset.i); });
-  });
-  wrap.querySelectorAll('.del').forEach(btn=>{
+  wrap.querySelectorAll('.row-del').forEach(btn=>{
     btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.target.dataset.i); });
+  });
+
+  // Drag-to-reorder (grab the handle, drag the row onto another)
+  let dragSrc = null;
+  wrap.querySelectorAll('.file-row').forEach(row=>{
+    const handle = row.querySelector('.drag-handle');
+    handle.addEventListener('mousedown', ()=> row.setAttribute('draggable', 'true'));
+    row.addEventListener('dragstart', e=>{
+      dragSrc = +row.dataset.i; row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(dragSrc)); } catch(_){}
+    });
+    row.addEventListener('dragend', ()=>{
+      row.removeAttribute('draggable'); row.classList.remove('dragging');
+      wrap.querySelectorAll('.drag-over').forEach(r=>r.classList.remove('drag-over'));
+      dragSrc = null;
+    });
+    row.addEventListener('dragover', e=>{ if (dragSrc!=null){ e.preventDefault(); e.dataTransfer.dropEffect='move'; } });
+    row.addEventListener('dragenter', ()=>{ if (dragSrc!=null && +row.dataset.i!==dragSrc) row.classList.add('drag-over'); });
+    row.addEventListener('dragleave', ()=> row.classList.remove('drag-over'));
+    row.addEventListener('drop', e=>{
+      e.preventDefault(); row.classList.remove('drag-over');
+      const to = +row.dataset.i;
+      if (dragSrc!=null && dragSrc!==to && callbacks.onReorder) callbacks.onReorder(dragSrc, to);
+      dragSrc = null;
+    });
   });
 }
 

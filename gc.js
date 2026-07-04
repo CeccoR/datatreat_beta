@@ -34,25 +34,8 @@ import { Plot } from './plot.js';
         if (!files.length) loadAlerts = '';
         afterFilesChange();
       },
-      onMoveUp(i){
-        if(i>0){
-          [files[i-1],files[i]]=[files[i],files[i-1]];
-          [ms[i-1],ms[i]]=[ms[i],ms[i-1]];
-          [Qs[i-1],Qs[i]]=[Qs[i],Qs[i-1]];
-          [lightOnDates[i-1],lightOnDates[i]]=[lightOnDates[i],lightOnDates[i-1]];
-          afterFilesChange();
-        }
-      },
-      onMoveDown(i){
-        if(i<files.length-1){
-          [files[i],files[i+1]]=[files[i+1],files[i]];
-          [ms[i],ms[i+1]]=[ms[i+1],ms[i]];
-          [Qs[i],Qs[i+1]]=[Qs[i+1],Qs[i]];
-          [lightOnDates[i],lightOnDates[i+1]]=[lightOnDates[i+1],lightOnDates[i]];
-          afterFilesChange();
-        }
-      },
-      onLabelChange(i, v){ files[i].label=v; computeAndRenderGc(); hist.commit(); },
+      onReorder(from, to){ [files,ms,Qs,lightOnDates].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); afterFilesChange(); },
+      onLabelChange(i, v){ files[i].label=v; renderGcParamTable(); computeAndRenderGc(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; computeAndRenderGc(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
       onRemoveAll(){ files.length=0; ms.length=0; Qs.length=0; lightOnDates.length=0; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); document.getElementById('gcLightAlert').innerHTML=''; afterFilesChange(); },

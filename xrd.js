@@ -82,8 +82,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
   function fileCallbacks(){
     return {
       onRemove(i){ files.splice(i,1); perParams.splice(i,1); processed.splice(i,1); manualPeaks.splice(i,1); removedPeaks.splice(i,1); savedFits.splice(i,1); afterFilesChange(); },
-      onMoveUp(i){ if(i>0){[files[i-1],files[i]]=[files[i],files[i-1]]; [perParams[i-1],perParams[i]]=[perParams[i],perParams[i-1]]; [processed[i-1],processed[i]]=[processed[i],processed[i-1]]; [manualPeaks[i-1],manualPeaks[i]]=[manualPeaks[i],manualPeaks[i-1]]; [removedPeaks[i-1],removedPeaks[i]]=[removedPeaks[i],removedPeaks[i-1]]; [savedFits[i-1],savedFits[i]]=[savedFits[i],savedFits[i-1]]; afterFilesChange();} },
-      onMoveDown(i){ if(i<files.length-1){[files[i],files[i+1]]=[files[i+1],files[i]]; [perParams[i],perParams[i+1]]=[perParams[i+1],perParams[i]]; [processed[i],processed[i+1]]=[processed[i+1],processed[i]]; [manualPeaks[i],manualPeaks[i+1]]=[manualPeaks[i+1],manualPeaks[i]]; [removedPeaks[i],removedPeaks[i+1]]=[removedPeaks[i+1],removedPeaks[i]]; [savedFits[i],savedFits[i+1]]=[savedFits[i+1],savedFits[i]]; afterFilesChange();} },
+      onReorder(from, to){ [files,perParams,processed,manualPeaks,removedPeaks,savedFits].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); afterFilesChange(); },
       onLabelChange(i, v){ files[i].label=v; renderPeakTable(); updateXrdResults(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateXrdResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },

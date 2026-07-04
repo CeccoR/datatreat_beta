@@ -33,8 +33,7 @@ import { Plot } from './plot.js';
         rebuildTaucAlerts();
         afterFilesChange();
       },
-      onMoveUp(i){ if(i>0){[files[i-1],files[i]]=[files[i],files[i-1]]; rebuildTaucAlerts(); afterFilesChange();} },
-      onMoveDown(i){ if(i<files.length-1){[files[i],files[i+1]]=[files[i+1],files[i]]; rebuildTaucAlerts(); afterFilesChange();} },
+      onReorder(from, to){ const [x]=files.splice(from,1); files.splice(to,0,x); rebuildTaucAlerts(); afterFilesChange(); },
       onLabelChange(i, v){ files[i].label=v; updateTaucResults(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateTaucResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },

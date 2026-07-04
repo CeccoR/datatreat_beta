@@ -185,6 +185,14 @@ input[type="file"] {
   font-size: 13px;
   color: var(--muted);
 }
+/* Dark-theme the native date/time picker so its calendar icon isn't black-on-dark */
+input[type="datetime-local"] { color-scheme: dark; }
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
+  opacity: 0.75;
+  cursor: pointer;
+}
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 button.btn {
   background: var(--accent);
   color: #06131f;
@@ -477,38 +485,36 @@ footer a:hover {
 }
 
 /* ===== Unified file list ===== */
-.file-row .file-actions {
-  display: flex;
-  gap: 4px;
+/* Drag handle (leftmost column): a plain grip; only the cursor changes on hover */
+.drag-cell { text-align: center; }
+.drag-handle {
+  display: inline-flex;
   align-items: center;
-  visibility: hidden;
-  white-space: nowrap;
-}
-.file-row:hover .file-actions {
-  visibility: visible;
-}
-.file-actions button {
-  background: var(--panel2);
-  border: 1px solid var(--line);
+  justify-content: center;
   color: var(--muted);
-  border-radius: 5px;
-  padding: 2px 7px;
+  cursor: grab;
+  padding: 2px;
+}
+.drag-handle:active { cursor: grabbing; }
+.grip-icon { width: 15px; height: 15px; display: block; }
+.file-row.dragging { opacity: 0.45; }
+.file-row.drag-over td { box-shadow: inset 0 2px 0 var(--accent); } /* drop indicator */
+/* Bare remove / remove-all buttons: just the ✕ glyph, no border/background */
+.del-bare {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  color: var(--muted);
   font-size: 13px;
+  line-height: 1;
   cursor: pointer;
-  line-height: 1.4;
-  transition: color 0.1s, border-color 0.1s;
+  transition: color 0.1s;
 }
-.file-actions button:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.file-actions button.del:hover {
-  color: var(--bad);
-  border-color: var(--bad);
-}
-th .remove-all {
-  font-weight: 700;
-}
+.del-bare:hover { color: var(--bad); }
+th .remove-all { font-weight: 700; }
+/* Row remove appears on row hover (unchanged behaviour) */
+.file-row .row-del { visibility: hidden; }
+.file-row:hover .row-del { visibility: visible; }
 td.fname {
   color: var(--muted);
   font-size: 12px;
@@ -875,6 +881,15 @@ button.color-swatch:hover { border-color: var(--text); }
 }
 .pending-row:hover .file-actions {
   visibility: visible;
+}
+.pending-row .file-actions button {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: color 0.1s, border-color 0.1s;
 }
 .file-actions .pending-del,
 .file-actions .pending-del-all {
