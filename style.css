@@ -185,11 +185,11 @@ input[type="file"] {
   font-size: 13px;
   color: var(--muted);
 }
-/* Dark-theme the native date/time picker so its calendar icon isn't black-on-dark */
+/* Dark-theme the native date/time picker and force its calendar icon white */
 input[type="datetime-local"] { color-scheme: dark; }
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.85);
-  opacity: 0.75;
+  filter: brightness(0) invert(1); /* → pure white regardless of the base glyph */
+  opacity: 0.85;
   cursor: pointer;
 }
 input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }

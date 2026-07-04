@@ -190,14 +190,23 @@ class Plot{
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1,y2:y1,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1:y2,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
   }
-  tickLabel(xv, text){
-    const entry = {type:'ticklabel', xv, text};
+  tickLabel(xv, text, rot){
+    const entry = {type:'ticklabel', xv, text, rot: rot||0};
     this._stored.push(entry);
     return this._renderTickLabel(entry);
   }
   _renderTickLabel(entry){
     const {h}=this.size(); const m=this.margin;
-    const t = svgEl('text',{x:this.px(entry.xv), y:h-m.b+28, 'font-size':10, fill:'#93a0b0', 'text-anchor':'middle', 'class':'plot-tick'});
+    const x = this.px(entry.xv);
+    if (entry.rot){
+      // Tilted labels: anchor at the tick's right end so long names don't overlap
+      const y = h-m.b+14;
+      const t = svgEl('text',{x, y, 'font-size':10, fill:'#93a0b0', 'text-anchor':'end', 'class':'plot-tick', transform:`rotate(-${entry.rot} ${x} ${y})`});
+      t.textContent = entry.text;
+      this.gAxes.appendChild(t);
+      return t;
+    }
+    const t = svgEl('text',{x, y:h-m.b+28, 'font-size':10, fill:'#93a0b0', 'text-anchor':'middle', 'class':'plot-tick'});
     t.textContent = entry.text;
     this.gAxes.appendChild(t);
     return t;

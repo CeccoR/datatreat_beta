@@ -387,10 +387,10 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   if (!files.length){ wrap.innerHTML=''; return; }
 
   const ec = extraCols || [];
-  // colgroup: drag handle (fixed), FILE, LABEL+extraCols, actions (fixed, right)
-  let colgroup = `<colgroup><col style="width:28px"><col style="width:38%">`;
-  for (let i = 0; i < 1 + ec.length; i++) colgroup += `<col>`;
-  colgroup += `<col style="width:40px"></colgroup>`;
+  // colgroup: drag 5%, FILE 40%, LABEL 40%, extraCols (auto), actions 5%
+  let colgroup = `<colgroup><col style="width:5%"><col style="width:40%"><col style="width:40%">`;
+  for (let i = 0; i < ec.length; i++) colgroup += `<col>`;
+  colgroup += `<col style="width:5%"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
   let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>LABEL</th>`;

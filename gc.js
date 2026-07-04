@@ -263,14 +263,14 @@ import { Plot } from './plot.js';
     if (!finite.length){ barCard.style.display='none'; return; }
     barCard.style.display='block';
     const svg = document.getElementById('gcSvgBar');
-    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true});
+    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:15,b:74}});
     const ymax = Math.max(...finite.map(c=>c.cost))*1.2;
     barPlot.setRange(0, costResults.length+1, 0, ymax||1);
     barPlot.drawAxes();
     costResults.forEach((c,k)=>{
       if (!isFinite(c.cost)) return;
       barPlot.bar(k+1-0.16, k+1+0.16, 0, c.cost, dataTables[k].color);
-      barPlot.tickLabel(k+1, c.label);
+      barPlot.tickLabel(k+1, c.label, 30);
     });
     barPlot.attachTools(svg.closest('.plot-wrap'));
   }
