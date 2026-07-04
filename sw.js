@@ -1,6 +1,6 @@
 /* DataTreat service worker — cache-first offline app shell.
    Bump CACHE when any precached asset changes to force a refresh. */
-const CACHE = 'datatreat-v17';
+const CACHE = 'datatreat-v18';
 const ASSETS = [
   './',
   './index.html',
@@ -38,8 +38,10 @@ self.addEventListener('fetch', (e)=>{
   if (url.origin !== self.location.origin) return; // don't touch cross-origin requests
 
   // Cache-first: serve from cache, else fetch and cache the result.
+  // ignoreSearch so cache-busting query strings (e.g. favicon.svg?v=2) still hit
+  // the precached asset offline.
   e.respondWith(
-    caches.match(req).then(hit => hit || fetch(req).then(res=>{
+    caches.match(req, { ignoreSearch: true }).then(hit => hit || fetch(req).then(res=>{
       if (res && res.status === 200 && res.type === 'basic'){
         const copy = res.clone();
         caches.open(CACHE).then(c=>c.put(req, copy));
