@@ -905,8 +905,15 @@ function nextColor(existingFiles){
     const section = block.closest('section.tab');
     const key = 'datatreat-instr-' + (section ? section.id : 's') + '-' + i;
     // Attach the toggle to the nearest preceding heading; fall back to inline.
-    let heading = block.previousElementSibling;
-    while (heading && !/^H[1-3]$/.test(heading.tagName)) heading = heading.previousElementSibling;
+    // The heading may be wrapped (e.g. in a .section-head flex row), so also
+    // look for a heading nested inside a preceding sibling.
+    let heading = null, prev = block.previousElementSibling;
+    while (prev){
+      if (/^H[1-3]$/.test(prev.tagName)){ heading = prev; break; }
+      const inner = prev.querySelector && prev.querySelector('h1,h2,h3');
+      if (inner){ heading = inner; break; }
+      prev = prev.previousElementSibling;
+    }
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'instr-info';

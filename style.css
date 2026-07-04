@@ -126,6 +126,23 @@ nav button.active {
   border-color: var(--accent);
   font-weight: 600;
 }
+/* Module section header: title left, floppy save button right, aligned to title */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+button.btn.icon-save {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
 /* Circular icon buttons on the right of the nav (sessions, theme, settings) */
 nav button.nav-icon {
   font-size: 15px;

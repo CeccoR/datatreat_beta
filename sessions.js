@@ -124,6 +124,18 @@ async function importSessionFile(file){
 
 /* ---- Rendering ---- */
 let _cache = [];
+let _sortKey = 'updatedAt', _sortDir = -1; // default: most-recent first
+function sortRows(rows){
+  const k = _sortKey;
+  return rows.sort((a,b)=>{
+    let av, bv;
+    if (k==='updatedAt'){ av=a.updatedAt||0; bv=b.updatedAt||0; return (av-bv)*_sortDir; }
+    if (k==='module'){ av=(MODULE_LABELS[a.module]||a.module); bv=(MODULE_LABELS[b.module]||b.module); }
+    else { av=a.title||''; bv=b.title||''; }
+    return av.localeCompare(bv) * _sortDir;
+  });
+}
+const arrow = key => _sortKey===key ? (_sortDir===1 ? ' ▲' : ' ▼') : '';
 function passesFilter(rec){
   const name = (document.getElementById('sessFilterName').value || '').trim().toLowerCase();
   const mod  = document.getElementById('sessFilterModule').value;
@@ -141,16 +153,20 @@ async function renderList(){
   _cache = (await allSessions()).sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
   const wrap = document.getElementById('sessListWrap');
   if (!wrap) return;
-  const rows = _cache.filter(passesFilter);
+  const rows = sortRows(_cache.filter(passesFilter));
   if (!_cache.length){ wrap.innerHTML = '<p class="hint">No saved sessions yet. Load data in a module and press “Save session”.</p>'; updateOpenSelectedState(); return; }
   if (!rows.length){ wrap.innerHTML = '<p class="hint">No sessions match the current filters.</p>'; updateOpenSelectedState(); return; }
-  let html = '<div class="table-wrap-box"><table><colgroup><col style="width:34px"><col><col style="width:110px"><col style="width:150px"><col style="width:230px"></colgroup>'
-    + '<thead><tr><th></th><th>TITLE</th><th>MODULE</th><th>SAVED</th><th></th></tr></thead><tbody>';
+  let html = '<div class="table-wrap-box"><table><colgroup><col style="width:34px"><col style="width:auto"><col style="width:112px"><col style="width:122px"><col style="width:284px"></colgroup>'
+    + '<thead><tr><th></th>'
+    + '<th class="sess-sort" data-key="title" style="cursor:pointer">TITLE'+arrow('title')+'</th>'
+    + '<th class="sess-sort" data-key="module" style="cursor:pointer">MODULE'+arrow('module')+'</th>'
+    + '<th class="sess-sort" data-key="updatedAt" style="cursor:pointer">SAVED'+arrow('updatedAt')+'</th>'
+    + '<th></th></tr></thead><tbody>';
   rows.forEach(r=>{
     html += '<tr data-id="'+r.id+'">'
       + '<td><input type="checkbox" class="sess-check" style="width:auto"></td>'
       + '<td class="fname" title="'+r.title.replace(/"/g,'&quot;')+'">'+r.title+'</td>'
-      + '<td><span class="pill">'+(MODULE_LABELS[r.module]||r.module)+'</span></td>'
+      + '<td style="white-space:nowrap"><span class="pill">'+(MODULE_LABELS[r.module]||r.module)+'</span></td>'
       + '<td style="color:var(--muted)">'+fmtDate(r.updatedAt)+'</td>'
       + '<td style="text-align:right;white-space:nowrap">'
         + '<button class="btn small sess-open">Open</button> '
@@ -215,6 +231,15 @@ document.getElementById('sessListWrap').addEventListener('click', async e=>{
 });
 document.getElementById('sessListWrap').addEventListener('change', e=>{
   if (e.target.classList.contains('sess-check')) updateOpenSelectedState();
+});
+// Sortable headers: click toggles direction (or picks a new column)
+document.getElementById('sessListWrap').addEventListener('click', e=>{
+  const th = e.target.closest('.sess-sort');
+  if (!th) return;
+  const key = th.dataset.key;
+  if (_sortKey === key) _sortDir = -_sortDir;
+  else { _sortKey = key; _sortDir = (key==='updatedAt') ? -1 : 1; }
+  renderList();
 });
 
 // Refresh the list whenever the Sessions tab is opened
