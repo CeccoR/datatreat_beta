@@ -375,8 +375,10 @@ class Plot{
         zoomRect.setAttribute('y', Math.min(cy,zoomStart.cy));
         zoomRect.setAttribute('width', Math.abs(cx-zoomStart.cx));
         zoomRect.setAttribute('height', Math.abs(cy-zoomStart.cy));
+      } else if (P._mode){
+        P._clearCrosshair(); // pan/zoom tool armed → no position readout
       } else {
-        P._drawCrosshair(e.clientX, e.clientY); // hover readout (no active drag)
+        P._drawCrosshair(e.clientX, e.clientY); // hover readout (no tool active)
       }
     });
     svg.addEventListener('pointerleave', ()=>{ const P = svg._plot; if (P) P._clearCrosshair(); });

@@ -1271,6 +1271,28 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit } from './xrd-fit-cor
     downloadBlob('xrd_output.csv', t);
     const wrap=document.getElementById('xrdDownloads'); wrap.innerHTML='';
     makeDownloadLink(wrap,'xrd_output.csv',t,'xrd_output.csv');
+    // Crystallite size (classic) — per-sample summary (mean ± std, matching the table)
+    {
+      const anyStd = !!standardName;
+      const head = ['Sample','n','Size_nm','Size_std_nm'].concat(anyStd ? ['Size_corr_nm','Size_corr_std_nm'] : []);
+      let ct = csvLine(head);
+      files.forEach((f,k)=>{
+        const st = sampleSizeStats(k);
+        const row = [
+          f.label,
+          st.isStd ? '' : st.rawN,
+          st.isStd ? 'standard' : (isFinite(st.rawMean) ? fmtNum(st.rawMean,2) : ''),
+          (!st.isStd && st.rawN>1 && isFinite(st.rawStd)) ? fmtNum(st.rawStd,2) : '',
+        ];
+        if (anyStd) row.push(
+          st.isStd ? '' : (isFinite(st.corrMean) ? fmtNum(st.corrMean,2) : ''),
+          (!st.isStd && st.corrN>1 && isFinite(st.corrStd)) ? fmtNum(st.corrStd,2) : ''
+        );
+        ct += csvLine(row);
+      });
+      downloadBlob('crystallite_size_classic.csv', ct);
+      makeDownloadLink(wrap,'crystallite_size_classic.csv',ct,'crystallite_size_classic.csv');
+    }
     // Per-sample peak list CSVs (excluding peaks removed in the table)
     processed.forEach((pr,k)=>{
       const pks = pr.peaks.filter(pk=>!pk.removed);

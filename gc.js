@@ -38,7 +38,7 @@ import { Plot } from './plot.js';
       onLabelChange(i, v){ files[i].label=v; renderGcParamTable(); computeAndRenderGc(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; computeAndRenderGc(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; ms.length=0; Qs.length=0; lightOnDates.length=0; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); document.getElementById('gcLightAlert').innerHTML=''; afterFilesChange(); },
+      onRemoveAll(){ files.length=0; ms.length=0; Qs.length=0; lightOnDates.length=0; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); afterFilesChange(); },
     };
   }
 
@@ -94,7 +94,6 @@ import { Plot } from './plot.js';
       document.getElementById('gcResultsBar').style.display='none';
       document.getElementById('gcExportCard').style.display='none';
       rebuildGcAlerts();
-      document.getElementById('gcLightAlert').innerHTML = '';
     }
     hist.commit();
   }
@@ -120,9 +119,22 @@ import { Plot } from './plot.js';
   }
   const hist = registerHistory('gc', gcSnapshot, gcRestore);
 
+  // Warning when a sample's light-on time is before (or at) its first injection
+  function lightOnWarn(i){
+    const f = files[i], lo = lightOnDates[i];
+    if (!f || !lo || isNaN(+lo)) return false;
+    return !f.injDates.some(d => d < lo);
+  }
+  function lightOnWarnHtml(i){
+    return lightOnWarn(i)
+      ? '<div class="alert warn" style="margin:0;padding:6px 8px;font-size:11px">⚠ Light-on time is before first injection</div>'
+      : '';
+  }
+
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
     if (!files.length){ wrap.innerHTML=''; return; }
+    // Columns: Label 40%, m 10%, Q 10%, date 20%, warning 20%
     const cg = `<colgroup><col style="width:40%"><col style="width:10%"><col style="width:10%"><col style="width:20%"><col style="width:20%"></colgroup>`;
     let html = `<div class="table-wrap-box"><table>${cg}<thead><tr><th>Label</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
     files.forEach((f,i)=>{
@@ -131,7 +143,7 @@ import { Plot } from './plot.js';
         <td><input data-i="${i}" class="gcM" type="number" min="0.001" step="0.1" value="${ms[i]}" style="width:100%"></td>
         <td><input data-i="${i}" class="gcQ" type="number" min="0.001" step="0.1" value="${Qs[i]}" style="width:100%"></td>
         <td><input data-i="${i}" class="gcDate" type="datetime-local" value="${toLocalInputValue(lightOnDates[i])}" style="width:100%"></td>
-        <td></td>
+        <td class="gc-warn-cell">${lightOnWarnHtml(i)}</td>
       </tr>`;
     });
     html += `</tbody></table></div>`;
@@ -146,7 +158,13 @@ import { Plot } from './plot.js';
       inp.addEventListener('change', commit);
     });
     wrap.querySelectorAll('.gcDate').forEach(inp=>{
-      inp.addEventListener('input', e=>{ lightOnDates[+e.target.dataset.i]=new Date(e.target.value); computeAndRenderGc(); });
+      inp.addEventListener('input', e=>{
+        const i = +e.target.dataset.i;
+        lightOnDates[i] = new Date(e.target.value);
+        const cell = e.target.closest('tr').querySelector('.gc-warn-cell');
+        if (cell) cell.innerHTML = lightOnWarnHtml(i); // update warning live without re-rendering the input
+        computeAndRenderGc();
+      });
       inp.addEventListener('change', commit);
     });
   }
@@ -165,14 +183,13 @@ import { Plot } from './plot.js';
     if (!files.length) return;
     plateauStart = +document.getElementById('gcPlateauStart').value;
     plateauEnd   = +document.getElementById('gcPlateauEnd').value;
-    const lightOnAlertNames=[];
     dataTables = files.map((f,h)=>{
       const pairs = f.injDates.map((d,i)=>({d, v:f.h2[i]})).sort((a,b)=>a.d-b.d);
       const lightOn = lightOnDates[h];
       let idxBefore = -1;
       for (let i=0;i<pairs.length;i++) if (pairs[i].d < lightOn) idxBefore = i;
       let h2New;
-      if (idxBefore<0){ lightOnAlertNames.push(f.name); h2New=0; } else h2New = pairs[idxBefore].v;
+      if (idxBefore<0){ h2New=0; } else h2New = pairs[idxBefore].v;
       pairs.push({d: lightOn, v: h2New});
       pairs.sort((a,b)=>a.d-b.d);
       const tHours = pairs.map(p=>(p.d - lightOn)/3600000);
@@ -183,8 +200,6 @@ import { Plot } from './plot.js';
       const h2FmInt = cumtrapz(tHours, h2Fm);
       return {t:tHours, h2pct, h2F, h2Fm, h2FmInt, label:f.label, color:f.color};
     });
-    document.getElementById('gcLightAlert').innerHTML = lightOnAlertNames.length
-      ? `<div class="alert warn">⚠ Light-on time is before first injection in:<br>${lightOnAlertNames.join('<br>')}</div>` : '';
     document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts;
     renderGcPlots();
   }
@@ -263,7 +278,15 @@ import { Plot } from './plot.js';
     if (!finite.length){ barCard.style.display='none'; return; }
     barCard.style.display='block';
     const svg = document.getElementById('gcSvgBar');
-    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:15,b:74}});
+    // Bottom margin adapts to the longest (30°-tilted) label so names fit without
+    // changing the chart's footprint — the data area shrinks instead.
+    const mctx = document.createElement('canvas').getContext('2d');
+    mctx.font = '10px -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
+    let maxLbl = 0;
+    costResults.forEach(c=>{ if (isFinite(c.cost)) maxLbl = Math.max(maxLbl, mctx.measureText(c.label).width); });
+    const svgH = svg.getBoundingClientRect().height || 640;
+    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:15,b:bottom}});
     const ymax = Math.max(...finite.map(c=>c.cost))*1.2;
     barPlot.setRange(0, costResults.length+1, 0, ymax||1);
     barPlot.drawAxes();
