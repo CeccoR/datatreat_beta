@@ -769,7 +769,7 @@ function setTabLoaded(tab, has){
   if (btn) btn.classList.toggle('has-data', !!has);
   // The section's floppy "Save session" button only appears once data is loaded
   const save = document.querySelector('.section-head .session-save-btn[data-module="'+tab+'"]');
-  if (save) save.style.display = has ? 'inline-flex' : 'none';
+  if (save) save.style.visibility = has ? 'visible' : 'hidden';
 }
 // Does a module currently hold loaded data? (drives the replace-on-open confirm)
 function moduleHasData(mod){

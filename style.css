@@ -149,7 +149,8 @@ button.btn.icon-save {
   width: 34px;
   height: 34px;
   padding: 0;
-  display: none; /* revealed by setTabLoaded once the module has data */
+  display: inline-flex;
+  visibility: hidden; /* space reserved; revealed by setTabLoaded once data loads */
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
