@@ -156,7 +156,7 @@ async function renderList(){
   const rows = sortRows(_cache.filter(passesFilter));
   if (!_cache.length){ wrap.innerHTML = '<p class="hint">No saved sessions yet. Load data in a module and press “Save session”.</p>'; updateOpenSelectedState(); return; }
   if (!rows.length){ wrap.innerHTML = '<p class="hint">No sessions match the current filters.</p>'; updateOpenSelectedState(); return; }
-  let html = '<div class="table-wrap-box sess-table-box"><table class="sess-table"><colgroup><col style="width:30px"><col style="width:30%"><col style="width:15%"><col style="width:25%"><col style="width:30%"></colgroup>'
+  let html = '<div class="table-wrap-box sess-table-box"><table class="sess-table"><colgroup><col style="width:30px"><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>'
     + '<thead><tr><th></th>'
     + '<th class="sess-sort" data-key="title" style="cursor:pointer">TITLE'+arrow('title')+'</th>'
     + '<th class="sess-sort" data-key="module" style="cursor:pointer">MODULE'+arrow('module')+'</th>'

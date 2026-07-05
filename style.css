@@ -10,6 +10,8 @@
   --good: #7fd17f;
   --warn: #ffb454;
   --bad: #ff6b6b;
+  --accent-hover: #ffc271;   /* primary button :hover */
+  --accent-active: #e89a35;  /* primary button :active (pressed) */
   --on-accent: #06131f;      /* text drawn on top of the accent fill */
   --icon-tile: #0e1316;      /* home-card square icon tile background */
   --sel-inset: #ffffff;      /* selected peak-row highlight border */
@@ -39,6 +41,8 @@
   --good: #2e8b4e;
   --warn: #a9670a;
   --bad: #cc3b3b;
+  --accent-hover: #a75e0b;
+  --accent-active: #8c4e08;
   --on-accent: #ffffff;
   --icon-tile: #f3f5f6;
   --sel-inset: #b96a10;
@@ -288,12 +292,19 @@ button.btn {
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
+/* Primary (export-style, orange) buttons: distinct hover and pressed states */
+button.btn:not(.secondary):hover:not(:disabled) { background: var(--accent-hover); }
+button.btn:not(.secondary):active:not(:disabled) { background: var(--accent-active); }
 button.btn.secondary {
   background: var(--panel2);
   color: var(--text);
   border: 1px solid var(--line);
 }
+/* Secondary buttons: coherent, subtle hover/press */
+button.btn.secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button.btn.secondary:active:not(:disabled) { background: var(--line); }
 button.btn.small {
   padding: 5px 10px;
   font-size: 12px;
