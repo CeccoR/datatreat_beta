@@ -929,6 +929,16 @@ button.color-swatch:hover { border-color: var(--text); }
   border-color: var(--accent) !important;
   background: transparent !important;
 }
+/* Icons render as centered blocks (no inline-baseline gap) so every icon's
+   bounding box is centered in its button/cell and aligns with its neighbours */
+.plot-btn-icon, .x-icon, .dl-icon { display: block; }
+.alert-dismiss, .peak-del,
+.file-actions .pending-del, .file-actions .pending-del-all {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+.alert-dismiss:hover { font-weight: normal; color: var(--bad); }
 .plot-tool-btn.active,
 .plot-dl-btn.active {
   border: 1px solid var(--accent) !important;

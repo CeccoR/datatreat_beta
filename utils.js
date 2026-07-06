@@ -448,6 +448,11 @@ function setupDropzone(dropzoneId, inputId, onFiles){
                onColorChange(i,color), onPaletteChange(colors)}
    extraCols: optional array of {header, render(file,i)} for additional columns
 ========================================================= */
+// A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
+const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>`;
+// Download glyph, inked box centred on (12,12) so it lines up with the X.
+const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
+
 function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   const wrap = document.getElementById(containerId);
   if (!wrap) return;
@@ -462,9 +467,9 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
 
   let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>SAMPLE LABEL</th>`;
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
-  // Same download glyph as the plot/image export buttons, scaled to match the ✕
-  const dlIcon = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg>`;
-  html += `<th style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">✕</button></th></tr></thead><tbody>`;
+  const dlIcon = DL_SVG(15);
+  const xIcon = X_SVG(15);
+  html += `<th style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
@@ -473,7 +478,7 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     html += `<td class="fname" title="${f.name}">${swatch}${f.name}</td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">✕</button></td>`;
+    html += `<td style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
@@ -949,7 +954,7 @@ window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true);
    ALERT HELPERS
 ========================================================= */
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidFn, dismissWarnFn){
-  const makeX = fn => `<button class="alert-dismiss" onclick="${fn||"this.closest('.alert').remove()"}" title="Dismiss">✕</button>`;
+  const makeX = fn => `<button class="alert-dismiss" onclick="${fn||"this.closest('.alert').remove()"}" title="Dismiss">${X_SVG(13)}</button>`;
   let html = '';
   if (invalidNames.length)
     html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidFn) + '</div>';
@@ -1004,5 +1009,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, applyTheme, currentTheme
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, applyTheme, currentTheme
 };

@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, X_SVG } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -763,7 +763,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const sizeRawCell = isStd ? '—' : fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda));
       const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
       const sel = panels.a.sel!=null && Math.abs(pk.pos-panels.a.sel)<1e-9 ? ' selected' : '';
-      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td><td>${sizeRawCell}</td>${corrCell}<td style="text-align:right"><button class="peak-del" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">✕</button></td></tr>`;
+      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td><td>${sizeRawCell}</td>${corrCell}<td style="text-align:right"><button class="peak-del" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
     });
     html+='</tbody></table>';
     // Mean ± std crystallite size for this sample, shown right under the peak table
