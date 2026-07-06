@@ -331,7 +331,7 @@
         </div>
         <div class="peak-box" id="xrdPeakBox">
           <div class="peak-box-head">
-            <span class="peak-box-title">Detected peaks (classic) — <span id="xrdPkLabel">—</span></span>
+            <span class="peak-box-title">Detected peaks</span>
             <button class="btn secondary peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
           </div>
           <div id="xrdPeakTableWrap"></div>
@@ -354,7 +354,7 @@
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSvg" data-dl-name="XRPD_fit.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend">
-              <span><i class="mk-dot" style="background:#6a7585"></i>raw</span>
+              <span><i class="mk-dot mk-ring" style="border-color:#6a7585"></i>raw</span>
               <span id="xrdLegBl"><i style="background:#ff9933"></i>baseline</span>
               <span id="xrdLegFit"><i style="background:#ff5050"></i>doublet fit</span>
               <span id="xrdLegKa1"><i style="background:#b07cff"></i>Kα₁ component</span>
@@ -384,7 +384,7 @@
         </div>
         <div class="peak-box" id="xrdFitPeakBox">
           <div class="peak-box-head">
-            <span class="peak-box-title">Fitted peaks — <span id="xrdFitPkLabel">—</span></span>
+            <span class="peak-box-title">Fitted peaks</span>
           </div>
           <div id="xrdFitTableWrap"></div>
         </div>
@@ -394,17 +394,17 @@
         <h3 style="margin:0 0 12px">RESULTS</h3>
         <div class="row" style="align-items:flex-start;gap:16px">
           <div class="col mw320" style="flex:1">
-            <p class="chart-title">Analysis — smoothed, baseline subtracted</p>
+            <p class="chart-title">Analysis</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdResSvg" style="height:560px"></svg>
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResSvg" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResLegend" class="legend"></div>
-            <p class="chart-title" style="margin:18px 0 6px">Crystallite size (classic) — per sample</p>
+            <p class="chart-title" style="margin:18px 0 6px">Crystallite size</p>
             <div id="xrdSizeTableWrap" class="table-wrap-box"></div>
           </div>
           <div class="col mw320" style="flex:1">
-            <p class="chart-title">Fitting — model, baseline subtracted</p>
+            <p class="chart-title">Fit</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdResFitSvg" style="height:560px"></svg>
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>

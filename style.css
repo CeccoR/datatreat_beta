@@ -383,6 +383,9 @@ svg.plot {
 .legend {
   font-size: 12px;
   margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
 }
 .legend span {
   display: inline-flex;
@@ -627,6 +630,8 @@ footer a:hover {
   vertical-align: middle;
 }
 .del-bare:hover { color: var(--bad); }
+/* File-list actions cell: trim padding so download + remove always fit the column */
+.row-acts { padding-left: 0 !important; padding-right: 4px !important; }
 /* Download buttons: same bare style, but light up to a lighter grey, not red */
 .dl-bare:hover { color: var(--text); }
 th .remove-all { font-weight: 700; }
@@ -1202,6 +1207,8 @@ button.color-swatch:hover { border-color: var(--text); }
 /* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
 .legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }
 .legend i.mk-dot { width: 9px; height: 9px; border-radius: 50%; }
+/* Hollow ring marker (open circles in the plot, e.g. raw XRPD data) */
+.legend i.mk-ring { width: 9px; height: 9px; border-radius: 50%; background: transparent; border: 1.6px solid; box-sizing: border-box; vertical-align: middle; }
 .legend i.mk-box { width: 11px; height: 11px; border-radius: 2px; }
 
 /* ===== Dropzone loading state ===== */

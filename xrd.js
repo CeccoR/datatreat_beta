@@ -745,7 +745,6 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!files.length || !processed.length) return;
     const isStd = files[curIdx].name === standardName;
     const fp = getFileParams(curIdx);
-    document.getElementById('xrdPkLabel').textContent = files[curIdx].label + (isStd ? ' (standard)' : '');
     const allPks = processed[curIdx] ? processed[curIdx].peaks : [];
     const wrap = document.getElementById('xrdPeakTableWrap');
     const resetBtn = document.getElementById('xrdPkReset');
@@ -771,8 +770,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (st.isStd){
       html += '<div class="size-summary">Standard sample — crystallite size not computed.</div>';
     } else {
-      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b> <span class="ss-n">(n = ${st.rawN})</span>`;
-      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b> <span class="ss-n">(n = ${st.corrN})</span>`;
+      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
+      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
       html += '</div>';
     }
     wrap.innerHTML=html;
@@ -811,7 +810,6 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!wrap) return;
     const isStd = files[curIdx].name === standardName;
     const fp = getFileParams(curIdx);
-    document.getElementById('xrdFitPkLabel').textContent = files[curIdx].label + (isStd ? ' (standard)' : '');
     const sf = savedFits[curIdx];
     if (!sf || !sf.fits || !sf.fits.length){ wrap.innerHTML='<p style="color:var(--muted);margin:6px 0">No fit yet — press Fit sample.</p>'; return; }
     const f = files[curIdx];

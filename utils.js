@@ -460,17 +460,18 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   if (!files.length){ wrap.innerHTML=''; return; }
 
   const ec = extraCols || [];
-  // colgroup: drag 5%, FILE 44%, LABEL 43%, extraCols (auto), actions 8% (dl + remove)
+  // colgroup: drag 5%, FILE 44%, LABEL 43%, extraCols (auto), actions fixed 58px
+  // (a fixed width guarantees the download+remove icons fit even on narrow phones)
   let colgroup = `<colgroup><col style="width:5%"><col style="width:44%"><col style="width:43%">`;
   for (let i = 0; i < ec.length; i++) colgroup += `<col>`;
-  colgroup += `<col style="width:8%"></colgroup>`;
+  colgroup += `<col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
   let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th><th>SAMPLE LABEL</th>`;
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
-  html += `<th style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
+  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
@@ -479,7 +480,7 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">${xIcon}</button></td>`;
+    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
