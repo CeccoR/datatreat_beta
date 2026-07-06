@@ -618,6 +618,11 @@ footer a:hover {
   line-height: 1;
   cursor: pointer;
   transition: color 0.1s;
+  /* Center the glyph/SVG and keep download + remove vertically aligned */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
 }
 .del-bare:hover { color: var(--bad); }
 /* Download buttons: same bare style, but light up to a lighter grey, not red */
