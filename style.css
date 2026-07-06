@@ -624,6 +624,8 @@ footer a:hover {
 .dl-bare:hover { color: var(--text); }
 th .remove-all { font-weight: 700; }
 th .download-all { vertical-align: middle; }
+/* Download-all reads as "bold": thicker icon strokes than the per-row download */
+th .download-all svg { stroke-width: 2.4; }
 /* Row remove / download appear on row hover (unchanged behaviour) */
 .file-row .row-del,
 .file-row .dl-file { visibility: hidden; }
