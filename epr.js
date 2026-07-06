@@ -76,7 +76,9 @@ import { Plot } from './plot.js';
   }
 
   async function processPair(stem, dtaFile, dscFile){
-    const dscText = await dscFile.text();
+    const dscBuf = await dscFile.arrayBuffer();
+    const dscBytes = new Uint8Array(dscBuf);
+    const dscText = new TextDecoder().decode(dscBuf);
     const p = parseDsc(dscText);
     const npts = parseInt(p.XPTS);
     if (!npts){ return null; }
@@ -96,7 +98,7 @@ import { Plot } from './plot.js';
     const a = s.map((v, i) => v - (s[0] + slope * (b[i] - b[0])));
 
     return { name: stem, label: stem, b, a,
-             rawFiles: [ { name: dscFile.name, text: dscText },
+             rawFiles: [ { name: dscFile.name, bytes: dscBytes },
                          { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
   }
 

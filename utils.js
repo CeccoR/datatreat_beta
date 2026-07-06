@@ -356,6 +356,15 @@ function downloadZip(filename, entries){
   setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
 }
 
+// Download raw bytes verbatim (byte-for-byte identical to the original upload).
+function downloadBytes(filename, bytes){
+  const arr = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+  const url = URL.createObjectURL(new Blob([arr], {type:'application/octet-stream'}));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
+}
+
 function makeDownloadLink(container, filename, text, label){
   const b = document.createElement('button');
   b.className = 'btn secondary small';
@@ -498,19 +507,26 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   wrap.querySelectorAll('.row-del').forEach(btn=>{
     btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.currentTarget.dataset.i); });
   });
-  // Per-file download of the original uploaded content. A file keeps either
-  // `raw` (single text file) or `rawFiles` (e.g. EPR's .dsc + binary .dta pair).
-  const originalsOf = f => f.rawFiles && f.rawFiles.length
-    ? f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text })
-    : (f.raw != null ? [{ name:f.name, text:f.raw }] : []);
+  // Per-file download of the original uploaded content, byte-for-byte. A file
+  // keeps its original bytes in `rawBytes`, or a `rawFiles` list (e.g. EPR's
+  // .dsc + .dta pair), or legacy decoded text in `raw` (older sessions).
+  const originalsOf = f => {
+    if (f.rawFiles && f.rawFiles.length)
+      return f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text });
+    if (f.rawBytes != null) return [{ name:f.name, bytes:f.rawBytes }];
+    if (f.raw != null) return [{ name:f.name, text:f.raw }];
+    return [];
+  };
   wrap.querySelectorAll('.dl-file').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const f = files[+e.currentTarget.dataset.i];
       if (!f) return;
       const orig = originalsOf(f);
       if (!orig.length){ alert('The original file for “'+f.name+'” is not available.'); return; }
-      if (orig.length === 1 && orig[0].text != null) downloadBlob(orig[0].name, orig[0].text);
-      else downloadZip((f.label||f.name)+'.zip', orig);
+      if (orig.length === 1){
+        if (orig[0].bytes != null) downloadBytes(orig[0].name, orig[0].bytes);
+        else downloadBlob(orig[0].name, orig[0].text);
+      } else downloadZip((f.label||f.name)+'.zip', orig);
     });
   });
   // Download all originals as a single zip
@@ -988,5 +1004,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, applyTheme, currentTheme
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, applyTheme, currentTheme
 };

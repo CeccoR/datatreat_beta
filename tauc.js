@@ -69,7 +69,9 @@ import { Plot } from './plot.js';
     for (const f of fileList){
       if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
       existing.add(f.name);
-      const text = await f.text();
+      const _buf = await f.arrayBuffer();
+      const rawBytes = new Uint8Array(_buf);
+      const text = new TextDecoder().decode(_buf);
       const rawLines = text.split(/\r?\n/).filter(l=>l.trim().length);
       if (!rawLines.length){ newInvalid.push(f.name); continue; }
 
@@ -103,7 +105,7 @@ import { Plot } from './plot.js';
         const b = parseFloat(parts[1].replace(',','.'));
         if (isFinite(a) && isFinite(b)){ wl.push(a); fr.push(b); }
       }
-      if (wl.length) files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), raw:text});
+      if (wl.length) files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes});
     }
     invalidUploadNames = newInvalid;
     taucWarnDismissed = false;

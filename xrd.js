@@ -96,7 +96,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     for (const f of fileList){
       if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
       existing.add(f.name);
-      const text = await f.text();
+      const _buf = await f.arrayBuffer();
+      const rawBytes = new Uint8Array(_buf);
+      const text = new TextDecoder().decode(_buf);
       const parser = new DOMParser();
       const xml = parser.parseFromString(text, 'text/xml');
       const positions = xml.getElementsByTagName('positions');
@@ -115,7 +117,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const yCorr = y.map(v=>v-ymin);
       const x = linspace(start, end, y.length);
       // Keep each file on its own native 2θ axis — no resampling
-      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y:yCorr, color:nextColor(files), raw:text});
+      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y:yCorr, color:nextColor(files), rawBytes});
       perParams.push({...shared});
       manualPeaks.push([]);
       removedPeaks.push([]);

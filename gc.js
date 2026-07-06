@@ -49,7 +49,9 @@ import { Plot } from './plot.js';
     for (const f of fileList){
       if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
       existing.add(f.name);
-      const text = await f.text();
+      const _buf = await f.arrayBuffer();
+      const rawBytes = new Uint8Array(_buf);
+      const text = new TextDecoder().decode(_buf);
       const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
       if (!lines.length){ invalidFiles.push(f.name); continue; }
       const delim = lines[0].includes(';') ? ';' : (lines[0].includes(',')? ',' : '\t');
@@ -66,7 +68,7 @@ import { Plot } from './plot.js';
       }
       if (!injDates.length){ invalidFiles.push(f.name); continue; }
       const sorted = injDates.slice().sort((a,b)=>a-b);
-      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, h2, color:nextColor(files), raw:text});
+      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, h2, color:nextColor(files), rawBytes});
       ms.push(15); Qs.push(2);
       lightOnDates.push(new Date(sorted[0]));
     }
