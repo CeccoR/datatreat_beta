@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -159,6 +159,7 @@ import { Plot } from './plot.js';
     afterFilesChange();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
+  registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(); });
 
   function updateEpr(){
     if (!files.length) return;
@@ -209,9 +210,12 @@ import { Plot } from './plot.js';
       }
       t += csvLine(row);
     }
-    downloadBlob('epr_output.csv', t);
     const wrap = document.getElementById('eprDownloads'); wrap.innerHTML='';
-    makeDownloadLink(wrap, 'epr_output.csv', t, 'epr_output.csv');
+    downloadZip('epr_export.zip', [{name:'epr_output.csv', text:t}]);
+    const b=document.createElement('button');
+    b.className='btn secondary small'; b.textContent='Download epr_export.zip';
+    b.onclick=()=>downloadZip('epr_export.zip', [{name:'epr_output.csv', text:t}]);
+    wrap.appendChild(b);
   };
 })();
 

@@ -681,6 +681,10 @@ document.querySelectorAll('.home-card').forEach(c=>{
 document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
+const _tabRedraw = {}, _needsRedraw = {};
+// A module registers how to redraw its current view; goTab calls it the first
+// time the tab becomes visible after a session restore flagged it.
+function registerTabRedraw(mod, fn){ _tabRedraw[mod] = fn; }
 const VALID_TABS = ['home','tauc','xrd','gc','epr','sessions','settings'];
 const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sessions:'DataTreat · Sessions', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
@@ -693,6 +697,12 @@ function goTab(tab, fromHash){
     if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
+  // A module whose plots were drawn while its tab was hidden (e.g. a session
+  // opened into a background tab) sized them to 0; redraw once now it's visible.
+  if (_needsRedraw[tab] && _tabRedraw[tab]){
+    _needsRedraw[tab] = false;
+    requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} });
+  }
   // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
   if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
@@ -722,7 +732,13 @@ class UndoStack {
     this.states.push(snap);
     if (this.states.length > this._limit) this.states.shift();
     this.index = this.states.length - 1;
+    // Fire (and clear) any one-shot change listeners for a real, recorded change.
+    if (this._onceListeners && this._onceListeners.length){
+      const cbs = this._onceListeners; this._onceListeners = [];
+      cbs.forEach(cb=>{ try { cb(); } catch(e){} });
+    }
   }
+  onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
   _apply(i){ this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; } }
   performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
@@ -822,6 +838,14 @@ function restoreModuleState(mod, state){
   try { st._restore(state); } finally { st._busy = false; }
   st.reset();
   st.commit(); // fresh baseline so undo/redo start clean from the loaded session
+  // Plots just drawn may be sized wrong if the tab is hidden; redraw on show.
+  if (_activeTab === mod){ if (_tabRedraw[mod]) requestAnimationFrame(()=>{ try { _tabRedraw[mod](); } catch(e){} }); }
+  else { _needsRedraw[mod] = true; }
+}
+// Run cb once, the next time the module records a real change (edit/add/remove…).
+function onModuleChangeOnce(mod, cb){
+  const st = _histories[mod];
+  if (st) st.onceCommit(cb);
 }
 
 // Size each home card so its square icon tile spans 90% of the (common) card
@@ -937,5 +961,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, applyTheme, currentTheme
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, applyTheme, currentTheme
 };

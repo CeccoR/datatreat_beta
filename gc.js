@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -118,6 +118,7 @@ import { Plot } from './plot.js';
     afterFilesChange();
   }
   const hist = registerHistory('gc', gcSnapshot, gcRestore);
+  registerTabRedraw('gc', ()=>{ if (files.length) computeAndRenderGc(); });
 
   // Warning when a sample's light-on time is before (or at) its first injection
   function lightOnWarn(i){
@@ -300,18 +301,22 @@ import { Plot } from './plot.js';
 
   document.getElementById('gcSaveCsv').onclick = ()=>{
     const wrap = document.getElementById('gcDownloads'); wrap.innerHTML='';
+    const entries = [];
     dataTables.forEach(d=>{
       let t = csvLine(['Time (h)','H2 (mol%)','H2 (umol/h)','H2 (mmol/h/g)','Cumulative H2 (mmol/g)']);
       for (let i=0;i<d.t.length;i++){
         t += csvLine([d.t[i],d.h2pct[i],d.h2F[i],d.h2Fm[i],d.h2FmInt[i]].map(v=>fmtNum(v,5)));
       }
-      downloadBlob(d.label+'_output.csv', t);
-      makeDownloadLink(wrap, d.label+'_output.csv', t, d.label+'_output.csv');
+      entries.push({name:d.label+'_output.csv', text:t});
     });
     let t2 = csvLine(['Sample','Mean integral rate (mmol/h/g)','Interval duration (h)']);
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
-    downloadBlob('H2_rates.csv', t2);
-    makeDownloadLink(wrap, 'H2_rates.csv', t2, 'H2_rates.csv');
+    entries.push({name:'H2_rates.csv', text:t2});
+    downloadZip('gc_export.zip', entries);
+    const b=document.createElement('button');
+    b.className='btn secondary small'; b.textContent='Download gc_export.zip';
+    b.onclick=()=>downloadZip('gc_export.zip', entries);
+    wrap.appendChild(b);
   };
 })();
 

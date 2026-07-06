@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -1001,6 +1001,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 
   /* ---------- Fit button + progress bar ---------- */
   let fitBusy = false;
+  let fitCancelled = false;   // set by the Cancel button; stops the fit loop
+  let _fitCanceller = null;   // aborts the in-flight worker job (resolves it null)
   function showProg(frac){
     const w=document.getElementById('xrdFitProgWrap'), b=document.getElementById('xrdFitProgBar');
     if (w) w.style.display=''; if (b) b.style.width=Math.max(0,Math.min(1,frac))*100+'%';
@@ -1024,7 +1026,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!w) return import('./xrd-fit-core.js').then(m=>m.multiStartFit(x, y, active, snip, hp, onProgress));
     return new Promise(resolve=>{
       const id = ++_fitJobId;
-      const cleanup = ()=>{ w.removeEventListener('message', onMsg); w.removeEventListener('error', onErr); };
+      const cleanup = ()=>{ w.removeEventListener('message', onMsg); w.removeEventListener('error', onErr); _fitCanceller = null; };
       const onMsg = (e)=>{
         const d = e.data; if (!d || d.id !== id) return;
         if (d.type === 'progress'){ if (onProgress) onProgress(d.frac); return; }
@@ -1033,6 +1035,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       };
       const onErr = ()=>{ cleanup(); _fitWorker = undefined; // worker died → fall back to main thread
         resolve(import('./xrd-fit-core.js').then(m=>m.multiStartFit(x, y, active, snip, hp, onProgress))); };
+      // Cancel: terminate the worker (recreated next run) and resolve this job null
+      _fitCanceller = ()=>{ cleanup(); try { w.terminate(); } catch(e){} _fitWorker = null; resolve(null); };
       w.addEventListener('message', onMsg);
       w.addEventListener('error', onErr, { once:true });
       w.postMessage({ id, x, y, active, snip, hp });
@@ -1059,6 +1063,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!init.length) return null;
     // The fit result lives only in savedFits — the Analysis pr stays SNIP-based & live.
     const res = await runFitInWorker(x, y, init, snipSeed, hp, onProgress);
+    if (fitCancelled) return null; // aborted mid-flight → keep the previous fit
     if (res){
       saveFit(i, res.fits, res.baseline);
       return res.calib || null;
@@ -1080,13 +1085,18 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   async function runFit(indices, hp, btnId, busyLabel){
     if (fitBusy || !files.length || !indices.length) return;
     fitBusy = true;
+    fitCancelled = false;
     const btn=document.getElementById(btnId); const lbl=btn?btn.textContent:'';
     if(btn){ btn.disabled=true; btn.textContent=busyLabel||'Fitting…'; }
+    const cancelBtn=document.getElementById('xrdFitCancelBtn');
+    if(cancelBtn) cancelBtn.style.display='';
     showProg(0);
     try {
       const n=indices.length;
       for (let s=0; s<n; s++){
+        if (fitCancelled) break;
         const calib = await fitOneFile(indices[s], hp, frac=>showProg((s+frac)/n));
+        if (fitCancelled) break;
         // propagate a calibrated geometry to the sample hyperparameters + both modals
         if (calib){
           fitHP.SL=calib.SL; fitHP.HL=calib.HL; stdHP.SL=calib.SL; stdHP.HL=calib.HL;
@@ -1099,11 +1109,18 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     } finally {
       setTimeout(hideProg, 250);
       if(btn){ btn.disabled=false; btn.textContent=lbl; }
-      fitBusy=false;
+      if(cancelBtn) cancelBtn.style.display='none';
+      fitBusy=false; fitCancelled=false; _fitCanceller=null;
       updateXrdFitting(true); updateXrdResults(); renderPeakTable();
-      hist.commit(); // a completed fit is an undoable step
+      hist.commit(); // a completed (or cancelled) fit is an undoable step
     }
   }
+  document.getElementById('xrdFitCancelBtn').onclick = ()=>{
+    if (!fitBusy) return;
+    fitCancelled = true;
+    if (_fitCanceller) _fitCanceller(); // abort the in-flight worker job now
+    hideProg();
+  };
   const standardIdx = ()=> files.findIndex(f=>f.name===standardName);
   document.getElementById('xrdFitSampleBtn').onclick = ()=> runFit([curIdx], fitHP, 'xrdFitSampleBtn', 'Fitting…');
   document.getElementById('xrdFitAllBtn').onclick    = ()=> runFit(files.map((_,i)=>i), fitHP, 'xrdFitAllBtn', 'Fitting…');
@@ -1297,7 +1314,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   attachTableDeselect('a');
   attachTableDeselect('f');
 
-  window._xrdRedraw = ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdFitting(true); updateXrdResults(); } };
+  window._xrdRedraw = ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdFitting(true); updateXrdResults(); renderPeakTable(); } };
+  registerTabRedraw('xrd', window._xrdRedraw);
 
   document.getElementById('xrdSave').onclick = ()=>{
     if (!files.length) return;

@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -60,6 +60,7 @@ import { Plot } from './plot.js';
     afterFilesChange();
   }
   const hist = registerHistory('tauc', taucSnapshot, taucRestore);
+  registerTabRedraw('tauc', ()=>{ if (files.length) setupAnalysis(); });
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
     const existing = new Set(files.map(f=>f.name));
@@ -453,6 +454,7 @@ import { Plot } from './plot.js';
     const p = curParams();
     const wrap = document.getElementById('taucDownloads'); wrap.innerHTML='';
     const maxLen = Math.max(...files.map(f=>f.wl.length));
+    const entries = [];
     // FR.csv — one (wavelength, F(R)) column pair per sample (native axes)
     let h1=[]; files.forEach(f=>h1.push('wavelength_nm_'+f.label, f.label));
     let t1 = csvLine(h1);
@@ -461,8 +463,7 @@ import { Plot } from './plot.js';
       files.forEach(f=>{ if (i<f.wl.length) row.push(fmtNum(f.wl[i],6), fmtNum(f.FR[i],6)); else row.push('',''); });
       t1 += csvLine(row);
     }
-    downloadBlob('FR.csv', t1);
-    makeDownloadLink(wrap, 'FR.csv', t1, 'FR.csv');
+    entries.push({name:'FR.csv', text:t1});
     // FRhva.csv — one (energy, [F(R)·hν]^a) column pair per sample
     let h2=[]; files.forEach(f=>h2.push('energy_eV_'+f.label, f.label));
     let t2 = csvLine(h2);
@@ -471,20 +472,22 @@ import { Plot } from './plot.js';
       files.forEach(f=>{ if (i<f.hv.length) row.push(fmtNum(f.hv[i],6), fmtNum(Math.pow(f.FR[i]*f.hv[i], p.a),6)); else row.push('',''); });
       t2 += csvLine(row);
     }
-    downloadBlob('FRhva.csv', t2);
-    makeDownloadLink(wrap, 'FRhva.csv', t2, 'FRhva.csv');
+    entries.push({name:'FRhva.csv', text:t2});
     // regressions.csv
     let t3 = csvLine(['Sample','m1','Var_m1','m2','Var_m2','q1','Var_q1','q2','Var_q2','Cov_mq1','Cov_mq2']);
     bestRegsAll.forEach(r=>{
       t3 += csvLine([r.label, fmtNum(r.regs.slope,8), fmtNum(r.regs.varM,8), fmtNum(r.regs2.slope,8), fmtNum(r.regs2.varM,8), fmtNum(r.regs.intercept,8), fmtNum(r.regs.varB,8), fmtNum(r.regs2.intercept,8), fmtNum(r.regs2.varB,8), fmtNum(r.regs.covMB,8), fmtNum(r.regs2.covMB,8)]);
     });
-    downloadBlob('regressions.csv', t3);
-    makeDownloadLink(wrap, 'regressions.csv', t3, 'regressions.csv');
+    entries.push({name:'regressions.csv', text:t3});
     // Eg_values.csv
     let t4 = csvLine(['Sample','Eg','Eg_err','Eg_int','Eg_int_err']);
     bestRegsAll.forEach(r=>{ t4 += csvLine([r.label, fmtNum(r.Eg,6), fmtNum(r.EgErr,6), fmtNum(r.EgInt,6), fmtNum(r.EgIntErr,6)]); });
-    downloadBlob('Eg_values.csv', t4);
-    makeDownloadLink(wrap, 'Eg_values.csv', t4, 'Eg_values.csv');
+    entries.push({name:'Eg_values.csv', text:t4});
+    downloadZip('tauc_export.zip', entries);
+    const b=document.createElement('button');
+    b.className='btn secondary small'; b.textContent='Download tauc_export.zip';
+    b.onclick=()=>downloadZip('tauc_export.zip', entries);
+    wrap.appendChild(b);
   };
 })();
 

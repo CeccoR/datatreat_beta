@@ -6,7 +6,7 @@
    provided they belong to different modules.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, goTab } from './utils.js';
+         moduleHasData, goTab, onModuleChangeOnce } from './utils.js';
 
 /* ---- IndexedDB tiny wrapper ---- */
 const DB_NAME = 'datatreat', STORE = 'sessions', DB_VER = 1;
@@ -44,13 +44,24 @@ async function deleteSession(id){ return tx('readwrite', os=>{ os.delete(id); })
 
 /* ---- helpers ---- */
 const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-// Convert any typed arrays to plain arrays so state survives both structured
-// clone AND JSON export/import unchanged.
-function deepPlain(v){
+// Encode module state into a JSON-safe form: typed arrays → plain arrays, and
+// Date objects → a tagged marker (GC's injection timestamps are Dates). This one
+// representation is used for BOTH IndexedDB and .json export/import; decode()
+// reverses it (reviving Dates) before handing state back to the module.
+function encode(v){
+  if (v instanceof Date) return { __t:'date', v:v.getTime() };
   if (ArrayBuffer.isView(v)) return Array.from(v);
-  if (Array.isArray(v)) return v.map(deepPlain);
+  if (Array.isArray(v)) return v.map(encode);
   if (v && typeof v === 'object'){
-    const o = {}; for (const k in v) o[k] = deepPlain(v[k]); return o;
+    const o = {}; for (const k in v) o[k] = encode(v[k]); return o;
+  }
+  return v;
+}
+function decode(v){
+  if (Array.isArray(v)) return v.map(decode);
+  if (v && typeof v === 'object'){
+    if (v.__t === 'date') return new Date(v.v);
+    const o = {}; for (const k in v) o[k] = decode(v[k]); return o;
   }
   return v;
 }
@@ -63,7 +74,7 @@ async function saveModuleSession(mod){
   if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
   const title = (prompt('Session title:', '') || '').trim();
   if (!title) return;
-  const state = deepPlain(getModuleState(mod));
+  const state = encode(getModuleState(mod));
   const all = await allSessions();
   const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
   const now = Date.now();
@@ -74,9 +85,28 @@ async function saveModuleSession(mod){
     await putSession({ id: uid(), module: mod, title, state, createdAt: now, updatedAt: now });
   }
   renderList();
-  // brief confirmation
-  const btn = document.querySelector('.session-save-btn[data-module="'+mod+'"]');
-  if (btn){ const t=btn.textContent; btn.textContent='Saved ✓'; setTimeout(()=>{ btn.textContent=t; }, 1200); }
+  markSaved(mod);
+}
+
+/* Turn both of a module's save buttons into a non-interactive green "Saved ✓"
+   state (without changing their box), reverting on the module's next change. */
+function markSaved(mod){
+  const btns = [...document.querySelectorAll('.session-save-btn[data-module="'+mod+'"]')];
+  btns.forEach(b=>{
+    if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
+    b.classList.add('saved-ok');
+    b.disabled = true;
+    b.innerHTML = b.classList.contains('icon-save')
+      ? '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>'
+      : 'Saved <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+  });
+  onModuleChangeOnce(mod, ()=>{
+    btns.forEach(b=>{
+      b.classList.remove('saved-ok');
+      b.disabled = false;
+      if (b.dataset.origHtml !== undefined) b.innerHTML = b.dataset.origHtml;
+    });
+  });
 }
 
 /* ---- Open ---- */
@@ -93,14 +123,14 @@ async function openSessions(recs){
       if (!confirm('The ' + (MODULE_LABELS[r.module]||r.module) + ' module already has data loaded. Replace it with “' + r.title + '”?')) return;
     }
   }
-  for (const r of recs) restoreModuleState(r.module, deepPlain(r.state));
+  for (const r of recs) restoreModuleState(r.module, decode(r.state));
   if (recs.length) goTab(recs[0].module);
 }
 
 /* ---- Export / Import ---- */
 function exportSession(rec){
   const payload = { datatreat_session: 1, module: rec.module, title: rec.title,
-                    createdAt: rec.createdAt, updatedAt: rec.updatedAt, state: deepPlain(rec.state) };
+                    createdAt: rec.createdAt, updatedAt: rec.updatedAt, state: rec.state };
   const blob = new Blob([JSON.stringify(payload)], { type:'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
