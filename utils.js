@@ -466,7 +466,7 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   colgroup += `<col style="width:8%"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
-  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>SAMPLE LABEL</th>`;
+  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th><th>SAMPLE LABEL</th>`;
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
@@ -476,7 +476,7 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
     html += `<tr class="file-row" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
-    html += `<td class="fname" title="${f.name}">${swatch}${f.name}</td>`;
+    html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
     html += `<td style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">${xIcon}</button></td>`;

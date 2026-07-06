@@ -602,6 +602,8 @@ footer a:hover {
   color: var(--muted);
   cursor: grab;
   padding: 2px;
+  line-height: 1;
+  vertical-align: middle;
   touch-action: none; /* let touch drag the row instead of scrolling */
 }
 .drag-handle:active { cursor: grabbing; }
@@ -642,10 +644,25 @@ td.fname {
   color: var(--muted);
   font-size: 12px;
   overflow: hidden;
+}
+/* Flex-center the colour swatch with the filename so it sits on the row centre */
+.fname-inner {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.fname-text {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 /* ===== Palette picker button (in FILE header) ===== */
+.file-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1; /* drop text descender space so the palette swatch is centred */
+}
 button.palette-pick-btn {
   width: 14px;
   height: 14px;
