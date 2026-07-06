@@ -620,10 +620,16 @@ footer a:hover {
   transition: color 0.1s;
 }
 .del-bare:hover { color: var(--bad); }
+/* Download buttons: same bare style, but light up to a lighter grey, not red */
+.dl-bare:hover { color: var(--text); }
 th .remove-all { font-weight: 700; }
-/* Row remove appears on row hover (unchanged behaviour) */
-.file-row .row-del { visibility: hidden; }
-.file-row:hover .row-del { visibility: visible; }
+th .download-all { vertical-align: middle; }
+/* Row remove / download appear on row hover (unchanged behaviour) */
+.file-row .row-del,
+.file-row .dl-file { visibility: hidden; }
+.file-row:hover .row-del,
+.file-row:hover .dl-file { visibility: visible; }
+.dl-file svg, .download-all svg { vertical-align: middle; }
 td.fname {
   color: var(--muted);
   font-size: 12px;

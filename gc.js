@@ -66,7 +66,7 @@ import { Plot } from './plot.js';
       }
       if (!injDates.length){ invalidFiles.push(f.name); continue; }
       const sorted = injDates.slice().sort((a,b)=>a-b);
-      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, h2, color:nextColor(files)});
+      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, h2, color:nextColor(files), raw:text});
       ms.push(15); Qs.push(2);
       lightOnDates.push(new Date(sorted[0]));
     }

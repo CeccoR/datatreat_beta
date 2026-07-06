@@ -320,7 +320,10 @@ function zipBlob(entries){
   const u32 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF, (v>>>16)&0xFF, (v>>>24)&0xFF]);
   for (const e of entries){
     const nameBytes = enc.encode(e.name);
-    const data = enc.encode(e.text);
+    // entry carries either text (string) or bytes (Uint8Array / number[])
+    const data = e.bytes != null
+      ? (e.bytes instanceof Uint8Array ? e.bytes : Uint8Array.from(e.bytes))
+      : enc.encode(e.text);
     const crc = _crc32(data);
     const local = [
       u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
@@ -442,15 +445,16 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   if (!files.length){ wrap.innerHTML=''; return; }
 
   const ec = extraCols || [];
-  // colgroup: drag 5%, FILE 45%, LABEL 45%, extraCols (auto), actions 5%
-  let colgroup = `<colgroup><col style="width:5%"><col style="width:45%"><col style="width:45%">`;
+  // colgroup: drag 5%, FILE 44%, LABEL 43%, extraCols (auto), actions 8% (dl + remove)
+  let colgroup = `<colgroup><col style="width:5%"><col style="width:44%"><col style="width:43%">`;
   for (let i = 0; i < ec.length; i++) colgroup += `<col>`;
-  colgroup += `<col style="width:5%"></colgroup>`;
+  colgroup += `<col style="width:8%"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
   let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>SAMPLE LABEL</th>`;
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
-  html += `<th style="text-align:right"><button class="remove-all del-bare" title="Remove all">✕</button></th></tr></thead><tbody>`;
+  const dlIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v10"/><polyline points="8 9 12 13 16 9"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`;
+  html += `<th style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">✕</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
@@ -459,7 +463,7 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     html += `<td class="fname" title="${f.name}">${swatch}${f.name}</td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td style="text-align:right"><button class="del del-bare row-del" data-i="${i}" title="Remove">✕</button></td>`;
+    html += `<td style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">✕</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
@@ -491,7 +495,29 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     });
   });
   wrap.querySelectorAll('.row-del').forEach(btn=>{
-    btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.target.dataset.i); });
+    btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.currentTarget.dataset.i); });
+  });
+  // Per-file download of the original uploaded content. A file keeps either
+  // `raw` (single text file) or `rawFiles` (e.g. EPR's .dsc + binary .dta pair).
+  const originalsOf = f => f.rawFiles && f.rawFiles.length
+    ? f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text })
+    : (f.raw != null ? [{ name:f.name, text:f.raw }] : []);
+  wrap.querySelectorAll('.dl-file').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const f = files[+e.currentTarget.dataset.i];
+      if (!f) return;
+      const orig = originalsOf(f);
+      if (!orig.length){ alert('The original file for “'+f.name+'” is not available.'); return; }
+      if (orig.length === 1 && orig[0].text != null) downloadBlob(orig[0].name, orig[0].text);
+      else downloadZip((f.label||f.name)+'.zip', orig);
+    });
+  });
+  // Download all originals as a single zip
+  const dlAll = wrap.querySelector('.download-all');
+  if (dlAll) dlAll.addEventListener('click', ()=>{
+    const entries = files.flatMap(originalsOf);
+    if (!entries.length){ alert('No original files are available to download.'); return; }
+    downloadZip('files.zip', entries);
   });
 
   // Drag-to-reorder via pointer events (works with both mouse and touch): grab the

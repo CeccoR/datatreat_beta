@@ -95,7 +95,9 @@ import { Plot } from './plot.js';
     const slope = (s[n-1] - s[0]) / (b[n-1] - b[0] || 1);
     const a = s.map((v, i) => v - (s[0] + slope * (b[i] - b[0])));
 
-    return { name: stem, label: stem, b, a };
+    return { name: stem, label: stem, b, a,
+             rawFiles: [ { name: dscFile.name, text: dscText },
+                         { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
   }
 
   setupDropzone('eprDropzone', 'eprFiles', async (fileList)=>{

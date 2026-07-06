@@ -103,7 +103,7 @@ import { Plot } from './plot.js';
         const b = parseFloat(parts[1].replace(',','.'));
         if (isFinite(a) && isFinite(b)){ wl.push(a); fr.push(b); }
       }
-      if (wl.length) files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files)});
+      if (wl.length) files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), raw:text});
     }
     invalidUploadNames = newInvalid;
     taucWarnDismissed = false;
