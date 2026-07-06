@@ -449,9 +449,10 @@ function setupDropzone(dropzoneId, inputId, onFiles){
    extraCols: optional array of {header, render(file,i)} for additional columns
 ========================================================= */
 // A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
-const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>`;
-// Download glyph, inked box centred on (12,12) so it lines up with the X.
-const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
+// Inked box 15×15, centred on (12,12) — same size as the download glyph below.
+const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4.5" y1="4.5" x2="19.5" y2="19.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="4.5"/></svg>`;
+// Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
+const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
 
 function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   const wrap = document.getElementById(containerId);
