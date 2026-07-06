@@ -453,7 +453,8 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
 
   let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>SAMPLE LABEL</th>`;
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
-  const dlIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v10"/><polyline points="8 9 12 13 16 9"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>`;
+  // Same download glyph as the plot/image export buttons, scaled to match the ✕
+  const dlIcon = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg>`;
   html += `<th style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">✕</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
