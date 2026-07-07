@@ -8,7 +8,7 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, goTab, onModuleChangeOnce, runCsvExport } from './utils.js';
+         moduleHasData, onModuleChangeOnce, runCsvExport } from './utils.js';
 
 /* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity) ---- */
 const DB_NAME = 'datatreat', STORE = 'sessions', DB_VER = 1;
@@ -78,16 +78,16 @@ const CHECK_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" 
 const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 
 function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-module="'+mod+'"]')]; }
-function setProjectTitle(mod){
-  const el = document.querySelector('.project-title[data-module="'+mod+'"]');
-  if (!el) return;
-  const cur = current[mod];
-  if (!cur || !moduleHasData(mod)){ el.style.display='none'; el.textContent=''; return; }
-  el.style.display = '';
-  el.textContent = cur.title + (dirty[mod] ? ' *' : '');
+function nameInput(mod){ return document.querySelector('.project-name-input[data-module="'+mod+'"]'); }
+function dirtyMark(mod){ return document.querySelector('.pb-dirty[data-module="'+mod+'"]'); }
+function restoreSaveBtns(mod){
+  saveBtns(mod).forEach(b=>{
+    b.classList.remove('saved-ok'); b.disabled = false;
+    if (b.dataset.origHtml !== undefined) b.innerHTML = b.dataset.origHtml;
+  });
 }
-// Put the module's Save buttons into the non-interactive green "Saved ✓" state,
-// clear the dirty flag, and arm a one-shot listener to flip back on next change.
+// Saved state: green non-interactive Save buttons, no unsaved marker; arms a
+// one-shot listener so the next change flips back to dirty.
 function markSaved(mod){
   dirty[mod] = false;
   saveBtns(mod).forEach(b=>{
@@ -96,57 +96,78 @@ function markSaved(mod){
     b.disabled = true;
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
-  setProjectTitle(mod);
+  const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
+// Unsaved changes (data edit or a rename in the field). Losing all data clears
+// the project association and the field entirely.
 function markDirty(mod){
+  if (!moduleHasData(mod)){
+    delete current[mod]; dirty[mod] = false;
+    const inp = nameInput(mod); if (inp) inp.value = '';
+    const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
+    restoreSaveBtns(mod);
+    return;
+  }
   dirty[mod] = true;
-  saveBtns(mod).forEach(b=>{
-    b.classList.remove('saved-ok');
-    b.disabled = false;
-    if (b.dataset.origHtml !== undefined) b.innerHTML = b.dataset.origHtml;
-  });
-  setProjectTitle(mod);
+  restoreSaveBtns(mod);
+  const dm = dirtyMark(mod); if (dm) dm.style.display = current[mod] ? 'inline-block' : 'none';
 }
 
-/* ---- Save / Save as ---- */
+/* ---- Save / Save as ----
+   Save: writes the current project under the name in the field (renaming it if
+   the field was edited); creates it if none is open yet. Save as: prompts for a
+   new name and always creates a NEW project, which becomes the open one. */
 async function doSave(mod, asNew){
   if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
-  const state = encode(getModuleState(mod));
+  const inp = nameInput(mod);
   const now = Date.now();
-  const cur = current[mod];
-  if (!asNew && cur){
-    // Overwrite the currently open project, keeping its name
-    const rec = (await allProjects()).find(s=> s.id === cur.id);
-    await putProject({ id: cur.id, module: mod, title: cur.title,
-                       createdAt: rec ? rec.createdAt : now, state, updatedAt: now });
+  const state = encode(getModuleState(mod));
+  const all = await allProjects();
+
+  if (asNew){
+    const title = (prompt('Save project as — new name:', (inp && inp.value.trim()) || '') || '').trim();
+    if (!title) return;
+    const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
+    let id;
+    if (existing){
+      if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return;
+      id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
+    } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
+    current[mod] = { id, title };
+    if (inp) inp.value = title;
     markSaved(mod); renderList();
     return;
   }
-  // First save, or "Save as…": ask for a name and create/overwrite by title
-  const title = (prompt('Project name:', cur ? cur.title : '') || '').trim();
-  if (!title) return;
-  const all = await allProjects();
-  const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
-  let id;
-  if (existing){
-    if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return;
-    id = existing.id;
-    await putProject({ ...existing, title, state, updatedAt: now });
+
+  // Plain Save: name comes from the field
+  const title = inp ? inp.value.trim() : '';
+  if (!title){ if (inp) inp.focus(); alert('Please enter a project name first.'); return; }
+  const cur = current[mod];
+  if (cur){
+    const clash = all.find(s=> s.module===mod && s.id!==cur.id && s.title.toLowerCase()===title.toLowerCase());
+    if (clash && !confirm('Another ' + (MODULE_LABELS[mod]||mod) + ' project is named “' + clash.title + '”. Save under this name anyway?')) return;
+    const rec = all.find(s=> s.id===cur.id);
+    await putProject({ id: cur.id, module: mod, title, createdAt: rec ? rec.createdAt : now, state, updatedAt: now });
+    current[mod] = { id: cur.id, title };
   } else {
-    id = uid();
-    await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now });
+    const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
+    let id;
+    if (existing){
+      if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return;
+      id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
+    } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
+    current[mod] = { id, title };
   }
-  current[mod] = { id, title };  // the new project becomes the open one
   markSaved(mod); renderList();
 }
 
 /* ---- Export current module as .json ---- */
 function exportJson(mod){
   if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
-  const cur = current[mod];
+  const inp = nameInput(mod);
   const now = Date.now();
-  const title = cur ? cur.title : (MODULE_LABELS[mod]||mod);
+  const title = (inp && inp.value.trim()) || (current[mod] ? current[mod].title : (MODULE_LABELS[mod]||mod));
   const payload = { datatreat_session: 1, module: mod, title, createdAt: now, updatedAt: now,
                     state: encode(getModuleState(mod)) };
   const safe = title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
@@ -168,9 +189,10 @@ async function openProjects(recs){
   for (const r of recs){
     restoreModuleState(r.module, decode(r.state));
     current[r.module] = { id: r.id, title: r.title };
+    const inp = nameInput(r.module); if (inp) inp.value = r.title;
     markSaved(r.module); // freshly opened → no unsaved changes
   }
-  if (recs.length) goTab(recs[0].module);
+  // Never switch tabs on open — the user stays on the Projects page.
 }
 
 /* ---- Export a saved project record / import a .json ---- */
@@ -263,6 +285,10 @@ document.addEventListener('click', e=>{
   else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
   else if (b.classList.contains('proj-json'))   exportJson(mod);
 });
+// Editing the project name is an unsaved change (a pending rename)
+document.querySelectorAll('.project-name-input').forEach(inp=>{
+  inp.addEventListener('input', ()=>{ if (moduleHasData(inp.dataset.module)) markDirty(inp.dataset.module); });
+});
 
 (function fillModuleFilter(){
   const sel = document.getElementById('sessFilterModule');
@@ -301,14 +327,22 @@ document.getElementById('sessListWrap').addEventListener('click', async e=>{
   else if (e.target.classList.contains('sess-delete')){
     if (confirm('Delete project “'+rec.title+'”? This cannot be undone.')){
       await deleteProject(rec.id);
-      if (current[rec.module] && current[rec.module].id === rec.id){ delete current[rec.module]; setProjectTitle(rec.module); }
+      if (current[rec.module] && current[rec.module].id === rec.id){
+        delete current[rec.module];
+        const inp = nameInput(rec.module); if (inp) inp.value = '';
+        const dm = dirtyMark(rec.module); if (dm) dm.style.display = 'none';
+        restoreSaveBtns(rec.module);
+      }
       renderList();
     }
   } else if (e.target.classList.contains('sess-rename')){
     const t = (prompt('New name:', rec.title) || '').trim();
     if (t && t !== rec.title){
       await putProject({ ...rec, title:t, updatedAt: Date.now() });
-      if (current[rec.module] && current[rec.module].id === rec.id){ current[rec.module].title = t; setProjectTitle(rec.module); }
+      if (current[rec.module] && current[rec.module].id === rec.id){
+        current[rec.module].title = t;
+        const inp = nameInput(rec.module); if (inp) inp.value = t;
+      }
       renderList();
     }
   }

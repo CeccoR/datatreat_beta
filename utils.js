@@ -753,6 +753,7 @@ function goTab(tab, fromHash){
     _needsRedraw[tab] = false;
     requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} });
   }
+  if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
   // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
   if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
@@ -833,9 +834,37 @@ document.addEventListener('keydown', e=>{
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
   if (btn) btn.classList.toggle('has-data', !!has);
-  // The section header's project buttons only appear once data is loaded
-  document.querySelectorAll('.section-head .proj-btn[data-module="'+tab+'"]')
+  // The project-bar action buttons only appear once data is loaded
+  document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"]')
     .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
+  if (has) normalizeProjIcons(tab);
+}
+
+/* Normalize a module's project icons so every icon's minimal bounding box is the
+   same size and centred in its button. Measures each icon's inked bbox (getBBox)
+   and transforms it to centre (12,12) at a common target extent. Idempotent. */
+const PROJ_ICON_TARGET = 18;
+function fitIcon(svg){
+  if (!svg) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  let g = svg.querySelector('g.icon-fit');
+  if (!g){
+    g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'icon-fit');
+    while (svg.firstChild) g.appendChild(svg.firstChild);
+    g.querySelectorAll('*').forEach(el=> el.setAttribute('vector-effect','non-scaling-stroke'));
+    svg.appendChild(g);
+  }
+  g.removeAttribute('transform');
+  let bb; try { bb = g.getBBox(); } catch(e){ return; }
+  if (!bb.width || !bb.height) return; // not rendered yet (hidden tab)
+  const s = PROJ_ICON_TARGET / Math.max(bb.width, bb.height);
+  const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
+  g.setAttribute('transform', `translate(12 12) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
+}
+function normalizeProjIcons(mod){
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('.project-bar .proj-icon[data-module="'+mod+'"] .proj-svg').forEach(fitIcon);
+  });
 }
 
 /* CSV export registry — each module registers how to build its .zip of CSVs so
