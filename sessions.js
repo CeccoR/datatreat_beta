@@ -118,31 +118,23 @@ function markDirty(mod){
    Save: writes the current project under the name in the field (renaming it if
    the field was edited); creates it if none is open yet. Save as: prompts for a
    new name and always creates a NEW project, which becomes the open one. */
+// Briefly flash a field red + shake (no browser dialog) to signal a missing name
+function flashInvalid(inp){
+  if (!inp) return;
+  inp.classList.remove('field-invalid'); void inp.offsetWidth; // restart the animation
+  inp.classList.add('field-invalid');
+  inp.focus();
+}
 async function doSave(mod, asNew){
   if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
+  if (asNew){ openSaveAsModal(mod); return; }
+
   const inp = nameInput(mod);
   const now = Date.now();
+  const title = inp ? inp.value.trim() : '';
+  if (!title){ flashInvalid(inp); return; }
   const state = encode(getModuleState(mod));
   const all = await allProjects();
-
-  if (asNew){
-    const title = (prompt('Save project as — new name:', (inp && inp.value.trim()) || '') || '').trim();
-    if (!title) return;
-    const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
-    let id;
-    if (existing){
-      if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return;
-      id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
-    } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
-    current[mod] = { id, title };
-    if (inp) inp.value = title;
-    markSaved(mod); renderList();
-    return;
-  }
-
-  // Plain Save: name comes from the field
-  const title = inp ? inp.value.trim() : '';
-  if (!title){ if (inp) inp.focus(); alert('Please enter a project name first.'); return; }
   const cur = current[mod];
   if (cur){
     const clash = all.find(s=> s.module===mod && s.id!==cur.id && s.title.toLowerCase()===title.toLowerCase());
@@ -172,6 +164,39 @@ function exportJson(mod){
                     state: encode(getModuleState(mod)) };
   const safe = title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
   downloadTextFile(mod + '_' + safe + '.json', JSON.stringify(payload));
+}
+
+/* ---- Save as… — custom in-page modal (no browser prompt) ---- */
+let _saveAsMod = null;
+function openSaveAsModal(mod){
+  _saveAsMod = mod;
+  const modal = document.getElementById('projSaveAsModal');
+  const inp = document.getElementById('projSaveAsInput');
+  const src = nameInput(mod);
+  inp.value = (src && src.value.trim()) || '';
+  inp.classList.remove('field-invalid');
+  modal.style.display = 'flex';
+  setTimeout(()=>{ inp.focus(); inp.select(); }, 0);
+}
+function closeSaveAsModal(){ document.getElementById('projSaveAsModal').style.display = 'none'; _saveAsMod = null; }
+async function commitSaveAs(){
+  const mod = _saveAsMod; if (!mod) return;
+  const inp = document.getElementById('projSaveAsInput');
+  const title = inp.value.trim();
+  if (!title){ flashInvalid(inp); return; }
+  const now = Date.now();
+  const state = encode(getModuleState(mod));
+  const all = await allProjects();
+  const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
+  let id;
+  if (existing){
+    if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return;
+    id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
+  } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
+  current[mod] = { id, title };
+  const fld = nameInput(mod); if (fld) fld.value = title;
+  markSaved(mod); renderList();
+  closeSaveAsModal();
 }
 
 /* ---- Open projects (from the Projects tab) ---- */
@@ -285,9 +310,23 @@ document.addEventListener('click', e=>{
   else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
   else if (b.classList.contains('proj-json'))   exportJson(mod);
 });
-// Editing the project name is an unsaved change (a pending rename)
+// Editing the project name is an unsaved change (a pending rename); typing also
+// clears the red "missing name" state.
 document.querySelectorAll('.project-name-input').forEach(inp=>{
-  inp.addEventListener('input', ()=>{ if (moduleHasData(inp.dataset.module)) markDirty(inp.dataset.module); });
+  inp.addEventListener('input', ()=>{
+    inp.classList.remove('field-invalid');
+    if (moduleHasData(inp.dataset.module)) markDirty(inp.dataset.module);
+  });
+});
+
+// Save as… modal
+document.getElementById('projSaveAsCancel').addEventListener('click', closeSaveAsModal);
+document.getElementById('projSaveAsOk').addEventListener('click', commitSaveAs);
+document.getElementById('projSaveAsModal').addEventListener('click', e=>{ if (e.target.id==='projSaveAsModal') closeSaveAsModal(); });
+document.getElementById('projSaveAsInput').addEventListener('input', e=> e.target.classList.remove('field-invalid'));
+document.getElementById('projSaveAsInput').addEventListener('keydown', e=>{
+  if (e.key==='Enter'){ e.preventDefault(); commitSaveAs(); }
+  else if (e.key==='Escape'){ closeSaveAsModal(); }
 });
 
 (function fillModuleFilter(){

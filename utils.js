@@ -844,8 +844,11 @@ function setTabLoaded(tab, has){
    same size and centred in its button. Measures each icon's inked bbox (getBBox)
    and transforms it to centre (12,12) at a common target extent. Idempotent. */
 const PROJ_ICON_TARGET = 18;
-function fitIcon(svg){
-  if (!svg) return;
+// Center an icon's inked content at (12,12). If `forceScale` is given, use it
+// (so one icon can match another's exact scale); otherwise scale so the icon's
+// larger side equals PROJ_ICON_TARGET. Returns the scale used.
+function fitIcon(svg, forceScale){
+  if (!svg) return null;
   const NS = 'http://www.w3.org/2000/svg';
   let g = svg.querySelector('g.icon-fit');
   if (!g){
@@ -855,15 +858,21 @@ function fitIcon(svg){
     svg.appendChild(g);
   }
   g.removeAttribute('transform');
-  let bb; try { bb = g.getBBox(); } catch(e){ return; }
-  if (!bb.width || !bb.height) return; // not rendered yet (hidden tab)
-  const s = PROJ_ICON_TARGET / Math.max(bb.width, bb.height);
+  let bb; try { bb = g.getBBox(); } catch(e){ return null; }
+  if (!bb.width || !bb.height) return null; // not rendered yet (hidden tab)
+  const s = forceScale || (PROJ_ICON_TARGET / Math.max(bb.width, bb.height));
   const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
   g.setAttribute('transform', `translate(12 12) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
+  return s;
 }
 function normalizeProjIcons(mod){
   requestAnimationFrame(()=>{
-    document.querySelectorAll('.project-bar .proj-icon[data-module="'+mod+'"] .proj-svg').forEach(fitIcon);
+    const q = cls => document.querySelector('.project-bar .'+cls+'[data-module="'+mod+'"] .proj-svg');
+    fitIcon(q('proj-save')); fitIcon(q('proj-saveas'));
+    const csvScale = fitIcon(q('proj-csv'));
+    // Exception: the JSON icon is the CSV icon with different text — render it at
+    // the exact same scale so the arrow and font match CSV, not the equal-box rule.
+    if (csvScale) fitIcon(q('proj-json'), csvScale);
   });
 }
 
