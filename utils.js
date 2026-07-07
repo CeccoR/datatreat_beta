@@ -311,7 +311,27 @@ function _crc32(bytes){
   for (let i=0;i<bytes.length;i++) c = _CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c>>>8);
   return (c ^ 0xFFFFFFFF) >>> 0;
 }
+// Make a filename safe for every OS's zip extractor: strip characters illegal
+// on Windows (< > : " / \ | ? *) and control chars, and de-duplicate collisions
+// (duplicate names make Windows reject the archive with "incorrect parameter").
+function _zipSafeNames(entries){
+  const seen = Object.create(null);
+  return entries.map(e=>{
+    let name = String(e.name == null ? 'file' : e.name)
+      .replace(/[\x00-\x1f\x7f<>:"/\\|?*]+/g, '_')
+      .replace(/^[.\s]+|[.\s]+$/g, '')      // no leading/trailing dots or spaces
+      .slice(0, 200) || 'file';
+    const key = name.toLowerCase();
+    if (seen[key] !== undefined){
+      const n = ++seen[key];
+      const dot = name.lastIndexOf('.');
+      name = (dot > 0 ? name.slice(0,dot) : name) + '_' + n + (dot > 0 ? name.slice(dot) : '');
+    } else seen[key] = 0;
+    return { ...e, name };
+  });
+}
 function zipBlob(entries){
+  entries = _zipSafeNames(entries);
   const enc = new TextEncoder();
   const chunks = [];   // file-data + local headers, concatenated
   const central = [];  // central-directory records
