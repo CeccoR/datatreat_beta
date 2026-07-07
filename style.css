@@ -105,13 +105,20 @@ header h1 {
 nav button {
   background: var(--panel2);
   border: 1px solid var(--line);
-  color: var(--text);
+  color: var(--muted);
   padding: 7px 14px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+/* Press feedback for non-active tabs: a filled-accent flash (distinct from the
+   outline-accent hover) */
+nav button:not(.active):active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
 }
 #nav {
   display: flex;
@@ -373,6 +380,23 @@ button.btn.secondary {
 /* Secondary buttons: coherent, subtle hover/press */
 button.btn.secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 button.btn.secondary:active:not(:disabled) { background: var(--line); }
+/* Settings-button style for the click-only project/export buttons and the XRD
+   fit-settings buttons: neutral outline at rest, accent outline on hover, and a
+   distinct filled-accent flash on click. */
+button.btn.proj-saveas, button.btn.proj-csv, button.btn.proj-json,
+button.btn#xrdFitSettings, button.btn#xrdStdSettings {
+  background: var(--panel2);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+button.btn.proj-saveas:hover:not(:disabled), button.btn.proj-csv:hover:not(:disabled), button.btn.proj-json:hover:not(:disabled),
+button.btn#xrdFitSettings:hover:not(:disabled), button.btn#xrdStdSettings:hover:not(:disabled) {
+  color: var(--accent); border-color: var(--accent); background: var(--panel2);
+}
+button.btn.proj-saveas:active:not(:disabled), button.btn.proj-csv:active:not(:disabled), button.btn.proj-json:active:not(:disabled),
+button.btn#xrdFitSettings:active:not(:disabled), button.btn#xrdStdSettings:active:not(:disabled) {
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+}
 button.btn.small {
   padding: 5px 10px;
   font-size: 12px;
@@ -552,7 +576,7 @@ svg.plot {
   top: 50%;
   transform: translateY(-50%);
   background: var(--icon-tile);
-  border: 1px solid var(--line);
+  border: none;
   border-radius: 12px;
   display: flex;
   align-items: center;
