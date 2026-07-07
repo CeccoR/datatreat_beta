@@ -69,9 +69,10 @@ import { Plot } from './plot.js';
     for (const f of fileList){
       if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
       existing.add(f.name);
-      const _buf = await f.arrayBuffer();
-      const rawBytes = new Uint8Array(_buf);
-      const text = new TextDecoder().decode(_buf);
+      // f.text() auto-detects encoding (incl. UTF-16 via BOM); rawBytes keeps the
+      // original bytes for byte-exact re-download.
+      const rawBytes = new Uint8Array(await f.arrayBuffer());
+      const text = await f.text();
       const rawLines = text.split(/\r?\n/).filter(l=>l.trim().length);
       if (!rawLines.length){ newInvalid.push(f.name); continue; }
 

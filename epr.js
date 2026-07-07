@@ -76,9 +76,8 @@ import { Plot } from './plot.js';
   }
 
   async function processPair(stem, dtaFile, dscFile){
-    const dscBuf = await dscFile.arrayBuffer();
-    const dscBytes = new Uint8Array(dscBuf);
-    const dscText = new TextDecoder().decode(dscBuf);
+    const dscBytes = new Uint8Array(await dscFile.arrayBuffer());
+    const dscText = await dscFile.text();
     const p = parseDsc(dscText);
     const npts = parseInt(p.XPTS);
     if (!npts){ return null; }
