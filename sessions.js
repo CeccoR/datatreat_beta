@@ -392,3 +392,14 @@ document.getElementById('sessListWrap').addEventListener('change', e=>{
 
 document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
 renderList();
+
+// Warn before leaving if a module has unsaved changes AND a non-empty project
+// name (a saved project, or one the user bothered to name — so it matters). One
+// native confirm covers all modules; unnamed drafts don't nag.
+window.addEventListener('beforeunload', e=>{
+  const unsaved = MODULES.some(m=>{
+    const inp = nameInput(m);
+    return dirty[m] && inp && inp.value.trim() !== '';
+  });
+  if (unsaved){ e.preventDefault(); e.returnValue = ''; }
+});
