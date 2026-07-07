@@ -305,17 +305,23 @@ import { Plot } from './plot.js';
   function exportGcZip(){
     if (!dataTables.length) return;
     const entries = [];
-    // gc_timeseries.csv — all samples in one long table (Sample column)
-    let t = csvLine(['Sample','Time_h','H2_molpct','H2_umol_h','H2_mmol_h_g','H2_cumulative_mmol_g']);
+    // gc_timeseries.csv — each sample keeps its own independent columns (own time axis)
+    const cols=[];
     dataTables.forEach(d=>{
-      for (let i=0;i<d.t.length;i++){
-        t += csvLine([d.label, fmtNum(d.t[i],5), fmtNum(d.h2pct[i],5), fmtNum(d.h2F[i],5), fmtNum(d.h2Fm[i],5), fmtNum(d.h2FmInt[i],5)]);
-      }
+      cols.push({h:'Time_h_'+d.label,        v:d.t.map(x=>fmtNum(x,5))});
+      cols.push({h:'H2_molpct_'+d.label,     v:d.h2pct.map(x=>fmtNum(x,5))});
+      cols.push({h:'H2_umol_h_'+d.label,     v:d.h2F.map(x=>fmtNum(x,5))});
+      cols.push({h:'H2_mmol_h_g_'+d.label,   v:d.h2Fm.map(x=>fmtNum(x,5))});
+      cols.push({h:'H2_cumulative_'+d.label, v:d.h2FmInt.map(x=>fmtNum(x,5))});
     });
+    const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
+    let t = csvLine(cols.map(c=>c.h));
+    for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
     entries.push({name:'gc_timeseries.csv', text:t});
+    // h2_rates.csv — bar-plot-like summary (one row per sample)
     let t2 = csvLine(['Sample','Mean integral rate (mmol/h/g)','Interval duration (h)']);
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
-    entries.push({name:'h2_rates_summary.csv', text:t2});
+    entries.push({name:'h2_rates.csv', text:t2});
     downloadZip('gc_export.zip', entries);
   }
   registerCsvExport('gc', exportGcZip);

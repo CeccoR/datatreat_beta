@@ -1381,42 +1381,50 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         entries.push({name:'standard_'+files[si].label+'.csv', text:st});
       }
     }
-    // peaks_all.csv — every sample's kept peaks in one long table (Sample column;
-    // the standard is excluded, it has its own dedicated CSV)
+    // peaks.csv — each sample's kept peaks as its own independent columns
+    // (standard excluded, it has its dedicated CSV)
     {
-      let pt=csvLine(['Sample','2Theta','RelIntensity','FWHM_deg','Crystallite_size_nm','Crystallite_size_corr_nm']);
+      const cols=[];
       processed.forEach((pr,k)=>{
         if (files[k].name === standardName) return;
         const pks = pr.peaks.filter(pk=>!pk.removed);
         if (!pks.length) return;
-        const kp = getFileParams(k);
+        const kp = getFileParams(k), lbl = files[k].label;
         const maxH=Math.max(...pks.map(pk=>pk.height))||1;
-        pks.forEach(pk=>{
-          const Draw = sizeRaw(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
-          const Dcorr= sizeCorr(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
-          pt+=csvLine([files[k].label, fmtNum(pk.pos,6),fmtNum(pk.height/maxH,6),
-                       isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'',
-                       isFinite(Draw)?fmtNum(Draw,3):'', isFinite(Dcorr)?fmtNum(Dcorr,3):'']);
-        });
+        cols.push({h:'2Theta_'+lbl,        v:pks.map(pk=>fmtNum(pk.pos,6))});
+        cols.push({h:'RelIntensity_'+lbl,  v:pks.map(pk=>fmtNum(pk.height/maxH,6))});
+        cols.push({h:'FWHM_deg_'+lbl,      v:pks.map(pk=>isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'')});
+        cols.push({h:'Size_nm_'+lbl,       v:pks.map(pk=>{const d=sizeRaw(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})});
+        cols.push({h:'Size_corr_nm_'+lbl,  v:pks.map(pk=>{const d=sizeCorr(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})});
       });
-      entries.push({name:'peaks_all.csv', text:pt});
+      if (cols.length){
+        const maxLen=Math.max(0,...cols.map(c=>c.v.length));
+        let pt=csvLine(cols.map(c=>c.h));
+        for (let i=0;i<maxLen;i++) pt+=csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
+        entries.push({name:'peaks.csv', text:pt});
+      }
     }
-    // fits_all.csv — every sample's last fit in one long table (Sample column)
+    // fits.csv — each sample's last fit as its own independent columns (own 2θ axis)
     {
-      let ft = csvLine(['Sample','2Theta','Observed','Fit_total','Background','Ka1','Ka2']);
-      let any = false;
+      const cols=[];
       files.forEach((f,k)=>{
         const sf = savedFits[k];
         if (!sf || !sf.fits || !sf.fits.length) return;
-        any = true;
         const rec = reconstructFit(f.x, sf.fits); // {full, ka1} in raw intensity units
-        for (let j=0;j<f.x.length;j++){
-          const bg=sf.baseline[j]||0, ka1=rec.ka1[j], ka2=rec.full[j]-rec.ka1[j];
-          ft += csvLine([f.label, fmtNum(f.x[j],6), fmtNum(f.y[j],6), fmtNum(bg+rec.full[j],6),
-                         fmtNum(bg,6), fmtNum(ka1,6), fmtNum(ka2,6)]);
-        }
+        const lbl=f.label;
+        cols.push({h:'2Theta_'+lbl,     v:f.x.map(x=>fmtNum(x,6))});
+        cols.push({h:'Observed_'+lbl,   v:f.y.map(x=>fmtNum(x,6))});
+        cols.push({h:'Fit_total_'+lbl,  v:f.x.map((_,j)=>fmtNum((sf.baseline[j]||0)+rec.full[j],6))});
+        cols.push({h:'Background_'+lbl,  v:f.x.map((_,j)=>fmtNum(sf.baseline[j]||0,6))});
+        cols.push({h:'Ka1_'+lbl,        v:f.x.map((_,j)=>fmtNum(rec.ka1[j],6))});
+        cols.push({h:'Ka2_'+lbl,        v:f.x.map((_,j)=>fmtNum(rec.full[j]-rec.ka1[j],6))});
       });
-      if (any) entries.push({name:'fits_all.csv', text:ft});
+      if (cols.length){
+        const maxLen=Math.max(0,...cols.map(c=>c.v.length));
+        let ft=csvLine(cols.map(c=>c.h));
+        for (let i=0;i<maxLen;i++) ft+=csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
+        entries.push({name:'fits.csv', text:ft});
+      }
     }
     // Bundle every CSV into a single downloadable zip
     downloadZip('xrd_export.zip', entries);
