@@ -147,7 +147,7 @@ button.btn.secondary.saved-ok {
   opacity: 1 !important;
   cursor: default;
 }
-/* Module section header: title left, floppy save button right, aligned to title */
+/* Module section header: title left, project action icons right */
 .section-head {
   display: flex;
   align-items: center;
@@ -155,6 +155,22 @@ button.btn.secondary.saved-ok {
   gap: 10px;
   margin-bottom: 10px;
 }
+.proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
+/* Open-project name shown above the file-upload area (white, bold) */
+.project-title {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0 0 12px;
+  word-break: break-word;
+}
+/* Bottom export card: the four project buttons in a 2×2 grid */
+.proj-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.proj-actions-row .btn { width: 100%; }
 button.btn.icon-save {
   width: 34px;
   height: 34px;

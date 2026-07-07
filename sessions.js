@@ -1,14 +1,16 @@
 /* =========================================================
-   SESSION MANAGER
+   PROJECT MANAGER
    Save/restore a whole module's state (raw data + parameters + fits) to
-   IndexedDB, with .json export/import. A dedicated "Sessions" tab lists every
-   saved session, filterable by name and module, and can open several at once
-   provided they belong to different modules.
+   IndexedDB as a named "project", with .json export/import and a per-module CSV
+   export. A dedicated "Projects" tab lists every saved project, filterable by
+   name and module. Each module shows its open project's name (white, with a
+   "*" when there are unsaved changes); the Save buttons sit in a green "saved"
+   state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, goTab, onModuleChangeOnce } from './utils.js';
+         moduleHasData, goTab, onModuleChangeOnce, runCsvExport } from './utils.js';
 
-/* ---- IndexedDB tiny wrapper ---- */
+/* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity) ---- */
 const DB_NAME = 'datatreat', STORE = 'sessions', DB_VER = 1;
 function idb(){
   return new Promise((resolve, reject)=>{
@@ -37,24 +39,19 @@ async function tx(mode, fn){
   });
 }
 const reqP = r => new Promise((res, rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
-
-async function allSessions(){ return tx('readonly', os=> reqP(os.getAll())); }
-async function putSession(rec){ return tx('readwrite', os=>{ os.put(rec); }); }
-async function deleteSession(id){ return tx('readwrite', os=>{ os.delete(id); }); }
+async function allProjects(){ return tx('readonly', os=> reqP(os.getAll())); }
+async function putProject(rec){ return tx('readwrite', os=>{ os.put(rec); }); }
+async function deleteProject(id){ return tx('readwrite', os=>{ os.delete(id); }); }
 
 /* ---- helpers ---- */
 const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-// Encode module state into a JSON-safe form: typed arrays → plain arrays, and
-// Date objects → a tagged marker (GC's injection timestamps are Dates). This one
-// representation is used for BOTH IndexedDB and .json export/import; decode()
-// reverses it (reviving Dates) before handing state back to the module.
+// Encode module state into a JSON-safe form: typed arrays → plain arrays, Date
+// objects → a tagged marker. Same representation for IndexedDB and .json.
 function encode(v){
   if (v instanceof Date) return { __t:'date', v:v.getTime() };
   if (ArrayBuffer.isView(v)) return Array.from(v);
   if (Array.isArray(v)) return v.map(encode);
-  if (v && typeof v === 'object'){
-    const o = {}; for (const k in v) o[k] = encode(v[k]); return o;
-  }
+  if (v && typeof v === 'object'){ const o = {}; for (const k in v) o[k] = encode(v[k]); return o; }
   return v;
 }
 function decode(v){
@@ -65,101 +62,145 @@ function decode(v){
   }
   return v;
 }
-function fmtDate(ts){
-  try { return new Date(ts).toLocaleString(); } catch(e){ return ''; }
+function fmtDate(ts){ try { return new Date(ts).toLocaleString(); } catch(e){ return ''; } }
+function downloadTextFile(name, text, type){
+  const url = URL.createObjectURL(new Blob([text], { type: type||'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
 }
 
-/* ---- Save ---- */
-async function saveModuleSession(mod){
-  if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
-  const title = (prompt('Session title:', '') || '').trim();
-  if (!title) return;
-  const state = encode(getModuleState(mod));
-  const all = await allSessions();
-  const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
-  const now = Date.now();
-  if (existing){
-    if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' session named “' + existing.title + '” already exists. Overwrite it?')) return;
-    await putSession({ ...existing, title, state, updatedAt: now });
-  } else {
-    await putSession({ id: uid(), module: mod, title, state, createdAt: now, updatedAt: now });
-  }
-  renderList();
-  markSaved(mod);
-}
+/* ---- Per-module open-project state ---- */
+const current = {};   // mod -> { id, title }
+const dirty = {};     // mod -> bool
 
-/* Turn both of a module's save buttons into a non-interactive green "Saved ✓"
-   state (without changing their box), reverting on the module's next change. */
+const CHECK_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+
+function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-module="'+mod+'"]')]; }
+function setProjectTitle(mod){
+  const el = document.querySelector('.project-title[data-module="'+mod+'"]');
+  if (!el) return;
+  const cur = current[mod];
+  if (!cur || !moduleHasData(mod)){ el.style.display='none'; el.textContent=''; return; }
+  el.style.display = '';
+  el.textContent = cur.title + (dirty[mod] ? ' *' : '');
+}
+// Put the module's Save buttons into the non-interactive green "Saved ✓" state,
+// clear the dirty flag, and arm a one-shot listener to flip back on next change.
 function markSaved(mod){
-  const btns = [...document.querySelectorAll('.session-save-btn[data-module="'+mod+'"]')];
-  btns.forEach(b=>{
+  dirty[mod] = false;
+  saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
     b.classList.add('saved-ok');
     b.disabled = true;
-    b.innerHTML = b.classList.contains('icon-save')
-      ? '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>'
-      : 'Saved <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+    b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
-  onModuleChangeOnce(mod, ()=>{
-    btns.forEach(b=>{
-      b.classList.remove('saved-ok');
-      b.disabled = false;
-      if (b.dataset.origHtml !== undefined) b.innerHTML = b.dataset.origHtml;
-    });
+  setProjectTitle(mod);
+  onModuleChangeOnce(mod, ()=> markDirty(mod));
+}
+function markDirty(mod){
+  dirty[mod] = true;
+  saveBtns(mod).forEach(b=>{
+    b.classList.remove('saved-ok');
+    b.disabled = false;
+    if (b.dataset.origHtml !== undefined) b.innerHTML = b.dataset.origHtml;
   });
+  setProjectTitle(mod);
 }
 
-/* ---- Open ---- */
-async function openSessions(recs){
-  // Guard: no two of the same module in one batch
+/* ---- Save / Save as ---- */
+async function doSave(mod, asNew){
+  if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
+  const state = encode(getModuleState(mod));
+  const now = Date.now();
+  const cur = current[mod];
+  if (!asNew && cur){
+    // Overwrite the currently open project, keeping its name
+    const rec = (await allProjects()).find(s=> s.id === cur.id);
+    await putProject({ id: cur.id, module: mod, title: cur.title,
+                       createdAt: rec ? rec.createdAt : now, state, updatedAt: now });
+    markSaved(mod); renderList();
+    return;
+  }
+  // First save, or "Save as…": ask for a name and create/overwrite by title
+  const title = (prompt('Project name:', cur ? cur.title : '') || '').trim();
+  if (!title) return;
+  const all = await allProjects();
+  const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
+  let id;
+  if (existing){
+    if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return;
+    id = existing.id;
+    await putProject({ ...existing, title, state, updatedAt: now });
+  } else {
+    id = uid();
+    await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now });
+  }
+  current[mod] = { id, title };  // the new project becomes the open one
+  markSaved(mod); renderList();
+}
+
+/* ---- Export current module as .json ---- */
+function exportJson(mod){
+  if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
+  const cur = current[mod];
+  const now = Date.now();
+  const title = cur ? cur.title : (MODULE_LABELS[mod]||mod);
+  const payload = { datatreat_session: 1, module: mod, title, createdAt: now, updatedAt: now,
+                    state: encode(getModuleState(mod)) };
+  const safe = title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
+  downloadTextFile(mod + '_' + safe + '.json', JSON.stringify(payload));
+}
+
+/* ---- Open projects (from the Projects tab) ---- */
+async function openProjects(recs){
   const seen = new Set();
   for (const r of recs){
-    if (seen.has(r.module)){ alert('You selected more than one ' + (MODULE_LABELS[r.module]||r.module) + ' session. Open only one session per module at a time.'); return; }
+    if (seen.has(r.module)){ alert('You selected more than one ' + (MODULE_LABELS[r.module]||r.module) + ' project. Open only one project per module at a time.'); return; }
     seen.add(r.module);
   }
-  // Confirm replacement for any module that currently holds data
   for (const r of recs){
     if (moduleHasData(r.module)){
       if (!confirm('The ' + (MODULE_LABELS[r.module]||r.module) + ' module already has data loaded. Replace it with “' + r.title + '”?')) return;
     }
   }
-  for (const r of recs) restoreModuleState(r.module, decode(r.state));
+  for (const r of recs){
+    restoreModuleState(r.module, decode(r.state));
+    current[r.module] = { id: r.id, title: r.title };
+    markSaved(r.module); // freshly opened → no unsaved changes
+  }
   if (recs.length) goTab(recs[0].module);
 }
 
-/* ---- Export / Import ---- */
-function exportSession(rec){
+/* ---- Export a saved project record / import a .json ---- */
+function exportProjectRecord(rec){
   const payload = { datatreat_session: 1, module: rec.module, title: rec.title,
                     createdAt: rec.createdAt, updatedAt: rec.updatedAt, state: rec.state };
-  const blob = new Blob([JSON.stringify(payload)], { type:'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const safe = rec.title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'session';
-  a.href = url; a.download = rec.module + '_' + safe + '.json';
-  document.body.appendChild(a); a.click();
-  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  const safe = rec.title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
+  downloadTextFile(rec.module + '_' + safe + '.json', JSON.stringify(payload));
 }
-async function importSessionFile(file){
+async function importProjectFile(file){
   let obj;
   try { obj = JSON.parse(await file.text()); }
   catch(e){ alert('Not a valid JSON file.'); return; }
   if (!obj || !obj.datatreat_session || !MODULES.includes(obj.module) || !obj.state){
-    alert('This file is not a DataTreat session.'); return;
+    alert('This file is not a DataTreat project.'); return;
   }
   const now = Date.now();
-  await putSession({ id: uid(), module: obj.module, title: (obj.title||'Imported session').trim(),
+  await putProject({ id: uid(), module: obj.module, title: (obj.title||'Imported project').trim(),
                      state: obj.state, createdAt: obj.createdAt||now, updatedAt: now });
   renderList();
 }
 
-/* ---- Rendering ---- */
+/* ---- Projects list rendering ---- */
 let _cache = [];
-let _sortKey = 'updatedAt', _sortDir = -1; // default: most-recent first
+let _sortKey = 'updatedAt', _sortDir = -1;
 function sortRows(rows){
   const k = _sortKey;
   return rows.sort((a,b)=>{
+    if (k==='updatedAt'){ return ((a.updatedAt||0) - (b.updatedAt||0)) * _sortDir; }
     let av, bv;
-    if (k==='updatedAt'){ av=a.updatedAt||0; bv=b.updatedAt||0; return (av-bv)*_sortDir; }
     if (k==='module'){ av=(MODULE_LABELS[a.module]||a.module); bv=(MODULE_LABELS[b.module]||b.module); }
     else { av=a.title||''; bv=b.title||''; }
     return av.localeCompare(bv) * _sortDir;
@@ -180,15 +221,15 @@ function updateOpenSelectedState(){
   btn.textContent = n > 1 ? ('Open selected ('+n+')') : 'Open selected';
 }
 async function renderList(){
-  _cache = (await allSessions()).sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+  _cache = (await allProjects()).sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
   const wrap = document.getElementById('sessListWrap');
   if (!wrap) return;
   const rows = sortRows(_cache.filter(passesFilter));
-  if (!_cache.length){ wrap.innerHTML = '<p class="hint">No saved sessions yet. Load data in a module and press “Save session”.</p>'; updateOpenSelectedState(); return; }
-  if (!rows.length){ wrap.innerHTML = '<p class="hint">No sessions match the current filters.</p>'; updateOpenSelectedState(); return; }
+  if (!_cache.length){ wrap.innerHTML = '<p class="hint">No saved projects yet. Load data in a module and press “Save project”.</p>'; updateOpenSelectedState(); return; }
+  if (!rows.length){ wrap.innerHTML = '<p class="hint">No projects match the current filters.</p>'; updateOpenSelectedState(); return; }
   let html = '<div class="table-wrap-box sess-table-box"><table class="sess-table"><colgroup><col style="width:30px"><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>'
     + '<thead><tr><th></th>'
-    + '<th class="sess-sort" data-key="title" style="cursor:pointer">TITLE'+arrow('title')+'</th>'
+    + '<th class="sess-sort" data-key="title" style="cursor:pointer">NAME'+arrow('title')+'</th>'
     + '<th class="sess-sort" data-key="module" style="cursor:pointer">MODULE'+arrow('module')+'</th>'
     + '<th class="sess-sort" data-key="updatedAt" style="cursor:pointer">SAVED'+arrow('updatedAt')+'</th>'
     + '<th></th></tr></thead><tbody>';
@@ -209,69 +250,72 @@ async function renderList(){
   wrap.innerHTML = html;
   updateOpenSelectedState();
 }
-
 function recById(id){ return _cache.find(s=> s.id === id); }
 
 /* ---- Wiring ---- */
-document.querySelectorAll('.session-save-btn').forEach(btn=>{
-  btn.addEventListener('click', ()=> saveModuleSession(btn.dataset.module));
+// Project action buttons (top icon row + bottom text row), via delegation
+document.addEventListener('click', e=>{
+  const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json');
+  if (!b || b.disabled) return;
+  const mod = b.dataset.module;
+  if (b.classList.contains('proj-save'))        doSave(mod, false);
+  else if (b.classList.contains('proj-saveas')) doSave(mod, true);
+  else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
+  else if (b.classList.contains('proj-json'))   exportJson(mod);
 });
 
-// Module filter options
 (function fillModuleFilter(){
   const sel = document.getElementById('sessFilterModule');
   if (!sel) return;
-  MODULES.forEach(m=>{
-    const o = document.createElement('option'); o.value = m; o.textContent = MODULE_LABELS[m]||m; sel.appendChild(o);
-  });
+  MODULES.forEach(m=>{ const o=document.createElement('option'); o.value=m; o.textContent=MODULE_LABELS[m]||m; sel.appendChild(o); });
 })();
-
 document.getElementById('sessFilterName').addEventListener('input', renderList);
 document.getElementById('sessFilterModule').addEventListener('change', renderList);
-
 document.getElementById('sessOpenSelected').addEventListener('click', ()=>{
   const ids = [...document.querySelectorAll('#sessListWrap tr')]
     .filter(tr=> tr.querySelector('.sess-check') && tr.querySelector('.sess-check').checked)
     .map(tr=> tr.dataset.id);
   const recs = ids.map(recById).filter(Boolean);
-  if (recs.length) openSessions(recs);
+  if (recs.length) openProjects(recs);
 });
-
 document.getElementById('sessImportBtn').addEventListener('click', ()=> document.getElementById('sessImportFile').click());
 document.getElementById('sessImportFile').addEventListener('change', e=>{
   const f = e.target.files && e.target.files[0];
-  if (f) importSessionFile(f);
+  if (f) importProjectFile(f);
   e.target.value = '';
 });
-
-// Row action / checkbox delegation
 document.getElementById('sessListWrap').addEventListener('click', async e=>{
+  const th = e.target.closest('.sess-sort');
+  if (th){
+    const key = th.dataset.key;
+    if (_sortKey === key) _sortDir = -_sortDir;
+    else { _sortKey = key; _sortDir = (key==='updatedAt') ? -1 : 1; }
+    renderList(); return;
+  }
   const tr = e.target.closest('tr[data-id]');
   if (!tr) return;
   const rec = recById(tr.dataset.id);
   if (!rec) return;
-  if (e.target.classList.contains('sess-open'))   openSessions([rec]);
-  else if (e.target.classList.contains('sess-export')) exportSession(rec);
+  if (e.target.classList.contains('sess-open'))   openProjects([rec]);
+  else if (e.target.classList.contains('sess-export')) exportProjectRecord(rec);
   else if (e.target.classList.contains('sess-delete')){
-    if (confirm('Delete session “'+rec.title+'”? This cannot be undone.')){ await deleteSession(rec.id); renderList(); }
+    if (confirm('Delete project “'+rec.title+'”? This cannot be undone.')){
+      await deleteProject(rec.id);
+      if (current[rec.module] && current[rec.module].id === rec.id){ delete current[rec.module]; setProjectTitle(rec.module); }
+      renderList();
+    }
   } else if (e.target.classList.contains('sess-rename')){
-    const t = (prompt('New title:', rec.title) || '').trim();
-    if (t && t !== rec.title){ await putSession({ ...rec, title:t, updatedAt: Date.now() }); renderList(); }
+    const t = (prompt('New name:', rec.title) || '').trim();
+    if (t && t !== rec.title){
+      await putProject({ ...rec, title:t, updatedAt: Date.now() });
+      if (current[rec.module] && current[rec.module].id === rec.id){ current[rec.module].title = t; setProjectTitle(rec.module); }
+      renderList();
+    }
   }
 });
 document.getElementById('sessListWrap').addEventListener('change', e=>{
   if (e.target.classList.contains('sess-check')) updateOpenSelectedState();
 });
-// Sortable headers: click toggles direction (or picks a new column)
-document.getElementById('sessListWrap').addEventListener('click', e=>{
-  const th = e.target.closest('.sess-sort');
-  if (!th) return;
-  const key = th.dataset.key;
-  if (_sortKey === key) _sortDir = -_sortDir;
-  else { _sortKey = key; _sortDir = (key==='updatedAt') ? -1 : 1; }
-  renderList();
-});
 
-// Refresh the list whenever the Sessions tab is opened
-document.querySelector('#nav button[data-tab="sessions"]').addEventListener('click', renderList);
+document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
 renderList();

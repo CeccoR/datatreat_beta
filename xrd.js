@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, X_SVG } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -1318,7 +1318,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   window._xrdRedraw = ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdFitting(true); updateXrdResults(); renderPeakTable(); } };
   registerTabRedraw('xrd', window._xrdRedraw);
 
-  document.getElementById('xrdSave').onclick = ()=>{
+  function exportXrdZip(){
     if (!files.length) return;
     const norm = document.getElementById('xrdNorm').value;
     // Main diffraction data CSV (baseline-subtracted, normalised). The standard is
@@ -1413,12 +1413,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     });
     // Bundle every CSV into a single downloadable zip
     downloadZip('xrd_export.zip', entries);
-    const wrap=document.getElementById('xrdDownloads'); wrap.innerHTML='';
-    const b=document.createElement('button');
-    b.className='btn secondary small'; b.style.marginRight='8px'; b.style.marginBottom='6px';
-    b.textContent='Download xrd_export.zip';
-    b.onclick=()=>downloadZip('xrd_export.zip', entries);
-    wrap.appendChild(b);
-  };
+  }
+  registerCsvExport('xrd', exportXrdZip);
 })();
 

@@ -735,8 +735,8 @@ const _tabRedraw = {}, _needsRedraw = {};
 // A module registers how to redraw its current view; goTab calls it the first
 // time the tab becomes visible after a session restore flagged it.
 function registerTabRedraw(mod, fn){ _tabRedraw[mod] = fn; }
-const VALID_TABS = ['home','tauc','xrd','gc','epr','sessions','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sessions:'DataTreat · Sessions', settings:'DataTreat · Settings' };
+const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -833,10 +833,16 @@ document.addEventListener('keydown', e=>{
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
   if (btn) btn.classList.toggle('has-data', !!has);
-  // The section's floppy "Save session" button only appears once data is loaded
-  const save = document.querySelector('.section-head .session-save-btn[data-module="'+tab+'"]');
-  if (save) save.style.visibility = has ? 'visible' : 'hidden';
+  // The section header's project buttons only appear once data is loaded
+  document.querySelectorAll('.section-head .proj-btn[data-module="'+tab+'"]')
+    .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
 }
+
+/* CSV export registry — each module registers how to build its .zip of CSVs so
+   the project buttons can trigger it. */
+const _csvExport = {};
+function registerCsvExport(mod, fn){ _csvExport[mod] = fn; }
+function runCsvExport(mod){ if (_csvExport[mod]) _csvExport[mod](); }
 // Does a module currently hold loaded data? (drives the replace-on-open confirm)
 function moduleHasData(mod){
   const btn = document.querySelector('#nav button[data-tab="'+mod+'"]');
@@ -1011,5 +1017,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, applyTheme, currentTheme
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, registerCsvExport, runCsvExport, applyTheme, currentTheme
 };

@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -302,8 +302,8 @@ import { Plot } from './plot.js';
     barPlot.attachTools(svg.closest('.plot-wrap'));
   }
 
-  document.getElementById('gcSaveCsv').onclick = ()=>{
-    const wrap = document.getElementById('gcDownloads'); wrap.innerHTML='';
+  function exportGcZip(){
+    if (!dataTables.length) return;
     const entries = [];
     dataTables.forEach(d=>{
       let t = csvLine(['Time (h)','H2 (mol%)','H2 (umol/h)','H2 (mmol/h/g)','Cumulative H2 (mmol/g)']);
@@ -316,10 +316,7 @@ import { Plot } from './plot.js';
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
     entries.push({name:'H2_rates.csv', text:t2});
     downloadZip('gc_export.zip', entries);
-    const b=document.createElement('button');
-    b.className='btn secondary small'; b.textContent='Download gc_export.zip';
-    b.onclick=()=>downloadZip('gc_export.zip', entries);
-    wrap.appendChild(b);
-  };
+  }
+  registerCsvExport('gc', exportGcZip);
 })();
 

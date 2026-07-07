@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -453,9 +453,9 @@ import { Plot } from './plot.js';
   function drawBar(plot, x0, x1, val, color){ plot.bar(x0, x1, 0, val, color); }
   function drawErrBar(plot, xc, val, err){ plot.errbar(xc, val, err); }
 
-  document.getElementById('taucExportBtn').onclick = ()=>{
+  function exportTaucZip(){
+    if (!files.length) return;
     const p = curParams();
-    const wrap = document.getElementById('taucDownloads'); wrap.innerHTML='';
     const maxLen = Math.max(...files.map(f=>f.wl.length));
     const entries = [];
     // FR.csv — one (wavelength, F(R)) column pair per sample (native axes)
@@ -487,10 +487,7 @@ import { Plot } from './plot.js';
     bestRegsAll.forEach(r=>{ t4 += csvLine([r.label, fmtNum(r.Eg,6), fmtNum(r.EgErr,6), fmtNum(r.EgInt,6), fmtNum(r.EgIntErr,6)]); });
     entries.push({name:'Eg_values.csv', text:t4});
     downloadZip('tauc_export.zip', entries);
-    const b=document.createElement('button');
-    b.className='btn secondary small'; b.textContent='Download tauc_export.zip';
-    b.onclick=()=>downloadZip('tauc_export.zip', entries);
-    wrap.appendChild(b);
-  };
+  }
+  registerCsvExport('tauc', exportTaucZip);
 })();
 
