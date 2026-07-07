@@ -318,6 +318,12 @@ function zipBlob(entries){
   let offset = 0;
   const u16 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF]);
   const u32 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF, (v>>>16)&0xFF, (v>>>24)&0xFF]);
+  // A *valid* DOS date/time — a zero date (day 0/month 0) makes strict
+  // extractors (macOS Archive Utility, Windows Explorer) reject the archive.
+  const d = new Date();
+  const dosTime = ((d.getHours()<<11) | (d.getMinutes()<<5) | (d.getSeconds()>>1)) & 0xFFFF;
+  const dosDate = (((d.getFullYear()-1980)<<9) | ((d.getMonth()+1)<<5) | d.getDate()) & 0xFFFF;
+  const FLAG = 0x0800; // filenames are UTF-8
   for (const e of entries){
     const nameBytes = enc.encode(e.name);
     // entry carries either text (string) or bytes (Uint8Array / number[])
@@ -326,14 +332,14 @@ function zipBlob(entries){
       : enc.encode(e.text);
     const crc = _crc32(data);
     const local = [
-      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(0x04034b50), u16(20), u16(FLAG), u16(0), u16(dosTime), u16(dosDate),
       u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0),
       nameBytes, data
     ];
     local.forEach(b=>chunks.push(b));
     const localSize = 30 + nameBytes.length + data.length;
     central.push([
-      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(0x02014b50), u16(20), u16(20), u16(FLAG), u16(0), u16(dosTime), u16(dosDate),
       u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length),
       u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBytes
     ]);
