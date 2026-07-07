@@ -466,8 +466,8 @@ import { Plot } from './plot.js';
       files.forEach(f=>{ if (i<f.wl.length) row.push(fmtNum(f.wl[i],6), fmtNum(f.FR[i],6)); else row.push('',''); });
       t1 += csvLine(row);
     }
-    entries.push({name:'FR.csv', text:t1});
-    // FRhva.csv — one (energy, [F(R)·hν]^a) column pair per sample
+    entries.push({name:'reflectance_FR.csv', text:t1});
+    // tauc_plot.csv — one (energy, [F(R)·hν]^a) column pair per sample
     let h2=[]; files.forEach(f=>h2.push('energy_eV_'+f.label, f.label));
     let t2 = csvLine(h2);
     for (let i=0;i<maxLen;i++){
@@ -475,17 +475,17 @@ import { Plot } from './plot.js';
       files.forEach(f=>{ if (i<f.hv.length) row.push(fmtNum(f.hv[i],6), fmtNum(Math.pow(f.FR[i]*f.hv[i], p.a),6)); else row.push('',''); });
       t2 += csvLine(row);
     }
-    entries.push({name:'FRhva.csv', text:t2});
-    // regressions.csv
-    let t3 = csvLine(['Sample','m1','Var_m1','m2','Var_m2','q1','Var_q1','q2','Var_q2','Cov_mq1','Cov_mq2']);
+    entries.push({name:'tauc_plot.csv', text:t2});
+    // results_summary.csv — Eg values + linear regressions, one row per sample
+    let t3 = csvLine(['Sample','Eg','Eg_err','Eg_baseline','Eg_baseline_err',
+                      'm1','Var_m1','m2','Var_m2','q1','Var_q1','q2','Var_q2','Cov_mq1','Cov_mq2']);
     bestRegsAll.forEach(r=>{
-      t3 += csvLine([r.label, fmtNum(r.regs.slope,8), fmtNum(r.regs.varM,8), fmtNum(r.regs2.slope,8), fmtNum(r.regs2.varM,8), fmtNum(r.regs.intercept,8), fmtNum(r.regs.varB,8), fmtNum(r.regs2.intercept,8), fmtNum(r.regs2.varB,8), fmtNum(r.regs.covMB,8), fmtNum(r.regs2.covMB,8)]);
+      t3 += csvLine([r.label, fmtNum(r.Eg,6), fmtNum(r.EgErr,6), fmtNum(r.EgInt,6), fmtNum(r.EgIntErr,6),
+        fmtNum(r.regs.slope,8), fmtNum(r.regs.varM,8), fmtNum(r.regs2.slope,8), fmtNum(r.regs2.varM,8),
+        fmtNum(r.regs.intercept,8), fmtNum(r.regs.varB,8), fmtNum(r.regs2.intercept,8), fmtNum(r.regs2.varB,8),
+        fmtNum(r.regs.covMB,8), fmtNum(r.regs2.covMB,8)]);
     });
-    entries.push({name:'regressions.csv', text:t3});
-    // Eg_values.csv
-    let t4 = csvLine(['Sample','Eg','Eg_err','Eg_int','Eg_int_err']);
-    bestRegsAll.forEach(r=>{ t4 += csvLine([r.label, fmtNum(r.Eg,6), fmtNum(r.EgErr,6), fmtNum(r.EgInt,6), fmtNum(r.EgIntErr,6)]); });
-    entries.push({name:'Eg_values.csv', text:t4});
+    entries.push({name:'results_summary.csv', text:t3});
     downloadZip('tauc_export.zip', entries);
   }
   registerCsvExport('tauc', exportTaucZip);

@@ -305,16 +305,17 @@ import { Plot } from './plot.js';
   function exportGcZip(){
     if (!dataTables.length) return;
     const entries = [];
+    // gc_timeseries.csv — all samples in one long table (Sample column)
+    let t = csvLine(['Sample','Time_h','H2_molpct','H2_umol_h','H2_mmol_h_g','H2_cumulative_mmol_g']);
     dataTables.forEach(d=>{
-      let t = csvLine(['Time (h)','H2 (mol%)','H2 (umol/h)','H2 (mmol/h/g)','Cumulative H2 (mmol/g)']);
       for (let i=0;i<d.t.length;i++){
-        t += csvLine([d.t[i],d.h2pct[i],d.h2F[i],d.h2Fm[i],d.h2FmInt[i]].map(v=>fmtNum(v,5)));
+        t += csvLine([d.label, fmtNum(d.t[i],5), fmtNum(d.h2pct[i],5), fmtNum(d.h2F[i],5), fmtNum(d.h2Fm[i],5), fmtNum(d.h2FmInt[i],5)]);
       }
-      entries.push({name:d.label+'_output.csv', text:t});
     });
+    entries.push({name:'gc_timeseries.csv', text:t});
     let t2 = csvLine(['Sample','Mean integral rate (mmol/h/g)','Interval duration (h)']);
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
-    entries.push({name:'H2_rates.csv', text:t2});
+    entries.push({name:'h2_rates_summary.csv', text:t2});
     downloadZip('gc_export.zip', entries);
   }
   registerCsvExport('gc', exportGcZip);

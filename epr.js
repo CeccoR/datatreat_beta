@@ -214,7 +214,7 @@ import { Plot } from './plot.js';
       }
       t += csvLine(row);
     }
-    downloadZip('epr_export.zip', [{name:'epr_output.csv', text:t}]);
+    downloadZip('epr_export.zip', [{name:'epr_spectra.csv', text:t}]);
   }
   registerCsvExport('epr', exportEprZip);
 })();

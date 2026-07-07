@@ -1344,7 +1344,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       t+=csvLine(row);
     }
     const entries = [];              // {name, text} collected into a single zip
-    entries.push({name:'xrd_output.csv', text:t});
+    entries.push({name:'diffractograms.csv', text:t});
     // Crystallite size (classic) — per-sample summary (mean ± std, matching the table)
     {
       const anyStd = !!standardName;
@@ -1363,7 +1363,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         );
         ct += csvLine(row);
       });
-      entries.push({name:'crystallite_size_classic.csv', text:ct});
+      entries.push({name:'crystallite_size.csv', text:ct});
     }
     // Dedicated standard CSV: its peaks and measured FWHM (instrumental profile).
     // Crystallite size is meaningless for the standard, so only the FWHM is listed.
@@ -1381,36 +1381,43 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         entries.push({name:'standard_'+files[si].label+'.csv', text:st});
       }
     }
-    // Per-sample peak list CSVs (excluding the standard and peaks removed in the table)
-    processed.forEach((pr,k)=>{
-      if (files[k].name === standardName) return; // standard has its own dedicated CSV
-      const pks = pr.peaks.filter(pk=>!pk.removed);
-      if (!pks.length) return;
-      const kp = getFileParams(k);
-      const maxH=Math.max(...pks.map(pk=>pk.height))||1;
-      let pt=csvLine(['2Theta','RelIntensity','FWHM_deg','Crystallite_size_nm','Crystallite_size_corr_nm']);
-      pks.forEach(pk=>{
-        const Draw = sizeRaw(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
-        const Dcorr= sizeCorr(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
-        pt+=csvLine([fmtNum(pk.pos,6),fmtNum(pk.height/maxH,6),
-                     isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'',
-                     isFinite(Draw)?fmtNum(Draw,3):'', isFinite(Dcorr)?fmtNum(Dcorr,3):'']);
+    // peaks_all.csv — every sample's kept peaks in one long table (Sample column;
+    // the standard is excluded, it has its own dedicated CSV)
+    {
+      let pt=csvLine(['Sample','2Theta','RelIntensity','FWHM_deg','Crystallite_size_nm','Crystallite_size_corr_nm']);
+      processed.forEach((pr,k)=>{
+        if (files[k].name === standardName) return;
+        const pks = pr.peaks.filter(pk=>!pk.removed);
+        if (!pks.length) return;
+        const kp = getFileParams(k);
+        const maxH=Math.max(...pks.map(pk=>pk.height))||1;
+        pks.forEach(pk=>{
+          const Draw = sizeRaw(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
+          const Dcorr= sizeCorr(pk.fwhmClassic, pk.detPos, kp.K, kp.lambda);
+          pt+=csvLine([files[k].label, fmtNum(pk.pos,6),fmtNum(pk.height/maxH,6),
+                       isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'',
+                       isFinite(Draw)?fmtNum(Draw,3):'', isFinite(Dcorr)?fmtNum(Dcorr,3):'']);
+        });
       });
-      entries.push({name:files[k].label+'_peaks.csv', text:pt});
-    });
-    // Per-sample last-fit CSVs: observed + fit total and its components (bkgnd, Kα1, Kα2)
-    files.forEach((f,k)=>{
-      const sf = savedFits[k];
-      if (!sf || !sf.fits || !sf.fits.length) return;
-      const rec = reconstructFit(f.x, sf.fits); // {full, ka1} in raw intensity units
-      let ft = csvLine(['2Theta','Observed','Fit_total','Background','Ka1','Ka2']);
-      for (let j=0;j<f.x.length;j++){
-        const bg=sf.baseline[j]||0, ka1=rec.ka1[j], ka2=rec.full[j]-rec.ka1[j];
-        ft += csvLine([fmtNum(f.x[j],6), fmtNum(f.y[j],6), fmtNum(bg+rec.full[j],6),
-                       fmtNum(bg,6), fmtNum(ka1,6), fmtNum(ka2,6)]);
-      }
-      entries.push({name:f.label+'_fit.csv', text:ft});
-    });
+      entries.push({name:'peaks_all.csv', text:pt});
+    }
+    // fits_all.csv — every sample's last fit in one long table (Sample column)
+    {
+      let ft = csvLine(['Sample','2Theta','Observed','Fit_total','Background','Ka1','Ka2']);
+      let any = false;
+      files.forEach((f,k)=>{
+        const sf = savedFits[k];
+        if (!sf || !sf.fits || !sf.fits.length) return;
+        any = true;
+        const rec = reconstructFit(f.x, sf.fits); // {full, ka1} in raw intensity units
+        for (let j=0;j<f.x.length;j++){
+          const bg=sf.baseline[j]||0, ka1=rec.ka1[j], ka2=rec.full[j]-rec.ka1[j];
+          ft += csvLine([f.label, fmtNum(f.x[j],6), fmtNum(f.y[j],6), fmtNum(bg+rec.full[j],6),
+                         fmtNum(bg,6), fmtNum(ka1,6), fmtNum(ka2,6)]);
+        }
+      });
+      if (any) entries.push({name:'fits_all.csv', text:ft});
+    }
     // Bundle every CSV into a single downloadable zip
     downloadZip('xrd_export.zip', entries);
   }
