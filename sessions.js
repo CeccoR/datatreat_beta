@@ -415,6 +415,27 @@ document.getElementById('sessListWrap').addEventListener('click', async e=>{
 document.getElementById('sessListWrap').addEventListener('keydown', e=>{
   if (e.target.classList.contains('proj-rename') && e.key==='Enter'){ e.preventDefault(); e.target.blur(); }
 });
+// Hover (grey) / press (light accent) highlight for the whole row EXCEPT the
+// name field. Driven by classes so we can exclude the name input from the trigger.
+(function(){
+  const wrap = document.getElementById('sessListWrap');
+  const overName = t => !!(t && t.closest && t.closest('.proj-rename'));
+  wrap.addEventListener('mouseover', e=>{
+    const row = e.target.closest && e.target.closest('.sess-row');
+    if (!row) return;
+    row.classList.toggle('row-hot', !overName(e.target));
+    if (overName(e.target)) row.classList.remove('row-press');
+  });
+  wrap.addEventListener('mouseout', e=>{
+    const row = e.target.closest && e.target.closest('.sess-row');
+    if (row && !row.contains(e.relatedTarget)) row.classList.remove('row-hot','row-press');
+  });
+  wrap.addEventListener('mousedown', e=>{
+    const row = e.target.closest && e.target.closest('.sess-row');
+    if (row && !overName(e.target)) row.classList.add('row-press');
+  });
+  document.addEventListener('mouseup', ()=> wrap.querySelectorAll('.sess-row.row-press').forEach(r=>r.classList.remove('row-press')));
+})();
 document.getElementById('sessListWrap').addEventListener('change', e=>{
   if (e.target.classList.contains('sess-check')){ updateBulkState(); return; }
   if (e.target.classList.contains('proj-rename')){
