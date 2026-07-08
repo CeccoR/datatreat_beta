@@ -311,26 +311,55 @@ function _crc32(bytes){
   for (let i=0;i<bytes.length;i++) c = _CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c>>>8);
   return (c ^ 0xFFFFFFFF) >>> 0;
 }
+// Make a filename safe for every OS's zip extractor: strip characters illegal
+// on Windows (< > : " / \ | ? *) and control chars, and de-duplicate collisions
+// (duplicate names make Windows reject the archive with "incorrect parameter").
+function _zipSafeNames(entries){
+  const seen = Object.create(null);
+  return entries.map(e=>{
+    let name = String(e.name == null ? 'file' : e.name)
+      .replace(/[\x00-\x1f\x7f<>:"/\\|?*]+/g, '_')
+      .replace(/^[.\s]+|[.\s]+$/g, '')      // no leading/trailing dots or spaces
+      .slice(0, 200) || 'file';
+    const key = name.toLowerCase();
+    if (seen[key] !== undefined){
+      const n = ++seen[key];
+      const dot = name.lastIndexOf('.');
+      name = (dot > 0 ? name.slice(0,dot) : name) + '_' + n + (dot > 0 ? name.slice(dot) : '');
+    } else seen[key] = 0;
+    return { ...e, name };
+  });
+}
 function zipBlob(entries){
+  entries = _zipSafeNames(entries);
   const enc = new TextEncoder();
   const chunks = [];   // file-data + local headers, concatenated
   const central = [];  // central-directory records
   let offset = 0;
   const u16 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF]);
   const u32 = v => new Uint8Array([v&0xFF, (v>>>8)&0xFF, (v>>>16)&0xFF, (v>>>24)&0xFF]);
+  // A *valid* DOS date/time — a zero date (day 0/month 0) makes strict
+  // extractors (macOS Archive Utility, Windows Explorer) reject the archive.
+  const d = new Date();
+  const dosTime = ((d.getHours()<<11) | (d.getMinutes()<<5) | (d.getSeconds()>>1)) & 0xFFFF;
+  const dosDate = (((d.getFullYear()-1980)<<9) | ((d.getMonth()+1)<<5) | d.getDate()) & 0xFFFF;
+  const FLAG = 0x0800; // filenames are UTF-8
   for (const e of entries){
     const nameBytes = enc.encode(e.name);
-    const data = enc.encode(e.text);
+    // entry carries either text (string) or bytes (Uint8Array / number[])
+    const data = e.bytes != null
+      ? (e.bytes instanceof Uint8Array ? e.bytes : Uint8Array.from(e.bytes))
+      : enc.encode(e.text);
     const crc = _crc32(data);
     const local = [
-      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(0x04034b50), u16(20), u16(FLAG), u16(0), u16(dosTime), u16(dosDate),
       u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0),
       nameBytes, data
     ];
     local.forEach(b=>chunks.push(b));
     const localSize = 30 + nameBytes.length + data.length;
     central.push([
-      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(0x02014b50), u16(20), u16(20), u16(FLAG), u16(0), u16(dosTime), u16(dosDate),
       u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length),
       u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBytes
     ]);
@@ -348,6 +377,15 @@ function zipBlob(entries){
 }
 function downloadZip(filename, entries){
   const url = URL.createObjectURL(zipBlob(entries));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
+}
+
+// Download raw bytes verbatim (byte-for-byte identical to the original upload).
+function downloadBytes(filename, bytes){
+  const arr = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+  const url = URL.createObjectURL(new Blob([arr], {type:'application/octet-stream'}));
   const a = document.createElement('a');
   a.href = url; a.download = filename; document.body.appendChild(a); a.click();
   setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 200);
@@ -436,30 +474,39 @@ function setupDropzone(dropzoneId, inputId, onFiles){
                onColorChange(i,color), onPaletteChange(colors)}
    extraCols: optional array of {header, render(file,i)} for additional columns
 ========================================================= */
+// A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
+// Inked box 15×15, centred on (12,12) — same size as the download glyph below.
+const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4.5" y1="4.5" x2="19.5" y2="19.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="4.5"/></svg>`;
+// Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
+const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
+
 function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   const wrap = document.getElementById(containerId);
   if (!wrap) return;
   if (!files.length){ wrap.innerHTML=''; return; }
 
   const ec = extraCols || [];
-  // colgroup: drag 5%, FILE 45%, LABEL 45%, extraCols (auto), actions 5%
-  let colgroup = `<colgroup><col style="width:5%"><col style="width:45%"><col style="width:45%">`;
+  // colgroup: drag 5%, FILE 44%, LABEL 43%, extraCols (auto), actions fixed 58px
+  // (a fixed width guarantees the download+remove icons fit even on narrow phones)
+  let colgroup = `<colgroup><col style="width:5%"><col style="width:44%"><col style="width:43%">`;
   for (let i = 0; i < ec.length; i++) colgroup += `<col>`;
-  colgroup += `<col style="width:5%"></colgroup>`;
+  colgroup += `<col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
-  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div style="display:flex;align-items:center;gap:5px"><button class="palette-pick-btn" title="Apply color palette"></button>FILE</div></th><th>SAMPLE LABEL</th>`;
+  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th><th>SAMPLE LABEL</th>`;
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
-  html += `<th style="text-align:right"><button class="remove-all del-bare" title="Remove all">✕</button></th></tr></thead><tbody>`;
+  const dlIcon = DL_SVG(15);
+  const xIcon = X_SVG(15);
+  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
     html += `<tr class="file-row" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
-    html += `<td class="fname" title="${f.name}">${swatch}${f.name}</td>`;
+    html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td style="text-align:right"><button class="del del-bare row-del" data-i="${i}" title="Remove">✕</button></td>`;
+    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
@@ -491,7 +538,36 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     });
   });
   wrap.querySelectorAll('.row-del').forEach(btn=>{
-    btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.target.dataset.i); });
+    btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.currentTarget.dataset.i); });
+  });
+  // Per-file download of the original uploaded content, byte-for-byte. A file
+  // keeps its original bytes in `rawBytes`, or a `rawFiles` list (e.g. EPR's
+  // .dsc + .dta pair), or legacy decoded text in `raw` (older sessions).
+  const originalsOf = f => {
+    if (f.rawFiles && f.rawFiles.length)
+      return f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text });
+    if (f.rawBytes != null) return [{ name:f.name, bytes:f.rawBytes }];
+    if (f.raw != null) return [{ name:f.name, text:f.raw }];
+    return [];
+  };
+  wrap.querySelectorAll('.dl-file').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const f = files[+e.currentTarget.dataset.i];
+      if (!f) return;
+      const orig = originalsOf(f);
+      if (!orig.length){ alert('The original file for “'+f.name+'” is not available.'); return; }
+      if (orig.length === 1){
+        if (orig[0].bytes != null) downloadBytes(orig[0].name, orig[0].bytes);
+        else downloadBlob(orig[0].name, orig[0].text);
+      } else downloadZip((f.label||f.name)+'.zip', orig);
+    });
+  });
+  // Download all originals as a single zip
+  const dlAll = wrap.querySelector('.download-all');
+  if (dlAll) dlAll.addEventListener('click', ()=>{
+    const entries = files.flatMap(originalsOf);
+    if (!entries.length){ alert('No original files are available to download.'); return; }
+    downloadZip('files.zip', entries);
   });
 
   // Drag-to-reorder via pointer events (works with both mouse and touch): grab the
@@ -681,8 +757,12 @@ document.querySelectorAll('.home-card').forEach(c=>{
 document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
-const VALID_TABS = ['home','tauc','xrd','gc','epr','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', settings:'DataTreat · Settings' };
+const _tabRedraw = {}, _needsRedraw = {};
+// A module registers how to redraw its current view; goTab calls it the first
+// time the tab becomes visible after a session restore flagged it.
+function registerTabRedraw(mod, fn){ _tabRedraw[mod] = fn; }
+const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -693,6 +773,13 @@ function goTab(tab, fromHash){
     if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
+  // A module whose plots were drawn while its tab was hidden (e.g. a session
+  // opened into a background tab) sized them to 0; redraw once now it's visible.
+  if (_needsRedraw[tab] && _tabRedraw[tab]){
+    _needsRedraw[tab] = false;
+    requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} });
+  }
+  if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
   // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
   if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
@@ -722,7 +809,13 @@ class UndoStack {
     this.states.push(snap);
     if (this.states.length > this._limit) this.states.shift();
     this.index = this.states.length - 1;
+    // Fire (and clear) any one-shot change listeners for a real, recorded change.
+    if (this._onceListeners && this._onceListeners.length){
+      const cbs = this._onceListeners; this._onceListeners = [];
+      cbs.forEach(cb=>{ try { cb(); } catch(e){} });
+    }
   }
+  onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
   _apply(i){ this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; } }
   performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
@@ -767,6 +860,112 @@ document.addEventListener('keydown', e=>{
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
   if (btn) btn.classList.toggle('has-data', !!has);
+  // The project-bar action buttons only appear once data is loaded
+  document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"]')
+    .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
+  if (has) normalizeProjIcons(tab);
+}
+
+/* Normalize a module's project icons so every icon's minimal bounding box is the
+   same size and centred in its button. Measures each icon's inked bbox (getBBox)
+   and transforms it to centre (12,12) at a common target extent. Idempotent. */
+const PROJ_ICON_TARGET = 18;
+// Center an icon's inked content at (12,12). If `forceScale` is given, use it
+// (so one icon can match another's exact scale); otherwise scale so the icon's
+// larger side equals PROJ_ICON_TARGET. Returns the scale used.
+function fitIcon(svg, forceScale){
+  if (!svg) return null;
+  const NS = 'http://www.w3.org/2000/svg';
+  let g = svg.querySelector('g.icon-fit');
+  if (!g){
+    g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'icon-fit');
+    while (svg.firstChild) g.appendChild(svg.firstChild);
+    g.querySelectorAll('*').forEach(el=> el.setAttribute('vector-effect','non-scaling-stroke'));
+    svg.appendChild(g);
+  }
+  g.removeAttribute('transform');
+  let bb; try { bb = g.getBBox(); } catch(e){ return null; }
+  if (!bb.width || !bb.height) return null; // not rendered yet (hidden tab)
+  const s = forceScale || (PROJ_ICON_TARGET / Math.max(bb.width, bb.height));
+  const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
+  g.setAttribute('transform', `translate(12 12) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
+  return s;
+}
+function normalizeProjIcons(mod){
+  requestAnimationFrame(()=>{
+    const q = cls => document.querySelector('.project-bar .'+cls+'[data-module="'+mod+'"] .proj-svg');
+    fitIcon(q('proj-save')); fitIcon(q('proj-saveas'));
+    const csvScale = fitIcon(q('proj-csv'));
+    // Exception: the JSON icon is the CSV icon with different text — render it at
+    // the exact same scale so the arrow and font match CSV, not the equal-box rule.
+    if (csvScale) fitIcon(q('proj-json'), csvScale);
+  });
+}
+
+/* CSV export registry — each module registers how to build its .zip of CSVs so
+   the project buttons can trigger it. */
+const _csvExport = {};
+function registerCsvExport(mod, fn){ _csvExport[mod] = fn; }
+function runCsvExport(mod){ if (_csvExport[mod]) _csvExport[mod](); }
+// Does a module currently hold loaded data? (drives the replace-on-open confirm)
+function moduleHasData(mod){
+  const btn = document.querySelector('#nav button[data-tab="'+mod+'"]');
+  return !!(btn && btn.classList.contains('has-data'));
+}
+
+/* =========================================================
+   THEME — light / dark, remembered, defaulting to the OS preference.
+   The initial attribute is set by an inline <head> script (no flash); here we
+   wire the header toggle and the settings selector, and persist the choice.
+========================================================= */
+const THEME_KEY = 'datatreat-theme';
+function currentTheme(){ return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
+function applyTheme(theme, persist){
+  theme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  if (persist){ try { localStorage.setItem(THEME_KEY, theme); } catch(e){} }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
+  const sel = document.getElementById('settingTheme');
+  if (sel) sel.value = theme;
+}
+(function initTheme(){
+  applyTheme(currentTheme(), false); // sync meta + settings select to the pre-painted attribute
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.addEventListener('click', ()=> applyTheme(currentTheme()==='light' ? 'dark' : 'light', true));
+  document.addEventListener('change', e=>{ if (e.target && e.target.id==='settingTheme') applyTheme(e.target.value, true); });
+  // Follow OS changes only while the user hasn't made an explicit choice
+  if (window.matchMedia){
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ev=>{
+      let saved=null; try { saved = localStorage.getItem(THEME_KEY); } catch(e){}
+      if (!saved) applyTheme(ev.matches ? 'light' : 'dark', false);
+    });
+  }
+})();
+
+/* Module state access for the session manager: reuse each module's registered
+   undo snapshot()/restore() as the canonical serialize/deserialize. */
+const MODULES = ['tauc','xrd','gc','epr'];
+const MODULE_LABELS = { tauc:'DRS UV-Vis', xrd:'XRPD', gc:'GC', epr:'EPR' };
+function getModuleState(mod){
+  const st = _histories[mod];
+  return st ? st._snap() : null;
+}
+function restoreModuleState(mod, state){
+  const st = _histories[mod];
+  if (!st) return;
+  st._busy = true;
+  try { st._restore(state); } finally { st._busy = false; }
+  st.reset();
+  st.commit(); // fresh baseline so undo/redo start clean from the loaded session
+  // Plots just drawn may be sized wrong if the tab is hidden; redraw on show.
+  if (_activeTab === mod){ if (_tabRedraw[mod]) requestAnimationFrame(()=>{ try { _tabRedraw[mod](); } catch(e){} }); }
+  else { _needsRedraw[mod] = true; }
+}
+// Run cb once, the next time the module records a real change (edit/add/remove…).
+function onModuleChangeOnce(mod, cb){
+  const st = _histories[mod];
+  if (st) st.onceCommit(cb);
 }
 
 // Size each home card so its square icon tile spans 90% of the (common) card
@@ -827,7 +1026,7 @@ window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true);
    ALERT HELPERS
 ========================================================= */
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidFn, dismissWarnFn){
-  const makeX = fn => `<button class="alert-dismiss" onclick="${fn||"this.closest('.alert').remove()"}" title="Dismiss">✕</button>`;
+  const makeX = fn => `<button class="alert-dismiss" onclick="${fn||"this.closest('.alert').remove()"}" title="Dismiss">${X_SVG(13)}</button>`;
   let html = '';
   if (invalidNames.length)
     html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidFn) + '</div>';
@@ -853,8 +1052,15 @@ function nextColor(existingFiles){
     const section = block.closest('section.tab');
     const key = 'datatreat-instr-' + (section ? section.id : 's') + '-' + i;
     // Attach the toggle to the nearest preceding heading; fall back to inline.
-    let heading = block.previousElementSibling;
-    while (heading && !/^H[1-3]$/.test(heading.tagName)) heading = heading.previousElementSibling;
+    // The heading may be wrapped (e.g. in a .section-head flex row), so also
+    // look for a heading nested inside a preceding sibling.
+    let heading = null, prev = block.previousElementSibling;
+    while (prev){
+      if (/^H[1-3]$/.test(prev.tagName)){ heading = prev; break; }
+      const inner = prev.querySelector && prev.querySelector('h1,h2,h3');
+      if (inner){ heading = inner; break; }
+      prev = prev.previousElementSibling;
+    }
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'instr-info';
@@ -875,5 +1081,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadZip, zipBlob, makeDownloadLink, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, registerHistory, buildAlertsHtml, nextColor
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, registerCsvExport, runCsvExport, applyTheme, currentTheme
 };

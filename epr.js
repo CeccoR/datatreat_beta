@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -45,10 +45,10 @@ import { Plot } from './plot.js';
       const dtaCell = pair.dta ? `<span style="color:var(--good)">✓ .DTA</span>` : `<span style="color:var(--bad)">✗ .DTA</span>`;
       const dscCell = pair.dsc ? `<span style="color:var(--good)">✓ .DSC</span>` : `<span style="color:var(--bad)">✗ .DSC</span>`;
       const esc = stem.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-      return `<tr class="pending-row"><td class="fname">${stem}</td><td>${dtaCell}</td><td>${dscCell}</td><td><div class="file-actions">${phantoms}<button class="pending-del" data-stem="${esc}" onclick="eprRemovePending(this.dataset.stem)">✕</button></div></td></tr>`;
+      return `<tr class="pending-row"><td class="fname">${stem}</td><td>${dtaCell}</td><td>${dscCell}</td><td><div class="file-actions">${phantoms}<button class="pending-del" data-stem="${esc}" onclick="eprRemovePending(this.dataset.stem)">${X_SVG(13)}</button></div></td></tr>`;
     }).join('');
     const colgroup = `<colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>`;
-    const header = `<tr><th>FILE</th><th>.DTA</th><th>.DSC</th><th><div class="file-actions" style="display:flex;gap:4px;align-items:center;visibility:visible;white-space:nowrap">${phantoms}<button class="pending-del-all" onclick="eprRemoveAllPending()">✕</button></div></th></tr>`;
+    const header = `<tr><th>FILE</th><th>.DTA</th><th>.DSC</th><th><div class="file-actions" style="display:flex;gap:4px;align-items:center;visibility:visible;white-space:nowrap">${phantoms}<button class="pending-del-all" onclick="eprRemoveAllPending()">${X_SVG(13)}</button></div></th></tr>`;
     wrap.innerHTML = `<div style="background:#3a2c0f;border:1px solid #5a430f;border-radius:8px;padding:0 8px 8px;margin-top:10px"><div style="padding:8px 0 6px;font-size:12px;color:var(--warn)">⚠ Waiting for pair:</div><table class="pending-table" style="table-layout:fixed;width:100%">${colgroup}<thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
   }
 
@@ -76,6 +76,7 @@ import { Plot } from './plot.js';
   }
 
   async function processPair(stem, dtaFile, dscFile){
+    const dscBytes = new Uint8Array(await dscFile.arrayBuffer());
     const dscText = await dscFile.text();
     const p = parseDsc(dscText);
     const npts = parseInt(p.XPTS);
@@ -95,7 +96,9 @@ import { Plot } from './plot.js';
     const slope = (s[n-1] - s[0]) / (b[n-1] - b[0] || 1);
     const a = s.map((v, i) => v - (s[0] + slope * (b[i] - b[0])));
 
-    return { name: stem, label: stem, b, a };
+    return { name: stem, label: stem, b, a,
+             rawFiles: [ { name: dscFile.name, bytes: dscBytes },
+                         { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
   }
 
   setupDropzone('eprDropzone', 'eprFiles', async (fileList)=>{
@@ -159,6 +162,7 @@ import { Plot } from './plot.js';
     afterFilesChange();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
+  registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(); });
 
   function updateEpr(){
     if (!files.length) return;
@@ -194,7 +198,8 @@ import { Plot } from './plot.js';
   });
   window._eprRedraw = ()=>{ if (files.length) updateEpr(); };
 
-  document.getElementById('eprSave').onclick = ()=>{
+  function exportEprZip(){
+    if (!files.length) return;
     updateEpr();
     const Y = lastY.map(y=>{ const y0=y[0]??0; return y.map(v=>v-y0); });
     const maxLen = Math.max(...files.map(f=>f.b.length));
@@ -209,9 +214,8 @@ import { Plot } from './plot.js';
       }
       t += csvLine(row);
     }
-    downloadBlob('epr_output.csv', t);
-    const wrap = document.getElementById('eprDownloads'); wrap.innerHTML='';
-    makeDownloadLink(wrap, 'epr_output.csv', t, 'epr_output.csv');
-  };
+    downloadZip('epr_export.zip', [{name:'epr_spectra.csv', text:t}]);
+  }
+  registerCsvExport('epr', exportEprZip);
 })();
 

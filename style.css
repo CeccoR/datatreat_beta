@@ -10,7 +10,62 @@
   --good: #7fd17f;
   --warn: #ffb454;
   --bad: #ff6b6b;
+  --accent-hover: #ffc271;   /* primary button :hover */
+  --accent-active: #e89a35;  /* primary button :active (pressed) */
+  --on-accent: #06131f;      /* text drawn on top of the accent fill */
+  --icon-tile: #0e1316;      /* home-card square icon tile background */
+  --sel-inset: #ffffff;      /* selected peak-row highlight border */
+  --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
+  --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
+  --alert-bad-bg:  #3a1212;  --alert-bad-line:  #5a1c1c;
+  --pending-line: #6b4d1a;
+  /* Plot chrome (axes/grid/labels/crosshair) — themed via .plot-* classes below */
+  --plot-border: #3a414c;
+  --plot-grid: #262c35;
+  --plot-tick: #93a0b0;
+  --plot-label: #c4ccd6;
+  --plot-cross: #c4ccd6;
+  --plot-readout: #f0f4f6;
+  --plot-readout-halo: #0b0f12;
 }
+/* ===== Light theme ===== */
+:root[data-theme="light"] {
+  --bg: #f3f5f6;
+  --panel: #ffffff;
+  --panel2: #eceff1;
+  --line: #d2d9dd;
+  --text: #1a2327;
+  --muted: #56676f;
+  --accent: #b96a10;
+  --accent2: #9c4b93;
+  --good: #2e8b4e;
+  --warn: #a9670a;
+  --bad: #cc3b3b;
+  --accent-hover: #a75e0b;
+  --accent-active: #8c4e08;
+  --on-accent: #ffffff;
+  --icon-tile: #f3f5f6;
+  --sel-inset: #b96a10;
+  --alert-warn-bg: #fbf1dd;  --alert-warn-line: #e4c583;
+  --alert-good-bg: #e2f4ea;  --alert-good-line: #9dd3b3;
+  --alert-bad-bg:  #fbe6e6;  --alert-bad-line:  #eaa9a9;
+  --pending-line: #e4c583;
+  --plot-border: #c2ccd2;
+  --plot-grid: #e5eaed;
+  --plot-tick: #56676f;
+  --plot-label: #33424a;
+  --plot-cross: #56676f;
+  --plot-readout: #1a2327;
+  --plot-readout-halo: #ffffff;
+}
+/* Plot chrome follows the theme. CSS beats SVG presentation attributes, so these
+   override the fills/strokes plot.js sets inline — no JS changes needed. */
+.plot-border { stroke: var(--plot-border); }
+.plot-grid   { stroke: var(--plot-grid); }
+.plot-tick   { fill: var(--plot-tick); }
+.plot-label  { fill: var(--plot-label); }
+.plot-crosshair { stroke: var(--plot-cross); }
+.plot-readout { fill: var(--plot-readout); stroke: var(--plot-readout-halo); }
 
 * {
   box-sizing: border-box;
@@ -48,14 +103,22 @@ header h1 {
   flex-shrink: 0;
 }
 nav button {
-  background: transparent;
+  background: var(--panel2);
   border: 1px solid var(--line);
   color: var(--muted);
   padding: 7px 14px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  transition: color 0.15s, border-color 0.15s;
+  font-weight: 600;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+/* Press feedback for non-active tabs: a filled-accent flash (distinct from the
+   outline-accent hover) */
+nav button:not(.active):active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
 }
 #nav {
   display: flex;
@@ -71,29 +134,131 @@ nav button:not(.nav-settings):not(.active):hover {
 }
 nav button.active {
   background: var(--accent);
-  color: #06131f;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 600;
 }
-nav button.nav-settings {
-  margin-left: auto;
+/* Saved-sessions table: keep columns usable on narrow screens by letting the
+   table scroll horizontally instead of collapsing. */
+.sess-table-box { overflow-x: auto; }
+.sess-table { min-width: 620px; }
+@media (max-width: 600px) {
+  .sess-table .btn.small { padding: 5px 8px; }
+}
+/* "Saved ✓" confirmation state — green, non-interactive, same box as the button */
+button.btn.saved-ok,
+button.btn.saved-ok:disabled,
+button.btn.secondary.saved-ok {
+  background: #2e9e4f !important;
+  color: #ffffff !important;
+  border-color: #2e9e4f !important;
+  opacity: 1 !important;
+  cursor: default;
+}
+/* Module section header: title left, project action icons right */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.proj-icon .proj-svg { width: 26px; height: 26px; display: block; }
+/* Project bar: sits above the upload area, always visible. Name field on the far
+   left, action icons on the far right, both vertically centered. */
+.card.project-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.proj-actions { margin-left: auto; }
+.project-bar .project-name-input {
+  width: 25%;
+  min-width: 180px;
+  height: 54px;               /* ~1.5× the previous ~36px field */
+  font-size: 16px;
+  font-weight: 500;
+  padding: 0 14px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.project-name-input::placeholder { font-weight: 400; color: var(--muted); }
+.project-name-input:hover { border-color: var(--muted); }
+.project-name-input:focus { border-color: var(--accent); outline: none; }
+/* Empty-name feedback: red field + a brief shake, no browser dialog */
+.field-invalid, .field-invalid:hover, .field-invalid:focus {
+  border-color: var(--bad) !important;
+  color: var(--bad);
+  animation: field-shake 0.4s;
+}
+.field-invalid::placeholder { color: var(--bad); opacity: 0.9; }
+@keyframes field-shake {
+  0%,100% { transform: translateX(0); }
+  15% { transform: translateX(-6px); }  35% { transform: translateX(6px); }
+  55% { transform: translateX(-4px); }  75% { transform: translateX(4px); }
+  90% { transform: translateX(-2px); }
+}
+@media (max-width: 640px) {
+  .project-bar .project-name-input { width: 45%; }
+}
+.pb-dirty {
+  display: none;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+/* Bottom export card: the four project buttons in a 2×2 grid */
+.proj-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.proj-actions-row .btn { width: 100%; }
+button.btn.icon-save {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  visibility: hidden; /* space reserved; revealed by setTabLoaded once data loads */
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+/* Circular icon buttons on the right of the nav (sessions, theme, settings) */
+nav button.nav-icon {
   font-size: 15px;
   font-weight: bold;
-  padding: 7px 11px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   border-color: var(--line);
   color: var(--muted);
+  flex-shrink: 0;
 }
-nav button.nav-settings:hover {
+nav button.nav-right { margin-left: auto; }
+nav button.nav-icon:hover {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--panel2);
 }
-nav button.nav-settings.active {
-  color: #06131f;
+nav button.nav-icon.active {
+  color: var(--on-accent);
   border-color: var(--accent);
   background: var(--accent);
 }
+/* Show only the icon matching the current theme */
+.theme-icon-light { display: none; }
+:root[data-theme="light"] .theme-icon-dark { display: none; }
+:root[data-theme="light"] .theme-icon-light { display: inline; }
 .home-settings-link {
   background: none;
   border: none;
@@ -195,18 +360,42 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 button.btn {
   background: var(--accent);
-  color: #06131f;
+  color: var(--on-accent);
   border: none;
   border-radius: 8px;
   padding: 9px 16px;
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
+/* Primary (export-style, orange) buttons: distinct hover and pressed states */
+button.btn:not(.secondary):hover:not(:disabled) { background: var(--accent-hover); }
+button.btn:not(.secondary):active:not(:disabled) { background: var(--accent-active); }
 button.btn.secondary {
   background: var(--panel2);
   color: var(--text);
   border: 1px solid var(--line);
+}
+/* Secondary buttons: coherent, subtle hover/press */
+button.btn.secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button.btn.secondary:active:not(:disabled) { background: var(--line); }
+/* Settings-button style for the click-only project/export buttons and the XRD
+   fit-settings buttons: neutral outline at rest, accent outline on hover, and a
+   distinct filled-accent flash on click. */
+button.btn.proj-saveas, button.btn.proj-csv, button.btn.proj-json,
+button.btn#xrdFitSettings, button.btn#xrdStdSettings {
+  background: var(--panel2);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+button.btn.proj-saveas:hover:not(:disabled), button.btn.proj-csv:hover:not(:disabled), button.btn.proj-json:hover:not(:disabled),
+button.btn#xrdFitSettings:hover:not(:disabled), button.btn#xrdStdSettings:hover:not(:disabled) {
+  color: var(--accent); border-color: var(--accent); background: var(--panel2);
+}
+button.btn.proj-saveas:active:not(:disabled), button.btn.proj-csv:active:not(:disabled), button.btn.proj-json:active:not(:disabled),
+button.btn#xrdFitSettings:active:not(:disabled), button.btn#xrdStdSettings:active:not(:disabled) {
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
 }
 button.btn.small {
   padding: 5px 10px;
@@ -275,6 +464,9 @@ svg.plot {
 .legend {
   font-size: 12px;
   margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
 }
 .legend span {
   display: inline-flex;
@@ -314,19 +506,19 @@ svg.plot {
 .alert:hover .alert-dismiss { opacity: 1; }
 .alert-dismiss:hover { font-weight: bold; }
 .alert.warn {
-  background: #3a2c0f;
+  background: var(--alert-warn-bg);
   color: var(--warn);
-  border: 1px solid #5a430f;
+  border: 1px solid var(--alert-warn-line);
 }
 .alert.good {
-  background: #0f3a26;
+  background: var(--alert-good-bg);
   color: var(--good);
-  border: 1px solid #1c5a3c;
+  border: 1px solid var(--alert-good-line);
 }
 .alert.bad {
-  background: #3a1212;
+  background: var(--alert-bad-bg);
   color: var(--bad);
-  border: 1px solid #5a1c1c;
+  border: 1px solid var(--alert-bad-line);
 }
 .grid2 {
   display: grid;
@@ -361,12 +553,12 @@ svg.plot {
   .home-grid { grid-template-columns: 1fr; }
 }
 .home-card {
-  background: var(--panel);
+  background: var(--panel2);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 18px;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
   position: relative;
   display: flex;
   align-items: center;
@@ -383,8 +575,8 @@ svg.plot {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background: #0e1316;
-  border: 1px solid var(--line);
+  background: var(--icon-tile);
+  border: none;
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -494,6 +686,8 @@ footer a:hover {
   color: var(--muted);
   cursor: grab;
   padding: 2px;
+  line-height: 1;
+  vertical-align: middle;
   touch-action: none; /* let touch drag the row instead of scrolling */
 }
 .drag-handle:active { cursor: grabbing; }
@@ -510,20 +704,51 @@ footer a:hover {
   line-height: 1;
   cursor: pointer;
   transition: color 0.1s;
+  /* Center the glyph/SVG and keep download + remove vertically aligned */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
 }
 .del-bare:hover { color: var(--bad); }
+/* File-list actions cell: trim padding so download + remove always fit the column */
+.row-acts { padding-left: 0 !important; padding-right: 4px !important; }
+/* Download buttons: same bare style, but light up to a lighter grey, not red */
+.dl-bare:hover { color: var(--text); }
 th .remove-all { font-weight: 700; }
-/* Row remove appears on row hover (unchanged behaviour) */
-.file-row .row-del { visibility: hidden; }
-.file-row:hover .row-del { visibility: visible; }
+th .download-all { vertical-align: middle; }
+/* Both "all" buttons are always bold: thicker icon strokes than the per-row ones */
+th .download-all svg { stroke-width: 2.5; }
+th .remove-all svg { stroke-width: 2.8; }
+/* Row remove / download appear on row hover (unchanged behaviour) */
+.file-row .row-del,
+.file-row .dl-file { visibility: hidden; }
+.file-row:hover .row-del,
+.file-row:hover .dl-file { visibility: visible; }
+.dl-file svg, .download-all svg { vertical-align: middle; }
 td.fname {
   color: var(--muted);
   font-size: 12px;
+  overflow: hidden;
+}
+/* Flex-center the colour swatch with the filename so it sits on the row centre */
+.fname-inner {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.fname-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 /* ===== Palette picker button (in FILE header) ===== */
+.file-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1; /* drop text descender space so the palette swatch is centred */
+}
 button.palette-pick-btn {
   width: 14px;
   height: 14px;
@@ -808,11 +1033,21 @@ button.color-swatch:hover { border-color: var(--text); }
   border-color: var(--accent) !important;
   background: transparent !important;
 }
+/* Icons render as centered blocks (no inline-baseline gap) so every icon's
+   bounding box is centered in its button/cell and aligns with its neighbours */
+.plot-btn-icon, .x-icon, .dl-icon { display: block; }
+.alert-dismiss, .peak-del,
+.file-actions .pending-del, .file-actions .pending-del-all {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+.alert-dismiss:hover { font-weight: normal; color: var(--bad); }
 .plot-tool-btn.active,
 .plot-dl-btn.active {
   border: 1px solid var(--accent) !important;
   background: var(--accent) !important;
-  color: #06131f !important;
+  color: var(--on-accent) !important;
 }
 
 /* ===== Sample navigation arrows ===== */
@@ -870,7 +1105,7 @@ button.color-swatch:hover { border-color: var(--text); }
 /* ===== EPR pending table ===== */
 .pending-table th,
 .pending-table td {
-  border-bottom: 1px solid #6b4d1a;
+  border-bottom: 1px solid var(--pending-line);
   color: var(--warn);
 }
 .pending-row .file-actions {
@@ -895,7 +1130,7 @@ button.color-swatch:hover { border-color: var(--text); }
 .file-actions .pending-del,
 .file-actions .pending-del-all {
   background: transparent;
-  border-color: #6b4d1a;
+  border-color: var(--pending-line);
   color: var(--warn);
 }
 .file-actions .pending-del-all {
@@ -973,9 +1208,9 @@ button.color-swatch:hover { border-color: var(--text); }
 /* Persistent selection: keep the normal background, add a uniform white outline.
    Applied per-cell (top+bottom on every cell, left on the first, right on the last)
    so the rectangle is even all around with no internal lines. */
-#xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff; }
-#xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff, inset 2px 0 0 #fff; }
-#xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 #fff, inset 0 -2px 0 #fff, inset -2px 0 0 #fff; }
+#xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset); }
+#xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset 2px 0 0 var(--sel-inset); }
+#xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
 /* Mean ± std crystallite-size summary under the analysis peak table */
 .size-summary {
   margin-top: 12px;
@@ -1053,6 +1288,8 @@ button.color-swatch:hover { border-color: var(--text); }
 /* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
 .legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }
 .legend i.mk-dot { width: 9px; height: 9px; border-radius: 50%; }
+/* Hollow ring marker (open circles in the plot, e.g. raw XRPD data) */
+.legend i.mk-ring { width: 9px; height: 9px; border-radius: 50%; background: transparent; border: 1.6px solid; box-sizing: border-box; vertical-align: middle; }
 .legend i.mk-box { width: 11px; height: 11px; border-radius: 2px; }
 
 /* ===== Dropzone loading state ===== */

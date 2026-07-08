@@ -21,6 +21,16 @@
   <meta name="twitter:title" content="DataTreat">
   <meta name="twitter:description" content="Browser-based scientific data analysis for spectroscopy and chromatography. Runs entirely in your browser; no data leaves your device.">
   <link rel="stylesheet" href="style.css">
+  <!-- Apply the saved (or OS-preferred) theme before first paint to avoid a flash -->
+  <script>
+    (function(){
+      try {
+        var saved = localStorage.getItem('datatreat-theme');
+        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
+    })();
+  </script>
 </head>
 
 <body>
@@ -32,7 +42,14 @@
       <button data-tab="xrd" role="tab" aria-selected="false" aria-controls="tab-xrd">XRPD</button>
       <button data-tab="gc" role="tab" aria-selected="false" aria-controls="tab-gc">GC</button>
       <button data-tab="epr" role="tab" aria-selected="false" aria-controls="tab-epr">EPR</button>
-      <button data-tab="settings" class="nav-settings" role="tab" aria-selected="false" aria-controls="tab-settings" aria-label="Settings">⚙</button>
+      <button data-tab="projects" class="nav-icon nav-right" role="tab" aria-selected="false" aria-controls="tab-projects" aria-label="Projects" title="Saved projects">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      </button>
+      <button id="themeToggle" class="nav-icon" type="button" aria-label="Toggle light/dark theme" title="Toggle theme">
+        <svg class="theme-icon-dark" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="theme-icon-light" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <button data-tab="settings" class="nav-icon nav-settings" role="tab" aria-selected="false" aria-controls="tab-settings" aria-label="Settings" title="Settings">⚙</button>
     </nav>
   </header>
 
@@ -83,7 +100,14 @@
     <section class="tab settings-tab" id="tab-settings" role="tabpanel" tabindex="0">
       <div class="card" style="max-width:480px;margin:0 auto">
         <h2>Settings</h2>
-        <h3 style="margin:0 0 6px">Plot export</h3>
+        <h3 style="margin:0 0 6px">Appearance</h3>
+        <div class="instr-block">Theme defaults to your operating-system preference; your choice here is remembered.</div>
+        <label style="margin-top:0">Theme</label>
+        <select id="settingTheme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+        <h3 style="margin:20px 0 6px">Plot export</h3>
         <div class="instr-block">Download format applied to all plot export buttons.</div>
         <label style="margin-top:0">Format</label>
         <select id="settingPlotFmt">
@@ -108,10 +132,37 @@
       </div>
     </section>
 
+    <!-- ============ PROJECTS ============ -->
+    <section class="tab" id="tab-projects" role="tabpanel" tabindex="0">
+      <div class="card">
+        <div class="flex-between" style="align-items:center;flex-wrap:wrap;gap:10px">
+          <h2 style="margin:0">Saved projects</h2>
+          <div style="display:flex;gap:8px">
+            <input type="file" id="sessImportFile" accept="application/json,.json" style="display:none">
+            <button class="btn secondary small" id="sessImportBtn">Import .json</button>
+            <button class="btn small" id="sessOpenSelected" disabled>Open selected</button>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:6px">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</p>
+        <div class="row" style="gap:10px;margin-top:12px">
+          <div class="col mw200" style="flex:2">
+            <label style="margin-top:0">Filter by name</label>
+            <input type="text" id="sessFilterName" placeholder="Search title…">
+          </div>
+          <div class="col mw200" style="flex:1">
+            <label style="margin-top:0">Filter by module</label>
+            <select id="sessFilterModule"><option value="">All modules</option></select>
+          </div>
+        </div>
+        <div id="sessListWrap" style="margin-top:14px"></div>
+      </div>
+    </section>
+
     <!-- ============ TAUC ============ -->
     <section class="tab" id="tab-tauc" role="tabpanel" tabindex="0">
+      <div class="card project-bar" data-module="tauc"><input type="text" class="project-name-input" data-module="tauc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="tauc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="tauc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="tauc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="tauc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="tauc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <h2>DRS UV-Vis</h2>
+        <div class="section-head"><h2 style="margin:0">DRS UV-Vis</h2></div>
         <div class="instr-block" style="max-width:100%">Compatible with Cary 5000 Instrument. Upload files with two columns: wavelength (nm) and Kubelka-Munk computed absorbance F(R).</div>
         <div class="dropzone" id="taucDropzone">
           <div class="dz-icon">⤒</div>
@@ -136,7 +187,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
               <svg class="plot" id="taucSvg"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="taucSvg" data-dl-name="Tauc_sample.svg" data-dl-legend="taucLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="taucSvg" data-dl-name="Tauc_sample.svg" data-dl-legend="taucLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend" id="taucLegend">
               <span><i style="background:#ffffff"></i>original</span>
@@ -176,13 +227,13 @@
         <p class="chart-title">Kubelka-Munk Function</p>
         <div class="plot-wrap">
           <svg class="plot" id="taucResSvg0" style="height:640px"></svg>
-          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg0" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg0" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
         <div id="taucResLegend0" class="legend" style="margin-bottom:18px"></div>
         <p class="chart-title">Tauc Plot</p>
         <div class="plot-wrap">
           <svg class="plot" id="taucResSvg1" style="height:640px"></svg>
-          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg1" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg1" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
         <div id="taucResLegend1" class="legend" style="margin-bottom:18px"></div>
         <p class="chart-title" id="taucBarTitle" style="margin-bottom:8px">Energy Band Gap</p>
@@ -190,7 +241,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
               <svg class="plot" id="taucResSvg2" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg2" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg2" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="taucBarAlert"></div>
             <div id="taucResLegend2" class="legend"></div>
@@ -202,15 +253,20 @@
       </div>
 
       <div class="card" id="taucExportCard" style="display:none">
-        <button class="btn" id="taucExportBtn" style="width:100%">Export CSV</button>
-        <div id="taucDownloads" style="margin-top:10px"></div>
+        <div class="proj-actions-row">
+          <button class="btn proj-btn proj-save" data-module="tauc" type="button">Save project</button>
+          <button class="btn secondary proj-btn proj-saveas" data-module="tauc" type="button">Save project as…</button>
+          <button class="btn secondary proj-btn proj-csv" data-module="tauc" type="button">Export .csv</button>
+          <button class="btn secondary proj-btn proj-json" data-module="tauc" type="button">Export .json</button>
+        </div>
       </div>
     </section>
 
     <!-- ============ XRD ============ -->
     <section class="tab" id="tab-xrd" role="tabpanel" tabindex="0">
+      <div class="card project-bar" data-module="xrd"><input type="text" class="project-name-input" data-module="xrd" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="xrd" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="xrd" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="xrd" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="xrd" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="xrd" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <h2>XRPD</h2>
+        <div class="section-head"><h2 style="margin:0">XRPD</h2></div>
         <div class="instr-block" style="max-width:100%">Compatible with XPERT diffractometer. Accepts PANalytical XML format files.</div>
         <div class="dropzone" id="xrdDropzone">
           <div class="dz-icon">⤒</div>
@@ -234,7 +290,7 @@
           <div class="col" style="flex:2;min-width:0">
             <div class="plot-wrap">
               <svg class="plot" id="xrdSvg" style="height:460px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSvg" data-dl-name="XRPD_sample.svg"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSvg" data-dl-name="XRPD_sample.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend">
               <span><i style="background:#6a7585"></i>raw</span>
@@ -280,7 +336,7 @@
         </div>
         <div class="peak-box" id="xrdPeakBox">
           <div class="peak-box-head">
-            <span class="peak-box-title">Detected peaks (classic) — <span id="xrdPkLabel">—</span></span>
+            <span class="peak-box-title">Detected peaks</span>
             <button class="btn secondary peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
           </div>
           <div id="xrdPeakTableWrap"></div>
@@ -300,10 +356,10 @@
           <div class="col" style="flex:2;min-width:0">
             <div class="plot-wrap">
               <svg class="plot" id="xrdFitSvg" style="height:420px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSvg" data-dl-name="XRPD_fit.svg"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSvg" data-dl-name="XRPD_fit.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend">
-              <span><i class="mk-dot" style="background:#6a7585"></i>raw</span>
+              <span><i class="mk-dot mk-ring" style="border-color:#6a7585"></i>raw</span>
               <span id="xrdLegBl"><i style="background:#ff9933"></i>baseline</span>
               <span id="xrdLegFit"><i style="background:#ff5050"></i>doublet fit</span>
               <span id="xrdLegKa1"><i style="background:#b07cff"></i>Kα₁ component</span>
@@ -324,6 +380,7 @@
             </div>
             <button class="btn secondary" id="xrdFitSettings" style="margin-top:8px;width:100%">Sample fit settings…</button>
             <div id="xrdFitProgWrap" style="display:none;margin-top:6px"><div id="xrdFitProgBar"></div></div>
+            <button class="btn secondary" id="xrdFitCancelBtn" style="display:none;margin-top:8px;width:100%">Cancel</button>
             <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px"></div>
             <button class="btn" id="xrdFitStdBtn" style="width:100%">Fit standard (calibrate S/L, H/L)</button>
             <button class="btn secondary" id="xrdStdSettings" style="margin-top:8px;width:100%">Standard fit settings…</button>
@@ -332,7 +389,7 @@
         </div>
         <div class="peak-box" id="xrdFitPeakBox">
           <div class="peak-box-head">
-            <span class="peak-box-title">Fitted peaks — <span id="xrdFitPkLabel">—</span></span>
+            <span class="peak-box-title">Fitted peaks</span>
           </div>
           <div id="xrdFitTableWrap"></div>
         </div>
@@ -342,28 +399,32 @@
         <h3 style="margin:0 0 12px">RESULTS</h3>
         <div class="row" style="align-items:flex-start;gap:16px">
           <div class="col mw320" style="flex:1">
-            <p class="chart-title">Analysis — smoothed, baseline subtracted</p>
+            <p class="chart-title">Analysis</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdResSvg" style="height:560px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResSvg" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResSvg" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResLegend" class="legend"></div>
-            <p class="chart-title" style="margin:18px 0 6px">Crystallite size (classic) — per sample</p>
+            <p class="chart-title" style="margin:18px 0 6px">Crystallite size</p>
             <div id="xrdSizeTableWrap" class="table-wrap-box"></div>
           </div>
           <div class="col mw320" style="flex:1">
-            <p class="chart-title">Fitting — model, baseline subtracted</p>
+            <p class="chart-title">Fit</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdResFitSvg" style="height:560px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResFitLegend" class="legend"></div>
           </div>
         </div>
       </div>
       <div class="card" id="xrdExportCard" style="display:none">
-        <button class="btn" id="xrdSave" style="width:100%">Export CSV</button>
-        <div id="xrdDownloads" style="margin-top:10px"></div>
+        <div class="proj-actions-row">
+          <button class="btn proj-btn proj-save" data-module="xrd" type="button">Save project</button>
+          <button class="btn secondary proj-btn proj-saveas" data-module="xrd" type="button">Save project as…</button>
+          <button class="btn secondary proj-btn proj-csv" data-module="xrd" type="button">Export .csv</button>
+          <button class="btn secondary proj-btn proj-json" data-module="xrd" type="button">Export .json</button>
+        </div>
       </div>
       <div id="xrdFitModal" class="modal-backdrop" style="display:none">
         <div class="modal-box">
@@ -445,8 +506,9 @@
 
     <!-- ============ GC ============ -->
     <section class="tab" id="tab-gc" role="tabpanel" tabindex="0">
+      <div class="card project-bar" data-module="gc"><input type="text" class="project-name-input" data-module="gc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="gc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="gc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="gc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="gc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="gc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <h2>GC</h2>
+        <div class="section-head"><h2 style="margin:0">GC</h2></div>
         <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) (%Mol)" column.</div>
         <div class="dropzone" id="gcDropzone">
           <div class="dz-icon">⤒</div>
@@ -468,11 +530,11 @@
             <p class="chart-title">H₂ Production</p>
             <div class="plot-wrap" style="margin-bottom:6px">
               <svg class="plot" id="gcSvg1" style="height:305px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg1" data-dl-name="GC_H2_rate.svg" data-dl-legend="gcLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg1" data-dl-name="GC_H2_rate.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="plot-wrap">
               <svg class="plot" id="gcSvg2" style="height:305px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg2" data-dl-name="GC_H2_cumulative.svg" data-dl-legend="gcLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg2" data-dl-name="GC_H2_cumulative.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="gcLegend" class="legend" style="margin-top:8px"></div>
           </div>
@@ -492,7 +554,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
               <svg class="plot" id="gcSvgBar" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvgBar" data-dl-name="GC_results.svg"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvgBar" data-dl-name="GC_results.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
           </div>
           <div class="col mw220" style="flex:1;background:var(--panel2);padding:12px;border-radius:4px;align-self:flex-start">
@@ -502,15 +564,20 @@
       </div>
 
       <div class="card" id="gcExportCard" style="display:none">
-        <button class="btn" id="gcSaveCsv" style="width:100%">Export CSV</button>
-        <div id="gcDownloads" style="margin-top:10px"></div>
+        <div class="proj-actions-row">
+          <button class="btn proj-btn proj-save" data-module="gc" type="button">Save project</button>
+          <button class="btn secondary proj-btn proj-saveas" data-module="gc" type="button">Save project as…</button>
+          <button class="btn secondary proj-btn proj-csv" data-module="gc" type="button">Export .csv</button>
+          <button class="btn secondary proj-btn proj-json" data-module="gc" type="button">Export .json</button>
+        </div>
       </div>
     </section>
 
     <!-- ============ EPR ============ -->
     <section class="tab" id="tab-epr" role="tabpanel" tabindex="0">
+      <div class="card project-bar" data-module="epr"><input type="text" class="project-name-input" data-module="epr" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="epr" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="epr" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="epr" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="epr" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="epr" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <h2>EPR</h2>
+        <div class="section-head"><h2 style="margin:0">EPR</h2></div>
         <div class="instr-block" style="max-width:100%">Compatible with Bruker EPR spectrometers (BES3T format). Upload paired .DTA and .DSC files: both are required for each sample. Pairs are matched by filename stem.</div>
         <div class="dropzone" id="eprDropzone">
           <div class="dz-icon">⤒</div>
@@ -529,7 +596,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
               <svg class="plot" id="eprSvg" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="eprSvg" data-dl-name="EPR.svg" data-dl-legend="eprLegend"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7,11 12,16 17,11"/><line x1="5" y1="19" x2="19" y2="19"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="eprSvg" data-dl-name="EPR.svg" data-dl-legend="eprLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="eprLegend" class="legend"></div>
           </div>
@@ -545,8 +612,12 @@
         </div>
       </div>
       <div class="card" id="eprExportCard" style="display:none">
-        <button class="btn" id="eprSave" style="width:100%">Export CSV</button>
-        <div id="eprDownloads" style="margin-top:10px"></div>
+        <div class="proj-actions-row">
+          <button class="btn proj-btn proj-save" data-module="epr" type="button">Save project</button>
+          <button class="btn secondary proj-btn proj-saveas" data-module="epr" type="button">Save project as…</button>
+          <button class="btn secondary proj-btn proj-csv" data-module="epr" type="button">Export .csv</button>
+          <button class="btn secondary proj-btn proj-json" data-module="epr" type="button">Export .json</button>
+        </div>
       </div>
     </section>
 
@@ -555,12 +626,25 @@
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
        each analysis module is its own file and can be added independently. -->
+  <!-- Save project as… dialog -->
+  <div id="projSaveAsModal" class="modal-backdrop" style="display:none">
+    <div class="modal-box">
+      <h3 style="margin:0 0 4px">Save project as…</h3>
+      <label style="margin-top:10px">Project name</label>
+      <input type="text" id="projSaveAsInput" placeholder="Project name…" autocomplete="off">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+        <button class="btn secondary" id="projSaveAsCancel" type="button">Cancel</button>
+        <button class="btn" id="projSaveAsOk" type="button">Save</button>
+      </div>
+    </div>
+  </div>
   <script type="module" src="utils.js"></script>
   <script type="module" src="plot.js"></script>
   <script type="module" src="tauc.js"></script>
   <script type="module" src="xrd.js"></script>
   <script type="module" src="epr.js"></script>
   <script type="module" src="gc.js"></script>
+  <script type="module" src="sessions.js"></script>
   <!-- Register the service worker for offline / installable use (secure contexts only) -->
   <script>
     if ('serviceWorker' in navigator) {

@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadBlob, makeDownloadLink, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -49,6 +49,9 @@ import { Plot } from './plot.js';
     for (const f of fileList){
       if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
       existing.add(f.name);
+      // f.text() auto-detects the encoding (incl. UTF-16 via BOM, as some GC
+      // instruments export); rawBytes keeps the original for byte-exact re-download.
+      const rawBytes = new Uint8Array(await f.arrayBuffer());
       const text = await f.text();
       const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
       if (!lines.length){ invalidFiles.push(f.name); continue; }
@@ -66,7 +69,7 @@ import { Plot } from './plot.js';
       }
       if (!injDates.length){ invalidFiles.push(f.name); continue; }
       const sorted = injDates.slice().sort((a,b)=>a-b);
-      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, h2, color:nextColor(files)});
+      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, h2, color:nextColor(files), rawBytes});
       ms.push(15); Qs.push(2);
       lightOnDates.push(new Date(sorted[0]));
     }
@@ -118,6 +121,7 @@ import { Plot } from './plot.js';
     afterFilesChange();
   }
   const hist = registerHistory('gc', gcSnapshot, gcRestore);
+  registerTabRedraw('gc', ()=>{ if (files.length) computeAndRenderGc(); });
 
   // Warning when a sample's light-on time is before (or at) its first injection
   function lightOnWarn(i){
@@ -298,20 +302,28 @@ import { Plot } from './plot.js';
     barPlot.attachTools(svg.closest('.plot-wrap'));
   }
 
-  document.getElementById('gcSaveCsv').onclick = ()=>{
-    const wrap = document.getElementById('gcDownloads'); wrap.innerHTML='';
+  function exportGcZip(){
+    if (!dataTables.length) return;
+    const entries = [];
+    // gc_timeseries.csv — each sample keeps its own independent columns (own time axis)
+    const cols=[];
     dataTables.forEach(d=>{
-      let t = csvLine(['Time (h)','H2 (mol%)','H2 (umol/h)','H2 (mmol/h/g)','Cumulative H2 (mmol/g)']);
-      for (let i=0;i<d.t.length;i++){
-        t += csvLine([d.t[i],d.h2pct[i],d.h2F[i],d.h2Fm[i],d.h2FmInt[i]].map(v=>fmtNum(v,5)));
-      }
-      downloadBlob(d.label+'_output.csv', t);
-      makeDownloadLink(wrap, d.label+'_output.csv', t, d.label+'_output.csv');
+      cols.push({h:'Time_h_'+d.label,        v:d.t.map(x=>fmtNum(x,5))});
+      cols.push({h:'H2_molpct_'+d.label,     v:d.h2pct.map(x=>fmtNum(x,5))});
+      cols.push({h:'H2_umol_h_'+d.label,     v:d.h2F.map(x=>fmtNum(x,5))});
+      cols.push({h:'H2_mmol_h_g_'+d.label,   v:d.h2Fm.map(x=>fmtNum(x,5))});
+      cols.push({h:'H2_cumulative_'+d.label, v:d.h2FmInt.map(x=>fmtNum(x,5))});
     });
+    const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
+    let t = csvLine(cols.map(c=>c.h));
+    for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
+    entries.push({name:'gc_timeseries.csv', text:t});
+    // h2_rates.csv — bar-plot-like summary (one row per sample)
     let t2 = csvLine(['Sample','Mean integral rate (mmol/h/g)','Interval duration (h)']);
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
-    downloadBlob('H2_rates.csv', t2);
-    makeDownloadLink(wrap, 'H2_rates.csv', t2, 'H2_rates.csv');
-  };
+    entries.push({name:'h2_rates.csv', text:t2});
+    downloadZip('gc_export.zip', entries);
+  }
+  registerCsvExport('gc', exportGcZip);
 })();
 
