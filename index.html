@@ -641,6 +641,22 @@
       </div>
     </div>
   </div>
+  <!-- Apply the tab from the URL hash synchronously (before paint) so a reload
+       lands on the current tab instead of flashing Home first. -->
+  <script>
+    (function(){
+      try {
+        var t = location.hash.slice(1);
+        var sec = t && document.getElementById('tab-'+t);
+        var btn = t && document.querySelector('#nav button[data-tab="'+t+'"]');
+        if (sec && btn){
+          document.querySelectorAll('.tab.active').forEach(function(e){ e.classList.remove('active'); });
+          document.querySelectorAll('#nav button.active').forEach(function(e){ e.classList.remove('active'); e.setAttribute('aria-selected','false'); });
+          sec.classList.add('active'); btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+        }
+      } catch(e){}
+    })();
+  </script>
   <script type="module" src="utils.js"></script>
   <script type="module" src="plot.js"></script>
   <script type="module" src="tauc.js"></script>

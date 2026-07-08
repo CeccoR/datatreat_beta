@@ -273,9 +273,7 @@ function selectedRecs(){
 }
 function updateBulkState(){
   const n = selectedRecs().length;
-  const open = document.getElementById('sessOpenSelected');
-  open.disabled = n === 0;
-  open.textContent = n > 1 ? ('Open selected ('+n+')') : 'Open selected';
+  document.getElementById('sessOpenSelected').disabled = n === 0;
   ['sessDeleteSelected','sessCsvSelected','sessJsonSelected'].forEach(id=>{
     const b = document.getElementById(id); if (b) b.disabled = n === 0;
   });

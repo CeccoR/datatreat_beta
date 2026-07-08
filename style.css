@@ -596,7 +596,8 @@ svg.plot {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 0 18px 0 18px; /* height + left padding set by JS (sizeHomeTiles) */
+  padding: 0 18px 0 116px; /* left padding clears the default logo; JS (sizeHomeTiles) refines */
+  min-height: 100px;       /* floor so the row doesn't collapse before JS sizing */
 }
 .home-card:hover {
   border-color: var(--accent);
@@ -609,6 +610,11 @@ svg.plot {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
+  /* Sensible default so the logos aren't huge for a frame before sizeHomeTiles()
+     computes the exact size; JS then overrides these inline. */
+  left: 20px;
+  width: 84px;
+  height: 84px;
   background: var(--icon-tile);
   border: none;
   border-radius: 12px;
