@@ -10,9 +10,10 @@
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
          moduleHasData, onModuleChangeOnce, runCsvExport, runWithModuleState, X_SVG } from './utils.js';
 
-// Row action icons: reuse the module CSV/JSON doc glyphs and the rounded X
-const ROW_DOC = txt => '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h7l5 5V21a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5z"/><path d="M13 2.5V8h5"/><text x="11.5" y="18.2" font-size="'+(txt==='JSON'?5:6.3)+'" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">'+txt+'</text></svg>';
-const ROW_CSV = ROW_DOC('CSV'), ROW_JSON = ROW_DOC('JSON'), ROW_X = X_SVG(16);
+// Row action icons: the exact CSV/JSON glyphs used in the module toolbars
+// (text over a right-pointing arrow) and the rounded X for delete.
+const ROW_DOC = (txt, fs) => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="'+fs+'" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">'+txt+'</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
+const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 7), ROW_X = X_SVG(16);
 
 /* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity) ---- */
 const DB_NAME = 'datatreat', STORE = 'sessions', DB_VER = 1;
