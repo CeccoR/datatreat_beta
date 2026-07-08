@@ -144,10 +144,10 @@ nav button.active {
 @media (max-width: 600px) {
   .sess-table .btn.small { padding: 5px 8px; }
 }
-/* Rows open on click; hover and press are visually distinct */
+/* Rows open on click; hover lights up, the press (only while held) is distinct */
 .sess-row { cursor: pointer; transition: background 0.12s; }
 .sess-row:hover { background: var(--panel2); }
-.sess-row:active { background: var(--line); }
+.sess-row:active { background: color-mix(in srgb, var(--accent) 22%, var(--panel2)); transition: none; }
 /* Inline-editable project name: looks like text until hovered/focused */
 .sess-row .proj-rename {
   width: 100%;

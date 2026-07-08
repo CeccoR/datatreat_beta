@@ -13,7 +13,7 @@ import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
 const ROW_DOC = (txt, fs) => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="'+fs+'" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">'+txt+'</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
-const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 7), ROW_X = X_SVG(16);
+const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 8.5), ROW_X = X_SVG(16);
 
 /* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity) ---- */
 const DB_NAME = 'datatreat', STORE = 'sessions', DB_VER = 1;
