@@ -137,10 +137,13 @@
       <div class="card">
         <div class="flex-between" style="align-items:center;flex-wrap:wrap;gap:10px">
           <h2 style="margin:0">Saved projects</h2>
-          <div style="display:flex;gap:8px">
-            <input type="file" id="sessImportFile" accept="application/json,.json" style="display:none">
-            <button class="btn secondary small" id="sessImportBtn">Import .json</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="file" id="sessImportFile" accept="application/json,.json" multiple style="display:none">
             <button class="btn small" id="sessOpenSelected" disabled>Open selected</button>
+            <button class="btn secondary small" id="sessDeleteSelected" disabled>Delete selected</button>
+            <button class="btn secondary small" id="sessCsvSelected" disabled>Export .csv selected</button>
+            <button class="btn secondary small" id="sessJsonSelected" disabled>Export .json selected</button>
+            <button class="btn secondary small" id="sessImportBtn">Import .json</button>
           </div>
         </div>
         <p class="hint" style="margin-top:6px">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</p>

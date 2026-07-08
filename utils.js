@@ -967,6 +967,18 @@ function onModuleChangeOnce(mod, cb){
   const st = _histories[mod];
   if (st) st.onceCommit(cb);
 }
+// Temporarily load `state` into a module, run fn (e.g. build its CSV export from
+// the loaded globals), then restore the previous state — all with history frozen
+// so it doesn't commit, reset undo, or fire change listeners. Lets us export a
+// saved project's CSVs without disturbing what's currently open.
+function runWithModuleState(mod, state, fn){
+  const st = _histories[mod];
+  if (!st) return;
+  const backup = st._snap();
+  st._busy = true;
+  try { st._restore(state); fn(); }
+  finally { try { st._restore(backup); } finally { st._busy = false; } }
+}
 
 // Size each home card so its square icon tile spans 90% of the (common) card
 // height, centered, with equal top/bottom/left insets. The tile is absolutely
@@ -1081,5 +1093,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, registerCsvExport, runCsvExport, applyTheme, currentTheme
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, runWithModuleState, registerTabRedraw, registerCsvExport, runCsvExport, applyTheme, currentTheme
 };

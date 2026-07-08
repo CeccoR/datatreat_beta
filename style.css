@@ -110,7 +110,7 @@ nav button {
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 /* Press feedback for non-active tabs: a filled-accent flash (distinct from the
@@ -136,7 +136,6 @@ nav button.active {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
-  font-weight: 600;
 }
 /* Saved-sessions table: keep columns usable on narrow screens by letting the
    table scroll horizontally instead of collapsing. */
@@ -145,6 +144,34 @@ nav button.active {
 @media (max-width: 600px) {
   .sess-table .btn.small { padding: 5px 8px; }
 }
+/* Rows open on click; hover and press are visually distinct */
+.sess-row { cursor: pointer; transition: background 0.12s; }
+.sess-row:hover { background: var(--panel2); }
+.sess-row:active { background: var(--line); }
+/* Inline-editable project name: looks like text until hovered/focused */
+.sess-row .proj-rename {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 5px 7px;
+  font-size: 13px;
+  color: var(--text);
+}
+.sess-row .proj-rename:hover { border-color: var(--line); background: var(--panel); }
+.sess-row .proj-rename:focus { border-color: var(--accent); background: var(--panel); outline: none; }
+/* Per-row action icons: only on row hover; bare, grey; exports light up, X reddens */
+.row-acts { text-align: right; }
+.row-acts-inner { display: flex; gap: 4px; justify-content: flex-end; visibility: hidden; }
+.sess-row:hover .row-acts-inner { visibility: visible; }
+.row-ic {
+  background: none; border: none; padding: 2px;
+  color: var(--muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color 0.12s;
+}
+.row-ic svg { display: block; }
+.row-ic.pr-csv:hover, .row-ic.pr-json:hover { color: var(--text); }
+.row-ic.pr-del:hover { color: var(--bad); }
 /* "Saved ✓" confirmation state — green, non-interactive, same box as the button */
 button.btn.saved-ok,
 button.btn.saved-ok:disabled,
@@ -384,17 +411,23 @@ button.btn.secondary:active:not(:disabled) { background: var(--line); }
    fit-settings buttons: neutral outline at rest, accent outline on hover, and a
    distinct filled-accent flash on click. */
 button.btn.proj-saveas, button.btn.proj-csv, button.btn.proj-json,
-button.btn#xrdFitSettings, button.btn#xrdStdSettings {
+button.btn#xrdFitSettings, button.btn#xrdStdSettings,
+button.btn#sessDeleteSelected, button.btn#sessCsvSelected, button.btn#sessJsonSelected, button.btn#sessImportBtn {
   background: var(--panel2);
   color: var(--muted);
   border: 1px solid var(--line);
 }
+/* Save as / Export .csv / Export .json (and the bulk buttons): white (theme text) at rest */
+button.btn.proj-saveas, button.btn.proj-csv, button.btn.proj-json,
+button.btn#sessDeleteSelected, button.btn#sessCsvSelected, button.btn#sessJsonSelected, button.btn#sessImportBtn { color: var(--text); }
 button.btn.proj-saveas:hover:not(:disabled), button.btn.proj-csv:hover:not(:disabled), button.btn.proj-json:hover:not(:disabled),
-button.btn#xrdFitSettings:hover:not(:disabled), button.btn#xrdStdSettings:hover:not(:disabled) {
+button.btn#xrdFitSettings:hover:not(:disabled), button.btn#xrdStdSettings:hover:not(:disabled),
+button.btn#sessDeleteSelected:hover:not(:disabled), button.btn#sessCsvSelected:hover:not(:disabled), button.btn#sessJsonSelected:hover:not(:disabled), button.btn#sessImportBtn:hover:not(:disabled) {
   color: var(--accent); border-color: var(--accent); background: var(--panel2);
 }
 button.btn.proj-saveas:active:not(:disabled), button.btn.proj-csv:active:not(:disabled), button.btn.proj-json:active:not(:disabled),
-button.btn#xrdFitSettings:active:not(:disabled), button.btn#xrdStdSettings:active:not(:disabled) {
+button.btn#xrdFitSettings:active:not(:disabled), button.btn#xrdStdSettings:active:not(:disabled),
+button.btn#sessDeleteSelected:active:not(:disabled), button.btn#sessCsvSelected:active:not(:disabled), button.btn#sessJsonSelected:active:not(:disabled), button.btn#sessImportBtn:active:not(:disabled) {
   background: var(--accent); color: var(--on-accent); border-color: var(--accent);
 }
 button.btn.small {

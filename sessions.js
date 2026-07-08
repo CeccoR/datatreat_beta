@@ -8,7 +8,11 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, runCsvExport } from './utils.js';
+         moduleHasData, onModuleChangeOnce, runCsvExport, runWithModuleState, X_SVG } from './utils.js';
+
+// Row action icons: reuse the module CSV/JSON doc glyphs and the rounded X
+const ROW_DOC = txt => '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h7l5 5V21a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5z"/><path d="M13 2.5V8h5"/><text x="11.5" y="18.2" font-size="'+(txt==='JSON'?5:6.3)+'" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">'+txt+'</text></svg>';
+const ROW_CSV = ROW_DOC('CSV'), ROW_JSON = ROW_DOC('JSON'), ROW_X = X_SVG(16);
 
 /* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity) ---- */
 const DB_NAME = 'datatreat', STORE = 'sessions', DB_VER = 1;
@@ -261,43 +265,71 @@ function passesFilter(rec){
   if (name && !rec.title.toLowerCase().includes(name)) return false;
   return true;
 }
-function updateOpenSelectedState(){
-  const n = document.querySelectorAll('#sessListWrap .sess-check:checked').length;
-  const btn = document.getElementById('sessOpenSelected');
-  btn.disabled = n === 0;
-  btn.textContent = n > 1 ? ('Open selected ('+n+')') : 'Open selected';
+function selectedRecs(){
+  return [...document.querySelectorAll('#sessListWrap tr.sess-row')]
+    .filter(tr=> tr.querySelector('.sess-check') && tr.querySelector('.sess-check').checked)
+    .map(tr=> recById(tr.dataset.id)).filter(Boolean);
+}
+function updateBulkState(){
+  const n = selectedRecs().length;
+  const open = document.getElementById('sessOpenSelected');
+  open.disabled = n === 0;
+  open.textContent = n > 1 ? ('Open selected ('+n+')') : 'Open selected';
+  ['sessDeleteSelected','sessCsvSelected','sessJsonSelected'].forEach(id=>{
+    const b = document.getElementById(id); if (b) b.disabled = n === 0;
+  });
 }
 async function renderList(){
   _cache = (await allProjects()).sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
   const wrap = document.getElementById('sessListWrap');
   if (!wrap) return;
   const rows = sortRows(_cache.filter(passesFilter));
-  if (!_cache.length){ wrap.innerHTML = '<p class="hint">No saved projects yet. Load data in a module and press “Save project”.</p>'; updateOpenSelectedState(); return; }
-  if (!rows.length){ wrap.innerHTML = '<p class="hint">No projects match the current filters.</p>'; updateOpenSelectedState(); return; }
-  let html = '<div class="table-wrap-box sess-table-box"><table class="sess-table"><colgroup><col style="width:30px"><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>'
+  if (!_cache.length){ wrap.innerHTML = '<p class="hint">No saved projects yet. Load data in a module and press “Save project”.</p>'; updateBulkState(); return; }
+  if (!rows.length){ wrap.innerHTML = '<p class="hint">No projects match the current filters.</p>'; updateBulkState(); return; }
+  // checkbox fixed, actions sized to its icons, the rest split the remaining space equally
+  let html = '<div class="table-wrap-box sess-table-box"><table class="sess-table"><colgroup><col style="width:30px"><col><col><col><col style="width:104px"></colgroup>'
     + '<thead><tr><th></th>'
     + '<th class="sess-sort" data-key="title" style="cursor:pointer">NAME'+arrow('title')+'</th>'
     + '<th class="sess-sort" data-key="module" style="cursor:pointer">MODULE'+arrow('module')+'</th>'
     + '<th class="sess-sort" data-key="updatedAt" style="cursor:pointer">SAVED'+arrow('updatedAt')+'</th>'
     + '<th></th></tr></thead><tbody>';
   rows.forEach(r=>{
-    html += '<tr data-id="'+r.id+'">'
+    html += '<tr class="sess-row" data-id="'+r.id+'" title="Click to open">'
       + '<td><input type="checkbox" class="sess-check" style="width:auto"></td>'
-      + '<td class="fname" title="'+r.title.replace(/"/g,'&quot;')+'">'+r.title+'</td>'
+      + '<td><input type="text" class="proj-rename" value="'+r.title.replace(/"/g,'&quot;')+'"></td>'
       + '<td style="white-space:nowrap"><span class="pill">'+(MODULE_LABELS[r.module]||r.module)+'</span></td>'
       + '<td style="color:var(--muted)">'+fmtDate(r.updatedAt)+'</td>'
-      + '<td style="text-align:right;white-space:nowrap">'
-        + '<button class="btn small sess-open">Open</button> '
-        + '<button class="btn secondary small sess-rename">Rename</button> '
-        + '<button class="btn secondary small sess-export">Export</button> '
-        + '<button class="btn secondary small sess-delete">Delete</button>'
-      + '</td></tr>';
+      + '<td class="row-acts"><div class="row-acts-inner">'
+        + '<button class="row-ic pr-csv" title="Export .csv">'+ROW_CSV+'</button>'
+        + '<button class="row-ic pr-json" title="Export .json">'+ROW_JSON+'</button>'
+        + '<button class="row-ic pr-del" title="Delete">'+ROW_X+'</button>'
+      + '</div></td></tr>';
   });
   html += '</tbody></table></div>';
   wrap.innerHTML = html;
-  updateOpenSelectedState();
+  updateBulkState();
 }
 function recById(id){ return _cache.find(s=> s.id === id); }
+function exportProjectCsv(rec){ runWithModuleState(rec.module, decode(rec.state), ()=> runCsvExport(rec.module)); }
+async function renameProject(rec, t){
+  t = (t||'').trim();
+  if (!t || t === rec.title) return;
+  await putProject({ ...rec, title:t, updatedAt: Date.now() });
+  if (current[rec.module] && current[rec.module].id === rec.id){
+    current[rec.module].title = t;
+    const inp = nameInput(rec.module); if (inp) inp.value = t;
+  }
+  renderList();
+}
+async function deleteProjectRec(rec){
+  await deleteProject(rec.id);
+  if (current[rec.module] && current[rec.module].id === rec.id){
+    delete current[rec.module];
+    const inp = nameInput(rec.module); if (inp) inp.value = '';
+    const dm = dirtyMark(rec.module); if (dm) dm.style.display = 'none';
+    restoreSaveBtns(rec.module);
+  }
+}
 
 /* ---- Wiring ---- */
 // Project action buttons (top icon row + bottom text row), via delegation
@@ -337,18 +369,25 @@ document.getElementById('projSaveAsInput').addEventListener('keydown', e=>{
 document.getElementById('sessFilterName').addEventListener('input', renderList);
 document.getElementById('sessFilterModule').addEventListener('change', renderList);
 document.getElementById('sessOpenSelected').addEventListener('click', ()=>{
-  const ids = [...document.querySelectorAll('#sessListWrap tr')]
-    .filter(tr=> tr.querySelector('.sess-check') && tr.querySelector('.sess-check').checked)
-    .map(tr=> tr.dataset.id);
-  const recs = ids.map(recById).filter(Boolean);
+  const recs = selectedRecs();
   if (recs.length) openProjects(recs);
 });
+document.getElementById('sessDeleteSelected').addEventListener('click', async ()=>{
+  const recs = selectedRecs();
+  if (!recs.length) return;
+  if (!confirm('Delete '+recs.length+' selected project'+(recs.length>1?'s':'')+'? This cannot be undone.')) return;
+  for (const r of recs) await deleteProjectRec(r);
+  renderList();
+});
+document.getElementById('sessCsvSelected').addEventListener('click', ()=>{ selectedRecs().forEach(exportProjectCsv); });
+document.getElementById('sessJsonSelected').addEventListener('click', ()=>{ selectedRecs().forEach(exportProjectRecord); });
 document.getElementById('sessImportBtn').addEventListener('click', ()=> document.getElementById('sessImportFile').click());
-document.getElementById('sessImportFile').addEventListener('change', e=>{
-  const f = e.target.files && e.target.files[0];
-  if (f) importProjectFile(f);
+document.getElementById('sessImportFile').addEventListener('change', async e=>{
+  const files = [...(e.target.files||[])];
+  for (const f of files) await importProjectFile(f);
   e.target.value = '';
 });
+// Sort headers, per-row icon actions, and click-row-to-open
 document.getElementById('sessListWrap').addEventListener('click', async e=>{
   const th = e.target.closest('.sess-sort');
   if (th){
@@ -357,37 +396,30 @@ document.getElementById('sessListWrap').addEventListener('click', async e=>{
     else { _sortKey = key; _sortDir = (key==='updatedAt') ? -1 : 1; }
     renderList(); return;
   }
-  const tr = e.target.closest('tr[data-id]');
+  const tr = e.target.closest('tr.sess-row');
   if (!tr) return;
   const rec = recById(tr.dataset.id);
   if (!rec) return;
-  if (e.target.classList.contains('sess-open'))   openProjects([rec]);
-  else if (e.target.classList.contains('sess-export')) exportProjectRecord(rec);
-  else if (e.target.classList.contains('sess-delete')){
-    if (confirm('Delete project “'+rec.title+'”? This cannot be undone.')){
-      await deleteProject(rec.id);
-      if (current[rec.module] && current[rec.module].id === rec.id){
-        delete current[rec.module];
-        const inp = nameInput(rec.module); if (inp) inp.value = '';
-        const dm = dirtyMark(rec.module); if (dm) dm.style.display = 'none';
-        restoreSaveBtns(rec.module);
-      }
-      renderList();
-    }
-  } else if (e.target.classList.contains('sess-rename')){
-    const t = (prompt('New name:', rec.title) || '').trim();
-    if (t && t !== rec.title){
-      await putProject({ ...rec, title:t, updatedAt: Date.now() });
-      if (current[rec.module] && current[rec.module].id === rec.id){
-        current[rec.module].title = t;
-        const inp = nameInput(rec.module); if (inp) inp.value = t;
-      }
-      renderList();
-    }
+  if (e.target.closest('.pr-csv'))  { exportProjectCsv(rec); return; }
+  if (e.target.closest('.pr-json')) { exportProjectRecord(rec); return; }
+  if (e.target.closest('.pr-del'))  {
+    if (confirm('Delete project “'+rec.title+'”? This cannot be undone.')){ await deleteProjectRec(rec); renderList(); }
+    return;
   }
+  // Clicks on the checkbox, the name field, or a button don't open the project
+  if (e.target.closest('input, button, .row-acts')) return;
+  openProjects([rec]);
+});
+// Inline rename (commit on Enter or blur); typing here must not open the row
+document.getElementById('sessListWrap').addEventListener('keydown', e=>{
+  if (e.target.classList.contains('proj-rename') && e.key==='Enter'){ e.preventDefault(); e.target.blur(); }
 });
 document.getElementById('sessListWrap').addEventListener('change', e=>{
-  if (e.target.classList.contains('sess-check')) updateOpenSelectedState();
+  if (e.target.classList.contains('sess-check')){ updateBulkState(); return; }
+  if (e.target.classList.contains('proj-rename')){
+    const tr = e.target.closest('tr.sess-row'); const rec = recById(tr && tr.dataset.id);
+    if (rec) renameProject(rec, e.target.value);
+  }
 });
 
 document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
