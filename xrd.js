@@ -7,7 +7,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 ========================================================= */
 (function(){
   let files = []; // {name, label, x[], y[], color}
-  let curIdx = 0;  // shared navigator index (analysis + peaks table)
+  let curIdx = 0;  // Analysis navigator index (non-standard samples only)
+  let fitIdx = 0;  // Fitting navigator index (all files, incl. the standard)
   let processed = []; // per file: {smoothed, baseline, subtracted, peaks}
   let manualPeaks = []; // per file: array of manually added 2θ positions
   let removedPeaks = []; // per file: array of removed peaks' detected 2θ positions
@@ -23,10 +24,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   const FWHM_HOVER = '#ff5a5a';  // brighter red, transient hover
   const FWHM_SEL   = '#ff0000';  // pure red, permanent selection
   // Per-panel selection/hover state — the Analysis table talks only to the Analysis
-  // plot, the Fitting table only to the Fitting plot.
+  // plot, the Standard table to the Standard plot, the Fitting table to the Fitting plot.
   const panels = {
-    a: { wrap:'xrdPeakTableWrap', box:'xrdPeakBox',    sel:null, hov:null, plot:()=>anaPlot },
-    f: { wrap:'xrdFitTableWrap',  box:'xrdFitPeakBox', sel:null, hov:null, plot:()=>fitPlot },
+    a: { wrap:'xrdPeakTableWrap',    box:'xrdPeakBox',    sel:null, hov:null, plot:()=>anaPlot },
+    s: { wrap:'xrdStdPeakTableWrap', box:'xrdStdPeakBox', sel:null, hov:null, plot:()=>stdPlot },
+    f: { wrap:'xrdFitTableWrap',     box:'xrdFitPeakBox', sel:null, hov:null, plot:()=>fitPlot },
   };
   let resPlot;
   let xrdUploadAlerts = '';
@@ -67,6 +69,14 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // Crystallite-size / Scherrer constants and state
   const SCHERRER_K = 0.9;
   let standardName = '';    // file.name selected as instrumental standard ('' = none)
+  // Independent analysis parameters for the instrumental standard (defaults = Analysis
+  // defaults). The standard is analysed in its own dedicated card, never sharing the
+  // per-sample shared/per params. K/λ are unused (no crystallite size for the standard).
+  let stdParams = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
+
+  function standardIdx(){ return files.findIndex(f=>f.name===standardName); }
+  // Indices of the non-standard samples, in file order (the Analysis navigation set).
+  function nonStdIdx(){ const out=[]; files.forEach((f,i)=>{ if (f.name!==standardName) out.push(i); }); return out; }
 
   window.dismissXrdUpload = function(){ xrdUploadAlerts=''; rebuildXrdAlerts(); };
 
@@ -149,19 +159,21 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     setTabLoaded('xrd', files.length);
     renderUnifiedFileList('xrdFileTableWrap', files, fileCallbacks());
     if (files.length){
-      document.getElementById('xrdWorkspace').style.display='block';
       document.getElementById('xrdFitCard').style.display='block';
       document.getElementById('xrdResults').style.display='block';
       document.getElementById('xrdExportCard').style.display='block';
       if (curIdx >= files.length) curIdx = files.length-1;
+      if (fitIdx >= files.length) fitIdx = files.length-1;
       populateStandardSelect();
       reprocessAll();
       writeStoreToInputs();
+      updateCardVis();
       updateXrdAnalysis();
+      updateXrdStandard();
       updateXrdFitting();
       updateXrdResults();
     } else {
-      ['xrdWorkspace','xrdFitCard','xrdResults','xrdExportCard'].forEach(id=>{ document.getElementById(id).style.display='none'; });
+      ['xrdWorkspace','xrdStdCard','xrdFitCard','xrdResults','xrdExportCard'].forEach(id=>{ document.getElementById(id).style.display='none'; });
     }
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
@@ -178,7 +190,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       savedFits: savedFits.map(sf=> sf ? {fits:sf.fits, baseline:sf.baseline, rwp:sf.rwp} : null),
       shared: {...shared},
       paramMode: {...paramMode},
-      standardName, curIdx,
+      stdParams: {...stdParams},
+      standardName, curIdx, fitIdx,
       norm: document.getElementById('xrdNorm').value,
     };
   }
@@ -190,8 +203,10 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     savedFits = s.savedFits.map(sf=> sf ? {fits:sf.fits, baseline:sf.baseline, rwp:sf.rwp} : null);
     Object.assign(shared, s.shared);
     Object.assign(paramMode, s.paramMode);
+    if (s.stdParams) Object.assign(stdParams, s.stdParams);
     standardName = s.standardName;
     curIdx = Math.min(s.curIdx, Math.max(0, files.length-1));
+    fitIdx = Math.min(s.fitIdx||0, Math.max(0, files.length-1));
     document.getElementById('xrdNorm').value = s.norm;
     syncModeButtons();
     afterFilesChange();
@@ -205,6 +220,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 
   // Get params for a specific file index (respects per-field shared/per mode)
   function getFileParams(i){
+    // The instrumental standard uses its own independent parameter set.
+    if (files[i] && files[i].name===standardName) return {...stdParams};
     const pp = perParams[i] || {};
     const g = k => paramMode[k]==='shared' ? shared[k] : (pp[k] ?? shared[k]);
     return { N:g('N'), blWin:g('blWin'), pkHeight:g('pkHeight'), pkProm:g('pkProm'), pkDist:g('pkDist'), K:g('K'), lambda:g('lambda') };
@@ -237,6 +254,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const p = getFileParams(curIdx);
     for (const key in FIELD_INPUT) document.getElementById(FIELD_INPUT[key]).value = p[key];
   }
+
+  // Standard's own parameter inputs (no all/one toggle, no K/λ, no normalization choice)
+  const STD_INPUT = { N:'xrdStdSmooth', blWin:'xrdStdBlWin', pkHeight:'xrdStdPkHeight', pkProm:'xrdStdPkProm', pkDist:'xrdStdPkDist' };
+  function writeStdInputs(){ for (const k in STD_INPUT){ const el=document.getElementById(STD_INPUT[k]); if (el) el.value = stdParams[k]; } }
+  function readStdInputs(){ for (const k in STD_INPUT){ stdParams[k] = Math.max(FIELD_MIN[k], numField(STD_INPUT[k], FIELD_DEF[k])); } }
 
   // Restore persisted XRD analysis defaults (norm, smoothing, baseline, K, λ) at startup
   loadXrdParams();
@@ -451,31 +473,40 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   }
 
   let anaPlot = null;
+  let stdPlot = null;   // instrumental-standard card plot
   let fitPlot = null;   // fitting-tab main plot
   let residPlot = null; // short plot of fit − signal residual (in the fitting card)
 
   // Reconstruct the full doublet model and the Kα1-only component over an axis,
   // from a plain list of fit objects (fp).
 
-  // ---- ANALYSIS plot: raw, smoothed, SNIP baseline, peaks (no fit) ----
-  function updateXrdAnalysis(preserveView){
-    if (!files.length || !processed.length) return;
-    if (curIdx >= files.length) curIdx = files.length-1;
-    document.getElementById('xrdCurrentLabel').textContent = files[curIdx].label;
-    document.getElementById('xrdIdx').textContent = (curIdx+1)+'/'+files.length;
+  // Show/hide the Analysis + Standard cards. Analysis is hidden when every loaded file
+  // is the standard (nothing left to analyse); the Standard card is shown whenever there
+  // are files (so the standard selector is always available).
+  function updateCardVis(){
+    const hasFiles = files.length>0;
+    document.getElementById('xrdStdCard').style.display  = hasFiles ? 'block' : 'none';
+    document.getElementById('xrdWorkspace').style.display = (hasFiles && nonStdIdx().length>0) ? 'block' : 'none';
+  }
 
-    const prev = (preserveView && anaPlot) ? {xmin:anaPlot.xmin, xmax:anaPlot.xmax, ymin:anaPlot.ymin, ymax:anaPlot.ymax} : null;
-    const f  = files[curIdx];
-    const pr = processed[curIdx];
+  // ---- Generic analysis drawer: raw, smoothed, SNIP baseline, peaks (no fit).
+  // Shared by the Analysis card ('a', xrdSvg) and the Instrumental-standard card
+  // ('s', xrdStdSvg). Each sample is normalised to its own smoothed max (= 1). ----
+  function drawAnalysisInto(idx, svgId, key, preserveView){
+    const f  = files[idx];
+    const pr = processed[idx];
+    if (!f || !pr) return;
     const mx = maxArr(pr.smoothed) || 1;
+    const prevPlot = panels[key].plot();
+    const prev = (preserveView && prevPlot) ? {xmin:prevPlot.xmin, xmax:prevPlot.xmax, ymin:prevPlot.ymin, ymax:prevPlot.ymax} : null;
 
     const ndense = Math.min(20000, Math.max(4000, f.x.length*10));
     const dense  = linspace(f.x[0], f.x[f.x.length-1], ndense);
     const baseD  = interpLinear(f.x, pr.baseline, dense);
 
-    const svgEl = document.getElementById('xrdSvg');
-    const plot  = new Plot(svgEl, {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
-    plot.attachTools(svgEl.closest('.plot-wrap'));
+    const svgNode = document.getElementById(svgId);
+    const plot  = new Plot(svgNode, {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    plot.attachTools(svgNode.closest('.plot-wrap'));
     plot.setRange(minArr(f.x), maxArr(f.x), 0, 1.1);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
     plot.drawAxes();
@@ -497,28 +528,56 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         fwhmMarks.push({pos:pk.pos, x0:gm.xl, x1:gm.xr, y:yDisp});
       }
     }
-    anaPlot = plot;
+    if (key==='s') stdPlot = plot; else anaPlot = plot;
     plot._peakMarks = peakMarks;
     plot._fwhmMarks = fwhmMarks;
-    plot._onView = ()=>{ refreshMarks(plot,'a'); applySelectionHighlight(); };
-    refreshMarks(plot,'a');
+    plot._onView = ()=>{ refreshMarks(plot,key); applySelectionHighlight(); };
+    refreshMarks(plot,key);
     applySelectionHighlight();
+  }
+
+  // ---- ANALYSIS card: current non-standard sample ----
+  function updateXrdAnalysis(preserveView){
+    if (!files.length || !processed.length) return;
+    const list = nonStdIdx();
+    if (!list.length){
+      document.getElementById('xrdCurrentLabel').textContent = '—';
+      document.getElementById('xrdIdx').textContent = '0/0';
+      return;
+    }
+    if (!list.includes(curIdx)) curIdx = list[0];
+    document.getElementById('xrdCurrentLabel').textContent = files[curIdx].label;
+    document.getElementById('xrdIdx').textContent = (list.indexOf(curIdx)+1)+'/'+list.length;
+    drawAnalysisInto(curIdx, 'xrdSvg', 'a', preserveView);
+  }
+
+  // ---- INSTRUMENTAL STANDARD card: the isolated standard sample ----
+  function updateXrdStandard(preserveView){
+    const si = standardIdx();
+    const body = document.getElementById('xrdStdBody');
+    if (!body) return;
+    if (si<0 || !processed[si]){ body.style.display='none'; return; }
+    body.style.display='';
+    document.getElementById('xrdStdLabel').textContent = files[si].label;
+    writeStdInputs();
+    drawAnalysisInto(si, 'xrdStdSvg', 's', preserveView);
+    renderStdTable();
   }
 
   // ---- FITTING plot: raw as open circles + peaks; with a saved fit → baseline,
   // Kα components and residual. Independent of the Analysis live view. ----
   function updateXrdFitting(preserveView){
     if (!files.length || !processed.length) return;
-    if (curIdx >= files.length) curIdx = files.length-1;
-    document.getElementById('xrdFitLabel').textContent = files[curIdx].label;
-    document.getElementById('xrdFitIdx').textContent = (curIdx+1)+'/'+files.length;
+    if (fitIdx >= files.length) fitIdx = files.length-1;
+    document.getElementById('xrdFitLabel').textContent = files[fitIdx].label;
+    document.getElementById('xrdFitIdx').textContent = (fitIdx+1)+'/'+files.length;
     updateStdButtons();
 
     const prev = (preserveView && fitPlot) ? {xmin:fitPlot.xmin, xmax:fitPlot.xmax, ymin:fitPlot.ymin, ymax:fitPlot.ymax} : null;
-    const f  = files[curIdx];
-    const pr = processed[curIdx];
+    const f  = files[fitIdx];
+    const pr = processed[fitIdx];
     const mx = maxArr(pr.smoothed) || 1;
-    const sf = savedFits[curIdx];
+    const sf = savedFits[fitIdx];
     const doFit = !!(sf && sf.fits && sf.fits.length);
 
     const svgEl = document.getElementById('xrdFitSvg');
@@ -588,7 +647,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 
   // Enable the standard-fit buttons only when the current sample is the chosen standard
   function updateStdButtons(){
-    const isStd = files.length && files[curIdx] && files[curIdx].name===standardName;
+    const isStd = files.length && files[fitIdx] && files[fitIdx].name===standardName;
     ['xrdFitStdBtn','xrdStdSettings'].forEach(id=>{ const b=document.getElementById(id); if(b){ b.disabled=!isStd; b.style.opacity=isStd?'':'0.5'; b.style.cursor=isStd?'':'not-allowed'; } });
   }
 
@@ -617,7 +676,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     });
   }
   // Refresh both plots' highlights (used after a full redraw)
-  function applySelectionHighlight(){ highlightPanel('a'); highlightPanel('f'); }
+  function applySelectionHighlight(){ highlightPanel('a'); highlightPanel('s'); highlightPanel('f'); }
 
   // Twin invisible thick "hit" line as a hover listener (à la Tauc draggable bars),
   // so peaks and FWHM markers have a fat, responsive target. Scheduled clear on leave
@@ -628,7 +687,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     el.addEventListener('pointerenter', ()=>{
       const plot = panels[key].plot();
       if (!plot || plot._mode) return;            // pan/zoom armed
-      if (key==='a' && addMode) return;           // placing a manual peak
+      if (addModeKey===key) return;               // placing a manual peak on this card
       if (markHoverRAF){ cancelAnimationFrame(markHoverRAF); markHoverRAF=null; }
       setHoverPanel(key, pos);
     });
@@ -738,20 +797,48 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     renderPeakTable();
   }
 
-  function renderPeakTable(){ renderAnalysisTable(); renderFitTable(); renderXrdSizeTable(); }
+  function renderPeakTable(){ renderAnalysisTable(); renderStdTable(); renderFitTable(); renderXrdSizeTable(); }
 
-  // Classic (peak-search) table: 2θ, rel intensity, prominence, classic FWHM, size.
-  // With a standard selected, size is shown both without and with correction.
+  // Re-derive everything downstream of a peak edit (add/remove/reset) on file `idx`.
+  // Covers the standard too: editing the standard's peaks changes β_instr and hence the
+  // samples' corrected sizes, so all cards are refreshed.
+  function refreshAfterPeakEdit(idx){
+    reprocessOne(idx);
+    updateXrdAnalysis(true);
+    updateXrdStandard(true);
+    updateXrdFitting(true);
+    updateXrdResults();
+    hist.commit();
+  }
+
+  // Analysis table for the current non-standard sample
   function renderAnalysisTable(){
-    if (!files.length || !processed.length) return;
-    const isStd = files[curIdx].name === standardName;
-    const fp = getFileParams(curIdx);
-    const allPks = processed[curIdx] ? processed[curIdx].peaks : [];
     const wrap = document.getElementById('xrdPeakTableWrap');
-    const resetBtn = document.getElementById('xrdPkReset');
-    const hasManual = (manualPeaks[curIdx]||[]).length > 0;
-    const hasRemoved = (removedPeaks[curIdx]||[]).length > 0;
-    resetBtn.style.display = (hasRemoved || hasManual) ? '' : 'none';
+    if (!wrap) return;
+    if (!files.length || !processed.length || !nonStdIdx().includes(curIdx)){ wrap.innerHTML=''; return; }
+    renderClassicTable(curIdx, 'a', 'xrdPeakTableWrap', 'xrdPkReset');
+  }
+  // Standard's peak table (isolated standard sample)
+  function renderStdTable(){
+    const si = standardIdx();
+    const wrap = document.getElementById('xrdStdPeakTableWrap');
+    if (!wrap) return;
+    if (si<0 || !processed[si]){ wrap.innerHTML=''; return; }
+    renderClassicTable(si, 's', 'xrdStdPeakTableWrap', 'xrdStdPkReset');
+  }
+
+  // Classic (peak-search) table: 2θ, rel intensity, classic FWHM, size. Generic over the
+  // file index, panel key ('a' or 's'), table wrap and reset-button ids.
+  // With a standard selected, non-standard samples show size both without and with correction.
+  function renderClassicTable(idx, key, wrapId, resetId){
+    const isStd = files[idx].name === standardName;
+    const fp = getFileParams(idx);
+    const allPks = processed[idx] ? processed[idx].peaks : [];
+    const wrap = document.getElementById(wrapId);
+    const resetBtn = document.getElementById(resetId);
+    const hasManual = (manualPeaks[idx]||[]).length > 0;
+    const hasRemoved = (removedPeaks[idx]||[]).length > 0;
+    if (resetBtn) resetBtn.style.display = (hasRemoved || hasManual) ? '' : 'none';
 
     const pks = allPks.filter(p=>!p.removed);
     if (!pks.length){ wrap.innerHTML='<p style="color:var(--muted);margin:6px 0">No peaks found with current parameters.</p>'; return; }
@@ -762,12 +849,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const fwhm = pk.fwhmClassic;
       const sizeRawCell = isStd ? '—' : fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda));
       const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
-      const sel = panels.a.sel!=null && Math.abs(pk.pos-panels.a.sel)<1e-9 ? ' selected' : '';
+      const sel = panels[key].sel!=null && Math.abs(pk.pos-panels[key].sel)<1e-9 ? ' selected' : '';
       html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td><td>${sizeRawCell}</td>${corrCell}<td style="text-align:right"><button class="peak-del" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
     });
     html+='</tbody></table>';
     // Mean ± std crystallite size for this sample, shown right under the peak table
-    const st = sampleSizeStats(curIdx);
+    const st = sampleSizeStats(idx);
     if (st.isStd){
       html += '<div class="size-summary">Standard sample — crystallite size not computed.</div>';
     } else {
@@ -779,11 +866,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 
     wrap.querySelectorAll('.peak-row').forEach(row=>{
       const pos = parseFloat(row.dataset.pos);
-      row.addEventListener('mouseenter', ()=> setHoverPanel('a', pos));
-      row.addEventListener('mouseleave', ()=> setHoverPanel('a', null));
+      row.addEventListener('mouseenter', ()=> setHoverPanel(key, pos));
+      row.addEventListener('mouseleave', ()=> setHoverPanel(key, null));
       row.addEventListener('click', e=>{
         if (e.target.closest('.peak-del')) return;
-        selectPanel('a', pos);
+        selectPanel(key, pos);
       });
     });
     wrap.querySelectorAll('.peak-del').forEach(btn=>{
@@ -793,13 +880,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         if (btn.dataset.manual === '1'){
           // Manual peaks are deleted permanently: drop them from manualPeaks so the
           // removal is independent of the peak-search params (which reset removedPeaks).
-          if (manualPeaks[curIdx]) manualPeaks[curIdx] = manualPeaks[curIdx].filter(v=>Math.abs(v-det) >= 1e-6);
+          if (manualPeaks[idx]) manualPeaks[idx] = manualPeaks[idx].filter(v=>Math.abs(v-det) >= 1e-6);
         } else {
-          if (!removedPeaks[curIdx]) removedPeaks[curIdx] = [];
-          if (!removedPeaks[curIdx].some(v=>Math.abs(v-det)<1e-6)) removedPeaks[curIdx].push(det);
+          if (!removedPeaks[idx]) removedPeaks[idx] = [];
+          if (!removedPeaks[idx].some(v=>Math.abs(v-det)<1e-6)) removedPeaks[idx].push(det);
         }
-        reprocessOne(curIdx); updateXrdAnalysis(true); updateXrdFitting(true); renderPeakTable();
-        hist.commit();
+        refreshAfterPeakEdit(idx);
       });
     });
   }
@@ -809,11 +895,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!files.length) return;
     const wrap = document.getElementById('xrdFitTableWrap');
     if (!wrap) return;
-    const isStd = files[curIdx].name === standardName;
-    const fp = getFileParams(curIdx);
-    const sf = savedFits[curIdx];
+    const isStd = files[fitIdx].name === standardName;
+    const fp = getFileParams(fitIdx);
+    const sf = savedFits[fitIdx];
     if (!sf || !sf.fits || !sf.fits.length){ wrap.innerHTML='<p style="color:var(--muted);margin:6px 0">No fit yet — press Fit sample.</p>'; return; }
-    const f = files[curIdx];
+    const f = files[fitIdx];
     // Reconstruct the fitted model on the native axis to get heights/prominences
     const rec = reconstructFit(f.x, sf.fits);
     const fits = sf.fits.map(fpk=>{
@@ -1122,18 +1208,48 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (_fitCanceller) _fitCanceller(); // abort the in-flight worker job now
     hideProg();
   };
-  const standardIdx = ()=> files.findIndex(f=>f.name===standardName);
-  document.getElementById('xrdFitSampleBtn').onclick = ()=> runFit([curIdx], fitHP, 'xrdFitSampleBtn', 'Fitting…');
+  document.getElementById('xrdFitSampleBtn').onclick = ()=> runFit([fitIdx], fitHP, 'xrdFitSampleBtn', 'Fitting…');
   document.getElementById('xrdFitAllBtn').onclick    = ()=> runFit(files.map((_,i)=>i), fitHP, 'xrdFitAllBtn', 'Fitting…');
   document.getElementById('xrdFitStdBtn').onclick    = ()=>{
     const si=standardIdx();
     if (si<0){ alert('Select an instrumental standard first (Instrumental standard dropdown).'); return; }
     runFit([si], stdHP, 'xrdFitStdBtn', 'Calibrating…');
   };
-  // Instrumental standard changes size columns + enables the standard-fit buttons
+  // Choosing/clearing the standard isolates that sample in the Standard card, removes it
+  // from Analysis navigation, and refreshes every card (its peaks drive the correction).
   document.getElementById('xrdStandard').addEventListener('change', e=>{
     standardName = e.target.value;
-    if (files.length){ updateStdButtons(); renderPeakTable(); hist.commit(); }
+    if (!files.length){ hist.commit(); return; }
+    panels.a.sel=panels.a.hov=panels.s.sel=panels.s.hov=null;
+    reprocessAll();               // the (de)selected file switches param set (stdParams ↔ per/shared)
+    updateCardVis();
+    if (!nonStdIdx().includes(curIdx)){ const l=nonStdIdx(); curIdx = l.length?l[0]:0; }
+    writeStoreToInputs();
+    updateXrdAnalysis();
+    updateXrdStandard();
+    updateXrdFitting(true);
+    updateXrdResults();
+    hist.commit();
+  });
+  // Standard's own parameter inputs (no all/one, no K/λ) — reprocess just the standard
+  Object.entries(STD_INPUT).forEach(([key,id])=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    const isPeakSearch = (key==='pkHeight' || key==='pkProm' || key==='pkDist');
+    const apply = ()=>{
+      const si = standardIdx();
+      if (si<0) return;
+      readStdInputs();
+      writeStdInputs();
+      if (isPeakSearch) removedPeaks[si] = [];
+      reprocessOne(si);
+      updateXrdStandard(true);
+      updateXrdFitting(true);   // standard's inherited peaks (fitting) refresh
+      updateXrdResults();       // corrected sample sizes depend on the standard
+      hist.commit();
+    };
+    el.addEventListener('change', apply);
+    el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
   });
   ['xrdSmooth','xrdBlWin','xrdPkHeight','xrdPkProm','xrdPkDist','xrdK','xrdLambda'].forEach(id=>{
     const el = document.getElementById(id);
@@ -1166,7 +1282,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // layout, compensate the scroll so the viewed content stays put.
   function withScrollAnchor(fn){
     const vh = window.innerHeight, cy = vh/2;
-    const cards = ['xrdWorkspace','xrdFitCard','xrdResults'].map(id=>document.getElementById(id)).filter(el=>el && el.offsetParent!==null);
+    const cards = ['xrdWorkspace','xrdStdCard','xrdFitCard','xrdResults'].map(id=>document.getElementById(id)).filter(el=>el && el.offsetParent!==null);
     let anchor = cards.find(c=>{ const r=c.getBoundingClientRect(); return r.top<=cy && r.bottom>=cy; })
               || cards.find(c=>{ const r=c.getBoundingClientRect(); return r.bottom>0 && r.top<vh; });
     const before = anchor ? anchor.getBoundingClientRect().top : null;
@@ -1174,130 +1290,130 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (anchor && before!=null){ const d = anchor.getBoundingClientRect().top - before; if (Math.abs(d)>0.5) window.scrollBy(0, d); }
   }
 
+  // Analysis navigation cycles the non-standard samples only.
   function navigate(delta){
-    if (!files.length) return;
-    setAddMode(false);
-    panels.a.sel=panels.a.hov=panels.f.sel=panels.f.hov=null;
-    curIdx = (curIdx + delta + files.length) % files.length;
+    const list = nonStdIdx();
+    if (!list.length) return;
+    addPeakA.setMode(false);
+    panels.a.sel=panels.a.hov=null;
+    let p = list.indexOf(curIdx); if (p<0) p=0;
+    p = (p + delta + list.length) % list.length;
+    curIdx = list[p];
     writeStoreToInputs();
-    withScrollAnchor(()=>{ updateXrdAnalysis(); updateXrdFitting(); renderPeakTable(); });
+    withScrollAnchor(()=>{ updateXrdAnalysis(); renderAnalysisTable(); });
+  }
+  // Fitting navigation cycles every file, including the standard.
+  function navigateFit(delta){
+    if (!files.length) return;
+    panels.f.sel=panels.f.hov=null;
+    fitIdx = (fitIdx + delta + files.length) % files.length;
+    withScrollAnchor(()=>{ updateXrdFitting(); renderFitTable(); });
   }
 
   document.getElementById('xrdPrev').onclick = ()=> navigate(-1);
   document.getElementById('xrdNext').onclick = ()=> navigate(1);
-  document.getElementById('xrdFitPrev').onclick = ()=> navigate(-1);
-  document.getElementById('xrdFitNext').onclick = ()=> navigate(1);
+  document.getElementById('xrdFitPrev').onclick = ()=> navigateFit(-1);
+  document.getElementById('xrdFitNext').onclick = ()=> navigateFit(1);
 
   // Reset peaks: drop manual + removed peaks and re-run the search for the current file
-  document.getElementById('xrdPkReset').onclick = ()=>{
-    if (!files.length) return;
-    manualPeaks[curIdx] = [];
-    removedPeaks[curIdx] = [];
-    reprocessOne(curIdx);
-    updateXrdAnalysis(true);
-    updateXrdFitting(true);
-    renderPeakTable();
-    hist.commit();
-  };
-
-  /* ---------- Add-peak mode ---------- */
-  let addMode = false;
-  let addIdx = null; // current data-grid index of the guide
-  const addBtn  = document.getElementById('xrdAddPeak');
-  const xrdSvgEl = document.getElementById('xrdSvg');
-
-  function clearAddGuide(){ xrdSvgEl.querySelectorAll('.add-guide').forEach(e=>e.remove()); }
-
-  // Range of grid indices currently visible in the analysis plot
-  function visibleIdxRange(){
-    const x = files[curIdx].x;
-    const a = nearestIdx(x, anaPlot.xmin), b = nearestIdx(x, anaPlot.xmax);
-    return [Math.min(a,b), Math.max(a,b)];
+  function resetPeaks(idx){
+    if (idx<0 || !files[idx]) return;
+    manualPeaks[idx] = [];
+    removedPeaks[idx] = [];
+    refreshAfterPeakEdit(idx);
   }
+  document.getElementById('xrdPkReset').onclick = ()=>{ if (files.length) resetPeaks(curIdx); };
+  document.getElementById('xrdStdPkReset').onclick = ()=>{ resetPeaks(standardIdx()); };
 
-  // Draw the guide line/marker/label at the current addIdx
-  function drawAddGuide(){
-    clearAddGuide();
-    if (!addMode || !anaPlot || !processed[curIdx] || addIdx==null) return;
-    const m = anaPlot.margin; const {w,h} = anaPlot.size();
-    const pr = processed[curIdx];
-    const mxv = maxArr(pr.smoothed) || 1;
-    const xv = files[curIdx].x[addIdx];
-    const yval = pr.smoothed[addIdx] / mxv;     // value of the (blue) smoothed curve
-    const px = anaPlot.px(xv), py = anaPlot.py(yval);
-    anaPlot.svg.appendChild(svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'#ffd24a','stroke-width':1.5,'stroke-dasharray':'4,3','pointer-events':'none','class':'add-guide'}));
-    anaPlot.svg.appendChild(svgEl('circle',{cx:px,cy:py,r:3.5,fill:'#ffd24a','pointer-events':'none','class':'add-guide'}));
-    const flip = px > w - m.r - 110;
-    const t = svgEl('text',{x:px+(flip?-8:8),y:m.t+14,'font-size':11,fill:'#ffd24a','text-anchor':flip?'end':'start','pointer-events':'none','class':'add-guide'});
-    t.textContent = `2θ=${xv.toFixed(3)}, y=${yval.toFixed(3)}`;
-    anaPlot.svg.appendChild(t);
-  }
-
-  function setAddMode(on){
-    addMode = !!on;
-    addBtn.classList.toggle('active', addMode);
-    xrdSvgEl.style.cursor = addMode ? 'crosshair' : '';
-    if (addMode && anaPlot) anaPlot.setMode(null); // disable pan/zoom while placing
-    if (!addMode){ addIdx = null; clearAddGuide(); }
-  }
-
-  function confirmAdd(){
-    if (addIdx==null) return;
-    if (!manualPeaks[curIdx]) manualPeaks[curIdx] = [];
-    manualPeaks[curIdx].push(files[curIdx].x[addIdx]);
-    setAddMode(false);
-    reprocessOne(curIdx);
-    updateXrdAnalysis(true);
-    updateXrdFitting(true);
-    renderPeakTable();
-    hist.commit();
-  }
-
-  addBtn.onclick = ()=>{ if (files.length) setAddMode(!addMode); };
-
-  xrdSvgEl.addEventListener('pointermove', e=>{
-    if (!addMode || !anaPlot || !processed[curIdx]) return;
-    const rect = anaPlot.svg.getBoundingClientRect();
-    let xv = anaPlot.invX(e.clientX - rect.left);
-    xv = Math.max(anaPlot.xmin, Math.min(anaPlot.xmax, xv));
-    addIdx = nearestIdx(files[curIdx].x, xv);
-    drawAddGuide();
-  });
-
-  xrdSvgEl.addEventListener('pointerleave', ()=>{ if (addMode) clearAddGuide(); });
-
-  xrdSvgEl.addEventListener('pointerdown', e=>{
-    if (!addMode || !anaPlot || e.button!==0) return;
-    e.preventDefault(); e.stopPropagation();
-    const rect = anaPlot.svg.getBoundingClientRect();
-    let xv = anaPlot.invX(e.clientX - rect.left);
-    xv = Math.max(anaPlot.xmin, Math.min(anaPlot.xmax, xv));
-    addIdx = nearestIdx(files[curIdx].x, xv);
-    confirmAdd();
-  }, true); // capture: run before the Plot's own pointerdown handler
-
-  document.addEventListener('keydown', e=>{
-    if (!addMode) return;
-    if (e.key==='Escape'){ setAddMode(false); return; }
-    if (e.key==='ArrowLeft' || e.key==='ArrowRight'){
-      e.preventDefault();
-      const [lo,hi] = visibleIdxRange();
-      if (addIdx==null) addIdx = nearestIdx((anaPlot.xmin+anaPlot.xmax)/2);
-      addIdx = Math.max(lo, Math.min(hi, addIdx + (e.key==='ArrowRight'?1:-1)));
-      drawAddGuide();
-    } else if (e.key==='Enter'){
-      e.preventDefault();
-      confirmAdd();
+  /* ---------- Add-peak mode (one instance per interactive card) ---------- */
+  // Which card is currently placing a manual peak ('a' | 's' | null) — used to suppress
+  // hover highlighting on that card while placing.
+  let addModeKey = null;
+  // Factory: build an add-peak controller for a plot. getPlot/getIdx read the live plot
+  // and the file index the card is showing.
+  function makeAddPeak(key, svgId, btnId, getPlot, getIdx){
+    let addMode = false, addIdx = null;
+    const btn = document.getElementById(btnId);
+    const svgNode = document.getElementById(svgId);
+    const clearGuide = ()=> svgNode.querySelectorAll('.add-guide').forEach(e=>e.remove());
+    function drawGuide(){
+      clearGuide();
+      const plot = getPlot(), idx = getIdx();
+      if (!addMode || !plot || !processed[idx] || addIdx==null) return;
+      const m = plot.margin; const {w,h} = plot.size();
+      const pr = processed[idx];
+      const mxv = maxArr(pr.smoothed) || 1;
+      const xv = files[idx].x[addIdx];
+      const yval = pr.smoothed[addIdx] / mxv;
+      const px = plot.px(xv), py = plot.py(yval);
+      plot.svg.appendChild(svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'#ffd24a','stroke-width':1.5,'stroke-dasharray':'4,3','pointer-events':'none','class':'add-guide'}));
+      plot.svg.appendChild(svgEl('circle',{cx:px,cy:py,r:3.5,fill:'#ffd24a','pointer-events':'none','class':'add-guide'}));
+      const flip = px > w - m.r - 110;
+      const t = svgEl('text',{x:px+(flip?-8:8),y:m.t+14,'font-size':11,fill:'#ffd24a','text-anchor':flip?'end':'start','pointer-events':'none','class':'add-guide'});
+      t.textContent = `2θ=${xv.toFixed(3)}, y=${yval.toFixed(3)}`;
+      plot.svg.appendChild(t);
     }
-  });
+    function setMode(on){
+      addMode = !!on;
+      addModeKey = addMode ? key : (addModeKey===key ? null : addModeKey);
+      btn.classList.toggle('active', addMode);
+      svgNode.style.cursor = addMode ? 'crosshair' : '';
+      const plot = getPlot();
+      if (addMode && plot) plot.setMode(null);
+      if (!addMode){ addIdx = null; clearGuide(); }
+    }
+    function confirmAdd(){
+      if (addIdx==null) return;
+      const idx = getIdx();
+      if (!manualPeaks[idx]) manualPeaks[idx] = [];
+      manualPeaks[idx].push(files[idx].x[addIdx]);
+      setMode(false);
+      refreshAfterPeakEdit(idx);
+    }
+    const pointToIdx = (e)=>{
+      const plot = getPlot();
+      const rect = plot.svg.getBoundingClientRect();
+      let xv = plot.invX(e.clientX - rect.left);
+      xv = Math.max(plot.xmin, Math.min(plot.xmax, xv));
+      return nearestIdx(files[getIdx()].x, xv);
+    };
+    btn.onclick = ()=>{ if (files.length && getIdx()>=0) setMode(!addMode); };
+    svgNode.addEventListener('pointermove', e=>{
+      if (!addMode || !getPlot() || !processed[getIdx()]) return;
+      addIdx = pointToIdx(e); drawGuide();
+    });
+    svgNode.addEventListener('pointerleave', ()=>{ if (addMode) clearGuide(); });
+    svgNode.addEventListener('pointerdown', e=>{
+      if (!addMode || !getPlot() || e.button!==0) return;
+      e.preventDefault(); e.stopPropagation();
+      addIdx = pointToIdx(e); confirmAdd();
+    }, true);
+    document.addEventListener('keydown', e=>{
+      if (!addMode) return;
+      const plot = getPlot(), idx = getIdx();
+      if (e.key==='Escape'){ setMode(false); return; }
+      if (e.key==='ArrowLeft' || e.key==='ArrowRight'){
+        e.preventDefault();
+        const x = files[idx].x;
+        const a = nearestIdx(x, plot.xmin), b = nearestIdx(x, plot.xmax);
+        const lo = Math.min(a,b), hi = Math.max(a,b);
+        if (addIdx==null) addIdx = nearestIdx(x, (plot.xmin+plot.xmax)/2);
+        addIdx = Math.max(lo, Math.min(hi, addIdx + (e.key==='ArrowRight'?1:-1)));
+        drawGuide();
+      } else if (e.key==='Enter'){ e.preventDefault(); confirmAdd(); }
+    });
+    return { isAdding:()=>addMode, setMode };
+  }
+  const addPeakA = makeAddPeak('a', 'xrdSvg',    'xrdAddPeak',    ()=>anaPlot, ()=>curIdx);
+  const addPeakS = makeAddPeak('s', 'xrdStdSvg', 'xrdStdAddPeak', ()=>stdPlot, ()=>standardIdx());
+  const isAddingKey = (key)=> (key==='a' && addPeakA.isAdding()) || (key==='s' && addPeakS.isAdding());
 
   // Plot-side peak hover + click-to-select (mirror of the table interaction).
   // Bound once per SVG; acts only when no pan/zoom tool is armed and not adding a peak.
   // Peak/FWHM hover is handled by per-mark invisible hit lines (see buildInteractiveMarks);
   // here we only bind click-to-(de)select, which reads the current hover position.
   function attachPeakInteractions(svgEl, key){
-    const isAnalysis = key==='a';
-    const blocked = (plot)=> !plot || plot._mode || (isAnalysis && addMode);
+    const blocked = (plot)=> !plot || plot._mode || isAddingKey(key);
     svgEl.addEventListener('click', ()=>{
       const plot = svgEl._plot; if (blocked(plot)) return;
       if (panels[key].hov!=null) selectPanel(key, panels[key].hov); // clicked a peak/FWHM → (de)select it
@@ -1310,12 +1426,14 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (box) box.addEventListener('click', e=>{ if (!e.target.closest('.peak-row')) clearSelection(key); });
   }
   function clearSelection(key){ if (panels[key].sel!=null){ panels[key].sel=null; renderPeakTable(); applySelectionHighlight(); } }
-  attachPeakInteractions(xrdSvgEl, 'a');
+  attachPeakInteractions(document.getElementById('xrdSvg'), 'a');
+  attachPeakInteractions(document.getElementById('xrdStdSvg'), 's');
   attachPeakInteractions(document.getElementById('xrdFitSvg'), 'f');
   attachTableDeselect('a');
+  attachTableDeselect('s');
   attachTableDeselect('f');
 
-  window._xrdRedraw = ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdFitting(true); updateXrdResults(); renderPeakTable(); } };
+  window._xrdRedraw = ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdStandard(true); updateXrdFitting(true); updateXrdResults(); renderPeakTable(); } };
   registerTabRedraw('xrd', window._xrdRedraw);
 
   function exportXrdZip(){
@@ -1345,40 +1463,61 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     }
     const entries = [];              // {name, text} collected into a single zip
     entries.push({name:'diffractograms.csv', text:t});
-    // Crystallite size (classic) — per-sample summary (mean ± std, matching the table)
+    // Crystallite size (classic) — per-sample summary (mean ± std, matching the table).
+    // The standard is excluded entirely (no crystallite size is meaningful for it).
     {
       const anyStd = !!standardName;
       const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
       let ct = csvLine(head);
       files.forEach((f,k)=>{
+        if (f.name === standardName) return;
         const st = sampleSizeStats(k);
         const row = [
           f.label,
-          st.isStd ? 'standard' : (isFinite(st.rawMean) ? fmtNum(st.rawMean,2) : ''),
-          (!st.isStd && st.rawN>1 && isFinite(st.rawStd)) ? fmtNum(st.rawStd,2) : '',
+          isFinite(st.rawMean) ? fmtNum(st.rawMean,2) : '',
+          (st.rawN>1 && isFinite(st.rawStd)) ? fmtNum(st.rawStd,2) : '',
         ];
         if (anyStd) row.push(
-          st.isStd ? '' : (isFinite(st.corrMean) ? fmtNum(st.corrMean,2) : ''),
-          (!st.isStd && st.corrN>1 && isFinite(st.corrStd)) ? fmtNum(st.corrStd,2) : ''
+          isFinite(st.corrMean) ? fmtNum(st.corrMean,2) : '',
+          (st.corrN>1 && isFinite(st.corrStd)) ? fmtNum(st.corrStd,2) : ''
         );
         ct += csvLine(row);
       });
       entries.push({name:'crystallite_size.csv', text:ct});
     }
-    // Dedicated standard CSV: its peaks and measured FWHM (instrumental profile).
-    // Crystallite size is meaningless for the standard, so only the FWHM is listed.
+    // Dedicated single standard.csv: everything about the file labelled as standard —
+    // its analysis result (curve + peaks with FWHM) and its fit result — as independent
+    // side-by-side columns. No crystallite size (meaningless for the standard).
     if (standardName){
-      const si = files.findIndex(f=>f.name===standardName);
+      const si = standardIdx();
       const pr = si>=0 ? processed[si] : null;
       if (pr){
+        const f = files[si];
+        const scol = [];
+        scol.push({h:'2Theta',     v:f.x.map(x=>fmtNum(x,6))});
+        scol.push({h:'Raw',        v:f.y.map(v=>fmtNum(v,6))});
+        scol.push({h:'Smoothed',   v:pr.smoothed.map(v=>fmtNum(v,6))});
+        scol.push({h:'Baseline',   v:pr.baseline.map(v=>fmtNum(v,6))});
+        scol.push({h:'Subtracted', v:pr.subtracted.map(v=>fmtNum(v,6))});
         const pks = pr.peaks.filter(pk=>!pk.removed);
-        const maxH=Math.max(...pks.map(pk=>pk.height))||1;
-        let st=csvLine(['2Theta','RelIntensity','FWHM_deg']);
-        pks.forEach(pk=>{
-          st+=csvLine([fmtNum(pk.pos,6), fmtNum(pk.height/maxH,6),
-                       isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'']);
-        });
-        entries.push({name:'standard_'+files[si].label+'.csv', text:st});
+        const maxH = Math.max(...pks.map(pk=>pk.height))||1;
+        scol.push({h:'Peak_2Theta',       v:pks.map(pk=>fmtNum(pk.pos,6))});
+        scol.push({h:'Peak_RelIntensity', v:pks.map(pk=>fmtNum(pk.height/maxH,6))});
+        scol.push({h:'Peak_FWHM_deg',     v:pks.map(pk=>isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'')});
+        const sf = savedFits[si];
+        if (sf && sf.fits && sf.fits.length){
+          const rec = reconstructFit(f.x, sf.fits);
+          scol.push({h:'Fit_2Theta',    v:f.x.map(x=>fmtNum(x,6))});
+          scol.push({h:'Fit_Observed',  v:f.y.map(v=>fmtNum(v,6))});
+          scol.push({h:'Fit_total',     v:f.x.map((_,j)=>fmtNum((sf.baseline[j]||0)+rec.full[j],6))});
+          scol.push({h:'Fit_Background',v:f.x.map((_,j)=>fmtNum(sf.baseline[j]||0,6))});
+          scol.push({h:'Fit_Ka1',       v:f.x.map((_,j)=>fmtNum(rec.ka1[j],6))});
+          scol.push({h:'Fit_Ka2',       v:f.x.map((_,j)=>fmtNum(rec.full[j]-rec.ka1[j],6))});
+        }
+        const smaxLen = Math.max(0,...scol.map(c=>c.v.length));
+        let stx = csvLine(scol.map(c=>c.h));
+        for (let i=0;i<smaxLen;i++) stx += csvLine(scol.map(c=> i<c.v.length ? c.v[i] : ''));
+        entries.push({name:'standard.csv', text:stx});
       }
     }
     // peaks.csv — each sample's kept peaks as its own independent columns
@@ -1408,6 +1547,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     {
       const cols=[];
       files.forEach((f,k)=>{
+        if (f.name === standardName) return; // standard's fit lives in standard.csv
         const sf = savedFits[k];
         if (!sf || !sf.fits || !sf.fits.length) return;
         const rec = reconstructFit(f.x, sf.fits); // {full, ka1} in raw intensity units

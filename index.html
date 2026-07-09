@@ -303,12 +303,8 @@
             </div>
           </div>
           <div class="col mw280" style="align-self:flex-start;display:flex;flex-direction:column;gap:11px">
-            <div class="field-half">
-              <div><label>Normalization</label>
-                <select id="xrdNorm"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select></div>
-              <div><label>Instrumental standard</label>
-                <select id="xrdStandard"><option value="">None</option></select></div>
-            </div>
+            <div><label>Normalization</label>
+              <select id="xrdNorm"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select></div>
             <div><label>Smoothing window (pts)</label>
               <div class="field-row"><input type="number" id="xrdSmooth" value="10" min="1">
                 <div class="xrd-seg mode-seg" id="xrdModeN"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
@@ -343,6 +339,54 @@
             <button class="btn secondary peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
           </div>
           <div id="xrdPeakTableWrap"></div>
+        </div>
+      </div>
+
+      <div class="card" id="xrdStdCard" style="display:none">
+        <h3 style="margin:0 0 0">INSTRUMENTAL STANDARD</h3>
+        <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. No crystallite size is computed for the standard itself.</div>
+        <div style="max-width:340px;margin-bottom:6px"><label>Instrumental standard</label>
+          <select id="xrdStandard"><option value="">None</option></select></div>
+        <div id="xrdStdBody" style="display:none">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="plot-subtitle" id="xrdStdLabel">—</span>
+          </div>
+          <div class="row" style="align-items:stretch">
+            <div class="col" style="flex:2;min-width:0">
+              <div class="plot-wrap">
+                <svg class="plot" id="xrdStdSvg" style="height:460px"></svg>
+                <button class="btn secondary plot-dl-btn" data-dl-svg="xrdStdSvg" data-dl-name="XRPD_standard.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              </div>
+              <div class="legend">
+                <span><i style="background:#6a7585"></i>raw</span>
+                <span><i style="background:#3aa0ff"></i>smoothed</span>
+                <span><i style="background:#ff9933"></i>baseline</span>
+                <span><i style="background:#5fcf6a"></i>peaks</span>
+              </div>
+            </div>
+            <div class="col mw280" style="align-self:flex-start;display:flex;flex-direction:column;gap:11px">
+              <div><label>Smoothing window (pts)</label>
+                <input type="number" id="xrdStdSmooth" value="10" min="1"></div>
+              <div><label>Baseline SNIP window (pts)</label>
+                <input type="number" id="xrdStdBlWin" value="150" min="1"></div>
+              <div class="field-half">
+                <div><label>Peak min. height (%)</label>
+                  <input type="text" inputmode="decimal" id="xrdStdPkHeight" value="5"></div>
+                <div><label>Peak min. prom. (%)</label>
+                  <input type="text" inputmode="decimal" id="xrdStdPkProm" value="3"></div>
+              </div>
+              <div><label>Peak min. distance (degrees 2&#952;)</label>
+                <input type="text" inputmode="decimal" id="xrdStdPkDist" value="0.3"></div>
+              <button class="btn secondary" id="xrdStdAddPeak" style="width:100%;padding:7px 9px">+ Add peak</button>
+            </div>
+          </div>
+          <div class="peak-box" id="xrdStdPeakBox">
+            <div class="peak-box-head">
+              <span class="peak-box-title">Detected peaks</span>
+              <button class="btn secondary peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
+            </div>
+            <div id="xrdStdPeakTableWrap"></div>
+          </div>
         </div>
       </div>
 
