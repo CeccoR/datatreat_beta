@@ -430,7 +430,8 @@ document.getElementById('sessListWrap').addEventListener('keydown', e=>{
   });
   wrap.addEventListener('mousedown', e=>{
     const row = e.target.closest && e.target.closest('.sess-row');
-    if (row && !overName(e.target)) row.classList.add('row-press');
+    // Pressing the name field or the checkbox must not flash the row
+    if (row && !overName(e.target) && !e.target.closest('.sess-check')) row.classList.add('row-press');
   });
   document.addEventListener('mouseup', ()=> wrap.querySelectorAll('.sess-row.row-press').forEach(r=>r.classList.remove('row-press')));
 })();
