@@ -146,7 +146,7 @@ import { Plot } from './plot.js';
         <td class="fname" title="${f.label}">${f.label}</td>
         <td><input data-i="${i}" class="gcM" type="number" min="0.001" step="0.1" value="${ms[i]}" style="width:100%"></td>
         <td><input data-i="${i}" class="gcQ" type="number" min="0.001" step="0.1" value="${Qs[i]}" style="width:100%"></td>
-        <td><input data-i="${i}" class="gcDate" type="datetime-local" value="${toLocalInputValue(lightOnDates[i])}" style="width:100%"></td>
+        <td><div class="date-input-wrap"><input data-i="${i}" class="gcDate" type="datetime-local" value="${toLocalInputValue(lightOnDates[i])}" style="width:100%"><button class="date-pick-btn" tabindex="-1" aria-label="Open calendar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg></button></div></td>
         <td class="gc-warn-cell">${lightOnWarnHtml(i)}</td>
       </tr>`;
     });
@@ -170,6 +170,14 @@ import { Plot } from './plot.js';
         computeAndRenderGc();
       });
       inp.addEventListener('change', commit);
+    });
+    wrap.querySelectorAll('.date-pick-btn').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.preventDefault();
+        const inp = btn.closest('.date-input-wrap').querySelector('.gcDate');
+        if (document.activeElement === inp){ inp.blur(); }
+        else { inp.focus(); inp.showPicker?.(); }
+      });
     });
   }
 
