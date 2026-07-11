@@ -172,11 +172,14 @@ import { Plot } from './plot.js';
       inp.addEventListener('change', commit);
     });
     wrap.querySelectorAll('.date-pick-btn').forEach(btn=>{
+      const inp = btn.closest('.date-input-wrap').querySelector('.gcDate');
+      let _closedByBtn = false;
+      // pointerdown fires before blur, so activeElement is still the input if picker was open
+      btn.addEventListener('pointerdown', ()=>{ _closedByBtn = document.activeElement === inp; });
       btn.addEventListener('click', e=>{
         e.preventDefault();
-        const inp = btn.closest('.date-input-wrap').querySelector('.gcDate');
-        if (document.activeElement === inp){ inp.blur(); }
-        else { inp.focus(); inp.showPicker?.(); }
+        if (_closedByBtn){ _closedByBtn = false; return; } // blur already closed picker
+        inp.focus(); inp.showPicker?.();
       });
     });
   }
