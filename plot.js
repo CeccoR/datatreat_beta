@@ -1,4 +1,4 @@
-import { settings } from './utils.js';
+import { settings, redrawAll } from './utils.js';
 
 /* =========================================================
    SVG PLOT HELPER (shared)
@@ -416,13 +416,7 @@ class Plot{
     });
   }
 }
-window.addEventListener('resize', ()=>{ if (window._redrawAll) window._redrawAll(); });
-window._redrawAll = ()=>{
-  if (window._taucRedraw) window._taucRedraw();
-  if (window._xrdRedraw) window._xrdRedraw();
-  if (window._eprRedraw) window._eprRedraw();
-  if (window._gcRedraw) window._gcRedraw();
-};
+window.addEventListener('resize', redrawAll);
 
 function downloadSvgClean(svgNode, filename, legendEl, currentView){
   const ns = 'http://www.w3.org/2000/svg';
