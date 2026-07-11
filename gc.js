@@ -253,8 +253,6 @@ import { Plot } from './plot.js';
     });
   }
 
-  window._gcRedraw = ()=>{ if (dataTables.length) renderGcPlots(); };
-
   function updateRegression(){
     const xStart = Math.min(plateauStart, plateauEnd);
     const xEnd   = Math.max(plateauStart, plateauEnd);

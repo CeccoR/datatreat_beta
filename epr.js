@@ -196,7 +196,6 @@ import { Plot } from './plot.js';
     el.addEventListener('input', ()=>{ if(files.length) updateEpr(); });
     el.addEventListener('change', ()=>{ if(files.length) hist.commit(); });
   });
-  window._eprRedraw = ()=>{ if (files.length) updateEpr(); };
 
   function exportEprZip(){
     if (!files.length) return;

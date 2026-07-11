@@ -1435,8 +1435,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   attachTableDeselect('s');
   attachTableDeselect('f');
 
-  window._xrdRedraw = ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdStandard(true); updateXrdFitting(true); updateXrdResults(); renderPeakTable(); } };
-  registerTabRedraw('xrd', window._xrdRedraw);
+  registerTabRedraw('xrd', ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdStandard(true); updateXrdFitting(true); updateXrdResults(); renderPeakTable(); } });
 
   function exportXrdZip(){
     if (!files.length) return;

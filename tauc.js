@@ -60,7 +60,8 @@ import { Plot } from './plot.js';
     afterFilesChange();
   }
   const hist = registerHistory('tauc', taucSnapshot, taucRestore);
-  registerTabRedraw('tauc', ()=>{ if (files.length) setupAnalysis(); });
+  // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.
+  registerTabRedraw('tauc', ()=>{ if (plot && files.length) updateTaucView(true); });
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
     const existing = new Set(files.map(f=>f.name));
@@ -326,7 +327,6 @@ import { Plot } from './plot.js';
 
   document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; updateTaucView(); };
   document.getElementById('taucNext').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex+1)%files.length; updateTaucView(); };
-  window._taucRedraw = ()=>{ if (plot && files.length) updateTaucView(true); };
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
