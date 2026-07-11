@@ -848,20 +848,18 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!pks.length){ wrap.innerHTML='<p style="color:var(--muted);margin:6px 0">No peaks found with current parameters.</p>'; return; }
     const maxH = Math.max(...pks.map(p=>p.height));
     const showCorr = !!standardName && !isStd;
-    let html='<table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th><th>Crystallite size (nm)</th>'+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
+    const sizeCol = !isStd;
+    let html='<table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th>'+(sizeCol?'<th>Crystallite size (nm)</th>':'')+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
     pks.forEach((pk,i)=>{
       const fwhm = pk.fwhmClassic;
-      const sizeRawCell = isStd ? '—' : fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda));
+      const sizeRawCell = sizeCol ? `<td>${fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
       const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
       const sel = panels[key].sel!=null && Math.abs(pk.pos-panels[key].sel)<1e-9 ? ' selected' : '';
-      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td><td>${sizeRawCell}</td>${corrCell}<td style="text-align:right"><button class="peak-del" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
+      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:right"><button class="peak-del" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
     });
     html+='</tbody></table>';
-    // Mean ± std crystallite size for this sample, shown right under the peak table
-    const st = sampleSizeStats(idx);
-    if (st.isStd){
-      html += '<div class="size-summary">Standard sample — crystallite size not computed.</div>';
-    } else {
+    if (!isStd){
+      const st = sampleSizeStats(idx);
       html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
       if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
       html += '</div>';

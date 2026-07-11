@@ -282,7 +282,7 @@
       </div>
       <div class="card" id="xrdStdCard" style="display:none">
         <h3 style="margin:0 0 0">INSTRUMENTAL STANDARD</h3>
-        <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. No crystallite size is computed for the standard itself.</div>
+        <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. No crystallite size is computed for the standard itself, so the size column is omitted from its peak table.</div>
         <div style="max-width:340px;margin-bottom:6px"><label>Instrumental standard</label>
           <select id="xrdStandard"><option value="">None</option></select></div>
         <div id="xrdStdBody" style="display:none">
