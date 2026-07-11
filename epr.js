@@ -12,8 +12,18 @@ import { Plot } from './plot.js';
   let loadAlerts = '';
   let uploadAlerts = '';
 
-  window.dismissEprInvalid = function(){ loadAlerts=''; rebuildAlerts(); };
-  window.dismissEprUpload  = function(){ uploadAlerts=''; rebuildAlerts(); };
+  // Delegated click handling for dynamically generated buttons (alerts + pending
+  // table), so no per-button global onclick handlers are needed.
+  document.getElementById('tab-epr').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if (!btn || !document.getElementById('tab-epr').contains(btn)) return;
+    switch (btn.dataset.action){
+      case 'epr-dismiss-invalid': loadAlerts=''; rebuildAlerts(); break;
+      case 'epr-dismiss-upload':  uploadAlerts=''; rebuildAlerts(); break;
+      case 'epr-remove-pending':  delete pending[btn.dataset.stem]; renderPendingTable(); break;
+      case 'epr-remove-all-pending': for (const k of Object.keys(pending)) delete pending[k]; renderPendingTable(); break;
+    }
+  });
 
   function fileCallbacks(){
     return {
@@ -45,15 +55,12 @@ import { Plot } from './plot.js';
       const dtaCell = pair.dta ? `<span style="color:var(--good)">✓ .DTA</span>` : `<span style="color:var(--bad)">✗ .DTA</span>`;
       const dscCell = pair.dsc ? `<span style="color:var(--good)">✓ .DSC</span>` : `<span style="color:var(--bad)">✗ .DSC</span>`;
       const esc = stem.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-      return `<tr class="pending-row"><td class="fname">${stem}</td><td>${dtaCell}</td><td>${dscCell}</td><td><div class="file-actions">${phantoms}<button class="pending-del" data-stem="${esc}" onclick="eprRemovePending(this.dataset.stem)">${X_SVG(13)}</button></div></td></tr>`;
+      return `<tr class="pending-row"><td class="fname">${stem}</td><td>${dtaCell}</td><td>${dscCell}</td><td><div class="file-actions">${phantoms}<button class="pending-del" data-stem="${esc}" data-action="epr-remove-pending">${X_SVG(13)}</button></div></td></tr>`;
     }).join('');
     const colgroup = `<colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>`;
-    const header = `<tr><th>FILE</th><th>.DTA</th><th>.DSC</th><th><div class="file-actions" style="display:flex;gap:4px;align-items:center;visibility:visible;white-space:nowrap">${phantoms}<button class="pending-del-all" onclick="eprRemoveAllPending()">${X_SVG(13)}</button></div></th></tr>`;
+    const header = `<tr><th>FILE</th><th>.DTA</th><th>.DSC</th><th><div class="file-actions" style="display:flex;gap:4px;align-items:center;visibility:visible;white-space:nowrap">${phantoms}<button class="pending-del-all" data-action="epr-remove-all-pending">${X_SVG(13)}</button></div></th></tr>`;
     wrap.innerHTML = `<div style="background:#3a2c0f;border:1px solid #5a430f;border-radius:8px;padding:0 8px 8px;margin-top:10px"><div style="padding:8px 0 6px;font-size:12px;color:var(--warn)">⚠ Waiting for pair:</div><table class="pending-table" style="table-layout:fixed;width:100%">${colgroup}<thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
   }
-
-  window.eprRemovePending = function(stem){ delete pending[stem]; renderPendingTable(); };
-  window.eprRemoveAllPending = function(){ for (const k of Object.keys(pending)) delete pending[k]; renderPendingTable(); };
 
   function parseDsc(text){
     const p = {};
@@ -126,8 +133,8 @@ import { Plot } from './plot.js';
       }
     }
 
-    loadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'dismissEprInvalid()') : '';
-    uploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'dismissEprUpload()') : '';
+    loadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'epr-dismiss-invalid') : '';
+    uploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'epr-dismiss-upload') : '';
     rebuildAlerts();
     afterFilesChange();
   });

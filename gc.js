@@ -16,8 +16,15 @@ import { Plot } from './plot.js';
 
   function rebuildGcAlerts(){ document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts; }
 
-  window.dismissGcInvalid = function(){ loadAlerts=''; rebuildGcAlerts(); };
-  window.dismissGcUpload  = function(){ gcUploadAlerts=''; rebuildGcAlerts(); };
+  // Delegated click handling for dynamically generated alert dismiss buttons.
+  document.getElementById('tab-gc').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if (!btn || !document.getElementById('tab-gc').contains(btn)) return;
+    switch (btn.dataset.action){
+      case 'gc-dismiss-invalid': loadAlerts=''; rebuildGcAlerts(); break;
+      case 'gc-dismiss-upload':  gcUploadAlerts=''; rebuildGcAlerts(); break;
+    }
+  });
 
   function parseGCDate(str){
     const m = str.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
@@ -73,8 +80,8 @@ import { Plot } from './plot.js';
       ms.push(15); Qs.push(2);
       lightOnDates.push(new Date(sorted[0]));
     }
-    loadAlerts = buildAlertsHtml(invalidFiles, [], undefined, 'dismissGcInvalid()');
-    gcUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'dismissGcUpload()') : '';
+    loadAlerts = buildAlertsHtml(invalidFiles, [], undefined, 'gc-dismiss-invalid');
+    gcUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'gc-dismiss-upload') : '';
     rebuildGcAlerts();
     afterFilesChange();
   });

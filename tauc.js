@@ -15,14 +15,21 @@ import { Plot } from './plot.js';
   let taucUploadAlerts = '';
   let taucWarnDismissed = false;
 
-  window.dismissTaucInvalid = function(){ invalidUploadNames=[]; rebuildTaucAlerts(); };
-  window.dismissTaucWarn    = function(){ taucWarnDismissed=true; rebuildTaucAlerts(); };
-  window.dismissTaucUpload  = function(){ taucUploadAlerts=''; rebuildTaucAlerts(); };
+  // Delegated click handling for dynamically generated alert dismiss buttons.
+  document.getElementById('tab-tauc').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if (!btn || !document.getElementById('tab-tauc').contains(btn)) return;
+    switch (btn.dataset.action){
+      case 'tauc-dismiss-invalid': invalidUploadNames=[]; rebuildTaucAlerts(); break;
+      case 'tauc-dismiss-warn':    taucWarnDismissed=true; rebuildTaucAlerts(); break;
+      case 'tauc-dismiss-upload':  taucUploadAlerts=''; rebuildTaucAlerts(); break;
+    }
+  });
 
   function rebuildTaucAlerts(){
     const warnNames = taucWarnDismissed ? [] : files.filter(f=>f.warn).map(f=>f.name);
     document.getElementById('taucAlerts').innerHTML =
-      buildAlertsHtml(invalidUploadNames, warnNames, undefined, 'dismissTaucInvalid()', 'dismissTaucWarn()') + taucUploadAlerts;
+      buildAlertsHtml(invalidUploadNames, warnNames, undefined, 'tauc-dismiss-invalid', 'tauc-dismiss-warn') + taucUploadAlerts;
   }
 
   function fileCallbacks(){
@@ -111,7 +118,7 @@ import { Plot } from './plot.js';
     }
     invalidUploadNames = newInvalid;
     taucWarnDismissed = false;
-    taucUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'dismissTaucUpload()') : '';
+    taucUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'tauc-dismiss-upload') : '';
     rebuildTaucAlerts();
     afterFilesChange();
   });

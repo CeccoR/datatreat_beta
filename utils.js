@@ -1038,13 +1038,18 @@ window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true);
 /* =========================================================
    ALERT HELPERS
 ========================================================= */
-function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidFn, dismissWarnFn){
-  const makeX = fn => `<button class="alert-dismiss" onclick="${fn||"this.closest('.alert').remove()"}" title="Dismiss">${X_SVG(13)}</button>`;
+// dismissInvalidAction / dismissWarnAction are data-action values handled by the
+// owning tab's delegated click listener; when omitted, the button just removes its
+// own alert inline (no global handler needed).
+function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
+  const makeX = act => act
+    ? `<button class="alert-dismiss" data-action="${act}" title="Dismiss">${X_SVG(13)}</button>`
+    : `<button class="alert-dismiss" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(13)}</button>`;
   let html = '';
   if (invalidNames.length)
-    html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidFn) + '</div>';
+    html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';
   if (warnNames.length)
-    html += '<div class="alert warn">⚠ ' + (warnHeader || 'Non-standard format — verify these files:') + '<br>' + warnNames.join('<br>') + makeX(dismissWarnFn) + '</div>';
+    html += '<div class="alert warn">⚠ ' + (warnHeader || 'Non-standard format — verify these files:') + '<br>' + warnNames.join('<br>') + makeX(dismissWarnAction) + '</div>';
   return html;
 }
 

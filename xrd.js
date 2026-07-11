@@ -78,7 +78,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // Indices of the non-standard samples, in file order (the Analysis navigation set).
   function nonStdIdx(){ const out=[]; files.forEach((f,i)=>{ if (f.name!==standardName) out.push(i); }); return out; }
 
-  window.dismissXrdUpload = function(){ xrdUploadAlerts=''; rebuildXrdAlerts(); };
+  // Delegated click handling for dynamically generated alert dismiss buttons.
+  document.getElementById('tab-xrd').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if (!btn || !document.getElementById('tab-xrd').contains(btn)) return;
+    if (btn.dataset.action === 'xrd-dismiss-upload'){ xrdUploadAlerts=''; rebuildXrdAlerts(); }
+  });
 
   // Global-fit hyperparameters (editable in the modal)
   const fitHP = { profile:'pv', asym:false, asymMode:'split', SL:0.02, HL:0.02, calib:false, bgDegree:4, maxIter:80, tol:1e-12, lambda0:1e-3, bgAnchor:0.3 };
@@ -133,7 +138,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       manualPeaks.push([]);
       removedPeaks.push([]);
     }
-    xrdUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'dismissXrdUpload()') : '';
+    xrdUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'xrd-dismiss-upload') : '';
     rebuildXrdAlerts();
     afterFilesChange();
   });
