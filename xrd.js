@@ -480,13 +480,17 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // Reconstruct the full doublet model and the Kα1-only component over an axis,
   // from a plain list of fit objects (fp).
 
-  // Show/hide the Analysis + Standard cards. Analysis is hidden when every loaded file
-  // is the standard (nothing left to analyse); the Standard card is shown whenever there
-  // are files (so the standard selector is always available).
+  // Show/hide the Analysis + Standard cards. Both are shown whenever files are loaded;
+  // the Analysis card shows a placeholder message when all files are set as the standard.
   function updateCardVis(){
     const hasFiles = files.length>0;
-    document.getElementById('xrdStdCard').style.display  = hasFiles ? 'block' : 'none';
-    document.getElementById('xrdWorkspace').style.display = (hasFiles && nonStdIdx().length>0) ? 'block' : 'none';
+    document.getElementById('xrdStdCard').style.display   = hasFiles ? 'block' : 'none';
+    document.getElementById('xrdWorkspace').style.display  = hasFiles ? 'block' : 'none';
+    const hasNonStd = nonStdIdx().length > 0;
+    const emptyEl   = document.getElementById('xrdAnalysisEmpty');
+    const contentEl = document.getElementById('xrdAnalysisContent');
+    if (emptyEl)   emptyEl.style.display   = hasNonStd ? 'none' : '';
+    if (contentEl) contentEl.style.display = hasNonStd ? ''     : 'none';
   }
 
   // ---- Generic analysis drawer: raw, smoothed, SNIP baseline, peaks (no fit).
