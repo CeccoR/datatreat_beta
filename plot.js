@@ -416,7 +416,14 @@ class Plot{
     });
   }
 }
-window.addEventListener('resize', redrawAll);
+// Coalesce the burst of resize events fired during a window drag into one redraw
+// per animation frame — otherwise each event triggers a full synchronous redraw
+// and the drag feels like it hangs for seconds.
+let _resizeRAF = null;
+window.addEventListener('resize', ()=>{
+  if (_resizeRAF) return;
+  _resizeRAF = requestAnimationFrame(()=>{ _resizeRAF = null; redrawAll(); });
+});
 
 function downloadSvgClean(svgNode, filename, legendEl, currentView){
   const ns = 'http://www.w3.org/2000/svg';

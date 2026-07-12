@@ -761,7 +761,14 @@ const _tabRedraw = {}, _needsRedraw = {};
 // A module registers how to redraw its current view; goTab calls it the first
 // time the tab becomes visible after a session restore flagged it.
 function registerTabRedraw(mod, fn){ _tabRedraw[mod] = fn; }
-function redrawAll(){ for (const fn of Object.values(_tabRedraw)){ try{ fn(); }catch(e){} } }
+// Redraw only the visible tab's plots (on window resize). Hidden tabs render at
+// size 0, so redrawing them would be wasted work / could corrupt their view; they
+// are redrawn when shown (see goTab). Flag the others so they refresh on show.
+function redrawAll(){
+  const fn = _tabRedraw[_activeTab];
+  if (fn){ try{ fn(); }catch(e){} }
+  for (const m in _tabRedraw){ if (m !== _activeTab) _needsRedraw[m] = true; }
+}
 const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
 const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
@@ -774,9 +781,10 @@ function goTab(tab, fromHash){
     if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
-  // A module whose plots were drawn while its tab was hidden (e.g. a session
-  // opened into a background tab) sized them to 0; redraw once now it's visible.
-  if (_needsRedraw[tab] && _tabRedraw[tab]){
+  // Plots drawn while their tab was hidden (background session restore, or any
+  // resize/edit while another tab was showing) are sized to 0 or stale; redraw
+  // whenever a module tab becomes visible so its charts always fit the viewport.
+  if (_tabRedraw[tab]){
     _needsRedraw[tab] = false;
     requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} });
   }
