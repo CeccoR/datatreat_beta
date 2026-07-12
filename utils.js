@@ -1044,6 +1044,55 @@ window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true);
 })();
 
 /* =========================================================
+   NUMERIC INPUT VALIDATION FEEDBACK
+   Values out of range are already clamped in the analysis code, but silently.
+   These helpers correct the *displayed* value on blur and flash the field
+   (reusing the .field-invalid red + shake animation) so the user notices.
+========================================================= */
+function flashFieldInvalid(el){
+  el.classList.remove('field-invalid');
+  void el.offsetWidth;                 // reflow so the shake animation restarts
+  el.classList.add('field-invalid');
+  clearTimeout(el._flashT);
+  el._flashT = setTimeout(()=>el.classList.remove('field-invalid'), 450);
+}
+// Guard one input: on change, coerce to [min,max] (and to integer if requested),
+// flashing + syncing the view when the typed value had to be corrected.
+function guardNumericInput(el, opts){
+  if (!el) return;
+  const { min=null, max=null, integer=false, def=null } = opts || {};
+  el.addEventListener('change', ()=>{
+    const raw = String(el.value).trim().replace(',', '.');
+    let v = parseFloat(raw), corrected = false;
+    if (raw==='' || !isFinite(v)){ v = (def!=null ? def : (min!=null ? min : 0)); corrected = true; }
+    else {
+      if (integer && !Number.isInteger(v)){ v = Math.round(v); corrected = true; }
+      if (min!=null && v<min){ v = min; corrected = true; }
+      if (max!=null && v>max){ v = max; corrected = true; }
+    }
+    if (corrected){
+      el.value = String(v);
+      flashFieldInvalid(el);
+      el.dispatchEvent(new Event('input', { bubbles:true })); // let the module re-read the corrected value
+    }
+  });
+}
+// Auto-wire every <input type="number"> under root, reading bounds from its
+// min/max attributes (step decides integer-ness). Covers most module fields.
+function guardNumberInputs(root){
+  (root || document).querySelectorAll('input[type="number"]').forEach(el=>{
+    const min = el.getAttribute('min')!==null && el.min!=='' ? +el.min : null;
+    const max = el.getAttribute('max')!==null && el.max!=='' ? +el.max : null;
+    const stepAttr = el.getAttribute('step');
+    const integer = !stepAttr || Number.isInteger(+stepAttr);
+    const def = el.defaultValue!=='' && isFinite(+el.defaultValue) ? +el.defaultValue : (min!=null ? min : 0);
+    guardNumericInput(el, { min, max, integer, def });
+  });
+}
+// Apply to all number inputs present in the page (modals included).
+guardNumberInputs(document);
+
+/* =========================================================
    ALERT HELPERS
 ========================================================= */
 // dismissInvalidAction / dismissWarnAction are data-action values handled by the
@@ -1107,5 +1156,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, applyTheme, currentTheme
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, applyTheme, currentTheme, guardNumericInput
 };

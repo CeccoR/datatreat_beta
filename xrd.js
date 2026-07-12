@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -245,6 +245,15 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   const FIELD_INPUT = { N:'xrdSmooth', blWin:'xrdBlWin', pkHeight:'xrdPkHeight', pkProm:'xrdPkProm', pkDist:'xrdPkDist', K:'xrdK', lambda:'xrdLambda' };
   const FIELD_MIN   = { N:1, blWin:1, pkHeight:0, pkProm:0, pkDist:0, K:1e-6, lambda:1e-6 };
   const FIELD_DEF   = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
+
+  // Validation feedback (shake + auto-correct) for the decimal (type=text) fields —
+  // the type=number fields are auto-guarded globally in utils.js. Wired early so
+  // these run before the fields' own change handlers. (SL/HL/G are readonly.)
+  [ ['xrdPkHeight',0,5], ['xrdPkProm',0,3], ['xrdPkDist',0,0.3], ['xrdK',1e-6,0.9], ['xrdLambda',1e-6,1.540598],
+    ['xrdStdPkHeight',0,5], ['xrdStdPkProm',0,3], ['xrdStdPkDist',0,0.3],
+    ['xrdHpTol',1e-12,1e-12], ['xrdHpLambda',1e-12,1e-3], ['xrdHpBgAnchor',0,0.3],
+    ['xrdStdTol',1e-12,1e-12], ['xrdStdLambda',1e-12,1e-3], ['xrdStdBgAnchor',0,0.3],
+  ].forEach(([id,min,def])=> guardNumericInput(document.getElementById(id), { min, def }));
 
   function readInputsToStore(){
     for (const key in FIELD_INPUT){
