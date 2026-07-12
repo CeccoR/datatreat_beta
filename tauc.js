@@ -10,6 +10,60 @@ import { Plot } from './plot.js';
   let plot;
   let vlines = {};
   let bestRegsAll = [];
+
+  // ---- Per-sample analysis parameters (all/one, mirroring the XRD module) ----
+  // Togglable fields: a (direct/indirect exponent) and the two smoothing windows.
+  // M/M2 (regression windows) are always shared — no toggle.
+  const taucMode = { a:'shared', N:'shared', N2:'shared' };   // 'shared' | 'per'
+  const taucShared = { a:0.5, N:1, N2:10, M:50, M2:50 };      // shared values / defaults
+  let   taucPer = [];                                          // per-sample overrides: {a?,N?,N2?}
+  const TAUC_TOGGLE = { taucModeA:'a', taucModeN:'N', taucModeN2:'N2' }; // toggle id -> field
+
+  // Resolve the effective params for a given file index (respects shared/per mode)
+  function getFileParams(i){
+    const pp = taucPer[i] || {};
+    const g = k => (taucMode[k]==='per') ? (pp[k] ?? taucShared[k]) : taucShared[k];
+    return {
+      a:  g('a'),
+      N:  Math.max(1, Math.round(g('N'))),
+      N2: Math.max(1, Math.round(g('N2'))),
+      M:  Math.max(2, Math.round(taucShared.M)),
+      M2: Math.max(2, Math.round(taucShared.M2)),
+    };
+  }
+  function curParams(){ return getFileParams(currIndex); }
+
+  // Store one field's value into the appropriate slot for the current sample
+  function setField(k, v){
+    if (taucMode[k]==='per'){ if (!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex][k]=v; }
+    else taucShared[k]=v;
+  }
+  // Read the input fields into the store (for the current sample)
+  function readInputsToStore(){
+    const aVal  = parseFloat(document.getElementById('taucA').value);
+    const nVal  = Math.max(1, Math.round(+document.getElementById('taucN').value  || 1));
+    const n2Val = Math.max(1, Math.round(+document.getElementById('taucN2').value || 1));
+    if (isFinite(aVal)) setField('a', aVal);
+    setField('N', nVal); setField('N2', n2Val);
+    taucShared.M  = Math.max(2, Math.round(+document.getElementById('taucM').value  || 2));
+    taucShared.M2 = Math.max(2, Math.round(+document.getElementById('taucM2').value || 2));
+  }
+  // Push the current sample's stored params into the input fields
+  function writeStoreToInputs(){
+    const p = getFileParams(currIndex);
+    document.getElementById('taucA').value  = p.a;
+    document.getElementById('taucN').value  = p.N;
+    document.getElementById('taucN2').value = p.N2;
+    document.getElementById('taucM').value  = p.M;
+    document.getElementById('taucM2').value = p.M2;
+    document.getElementById('taucNExp').textContent = p.a;
+  }
+  function syncTaucModeButtons(){
+    Object.entries(TAUC_TOGGLE).forEach(([tid, key])=>{
+      document.querySelectorAll('#'+tid+' button').forEach(btn=> btn.classList.toggle('active', btn.dataset.m===taucMode[key]));
+    });
+  }
+
   // per-upload invalid names (files that were skipped); persists until all files are removed
   let invalidUploadNames = [];
   let taucUploadAlerts = '';
@@ -36,34 +90,45 @@ import { Plot } from './plot.js';
     return {
       onRemove(i){
         files.splice(i,1);
+        taucPer.splice(i,1);            // keep per-sample params aligned with files
         if (!files.length) invalidUploadNames = [];
         rebuildTaucAlerts();
         afterFilesChange();
       },
-      onReorder(from, to){ const [x]=files.splice(from,1); files.splice(to,0,x); rebuildTaucAlerts(); afterFilesChange(); },
+      onReorder(from, to){ [files,taucPer].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); rebuildTaucAlerts(); afterFilesChange(); },
       onLabelChange(i, v){ files[i].label=v; updateTaucResults(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateTaucResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; vlines={}; rebuildTaucAlerts(); afterFilesChange(); },
+      onRemoveAll(){ files.length=0; taucPer=[]; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; vlines={}; rebuildTaucAlerts(); afterFilesChange(); },
     };
   }
 
   /* ---- Undo/redo: snapshot the reversible state (file order/labels/colors,
      the draggable line positions and the analysis parameters). Raw spectra
      arrays are shared by reference; only metadata is cloned. ---- */
-  const TAUC_PARAM_IDS = ['taucA','taucN','taucN2','taucM','taucM2'];
   function taucSnapshot(){
     return {
       files: files.map(f=>({...f})),
       vlines: {...vlines},
-      params: TAUC_PARAM_IDS.reduce((o,id)=>{ o[id]=document.getElementById(id).value; return o; }, {}),
+      mode: {...taucMode},
+      shared: {...taucShared},
+      per: taucPer.map(p=>({...p})),
     };
   }
   function taucRestore(s){
     files = s.files.map(f=>({...f}));
     vlines = {...s.vlines};
-    for (const id of TAUC_PARAM_IDS) document.getElementById(id).value = s.params[id];
-    document.getElementById('taucNExp').textContent = document.getElementById('taucA').value;
+    if (s.mode)   Object.assign(taucMode, s.mode);
+    if (s.shared) Object.assign(taucShared, s.shared);
+    taucPer = s.per ? s.per.map(p=>({...p})) : files.map(()=>({}));
+    // Backward compatibility with pre-all/one snapshots (params stored by input id)
+    if (s.params){
+      taucShared.a  = parseFloat(s.params.taucA);
+      taucShared.N  = +s.params.taucN;  taucShared.N2 = +s.params.taucN2;
+      taucShared.M  = +s.params.taucM;  taucShared.M2 = +s.params.taucM2;
+    }
+    if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
+    syncTaucModeButtons();
     afterFilesChange();
   }
   const hist = registerHistory('tauc', taucSnapshot, taucRestore);
@@ -114,7 +179,7 @@ import { Plot } from './plot.js';
         const b = parseFloat(parts[1].replace(',','.'));
         if (isFinite(a) && isFinite(b)){ wl.push(a); fr.push(b); }
       }
-      if (wl.length) files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes});
+      if (wl.length){ files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes}); taucPer.push({}); }
     }
     invalidUploadNames = newInvalid;
     taucWarnDismissed = false;
@@ -140,6 +205,10 @@ import { Plot } from './plot.js';
     files.forEach(f=>{ f.hv = f.wl.map(wl=>1240/wl); });
     if (currIndex >= files.length) currIndex = files.length-1;
     bestRegsAll = files.map(()=>null);
+    if (currIndex < 0) currIndex = 0;
+    if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
+    writeStoreToInputs();      // reflect the current sample's params in the inputs
+    syncTaucModeButtons();
     document.getElementById('taucWorkspace').style.display='block';
     document.getElementById('taucResults').style.display='block';
     document.getElementById('taucExportCard').style.display='block';
@@ -163,15 +232,6 @@ import { Plot } from './plot.js';
     updateTaucView();
   }
 
-  function curParams(){
-    return {
-      a: parseFloat(document.getElementById('taucA').value),
-      N: Math.max(1, Math.round(+document.getElementById('taucN').value||1)),
-      N2: Math.max(1, Math.round(+document.getElementById('taucN2').value||1)),
-      M: Math.max(2, Math.round(+document.getElementById('taucM').value||2)),
-      M2: Math.max(2, Math.round(+document.getElementById('taucM2').value||2)),
-    };
-  }
 
   function scanRegr(hv, frArr, a, N, M, x1, x2){
     const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], a));
@@ -223,9 +283,10 @@ import { Plot } from './plot.js';
     return {Eg,EgErr,EgInt,EgIntErr,regs,regs2};
   }
 
-  function processAll(p){
+  function processAll(){
     bestRegsAll = files.map((f,k)=>{
-      const r = analyzeOneFile(f.hv, f.FR, p.a, p.N, p.M, vlines.v1, vlines.v2, p.M2, vlines.v3, vlines.v4);
+      const fp = getFileParams(k);
+      const r = analyzeOneFile(f.hv, f.FR, fp.a, fp.N, fp.M, vlines.v1, vlines.v2, fp.M2, vlines.v3, vlines.v4);
       return {label:f.label, ...r};
     });
   }
@@ -308,9 +369,8 @@ import { Plot } from './plot.js';
 
   function updateTaucResults(){
     if (!files.length) return;
-    const p = curParams();
-    processAll(p);
-    renderResView(p);
+    processAll();
+    renderResView();
     renderEgTable();
   }
 
@@ -325,6 +385,7 @@ import { Plot } from './plot.js';
   ['taucA','taucN','taucN2','taucM','taucM2'].forEach(id=>{
     const el = document.getElementById(id);
     el.addEventListener('input', ()=>{
+      readInputsToStore();  // route the edit to shared or this sample's slot
       if (id==='taucA') document.getElementById('taucNExp').textContent = el.value;
       if(plot) updateTaucView(id!=='taucA');
     });
@@ -332,8 +393,25 @@ import { Plot } from './plot.js';
     el.addEventListener('change', ()=>{ if (files.length) hist.commit(); });
   });
 
-  document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; updateTaucView(); };
-  document.getElementById('taucNext').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex+1)%files.length; updateTaucView(); };
+  // Per-field shared/per (all/one) toggles for a, N and N2
+  Object.entries(TAUC_TOGGLE).forEach(([tid, key])=>{
+    document.querySelectorAll('#'+tid+' button').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if (btn.classList.contains('active')) return;
+        document.querySelectorAll('#'+tid+' button').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const cur = getFileParams(currIndex)[key];   // value currently shown
+        taucMode[key] = btn.dataset.m;
+        if (btn.dataset.m==='shared') taucShared[key] = cur;               // "all": adopt shown value everywhere
+        else { if (!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex][key] = cur; } // "one": keep on this sample only
+        writeStoreToInputs();
+        if (files.length){ if (plot) updateTaucView(true); hist.commit(); }
+      });
+    });
+  });
+
+  document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; writeStoreToInputs(); updateTaucView(); };
+  document.getElementById('taucNext').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex+1)%files.length; writeStoreToInputs(); updateTaucView(); };
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
@@ -357,7 +435,12 @@ import { Plot } from './plot.js';
     wrap.innerHTML = html;
   }
 
-  function renderResView(p){
+  function renderResView(){
+    // Effective exponent per file; when uniform, show it on the shared Tauc axis,
+    // otherwise fall back to a generic "a" (samples may use different exponents).
+    const aVals = files.map((f,k)=>getFileParams(k).a);
+    const aUniform = aVals.every(v=>v===aVals[0]);
+    const aLabel = aUniform ? aVals[0] : 'a';
     // Plot 0: F(R) vs λ
     const plot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a.u.)', xTickStep:50, noYTickLabels:true});
     const leg0 = document.getElementById('taucResLegend0'); leg0.innerHTML='';
@@ -373,11 +456,12 @@ import { Plot } from './plot.js';
     plot0.attachTools(plot0.svg.closest('.plot-wrap'));
 
     // Plot 1: Tauc + regressions
-    const plot1 = new Plot(document.getElementById('taucResSvg1'), {xlabel:'Energy (eV)', ylabelSvg:`[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a.u.)`, xTickStep:0.5, noYTickLabels:true});
+    const plot1 = new Plot(document.getElementById('taucResSvg1'), {xlabel:'Energy (eV)', ylabelSvg:`[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a.u.)`, xTickStep:0.5, noYTickLabels:true});
     const leg1 = document.getElementById('taucResLegend1'); leg1.innerHTML='';
     const Ys_all = files.map((f,k)=>{
-      const Yraw = f.FR.map((v,i)=>Math.pow(v*f.hv[i], p.a));
-      return movingAverage(Yraw, p.N);
+      const fp = getFileParams(k);
+      const Yraw = f.FR.map((v,i)=>Math.pow(v*f.hv[i], fp.a));
+      return movingAverage(Yraw, fp.N);
     });
     const ymax1 = Math.max(...Ys_all.map(maxArr));
     const [hv0, hv1] = unionHv();
@@ -399,10 +483,8 @@ import { Plot } from './plot.js';
     plot1.attachTools(plot1.svg.closest('.plot-wrap'));
 
     // Plot 2: Eg bar chart
-    const aVal = document.getElementById('taucA').value;
-    const egLabel = aVal === '2' ? 'Direct' : 'Indirect';
     const barTitleEl = document.getElementById('taucBarTitle');
-    if (barTitleEl) barTitleEl.textContent = egLabel + ' Energy Band Gap';
+    if (barTitleEl) barTitleEl.textContent = (aUniform ? (aVals[0]===2 ? 'Direct ' : 'Indirect ') : '') + 'Energy Band Gap';
     const leg2 = document.getElementById('taucResLegend2'); leg2.innerHTML='';
     const barAlertDiv = document.getElementById('taucBarAlert'); barAlertDiv.innerHTML='';
     const egs = bestRegsAll.map(r=>r.Eg), egErrs = bestRegsAll.map(r=>r.EgErr);
@@ -470,7 +552,6 @@ import { Plot } from './plot.js';
   }
   function exportTaucZip(){
     if (!files.length) return;
-    const p = curParams();
     const entries = [];
     // reflectance_FR.csv — (wavelength, F(R)) per sample
     {
@@ -488,7 +569,7 @@ import { Plot } from './plot.js';
       files.forEach((f,k)=>{
         const r = bestRegsAll[k];
         cols.push({h:'energy_eV_'+f.label,       v:f.hv.map(x=>fmtNum(x,6))});
-        cols.push({h:f.label,                    v:f.hv.map((hv,i)=>fmtNum(Math.pow(f.FR[i]*hv, p.a),6))});
+        cols.push({h:f.label,                    v:f.hv.map((hv,i)=>fmtNum(Math.pow(f.FR[i]*hv, getFileParams(k).a),6))});
         cols.push({h:f.label+'_reg_linear',      v:f.hv.map(hv=> (r&&r.regs)  ? fmtNum(r.regs.slope*hv  + r.regs.intercept, 6)  : '')});
         cols.push({h:f.label+'_reg_baseline',    v:f.hv.map(hv=> (r&&r.regs2) ? fmtNum(r.regs2.slope*hv + r.regs2.intercept, 6) : '')});
       });
