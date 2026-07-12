@@ -129,6 +129,12 @@
           <option value=";" selected>; (semicolon)</option>
           <option value=",">, (comma)</option>
         </select>
+        <h3 style="margin:20px 0 6px">Keyboard shortcuts</h3>
+        <div class="shortcut-list">
+          <div><span><span class="kbd">&#8592;</span> <span class="kbd">&#8594;</span></span><span>Previous / next sample</span></div>
+          <div><span><span class="kbd">Ctrl</span>/<span class="kbd">&#8984;</span> + <span class="kbd">Z</span></span><span>Undo</span></div>
+          <div><span><span class="kbd">Ctrl</span>/<span class="kbd">&#8984;</span> + <span class="kbd">Y</span> or <span class="kbd">&#8679;</span>+<span class="kbd">Z</span></span><span>Redo</span></div>
+        </div>
       </div>
     </section>
 
@@ -181,9 +187,9 @@
         <h3 style="margin:0 0 0">ANALYSIS</h3>
         <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta). Eg is extracted from both the x-axis intersection and the baseline intersection of the regression line.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <button class="btn secondary nav-arrow" id="taucPrev" aria-label="Previous sample">‹</button>
+          <button class="btn secondary nav-arrow" id="taucPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
           <span id="taucIdx" class="pill" style="margin:0">1/1</span>
-          <button class="btn secondary nav-arrow" id="taucNext" aria-label="Next sample">›</button>
+          <button class="btn secondary nav-arrow" id="taucNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
           <span class="plot-subtitle" id="taucCurrentLabel">—</span>
         </div>
         <div class="row" style="align-items:flex-start">
@@ -338,9 +344,9 @@
         <div id="xrdAnalysisEmpty" style="display:none;color:var(--muted);font-size:14px;padding:18px 0 6px">All loaded files are set as the instrumental standard — load additional samples to analyse them here.</div>
         <div id="xrdAnalysisContent">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <button class="btn secondary nav-arrow" id="xrdPrev" aria-label="Previous sample">&#8249;</button>
+          <button class="btn secondary nav-arrow" id="xrdPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
           <span id="xrdIdx" class="pill" style="margin:0">1/1</span>
-          <button class="btn secondary nav-arrow" id="xrdNext" aria-label="Next sample">&#8250;</button>
+          <button class="btn secondary nav-arrow" id="xrdNext" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
           <span class="plot-subtitle" id="xrdCurrentLabel">—</span>
         </div>
         <div class="row" style="align-items:stretch">
@@ -692,6 +698,7 @@
       </div>
     </div>
   </div>
+  <button id="scrollTopBtn" type="button" aria-label="Back to top" title="Back to top">&#8593;</button>
   <!-- Apply the tab from the URL hash synchronously (before paint) so a reload
        lands on the current tab instead of flashing Home first. -->
   <script>

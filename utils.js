@@ -850,6 +850,27 @@ document.addEventListener('keydown', e=>{
   const did = isUndo ? st.performUndo() : st.performRedo();
   if (did) e.preventDefault();
 });
+// ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
+const SAMPLE_NAV = { tauc:['taucPrev','taucNext'], xrd:['xrdPrev','xrdNext'] };
+document.addEventListener('keydown', e=>{
+  if (e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = document.activeElement, tag = el && el.tagName;
+  if (tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT' || (el && el.isContentEditable)) return;
+  const nav = SAMPLE_NAV[_activeTab];
+  if (!nav) return;
+  const btn = document.getElementById(e.key==='ArrowLeft' ? nav[0] : nav[1]);
+  if (btn && btn.offsetParent!==null){ btn.click(); e.preventDefault(); }
+});
+// Sticky "back to top" button — visible only once the page is scrolled down.
+(function initScrollTop(){
+  const btn = document.getElementById('scrollTopBtn');
+  if (!btn) return;
+  const onScroll = ()=> btn.classList.toggle('visible', window.scrollY > 280);
+  window.addEventListener('scroll', onScroll, { passive:true });
+  btn.addEventListener('click', ()=> window.scrollTo({ top:0, behavior:'smooth' }));
+  onScroll();
+})();
 // Give every module tab a permanent (invisible) round SVG dot so its slot is
 // always reserved — the tab width never changes when the badge appears.
 (function initTabDots(){
@@ -931,7 +952,15 @@ const THEME_KEY = 'datatreat-theme';
 function currentTheme(){ return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
 function applyTheme(theme, persist){
   theme = theme === 'light' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', theme);
+  const root = document.documentElement;
+  // Smoothly cross-fade colours on a user-initiated switch (not the initial sync);
+  // a temporary class scopes the transition to the toggle so hovers stay snappy.
+  if (persist && root.getAttribute('data-theme') !== theme){
+    root.classList.add('theme-anim');
+    clearTimeout(applyTheme._t);
+    applyTheme._t = setTimeout(()=>root.classList.remove('theme-anim'), 320);
+  }
+  root.setAttribute('data-theme', theme);
   if (persist){ try { localStorage.setItem(THEME_KEY, theme); } catch(e){} }
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');

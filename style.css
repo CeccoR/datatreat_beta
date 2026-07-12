@@ -1,3 +1,13 @@
+/* Inter (variable, Latin subset) — self-hosted so the app stays fully offline.
+   font-display:swap shows the system fallback until the font is ready. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('inter-latin.woff2') format('woff2');
+}
+
 :root {
   --bg: #0e1316;
   --panel: #161f24;
@@ -72,10 +82,12 @@
 }
 body {
   margin: 0;
-  font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
+/* Tabular figures keep numeric columns/readouts aligned in the data tables */
+table, input, .stat, .pill, .plot-readout { font-variant-numeric: tabular-nums; }
 header {
   display: flex;
   align-items: center;
@@ -315,7 +327,62 @@ main {
 }
 .tab.active {
   display: block;
+  animation: tab-fade 0.15s ease;
 }
+@keyframes tab-fade { from { opacity: 0; } to { opacity: 1; } }
+/* Cross-fade colours during a light/dark toggle (scoped to .theme-anim so it only
+   runs on the switch, keeping normal hover/press feedback instant) */
+:root.theme-anim, :root.theme-anim * {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, fill 0.25s ease, stroke 0.25s ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab.active { animation: none; }
+  :root.theme-anim, :root.theme-anim * { transition: none !important; }
+}
+/* Keyboard-shortcut reference (Settings) */
+.shortcut-list { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--text); }
+.shortcut-list > div { display: flex; align-items: center; gap: 10px; }
+.shortcut-list > div > span:last-child { color: var(--muted); }
+.kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel2);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text);
+}
+/* Sticky "back to top" button — hidden until the page is scrolled down */
+#scrollTopBtn {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.15s ease, border-color 0.15s ease;
+  z-index: 900;
+}
+#scrollTopBtn.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+#scrollTopBtn:hover { color: var(--accent); border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { #scrollTopBtn { transition: opacity 0.2s ease; } }
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
