@@ -8,45 +8,59 @@ import { Plot } from './plot.js';
   let files = []; // {name,label,wl[],FR[],hv[]}  (each on its own native axis)
   let currIndex=0;
   let plot;
-  let vlines = {};
+  let vlines = {};            // active interval lines (points at the current sample's set)
   let bestRegsAll = [];
 
-  // ---- Per-sample analysis parameters (all/one, mirroring the XRD module) ----
-  // Togglable fields: a (direct/indirect exponent) and the two smoothing windows.
-  // M/M2 (regression windows) are always shared — no toggle.
-  const taucMode = { a:'shared', N:'shared', N2:'shared' };   // 'shared' | 'per'
-  const taucShared = { a:0.5, N:1, N2:10, M:50, M2:50 };      // shared values / defaults
-  let   taucPer = [];                                          // per-sample overrides: {a?,N?,N2?}
-  const TAUC_TOGGLE = { taucModeA:'a', taucModeN:'N', taucModeN2:'N2' }; // toggle id -> field
+  // ---- all/one analysis mode (single global toggle) ----
+  // 'shared': every sample uses one common parameter set AND one common set of
+  //           interval lines. 'per': each sample is fully independent — its own
+  //           exponent, smoothing/regression windows and interval-line positions.
+  let   taucMode = 'shared';                             // 'shared' | 'per'
+  const taucShared = { a:0.5, N:1, N2:10, M:50, M2:50 }; // common params (shared mode)
+  let   sharedVlines = {};                               // common interval lines (shared mode)
+  let   taucPer = [];                                    // per sample: {a,N,N2,M,M2,vlines:{v1..v4}}
 
-  // Resolve the effective params for a given file index (respects shared/per mode)
+  const clampN = v => Math.max(1, Math.round(v));
+  const clampM = v => Math.max(2, Math.round(v));
+
+  // Default interval-line positions from a sample's own energy range
+  function defaultVlinesFor(i){
+    const hv = files[i].hv, lo = minArr(hv), hi = maxArr(hv), d = hi - lo;
+    return { v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d };
+  }
+  // The interval-line set used for sample i (shared object, or the sample's own)
+  function vlinesFor(i){
+    if (taucMode==='shared') return sharedVlines;
+    let pp = taucPer[i]; if (!pp) pp = taucPer[i] = {};
+    if (!pp.vlines || !isFinite(pp.vlines.v1)) pp.vlines = defaultVlinesFor(i);
+    return pp.vlines;
+  }
+  // Resolve the effective params for a given file index
   function getFileParams(i){
-    const pp = taucPer[i] || {};
-    const g = k => (taucMode[k]==='per') ? (pp[k] ?? taucShared[k]) : taucShared[k];
+    const s = taucShared;
+    const src = (taucMode==='per') ? (taucPer[i] || {}) : s;
     return {
-      a:  g('a'),
-      N:  Math.max(1, Math.round(g('N'))),
-      N2: Math.max(1, Math.round(g('N2'))),
-      M:  Math.max(2, Math.round(taucShared.M)),
-      M2: Math.max(2, Math.round(taucShared.M2)),
+      a:  (src.a  ?? s.a),
+      N:  clampN(src.N  ?? s.N),
+      N2: clampN(src.N2 ?? s.N2),
+      M:  clampM(src.M  ?? s.M),
+      M2: clampM(src.M2 ?? s.M2),
     };
   }
   function curParams(){ return getFileParams(currIndex); }
 
-  // Store one field's value into the appropriate slot for the current sample
-  function setField(k, v){
-    if (taucMode[k]==='per'){ if (!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex][k]=v; }
-    else taucShared[k]=v;
-  }
-  // Read the input fields into the store (for the current sample)
+  // Read the input fields into the active store (shared, or the current sample)
   function readInputsToStore(){
-    const aVal  = parseFloat(document.getElementById('taucA').value);
-    const nVal  = Math.max(1, Math.round(+document.getElementById('taucN').value  || 1));
-    const n2Val = Math.max(1, Math.round(+document.getElementById('taucN2').value || 1));
-    if (isFinite(aVal)) setField('a', aVal);
-    setField('N', nVal); setField('N2', n2Val);
-    taucShared.M  = Math.max(2, Math.round(+document.getElementById('taucM').value  || 2));
-    taucShared.M2 = Math.max(2, Math.round(+document.getElementById('taucM2').value || 2));
+    const vals = {
+      a:  parseFloat(document.getElementById('taucA').value),
+      N:  clampN(+document.getElementById('taucN').value  || 1),
+      N2: clampN(+document.getElementById('taucN2').value || 1),
+      M:  clampM(+document.getElementById('taucM').value  || 2),
+      M2: clampM(+document.getElementById('taucM2').value || 2),
+    };
+    if (!isFinite(vals.a)) delete vals.a;
+    if (taucMode==='shared') Object.assign(taucShared, vals);
+    else { const pp = taucPer[currIndex] || (taucPer[currIndex]={}); Object.assign(pp, vals); }
   }
   // Push the current sample's stored params into the input fields
   function writeStoreToInputs(){
@@ -59,9 +73,7 @@ import { Plot } from './plot.js';
     document.getElementById('taucNExp').textContent = p.a;
   }
   function syncTaucModeButtons(){
-    Object.entries(TAUC_TOGGLE).forEach(([tid, key])=>{
-      document.querySelectorAll('#'+tid+' button').forEach(btn=> btn.classList.toggle('active', btn.dataset.m===taucMode[key]));
-    });
+    document.querySelectorAll('#taucModeAll button').forEach(btn=> btn.classList.toggle('active', btn.dataset.m===taucMode));
   }
 
   // per-upload invalid names (files that were skipped); persists until all files are removed
@@ -99,28 +111,29 @@ import { Plot } from './plot.js';
       onLabelChange(i, v){ files[i].label=v; updateTaucResults(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateTaucResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; taucPer=[]; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; vlines={}; rebuildTaucAlerts(); afterFilesChange(); },
+      onRemoveAll(){ files.length=0; taucPer=[]; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; sharedVlines={}; rebuildTaucAlerts(); afterFilesChange(); },
     };
   }
 
   /* ---- Undo/redo: snapshot the reversible state (file order/labels/colors,
      the draggable line positions and the analysis parameters). Raw spectra
      arrays are shared by reference; only metadata is cloned. ---- */
+  const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
   function taucSnapshot(){
     return {
       files: files.map(f=>({...f})),
-      vlines: {...vlines},
-      mode: {...taucMode},
+      mode: taucMode,
       shared: {...taucShared},
-      per: taucPer.map(p=>({...p})),
+      sharedVlines: {...sharedVlines},
+      per: taucPer.map(clonePer),
     };
   }
   function taucRestore(s){
     files = s.files.map(f=>({...f}));
-    vlines = {...s.vlines};
-    if (s.mode)   Object.assign(taucMode, s.mode);
+    taucMode = (typeof s.mode==='string') ? s.mode : 'shared';   // older snapshots stored a per-field object
     if (s.shared) Object.assign(taucShared, s.shared);
-    taucPer = s.per ? s.per.map(p=>({...p})) : files.map(()=>({}));
+    sharedVlines = s.sharedVlines ? {...s.sharedVlines} : (s.vlines ? {...s.vlines} : {});
+    taucPer = s.per ? s.per.map(clonePer) : files.map(()=>({}));
     // Backward compatibility with pre-all/one snapshots (params stored by input id)
     if (s.params){
       taucShared.a  = parseFloat(s.params.taucA);
@@ -223,11 +236,11 @@ import { Plot } from './plot.js';
     plot = new Plot(document.getElementById('taucSvg'), {xlabel:'hν (eV)', ylabelSvg:'[F(R)·hν]<tspan baseline-shift="super" font-size="8">a</tspan>', xTickStep:0.5, noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const [hvMin, hvMax] = unionHv();
-    if (!isFinite(vlines.v1)){
-      vlines.v1 = hvMin + 0.6*(hvMax-hvMin);
-      vlines.v2 = hvMin + 0.8*(hvMax-hvMin);
-      vlines.v3 = hvMin + 0.2*(hvMax-hvMin);
-      vlines.v4 = hvMin + 0.4*(hvMax-hvMin);
+    if (!isFinite(sharedVlines.v1)){
+      sharedVlines.v1 = hvMin + 0.6*(hvMax-hvMin);
+      sharedVlines.v2 = hvMin + 0.8*(hvMax-hvMin);
+      sharedVlines.v3 = hvMin + 0.2*(hvMax-hvMin);
+      sharedVlines.v4 = hvMin + 0.4*(hvMax-hvMin);
     }
     updateTaucView();
   }
@@ -285,14 +298,15 @@ import { Plot } from './plot.js';
 
   function processAll(){
     bestRegsAll = files.map((f,k)=>{
-      const fp = getFileParams(k);
-      const r = analyzeOneFile(f.hv, f.FR, fp.a, fp.N, fp.M, vlines.v1, vlines.v2, fp.M2, vlines.v3, vlines.v4);
+      const fp = getFileParams(k), vl = vlinesFor(k);
+      const r = analyzeOneFile(f.hv, f.FR, fp.a, fp.N, fp.M, vl.v1, vl.v2, fp.M2, vl.v3, vl.v4);
       return {label:f.label, ...r};
     });
   }
 
   function updateTaucView(preserveView){
     if (!plot || !files.length) return;
+    vlines = vlinesFor(currIndex);   // point at the current sample's interval lines
     const p = curParams();
     const hv = files[currIndex].hv, frArr = files[currIndex].FR;
     document.getElementById('taucCurrentLabel').textContent = files[currIndex].label;
@@ -393,20 +407,25 @@ import { Plot } from './plot.js';
     el.addEventListener('change', ()=>{ if (files.length) hist.commit(); });
   });
 
-  // Per-field shared/per (all/one) toggles for a, N and N2
-  Object.entries(TAUC_TOGGLE).forEach(([tid, key])=>{
-    document.querySelectorAll('#'+tid+' button').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        if (btn.classList.contains('active')) return;
-        document.querySelectorAll('#'+tid+' button').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        const cur = getFileParams(currIndex)[key];   // value currently shown
-        taucMode[key] = btn.dataset.m;
-        if (btn.dataset.m==='shared') taucShared[key] = cur;               // "all": adopt shown value everywhere
-        else { if (!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex][key] = cur; } // "one": keep on this sample only
-        writeStoreToInputs();
-        if (files.length){ if (plot) updateTaucView(true); hist.commit(); }
-      });
+  // Single all/one toggle: 'all' = one common param set + shared interval lines;
+  // 'one' = every sample fully independent (params AND interval-line positions).
+  document.querySelectorAll('#taucModeAll button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if (btn.classList.contains('active')) return;
+      const mode = btn.dataset.m;
+      if (mode==='per'){
+        // Seed each sample's own set: params inherit the current shared values,
+        // interval lines default to that sample's own energy range.
+        files.forEach((f,i)=>{
+          const pp = taucPer[i] || (taucPer[i]={});
+          ['a','N','N2','M','M2'].forEach(k=>{ if (pp[k]==null) pp[k]=taucShared[k]; });
+          if (!pp.vlines || !isFinite(pp.vlines.v1)) pp.vlines = defaultVlinesFor(i);
+        });
+      }
+      taucMode = mode;
+      syncTaucModeButtons();
+      writeStoreToInputs();
+      if (files.length){ if (plot) updateTaucView(); hist.commit(); }
     });
   });
 
@@ -482,9 +501,11 @@ import { Plot } from './plot.js';
     });
     plot1.attachTools(plot1.svg.closest('.plot-wrap'));
 
-    // Plot 2: Eg bar chart
+    // Plot 2: Eg bar chart. With mixed exponents (per-sample mode) there is no single
+    // Direct/Indirect qualifier, so drop it from the title and axis label.
+    const egLabel = aUniform ? (aVals[0]===2 ? 'Direct' : 'Indirect') : '';
     const barTitleEl = document.getElementById('taucBarTitle');
-    if (barTitleEl) barTitleEl.textContent = (aUniform ? (aVals[0]===2 ? 'Direct ' : 'Indirect ') : '') + 'Energy Band Gap';
+    if (barTitleEl) barTitleEl.textContent = (egLabel ? egLabel+' ' : '') + 'Energy Band Gap';
     const leg2 = document.getElementById('taucResLegend2'); leg2.innerHTML='';
     const barAlertDiv = document.getElementById('taucBarAlert'); barAlertDiv.innerHTML='';
     const egs = bestRegsAll.map(r=>r.Eg), egErrs = bestRegsAll.map(r=>r.EgErr);
@@ -505,7 +526,7 @@ import { Plot } from './plot.js';
       barSvg.style.display='none'; barWrap.style.display='none';
     } else {
       barSvg.style.display=''; barWrap.style.display='';
-      const plot2 = new Plot(barSvg, {xlabel:'', ylabelSvg:`${egLabel} Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, noXTickLabels:true});
+      const plot2 = new Plot(barSvg, {xlabel:'', ylabelSvg:`${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, noXTickLabels:true});
       const ymax2 = Math.max(...posVals)*1.3;
       plot2.setRange(0, n+1, 0, ymax2||1);
       plot2.drawAxes();

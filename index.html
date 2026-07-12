@@ -202,18 +202,19 @@
             <div id="taucAlert"></div>
           </div>
           <div class="col mw280" style="align-self:flex-start">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px">
+              <label style="margin:0" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">Parameters per sample</label>
+              <div class="xrd-seg mode-seg" id="taucModeAll"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div>
+            </div>
             <label>Tauc exponent (0.5 for indirect semiconductors, 2 for direct semiconductors)</label>
-            <div class="field-row"><select id="taucA">
-                <option value="0.5" selected>0.5</option>
-                <option value="2">2</option>
-              </select>
-              <div class="xrd-seg mode-seg" id="taucModeA"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div>
+            <select id="taucA">
+              <option value="0.5" selected>0.5</option>
+              <option value="2">2</option>
+            </select>
             <label>[F(R)hν]<sup id="taucNExp">0.5</sup> smoothing window</label>
-            <div class="field-row"><input type="number" id="taucN" value="1" min="1">
-              <div class="xrd-seg mode-seg" id="taucModeN"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div>
+            <input type="number" id="taucN" value="1" min="1">
             <label>Derivative smoothing window</label>
-            <div class="field-row"><input type="number" id="taucN2" value="10" min="1">
-              <div class="xrd-seg mode-seg" id="taucModeN2"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div>
+            <input type="number" id="taucN2" value="10" min="1">
             <label>Tauc linear region regression window</label>
             <input type="number" id="taucM" value="50" min="2">
             <div class="stat">RMSE: <b id="taucRMSE1">-</b></div>
