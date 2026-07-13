@@ -1122,6 +1122,149 @@ function guardNumberInputs(root){
 guardNumberInputs(document);
 
 /* =========================================================
+   CUSTOM DATE-TIME FIELD  (GG/MM/AAAA hh:mm, 24h)
+   Fully custom so no browser-native picker chrome appears anywhere. The field is
+   made of individually focusable segments — Tab/Shift-Tab move one segment at a
+   time, digits type in place, ↑/↓ increment. A calendar button opens an in-app
+   modal styled like the rest of the UI.
+========================================================= */
+const DT_SEGS = [
+  { key:'day',   len:2, min:1, max:31,   ph:'GG'   },
+  { key:'month', len:2, min:1, max:12,   ph:'MM'   },
+  { key:'year',  len:4, min:1900, max:2100, ph:'AAAA' },
+  { key:'hour',  len:2, min:0, max:23,   ph:'hh'   },
+  { key:'min',   len:2, min:0, max:59,   ph:'mm'   },
+];
+const DT_SEP = { day:'/', month:'/', year:' ', hour:':' }; // separator drawn after each segment
+function dtDaysInMonth(y,m){ return new Date(y, m, 0).getDate(); } // m: 1-12
+function createDateTimeField(initial, onChange){
+  let val = { day:null, month:null, year:null, hour:null, min:null };
+  const load = d => { if (d instanceof Date && !isNaN(d)) val = { day:d.getDate(), month:d.getMonth()+1, year:d.getFullYear(), hour:d.getHours(), min:d.getMinutes() }; };
+  load(initial);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'dt-field';
+  const segEls = {};
+  DT_SEGS.forEach(s=>{
+    const el = document.createElement('span');
+    el.className = 'dt-seg'; el.tabIndex = 0; el.dataset.seg = s.key;
+    el.setAttribute('role','spinbutton'); el.setAttribute('aria-label', s.key);
+    segEls[s.key] = el; wrap.appendChild(el);
+    if (DT_SEP[s.key] != null){ const sep = document.createElement('span'); sep.className='dt-sep'; sep.textContent = DT_SEP[s.key]; wrap.appendChild(sep); }
+  });
+  const calBtn = document.createElement('button');
+  calBtn.type='button'; calBtn.className='dt-cal-btn'; calBtn.tabIndex=-1; calBtn.setAttribute('aria-label','Open calendar');
+  calBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>';
+  wrap.appendChild(calBtn);
+
+  const pad = (n,l)=>String(n).padStart(l,'0');
+  function render(){
+    DT_SEGS.forEach(s=>{
+      const v = val[s.key], el = segEls[s.key];
+      if (v==null){ el.textContent = s.ph; el.classList.add('empty'); }
+      else { el.textContent = pad(v, s.len); el.classList.remove('empty'); }
+    });
+  }
+  function currentDate(){
+    if (DT_SEGS.some(s=>val[s.key]==null)) return null;
+    const d = Math.min(val.day, dtDaysInMonth(val.year, val.month));
+    return new Date(val.year, val.month-1, d, val.hour, val.min, 0, 0);
+  }
+  function emit(){ const d = currentDate(); if (d) onChange(d); }
+
+  const idxOf = k => DT_SEGS.findIndex(s=>s.key===k);
+  const moveSeg = (k, dir)=>{ const i=idxOf(k)+dir; if (i>=0 && i<DT_SEGS.length) segEls[DT_SEGS[i].key].focus(); };
+  let buf = '';
+  DT_SEGS.forEach(s=>{
+    const el = segEls[s.key];
+    el.addEventListener('focus', ()=>{ buf=''; el.classList.add('sel'); });
+    el.addEventListener('blur', ()=>{ el.classList.remove('sel'); emit(); });
+    el.addEventListener('keydown', e=>{
+      if (e.key>='0' && e.key<='9'){
+        e.preventDefault();
+        buf = (buf.length>=s.len ? e.key : buf + e.key);
+        let n = parseInt(buf,10);
+        if (n > s.max){ n = parseInt(e.key,10); buf = e.key; }
+        val[s.key] = Math.max(s.min, n); render();
+        if (buf.length>=s.len || n*10 > s.max){ buf=''; moveSeg(s.key,+1); }
+      } else if (e.key==='ArrowUp' || e.key==='ArrowDown'){
+        e.preventDefault();
+        const step = e.key==='ArrowUp' ? 1 : -1;
+        let v = (val[s.key]==null) ? (step>0? s.min : s.max) : val[s.key]+step;
+        if (v > s.max) v = s.min; if (v < s.min) v = s.max;
+        val[s.key]=v; buf=''; render(); emit();
+      } else if (e.key==='ArrowLeft'){ e.preventDefault(); moveSeg(s.key,-1); }
+      else if (e.key==='ArrowRight'){ e.preventDefault(); moveSeg(s.key,+1); }
+      else if (e.key==='Backspace' || e.key==='Delete'){ e.preventDefault(); val[s.key]=null; buf=''; render(); }
+      // Tab falls through to the browser (moves to the next focusable segment)
+      e.stopPropagation(); // keep global arrow-nav / undo shortcuts from firing
+    });
+  });
+  calBtn.addEventListener('click', ()=> openDateModal(currentDate() || new Date(), d=>{ load(d); render(); emit(); }));
+
+  render();
+  return { el: wrap, get: currentDate, set: d=>{ load(d); render(); } };
+}
+
+// In-app modal calendar (month grid + time steppers). Calls onPick(Date) on OK.
+function openDateModal(baseDate, onPick){
+  const view = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+  const sel = new Date(baseDate);
+  const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop dt-modal-backdrop';
+  const modal = document.createElement('div'); modal.className = 'modal-box dt-modal'; backdrop.appendChild(modal);
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const WD = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+  const p2 = n => String(n).padStart(2,'0');
+  function build(){
+    const y=view.getFullYear(), m=view.getMonth();
+    let cells='';
+    const startDow = (new Date(y,m,1).getDay()+6)%7;      // 0 = Monday
+    const dim = dtDaysInMonth(y, m+1);
+    const today = new Date();
+    for (let i=0;i<startDow;i++) cells += '<span class="dt-day empty"></span>';
+    for (let d=1; d<=dim; d++){
+      const isSel = sel.getFullYear()===y && sel.getMonth()===m && sel.getDate()===d;
+      const isToday = today.getFullYear()===y && today.getMonth()===m && today.getDate()===d;
+      cells += `<button type="button" class="dt-day${isSel?' sel':''}${isToday?' today':''}" data-day="${d}">${d}</button>`;
+    }
+    modal.innerHTML = `
+      <div class="dt-modal-head">
+        <button type="button" class="dt-nav" data-nav="-1" aria-label="Previous month">&#8249;</button>
+        <span class="dt-title">${MONTHS[m]} ${y}</span>
+        <button type="button" class="dt-nav" data-nav="1" aria-label="Next month">&#8250;</button>
+      </div>
+      <div class="dt-grid dt-week">${WD.map(d=>`<span class="dt-wd">${d}</span>`).join('')}</div>
+      <div class="dt-grid dt-days">${cells}</div>
+      <div class="dt-time">
+        <span class="dt-time-lbl">Time</span>
+        <span class="dt-time-field"><button type="button" class="dt-step" data-t="h" data-d="1">&#9650;</button><b>${p2(sel.getHours())}</b><button type="button" class="dt-step" data-t="h" data-d="-1">&#9660;</button></span>
+        <b class="dt-colon">:</b>
+        <span class="dt-time-field"><button type="button" class="dt-step" data-t="m" data-d="1">&#9650;</button><b>${p2(sel.getMinutes())}</b><button type="button" class="dt-step" data-t="m" data-d="-1">&#9660;</button></span>
+      </div>
+      <div class="dt-modal-foot"><button type="button" class="btn secondary dt-cancel">Cancel</button><button type="button" class="btn dt-ok">OK</button></div>`;
+  }
+  function close(){ document.removeEventListener('keydown', onKey); backdrop.remove(); }
+  function onKey(e){ if (e.key==='Escape') close(); }
+  build();
+  modal.addEventListener('click', e=>{
+    const nav = e.target.closest('.dt-nav');
+    if (nav){ view.setMonth(view.getMonth() + (+nav.dataset.nav)); build(); return; }
+    const day = e.target.closest('.dt-day');
+    if (day && !day.classList.contains('empty')){ sel.setFullYear(view.getFullYear(), view.getMonth(), +day.dataset.day); build(); return; }
+    const step = e.target.closest('.dt-step');
+    if (step){ const d=+step.dataset.d;
+      if (step.dataset.t==='h') sel.setHours((sel.getHours()+d+24)%24);
+      else sel.setMinutes((sel.getMinutes()+d+60)%60);
+      build(); return; }
+    if (e.target.closest('.dt-cancel')){ close(); return; }
+    if (e.target.closest('.dt-ok')){ onPick(new Date(sel)); close(); return; }
+  });
+  backdrop.addEventListener('click', e=>{ if (e.target===backdrop) close(); });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(backdrop);
+}
+
+/* =========================================================
    ALERT HELPERS
 ========================================================= */
 // dismissInvalidAction / dismissWarnAction are data-action values handled by the
@@ -1185,5 +1328,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, applyTheme, currentTheme, guardNumericInput
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, applyTheme, currentTheme, guardNumericInput, createDateTimeField
 };

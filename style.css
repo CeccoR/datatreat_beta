@@ -434,7 +434,6 @@ label {
 }
 input[type="text"],
 input[type="number"],
-input[type="datetime-local"],
 select {
   width: 100%;
   padding: 7px 9px;
@@ -448,30 +447,81 @@ input[type="file"] {
   font-size: 13px;
   color: var(--muted);
 }
-/* Date/time picker: follow the active theme */
-input[type="datetime-local"] { color-scheme: dark; }
-:root[data-theme="light"] input[type="datetime-local"] { color-scheme: light; }
-/* Hide native calendar icon — replaced by .date-pick-btn */
-input[type="datetime-local"]::-webkit-calendar-picker-indicator { display: none; }
 
-/* Custom calendar icon button alongside datetime-local inputs */
-.date-input-wrap { position: relative; display: flex; align-items: center; }
-.date-input-wrap input[type="datetime-local"] { flex: 1; padding-right: 30px; }
-.date-pick-btn {
-  position: absolute;
-  right: 6px;
+/* ===== Custom date-time field (segmented text + calendar button) ===== */
+.dt-field {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 6px 6px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-field:focus-within { border-color: var(--accent); }
+.dt-seg {
+  padding: 1px 2px;
+  border-radius: 3px;
+  cursor: text;
+  outline: none;
+  white-space: nowrap;
+}
+.dt-seg.empty { color: var(--muted); }
+.dt-seg.sel, .dt-seg:focus { background: var(--accent); color: var(--on-accent); }
+.dt-sep { color: var(--muted); padding: 0 1px; }
+.dt-cal-btn {
+  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: center;
   background: none;
   border: none;
-  padding: 2px;
+  padding: 2px 2px 2px 6px;
   cursor: pointer;
   color: var(--muted);
   transition: color 0.15s;
-  border-radius: 4px;
 }
-.date-pick-btn:hover { color: var(--text); }
+.dt-cal-btn:hover { color: var(--text); }
+
+/* Calendar modal (inherits card bg/border/shadow from .modal-box) */
+.dt-modal { width: 300px; padding: 16px; }
+.dt-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.dt-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.dt-nav {
+  width: 30px; height: 30px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel2); color: var(--muted);
+  cursor: pointer; font-size: 15px; line-height: 1;
+}
+.dt-nav:hover { color: var(--accent); border-color: var(--accent); }
+.dt-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dt-week { margin-bottom: 4px; }
+.dt-wd { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0; }
+.dt-day {
+  aspect-ratio: 1 / 1;
+  border: 1px solid transparent; border-radius: 6px;
+  background: none; color: var(--text); cursor: pointer;
+  font-size: 12px; display: flex; align-items: center; justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.dt-day:hover { background: var(--panel); }
+.dt-day.today { border-color: var(--line); }
+.dt-day.sel { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.dt-day.empty { pointer-events: none; }
+.dt-time { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.dt-time-lbl { font-size: 13px; color: var(--muted); margin-right: auto; }
+.dt-time-field { display: inline-flex; align-items: center; gap: 4px; }
+.dt-time-field b { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.dt-colon { color: var(--muted); }
+.dt-step {
+  width: 22px; height: 20px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--panel2); color: var(--muted); cursor: pointer; font-size: 9px; line-height: 1; padding: 0;
+}
+.dt-step:hover { color: var(--accent); border-color: var(--accent); }
+.dt-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 button.btn {
   background: var(--accent);
   color: var(--on-accent);
