@@ -28,6 +28,59 @@ import { Plot } from './plot.js';
     const hv = files[i].hv, lo = minArr(hv), hi = maxArr(hv), d = hi - lo;
     return { v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d };
   }
+
+  // ---- Auto-suggested interval-line positions ----
+  // SNIP background (peak-clipping, downward) of an array.
+  function snipBaseline(y, halfWin){
+    const n = y.length, z = Float64Array.from(y);
+    for (let w = halfWin; w >= 1; w--)
+      for (let i = w; i < n-w; i++){ const a = (z[i-w]+z[i+w])/2; if (a < z[i]) z[i] = a; }
+    return z;
+  }
+  // Suggest {v1,v2,v3,v4} for sample i from the Tauc-curve derivative:
+  //  - SNIP background of the derivative (wide window, ~150 pts)
+  //  - v1 = where the background-subtracted derivative, descending from its peak
+  //    toward lower energy, drops back below 5% of the peak height (the onset)
+  //  - v2 = mirror of v1 about the derivative peak (2*xPeak - v1)
+  //  - baseline window = [v1 - 1.6 eV, v1 - 0.1 eV]
+  function suggestOne(i){
+    const fp = getFileParams(i), hv = files[i].hv, fr = files[i].FR, n = hv.length;
+    if (n < 5) return null;
+    const Yraw = fr.map((v,k)=>Math.pow(v*hv[k], fp.a));
+    const Ys = movingAverage(Yraw, fp.N);
+    const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);
+    const win = Math.min(150, Math.max(1, Math.floor((n-1)/2)));
+    const bg = snipBaseline(dYs, win);
+    const detr = dYs.map((v,k)=> v - bg[k]);
+    let pk = 0, pkIdx = -1;
+    for (let k=0;k<n;k++) if (detr[k] > pk){ pk = detr[k]; pkIdx = k; }
+    if (pkIdx < 0 || pk <= 0) return null;
+    const thr = 0.05 * pk;
+    const dir = (hv[0] > hv[n-1]) ? 1 : -1;   // step index toward lower energy
+    let k = pkIdx;
+    while (k+dir >= 0 && k+dir < n && detr[k+dir] >= thr) k += dir;
+    const iOnset = (k+dir >= 0 && k+dir < n) ? k+dir : k;
+    const v1 = hv[iOnset], xPeak = hv[pkIdx];
+    const lo = Math.min(hv[0], hv[n-1]), hi = Math.max(hv[0], hv[n-1]);
+    const clamp = x => Math.max(lo, Math.min(hi, x));
+    return { v1: clamp(v1), v2: clamp(2*xPeak - v1), v3: clamp(v1-1.6), v4: clamp(v1-0.1) };
+  }
+  // Shared (all-mode) suggestion: linear region [min v1, min v2] over all samples,
+  // baseline computed once from min(v1).
+  function suggestShared(){
+    const ss = files.map((f,i)=>suggestOne(i)).filter(Boolean);
+    if (!ss.length) return null;
+    const minV1 = Math.min(...ss.map(s=>s.v1)), minV2 = Math.min(...ss.map(s=>s.v2));
+    let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
+    const clamp = x => Math.max(lo, Math.min(hi, x));
+    return { v1: clamp(minV1), v2: clamp(minV2), v3: clamp(minV1-1.6), v4: clamp(minV1-0.1) };
+  }
+  // Apply suggestions to the whole workspace (used once on first upload).
+  function autoSuggestAll(){
+    if (!files.length) return;
+    if (taucMode==='per'){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!taucPer[i]) taucPer[i]={}; taucPer[i].vlines = s; } }); }
+    else { const s = suggestShared(); if (s) sharedVlines = s; }
+  }
   // The interval-line set used for sample i (shared object, or the sample's own)
   function vlinesFor(i){
     if (taucMode==='shared') return sharedVlines;
@@ -149,6 +202,7 @@ import { Plot } from './plot.js';
   registerTabRedraw('tauc', ()=>{ if (plot && files.length) updateTaucView(true); });
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
+    const hadFiles = files.length > 0;   // auto-suggest only on the first upload
     const existing = new Set(files.map(f=>f.name));
     const newInvalid = [];
     const alreadyLoaded = [];
@@ -199,6 +253,8 @@ import { Plot } from './plot.js';
     taucUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'tauc-dismiss-upload') : '';
     rebuildTaucAlerts();
     afterFilesChange();
+    // Once, when the first data lands: propose optimal interval-line positions.
+    if (!hadFiles && files.length){ autoSuggestAll(); writeStoreToInputs(); updateTaucView(); hist.commit(); }
   });
 
   function afterFilesChange(){
@@ -431,6 +487,15 @@ import { Plot } from './plot.js';
 
   document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; writeStoreToInputs(); updateTaucView(); };
   document.getElementById('taucNext').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex+1)%files.length; writeStoreToInputs(); updateTaucView(); };
+
+  // Re-propose interval-line positions on demand: current sample in one-mode,
+  // the shared set in all-mode.
+  document.getElementById('taucSuggest').onclick = ()=>{
+    if (!files.length) return;
+    if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
+    else { const s=suggestShared(); if (s) sharedVlines=s; }
+    updateTaucView(); hist.commit();
+  };
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
