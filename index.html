@@ -213,9 +213,8 @@
               <div class="xrd-seg mode-seg" id="taucModeAll"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div>
             </div>
             <button class="btn secondary" id="taucSuggest" style="width:100%;padding:6px 9px;margin-top:6px" title="Propose optimal Tauc-region and baseline line positions from the absorption edge">&#10022; Suggest line positions</button>
-            <div style="display:flex;gap:8px;margin-top:6px;padding:6px 8px;border:1px dashed var(--line);border-radius:7px">
-              <div style="flex:1"><label style="margin:0;font-size:11px">SNIP window (debug)</label><input type="number" id="taucSnipWin" value="150" min="1"></div>
-              <div style="flex:1"><label style="margin:0;font-size:11px">Threshold % (debug)</label><input type="number" id="taucThresh" value="5" min="0" step="0.5"></div>
+            <div style="margin-top:6px;padding:6px 8px;border:1px dashed var(--line);border-radius:7px">
+              <label style="margin:0;font-size:11px">Detachment threshold % (debug)</label><input type="number" id="taucThresh" value="5" min="0" step="0.5">
             </div>
             <label>Tauc exponent (0.5 for indirect semiconductors, 2 for direct semiconductors)</label>
             <select id="taucA">

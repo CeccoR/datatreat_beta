@@ -30,42 +30,35 @@ import { Plot } from './plot.js';
   }
 
   // ---- Auto-suggested interval-line positions ----
-  // SNIP background (peak-clipping, downward) of an array.
-  function snipBaseline(y, halfWin){
-    const n = y.length, z = Float64Array.from(y);
-    for (let w = halfWin; w >= 1; w--)
-      for (let i = w; i < n-w; i++){ const a = (z[i-w]+z[i+w])/2; if (a < z[i]) z[i] = a; }
-    return z;
-  }
-  // TEMP DEBUG: SNIP window and detachment threshold read from on-screen fields
-  function dbgSnipWin(){ const el=document.getElementById('taucSnipWin'); const v=el?parseInt(el.value,10):150; return Math.max(1, isFinite(v)?v:150); }
+  // TEMP DEBUG: detachment threshold (% of local peak height) read from the field.
   function dbgThreshFrac(){ const el=document.getElementById('taucThresh'); const v=el?parseFloat(el.value):5; return Math.max(0, (isFinite(v)?v:5))/100; }
-  // Suggest {v1,v2,v3,v4} for sample i from the Tauc-curve derivative:
-  //  - SNIP background of the derivative (wide window, ~150 pts)
-  //  - v1 = where the background-subtracted derivative, descending from its peak
-  //    toward lower energy, drops back below 5% of the peak height (the onset)
-  //  - v2 = mirror of v1 about the derivative peak (2*xPeak - v1)
-  //  - baseline window = [v1 - 1.6 eV, v1 - 0.1 eV]
-  function suggestOne(i){
+  // Peak / base of the Tauc-curve derivative for sample i (no window parameter):
+  //  - peak = the derivative maximum (the inflection = centre of the Tauc region)
+  //  - base = the derivative MINIMUM on the low-energy side of the peak (the pre-edge
+  //    background level, which is non-zero) → so the threshold is measured relative to
+  //    this local background rather than to 0
+  //  - onset v1 = descending from the peak toward lower energy, where the derivative
+  //    crosses base + threshold·(peak-base)
+  function derivEdge(i){
     const fp = getFileParams(i), hv = files[i].hv, fr = files[i].FR, n = hv.length;
     if (n < 5) return null;
     const Yraw = fr.map((v,k)=>Math.pow(v*hv[k], fp.a));
     const Ys = movingAverage(Yraw, fp.N);
     const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);
-    const win = Math.min(dbgSnipWin(), Math.max(1, Math.floor((n-1)/2)));
-    const bg = snipBaseline(dYs, win);
-    const detr = dYs.map((v,k)=> v - bg[k]);
-    // Main derivative peak = the absorption edge. Ignore a small margin at both ends
-    // so a spike at the spectrum boundary can't be mistaken for the edge.
+    // peak = derivative max, ignoring a small margin at both spectrum ends
     const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
-    let pk = 0, pkIdx = -1;
-    for (let k=margin;k<n-margin;k++) if (detr[k] > pk){ pk = detr[k]; pkIdx = k; }
-    if (pkIdx < 0 || pk <= 0) return null;
-    const thr = dbgThreshFrac() * pk;
+    let pk = -Infinity, pkIdx = -1;
+    for (let k=margin;k<n-margin;k++) if (dYs[k] > pk){ pk = dYs[k]; pkIdx = k; }
+    if (pkIdx < 0) return null;
     const xPeak = hv[pkIdx];
-    // Descend from the peak toward LOWER energy (order-independent: always step to the
-    // neighbour with the smaller hv) until the peak drops below 5% of its height; that
-    // crossing is the low-energy base = v1 (interpolated between the two samples).
+    // local background = smallest derivative value at energy below the peak
+    let base = Infinity;
+    for (let k=0;k<n;k++) if (hv[k] < xPeak && dYs[k] < base) base = dYs[k];
+    if (!isFinite(base)) base = Math.min(...dYs);
+    const H = pk - base;
+    if (H <= 0) return null;
+    const level = base + dbgThreshFrac()*H;
+    // descend from the peak toward LOWER energy until the derivative crosses `level`
     const lowerNbr = idx => {
       const a = idx-1, b = idx+1;
       if (a>=0 && (b>=n || hv[a] < hv[b])) return hv[a] < hv[idx] ? a : (b<n && hv[b] < hv[idx] ? b : -1);
@@ -75,17 +68,19 @@ import { Plot } from './plot.js';
     let cur = pkIdx, v1 = hv[pkIdx];
     while (true){
       const nb = lowerNbr(cur);
-      if (nb < 0) { v1 = hv[cur]; break; }               // reached the low-energy end
-      if (detr[nb] < thr){                                // crossed the threshold: interpolate
-        const t = (detr[cur] - thr) / (detr[cur] - detr[nb] || 1);
-        v1 = hv[cur] + t * (hv[nb] - hv[cur]);
-        break;
-      }
+      if (nb < 0){ v1 = hv[cur]; break; }
+      if (dYs[nb] < level){ const t = (dYs[cur]-level)/((dYs[cur]-dYs[nb])||1); v1 = hv[cur] + t*(hv[nb]-hv[cur]); break; }
       cur = nb;
     }
+    return { v1, xPeak, base, level, pk };
+  }
+  function suggestOne(i){
+    const e = derivEdge(i);
+    if (!e) return null;
+    const hv = files[i].hv, n = hv.length;
     const lo = Math.min(hv[0], hv[n-1]), hi = Math.max(hv[0], hv[n-1]);
     const clamp = x => Math.max(lo, Math.min(hi, x));
-    return { v1: clamp(v1), v2: clamp(2*xPeak - v1), v3: clamp(v1-1.6), v4: clamp(v1-0.1) };
+    return { v1: clamp(e.v1), v2: clamp(2*e.xPeak - e.v1), v3: clamp(e.v1-1.6), v4: clamp(e.v1-0.1) };
   }
   // Shared (all-mode) suggestion: linear region [min v1, min v2] over all samples,
   // baseline computed once from min(v1).
@@ -409,11 +404,14 @@ import { Plot } from './plot.js';
     plot.line(hv, Yraw, '#ffffff', 1);
     plot.line(hv, Ys, '#3aa0ff', 1.4);
     plot.line(hv, dYs, '#5fcf6a', 1);
-    // TEMP DEBUG: SNIP background of the derivative (same normalisation as the green curve)
+    // TEMP DEBUG: show the derivative's local background level (orange) and the
+    // detachment threshold level (yellow) that define the onset v1.
     {
-      const win = Math.min(dbgSnipWin(), Math.max(1, Math.floor((hv.length-1)/2)));
-      const bg = Array.from(snipBaseline(dYsRaw, win)).map(normD);
-      plot.line(hv, bg, '#ff9933', 1.2, '5,3');
+      const e = derivEdge(currIndex);
+      if (e){
+        plot.line(hv, hv.map(()=>normD(e.base)),  '#ff9933', 1,   '2,3');
+        plot.line(hv, hv.map(()=>normD(e.level)), '#ffd000', 1.2, '5,3');
+      }
     }
 
     const lo1=Math.min(vlines.v1,vlines.v2), hi1=Math.max(vlines.v1,vlines.v2);
@@ -526,8 +524,8 @@ import { Plot } from './plot.js';
     updateTaucView(); hist.commit();
   };
 
-  // TEMP DEBUG: live re-suggest when the SNIP window / threshold fields change
-  ['taucSnipWin','taucThresh'].forEach(id=>{
+  // TEMP DEBUG: live re-suggest when the threshold field changes
+  ['taucThresh'].forEach(id=>{
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', ()=>{
