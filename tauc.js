@@ -52,15 +52,34 @@ import { Plot } from './plot.js';
     const win = Math.min(150, Math.max(1, Math.floor((n-1)/2)));
     const bg = snipBaseline(dYs, win);
     const detr = dYs.map((v,k)=> v - bg[k]);
+    // Main derivative peak = the absorption edge. Ignore a small margin at both ends
+    // so a spike at the spectrum boundary can't be mistaken for the edge.
+    const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
     let pk = 0, pkIdx = -1;
-    for (let k=0;k<n;k++) if (detr[k] > pk){ pk = detr[k]; pkIdx = k; }
+    for (let k=margin;k<n-margin;k++) if (detr[k] > pk){ pk = detr[k]; pkIdx = k; }
     if (pkIdx < 0 || pk <= 0) return null;
     const thr = 0.05 * pk;
-    const dir = (hv[0] > hv[n-1]) ? 1 : -1;   // step index toward lower energy
-    let k = pkIdx;
-    while (k+dir >= 0 && k+dir < n && detr[k+dir] >= thr) k += dir;
-    const iOnset = (k+dir >= 0 && k+dir < n) ? k+dir : k;
-    const v1 = hv[iOnset], xPeak = hv[pkIdx];
+    const xPeak = hv[pkIdx];
+    // Descend from the peak toward LOWER energy (order-independent: always step to the
+    // neighbour with the smaller hv) until the peak drops below 5% of its height; that
+    // crossing is the low-energy base = v1 (interpolated between the two samples).
+    const lowerNbr = idx => {
+      const a = idx-1, b = idx+1;
+      if (a>=0 && (b>=n || hv[a] < hv[b])) return hv[a] < hv[idx] ? a : (b<n && hv[b] < hv[idx] ? b : -1);
+      if (b<n && hv[b] < hv[idx]) return b;
+      return (a>=0 && hv[a] < hv[idx]) ? a : -1;
+    };
+    let cur = pkIdx, v1 = hv[pkIdx];
+    while (true){
+      const nb = lowerNbr(cur);
+      if (nb < 0) { v1 = hv[cur]; break; }               // reached the low-energy end
+      if (detr[nb] < thr){                                // crossed the threshold: interpolate
+        const t = (detr[cur] - thr) / (detr[cur] - detr[nb] || 1);
+        v1 = hv[cur] + t * (hv[nb] - hv[cur]);
+        break;
+      }
+      cur = nb;
+    }
     const lo = Math.min(hv[0], hv[n-1]), hi = Math.max(hv[0], hv[n-1]);
     const clamp = x => Math.max(lo, Math.min(hi, x));
     return { v1: clamp(v1), v2: clamp(2*xPeak - v1), v3: clamp(v1-1.6), v4: clamp(v1-0.1) };
