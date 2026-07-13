@@ -37,6 +37,9 @@ import { Plot } from './plot.js';
       for (let i = w; i < n-w; i++){ const a = (z[i-w]+z[i+w])/2; if (a < z[i]) z[i] = a; }
     return z;
   }
+  // TEMP DEBUG: SNIP window and detachment threshold read from on-screen fields
+  function dbgSnipWin(){ const el=document.getElementById('taucSnipWin'); const v=el?parseInt(el.value,10):150; return Math.max(1, isFinite(v)?v:150); }
+  function dbgThreshFrac(){ const el=document.getElementById('taucThresh'); const v=el?parseFloat(el.value):5; return Math.max(0, (isFinite(v)?v:5))/100; }
   // Suggest {v1,v2,v3,v4} for sample i from the Tauc-curve derivative:
   //  - SNIP background of the derivative (wide window, ~150 pts)
   //  - v1 = where the background-subtracted derivative, descending from its peak
@@ -49,7 +52,7 @@ import { Plot } from './plot.js';
     const Yraw = fr.map((v,k)=>Math.pow(v*hv[k], fp.a));
     const Ys = movingAverage(Yraw, fp.N);
     const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);
-    const win = Math.min(150, Math.max(1, Math.floor((n-1)/2)));
+    const win = Math.min(dbgSnipWin(), Math.max(1, Math.floor((n-1)/2)));
     const bg = snipBaseline(dYs, win);
     const detr = dYs.map((v,k)=> v - bg[k]);
     // Main derivative peak = the absorption edge. Ignore a small margin at both ends
@@ -58,7 +61,7 @@ import { Plot } from './plot.js';
     let pk = 0, pkIdx = -1;
     for (let k=margin;k<n-margin;k++) if (detr[k] > pk){ pk = detr[k]; pkIdx = k; }
     if (pkIdx < 0 || pk <= 0) return null;
-    const thr = 0.05 * pk;
+    const thr = dbgThreshFrac() * pk;
     const xPeak = hv[pkIdx];
     // Descend from the peak toward LOWER energy (order-independent: always step to the
     // neighbour with the smaller hv) until the peak drops below 5% of its height; that
@@ -390,9 +393,10 @@ import { Plot } from './plot.js';
     const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], p.a));
     const Ys = movingAverage(Yraw, p.N);
     let dY = gradientArr(Ys, hv);
-    let dYs = movingAverage(dY, p.N2);
-    const dmin = minArr(dYs), dmax = maxArr(dYs), ymax = maxArr(Ys);
-    dYs = dYs.map(v=> (dmax-dmin)>0 ? (v-dmin)/(dmax-dmin)*ymax : v);
+    const dYsRaw = movingAverage(dY, p.N2);
+    const dmin = minArr(dYsRaw), dmax = maxArr(dYsRaw), ymax = maxArr(Ys);
+    const normD = v => (dmax-dmin)>0 ? (v-dmin)/(dmax-dmin)*ymax : v;
+    const dYs = dYsRaw.map(normD);
 
     // Capture current zoom so it can be kept across redraws (the full range
     // set below stays as the "home" reset target)
@@ -405,6 +409,12 @@ import { Plot } from './plot.js';
     plot.line(hv, Yraw, '#ffffff', 1);
     plot.line(hv, Ys, '#3aa0ff', 1.4);
     plot.line(hv, dYs, '#5fcf6a', 1);
+    // TEMP DEBUG: SNIP background of the derivative (same normalisation as the green curve)
+    {
+      const win = Math.min(dbgSnipWin(), Math.max(1, Math.floor((hv.length-1)/2)));
+      const bg = Array.from(snipBaseline(dYsRaw, win)).map(normD);
+      plot.line(hv, bg, '#ff9933', 1.2, '5,3');
+    }
 
     const lo1=Math.min(vlines.v1,vlines.v2), hi1=Math.max(vlines.v1,vlines.v2);
     const lo2=Math.min(vlines.v3,vlines.v4), hi2=Math.max(vlines.v3,vlines.v4);
@@ -515,6 +525,18 @@ import { Plot } from './plot.js';
     else { const s=suggestShared(); if (s) sharedVlines=s; }
     updateTaucView(); hist.commit();
   };
+
+  // TEMP DEBUG: live re-suggest when the SNIP window / threshold fields change
+  ['taucSnipWin','taucThresh'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', ()=>{
+      if (!files.length) return;
+      if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
+      else { const s=suggestShared(); if (s) sharedVlines=s; }
+      updateTaucView(true);
+    });
+  });
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
