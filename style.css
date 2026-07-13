@@ -327,7 +327,7 @@ main {
 }
 .tab.active {
   display: block;
-  animation: tab-fade 0.18s ease;
+  animation: tab-fade 0.25s ease;
 }
 @keyframes tab-fade {
   from { opacity: 0; transform: translateY(6px); }
