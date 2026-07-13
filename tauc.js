@@ -30,49 +30,32 @@ import { Plot } from './plot.js';
   }
 
   // ---- Auto-suggested interval-line positions ----
-  // TEMP DEBUG: detachment threshold (% of local peak height) read from the field.
-  function dbgThreshFrac(){ const el=document.getElementById('taucThresh'); const v=el?parseFloat(el.value):5; return Math.max(0, (isFinite(v)?v:5))/100; }
-  // Peak / base of the Tauc-curve derivative for sample i (no window parameter):
-  //  - peak = the derivative maximum (the inflection = centre of the Tauc region)
-  //  - base = the derivative MINIMUM on the low-energy side of the peak (the pre-edge
-  //    background level, which is non-zero) → so the threshold is measured relative to
-  //    this local background rather than to 0
-  //  - onset v1 = descending from the peak toward lower energy, where the derivative
-  //    crosses base + threshold·(peak-base)
+  // Second-derivative method (parameter-free; a linear/constant background has zero
+  // curvature, so the non-zero derivative background cancels automatically):
+  //  - inflection = max of Y'  (the centre of the Tauc linear region)
+  //  - v1 (onset)   = max of Y'' on the LOW-energy side of the inflection
+  //  - v2 (shoulder)= min of Y'' on the HIGH-energy side of the inflection
   function derivEdge(i){
     const fp = getFileParams(i), hv = files[i].hv, fr = files[i].FR, n = hv.length;
-    if (n < 5) return null;
+    if (n < 7) return null;
     const Yraw = fr.map((v,k)=>Math.pow(v*hv[k], fp.a));
-    const Ys = movingAverage(Yraw, fp.N);
-    const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);
-    // peak = derivative max, ignoring a small margin at both spectrum ends
+    const Ys  = movingAverage(Yraw, fp.N);
+    const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);        // Y'
+    const d2  = movingAverage(gradientArr(dYs, hv), fp.N2);       // Y''
     const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
+    // inflection = first-derivative peak (robust anchor for the edge)
     let pk = -Infinity, pkIdx = -1;
     for (let k=margin;k<n-margin;k++) if (dYs[k] > pk){ pk = dYs[k]; pkIdx = k; }
     if (pkIdx < 0) return null;
     const xPeak = hv[pkIdx];
-    // local background = smallest derivative value at energy below the peak
-    let base = Infinity;
-    for (let k=0;k<n;k++) if (hv[k] < xPeak && dYs[k] < base) base = dYs[k];
-    if (!isFinite(base)) base = Math.min(...dYs);
-    const H = pk - base;
-    if (H <= 0) return null;
-    const level = base + dbgThreshFrac()*H;
-    // descend from the peak toward LOWER energy until the derivative crosses `level`
-    const lowerNbr = idx => {
-      const a = idx-1, b = idx+1;
-      if (a>=0 && (b>=n || hv[a] < hv[b])) return hv[a] < hv[idx] ? a : (b<n && hv[b] < hv[idx] ? b : -1);
-      if (b<n && hv[b] < hv[idx]) return b;
-      return (a>=0 && hv[a] < hv[idx]) ? a : -1;
-    };
-    let cur = pkIdx, v1 = hv[pkIdx];
-    while (true){
-      const nb = lowerNbr(cur);
-      if (nb < 0){ v1 = hv[cur]; break; }
-      if (dYs[nb] < level){ const t = (dYs[cur]-level)/((dYs[cur]-dYs[nb])||1); v1 = hv[cur] + t*(hv[nb]-hv[cur]); break; }
-      cur = nb;
+    // v1 = max curvature-up on the low-energy side; v2 = max curvature-down on the high side
+    let v1i = -1, v2i = -1, mx = -Infinity, mn = Infinity;
+    for (let k=margin;k<n-margin;k++){
+      if (hv[k] < xPeak){ if (d2[k] > mx){ mx = d2[k]; v1i = k; } }
+      else             { if (d2[k] < mn){ mn = d2[k]; v2i = k; } }
     }
-    return { v1, xPeak, base, level, pk };
+    if (v1i < 0 || v2i < 0) return null;
+    return { v1: hv[v1i], v2: hv[v2i], xPeak, d2, dYs, Ys, Yraw };
   }
   function suggestOne(i){
     const e = derivEdge(i);
@@ -80,7 +63,7 @@ import { Plot } from './plot.js';
     const hv = files[i].hv, n = hv.length;
     const lo = Math.min(hv[0], hv[n-1]), hi = Math.max(hv[0], hv[n-1]);
     const clamp = x => Math.max(lo, Math.min(hi, x));
-    return { v1: clamp(e.v1), v2: clamp(2*e.xPeak - e.v1), v3: clamp(e.v1-1.6), v4: clamp(e.v1-0.1) };
+    return { v1: clamp(e.v1), v2: clamp(e.v2), v3: clamp(e.v1-1.6), v4: clamp(e.v1-0.1) };
   }
   // Shared (all-mode) suggestion: linear region [min v1, min v2] over all samples,
   // baseline computed once from min(v1).
@@ -404,13 +387,17 @@ import { Plot } from './plot.js';
     plot.line(hv, Yraw, '#ffffff', 1);
     plot.line(hv, Ys, '#3aa0ff', 1.4);
     plot.line(hv, dYs, '#5fcf6a', 1);
-    // TEMP DEBUG: show the derivative's local background level (orange) and the
-    // detachment threshold level (yellow) that define the onset v1.
+    // TEMP DEBUG: overlay the second derivative Y'' (orange). Its max (low-energy
+    // side) → v1, its min (high-energy side) → v2; the zero-crossing is the
+    // inflection. Centred on the plot mid-height and scaled to be visible.
     {
       const e = derivEdge(currIndex);
-      if (e){
-        plot.line(hv, hv.map(()=>normD(e.base)),  '#ff9933', 1,   '2,3');
-        plot.line(hv, hv.map(()=>normD(e.level)), '#ffd000', 1.2, '5,3');
+      if (e && e.d2){
+        const amp = Math.max(Math.abs(minArr(e.d2)), Math.abs(maxArr(e.d2))) || 1;
+        const mid = maxArr(Yraw)*0.5;
+        const d2n = e.d2.map(v => mid + (v/amp)*mid*0.9);
+        plot.line(hv, hv.map(()=>mid), '#6a7585', 0.8, '2,4'); // zero line of Y''
+        plot.line(hv, d2n, '#ff9933', 1.2, '5,3');
       }
     }
 
@@ -524,17 +511,6 @@ import { Plot } from './plot.js';
     updateTaucView(); hist.commit();
   };
 
-  // TEMP DEBUG: live re-suggest when the threshold field changes
-  ['taucThresh'].forEach(id=>{
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', ()=>{
-      if (!files.length) return;
-      if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
-      else { const s=suggestShared(); if (s) sharedVlines=s; }
-      updateTaucView(true);
-    });
-  });
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
