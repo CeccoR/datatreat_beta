@@ -30,16 +30,13 @@ import { Plot } from './plot.js';
   }
 
   // ---- Auto-suggested interval-line positions ----
-  // TEMP DEBUG: zero-zone threshold (% of max|Y''|) and continuity (points) from fields.
-  function dbgThreshFrac(){ const el=document.getElementById('taucThresh'); const v=el?parseFloat(el.value):10; return Math.max(0, (isFinite(v)?v:10))/100; }
-  function dbgContinuity(){ const el=document.getElementById('taucCont'); const v=el?parseInt(el.value,10):25; return Math.max(1, isFinite(v)?v:25); }
-  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero
-  // (a linear/constant background has zero curvature, so it cancels). The "zero
-  // zones" are the flat pre-edge (low E) and post-edge (high E) regions, defined by
-  // |Y''| < ε with ε = threshold·max|Y''|. Two ways to bound the region, same ε:
-  //  - OUTSIDE: from each spectrum end inward, first point with |Y''| >= ε.
-  //  - INSIDE : from the inflection (Y' peak) outward, first point where |Y''| drops
-  //    back below ε after having risen above it.
+  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
+  // linear/constant background has zero curvature, so it cancels). The "zero zones"
+  // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
+  // ε = 10%·max|Y''|. The region bounds are found from each spectrum end inward: the
+  // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
+  const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
+  const SUGG_CONT   = 25;     // required consecutive points above ε
   function derivEdge(i){
     const fp = getFileParams(i), hv = files[i].hv, fr = files[i].FR, n = hv.length;
     if (n < 7) return null;
@@ -51,38 +48,16 @@ import { Plot } from './plot.js';
     // energy-ascending order of indices, so we can scan by energy regardless of layout
     const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
     const A = d2.reduce((m,v)=>Math.max(m, Math.abs(v)), 0) || 1;
-    const eps = dbgThreshFrac() * A;
+    const eps = SUGG_THRESH * A;
     const ax = j => Math.abs(d2[ord[j]]);
-    // interpolate the energy where |Y''| crosses eps between order-positions j and k
     const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
-    // inflection position in energy order
-    let pk=-Infinity, pkIdx=-1; for (let k=margin;k<n-margin;k++) if (dYs[k]>pk){ pk=dYs[k]; pkIdx=k; }
-    if (pkIdx<0) return null;
-    const infPos = ord.indexOf(pkIdx);
-    // Continuity: a crossing counts only if it is sustained for K consecutive points.
-    const K = dbgContinuity();
     const inR = j => j>=margin && j<n-margin;
-    // run of K consecutive points (from j, stepping dir) that are all >= eps / all < eps.
-    // Out-of-range points fail a ">=eps" run but satisfy a "<eps" run (spectrum end = zero).
-    const runGE = (j,dir) => { for (let m=0;m<K;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
-    const runLT = (j,dir) => { for (let m=0;m<K;m++){ const jj=j+dir*m; if ( inR(jj) && ax(jj)>=eps) return false; } return true; };
-    // OUTSIDE: from each end inward, first start of a sustained (K) run of |Y''| >= eps
-    let v1o=hv[ord[margin]], v2o=hv[ord[n-1-margin]];
-    for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1o = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
-    for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2o = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
-    // INSIDE: from the inflection outward, first start of a sustained (K) run of |Y''| < eps
-    // after having entered the structure (|Y''| >= eps at least once).
-    const scanInside = dir => {
-      let j=infPos;
-      while (inR(j) && ax(j)<eps) j+=dir;                 // advance to the structure
-      while (inR(j)){
-        if (ax(j)<eps && runLT(j,dir)) return cross(j-dir, j);
-        j+=dir;
-      }
-      return hv[ord[Math.max(margin,Math.min(n-1-margin,j-dir))]];
-    };
-    const v1i = scanInside(-1), v2i = scanInside(+1);
-    return { v1:v1o, v2:v2o, v1in:v1i, v2in:v2i, xPeak:hv[pkIdx], d2, eps, A };
+    // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
+    const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
+    let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
+    for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
+    for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
+    return { v1, v2 };
   }
   function suggestOne(i){
     const e = derivEdge(i);
@@ -415,20 +390,6 @@ import { Plot } from './plot.js';
     plot.line(hv, Yraw, '#ffffff', 1);
     plot.line(hv, Ys, '#3aa0ff', 1.4);
     plot.line(hv, dYs, '#5fcf6a', 1);
-    // TEMP DEBUG: overlay |Y''| (orange) from 0 upward with the ε threshold line
-    // (grey). Red interval bars = OUTSIDE bounds; cyan markers = INSIDE bounds.
-    {
-      const e = derivEdge(currIndex);
-      if (e && e.d2){
-        const amp = e.A || 1;
-        const sc = maxArr(Yraw)*0.9;
-        const yOf = v => (v/amp)*sc;
-        plot.line(hv, e.d2.map(v=>yOf(Math.abs(v))), '#ff9933', 1.2, '5,3'); // |Y''|
-        plot.line(hv, hv.map(()=>yOf(e.eps)),        '#8a94a3', 0.8, '4,4'); // ε
-        plot.vline(e.v1in, '#22c3d6', false);   // inside bounds (comparison)
-        plot.vline(e.v2in, '#22c3d6', false);
-      }
-    }
 
     const lo1=Math.min(vlines.v1,vlines.v2), hi1=Math.max(vlines.v1,vlines.v2);
     const lo2=Math.min(vlines.v3,vlines.v4), hi2=Math.max(vlines.v3,vlines.v4);
@@ -512,16 +473,21 @@ import { Plot } from './plot.js';
     btn.addEventListener('click', ()=>{
       if (btn.classList.contains('active')) return;
       const mode = btn.dataset.m;
+      taucMode = mode;
       if (mode==='per'){
-        // Seed each sample's own set: params inherit the current shared values,
-        // interval lines default to that sample's own energy range.
+        // Each sample becomes independent: params inherit the current shared values,
+        // interval lines are re-proposed per sample.
         files.forEach((f,i)=>{
           const pp = taucPer[i] || (taucPer[i]={});
           ['a','N','N2','M','M2'].forEach(k=>{ if (pp[k]==null) pp[k]=taucShared[k]; });
-          if (!pp.vlines || !isFinite(pp.vlines.v1)) pp.vlines = defaultVlinesFor(i);
+          const s = suggestOne(i);
+          pp.vlines = s ? {v1:s.v1,v2:s.v2,v3:s.v3,v4:s.v4} : (pp.vlines || defaultVlinesFor(i));
         });
+      } else {
+        // Back to a single shared set: re-propose the common lines.
+        const s = suggestShared();
+        if (s) sharedVlines = s;
       }
-      taucMode = mode;
       syncTaucModeButtons();
       writeStoreToInputs();
       if (files.length){ if (plot) updateTaucView(); hist.commit(); }
@@ -539,17 +505,6 @@ import { Plot } from './plot.js';
     else { const s=suggestShared(); if (s) sharedVlines=s; }
     updateTaucView(); hist.commit();
   };
-
-  // TEMP DEBUG: live re-suggest when the threshold / continuity fields change
-  ['taucThresh','taucCont'].forEach(id=>{
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', ()=>{
-      if (!files.length) return;
-      if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
-      else { const s=suggestShared(); if (s) sharedVlines=s; }
-      updateTaucView(true);
-    });
-  });
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
