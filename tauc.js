@@ -329,6 +329,36 @@ import { Plot } from './plot.js';
     return best;
   }
 
+  // TEMP DEBUG: best fit inside [x1,x2] according to 4 selection criteria.
+  // NRMSE = RMSE / (max(y) - min(y)) over the window's points.
+  function scanRegr4(hv, frArr, a, N, M, x1, x2){
+    const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], a));
+    const Ys = movingAverage(Yraw, N);
+    const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
+    const idxSel = [];
+    for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi) idxSel.push(i);
+    if (idxSel.length < M) return null;
+    const out = { rmse:null, rmseR2:null, nrmseR2:null, r2:null };
+    const bs  = { rmse:Infinity, rmseR2:Infinity, nrmseR2:Infinity, r2:-Infinity };
+    for (let s=0; s<=idxSel.length-M; s++){
+      const block = idxSel.slice(s, s+M);
+      const yb = block.map(i=>Ys[i]);
+      if (yb.some(v=>!isFinite(v))) continue;
+      const xb = block.map(i=>hv[i]);
+      const r = fitLinear(xb, yb);
+      if (!isFinite(r.slope)) continue;
+      const range = Math.max(...yb) - Math.min(...yb);
+      const nrmse = range>0 ? r.rmse/range : Infinity;
+      const cand = {slope:r.slope, intercept:r.intercept, R2:r.R2, rmse:r.rmse, nrmse, bestIdx:block};
+      const rmseR2 = r.rmse / r.R2, nrmseR2 = nrmse / r.R2;
+      if (r.rmse   < bs.rmse)   { bs.rmse=r.rmse;      out.rmse=cand; }
+      if (rmseR2   < bs.rmseR2) { bs.rmseR2=rmseR2;    out.rmseR2=cand; }
+      if (nrmseR2  < bs.nrmseR2){ bs.nrmseR2=nrmseR2;  out.nrmseR2=cand; }
+      if (r.R2     > bs.r2)     { bs.r2=r.R2;          out.r2=cand; }
+    }
+    return out;
+  }
+
   function analyzeOneFile(hv, frArr, a,N,M,x1,x2,M2,x3,x4){
     const regs = scanRegr(hv, frArr, a, N, M, x1, x2);
     const regs2 = scanRegr(hv, frArr, a, N, M2, x3, x4);
@@ -412,6 +442,25 @@ import { Plot } from './plot.js';
     } else {
       document.getElementById('taucRMSE1').textContent='-'; document.getElementById('taucR21').textContent='-';
       alertDiv.innerHTML = '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>';
+    }
+    // TEMP DEBUG: compare the Tauc-region best fit under 4 selection criteria
+    {
+      const dbg = document.getElementById('taucDbg4');
+      const m = (sel1>=p.M) ? scanRegr4(hv, frArr, p.a, p.N, p.M, vlines.v1, vlines.v2) : null;
+      if (dbg){
+        if (!m){ dbg.innerHTML=''; }
+        else {
+          const cols = { rmse:'#22c3d6', rmseR2:'#ff5050', nrmseR2:'#ff9933', r2:'#ffd000' };
+          const xExt = linspace(minArr(hv), maxArr(hv), 100);
+          ['rmse','nrmseR2','r2'].forEach(k=>{ const c=m[k]; if (c) plot.line(xExt, xExt.map(x=>c.slope*x+c.intercept), cols[k], 1, '2,3'); });
+          const Eg = c => (c && c.slope) ? (-c.intercept/c.slope) : NaN;
+          const row = (name,k)=>{ const c=m[k]; return `<tr><td style="text-align:left;color:${cols[k]}">${name}</td><td>${isFinite(Eg(c))?Eg(c).toFixed(3):'-'}</td><td>${c?c.rmse.toExponential(2):'-'}</td><td>${c?c.nrmse.toExponential(2):'-'}</td><td>${c?c.R2.toFixed(4):'-'}</td></tr>`; };
+          dbg.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:2px">DEBUG — Tauc-region best fit by criterion (NRMSE = RMSE / y-range):</div>`
+            + `<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="color:var(--muted)"><th style="text-align:left">Method</th><th>Eg (eV)</th><th>RMSE</th><th>NRMSE</th><th>R²</th></tr></thead><tbody>`
+            + row('min RMSE','rmse') + row('min RMSE/R² (current)','rmseR2') + row('min NRMSE/R²','nrmseR2') + row('max R²','r2')
+            + `</tbody></table>`;
+        }
+      }
     }
     if (sel2>=p.M2){
       const regs2 = scanRegr(hv, frArr, p.a, p.N, p.M2, vlines.v3, vlines.v4);
