@@ -185,7 +185,7 @@
 
       <div class="card" id="taucWorkspace" style="display:none">
         <h3 style="margin:0 0 0">ANALYSIS</h3>
-        <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta). Eg is extracted from both the x-axis intersection and the baseline intersection of the regression line.</div>
+        <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest line positions</b> to place them automatically from the absorption edge (second-derivative method). Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <button class="btn secondary nav-arrow" id="taucPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
           <span id="taucIdx" class="pill" style="margin:0">1/1</span>
@@ -224,17 +224,16 @@
             <input type="number" id="taucN2" value="20" min="1">
             <label>Tauc linear region regression window</label>
             <input type="number" id="taucM" value="50" min="2">
-            <div class="stat">RMSE: <b id="taucRMSE1">-</b></div>
+            <div class="stat">NRMSE: <b id="taucRMSE1">-</b></div>
             <div class="stat">R²: <b id="taucR21">-</b></div>
             <label>Baseline regression window</label>
             <input type="number" id="taucM2" value="50" min="2">
-            <div class="stat">RMSE: <b id="taucRMSE2">-</b></div>
+            <div class="stat">NRMSE: <b id="taucRMSE2">-</b></div>
             <div class="stat">R²: <b id="taucR22">-</b></div>
             <div class="stat" style="margin-top:10px">Eg (x-axis): <b id="taucEg">-</b></div>
             <div class="stat" style="margin-top:6px">Eg (baseline): <b id="taucEgInt">-</b></div>
           </div>
         </div>
-        <div id="taucDbg4" style="margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:7px"></div>
       </div>
 
       <div class="card" id="taucResults" style="display:none">
