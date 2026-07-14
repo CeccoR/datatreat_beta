@@ -30,8 +30,9 @@ import { Plot } from './plot.js';
   }
 
   // ---- Auto-suggested interval-line positions ----
-  // TEMP DEBUG: zero-zone threshold (% of max|Y''|) read from the field.
+  // TEMP DEBUG: zero-zone threshold (% of max|Y''|) and continuity (points) from fields.
   function dbgThreshFrac(){ const el=document.getElementById('taucThresh'); const v=el?parseFloat(el.value):5; return Math.max(0, (isFinite(v)?v:5))/100; }
+  function dbgContinuity(){ const el=document.getElementById('taucCont'); const v=el?parseInt(el.value,10):10; return Math.max(1, isFinite(v)?v:10); }
   // Second-derivative method. The Tauc region is the span where Y'' is NON-zero
   // (a linear/constant background has zero curvature, so it cancels). The "zero
   // zones" are the flat pre-edge (low E) and post-edge (high E) regions, defined by
@@ -58,17 +59,25 @@ import { Plot } from './plot.js';
     let pk=-Infinity, pkIdx=-1; for (let k=margin;k<n-margin;k++) if (dYs[k]>pk){ pk=dYs[k]; pkIdx=k; }
     if (pkIdx<0) return null;
     const infPos = ord.indexOf(pkIdx);
-    // OUTSIDE: scan inward from each end to the first |Y''| >= eps
+    // Continuity: a crossing counts only if it is sustained for K consecutive points.
+    const K = dbgContinuity();
+    const inR = j => j>=margin && j<n-margin;
+    // run of K consecutive points (from j, stepping dir) that are all >= eps / all < eps.
+    // Out-of-range points fail a ">=eps" run but satisfy a "<eps" run (spectrum end = zero).
+    const runGE = (j,dir) => { for (let m=0;m<K;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
+    const runLT = (j,dir) => { for (let m=0;m<K;m++){ const jj=j+dir*m; if ( inR(jj) && ax(jj)>=eps) return false; } return true; };
+    // OUTSIDE: from each end inward, first start of a sustained (K) run of |Y''| >= eps
     let v1o=hv[ord[margin]], v2o=hv[ord[n-1-margin]];
-    for (let j=margin;j<n-margin;j++){ if (ax(j)>=eps){ v1o = j>0?cross(j-1,j):hv[ord[j]]; break; } }
-    for (let j=n-1-margin;j>=margin;j--){ if (ax(j)>=eps){ v2o = j<n-1?cross(j+1,j):hv[ord[j]]; break; } }
-    // INSIDE: from the inflection outward, first exit below eps after entering above it
+    for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1o = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
+    for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2o = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
+    // INSIDE: from the inflection outward, first start of a sustained (K) run of |Y''| < eps
+    // after having entered the structure (|Y''| >= eps at least once).
     const scanInside = dir => {
-      let entered=false, j=infPos, prev=infPos;
-      while (j>=margin && j<n-margin){
-        if (!entered){ if (ax(j)>=eps) entered=true; }
-        else if (ax(j)<eps){ return cross(prev, j); }
-        prev=j; j+=dir;
+      let j=infPos;
+      while (inR(j) && ax(j)<eps) j+=dir;                 // advance to the structure
+      while (inR(j)){
+        if (ax(j)<eps && runLT(j,dir)) return cross(j-dir, j);
+        j+=dir;
       }
       return hv[ord[Math.max(margin,Math.min(n-1-margin,j-dir))]];
     };
@@ -534,16 +543,16 @@ import { Plot } from './plot.js';
     updateTaucView(); hist.commit();
   };
 
-  // TEMP DEBUG: live re-suggest when the zero-zone threshold changes
-  {
-    const el = document.getElementById('taucThresh');
+  // TEMP DEBUG: live re-suggest when the threshold / continuity fields change
+  ['taucThresh','taucCont'].forEach(id=>{
+    const el = document.getElementById(id);
     if (el) el.addEventListener('input', ()=>{
       if (!files.length) return;
       if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
       else { const s=suggestShared(); if (s) sharedVlines=s; }
       updateTaucView(true);
     });
-  }
+  });
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
