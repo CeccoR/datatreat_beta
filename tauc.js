@@ -16,7 +16,7 @@ import { Plot } from './plot.js';
   //           interval lines. 'per': each sample is fully independent — its own
   //           exponent, smoothing/regression windows and interval-line positions.
   let   taucMode = 'shared';                             // 'shared' | 'per'
-  const taucShared = { a:0.5, N:1, N2:10, M:50, M2:50 }; // common params (shared mode)
+  const taucShared = { a:0.5, N:1, N2:20, M:50, M2:50 }; // common params (shared mode)
   let   sharedVlines = {};                               // common interval lines (shared mode)
   let   taucPer = [];                                    // per sample: {a,N,N2,M,M2,vlines:{v1..v4}}
 
@@ -30,11 +30,15 @@ import { Plot } from './plot.js';
   }
 
   // ---- Auto-suggested interval-line positions ----
-  // Second-derivative method (parameter-free; a linear/constant background has zero
-  // curvature, so the non-zero derivative background cancels automatically):
-  //  - inflection = max of Y'  (the centre of the Tauc linear region)
-  //  - v1 (onset)   = max of Y'' on the LOW-energy side of the inflection
-  //  - v2 (shoulder)= min of Y'' on the HIGH-energy side of the inflection
+  // TEMP DEBUG: zero-zone threshold (% of max|Y''|) read from the field.
+  function dbgThreshFrac(){ const el=document.getElementById('taucThresh'); const v=el?parseFloat(el.value):5; return Math.max(0, (isFinite(v)?v:5))/100; }
+  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero
+  // (a linear/constant background has zero curvature, so it cancels). The "zero
+  // zones" are the flat pre-edge (low E) and post-edge (high E) regions, defined by
+  // |Y''| < ε with ε = threshold·max|Y''|. Two ways to bound the region, same ε:
+  //  - OUTSIDE: from each spectrum end inward, first point with |Y''| >= ε.
+  //  - INSIDE : from the inflection (Y' peak) outward, first point where |Y''| drops
+  //    back below ε after having risen above it.
   function derivEdge(i){
     const fp = getFileParams(i), hv = files[i].hv, fr = files[i].FR, n = hv.length;
     if (n < 7) return null;
@@ -43,19 +47,33 @@ import { Plot } from './plot.js';
     const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);        // Y'
     const d2  = movingAverage(gradientArr(dYs, hv), fp.N2);       // Y''
     const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
-    // inflection = first-derivative peak (robust anchor for the edge)
-    let pk = -Infinity, pkIdx = -1;
-    for (let k=margin;k<n-margin;k++) if (dYs[k] > pk){ pk = dYs[k]; pkIdx = k; }
-    if (pkIdx < 0) return null;
-    const xPeak = hv[pkIdx];
-    // v1 = max curvature-up on the low-energy side; v2 = max curvature-down on the high side
-    let v1i = -1, v2i = -1, mx = -Infinity, mn = Infinity;
-    for (let k=margin;k<n-margin;k++){
-      if (hv[k] < xPeak){ if (d2[k] > mx){ mx = d2[k]; v1i = k; } }
-      else             { if (d2[k] < mn){ mn = d2[k]; v2i = k; } }
-    }
-    if (v1i < 0 || v2i < 0) return null;
-    return { v1: hv[v1i], v2: hv[v2i], xPeak, d2, dYs, Ys, Yraw };
+    // energy-ascending order of indices, so we can scan by energy regardless of layout
+    const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
+    const A = d2.reduce((m,v)=>Math.max(m, Math.abs(v)), 0) || 1;
+    const eps = dbgThreshFrac() * A;
+    const ax = j => Math.abs(d2[ord[j]]);
+    // interpolate the energy where |Y''| crosses eps between order-positions j and k
+    const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
+    // inflection position in energy order
+    let pk=-Infinity, pkIdx=-1; for (let k=margin;k<n-margin;k++) if (dYs[k]>pk){ pk=dYs[k]; pkIdx=k; }
+    if (pkIdx<0) return null;
+    const infPos = ord.indexOf(pkIdx);
+    // OUTSIDE: scan inward from each end to the first |Y''| >= eps
+    let v1o=hv[ord[margin]], v2o=hv[ord[n-1-margin]];
+    for (let j=margin;j<n-margin;j++){ if (ax(j)>=eps){ v1o = j>0?cross(j-1,j):hv[ord[j]]; break; } }
+    for (let j=n-1-margin;j>=margin;j--){ if (ax(j)>=eps){ v2o = j<n-1?cross(j+1,j):hv[ord[j]]; break; } }
+    // INSIDE: from the inflection outward, first exit below eps after entering above it
+    const scanInside = dir => {
+      let entered=false, j=infPos, prev=infPos;
+      while (j>=margin && j<n-margin){
+        if (!entered){ if (ax(j)>=eps) entered=true; }
+        else if (ax(j)<eps){ return cross(prev, j); }
+        prev=j; j+=dir;
+      }
+      return hv[ord[Math.max(margin,Math.min(n-1-margin,j-dir))]];
+    };
+    const v1i = scanInside(-1), v2i = scanInside(+1);
+    return { v1:v1o, v2:v2o, v1in:v1i, v2in:v2i, xPeak:hv[pkIdx], d2, eps, A };
   }
   function suggestOne(i){
     const e = derivEdge(i);
@@ -63,7 +81,8 @@ import { Plot } from './plot.js';
     const hv = files[i].hv, n = hv.length;
     const lo = Math.min(hv[0], hv[n-1]), hi = Math.max(hv[0], hv[n-1]);
     const clamp = x => Math.max(lo, Math.min(hi, x));
-    return { v1: clamp(e.v1), v2: clamp(e.v2), v3: clamp(e.v1-1.6), v4: clamp(e.v1-0.1) };
+    // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span).
+    return { v1: clamp(e.v1), v2: clamp(e.v2), v3: clamp(e.v1-0.85), v4: clamp(e.v1-0.1) };
   }
   // Shared (all-mode) suggestion: linear region [min v1, min v2] over all samples,
   // baseline computed once from min(v1).
@@ -387,17 +406,21 @@ import { Plot } from './plot.js';
     plot.line(hv, Yraw, '#ffffff', 1);
     plot.line(hv, Ys, '#3aa0ff', 1.4);
     plot.line(hv, dYs, '#5fcf6a', 1);
-    // TEMP DEBUG: overlay the second derivative Y'' (orange). Its max (low-energy
-    // side) → v1, its min (high-energy side) → v2; the zero-crossing is the
-    // inflection. Centred on the plot mid-height and scaled to be visible.
+    // TEMP DEBUG: overlay Y'' (orange) centred at mid-height, its zero line and the
+    // ±ε band (grey). Red interval bars = OUTSIDE bounds; cyan markers = INSIDE bounds.
     {
       const e = derivEdge(currIndex);
       if (e && e.d2){
-        const amp = Math.max(Math.abs(minArr(e.d2)), Math.abs(maxArr(e.d2))) || 1;
+        const amp = e.A || 1;
         const mid = maxArr(Yraw)*0.5;
-        const d2n = e.d2.map(v => mid + (v/amp)*mid*0.9);
-        plot.line(hv, hv.map(()=>mid), '#6a7585', 0.8, '2,4'); // zero line of Y''
-        plot.line(hv, d2n, '#ff9933', 1.2, '5,3');
+        const sc = mid*0.9;
+        const yOf = v => mid + (v/amp)*sc;
+        plot.line(hv, hv.map(()=>mid),         '#6a7585', 0.8, '2,4'); // Y'' zero
+        plot.line(hv, hv.map(()=>yOf(e.eps)),  '#8a94a3', 0.7, '1,4'); // +ε
+        plot.line(hv, hv.map(()=>yOf(-e.eps)), '#8a94a3', 0.7, '1,4'); // -ε
+        plot.line(hv, e.d2.map(yOf),           '#ff9933', 1.2, '5,3'); // Y''
+        plot.vline(e.v1in, '#22c3d6', false);   // inside bounds (comparison)
+        plot.vline(e.v2in, '#22c3d6', false);
       }
     }
 
@@ -511,6 +534,16 @@ import { Plot } from './plot.js';
     updateTaucView(); hist.commit();
   };
 
+  // TEMP DEBUG: live re-suggest when the zero-zone threshold changes
+  {
+    const el = document.getElementById('taucThresh');
+    if (el) el.addEventListener('input', ()=>{
+      if (!files.length) return;
+      if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
+      else { const s=suggestShared(); if (s) sharedVlines=s; }
+      updateTaucView(true);
+    });
+  }
 
   function renderEgTable(){
     const wrap = document.getElementById('taucEgTableWrap');
