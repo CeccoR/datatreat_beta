@@ -607,7 +607,13 @@ import { Plot } from './plot.js';
       barSvg.style.display='none'; barWrap.style.display='none';
     } else {
       barSvg.style.display=''; barWrap.style.display='';
-      const plot2 = new Plot(barSvg, {xlabel:'', ylabelSvg:`${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, noXTickLabels:true});
+      // Bottom margin adapts to the longest 30°-tilted label so names fit.
+      const mctx = document.createElement('canvas').getContext('2d');
+      mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+      let maxLbl = 0; files.forEach(f=>{ maxLbl = Math.max(maxLbl, mctx.measureText(f.label).width); });
+      const svgH = barSvg.getBoundingClientRect().height || 640;
+      const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+      const plot2 = new Plot(barSvg, {xlabel:'', ylabelSvg:`${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, noXTickLabels:true, margin:{l:55,r:20,t:15,b:bottom}});
       const ymax2 = Math.max(...posVals)*1.3;
       plot2.setRange(0, n+1, 0, ymax2||1);
       plot2.drawAxes();
@@ -623,7 +629,7 @@ import { Plot } from './plot.js';
           drawBar(plot2,x0,x1,egInts[k],'#ff7a59');
           if (isFinite(egIntErrs[k])) drawErrBar(plot2,(x0+x1)/2,egInts[k],egIntErrs[k]);
         }
-        plot2.tickLabel(xc, files[k].label);
+        plot2.tickLabel(xc, files[k].label, 30);
       }
       plot2.attachTools(barSvg.closest('.plot-wrap'));
       leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
