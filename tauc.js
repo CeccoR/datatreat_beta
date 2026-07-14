@@ -16,7 +16,7 @@ import { Plot } from './plot.js';
   //           interval lines. 'per': each sample is fully independent — its own
   //           exponent, smoothing/regression windows and interval-line positions.
   let   taucMode = 'shared';                             // 'shared' | 'per'
-  const taucShared = { a:0.5, N:1, N2:20, M:50, M2:50 }; // common params (shared mode)
+  const taucShared = { a:0.5, N:1, N2:20, M:25, M2:50 }; // common params (shared mode)
   let   sharedVlines = {};                               // common interval lines (shared mode)
   let   taucPer = [];                                    // per sample: {a,N,N2,M,M2,vlines:{v1..v4}}
 
