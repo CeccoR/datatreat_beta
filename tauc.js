@@ -335,27 +335,6 @@ import { Plot } from './plot.js';
     return best;
   }
 
-  // TEMP DEBUG: best fit inside [x1,x2] by min NRMSE/R² (current engine) vs max R².
-  function scanRegrDbg(hv, frArr, a, N, M, x1, x2){
-    const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], a));
-    const Ys = movingAverage(Yraw, N);
-    const lo=Math.min(x1,x2), hi=Math.max(x1,x2);
-    const idxSel=[]; for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi) idxSel.push(i);
-    if (idxSel.length < M) return null;
-    let cur=null, r2b=null, cs=Infinity, rs=-Infinity;
-    for (let s=0; s<=idxSel.length-M; s++){
-      const block=idxSel.slice(s,s+M), yb=block.map(i=>Ys[i]);
-      if (yb.some(v=>!isFinite(v))) continue;
-      const xb=block.map(i=>hv[i]), r=fitLinear(xb,yb);
-      if (!isFinite(r.slope)) continue;
-      const range=Math.max(...yb)-Math.min(...yb), nrmse=range>0?r.rmse/range:Infinity;
-      const cand={slope:r.slope,intercept:r.intercept,R2:r.R2,nrmse};
-      const sc=nrmse/r.R2;
-      if (sc<cs){ cs=sc; cur=cand; }
-      if (r.R2>rs){ rs=r.R2; r2b=cand; }
-    }
-    return {cur, r2:r2b};
-  }
 
   function analyzeOneFile(hv, frArr, a,N,M,x1,x2,M2,x3,x4){
     const regs = scanRegr(hv, frArr, a, N, M, x1, x2);
@@ -440,24 +419,6 @@ import { Plot } from './plot.js';
     } else {
       document.getElementById('taucRMSE1').textContent='-'; document.getElementById('taucR21').textContent='-';
       alertDiv.innerHTML = '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>';
-    }
-    // TEMP DEBUG: current criterion (min NRMSE/R²) vs max R² for the Tauc region
-    {
-      const dbg = document.getElementById('taucDbg4');
-      const m = (sel1>=p.M) ? scanRegrDbg(hv, frArr, p.a, p.N, p.M, vlines.v1, vlines.v2) : null;
-      if (dbg){
-        if (!m){ dbg.innerHTML=''; }
-        else {
-          const xExt = linspace(minArr(hv), maxArr(hv), 100);
-          if (m.r2) plot.line(xExt, xExt.map(x=>m.r2.slope*x+m.r2.intercept), '#ffd000', 1, '2,3'); // max R² (yellow); current = red
-          const Eg = c => (c && c.slope) ? (-c.intercept/c.slope) : NaN;
-          const row = (name,c,col)=>`<tr><td style="text-align:left;color:${col}">${name}</td><td>${isFinite(Eg(c))?Eg(c).toFixed(3):'-'}</td><td>${c?c.nrmse.toExponential(2):'-'}</td><td>${c?c.R2.toFixed(4):'-'}</td></tr>`;
-          dbg.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:2px">DEBUG — Tauc-region fit: current (min NRMSE/R², red) vs max R² (yellow):</div>`
-            + `<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="color:var(--muted)"><th style="text-align:left">Method</th><th>Eg (eV)</th><th>NRMSE</th><th>R²</th></tr></thead><tbody>`
-            + row('min NRMSE/R² (current)', m.cur, '#ff5050') + row('max R²', m.r2, '#ffd000')
-            + `</tbody></table>`;
-        }
-      }
     }
     if (sel2>=p.M2){
       const regs2 = scanRegr(hv, frArr, p.a, p.N, p.M2, vlines.v3, vlines.v4);
