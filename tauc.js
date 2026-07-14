@@ -31,8 +31,8 @@ import { Plot } from './plot.js';
 
   // ---- Auto-suggested interval-line positions ----
   // TEMP DEBUG: zero-zone threshold (% of max|Y''|) and continuity (points) from fields.
-  function dbgThreshFrac(){ const el=document.getElementById('taucThresh'); const v=el?parseFloat(el.value):5; return Math.max(0, (isFinite(v)?v:5))/100; }
-  function dbgContinuity(){ const el=document.getElementById('taucCont'); const v=el?parseInt(el.value,10):10; return Math.max(1, isFinite(v)?v:10); }
+  function dbgThreshFrac(){ const el=document.getElementById('taucThresh'); const v=el?parseFloat(el.value):10; return Math.max(0, (isFinite(v)?v:10))/100; }
+  function dbgContinuity(){ const el=document.getElementById('taucCont'); const v=el?parseInt(el.value,10):25; return Math.max(1, isFinite(v)?v:25); }
   // Second-derivative method. The Tauc region is the span where Y'' is NON-zero
   // (a linear/constant background has zero curvature, so it cancels). The "zero
   // zones" are the flat pre-edge (low E) and post-edge (high E) regions, defined by
@@ -93,15 +93,15 @@ import { Plot } from './plot.js';
     // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span).
     return { v1: clamp(e.v1), v2: clamp(e.v2), v3: clamp(e.v1-0.85), v4: clamp(e.v1-0.1) };
   }
-  // Shared (all-mode) suggestion: linear region [min v1, min v2] over all samples,
-  // baseline computed once from min(v1).
+  // Shared (all-mode) suggestion: linear region [max(v1), min(v2)] over all samples
+  // (widest common linear window), baseline computed once from max(v1).
   function suggestShared(){
     const ss = files.map((f,i)=>suggestOne(i)).filter(Boolean);
     if (!ss.length) return null;
-    const minV1 = Math.min(...ss.map(s=>s.v1)), minV2 = Math.min(...ss.map(s=>s.v2));
+    const maxV1 = Math.max(...ss.map(s=>s.v1)), minV2 = Math.min(...ss.map(s=>s.v2));
     let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
     const clamp = x => Math.max(lo, Math.min(hi, x));
-    return { v1: clamp(minV1), v2: clamp(minV2), v3: clamp(minV1-1.6), v4: clamp(minV1-0.1) };
+    return { v1: clamp(maxV1), v2: clamp(minV2), v3: clamp(maxV1-0.85), v4: clamp(maxV1-0.1) };
   }
   // Apply suggestions to the whole workspace (used once on first upload).
   function autoSuggestAll(){
