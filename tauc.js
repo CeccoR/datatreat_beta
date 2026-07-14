@@ -415,19 +415,16 @@ import { Plot } from './plot.js';
     plot.line(hv, Yraw, '#ffffff', 1);
     plot.line(hv, Ys, '#3aa0ff', 1.4);
     plot.line(hv, dYs, '#5fcf6a', 1);
-    // TEMP DEBUG: overlay Y'' (orange) centred at mid-height, its zero line and the
-    // ±ε band (grey). Red interval bars = OUTSIDE bounds; cyan markers = INSIDE bounds.
+    // TEMP DEBUG: overlay |Y''| (orange) from 0 upward with the ε threshold line
+    // (grey). Red interval bars = OUTSIDE bounds; cyan markers = INSIDE bounds.
     {
       const e = derivEdge(currIndex);
       if (e && e.d2){
         const amp = e.A || 1;
-        const mid = maxArr(Yraw)*0.5;
-        const sc = mid*0.9;
-        const yOf = v => mid + (v/amp)*sc;
-        plot.line(hv, hv.map(()=>mid),         '#6a7585', 0.8, '2,4'); // Y'' zero
-        plot.line(hv, hv.map(()=>yOf(e.eps)),  '#8a94a3', 0.7, '1,4'); // +ε
-        plot.line(hv, hv.map(()=>yOf(-e.eps)), '#8a94a3', 0.7, '1,4'); // -ε
-        plot.line(hv, e.d2.map(yOf),           '#ff9933', 1.2, '5,3'); // Y''
+        const sc = maxArr(Yraw)*0.9;
+        const yOf = v => (v/amp)*sc;
+        plot.line(hv, e.d2.map(v=>yOf(Math.abs(v))), '#ff9933', 1.2, '5,3'); // |Y''|
+        plot.line(hv, hv.map(()=>yOf(e.eps)),        '#8a94a3', 0.8, '4,4'); // ε
         plot.vline(e.v1in, '#22c3d6', false);   // inside bounds (comparison)
         plot.vline(e.v2in, '#22c3d6', false);
       }
