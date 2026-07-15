@@ -225,7 +225,7 @@ class Plot{
       const hit = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'ew-resize'});
       this.gOverlay.appendChild(hit);
       // Grip dot near the top for an easy drag target
-      const grip = svgEl('circle',{cx:x0, cy:m.t+9, r:5, fill:entry.color, stroke:'#ffffff', 'stroke-width':1, 'cursor':'ew-resize'});
+      const grip = svgEl('circle',{cx:x0, cy:m.t+15, r:7.5, fill:entry.color, 'cursor':'ew-resize'});
       this.gOverlay.appendChild(grip);
       let dragging = false;
       const move = (clientX)=>{
