@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -140,9 +140,10 @@ import { Plot } from './plot.js';
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
     if (!files.length){ wrap.innerHTML=''; return; }
-    // Columns: Label 40%, m 10%, Q 10%, date 20%, warning 20%
-    const cg = `<colgroup><col style="width:40%"><col style="width:10%"><col style="width:10%"><col style="width:20%"><col style="width:20%"></colgroup>`;
-    let html = `<div class="table-wrap-box"><table>${cg}<thead><tr><th>Sample</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
+    // Columns: Label 24%, m 9%, Q 9%, date 34%, warning 24%. A min-width keeps the
+    // date field usable — on narrow screens the .table-wrap-box scrolls horizontally.
+    const cg = `<colgroup><col style="width:24%"><col style="width:9%"><col style="width:9%"><col style="width:34%"><col style="width:24%"></colgroup>`;
+    let html = `<div class="table-wrap-box"><table style="min-width:600px">${cg}<thead><tr><th>Sample</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
     files.forEach((f,i)=>{
       html += `<tr>
         <td class="fname" title="${f.label}">${f.label}</td>
@@ -176,14 +177,28 @@ import { Plot } from './plot.js';
     });
   }
 
+  // Show/clear the "end must be > start" warning.
+  function updateIntervalWarn(){
+    const w = document.getElementById('gcIntervalWarn');
+    if (!w) return;
+    w.innerHTML = (plateauEnd <= plateauStart)
+      ? '<div class="alert warn" style="margin-top:8px;padding:6px 8px;font-size:11px">⚠ Interval end must be greater than interval start.</div>'
+      : '';
+  }
   ['gcPlateauStart','gcPlateauEnd'].forEach(id=>{
     const el = document.getElementById(id);
     el.addEventListener('input', ()=>{
       plateauStart = +document.getElementById('gcPlateauStart').value;
       plateauEnd   = +document.getElementById('gcPlateauEnd').value;
+      updateIntervalWarn();
       if (dataTables.length) updateRegression();
     });
-    el.addEventListener('change', ()=>{ if (files.length) hist.commit(); });
+    el.addEventListener('change', ()=>{
+      // Enforce end > start on commit: flash the end field if it isn't.
+      if (+document.getElementById('gcPlateauEnd').value <= +document.getElementById('gcPlateauStart').value)
+        flashFieldInvalid(document.getElementById('gcPlateauEnd'));
+      if (files.length) hist.commit();
+    });
   });
 
   function computeAndRenderGc(){
@@ -213,27 +228,30 @@ import { Plot } from './plot.js';
 
   function renderGcPlots(){
     const legend = document.getElementById('gcLegend'); legend.innerHTML='';
-    let allT = dataTables.flatMap(d=>d.t);
-    const tmin = Math.min(0, minArr(allT)), tmax = maxArr(allT);
-
     plot1 = new Plot(document.getElementById('gcSvg1'), {xlabel:'Time (h)', ylabel:'H₂ Rate (mmol/h/g)'});
-    let ymax1 = Math.max(...dataTables.map(d=>maxArr(d.h2Fm))), ymin1 = Math.min(...dataTables.map(d=>minArr(d.h2Fm)));
-    plot1.setRange(tmin, tmax, ymin1, ymax1*1.05);
-    plot1.drawAxes();
-    dataTables.forEach((d,k)=>{
-      plot1.line(d.t, d.h2Fm, d.color, 1.3);
+    plot2 = new Plot(document.getElementById('gcSvg2'), {xlabel:'Time (h)', ylabel:'Cumulative H₂ (mmol/g)'});
+    dataTables.forEach(d=>{
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${d.color}"></i>${d.label}`; legend.appendChild(s);
     });
     plot1.attachTools(plot1.svg.closest('.plot-wrap'));
-
-    plot2 = new Plot(document.getElementById('gcSvg2'), {xlabel:'Time (h)', ylabel:'Cumulative H₂ (mmol/g)'});
-    let ymax2 = Math.max(...dataTables.map(d=>maxArr(d.h2FmInt)));
-    plot2.setRange(tmin, tmax, 0, ymax2*1.05);  // tmin already ≤ 0
-    plot2.drawAxes();
-    dataTables.forEach(d=> plot2.line(d.t, d.h2FmInt, d.color, 1.3));
     plot2.attachTools(plot2.svg.closest('.plot-wrap'));
-
     updateRegression();
+  }
+
+  // Draw the data lines + interval bars with an x-range that spans BOTH the data
+  // and the white interval bars (so the bars are never clipped off the plot).
+  function drawGcData(){
+    if (!plot1 || !plot2 || !dataTables.length) return;
+    const allT = dataTables.flatMap(d=>d.t);
+    const tmin = Math.min(0, minArr(allT), plateauStart, plateauEnd);
+    const tmax = Math.max(maxArr(allT), plateauStart, plateauEnd);
+    const ymax1 = Math.max(...dataTables.map(d=>maxArr(d.h2Fm))), ymin1 = Math.min(...dataTables.map(d=>minArr(d.h2Fm)));
+    plot1.setRange(tmin, tmax, ymin1, ymax1*1.05); plot1.drawAxes(); plot1.clearData();
+    dataTables.forEach(d=> plot1.line(d.t, d.h2Fm, d.color, 1.3));
+    const ymax2 = Math.max(...dataTables.map(d=>maxArr(d.h2FmInt)));
+    plot2.setRange(tmin, tmax, 0, ymax2*1.05); plot2.drawAxes(); plot2.clearData();
+    dataTables.forEach(d=> plot2.line(d.t, d.h2FmInt, d.color, 1.3));
+    drawGcVlines();
   }
 
   function drawGcVlines(){
@@ -261,10 +279,7 @@ import { Plot } from './plot.js';
       const rate = (d.h2FmInt[endIdx] - d.h2FmInt[startIdx]) / dt;
       return {label:d.label, cost:rate, dt};
     });
-    // Redraw data lines then overlay vlines
-    plot1.clearData(); dataTables.forEach(d=> plot1.line(d.t, d.h2Fm, d.color, 1.3));
-    plot2.clearData(); dataTables.forEach(d=> plot2.line(d.t, d.h2FmInt, d.color, 1.3));
-    drawGcVlines();
+    drawGcData();
     renderPlateauTable();
     drawBarChart();
   }
@@ -286,9 +301,22 @@ import { Plot } from './plot.js';
     // Bottom margin adapts to the longest (30°-tilted) label so names fit without
     // changing the chart's footprint — the data area shrinks instead.
     const mctx = document.createElement('canvas').getContext('2d');
-    mctx.font = '10px -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
+    mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+    // Truncate labels so a 30°-tilted name spans at most ~one bar spacing horizontally
+    // (keeps the leftmost label from spilling off the left edge on narrow screens).
+    const svgW = svg.getBoundingClientRect().width || 640;
+    const cos30 = Math.cos(Math.PI/6);
+    const barSpacing = Math.max(30, (svgW-75)/(costResults.length+1));
+    const maxTextW = barSpacing / cos30;
+    const trunc = s => {
+      if (mctx.measureText(s).width <= maxTextW) return s;
+      let t = s;
+      while (t.length>1 && mctx.measureText(t+'…').width > maxTextW) t = t.slice(0,-1);
+      return t+'…';
+    };
+    const labels = costResults.map(c=>trunc(c.label));
     let maxLbl = 0;
-    costResults.forEach(c=>{ if (isFinite(c.cost)) maxLbl = Math.max(maxLbl, mctx.measureText(c.label).width); });
+    labels.forEach((lbl,k)=>{ if (isFinite(costResults[k].cost)) maxLbl = Math.max(maxLbl, mctx.measureText(lbl).width); });
     const svgH = svg.getBoundingClientRect().height || 640;
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
     const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:15,b:bottom}});
@@ -298,7 +326,7 @@ import { Plot } from './plot.js';
     costResults.forEach((c,k)=>{
       if (!isFinite(c.cost)) return;
       barPlot.bar(k+1-0.16, k+1+0.16, 0, c.cost, dataTables[k].color);
-      barPlot.tickLabel(k+1, c.label, 30);
+      barPlot.tickLabel(k+1, labels[k], 30);
     });
     barPlot.attachTools(svg.closest('.plot-wrap'));
   }

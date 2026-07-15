@@ -1272,6 +1272,7 @@ button.color-swatch:hover { border-color: var(--text); }
   border-radius: 8px;
   padding: 0 8px 8px;
   margin-top: 10px;
+  overflow-x: auto;   /* narrow screens: scroll the table instead of crushing columns */
 }
 .table-wrap-box table {
   table-layout: fixed;
