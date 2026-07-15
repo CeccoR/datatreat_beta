@@ -16,7 +16,7 @@ import { Plot } from './plot.js';
   //           interval lines. 'per': each sample is fully independent — its own
   //           exponent, smoothing/regression windows and interval-line positions.
   let   taucMode = 'shared';                             // 'shared' | 'per'
-  const taucShared = { a:0.5, N:1, N2:20, M:25, M2:50 }; // common params (shared mode)
+  const taucShared = { a:0.5, N:1, N2:20, M:25, M2:100 }; // common params (shared mode)
   let   sharedVlines = {};                               // common interval lines (shared mode)
   let   taucPer = [];                                    // per sample: {a,N,N2,M,M2,vlines:{v1..v4}}
 
@@ -407,8 +407,8 @@ import { Plot } from './plot.js';
 
     if (sel1>=p.M){
       const regs = scanRegr(hv, frArr, p.a, p.N, p.M, vlines.v1, vlines.v2);
-      document.getElementById('taucRMSE1').textContent = isFinite(regs.NRMSE)? regs.NRMSE.toExponential(3): '-';
-      document.getElementById('taucR21').textContent = isFinite(regs.R2)? regs.R2.toFixed(3): '-';
+      document.getElementById('taucRMSE1').textContent = isFinite(regs.NRMSE)? regs.NRMSE.toFixed(4): '-';
+      document.getElementById('taucR21').textContent = isFinite(regs.R2)? regs.R2.toFixed(4): '-';
       if (regs.bestIdx.length){
         const xb = regs.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs.slope*x+regs.intercept);
@@ -422,8 +422,8 @@ import { Plot } from './plot.js';
     }
     if (sel2>=p.M2){
       const regs2 = scanRegr(hv, frArr, p.a, p.N, p.M2, vlines.v3, vlines.v4);
-      document.getElementById('taucRMSE2').textContent = isFinite(regs2.NRMSE)? regs2.NRMSE.toExponential(3): '-';
-      document.getElementById('taucR22').textContent = isFinite(regs2.R2)? regs2.R2.toFixed(3): '-';
+      document.getElementById('taucRMSE2').textContent = isFinite(regs2.NRMSE)? regs2.NRMSE.toFixed(4): '-';
+      document.getElementById('taucR22').textContent = isFinite(regs2.R2)? regs2.R2.toFixed(4): '-';
       if (regs2.bestIdx.length){
         const xb = regs2.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs2.slope*x+regs2.intercept);

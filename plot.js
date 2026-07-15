@@ -224,6 +224,9 @@ class Plot{
     if (entry.draggable){
       const hit = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'ew-resize'});
       this.gOverlay.appendChild(hit);
+      // Grip dot near the top for an easy drag target
+      const grip = svgEl('circle',{cx:x0, cy:m.t+9, r:5, fill:entry.color, stroke:'#ffffff', 'stroke-width':1, 'cursor':'ew-resize'});
+      this.gOverlay.appendChild(grip);
       let dragging = false;
       const move = (clientX)=>{
         const rect = this.svg.getBoundingClientRect();
@@ -232,7 +235,9 @@ class Plot{
         entry.xv = xv2;
         if (entry.onDrag) entry.onDrag(xv2);
       };
-      hit.addEventListener('pointerdown', e=>{ dragging = true; e.preventDefault(); e.stopPropagation(); });
+      const startDrag = e=>{ dragging = true; e.preventDefault(); e.stopPropagation(); };
+      hit.addEventListener('pointerdown', startDrag);
+      grip.addEventListener('pointerdown', startDrag);
       // Listen on svg + window so dragging survives gOverlay clears during redraws
       this.svg.addEventListener('pointermove', e=>{ if (dragging) move(e.clientX); });
       window.addEventListener('pointerup', ()=>{ if (dragging){ dragging = false; if (entry.onDragEnd) entry.onDragEnd(entry.xv); } });
