@@ -142,7 +142,7 @@ import { Plot } from './plot.js';
     if (!files.length){ wrap.innerHTML=''; return; }
     // Columns: Label 24%, m 9%, Q 9%, date 34%, warning 24%. A min-width keeps the
     // date field usable — on narrow screens the .table-wrap-box scrolls horizontally.
-    const cg = `<colgroup><col style="width:24%"><col style="width:9%"><col style="width:9%"><col style="width:34%"><col style="width:24%"></colgroup>`;
+    const cg = `<colgroup><col style="width:20%"><col style="width:15%"><col style="width:15%"><col style="width:30%"><col style="width:20%"></colgroup>`;
     let html = `<div class="table-wrap-box"><table style="min-width:600px">${cg}<thead><tr><th>Sample</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
     files.forEach((f,i)=>{
       html += `<tr>
@@ -177,28 +177,51 @@ import { Plot } from './plot.js';
     });
   }
 
-  // Show/clear the "end must be > start" warning.
+  const WARN_HTML = '<div class="alert warn" style="margin-top:8px;padding:6px 8px;font-size:11px">⚠ Interval end must be greater than interval start.</div>';
+  // Parse a raw field string into a finite number, or null if it isn't a
+  // complete value yet (empty, or just a lone sign/decimal point).
+  function parseIntervalField(v){
+    const s = String(v).trim();
+    if (s==='' || s==='-' || s==='+' || s==='.' || s==='-.' || s==='+.') return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+  // Live warning: only once BOTH fields hold complete valid numbers and end<=start.
   function updateIntervalWarn(){
     const w = document.getElementById('gcIntervalWarn');
     if (!w) return;
-    w.innerHTML = (plateauEnd <= plateauStart)
-      ? '<div class="alert warn" style="margin-top:8px;padding:6px 8px;font-size:11px">⚠ Interval end must be greater than interval start.</div>'
-      : '';
+    const s = parseIntervalField(document.getElementById('gcPlateauStart').value);
+    const e = parseIntervalField(document.getElementById('gcPlateauEnd').value);
+    w.innerHTML = (s!==null && e!==null && e<=s) ? WARN_HTML : '';
+  }
+  // Commit on blur/Enter: validate, revert invalid input to the last good values
+  // (shaking + keeping the warning when end<=start), else apply and recompute.
+  function commitInterval(){
+    const startEl = document.getElementById('gcPlateauStart');
+    const endEl   = document.getElementById('gcPlateauEnd');
+    let s = parseIntervalField(startEl.value);
+    let e = parseIntervalField(endEl.value);
+    if (s===null){ s = plateauStart; startEl.value = plateauStart; }
+    if (e===null){ e = plateauEnd;   endEl.value   = plateauEnd; }
+    if (e <= s){
+      // Invalid interval: shake, revert both fields, keep the warning visible.
+      flashFieldInvalid(endEl);
+      startEl.value = plateauStart;
+      endEl.value   = plateauEnd;
+      const w = document.getElementById('gcIntervalWarn'); if (w) w.innerHTML = WARN_HTML;
+      return;
+    }
+    plateauStart = s; plateauEnd = e;
+    updateIntervalWarn();
+    if (dataTables.length) updateRegression();
+    if (files.length) hist.commit();
   }
   ['gcPlateauStart','gcPlateauEnd'].forEach(id=>{
     const el = document.getElementById(id);
-    el.addEventListener('input', ()=>{
-      plateauStart = +document.getElementById('gcPlateauStart').value;
-      plateauEnd   = +document.getElementById('gcPlateauEnd').value;
-      updateIntervalWarn();
-      if (dataTables.length) updateRegression();
-    });
-    el.addEventListener('change', ()=>{
-      // Enforce end > start on commit: flash the end field if it isn't.
-      if (+document.getElementById('gcPlateauEnd').value <= +document.getElementById('gcPlateauStart').value)
-        flashFieldInvalid(document.getElementById('gcPlateauEnd'));
-      if (files.length) hist.commit();
-    });
+    // Live: update only the warning while typing; never touch plots/results.
+    el.addEventListener('input', updateIntervalWarn);
+    el.addEventListener('change', commitInterval);
+    el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
   });
 
   function computeAndRenderGc(){
