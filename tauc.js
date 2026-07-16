@@ -679,9 +679,9 @@ import { Plot } from './plot.js';
     // is otherwise only readable off the Analysis plot). Endpoints are in eV, taken
     // from the best-fit window; R²/NRMSE are the fit-quality metrics for each line.
     {
-      let t = csvLine(['Sample','Exponent (a)','Smoothing points (N)',
-        'Tauc regression points (M)','Tauc start (eV)','Tauc end (eV)','Tauc R²','Tauc NRMSE',
-        'Baseline regression points (M2)','Baseline start (eV)','Baseline end (eV)','Baseline R²','Baseline NRMSE']);
+      let t = csvLine(['Sample','Tauc Exponent','Smoothing points',
+        'Tauc regression points','Tauc start (eV)','Tauc end (eV)','Tauc R^2','Tauc NRMSE',
+        'Baseline regression points','Baseline start (eV)','Baseline end (eV)','Baseline R^2','Baseline NRMSE']);
       files.forEach((f,k)=>{
         const fp = getFileParams(k), r = bestRegsAll[k] || {};
         const span = (reg) => {
@@ -697,7 +697,7 @@ import { Plot } from './plot.js';
           fp.M2, bs, be,
           r.regs2&&isFinite(r.regs2.R2)?fmtNum(r.regs2.R2,6):'', r.regs2&&isFinite(r.regs2.NRMSE)?fmtNum(r.regs2.NRMSE,6):'']);
       });
-      entries.push({name:'tauc_regression.csv', text:t});
+      entries.push({name:'analysis_info.csv', text:t});
     }
     downloadZip('tauc_export.zip', entries);
   }
