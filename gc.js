@@ -147,8 +147,8 @@ import { Plot } from './plot.js';
     files.forEach((f,i)=>{
       html += `<tr>
         <td class="fname" title="${f.label}">${f.label}</td>
-        <td><input data-i="${i}" class="gcM" type="number" min="0.001" step="0.1" value="${ms[i]}" style="width:100%"></td>
-        <td><input data-i="${i}" class="gcQ" type="number" min="0.001" step="0.1" value="${Qs[i]}" style="width:100%"></td>
+        <td><input data-i="${i}" class="gcM" type="text" inputmode="decimal" value="${ms[i]}" style="width:100%"></td>
+        <td><input data-i="${i}" class="gcQ" type="text" inputmode="decimal" value="${Qs[i]}" style="width:100%"></td>
         <td class="gc-date-cell" data-i="${i}"></td>
         <td class="gc-warn-cell">${lightOnWarnHtml(i)}</td>
       </tr>`;
@@ -183,7 +183,7 @@ import { Plot } from './plot.js';
   // Parse a raw field string into a finite number, or null if it isn't a
   // complete value yet (empty, or just a lone sign/decimal point).
   function parseIntervalField(v){
-    const s = String(v).trim();
+    const s = String(v).trim().replace(',', '.');   // accept comma decimals
     if (s==='' || s==='-' || s==='+' || s==='.' || s==='-.' || s==='+.') return null;
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
@@ -220,6 +220,10 @@ import { Plot } from './plot.js';
   }
   ['gcPlateauStart','gcPlateauEnd'].forEach(id=>{
     const el = document.getElementById(id);
+    // Now type=text (to accept comma decimals), so the global number-input guard
+    // doesn't cover it — wire it here so non-numeric entries shake + revert. It runs
+    // before commitInterval, which additionally enforces the end>start cross rule.
+    guardNumericInput(el, {});
     // Live: update only the warning while typing; never touch plots/results.
     el.addEventListener('input', updateIntervalWarn);
     el.addEventListener('change', commitInterval);
