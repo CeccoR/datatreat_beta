@@ -461,17 +461,19 @@ import { Plot } from './plot.js';
     throttle = requestAnimationFrame(()=>{ throttle=null; updateTaucView(true); });
   }
 
-  // Live param updates — keep the current zoom (except when changing the
-  // exponent, which rescales the y-axis, so a full reset is clearer there)
+  // Param updates apply on confirm (blur / Enter), not while typing. taucA is a
+  // <select>, so its change already is a deliberate choice; the numeric fields are
+  // guarded (invalid input shakes + reverts) by guardNumberInputs, and their change
+  // fires only once a valid value is committed. Changing the exponent rescales the
+  // y-axis, so it does a full reset; the smoothing/window fields keep the zoom.
   ['taucA','taucN','taucN2','taucM','taucM2'].forEach(id=>{
     const el = document.getElementById(id);
-    el.addEventListener('input', ()=>{
+    el.addEventListener('change', ()=>{
       readInputsToStore();  // route the edit to shared or this sample's slot
       if (id==='taucA') document.getElementById('taucNExp').textContent = el.value;
-      if(plot) updateTaucView(id!=='taucA');
+      if (plot) updateTaucView(id!=='taucA');
+      if (files.length) hist.commit();
     });
-    // Commit one undo step per completed edit (on change/blur, not each keystroke)
-    el.addEventListener('change', ()=>{ if (files.length) hist.commit(); });
   });
 
   // Single all/one toggle: 'all' = one common param set + shared interval lines;

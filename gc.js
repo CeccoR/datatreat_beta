@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -155,14 +155,16 @@ import { Plot } from './plot.js';
     });
     html += `</tbody></table></div>`;
     wrap.innerHTML = html;
-    const commit = ()=>{ if (files.length) hist.commit(); };
+    // These inputs are created dynamically, so wire the guard here (invalid input
+    // shakes + reverts to the last confirmed value). Views update only on confirm
+    // (blur / Enter) — the guard blocks the change event for invalid entries.
     wrap.querySelectorAll('.gcM').forEach(inp=>{
-      inp.addEventListener('input', e=>{ const v=+e.target.value; if (v>=0.001) ms[+e.target.dataset.i]=v; computeAndRenderGc(); });
-      inp.addEventListener('change', commit);
+      guardNumericInput(inp, { min:0.001 });
+      inp.addEventListener('change', e=>{ ms[+e.target.dataset.i] = +e.target.value; computeAndRenderGc(); if (files.length) hist.commit(); });
     });
     wrap.querySelectorAll('.gcQ').forEach(inp=>{
-      inp.addEventListener('input', e=>{ const v=+e.target.value; if (v>=0.001) Qs[+e.target.dataset.i]=v; computeAndRenderGc(); });
-      inp.addEventListener('change', commit);
+      guardNumericInput(inp, { min:0.001 });
+      inp.addEventListener('change', e=>{ Qs[+e.target.dataset.i] = +e.target.value; computeAndRenderGc(); if (files.length) hist.commit(); });
     });
     wrap.querySelectorAll('.gc-date-cell').forEach(cell=>{
       const i = +cell.dataset.i;

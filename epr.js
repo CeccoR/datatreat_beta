@@ -198,10 +198,13 @@ import { Plot } from './plot.js';
     lastY = Y;
   }
 
+  // Apply on confirm, not while typing. eprNorm is a <select> (its change is a
+  // deliberate pick); eprSmooth is a guarded number field, so its change only
+  // fires with a valid value (invalid input shakes + reverts via guardNumberInputs).
   ['eprNorm','eprSmooth'].forEach(id=>{
-    const el = document.getElementById(id);
-    el.addEventListener('input', ()=>{ if(files.length) updateEpr(); });
-    el.addEventListener('change', ()=>{ if(files.length) hist.commit(); });
+    document.getElementById(id).addEventListener('change', ()=>{
+      if (files.length){ updateEpr(); hist.commit(); }
+    });
   });
 
   function exportEprZip(){

@@ -1085,26 +1085,39 @@ function flashFieldInvalid(el){
   clearTimeout(el._flashT);
   el._flashT = setTimeout(()=>el.classList.remove('field-invalid'), 450);
 }
-// Guard one input: on change, coerce to [min,max] (and to integer if requested),
-// flashing + syncing the view when the typed value had to be corrected.
+// Guard one input so it only ever commits a valid value: views update on confirm
+// (blur / Enter), and any invalid entry (empty, non-numeric, out of range, or a
+// non-integer where one is required) shakes the field and snaps it back to the
+// last value that was successfully confirmed — never a live/partial update.
 function guardNumericInput(el, opts){
   if (!el) return;
   const { min=null, max=null, integer=false, def=null } = opts || {};
-  el.addEventListener('change', ()=>{
+  const parse = ()=>{ const v = parseFloat(String(el.value).trim().replace(',', '.')); return isFinite(v) ? v : NaN; };
+  // Seed the "last confirmed" value from the field's initial (valid) content.
+  const seed = parse();
+  el._lastValid = isFinite(seed) ? seed : (def!=null ? def : (min!=null ? min : 0));
+  // Re-seed on focus so programmatic value changes (session restore, param sync)
+  // become the new revert target without every setter having to notify us.
+  el.addEventListener('focus', ()=>{ const v = parse(); if (isFinite(v)) el._lastValid = v; });
+  el.addEventListener('change', e=>{
     const raw = String(el.value).trim().replace(',', '.');
-    let v = parseFloat(raw), corrected = false;
-    if (raw==='' || !isFinite(v)){ v = (def!=null ? def : (min!=null ? min : 0)); corrected = true; }
-    else {
-      if (integer && !Number.isInteger(v)){ v = Math.round(v); corrected = true; }
-      if (min!=null && v<min){ v = min; corrected = true; }
-      if (max!=null && v>max){ v = max; corrected = true; }
-    }
-    if (corrected){
-      el.value = String(v);
+    const v = parseFloat(raw);
+    const bad = raw==='' || !isFinite(v)
+      || (integer && !Number.isInteger(v))
+      || (min!=null && v<min) || (max!=null && v>max);
+    if (bad){
+      // Reject: shake, restore the last confirmed value, and keep the invalid
+      // entry from reaching the module's own listeners (so views stay untouched).
       flashFieldInvalid(el);
-      el.dispatchEvent(new Event('input', { bubbles:true })); // let the module re-read the corrected value
+      el.value = String(el._lastValid);
+      e.stopImmediatePropagation();
+      return;
     }
+    el._lastValid = v;
+    el.value = String(v);
+    el.dispatchEvent(new Event('input', { bubbles:true })); // let input-based consumers re-read
   });
+  el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
 }
 // Auto-wire every <input type="number"> under root, reading bounds from its
 // min/max attributes (step decides integer-ness). Covers most module fields.
