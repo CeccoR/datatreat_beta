@@ -37,6 +37,7 @@
   --plot-cross: #c4ccd6;
   --plot-readout: #f0f4f6;
   --plot-readout-halo: #0b0f12;
+  --plot-errbar: #f0f4f6;
 }
 /* ===== Light theme ===== */
 :root[data-theme="light"] {
@@ -67,6 +68,7 @@
   --plot-cross: #56676f;
   --plot-readout: #1a2327;
   --plot-readout-halo: #ffffff;
+  --plot-errbar: #2a2f38;
 }
 /* Plot chrome follows the theme. CSS beats SVG presentation attributes, so these
    override the fills/strokes plot.js sets inline — no JS changes needed. */
@@ -76,6 +78,9 @@
 .plot-label  { fill: var(--plot-label); }
 .plot-crosshair { stroke: var(--plot-cross); }
 .plot-readout { fill: var(--plot-readout); stroke: var(--plot-readout-halo); }
+/* Error bars + their value labels: visible in both themes (override inline #fff) */
+.plot-errbar  { stroke: var(--plot-errbar); }
+.plot-errlabel { fill: var(--plot-errbar); }
 
 * {
   box-sizing: border-box;

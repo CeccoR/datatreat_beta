@@ -452,7 +452,6 @@ import { Plot } from './plot.js';
     if (!files.length) return;
     processAll();
     renderResView();
-    renderEgTable();
   }
 
   let throttle=null;
@@ -514,28 +513,6 @@ import { Plot } from './plot.js';
     else { const s=suggestShared(); if (s) sharedVlines=s; }
     updateTaucView(); hist.commit();
   };
-
-  function renderEgTable(){
-    const wrap = document.getElementById('taucEgTableWrap');
-    let html = '<table><colgroup><col style="width:44%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th rowspan="2">Sample</th><th colspan="2" style="text-align:center">E<sub>g</sub> (eV)</th></tr><tr><th style="text-align:center">x-axis</th><th style="text-align:center">baseline</th></tr></thead><tbody>';
-    bestRegsAll.forEach(r=>{
-      const egNeg = isFinite(r.Eg) && r.Eg < 0;
-      const egiNeg = isFinite(r.EgInt) && r.EgInt < 0;
-      const eg = isFinite(r.Eg)
-        ? (egNeg
-            ? `<span style="color:var(--warn)">⚠ ${r.Eg.toFixed(3)}</span>`
-            : (isFinite(r.EgErr) ? `${r.Eg.toFixed(3)} ± ${r.EgErr.toFixed(3)}` : r.Eg.toFixed(3)))
-        : '—';
-      const egi = isFinite(r.EgInt)
-        ? (egiNeg
-            ? `<span style="color:var(--warn)">⚠ ${r.EgInt.toFixed(3)}</span>`
-            : (isFinite(r.EgIntErr) ? `${r.EgInt.toFixed(3)} ± ${r.EgIntErr.toFixed(3)}` : r.EgInt.toFixed(3)))
-        : '—';
-      html += `<tr><td>${r.label}</td><td>${eg}</td><td>${egi}</td></tr>`;
-    });
-    html += '</tbody></table>';
-    wrap.innerHTML = html;
-  }
 
   function renderResView(){
     // Effective exponent per file; when uniform, show it on the shared Tauc axis,
@@ -615,39 +592,42 @@ import { Plot } from './plot.js';
       let maxLbl = 0; files.forEach(f=>{ maxLbl = Math.max(maxLbl, mctx.measureText(f.label).width); });
       const svgH = barSvg.getBoundingClientRect().height || 640;
       const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
-      const plot2 = new Plot(barSvg, {xlabel:'', ylabelSvg:`${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, noXTickLabels:true, margin:{l:55,r:20,t:15,b:bottom}});
-      const ymax2 = Math.max(...posVals)*1.3;
+      // Each bar carries a vertical "Eg±err" label above it. Reserve enough top
+      // headroom (in the y-range) that the longest label never spills off the top.
+      const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
+      const topOf = (v,e)=> v + (isFinite(e)?e:0);
+      let maxValW = 0, maxTop = 0;
+      for (let k=0;k<n;k++){
+        if (isFinite(egs[k])&&egs[k]>0){ maxValW = Math.max(maxValW, mctx.measureText(fmtLab(egs[k],egErrs[k])).width); maxTop = Math.max(maxTop, topOf(egs[k],egErrs[k])); }
+        if (isFinite(egInts[k])&&egInts[k]>0){ maxValW = Math.max(maxValW, mctx.measureText(fmtLab(egInts[k],egIntErrs[k])).width); maxTop = Math.max(maxTop, topOf(egInts[k],egIntErrs[k])); }
+      }
+      const mTop = 15, gap = 6;
+      const plotH = svgH - mTop - bottom;
+      const reserve = gap + maxValW + 6;                 // px needed above the tallest bar
+      const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
+      const ymax2 = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
+      const plot2 = new Plot(barSvg, {xlabel:'', ylabelSvg:`${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
       plot2.setRange(0, n+1, 0, ymax2||1);
       plot2.drawAxes();
       for (let k=0;k<n;k++){
         const xc = k+1;
         if (isFinite(egs[k])&&egs[k]>0){
-          const x0=xc-0.18, x1=xc-0.02;
+          const x0=xc-0.18, x1=xc-0.02, cx=(x0+x1)/2;
           drawBar(plot2,x0,x1,egs[k],'#3aa0ff');
-          if (isFinite(egErrs[k])) drawErrBar(plot2,(x0+x1)/2,egs[k],egErrs[k]);
+          if (isFinite(egErrs[k])) drawErrBar(plot2,cx,egs[k],egErrs[k]);
+          plot2.barLabel(cx, topOf(egs[k],egErrs[k]), fmtLab(egs[k],egErrs[k]), {gap});
         }
         if (isFinite(egInts[k])&&egInts[k]>0){
-          const x0=xc+0.02, x1=xc+0.18;
+          const x0=xc+0.02, x1=xc+0.18, cx=(x0+x1)/2;
           drawBar(plot2,x0,x1,egInts[k],'#ff7a59');
-          if (isFinite(egIntErrs[k])) drawErrBar(plot2,(x0+x1)/2,egInts[k],egIntErrs[k]);
+          if (isFinite(egIntErrs[k])) drawErrBar(plot2,cx,egInts[k],egIntErrs[k]);
+          plot2.barLabel(cx, topOf(egInts[k],egIntErrs[k]), fmtLab(egInts[k],egIntErrs[k]), {gap});
         }
         plot2.tickLabel(xc, files[k].label, 30);
       }
       plot2.attachTools(barSvg.closest('.plot-wrap'));
       leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
     }
-    // Align the table panel with the first visible content in the left col
-    const _leftCol = barSvg.closest('.col');
-    const _rightCol = _leftCol && _leftCol.nextElementSibling;
-    if (_rightCol) requestAnimationFrame(()=>{
-      const rowTop = _leftCol.parentElement.getBoundingClientRect().top;
-      let targetTop = rowTop;
-      for (const child of _leftCol.children){
-        const r = child.getBoundingClientRect();
-        if (r.height > 0){ targetTop = r.top; break; }
-      }
-      _rightCol.style.marginTop = Math.max(0, Math.round(targetTop - rowTop)) + 'px';
-    });
   }
   function drawBar(plot, x0, x1, val, color){ plot.bar(x0, x1, 0, val, color); }
   function drawErrBar(plot, xc, val, err){ plot.errbar(xc, val, err); }
@@ -694,6 +674,30 @@ import { Plot } from './plot.js';
           r?fmtNum(r.Eg,6):'', r?fmtNum(r.EgErr,6):'', r?fmtNum(r.EgInt,6):'', r?fmtNum(r.EgIntErr,6):'']);
       });
       entries.push({name:'Eg.csv', text:t});
+    }
+    // tauc_regression.csv — per-sample regression settings & results (the info that
+    // is otherwise only readable off the Analysis plot). Endpoints are in eV, taken
+    // from the best-fit window; R²/NRMSE are the fit-quality metrics for each line.
+    {
+      let t = csvLine(['Sample','Exponent (a)','Smoothing points (N)',
+        'Tauc regression points (M)','Tauc start (eV)','Tauc end (eV)','Tauc R²','Tauc NRMSE',
+        'Baseline regression points (M2)','Baseline start (eV)','Baseline end (eV)','Baseline R²','Baseline NRMSE']);
+      files.forEach((f,k)=>{
+        const fp = getFileParams(k), r = bestRegsAll[k] || {};
+        const span = (reg) => {
+          const idx = reg && reg.bestIdx;
+          if (!idx || !idx.length) return ['',''];
+          let lo=Infinity, hi=-Infinity;
+          idx.forEach(i=>{ const e=f.hv[i]; if(e<lo)lo=e; if(e>hi)hi=e; });
+          return [fmtNum(lo,6), fmtNum(hi,6)];
+        };
+        const [ts,te] = span(r.regs), [bs,be] = span(r.regs2);
+        t += csvLine([f.label, fp.a, fp.N, fp.M, ts, te,
+          r.regs&&isFinite(r.regs.R2)?fmtNum(r.regs.R2,6):'', r.regs&&isFinite(r.regs.NRMSE)?fmtNum(r.regs.NRMSE,6):'',
+          fp.M2, bs, be,
+          r.regs2&&isFinite(r.regs2.R2)?fmtNum(r.regs2.R2,6):'', r.regs2&&isFinite(r.regs2.NRMSE)?fmtNum(r.regs2.NRMSE,6):'']);
+      });
+      entries.push({name:'tauc_regression.csv', text:t});
     }
     downloadZip('tauc_export.zip', entries);
   }

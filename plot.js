@@ -211,6 +211,25 @@ class Plot{
     this.gAxes.appendChild(t);
     return t;
   }
+  // Value label anchored at data coords, drawn rotated (default vertical, reading
+  // upward) a few px above the point — used for the numeric value above a bar. Lives
+  // in gData so it tracks pan/zoom; colour comes from CSS (.plot-errlabel).
+  barLabel(xv, yval, text, opts){
+    const entry = Object.assign({type:'barlabel', xv, yval, text}, opts||{});
+    this._stored.push(entry);
+    return this._renderBarLabel(entry);
+  }
+  _renderBarLabel(entry){
+    const x = this.px(entry.xv);
+    const y = this.py(entry.yval) - (entry.gap!=null ? entry.gap : 6);
+    const rot = entry.rot!=null ? entry.rot : 90;   // vertical, reading upward
+    const t = svgEl('text',{x, y, 'font-size':entry.size||10, 'text-anchor':'start',
+      'dominant-baseline':'central', 'class':'plot-errlabel', 'pointer-events':'none',
+      transform:`rotate(-${rot} ${x} ${y})`});
+    t.textContent = entry.text;
+    this.gData.appendChild(t);
+    return t;
+  }
   vline(xv, color, draggable, onDrag, onDragEnd){
     const entry = {type:'vline', xv, color, draggable, onDrag, onDragEnd};
     this._stored.push(entry);
@@ -253,6 +272,7 @@ class Plot{
       else if (e.type==='bar') this._renderBar(e);
       else if (e.type==='errbar') this._renderErrbar(e);
       else if (e.type==='ticklabel') this._renderTickLabel(e);
+      else if (e.type==='barlabel') this._renderBarLabel(e);
       else if (e.type==='vline') this._renderVline(e);
     }
   }
