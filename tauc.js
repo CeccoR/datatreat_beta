@@ -641,7 +641,7 @@ import { Plot } from './plot.js';
     return t;
   }
   function exportTaucZip(){
-    if (!files.length) return;
+    if (!files.length) return [];
     const entries = [];
     // reflectance_FR.csv — (wavelength, F(R)) per sample
     {
@@ -699,7 +699,7 @@ import { Plot } from './plot.js';
       });
       entries.push({name:'analysis_info.csv', text:t});
     }
-    downloadZip('tauc_export.zip', entries);
+    return entries;
   }
   registerCsvExport('tauc', exportTaucZip);
 })();

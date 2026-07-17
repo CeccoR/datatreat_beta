@@ -208,7 +208,7 @@ import { Plot } from './plot.js';
   });
 
   function exportEprZip(){
-    if (!files.length) return;
+    if (!files.length) return [];
     const N = +document.getElementById('eprSmooth').value || 1;
     const norm = document.getElementById('eprNorm').value;
     // Smoothed column: moving-average (N pts), background subtracted as the first point,
@@ -229,7 +229,7 @@ import { Plot } from './plot.js';
     const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
     let t = csvLine(cols.map(c=>c.h));
     for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-    downloadZip('epr_export.zip', [{name:'epr_spectra.csv', text:t}]);
+    return [{name:'epr_spectra.csv', text:t}];
   }
   registerCsvExport('epr', exportEprZip);
 })();

@@ -932,11 +932,50 @@ function normalizeProjIcons(mod){
   });
 }
 
-/* CSV export registry — each module registers how to build its .zip of CSVs so
-   the project buttons can trigger it. */
+/* CSV export registry — each module registers a builder returning its list of
+   {name,text} CSV entries. The group button zips them all; per-plot/table buttons
+   pick a subset by name. */
 const _csvExport = {};
-function registerCsvExport(mod, fn){ _csvExport[mod] = fn; }
-function runCsvExport(mod){ if (_csvExport[mod]) _csvExport[mod](); }
+function registerCsvExport(mod, buildFn){ _csvExport[mod] = buildFn; }
+function runCsvExport(mod){
+  const b = _csvExport[mod]; if (!b) return;
+  const e = b(); if (e && e.length) downloadZip(mod+'_export.zip', e);
+}
+// Download a subset of a module's CSVs by file name: a single file downloads as a
+// .csv, several bundle into a .zip.
+function downloadCsvFiles(mod, names){
+  const b = _csvExport[mod]; if (!b) return;
+  const all = b() || [];
+  const sel = all.filter(e=>names.includes(e.name));
+  if (!sel.length) return;
+  if (sel.length === 1) downloadBlob(sel[0].name, sel[0].text);
+  else downloadZip(mod+'_export.zip', sel);
+}
+// The project CSV icon, reused on every per-view download button.
+const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
+// Build a toolbar CSV button (same look/size as the other plot tool buttons, icon
+// normalised to the minimum-circumscribed-square rule). Downloads `names` for `mod`.
+function makeCsvButton(mod, names, title){
+  const btn = document.createElement('button');
+  btn.className = 'btn secondary plot-tool-btn plot-csv-btn';
+  btn.title = title || 'Download CSV';
+  btn.dataset.csvMod = mod;
+  btn.dataset.csvNames = names;
+  btn.innerHTML = CSV_BTN_ICON;
+  requestAnimationFrame(()=>fitIcon(btn.querySelector('svg')));
+  return btn;
+}
+// Normalise any CSV icons that are now visible (idempotent; hidden ones retry later).
+function fitCsvIcons(root){
+  (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIcon(s));
+}
+// One delegated handler drives every per-view CSV button.
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-csv-mod]');
+  if (!btn) return;
+  const names = (btn.dataset.csvNames||'').split(',').map(s=>s.trim()).filter(Boolean);
+  downloadCsvFiles(btn.dataset.csvMod, names);
+});
 // Does a module currently hold loaded data? (drives the replace-on-open confirm)
 function moduleHasData(mod){
   const btn = document.querySelector('#nav button[data-tab="'+mod+'"]');
@@ -1341,5 +1380,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid
 };

@@ -1,4 +1,4 @@
-import { settings, redrawAll } from './utils.js';
+import { settings, redrawAll, makeCsvButton, fitCsvIcons } from './utils.js';
 
 /* =========================================================
    SVG PLOT HELPER (shared)
@@ -291,6 +291,9 @@ class Plot{
         dlBtn.addEventListener('mousedown', ()=>dlBtn.classList.add('active'));
         dlBtn.addEventListener('mouseup', ()=>dlBtn.classList.remove('active'));
         dlBtn.addEventListener('mouseleave', ()=>dlBtn.classList.remove('active'));
+        // A CSV download button (same look/size), if this plot declares its CSVs.
+        if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
+          col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
       }
       else { wrapEl.appendChild(col); }
     }
@@ -332,6 +335,8 @@ class Plot{
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
     this.setMode(this._mode || null);
+    // Normalise the CSV icon now that the plot (and its button) is on-screen.
+    fitCsvIcons(col);
   }
   _clearCrosshair(){ if (this.gCross) this.gCross.innerHTML=''; }
   // Draw a thin crosshair + a coordinate readout at the pointer (data coordinates via invX/invY)

@@ -359,7 +359,7 @@ import { Plot } from './plot.js';
   }
 
   function exportGcZip(){
-    if (!dataTables.length) return;
+    if (!dataTables.length) return [];
     const entries = [];
     // gc_timeseries.csv — each sample keeps its own independent columns (own time axis)
     const cols=[];
@@ -383,7 +383,7 @@ import { Plot } from './plot.js';
     let t3 = csvLine(['Sample','m (g)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)']);
     dataTables.forEach((d,k)=> t3 += csvLine([d.label, ms[k], Qs[k], fmtDate(lightOnDates[k]), plateauStart, plateauEnd]));
     entries.push({name:'gc_info.csv', text:t3});
-    downloadZip('gc_export.zip', entries);
+    return entries;
   }
   registerCsvExport('gc', exportGcZip);
 })();

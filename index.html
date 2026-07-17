@@ -196,7 +196,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
               <svg class="plot" id="taucSvg"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="taucSvg" data-dl-name="Tauc_sample.svg" data-dl-legend="taucLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="taucSvg" data-csv-mod="tauc" data-csv-names="analysis_info.csv" data-dl-name="Tauc_sample.svg" data-dl-legend="taucLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend" id="taucLegend">
               <span><i style="background:#ffffff"></i>original</span>
@@ -241,13 +241,13 @@
         <p class="chart-title">Kubelka-Munk Function</p>
         <div class="plot-wrap">
           <svg class="plot" id="taucResSvg0" style="height:640px"></svg>
-          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg0" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg0" data-csv-mod="tauc" data-csv-names="reflectance_FR.csv" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
         <div id="taucResLegend0" class="legend" style="margin-bottom:18px"></div>
         <p class="chart-title">Tauc Plot</p>
         <div class="plot-wrap">
           <svg class="plot" id="taucResSvg1" style="height:640px"></svg>
-          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg1" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg1" data-csv-mod="tauc" data-csv-names="tauc_plot.csv" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
         <div id="taucResLegend1" class="legend" style="margin-bottom:18px"></div>
         <p class="chart-title" id="taucBarTitle" style="margin-bottom:8px">Energy Band Gap</p>
@@ -255,7 +255,7 @@
           <div class="col" style="flex:1">
             <div class="plot-wrap">
               <svg class="plot" id="taucResSvg2" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg2" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg2" data-csv-mod="tauc" data-csv-names="Eg.csv" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="taucBarAlert"></div>
             <div id="taucResLegend2" class="legend"></div>
@@ -301,7 +301,7 @@
             <div class="col mw520" style="flex:2">
               <div class="plot-wrap">
                 <svg class="plot" id="xrdStdSvg" style="height:460px"></svg>
-                <button class="btn secondary plot-dl-btn" data-dl-svg="xrdStdSvg" data-dl-name="XRPD_standard.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+                <button class="btn secondary plot-dl-btn" data-dl-svg="xrdStdSvg" data-csv-mod="xrd" data-csv-names="standard.csv" data-dl-name="XRPD_standard.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
               </div>
               <div class="legend">
                 <span><i style="background:#6a7585"></i>raw</span>
@@ -330,6 +330,7 @@
             <div class="peak-box-head">
               <span class="peak-box-title">Detected peaks</span>
               <button class="btn secondary peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
+              <button class="btn secondary table-csv-btn" data-csv-mod="xrd" data-csv-names="standard.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
             </div>
             <div id="xrdStdPeakTableWrap"></div>
           </div>
@@ -351,7 +352,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
               <svg class="plot" id="xrdSvg" style="height:460px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSvg" data-dl-name="XRPD_sample.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv,peaks.csv" data-dl-name="XRPD_sample.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend">
               <span><i style="background:#6a7585"></i>raw</span>
@@ -395,6 +396,7 @@
           <div class="peak-box-head">
             <span class="peak-box-title">Detected peaks</span>
             <button class="btn secondary peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
+            <button class="btn secondary table-csv-btn" data-csv-mod="xrd" data-csv-names="peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="xrdPeakTableWrap"></div>
         </div>
@@ -414,7 +416,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
               <svg class="plot" id="xrdFitSvg" style="height:420px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSvg" data-dl-name="XRPD_fit.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSvg" data-csv-mod="xrd" data-csv-names="fits.csv" data-dl-name="XRPD_fit.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend">
               <span><i class="mk-dot mk-ring" style="border-color:#6a7585"></i>raw</span>
@@ -448,6 +450,7 @@
         <div class="peak-box" id="xrdFitPeakBox">
           <div class="peak-box-head">
             <span class="peak-box-title">Fitted peaks</span>
+            <button class="btn secondary table-csv-btn" data-csv-mod="xrd" data-csv-names="fit_peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="xrdFitTableWrap"></div>
         </div>
@@ -460,13 +463,13 @@
             <p class="chart-title">Analysis</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdResSvg" style="height:560px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResSvg" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResLegend" class="legend"></div>
             <p class="chart-title" style="margin:18px 0 6px">Crystallite size</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdSizeBarSvg" style="height:420px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSizeBarSvg" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="xrdSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="xrdSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdSizeBarLegend" class="legend"></div>
           </div>
@@ -474,13 +477,13 @@
             <p class="chart-title">Fit</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdResFitSvg" style="height:560px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-csv-mod="xrd" data-csv-names="fits.csv" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResFitLegend" class="legend"></div>
             <p class="chart-title" style="margin:18px 0 6px">Crystallite size (fit)</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdFitSizeBarSvg" style="height:420px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSizeBarSvg" data-dl-name="XRPD_crystallite_size_fit.svg" data-dl-legend="xrdFitSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSizeBarSvg" data-csv-mod="xrd" data-csv-names="fit_crystallite_size.csv" data-dl-name="XRPD_crystallite_size_fit.svg" data-dl-legend="xrdFitSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdFitSizeBarLegend" class="legend"></div>
           </div>
@@ -598,11 +601,11 @@
             <p class="chart-title">H₂ Production</p>
             <div class="plot-wrap" style="margin-bottom:6px">
               <svg class="plot" id="gcSvg1" style="height:305px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg1" data-dl-name="GC_H2_rate.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg1" data-csv-mod="gc" data-csv-names="gc_timeseries.csv" data-dl-name="GC_H2_rate.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="plot-wrap">
               <svg class="plot" id="gcSvg2" style="height:305px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg2" data-dl-name="GC_H2_cumulative.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg2" data-csv-mod="gc" data-csv-names="gc_timeseries.csv" data-dl-name="GC_H2_cumulative.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="gcLegend" class="legend" style="margin-top:8px"></div>
           </div>
@@ -623,7 +626,7 @@
           <div class="col" style="flex:1">
             <div class="plot-wrap">
               <svg class="plot" id="gcSvgBar" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvgBar" data-dl-name="GC_results.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvgBar" data-csv-mod="gc" data-csv-names="h2_rates.csv,gc_info.csv" data-dl-name="GC_results.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
           </div>
         </div>
@@ -662,7 +665,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
               <svg class="plot" id="eprSvg" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="eprSvg" data-dl-name="EPR.svg" data-dl-legend="eprLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="eprSvg" data-csv-mod="epr" data-csv-names="epr_spectra.csv" data-dl-name="EPR.svg" data-dl-legend="eprLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="eprLegend" class="legend"></div>
           </div>

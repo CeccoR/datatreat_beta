@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -815,7 +815,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     renderPeakTable();
   }
 
-  function renderPeakTable(){ renderAnalysisTable(); renderStdTable(); renderFitTable(); renderXrdSizeChart(); renderXrdFitSizeChart(); }
+  function renderPeakTable(){ renderAnalysisTable(); renderStdTable(); renderFitTable(); renderXrdSizeChart(); renderXrdFitSizeChart(); fitCsvIcons(); }
 
   // Re-derive everything downstream of a peak edit (add/remove/reset) on file `idx`.
   // Covers the standard too: editing the standard's peaks changes β_instr and hence the
@@ -1560,7 +1560,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   }
 
   function exportXrdZip(){
-    if (!files.length) return;
+    if (!files.length) return [];
     const norm = document.getElementById('xrdNorm').value;
     const anyStd = !!standardName;
     const nonStd = files.map((f,k)=>k).filter(k=>files[k].name!==standardName);
@@ -1629,8 +1629,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const cols=[]; nonStd.forEach(k=>{ const c=fitPeakCols(k, anyStd); if (c) cols.push(...c); });
       if (cols.length) entries.push({name:'fit_peaks.csv', text:wideCsv(cols)});
     }
-    // Bundle every CSV into a single downloadable zip
-    downloadZip('xrd_export.zip', entries);
+    return entries;
   }
   registerCsvExport('xrd', exportXrdZip);
 })();

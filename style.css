@@ -1214,6 +1214,24 @@ button.color-swatch:hover { border-color: var(--text); }
   border-color: var(--accent) !important;
   background: transparent !important;
 }
+/* Compact icon-only CSV button used in table headers (Detected/Fitted peaks). */
+.table-csv-btn {
+  width: 30px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.table-csv-btn:hover {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  background: transparent !important;
+}
 /* Icons render as centered blocks (no inline-baseline gap) so every icon's
    bounding box is centered in its button/cell and aligns with its neighbours */
 .plot-btn-icon, .x-icon, .dl-icon { display: block; }
