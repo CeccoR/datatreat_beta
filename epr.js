@@ -210,15 +210,21 @@ import { Plot } from './plot.js';
   function exportEprZip(){
     if (!files.length) return;
     const N = +document.getElementById('eprSmooth').value || 1;
+    const norm = document.getElementById('eprNorm').value;
+    // Smoothed column: moving-average (N pts), background subtracted as the first point,
+    // then normalised the user's way — divide by the peak-to-peak (local = own,
+    // global = largest across samples), matching the on-screen normalisation divisor.
+    const sms = files.map(f=>movingAverage(f.a, N));
+    const ppks = sms.map(sm => (maxArr(sm)-minArr(sm)) || 1);
+    const gPP = Math.max(...ppks);
     // Per sample: the (already g-corrected) field, the raw intensity — already
-    // baseline-centred at import — and the smoothed (N pts) trace minus its minimum,
-    // which matches the displayed baseline-shifted curve.
+    // baseline-centred at import — and the processed smoothed trace.
     const cols = [];
-    files.forEach(f=>{
-      const sm = movingAverage(f.a, N), smMin = minArr(sm);
+    files.forEach((f,k)=>{
+      const sm = sms[k], bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP;
       cols.push({h:'Bfield_mT_'+f.label,             v:f.b.map(v=>fmtNum(v,6))});
       cols.push({h:'Raw_'+f.label,                   v:f.a.map(v=>fmtNum(v,6))});
-      cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:sm.map(v=>fmtNum(v-smMin,6))});
+      cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:sm.map(v=>fmtNum((v-bg)/div,6))});
     });
     const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
     let t = csvLine(cols.map(c=>c.h));
