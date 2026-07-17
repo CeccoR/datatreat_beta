@@ -1169,7 +1169,7 @@ button.color-swatch:hover { border-color: var(--text); }
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
-  opacity: 0;
+  opacity: 0.5;                 /* dimmed by default, full on hovering the plot */
   transition: opacity 0.18s;
 }
 .plot-wrap:hover .plot-btn-col {
@@ -1214,8 +1214,11 @@ button.color-swatch:hover { border-color: var(--text); }
   border-color: var(--accent) !important;
   background: transparent !important;
 }
-/* Compact icon-only CSV button used in table headers (Detected/Fitted peaks). */
+/* Compact icon-only CSV button pinned to the far edge of a table header. Dimmed by
+   default, full opacity when the table (or the button) is hovered — matching the
+   plot toolbar buttons. */
 .table-csv-btn {
+  margin-left: auto;            /* push to the extreme right of its header row */
   width: 30px !important;
   height: 28px !important;
   padding: 0 !important;
@@ -1225,13 +1228,56 @@ button.color-swatch:hover { border-color: var(--text); }
   border-radius: 6px;
   color: var(--muted) !important;
   border-color: var(--line) !important;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  opacity: 0.5;
+  transition: opacity 0.18s, color 0.15s, border-color 0.15s, background 0.15s;
+}
+.peak-box:hover .table-csv-btn,
+.table-box:hover .table-csv-btn,
+.table-csv-btn:hover {
+  opacity: 1;
 }
 .table-csv-btn:hover {
   color: var(--accent) !important;
   border-color: var(--accent) !important;
   background: transparent !important;
 }
+/* PWA update toast */
+.pwa-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%) translateY(20px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px 10px 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  z-index: 9999;
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.pwa-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.pwa-toast .btn { padding: 4px 12px; }
+.pwa-toast-x {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.pwa-toast-x:hover { color: var(--text); }
 /* Icons render as centered blocks (no inline-baseline gap) so every icon's
    bounding box is centered in its button/cell and aligns with its neighbours */
 .plot-btn-icon, .x-icon, .dl-icon { display: block; }

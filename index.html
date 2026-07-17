@@ -595,10 +595,13 @@
       <div class="card" id="gcResults" style="display:none">
         <h3 style="margin:0 0 0">ANALYSIS</h3>
         <div class="instr-block">Set catalyst mass (m), carrier gas flow rate (Q), and the light-on time for each sample. Define the integration interval to compute mean H₂ production rates. The white vertical lines mark the selected boundaries.</div>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
-          <button class="btn secondary table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
+        <div class="table-box" style="margin-bottom:14px">
+          <div class="peak-box-head">
+            <span class="peak-box-title">Sample parameters</span>
+            <button class="btn secondary table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
+          </div>
+          <div id="gcParamTableWrap"></div>
         </div>
-        <div id="gcParamTableWrap" style="margin-bottom:14px"></div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
             <p class="chart-title">H₂ Production</p>
@@ -734,11 +737,42 @@
   <script type="module" src="epr.js"></script>
   <script type="module" src="gc.js"></script>
   <script type="module" src="sessions.js"></script>
+  <!-- PWA update prompt: shown when a new service-worker version is ready -->
+  <div id="pwaUpdateToast" class="pwa-toast" role="status" aria-live="polite">
+    <span>A new version is available.</span>
+    <button id="pwaUpdateBtn" class="btn" type="button">Update</button>
+    <button id="pwaUpdateDismiss" class="pwa-toast-x" type="button" aria-label="Dismiss">&#10005;</button>
+  </div>
   <!-- Register the service worker for offline / installable use (secure contexts only) -->
   <script>
+    function showPwaUpdate(worker){
+      const t = document.getElementById('pwaUpdateToast');
+      if (!t || t.classList.contains('show')) return;
+      t.classList.add('show');
+      document.getElementById('pwaUpdateBtn').onclick = () => {
+        worker.postMessage('SKIP_WAITING');   // activate the waiting SW → controllerchange → reload
+        t.classList.remove('show');
+      };
+      document.getElementById('pwaUpdateDismiss').onclick = () => t.classList.remove('show');
+    }
     if ('serviceWorker' in navigator) {
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading) return; reloading = true; location.reload();
+      });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register('sw.js').then(reg => {
+          // Already-waiting worker (update downloaded on a previous visit)
+          if (reg.waiting && navigator.serviceWorker.controller) showPwaUpdate(reg.waiting);
+          reg.addEventListener('updatefound', () => {
+            const nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener('statechange', () => {
+              // "installed" + an existing controller ⇒ this is an update, not first install
+              if (nw.state === 'installed' && navigator.serviceWorker.controller) showPwaUpdate(nw);
+            });
+          });
+        }).catch(() => {});
       });
     }
   </script>

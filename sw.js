@@ -1,6 +1,6 @@
 /* DataTreat service worker — cache-first offline app shell.
    Bump CACHE when any precached asset changes to force a refresh. */
-const CACHE = 'datatreat-v112';
+const CACHE = 'datatreat-v113';
 const ASSETS = [
   './',
   './index.html',
@@ -24,10 +24,14 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e)=>{
-  e.waitUntil(
-    caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())
-  );
+  // Don't skipWaiting automatically — the page shows an "update" toast and only then
+  // asks this worker to activate (via the SKIP_WAITING message below).
+  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));
 });
+
+// The page posts this once the user accepts the update; activating fires
+// controllerchange in the page, which reloads to pick up the new assets.
+self.addEventListener('message', (e)=>{ if (e.data === 'SKIP_WAITING') self.skipWaiting(); });
 
 self.addEventListener('activate', (e)=>{
   e.waitUntil(
