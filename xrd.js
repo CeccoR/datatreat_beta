@@ -129,11 +129,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const intensNode = xml.getElementsByTagName('intensities')[0];
       if (!intensNode || start===null) continue;
       const y = intensNode.textContent.trim().split(/\s+/).map(Number);
-      const ymin = minArr(y);
-      const yCorr = y.map(v=>v-ymin);
       const x = linspace(start, end, y.length);
-      // Keep each file on its own native 2θ axis — no resampling
-      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y:yCorr, color:nextColor(files), rawBytes});
+      // Keep the raw intensities untouched (no minimum subtraction): the constant
+      // offset is absorbed by the SNIP background, so the whole pipeline — analysis
+      // and fit alike — runs on the true raw data and stays consistent with the CSVs.
+      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color:nextColor(files), rawBytes});
       perParams.push({...shared});
       manualPeaks.push([]);
       removedPeaks.push([]);
@@ -1451,135 +1451,158 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 
   registerTabRedraw('xrd', ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdStandard(true); updateXrdFitting(true); updateXrdResults(); renderPeakTable(); } });
 
+  // Assemble a "wide" CSV from {h,v} columns, padded to the longest column.
+  function wideCsv(cols){
+    const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
+    let t = csvLine(cols.map(c=>c.h));
+    for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
+    return t;
+  }
+  // Mean/std of the fit-derived crystallite sizes across a sample's fitted peaks.
+  function fitSizeStats(k){
+    const sf = savedFits[k], f = files[k], kp = getFileParams(k);
+    const isStd = f.name === standardName, showCorr = !!standardName && !isStd;
+    const raw=[], corr=[];
+    if (sf && sf.fits && sf.fits.length && !isStd){
+      sf.fits.forEach(fp=>{
+        const s = sizeRaw(fp.fwhm, fp.pos, kp.K, kp.lambda); if (isFinite(s)) raw.push(s);
+        if (showCorr){ const sc = sizeCorr(fp.fwhm, fp.pos, kp.K, kp.lambda); if (isFinite(sc)) corr.push(sc); }
+      });
+    }
+    return { isStd, showCorr,
+      rawN:raw.length,  rawMean:raw.length?meanArr(raw):NaN,  rawStd:raw.length>1?stdArr(raw):NaN,
+      corrN:corr.length, corrMean:corr.length?meanArr(corr):NaN, corrStd:corr.length>1?stdArr(corr):NaN };
+  }
+
+  // ---- Reusable per-sample column builders (shared by the bulk CSVs and standard.csv) ----
+  // Diffractogram block: refined (smoothed−SNIP, normalised) + raw + smoothed + SNIP background.
+  function diffractoCols(k, refinedNorm){
+    const f=files[k], pr=processed[k], kp=getFileParams(k), mx=refinedNorm(k);
+    return [
+      {h:'2Theta_'+f.label,                          v:f.x.map(x=>fmtNum(x,6))},
+      {h:f.label,                                    v:pr.subtracted.map(v=>fmtNum(v/mx,6))},
+      {h:'Raw_'+f.label,                             v:f.y.map(v=>fmtNum(v,6))},
+      {h:`Smoothed_${f.label} (N=${kp.N})`,          v:pr.smoothed.map(v=>fmtNum(v,6))},
+      {h:`SNIP_background_${f.label} (win=${kp.blWin})`, v:pr.snip.map(v=>fmtNum(v,6))},
+    ];
+  }
+  // Classic peak-search block: 2θ, rel. intensity, FWHM, crystallite size [, corrected].
+  function peakCols(k, withCorr){
+    const f=files[k], pr=processed[k], kp=getFileParams(k);
+    const pks=pr.peaks.filter(pk=>!pk.removed);
+    const maxH=Math.max(...pks.map(pk=>pk.height))||1;
+    const cols=[
+      {h:'Peak_2Theta_'+f.label,       v:pks.map(pk=>fmtNum(pk.pos,6))},
+      {h:'Peak_RelIntensity_'+f.label, v:pks.map(pk=>fmtNum(pk.height/maxH,6))},
+      {h:'Peak_FWHM_deg_'+f.label,     v:pks.map(pk=>isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'')},
+      {h:'Peak_Size_nm_'+f.label,      v:pks.map(pk=>{const d=sizeRaw(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})},
+    ];
+    if (withCorr) cols.push({h:'Peak_Size_corr_nm_'+f.label, v:pks.map(pk=>{const d=sizeCorr(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})});
+    return cols;
+  }
+  // Fit-curve block: background-subtracted normalised (results curve) + raw + total +
+  // residual + background + Kα1 + Kα2. Returns null when the sample has no saved fit.
+  function fitCols(k, fitNorm){
+    const f=files[k], sf=savedFits[k];
+    if (!sf || !sf.fits || !sf.fits.length) return null;
+    const rec=reconstructFit(f.x, sf.fits), mx=fitNorm(k);
+    return [
+      {h:'Fit_2Theta_'+f.label,     v:f.x.map(x=>fmtNum(x,6))},
+      {h:'Fit_'+f.label,            v:rec.full.map(v=>fmtNum(v/mx,6))},
+      {h:'Fit_Raw_'+f.label,        v:f.y.map(v=>fmtNum(v,6))},
+      {h:'Fit_total_'+f.label,      v:f.x.map((_,j)=>fmtNum((sf.baseline[j]||0)+rec.full[j],6))},
+      {h:'Fit_residual_'+f.label,   v:f.x.map((_,j)=>fmtNum(f.y[j]-((sf.baseline[j]||0)+rec.full[j]),6))},
+      {h:'Fit_background_'+f.label, v:f.x.map((_,j)=>fmtNum(sf.baseline[j]||0,6))},
+      {h:'Fit_Ka1_'+f.label,        v:rec.ka1.map(v=>fmtNum(v,6))},
+      {h:'Fit_Ka2_'+f.label,        v:rec.full.map((v,j)=>fmtNum(v-rec.ka1[j],6))},
+    ];
+  }
+  // Fitted-peak block: parameters read off the saved fit (analogue of peakCols).
+  function fitPeakCols(k, withCorr){
+    const f=files[k], sf=savedFits[k], kp=getFileParams(k);
+    if (!sf || !sf.fits || !sf.fits.length) return null;
+    const rec=reconstructFit(f.x, sf.fits);
+    const pks=sf.fits.map(fp=>({pos:fp.pos, fwhm:fp.fwhm, height:rec.full[nearestIdx(f.x, fp.pos)]})).sort((a,b)=>a.pos-b.pos);
+    const maxH=Math.max(...pks.map(p=>p.height))||1;
+    const cols=[
+      {h:'FitPeak_2Theta_'+f.label,       v:pks.map(p=>fmtNum(p.pos,6))},
+      {h:'FitPeak_RelIntensity_'+f.label, v:pks.map(p=>fmtNum(p.height/maxH,6))},
+      {h:'FitPeak_FWHM_deg_'+f.label,     v:pks.map(p=>isFinite(p.fwhm)?fmtNum(p.fwhm,5):'')},
+      {h:'FitPeak_Size_nm_'+f.label,      v:pks.map(p=>{const d=sizeRaw(p.fwhm,p.pos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})},
+    ];
+    if (withCorr) cols.push({h:'FitPeak_Size_corr_nm_'+f.label, v:pks.map(p=>{const d=sizeCorr(p.fwhm,p.pos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})});
+    return cols;
+  }
+
   function exportXrdZip(){
     if (!files.length) return;
     const norm = document.getElementById('xrdNorm').value;
-    // Main diffraction data CSV (baseline-subtracted, normalised). The standard is
-    // excluded here — it has its own dedicated CSV — and never participates in the
-    // global/local normalization: non-standard samples share the global max.
-    const cols = files.map((f,k)=>({f,k})).filter(o=>o.f.name!==standardName);
-    const gmax = Math.max(1, ...cols.map(o=>maxArr(processed[o.k].subtracted)));
-    const Ycol = cols.map(o=>{
-      const y = processed[o.k].subtracted;
-      const mx = norm==='local' ? (maxArr(y)||1) : gmax;
-      return y.map(v=>v/mx);
-    });
-    // Each sample keeps its own 2θ axis → one (2Theta, intensity) column pair per sample
-    const header=[]; cols.forEach(o=>header.push('2Theta_'+o.f.label, o.f.label));
-    let t=csvLine(header);
-    const maxLen = cols.length ? Math.max(...cols.map(o=>o.f.x.length)) : 0;
-    for (let i=0;i<maxLen;i++){
-      const row=[];
-      cols.forEach((o,c)=>{
-        if (i<o.f.x.length) row.push(fmtNum(o.f.x[i],6), fmtNum(Ycol[c][i],6));
-        else row.push('','');
-      });
-      t+=csvLine(row);
-    }
+    const anyStd = !!standardName;
+    const nonStd = files.map((f,k)=>k).filter(k=>files[k].name!==standardName);
+    // Normalization factors (match the results plots): local = own max, global = shared max.
+    const gmaxSub = Math.max(1, ...nonStd.map(k=>maxArr(processed[k].subtracted)));
+    const refinedNorm = k => norm==='local' ? (maxArr(processed[k].subtracted)||1) : gmaxSub;
+    const fitIdxs = nonStd.filter(k=>{ const sf=savedFits[k]; return sf && sf.fits && sf.fits.length; });
+    const gmaxFit = Math.max(1, ...fitIdxs.map(k=>maxArr(reconstructFit(files[k].x, savedFits[k].fits).full)));
+    const fitNorm = k => norm==='local' ? (maxArr(reconstructFit(files[k].x, savedFits[k].fits).full)||1) : gmaxFit;
+
     const entries = [];              // {name, text} collected into a single zip
-    entries.push({name:'diffractograms.csv', text:t});
-    // Crystallite size (classic) — per-sample summary (mean ± std, matching the table).
-    // The standard is excluded entirely (no crystallite size is meaningful for it).
+    // diffractograms.csv — every non-standard sample's refined/raw/smoothed/SNIP columns.
     {
-      const anyStd = !!standardName;
+      const cols=[]; nonStd.forEach(k=>cols.push(...diffractoCols(k, refinedNorm)));
+      if (cols.length) entries.push({name:'diffractograms.csv', text:wideCsv(cols)});
+    }
+    // Crystallite size (classic) — per-sample summary (mean ± std, matching the chart).
+    {
       const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
       let ct = csvLine(head);
-      files.forEach((f,k)=>{
-        if (f.name === standardName) return;
-        const st = sampleSizeStats(k);
-        const row = [
-          f.label,
-          isFinite(st.rawMean) ? fmtNum(st.rawMean,2) : '',
-          (st.rawN>1 && isFinite(st.rawStd)) ? fmtNum(st.rawStd,2) : '',
-        ];
-        if (anyStd) row.push(
-          isFinite(st.corrMean) ? fmtNum(st.corrMean,2) : '',
-          (st.corrN>1 && isFinite(st.corrStd)) ? fmtNum(st.corrStd,2) : ''
-        );
+      nonStd.forEach(k=>{
+        const f=files[k], st = sampleSizeStats(k);
+        const row = [f.label, isFinite(st.rawMean)?fmtNum(st.rawMean,2):'', (st.rawN>1&&isFinite(st.rawStd))?fmtNum(st.rawStd,2):''];
+        if (anyStd) row.push(isFinite(st.corrMean)?fmtNum(st.corrMean,2):'', (st.corrN>1&&isFinite(st.corrStd))?fmtNum(st.corrStd,2):'');
         ct += csvLine(row);
       });
       entries.push({name:'crystallite_size.csv', text:ct});
     }
-    // Dedicated single standard.csv: everything about the file labelled as standard —
-    // its analysis result (curve + peaks with FWHM) and its fit result — as independent
-    // side-by-side columns. No crystallite size (meaningless for the standard).
-    if (standardName){
+    // Fit-derived crystallite size — same layout, sizes read off the saved fits.
+    {
+      const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
+      let ct = csvLine(head);
+      nonStd.forEach(k=>{
+        const f=files[k], st = fitSizeStats(k);
+        const row = [f.label, isFinite(st.rawMean)?fmtNum(st.rawMean,2):'', (st.rawN>1&&isFinite(st.rawStd))?fmtNum(st.rawStd,2):''];
+        if (anyStd) row.push(isFinite(st.corrMean)?fmtNum(st.corrMean,2):'', (st.corrN>1&&isFinite(st.corrStd))?fmtNum(st.corrStd,2):'');
+        ct += csvLine(row);
+      });
+      entries.push({name:'fit_crystallite_size.csv', text:ct});
+    }
+    // standard.csv — everything about the standard in one file: diffractogram + peaks +
+    // fit curves + fitted peaks (normalised against its own max, as it stands alone).
+    if (anyStd){
       const si = standardIdx();
-      const pr = si>=0 ? processed[si] : null;
-      if (pr){
-        const f = files[si];
-        const scol = [];
-        scol.push({h:'2Theta',     v:f.x.map(x=>fmtNum(x,6))});
-        scol.push({h:'Raw',        v:f.y.map(v=>fmtNum(v,6))});
-        scol.push({h:'Smoothed',   v:pr.smoothed.map(v=>fmtNum(v,6))});
-        scol.push({h:'Baseline',   v:pr.baseline.map(v=>fmtNum(v,6))});
-        scol.push({h:'Subtracted', v:pr.subtracted.map(v=>fmtNum(v,6))});
-        const pks = pr.peaks.filter(pk=>!pk.removed);
-        const maxH = Math.max(...pks.map(pk=>pk.height))||1;
-        scol.push({h:'Peak_2Theta',       v:pks.map(pk=>fmtNum(pk.pos,6))});
-        scol.push({h:'Peak_RelIntensity', v:pks.map(pk=>fmtNum(pk.height/maxH,6))});
-        scol.push({h:'Peak_FWHM_deg',     v:pks.map(pk=>isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'')});
-        const sf = savedFits[si];
-        if (sf && sf.fits && sf.fits.length){
-          const rec = reconstructFit(f.x, sf.fits);
-          scol.push({h:'Fit_2Theta',    v:f.x.map(x=>fmtNum(x,6))});
-          scol.push({h:'Fit_Observed',  v:f.y.map(v=>fmtNum(v,6))});
-          scol.push({h:'Fit_total',     v:f.x.map((_,j)=>fmtNum((sf.baseline[j]||0)+rec.full[j],6))});
-          scol.push({h:'Fit_Background',v:f.x.map((_,j)=>fmtNum(sf.baseline[j]||0,6))});
-          scol.push({h:'Fit_Ka1',       v:f.x.map((_,j)=>fmtNum(rec.ka1[j],6))});
-          scol.push({h:'Fit_Ka2',       v:f.x.map((_,j)=>fmtNum(rec.full[j]-rec.ka1[j],6))});
-        }
-        const smaxLen = Math.max(0,...scol.map(c=>c.v.length));
-        let stx = csvLine(scol.map(c=>c.h));
-        for (let i=0;i<smaxLen;i++) stx += csvLine(scol.map(c=> i<c.v.length ? c.v[i] : ''));
-        entries.push({name:'standard.csv', text:stx});
+      if (si>=0 && processed[si]){
+        const own = () => (maxArr(processed[si].subtracted)||1);
+        const ownFit = () => { const sf=savedFits[si]; return sf&&sf.fits&&sf.fits.length ? (maxArr(reconstructFit(files[si].x, sf.fits).full)||1) : 1; };
+        const scol = [...diffractoCols(si, own), ...peakCols(si, false)];
+        const fc = fitCols(si, ownFit); if (fc) scol.push(...fc);
+        const fpc = fitPeakCols(si, false); if (fpc) scol.push(...fpc);
+        entries.push({name:'standard.csv', text:wideCsv(scol)});
       }
     }
-    // peaks.csv — each sample's kept peaks as its own independent columns
-    // (standard excluded, it has its dedicated CSV)
+    // peaks.csv — classic peaks of every non-standard sample (standard has its own file).
     {
-      const cols=[];
-      processed.forEach((pr,k)=>{
-        if (files[k].name === standardName) return;
-        const pks = pr.peaks.filter(pk=>!pk.removed);
-        if (!pks.length) return;
-        const kp = getFileParams(k), lbl = files[k].label;
-        const maxH=Math.max(...pks.map(pk=>pk.height))||1;
-        cols.push({h:'2Theta_'+lbl,        v:pks.map(pk=>fmtNum(pk.pos,6))});
-        cols.push({h:'RelIntensity_'+lbl,  v:pks.map(pk=>fmtNum(pk.height/maxH,6))});
-        cols.push({h:'FWHM_deg_'+lbl,      v:pks.map(pk=>isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'')});
-        cols.push({h:'Size_nm_'+lbl,       v:pks.map(pk=>{const d=sizeRaw(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})});
-        cols.push({h:'Size_corr_nm_'+lbl,  v:pks.map(pk=>{const d=sizeCorr(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})});
-      });
-      if (cols.length){
-        const maxLen=Math.max(0,...cols.map(c=>c.v.length));
-        let pt=csvLine(cols.map(c=>c.h));
-        for (let i=0;i<maxLen;i++) pt+=csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-        entries.push({name:'peaks.csv', text:pt});
-      }
+      const cols=[]; nonStd.forEach(k=>{ if (processed[k].peaks.some(pk=>!pk.removed)) cols.push(...peakCols(k, anyStd)); });
+      if (cols.length) entries.push({name:'peaks.csv', text:wideCsv(cols)});
     }
-    // fits.csv — each sample's last fit as its own independent columns (own 2θ axis)
+    // fits.csv — every non-standard sample's fit curves (standard's fit lives in standard.csv).
     {
-      const cols=[];
-      files.forEach((f,k)=>{
-        if (f.name === standardName) return; // standard's fit lives in standard.csv
-        const sf = savedFits[k];
-        if (!sf || !sf.fits || !sf.fits.length) return;
-        const rec = reconstructFit(f.x, sf.fits); // {full, ka1} in raw intensity units
-        const lbl=f.label;
-        cols.push({h:'2Theta_'+lbl,     v:f.x.map(x=>fmtNum(x,6))});
-        cols.push({h:'Observed_'+lbl,   v:f.y.map(x=>fmtNum(x,6))});
-        cols.push({h:'Fit_total_'+lbl,  v:f.x.map((_,j)=>fmtNum((sf.baseline[j]||0)+rec.full[j],6))});
-        cols.push({h:'Background_'+lbl,  v:f.x.map((_,j)=>fmtNum(sf.baseline[j]||0,6))});
-        cols.push({h:'Ka1_'+lbl,        v:f.x.map((_,j)=>fmtNum(rec.ka1[j],6))});
-        cols.push({h:'Ka2_'+lbl,        v:f.x.map((_,j)=>fmtNum(rec.full[j]-rec.ka1[j],6))});
-      });
-      if (cols.length){
-        const maxLen=Math.max(0,...cols.map(c=>c.v.length));
-        let ft=csvLine(cols.map(c=>c.h));
-        for (let i=0;i<maxLen;i++) ft+=csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-        entries.push({name:'fits.csv', text:ft});
-      }
+      const cols=[]; nonStd.forEach(k=>{ const c=fitCols(k, fitNorm); if (c) cols.push(...c); });
+      if (cols.length) entries.push({name:'fits.csv', text:wideCsv(cols)});
+    }
+    // fit_peaks.csv — fitted-peak parameters of every non-standard sample.
+    {
+      const cols=[]; nonStd.forEach(k=>{ const c=fitPeakCols(k, anyStd); if (c) cols.push(...c); });
+      if (cols.length) entries.push({name:'fit_peaks.csv', text:wideCsv(cols)});
     }
     // Bundle every CSV into a single downloadable zip
     downloadZip('xrd_export.zip', entries);
