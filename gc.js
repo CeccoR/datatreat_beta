@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -155,6 +155,7 @@ import { Plot } from './plot.js';
     });
     html += `</tbody></table></div>`;
     wrap.innerHTML = html;
+    fitCsvIcons();   // normalise the param-table CSV button now the tab is visible
     // These inputs are created dynamically, so wire the guard here (invalid input
     // shakes + reverts to the last confirmed value). Views update only on confirm
     // (blur / Enter) — the guard blocks the change event for invalid entries.
