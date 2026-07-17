@@ -209,20 +209,20 @@ import { Plot } from './plot.js';
 
   function exportEprZip(){
     if (!files.length) return;
-    updateEpr();
-    const Y = lastY.map(y=>{ const y0=y[0]??0; return y.map(v=>v-y0); });
-    const maxLen = Math.max(...files.map(f=>f.b.length));
-    let header=[];
-    for (let k=0;k<files.length;k++){ header.push('Bfield_'+(k+1)); header.push(files[k].label); }
-    let t = csvLine(header);
-    for (let i=0;i<maxLen;i++){
-      let row=[];
-      for (let k=0;k<files.length;k++){
-        row.push(files[k].b[i]!=null ? fmtNum(files[k].b[i],6) : '');
-        row.push(Y[k][i]!=null ? fmtNum(Y[k][i],6) : '');
-      }
-      t += csvLine(row);
-    }
+    const N = +document.getElementById('eprSmooth').value || 1;
+    // Per sample: the (already g-corrected) field, the raw intensity — already
+    // baseline-centred at import — and the smoothed (N pts) trace minus its minimum,
+    // which matches the displayed baseline-shifted curve.
+    const cols = [];
+    files.forEach(f=>{
+      const sm = movingAverage(f.a, N), smMin = minArr(sm);
+      cols.push({h:'Bfield_mT_'+f.label,             v:f.b.map(v=>fmtNum(v,6))});
+      cols.push({h:'Raw_'+f.label,                   v:f.a.map(v=>fmtNum(v,6))});
+      cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:sm.map(v=>fmtNum(v-smMin,6))});
+    });
+    const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
+    let t = csvLine(cols.map(c=>c.h));
+    for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
     downloadZip('epr_export.zip', [{name:'epr_spectra.csv', text:t}]);
   }
   registerCsvExport('epr', exportEprZip);
