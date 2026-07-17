@@ -309,16 +309,7 @@ import { Plot } from './plot.js';
       return {label:d.label, cost:rate, dt};
     });
     drawGcData();
-    renderPlateauTable();
     drawBarChart();
-  }
-
-  function renderPlateauTable(){
-    const wrap = document.getElementById('gcPlateauTableWrap');
-    let html = '<table><thead><tr><th>Sample</th><th>Mean integral rate (mmol/h/g)</th></tr></thead><tbody>';
-    costResults.forEach(c=> html += `<tr><td>${c.label}</td><td>${isFinite(c.cost)?c.cost.toFixed(4):'-'}</td></tr>`);
-    html += '</tbody></table>';
-    wrap.innerHTML = html;
   }
 
   function drawBarChart(){
@@ -348,13 +339,20 @@ import { Plot } from './plot.js';
     labels.forEach((lbl,k)=>{ if (isFinite(costResults[k].cost)) maxLbl = Math.max(maxLbl, mctx.measureText(lbl).width); });
     const svgH = svg.getBoundingClientRect().height || 640;
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
-    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:15,b:bottom}});
-    const ymax = Math.max(...finite.map(c=>c.cost))*1.2;
+    // Value label (vertical) above each bar, with reserved top headroom so it never clips.
+    const fmtVal = v => v.toFixed(4);
+    let maxValW = 0, maxTop = 0;
+    costResults.forEach(c=>{ if (isFinite(c.cost)){ maxValW = Math.max(maxValW, mctx.measureText(fmtVal(c.cost)).width); maxTop = Math.max(maxTop, c.cost); } });
+    const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
+    const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
+    const ymax = Math.max(Math.max(...finite.map(c=>c.cost))*1.2, maxTop/frac);
+    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     barPlot.setRange(0, costResults.length+1, 0, ymax||1);
     barPlot.drawAxes();
     costResults.forEach((c,k)=>{
       if (!isFinite(c.cost)) return;
       barPlot.bar(k+1-0.16, k+1+0.16, 0, c.cost, dataTables[k].color);
+      barPlot.barLabel(k+1, c.cost, fmtVal(c.cost), {gap});
       barPlot.tickLabel(k+1, labels[k], 30);
     });
     barPlot.attachTools(svg.closest('.plot-wrap'));
@@ -380,6 +378,11 @@ import { Plot } from './plot.js';
     let t2 = csvLine(['Sample','Mean integral rate (mmol/h/g)','Interval duration (h)']);
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
     entries.push({name:'h2_rates.csv', text:t2});
+    // gc_info.csv — per-sample inputs + the integration interval used
+    const fmtDate = d => d ? new Date(d).toISOString().slice(0,16).replace('T',' ') : '';
+    let t3 = csvLine(['Sample','m (g)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)']);
+    dataTables.forEach((d,k)=> t3 += csvLine([d.label, ms[k], Qs[k], fmtDate(lightOnDates[k]), plateauStart, plateauEnd]));
+    entries.push({name:'gc_info.csv', text:t3});
     downloadZip('gc_export.zip', entries);
   }
   registerCsvExport('gc', exportGcZip);
