@@ -815,7 +815,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     renderPeakTable();
   }
 
-  function renderPeakTable(){ renderAnalysisTable(); renderStdTable(); renderFitTable(); renderXrdSizeTable(); }
+  function renderPeakTable(){ renderAnalysisTable(); renderStdTable(); renderFitTable(); renderXrdSizeChart(); renderXrdFitSizeChart(); }
 
   // Re-derive everything downstream of a peak edit (add/remove/reset) on file `idx`.
   // Covers the standard too: editing the standard's peaks changes β_instr and hence the
@@ -980,33 +980,58 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     return mean.toFixed(1);
   }
 
-  // Results card: per-sample mean crystallite size (classic method), half-page width.
-  function renderXrdSizeTable(){
-    const wrap = document.getElementById('xrdSizeTableWrap');
-    if (!wrap) return;
-    if (!files.length || !processed.length){ wrap.innerHTML=''; return; }
-    const anyStd = !!standardName;
-    // Sample 70%, the size column(s) share the remaining 30%
-    const cg = anyStd
-      ? '<colgroup><col style="width:70%"><col style="width:15%"><col style="width:15%"></colgroup>'
-      : '<colgroup><col style="width:70%"><col style="width:30%"></colgroup>';
-    let html = '<table>'+cg+'<thead><tr><th>Sample</th><th>Crystallite size (nm)</th>' + (anyStd?'<th>Crystallite size corr. (nm)</th>':'') + '</tr></thead><tbody>';
-    files.forEach((f,i)=>{
-      if (f.name === standardName) return; // standard excluded from results
-      const st = sampleSizeStats(i);
-      const sizeCell = fmtMeanStd(st.rawMean, st.rawStd, st.rawN);
-      const corrCell = anyStd ? `<td>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)}</td>` : '';
-      html += `<tr><td class="fname" title="${f.label.replace(/"/g,'&quot;')}">${f.label}</td><td>${sizeCell}</td>${corrCell}</tr>`;
-    });
-    html += '</tbody></table>';
-    wrap.innerHTML = html;
-    // Match the table width to the analysis plot's svg (which is narrower than the
-    // column by the plot's button gutter). Measure after layout so it stays exact.
-    requestAnimationFrame(()=>{
-      const svg = document.getElementById('xrdResSvg');
-      if (svg && svg.clientWidth) wrap.style.width = svg.clientWidth + 'px';
-    });
+  // Results card: per-sample crystallite size as a bar chart (mean bar + std error bar
+  // + value label above), one/two bars per sample (size, and corr. when a standard is
+  // set). `statsFn` returns {rawMean,rawStd,rawN,corrMean,corrStd,corrN}: classic vs fit.
+  function drawSizeBarChart(svgId, legendId, statsFn){
+    const svg = document.getElementById(svgId); if (!svg) return;
+    const wrap = svg.closest('.plot-wrap'), legend = document.getElementById(legendId);
+    const idxs = files.map((f,k)=>k).filter(k=>files[k].name!==standardName);
+    const rows = idxs.map(k=>({label:files[k].label, ...statsFn(k)}));
+    const raws=rows.map(r=>r.rawMean), rawE=rows.map(r=>r.rawStd);
+    const corrs=rows.map(r=>r.corrMean), corrE=rows.map(r=>r.corrStd);
+    const anyCorr = rows.some(r=>isFinite(r.corrMean));
+    const posVals = raws.concat(anyCorr?corrs:[]).filter(v=>isFinite(v)&&v>0);
+    if (!files.length || !processed.length || !posVals.length){
+      svg.style.display='none'; if(wrap)wrap.style.display='none'; if(legend)legend.innerHTML=''; return;
+    }
+    svg.style.display=''; if(wrap)wrap.style.display='';
+    const n = rows.length;
+    const mctx = document.createElement('canvas').getContext('2d');
+    mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+    let maxLbl=0; rows.forEach(r=>maxLbl=Math.max(maxLbl, mctx.measureText(r.label).width));
+    const svgH = svg.getBoundingClientRect().height || 420;
+    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+    const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
+    const topOf = (v,e)=> v + (isFinite(e)?e:0);
+    let maxValW=0, maxTop=0;
+    for (let k=0;k<n;k++){
+      if (isFinite(raws[k])&&raws[k]>0){ maxValW=Math.max(maxValW, mctx.measureText(fmtLab(raws[k],rawE[k])).width); maxTop=Math.max(maxTop, topOf(raws[k],rawE[k])); }
+      if (anyCorr&&isFinite(corrs[k])&&corrs[k]>0){ maxValW=Math.max(maxValW, mctx.measureText(fmtLab(corrs[k],corrE[k])).width); maxTop=Math.max(maxTop, topOf(corrs[k],corrE[k])); }
+    }
+    const mTop=15, gap=6, plotH=svgH-mTop-bottom, reserve=gap+maxValW+6;
+    const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
+    const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
+    const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+    plot.setRange(0, n+1, 0, ymax||1);
+    plot.drawAxes();
+    for (let k=0;k<n;k++){
+      const xc=k+1;
+      if (anyCorr){
+        if (isFinite(raws[k])&&raws[k]>0){ const x0=xc-0.18,x1=xc-0.02,cx=(x0+x1)/2; plot.bar(x0,x1,0,raws[k],'#3aa0ff'); if(isFinite(rawE[k]))plot.errbar(cx,raws[k],rawE[k]); plot.barLabel(cx,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap}); }
+        if (isFinite(corrs[k])&&corrs[k]>0){ const x0=xc+0.02,x1=xc+0.18,cx=(x0+x1)/2; plot.bar(x0,x1,0,corrs[k],'#ff7a59'); if(isFinite(corrE[k]))plot.errbar(cx,corrs[k],corrE[k]); plot.barLabel(cx,topOf(corrs[k],corrE[k]),fmtLab(corrs[k],corrE[k]),{gap}); }
+      } else if (isFinite(raws[k])&&raws[k]>0){
+        const x0=xc-0.16,x1=xc+0.16; plot.bar(x0,x1,0,raws[k],'#3aa0ff'); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
+      }
+      plot.tickLabel(xc, rows[k].label, 30);
+    }
+    plot.attachTools(wrap);
+    if (legend) legend.innerHTML = anyCorr
+      ? `<span><i class="mk-box" style="background:#3aa0ff"></i>size</span><span><i class="mk-box" style="background:#ff7a59"></i>size corr.</span>`
+      : `<span><i class="mk-box" style="background:#3aa0ff"></i>size</span>`;
   }
+  function renderXrdSizeChart(){ drawSizeBarChart('xrdSizeBarSvg', 'xrdSizeBarLegend', sampleSizeStats); }
+  function renderXrdFitSizeChart(){ drawSizeBarChart('xrdFitSizeBarSvg', 'xrdFitSizeBarLegend', fitSizeStats); }
 
   // Per-field shared/per-sample toggles (one segmented control per editable field)
   const TOGGLE_FIELD = { xrdModeN:'N', xrdModeBl:'blWin', xrdModeH:'pkHeight', xrdModeP:'pkProm', xrdModeD:'pkDist', xrdModeK:'K', xrdModeL:'lambda' };

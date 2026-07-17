@@ -338,7 +338,7 @@
 
       <div class="card" id="xrdWorkspace" style="display:none">
         <h3 style="margin:0 0 0">ANALYSIS</h3>
-        <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (contains the whole Kα₁+Kα₂ doublet). K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². The table shows size both without and (if a standard is set) with this correction. The Kα₂-deconvolved profile fit lives in the <b>Fitting</b> panel below.</div>
+        <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (contains the whole Kα₁+Kα₂ doublet). K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². The Results chart shows size both without and (if a standard is set) with this correction. The Kα₂-deconvolved profile fit lives in the <b>Fitting</b> panel below.</div>
         <div id="xrdAnalysisEmpty" style="display:none;color:var(--muted);font-size:14px;padding:18px 0 6px">All loaded files are set as the instrumental standard — load additional samples to analyse them here.</div>
         <div id="xrdAnalysisContent">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -464,7 +464,11 @@
             </div>
             <div id="xrdResLegend" class="legend"></div>
             <p class="chart-title" style="margin:18px 0 6px">Crystallite size</p>
-            <div id="xrdSizeTableWrap" class="table-wrap-box"></div>
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdSizeBarSvg" style="height:420px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSizeBarSvg" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="xrdSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="xrdSizeBarLegend" class="legend"></div>
           </div>
           <div class="col mw320" style="flex:1">
             <p class="chart-title">Fit</p>
@@ -473,6 +477,12 @@
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResFitLegend" class="legend"></div>
+            <p class="chart-title" style="margin:18px 0 6px">Crystallite size (fit)</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdFitSizeBarSvg" style="height:420px"></svg>
+              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSizeBarSvg" data-dl-name="XRPD_crystallite_size_fit.svg" data-dl-legend="xrdFitSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="xrdFitSizeBarLegend" class="legend"></div>
           </div>
         </div>
       </div>
