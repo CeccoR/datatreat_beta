@@ -41,25 +41,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // Shared param values (defaults)
   const shared = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
 
-  // Persist only these XRD analysis defaults across sessions (per user's choice):
-  // normalization, smoothing, SNIP baseline window, K and λ — NOT the peak-search fields.
-  const XRD_STORE_KEY = 'datatreat-xrd-params';
+  // Analysis parameters are no longer persisted across sessions — they always start
+  // at their defaults (projects are the way to keep a specific configuration).
   const XRD_PERSIST_FIELDS = ['N','blWin','K','lambda'];
-  function saveXrdParams(){
-    try {
-      const data = { norm: document.getElementById('xrdNorm').value };
-      XRD_PERSIST_FIELDS.forEach(k=>{ data[k] = shared[k]; });
-      localStorage.setItem(XRD_STORE_KEY, JSON.stringify(data));
-    } catch(e){}
-  }
+  function saveXrdParams(){ /* intentionally no-op: params are not persisted */ }
   function loadXrdParams(){
-    let data = null;
-    try { data = JSON.parse(localStorage.getItem(XRD_STORE_KEY) || 'null'); } catch(e){}
-    if (!data) return;
-    XRD_PERSIST_FIELDS.forEach(k=>{ if (typeof data[k]==='number' && isFinite(data[k])) shared[k] = data[k]; });
-    const normSel = document.getElementById('xrdNorm');
-    if (normSel && (data.norm==='global' || data.norm==='local')) normSel.value = data.norm;
-    // Reflect the restored defaults in the (still empty) input fields
+    // Just reflect the default store values in the input fields at startup.
     XRD_PERSIST_FIELDS.forEach(k=>{ const el = document.getElementById(FIELD_INPUT[k]); if (el) el.value = shared[k]; });
   }
 

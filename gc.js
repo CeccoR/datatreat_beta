@@ -143,7 +143,7 @@ import { Plot } from './plot.js';
     // Columns: Label 24%, m 9%, Q 9%, date 34%, warning 24%. A min-width keeps the
     // date field usable — on narrow screens the .table-wrap-box scrolls horizontally.
     const cg = `<colgroup><col style="width:20%"><col style="width:15%"><col style="width:15%"><col style="width:30%"><col style="width:20%"></colgroup>`;
-    let html = `<div class="table-wrap-box"><table style="min-width:720px">${cg}<thead><tr><th>Sample</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
+    let html = `<div style="overflow-x:auto"><table style="min-width:720px;width:100%;table-layout:fixed">${cg}<thead><tr><th>Sample</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
     files.forEach((f,i)=>{
       html += `<tr>
         <td class="fname" title="${f.label}">${f.label}</td>

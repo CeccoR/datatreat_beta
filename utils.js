@@ -261,7 +261,15 @@ const palettePickerUI = new PalettePickerUI();
 /* =========================================================
    SETTINGS
 ========================================================= */
+const SETTINGS_KEY = 'datatreat-settings';
 const settings = { decimal: '.', field: ';', plotFmt: 'png' };
+// Settings (image format + CSV decimal/field) persist across sessions, like the theme.
+try {
+  const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+  if (saved && typeof saved === 'object') Object.assign(settings, saved);
+} catch(e){}
+if (settings.decimal === ',' && settings.field === ',') settings.field = ';'; // guard invalid combo
+function saveSettings(){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){} }
 
 function fmtNum(v, decimals){
   if (!isFinite(v)) return '';
@@ -273,6 +281,11 @@ function csvLine(vals){ return csvJoin(vals) + '\n'; }
 (function initSettings(){
   const decSel = document.getElementById('settingDecimal');
   const fldSel = document.getElementById('settingField');
+  const fmtSel = document.getElementById('settingPlotFmt');
+  // Reflect the (possibly restored) settings in the controls.
+  decSel.value = settings.decimal;
+  fldSel.value = settings.field;
+  fmtSel.value = settings.plotFmt;
 
   function validate(){
     const d = decSel.value, f = fldSel.value;
@@ -283,12 +296,12 @@ function csvLine(vals){ return csvJoin(vals) + '\n'; }
     }
     settings.decimal = decSel.value;
     settings.field   = fldSel.value;
+    saveSettings();
   }
 
   decSel.addEventListener('change', validate);
   fldSel.addEventListener('change', validate);
-  const fmtSel = document.getElementById('settingPlotFmt');
-  fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; });
+  fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; saveSettings(); });
 })();
 
 function downloadBlob(filename, text){
