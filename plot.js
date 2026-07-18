@@ -287,13 +287,14 @@ class Plot{
       col.className = 'plot-btn-col';
       const dlBtn = wrapEl.querySelector('.plot-dl-btn');
       if (dlBtn){
-        wrapEl.insertBefore(col, dlBtn); col.appendChild(dlBtn);
+        wrapEl.insertBefore(col, dlBtn);
+        // Order (top→bottom): CSV, download image, then the tool buttons below.
+        if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
+          col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
+        col.appendChild(dlBtn);
         dlBtn.addEventListener('mousedown', ()=>dlBtn.classList.add('active'));
         dlBtn.addEventListener('mouseup', ()=>dlBtn.classList.remove('active'));
         dlBtn.addEventListener('mouseleave', ()=>dlBtn.classList.remove('active'));
-        // A CSV download button (same look/size), if this plot declares its CSVs.
-        if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
-          col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
       }
       else { wrapEl.appendChild(col); }
     }
@@ -314,12 +315,28 @@ class Plot{
     snapBtn.addEventListener('mousedown', ()=>snapBtn.classList.add('active'));
     snapBtn.addEventListener('mouseup',   ()=>snapBtn.classList.remove('active'));
     snapBtn.addEventListener('mouseleave',()=>snapBtn.classList.remove('active'));
+    const viewLeg = ()=>{ const d=col.querySelector('.plot-dl-btn'); return d && d.dataset.dlLegend ? document.getElementById(d.dataset.dlLegend) : null; };
     snapBtn.onclick = ()=>{
       const dlBtn = col.querySelector('.plot-dl-btn');
-      const legEl = dlBtn && dlBtn.dataset.dlLegend ? document.getElementById(dlBtn.dataset.dlLegend) : null;
       const baseName = dlBtn && dlBtn.dataset.dlName ? dlBtn.dataset.dlName.replace(/\.[^.]+$/, '') : 'plot';
-      downloadSvgClean(this.svg, baseName+'_current.svg', legEl, true);
+      downloadSvgClean(this.svg, baseName+'_current.svg', viewLeg(), true);
     };
+    // Copy current view to the clipboard as a PNG (only where the API is available).
+    let copyBtn = null;
+    if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write){
+      copyBtn = document.createElement('button');
+      copyBtn.className = 'btn secondary plot-tool-btn';
+      copyBtn.title = 'Copy image';
+      copyBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>`;
+      copyBtn.onclick = async ()=>{
+        copyBtn.classList.add('active');
+        try {
+          const blob = await downloadSvgClean(this.svg, 'plot.png', viewLeg(), true, true);
+          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+        } catch(e){ /* clipboard denied / unsupported — silently ignore */ }
+        finally { setTimeout(()=>copyBtn.classList.remove('active'), 200); }
+      };
+    }
 
     const sync = (mode)=>{
       panBtn.classList.toggle('active', mode==='pan');
@@ -328,7 +345,9 @@ class Plot{
     panBtn.onclick = ()=>{ this.setMode(this._mode==='pan'?null:'pan'); };
     zoomBtn.onclick = ()=>{ this.setMode(this._mode==='zoom'?null:'zoom'); };
     this._onModeChange = sync;
+    // Order (top→bottom): snapshot, copy, pan, zoom.
     div.appendChild(snapBtn);
+    if (copyBtn) div.appendChild(copyBtn);
     div.appendChild(panBtn);
     div.appendChild(zoomBtn);
     col.appendChild(div);
@@ -455,7 +474,9 @@ window.addEventListener('resize', ()=>{
   _resizeRAF = requestAnimationFrame(()=>{ _resizeRAF = null; redrawAll(); });
 });
 
-function downloadSvgClean(svgNode, filename, legendEl, currentView){
+// With asBlob=true, resolves to a PNG Blob of the (current-view) plot instead of
+// triggering a download — used by the "copy image" button.
+function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
   const ns = 'http://www.w3.org/2000/svg';
   const plotObj = svgNode._plot || null;
   const bbox = svgNode.getBoundingClientRect();
@@ -605,36 +626,43 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView){
   }
 
   const svgStr = new XMLSerializer().serializeToString(workSvg);
-  const fmt = settings.plotFmt || 'png';
+  const fmt = asBlob ? 'png' : (settings.plotFmt || 'png');
   const baseName = filename.replace(/\.[^.]+$/, '');
-  if (fmt === 'svg'){
+  if (!asBlob && fmt === 'svg'){
     const blob = new Blob([svgStr],{type:'image/svg+xml'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href=url; a.download=baseName+'.svg';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 1000);
-  } else {
-    const mimeMap = {png:'image/png', jpeg:'image/jpeg', webp:'image/webp'};
-    const mime = mimeMap[fmt] || 'image/png';
-    const scale = 2;
-    const cW = (w+padL)*scale, cH = (totalH+padT)*scale;
-    const canvas = document.createElement('canvas');
-    canvas.width = cW; canvas.height = cH;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(scale, scale);
+    return;
+  }
+  const mimeMap = {png:'image/png', jpeg:'image/jpeg', webp:'image/webp'};
+  const mime = asBlob ? 'image/png' : (mimeMap[fmt] || 'image/png');
+  const scale = 2;
+  const cW = (w+padL)*scale, cH = (totalH+padT)*scale;
+  const canvas = document.createElement('canvas');
+  canvas.width = cW; canvas.height = cH;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const svgBlob = new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});
+  const svgUrl = URL.createObjectURL(svgBlob);
+  const run = (resolve, reject)=>{
     const img = new Image();
-    const svgBlob = new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});
-    const svgUrl = URL.createObjectURL(svgBlob);
     img.onload = ()=>{
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(svgUrl);
+      if (asBlob){ canvas.toBlob(b=> b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png'); return; }
       const a = document.createElement('a');
       a.download = baseName+'.'+fmt;
       a.href = canvas.toDataURL(mime, fmt==='jpeg'?0.92:undefined);
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      resolve();
     };
+    img.onerror = ()=>{ URL.revokeObjectURL(svgUrl); reject(new Error('image load failed')); };
     img.src = svgUrl;
-  }
+  };
+  if (asBlob) return new Promise(run);
+  run(()=>{}, ()=>{});
 }
 document.addEventListener('click', e=>{
   const btn = e.target.closest('[data-dl-svg]');
