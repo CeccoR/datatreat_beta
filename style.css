@@ -294,14 +294,14 @@ nav button.nav-icon {
   color: var(--muted);
   flex-shrink: 0;
 }
-nav button.nav-right { margin-left: auto; position: relative; }
-/* Explicit divider between the module tabs and the icon buttons (folder/theme/settings). */
-nav button.nav-right::before {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  transform: translateY(-50%);
+/* Explicit divider between the module tabs and the icon buttons (folder/theme/settings).
+   It carries the margin-left:auto so the icon cluster is pushed right and the divider
+   always sits in the gap — on desktop (big auto gap) and mobile (scrolling) alike. */
+.nav-divider {
+  margin-left: auto;
+  margin-right: 10px;          /* extra breathing room before the circular buttons */
+  align-self: center;
+  flex-shrink: 0;
   width: 1px;
   height: 20px;
   background: var(--line);
