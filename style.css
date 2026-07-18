@@ -298,8 +298,8 @@ nav button.nav-icon {
    It carries the margin-left:auto so the icon cluster is pushed right and the divider
    always sits in the gap — on desktop (big auto gap) and mobile (scrolling) alike. */
 .nav-divider {
-  margin-left: auto;
-  margin-right: 10px;          /* extra breathing room before the circular buttons */
+  margin-left: auto;           /* push the icon cluster right; the 8px flex gap sits on
+                                  each side, matching every other margin-to-margin gap */
   align-self: center;
   flex-shrink: 0;
   width: 1px;
