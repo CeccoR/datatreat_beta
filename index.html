@@ -738,6 +738,12 @@
   <script type="module" src="epr.js"></script>
   <script type="module" src="gc.js"></script>
   <script type="module" src="sessions.js"></script>
+  <!-- Crash-recovery prompt: shown at startup when an unsaved draft exists -->
+  <div id="restoreBanner" class="pwa-toast" role="dialog" aria-live="polite">
+    <span id="restoreBannerText">Restore previous session?</span>
+    <button id="restoreBannerYes" class="btn" type="button">Restore</button>
+    <button id="restoreBannerNo" class="btn secondary" type="button">Discard</button>
+  </div>
   <!-- PWA update prompt: shown when a new service-worker version is ready -->
   <div id="pwaUpdateToast" class="pwa-toast" role="status" aria-live="polite">
     <span>A new version is available.</span>

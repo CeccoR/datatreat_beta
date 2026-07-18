@@ -8,15 +8,16 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, runCsvExport, runWithModuleState, X_SVG } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG } from './utils.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
 const ROW_DOC = (txt, fs) => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="'+fs+'" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">'+txt+'</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
 const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 8.5), ROW_X = X_SVG(16);
 
-/* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity) ---- */
-const DB_NAME = 'datatreat', STORE = 'sessions', DB_VER = 1;
+/* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity;
+   'drafts' holds one autosave per module for crash recovery) ---- */
+const DB_NAME = 'datatreat', STORE = 'sessions', DRAFTS = 'drafts', DB_VER = 2;
 function idb(){
   return new Promise((resolve, reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VER);
@@ -26,16 +27,19 @@ function idb(){
         const os = db.createObjectStore(STORE, { keyPath:'id' });
         os.createIndex('module', 'module', { unique:false });
       }
+      if (!db.objectStoreNames.contains(DRAFTS)){
+        db.createObjectStore(DRAFTS, { keyPath:'module' });
+      }
     };
     req.onsuccess = ()=> resolve(req.result);
     req.onerror   = ()=> reject(req.error);
   });
 }
-async function tx(mode, fn){
+async function txStore(store, mode, fn){
   const db = await idb();
   return new Promise((resolve, reject)=>{
-    const t = db.transaction(STORE, mode);
-    const os = t.objectStore(STORE);
+    const t = db.transaction(store, mode);
+    const os = t.objectStore(store);
     let out;
     Promise.resolve(fn(os)).then(v=>{ out = v; });
     t.oncomplete = ()=> resolve(out);
@@ -43,10 +47,14 @@ async function tx(mode, fn){
     t.onabort = ()=> reject(t.error);
   });
 }
+const tx = (mode, fn)=> txStore(STORE, mode, fn);
 const reqP = r => new Promise((res, rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
 async function allProjects(){ return tx('readonly', os=> reqP(os.getAll())); }
 async function putProject(rec){ return tx('readwrite', os=>{ os.put(rec); }); }
 async function deleteProject(id){ return tx('readwrite', os=>{ os.delete(id); }); }
+async function putDraft(rec){ return txStore(DRAFTS, 'readwrite', os=>{ os.put(rec); }); }
+async function getAllDrafts(){ return txStore(DRAFTS, 'readonly', os=> reqP(os.getAll())); }
+async function deleteDraft(mod){ return txStore(DRAFTS, 'readwrite', os=>{ os.delete(mod); }); }
 
 /* ---- helpers ---- */
 const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -79,6 +87,32 @@ function downloadTextFile(name, text, type){
 const current = {};   // mod -> { id, title }
 const dirty = {};     // mod -> bool
 
+/* ---- Autosave (crash-recovery draft) ----
+   5 s after the last change, save the module's state to the 'drafts' store — but
+   ONLY when the project name field is filled (the one signal that the user cares).
+   Cleared on Save / data-loss. A draft ≠ a saved project: on restore it comes back
+   as unsaved work that still needs an explicit Save. */
+const AUTOSAVE_MS = 5000;
+const _autosaveTimers = {};
+function scheduleAutosave(mod){
+  clearTimeout(_autosaveTimers[mod]);
+  _autosaveTimers[mod] = setTimeout(()=>saveDraft(mod), AUTOSAVE_MS);
+}
+async function saveDraft(mod){
+  const inp = nameInput(mod);
+  const title = inp ? inp.value.trim() : '';
+  if (!title || !moduleHasData(mod)) return;   // only named projects that still hold data
+  try {
+    const rec = { module: mod, title, state: encode(getModuleState(mod)), updatedAt: Date.now() };
+    if (current[mod]) rec.id = current[mod].id;  // keep the association so Save updates the right project
+    await putDraft(rec);
+  } catch(e){}
+}
+function clearDraft(mod){
+  clearTimeout(_autosaveTimers[mod]);
+  deleteDraft(mod).catch(()=>{});
+}
+
 const CHECK_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 
@@ -95,6 +129,7 @@ function restoreSaveBtns(mod){
 // one-shot listener so the next change flips back to dirty.
 function markSaved(mod){
   dirty[mod] = false;
+  clearDraft(mod);   // saved (or freshly opened) → no crash-recovery draft needed
   saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
     b.classList.add('saved-ok');
@@ -112,6 +147,7 @@ function markDirty(mod){
     const inp = nameInput(mod); if (inp) inp.value = '';
     const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
     restoreSaveBtns(mod);
+    clearDraft(mod);   // no data left → nothing to recover
     return;
   }
   dirty[mod] = true;
@@ -346,7 +382,7 @@ document.addEventListener('click', e=>{
 document.querySelectorAll('.project-name-input').forEach(inp=>{
   inp.addEventListener('input', ()=>{
     inp.classList.remove('field-invalid');
-    if (moduleHasData(inp.dataset.module)) markDirty(inp.dataset.module);
+    if (moduleHasData(inp.dataset.module)){ markDirty(inp.dataset.module); scheduleAutosave(inp.dataset.module); }
   });
 });
 
@@ -445,6 +481,38 @@ document.getElementById('sessListWrap').addEventListener('change', e=>{
 
 document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
 renderList();
+
+/* ---- Autosave subscription + crash-recovery banner ---- */
+MODULES.forEach(m=> onModuleChange(m, ()=> scheduleAutosave(m)));
+
+async function initDraftRecovery(){
+  let drafts;
+  try { drafts = await getAllDrafts(); } catch(e){ return; }
+  drafts = (drafts || []).filter(d=> d && d.title && d.state);
+  const banner = document.getElementById('restoreBanner');
+  if (!drafts.length || !banner) return;
+  const labels = drafts.map(d=> MODULE_LABELS[d.module] || d.module).join(', ');
+  document.getElementById('restoreBannerText').textContent =
+    'Unsaved work found in ' + labels + '. Restore previous session?';
+  banner.classList.add('show');
+  document.getElementById('restoreBannerYes').onclick = ()=>{
+    drafts.forEach(d=>{
+      try {
+        restoreModuleState(d.module, decode(d.state));
+        const inp = nameInput(d.module); if (inp) inp.value = d.title;
+        if (d.id) current[d.module] = { id: d.id, title: d.title };
+        markDirty(d.module);   // comes back as unsaved work
+      } catch(e){}
+    });
+    banner.classList.remove('show');
+    renderList();
+  };
+  document.getElementById('restoreBannerNo').onclick = ()=>{
+    drafts.forEach(d=> clearDraft(d.module));
+    banner.classList.remove('show');
+  };
+}
+initDraftRecovery();
 
 // Warn before leaving if a module has unsaved changes AND a non-empty project
 // name (a saved project, or one the user bothered to name — so it matters). One

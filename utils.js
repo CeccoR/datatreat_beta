@@ -820,7 +820,9 @@ class UndoStack {
     this.states = []; this.index = -1; this._busy = false;
   }
   // Record the CURRENT state (called after a reversible change, and once as baseline).
-  commit(){
+  // `silent` records the state without firing change listeners — used for the
+  // baseline commit after a programmatic restore (not a user edit).
+  commit(silent){
     if (this._busy) return;
     const snap = this._snap();
     const cur = this.index >= 0 ? this.states[this.index] : null;
@@ -831,13 +833,17 @@ class UndoStack {
     this.states.push(snap);
     if (this.states.length > this._limit) this.states.shift();
     this.index = this.states.length - 1;
+    if (silent) return;
     // Fire (and clear) any one-shot change listeners for a real, recorded change.
     if (this._onceListeners && this._onceListeners.length){
       const cbs = this._onceListeners; this._onceListeners = [];
       cbs.forEach(cb=>{ try { cb(); } catch(e){} });
     }
+    // Persistent change listeners (e.g. autosave).
+    if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
   }
   onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
+  onCommit(cb){ (this._listeners || (this._listeners = [])).push(cb); }
   _apply(i){ this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; } }
   performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
@@ -1047,7 +1053,7 @@ function restoreModuleState(mod, state){
   st._busy = true;
   try { st._restore(state); } finally { st._busy = false; }
   st.reset();
-  st.commit(); // fresh baseline so undo/redo start clean from the loaded session
+  st.commit(true); // fresh baseline (silent: a restore is not a user edit → no autosave)
   // Plots just drawn may be sized wrong if the tab is hidden; redraw on show.
   if (_activeTab === mod){ if (_tabRedraw[mod]) requestAnimationFrame(()=>{ try { _tabRedraw[mod](); } catch(e){} }); }
   else { _needsRedraw[mod] = true; }
@@ -1056,6 +1062,11 @@ function restoreModuleState(mod, state){
 function onModuleChangeOnce(mod, cb){
   const st = _histories[mod];
   if (st) st.onceCommit(cb);
+}
+// Persistent: fire cb on every real change commit of a module (used for autosave).
+function onModuleChange(mod, cb){
+  const st = _histories[mod];
+  if (st) st.onCommit(cb);
 }
 // Temporarily load `state` into a module, run fn (e.g. build its CSV export from
 // the loaded globals), then restore the previous state — all with history frozen
@@ -1393,5 +1404,5 @@ function nextColor(existingFiles){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid
 };
