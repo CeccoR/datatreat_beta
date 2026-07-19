@@ -439,24 +439,31 @@ main {
   .col,
   .mw520, .mw320, .mw280, .mw260, .mw220, .mw200 { min-width: 100%; }
 }
-/* ===== Text style tokens — reusable named classes (also aliased onto the semantic
-   tags so existing markup keeps its style). See also .txt-mini / .txt-caption /
-   .txt-meta below. ===== */
-h2, .txt-title {            /* page / module title */
+/* ===== Text style tokens — the single source of text styling. Every text element
+   carries one of these classes explicitly (no bare-tag aliases); see also
+   .txt-mini / .txt-caption / .txt-meta below. ===== */
+.txt-title {                /* page / module title */
   margin-top: 0;
   font-size: 18px;
   font-weight: 700;
   color: var(--text);
 }
-h3, .txt-head {             /* card header */
+.txt-head {                 /* card / section header — forced uppercase, no hand-typed caps */
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: 0.08em;
   margin: 0 0 8px;
+  text-transform: uppercase;
 }
-.txt-head { text-transform: uppercase; }   /* forced — no hand-typed caps in the HTML */
-label, .txt-label {         /* field label */
+.txt-tile {                 /* home technique-tile title (accent, natural case) */
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+.txt-label {                /* field label */
   font-size: 13px;
   color: var(--muted);
   display: block;
@@ -815,14 +822,6 @@ svg.plot {
   flex-direction: column;
   justify-content: center;
   gap: 8px;
-}
-.home-card h3 {
-  color: var(--accent);
-  font-size: 15px;
-  margin: 0;
-  text-transform: none;
-  letter-spacing: 0.04em;
-  font-weight: 700;
 }
 .home-card p {
   color: var(--muted);
@@ -1379,12 +1378,11 @@ button.color-swatch:hover { border-color: var(--text); }
   row-gap: 9px;
   align-items: center;
 }
-.param-grid > label,
+/* Grid layout for the title cells (font comes from .txt-label on the same element) */
+.param-grid > .txt-label,
 .param-grid > .pg-title {
   margin: 0;
   align-self: center;
-  font-size: 13px;
-  color: var(--muted);
   line-height: 1.35;
 }
 /* Title cell that carries an inline all/one chip right after the text */

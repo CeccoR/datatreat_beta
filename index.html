@@ -64,34 +64,34 @@
     <!-- ============ HOME ============ -->
     <section class="tab active" id="tab-home" role="tabpanel" tabindex="0">
       <div class="card">
-        <h2>Pick your technique.</h2>
+        <h2 class="txt-title">Pick your technique.</h2>
         <p class="txt-meta" style="margin-bottom:18px">Analyze your data.</p>
         <div class="home-grid">
           <div class="home-card" data-go="tauc">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M42 22 C 28 22, 25 5, 2 4"/></svg></div>
             <div class="home-card-text">
-              <h3>DRS UV-Vis</h3>
+              <h3 class="txt-tile">DRS UV-Vis</h3>
               <p>Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (Eg) can be inferred through Tauc Plot analysis.</p>
             </div>
           </div>
           <div class="home-card" data-go="xrd">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H11 L14 6 L17 22 H25 L28 13 L31 22 H42"/></svg></div>
             <div class="home-card-text">
-              <h3>XRPD</h3>
+              <h3 class="txt-tile">XRPD</h3>
               <p>X-Ray Powder Diffraction. Diffractograms comparison, smoothing, and normalization.</p>
             </div>
           </div>
           <div class="home-card" data-go="gc">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H10 C13 22 13 8 16 8 C19 8 19 22 22 22 H28 C32 22 31 14 34 14 C37 14 37 22 40 22 H42"/></svg></div>
             <div class="home-card-text">
-              <h3>GC</h3>
+              <h3 class="txt-tile">GC</h3>
               <p>Gas Chromatography for H₂ production rate assessment.</p>
             </div>
           </div>
           <div class="home-card" data-go="epr">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 14 H15 L20 5 L24 21 L29 14 H42"/></svg></div>
             <div class="home-card-text">
-              <h3>EPR</h3>
+              <h3 class="txt-tile">EPR</h3>
               <p>Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.</p>
             </div>
           </div>
@@ -105,37 +105,37 @@
     <!-- ============ SETTINGS ============ -->
     <section class="tab settings-tab" id="tab-settings" role="tabpanel" tabindex="0">
       <div class="card" style="max-width:480px;margin:0 auto">
-        <h2>Settings</h2>
-        <h3 style="margin:0 0 6px">Appearance</h3>
+        <h2 class="txt-title">Settings</h2>
+        <h3 class="txt-head" style="margin:0 0 6px">Appearance</h3>
         <div class="instr-block">Theme defaults to your operating-system preference; your choice here is remembered.</div>
-        <label style="margin-top:0">Theme</label>
+        <label class="txt-label" style="margin-top:0">Theme</label>
         <select id="settingTheme">
           <option value="dark">Dark</option>
           <option value="light">Light</option>
         </select>
-        <h3 style="margin:20px 0 6px">Plot export</h3>
+        <h3 class="txt-head" style="margin:20px 0 6px">Plot export</h3>
         <div class="instr-block">Download format applied to all plot export buttons.</div>
-        <label style="margin-top:0">Format</label>
+        <label class="txt-label" style="margin-top:0">Format</label>
         <select id="settingPlotFmt">
           <option value="png" selected>PNG</option>
           <option value="svg">SVG</option>
           <option value="jpeg">JPEG</option>
           <option value="webp">WebP</option>
         </select>
-        <h3 style="margin:20px 0 6px">CSV export</h3>
+        <h3 class="txt-head" style="margin:20px 0 6px">CSV export</h3>
         <div class="instr-block">Decimal and field separator cannot both be set to comma.</div>
-        <label style="margin-top:0">Decimal separator</label>
+        <label class="txt-label" style="margin-top:0">Decimal separator</label>
         <select id="settingDecimal">
           <option value="." selected>. (point)</option>
           <option value=",">, (comma)</option>
         </select>
-        <label style="margin-top:14px">Field separator</label>
+        <label class="txt-label" style="margin-top:14px">Field separator</label>
         <select id="settingField">
           <option value="	">Tab</option>
           <option value=";" selected>; (semicolon)</option>
           <option value=",">, (comma)</option>
         </select>
-        <h3 style="margin:20px 0 6px">Keyboard shortcuts</h3>
+        <h3 class="txt-head" style="margin:20px 0 6px">Keyboard shortcuts</h3>
         <div class="shortcut-list">
           <div><span><span class="kbd">&#8592;</span> <span class="kbd">&#8594;</span></span><span>Previous / next sample</span></div>
           <div><span><span class="kbd">Ctrl</span>/<span class="kbd">&#8984;</span> + <span class="kbd">Z</span></span><span>Undo</span></div>
@@ -148,7 +148,7 @@
     <section class="tab" id="tab-projects" role="tabpanel" tabindex="0">
       <div class="card">
         <div class="flex-between" style="align-items:center;flex-wrap:wrap;gap:10px">
-          <h2 style="margin:0">Saved projects</h2>
+          <h2 class="txt-title" style="margin:0">Saved projects</h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <input type="file" id="sessImportFile" accept="application/json,.json" multiple style="display:none">
             <button class="btn small" id="sessOpenSelected" disabled>Open selected</button>
@@ -161,11 +161,11 @@
         <p class="txt-meta" style="margin-top:6px">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</p>
         <div class="row" style="gap:10px;margin-top:12px">
           <div class="col mw200" style="flex:2">
-            <label style="margin-top:0">Filter by name</label>
+            <label class="txt-label" style="margin-top:0">Filter by name</label>
             <input type="text" id="sessFilterName" placeholder="Search title…">
           </div>
           <div class="col mw200" style="flex:1">
-            <label style="margin-top:0">Filter by module</label>
+            <label class="txt-label" style="margin-top:0">Filter by module</label>
             <select id="sessFilterModule"><option value="">All modules</option></select>
           </div>
         </div>
@@ -177,7 +177,7 @@
     <section class="tab" id="tab-tauc" role="tabpanel" tabindex="0">
       <div class="card project-bar" data-module="tauc"><input type="text" class="project-name-input" data-module="tauc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="tauc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="tauc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="tauc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="tauc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="tauc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 style="margin:0">DRS UV-Vis</h2></div>
+        <div class="section-head"><h2 class="txt-title" style="margin:0">DRS UV-Vis</h2></div>
         <div class="instr-block" style="max-width:100%">Compatible with Cary 5000 Instrument. Upload files with two columns: wavelength (nm) and Kubelka-Munk computed absorbance F(R).</div>
         <div class="dropzone" id="taucDropzone">
           <div class="dz-icon">⤒</div>
@@ -219,20 +219,20 @@
           <div class="col mw280" style="align-self:flex-start">
             <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
             <div class="param-grid">
-              <label>Tauc exponent</label>
+              <label class="txt-label">Tauc exponent</label>
               <select id="taucA" class="pg-field">
                 <option value="0.5" selected>0.5</option>
                 <option value="2">2</option>
               </select>
-              <label>[F(R)hν]<sup id="taucNExp">0.5</sup> smoothing window</label>
+              <label class="txt-label">[F(R)hν]<sup id="taucNExp">0.5</sup> smoothing window</label>
               <input type="number" class="pg-field" id="taucN" value="1" min="1">
-              <label>Derivative smoothing window</label>
+              <label class="txt-label">Derivative smoothing window</label>
               <input type="number" class="pg-field" id="taucN2" value="20" min="1">
-              <label>Tauc linear region regression window</label>
+              <label class="txt-label">Tauc linear region regression window</label>
               <input type="number" class="pg-field" id="taucM" value="25" min="2">
               <div class="pg-stat">NRMSE: <b id="taucRMSE1">-</b></div>
               <div class="pg-stat">R²: <b id="taucR21">-</b></div>
-              <label>Baseline regression window</label>
+              <label class="txt-label">Baseline regression window</label>
               <input type="number" class="pg-field" id="taucM2" value="100" min="2">
               <div class="pg-stat">NRMSE: <b id="taucRMSE2">-</b></div>
               <div class="pg-stat">R²: <b id="taucR22">-</b></div>
@@ -284,7 +284,7 @@
     <section class="tab" id="tab-xrd" role="tabpanel" tabindex="0">
       <div class="card project-bar" data-module="xrd"><input type="text" class="project-name-input" data-module="xrd" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="xrd" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="xrd" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="xrd" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="xrd" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="xrd" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 style="margin:0">XRPD</h2></div>
+        <div class="section-head"><h2 class="txt-title" style="margin:0">XRPD</h2></div>
         <div class="instr-block" style="max-width:100%">Compatible with XPERT diffractometer. Accepts PANalytical XML format files.</div>
         <div class="dropzone" id="xrdDropzone">
           <div class="dz-icon">⤒</div>
@@ -298,7 +298,7 @@
       <div class="card" id="xrdStdCard" style="display:none">
         <h3 class="txt-head" style="margin:0 0 0">Instrumental standard</h3>
         <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. No crystallite size is computed for the standard itself, so the size column is omitted from its peak table.</div>
-        <div style="max-width:340px;margin-bottom:6px"><label>Instrumental standard</label>
+        <div style="max-width:340px;margin-bottom:6px"><label class="txt-label">Instrumental standard</label>
           <select id="xrdStandard"><option value="">None</option></select></div>
         <div id="xrdStdBody" style="display:none">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -318,17 +318,17 @@
               </div>
             </div>
             <div class="col mw280" style="align-self:flex-start;display:flex;flex-direction:column;gap:11px">
-              <div><label>Smoothing window (pts)</label>
+              <div><label class="txt-label">Smoothing window (pts)</label>
                 <input type="number" id="xrdStdSmooth" value="10" min="1"></div>
-              <div><label>Baseline SNIP window (pts)</label>
+              <div><label class="txt-label">Baseline SNIP window (pts)</label>
                 <input type="number" id="xrdStdBlWin" value="150" min="1"></div>
               <div class="field-half">
-                <div><label>Peak min. height (%)</label>
+                <div><label class="txt-label">Peak min. height (%)</label>
                   <input type="text" inputmode="decimal" id="xrdStdPkHeight" value="5"></div>
-                <div><label>Peak min. prom. (%)</label>
+                <div><label class="txt-label">Peak min. prom. (%)</label>
                   <input type="text" inputmode="decimal" id="xrdStdPkProm" value="3"></div>
               </div>
-              <div><label>Peak min. distance (degrees 2&#952;)</label>
+              <div><label class="txt-label">Peak min. distance (degrees 2&#952;)</label>
                 <input type="text" inputmode="decimal" id="xrdStdPkDist" value="0.3"></div>
               <button class="btn secondary" id="xrdStdAddPeak" style="width:100%;padding:7px 9px">+ Add peak</button>
             </div>
@@ -374,28 +374,28 @@
           <div class="col mw280" style="align-self:flex-start">
             <div class="txt-mini param-head aligned">Parameters</div>
             <div class="param-grid">
-              <label>Normalization</label>
+              <label class="txt-label">Normalization</label>
               <select id="xrdNorm" class="pg-field"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select>
 
-              <div class="pg-title">Smoothing window (pts) <button type="button" class="mode-chip" id="xrdModeN" title="Switch all / one">all</button></div>
+              <div class="txt-label pg-title">Smoothing window (pts) <button type="button" class="mode-chip" id="xrdModeN" title="Switch all / one">all</button></div>
               <input type="number" class="pg-field" id="xrdSmooth" value="10" min="1">
 
-              <div class="pg-title">Baseline SNIP window (pts) <button type="button" class="mode-chip" id="xrdModeBl" title="Switch all / one">all</button></div>
+              <div class="txt-label pg-title">Baseline SNIP window (pts) <button type="button" class="mode-chip" id="xrdModeBl" title="Switch all / one">all</button></div>
               <input type="number" class="pg-field" id="xrdBlWin" value="150" min="1">
 
-              <div class="pg-title">Peak min. height (%) <button type="button" class="mode-chip" id="xrdModeH" title="Switch all / one">one</button></div>
+              <div class="txt-label pg-title">Peak min. height (%) <button type="button" class="mode-chip" id="xrdModeH" title="Switch all / one">one</button></div>
               <input type="text" inputmode="decimal" class="pg-field" id="xrdPkHeight" value="5">
 
-              <div class="pg-title">Peak min. prominence (%) <button type="button" class="mode-chip" id="xrdModeP" title="Switch all / one">one</button></div>
+              <div class="txt-label pg-title">Peak min. prominence (%) <button type="button" class="mode-chip" id="xrdModeP" title="Switch all / one">one</button></div>
               <input type="text" inputmode="decimal" class="pg-field" id="xrdPkProm" value="3">
 
-              <div class="pg-title">Peak min. distance (&#176;2&#952;) <button type="button" class="mode-chip" id="xrdModeD" title="Switch all / one">one</button></div>
+              <div class="txt-label pg-title">Peak min. distance (&#176;2&#952;) <button type="button" class="mode-chip" id="xrdModeD" title="Switch all / one">one</button></div>
               <input type="text" inputmode="decimal" class="pg-field" id="xrdPkDist" value="0.3">
 
-              <div class="pg-title">Shape factor K <button type="button" class="mode-chip" id="xrdModeK" title="Switch all / one">all</button></div>
+              <div class="txt-label pg-title">Shape factor K <button type="button" class="mode-chip" id="xrdModeK" title="Switch all / one">all</button></div>
               <input type="text" inputmode="decimal" class="pg-field" id="xrdK" value="0.9">
 
-              <div class="pg-title">Wavelength &#955; (&#8491;) <button type="button" class="mode-chip" id="xrdModeL" title="Switch all / one">all</button></div>
+              <div class="txt-label pg-title">Wavelength &#955; (&#8491;) <button type="button" class="mode-chip" id="xrdModeL" title="Switch all / one">all</button></div>
               <input type="text" inputmode="decimal" class="pg-field" id="xrdLambda" value="1.5406">
             </div>
           </div>
@@ -507,41 +507,41 @@
       </div>
       <div id="xrdFitModal" class="modal-backdrop" style="display:none">
         <div class="modal-box">
-          <h3 style="margin:0 0 4px">Sample fit — hyperparameters</h3>
+          <h3 class="txt-head" style="margin:0 0 4px">Sample fit — hyperparameters</h3>
           <p style="color:var(--muted);font-size:12px;margin:0 0 10px">Whole-pattern least-squares: Σ Kα₁/Kα₂ doublets + polynomial background, Levenberg–Marquardt. Multi-start over profile shape (5) × initial width 1–5× FWHM (5) = 25 starts, then a final refinement pass on <b>all</b> points. Used by <b>Fit sample</b> and <b>Fit all</b>.</p>
-          <label>Peak profile</label>
+          <label class="txt-label">Peak profile</label>
           <select id="xrdHpProfile">
             <option value="voigt">True Voigt (σ, γ)</option>
             <option value="pv" selected>Pseudo-Voigt (FWHM, η)</option>
           </select>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
             <input type="checkbox" id="xrdHpAsym" style="width:auto;margin:0"> Enable peak asymmetry
           </label>
           <div id="xrdHpAsymOpts">
-            <label>Asymmetry model</label>
+            <label class="txt-label">Asymmetry model</label>
             <select id="xrdHpAsymMode">
               <option value="split" selected>Split (per-peak, fitted)</option>
               <option value="fcj">Axial divergence (FCJ)</option>
             </select>
             <div id="xrdHpFcj" style="display:none">
-              <label>S/L (sample / radius)</label>
+              <label class="txt-label">S/L (sample / radius)</label>
               <input type="text" id="xrdHpSL" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
-              <label>H/L (slit / radius)</label>
+              <label class="txt-label">H/L (slit / radius)</label>
               <input type="text" id="xrdHpHL" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
               <small style="color:var(--muted);display:block;margin-top:4px">Fixed instrumental geometry applied to samples. Refine these by running <b>Fit standard</b> on your LaB₆ (or other) standard — the calibrated value is written back here automatically.</small>
             </div>
           </div>
-          <label>Background polynomial degree</label>
+          <label class="txt-label">Background polynomial degree</label>
           <input type="number" id="xrdHpDeg" value="4" min="0" max="12">
-          <label>Max iterations</label>
+          <label class="txt-label">Max iterations</label>
           <input type="number" id="xrdHpIter" value="80" min="5" max="2000">
-          <label>Convergence tolerance (relative)</label>
+          <label class="txt-label">Convergence tolerance (relative)</label>
           <input type="text" inputmode="decimal" id="xrdHpTol" value="1e-12">
-          <label>Initial LM damping λ₀</label>
+          <label class="txt-label">Initial LM damping λ₀</label>
           <input type="text" inputmode="decimal" id="xrdHpLambda" value="1e-3">
-          <label>Background→SNIP anchor (0 = off)</label>
+          <label class="txt-label">Background→SNIP anchor (0 = off)</label>
           <input type="text" inputmode="decimal" id="xrdHpBgAnchor" value="0.3">
-          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
             <input type="checkbox" id="xrdHpFromCurrent" style="width:auto;margin:0"> Restart fit from current fit (instead of SNIP + peak search)
           </label>
           <div style="display:flex;gap:8px;margin-top:16px">
@@ -552,27 +552,27 @@
       </div>
       <div id="xrdStdModal" class="modal-backdrop" style="display:none">
         <div class="modal-box">
-          <h3 style="margin:0 0 4px">Standard fit — instrument calibration</h3>
+          <h3 class="txt-head" style="margin:0 0 4px">Standard fit — instrument calibration</h3>
           <p style="color:var(--muted);font-size:12px;margin:0 0 10px">Fits the file chosen as <b>Instrumental standard</b> with axial-divergence (FCJ) asymmetry, refining a single geometry parameter <b>G = S/L = H/L</b>. Multi-start over shape × initial width (25 starts, each refining G) + a final all-points pass; expect ~1 min. The result is written back to the sample fit settings and reused on all samples.</p>
-          <label>Peak profile</label>
+          <label class="txt-label">Peak profile</label>
           <select id="xrdStdProfile">
             <option value="voigt" selected>True Voigt (σ, γ)</option>
             <option value="pv">Pseudo-Voigt (FWHM, η)</option>
           </select>
-          <label>Calibrated geometry G = S/L = H/L</label>
+          <label class="txt-label">Calibrated geometry G = S/L = H/L</label>
           <input type="text" id="xrdStdG" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
           <small style="color:var(--muted);display:block;margin:4px 0">Updated automatically after each standard fit (refined within [0.001, 0.1]).</small>
-          <label>Background polynomial degree</label>
+          <label class="txt-label">Background polynomial degree</label>
           <input type="number" id="xrdStdDeg" value="4" min="0" max="12">
-          <label>Max iterations</label>
+          <label class="txt-label">Max iterations</label>
           <input type="number" id="xrdStdIter" value="60" min="5" max="2000">
-          <label>Convergence tolerance (relative)</label>
+          <label class="txt-label">Convergence tolerance (relative)</label>
           <input type="text" inputmode="decimal" id="xrdStdTol" value="1e-12">
-          <label>Initial LM damping λ₀</label>
+          <label class="txt-label">Initial LM damping λ₀</label>
           <input type="text" inputmode="decimal" id="xrdStdLambda" value="1e-3">
-          <label>Background→SNIP anchor (0 = off)</label>
+          <label class="txt-label">Background→SNIP anchor (0 = off)</label>
           <input type="text" inputmode="decimal" id="xrdStdBgAnchor" value="0.3">
-          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
             <input type="checkbox" id="xrdStdFromCurrent" style="width:auto;margin:0"> Restart fit from current fit (instead of SNIP + peak search)
           </label>
           <div style="display:flex;gap:8px;margin-top:16px">
@@ -587,7 +587,7 @@
     <section class="tab" id="tab-gc" role="tabpanel" tabindex="0">
       <div class="card project-bar" data-module="gc"><input type="text" class="project-name-input" data-module="gc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="gc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="gc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="gc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="gc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="gc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 style="margin:0">GC</h2></div>
+        <div class="section-head"><h2 class="txt-title" style="margin:0">GC</h2></div>
         <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) (%Mol)" column.</div>
         <div class="dropzone" id="gcDropzone">
           <div class="dz-icon">⤒</div>
@@ -653,7 +653,7 @@
     <section class="tab" id="tab-epr" role="tabpanel" tabindex="0">
       <div class="card project-bar" data-module="epr"><input type="text" class="project-name-input" data-module="epr" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="epr" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="epr" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="epr" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="epr" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="epr" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 style="margin:0">EPR</h2></div>
+        <div class="section-head"><h2 class="txt-title" style="margin:0">EPR</h2></div>
         <div class="instr-block" style="max-width:100%">Compatible with Bruker EPR spectrometers (BES3T format). Upload paired .DTA and .DSC files: both are required for each sample. Pairs are matched by filename stem.</div>
         <div class="dropzone" id="eprDropzone">
           <div class="dz-icon">⤒</div>
@@ -677,12 +677,12 @@
             <div id="eprLegend" class="legend"></div>
           </div>
           <div class="col mw260" style="align-self:flex-start">
-            <label>Normalization</label>
+            <label class="txt-label">Normalization</label>
             <select id="eprNorm">
               <option value="global">Global (max of all)</option>
               <option value="local">Local (max of each)</option>
             </select>
-            <label>Smoothing points</label>
+            <label class="txt-label">Smoothing points</label>
             <input type="number" id="eprSmooth" value="10" min="1">
           </div>
         </div>
@@ -705,8 +705,8 @@
   <!-- Save project as… dialog -->
   <div id="projSaveAsModal" class="modal-backdrop" style="display:none">
     <div class="modal-box">
-      <h3 style="margin:0 0 4px">Save project as…</h3>
-      <label style="margin-top:10px">Project name</label>
+      <h3 class="txt-head" style="margin:0 0 4px">Save project as…</h3>
+      <label class="txt-label" style="margin-top:10px">Project name</label>
       <input type="text" id="projSaveAsInput" placeholder="Project name…" autocomplete="off">
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
         <button class="btn secondary" id="projSaveAsCancel" type="button">Cancel</button>
