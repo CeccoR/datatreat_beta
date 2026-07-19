@@ -217,7 +217,7 @@
             <div id="taucAlert"></div>
           </div>
           <div class="col mw280" style="align-self:flex-start">
-            <div class="param-head">Parameters <button type="button" class="mode-chip" id="taucModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
+            <div class="param-head aligned">Parameters <button type="button" class="mode-chip" id="taucModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
             <div class="param-grid">
               <label>Tauc exponent</label>
               <select id="taucA" class="pg-field">
@@ -372,6 +372,7 @@
             </div>
           </div>
           <div class="col mw280" style="align-self:flex-start">
+            <div class="param-head aligned">Parameters</div>
             <div class="param-grid">
               <label>Normalization</label>
               <select id="xrdNorm" class="pg-field"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select>
@@ -604,7 +605,7 @@
         <div class="instr-block">Set catalyst mass (m), carrier gas flow rate (Q), the light-on time and the integration interval for each sample to compute mean H₂ production rates. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on both plots (and vice-versa).</div>
         <div class="peak-box" style="margin-top:0;margin-bottom:14px">
           <div class="peak-box-head">
-            <span class="peak-box-title">Sample parameters</span>
+            <span class="peak-box-title">Parameters</span>
             <button class="btn secondary table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="gcParamTableWrap"></div>

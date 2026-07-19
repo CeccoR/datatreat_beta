@@ -10,9 +10,8 @@ import { Plot, svgEl } from './plot.js';
   let dataTables=[];
   let plot1, plot2;
   // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
-  // Each of m, Q, start and end toggles independently. Defaults preserve the historical
-  // behaviour: per-sample m/Q, one shared interval.
-  let mMode='one', qMode='one', startMode='all', endMode='all';
+  // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
+  let mMode='all', qMode='all', startMode='all', endMode='all';
   let mShared=15, qShared=2, startShared=0, endShared=24;
   let costResults=[];
   let gcSel=null, gcHov=null;   // selected / hovered sample index (interval interaction)
