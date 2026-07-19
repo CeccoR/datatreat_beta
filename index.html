@@ -104,8 +104,9 @@
 
     <!-- ============ SETTINGS ============ -->
     <section class="tab settings-tab" id="tab-settings" role="tabpanel" tabindex="0">
-      <div class="card" style="max-width:480px;margin:0 auto">
-        <h2 class="txt-title">Settings</h2>
+      <div style="max-width:480px;margin:0 auto">
+        <h2 class="txt-title" style="margin:0 0 10px">Settings</h2>
+        <div class="card">
         <h3 class="txt-head" style="margin:0 0 6px">Appearance</h3>
         <div class="instr-block">Theme defaults to your operating-system preference; your choice here is remembered.</div>
         <label class="txt-label" style="margin-top:0">Theme</label>
@@ -142,13 +143,15 @@
           <div><span><span class="kbd">Ctrl</span>/<span class="kbd">&#8984;</span> + <span class="kbd">Y</span> or <span class="kbd">&#8679;</span>+<span class="kbd">Z</span></span><span>Redo</span></div>
         </div>
       </div>
+      </div>
     </section>
 
     <!-- ============ PROJECTS ============ -->
     <section class="tab" id="tab-projects" role="tabpanel" tabindex="0">
+      <div class="module-head"><h2 class="txt-title" style="margin:0">Projects</h2></div>
+      <div class="instr-block">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</div>
       <div class="card">
         <div class="flex-between" style="align-items:center;flex-wrap:wrap;gap:10px">
-          <h2 class="txt-title" style="margin:0">Saved projects</h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <input type="file" id="sessImportFile" accept="application/json,.json" multiple style="display:none">
             <button class="btn small" id="sessOpenSelected" disabled>Open selected</button>
@@ -158,7 +161,6 @@
             <button class="btn secondary small" id="sessImportBtn">Import .json</button>
           </div>
         </div>
-        <p class="txt-meta" style="margin-top:6px">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</p>
         <div class="row" style="gap:10px;margin-top:12px">
           <div class="col mw200" style="flex:2">
             <label class="txt-label" style="margin-top:0">Filter by name</label>
@@ -175,9 +177,11 @@
 
     <!-- ============ TAUC ============ -->
     <section class="tab" id="tab-tauc" role="tabpanel" tabindex="0">
+      <div class="module-head"><h2 class="txt-title" style="margin:0">DRS UV-Vis</h2></div>
+      <div class="instr-block">Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (E<sub>g</sub>) can be inferred through Tauc Plot analysis.</div>
       <div class="card project-bar" data-module="tauc"><input type="text" class="project-name-input" data-module="tauc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="tauc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="tauc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="tauc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="tauc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="tauc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 class="txt-title" style="margin:0">DRS UV-Vis</h2></div>
+        <h3 class="txt-head" style="margin:0 0 8px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Cary 5000 Instrument. Upload files with two columns: wavelength (nm) and Kubelka-Munk computed absorbance F(R).</div>
         <div class="dropzone" id="taucDropzone">
           <div class="dz-icon">⤒</div>
@@ -282,9 +286,11 @@
 
     <!-- ============ XRD ============ -->
     <section class="tab" id="tab-xrd" role="tabpanel" tabindex="0">
+      <div class="module-head"><h2 class="txt-title" style="margin:0">XRPD</h2></div>
+      <div class="instr-block">X-Ray Powder Diffraction. Diffractograms comparison, smoothing and normalization, with peak detection, Scherrer crystallite-size estimation and whole-pattern profile fitting.</div>
       <div class="card project-bar" data-module="xrd"><input type="text" class="project-name-input" data-module="xrd" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="xrd" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="xrd" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="xrd" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="xrd" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="xrd" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 class="txt-title" style="margin:0">XRPD</h2></div>
+        <h3 class="txt-head" style="margin:0 0 8px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with XPERT diffractometer. Accepts PANalytical XML format files.</div>
         <div class="dropzone" id="xrdDropzone">
           <div class="dz-icon">⤒</div>
@@ -585,9 +591,11 @@
 
     <!-- ============ GC ============ -->
     <section class="tab" id="tab-gc" role="tabpanel" tabindex="0">
+      <div class="module-head"><h2 class="txt-title" style="margin:0">GC</h2></div>
+      <div class="instr-block">Gas Chromatography for H₂ production-rate assessment. Computes mean H₂ production rates over a chosen integration interval from time-resolved injection measurements.</div>
       <div class="card project-bar" data-module="gc"><input type="text" class="project-name-input" data-module="gc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="gc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="gc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="gc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="gc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="gc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 class="txt-title" style="margin:0">GC</h2></div>
+        <h3 class="txt-head" style="margin:0 0 8px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) (%Mol)" column.</div>
         <div class="dropzone" id="gcDropzone">
           <div class="dz-icon">⤒</div>
@@ -651,9 +659,11 @@
 
     <!-- ============ EPR ============ -->
     <section class="tab" id="tab-epr" role="tabpanel" tabindex="0">
+      <div class="module-head"><h2 class="txt-title" style="margin:0">EPR</h2></div>
+      <div class="instr-block">Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.</div>
       <div class="card project-bar" data-module="epr"><input type="text" class="project-name-input" data-module="epr" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="epr" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="epr" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="epr" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="epr" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="epr" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 class="txt-title" style="margin:0">EPR</h2></div>
+        <h3 class="txt-head" style="margin:0 0 8px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Bruker EPR spectrometers (BES3T format). Upload paired .DTA and .DSC files: both are required for each sample. Pairs are matched by filename stem.</div>
         <div class="dropzone" id="eprDropzone">
           <div class="dz-icon">⤒</div>

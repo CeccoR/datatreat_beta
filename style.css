@@ -444,10 +444,12 @@ main {
    .txt-mini / .txt-caption / .txt-meta below. ===== */
 .txt-title {                /* page / module title */
   margin-top: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
-  color: var(--text);
+  color: var(--accent);
 }
+/* Module title sits above the project bar, aligned to the cards' left edge */
+.module-head { margin: 2px 2px 10px; }
 .txt-head {                 /* card / section header — forced uppercase, no hand-typed caps */
   font-size: 14px;
   font-weight: 700;
