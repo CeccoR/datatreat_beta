@@ -1367,13 +1367,11 @@ function nextColor(existingFiles){
 /* =========================================================
    COLLAPSIBLE INSTRUCTIONS
    Each .instr-block is toggled by a small info icon placed next to the card's
-   title. Open by default; the collapsed choice is remembered per block.
+   title. Always starts collapsed on load; the choice is not remembered.
 ========================================================= */
 (function initInstrCollapse(){
   const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
   document.querySelectorAll('.instr-block').forEach((block, i)=>{
-    const section = block.closest('section.tab');
-    const key = 'datatreat-instr-' + (section ? section.id : 's') + '-' + i;
     // Attach the toggle to the nearest preceding heading; fall back to inline.
     // The heading may be wrapped (e.g. in a .section-head flex row), so also
     // look for a heading nested inside a preceding sibling.
@@ -1391,15 +1389,14 @@ function nextColor(existingFiles){
     btn.innerHTML = INFO_SVG;
     if (heading) heading.appendChild(btn);
     else block.parentNode.insertBefore(btn, block);
-    let collapsed = false;
-    try { collapsed = localStorage.getItem(key) === 'collapsed'; } catch(e){}
+    let collapsed = true;   // always start closed; the choice is not remembered
     const apply = ()=>{
       block.style.display = collapsed ? 'none' : '';
       btn.classList.toggle('active', !collapsed); // highlighted while instructions are shown
       btn.setAttribute('aria-expanded', String(!collapsed));
     };
     apply();
-    btn.addEventListener('click', ()=>{ collapsed = !collapsed; try { localStorage.setItem(key, collapsed ? 'collapsed' : 'open'); } catch(e){} apply(); });
+    btn.addEventListener('click', ()=>{ collapsed = !collapsed; apply(); });
   });
 })();
 

@@ -230,7 +230,7 @@ button.btn.secondary.saved-ok {
 .project-bar .project-name-input {
   width: 25%;
   min-width: 180px;
-  height: 40.5px;             /* 75% of the previous 54px field */
+  height: 40px;
   font-size: 16px;
   font-weight: 500;
   padding: 0 14px;
