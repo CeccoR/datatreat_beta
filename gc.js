@@ -163,7 +163,7 @@ import { Plot, svgEl } from './plot.js';
     const dis = state==='off' ? 'disabled' : (state==='ro' ? 'readonly' : '');
     return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${value}" ${dis} style="width:100%">`;
   }
-  const modeChip = (pair, mode)=> `<button type="button" class="gc-toggle" data-pair="${pair}" title="Switch all / one">${mode}</button>`;
+  const modeChip = (pair, mode)=> `<button type="button" class="mode-chip gc-toggle" data-pair="${pair}" title="Switch all / one">${mode}</button>`;
 
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
@@ -385,6 +385,10 @@ import { Plot, svgEl } from './plot.js';
   }
   function selectGc(k){
     if (intMode!=='one') return;
+    // Clear any transient hover so the green .hovering tint doesn't linger after a
+    // click (mirrors the XRD peak table, whose full re-render drops it).
+    if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
+    gcHov = null;
     gcSel = (gcSel===k) ? null : k;
     drawGcIntervals(plot1); drawGcIntervals(plot2); refreshGcRows();
   }

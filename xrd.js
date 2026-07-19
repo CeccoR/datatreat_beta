@@ -205,7 +205,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   }
   function syncModeButtons(){
     Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
-      document.querySelectorAll('#'+tid+' button').forEach(btn=> btn.classList.toggle('active', btn.dataset.m === paramMode[key]));
+      const c = document.getElementById(tid);
+      if (c) c.textContent = paramMode[key]==='shared' ? 'all' : 'one';
     });
   }
   const hist = registerHistory('xrd', xrdSnapshot, xrdRestore);
@@ -1024,35 +1025,31 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   const TOGGLE_FIELD = { xrdModeN:'N', xrdModeBl:'blWin', xrdModeH:'pkHeight', xrdModeP:'pkProm', xrdModeD:'pkDist', xrdModeK:'K', xrdModeL:'lambda' };
   const SIZE_ONLY = new Set(['K','lambda']);
   Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
-    document.querySelectorAll('#'+tid+' button').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        if (btn.classList.contains('active')) return; // no-op if already in this mode
-        document.querySelectorAll('#'+tid+' button').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        // The value currently displayed on the graph for this field
-        const cur = getFileParams(curIdx)[key];
-        paramMode[key] = btn.dataset.m;
-        if (btn.dataset.m==='shared'){
-          // Switching to "all": every sample takes the currently displayed value
-          shared[key] = cur;
-        } else {
-          // Switching to "one": keep the displayed value on this sample only;
-          // other samples' per-sample values are left untouched
-          if(!perParams[curIdx]) perParams[curIdx]={};
-          perParams[curIdx][key] = cur;
+    document.getElementById(tid).addEventListener('click', ()=>{
+      const mode = paramMode[key]==='shared' ? 'per' : 'shared';
+      // The value currently displayed on the graph for this field
+      const cur = getFileParams(curIdx)[key];
+      paramMode[key] = mode;
+      if (mode==='shared'){
+        // Switching to "all": every sample takes the currently displayed value
+        shared[key] = cur;
+      } else {
+        // Switching to "one": keep the displayed value on this sample only;
+        // other samples' per-sample values are left untouched
+        if(!perParams[curIdx]) perParams[curIdx]={};
+        perParams[curIdx][key] = cur;
+      }
+      writeStoreToInputs();
+      if (files.length){
+        if (!SIZE_ONLY.has(key)){
+          if (mode==='shared') reprocessAll(); else reprocessOne(curIdx);
+          updateXrdAnalysis(true);
+          updateXrdFitting(true);
         }
-        writeStoreToInputs();
-        if (files.length){
-          if (!SIZE_ONLY.has(key)){
-            if (btn.dataset.m==='shared') reprocessAll(); else reprocessOne(curIdx);
-            updateXrdAnalysis(true);
-            updateXrdFitting(true);
-          }
-          updateXrdResults();
-          renderPeakTable();
-          hist.commit();
-        }
-      });
+        updateXrdResults();
+        renderPeakTable();
+        hist.commit();
+      }
     });
   });
 

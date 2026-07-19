@@ -216,7 +216,7 @@
           <div class="col mw280" style="align-self:flex-start">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px">
               <label style="margin:0" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">Parameters per sample</label>
-              <div class="xrd-seg mode-seg" id="taucModeAll"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div>
+              <button type="button" class="mode-chip" id="taucModeAll" title="Switch all / one">all</button>
             </div>
             <button class="btn secondary" id="taucSuggest" style="width:100%;padding:6px 9px;margin-top:6px" title="Propose optimal Tauc-region and baseline line positions from the absorption edge">&#10022; Suggest line positions</button>
             <label>Tauc exponent (0.5 for indirect semiconductors, 2 for direct semiconductors)</label>
@@ -372,28 +372,28 @@
               <select id="xrdNorm"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select></div>
             <div><label>Smoothing window (pts)</label>
               <div class="field-row"><input type="number" id="xrdSmooth" value="10" min="1">
-                <div class="xrd-seg mode-seg" id="xrdModeN"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
+                <button type="button" class="mode-chip" id="xrdModeN" title="Switch all / one">all</button></div></div>
             <div><label>Baseline SNIP window (pts)</label>
               <div class="field-row"><input type="number" id="xrdBlWin" value="150" min="1">
-                <div class="xrd-seg mode-seg" id="xrdModeBl"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
+                <button type="button" class="mode-chip" id="xrdModeBl" title="Switch all / one">all</button></div></div>
             <div class="field-half">
               <div><label>Peak min. height (%)</label>
                 <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkHeight" value="5">
-                  <div class="xrd-seg mode-seg" id="xrdModeH"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
+                  <button type="button" class="mode-chip" id="xrdModeH" title="Switch all / one">one</button></div></div>
               <div><label>Peak min. prom. (%)</label>
                 <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkProm" value="3">
-                  <div class="xrd-seg mode-seg" id="xrdModeP"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
+                  <button type="button" class="mode-chip" id="xrdModeP" title="Switch all / one">one</button></div></div>
             </div>
             <div><label>Peak min. distance (degrees 2&#952;)</label>
               <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkDist" value="0.3">
-                <div class="xrd-seg mode-seg" id="xrdModeD"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
+                <button type="button" class="mode-chip" id="xrdModeD" title="Switch all / one">one</button></div></div>
             <div class="field-half">
               <div><label>Shape factor K</label>
                 <div class="field-row"><input type="text" inputmode="decimal" id="xrdK" value="0.9">
-                  <div class="xrd-seg mode-seg" id="xrdModeK"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
+                  <button type="button" class="mode-chip" id="xrdModeK" title="Switch all / one">all</button></div></div>
               <div><label>&#955; (&#8491;)</label>
                 <div class="field-row"><input type="text" inputmode="decimal" id="xrdLambda" value="1.5406">
-                  <div class="xrd-seg mode-seg" id="xrdModeL"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
+                  <button type="button" class="mode-chip" id="xrdModeL" title="Switch all / one">all</button></div></div>
             </div>
             <button class="btn secondary" id="xrdAddPeak" style="width:100%;padding:7px 9px">+ Add peak</button>
           </div>

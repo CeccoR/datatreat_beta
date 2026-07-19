@@ -129,7 +129,8 @@ import { Plot } from './plot.js';
     document.getElementById('taucNExp').textContent = p.a;
   }
   function syncTaucModeButtons(){
-    document.querySelectorAll('#taucModeAll button').forEach(btn=> btn.classList.toggle('active', btn.dataset.m===taucMode));
+    const c = document.getElementById('taucModeAll');
+    if (c) c.textContent = taucMode==='shared' ? 'all' : 'one';
   }
 
   // per-upload invalid names (files that were skipped); persists until all files are removed
@@ -477,10 +478,9 @@ import { Plot } from './plot.js';
 
   // Single all/one toggle: 'all' = one common param set + shared interval lines;
   // 'one' = every sample fully independent (params AND interval-line positions).
-  document.querySelectorAll('#taucModeAll button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      if (btn.classList.contains('active')) return;
-      const mode = btn.dataset.m;
+  document.getElementById('taucModeAll').addEventListener('click', ()=>{
+    {
+      const mode = taucMode==='shared' ? 'per' : 'shared';
       taucMode = mode;
       if (mode==='per'){
         // Each sample becomes independent: params inherit the current shared values,
@@ -499,7 +499,7 @@ import { Plot } from './plot.js';
       syncTaucModeButtons();
       writeStoreToInputs();
       if (files.length){ if (plot) updateTaucView(); hist.commit(); }
-    });
+    }
   });
 
   document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; writeStoreToInputs(); updateTaucView(); };
