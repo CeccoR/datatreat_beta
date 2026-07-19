@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DataTreat</title>
-  <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (DRS UV-Vis Tauc plots, XRPD, GC H₂ rates, EPR). All processing runs locally in your browser; no data is uploaded.">
+  <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (UV-Vis DRS Tauc plots, XRPD, GC H₂ rates, EPR). All processing runs locally in your browser; no data is uploaded.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <!-- PWA: installable + offline app shell -->
   <link rel="manifest" href="manifest.webmanifest">
@@ -14,13 +14,13 @@
   <!-- Open Graph / social preview -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="DataTreat">
-  <meta property="og:description" content="Browser-based scientific data analysis for spectroscopy and chromatography — DRS UV-Vis Tauc plots, XRPD, GC, EPR. Runs entirely in your browser; no data leaves your device.">
+  <meta property="og:description" content="Browser-based scientific data analysis for spectroscopy and chromatography — UV-Vis DRS Tauc plots, XRPD, GC, EPR. Runs entirely in your browser; no data leaves your device.">
   <meta property="og:url" content="https://ceccor.github.io/datatreat_beta/">
   <meta property="og:image" content="https://ceccor.github.io/datatreat_beta/og-image.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="DataTreat — browser-based scientific data analysis (DRS UV-Vis, XRPD, GC, EPR)">
+  <meta property="og:image:alt" content="DataTreat — browser-based scientific data analysis (UV-Vis DRS, XRPD, GC, EPR)">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DataTreat">
   <meta name="twitter:description" content="Browser-based scientific data analysis for spectroscopy and chromatography. Runs entirely in your browser; no data leaves your device.">
@@ -43,7 +43,7 @@
     <h1 style="font-size:19px"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#0e1316"/><path d="M5 23 H12 V9 H20 V23 H27" fill="none" stroke="#ffb454" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>DataTreat</h1>
     <nav id="nav" role="tablist" aria-label="Analysis modules">
       <button data-tab="home" class="active" role="tab" aria-selected="true" aria-controls="tab-home">Home</button>
-      <button data-tab="tauc" role="tab" aria-selected="false" aria-controls="tab-tauc">DRS UV-Vis</button>
+      <button data-tab="tauc" role="tab" aria-selected="false" aria-controls="tab-tauc">UV-Vis DRS</button>
       <button data-tab="xrd" role="tab" aria-selected="false" aria-controls="tab-xrd">XRPD</button>
       <button data-tab="gc" role="tab" aria-selected="false" aria-controls="tab-gc">GC</button>
       <button data-tab="epr" role="tab" aria-selected="false" aria-controls="tab-epr">EPR</button>
@@ -70,7 +70,7 @@
           <div class="home-card" data-go="tauc">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M42 22 C 28 22, 25 5, 2 4"/></svg></div>
             <div class="home-card-text">
-              <h3 class="txt-tile">DRS UV-Vis</h3>
+              <h3 class="txt-tile">UV-Vis DRS</h3>
               <p>Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (Eg) can be inferred through Tauc Plot analysis.</p>
             </div>
           </div>
@@ -177,7 +177,7 @@
 
     <!-- ============ TAUC ============ -->
     <section class="tab" id="tab-tauc" role="tabpanel" tabindex="0">
-      <div class="module-head"><h2 class="txt-title" style="margin:0">DRS UV-Vis</h2></div>
+      <div class="module-head"><h2 class="txt-title" style="margin:0">UV-Vis DRS</h2></div>
       <div class="instr-block">Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (E<sub>g</sub>) can be inferred through Tauc Plot analysis.</div>
       <div class="card project-bar" data-module="tauc"><input type="text" class="project-name-input" data-module="tauc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="tauc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="tauc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="tauc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="tauc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="tauc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
       <div class="card">

@@ -783,7 +783,7 @@ function redrawAll(){
   for (const m in _tabRedraw){ if (m !== _activeTab) _needsRedraw[m] = true; }
 }
 const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -1042,7 +1042,7 @@ function applyTheme(theme, persist){
 /* Module state access for the session manager: reuse each module's registered
    undo snapshot()/restore() as the canonical serialize/deserialize. */
 const MODULES = ['tauc','xrd','gc','epr'];
-const MODULE_LABELS = { tauc:'DRS UV-Vis', xrd:'XRPD', gc:'GC', epr:'EPR' };
+const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR' };
 function getModuleState(mod){
   const st = _histories[mod];
   return st ? st._snap() : null;
