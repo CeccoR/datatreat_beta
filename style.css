@@ -1556,7 +1556,7 @@ button.color-swatch:hover { border-color: var(--text); }
 #gcParamTableWrap .gc-grp { text-align: center; }
 #gcParamTableWrap .gc-toggle { margin-left: 8px; vertical-align: 1px; }
 #gcParamTableWrap .gc-all-row { background: rgba(160, 170, 185, 0.08); }
-#gcParamTableWrap .gc-all-row .fname { color: var(--muted); font-style: italic; }
+#gcParamTableWrap .gc-all-row .fname { color: var(--muted); }
 #gcParamTableWrap input[disabled] { opacity: .35; }
 #gcParamTableWrap input[readonly] { opacity: .6; cursor: default; }
 #gcParamTableWrap .gc-row { transition: background .1s; }

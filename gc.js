@@ -9,20 +9,23 @@ import { Plot, svgEl } from './plot.js';
   let ms=[], Qs=[], startArr=[], endArr=[], lightOnDates=[];
   let dataTables=[];
   let plot1, plot2;
-  // all/one per pair: 'all' = one shared value for every sample; 'one' = per-sample.
-  // Defaults preserve the historical behaviour: per-sample m/Q, one shared interval.
-  let mqMode='one', intMode='all';
+  // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
+  // Each of m, Q, start and end toggles independently. Defaults preserve the historical
+  // behaviour: per-sample m/Q, one shared interval.
+  let mMode='one', qMode='one', startMode='all', endMode='all';
   let mShared=15, qShared=2, startShared=0, endShared=24;
   let costResults=[];
   let gcSel=null, gcHov=null;   // selected / hovered sample index (interval interaction)
   let loadAlerts='';
   let gcUploadAlerts='';
 
-  // Effective per-sample values (respect the pair's all/one mode).
-  const mOf     = k => mqMode==='all'  ? mShared     : ms[k];
-  const qOf     = k => mqMode==='all'  ? qShared     : Qs[k];
-  const startOf = k => intMode==='all' ? startShared : startArr[k];
-  const endOf   = k => intMode==='all' ? endShared   : endArr[k];
+  // Effective per-sample values (respect each parameter's all/one mode).
+  const mOf     = k => mMode==='all'     ? mShared     : ms[k];
+  const qOf     = k => qMode==='all'     ? qShared     : Qs[k];
+  const startOf = k => startMode==='all' ? startShared : startArr[k];
+  const endOf   = k => endMode==='all'   ? endShared   : endArr[k];
+  // The plot shows per-sample interval lines (interactive) whenever either bound is per-sample.
+  const intPerSample = () => startMode==='one' || endMode==='one';
 
   function rebuildGcAlerts(){ document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts; }
 
@@ -121,21 +124,28 @@ import { Plot, svgEl } from './plot.js';
       files: files.map(f=>({...f})),
       ms: ms.slice(), Qs: Qs.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
       lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
-      mqMode, intMode, mShared, qShared, startShared, endShared,
+      mMode, qMode, startMode, endMode, mShared, qShared, startShared, endShared,
     };
   }
   function gcRestore(s){
     files = s.files.map(f=>({...f}));
     ms = s.ms.slice(); Qs = s.Qs.slice();
     lightOnDates = s.lightOnDates.map(t=> t!=null ? new Date(t) : null);
-    if (s.intMode !== undefined){
-      mqMode = s.mqMode; intMode = s.intMode;
+    if (s.mMode !== undefined){
+      // Current format: four independent per-parameter modes.
+      mMode = s.mMode; qMode = s.qMode; startMode = s.startMode; endMode = s.endMode;
+      mShared = s.mShared; qShared = s.qShared; startShared = s.startShared; endShared = s.endShared;
+      startArr = (s.startArr||files.map(()=>startShared)).slice();
+      endArr   = (s.endArr  ||files.map(()=>endShared)).slice();
+    } else if (s.intMode !== undefined){
+      // Migrate paired-mode projects (mqMode / intMode) to independent modes.
+      mMode = qMode = s.mqMode; startMode = endMode = s.intMode;
       mShared = s.mShared; qShared = s.qShared; startShared = s.startShared; endShared = s.endShared;
       startArr = (s.startArr||files.map(()=>startShared)).slice();
       endArr   = (s.endArr  ||files.map(()=>endShared)).slice();
     } else {
-      // Migrate old projects: a single global interval → interval 'all' mode.
-      mqMode='one'; intMode='all';
+      // Migrate the oldest projects: a single global interval → interval 'all' mode.
+      mMode='one'; qMode='one'; startMode='all'; endMode='all';
       mShared=15; qShared=2;
       startShared = s.plateauStart ?? 0; endShared = s.plateauEnd ?? 24;
       startArr = files.map(()=>startShared); endArr = files.map(()=>endShared);
@@ -168,28 +178,35 @@ import { Plot, svgEl } from './plot.js';
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
     if (!files.length){ wrap.innerHTML=''; return; }
-    const cg = `<colgroup><col style="width:15%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:26%"><col style="width:15%"></colgroup>`;
-    const mShareState = mqMode==='all' ? 'on' : 'off',  mCellState = mqMode==='all' ? 'ro' : 'on';
-    const iShareState = intMode==='all' ? 'on' : 'off', iCellState = intMode==='all' ? 'ro' : 'on';
+    const cg = `<colgroup><col style="width:15%"><col style="width:12%"><col style="width:12%"><col style="width:24%"><col style="width:11%"><col style="width:11%"><col style="width:15%"></colgroup>`;
+    const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
+    const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
+    // Column order: Sample | m | Q | Light-on | [Interval: start end] | warnings.
     let html = `<div style="overflow-x:auto"><table style="min-width:860px;width:100%;table-layout:fixed">${cg}<thead>
-      <tr><th rowspan="2">Sample</th><th colspan="2" class="gc-grp">Feed ${modeChip('mq',mqMode)}</th><th colspan="2" class="gc-grp">Interval (h) ${modeChip('int',intMode)}</th><th rowspan="2">Light-on date/time</th><th rowspan="2"></th></tr>
-      <tr><th>m (g)</th><th>Q (mL/min)</th><th>start</th><th>end</th></tr></thead><tbody>`;
+      <tr><th rowspan="2">Sample</th>
+        <th rowspan="2">m (g) ${modeChip('m',mMode)}</th>
+        <th rowspan="2">Q (mL/min) ${modeChip('q',qMode)}</th>
+        <th rowspan="2">Light-on date/time</th>
+        <th colspan="2" class="gc-grp">Interval (h)</th>
+        <th rowspan="2"></th></tr>
+      <tr><th>start ${modeChip('start',startMode)}</th><th>end ${modeChip('end',endMode)}</th></tr></thead><tbody>`;
     // Shared "all" row
     html += `<tr class="gc-all-row"><td class="fname">All</td>
-      <td>${numCell('gcShared','data-f="m"',mShared,mShareState)}</td>
-      <td>${numCell('gcShared','data-f="q"',qShared,mShareState)}</td>
-      <td>${numCell('gcShared','data-f="start"',startShared,iShareState)}</td>
-      <td>${numCell('gcShared','data-f="end"',endShared,iShareState)}</td>
-      <td></td><td></td></tr>`;
+      <td>${numCell('gcShared','data-f="m"',mShared,shareState(mMode))}</td>
+      <td>${numCell('gcShared','data-f="q"',qShared,shareState(qMode))}</td>
+      <td></td>
+      <td>${numCell('gcShared','data-f="start"',startShared,shareState(startMode))}</td>
+      <td>${numCell('gcShared','data-f="end"',endShared,shareState(endMode))}</td>
+      <td></td></tr>`;
     // Per-sample rows
     files.forEach((f,i)=>{
       html += `<tr class="gc-row" data-i="${i}">
         <td class="fname" title="${f.label}">${f.label}</td>
-        <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),mCellState)}</td>
-        <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),mCellState)}</td>
-        <td>${numCell('gcCell','data-i="'+i+'" data-f="start"',startOf(i),iCellState)}</td>
-        <td>${numCell('gcCell','data-i="'+i+'" data-f="end"',endOf(i),iCellState)}</td>
+        <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),cellState(mMode))}</td>
+        <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),cellState(qMode))}</td>
         <td class="gc-date-cell" data-i="${i}"></td>
+        <td>${numCell('gcCell','data-i="'+i+'" data-f="start"',startOf(i),cellState(startMode))}</td>
+        <td>${numCell('gcCell','data-i="'+i+'" data-f="end"',endOf(i),cellState(endMode))}</td>
         <td class="gc-warn-cell">${lightOnWarnHtml(i)}</td>
       </tr>`;
     });
@@ -197,16 +214,18 @@ import { Plot, svgEl } from './plot.js';
     wrap.innerHTML = html;
     fitCsvIcons();
 
-    // all/one toggles: flip a pair, seeding across the boundary (one→all from sample 0,
-    // all→one from the shared value), then re-render + recompute.
+    // all/one toggles: flip a parameter, seeding across the boundary (one→all from
+    // sample 0, all→one from the shared value), then re-render + recompute.
     wrap.querySelectorAll('.gc-toggle').forEach(btn=> btn.addEventListener('click', ()=>{
-      if (btn.dataset.pair==='mq'){
-        if (mqMode==='one'){ mqMode='all'; mShared=ms[0]; qShared=Qs[0]; }
-        else { mqMode='one'; files.forEach((f,i)=>{ ms[i]=mShared; Qs[i]=qShared; }); }
-      } else {
-        if (intMode==='one'){ intMode='all'; startShared=startArr[0]; endShared=endArr[0]; }
-        else { intMode='one'; files.forEach((f,i)=>{ startArr[i]=startShared; endArr[i]=endShared; }); }
-        gcSel=gcHov=null;
+      const flip = (mode, shared, arr, setShared)=>{
+        if (mode==='one'){ setShared(arr[0]); return 'all'; }
+        files.forEach((f,i)=>{ arr[i]=shared; }); return 'one';
+      };
+      switch (btn.dataset.pair){
+        case 'm':     mMode     = flip(mMode,     mShared,     ms,       v=>mShared=v);     break;
+        case 'q':     qMode     = flip(qMode,     qShared,     Qs,       v=>qShared=v);     break;
+        case 'start': startMode = flip(startMode, startShared, startArr, v=>startShared=v); gcSel=gcHov=null; break;
+        case 'end':   endMode   = flip(endMode,   endShared,   endArr,   v=>endShared=v);   gcSel=gcHov=null; break;
       }
       renderGcParamTable(); computeAndRenderGc(); hist.commit();
     }));
@@ -216,21 +235,19 @@ import { Plot, svgEl } from './plot.js';
       guardNumericInput(inp, { min:0.001 });
       inp.addEventListener('change', ()=>{ apply(+inp.value); computeAndRenderGc(); hist.commit(); });
     };
-    wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mqMode==='all' && wireNum(inp, v=>mShared=v));
-    wrap.querySelectorAll('.gcShared[data-f="q"]').forEach(inp=> mqMode==='all' && wireNum(inp, v=>qShared=v));
-    wrap.querySelectorAll('.gcCell[data-f="m"]').forEach(inp=>{ if(mqMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>ms[i]=v); }});
-    wrap.querySelectorAll('.gcCell[data-f="q"]').forEach(inp=>{ if(mqMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Qs[i]=v); }});
+    wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mMode==='all' && wireNum(inp, v=>mShared=v));
+    wrap.querySelectorAll('.gcShared[data-f="q"]').forEach(inp=> qMode==='all' && wireNum(inp, v=>qShared=v));
+    wrap.querySelectorAll('.gcCell[data-f="m"]').forEach(inp=>{ if(mMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>ms[i]=v); }});
+    wrap.querySelectorAll('.gcCell[data-f="q"]').forEach(inp=>{ if(qMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Qs[i]=v); }});
 
-    // start/end pairs (enforce end>start; only the active mode's inputs are wired).
-    if (intMode==='all'){
-      wireStartEnd(wrap.querySelector('.gcShared[data-f="start"]'), wrap.querySelector('.gcShared[data-f="end"]'),
-        ()=>({start:startShared,end:endShared}), (s,e)=>{ startShared=s; endShared=e; });
-    } else {
-      files.forEach((f,i)=>{
-        wireStartEnd(wrap.querySelector(`.gcCell[data-i="${i}"][data-f="start"]`), wrap.querySelector(`.gcCell[data-i="${i}"][data-f="end"]`),
-          ()=>({start:startArr[i],end:endArr[i]}), (s,e)=>{ startArr[i]=s; endArr[i]=e; });
-      });
-    }
+    // start/end inputs — start and end can be in different modes, so each input is wired
+    // independently and validated against the effective counterpart (end>start per sample).
+    if (startMode==='all') wireBoundInput(wrap.querySelector('.gcShared[data-f="start"]'), 'start', true, 0);
+    if (endMode==='all')   wireBoundInput(wrap.querySelector('.gcShared[data-f="end"]'),   'end',   true, 0);
+    files.forEach((f,i)=>{
+      if (startMode==='one') wireBoundInput(wrap.querySelector(`.gcCell[data-i="${i}"][data-f="start"]`), 'start', false, i);
+      if (endMode==='one')   wireBoundInput(wrap.querySelector(`.gcCell[data-i="${i}"][data-f="end"]`),   'end',   false, i);
+    });
 
     wrap.querySelectorAll('.gc-date-cell').forEach(cell=>{
       const i = +cell.dataset.i;
@@ -254,22 +271,32 @@ import { Plot, svgEl } from './plot.js';
     refreshGcRows();
   }
 
-  // Wire a start/end input pair: guard rejects non-numbers; a valid change that keeps
-  // end>start applies + redraws, else it shakes the offending field and reverts.
-  function wireStartEnd(startInp, endInp, get, set){
-    if (!startInp || !endInp) return;
-    [[startInp,'start'],[endInp,'end']].forEach(([inp,which])=>{
-      guardNumericInput(inp, {});
-      inp.addEventListener('change', ()=>{
-        const cur = get(), v = parseIntervalField(inp.value);
-        if (v===null){ inp.value = cur[which]; return; }
-        const ns = which==='start' ? v : cur.start, ne = which==='end' ? v : cur.end;
-        if (ne <= ns){ flashFieldInvalid(inp); inp.value = cur[which]; return; }
-        set(ns, ne);
-        updateRegression(); hist.commit();
-      });
-      inp.addEventListener('keydown', e=>{ if (e.key==='Enter') inp.blur(); });
+  // Wire a single interval-bound input (start or end; shared or per-sample i). Since the
+  // two bounds can be in different all/one modes, each input validates against the
+  // effective counterpart so that end>start holds for every affected sample. Invalid
+  // input shakes the field and reverts.
+  function wireBoundInput(inp, which, isShared, i){
+    if (!inp) return;
+    guardNumericInput(inp, {});
+    inp.addEventListener('change', ()=>{
+      const cur = isShared ? (which==='start'?startShared:endShared) : (which==='start'?startArr[i]:endArr[i]);
+      const v = parseIntervalField(inp.value);
+      if (v===null){ inp.value = cur; return; }
+      let ok;
+      if (which==='start'){
+        // A shared start must stay below every sample's end; a per-sample start below its own end.
+        const endBound = isShared ? (endMode==='all' ? endShared : Math.min(...endArr)) : endOf(i);
+        ok = v < endBound;
+      } else {
+        const startBound = isShared ? (startMode==='all' ? startShared : Math.max(...startArr)) : startOf(i);
+        ok = v > startBound;
+      }
+      if (!ok){ flashFieldInvalid(inp); inp.value = cur; return; }
+      if (isShared){ if (which==='start') startShared=v; else endShared=v; }
+      else { if (which==='start') startArr[i]=v; else endArr[i]=v; }
+      updateRegression(); hist.commit();
     });
+    inp.addEventListener('keydown', e=>{ if (e.key==='Enter') inp.blur(); });
   }
 
   // Parse a raw field string into a finite number, or null if incomplete/invalid.
@@ -321,8 +348,7 @@ import { Plot, svgEl } from './plot.js';
   function drawGcData(){
     if (!plot1 || !plot2 || !dataTables.length) return;
     const allT = dataTables.flatMap(d=>d.t);
-    const intPts = intMode==='all' ? [startShared, endShared]
-                                   : dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
+    const intPts = dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
     const tmin = Math.min(0, minArr(allT), ...intPts);
     const tmax = Math.max(maxArr(allT), ...intPts);
     const ymax1 = Math.max(...dataTables.map(d=>maxArr(d.h2Fm))), ymin1 = Math.min(...dataTables.map(d=>minArr(d.h2Fm)));
@@ -358,7 +384,7 @@ import { Plot, svgEl } from './plot.js';
         g.appendChild(ht);
       }
     };
-    if (intMode==='all'){
+    if (!intPerSample()){
       vline(startShared, {width:1.5, cls:'gc-int-hl'});
       vline(endShared,   {width:1.5, cls:'gc-int-hl'});
     } else {
@@ -377,14 +403,14 @@ import { Plot, svgEl } from './plot.js';
     gcHoverRAF = requestAnimationFrame(()=>{ gcHoverRAF=null; setGcHover(null); });
   }
   function setGcHover(k){
-    if (intMode!=='one') k = null;
+    if (!intPerSample()) k = null;
     if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
     if (gcHov === k) return;
     gcHov = k;
     drawGcIntervals(plot1); drawGcIntervals(plot2); refreshGcRows();
   }
   function selectGc(k){
-    if (intMode!=='one') return;
+    if (!intPerSample()) return;
     // Clear any transient hover so the green .hovering tint doesn't linger after a
     // click (mirrors the XRD peak table, whose full re-render drops it).
     if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
