@@ -1327,6 +1327,74 @@ button.color-swatch:hover { border-color: var(--text); }
   font-weight: 500;
   margin: 0;
 }
+
+/* ===== Plot header row: sample nav on the left, a corner action button whose
+   right edge lines up with the plot's right edge (padding-right = toolbar col:
+   32px button + 8px gap). The button is 1/3 of the plot width. ===== */
+.plot-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-right: 40px;
+}
+.plot-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.plot-corner-btn {
+  flex: 0 0 33.333%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 9px;
+}
+
+/* ===== Parameter panel: mini section header with the all/one chip, then a
+   2fr/1fr grid so every field sits on the title's row (title ≤2/3, field 1/3);
+   long titles wrap within their 2/3 column instead of overflowing. ===== */
+.param-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.param-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  column-gap: 10px;
+  row-gap: 9px;
+  align-items: center;
+}
+.param-grid > label {
+  margin: 0;
+  align-self: center;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
+/* Info outputs: keep them full-width where they sit, but bare (no field box) —
+   they read like the titles, with the value in accent. */
+.param-grid > .pg-stat {
+  grid-column: 1 / -1;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.param-grid > .pg-stat.pg-gap { margin-top: 6px; }
 /* Remove top margin on first label in parameter panels */
 .col > label:first-child,
 .col > label:first-of-type {
