@@ -349,14 +349,17 @@
         <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (contains the whole Kα₁+Kα₂ doublet). K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². The Results chart shows size both without and (if a standard is set) with this correction. The Kα₂-deconvolved profile fit lives in the <b>Fitting</b> panel below.</div>
         <div id="xrdAnalysisEmpty" style="display:none;color:var(--muted);font-size:14px;padding:18px 0 6px">All loaded files are set as the instrumental standard — load additional samples to analyse them here.</div>
         <div id="xrdAnalysisContent">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <button class="btn secondary nav-arrow" id="xrdPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
-          <span id="xrdIdx" class="pill" style="margin:0">1/1</span>
-          <button class="btn secondary nav-arrow" id="xrdNext" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
-          <span class="plot-subtitle" id="xrdCurrentLabel">—</span>
-        </div>
-        <div class="row" style="align-items:stretch">
+        <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left">
+                <button class="btn secondary nav-arrow" id="xrdPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
+                <span id="xrdIdx" class="pill" style="margin:0">1/1</span>
+                <button class="btn secondary nav-arrow" id="xrdNext" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
+                <span class="plot-subtitle" id="xrdCurrentLabel">—</span>
+              </div>
+              <button class="btn secondary plot-corner-btn" id="xrdAddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
+            </div>
             <div class="plot-wrap">
               <svg class="plot" id="xrdSvg" style="height:460px"></svg>
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv,peaks.csv" data-dl-name="XRPD_sample.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
@@ -368,35 +371,32 @@
               <span><i style="background:#5fcf6a"></i>peaks</span>
             </div>
           </div>
-          <div class="col mw280" style="align-self:flex-start;display:flex;flex-direction:column;gap:11px">
-            <div><label>Normalization</label>
-              <select id="xrdNorm"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select></div>
-            <div><label>Smoothing window (pts)</label>
-              <div class="field-row"><input type="number" id="xrdSmooth" value="10" min="1">
-                <button type="button" class="mode-chip" id="xrdModeN" title="Switch all / one">all</button></div></div>
-            <div><label>Baseline SNIP window (pts)</label>
-              <div class="field-row"><input type="number" id="xrdBlWin" value="150" min="1">
-                <button type="button" class="mode-chip" id="xrdModeBl" title="Switch all / one">all</button></div></div>
-            <div class="field-half">
-              <div><label>Peak min. height (%)</label>
-                <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkHeight" value="5">
-                  <button type="button" class="mode-chip" id="xrdModeH" title="Switch all / one">one</button></div></div>
-              <div><label>Peak min. prom. (%)</label>
-                <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkProm" value="3">
-                  <button type="button" class="mode-chip" id="xrdModeP" title="Switch all / one">one</button></div></div>
+          <div class="col mw280" style="align-self:flex-start">
+            <div class="param-grid">
+              <label>Normalization</label>
+              <select id="xrdNorm" class="pg-field"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select>
+
+              <div class="pg-title">Smoothing window (pts) <button type="button" class="mode-chip" id="xrdModeN" title="Switch all / one">all</button></div>
+              <input type="number" class="pg-field" id="xrdSmooth" value="10" min="1">
+
+              <div class="pg-title">Baseline SNIP window (pts) <button type="button" class="mode-chip" id="xrdModeBl" title="Switch all / one">all</button></div>
+              <input type="number" class="pg-field" id="xrdBlWin" value="150" min="1">
+
+              <div class="pg-title">Peak min. height (%) <button type="button" class="mode-chip" id="xrdModeH" title="Switch all / one">one</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkHeight" value="5">
+
+              <div class="pg-title">Peak min. prominence (%) <button type="button" class="mode-chip" id="xrdModeP" title="Switch all / one">one</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkProm" value="3">
+
+              <div class="pg-title">Peak min. distance (&#176;2&#952;) <button type="button" class="mode-chip" id="xrdModeD" title="Switch all / one">one</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkDist" value="0.3">
+
+              <div class="pg-title">Shape factor K <button type="button" class="mode-chip" id="xrdModeK" title="Switch all / one">all</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdK" value="0.9">
+
+              <div class="pg-title">Wavelength &#955; (&#8491;) <button type="button" class="mode-chip" id="xrdModeL" title="Switch all / one">all</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdLambda" value="1.5406">
             </div>
-            <div><label>Peak min. distance (degrees 2&#952;)</label>
-              <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkDist" value="0.3">
-                <button type="button" class="mode-chip" id="xrdModeD" title="Switch all / one">one</button></div></div>
-            <div class="field-half">
-              <div><label>Shape factor K</label>
-                <div class="field-row"><input type="text" inputmode="decimal" id="xrdK" value="0.9">
-                  <button type="button" class="mode-chip" id="xrdModeK" title="Switch all / one">all</button></div></div>
-              <div><label>&#955; (&#8491;)</label>
-                <div class="field-row"><input type="text" inputmode="decimal" id="xrdLambda" value="1.5406">
-                  <button type="button" class="mode-chip" id="xrdModeL" title="Switch all / one">all</button></div></div>
-            </div>
-            <button class="btn secondary" id="xrdAddPeak" style="width:100%;padding:7px 9px">+ Add peak</button>
           </div>
         </div>
         <div class="peak-box" id="xrdPeakBox">

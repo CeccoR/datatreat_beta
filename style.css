@@ -1375,12 +1375,21 @@ button.color-swatch:hover { border-color: var(--text); }
   row-gap: 9px;
   align-items: center;
 }
-.param-grid > label {
+.param-grid > label,
+.param-grid > .pg-title {
   margin: 0;
   align-self: center;
   font-size: 13px;
   color: var(--muted);
   line-height: 1.35;
+}
+/* Title cell that carries an inline all/one chip right after the text */
+.param-grid > .pg-title {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
 /* Info outputs: keep them full-width where they sit, but bare (no field box) —
