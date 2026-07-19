@@ -65,7 +65,7 @@
     <section class="tab active" id="tab-home" role="tabpanel" tabindex="0">
       <div class="card">
         <h2>Pick your technique.</h2>
-        <p class="hint" style="margin-bottom:18px">Analyze your data.</p>
+        <p class="txt-meta" style="margin-bottom:18px">Analyze your data.</p>
         <div class="home-grid">
           <div class="home-card" data-go="tauc">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M42 22 C 28 22, 25 5, 2 4"/></svg></div>
@@ -158,7 +158,7 @@
             <button class="btn secondary small" id="sessImportBtn">Import .json</button>
           </div>
         </div>
-        <p class="hint" style="margin-top:6px">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</p>
+        <p class="txt-meta" style="margin-top:6px">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</p>
         <div class="row" style="gap:10px;margin-top:12px">
           <div class="col mw200" style="flex:2">
             <label style="margin-top:0">Filter by name</label>
@@ -182,7 +182,7 @@
         <div class="dropzone" id="taucDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="dz-hint">.csv, .txt</div>
+          <div class="txt-meta">.csv, .txt</div>
           <input type="file" id="taucFiles" multiple accept=".csv,.txt" style="display:none">
         </div>
         <div id="taucAlerts"></div>
@@ -190,7 +190,7 @@
       </div>
 
       <div class="card" id="taucWorkspace" style="display:none">
-        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
         <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest line positions</b> to place them automatically from the absorption edge (second-derivative method). Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 0.5 for indirect semiconductors and 2 for direct semiconductors.</div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
@@ -199,7 +199,7 @@
                 <button class="btn secondary nav-arrow" id="taucPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
                 <span id="taucIdx" class="pill" style="margin:0">1/1</span>
                 <button class="btn secondary nav-arrow" id="taucNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
-                <span class="plot-subtitle" id="taucCurrentLabel">—</span>
+                <span class="txt-caption" id="taucCurrentLabel">—</span>
               </div>
               <button class="btn secondary plot-corner-btn" id="taucSuggest" title="Propose optimal Tauc-region and baseline line positions from the absorption edge">&#10022; Suggest line positions</button>
             </div>
@@ -217,7 +217,7 @@
             <div id="taucAlert"></div>
           </div>
           <div class="col mw280" style="align-self:flex-start">
-            <div class="param-head aligned">Parameters <button type="button" class="mode-chip" id="taucModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
             <div class="param-grid">
               <label>Tauc exponent</label>
               <select id="taucA" class="pg-field">
@@ -244,20 +244,20 @@
       </div>
 
       <div class="card" id="taucResults" style="display:none">
-        <h3 style="margin:0 0 12px">RESULTS</h3>
-        <p class="chart-title">Kubelka-Munk Function</p>
+        <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
+        <p class="txt-caption">Kubelka-Munk Function</p>
         <div class="plot-wrap">
           <svg class="plot" id="taucResSvg0" style="height:640px"></svg>
           <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg0" data-csv-mod="tauc" data-csv-names="reflectance_FR.csv" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
         <div id="taucResLegend0" class="legend" style="margin-bottom:18px"></div>
-        <p class="chart-title">Tauc Plot</p>
+        <p class="txt-caption">Tauc Plot</p>
         <div class="plot-wrap">
           <svg class="plot" id="taucResSvg1" style="height:640px"></svg>
           <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg1" data-csv-mod="tauc" data-csv-names="tauc_plot.csv" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
         <div id="taucResLegend1" class="legend" style="margin-bottom:18px"></div>
-        <p class="chart-title" id="taucBarTitle" style="margin-bottom:8px">Energy Band Gap</p>
+        <p class="txt-caption" id="taucBarTitle" style="margin-bottom:8px">Energy Band Gap</p>
         <div class="row" style="align-items:flex-start;gap:16px">
           <div class="col" style="flex:1">
             <div class="plot-wrap">
@@ -289,20 +289,20 @@
         <div class="dropzone" id="xrdDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="dz-hint">.xrdml, .xml</div>
+          <div class="txt-meta">.xrdml, .xml</div>
           <input type="file" id="xrdFiles" multiple accept=".xrdml,.xml" style="display:none">
         </div>
         <div id="xrdAlerts"></div>
         <div id="xrdFileTableWrap"></div>
       </div>
       <div class="card" id="xrdStdCard" style="display:none">
-        <h3 style="margin:0 0 0">INSTRUMENTAL STANDARD</h3>
+        <h3 class="txt-head" style="margin:0 0 0">Instrumental standard</h3>
         <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. No crystallite size is computed for the standard itself, so the size column is omitted from its peak table.</div>
         <div style="max-width:340px;margin-bottom:6px"><label>Instrumental standard</label>
           <select id="xrdStandard"><option value="">None</option></select></div>
         <div id="xrdStdBody" style="display:none">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span class="plot-subtitle" id="xrdStdLabel">—</span>
+            <span class="txt-caption" id="xrdStdLabel">—</span>
           </div>
           <div class="row" style="align-items:stretch">
             <div class="col mw520" style="flex:2">
@@ -335,7 +335,7 @@
           </div>
           <div class="peak-box" id="xrdStdPeakBox">
             <div class="peak-box-head">
-              <span class="peak-box-title">Detected peaks</span>
+              <span class="txt-mini">Detected peaks</span>
               <button class="btn secondary peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
               <button class="btn secondary table-csv-btn" data-csv-mod="xrd" data-csv-names="standard.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
             </div>
@@ -345,7 +345,7 @@
       </div>
 
       <div class="card" id="xrdWorkspace" style="display:none">
-        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
         <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (contains the whole Kα₁+Kα₂ doublet). K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². The Results chart shows size both without and (if a standard is set) with this correction. The Kα₂-deconvolved profile fit lives in the <b>Fitting</b> panel below.</div>
         <div id="xrdAnalysisEmpty" style="display:none;color:var(--muted);font-size:14px;padding:18px 0 6px">All loaded files are set as the instrumental standard — load additional samples to analyse them here.</div>
         <div id="xrdAnalysisContent">
@@ -356,7 +356,7 @@
                 <button class="btn secondary nav-arrow" id="xrdPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
                 <span id="xrdIdx" class="pill" style="margin:0">1/1</span>
                 <button class="btn secondary nav-arrow" id="xrdNext" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
-                <span class="plot-subtitle" id="xrdCurrentLabel">—</span>
+                <span class="txt-caption" id="xrdCurrentLabel">—</span>
               </div>
               <button class="btn secondary plot-corner-btn" id="xrdAddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
             </div>
@@ -372,7 +372,7 @@
             </div>
           </div>
           <div class="col mw280" style="align-self:flex-start">
-            <div class="param-head aligned">Parameters</div>
+            <div class="txt-mini param-head aligned">Parameters</div>
             <div class="param-grid">
               <label>Normalization</label>
               <select id="xrdNorm" class="pg-field"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select>
@@ -402,7 +402,7 @@
         </div>
         <div class="peak-box" id="xrdPeakBox">
           <div class="peak-box-head">
-            <span class="peak-box-title">Detected peaks</span>
+            <span class="txt-mini">Detected peaks</span>
             <button class="btn secondary peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
             <button class="btn secondary table-csv-btn" data-csv-mod="xrd" data-csv-names="peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
@@ -412,13 +412,13 @@
       </div>
 
       <div class="card" id="xrdFitCard" style="display:none">
-        <h3 style="margin:0 0 0">FITTING</h3>
+        <h3 class="txt-head" style="margin:0 0 0">Fitting</h3>
         <div class="instr-block">Cu Kα₂-deconvolved whole-pattern fit. The raw pattern (open circles) and the peaks inherited from the Analysis peak search are shown; press <b>Fit sample</b>/<b>Fit all</b> to fit a sum of Kα₁/Kα₂ doublets (Kα₁ + ½·Kα₂ at +Δ2θ) plus a polynomial background, all refined together (Levenberg–Marquardt). Profile, asymmetry and other hyperparameters are in <i>Sample fit settings</i>. By default each fit restarts from the SNIP baseline and the current peak search (manual peaks kept); a setting lets it instead continue from the last fit. A chosen <b>standard</b> (LaB₆…) is fitted with the FCJ axial-divergence kernel via <b>Fit standard</b> to calibrate the instrument geometry. The fitted doublet, its Kα₁/Kα₂ components and the residual (with Rwp) appear once a fit exists.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <button class="btn secondary nav-arrow" id="xrdFitPrev" aria-label="Previous sample">&#8249;</button>
           <span id="xrdFitIdx" class="pill" style="margin:0">1/1</span>
           <button class="btn secondary nav-arrow" id="xrdFitNext" aria-label="Next sample">&#8250;</button>
-          <span class="plot-subtitle" id="xrdFitLabel">—</span>
+          <span class="txt-caption" id="xrdFitLabel">—</span>
         </div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
@@ -457,7 +457,7 @@
         </div>
         <div class="peak-box" id="xrdFitPeakBox">
           <div class="peak-box-head">
-            <span class="peak-box-title">Fitted peaks</span>
+            <span class="txt-mini">Fitted peaks</span>
             <button class="btn secondary table-csv-btn" data-csv-mod="xrd" data-csv-names="fit_peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="xrdFitTableWrap"></div>
@@ -465,16 +465,16 @@
       </div>
 
       <div class="card" id="xrdResults" style="display:none">
-        <h3 style="margin:0 0 12px">RESULTS</h3>
+        <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
         <div class="row" style="align-items:flex-start;gap:16px">
           <div class="col mw320" style="flex:1">
-            <p class="chart-title">Analysis</p>
+            <p class="txt-caption">Analysis</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdResSvg" style="height:560px"></svg>
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResLegend" class="legend"></div>
-            <p class="chart-title" style="margin:18px 0 6px">Crystallite size</p>
+            <p class="txt-caption" style="margin:18px 0 6px">Crystallite size</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdSizeBarSvg" style="height:420px"></svg>
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="xrdSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
@@ -482,13 +482,13 @@
             <div id="xrdSizeBarLegend" class="legend"></div>
           </div>
           <div class="col mw320" style="flex:1">
-            <p class="chart-title">Fit</p>
+            <p class="txt-caption">Fit</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdResFitSvg" style="height:560px"></svg>
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-csv-mod="xrd" data-csv-names="fits.csv" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResFitLegend" class="legend"></div>
-            <p class="chart-title" style="margin:18px 0 6px">Crystallite size (fit)</p>
+            <p class="txt-caption" style="margin:18px 0 6px">Crystallite size (fit)</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdFitSizeBarSvg" style="height:420px"></svg>
               <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSizeBarSvg" data-csv-mod="xrd" data-csv-names="fit_crystallite_size.csv" data-dl-name="XRPD_crystallite_size_fit.svg" data-dl-legend="xrdFitSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
@@ -592,7 +592,7 @@
         <div class="dropzone" id="gcDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="dz-hint">.csv</div>
+          <div class="txt-meta">.csv</div>
           <input type="file" id="gcFiles" multiple accept=".csv" style="display:none">
         </div>
         <div id="gcAlerts"></div>
@@ -601,18 +601,18 @@
 
       <!-- Plots card -->
       <div class="card" id="gcResults" style="display:none">
-        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
         <div class="instr-block">Set catalyst mass (m), carrier gas flow rate (Q), the light-on time and the integration interval for each sample to compute mean H₂ production rates. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on both plots (and vice-versa).</div>
         <div class="peak-box" style="margin-top:0;margin-bottom:14px">
           <div class="peak-box-head">
-            <span class="peak-box-title">Parameters</span>
+            <span class="txt-mini">Parameters</span>
             <button class="btn secondary table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="gcParamTableWrap"></div>
         </div>
         <div class="row" style="align-items:flex-start">
           <div class="col" style="flex:1">
-            <p class="chart-title">H₂ Production</p>
+            <p class="txt-caption">H₂ Production</p>
             <div class="plot-wrap" style="margin-bottom:6px">
               <svg class="plot" id="gcSvg1" style="height:305px"></svg>
               <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg1" data-csv-mod="gc" data-csv-names="gc_timeseries.csv" data-dl-name="GC_H2_rate.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
@@ -628,7 +628,7 @@
 
       <!-- Bar chart + Summary card -->
       <div class="card" id="gcResultsBar" style="display:none">
-        <h3 style="margin:0 0 12px">RESULTS</h3>
+        <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
         <div class="row" style="align-items:flex-start">
           <div class="col" style="flex:1">
             <div class="plot-wrap">
@@ -658,7 +658,7 @@
         <div class="dropzone" id="eprDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="dz-hint">.DTA / .DSC (Bruker BES3T pairs)</div>
+          <div class="txt-meta">.DTA / .DSC (Bruker BES3T pairs)</div>
           <input type="file" id="eprFiles" multiple accept=".dta,.DTA,.dsc,.DSC" style="display:none">
         </div>
         <div id="eprAlerts"></div>
@@ -666,7 +666,7 @@
         <div id="eprFileTableWrap"></div>
       </div>
       <div class="card" id="eprWorkspace" style="display:none">
-        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
         <div class="instr-block">Spectra are normalized and stacked for visual comparison. Adjust the smoothing window and normalization mode as needed.</div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">

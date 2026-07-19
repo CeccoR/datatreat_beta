@@ -439,18 +439,24 @@ main {
   .col,
   .mw520, .mw320, .mw280, .mw260, .mw220, .mw200 { min-width: 100%; }
 }
-h2 {
+/* ===== Text style tokens — reusable named classes (also aliased onto the semantic
+   tags so existing markup keeps its style). See also .txt-mini / .txt-caption /
+   .txt-meta below. ===== */
+h2, .txt-title {            /* page / module title */
   margin-top: 0;
   font-size: 18px;
+  font-weight: 700;
   color: var(--text);
 }
-h3 {
+h3, .txt-head {             /* card header */
   font-size: 14px;
+  font-weight: 700;
   color: var(--text);
   letter-spacing: 0.08em;
   margin: 0 0 8px;
 }
-label {
+.txt-head { text-transform: uppercase; }   /* forced — no hand-typed caps in the HTML */
+label, .txt-label {         /* field label */
   font-size: 13px;
   color: var(--muted);
   display: block;
@@ -635,10 +641,10 @@ td input.label-input {
   color: var(--muted);
   margin-right: 6px;
 }
-.hint {
+/* Meta token: small secondary text (intro lines, empty-state notes, dropzone hints) */
+.txt-meta {
   font-size: 12px;
   color: var(--muted);
-  margin-top: 4px;
 }
 .flex-between {
   display: flex;
@@ -867,10 +873,6 @@ footer a:hover {
   color: var(--text);
   font-weight: 600;
   margin-bottom: 4px;
-}
-.dropzone .dz-hint {
-  font-size: 12px;
-  color: var(--muted);
 }
 .dropzone input[type="file"] {
   display: none;
@@ -1321,12 +1323,6 @@ button.color-swatch:hover { border-color: var(--text); }
   line-height: 1;
   border-radius: 6px;
 }
-.plot-subtitle {
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 500;
-  margin: 0;
-}
 
 /* ===== Plot header row: sample nav on the left, a corner action button whose
    right edge lines up with the plot's right edge (padding-right = toolbar col:
@@ -1357,15 +1353,19 @@ button.color-swatch:hover { border-color: var(--text); }
 /* ===== Parameter panel: mini section header with the all/one chip, then a
    3fr/2fr grid so every field sits on the title's row (title 3/5, field 2/5);
    long titles wrap within their 3/5 column instead of overflowing. ===== */
-.param-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* Mini-header token: PARAMETERS, DETECTED PEAKS, FITTED PEAKS … */
+.txt-mini {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--muted);
+}
+/* .param-head is layout-only now (the font comes from .txt-mini on the same tag) */
+.param-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
 }
 /* Desktop: drop the header down so its top lines up with the plot's top edge
@@ -1416,12 +1416,14 @@ button.color-swatch:hover { border-color: var(--text); }
 }
 
 /* ===== Chart titles in results ===== */
-.chart-title {
+/* Caption token: chart titles (block <p>) and current-sample labels (inline <span>) */
+.txt-caption {
   font-size: 13px;
   color: var(--muted);
   font-weight: 500;
   margin: 0 0 6px;
 }
+span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row */
 
 /* ===== Instruction block ===== */
 .instr-block {
@@ -1528,13 +1530,6 @@ button.color-swatch:hover { border-color: var(--text); }
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
-}
-.peak-box-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  letter-spacing: .06em;
-  text-transform: uppercase;
 }
 .peak-reset-btn {
   padding: 3px 12px !important;
@@ -1661,7 +1656,7 @@ button.color-swatch:hover { border-color: var(--text); }
 .dropzone.dz-loading { pointer-events: none; }
 .dropzone.dz-loading .dz-icon,
 .dropzone.dz-loading .dz-title,
-.dropzone.dz-loading .dz-hint { opacity: 0.2; }
+.dropzone.dz-loading .txt-meta { opacity: 0.2; }
 .dropzone.dz-loading::before {
   content: '';
   position: absolute;

@@ -319,8 +319,8 @@ async function renderList(){
   const wrap = document.getElementById('sessListWrap');
   if (!wrap) return;
   const rows = sortRows(_cache.filter(passesFilter));
-  if (!_cache.length){ wrap.innerHTML = '<p class="hint">No saved projects yet. Load data in a module and press “Save project”.</p>'; updateBulkState(); return; }
-  if (!rows.length){ wrap.innerHTML = '<p class="hint">No projects match the current filters.</p>'; updateBulkState(); return; }
+  if (!_cache.length){ wrap.innerHTML = '<p class="txt-meta">No saved projects yet. Load data in a module and press “Save project”.</p>'; updateBulkState(); return; }
+  if (!rows.length){ wrap.innerHTML = '<p class="txt-meta">No projects match the current filters.</p>'; updateBulkState(); return; }
   // checkbox fixed, actions sized to its icons, the rest split the remaining space equally
   let html = '<div class="table-wrap-box sess-table-box"><table class="sess-table"><colgroup><col style="width:30px"><col><col><col><col style="width:104px"></colgroup>'
     + '<thead><tr><th></th>'
