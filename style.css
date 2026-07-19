@@ -81,6 +81,9 @@
 /* Error bars + their value labels: visible in both themes (override inline #fff) */
 .plot-errbar  { stroke: var(--plot-errbar); }
 .plot-errlabel { fill: var(--plot-errbar); }
+/* GC integration-interval lines: shared ('all') pair and selected sample use the
+   theme-aware grey (light on dark, dark on light) — never pure white. */
+.gc-int-hl { stroke: var(--plot-errbar); }
 
 * {
   box-sizing: border-box;
@@ -1473,6 +1476,25 @@ button.color-swatch:hover { border-color: var(--text); }
 #xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td, #xrdStdPeakTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset); }
 #xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child, #xrdStdPeakTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset 2px 0 0 var(--sel-inset); }
 #xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child, #xrdStdPeakTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
+
+/* ===== GC parameter table: grouped headers, all/one toggle, row↔plot interaction ===== */
+#gcParamTableWrap .gc-grp { text-align: center; }
+#gcParamTableWrap .gc-toggle {
+  font-size: 10px; padding: 1px 8px; margin-left: 8px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel2); color: var(--muted); cursor: pointer;
+  text-transform: uppercase; letter-spacing: .05em; vertical-align: 1px;
+}
+#gcParamTableWrap .gc-toggle:hover { color: var(--accent); border-color: var(--accent); }
+#gcParamTableWrap .gc-all-row { background: rgba(160, 170, 185, 0.08); }
+#gcParamTableWrap .gc-all-row .fname { color: var(--muted); font-style: italic; }
+#gcParamTableWrap input[disabled] { opacity: .35; }
+#gcParamTableWrap input[readonly] { opacity: .6; cursor: default; }
+#gcParamTableWrap .gc-row { transition: background .1s; }
+#gcParamTableWrap .gc-row.hovering { background: rgba(95, 207, 106, 0.20); }
+#gcParamTableWrap .gc-row.selected td { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset); }
+#gcParamTableWrap .gc-row.selected td:first-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset 2px 0 0 var(--sel-inset); }
+#gcParamTableWrap .gc-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
 /* Mean ± std crystallite-size summary under the analysis peak table */
 .size-summary {
   margin-top: 12px;

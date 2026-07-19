@@ -1,18 +1,28 @@
 import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons } from './utils.js';
-import { Plot } from './plot.js';
+import { Plot, svgEl } from './plot.js';
 
 /* =========================================================
    GC MODULE
 ========================================================= */
 (function(){
   let files=[]; // {name, label, injDates:[Date], h2:[number]}
-  let ms=[], Qs=[], lightOnDates=[];
+  let ms=[], Qs=[], startArr=[], endArr=[], lightOnDates=[];
   let dataTables=[];
   let plot1, plot2;
-  let plateauStart=0, plateauEnd=24;
+  // all/one per pair: 'all' = one shared value for every sample; 'one' = per-sample.
+  // Defaults preserve the historical behaviour: per-sample m/Q, one shared interval.
+  let mqMode='one', intMode='all';
+  let mShared=15, qShared=2, startShared=0, endShared=24;
   let costResults=[];
+  let gcSel=null, gcHov=null;   // selected / hovered sample index (interval interaction)
   let loadAlerts='';
   let gcUploadAlerts='';
+
+  // Effective per-sample values (respect the pair's all/one mode).
+  const mOf     = k => mqMode==='all'  ? mShared     : ms[k];
+  const qOf     = k => mqMode==='all'  ? qShared     : Qs[k];
+  const startOf = k => intMode==='all' ? startShared : startArr[k];
+  const endOf   = k => intMode==='all' ? endShared   : endArr[k];
 
   function rebuildGcAlerts(){ document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts; }
 
@@ -37,15 +47,16 @@ import { Plot } from './plot.js';
   function fileCallbacks(){
     return {
       onRemove(i){
-        files.splice(i,1); ms.splice(i,1); Qs.splice(i,1); lightOnDates.splice(i,1);
+        [files,ms,Qs,startArr,endArr,lightOnDates].forEach(a=>a.splice(i,1));
         if (!files.length) loadAlerts = '';
+        gcSel=gcHov=null;
         afterFilesChange();
       },
-      onReorder(from, to){ [files,ms,Qs,lightOnDates].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); afterFilesChange(); },
+      onReorder(from, to){ [files,ms,Qs,startArr,endArr,lightOnDates].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); gcSel=gcHov=null; afterFilesChange(); },
       onLabelChange(i, v){ files[i].label=v; renderGcParamTable(); computeAndRenderGc(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; computeAndRenderGc(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; ms.length=0; Qs.length=0; lightOnDates.length=0; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); afterFilesChange(); },
+      onRemoveAll(){ [files,ms,Qs,startArr,endArr,lightOnDates].forEach(a=>a.length=0); gcSel=gcHov=null; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); afterFilesChange(); },
     };
   }
 
@@ -77,7 +88,7 @@ import { Plot } from './plot.js';
       if (!injDates.length){ invalidFiles.push(f.name); continue; }
       const sorted = injDates.slice().sort((a,b)=>a-b);
       files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, h2, color:nextColor(files), rawBytes});
-      ms.push(15); Qs.push(2);
+      ms.push(15); Qs.push(2); startArr.push(0); endArr.push(24);
       lightOnDates.push(new Date(sorted[0]));
     }
     loadAlerts = buildAlertsHtml(invalidFiles, [], undefined, 'gc-dismiss-invalid');
@@ -108,18 +119,28 @@ import { Plot } from './plot.js';
   function gcSnapshot(){
     return {
       files: files.map(f=>({...f})),
-      ms: ms.slice(), Qs: Qs.slice(),
+      ms: ms.slice(), Qs: Qs.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
       lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
-      plateauStart, plateauEnd,
+      mqMode, intMode, mShared, qShared, startShared, endShared,
     };
   }
   function gcRestore(s){
     files = s.files.map(f=>({...f}));
     ms = s.ms.slice(); Qs = s.Qs.slice();
     lightOnDates = s.lightOnDates.map(t=> t!=null ? new Date(t) : null);
-    plateauStart = s.plateauStart; plateauEnd = s.plateauEnd;
-    document.getElementById('gcPlateauStart').value = plateauStart;
-    document.getElementById('gcPlateauEnd').value = plateauEnd;
+    if (s.intMode !== undefined){
+      mqMode = s.mqMode; intMode = s.intMode;
+      mShared = s.mShared; qShared = s.qShared; startShared = s.startShared; endShared = s.endShared;
+      startArr = (s.startArr||files.map(()=>startShared)).slice();
+      endArr   = (s.endArr  ||files.map(()=>endShared)).slice();
+    } else {
+      // Migrate old projects: a single global interval → interval 'all' mode.
+      mqMode='one'; intMode='all';
+      mShared=15; qShared=2;
+      startShared = s.plateauStart ?? 0; endShared = s.plateauEnd ?? 24;
+      startArr = files.map(()=>startShared); endArr = files.map(()=>endShared);
+    }
+    gcSel=gcHov=null;
     afterFilesChange();
   }
   const hist = registerHistory('gc', gcSnapshot, gcRestore);
@@ -137,104 +158,130 @@ import { Plot } from './plot.js';
       : '';
   }
 
+  // A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled).
+  function numCell(cls, attrs, value, state){
+    const dis = state==='off' ? 'disabled' : (state==='ro' ? 'readonly' : '');
+    return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${value}" ${dis} style="width:100%">`;
+  }
+  const modeChip = (pair, mode)=> `<button type="button" class="gc-toggle" data-pair="${pair}" title="Switch all / one">${mode}</button>`;
+
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
     if (!files.length){ wrap.innerHTML=''; return; }
-    // Columns: Label 24%, m 9%, Q 9%, date 34%, warning 24%. A min-width keeps the
-    // date field usable — on narrow screens the .table-wrap-box scrolls horizontally.
-    const cg = `<colgroup><col style="width:20%"><col style="width:15%"><col style="width:15%"><col style="width:30%"><col style="width:20%"></colgroup>`;
-    let html = `<div style="overflow-x:auto"><table style="min-width:720px;width:100%;table-layout:fixed">${cg}<thead><tr><th>Sample</th><th>m (g)</th><th>Q (mL/min)</th><th>Light-on date/time</th><th></th></tr></thead><tbody>`;
+    const cg = `<colgroup><col style="width:15%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:26%"><col style="width:15%"></colgroup>`;
+    const mShareState = mqMode==='all' ? 'on' : 'off',  mCellState = mqMode==='all' ? 'ro' : 'on';
+    const iShareState = intMode==='all' ? 'on' : 'off', iCellState = intMode==='all' ? 'ro' : 'on';
+    let html = `<div style="overflow-x:auto"><table style="min-width:860px;width:100%;table-layout:fixed">${cg}<thead>
+      <tr><th rowspan="2">Sample</th><th colspan="2" class="gc-grp">Feed ${modeChip('mq',mqMode)}</th><th colspan="2" class="gc-grp">Interval (h) ${modeChip('int',intMode)}</th><th rowspan="2">Light-on date/time</th><th rowspan="2"></th></tr>
+      <tr><th>m (g)</th><th>Q (mL/min)</th><th>start</th><th>end</th></tr></thead><tbody>`;
+    // Shared "all" row
+    html += `<tr class="gc-all-row"><td class="fname">All</td>
+      <td>${numCell('gcShared','data-f="m"',mShared,mShareState)}</td>
+      <td>${numCell('gcShared','data-f="q"',qShared,mShareState)}</td>
+      <td>${numCell('gcShared','data-f="start"',startShared,iShareState)}</td>
+      <td>${numCell('gcShared','data-f="end"',endShared,iShareState)}</td>
+      <td></td><td></td></tr>`;
+    // Per-sample rows
     files.forEach((f,i)=>{
-      html += `<tr>
+      html += `<tr class="gc-row" data-i="${i}">
         <td class="fname" title="${f.label}">${f.label}</td>
-        <td><input data-i="${i}" class="gcM" type="text" inputmode="decimal" value="${ms[i]}" style="width:100%"></td>
-        <td><input data-i="${i}" class="gcQ" type="text" inputmode="decimal" value="${Qs[i]}" style="width:100%"></td>
+        <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),mCellState)}</td>
+        <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),mCellState)}</td>
+        <td>${numCell('gcCell','data-i="'+i+'" data-f="start"',startOf(i),iCellState)}</td>
+        <td>${numCell('gcCell','data-i="'+i+'" data-f="end"',endOf(i),iCellState)}</td>
         <td class="gc-date-cell" data-i="${i}"></td>
         <td class="gc-warn-cell">${lightOnWarnHtml(i)}</td>
       </tr>`;
     });
     html += `</tbody></table></div>`;
     wrap.innerHTML = html;
-    fitCsvIcons();   // normalise the param-table CSV button now the tab is visible
-    // These inputs are created dynamically, so wire the guard here (invalid input
-    // shakes + reverts to the last confirmed value). Views update only on confirm
-    // (blur / Enter) — the guard blocks the change event for invalid entries.
-    wrap.querySelectorAll('.gcM').forEach(inp=>{
+    fitCsvIcons();
+
+    // all/one toggles: flip a pair, seeding across the boundary (one→all from sample 0,
+    // all→one from the shared value), then re-render + recompute.
+    wrap.querySelectorAll('.gc-toggle').forEach(btn=> btn.addEventListener('click', ()=>{
+      if (btn.dataset.pair==='mq'){
+        if (mqMode==='one'){ mqMode='all'; mShared=ms[0]; qShared=Qs[0]; }
+        else { mqMode='one'; files.forEach((f,i)=>{ ms[i]=mShared; Qs[i]=qShared; }); }
+      } else {
+        if (intMode==='one'){ intMode='all'; startShared=startArr[0]; endShared=endArr[0]; }
+        else { intMode='one'; files.forEach((f,i)=>{ startArr[i]=startShared; endArr[i]=endShared; }); }
+        gcSel=gcHov=null;
+      }
+      renderGcParamTable(); computeAndRenderGc(); hist.commit();
+    }));
+
+    // m/Q inputs (shared + per-sample) — recompute the whole series on a valid change.
+    const wireNum = (inp, apply)=>{
       guardNumericInput(inp, { min:0.001 });
-      inp.addEventListener('change', e=>{ ms[+e.target.dataset.i] = +e.target.value; computeAndRenderGc(); if (files.length) hist.commit(); });
-    });
-    wrap.querySelectorAll('.gcQ').forEach(inp=>{
-      guardNumericInput(inp, { min:0.001 });
-      inp.addEventListener('change', e=>{ Qs[+e.target.dataset.i] = +e.target.value; computeAndRenderGc(); if (files.length) hist.commit(); });
-    });
+      inp.addEventListener('change', ()=>{ apply(+inp.value); computeAndRenderGc(); hist.commit(); });
+    };
+    wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mqMode==='all' && wireNum(inp, v=>mShared=v));
+    wrap.querySelectorAll('.gcShared[data-f="q"]').forEach(inp=> mqMode==='all' && wireNum(inp, v=>qShared=v));
+    wrap.querySelectorAll('.gcCell[data-f="m"]').forEach(inp=>{ if(mqMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>ms[i]=v); }});
+    wrap.querySelectorAll('.gcCell[data-f="q"]').forEach(inp=>{ if(mqMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Qs[i]=v); }});
+
+    // start/end pairs (enforce end>start; only the active mode's inputs are wired).
+    if (intMode==='all'){
+      wireStartEnd(wrap.querySelector('.gcShared[data-f="start"]'), wrap.querySelector('.gcShared[data-f="end"]'),
+        ()=>({start:startShared,end:endShared}), (s,e)=>{ startShared=s; endShared=e; });
+    } else {
+      files.forEach((f,i)=>{
+        wireStartEnd(wrap.querySelector(`.gcCell[data-i="${i}"][data-f="start"]`), wrap.querySelector(`.gcCell[data-i="${i}"][data-f="end"]`),
+          ()=>({start:startArr[i],end:endArr[i]}), (s,e)=>{ startArr[i]=s; endArr[i]=e; });
+      });
+    }
+
     wrap.querySelectorAll('.gc-date-cell').forEach(cell=>{
       const i = +cell.dataset.i;
       const field = createDateTimeField(lightOnDates[i], d=>{
         lightOnDates[i] = d;
         const wc = cell.closest('tr').querySelector('.gc-warn-cell');
         if (wc) wc.innerHTML = lightOnWarnHtml(i);
-        computeAndRenderGc();
-        commit();
+        computeAndRenderGc(); hist.commit();
       });
       cell.appendChild(field.el);
     });
+
+    // Row ↔ plot interaction (interval mode 'one'): hover highlights the sample's lines
+    // on both plots; clicking (off the inputs) toggles the selection.
+    wrap.querySelectorAll('.gc-row').forEach(row=>{
+      const i = +row.dataset.i;
+      row.addEventListener('mouseenter', ()=> setGcHover(i));
+      row.addEventListener('mouseleave', ()=> setGcHover(null));
+      row.addEventListener('click', e=>{ if (e.target.closest('input, button, .gc-date-cell')) return; selectGc(i); });
+    });
+    refreshGcRows();
   }
 
-  const WARN_HTML = '<div class="alert warn" style="margin-top:8px;padding:6px 8px;font-size:11px">⚠ Interval end must be greater than interval start.</div>';
-  // Parse a raw field string into a finite number, or null if it isn't a
-  // complete value yet (empty, or just a lone sign/decimal point).
+  // Wire a start/end input pair: guard rejects non-numbers; a valid change that keeps
+  // end>start applies + redraws, else it shakes the offending field and reverts.
+  function wireStartEnd(startInp, endInp, get, set){
+    if (!startInp || !endInp) return;
+    [[startInp,'start'],[endInp,'end']].forEach(([inp,which])=>{
+      guardNumericInput(inp, {});
+      inp.addEventListener('change', ()=>{
+        const cur = get(), v = parseIntervalField(inp.value);
+        if (v===null){ inp.value = cur[which]; return; }
+        const ns = which==='start' ? v : cur.start, ne = which==='end' ? v : cur.end;
+        if (ne <= ns){ flashFieldInvalid(inp); inp.value = cur[which]; return; }
+        set(ns, ne);
+        updateRegression(); hist.commit();
+      });
+      inp.addEventListener('keydown', e=>{ if (e.key==='Enter') inp.blur(); });
+    });
+  }
+
+  // Parse a raw field string into a finite number, or null if incomplete/invalid.
   function parseIntervalField(v){
     const s = String(v).trim().replace(',', '.');   // accept comma decimals
     if (s==='' || s==='-' || s==='+' || s==='.' || s==='-.' || s==='+.') return null;
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
   }
-  // Live warning: only once BOTH fields hold complete valid numbers and end<=start.
-  function updateIntervalWarn(){
-    const w = document.getElementById('gcIntervalWarn');
-    if (!w) return;
-    const s = parseIntervalField(document.getElementById('gcPlateauStart').value);
-    const e = parseIntervalField(document.getElementById('gcPlateauEnd').value);
-    w.innerHTML = (s!==null && e!==null && e<=s) ? WARN_HTML : '';
-  }
-  // Commit on blur/Enter: validate, revert invalid input to the last good values
-  // (shaking + keeping the warning when end<=start), else apply and recompute.
-  function commitInterval(){
-    const startEl = document.getElementById('gcPlateauStart');
-    const endEl   = document.getElementById('gcPlateauEnd');
-    let s = parseIntervalField(startEl.value);
-    let e = parseIntervalField(endEl.value);
-    if (s===null){ s = plateauStart; startEl.value = plateauStart; }
-    if (e===null){ e = plateauEnd;   endEl.value   = plateauEnd; }
-    if (e <= s){
-      // Invalid interval: shake, revert both fields, keep the warning visible.
-      flashFieldInvalid(endEl);
-      startEl.value = plateauStart;
-      endEl.value   = plateauEnd;
-      const w = document.getElementById('gcIntervalWarn'); if (w) w.innerHTML = WARN_HTML;
-      return;
-    }
-    plateauStart = s; plateauEnd = e;
-    updateIntervalWarn();
-    if (dataTables.length) updateRegression();
-    if (files.length) hist.commit();
-  }
-  ['gcPlateauStart','gcPlateauEnd'].forEach(id=>{
-    const el = document.getElementById(id);
-    // Now type=text (to accept comma decimals), so the global number-input guard
-    // doesn't cover it — wire it here so non-numeric entries shake + revert. It runs
-    // before commitInterval, which additionally enforces the end>start cross rule.
-    guardNumericInput(el, {});
-    // Live: update only the warning while typing; never touch plots/results.
-    el.addEventListener('input', updateIntervalWarn);
-    el.addEventListener('change', commitInterval);
-    el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
-  });
 
   function computeAndRenderGc(){
     if (!files.length) return;
-    plateauStart = +document.getElementById('gcPlateauStart').value;
-    plateauEnd   = +document.getElementById('gcPlateauEnd').value;
     dataTables = files.map((f,h)=>{
       const pairs = f.injDates.map((d,i)=>({d, v:f.h2[i]})).sort((a,b)=>a.d-b.d);
       const lightOn = lightOnDates[h];
@@ -246,9 +293,9 @@ import { Plot } from './plot.js';
       pairs.sort((a,b)=>a.d-b.d);
       const tHours = pairs.map(p=>(p.d - lightOn)/3600000);
       const h2pct = pairs.map(p=>p.v);
-      const F = Qs[h]/1000*60/22.41396954;
+      const F = qOf(h)/1000*60/22.41396954;
       const h2F = h2pct.map(v=> v/100*F*1e6);
-      const h2Fm = h2F.map(v=> v/ms[h]);
+      const h2Fm = h2F.map(v=> v/mOf(h));
       const h2FmInt = cumtrapz(tHours, h2Fm);
       return {t:tHours, h2pct, h2F, h2Fm, h2FmInt, label:f.label, color:f.color};
     });
@@ -268,36 +315,90 @@ import { Plot } from './plot.js';
     updateRegression();
   }
 
-  // Draw the data lines + interval bars with an x-range that spans BOTH the data
-  // and the white interval bars (so the bars are never clipped off the plot).
+  // Draw the data lines with an x-range spanning both the data and every interval line
+  // (so bars are never clipped). Interval lines are drawn as an overlay, redrawn on
+  // pan/zoom via _onView.
   function drawGcData(){
     if (!plot1 || !plot2 || !dataTables.length) return;
     const allT = dataTables.flatMap(d=>d.t);
-    const tmin = Math.min(0, minArr(allT), plateauStart, plateauEnd);
-    const tmax = Math.max(maxArr(allT), plateauStart, plateauEnd);
+    const intPts = intMode==='all' ? [startShared, endShared]
+                                   : dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
+    const tmin = Math.min(0, minArr(allT), ...intPts);
+    const tmax = Math.max(maxArr(allT), ...intPts);
     const ymax1 = Math.max(...dataTables.map(d=>maxArr(d.h2Fm))), ymin1 = Math.min(...dataTables.map(d=>minArr(d.h2Fm)));
     plot1.setRange(tmin, tmax, ymin1, ymax1*1.05); plot1.drawAxes(); plot1.clearData();
     dataTables.forEach(d=> plot1.line(d.t, d.h2Fm, d.color, 1.3));
     const ymax2 = Math.max(...dataTables.map(d=>maxArr(d.h2FmInt)));
     plot2.setRange(tmin, tmax, 0, ymax2*1.05); plot2.drawAxes(); plot2.clearData();
     dataTables.forEach(d=> plot2.line(d.t, d.h2FmInt, d.color, 1.3));
-    drawGcVlines();
+    plot1._onView = ()=> drawGcIntervals(plot1);
+    plot2._onView = ()=> drawGcIntervals(plot2);
+    drawGcIntervals(plot1); drawGcIntervals(plot2);
   }
 
-  function drawGcVlines(){
-    [plot1, plot2].forEach(p=>{
-      if (!p) return;
-      p.clearOverlay();
-      p.vline(plateauStart, '#fff', false);
-      p.vline(plateauEnd,   '#fff', false);
+  // Integration-interval vertical lines. 'all': one shared pair in the theme-aware
+  // grey (--plot-errbar). 'one': a pair per sample in the sample's colour (1px), with
+  // an invisible fat hit line for hover/select; hovered/selected lines thicken, the
+  // selected pair turns the highlight grey.
+  function drawGcIntervals(plot){
+    if (!plot) return;
+    const g = plot.gOverlay;
+    g.querySelectorAll('.gc-int').forEach(e=>e.remove());
+    const { h } = plot.size(), m = plot.margin;
+    const vline = (xv, o)=>{
+      const px = plot.px(xv);
+      const ln = svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,'stroke-width':o.width,'pointer-events':'none','class':'gc-int'+(o.cls?' '+o.cls:'')});
+      if (o.color) ln.setAttribute('stroke', o.color);
+      g.appendChild(ln);
+      if (o.hit){
+        const ht = svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'pointer','class':'gc-int'});
+        ht.addEventListener('pointerenter', ()=> setGcHover(o.k));
+        ht.addEventListener('pointerleave', scheduleClearGcHover);
+        ht.addEventListener('click', ()=> selectGc(o.k));
+        g.appendChild(ht);
+      }
+    };
+    if (intMode==='all'){
+      vline(startShared, {width:1.5, cls:'gc-int-hl'});
+      vline(endShared,   {width:1.5, cls:'gc-int-hl'});
+    } else {
+      dataTables.forEach((d,k)=>{
+        const sel = gcSel===k, on = sel || gcHov===k;
+        const o = { k, hit:true, width: on?2.6:1, cls: sel?'gc-int-hl':'', color: sel?null:d.color };
+        vline(startOf(k), o); vline(endOf(k), o);
+      });
+    }
+  }
+
+  // ---- Row ↔ plot1 ↔ plot2 interaction (all three respond in unison) ----
+  let gcHoverRAF = null;
+  function scheduleClearGcHover(){
+    if (gcHoverRAF) cancelAnimationFrame(gcHoverRAF);
+    gcHoverRAF = requestAnimationFrame(()=>{ gcHoverRAF=null; setGcHover(null); });
+  }
+  function setGcHover(k){
+    if (intMode!=='one') k = null;
+    if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
+    if (gcHov === k) return;
+    gcHov = k;
+    drawGcIntervals(plot1); drawGcIntervals(plot2); refreshGcRows();
+  }
+  function selectGc(k){
+    if (intMode!=='one') return;
+    gcSel = (gcSel===k) ? null : k;
+    drawGcIntervals(plot1); drawGcIntervals(plot2); refreshGcRows();
+  }
+  function refreshGcRows(){
+    document.querySelectorAll('#gcParamTableWrap .gc-row').forEach(r=>{
+      const k = +r.dataset.i;
+      r.classList.toggle('hovering', k===gcHov);
+      r.classList.toggle('selected', k===gcSel);
     });
   }
 
   function updateRegression(){
-    const xStart = Math.min(plateauStart, plateauEnd);
-    const xEnd   = Math.max(plateauStart, plateauEnd);
-    costResults = dataTables.map(d=>{
-      // Find first index with t >= xStart and last index with t <= xEnd
+    costResults = dataTables.map((d,k)=>{
+      const xStart = Math.min(startOf(k), endOf(k)), xEnd = Math.max(startOf(k), endOf(k));
       let startIdx = -1, endIdx = -1;
       for (let i=0;i<d.t.length;i++){
         if (d.t[i] >= xStart && startIdx < 0) startIdx = i;
@@ -382,7 +483,7 @@ import { Plot } from './plot.js';
     // gc_info.csv — per-sample inputs + the integration interval used
     const fmtDate = d => d ? new Date(d).toISOString().slice(0,16).replace('T',' ') : '';
     let t3 = csvLine(['Sample','m (g)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)']);
-    dataTables.forEach((d,k)=> t3 += csvLine([d.label, ms[k], Qs[k], fmtDate(lightOnDates[k]), plateauStart, plateauEnd]));
+    dataTables.forEach((d,k)=> t3 += csvLine([d.label, mOf(k), qOf(k), fmtDate(lightOnDates[k]), startOf(k), endOf(k)]));
     entries.push({name:'gc_info.csv', text:t3});
     return entries;
   }
