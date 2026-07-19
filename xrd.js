@@ -1030,6 +1030,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       // The value currently displayed on the graph for this field
       const cur = getFileParams(curIdx)[key];
       paramMode[key] = mode;
+      document.getElementById(tid).textContent = mode==='shared' ? 'all' : 'one';
       if (mode==='shared'){
         // Switching to "all": every sample takes the currently displayed value
         shared[key] = cur;
