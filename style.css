@@ -23,6 +23,8 @@
   --accent-hover: #ffc271;   /* primary button :hover */
   --accent-active: #e89a35;  /* primary button :active (pressed) */
   --on-accent: #06131f;      /* text drawn on top of the accent fill */
+  --ok: #2e9e4f;             /* "saved ✓" confirmation fill */
+  --ok-fg: #ffffff;          /* text on the confirmation fill */
   --icon-tile: #0e1316;      /* home-card square icon tile background */
   --sel-inset: #ffffff;      /* selected peak-row highlight border */
   --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
@@ -55,6 +57,8 @@
   --accent-hover: #a75e0b;
   --accent-active: #8c4e08;
   --on-accent: #ffffff;
+  --ok: #2e8b4e;
+  --ok-fg: #ffffff;
   --icon-tile: #f3f5f6;
   --sel-inset: #b96a10;
   --alert-warn-bg: #fbf1dd;  --alert-warn-line: #e4c583;
@@ -198,13 +202,13 @@ nav button.active {
 .row-ic svg { display: block; }
 .row-ic.pr-csv:hover, .row-ic.pr-json:hover { color: var(--text); }
 .row-ic.pr-del:hover { color: var(--bad); }
-/* "Saved ✓" confirmation state — green, non-interactive, same box as the button */
+/* "Saved ✓" confirmation state — green, non-interactive, same box as the button.
+   !important so it wins over .primary on the same Save button. */
 button.btn.saved-ok,
-button.btn.saved-ok:disabled,
-button.btn.secondary.saved-ok {
-  background: #2e9e4f !important;
-  color: #ffffff !important;
-  border-color: #2e9e4f !important;
+button.btn.saved-ok:disabled {
+  --btn-bg: var(--ok) !important;
+  --btn-fg: var(--ok-fg) !important;
+  --btn-bd: var(--ok) !important;
   opacity: 1 !important;
   cursor: default;
 }
@@ -561,10 +565,21 @@ input[type="file"] {
 }
 .dt-step:hover { color: var(--accent); border-color: var(--accent); }
 .dt-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+/* ===== Buttons =====
+   Colours are driven by three per-button variables so variants/states only re-point
+   them — no hard-coded colours in the rules:
+     --btn-bg  fill        --btn-bd  border
+     --btn-fg  text/icon   → always one of three theme tokens:
+                             --on-accent (on the accent fill), --text (secondary
+                             actions) or --muted (icon / subtle buttons).
+   Base .btn is the neutral outline (the common case); .primary is the filled CTA. */
 button.btn {
-  background: var(--accent);
-  color: var(--on-accent);
-  border: none;
+  --btn-bg: var(--panel2);
+  --btn-fg: var(--text);
+  --btn-bd: var(--line);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: 1px solid var(--btn-bd);
   border-radius: 8px;
   padding: 9px 16px;
   font-weight: 600;
@@ -572,39 +587,23 @@ button.btn {
   cursor: pointer;
   transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
-/* Primary (export-style, orange) buttons: distinct hover and pressed states */
-button.btn:not(.secondary):hover:not(:disabled) { background: var(--accent-hover); }
-button.btn:not(.secondary):active:not(:disabled) { background: var(--accent-active); }
-button.btn.secondary {
-  background: var(--panel2);
-  color: var(--text);
-  border: 1px solid var(--line);
+/* Outline (default): hover accents the outline; press greys the fill */
+button.btn:hover:not(:disabled)  { --btn-fg: var(--accent); --btn-bd: var(--accent); }
+button.btn:active:not(:disabled) { --btn-bg: var(--line); }
+/* Primary (filled accent): hover lightens the fill, press darkens it */
+button.btn.primary {
+  --btn-bg: var(--accent);
+  --btn-fg: var(--on-accent);
+  --btn-bd: var(--accent);
 }
-/* Secondary buttons: coherent, subtle hover/press */
-button.btn.secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-button.btn.secondary:active:not(:disabled) { background: var(--line); }
-/* Settings-button style for the click-only project/export buttons and the XRD
-   fit-settings buttons: neutral outline at rest, accent outline on hover, and a
-   distinct filled-accent flash on click. */
-button.btn.proj-saveas, button.btn.proj-csv, button.btn.proj-json,
-button.btn#xrdFitSettings, button.btn#xrdStdSettings,
-button.btn#sessDeleteSelected, button.btn#sessCsvSelected, button.btn#sessJsonSelected, button.btn#sessImportBtn {
-  background: var(--panel2);
-  color: var(--muted);
-  border: 1px solid var(--line);
-}
-/* Save as / Export .csv / Export .json (and the bulk buttons): white (theme text) at rest */
-button.btn.proj-saveas, button.btn.proj-csv, button.btn.proj-json,
-button.btn#sessDeleteSelected, button.btn#sessCsvSelected, button.btn#sessJsonSelected, button.btn#sessImportBtn { color: var(--text); }
-button.btn.proj-saveas:hover:not(:disabled), button.btn.proj-csv:hover:not(:disabled), button.btn.proj-json:hover:not(:disabled),
-button.btn#xrdFitSettings:hover:not(:disabled), button.btn#xrdStdSettings:hover:not(:disabled),
-button.btn#sessDeleteSelected:hover:not(:disabled), button.btn#sessCsvSelected:hover:not(:disabled), button.btn#sessJsonSelected:hover:not(:disabled), button.btn#sessImportBtn:hover:not(:disabled) {
-  color: var(--accent); border-color: var(--accent); background: var(--panel2);
-}
-button.btn.proj-saveas:active:not(:disabled), button.btn.proj-csv:active:not(:disabled), button.btn.proj-json:active:not(:disabled),
-button.btn#xrdFitSettings:active:not(:disabled), button.btn#xrdStdSettings:active:not(:disabled),
-button.btn#sessDeleteSelected:active:not(:disabled), button.btn#sessCsvSelected:active:not(:disabled), button.btn#sessJsonSelected:active:not(:disabled), button.btn#sessImportBtn:active:not(:disabled) {
-  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+button.btn.primary:hover:not(:disabled)  { --btn-bg: var(--accent-hover);  --btn-fg: var(--on-accent); --btn-bd: var(--accent-hover); }
+button.btn.primary:active:not(:disabled) { --btn-bg: var(--accent-active); --btn-bd: var(--accent-active); }
+/* Permanent "on" toggle (armed +Add peak, etc.) — filled accent, held on hover too */
+button.btn.active,
+button.btn.active:hover:not(:disabled) {
+  --btn-bg: var(--accent);
+  --btn-fg: var(--on-accent);
+  --btn-bd: var(--accent);
 }
 button.btn.small {
   padding: 5px 10px;
@@ -1599,12 +1598,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 #xrdStdPeakTableWrap .peak-row .peak-del:hover {
   color: var(--bad);
 }
-/* Add-peak mode toggle button */
-#xrdAddPeak.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
+/* +Add peak armed state is handled by the shared button.btn.active rule. */
 
 /* ===== XRD fit hyperparameters modal ===== */
 .modal-backdrop {

@@ -301,15 +301,15 @@ class Plot{
     const div = document.createElement('div');
     div.className = 'plot-tool-btns';
     const panBtn = document.createElement('button');
-    panBtn.className = 'btn secondary plot-tool-btn';
+    panBtn.className = 'btn plot-tool-btn';
     panBtn.title = 'Pan';
     panBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="12" y1="4" x2="12" y2="20"/><path d="M6.5 9.5 4 12l2.5 2.5M17.5 9.5 20 12l-2.5 2.5M9.5 6.5 12 4l2.5 2.5M9.5 17.5 12 20l2.5-2.5"/></svg>`;
     const zoomBtn = document.createElement('button');
-    zoomBtn.className = 'btn secondary plot-tool-btn';
+    zoomBtn.className = 'btn plot-tool-btn';
     zoomBtn.title = 'Zoom area';
     zoomBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><line x1="14.8" y1="14.8" x2="20" y2="20"/><line x1="7.5" y1="10.5" x2="13.5" y2="10.5"/><line x1="10.5" y1="7.5" x2="10.5" y2="13.5"/></svg>`;
     const snapBtn = document.createElement('button');
-    snapBtn.className = 'btn secondary plot-tool-btn';
+    snapBtn.className = 'btn plot-tool-btn';
     snapBtn.title = 'Download current view';
     snapBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5a1.5 1.5 0 0 1 1.5-1.5h2l1.2-2h6.6l1.2 2h2A1.5 1.5 0 0 1 20 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3"/></svg>`;
     snapBtn.addEventListener('mousedown', ()=>snapBtn.classList.add('active'));
@@ -325,7 +325,7 @@ class Plot{
     let copyBtn = null;
     if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write){
       copyBtn = document.createElement('button');
-      copyBtn.className = 'btn secondary plot-tool-btn';
+      copyBtn.className = 'btn plot-tool-btn';
       copyBtn.title = 'Copy image';
       copyBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>`;
       copyBtn.onclick = async ()=>{

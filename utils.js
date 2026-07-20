@@ -406,7 +406,7 @@ function downloadBytes(filename, bytes){
 
 function makeDownloadLink(container, filename, text, label){
   const b = document.createElement('button');
-  b.className = 'btn secondary small';
+  b.className = 'btn small';
   b.style.marginRight = '8px'; b.style.marginBottom='6px';
   b.textContent = label || ('Download ' + filename);
   b.onclick = ()=>downloadBlob(filename, text);
@@ -976,7 +976,7 @@ const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" 
 // normalised to the minimum-circumscribed-square rule). Downloads `names` for `mod`.
 function makeCsvButton(mod, names, title){
   const btn = document.createElement('button');
-  btn.className = 'btn secondary plot-tool-btn plot-csv-btn';
+  btn.className = 'btn plot-tool-btn plot-csv-btn';
   btn.title = title || 'Download CSV';
   btn.dataset.csvMod = mod;
   btn.dataset.csvNames = names;
@@ -1317,7 +1317,7 @@ function openDateModal(baseDate, onPick){
         <b class="dt-colon">:</b>
         <span class="dt-time-field"><button type="button" class="dt-step" data-t="m" data-d="1">&#9650;</button><b>${p2(sel.getMinutes())}</b><button type="button" class="dt-step" data-t="m" data-d="-1">&#9660;</button></span>
       </div>
-      <div class="dt-modal-foot"><button type="button" class="btn secondary dt-cancel">Cancel</button><button type="button" class="btn dt-ok">OK</button></div>`;
+      <div class="dt-modal-foot"><button type="button" class="btn dt-cancel">Cancel</button><button type="button" class="btn primary dt-ok">OK</button></div>`;
   }
   function close(){ document.removeEventListener('keydown', onKey); backdrop.remove(); }
   function onKey(e){ if (e.key==='Escape') close(); }
