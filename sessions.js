@@ -121,7 +121,7 @@ function nameInput(mod){ return document.querySelector('.project-name-input[data
 function dirtyMark(mod){ return document.querySelector('.pb-dirty[data-module="'+mod+'"]'); }
 function restoreSaveBtns(mod){
   saveBtns(mod).forEach(b=>{
-    b.classList.remove('saved-ok'); b.disabled = false;
+    b.classList.remove('is-saved'); b.disabled = false;
     if (b.dataset.origHtml !== undefined) b.innerHTML = b.dataset.origHtml;
   });
 }
@@ -132,7 +132,7 @@ function markSaved(mod){
   clearDraft(mod);   // saved (or freshly opened) → no crash-recovery draft needed
   saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
-    b.classList.add('saved-ok');
+    b.classList.add('is-saved');
     b.disabled = true;
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });

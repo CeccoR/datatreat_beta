@@ -1382,7 +1382,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     function setMode(on){
       addMode = !!on;
       addModeKey = addMode ? key : (addModeKey===key ? null : addModeKey);
-      btn.classList.toggle('active', addMode);
+      btn.classList.toggle('is-on', addMode);
       svgNode.style.cursor = addMode ? 'crosshair' : '';
       const plot = getPlot();
       if (addMode && plot) plot.setMode(null);

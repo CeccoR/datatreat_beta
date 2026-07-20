@@ -292,9 +292,9 @@ class Plot{
         if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
           col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
         col.appendChild(dlBtn);
-        dlBtn.addEventListener('mousedown', ()=>dlBtn.classList.add('active'));
-        dlBtn.addEventListener('mouseup', ()=>dlBtn.classList.remove('active'));
-        dlBtn.addEventListener('mouseleave', ()=>dlBtn.classList.remove('active'));
+        dlBtn.addEventListener('mousedown', ()=>dlBtn.classList.add('is-on'));
+        dlBtn.addEventListener('mouseup', ()=>dlBtn.classList.remove('is-on'));
+        dlBtn.addEventListener('mouseleave', ()=>dlBtn.classList.remove('is-on'));
       }
       else { wrapEl.appendChild(col); }
     }
@@ -312,9 +312,9 @@ class Plot{
     snapBtn.className = 'btn plot-tool-btn';
     snapBtn.title = 'Download current view';
     snapBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5a1.5 1.5 0 0 1 1.5-1.5h2l1.2-2h6.6l1.2 2h2A1.5 1.5 0 0 1 20 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3"/></svg>`;
-    snapBtn.addEventListener('mousedown', ()=>snapBtn.classList.add('active'));
-    snapBtn.addEventListener('mouseup',   ()=>snapBtn.classList.remove('active'));
-    snapBtn.addEventListener('mouseleave',()=>snapBtn.classList.remove('active'));
+    snapBtn.addEventListener('mousedown', ()=>snapBtn.classList.add('is-on'));
+    snapBtn.addEventListener('mouseup',   ()=>snapBtn.classList.remove('is-on'));
+    snapBtn.addEventListener('mouseleave',()=>snapBtn.classList.remove('is-on'));
     const viewLeg = ()=>{ const d=col.querySelector('.plot-dl-btn'); return d && d.dataset.dlLegend ? document.getElementById(d.dataset.dlLegend) : null; };
     snapBtn.onclick = ()=>{
       const dlBtn = col.querySelector('.plot-dl-btn');
@@ -329,18 +329,18 @@ class Plot{
       copyBtn.title = 'Copy image';
       copyBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>`;
       copyBtn.onclick = async ()=>{
-        copyBtn.classList.add('active');
+        copyBtn.classList.add('is-on');
         try {
           const blob = await downloadSvgClean(this.svg, 'plot.png', viewLeg(), true, true);
           await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
         } catch(e){ /* clipboard denied / unsupported — silently ignore */ }
-        finally { setTimeout(()=>copyBtn.classList.remove('active'), 200); }
+        finally { setTimeout(()=>copyBtn.classList.remove('is-on'), 200); }
       };
     }
 
     const sync = (mode)=>{
-      panBtn.classList.toggle('active', mode==='pan');
-      zoomBtn.classList.toggle('active', mode==='zoom');
+      panBtn.classList.toggle('is-on', mode==='pan');
+      zoomBtn.classList.toggle('is-on', mode==='zoom');
     };
     panBtn.onclick = ()=>{ this.setMode(this._mode==='pan'?null:'pan'); };
     zoomBtn.onclick = ()=>{ this.setMode(this._mode==='zoom'?null:'zoom'); };

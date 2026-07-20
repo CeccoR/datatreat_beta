@@ -42,7 +42,7 @@
   <header>
     <h1 style="font-size:19px"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#0e1316"/><path d="M5 23 H12 V9 H20 V23 H27" fill="none" stroke="#ffb454" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>DataTreat</h1>
     <nav id="nav" role="tablist" aria-label="Analysis modules">
-      <button data-tab="home" class="active" role="tab" aria-selected="true" aria-controls="tab-home">Home</button>
+      <button data-tab="home" class="is-on" role="tab" aria-selected="true" aria-controls="tab-home">Home</button>
       <button data-tab="tauc" role="tab" aria-selected="false" aria-controls="tab-tauc">UV-Vis DRS</button>
       <button data-tab="xrd" role="tab" aria-selected="false" aria-controls="tab-xrd">XRPD</button>
       <button data-tab="gc" role="tab" aria-selected="false" aria-controls="tab-gc">GC</button>
@@ -154,11 +154,11 @@
         <div class="flex-between" style="align-items:center;flex-wrap:wrap;gap:10px">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <input type="file" id="sessImportFile" accept="application/json,.json" multiple style="display:none">
-            <button class="btn primary small" id="sessOpenSelected" disabled>Open selected</button>
-            <button class="btn small" id="sessDeleteSelected" disabled>Delete selected</button>
-            <button class="btn small" id="sessCsvSelected" disabled>Export .csv selected</button>
-            <button class="btn small" id="sessJsonSelected" disabled>Export .json selected</button>
-            <button class="btn small" id="sessImportBtn">Import .json</button>
+            <button class="btn primary btn-sm" id="sessOpenSelected" disabled>Open selected</button>
+            <button class="btn btn-sm" id="sessDeleteSelected" disabled>Delete selected</button>
+            <button class="btn btn-sm" id="sessCsvSelected" disabled>Export .csv selected</button>
+            <button class="btn btn-sm" id="sessJsonSelected" disabled>Export .json selected</button>
+            <button class="btn btn-sm" id="sessImportBtn">Import .json</button>
           </div>
         </div>
         <div class="row" style="gap:10px;margin-top:12px">

@@ -406,7 +406,7 @@ function downloadBytes(filename, bytes){
 
 function makeDownloadLink(container, filename, text, label){
   const b = document.createElement('button');
-  b.className = 'btn small';
+  b.className = 'btn btn-sm';
   b.style.marginRight = '8px'; b.style.marginBottom='6px';
   b.textContent = label || ('Download ' + filename);
   b.onclick = ()=>downloadBlob(filename, text);
@@ -790,7 +790,7 @@ function goTab(tab, fromHash){
   _activeTab = tab;
   document.querySelectorAll('#nav button').forEach(b=>{
     const on = b.dataset.tab===tab;
-    b.classList.toggle('active', on);
+    b.classList.toggle('is-on', on);
     if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
@@ -1392,7 +1392,7 @@ function nextColor(existingFiles){
     let collapsed = true;   // always start closed; the choice is not remembered
     const apply = ()=>{
       block.style.display = collapsed ? 'none' : '';
-      btn.classList.toggle('active', !collapsed); // highlighted while instructions are shown
+      btn.classList.toggle('is-on', !collapsed); // highlighted while instructions are shown
       btn.setAttribute('aria-expanded', String(!collapsed));
     };
     apply();
