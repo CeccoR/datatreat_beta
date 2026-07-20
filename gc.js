@@ -455,10 +455,14 @@ import { Plot, svgEl } from './plot.js';
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
     // Truncate labels so a 30°-tilted name spans at most ~one bar spacing horizontally
     // (keeps the leftmost label from spilling off the left edge on narrow screens).
-    const svgW = svg.getBoundingClientRect().width || 640;
-    const cos30 = Math.cos(Math.PI/6);
+    const rect = svg.getBoundingClientRect();
+    const svgW = rect.width || 640, svgH = rect.height || 640;
+    const cos30 = Math.cos(Math.PI/6), sin30 = Math.sin(Math.PI/6);
     const barSpacing = Math.max(30, (svgW-75)/(costResults.length+1));
-    const maxTextW = barSpacing / cos30;
+    // Cut point: the 30°-tilted name must fit one bar-spacing horizontally AND its
+    // vertical footprint must stay within 15% of the chart height, so long names
+    // never eat more than a thin strip of a tall (golden-ratio) chart.
+    const maxTextW = Math.min(barSpacing / cos30, 0.15 * svgH / sin30);
     const trunc = s => {
       if (mctx.measureText(s).width <= maxTextW) return s;
       let t = s;
@@ -468,7 +472,6 @@ import { Plot, svgEl } from './plot.js';
     const labels = costResults.map(c=>trunc(c.label));
     let maxLbl = 0;
     labels.forEach((lbl,k)=>{ if (isFinite(costResults[k].cost)) maxLbl = Math.max(maxLbl, mctx.measureText(lbl).width); });
-    const svgH = svg.getBoundingClientRect().height || 640;
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
     // Value label (vertical) above each bar, with reserved top headroom so it never clips.
     const fmtVal = v => v.toFixed(4);
