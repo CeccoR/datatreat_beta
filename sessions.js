@@ -96,8 +96,11 @@ const dirty = {};     // mod -> bool
 const AUTOSAVE_MS = 5000;
 const _autosaveTimers = {};
 function scheduleAutosave(mod){
+  // Leading edge: save right away on the first change (e.g. as soon as data loads),
+  // so an immediate reload is already covered; then debounce the trailing save.
+  if (!_autosaveTimers[mod]) saveDraft(mod);
   clearTimeout(_autosaveTimers[mod]);
-  _autosaveTimers[mod] = setTimeout(()=>saveDraft(mod), AUTOSAVE_MS);
+  _autosaveTimers[mod] = setTimeout(()=>{ _autosaveTimers[mod] = null; saveDraft(mod); }, AUTOSAVE_MS);
 }
 async function saveDraft(mod){
   if (!moduleHasData(mod)) return;   // autosave any module that still holds data
