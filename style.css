@@ -677,6 +677,11 @@ svg.plot {
   border: 1px solid var(--line);
   touch-action: none;
 }
+/* On mobile / small screens the columns already stack to full width, so drop the
+   min-width floor — otherwise every plot would overflow and scroll horizontally. */
+@media (max-width: 820px) {
+  svg.plot { min-width: 0; }
+}
 .legend {
   font-size: 12px;
   margin-top: 6px;
