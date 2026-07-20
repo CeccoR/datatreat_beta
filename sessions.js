@@ -88,10 +88,11 @@ const current = {};   // mod -> { id, title }
 const dirty = {};     // mod -> bool
 
 /* ---- Autosave (crash-recovery draft) ----
-   5 s after the last change, save the module's state to the 'drafts' store — but
-   ONLY when the project name field is filled (the one signal that the user cares).
-   Cleared on Save / data-loss. A draft ≠ a saved project: on restore it comes back
-   as unsaved work that still needs an explicit Save. */
+   5 s after the last change, save the module's state to the 'drafts' store whenever
+   the module holds data — named or not — so a reload (incl. Chrome's desktop/mobile
+   switch, which reloads the page) doesn't wipe unsaved work. Cleared on Save / data
+   loss. A draft ≠ a saved project: on restore it comes back as unsaved work that
+   still needs an explicit Save. */
 const AUTOSAVE_MS = 5000;
 const _autosaveTimers = {};
 function scheduleAutosave(mod){
@@ -99,9 +100,9 @@ function scheduleAutosave(mod){
   _autosaveTimers[mod] = setTimeout(()=>saveDraft(mod), AUTOSAVE_MS);
 }
 async function saveDraft(mod){
+  if (!moduleHasData(mod)) return;   // autosave any module that still holds data
   const inp = nameInput(mod);
   const title = inp ? inp.value.trim() : '';
-  if (!title || !moduleHasData(mod)) return;   // only named projects that still hold data
   try {
     const rec = { module: mod, title, state: encode(getModuleState(mod)), updatedAt: Date.now() };
     if (current[mod]) rec.id = current[mod].id;  // keep the association so Save updates the right project
@@ -488,7 +489,7 @@ MODULES.forEach(m=> onModuleChange(m, ()=> scheduleAutosave(m)));
 async function initDraftRecovery(){
   let drafts;
   try { drafts = await getAllDrafts(); } catch(e){ return; }
-  drafts = (drafts || []).filter(d=> d && d.title && d.state);
+  drafts = (drafts || []).filter(d=> d && d.state);   // title may be empty (unnamed work)
   const banner = document.getElementById('restoreBanner');
   if (!drafts.length || !banner) return;
   const labels = drafts.map(d=> MODULE_LABELS[d.module] || d.module).join(', ');
@@ -513,6 +514,14 @@ async function initDraftRecovery(){
   };
 }
 initDraftRecovery();
+
+// Flush pending drafts immediately when the page is hidden/unloaded (Chrome's
+// desktop⇄mobile switch reloads the page, tab close, refresh) so changes made in
+// the last few seconds aren't lost to the debounce. Best-effort: visibilitychange
+// (hidden) fires early enough for IndexedDB to commit; pagehide is the backstop.
+function flushDrafts(){ MODULES.forEach(m=>{ if (moduleHasData(m)) saveDraft(m); }); }
+document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState === 'hidden') flushDrafts(); });
+window.addEventListener('pagehide', flushDrafts);
 
 // Warn before leaving if a module has unsaved changes AND a non-empty project
 // name (a saved project, or one the user bothered to name — so it matters). One
