@@ -179,13 +179,28 @@ class Plot{
     this.gData.appendChild(r);
     return r;
   }
-  errbar(xc, yval, yerr){
-    const entry = {type:'errbar', xc, yval, yerr};
+  /* Bar with a fixed PIXEL width, centred at data-x `xc` (+ optional pixel offset `dx`).
+     Width stays constant regardless of the sample count or the zoom level — only the
+     centre reprojects. `hw` is the half-width in px. */
+  barPx(xc, y0, y1, color, hw, dx){
+    const entry = {type:'barpx', xc, y0, y1, color, hw:hw||14, dx:dx||0};
+    this._stored.push(entry);
+    return this._renderBarPx(entry);
+  }
+  _renderBarPx(entry){
+    const cx=this.px(entry.xc)+entry.dx;
+    const py0=this.py(entry.y0), py1=this.py(entry.y1);
+    const r = svgEl('rect',{x:cx-entry.hw, y:Math.min(py0,py1), width:entry.hw*2, height:Math.abs(py0-py1), fill:entry.color});
+    this.gData.appendChild(r);
+    return r;
+  }
+  errbar(xc, yval, yerr, dx){
+    const entry = {type:'errbar', xc, yval, yerr, dx:dx||0};
     this._stored.push(entry);
     this._renderErrbar(entry);
   }
   _renderErrbar(entry){
-    const x=this.px(entry.xc), y1=this.py(entry.yval-entry.yerr), y2=this.py(entry.yval+entry.yerr);
+    const x=this.px(entry.xc)+(entry.dx||0), y1=this.py(entry.yval-entry.yerr), y2=this.py(entry.yval+entry.yerr);
     this.gData.appendChild(svgEl('line',{x1:x,x2:x,y1,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1,y2:y1,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1:y2,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
@@ -220,7 +235,7 @@ class Plot{
     return this._renderBarLabel(entry);
   }
   _renderBarLabel(entry){
-    const x = this.px(entry.xv);
+    const x = this.px(entry.xv) + (entry.dx||0);
     const y = this.py(entry.yval) - (entry.gap!=null ? entry.gap : 6);
     const rot = entry.rot!=null ? entry.rot : 90;   // vertical, reading upward
     const t = svgEl('text',{x, y, 'font-size':entry.size||10, 'text-anchor':'start',
@@ -270,6 +285,7 @@ class Plot{
       if (e.type==='line') this._renderLine(e);
       else if (e.type==='points') this._renderPoints(e);
       else if (e.type==='bar') this._renderBar(e);
+      else if (e.type==='barpx') this._renderBarPx(e);
       else if (e.type==='errbar') this._renderErrbar(e);
       else if (e.type==='ticklabel') this._renderTickLabel(e);
       else if (e.type==='barlabel') this._renderBarLabel(e);

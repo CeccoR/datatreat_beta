@@ -482,7 +482,7 @@ import { Plot, svgEl } from './plot.js';
     barPlot.drawAxes();
     costResults.forEach((c,k)=>{
       if (!isFinite(c.cost)) return;
-      barPlot.bar(k+1-0.16, k+1+0.16, 0, c.cost, dataTables[k].color);
+      barPlot.barPx(k+1, 0, c.cost, dataTables[k].color, 16);
       barPlot.barLabel(k+1, c.cost, fmtVal(c.cost), {gap});
       barPlot.tickLabel(k+1, labels[k], 30);
     });

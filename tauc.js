@@ -612,16 +612,14 @@ import { Plot } from './plot.js';
       for (let k=0;k<n;k++){
         const xc = k+1;
         if (isFinite(egs[k])&&egs[k]>0){
-          const x0=xc-0.18, x1=xc-0.02, cx=(x0+x1)/2;
-          drawBar(plot2,x0,x1,egs[k],'#3aa0ff');
-          if (isFinite(egErrs[k])) drawErrBar(plot2,cx,egs[k],egErrs[k]);
-          plot2.barLabel(cx, topOf(egs[k],egErrs[k]), fmtLab(egs[k],egErrs[k]), {gap});
+          drawBar(plot2,xc,egs[k],'#3aa0ff',12,-13);
+          if (isFinite(egErrs[k])) drawErrBar(plot2,xc,egs[k],egErrs[k],-13);
+          plot2.barLabel(xc, topOf(egs[k],egErrs[k]), fmtLab(egs[k],egErrs[k]), {gap,dx:-13});
         }
         if (isFinite(egInts[k])&&egInts[k]>0){
-          const x0=xc+0.02, x1=xc+0.18, cx=(x0+x1)/2;
-          drawBar(plot2,x0,x1,egInts[k],'#ff7a59');
-          if (isFinite(egIntErrs[k])) drawErrBar(plot2,cx,egInts[k],egIntErrs[k]);
-          plot2.barLabel(cx, topOf(egInts[k],egIntErrs[k]), fmtLab(egInts[k],egIntErrs[k]), {gap});
+          drawBar(plot2,xc,egInts[k],'#ff7a59',12,13);
+          if (isFinite(egIntErrs[k])) drawErrBar(plot2,xc,egInts[k],egIntErrs[k],13);
+          plot2.barLabel(xc, topOf(egInts[k],egIntErrs[k]), fmtLab(egInts[k],egIntErrs[k]), {gap,dx:13});
         }
         plot2.tickLabel(xc, files[k].label, 30);
       }
@@ -629,8 +627,8 @@ import { Plot } from './plot.js';
       leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
     }
   }
-  function drawBar(plot, x0, x1, val, color){ plot.bar(x0, x1, 0, val, color); }
-  function drawErrBar(plot, xc, val, err){ plot.errbar(xc, val, err); }
+  function drawBar(plot, xc, val, color, hw, dx){ plot.barPx(xc, 0, val, color, hw, dx); }
+  function drawErrBar(plot, xc, val, err, dx){ plot.errbar(xc, val, err, dx); }
 
   // Assemble a "wide" CSV: each column is {h:header, v:[values]}, padded to the
   // longest so every sample keeps its own independent columns (no shared axis).

@@ -1006,10 +1006,10 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     for (let k=0;k<n;k++){
       const xc=k+1;
       if (anyCorr){
-        if (isFinite(raws[k])&&raws[k]>0){ const x0=xc-0.18,x1=xc-0.02,cx=(x0+x1)/2; plot.bar(x0,x1,0,raws[k],'#3aa0ff'); if(isFinite(rawE[k]))plot.errbar(cx,raws[k],rawE[k]); plot.barLabel(cx,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap}); }
-        if (isFinite(corrs[k])&&corrs[k]>0){ const x0=xc+0.02,x1=xc+0.18,cx=(x0+x1)/2; plot.bar(x0,x1,0,corrs[k],'#ff7a59'); if(isFinite(corrE[k]))plot.errbar(cx,corrs[k],corrE[k]); plot.barLabel(cx,topOf(corrs[k],corrE[k]),fmtLab(corrs[k],corrE[k]),{gap}); }
+        if (isFinite(raws[k])&&raws[k]>0){ plot.barPx(xc,0,raws[k],'#3aa0ff',12,-13); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k],-13); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap,dx:-13}); }
+        if (isFinite(corrs[k])&&corrs[k]>0){ plot.barPx(xc,0,corrs[k],'#ff7a59',12,13); if(isFinite(corrE[k]))plot.errbar(xc,corrs[k],corrE[k],13); plot.barLabel(xc,topOf(corrs[k],corrE[k]),fmtLab(corrs[k],corrE[k]),{gap,dx:13}); }
       } else if (isFinite(raws[k])&&raws[k]>0){
-        const x0=xc-0.16,x1=xc+0.16; plot.bar(x0,x1,0,raws[k],'#3aa0ff'); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
+        plot.barPx(xc,0,raws[k],'#3aa0ff',16,0); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
       }
       plot.tickLabel(xc, rows[k].label, 30);
     }
