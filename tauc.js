@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -589,8 +589,11 @@ import { Plot } from './plot.js';
       // Bottom margin adapts to the longest 30°-tilted label so names fit.
       const mctx = document.createElement('canvas').getContext('2d');
       mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-      let maxLbl = 0; files.forEach(f=>{ maxLbl = Math.max(maxLbl, mctx.measureText(f.label).width); });
-      const svgH = barSvg.getBoundingClientRect().height || 640;
+      const brect = barSvg.getBoundingClientRect();
+      const svgW = brect.width || 640, svgH = brect.height || 640;
+      const barSpacing = Math.max(30, (svgW-75)/(files.length+1));
+      const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, barSpacing, svgH));
+      let maxLbl = 0; barLabels.forEach(l=>{ maxLbl = Math.max(maxLbl, mctx.measureText(l).width); });
       const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
       // Each bar carries a vertical "Eg±err" label above it. Reserve enough top
       // headroom (in the y-range) that the longest label never spills off the top.
@@ -621,7 +624,7 @@ import { Plot } from './plot.js';
           if (isFinite(egIntErrs[k])) drawErrBar(plot2,xc,egInts[k],egIntErrs[k],17);
           plot2.barLabel(xc, topOf(egInts[k],egIntErrs[k]), fmtLab(egInts[k],egIntErrs[k]), {gap,dx:17});
         }
-        plot2.tickLabel(xc, files[k].label, 30);
+        plot2.tickLabel(xc, barLabels[k], 30);
       }
       plot2.attachTools(barSvg.closest('.plot-wrap'));
       leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;

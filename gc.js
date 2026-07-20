@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 
 /* =========================================================
@@ -17,6 +17,9 @@ import { Plot, svgEl } from './plot.js';
   let gcSel=null, gcHov=null;   // selected / hovered sample index (interval interaction)
   let loadAlerts='';
   let gcUploadAlerts='';
+  // Outgoing plot view captured before a resize/tab-switch redraw recreates the plots,
+  // so drawGcData can restore the current zoom instead of snapping to the full range.
+  let _gcPrev1=null, _gcPrev2=null;
 
   // Effective per-sample values (respect each parameter's all/one mode).
   const mOf     = k => mMode==='all'     ? mShared     : ms[k];
@@ -153,7 +156,7 @@ import { Plot, svgEl } from './plot.js';
     afterFilesChange();
   }
   const hist = registerHistory('gc', gcSnapshot, gcRestore);
-  registerTabRedraw('gc', ()=>{ if (files.length) computeAndRenderGc(); });
+  registerTabRedraw('gc', ()=>{ if (files.length) computeAndRenderGc(true); });
 
   // Warning when a sample's light-on time is before (or at) its first injection
   function lightOnWarn(i){
@@ -306,8 +309,12 @@ import { Plot, svgEl } from './plot.js';
     return Number.isFinite(n) ? n : null;
   }
 
-  function computeAndRenderGc(){
+  function computeAndRenderGc(preserveView){
     if (!files.length) return;
+    // Snapshot the current zoom before renderGcPlots() builds fresh Plot instances.
+    const o1 = document.getElementById('gcSvg1')._plot, o2 = document.getElementById('gcSvg2')._plot;
+    _gcPrev1 = (preserveView && o1 && isFinite(o1.xmin)) ? {xmin:o1.xmin,xmax:o1.xmax,ymin:o1.ymin,ymax:o1.ymax} : null;
+    _gcPrev2 = (preserveView && o2 && isFinite(o2.xmin)) ? {xmin:o2.xmin,xmax:o2.xmax,ymin:o2.ymin,ymax:o2.ymax} : null;
     dataTables = files.map((f,h)=>{
       const pairs = f.injDates.map((d,i)=>({d, v:f.h2[i]})).sort((a,b)=>a.d-b.d);
       const lightOn = lightOnDates[h];
@@ -346,15 +353,22 @@ import { Plot, svgEl } from './plot.js';
   // pan/zoom via _onView.
   function drawGcData(){
     if (!plot1 || !plot2 || !dataTables.length) return;
+    // Restore the pre-redraw zoom captured in computeAndRenderGc (resize/tab-switch),
+    // then clear it so a subsequent data-driven redraw snaps back to the full range.
+    const prev1 = _gcPrev1, prev2 = _gcPrev2; _gcPrev1 = _gcPrev2 = null;
     const allT = dataTables.flatMap(d=>d.t);
     const intPts = dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
     const tmin = Math.min(0, minArr(allT), ...intPts);
     const tmax = Math.max(maxArr(allT), ...intPts);
     const ymax1 = Math.max(...dataTables.map(d=>maxArr(d.h2Fm))), ymin1 = Math.min(...dataTables.map(d=>minArr(d.h2Fm)));
-    plot1.setRange(tmin, tmax, ymin1, ymax1*1.05); plot1.drawAxes(); plot1.clearData();
+    plot1.setRange(tmin, tmax, ymin1, ymax1*1.05);
+    if (prev1){ plot1.xmin=prev1.xmin; plot1.xmax=prev1.xmax; plot1.ymin=prev1.ymin; plot1.ymax=prev1.ymax; }
+    plot1.drawAxes(); plot1.clearData();
     dataTables.forEach(d=> plot1.line(d.t, d.h2Fm, d.color, 1.3));
     const ymax2 = Math.max(...dataTables.map(d=>maxArr(d.h2FmInt)));
-    plot2.setRange(tmin, tmax, 0, ymax2*1.05); plot2.drawAxes(); plot2.clearData();
+    plot2.setRange(tmin, tmax, 0, ymax2*1.05);
+    if (prev2){ plot2.xmin=prev2.xmin; plot2.xmax=prev2.xmax; plot2.ymin=prev2.ymin; plot2.ymax=prev2.ymax; }
+    plot2.drawAxes(); plot2.clearData();
     dataTables.forEach(d=> plot2.line(d.t, d.h2FmInt, d.color, 1.3));
     plot1._onView = ()=> drawGcIntervals(plot1);
     plot2._onView = ()=> drawGcIntervals(plot2);
@@ -457,19 +471,8 @@ import { Plot, svgEl } from './plot.js';
     // (keeps the leftmost label from spilling off the left edge on narrow screens).
     const rect = svg.getBoundingClientRect();
     const svgW = rect.width || 640, svgH = rect.height || 640;
-    const cos30 = Math.cos(Math.PI/6), sin30 = Math.sin(Math.PI/6);
     const barSpacing = Math.max(30, (svgW-75)/(costResults.length+1));
-    // Cut point: the 30°-tilted name must fit one bar-spacing horizontally AND its
-    // vertical footprint must stay within 15% of the chart height, so long names
-    // never eat more than a thin strip of a tall (golden-ratio) chart.
-    const maxTextW = Math.min(barSpacing / cos30, 0.15 * svgH / sin30);
-    const trunc = s => {
-      if (mctx.measureText(s).width <= maxTextW) return s;
-      let t = s;
-      while (t.length>1 && mctx.measureText(t+'…').width > maxTextW) t = t.slice(0,-1);
-      return t+'…';
-    };
-    const labels = costResults.map(c=>trunc(c.label));
+    const labels = costResults.map(c=>truncTiltLabel(mctx, c.label, barSpacing, svgH));
     let maxLbl = 0;
     labels.forEach((lbl,k)=>{ if (isFinite(costResults[k].cost)) maxLbl = Math.max(maxLbl, mctx.measureText(lbl).width); });
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));

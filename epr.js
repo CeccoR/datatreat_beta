@@ -169,13 +169,17 @@ import { Plot } from './plot.js';
     afterFilesChange();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
-  registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(); });
+  registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(true); });
 
-  function updateEpr(){
+  function updateEpr(preserveView){
     if (!files.length) return;
     const N = +document.getElementById('eprSmooth').value || 1;
     const norm = document.getElementById('eprNorm').value;
     let Y = files.map(f=>movingAverage(f.a, N));
+    // A fresh Plot is built each render, so grab the outgoing view first to keep the
+    // current zoom on a resize / tab-switch redraw instead of snapping to full range.
+    const old = document.getElementById('eprSvg')._plot;
+    const prev = (preserveView && old && isFinite(old.xmin)) ? {xmin:old.xmin,xmax:old.xmax,ymin:old.ymin,ymax:old.ymax} : null;
     const plot = new Plot(document.getElementById('eprSvg'), {xlabel:'Magnetic Field (mT)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById('eprLegend'); legend.innerHTML='';
@@ -190,6 +194,7 @@ import { Plot } from './plot.js';
       Y = Y.map((y,k)=>{ const mid=maxArr(y)/(2*gmax); return y.map(v=>v/gmax+baseOf(k)+0.55-mid); });
     }
     plot.setRange(minArr(allB), maxArr(allB), baseOf(n-1), baseOf(0)+1.1);
+    if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
     plot.drawAxes();
     Y.forEach((y,k)=>{
       plot.line(files[k].b, y, files[k].color, 1.3);

@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, truncTiltLabel } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -987,8 +987,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const n = rows.length;
     const mctx = document.createElement('canvas').getContext('2d');
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-    let maxLbl=0; rows.forEach(r=>maxLbl=Math.max(maxLbl, mctx.measureText(r.label).width));
-    const svgH = svg.getBoundingClientRect().height || 420;
+    const brect = svg.getBoundingClientRect();
+    const svgW = brect.width || 640, svgH = brect.height || 420;
+    const barSpacing = Math.max(30, (svgW-75)/(n+1));
+    const labels = rows.map(r=>truncTiltLabel(mctx, r.label, barSpacing, svgH));
+    let maxLbl=0; labels.forEach(l=>maxLbl=Math.max(maxLbl, mctx.measureText(l).width));
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
     const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
     const topOf = (v,e)=> v + (isFinite(e)?e:0);
@@ -1011,7 +1014,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       } else if (isFinite(raws[k])&&raws[k]>0){
         plot.barPx(xc,0,raws[k],'#3aa0ff',16,0); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
       }
-      plot.tickLabel(xc, rows[k].label, 30);
+      plot.tickLabel(xc, labels[k], 30);
     }
     plot.attachTools(wrap);
     if (legend) legend.innerHTML = anyCorr
