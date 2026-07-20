@@ -612,14 +612,14 @@ import { Plot } from './plot.js';
       for (let k=0;k<n;k++){
         const xc = k+1;
         if (isFinite(egs[k])&&egs[k]>0){
-          drawBar(plot2,xc,egs[k],'#3aa0ff',12,-13);
-          if (isFinite(egErrs[k])) drawErrBar(plot2,xc,egs[k],egErrs[k],-13);
-          plot2.barLabel(xc, topOf(egs[k],egErrs[k]), fmtLab(egs[k],egErrs[k]), {gap,dx:-13});
+          drawBar(plot2,xc,egs[k],'#3aa0ff',16,-17);
+          if (isFinite(egErrs[k])) drawErrBar(plot2,xc,egs[k],egErrs[k],-17);
+          plot2.barLabel(xc, topOf(egs[k],egErrs[k]), fmtLab(egs[k],egErrs[k]), {gap,dx:-17});
         }
         if (isFinite(egInts[k])&&egInts[k]>0){
-          drawBar(plot2,xc,egInts[k],'#ff7a59',12,13);
-          if (isFinite(egIntErrs[k])) drawErrBar(plot2,xc,egInts[k],egIntErrs[k],13);
-          plot2.barLabel(xc, topOf(egInts[k],egIntErrs[k]), fmtLab(egInts[k],egIntErrs[k]), {gap,dx:13});
+          drawBar(plot2,xc,egInts[k],'#ff7a59',16,17);
+          if (isFinite(egIntErrs[k])) drawErrBar(plot2,xc,egInts[k],egIntErrs[k],17);
+          plot2.barLabel(xc, topOf(egInts[k],egIntErrs[k]), fmtLab(egInts[k],egIntErrs[k]), {gap,dx:17});
         }
         plot2.tickLabel(xc, files[k].label, 30);
       }
