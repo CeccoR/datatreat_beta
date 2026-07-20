@@ -15,18 +15,19 @@
   --line: #26343b;
   --text: #dfe8ea;
   --muted: #7f97a0;
+  --white: #ffffff;          /* the single source of "white" across the UI */
   --accent: #ffb454;
   --accent2: #d98fd1;
   --good: #7fd17f;
-  --warn: #ffb454;
+  --warn: var(--accent);     /* warnings reuse the accent (were a near-identical orange) */
   --bad: #ff6b6b;
   --accent-hover: #ffc271;   /* primary button :hover */
   --accent-active: #e89a35;  /* primary button :active (pressed) */
   --on-accent: #06131f;      /* text drawn on top of the accent fill */
   --ok: #2e9e4f;             /* "saved ✓" confirmation fill */
-  --ok-fg: #ffffff;          /* text on the confirmation fill */
+  --ok-fg: var(--white);     /* text on the confirmation fill */
   --icon-tile: #0e1316;      /* home-card square icon tile background */
-  --sel-inset: #ffffff;      /* selected peak-row highlight border */
+  --sel-inset: var(--white); /* selected peak-row highlight border */
   --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
   --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
   --alert-bad-bg:  #3a1212;  --alert-bad-line:  #5a1c1c;
@@ -44,7 +45,7 @@
 /* ===== Light theme ===== */
 :root[data-theme="light"] {
   --bg: #f3f5f6;
-  --panel: #ffffff;
+  --panel: var(--white);
   --panel2: #eceff1;
   --line: #d2d9dd;
   --text: #1a2327;
@@ -52,15 +53,13 @@
   --accent: #b96a10;
   --accent2: #9c4b93;
   --good: #2e8b4e;
-  --warn: #a9670a;
   --bad: #cc3b3b;
   --accent-hover: #a75e0b;
   --accent-active: #8c4e08;
-  --on-accent: #ffffff;
+  --on-accent: var(--white);
   --ok: #2e8b4e;
-  --ok-fg: #ffffff;
   --icon-tile: #f3f5f6;
-  --sel-inset: #b96a10;
+  --sel-inset: var(--accent);
   --alert-warn-bg: #fbf1dd;  --alert-warn-line: #e4c583;
   --alert-good-bg: #e2f4ea;  --alert-good-line: #9dd3b3;
   --alert-bad-bg:  #fbe6e6;  --alert-bad-line:  #eaa9a9;
@@ -71,7 +70,7 @@
   --plot-label: #33424a;
   --plot-cross: #56676f;
   --plot-readout: #1a2327;
-  --plot-readout-halo: #ffffff;
+  --plot-readout-halo: var(--white);
   --plot-errbar: #2a2f38;
 }
 /* Plot chrome follows the theme. CSS beats SVG presentation attributes, so these
@@ -1037,7 +1036,7 @@ button.color-swatch:hover { border-color: var(--text); }
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--white);
   box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
   position: absolute;
   transform: translate(-50%,-50%);
@@ -1056,7 +1055,7 @@ button.color-swatch:hover { border-color: var(--text); }
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--white);
   box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
   position: absolute;
   top: 50%;
@@ -1129,7 +1128,7 @@ button.color-swatch:hover { border-color: var(--text); }
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--white);
   border: 2px solid rgba(0,0,0,0.22);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   cursor: pointer;
@@ -1143,7 +1142,7 @@ button.color-swatch:hover { border-color: var(--text); }
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--white);
   border: 2px solid rgba(0,0,0,0.22);
   cursor: pointer;
 }
