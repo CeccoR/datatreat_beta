@@ -222,6 +222,9 @@ button.btn.is-saved:disabled {
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .proj-icon .proj-svg { width: 26px; height: 26px; display: block; }
+/* Project-bar export icons are icon buttons → muted grey like every other icon
+   button (nav, plot toolbar, table CSV). Save stays primary; hover still accents. */
+.btn.proj-saveas, .btn.proj-csv, .btn.proj-json { --btn-fg: var(--muted); }
 /* Project bar: sits above the upload area, always visible. Name field on the far
    left, action icons on the far right, both vertically centered. */
 .card.project-bar {
