@@ -647,13 +647,18 @@ td input.label-input {
   width: 100%;
   min-width: 120px;
 }
+/* Sample counter (e.g. "3/12"): styled like the all/one mode-chip — small, muted,
+   rounded — so it and the nav arrows read as one control group. */
 .pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
   background: var(--panel2);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 3px 10px;
-  font-size: 12px;
+  border-radius: 11px;
+  padding: 0 8px;
+  font-size: 10px;
   color: var(--muted);
   margin-right: 6px;
 }
@@ -1301,10 +1306,13 @@ button.color-swatch:hover { border-color: var(--text); }
   z-index: 9999;
   font-size: 13px;
   color: var(--text);
+  max-width: min(560px, calc(100vw - 20px));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s, transform 0.2s;
 }
+/* On phones give the banner room so the message doesn't crush into a sliver. */
+@media (max-width: 640px) { .pwa-toast { width: calc(100vw - 20px); } }
 .pwa-toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
@@ -1339,15 +1347,18 @@ button.color-swatch:hover { border-color: var(--text); }
 }
 
 /* ===== Sample navigation arrows ===== */
-.nav-arrow {
-  height: 30px;
+/* Nav arrows: same chip box as the counter (.pill) — same height/shape, width just
+   fits the arrow, glyph perfectly centred; styled like the all/one mode-chip. */
+.btn.nav-arrow {
+  height: 22px;
+  min-width: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 10px;
-  font-size: 18px;
+  padding: 0 6px;
+  font-size: 13px;
   line-height: 1;
-  border-radius: 6px;
+  border-radius: 11px;
 }
 
 /* Instrumental-standard picker: sits in the plot header row, aligned with and the

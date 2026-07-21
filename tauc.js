@@ -12,8 +12,6 @@ import { Plot } from './plot.js';
   let bestRegsAll = [];
   let resPlot0=null, resPlot1=null;   // reused summary-plot instances (created once)
   let _dragging=false;                // true while an interval line is being dragged
-  let _resTimer=null;
-  const RES_DEBOUNCE=0;               // ms; 0 = next tick (coalesces bursts, keeps drag out)
 
   // ---- all/one analysis mode (single global toggle) ----
   // 'shared': every sample uses one common parameter set AND one common set of
@@ -454,18 +452,13 @@ import { Plot } from './plot.js';
     plot.vline(vlines.v3, '#d050ff', true, onDrag('v3'), onRelease('v3'));
     plot.vline(vlines.v4, '#d050ff', true, onDrag('v4'), onRelease('v4'));
 
-    if (!_dragging) scheduleResults();   // skip the heavy summaries mid-drag
+    if (!_dragging) updateTaucResults();   // skip the heavy summaries mid-drag
   }
 
   function updateTaucResults(){
     if (!files.length) return;
     processAll();
     renderResView();
-  }
-  // Coalesce summary re-renders (debounce). RES_DEBOUNCE=0 → next tick for now.
-  function scheduleResults(){
-    clearTimeout(_resTimer);
-    _resTimer = setTimeout(()=>{ _resTimer=null; updateTaucResults(); }, RES_DEBOUNCE);
   }
 
   let throttle=null;

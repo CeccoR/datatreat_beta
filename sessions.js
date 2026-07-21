@@ -396,13 +396,16 @@ async function deleteProjectRec(rec){
 // "remove all" action (and confirmation banner) as the file table's remove-all.
 async function deleteOpenProject(mod){
   const cur = current[mod];
+  const rmAll = document.querySelector('#'+mod+'FileTableWrap .remove-all');
   if (cur){
-    if (!await confirmBanner('Delete project “'+cur.title+'”? This cannot be undone.', 'Delete')) return;
+    // Delete the saved project AND clear the module (files + draft), one confirmation.
+    if (!await confirmBanner('Delete project “'+cur.title+'” and remove all files? Unsaved changes will be permanently lost.', 'Delete')) return;
     await deleteProjectRec({ id: cur.id, module: mod, title: cur.title });
+    if (rmAll && rmAll._clearNow) rmAll._clearNow();
     renderList();
     return;
   }
-  const rmAll = document.querySelector('#'+mod+'FileTableWrap .remove-all');
+  // No saved project → plain remove-all (with its own confirmation banner).
   if (rmAll) rmAll.click();
 }
 

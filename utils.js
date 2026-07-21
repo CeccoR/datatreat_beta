@@ -526,10 +526,14 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   wrap.innerHTML = html;
 
   const REMOVE_ALL_MSG = 'Remove all files? Unsaved changes will be permanently lost.';
-  wrap.querySelector('.remove-all').addEventListener('click', async ()=>{
+  const rmAllBtn = wrap.querySelector('.remove-all');
+  // Exposed so other flows (e.g. the project-bar trash) can clear the module without
+  // re-showing the confirmation banner — they confirm once on their own.
+  rmAllBtn._clearNow = ()=>{ if (callbacks.onRemoveAll) callbacks.onRemoveAll(); };
+  rmAllBtn.addEventListener('click', async ()=>{
     // Remove-all also drops the module's autosaved draft, so always confirm first.
     if (!await confirmBanner(REMOVE_ALL_MSG)) return;
-    if (callbacks.onRemoveAll) callbacks.onRemoveAll();
+    rmAllBtn._clearNow();
   });
   const palBtn = wrap.querySelector('.palette-pick-btn');
   if (palBtn) palBtn.addEventListener('click', e=>{
