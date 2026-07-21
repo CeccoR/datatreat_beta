@@ -195,7 +195,7 @@
 
       <div class="card" id="taucWorkspace" style="display:none">
         <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
-        <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest line positions</b> to place them automatically from the absorption edge (second-derivative method). Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 0.5 for indirect semiconductors and 2 for direct semiconductors.</div>
+        <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method). Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 0.5 for indirect semiconductors and 2 for direct semiconductors.</div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
             <div class="plot-nav-row">
@@ -205,7 +205,7 @@
                 <button class="btn nav-arrow" id="taucNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
                 <span class="txt-caption" id="taucCurrentLabel">—</span>
               </div>
-              <button class="btn plot-corner-btn" id="taucSuggest" title="Propose optimal Tauc-region and baseline line positions from the absorption edge">&#10022; Suggest line positions</button>
+              <button class="btn plot-corner-btn" id="taucSuggest" title="Propose optimal Tauc-region and baseline intervals from the absorption edge">&#10022; Suggest intervals</button>
             </div>
             <div class="plot-wrap">
               <svg class="plot" id="taucSvg"></svg>
@@ -735,7 +735,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v158</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v159</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
