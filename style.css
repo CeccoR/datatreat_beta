@@ -259,7 +259,7 @@ button.btn.is-saved:disabled {
   padding: 0 10px;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
-.project-name-input::placeholder { font-weight: 400; font-size: 16px; color: var(--muted); }
+.project-name-input::placeholder { font-weight: 400; font-size: 13px; color: var(--muted); }
 /* Empty → always a real dark field; hover/focus on a filled field reveal it too */
 .project-name-input:placeholder-shown,
 .project-name-input:hover { border-color: var(--line); background: var(--panel2); }

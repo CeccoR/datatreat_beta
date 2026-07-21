@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, truncTiltLabel } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, truncTiltLabel, confirmBanner } from './utils.js';
 import { svgEl, Plot } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -142,13 +142,14 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const sel = document.getElementById('xrdStandard');
     if (!sel) return;
     if (standardName && !files.some(f=>f.name===standardName)) standardName = '';
-    // Ghost placeholder shown when nothing is chosen (hidden from the open list),
-    // plus a blank row that selects "none" explicitly.
+    // List = "None" + samples. When "None" is the selection the closed box shows a
+    // grey ghost placeholder instead of the word "None" (a hidden first option that
+    // we snap the selection back to — see the change handler).
     sel.innerHTML = '<option value="" hidden>Choose standard…</option>' +
-      '<option value="">None</option>' +
+      '<option value="__none__">None</option>' +
       files.map(f=>`<option value="${f.name.replace(/"/g,'&quot;')}">${f.label}</option>`).join('');
-    sel.value = standardName;
-    sel.classList.toggle('ghost', !sel.value);
+    if (standardName){ sel.value = standardName; sel.classList.remove('ghost'); }
+    else { sel.selectedIndex = 0; sel.classList.add('ghost'); }   // ghost placeholder
   }
 
   function afterFilesChange(){
@@ -569,7 +570,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // Until a standard is chosen only the select box shows; picking one spawns the
     // plot, its parameters column and the peak table.
     const show = !(si<0 || !processed[si]);
-    ['xrdStdBody','xrdStdParams'].forEach(id=>{ const el=document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; });
+    ['xrdStdBody','xrdStdParams','xrdStdPeakBox'].forEach(id=>{ const el=document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; });
     // Add-peak keeps its slot reserved (visibility, not display) so the picker box
     // beside it never resizes when a standard is chosen.
     const addBtn = document.getElementById('xrdStdAddPeak'); if (addBtn) addBtn.style.visibility = show ? 'visible' : 'hidden';
@@ -594,6 +595,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const mx = maxArr(pr.smoothed) || 1;
     const sf = savedFits[fitIdx];
     const doFit = !!(sf && sf.fits && sf.fits.length);
+    // Delete-fit buttons enabled only when there is a fit to remove.
+    const delOne = document.getElementById('xrdDelFitBtn'); if (delOne) delOne.disabled = !doFit;
+    const delAll = document.getElementById('xrdDelAllFitsBtn'); if (delAll) delAll.disabled = !savedFits.some(Boolean);
 
     const svgEl = document.getElementById('xrdFitSvg');
     const plot  = new Plot(svgEl, {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
@@ -817,10 +821,20 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       return reconstructFit(f.x, sf.fits).full;
     });
     // The Fit column keeps its space (so the Analysis plots stay half-width) but
-    // its plots and titles only become visible once a sample has a fit.
+    // its plots and titles only become visible once a sample has a fit — UNLESS the
+    // layout has wrapped the columns onto separate rows (narrow desktop / mobile),
+    // where reserving space would just leave a meaningless empty block: then hide it.
     const anyFit = fitCurves.some(c=>c);
     const fitCol = document.getElementById('xrdResFitCol');
-    if (fitCol) fitCol.style.visibility = anyFit ? 'visible' : 'hidden';
+    if (fitCol){
+      if (anyFit){ fitCol.style.display = ''; fitCol.style.visibility = 'visible'; }
+      else {
+        fitCol.style.display = ''; fitCol.style.visibility = 'hidden';
+        const content = document.getElementById('xrdResultsContent');
+        const a = content.children[0].getBoundingClientRect(), f = fitCol.getBoundingClientRect();
+        if (Math.abs(f.top - a.top) > 2) fitCol.style.display = 'none';   // wrapped → don't reserve
+      }
+    }
     if (anyFit) drawStackedResults('xrdResFitSvg', 'xrdResFitLegend', fitCurves);
     renderPeakTable();
   }
@@ -1279,6 +1293,17 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   };
   document.getElementById('xrdFitSampleBtn').onclick = ()=> runFit([fitIdx], fitHP, 'xrdFitSampleBtn', 'Fitting…');
   document.getElementById('xrdFitAllBtn').onclick    = ()=> runFit(files.map((_,i)=>i), fitHP, 'xrdFitAllBtn', 'Fitting…');
+  // Clear the fit of the selected sample, or of every sample.
+  function afterFitDeleted(){ updateXrdFitting(true); updateXrdResults(); renderPeakTable(); hist.commit(); }
+  document.getElementById('xrdDelFitBtn').onclick = ()=>{
+    if (fitBusy || !savedFits[fitIdx]) return;
+    savedFits[fitIdx] = null; afterFitDeleted();
+  };
+  document.getElementById('xrdDelAllFitsBtn').onclick = async ()=>{
+    if (fitBusy || !savedFits.some(Boolean)) return;
+    if (!await confirmBanner('Delete all fits? This cannot be undone.', 'Delete')) return;
+    savedFits = savedFits.map(()=>null); afterFitDeleted();
+  };
   document.getElementById('xrdFitStdBtn').onclick    = ()=>{
     const si=standardIdx();
     if (si<0){ alert('Select an instrumental standard first (Instrumental standard dropdown).'); return; }
@@ -1287,7 +1312,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // Choosing/clearing the standard isolates that sample in the Standard card, removes it
   // from Analysis navigation, and refreshes every card (its peaks drive the correction).
   document.getElementById('xrdStandard').addEventListener('change', e=>{
-    standardName = e.target.value;
+    // "None" (__none__) clears the standard; snap the box back to the ghost placeholder.
+    standardName = (e.target.value === '__none__') ? '' : e.target.value;
+    if (!standardName) e.target.selectedIndex = 0;
     e.target.classList.toggle('ghost', !standardName);
     if (!files.length){ hist.commit(); return; }
     panels.a.sel=panels.a.hov=panels.s.sel=panels.s.hov=null;

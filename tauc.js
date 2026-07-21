@@ -10,6 +10,10 @@ import { Plot } from './plot.js';
   let plot;
   let vlines = {};            // active interval lines (points at the current sample's set)
   let bestRegsAll = [];
+  let resPlot0=null, resPlot1=null;   // reused summary-plot instances (created once)
+  let _dragging=false;                // true while an interval line is being dragged
+  let _resTimer=null;
+  const RES_DEBOUNCE=0;               // ms; 0 = next tick (coalesces bursts, keeps drag out)
 
   // ---- all/one analysis mode (single global toggle) ----
   // 'shared': every sample uses one common parameter set AND one common set of
@@ -441,18 +445,27 @@ import { Plot } from './plot.js';
     document.getElementById('taucEg').textContent = isFinite(res.Eg) ? (isFinite(res.EgErr) ? `${res.Eg.toFixed(3)} ± ${res.EgErr.toFixed(3)} eV` : `${res.Eg.toFixed(3)} eV`) : '-';
     document.getElementById('taucEgInt').textContent = isFinite(res.EgInt) ? (isFinite(res.EgIntErr) ? `${res.EgInt.toFixed(3)} ± ${res.EgIntErr.toFixed(3)} eV` : `${res.EgInt.toFixed(3)} eV`) : '-';
 
-    plot.vline(vlines.v1, '#ff5050', true, v=>{vlines.v1=v; throttledUpdate();}, v=>{vlines.v1=v; updateTaucView(true); hist.commit();});
-    plot.vline(vlines.v2, '#ff5050', true, v=>{vlines.v2=v; throttledUpdate();}, v=>{vlines.v2=v; updateTaucView(true); hist.commit();});
-    plot.vline(vlines.v3, '#d050ff', true, v=>{vlines.v3=v; throttledUpdate();}, v=>{vlines.v3=v; updateTaucView(true); hist.commit();});
-    plot.vline(vlines.v4, '#d050ff', true, v=>{vlines.v4=v; throttledUpdate();}, v=>{vlines.v4=v; updateTaucView(true); hist.commit();});
+    // While dragging a line: live-update only the interactive plot (below); the
+    // summary plots refresh once, on release. onDrag sets _dragging, onRelease clears it.
+    const onDrag = k => v=>{ vlines[k]=v; _dragging=true; throttledUpdate(); };
+    const onRelease = k => v=>{ vlines[k]=v; _dragging=false; updateTaucView(true); hist.commit(); };
+    plot.vline(vlines.v1, '#ff5050', true, onDrag('v1'), onRelease('v1'));
+    plot.vline(vlines.v2, '#ff5050', true, onDrag('v2'), onRelease('v2'));
+    plot.vline(vlines.v3, '#d050ff', true, onDrag('v3'), onRelease('v3'));
+    plot.vline(vlines.v4, '#d050ff', true, onDrag('v4'), onRelease('v4'));
 
-    updateTaucResults();
+    if (!_dragging) scheduleResults();   // skip the heavy summaries mid-drag
   }
 
   function updateTaucResults(){
     if (!files.length) return;
     processAll();
     renderResView();
+  }
+  // Coalesce summary re-renders (debounce). RES_DEBOUNCE=0 → next tick for now.
+  function scheduleResults(){
+    clearTimeout(_resTimer);
+    _resTimer = setTimeout(()=>{ _resTimer=null; updateTaucResults(); }, RES_DEBOUNCE);
   }
 
   let throttle=null;
@@ -520,8 +533,12 @@ import { Plot } from './plot.js';
     const aVals = files.map((f,k)=>getFileParams(k).a);
     const aUniform = aVals.every(v=>v===aVals[0]);
     const aLabel = aUniform ? aVals[0] : 'a';
-    // Plot 0: F(R) vs λ
-    const plot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a.u.)', xTickStep:50, noYTickLabels:true});
+    // Plot 0: F(R) vs λ — reuse one Plot instance (create + attach tools once).
+    if (!resPlot0){
+      resPlot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a.u.)', xTickStep:50, noYTickLabels:true});
+      resPlot0.attachTools(resPlot0.svg.closest('.plot-wrap'));
+    }
+    const plot0 = resPlot0; plot0.clearData();
     const leg0 = document.getElementById('taucResLegend0'); leg0.innerHTML='';
     let ymax0=-Infinity;
     files.forEach((f,k)=>{ ymax0=Math.max(ymax0,maxArr(f.FR)); });
@@ -532,10 +549,14 @@ import { Plot } from './plot.js';
       plot0.line(f.wl, f.FR, f.color, 1.3);
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg0.appendChild(s);
     });
-    plot0.attachTools(plot0.svg.closest('.plot-wrap'));
 
-    // Plot 1: Tauc + regressions
-    const plot1 = new Plot(document.getElementById('taucResSvg1'), {xlabel:'Energy (eV)', ylabelSvg:`[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a.u.)`, xTickStep:0.5, noYTickLabels:true});
+    // Plot 1: Tauc + regressions — reused instance; its y-label depends on the exponent.
+    if (!resPlot1){
+      resPlot1 = new Plot(document.getElementById('taucResSvg1'), {xlabel:'Energy (eV)', xTickStep:0.5, noYTickLabels:true});
+      resPlot1.attachTools(resPlot1.svg.closest('.plot-wrap'));
+    }
+    const plot1 = resPlot1; plot1.clearData();
+    plot1.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a.u.)`;
     const leg1 = document.getElementById('taucResLegend1'); leg1.innerHTML='';
     const Ys_all = files.map((f,k)=>{
       const fp = getFileParams(k);
@@ -559,7 +580,6 @@ import { Plot } from './plot.js';
       }
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
     });
-    plot1.attachTools(plot1.svg.closest('.plot-wrap'));
 
     // Plot 2: Eg bar chart. With mixed exponents (per-sample mode) there is no single
     // Direct/Indirect qualifier, so drop it from the title and axis label.

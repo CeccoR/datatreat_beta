@@ -335,14 +335,6 @@
                 <span><i style="background:#ff9933"></i>baseline</span>
                 <span><i style="background:#5fcf6a"></i>peaks</span>
               </div>
-              <div class="peak-box" id="xrdStdPeakBox">
-                <div class="peak-box-head">
-                  <span class="txt-mini">Detected peaks</span>
-                  <button class="btn peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
-                  <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="standard.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
-                </div>
-                <div id="xrdStdPeakTableWrap"></div>
-              </div>
             </div>
           </div>
           <div class="col mw280" id="xrdStdParams" style="align-self:flex-start;display:none">
@@ -364,6 +356,14 @@
               <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkDist" value="0.3">
             </div>
           </div>
+        </div>
+        <div class="peak-box" id="xrdStdPeakBox" style="display:none">
+          <div class="peak-box-head">
+            <span class="txt-mini">Detected peaks</span>
+            <button class="btn peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
+            <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="standard.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
+          </div>
+          <div id="xrdStdPeakTableWrap"></div>
         </div>
       </div>
 
@@ -470,6 +470,10 @@
               <button class="btn primary" id="xrdFitAllBtn" style="flex:1">Fit all</button>
             </div>
             <button class="btn" id="xrdFitSettings" style="margin-top:8px;width:100%">Sample fit settings…</button>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn is-danger" id="xrdDelFitBtn" style="flex:1">Delete fit</button>
+              <button class="btn is-danger" id="xrdDelAllFitsBtn" style="flex:1">Delete all fits</button>
+            </div>
             <div id="xrdFitProgWrap" style="display:none;margin-top:6px"><div id="xrdFitProgBar"></div></div>
             <button class="btn" id="xrdFitCancelBtn" style="display:none;margin-top:8px;width:100%">Cancel</button>
             <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px"></div>
@@ -731,7 +735,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v156</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v157</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
