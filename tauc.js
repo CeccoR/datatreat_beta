@@ -580,53 +580,59 @@ import { Plot } from './plot.js';
     const posVals = egs.concat(egInts).filter(v=>isFinite(v)&&v>0);
     const noChart = !posVals.length;
     if (negWarns.length) barAlertDiv.innerHTML = negWarns.map((w,i)=>`<div class="alert warn"${noChart&&!i?' style="margin-top:0"':''}>${w}</div>`).join('');
-    const barSvg = document.getElementById('taucResSvg2');
-    const barWrap = barSvg.closest('.plot-wrap');
+    const barSvg  = document.getElementById('taucResSvg2');   // Eg (x-axis)
+    const barSvg3 = document.getElementById('taucResSvg3');   // Eg (baseline)
+    const barWrap  = barSvg.closest('.plot-wrap');
+    const barWrap3 = barSvg3.closest('.plot-wrap');
     if (noChart){
       barSvg.style.display='none'; barWrap.style.display='none';
+      barSvg3.style.display='none'; barWrap3.style.display='none';
+      leg2.innerHTML='';
     } else {
-      barSvg.style.display=''; barWrap.style.display='';
-      // Bottom margin adapts to the longest 30°-tilted label so names fit.
-      const mctx = document.createElement('canvas').getContext('2d');
-      mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-      const brect = barSvg.getBoundingClientRect();
-      const svgW = brect.width || 640, svgH = brect.height || 640;
-      const barSpacing = Math.max(30, (svgW-75)/(files.length+1));
-      const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, barSpacing, svgH));
-      let maxLbl = 0; barLabels.forEach(l=>{ maxLbl = Math.max(maxLbl, mctx.measureText(l).width); });
-      const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
-      // Each bar carries a vertical "Eg±err" label above it. Reserve enough top
-      // headroom (in the y-range) that the longest label never spills off the top.
+      barSvg.style.display='';  barWrap.style.display='';
+      barSvg3.style.display=''; barWrap3.style.display='';
       const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
       const topOf = (v,e)=> v + (isFinite(e)?e:0);
+      // The two twin plots share one y-scale so their bars are directly comparable.
       let maxValW = 0, maxTop = 0;
+      const mctxShared = document.createElement('canvas').getContext('2d');
+      mctxShared.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
       for (let k=0;k<n;k++){
-        if (isFinite(egs[k])&&egs[k]>0){ maxValW = Math.max(maxValW, mctx.measureText(fmtLab(egs[k],egErrs[k])).width); maxTop = Math.max(maxTop, topOf(egs[k],egErrs[k])); }
-        if (isFinite(egInts[k])&&egInts[k]>0){ maxValW = Math.max(maxValW, mctx.measureText(fmtLab(egInts[k],egIntErrs[k])).width); maxTop = Math.max(maxTop, topOf(egInts[k],egIntErrs[k])); }
+        if (isFinite(egs[k])&&egs[k]>0){ maxValW = Math.max(maxValW, mctxShared.measureText(fmtLab(egs[k],egErrs[k])).width); maxTop = Math.max(maxTop, topOf(egs[k],egErrs[k])); }
+        if (isFinite(egInts[k])&&egInts[k]>0){ maxValW = Math.max(maxValW, mctxShared.measureText(fmtLab(egInts[k],egIntErrs[k])).width); maxTop = Math.max(maxTop, topOf(egInts[k],egIntErrs[k])); }
       }
-      const mTop = 15, gap = 6;
-      const plotH = svgH - mTop - bottom;
-      const reserve = gap + maxValW + 6;                 // px needed above the tallest bar
-      const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
-      const ymax2 = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
-      const plot2 = new Plot(barSvg, {xlabel:'', ylabelSvg:`${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-      plot2.setRange(0, n+1, 0, ymax2||1);
-      plot2.drawAxes();
-      for (let k=0;k<n;k++){
-        const xc = k+1;
-        if (isFinite(egs[k])&&egs[k]>0){
-          drawBar(plot2,xc,egs[k],'#3aa0ff',16,-17);
-          if (isFinite(egErrs[k])) drawErrBar(plot2,xc,egs[k],egErrs[k],-17);
-          plot2.barLabel(xc, topOf(egs[k],egErrs[k]), fmtLab(egs[k],egErrs[k]), {gap,dx:-17});
+      const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
+      // Draws one series (a single centred bar per sample) into `svg`.
+      const drawEgBars = (svg, vals, errs, color)=>{
+        const mctx = document.createElement('canvas').getContext('2d');
+        mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+        const brect = svg.getBoundingClientRect();
+        const svgW = brect.width || 640, svgH = brect.height || 640;
+        const barSpacing = Math.max(30, (svgW-75)/(n+1));
+        const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, barSpacing, svgH));
+        let maxLbl = 0; barLabels.forEach(l=>{ maxLbl = Math.max(maxLbl, mctx.measureText(l).width); });
+        const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+        const mTop = 15, gap = 6;
+        const plotH = svgH - mTop - bottom;
+        const reserve = gap + maxValW + 6;               // px needed above the tallest bar
+        const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
+        const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
+        const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+        plot.setRange(0, n+1, 0, ymax||1);
+        plot.drawAxes();
+        for (let k=0;k<n;k++){
+          const xc = k+1;
+          if (isFinite(vals[k])&&vals[k]>0){
+            drawBar(plot,xc,vals[k],color,16,0);
+            if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
+            plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
+          }
+          plot.tickLabel(xc, barLabels[k], 30);
         }
-        if (isFinite(egInts[k])&&egInts[k]>0){
-          drawBar(plot2,xc,egInts[k],'#ff7a59',16,17);
-          if (isFinite(egIntErrs[k])) drawErrBar(plot2,xc,egInts[k],egIntErrs[k],17);
-          plot2.barLabel(xc, topOf(egInts[k],egIntErrs[k]), fmtLab(egInts[k],egIntErrs[k]), {gap,dx:17});
-        }
-        plot2.tickLabel(xc, barLabels[k], 30);
-      }
-      plot2.attachTools(barSvg.closest('.plot-wrap'));
+        plot.attachTools(svg.closest('.plot-wrap'));
+      };
+      drawEgBars(barSvg,  egs,    egErrs,    '#3aa0ff');
+      drawEgBars(barSvg3, egInts, egIntErrs, '#ff7a59');
       leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
     }
   }

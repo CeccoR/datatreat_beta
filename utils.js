@@ -510,7 +510,7 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
-  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
+  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
@@ -519,15 +519,16 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
+    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
   wrap.innerHTML = html;
 
-  wrap.querySelector('.remove-all').addEventListener('click', ()=>{
+  const REMOVE_ALL_MSG = 'Remove all files? Unsaved changes will be permanently lost.';
+  wrap.querySelector('.remove-all').addEventListener('click', async ()=>{
     // Remove-all also drops the module's autosaved draft, so always confirm first.
-    if (!confirm('Remove all files? This clears the module and deletes its autosaved recovery draft.')) return;
+    if (!await confirmBanner(REMOVE_ALL_MSG)) return;
     if (callbacks.onRemoveAll) callbacks.onRemoveAll();
   });
   const palBtn = wrap.querySelector('.palette-pick-btn');
@@ -553,7 +554,13 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     });
   });
   wrap.querySelectorAll('.row-del').forEach(btn=>{
-    btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.currentTarget.dataset.i); });
+    btn.addEventListener('click', async e=>{
+      const i = +e.currentTarget.dataset.i;
+      // Removing the last remaining file clears the module + its draft, same as
+      // remove-all, so guard it with the same confirmation banner.
+      if (files.length === 1 && !await confirmBanner(REMOVE_ALL_MSG)) return;
+      if (callbacks.onRemove) callbacks.onRemove(i);
+    });
   });
   // Per-file download of the original uploaded content, byte-for-byte. A file
   // keeps its original bytes in `rawBytes`, or a `rawFiles` list (e.g. EPR's
@@ -950,6 +957,8 @@ function normalizeProjIcons(mod){
     // Exception: the JSON icon is the CSV icon with different text — render it at
     // the exact same scale so the arrow and font match CSV, not the equal-box rule.
     if (csvScale) fitIcon(q('proj-json'), csvScale);
+    const del = document.querySelector('.project-bar[data-module="'+mod+'"] .proj-del .proj-svg');
+    if (del) fitIcon(del);
   });
 }
 
@@ -1343,6 +1352,46 @@ function openDateModal(baseDate, onPick){
 }
 
 /* =========================================================
+   CONFIRM BANNER (in-site, non-native)
+========================================================= */
+// In-site replacement for window.confirm(): a top-centered banner reusing the
+// PWA-toast styling. Returns a Promise<boolean> (true = confirmed).
+// Only one banner is shown at a time; a second call cancels the first.
+let _confirmBannerEl = null;
+function confirmBanner(message, confirmLabel){
+  return new Promise(resolve=>{
+    if (_confirmBannerEl){ _confirmBannerEl.remove(); _confirmBannerEl = null; }
+    const t = document.createElement('div');
+    t.className = 'pwa-toast';
+    t.setAttribute('role', 'alertdialog');
+    t.setAttribute('aria-live', 'assertive');
+    const msg = document.createElement('span'); msg.textContent = message;
+    const ok = document.createElement('button');
+    ok.type = 'button'; ok.className = 'btn primary is-danger';
+    ok.textContent = confirmLabel || 'Remove';
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'pwa-toast-x'; x.setAttribute('aria-label', 'Cancel');
+    x.innerHTML = '&#10005;';
+    t.appendChild(msg); t.appendChild(ok); t.appendChild(x);
+    document.body.appendChild(t);
+    _confirmBannerEl = t;
+    requestAnimationFrame(()=> t.classList.add('show'));
+    const done = (val)=>{
+      if (_confirmBannerEl !== t){ resolve(val); return; }
+      _confirmBannerEl = null;
+      document.removeEventListener('keydown', onKey);
+      t.classList.remove('show');
+      setTimeout(()=> t.remove(), 200);
+      resolve(val);
+    };
+    const onKey = e=>{ if (e.key === 'Escape') done(false); };
+    ok.addEventListener('click', ()=> done(true));
+    x.addEventListener('click', ()=> done(false));
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+/* =========================================================
    ALERT HELPERS
 ========================================================= */
 // dismissInvalidAction / dismissWarnAction are data-action values handled by the
@@ -1350,8 +1399,8 @@ function openDateModal(baseDate, onPick){
 // own alert inline (no global handler needed).
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
   const makeX = act => act
-    ? `<button class="alert-dismiss" data-action="${act}" title="Dismiss">${X_SVG(13)}</button>`
-    : `<button class="alert-dismiss" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(13)}</button>`;
+    ? `<button class="alert-dismiss is-danger" data-action="${act}" title="Dismiss">${X_SVG(13)}</button>`
+    : `<button class="alert-dismiss is-danger" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(13)}</button>`;
   let html = '';
   if (invalidNames.length)
     html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';
@@ -1415,5 +1464,5 @@ function truncTiltLabel(mctx, text, barSpacing, chartH){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner
 };

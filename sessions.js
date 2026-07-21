@@ -8,12 +8,14 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner } from './utils.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
 const ROW_DOC = (txt, fs) => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="'+fs+'" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">'+txt+'</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
 const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 8.5), ROW_X = X_SVG(16);
+// Trash glyph for delete actions — same visual weight as the X it replaces.
+const ROW_TRASH = '<svg class="x-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 
 /* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity;
    'drafts' holds one autosave per module for crash recovery) ---- */
@@ -129,6 +131,9 @@ const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" st
 function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-module="'+mod+'"]')]; }
 function nameInput(mod){ return document.querySelector('.project-name-input[data-module="'+mod+'"]'); }
 function dirtyMark(mod){ return document.querySelector('.pb-dirty[data-module="'+mod+'"]'); }
+function delBtn(mod){ return document.querySelector('.project-bar[data-module="'+mod+'"] .proj-del'); }
+// The delete-project button only makes sense once a project is actually saved/open.
+function showDelBtn(mod, on){ const b = delBtn(mod); if (b) b.style.visibility = on ? 'visible' : 'hidden'; }
 function restoreSaveBtns(mod){
   saveBtns(mod).forEach(b=>{
     b.classList.remove('is-saved'); b.disabled = false;
@@ -150,6 +155,7 @@ function markSaved(mod){
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
   const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
+  showDelBtn(mod, true);
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit or a rename in the field). Losing all data clears
@@ -160,11 +166,13 @@ function markDirty(mod){
     const inp = nameInput(mod); if (inp) inp.value = '';
     const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
     restoreSaveBtns(mod);
+    showDelBtn(mod, false);
     clearDraft(mod);   // no data left → nothing to recover
     return;
   }
   dirty[mod] = true;
   restoreSaveBtns(mod);
+  showDelBtn(mod, !!current[mod]);
   const dm = dirtyMark(mod); if (dm) dm.style.display = current[mod] ? 'inline-block' : 'none';
 }
 
@@ -350,7 +358,7 @@ async function renderList(){
       + '<td class="row-acts"><div class="row-acts-inner idle-dim">'
         + '<button class="row-ic pr-csv" title="Export .csv">'+ROW_CSV+'</button>'
         + '<button class="row-ic pr-json" title="Export .json">'+ROW_JSON+'</button>'
-        + '<button class="row-ic pr-del" title="Delete">'+ROW_X+'</button>'
+        + '<button class="row-ic pr-del" title="Delete">'+ROW_TRASH+'</button>'
       + '</div></td></tr>';
   });
   html += '</tbody></table></div>';
@@ -376,19 +384,31 @@ async function deleteProjectRec(rec){
     const inp = nameInput(rec.module); if (inp) inp.value = '';
     const dm = dirtyMark(rec.module); if (dm) dm.style.display = 'none';
     restoreSaveBtns(rec.module);
+    showDelBtn(rec.module, false);
   }
+}
+// Delete the project currently open in a module's project-bar (same confirmation
+// banner as the Projects page). The module keeps its loaded data, now unsaved.
+async function deleteOpenProject(mod){
+  const cur = current[mod];
+  if (!cur) return;
+  if (!await confirmBanner('Delete project “'+cur.title+'”? This cannot be undone.', 'Delete')) return;
+  await deleteProjectRec({ id: cur.id, module: mod, title: cur.title });
+  renderList();
 }
 
 /* ---- Wiring ---- */
 // Project action buttons (top icon row + bottom text row), via delegation
 document.addEventListener('click', e=>{
-  const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json');
+  const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del');
   if (!b || b.disabled) return;
-  const mod = b.dataset.module;
+  // The delete button carries no data-module of its own; take it from its project-bar.
+  const mod = b.dataset.module || (b.closest('.project-bar') || {}).dataset && b.closest('.project-bar').dataset.module;
   if (b.classList.contains('proj-save'))        doSave(mod, false);
   else if (b.classList.contains('proj-saveas')) doSave(mod, true);
   else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
   else if (b.classList.contains('proj-json'))   exportJson(mod);
+  else if (b.classList.contains('proj-del'))    deleteOpenProject(mod);
 });
 // Editing the project name is an unsaved change (a pending rename); typing also
 // clears the red "missing name" state.
@@ -423,7 +443,7 @@ document.getElementById('sessOpenSelected').addEventListener('click', ()=>{
 document.getElementById('sessDeleteSelected').addEventListener('click', async ()=>{
   const recs = selectedRecs();
   if (!recs.length) return;
-  if (!confirm('Delete '+recs.length+' selected project'+(recs.length>1?'s':'')+'? This cannot be undone.')) return;
+  if (!await confirmBanner('Delete '+recs.length+' selected project'+(recs.length>1?'s':'')+'? This cannot be undone.', 'Delete')) return;
   for (const r of recs) await deleteProjectRec(r);
   renderList();
 });
@@ -451,7 +471,7 @@ document.getElementById('sessListWrap').addEventListener('click', async e=>{
   if (e.target.closest('.pr-csv'))  { exportProjectCsv(rec); return; }
   if (e.target.closest('.pr-json')) { exportProjectRecord(rec); return; }
   if (e.target.closest('.pr-del'))  {
-    if (confirm('Delete project “'+rec.title+'”? This cannot be undone.')){ await deleteProjectRec(rec); renderList(); }
+    if (await confirmBanner('Delete project “'+rec.title+'”? This cannot be undone.', 'Delete')){ await deleteProjectRec(rec); renderList(); }
     return;
   }
   // Clicks on the checkbox, the name field, or a button don't open the project

@@ -308,9 +308,7 @@ class Plot{
         if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
           col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
         col.appendChild(dlBtn);
-        dlBtn.addEventListener('mousedown', ()=>dlBtn.classList.add('is-on'));
-        dlBtn.addEventListener('mouseup', ()=>dlBtn.classList.remove('is-on'));
-        dlBtn.addEventListener('mouseleave', ()=>dlBtn.classList.remove('is-on'));
+        // Press feedback (grey fill) is handled by the shared button.btn:active CSS.
       }
       else { wrapEl.appendChild(col); }
     }
@@ -328,9 +326,6 @@ class Plot{
     snapBtn.className = 'btn plot-tool-btn';
     snapBtn.title = 'Download current view';
     snapBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5a1.5 1.5 0 0 1 1.5-1.5h2l1.2-2h6.6l1.2 2h2A1.5 1.5 0 0 1 20 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3"/></svg>`;
-    snapBtn.addEventListener('mousedown', ()=>snapBtn.classList.add('is-on'));
-    snapBtn.addEventListener('mouseup',   ()=>snapBtn.classList.remove('is-on'));
-    snapBtn.addEventListener('mouseleave',()=>snapBtn.classList.remove('is-on'));
     const viewLeg = ()=>{ const d=col.querySelector('.plot-dl-btn'); return d && d.dataset.dlLegend ? document.getElementById(d.dataset.dlLegend) : null; };
     snapBtn.onclick = ()=>{
       const dlBtn = col.querySelector('.plot-dl-btn');
