@@ -1367,7 +1367,7 @@ function confirmBanner(message, confirmLabel){
     t.setAttribute('aria-live', 'assertive');
     const msg = document.createElement('span'); msg.textContent = message;
     const ok = document.createElement('button');
-    ok.type = 'button'; ok.className = 'btn primary is-danger';
+    ok.type = 'button'; ok.className = 'btn primary';
     ok.textContent = confirmLabel || 'Remove';
     const x = document.createElement('button');
     x.type = 'button'; x.className = 'pwa-toast-x'; x.setAttribute('aria-label', 'Cancel');

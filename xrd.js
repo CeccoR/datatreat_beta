@@ -564,7 +564,6 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!body) return;
     if (si<0 || !processed[si]){ body.style.display='none'; return; }
     body.style.display='';
-    document.getElementById('xrdStdLabel').textContent = files[si].label;
     writeStdInputs();
     drawAnalysisInto(si, 'xrdStdSvg', 's', preserveView);
     renderStdTable();

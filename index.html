@@ -218,7 +218,6 @@
               <span><i style="background:#ff5050"></i>Tauc linear region</span>
               <span><i style="background:#d050ff"></i>baseline</span>
             </div>
-            <div id="taucAlert"></div>
           </div>
           <div class="col mw280" style="align-self:flex-start">
             <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
@@ -243,6 +242,7 @@
               <div class="pg-stat pg-gap">Eg (x-axis): <b id="taucEg">-</b></div>
               <div class="pg-stat">Eg (baseline): <b id="taucEgInt">-</b></div>
             </div>
+            <div id="taucAlert"></div>
           </div>
         </div>
       </div>
@@ -321,10 +321,7 @@
         <div style="max-width:340px;margin-bottom:6px"><label class="txt-label">Instrumental standard</label>
           <select id="xrdStandard"><option value="">None</option></select></div>
         <div id="xrdStdBody" style="display:none">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span class="txt-caption" id="xrdStdLabel">—</span>
-          </div>
-          <div class="row" style="align-items:stretch">
+          <div class="row" style="align-items:flex-start">
             <div class="col mw520" style="flex:2">
               <div class="plot-wrap">
                 <svg class="plot" id="xrdStdSvg"></svg>
@@ -337,20 +334,25 @@
                 <span><i style="background:#5fcf6a"></i>peaks</span>
               </div>
             </div>
-            <div class="col mw280" style="align-self:flex-start;display:flex;flex-direction:column;gap:11px">
-              <div><label class="txt-label">Smoothing window (pts)</label>
-                <input type="number" id="xrdStdSmooth" value="10" min="1"></div>
-              <div><label class="txt-label">Baseline SNIP window (pts)</label>
-                <input type="number" id="xrdStdBlWin" value="150" min="1"></div>
-              <div class="field-half">
-                <div><label class="txt-label">Peak min. height (%)</label>
-                  <input type="text" inputmode="decimal" id="xrdStdPkHeight" value="5"></div>
-                <div><label class="txt-label">Peak min. prom. (%)</label>
-                  <input type="text" inputmode="decimal" id="xrdStdPkProm" value="3"></div>
+            <div class="col mw280" style="align-self:flex-start">
+              <div class="txt-mini param-head">Parameters</div>
+              <div class="param-grid">
+                <label class="txt-label">Smoothing window (pts)</label>
+                <input type="number" class="pg-field" id="xrdStdSmooth" value="10" min="1">
+
+                <label class="txt-label">Baseline SNIP window (pts)</label>
+                <input type="number" class="pg-field" id="xrdStdBlWin" value="150" min="1">
+
+                <label class="txt-label">Peak min. height (%)</label>
+                <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkHeight" value="5">
+
+                <label class="txt-label">Peak min. prominence (%)</label>
+                <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkProm" value="3">
+
+                <label class="txt-label">Peak min. distance (&#176;2&#952;)</label>
+                <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkDist" value="0.3">
               </div>
-              <div><label class="txt-label">Peak min. distance (degrees 2&#952;)</label>
-                <input type="text" inputmode="decimal" id="xrdStdPkDist" value="0.3"></div>
-              <button class="btn" id="xrdStdAddPeak" style="width:100%;padding:7px 9px">+ Add peak</button>
+              <button class="btn" id="xrdStdAddPeak" style="width:100%;padding:7px 9px;margin-top:11px">+ Add peak</button>
             </div>
           </div>
           <div class="peak-box" id="xrdStdPeakBox">
@@ -725,7 +727,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v152</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v153</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
