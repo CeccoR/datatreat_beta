@@ -145,7 +145,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // Ghost placeholder shown when nothing is chosen (hidden from the open list),
     // plus a blank row that selects "none" explicitly.
     sel.innerHTML = '<option value="" hidden>Choose standard…</option>' +
-      '<option value="">&nbsp;</option>' +
+      '<option value="">None</option>' +
       files.map(f=>`<option value="${f.name.replace(/"/g,'&quot;')}">${f.label}</option>`).join('');
     sel.value = standardName;
     sel.classList.toggle('ghost', !sel.value);
@@ -569,7 +569,10 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // Until a standard is chosen only the select box shows; picking one spawns the
     // plot, its parameters column and the peak table.
     const show = !(si<0 || !processed[si]);
-    ['xrdStdBody','xrdStdParams','xrdStdAddPeak'].forEach(id=>{ const el=document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; });
+    ['xrdStdBody','xrdStdParams'].forEach(id=>{ const el=document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; });
+    // Add-peak keeps its slot reserved (visibility, not display) so the picker box
+    // beside it never resizes when a standard is chosen.
+    const addBtn = document.getElementById('xrdStdAddPeak'); if (addBtn) addBtn.style.visibility = show ? 'visible' : 'hidden';
     if (!show) return;
     writeStdInputs();
     drawAnalysisInto(si, 'xrdStdSvg', 's', preserveView);
@@ -797,6 +800,14 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 
   function updateXrdResults(){
     if (!files.length || !processed.length) return;
+    // With no non-standard sample there is nothing to show — display the same
+    // placeholder the Analysis card uses instead of empty/half-drawn plots.
+    const hasNonStd = nonStdIdx().length > 0;
+    const emptyEl = document.getElementById('xrdResultsEmpty');
+    const contentEl = document.getElementById('xrdResultsContent');
+    if (emptyEl)   emptyEl.style.display   = hasNonStd ? 'none' : '';
+    if (contentEl) contentEl.style.display = hasNonStd ? ''     : 'none';
+    if (!hasNonStd){ renderPeakTable(); return; }
     // Analysis: smoothed − SNIP baseline
     resPlot = drawStackedResults('xrdResSvg', 'xrdResLegend', processed.map(pr=>pr.subtracted));
     // Fitting: reconstructed Kα doublet above the fit baseline (samples with a fit)
@@ -805,11 +816,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       if (!sf || !sf.fits || !sf.fits.length) return null;
       return reconstructFit(f.x, sf.fits).full;
     });
-    // The whole Fit column (fitted diffractograms + fit crystallite size) only
-    // appears once at least one sample has a fit — no empty plots.
+    // The Fit column keeps its space (so the Analysis plots stay half-width) but
+    // its plots and titles only become visible once a sample has a fit.
     const anyFit = fitCurves.some(c=>c);
     const fitCol = document.getElementById('xrdResFitCol');
-    if (fitCol) fitCol.style.display = anyFit ? '' : 'none';
+    if (fitCol) fitCol.style.visibility = anyFit ? 'visible' : 'hidden';
     if (anyFit) drawStackedResults('xrdResFitSvg', 'xrdResFitLegend', fitCurves);
     renderPeakTable();
   }
@@ -1596,7 +1607,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       if (cols.length) entries.push({name:'diffractograms.csv', text:wideCsv(cols)});
     }
     // Crystallite size (classic) — per-sample summary (mean ± std, matching the chart).
-    {
+    // Skipped entirely when there is no non-standard sample (nothing to size).
+    if (nonStd.length){
       const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
       let ct = csvLine(head);
       nonStd.forEach(k=>{
@@ -1607,11 +1619,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       });
       entries.push({name:'crystallite_size.csv', text:ct});
     }
-    // Fit-derived crystallite size — same layout, sizes read off the saved fits.
-    {
+    // Fit-derived crystallite size — same layout, only when at least one fit exists.
+    if (fitIdxs.length){
       const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
       let ct = csvLine(head);
-      nonStd.forEach(k=>{
+      fitIdxs.forEach(k=>{
         const f=files[k], st = fitSizeStats(k);
         const row = [f.label, isFinite(st.rawMean)?fmtNum(st.rawMean,2):'', (st.rawN>1&&isFinite(st.rawStd))?fmtNum(st.rawStd,2):''];
         if (anyStd) row.push(isFinite(st.corrMean)?fmtNum(st.corrMean,2):'', (st.corrN>1&&isFinite(st.corrStd))?fmtNum(st.corrStd,2):'');

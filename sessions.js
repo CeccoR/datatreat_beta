@@ -130,9 +130,6 @@ const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" st
 
 function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-module="'+mod+'"]')]; }
 function nameInput(mod){ return document.querySelector('.project-name-input[data-module="'+mod+'"]'); }
-function delBtn(mod){ return document.querySelector('.project-bar[data-module="'+mod+'"] .proj-del'); }
-// The delete-project button only makes sense once a project is actually saved/open.
-function showDelBtn(mod, on){ const b = delBtn(mod); if (b) b.style.visibility = on ? 'visible' : 'hidden'; }
 // Save-disk icon with a red asterisk badge (top-right): shown on the project-bar
 // Save button when an open project has unsaved changes — this replaces the old
 // "*" marker next to the name.
@@ -166,7 +163,6 @@ function markSaved(mod){
     b.disabled = true;
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
-  showDelBtn(mod, true);
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit or a rename in the field). Losing all data clears
@@ -176,13 +172,11 @@ function markDirty(mod){
     delete current[mod]; dirty[mod] = false;
     const inp = nameInput(mod); if (inp) inp.value = '';
     restoreSaveBtns(mod);
-    showDelBtn(mod, false);
     clearDraft(mod);   // no data left → nothing to recover
     return;
   }
   dirty[mod] = true;
   restoreSaveBtns(mod);
-  showDelBtn(mod, !!current[mod]);
   // Badge the Save icon with a red asterisk when an open project has changes.
   setSaveDirtyIcon(mod, !!current[mod]);
 }
@@ -395,17 +389,21 @@ async function deleteProjectRec(rec){
     const inp = nameInput(rec.module); if (inp) inp.value = '';
     restoreSaveBtns(rec.module);
     normalizeProjIcons(rec.module);
-    showDelBtn(rec.module, false);
   }
 }
-// Delete the project currently open in a module's project-bar (same confirmation
-// banner as the Projects page). The module keeps its loaded data, now unsaved.
+// Project-bar trash button. With an open project it deletes that project (the data
+// stays, now unsaved). With no saved project it clears the module — the same
+// "remove all" action (and confirmation banner) as the file table's remove-all.
 async function deleteOpenProject(mod){
   const cur = current[mod];
-  if (!cur) return;
-  if (!await confirmBanner('Delete project “'+cur.title+'”? This cannot be undone.', 'Delete')) return;
-  await deleteProjectRec({ id: cur.id, module: mod, title: cur.title });
-  renderList();
+  if (cur){
+    if (!await confirmBanner('Delete project “'+cur.title+'”? This cannot be undone.', 'Delete')) return;
+    await deleteProjectRec({ id: cur.id, module: mod, title: cur.title });
+    renderList();
+    return;
+  }
+  const rmAll = document.querySelector('#'+mod+'FileTableWrap .remove-all');
+  if (rmAll) rmAll.click();
 }
 
 /* ---- Wiring ---- */

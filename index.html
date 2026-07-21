@@ -322,7 +322,7 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-nav-row">
               <div class="plot-nav-left"><select id="xrdStandard" class="std-select ghost"><option value="">Choose standard…</option></select></div>
-              <button class="btn plot-corner-btn" id="xrdStdAddPeak" style="display:none" title="Add a peak by clicking on the plot">+ Add peak</button>
+              <button class="btn plot-corner-btn" id="xrdStdAddPeak" style="visibility:hidden" title="Add a peak by clicking on the plot">+ Add peak</button>
             </div>
             <div id="xrdStdBody" style="display:none">
               <div class="plot-wrap">
@@ -489,7 +489,8 @@
 
       <div class="card" id="xrdResults" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
-        <div class="row" style="align-items:flex-start;gap:16px">
+        <div id="xrdResultsEmpty" style="display:none;color:var(--muted);font-size:14px;padding:6px 0">All loaded files are set as the instrumental standard — load additional samples to see results here.</div>
+        <div class="row" id="xrdResultsContent" style="align-items:flex-start;gap:16px">
           <div class="col mw320" style="flex:1">
             <p class="txt-caption">Analysis</p>
             <div class="plot-wrap">
@@ -730,7 +731,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v155</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v156</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

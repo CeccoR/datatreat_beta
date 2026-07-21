@@ -921,6 +921,9 @@ function setTabLoaded(tab, has){
   // The project-bar action buttons only appear once data is loaded
   document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"]')
     .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
+  // The delete button carries no data-module of its own; reveal it with the rest.
+  const del = document.querySelector('.project-bar[data-module="'+tab+'"] .proj-del');
+  if (del) del.style.visibility = has ? 'visible' : 'hidden';
   if (has) normalizeProjIcons(tab);
 }
 

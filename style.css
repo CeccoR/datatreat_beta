@@ -1355,6 +1355,7 @@ button.color-swatch:hover { border-color: var(--text); }
    placeholder (nothing chosen). */
 .std-select {
   height: 30px;
+  width: 100%;
   max-width: 340px;
   padding: 0 9px;
 }
