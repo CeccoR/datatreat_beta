@@ -142,9 +142,13 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const sel = document.getElementById('xrdStandard');
     if (!sel) return;
     if (standardName && !files.some(f=>f.name===standardName)) standardName = '';
-    sel.innerHTML = '<option value="">None</option>' +
+    // Ghost placeholder shown when nothing is chosen (hidden from the open list),
+    // plus a blank row that selects "none" explicitly.
+    sel.innerHTML = '<option value="" hidden>Choose standard…</option>' +
+      '<option value="">&nbsp;</option>' +
       files.map(f=>`<option value="${f.name.replace(/"/g,'&quot;')}">${f.label}</option>`).join('');
     sel.value = standardName;
+    sel.classList.toggle('ghost', !sel.value);
   }
 
   function afterFilesChange(){
@@ -562,8 +566,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const si = standardIdx();
     const body = document.getElementById('xrdStdBody');
     if (!body) return;
-    if (si<0 || !processed[si]){ body.style.display='none'; return; }
-    body.style.display='';
+    // Until a standard is chosen only the select box shows; picking one spawns the
+    // plot, its parameters column and the peak table.
+    const show = !(si<0 || !processed[si]);
+    ['xrdStdBody','xrdStdParams','xrdStdAddPeak'].forEach(id=>{ const el=document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; });
+    if (!show) return;
     writeStdInputs();
     drawAnalysisInto(si, 'xrdStdSvg', 's', preserveView);
     renderStdTable();
@@ -798,7 +805,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       if (!sf || !sf.fits || !sf.fits.length) return null;
       return reconstructFit(f.x, sf.fits).full;
     });
-    drawStackedResults('xrdResFitSvg', 'xrdResFitLegend', fitCurves);
+    // The whole Fit column (fitted diffractograms + fit crystallite size) only
+    // appears once at least one sample has a fit — no empty plots.
+    const anyFit = fitCurves.some(c=>c);
+    const fitCol = document.getElementById('xrdResFitCol');
+    if (fitCol) fitCol.style.display = anyFit ? '' : 'none';
+    if (anyFit) drawStackedResults('xrdResFitSvg', 'xrdResFitLegend', fitCurves);
     renderPeakTable();
   }
 
@@ -931,7 +943,13 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       html+=`<tr class="peak-row${i===selIdx?' selected':''}" data-pos="${pk.pos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(pk.fwhm)?pk.fwhm.toFixed(3):'—'}</td><td>${sizeRawCell}</td>${corrCell}</tr>`;
     });
     html+='</tbody></table>';
-    if (isFinite(sf.rwp)) html+=`<p style="color:var(--muted);font-size:11px;margin:4px 0 0">Rwp = ${sf.rwp.toFixed(1)}%</p>`;
+    // Mean crystallite size from the fitted peaks, same summary as the Analysis table.
+    if (!isStd){
+      const st = fitSizeStats(fitIdx);
+      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
+      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
+      html += '</div>';
+    }
     wrap.innerHTML=html;
     // Same click-to-select mechanic as the analysis table (no delete here)
     wrap.querySelectorAll('.peak-row').forEach(row=>{
@@ -1259,6 +1277,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // from Analysis navigation, and refreshes every card (its peaks drive the correction).
   document.getElementById('xrdStandard').addEventListener('change', e=>{
     standardName = e.target.value;
+    e.target.classList.toggle('ghost', !standardName);
     if (!files.length){ hist.commit(); return; }
     panels.a.sel=panels.a.hov=panels.s.sel=panels.s.hov=null;
     reprocessAll();               // the (de)selected file switches param set (stdParams ↔ per/shared)

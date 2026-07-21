@@ -248,6 +248,7 @@ button.btn.is-saved:disabled {
    name shows. Hovering a filled field brings the dark field back; focusing it
    also lights the border with accent, but the fill stays dark. */
 .project-bar .project-name-input {
+  width: 240px;
   min-width: 0;
   height: 29px;
   font-size: 20px;
@@ -275,16 +276,6 @@ button.btn.is-saved:disabled {
   15% { transform: translateX(-6px); }  35% { transform: translateX(6px); }
   55% { transform: translateX(-4px); }  75% { transform: translateX(4px); }
   90% { transform: translateX(-2px); }
-}
-.pb-dirty {
-  display: none;
-  color: var(--accent);
-  font-weight: 700;
-  font-size: 22px;
-  line-height: 1;
-  width: 12px;
-  text-align: center;
-  flex-shrink: 0;
 }
 /* Bottom export card: the four project buttons in a 2×2 grid */
 .proj-actions-row {
@@ -1358,6 +1349,16 @@ button.color-swatch:hover { border-color: var(--text); }
   line-height: 1;
   border-radius: 6px;
 }
+
+/* Instrumental-standard picker: sits in the plot header row, aligned with and the
+   same height as the "+ Add peak" corner button. Greyed while showing its ghost
+   placeholder (nothing chosen). */
+.std-select {
+  height: 30px;
+  max-width: 340px;
+  padding: 0 9px;
+}
+.std-select.ghost { color: var(--muted); }
 
 /* ===== Plot header row: sample nav on the left, a corner action button whose
    right edge lines up with the plot's right edge (padding-right = toolbar col:

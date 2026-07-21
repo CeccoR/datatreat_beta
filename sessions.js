@@ -8,7 +8,7 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons } from './utils.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
@@ -130,21 +130,22 @@ const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" st
 
 function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-module="'+mod+'"]')]; }
 function nameInput(mod){ return document.querySelector('.project-name-input[data-module="'+mod+'"]'); }
-function dirtyMark(mod){ return document.querySelector('.pb-dirty[data-module="'+mod+'"]'); }
 function delBtn(mod){ return document.querySelector('.project-bar[data-module="'+mod+'"] .proj-del'); }
-// Size the name field: full width while empty or being edited, shrunk to the
-// name's width once filled and blurred, so the "*" dirty marker sits right after
-// the name instead of at the far edge of an invisible field.
-const _nameMeas = document.createElement('canvas').getContext('2d');
-const _NAME_FULL = 240;
-function fitNameField(mod){
-  const inp = nameInput(mod); if (!inp) return;
-  if (document.activeElement === inp || !inp.value){ inp.style.width = _NAME_FULL + 'px'; return; }
-  _nameMeas.font = "700 20px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-  inp.style.width = Math.min(_NAME_FULL, Math.ceil(_nameMeas.measureText(inp.value).width) + 24) + 'px';
-}
 // The delete-project button only makes sense once a project is actually saved/open.
 function showDelBtn(mod, on){ const b = delBtn(mod); if (b) b.style.visibility = on ? 'visible' : 'hidden'; }
+// Save-disk icon with a red asterisk badge (top-right): shown on the project-bar
+// Save button when an open project has unsaved changes — this replaces the old
+// "*" marker next to the name.
+const SAVE_STAR_ICON = '<svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/><g stroke="#ff5050" stroke-width="2.2"><line x1="19" y1="1.9" x2="19" y2="7.1"/><line x1="16.75" y1="3.2" x2="21.25" y2="5.8"/><line x1="16.75" y1="5.8" x2="21.25" y2="3.2"/></g></svg>';
+// Put the dirty (asterisk) or clean disk icon on the project-bar Save icon button.
+// origHtml is captured pristine at startup, so it is always the plain disk.
+function setSaveDirtyIcon(mod, dirtyState){
+  saveBtns(mod).forEach(b=>{
+    if (!b.classList.contains('proj-icon')) return;
+    b.innerHTML = dirtyState ? SAVE_STAR_ICON : (b.dataset.origHtml ?? b.innerHTML);
+  });
+  normalizeProjIcons(mod);
+}
 function restoreSaveBtns(mod){
   saveBtns(mod).forEach(b=>{
     b.classList.remove('is-saved'); b.disabled = false;
@@ -165,9 +166,7 @@ function markSaved(mod){
     b.disabled = true;
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
-  const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
   showDelBtn(mod, true);
-  fitNameField(mod);
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit or a rename in the field). Losing all data clears
@@ -176,8 +175,6 @@ function markDirty(mod){
   if (!moduleHasData(mod)){
     delete current[mod]; dirty[mod] = false;
     const inp = nameInput(mod); if (inp) inp.value = '';
-    fitNameField(mod);
-    const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
     restoreSaveBtns(mod);
     showDelBtn(mod, false);
     clearDraft(mod);   // no data left → nothing to recover
@@ -186,8 +183,8 @@ function markDirty(mod){
   dirty[mod] = true;
   restoreSaveBtns(mod);
   showDelBtn(mod, !!current[mod]);
-  fitNameField(mod);
-  const dm = dirtyMark(mod); if (dm) dm.style.display = current[mod] ? 'inline-block' : 'none';
+  // Badge the Save icon with a red asterisk when an open project has changes.
+  setSaveDirtyIcon(mod, !!current[mod]);
 }
 
 /* ---- Save / Save as ----
@@ -396,8 +393,8 @@ async function deleteProjectRec(rec){
   if (current[rec.module] && current[rec.module].id === rec.id){
     delete current[rec.module];
     const inp = nameInput(rec.module); if (inp) inp.value = '';
-    const dm = dirtyMark(rec.module); if (dm) dm.style.display = 'none';
     restoreSaveBtns(rec.module);
+    normalizeProjIcons(rec.module);
     showDelBtn(rec.module, false);
   }
 }
@@ -412,6 +409,11 @@ async function deleteOpenProject(mod){
 }
 
 /* ---- Wiring ---- */
+// Capture each Save button's pristine markup once, before any state swap, so the
+// disk icon / "Save project" text can always be restored (and never captured
+// while showing the check or the dirty-asterisk variant).
+document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML; });
+
 // Project action buttons (top icon row + bottom text row), via delegation
 document.addEventListener('click', e=>{
   const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del');
@@ -430,13 +432,8 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
   const mod = inp.dataset.module;
   inp.addEventListener('input', ()=>{
     inp.classList.remove('field-invalid');
-    fitNameField(mod);
     if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(mod); }
   });
-  // Expand to full width while editing, collapse back to the name width on blur.
-  inp.addEventListener('focus', ()=> fitNameField(mod));
-  inp.addEventListener('blur',  ()=> fitNameField(mod));
-  fitNameField(mod);   // initial sizing
 });
 
 // Save as… modal

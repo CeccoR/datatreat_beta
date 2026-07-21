@@ -1415,16 +1415,12 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
-/* Truncate a 30°-tilted bar-chart axis label (adding an ellipsis) so it fits
-   `barSpacing` px horizontally AND its vertical footprint stays within 15% of the
-   chart height. `mctx` is a canvas 2D context with the label font already set. */
-function truncTiltLabel(mctx, text, barSpacing, chartH){
-  const cos30 = Math.cos(Math.PI/6), sin30 = Math.sin(Math.PI/6);
-  const maxW = Math.min(barSpacing / cos30, 0.15 * chartH / sin30);
-  if (mctx.measureText(text).width <= maxW) return text;
-  let t = text;
-  while (t.length > 1 && mctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
-  return t + '…';
+/* Truncate a bar-chart axis label to a fixed maximum length (adding an ellipsis).
+   Extra args (mctx, barSpacing, chartH) are kept for call-site compatibility but
+   no longer used — the cap is a simple character count. */
+const TILT_LABEL_MAX = 25;
+function truncTiltLabel(mctx, text){
+  return text.length > TILT_LABEL_MAX ? text.slice(0, TILT_LABEL_MAX) + '…' : text;
 }
 
 /* =========================================================
@@ -1464,5 +1460,5 @@ function truncTiltLabel(mctx, text, barSpacing, chartH){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons
 };
