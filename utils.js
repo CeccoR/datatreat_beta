@@ -1369,7 +1369,7 @@ function confirmBanner(message, confirmLabel){
   return new Promise(resolve=>{
     if (_confirmBannerEl){ _confirmBannerEl.remove(); _confirmBannerEl = null; }
     const t = document.createElement('div');
-    t.className = 'pwa-toast';
+    t.className = 'pwa-toast pwa-confirm';
     t.setAttribute('role', 'alertdialog');
     t.setAttribute('aria-live', 'assertive');
     const msg = document.createElement('span'); msg.textContent = message;

@@ -1311,8 +1311,9 @@ button.color-swatch:hover { border-color: var(--text); }
   pointer-events: none;
   transition: opacity 0.2s, transform 0.2s;
 }
-/* On phones give the banner room so the message doesn't crush into a sliver. */
-@media (max-width: 640px) { .pwa-toast { width: calc(100vw - 20px); } }
+/* On phones give the confirm banner room so its message doesn't crush into a
+   sliver. The short update toast keeps sizing to its content. */
+@media (max-width: 640px) { .pwa-toast.pwa-confirm { width: calc(100vw - 20px); } }
 .pwa-toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
