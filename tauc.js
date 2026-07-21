@@ -620,10 +620,14 @@ import { Plot } from './plot.js';
         const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
         plot.setRange(0, n+1, 0, ymax||1);
         plot.drawAxes();
+        // Bars are capped at 16px half-width but shrink to fit the per-sample
+        // spacing so many samples don't overlap. Computed once here (fixed px →
+        // stays constant on zoom).
+        const hw = Math.min(16, (plot.px(1)-plot.px(0))*0.3);
         for (let k=0;k<n;k++){
           const xc = k+1;
           if (isFinite(vals[k])&&vals[k]>0){
-            drawBar(plot,xc,vals[k],color,16,0);
+            drawBar(plot,xc,vals[k],color,hw,0);
             if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
             plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
           }

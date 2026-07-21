@@ -1009,13 +1009,21 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     plot.setRange(0, n+1, 0, ymax||1);
     plot.drawAxes();
+    // Bar geometry is capped at the previous fixed sizes but shrinks to fit the
+    // per-sample spacing so many samples don't overlap. Paired bars (size + corr.)
+    // keep their ±17px offset unless the slot is too narrow, then scale together.
+    // Computed once here (fixed px → constant on zoom).
+    const pxSlot = plot.px(1)-plot.px(0);
+    const s = Math.min(1, (pxSlot*0.8)/66);   // 66 = full paired span at hw16/dx17
+    const pHw = 16*s, pDx = 17*s;
+    const sHw = Math.min(16, pxSlot*0.3);      // single centred bar
     for (let k=0;k<n;k++){
       const xc=k+1;
       if (anyCorr){
-        if (isFinite(raws[k])&&raws[k]>0){ plot.barPx(xc,0,raws[k],'#3aa0ff',16,-17); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k],-17); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap,dx:-17}); }
-        if (isFinite(corrs[k])&&corrs[k]>0){ plot.barPx(xc,0,corrs[k],'#ff7a59',16,17); if(isFinite(corrE[k]))plot.errbar(xc,corrs[k],corrE[k],17); plot.barLabel(xc,topOf(corrs[k],corrE[k]),fmtLab(corrs[k],corrE[k]),{gap,dx:17}); }
+        if (isFinite(raws[k])&&raws[k]>0){ plot.barPx(xc,0,raws[k],'#3aa0ff',pHw,-pDx); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k],-pDx); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap,dx:-pDx}); }
+        if (isFinite(corrs[k])&&corrs[k]>0){ plot.barPx(xc,0,corrs[k],'#ff7a59',pHw,pDx); if(isFinite(corrE[k]))plot.errbar(xc,corrs[k],corrE[k],pDx); plot.barLabel(xc,topOf(corrs[k],corrE[k]),fmtLab(corrs[k],corrE[k]),{gap,dx:pDx}); }
       } else if (isFinite(raws[k])&&raws[k]>0){
-        plot.barPx(xc,0,raws[k],'#3aa0ff',16,0); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
+        plot.barPx(xc,0,raws[k],'#3aa0ff',sHw,0); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
       }
       plot.tickLabel(xc, labels[k], 30);
     }

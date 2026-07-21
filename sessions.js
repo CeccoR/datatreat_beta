@@ -132,6 +132,17 @@ function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-mo
 function nameInput(mod){ return document.querySelector('.project-name-input[data-module="'+mod+'"]'); }
 function dirtyMark(mod){ return document.querySelector('.pb-dirty[data-module="'+mod+'"]'); }
 function delBtn(mod){ return document.querySelector('.project-bar[data-module="'+mod+'"] .proj-del'); }
+// Size the name field: full width while empty or being edited, shrunk to the
+// name's width once filled and blurred, so the "*" dirty marker sits right after
+// the name instead of at the far edge of an invisible field.
+const _nameMeas = document.createElement('canvas').getContext('2d');
+const _NAME_FULL = 240;
+function fitNameField(mod){
+  const inp = nameInput(mod); if (!inp) return;
+  if (document.activeElement === inp || !inp.value){ inp.style.width = _NAME_FULL + 'px'; return; }
+  _nameMeas.font = "700 20px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+  inp.style.width = Math.min(_NAME_FULL, Math.ceil(_nameMeas.measureText(inp.value).width) + 24) + 'px';
+}
 // The delete-project button only makes sense once a project is actually saved/open.
 function showDelBtn(mod, on){ const b = delBtn(mod); if (b) b.style.visibility = on ? 'visible' : 'hidden'; }
 function restoreSaveBtns(mod){
@@ -156,6 +167,7 @@ function markSaved(mod){
   });
   const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
   showDelBtn(mod, true);
+  fitNameField(mod);
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit or a rename in the field). Losing all data clears
@@ -164,6 +176,7 @@ function markDirty(mod){
   if (!moduleHasData(mod)){
     delete current[mod]; dirty[mod] = false;
     const inp = nameInput(mod); if (inp) inp.value = '';
+    fitNameField(mod);
     const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
     restoreSaveBtns(mod);
     showDelBtn(mod, false);
@@ -173,6 +186,7 @@ function markDirty(mod){
   dirty[mod] = true;
   restoreSaveBtns(mod);
   showDelBtn(mod, !!current[mod]);
+  fitNameField(mod);
   const dm = dirtyMark(mod); if (dm) dm.style.display = current[mod] ? 'inline-block' : 'none';
 }
 
@@ -413,10 +427,16 @@ document.addEventListener('click', e=>{
 // Editing the project name is an unsaved change (a pending rename); typing also
 // clears the red "missing name" state.
 document.querySelectorAll('.project-name-input').forEach(inp=>{
+  const mod = inp.dataset.module;
   inp.addEventListener('input', ()=>{
     inp.classList.remove('field-invalid');
-    if (moduleHasData(inp.dataset.module)){ markDirty(inp.dataset.module); scheduleAutosave(inp.dataset.module); }
+    fitNameField(mod);
+    if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(mod); }
   });
+  // Expand to full width while editing, collapse back to the name width on blur.
+  inp.addEventListener('focus', ()=> fitNameField(mod));
+  inp.addEventListener('blur',  ()=> fitNameField(mod));
+  fitNameField(mod);   // initial sizing
 });
 
 // Save as… modal
