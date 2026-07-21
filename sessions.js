@@ -96,6 +96,9 @@ const dirty = {};     // mod -> bool
 const AUTOSAVE_MS = 5000;
 const _autosaveTimers = {};
 function scheduleAutosave(mod){
+  // No data (e.g. all files removed) → drop the module's draft right away so a reload
+  // doesn't bring back emptied work.
+  if (!moduleHasData(mod)){ clearDraft(mod); return; }
   // Leading edge: save right away on the first change (e.g. as soon as data loads),
   // so an immediate reload is already covered; then debounce the trailing save.
   if (!_autosaveTimers[mod]) saveDraft(mod);
@@ -133,7 +136,8 @@ function restoreSaveBtns(mod){
 // one-shot listener so the next change flips back to dirty.
 function markSaved(mod){
   dirty[mod] = false;
-  clearDraft(mod);   // saved (or freshly opened) → no crash-recovery draft needed
+  // NB: the draft is kept even for saved projects — it is the persistent working
+  // state that gets auto-restored on the next load (cleared only when data is gone).
   saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
     b.classList.add('is-saved');
@@ -486,35 +490,25 @@ document.getElementById('sessListWrap').addEventListener('change', e=>{
 document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
 renderList();
 
-/* ---- Autosave subscription + crash-recovery banner ---- */
+/* ---- Autosave subscription + silent session restore ---- */
 MODULES.forEach(m=> onModuleChange(m, ()=> scheduleAutosave(m)));
 
+// On load, silently reload every module's draft — no banner, no confirmation. The
+// draft is the persistent working state, so the app comes back exactly as it was.
 async function initDraftRecovery(){
   let drafts;
   try { drafts = await getAllDrafts(); } catch(e){ return; }
   drafts = (drafts || []).filter(d=> d && d.state);   // title may be empty (unnamed work)
-  const banner = document.getElementById('restoreBanner');
-  if (!drafts.length || !banner) return;
-  const labels = drafts.map(d=> MODULE_LABELS[d.module] || d.module).join(', ');
-  document.getElementById('restoreBannerText').textContent =
-    'Unsaved work found in ' + labels + '. Restore previous session?';
-  banner.classList.add('show');
-  document.getElementById('restoreBannerYes').onclick = ()=>{
-    drafts.forEach(d=>{
-      try {
-        restoreModuleState(d.module, decode(d.state));
-        const inp = nameInput(d.module); if (inp) inp.value = d.title;
-        if (d.id) current[d.module] = { id: d.id, title: d.title };
-        markDirty(d.module);   // comes back as unsaved work
-      } catch(e){}
-    });
-    banner.classList.remove('show');
-    renderList();
-  };
-  document.getElementById('restoreBannerNo').onclick = ()=>{
-    drafts.forEach(d=> clearDraft(d.module));
-    banner.classList.remove('show');
-  };
+  if (!drafts.length) return;
+  drafts.forEach(d=>{
+    try {
+      restoreModuleState(d.module, decode(d.state));
+      const inp = nameInput(d.module); if (inp) inp.value = d.title || '';
+      if (d.id) current[d.module] = { id: d.id, title: d.title };
+      markDirty(d.module);   // comes back as unsaved work until an explicit Save
+    } catch(e){}
+  });
+  renderList();
 }
 initDraftRecovery();
 
@@ -525,14 +519,5 @@ initDraftRecovery();
 function flushDrafts(){ MODULES.forEach(m=>{ if (moduleHasData(m)) saveDraft(m); }); }
 document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState === 'hidden') flushDrafts(); });
 window.addEventListener('pagehide', flushDrafts);
-
-// Warn before leaving if a module has unsaved changes AND a non-empty project
-// name (a saved project, or one the user bothered to name — so it matters). One
-// native confirm covers all modules; unnamed drafts don't nag.
-window.addEventListener('beforeunload', e=>{
-  const unsaved = MODULES.some(m=>{
-    const inp = nameInput(m);
-    return dirty[m] && inp && inp.value.trim() !== '';
-  });
-  if (unsaved){ e.preventDefault(); e.returnValue = ''; }
-});
+// No beforeunload nag: the session auto-restores on the next load, so a reload
+// never loses work.
