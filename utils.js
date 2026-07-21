@@ -519,13 +519,15 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">${xIcon}</button></td>`;
+    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
   wrap.innerHTML = html;
 
   wrap.querySelector('.remove-all').addEventListener('click', ()=>{
+    // Remove-all also drops the module's autosaved draft, so always confirm first.
+    if (!confirm('Remove all files? This clears the module and deletes its autosaved recovery draft.')) return;
     if (callbacks.onRemoveAll) callbacks.onRemoveAll();
   });
   const palBtn = wrap.querySelector('.palette-pick-btn');

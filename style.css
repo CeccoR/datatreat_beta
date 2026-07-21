@@ -190,8 +190,15 @@ nav button.is-on {
 .sess-row .proj-rename:focus { border-color: var(--accent); background: var(--panel); outline: none; }
 /* Per-row action icons: only on row hover; bare, grey; exports light up, X reddens */
 .row-acts { text-align: right; }
-.row-acts-inner { display: flex; gap: 4px; justify-content: flex-end; visibility: hidden; }
-.sess-row:hover .row-acts-inner { visibility: visible; }
+.row-acts-inner { display: flex; gap: 4px; justify-content: flex-end; }
+/* ===== Idle-dimmed controls =====
+   50% opacity at rest, full when the containing row/box (or the control itself) is
+   hovered. The standard for row/box action icons — add .idle-dim to new ones. ===== */
+.idle-dim { opacity: 0.5; transition: opacity 0.18s; }
+.idle-dim:hover,
+.sess-row:hover .idle-dim,
+.file-row:hover .idle-dim,
+.peak-row:hover .idle-dim { opacity: 1; }
 .row-ic {
   background: none; border: none; padding: 2px;
   color: var(--muted); cursor: pointer;
@@ -936,11 +943,7 @@ th .download-all { vertical-align: middle; }
 /* Both "all" buttons are always bold: thicker icon strokes than the per-row ones */
 th .download-all svg { stroke-width: 2.5; }
 th .remove-all svg { stroke-width: 2.8; }
-/* Row remove / download appear on row hover (unchanged behaviour) */
-.file-row .row-del,
-.file-row .dl-file { visibility: hidden; }
-.file-row:hover .row-del,
-.file-row:hover .dl-file { visibility: visible; }
+/* Row remove / download: dimmed until the row is hovered (see .idle-dim). */
 .dl-file svg, .download-all svg { vertical-align: middle; }
 td.fname {
   color: var(--muted);
@@ -1596,7 +1599,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 /* ✕ delete button — bare glyph, no border/background; padding keeps a clickable hitbox */
 #xrdPeakTableWrap .peak-row .peak-del,
 #xrdStdPeakTableWrap .peak-row .peak-del {
-  visibility: hidden;
   background: none;
   border: none;
   color: var(--muted);
@@ -1607,8 +1609,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   line-height: 1;
   transition: color 0.1s;
 }
-#xrdPeakTableWrap .peak-row:hover .peak-del,
-#xrdStdPeakTableWrap .peak-row:hover .peak-del { visibility: visible; }
 #xrdPeakTableWrap .peak-row .peak-del:hover,
 #xrdStdPeakTableWrap .peak-row .peak-del:hover {
   color: var(--bad);

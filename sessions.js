@@ -96,6 +96,7 @@ const dirty = {};     // mod -> bool
 const AUTOSAVE_MS = 5000;
 const _autosaveTimers = {};
 function scheduleAutosave(mod){
+  if (_restoring) return;   // don't rewrite drafts while we're replaying them at startup
   // No data (e.g. all files removed) → drop the module's draft right away so a reload
   // doesn't bring back emptied work.
   if (!moduleHasData(mod)){ clearDraft(mod); return; }
@@ -105,12 +106,14 @@ function scheduleAutosave(mod){
   clearTimeout(_autosaveTimers[mod]);
   _autosaveTimers[mod] = setTimeout(()=>{ _autosaveTimers[mod] = null; saveDraft(mod); }, AUTOSAVE_MS);
 }
+let _restoring = false;   // true while initDraftRecovery is replaying drafts
 async function saveDraft(mod){
   if (!moduleHasData(mod)) return;   // autosave any module that still holds data
   const inp = nameInput(mod);
   const title = inp ? inp.value.trim() : '';
   try {
-    const rec = { module: mod, title, state: encode(getModuleState(mod)), updatedAt: Date.now() };
+    const rec = { module: mod, title, state: encode(getModuleState(mod)), updatedAt: Date.now(),
+                  dirty: !!dirty[mod] };   // remember whether it matched its saved project
     if (current[mod]) rec.id = current[mod].id;  // keep the association so Save updates the right project
     await putDraft(rec);
   } catch(e){}
@@ -138,6 +141,8 @@ function markSaved(mod){
   dirty[mod] = false;
   // NB: the draft is kept even for saved projects — it is the persistent working
   // state that gets auto-restored on the next load (cleared only when data is gone).
+  // Re-persist it so the draft records the saved (not-dirty) status for next load.
+  if (!_restoring) saveDraft(mod);
   saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
     b.classList.add('is-saved');
@@ -342,7 +347,7 @@ async function renderList(){
       + '<td><input type="text" class="proj-rename" value="'+r.title.replace(/"/g,'&quot;')+'"></td>'
       + '<td style="white-space:nowrap"><span class="pill">'+(MODULE_LABELS[r.module]||r.module)+'</span></td>'
       + '<td style="color:var(--muted)">'+fmtDate(r.updatedAt)+'</td>'
-      + '<td class="row-acts"><div class="row-acts-inner">'
+      + '<td class="row-acts"><div class="row-acts-inner idle-dim">'
         + '<button class="row-ic pr-csv" title="Export .csv">'+ROW_CSV+'</button>'
         + '<button class="row-ic pr-json" title="Export .json">'+ROW_JSON+'</button>'
         + '<button class="row-ic pr-del" title="Delete">'+ROW_X+'</button>'
@@ -500,14 +505,19 @@ async function initDraftRecovery(){
   try { drafts = await getAllDrafts(); } catch(e){ return; }
   drafts = (drafts || []).filter(d=> d && d.state);   // title may be empty (unnamed work)
   if (!drafts.length) return;
+  _restoring = true;
   drafts.forEach(d=>{
     try {
       restoreModuleState(d.module, decode(d.state));
       const inp = nameInput(d.module); if (inp) inp.value = d.title || '';
       if (d.id) current[d.module] = { id: d.id, title: d.title };
-      markDirty(d.module);   // comes back as unsaved work until an explicit Save
+      // A saved project (has an id and wasn't dirty when stored) comes back green;
+      // anything else comes back as unsaved work.
+      if (d.id && !d.dirty) markSaved(d.module);
+      else markDirty(d.module);
     } catch(e){}
   });
+  _restoring = false;
   renderList();
 }
 initDraftRecovery();
