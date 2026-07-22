@@ -912,14 +912,20 @@ document.addEventListener('keydown', e=>{
 // Toggle the "data loaded" dot's visibility (the slot is already reserved).
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
-  if (btn) btn.classList.toggle('has-data', !!has);
-  // The project-bar action buttons only appear once data is loaded
-  document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"]')
-    .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
-  // The delete / new-project buttons carry no data-module; reveal them with the rest.
-  document.querySelectorAll('.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
-    .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
-  if (has) normalizeProjIcons(tab);
+  if (btn) btn.classList.toggle('has-data', !!has);   // the nav dot tracks actual data
+  refreshProjBar(tab);
+}
+// Project-bar buttons show when the module has files OR a non-empty project name —
+// hidden only when both are empty. (Save/export still refuse an empty file list.)
+function refreshProjBar(tab){
+  const nameInp = document.querySelector('.project-name-input[data-module="'+tab+'"]');
+  const named = !!(nameInp && nameInp.value.trim());
+  const has = !!document.querySelector('#nav button[data-tab="'+tab+'"].has-data');
+  const show = has || named;
+  document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"], '
+    + '.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
+    .forEach(b=>{ b.style.visibility = show ? 'visible' : 'hidden'; });
+  if (show) normalizeProjIcons(tab);
 }
 
 /* Normalize a module's project icons so every icon's minimal bounding box is the
@@ -1470,5 +1476,5 @@ function truncTiltLabel(mctx, text){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons, refreshProjBar
 };

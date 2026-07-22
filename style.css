@@ -677,11 +677,12 @@ td input.label-input {
 svg.plot {
   width: 100%;
   /* Golden-ratio landscape: height tracks the width (φ ≈ 1.618) in every layout,
-     on desktop and mobile alike. A floor keeps it from getting tiny; below the
-     floor the .plot-wrap scrolls horizontally instead of shrinking further. */
+     on desktop and mobile alike. The floor is low enough that side-by-side plots
+     shrink continuously down to ~half their full width and then wrap (at the 820px
+     breakpoint) — never hitting the floor first, so they never scroll horizontally. */
   aspect-ratio: 1.618;
   height: auto;
-  min-width: 460px;
+  min-width: 320px;
   background: var(--panel2);
   border-radius: 8px;
   border: 1px solid var(--line);

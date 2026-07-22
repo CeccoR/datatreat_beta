@@ -8,7 +8,7 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar } from './utils.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
@@ -272,8 +272,10 @@ async function openProjects(recs){
     seen.add(r.module);
   }
   for (const r of recs){
-    if (moduleHasData(r.module)){
-      if (!confirm('The ' + (MODULE_LABELS[r.module]||r.module) + ' module already has data loaded. Replace it with “' + r.title + '”?')) return;
+    // Opening the project that's already loaded in that module is a no-op → no prompt.
+    // Otherwise, if the module holds other data, confirm the replace (in-site banner).
+    if (moduleHasData(r.module) && !(current[r.module] && current[r.module].id === r.id)){
+      if (!await confirmBanner('The ' + (MODULE_LABELS[r.module]||r.module) + ' module already has data loaded. Replace it with “' + r.title + '”?', 'Replace')) return;
     }
   }
   for (const r of recs){
@@ -447,11 +449,15 @@ async function newProject(mod){
 document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML; });
 
 // Project action buttons (top icon row + bottom text row), via delegation
-document.addEventListener('click', e=>{
+document.addEventListener('click', async e=>{
   const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del, .proj-new');
   if (!b || b.disabled) return;
   // The delete / new-project buttons carry no data-module; take it from their project-bar.
   const mod = b.dataset.module || (b.closest('.project-bar') || {}).dataset && b.closest('.project-bar').dataset.module;
+  const isExport = b.classList.contains('proj-save') || b.classList.contains('proj-saveas')
+                || b.classList.contains('proj-csv')  || b.classList.contains('proj-json');
+  // Save / Save as / export need files; with an empty list say so (delete & new are fine).
+  if (isExport && !moduleHasData(mod)){ await confirmBanner('Project file list is empty.', 'OK'); return; }
   if (b.classList.contains('proj-save'))        doSave(mod, false);
   else if (b.classList.contains('proj-saveas')) doSave(mod, true);
   else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
@@ -459,12 +465,13 @@ document.addEventListener('click', e=>{
   else if (b.classList.contains('proj-del'))    deleteOpenProject(mod);
   else if (b.classList.contains('proj-new'))    newProject(mod);
 });
-// Editing the project name is an unsaved change (a pending rename); typing also
-// clears the red "missing name" state.
+// Editing the project name marks a pending change, clears the red "missing name"
+// state, and updates the project-bar visibility (a name alone reveals the buttons).
 document.querySelectorAll('.project-name-input').forEach(inp=>{
   const mod = inp.dataset.module;
   inp.addEventListener('input', ()=>{
     inp.classList.remove('field-invalid');
+    refreshProjBar(mod);
     if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(mod); }
   });
 });
