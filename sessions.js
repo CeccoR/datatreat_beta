@@ -8,7 +8,7 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, setRemoveAllGuard } from './utils.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
@@ -192,20 +192,22 @@ function flashInvalid(inp){
   inp.classList.add('field-invalid');
   inp.focus();
 }
+// Returns true when the project was actually written, false on any abort (no data,
+// missing name, or a declined overwrite) — callers like "New project" rely on this.
 async function doSave(mod, asNew){
-  if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
-  if (asNew){ openSaveAsModal(mod); return; }
+  if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return false; }
+  if (asNew){ openSaveAsModal(mod); return false; }
 
   const inp = nameInput(mod);
   const now = Date.now();
   const title = inp ? inp.value.trim() : '';
-  if (!title){ flashInvalid(inp); return; }
+  if (!title){ flashInvalid(inp); return false; }
   const state = encode(getModuleState(mod));
   const all = await allProjects();
   const cur = current[mod];
   if (cur){
     const clash = all.find(s=> s.module===mod && s.id!==cur.id && s.title.toLowerCase()===title.toLowerCase());
-    if (clash && !confirm('Another ' + (MODULE_LABELS[mod]||mod) + ' project is named “' + clash.title + '”. Save under this name anyway?')) return;
+    if (clash && !confirm('Another ' + (MODULE_LABELS[mod]||mod) + ' project is named “' + clash.title + '”. Save under this name anyway?')) return false;
     const rec = all.find(s=> s.id===cur.id);
     await putProject({ id: cur.id, module: mod, title, createdAt: rec ? rec.createdAt : now, state, updatedAt: now });
     current[mod] = { id: cur.id, title };
@@ -213,12 +215,13 @@ async function doSave(mod, asNew){
     const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
     let id;
     if (existing){
-      if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return;
+      if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return false;
       id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
     } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
     current[mod] = { id, title };
   }
   markSaved(mod); renderList();
+  return true;
 }
 
 /* ---- Export current module as .json ---- */
@@ -409,8 +412,28 @@ async function deleteOpenProject(mod){
   // No saved project → plain remove-all (with its own confirmation banner).
   if (rmAll) rmAll.click();
 }
+// New project: clear the module for a fresh start. If there are unsaved changes,
+// offer to save first (Save / Don't save / Cancel).
+async function newProject(mod){
+  if (!moduleHasData(mod)) return;          // already empty → nothing to start over
+  const rmAll = document.querySelector('#'+mod+'FileTableWrap .remove-all');
+  const clear = ()=>{ if (rmAll && rmAll._clearNow) rmAll._clearNow(); const inp=nameInput(mod); if (inp) inp.value=''; };
+  if (dirty[mod] || !current[mod]){
+    const res = await confirmBanner('Save the current project before starting a new one?', 'Save', "Don't save");
+    if (res === false) return;              // cancel
+    if (res === true){ if (!await doSave(mod, false)) return; }  // save failed/aborted → keep working
+    clear();
+  } else {
+    // Saved with no pending changes → start fresh right away.
+    clear();
+  }
+}
 
 /* ---- Wiring ---- */
+// Remove-all only needs to confirm when there's something to lose: skip the banner
+// when the open project is saved with no pending changes.
+setRemoveAllGuard(mod => !(current[mod] && !dirty[mod]));
+
 // Capture each Save button's pristine markup once, before any state swap, so the
 // disk icon / "Save project" text can always be restored (and never captured
 // while showing the check or the dirty-asterisk variant).
@@ -418,15 +441,16 @@ document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml === 
 
 // Project action buttons (top icon row + bottom text row), via delegation
 document.addEventListener('click', e=>{
-  const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del');
+  const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del, .proj-new');
   if (!b || b.disabled) return;
-  // The delete button carries no data-module of its own; take it from its project-bar.
+  // The delete / new-project buttons carry no data-module; take it from their project-bar.
   const mod = b.dataset.module || (b.closest('.project-bar') || {}).dataset && b.closest('.project-bar').dataset.module;
   if (b.classList.contains('proj-save'))        doSave(mod, false);
   else if (b.classList.contains('proj-saveas')) doSave(mod, true);
   else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
   else if (b.classList.contains('proj-json'))   exportJson(mod);
   else if (b.classList.contains('proj-del'))    deleteOpenProject(mod);
+  else if (b.classList.contains('proj-new'))    newProject(mod);
 });
 // Editing the project name is an unsaved change (a pending rename); typing also
 // clears the red "missing name" state.

@@ -139,20 +139,6 @@ import { Plot } from './plot.js';
     afterFilesChange();
   });
 
-  // SNIP baseline (debug): iteratively clip each point downward toward the mean of
-  // its neighbours at shrinking window widths — same algorithm used in XRPD.
-  function computeBaseline(y, halfWin){
-    const n = y.length;
-    const z = Float64Array.from(y);
-    for (let w = halfWin; w >= 1; w--){
-      for (let i = w; i < n-w; i++){
-        const avg = (z[i-w] + z[i+w]) / 2;
-        if (avg < z[i]) z[i] = avg;
-      }
-    }
-    return Array.from(z);
-  }
-
   function afterFilesChange(){
     setTabLoaded('epr', files.length);
     renderUnifiedFileList('eprFileTableWrap', files, fileCallbacks());
@@ -174,14 +160,12 @@ import { Plot } from './plot.js';
       files: files.map(f=>({...f})),
       norm: document.getElementById('eprNorm').value,
       smooth: document.getElementById('eprSmooth').value,
-      blWin: document.getElementById('eprBlWin').value,
     };
   }
   function eprRestore(s){
     files = s.files.map(f=>({...f}));
     document.getElementById('eprNorm').value = s.norm;
     document.getElementById('eprSmooth').value = s.smooth;
-    if (s.blWin !== undefined) document.getElementById('eprBlWin').value = s.blWin;
     afterFilesChange();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
@@ -191,7 +175,6 @@ import { Plot } from './plot.js';
     if (!files.length) return;
     const N = +document.getElementById('eprSmooth').value || 1;
     const norm = document.getElementById('eprNorm').value;
-    const blWin = Math.max(0, Math.round(+document.getElementById('eprBlWin').value || 0));
     let Y = files.map(f=>movingAverage(f.a, N));
     // A fresh Plot is built each render, so grab the outgoing view first to keep the
     // current zoom on a resize / tab-switch redraw instead of snapping to full range.
@@ -215,18 +198,15 @@ import { Plot } from './plot.js';
     plot.drawAxes();
     Y.forEach((y,k)=>{
       plot.line(files[k].b, y, files[k].color, 1.3);
-      // Debug: overlay the SNIP background per spectrum (dashed) when enabled.
-      if (blWin>0){ plot.line(files[k].b, computeBaseline(y, blWin), '#888', 1, '4,3'); }
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`; legend.appendChild(s);
     });
-    if (blWin>0){ const s=document.createElement('span'); s.innerHTML=`<i style="background:#888"></i>SNIP background (debug)`; legend.appendChild(s); }
     lastY = Y;
   }
 
   // Apply on confirm, not while typing. eprNorm is a <select> (its change is a
   // deliberate pick); eprSmooth is a guarded number field, so its change only
   // fires with a valid value (invalid input shakes + reverts via guardNumberInputs).
-  ['eprNorm','eprSmooth','eprBlWin'].forEach(id=>{
+  ['eprNorm','eprSmooth'].forEach(id=>{
     document.getElementById(id).addEventListener('change', ()=>{
       if (files.length){ updateEpr(); hist.commit(); }
     });

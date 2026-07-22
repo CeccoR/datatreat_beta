@@ -233,7 +233,7 @@ button.btn.is-saved:disabled {
 /* Project-bar export ICONS are icon buttons → muted grey like every other icon
    button (nav, plot toolbar, table CSV). Scoped to .proj-icon so the bottom
    text buttons (Save as / Export …) keep the white secondary-action text. */
-.btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del { --btn-fg: var(--muted); }
+.btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new { --btn-fg: var(--muted); }
 /* Project bar: sits above the upload area, always visible. Name field on the far
    left, action icons on the far right, both vertically centered. */
 .card.project-bar {

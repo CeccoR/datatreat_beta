@@ -493,6 +493,11 @@ const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size
 // Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
 const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
 
+// Optional predicate (mod)->bool set by the project layer: return false to let
+// remove-all skip its confirmation banner (nothing would be lost, e.g. saved+clean).
+let _removeAllGuard = null;
+function setRemoveAllGuard(fn){ _removeAllGuard = fn; }
+
 function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   const wrap = document.getElementById(containerId);
   if (!wrap) return;
@@ -526,13 +531,16 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   wrap.innerHTML = html;
 
   const REMOVE_ALL_MSG = 'Remove all files? Unsaved changes will be permanently lost.';
+  const rmMod = containerId.replace(/FileTableWrap$/, '');
   const rmAllBtn = wrap.querySelector('.remove-all');
   // Exposed so other flows (e.g. the project-bar trash) can clear the module without
   // re-showing the confirmation banner — they confirm once on their own.
   rmAllBtn._clearNow = ()=>{ if (callbacks.onRemoveAll) callbacks.onRemoveAll(); };
   rmAllBtn.addEventListener('click', async ()=>{
-    // Remove-all also drops the module's autosaved draft, so always confirm first.
-    if (!await confirmBanner(REMOVE_ALL_MSG)) return;
+    // Remove-all drops the module's autosaved draft, so confirm — UNLESS the guard
+    // says the module is safe to clear (e.g. the open project is saved with no
+    // pending changes, so nothing would be lost).
+    if ((!_removeAllGuard || _removeAllGuard(rmMod)) && !await confirmBanner(REMOVE_ALL_MSG)) return;
     rmAllBtn._clearNow();
   });
   const palBtn = wrap.querySelector('.palette-pick-btn');
@@ -925,9 +933,9 @@ function setTabLoaded(tab, has){
   // The project-bar action buttons only appear once data is loaded
   document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"]')
     .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
-  // The delete button carries no data-module of its own; reveal it with the rest.
-  const del = document.querySelector('.project-bar[data-module="'+tab+'"] .proj-del');
-  if (del) del.style.visibility = has ? 'visible' : 'hidden';
+  // The delete / new-project buttons carry no data-module; reveal them with the rest.
+  document.querySelectorAll('.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
+    .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
   if (has) normalizeProjIcons(tab);
 }
 
@@ -964,8 +972,8 @@ function normalizeProjIcons(mod){
     // Exception: the JSON icon is the CSV icon with different text — render it at
     // the exact same scale so the arrow and font match CSV, not the equal-box rule.
     if (csvScale) fitIcon(q('proj-json'), csvScale);
-    const del = document.querySelector('.project-bar[data-module="'+mod+'"] .proj-del .proj-svg');
-    if (del) fitIcon(del);
+    document.querySelectorAll('.project-bar[data-module="'+mod+'"] .proj-del .proj-svg, .project-bar[data-module="'+mod+'"] .proj-new .proj-svg')
+      .forEach(svg=> fitIcon(svg));
   });
 }
 
@@ -1365,7 +1373,10 @@ function openDateModal(baseDate, onPick){
 // PWA-toast styling. Returns a Promise<boolean> (true = confirmed).
 // Only one banner is shown at a time; a second call cancels the first.
 let _confirmBannerEl = null;
-function confirmBanner(message, confirmLabel){
+// Two-button banner by default: resolves true (confirm) / false (cancel or X).
+// Passing altLabel adds a middle secondary button and turns it three-way, resolving
+// 'alt' when that button is clicked (e.g. Save / Don't save / Cancel).
+function confirmBanner(message, confirmLabel, altLabel){
   return new Promise(resolve=>{
     if (_confirmBannerEl){ _confirmBannerEl.remove(); _confirmBannerEl = null; }
     const t = document.createElement('div');
@@ -1379,7 +1390,15 @@ function confirmBanner(message, confirmLabel){
     const x = document.createElement('button');
     x.type = 'button'; x.className = 'pwa-toast-x'; x.setAttribute('aria-label', 'Cancel');
     x.innerHTML = '&#10005;';
-    t.appendChild(msg); t.appendChild(ok); t.appendChild(x);
+    t.appendChild(msg);
+    let alt = null;
+    if (altLabel){
+      alt = document.createElement('button');
+      alt.type = 'button'; alt.className = 'btn';
+      alt.textContent = altLabel;
+      t.appendChild(alt);
+    }
+    t.appendChild(ok); t.appendChild(x);
     document.body.appendChild(t);
     _confirmBannerEl = t;
     requestAnimationFrame(()=> t.classList.add('show'));
@@ -1393,6 +1412,7 @@ function confirmBanner(message, confirmLabel){
     };
     const onKey = e=>{ if (e.key === 'Escape') done(false); };
     ok.addEventListener('click', ()=> done(true));
+    if (alt) alt.addEventListener('click', ()=> done('alt'));
     x.addEventListener('click', ()=> done(false));
     document.addEventListener('keydown', onKey);
   });
@@ -1467,5 +1487,5 @@ function truncTiltLabel(mctx, text){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons, setRemoveAllGuard
 };
