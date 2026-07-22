@@ -493,11 +493,6 @@ const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size
 // Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
 const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
 
-// Optional predicate (mod)->bool set by the project layer: return false to let
-// remove-all skip its confirmation banner (nothing would be lost, e.g. saved+clean).
-let _removeAllGuard = null;
-function setRemoveAllGuard(fn){ _removeAllGuard = fn; }
-
 function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   const wrap = document.getElementById(containerId);
   if (!wrap) return;
@@ -530,18 +525,11 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   html += `</tbody></table></div>`;
   wrap.innerHTML = html;
 
-  const REMOVE_ALL_MSG = 'Remove all files? Unsaved changes will be permanently lost.';
-  const rmMod = containerId.replace(/FileTableWrap$/, '');
-  const rmAllBtn = wrap.querySelector('.remove-all');
-  // Exposed so other flows (e.g. the project-bar trash) can clear the module without
-  // re-showing the confirmation banner — they confirm once on their own.
-  rmAllBtn._clearNow = ()=>{ if (callbacks.onRemoveAll) callbacks.onRemoveAll(); };
-  rmAllBtn.addEventListener('click', async ()=>{
-    // Remove-all drops the module's autosaved draft, so confirm — UNLESS the guard
-    // says the module is safe to clear (e.g. the open project is saved with no
-    // pending changes, so nothing would be lost).
-    if ((!_removeAllGuard || _removeAllGuard(rmMod)) && !await confirmBanner(REMOVE_ALL_MSG)) return;
-    rmAllBtn._clearNow();
+  // Removing files (all or one) is treated as an ordinary edit to the project — it
+  // updates the draft rather than discarding it — so this only confirms the action.
+  wrap.querySelector('.remove-all').addEventListener('click', async ()=>{
+    if (!await confirmBanner('Are you sure to remove all files?')) return;
+    if (callbacks.onRemoveAll) callbacks.onRemoveAll();
   });
   const palBtn = wrap.querySelector('.palette-pick-btn');
   if (palBtn) palBtn.addEventListener('click', e=>{
@@ -566,13 +554,8 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     });
   });
   wrap.querySelectorAll('.row-del').forEach(btn=>{
-    btn.addEventListener('click', async e=>{
-      const i = +e.currentTarget.dataset.i;
-      // Removing the last remaining file clears the module + its draft, same as
-      // remove-all, so guard it with the same confirmation banner.
-      if (files.length === 1 && !await confirmBanner(REMOVE_ALL_MSG)) return;
-      if (callbacks.onRemove) callbacks.onRemove(i);
-    });
+    // Removing a single file is a plain edit — no confirmation, even for the last one.
+    btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.currentTarget.dataset.i); });
   });
   // Per-file download of the original uploaded content, byte-for-byte. A file
   // keeps its original bytes in `rawBytes`, or a `rawFiles` list (e.g. EPR's
@@ -1487,5 +1470,5 @@ function truncTiltLabel(mctx, text){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons, setRemoveAllGuard
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons
 };

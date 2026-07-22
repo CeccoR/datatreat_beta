@@ -8,7 +8,7 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, setRemoveAllGuard } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons } from './utils.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
@@ -99,9 +99,8 @@ const AUTOSAVE_MS = 5000;
 const _autosaveTimers = {};
 function scheduleAutosave(mod){
   if (_restoring) return;   // don't rewrite drafts while we're replaying them at startup
-  // No data (e.g. all files removed) → drop the module's draft right away so a reload
-  // doesn't bring back emptied work.
-  if (!moduleHasData(mod)){ clearDraft(mod); return; }
+  // Any edit — including removing files — just updates the draft. A full reset
+  // (delete / new project) clears it explicitly via resetModule(), not here.
   // Leading edge: save right away on the first change (e.g. as soon as data loads),
   // so an immediate reload is already covered; then debounce the trailing save.
   if (!_autosaveTimers[mod]) saveDraft(mod);
@@ -110,7 +109,9 @@ function scheduleAutosave(mod){
 }
 let _restoring = false;   // true while initDraftRecovery is replaying drafts
 async function saveDraft(mod){
-  if (!moduleHasData(mod)) return;   // autosave any module that still holds data
+  // Persist whatever state the module is in. Autosave only fires on real edits
+  // (commits), so a pristine empty module never reaches here; removing files is an
+  // edit and correctly updates the draft to the emptied state.
   const inp = nameInput(mod);
   const title = inp ? inp.value.trim() : '';
   try {
@@ -165,16 +166,10 @@ function markSaved(mod){
   });
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
-// Unsaved changes (data edit or a rename in the field). Losing all data clears
-// the project association and the field entirely.
+// Unsaved changes (data edit, a file removal, or a rename in the field). Removing
+// files is a normal edit now — it never clears the project; only an explicit reset
+// (delete / new project) does. See resetModule().
 function markDirty(mod){
-  if (!moduleHasData(mod)){
-    delete current[mod]; dirty[mod] = false;
-    const inp = nameInput(mod); if (inp) inp.value = '';
-    restoreSaveBtns(mod);
-    clearDraft(mod);   // no data left → nothing to recover
-    return;
-  }
   dirty[mod] = true;
   restoreSaveBtns(mod);
   // Badge the Save icon with a red asterisk when an open project has changes.
@@ -394,46 +389,58 @@ async function deleteProjectRec(rec){
     normalizeProjIcons(rec.module);
   }
 }
-// Project-bar trash button. With an open project it deletes that project (the data
-// stays, now unsaved). With no saved project it clears the module — the same
-// "remove all" action (and confirmation banner) as the file table's remove-all.
+// Default (pristine) module states captured at startup — used to hard-reset a
+// module so a delete / new project leaves NO memory of the previous parameters.
+const DEFAULT_STATE = {};
+MODULES.forEach(m=>{ try { DEFAULT_STATE[m] = encode(getModuleState(m)); } catch(e){} });
+
+// Full reset of a module: files cleared, parameters back to their defaults, the
+// project association / name / draft all dropped. This is the "start clean" path
+// (delete, new project) — as opposed to remove-all, which is just an edit.
+function resetModule(mod){
+  delete current[mod];
+  dirty[mod] = false;
+  if (DEFAULT_STATE[mod] != null) restoreModuleState(mod, decode(DEFAULT_STATE[mod]));  // params → defaults, files → empty
+  const inp = nameInput(mod); if (inp) inp.value = '';
+  restoreSaveBtns(mod);
+  normalizeProjIcons(mod);
+  clearDraft(mod);
+}
+
+// Project-bar trash button. Forces a decision, then wipes the module clean.
+//  • Open saved project → confirm "delete «name»" (Delete + cancel), then reset.
+//  • Unsaved work        → Save / Discard / cancel (like New project). Save with an
+//    empty name just fires the "enter a name" shake, deleting nothing.
 async function deleteOpenProject(mod){
   const cur = current[mod];
-  const rmAll = document.querySelector('#'+mod+'FileTableWrap .remove-all');
   if (cur){
-    // Delete the saved project AND clear the module (files + draft), one confirmation.
-    if (!await confirmBanner('Delete project “'+cur.title+'” and remove all files? Unsaved changes will be permanently lost.', 'Delete')) return;
-    await deleteProjectRec({ id: cur.id, module: mod, title: cur.title });
-    if (rmAll && rmAll._clearNow) rmAll._clearNow();
-    const inp = nameInput(mod); if (inp) inp.value = '';   // also empty the name field
+    if (!await confirmBanner('Are you sure to delete “'+cur.title+'”? This action is permanent.', 'Delete')) return;
+    await deleteProject(cur.id);
+    resetModule(mod);
     renderList();
     return;
   }
-  // No saved project → plain remove-all (with its own confirmation banner).
-  if (rmAll) rmAll.click();
+  if (!moduleHasData(mod)) return;   // nothing loaded, nothing saved → nothing to do
+  const res = await confirmBanner('Are you sure to discard all? All unsaved changes will be lost.', 'Save', 'Discard');
+  if (res === false) return;                                   // cancel
+  if (res === true){ if (!await doSave(mod, false)) return; }  // Save (empty name → shake, no reset)
+  resetModule(mod);                                            // Save-then-clear, or Discard
+  renderList();
 }
-// New project: clear the module for a fresh start. If there are unsaved changes,
-// offer to save first (Save / Don't save / Cancel).
+// New project: force a Save / Don't save / cancel choice when there are unsaved
+// changes, then start from a clean default module. Saved+clean starts fresh at once.
 async function newProject(mod){
   if (!moduleHasData(mod)) return;          // already empty → nothing to start over
-  const rmAll = document.querySelector('#'+mod+'FileTableWrap .remove-all');
-  const clear = ()=>{ if (rmAll && rmAll._clearNow) rmAll._clearNow(); const inp=nameInput(mod); if (inp) inp.value=''; };
   if (dirty[mod] || !current[mod]){
     const res = await confirmBanner('Save the current project before starting a new one?', 'Save', "Don't save");
-    if (res === false) return;              // cancel
+    if (res === false) return;                                   // cancel
     if (res === true){ if (!await doSave(mod, false)) return; }  // save failed/aborted → keep working
-    clear();
-  } else {
-    // Saved with no pending changes → start fresh right away.
-    clear();
   }
+  resetModule(mod);
+  renderList();
 }
 
 /* ---- Wiring ---- */
-// Remove-all only needs to confirm when there's something to lose: skip the banner
-// when the open project is saved with no pending changes.
-setRemoveAllGuard(mod => !(current[mod] && !dirty[mod]));
-
 // Capture each Save button's pristine markup once, before any state swap, so the
 // disk icon / "Save project" text can always be restored (and never captured
 // while showing the check or the dirty-asterisk variant).
