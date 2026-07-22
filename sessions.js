@@ -402,11 +402,16 @@ MODULES.forEach(m=>{ try { DEFAULT_STATE[m] = encode(getModuleState(m)); } catch
 function resetModule(mod){
   delete current[mod];
   dirty[mod] = false;
-  if (DEFAULT_STATE[mod] != null) restoreModuleState(mod, decode(DEFAULT_STATE[mod]));  // params → defaults, files → empty
-  const inp = nameInput(mod); if (inp) inp.value = '';
+  const inp = nameInput(mod); if (inp) inp.value = '';   // clear name BEFORE the restore
+  if (DEFAULT_STATE[mod] != null) restoreModuleState(mod, decode(DEFAULT_STATE[mod]));  // params → defaults, files → empty (also refreshes the now-empty project bar)
   restoreSaveBtns(mod);
   normalizeProjIcons(mod);
+  refreshProjBar(mod);   // both name and files empty now → hide the buttons
   clearDraft(mod);
+}
+// Is there anything for a reset to actually clear? (files, an open project, a name)
+function moduleHasSomething(mod){
+  return moduleHasData(mod) || !!current[mod] || !!(nameInput(mod) && nameInput(mod).value.trim());
 }
 
 // Project-bar trash button. Forces a decision, then wipes the module clean.
@@ -422,7 +427,9 @@ async function deleteOpenProject(mod){
     renderList();
     return;
   }
-  if (!moduleHasData(mod)) return;   // nothing loaded, nothing saved → nothing to do
+  // No files (only a leftover name / draft): nothing to save or lose — just clear
+  // the name and the draft, no prompt.
+  if (!moduleHasData(mod)){ if (moduleHasSomething(mod)){ resetModule(mod); renderList(); } return; }
   const res = await confirmBanner('Are you sure to discard all? All unsaved changes will be lost.', 'Save', 'Discard');
   if (res === false) return;                                   // cancel
   if (res === true){ if (!await doSave(mod, false)) return; }  // Save (empty name → shake, no reset)
@@ -432,7 +439,8 @@ async function deleteOpenProject(mod){
 // New project: force a Save / Don't save / cancel choice when there are unsaved
 // changes, then start from a clean default module. Saved+clean starts fresh at once.
 async function newProject(mod){
-  if (!moduleHasData(mod)) return;          // already empty → nothing to start over
+  // No files: nothing to save/lose — clear any leftover name + draft, no prompt.
+  if (!moduleHasData(mod)){ if (moduleHasSomething(mod)){ resetModule(mod); renderList(); } return; }
   if (dirty[mod] || !current[mod]){
     const res = await confirmBanner('Save the current project before starting a new one?', 'Save', "Don't save");
     if (res === false) return;                                   // cancel
