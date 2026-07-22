@@ -402,6 +402,7 @@ async function deleteOpenProject(mod){
     if (!await confirmBanner('Delete project “'+cur.title+'” and remove all files? Unsaved changes will be permanently lost.', 'Delete')) return;
     await deleteProjectRec({ id: cur.id, module: mod, title: cur.title });
     if (rmAll && rmAll._clearNow) rmAll._clearNow();
+    const inp = nameInput(mod); if (inp) inp.value = '';   // also empty the name field
     renderList();
     return;
   }
