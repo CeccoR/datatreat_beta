@@ -5,21 +5,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DataTreat</title>
-  <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (DRS UV-Vis Tauc plots, XRPD, GC H₂ rates, EPR). All processing runs locally in your browser; no data is uploaded.">
+  <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (UV-Vis DRS Tauc plots, XRPD, GC H₂ rates, EPR). All processing runs locally in your browser; no data is uploaded.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <!-- PWA: installable + offline app shell -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#0e1316">
-  <link rel="apple-touch-icon" href="favicon.svg?v=2">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <!-- Open Graph / social preview -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="DataTreat">
-  <meta property="og:description" content="Browser-based scientific data analysis for spectroscopy and chromatography — DRS UV-Vis Tauc plots, XRPD, GC, EPR. Runs entirely in your browser; no data leaves your device.">
-  <meta property="og:url" content="https://ceccor.github.io/datatreat/">
-  <meta property="og:image" content="https://ceccor.github.io/datatreat/favicon.svg">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:description" content="Browser-based scientific data analysis for spectroscopy and chromatography — UV-Vis DRS Tauc plots, XRPD, GC, EPR. Runs entirely in your browser; no data leaves your device.">
+  <meta property="og:url" content="https://ceccor.github.io/datatreat_beta/">
+  <meta property="og:image" content="https://ceccor.github.io/datatreat_beta/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="DataTreat — browser-based scientific data analysis (UV-Vis DRS, XRPD, GC, EPR)">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DataTreat">
   <meta name="twitter:description" content="Browser-based scientific data analysis for spectroscopy and chromatography. Runs entirely in your browser; no data leaves your device.">
+  <meta name="twitter:image" content="https://ceccor.github.io/datatreat_beta/og-image.png">
   <link rel="stylesheet" href="style.css">
   <!-- Apply the saved (or OS-preferred) theme before first paint to avoid a flash -->
   <script>
@@ -37,11 +42,12 @@
   <header>
     <h1 style="font-size:19px"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#0e1316"/><path d="M5 23 H12 V9 H20 V23 H27" fill="none" stroke="#ffb454" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>DataTreat</h1>
     <nav id="nav" role="tablist" aria-label="Analysis modules">
-      <button data-tab="home" class="active" role="tab" aria-selected="true" aria-controls="tab-home">Home</button>
-      <button data-tab="tauc" role="tab" aria-selected="false" aria-controls="tab-tauc">DRS UV-Vis</button>
+      <button data-tab="home" class="is-on" role="tab" aria-selected="true" aria-controls="tab-home">Home</button>
+      <button data-tab="tauc" role="tab" aria-selected="false" aria-controls="tab-tauc">UV-Vis DRS</button>
       <button data-tab="xrd" role="tab" aria-selected="false" aria-controls="tab-xrd">XRPD</button>
       <button data-tab="gc" role="tab" aria-selected="false" aria-controls="tab-gc">GC</button>
       <button data-tab="epr" role="tab" aria-selected="false" aria-controls="tab-epr">EPR</button>
+      <span class="nav-divider" aria-hidden="true"></span>
       <button data-tab="projects" class="nav-icon nav-right" role="tab" aria-selected="false" aria-controls="tab-projects" aria-label="Projects" title="Saved projects">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
       </button>
@@ -58,34 +64,34 @@
     <!-- ============ HOME ============ -->
     <section class="tab active" id="tab-home" role="tabpanel" tabindex="0">
       <div class="card">
-        <h2>Pick your technique.</h2>
-        <p class="hint" style="margin-bottom:18px">Analyze your data.</p>
+        <h2 class="txt-title">Pick your technique.</h2>
+        <p class="txt-meta" style="margin-bottom:18px">Analyze your data.</p>
         <div class="home-grid">
           <div class="home-card" data-go="tauc">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M42 22 C 28 22, 25 5, 2 4"/></svg></div>
             <div class="home-card-text">
-              <h3>DRS UV-Vis</h3>
+              <h3 class="txt-tile">UV-Vis DRS</h3>
               <p>Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (Eg) can be inferred through Tauc Plot analysis.</p>
             </div>
           </div>
           <div class="home-card" data-go="xrd">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H11 L14 6 L17 22 H25 L28 13 L31 22 H42"/></svg></div>
             <div class="home-card-text">
-              <h3>XRPD</h3>
+              <h3 class="txt-tile">XRPD</h3>
               <p>X-Ray Powder Diffraction. Diffractograms comparison, smoothing, and normalization.</p>
             </div>
           </div>
           <div class="home-card" data-go="gc">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H10 C13 22 13 8 16 8 C19 8 19 22 22 22 H28 C32 22 31 14 34 14 C37 14 37 22 40 22 H42"/></svg></div>
             <div class="home-card-text">
-              <h3>GC</h3>
+              <h3 class="txt-tile">GC</h3>
               <p>Gas Chromatography for H₂ production rate assessment.</p>
             </div>
           </div>
           <div class="home-card" data-go="epr">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 14 H15 L20 5 L24 21 L29 14 H42"/></svg></div>
             <div class="home-card-text">
-              <h3>EPR</h3>
+              <h3 class="txt-tile">EPR</h3>
               <p>Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.</p>
             </div>
           </div>
@@ -98,59 +104,70 @@
 
     <!-- ============ SETTINGS ============ -->
     <section class="tab settings-tab" id="tab-settings" role="tabpanel" tabindex="0">
-      <div class="card" style="max-width:480px;margin:0 auto">
-        <h2>Settings</h2>
-        <h3 style="margin:0 0 6px">Appearance</h3>
+      <div style="max-width:480px;margin:0 auto">
+        <h2 class="txt-title" style="margin:0 0 10px">Settings</h2>
+        <div class="card">
+        <h3 class="txt-head" style="margin:0 0 6px">Appearance</h3>
         <div class="instr-block">Theme defaults to your operating-system preference; your choice here is remembered.</div>
-        <label style="margin-top:0">Theme</label>
+        <label class="txt-label" style="margin-top:0">Theme</label>
         <select id="settingTheme">
           <option value="dark">Dark</option>
           <option value="light">Light</option>
         </select>
-        <h3 style="margin:20px 0 6px">Plot export</h3>
+        <h3 class="txt-head" style="margin:20px 0 6px">Plot export</h3>
         <div class="instr-block">Download format applied to all plot export buttons.</div>
-        <label style="margin-top:0">Format</label>
+        <label class="txt-label" style="margin-top:0">Format</label>
         <select id="settingPlotFmt">
           <option value="png" selected>PNG</option>
           <option value="svg">SVG</option>
           <option value="jpeg">JPEG</option>
           <option value="webp">WebP</option>
         </select>
-        <h3 style="margin:20px 0 6px">CSV export</h3>
+        <h3 class="txt-head" style="margin:20px 0 6px">CSV export</h3>
         <div class="instr-block">Decimal and field separator cannot both be set to comma.</div>
-        <label style="margin-top:0">Decimal separator</label>
+        <label class="txt-label" style="margin-top:0">Decimal separator</label>
         <select id="settingDecimal">
           <option value="." selected>. (point)</option>
           <option value=",">, (comma)</option>
         </select>
-        <label style="margin-top:14px">Field separator</label>
+        <label class="txt-label" style="margin-top:14px">Field separator</label>
         <select id="settingField">
           <option value="	">Tab</option>
           <option value=";" selected>; (semicolon)</option>
           <option value=",">, (comma)</option>
         </select>
+        <h3 class="txt-head" style="margin:20px 0 6px">Keyboard shortcuts</h3>
+        <div class="shortcut-list">
+          <div><span><span class="kbd">&#8592;</span> <span class="kbd">&#8594;</span></span><span>Previous / next sample</span></div>
+          <div><span><span class="kbd">Ctrl</span>/<span class="kbd">&#8984;</span> + <span class="kbd">Z</span></span><span>Undo</span></div>
+          <div><span><span class="kbd">Ctrl</span>/<span class="kbd">&#8984;</span> + <span class="kbd">Y</span> or <span class="kbd">&#8679;</span>+<span class="kbd">Z</span></span><span>Redo</span></div>
+        </div>
+      </div>
       </div>
     </section>
 
     <!-- ============ PROJECTS ============ -->
     <section class="tab" id="tab-projects" role="tabpanel" tabindex="0">
+      <div class="module-head"><h2 class="txt-title" style="margin:0">Projects</h2></div>
+      <div class="instr-block">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</div>
       <div class="card">
         <div class="flex-between" style="align-items:center;flex-wrap:wrap;gap:10px">
-          <h2 style="margin:0">Saved projects</h2>
-          <div style="display:flex;gap:8px">
-            <input type="file" id="sessImportFile" accept="application/json,.json" style="display:none">
-            <button class="btn secondary small" id="sessImportBtn">Import .json</button>
-            <button class="btn small" id="sessOpenSelected" disabled>Open selected</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="file" id="sessImportFile" accept="application/json,.json" multiple style="display:none">
+            <button class="btn primary btn-sm" id="sessOpenSelected" disabled>Open selected</button>
+            <button class="btn btn-sm" id="sessDeleteSelected" disabled>Delete selected</button>
+            <button class="btn btn-sm" id="sessCsvSelected" disabled>Export .csv selected</button>
+            <button class="btn btn-sm" id="sessJsonSelected" disabled>Export .json selected</button>
+            <button class="btn btn-sm" id="sessImportBtn">Import .json</button>
           </div>
         </div>
-        <p class="hint" style="margin-top:6px">Each project stores a whole module's state (raw data, parameters and fits). You can open several at once as long as they belong to different modules.</p>
         <div class="row" style="gap:10px;margin-top:12px">
           <div class="col mw200" style="flex:2">
-            <label style="margin-top:0">Filter by name</label>
+            <label class="txt-label" style="margin-top:0">Filter by name</label>
             <input type="text" id="sessFilterName" placeholder="Search title…">
           </div>
           <div class="col mw200" style="flex:1">
-            <label style="margin-top:0">Filter by module</label>
+            <label class="txt-label" style="margin-top:0">Filter by module</label>
             <select id="sessFilterModule"><option value="">All modules</option></select>
           </div>
         </div>
@@ -160,14 +177,16 @@
 
     <!-- ============ TAUC ============ -->
     <section class="tab" id="tab-tauc" role="tabpanel" tabindex="0">
-      <div class="card project-bar" data-module="tauc"><input type="text" class="project-name-input" data-module="tauc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="tauc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="tauc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="tauc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="tauc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="tauc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
+      <div class="module-head"><h2 class="txt-title" style="margin:0">UV-Vis DRS</h2></div>
+      <div class="instr-block">Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (E<sub>g</sub>) can be inferred through Tauc Plot analysis.</div>
+      <div class="card project-bar" data-module="tauc"><input type="text" class="project-name-input" data-module="tauc" placeholder="Project name…" aria-label="Project name"><div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" data-module="tauc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" data-module="tauc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" data-module="tauc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" data-module="tauc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 style="margin:0">DRS UV-Vis</h2></div>
+        <h3 class="txt-head" style="margin:0 0 8px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Cary 5000 Instrument. Upload files with two columns: wavelength (nm) and Kubelka-Munk computed absorbance F(R).</div>
         <div class="dropzone" id="taucDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="dz-hint">.csv, .txt</div>
+          <div class="txt-meta">.csv, .txt</div>
           <input type="file" id="taucFiles" multiple accept=".csv,.txt" style="display:none">
         </div>
         <div id="taucAlerts"></div>
@@ -175,19 +194,22 @@
       </div>
 
       <div class="card" id="taucWorkspace" style="display:none">
-        <h3 style="margin:0 0 0">ANALYSIS</h3>
-        <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta). Eg is extracted from both the x-axis intersection and the baseline intersection of the regression line.</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <button class="btn secondary nav-arrow" id="taucPrev" aria-label="Previous sample">‹</button>
-          <span id="taucIdx" class="pill" style="margin:0">1/1</span>
-          <button class="btn secondary nav-arrow" id="taucNext" aria-label="Next sample">›</button>
-          <span class="plot-subtitle" id="taucCurrentLabel">—</span>
-        </div>
+        <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
+        <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method). Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 0.5 for indirect semiconductors and 2 for direct semiconductors.</div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left">
+                <button class="btn nav-arrow" id="taucPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
+                <span id="taucIdx" class="pill" style="margin:0">1/1</span>
+                <button class="btn nav-arrow" id="taucNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
+                <span class="txt-caption" id="taucCurrentLabel">—</span>
+              </div>
+              <button class="btn plot-corner-btn" id="taucSuggest" title="Propose optimal Tauc-region and baseline intervals from the absorption edge">&#10022; Suggest intervals</button>
+            </div>
             <div class="plot-wrap">
               <svg class="plot" id="taucSvg"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="taucSvg" data-dl-name="Tauc_sample.svg" data-dl-legend="taucLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <button class="btn plot-dl-btn" data-dl-svg="taucSvg" data-csv-mod="tauc" data-csv-names="analysis_info.csv" data-dl-name="Tauc_sample.svg" data-dl-legend="taucLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend" id="taucLegend">
               <span><i style="background:#ffffff"></i>original</span>
@@ -196,101 +218,174 @@
               <span><i style="background:#ff5050"></i>Tauc linear region</span>
               <span><i style="background:#d050ff"></i>baseline</span>
             </div>
-            <div id="taucAlert"></div>
           </div>
           <div class="col mw280" style="align-self:flex-start">
-            <label>Tauc exponent (0.5 for indirect semiconductors, 2 for direct semiconductors)</label>
-            <select id="taucA">
-              <option value="0.5" selected>0.5</option>
-              <option value="2">2</option>
-            </select>
-            <label>[F(R)hν]<sup id="taucNExp">0.5</sup> smoothing window</label>
-            <input type="number" id="taucN" value="1" min="1">
-            <label>Derivative smoothing window</label>
-            <input type="number" id="taucN2" value="10" min="1">
-            <label>Tauc linear region regression window</label>
-            <input type="number" id="taucM" value="50" min="2">
-            <div class="stat">RMSE: <b id="taucRMSE1">-</b></div>
-            <div class="stat">R²: <b id="taucR21">-</b></div>
-            <label>Baseline regression window</label>
-            <input type="number" id="taucM2" value="50" min="2">
-            <div class="stat">RMSE: <b id="taucRMSE2">-</b></div>
-            <div class="stat">R²: <b id="taucR22">-</b></div>
-            <div class="stat" style="margin-top:10px">Eg (x-axis): <b id="taucEg">-</b></div>
-            <div class="stat" style="margin-top:6px">Eg (baseline): <b id="taucEgInt">-</b></div>
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
+            <div class="param-grid">
+              <label class="txt-label">Tauc exponent</label>
+              <select id="taucA" class="pg-field">
+                <option value="0.5" selected>0.5</option>
+                <option value="2">2</option>
+              </select>
+              <label class="txt-label">[F(R)hν]<sup id="taucNExp">0.5</sup> smoothing window</label>
+              <input type="number" class="pg-field" id="taucN" value="1" min="1">
+              <label class="txt-label">Derivative smoothing window</label>
+              <input type="number" class="pg-field" id="taucN2" value="20" min="1">
+              <label class="txt-label">Tauc linear region regression window</label>
+              <input type="number" class="pg-field" id="taucM" value="25" min="2">
+              <div class="pg-stat">NRMSE: <b id="taucRMSE1">-</b></div>
+              <div class="pg-stat">R²: <b id="taucR21">-</b></div>
+              <label class="txt-label">Baseline regression window</label>
+              <input type="number" class="pg-field" id="taucM2" value="100" min="2">
+              <div class="pg-stat">NRMSE: <b id="taucRMSE2">-</b></div>
+              <div class="pg-stat">R²: <b id="taucR22">-</b></div>
+              <div class="pg-stat pg-gap">Eg (x-axis): <b id="taucEg">-</b></div>
+              <div class="pg-stat">Eg (baseline): <b id="taucEgInt">-</b></div>
+            </div>
+            <div id="taucAlert"></div>
           </div>
         </div>
       </div>
 
       <div class="card" id="taucResults" style="display:none">
-        <h3 style="margin:0 0 12px">RESULTS</h3>
-        <p class="chart-title">Kubelka-Munk Function</p>
-        <div class="plot-wrap">
-          <svg class="plot" id="taucResSvg0" style="height:640px"></svg>
-          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg0" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-        </div>
-        <div id="taucResLegend0" class="legend" style="margin-bottom:18px"></div>
-        <p class="chart-title">Tauc Plot</p>
-        <div class="plot-wrap">
-          <svg class="plot" id="taucResSvg1" style="height:640px"></svg>
-          <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg1" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-        </div>
-        <div id="taucResLegend1" class="legend" style="margin-bottom:18px"></div>
-        <p class="chart-title" id="taucBarTitle" style="margin-bottom:8px">Energy Band Gap</p>
+        <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
         <div class="row" style="align-items:flex-start;gap:16px">
-          <div class="col mw520" style="flex:2">
+          <div class="col" style="flex:1">
+            <p class="txt-caption">Kubelka-Munk Function</p>
             <div class="plot-wrap">
-              <svg class="plot" id="taucResSvg2" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="taucResSvg2" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <svg class="plot" id="taucResSvg0"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg0" data-csv-mod="tauc" data-csv-names="reflectance_FR.csv" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
-            <div id="taucBarAlert"></div>
-            <div id="taucResLegend2" class="legend"></div>
+            <div id="taucResLegend0" class="legend"></div>
           </div>
-          <div class="col mw280" style="flex:1;background:var(--panel2);padding:8px 12px;border-radius:4px;align-self:flex-start">
-            <div style="text-transform:none" id="taucEgTableWrap"></div>
+          <div class="col" style="flex:1">
+            <p class="txt-caption">Tauc Plot</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvg1"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg1" data-csv-mod="tauc" data-csv-names="tauc_plot.csv" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="taucResLegend1" class="legend"></div>
           </div>
         </div>
+        <p class="txt-caption" id="taucBarTitle" style="margin:18px 0 8px">Energy Band Gap</p>
+        <div id="taucBarAlert"></div>
+        <div class="row" style="align-items:flex-start;gap:16px">
+          <div class="col" style="flex:1">
+            <p class="txt-caption">E<sub>g</sub> (x-axis)</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvg2"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg2" data-csv-mod="tauc" data-csv-names="Eg.csv" data-dl-name="Eg_xaxis_bar_chart.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+          </div>
+          <div class="col" style="flex:1">
+            <p class="txt-caption">E<sub>g</sub> (baseline)</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvg3"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg3" data-csv-mod="tauc" data-csv-names="Eg.csv" data-dl-name="Eg_baseline_bar_chart.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div id="taucResLegend2" class="legend"></div>
       </div>
 
       <div class="card" id="taucExportCard" style="display:none">
         <div class="proj-actions-row">
-          <button class="btn proj-btn proj-save" data-module="tauc" type="button">Save project</button>
-          <button class="btn secondary proj-btn proj-saveas" data-module="tauc" type="button">Save project as…</button>
-          <button class="btn secondary proj-btn proj-csv" data-module="tauc" type="button">Export .csv</button>
-          <button class="btn secondary proj-btn proj-json" data-module="tauc" type="button">Export .json</button>
+          <button class="btn primary proj-btn proj-save" data-module="tauc" type="button">Save project</button>
+          <button class="btn proj-btn proj-saveas" data-module="tauc" type="button">Save project as…</button>
+          <button class="btn proj-btn proj-csv" data-module="tauc" type="button">Export .csv</button>
+          <button class="btn proj-btn proj-json" data-module="tauc" type="button">Export .json</button>
         </div>
       </div>
     </section>
 
     <!-- ============ XRD ============ -->
     <section class="tab" id="tab-xrd" role="tabpanel" tabindex="0">
-      <div class="card project-bar" data-module="xrd"><input type="text" class="project-name-input" data-module="xrd" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="xrd" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="xrd" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="xrd" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="xrd" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="xrd" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
+      <div class="module-head"><h2 class="txt-title" style="margin:0">XRPD</h2></div>
+      <div class="instr-block">X-Ray Powder Diffraction. Diffractograms comparison, smoothing and normalization, with peak detection, Scherrer crystallite-size estimation and whole-pattern profile fitting.</div>
+      <div class="card project-bar" data-module="xrd"><input type="text" class="project-name-input" data-module="xrd" placeholder="Project name…" aria-label="Project name"><div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" data-module="xrd" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" data-module="xrd" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" data-module="xrd" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" data-module="xrd" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 style="margin:0">XRPD</h2></div>
+        <h3 class="txt-head" style="margin:0 0 8px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with XPERT diffractometer. Accepts PANalytical XML format files.</div>
         <div class="dropzone" id="xrdDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="dz-hint">.xrdml, .xml</div>
+          <div class="txt-meta">.xrdml, .xml</div>
           <input type="file" id="xrdFiles" multiple accept=".xrdml,.xml" style="display:none">
         </div>
         <div id="xrdAlerts"></div>
         <div id="xrdFileTableWrap"></div>
       </div>
-      <div class="card" id="xrdWorkspace" style="display:none">
-        <h3 style="margin:0 0 0">ANALYSIS</h3>
-        <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (contains the whole Kα₁+Kα₂ doublet). K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². The table shows size both without and (if a standard is set) with this correction. The Kα₂-deconvolved profile fit lives in the <b>Fitting</b> panel below.</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <button class="btn secondary nav-arrow" id="xrdPrev" aria-label="Previous sample">&#8249;</button>
-          <span id="xrdIdx" class="pill" style="margin:0">1/1</span>
-          <button class="btn secondary nav-arrow" id="xrdNext" aria-label="Next sample">&#8250;</button>
-          <span class="plot-subtitle" id="xrdCurrentLabel">—</span>
+      <div class="card" id="xrdStdCard" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 0">Instrumental standard</h3>
+        <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. No crystallite size is computed for the standard itself, so the size column is omitted from its peak table.</div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left"><select id="xrdStandard" class="std-select ghost"><option value="">Choose standard…</option></select></div>
+              <button class="btn plot-corner-btn" id="xrdStdAddPeak" style="visibility:hidden" title="Add a peak by clicking on the plot">+ Add peak</button>
+            </div>
+            <div id="xrdStdBody" style="display:none">
+              <div class="plot-wrap">
+                <svg class="plot" id="xrdStdSvg"></svg>
+                <button class="btn plot-dl-btn" data-dl-svg="xrdStdSvg" data-csv-mod="xrd" data-csv-names="standard.csv" data-dl-name="XRPD_standard.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              </div>
+              <div class="legend">
+                <span><i style="background:#6a7585"></i>raw</span>
+                <span><i style="background:#3aa0ff"></i>smoothed</span>
+                <span><i style="background:#ff9933"></i>baseline</span>
+                <span><i style="background:#5fcf6a"></i>peaks</span>
+              </div>
+            </div>
+          </div>
+          <div class="col mw280" id="xrdStdParams" style="align-self:flex-start;display:none">
+            <div class="txt-mini param-head aligned">Parameters</div>
+            <div class="param-grid">
+              <label class="txt-label">Smoothing window (pts)</label>
+              <input type="number" class="pg-field" id="xrdStdSmooth" value="10" min="1">
+
+              <label class="txt-label">Baseline SNIP window (pts)</label>
+              <input type="number" class="pg-field" id="xrdStdBlWin" value="150" min="1">
+
+              <label class="txt-label">Peak min. height (%)</label>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkHeight" value="5">
+
+              <label class="txt-label">Peak min. prominence (%)</label>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkProm" value="3">
+
+              <label class="txt-label">Peak min. distance (&#176;2&#952;)</label>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkDist" value="0.3">
+            </div>
+          </div>
         </div>
-        <div class="row" style="align-items:stretch">
-          <div class="col" style="flex:2;min-width:0">
+        <div class="peak-box" id="xrdStdPeakBox" style="display:none">
+          <div class="peak-box-head">
+            <span class="txt-mini">Detected peaks</span>
+            <button class="btn peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
+            <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="standard.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
+          </div>
+          <div id="xrdStdPeakTableWrap"></div>
+        </div>
+      </div>
+
+      <div class="card" id="xrdWorkspace" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
+        <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (contains the whole Kα₁+Kα₂ doublet). K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². The Results chart shows size both without and (if a standard is set) with this correction. The Kα₂-deconvolved profile fit lives in the <b>Fitting</b> panel below.</div>
+        <div id="xrdAnalysisEmpty" style="display:none;color:var(--muted);font-size:14px;padding:18px 0 6px">All loaded files are set as the instrumental standard — load additional samples to analyse them here.</div>
+        <div id="xrdAnalysisContent">
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left">
+                <button class="btn nav-arrow" id="xrdPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
+                <span id="xrdIdx" class="pill" style="margin:0">1/1</span>
+                <button class="btn nav-arrow" id="xrdNext" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
+                <span class="txt-caption" id="xrdCurrentLabel">—</span>
+              </div>
+              <button class="btn plot-corner-btn" id="xrdAddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
+            </div>
             <div class="plot-wrap">
-              <svg class="plot" id="xrdSvg" style="height:460px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdSvg" data-dl-name="XRPD_sample.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <svg class="plot" id="xrdSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="xrdSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv,peaks.csv" data-dl-name="XRPD_sample.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend">
               <span><i style="background:#6a7585"></i>raw</span>
@@ -299,64 +394,60 @@
               <span><i style="background:#5fcf6a"></i>peaks</span>
             </div>
           </div>
-          <div class="col mw280" style="align-self:flex-start;display:flex;flex-direction:column;gap:11px">
-            <div class="field-half">
-              <div><label>Normalization</label>
-                <select id="xrdNorm"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select></div>
-              <div><label>Instrumental standard</label>
-                <select id="xrdStandard"><option value="">None</option></select></div>
+          <div class="col mw280" style="align-self:flex-start">
+            <div class="txt-mini param-head aligned">Parameters</div>
+            <div class="param-grid">
+              <label class="txt-label">Normalization</label>
+              <select id="xrdNorm" class="pg-field"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select>
+
+              <div class="txt-label pg-title">Smoothing window (pts) <button type="button" class="mode-chip" id="xrdModeN" title="Switch all / one">all</button></div>
+              <input type="number" class="pg-field" id="xrdSmooth" value="10" min="1">
+
+              <div class="txt-label pg-title">Baseline SNIP window (pts) <button type="button" class="mode-chip" id="xrdModeBl" title="Switch all / one">all</button></div>
+              <input type="number" class="pg-field" id="xrdBlWin" value="150" min="1">
+
+              <div class="txt-label pg-title">Peak min. height (%) <button type="button" class="mode-chip" id="xrdModeH" title="Switch all / one">one</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkHeight" value="5">
+
+              <div class="txt-label pg-title">Peak min. prominence (%) <button type="button" class="mode-chip" id="xrdModeP" title="Switch all / one">one</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkProm" value="3">
+
+              <div class="txt-label pg-title">Peak min. distance (&#176;2&#952;) <button type="button" class="mode-chip" id="xrdModeD" title="Switch all / one">one</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkDist" value="0.3">
+
+              <div class="txt-label pg-title">Shape factor K <button type="button" class="mode-chip" id="xrdModeK" title="Switch all / one">all</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdK" value="0.9">
+
+              <div class="txt-label pg-title">Wavelength &#955; (&#8491;) <button type="button" class="mode-chip" id="xrdModeL" title="Switch all / one">all</button></div>
+              <input type="text" inputmode="decimal" class="pg-field" id="xrdLambda" value="1.5406">
             </div>
-            <div><label>Smoothing window (pts)</label>
-              <div class="field-row"><input type="number" id="xrdSmooth" value="10" min="1">
-                <div class="xrd-seg mode-seg" id="xrdModeN"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
-            <div><label>Baseline SNIP window (pts)</label>
-              <div class="field-row"><input type="number" id="xrdBlWin" value="150" min="1">
-                <div class="xrd-seg mode-seg" id="xrdModeBl"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
-            <div class="field-half">
-              <div><label>Peak min. height (%)</label>
-                <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkHeight" value="5">
-                  <div class="xrd-seg mode-seg" id="xrdModeH"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
-              <div><label>Peak min. prom. (%)</label>
-                <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkProm" value="3">
-                  <div class="xrd-seg mode-seg" id="xrdModeP"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
-            </div>
-            <div><label>Peak min. distance (degrees 2&#952;)</label>
-              <div class="field-row"><input type="text" inputmode="decimal" id="xrdPkDist" value="0.3">
-                <div class="xrd-seg mode-seg" id="xrdModeD"><button data-m="shared">all</button><button class="active" data-m="per">one</button></div></div></div>
-            <div class="field-half">
-              <div><label>Shape factor K</label>
-                <div class="field-row"><input type="text" inputmode="decimal" id="xrdK" value="0.9">
-                  <div class="xrd-seg mode-seg" id="xrdModeK"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
-              <div><label>&#955; (&#8491;)</label>
-                <div class="field-row"><input type="text" inputmode="decimal" id="xrdLambda" value="1.5406">
-                  <div class="xrd-seg mode-seg" id="xrdModeL"><button class="active" data-m="shared">all</button><button data-m="per">one</button></div></div></div>
-            </div>
-            <button class="btn secondary" id="xrdAddPeak" style="width:100%;padding:7px 9px">+ Add peak</button>
           </div>
         </div>
         <div class="peak-box" id="xrdPeakBox">
           <div class="peak-box-head">
-            <span class="peak-box-title">Detected peaks</span>
-            <button class="btn secondary peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
+            <span class="txt-mini">Detected peaks</span>
+            <button class="btn peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634; Reset</button>
+            <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="xrdPeakTableWrap"></div>
+        </div>
         </div>
       </div>
 
       <div class="card" id="xrdFitCard" style="display:none">
-        <h3 style="margin:0 0 0">FITTING</h3>
+        <h3 class="txt-head" style="margin:0 0 0">Fitting</h3>
         <div class="instr-block">Cu Kα₂-deconvolved whole-pattern fit. The raw pattern (open circles) and the peaks inherited from the Analysis peak search are shown; press <b>Fit sample</b>/<b>Fit all</b> to fit a sum of Kα₁/Kα₂ doublets (Kα₁ + ½·Kα₂ at +Δ2θ) plus a polynomial background, all refined together (Levenberg–Marquardt). Profile, asymmetry and other hyperparameters are in <i>Sample fit settings</i>. By default each fit restarts from the SNIP baseline and the current peak search (manual peaks kept); a setting lets it instead continue from the last fit. A chosen <b>standard</b> (LaB₆…) is fitted with the FCJ axial-divergence kernel via <b>Fit standard</b> to calibrate the instrument geometry. The fitted doublet, its Kα₁/Kα₂ components and the residual (with Rwp) appear once a fit exists.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <button class="btn secondary nav-arrow" id="xrdFitPrev" aria-label="Previous sample">&#8249;</button>
+          <button class="btn nav-arrow" id="xrdFitPrev" aria-label="Previous sample">&#8249;</button>
           <span id="xrdFitIdx" class="pill" style="margin:0">1/1</span>
-          <button class="btn secondary nav-arrow" id="xrdFitNext" aria-label="Next sample">&#8250;</button>
-          <span class="plot-subtitle" id="xrdFitLabel">—</span>
+          <button class="btn nav-arrow" id="xrdFitNext" aria-label="Next sample">&#8250;</button>
+          <span class="txt-caption" id="xrdFitLabel">—</span>
         </div>
         <div class="row" style="align-items:flex-start">
-          <div class="col" style="flex:2;min-width:0">
+          <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
-              <svg class="plot" id="xrdFitSvg" style="height:420px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdFitSvg" data-dl-name="XRPD_fit.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <svg class="plot" id="xrdFitSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="xrdFitSvg" data-csv-mod="xrd" data-csv-names="fits.csv" data-dl-name="XRPD_fit.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div class="legend">
               <span><i class="mk-dot mk-ring" style="border-color:#6a7585"></i>raw</span>
@@ -368,137 +459,153 @@
             </div>
             <div id="xrdResidBlock">
               <div class="plot-wrap" style="margin-top:6px;padding-right:40px">
-                <svg class="plot" id="xrdResidSvg" style="height:90px"></svg>
+                <svg class="plot" id="xrdResidSvg" style="height:90px;aspect-ratio:auto;min-width:0"></svg>
               </div>
               <div class="legend"><span id="xrdResidCaption" style="color:var(--muted);font-size:11px">Fit residual (doublet fit − signal)</span></div>
             </div>
           </div>
           <div class="col mw260" style="align-self:flex-start">
             <div style="display:flex;gap:8px">
-              <button class="btn" id="xrdFitSampleBtn" style="flex:1">Fit sample</button>
-              <button class="btn" id="xrdFitAllBtn" style="flex:1">Fit all</button>
+              <button class="btn primary" id="xrdFitSampleBtn" style="flex:1">Fit sample</button>
+              <button class="btn primary" id="xrdFitAllBtn" style="flex:1">Fit all</button>
             </div>
-            <button class="btn secondary" id="xrdFitSettings" style="margin-top:8px;width:100%">Sample fit settings…</button>
+            <button class="btn" id="xrdFitSettings" style="margin-top:8px;width:100%">Sample fit settings…</button>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn is-danger" id="xrdDelFitBtn" style="flex:1">Delete fit</button>
+              <button class="btn is-danger" id="xrdDelAllFitsBtn" style="flex:1">Delete all fits</button>
+            </div>
             <div id="xrdFitProgWrap" style="display:none;margin-top:6px"><div id="xrdFitProgBar"></div></div>
-            <button class="btn secondary" id="xrdFitCancelBtn" style="display:none;margin-top:8px;width:100%">Cancel</button>
+            <button class="btn" id="xrdFitCancelBtn" style="display:none;margin-top:8px;width:100%">Cancel</button>
             <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px"></div>
-            <button class="btn" id="xrdFitStdBtn" style="width:100%">Fit standard (calibrate S/L, H/L)</button>
-            <button class="btn secondary" id="xrdStdSettings" style="margin-top:8px;width:100%">Standard fit settings…</button>
+            <button class="btn primary" id="xrdFitStdBtn" style="width:100%">Fit standard (calibrate S/L, H/L)</button>
+            <button class="btn" id="xrdStdSettings" style="margin-top:8px;width:100%">Standard fit settings…</button>
             <small id="xrdStdHint" style="color:var(--muted);display:block;margin-top:6px">Enabled only when the current sample is the chosen instrumental standard.</small>
           </div>
         </div>
         <div class="peak-box" id="xrdFitPeakBox">
           <div class="peak-box-head">
-            <span class="peak-box-title">Fitted peaks</span>
+            <span class="txt-mini">Fitted peaks</span>
+            <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="fit_peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="xrdFitTableWrap"></div>
         </div>
       </div>
 
       <div class="card" id="xrdResults" style="display:none">
-        <h3 style="margin:0 0 12px">RESULTS</h3>
-        <div class="row" style="align-items:flex-start;gap:16px">
+        <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
+        <div id="xrdResultsEmpty" style="display:none;color:var(--muted);font-size:14px;padding:6px 0">All loaded files are set as the instrumental standard — load additional samples to see results here.</div>
+        <div class="row" id="xrdResultsContent" style="align-items:flex-start;gap:16px">
           <div class="col mw320" style="flex:1">
-            <p class="chart-title">Analysis</p>
+            <p class="txt-caption">Analysis</p>
             <div class="plot-wrap">
-              <svg class="plot" id="xrdResSvg" style="height:560px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResSvg" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <svg class="plot" id="xrdResSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="xrdResSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResLegend" class="legend"></div>
-            <p class="chart-title" style="margin:18px 0 6px">Crystallite size</p>
-            <div id="xrdSizeTableWrap" class="table-wrap-box"></div>
-          </div>
-          <div class="col mw320" style="flex:1">
-            <p class="chart-title">Fit</p>
+            <p class="txt-caption" style="margin:18px 0 6px">Crystallite size</p>
             <div class="plot-wrap">
-              <svg class="plot" id="xrdResFitSvg" style="height:560px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="xrdResFitSvg" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <svg class="plot" id="xrdSizeBarSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="xrdSizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="xrdSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="xrdSizeBarLegend" class="legend"></div>
+          </div>
+          <div class="col mw320" id="xrdResFitCol" style="flex:1">
+            <p class="txt-caption">Fit</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdResFitSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="xrdResFitSvg" data-csv-mod="xrd" data-csv-names="fits.csv" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResFitLegend" class="legend"></div>
+            <p class="txt-caption" style="margin:18px 0 6px">Crystallite size (fit)</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdFitSizeBarSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="xrdFitSizeBarSvg" data-csv-mod="xrd" data-csv-names="fit_crystallite_size.csv" data-dl-name="XRPD_crystallite_size_fit.svg" data-dl-legend="xrdFitSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="xrdFitSizeBarLegend" class="legend"></div>
           </div>
         </div>
       </div>
       <div class="card" id="xrdExportCard" style="display:none">
         <div class="proj-actions-row">
-          <button class="btn proj-btn proj-save" data-module="xrd" type="button">Save project</button>
-          <button class="btn secondary proj-btn proj-saveas" data-module="xrd" type="button">Save project as…</button>
-          <button class="btn secondary proj-btn proj-csv" data-module="xrd" type="button">Export .csv</button>
-          <button class="btn secondary proj-btn proj-json" data-module="xrd" type="button">Export .json</button>
+          <button class="btn primary proj-btn proj-save" data-module="xrd" type="button">Save project</button>
+          <button class="btn proj-btn proj-saveas" data-module="xrd" type="button">Save project as…</button>
+          <button class="btn proj-btn proj-csv" data-module="xrd" type="button">Export .csv</button>
+          <button class="btn proj-btn proj-json" data-module="xrd" type="button">Export .json</button>
         </div>
       </div>
       <div id="xrdFitModal" class="modal-backdrop" style="display:none">
         <div class="modal-box">
-          <h3 style="margin:0 0 4px">Sample fit — hyperparameters</h3>
+          <h3 class="txt-head" style="margin:0 0 4px">Sample fit — hyperparameters</h3>
           <p style="color:var(--muted);font-size:12px;margin:0 0 10px">Whole-pattern least-squares: Σ Kα₁/Kα₂ doublets + polynomial background, Levenberg–Marquardt. Multi-start over profile shape (5) × initial width 1–5× FWHM (5) = 25 starts, then a final refinement pass on <b>all</b> points. Used by <b>Fit sample</b> and <b>Fit all</b>.</p>
-          <label>Peak profile</label>
+          <label class="txt-label">Peak profile</label>
           <select id="xrdHpProfile">
             <option value="voigt">True Voigt (σ, γ)</option>
             <option value="pv" selected>Pseudo-Voigt (FWHM, η)</option>
           </select>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
             <input type="checkbox" id="xrdHpAsym" style="width:auto;margin:0"> Enable peak asymmetry
           </label>
           <div id="xrdHpAsymOpts">
-            <label>Asymmetry model</label>
+            <label class="txt-label">Asymmetry model</label>
             <select id="xrdHpAsymMode">
               <option value="split" selected>Split (per-peak, fitted)</option>
               <option value="fcj">Axial divergence (FCJ)</option>
             </select>
             <div id="xrdHpFcj" style="display:none">
-              <label>S/L (sample / radius)</label>
+              <label class="txt-label">S/L (sample / radius)</label>
               <input type="text" id="xrdHpSL" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
-              <label>H/L (slit / radius)</label>
+              <label class="txt-label">H/L (slit / radius)</label>
               <input type="text" id="xrdHpHL" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
               <small style="color:var(--muted);display:block;margin-top:4px">Fixed instrumental geometry applied to samples. Refine these by running <b>Fit standard</b> on your LaB₆ (or other) standard — the calibrated value is written back here automatically.</small>
             </div>
           </div>
-          <label>Background polynomial degree</label>
+          <label class="txt-label">Background polynomial degree</label>
           <input type="number" id="xrdHpDeg" value="4" min="0" max="12">
-          <label>Max iterations</label>
+          <label class="txt-label">Max iterations</label>
           <input type="number" id="xrdHpIter" value="80" min="5" max="2000">
-          <label>Convergence tolerance (relative)</label>
+          <label class="txt-label">Convergence tolerance (relative)</label>
           <input type="text" inputmode="decimal" id="xrdHpTol" value="1e-12">
-          <label>Initial LM damping λ₀</label>
+          <label class="txt-label">Initial LM damping λ₀</label>
           <input type="text" inputmode="decimal" id="xrdHpLambda" value="1e-3">
-          <label>Background→SNIP anchor (0 = off)</label>
+          <label class="txt-label">Background→SNIP anchor (0 = off)</label>
           <input type="text" inputmode="decimal" id="xrdHpBgAnchor" value="0.3">
-          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
             <input type="checkbox" id="xrdHpFromCurrent" style="width:auto;margin:0"> Restart fit from current fit (instead of SNIP + peak search)
           </label>
           <div style="display:flex;gap:8px;margin-top:16px">
-            <button class="btn" id="xrdHpApply" style="flex:1">Apply</button>
-            <button class="btn secondary" id="xrdHpClose" style="flex:1">Close</button>
+            <button class="btn primary" id="xrdHpApply" style="flex:1">Apply</button>
+            <button class="btn" id="xrdHpClose" style="flex:1">Close</button>
           </div>
         </div>
       </div>
       <div id="xrdStdModal" class="modal-backdrop" style="display:none">
         <div class="modal-box">
-          <h3 style="margin:0 0 4px">Standard fit — instrument calibration</h3>
+          <h3 class="txt-head" style="margin:0 0 4px">Standard fit — instrument calibration</h3>
           <p style="color:var(--muted);font-size:12px;margin:0 0 10px">Fits the file chosen as <b>Instrumental standard</b> with axial-divergence (FCJ) asymmetry, refining a single geometry parameter <b>G = S/L = H/L</b>. Multi-start over shape × initial width (25 starts, each refining G) + a final all-points pass; expect ~1 min. The result is written back to the sample fit settings and reused on all samples.</p>
-          <label>Peak profile</label>
+          <label class="txt-label">Peak profile</label>
           <select id="xrdStdProfile">
             <option value="voigt" selected>True Voigt (σ, γ)</option>
             <option value="pv">Pseudo-Voigt (FWHM, η)</option>
           </select>
-          <label>Calibrated geometry G = S/L = H/L</label>
+          <label class="txt-label">Calibrated geometry G = S/L = H/L</label>
           <input type="text" id="xrdStdG" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
           <small style="color:var(--muted);display:block;margin:4px 0">Updated automatically after each standard fit (refined within [0.001, 0.1]).</small>
-          <label>Background polynomial degree</label>
+          <label class="txt-label">Background polynomial degree</label>
           <input type="number" id="xrdStdDeg" value="4" min="0" max="12">
-          <label>Max iterations</label>
+          <label class="txt-label">Max iterations</label>
           <input type="number" id="xrdStdIter" value="60" min="5" max="2000">
-          <label>Convergence tolerance (relative)</label>
+          <label class="txt-label">Convergence tolerance (relative)</label>
           <input type="text" inputmode="decimal" id="xrdStdTol" value="1e-12">
-          <label>Initial LM damping λ₀</label>
+          <label class="txt-label">Initial LM damping λ₀</label>
           <input type="text" inputmode="decimal" id="xrdStdLambda" value="1e-3">
-          <label>Background→SNIP anchor (0 = off)</label>
+          <label class="txt-label">Background→SNIP anchor (0 = off)</label>
           <input type="text" inputmode="decimal" id="xrdStdBgAnchor" value="0.3">
-          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
             <input type="checkbox" id="xrdStdFromCurrent" style="width:auto;margin:0"> Restart fit from current fit (instead of SNIP + peak search)
           </label>
           <div style="display:flex;gap:8px;margin-top:16px">
-            <button class="btn" id="xrdStdApply" style="flex:1">Apply</button>
-            <button class="btn secondary" id="xrdStdClose" style="flex:1">Close</button>
+            <button class="btn primary" id="xrdStdApply" style="flex:1">Apply</button>
+            <button class="btn" id="xrdStdClose" style="flex:1">Close</button>
           </div>
         </div>
       </div>
@@ -506,14 +613,16 @@
 
     <!-- ============ GC ============ -->
     <section class="tab" id="tab-gc" role="tabpanel" tabindex="0">
-      <div class="card project-bar" data-module="gc"><input type="text" class="project-name-input" data-module="gc" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="gc" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="gc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="gc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="gc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="gc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
+      <div class="module-head"><h2 class="txt-title" style="margin:0">GC</h2></div>
+      <div class="instr-block">Gas Chromatography for H₂ production-rate assessment. Computes mean H₂ production rates over a chosen integration interval from time-resolved injection measurements.</div>
+      <div class="card project-bar" data-module="gc"><input type="text" class="project-name-input" data-module="gc" placeholder="Project name…" aria-label="Project name"><div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" data-module="gc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" data-module="gc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" data-module="gc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" data-module="gc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 style="margin:0">GC</h2></div>
+        <h3 class="txt-head" style="margin:0 0 8px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) (%Mol)" column.</div>
         <div class="dropzone" id="gcDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="dz-hint">.csv</div>
+          <div class="txt-meta">.csv</div>
           <input type="file" id="gcFiles" multiple accept=".csv" style="display:none">
         </div>
         <div id="gcAlerts"></div>
@@ -522,67 +631,69 @@
 
       <!-- Plots card -->
       <div class="card" id="gcResults" style="display:none">
-        <h3 style="margin:0 0 0">ANALYSIS</h3>
-        <div class="instr-block">Set catalyst mass (m), carrier gas flow rate (Q), and the light-on time for each sample. Define the integration interval to compute mean H₂ production rates. The white vertical lines mark the selected boundaries.</div>
-        <div id="gcParamTableWrap" style="margin-bottom:14px"></div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <p class="chart-title">H₂ Production</p>
-            <div class="plot-wrap" style="margin-bottom:6px">
-              <svg class="plot" id="gcSvg1" style="height:305px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg1" data-dl-name="GC_H2_rate.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div class="plot-wrap">
-              <svg class="plot" id="gcSvg2" style="height:305px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvg2" data-dl-name="GC_H2_cumulative.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="gcLegend" class="legend" style="margin-top:8px"></div>
+        <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
+        <div class="instr-block">Set catalyst mass (m), carrier gas flow rate (Q), the light-on time and the integration interval for each sample to compute mean H₂ production rates. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on both plots (and vice-versa).</div>
+        <div class="peak-box" style="margin-top:0;margin-bottom:14px">
+          <div class="peak-box-head">
+            <span class="txt-mini">Parameters</span>
+            <button class="btn table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
-          <div class="col mw200" style="align-self:flex-start;padding-top:26px">
-            <label>Interval start (h)</label>
-            <input type="number" id="gcPlateauStart" value="0" min="0" step="0.5">
-            <label>Interval end (h)</label>
-            <input type="number" id="gcPlateauEnd" value="24" min="0" step="0.5">
+          <div id="gcParamTableWrap"></div>
+        </div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col" style="flex:1">
+            <p class="txt-caption">H₂ Production</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="gcSvg1"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="gcSvg1" data-csv-mod="gc" data-csv-names="gc_timeseries.csv" data-dl-name="GC_H2_rate.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+          </div>
+          <div class="col" style="flex:1">
+            <p class="txt-caption">Cumulative H₂</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="gcSvg2"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="gcSvg2" data-csv-mod="gc" data-csv-names="gc_timeseries.csv" data-dl-name="GC_H2_cumulative.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
           </div>
         </div>
+        <div id="gcLegend" class="legend" style="margin-top:8px"></div>
       </div>
 
       <!-- Bar chart + Summary card -->
       <div class="card" id="gcResultsBar" style="display:none">
-        <h3 style="margin:0 0 12px">RESULTS</h3>
-        <div class="row" style="align-items:flex-start;gap:16px">
-          <div class="col mw520" style="flex:2">
+        <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
+        <div class="row" style="align-items:flex-start">
+          <div class="col" style="flex:1">
             <div class="plot-wrap">
-              <svg class="plot" id="gcSvgBar" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="gcSvgBar" data-dl-name="GC_results.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <svg class="plot" id="gcSvgBar"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="gcSvgBar" data-csv-mod="gc" data-csv-names="h2_rates.csv" data-dl-name="GC_results.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
-          </div>
-          <div class="col mw220" style="flex:1;background:var(--panel2);padding:12px;border-radius:4px;align-self:flex-start">
-            <div style="font-size:13px" id="gcPlateauTableWrap"></div>
           </div>
         </div>
       </div>
 
       <div class="card" id="gcExportCard" style="display:none">
         <div class="proj-actions-row">
-          <button class="btn proj-btn proj-save" data-module="gc" type="button">Save project</button>
-          <button class="btn secondary proj-btn proj-saveas" data-module="gc" type="button">Save project as…</button>
-          <button class="btn secondary proj-btn proj-csv" data-module="gc" type="button">Export .csv</button>
-          <button class="btn secondary proj-btn proj-json" data-module="gc" type="button">Export .json</button>
+          <button class="btn primary proj-btn proj-save" data-module="gc" type="button">Save project</button>
+          <button class="btn proj-btn proj-saveas" data-module="gc" type="button">Save project as…</button>
+          <button class="btn proj-btn proj-csv" data-module="gc" type="button">Export .csv</button>
+          <button class="btn proj-btn proj-json" data-module="gc" type="button">Export .json</button>
         </div>
       </div>
     </section>
 
     <!-- ============ EPR ============ -->
     <section class="tab" id="tab-epr" role="tabpanel" tabindex="0">
-      <div class="card project-bar" data-module="epr"><input type="text" class="project-name-input" data-module="epr" placeholder="Project name…" aria-label="Project name"><span class="pb-dirty" data-module="epr" title="Unsaved changes">*</span><div class="proj-actions"><button class="btn icon-save proj-btn proj-save proj-icon" data-module="epr" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon secondary" data-module="epr" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon secondary" data-module="epr" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon secondary" data-module="epr" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button></div></div>
+      <div class="module-head"><h2 class="txt-title" style="margin:0">EPR</h2></div>
+      <div class="instr-block">Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.</div>
+      <div class="card project-bar" data-module="epr"><input type="text" class="project-name-input" data-module="epr" placeholder="Project name…" aria-label="Project name"><div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" data-module="epr" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" data-module="epr" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" data-module="epr" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" data-module="epr" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></div></div>
       <div class="card">
-        <div class="section-head"><h2 style="margin:0">EPR</h2></div>
+        <h3 class="txt-head" style="margin:0 0 8px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Bruker EPR spectrometers (BES3T format). Upload paired .DTA and .DSC files: both are required for each sample. Pairs are matched by filename stem.</div>
         <div class="dropzone" id="eprDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
-          <div class="dz-hint">.DTA / .DSC (Bruker BES3T pairs)</div>
+          <div class="txt-meta">.DTA / .DSC (Bruker BES3T pairs)</div>
           <input type="file" id="eprFiles" multiple accept=".dta,.DTA,.dsc,.DSC" style="display:none">
         </div>
         <div id="eprAlerts"></div>
@@ -590,38 +701,41 @@
         <div id="eprFileTableWrap"></div>
       </div>
       <div class="card" id="eprWorkspace" style="display:none">
-        <h3 style="margin:0 0 0">ANALYSIS</h3>
+        <h3 class="txt-head" style="margin:0 0 0">Analysis</h3>
         <div class="instr-block">Spectra are normalized and stacked for visual comparison. Adjust the smoothing window and normalization mode as needed.</div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
             <div class="plot-wrap">
-              <svg class="plot" id="eprSvg" style="height:640px"></svg>
-              <button class="btn secondary plot-dl-btn" data-dl-svg="eprSvg" data-dl-name="EPR.svg" data-dl-legend="eprLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+              <svg class="plot" id="eprSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="eprSvg" data-csv-mod="epr" data-csv-names="epr_spectra.csv" data-dl-name="EPR.svg" data-dl-legend="eprLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="eprLegend" class="legend"></div>
           </div>
           <div class="col mw260" style="align-self:flex-start">
-            <label>Normalization</label>
+            <div class="txt-mini param-head">Parameters</div>
+            <label class="txt-label">Normalization</label>
             <select id="eprNorm">
               <option value="global">Global (max of all)</option>
               <option value="local">Local (max of each)</option>
             </select>
-            <label>Smoothing points</label>
+            <label class="txt-label">Smoothing points</label>
             <input type="number" id="eprSmooth" value="10" min="1">
+            <label class="txt-label">Baseline SNIP window (debug)</label>
+            <input type="number" id="eprBlWin" value="0" min="0" title="Experimental: SNIP background per spectrum. 0 = off.">
           </div>
         </div>
       </div>
       <div class="card" id="eprExportCard" style="display:none">
         <div class="proj-actions-row">
-          <button class="btn proj-btn proj-save" data-module="epr" type="button">Save project</button>
-          <button class="btn secondary proj-btn proj-saveas" data-module="epr" type="button">Save project as…</button>
-          <button class="btn secondary proj-btn proj-csv" data-module="epr" type="button">Export .csv</button>
-          <button class="btn secondary proj-btn proj-json" data-module="epr" type="button">Export .json</button>
+          <button class="btn primary proj-btn proj-save" data-module="epr" type="button">Save project</button>
+          <button class="btn proj-btn proj-saveas" data-module="epr" type="button">Save project as…</button>
+          <button class="btn proj-btn proj-csv" data-module="epr" type="button">Export .csv</button>
+          <button class="btn proj-btn proj-json" data-module="epr" type="button">Export .json</button>
         </div>
       </div>
     </section>
 
-    <footer>DataTreat — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v160</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
@@ -629,15 +743,31 @@
   <!-- Save project as… dialog -->
   <div id="projSaveAsModal" class="modal-backdrop" style="display:none">
     <div class="modal-box">
-      <h3 style="margin:0 0 4px">Save project as…</h3>
-      <label style="margin-top:10px">Project name</label>
-      <input type="text" id="projSaveAsInput" placeholder="Project name…" autocomplete="off">
+      <h3 class="txt-head" style="margin:0 0 4px">Save project as…</h3>
+      <input type="text" id="projSaveAsInput" placeholder="Project name…" autocomplete="off" style="margin-top:10px">
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
-        <button class="btn secondary" id="projSaveAsCancel" type="button">Cancel</button>
-        <button class="btn" id="projSaveAsOk" type="button">Save</button>
+        <button class="btn" id="projSaveAsCancel" type="button">Cancel</button>
+        <button class="btn primary" id="projSaveAsOk" type="button">Save</button>
       </div>
     </div>
   </div>
+  <button id="scrollTopBtn" type="button" aria-label="Back to top" title="Back to top">&#8593;</button>
+  <!-- Apply the tab from the URL hash synchronously (before paint) so a reload
+       lands on the current tab instead of flashing Home first. -->
+  <script>
+    (function(){
+      try {
+        var t = location.hash.slice(1);
+        var sec = t && document.getElementById('tab-'+t);
+        var btn = t && document.querySelector('#nav button[data-tab="'+t+'"]');
+        if (sec && btn){
+          document.querySelectorAll('.tab.active').forEach(function(e){ e.classList.remove('active'); });
+          document.querySelectorAll('#nav button.active').forEach(function(e){ e.classList.remove('active'); e.setAttribute('aria-selected','false'); });
+          sec.classList.add('active'); btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+        }
+      } catch(e){}
+    })();
+  </script>
   <script type="module" src="utils.js"></script>
   <script type="module" src="plot.js"></script>
   <script type="module" src="tauc.js"></script>
@@ -645,11 +775,42 @@
   <script type="module" src="epr.js"></script>
   <script type="module" src="gc.js"></script>
   <script type="module" src="sessions.js"></script>
+  <!-- PWA update prompt: shown when a new service-worker version is ready -->
+  <div id="pwaUpdateToast" class="pwa-toast" role="status" aria-live="polite">
+    <span>A new version is available.</span>
+    <button id="pwaUpdateBtn" class="btn primary" type="button">Update</button>
+    <button id="pwaUpdateDismiss" class="pwa-toast-x" type="button" aria-label="Dismiss">&#10005;</button>
+  </div>
   <!-- Register the service worker for offline / installable use (secure contexts only) -->
   <script>
+    function showPwaUpdate(worker){
+      const t = document.getElementById('pwaUpdateToast');
+      if (!t || t.classList.contains('show')) return;
+      t.classList.add('show');
+      document.getElementById('pwaUpdateBtn').onclick = () => {
+        worker.postMessage('SKIP_WAITING');   // activate the waiting SW → controllerchange → reload
+        t.classList.remove('show');
+      };
+      document.getElementById('pwaUpdateDismiss').onclick = () => t.classList.remove('show');
+    }
     if ('serviceWorker' in navigator) {
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading) return; reloading = true; location.reload();
+      });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register('sw.js').then(reg => {
+          // Already-waiting worker (update downloaded on a previous visit)
+          if (reg.waiting && navigator.serviceWorker.controller) showPwaUpdate(reg.waiting);
+          reg.addEventListener('updatefound', () => {
+            const nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener('statechange', () => {
+              // "installed" + an existing controller ⇒ this is an update, not first install
+              if (nw.state === 'installed' && navigator.serviceWorker.controller) showPwaUpdate(nw);
+            });
+          });
+        }).catch(() => {});
       });
     }
   </script>

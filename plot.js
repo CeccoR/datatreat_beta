@@ -1,4 +1,4 @@
-import { settings } from './utils.js';
+import { settings, redrawAll, makeCsvButton, fitCsvIcons } from './utils.js';
 
 /* =========================================================
    SVG PLOT HELPER (shared)
@@ -179,13 +179,28 @@ class Plot{
     this.gData.appendChild(r);
     return r;
   }
-  errbar(xc, yval, yerr){
-    const entry = {type:'errbar', xc, yval, yerr};
+  /* Bar with a fixed PIXEL width, centred at data-x `xc` (+ optional pixel offset `dx`).
+     Width stays constant regardless of the sample count or the zoom level — only the
+     centre reprojects. `hw` is the half-width in px. */
+  barPx(xc, y0, y1, color, hw, dx){
+    const entry = {type:'barpx', xc, y0, y1, color, hw:hw||14, dx:dx||0};
+    this._stored.push(entry);
+    return this._renderBarPx(entry);
+  }
+  _renderBarPx(entry){
+    const cx=this.px(entry.xc)+entry.dx;
+    const py0=this.py(entry.y0), py1=this.py(entry.y1);
+    const r = svgEl('rect',{x:cx-entry.hw, y:Math.min(py0,py1), width:entry.hw*2, height:Math.abs(py0-py1), fill:entry.color});
+    this.gData.appendChild(r);
+    return r;
+  }
+  errbar(xc, yval, yerr, dx){
+    const entry = {type:'errbar', xc, yval, yerr, dx:dx||0};
     this._stored.push(entry);
     this._renderErrbar(entry);
   }
   _renderErrbar(entry){
-    const x=this.px(entry.xc), y1=this.py(entry.yval-entry.yerr), y2=this.py(entry.yval+entry.yerr);
+    const x=this.px(entry.xc)+(entry.dx||0), y1=this.py(entry.yval-entry.yerr), y2=this.py(entry.yval+entry.yerr);
     this.gData.appendChild(svgEl('line',{x1:x,x2:x,y1,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1,y2:y1,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1:y2,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
@@ -211,6 +226,25 @@ class Plot{
     this.gAxes.appendChild(t);
     return t;
   }
+  // Value label anchored at data coords, drawn rotated (default vertical, reading
+  // upward) a few px above the point — used for the numeric value above a bar. Lives
+  // in gData so it tracks pan/zoom; colour comes from CSS (.plot-errlabel).
+  barLabel(xv, yval, text, opts){
+    const entry = Object.assign({type:'barlabel', xv, yval, text}, opts||{});
+    this._stored.push(entry);
+    return this._renderBarLabel(entry);
+  }
+  _renderBarLabel(entry){
+    const x = this.px(entry.xv) + (entry.dx||0);
+    const y = this.py(entry.yval) - (entry.gap!=null ? entry.gap : 6);
+    const rot = entry.rot!=null ? entry.rot : 90;   // vertical, reading upward
+    const t = svgEl('text',{x, y, 'font-size':entry.size||10, 'text-anchor':'start',
+      'dominant-baseline':'central', 'class':'plot-errlabel', 'pointer-events':'none',
+      transform:`rotate(-${rot} ${x} ${y})`});
+    t.textContent = entry.text;
+    this.gData.appendChild(t);
+    return t;
+  }
   vline(xv, color, draggable, onDrag, onDragEnd){
     const entry = {type:'vline', xv, color, draggable, onDrag, onDragEnd};
     this._stored.push(entry);
@@ -224,6 +258,9 @@ class Plot{
     if (entry.draggable){
       const hit = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'ew-resize'});
       this.gOverlay.appendChild(hit);
+      // Grip dot near the top for an easy drag target
+      const grip = svgEl('circle',{cx:x0, cy:m.t+15, r:7.5, fill:entry.color, 'cursor':'ew-resize'});
+      this.gOverlay.appendChild(grip);
       let dragging = false;
       const move = (clientX)=>{
         const rect = this.svg.getBoundingClientRect();
@@ -232,7 +269,9 @@ class Plot{
         entry.xv = xv2;
         if (entry.onDrag) entry.onDrag(xv2);
       };
-      hit.addEventListener('pointerdown', e=>{ dragging = true; e.preventDefault(); e.stopPropagation(); });
+      const startDrag = e=>{ dragging = true; e.preventDefault(); e.stopPropagation(); };
+      hit.addEventListener('pointerdown', startDrag);
+      grip.addEventListener('pointerdown', startDrag);
       // Listen on svg + window so dragging survives gOverlay clears during redraws
       this.svg.addEventListener('pointermove', e=>{ if (dragging) move(e.clientX); });
       window.addEventListener('pointerup', ()=>{ if (dragging){ dragging = false; if (entry.onDragEnd) entry.onDragEnd(entry.xv); } });
@@ -246,8 +285,10 @@ class Plot{
       if (e.type==='line') this._renderLine(e);
       else if (e.type==='points') this._renderPoints(e);
       else if (e.type==='bar') this._renderBar(e);
+      else if (e.type==='barpx') this._renderBarPx(e);
       else if (e.type==='errbar') this._renderErrbar(e);
       else if (e.type==='ticklabel') this._renderTickLabel(e);
+      else if (e.type==='barlabel') this._renderBarLabel(e);
       else if (e.type==='vline') this._renderVline(e);
     }
   }
@@ -262,51 +303,70 @@ class Plot{
       col.className = 'plot-btn-col';
       const dlBtn = wrapEl.querySelector('.plot-dl-btn');
       if (dlBtn){
-        wrapEl.insertBefore(col, dlBtn); col.appendChild(dlBtn);
-        dlBtn.addEventListener('mousedown', ()=>dlBtn.classList.add('active'));
-        dlBtn.addEventListener('mouseup', ()=>dlBtn.classList.remove('active'));
-        dlBtn.addEventListener('mouseleave', ()=>dlBtn.classList.remove('active'));
+        wrapEl.insertBefore(col, dlBtn);
+        // Order (top→bottom): CSV, download image, then the tool buttons below.
+        if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
+          col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
+        col.appendChild(dlBtn);
+        // Press feedback (grey fill) is handled by the shared button.btn:active CSS.
       }
       else { wrapEl.appendChild(col); }
     }
     const div = document.createElement('div');
     div.className = 'plot-tool-btns';
     const panBtn = document.createElement('button');
-    panBtn.className = 'btn secondary plot-tool-btn';
+    panBtn.className = 'btn plot-tool-btn';
     panBtn.title = 'Pan';
     panBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="12" y1="4" x2="12" y2="20"/><path d="M6.5 9.5 4 12l2.5 2.5M17.5 9.5 20 12l-2.5 2.5M9.5 6.5 12 4l2.5 2.5M9.5 17.5 12 20l2.5-2.5"/></svg>`;
     const zoomBtn = document.createElement('button');
-    zoomBtn.className = 'btn secondary plot-tool-btn';
+    zoomBtn.className = 'btn plot-tool-btn';
     zoomBtn.title = 'Zoom area';
     zoomBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><line x1="14.8" y1="14.8" x2="20" y2="20"/><line x1="7.5" y1="10.5" x2="13.5" y2="10.5"/><line x1="10.5" y1="7.5" x2="10.5" y2="13.5"/></svg>`;
     const snapBtn = document.createElement('button');
-    snapBtn.className = 'btn secondary plot-tool-btn';
+    snapBtn.className = 'btn plot-tool-btn';
     snapBtn.title = 'Download current view';
     snapBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5a1.5 1.5 0 0 1 1.5-1.5h2l1.2-2h6.6l1.2 2h2A1.5 1.5 0 0 1 20 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3"/></svg>`;
-    snapBtn.addEventListener('mousedown', ()=>snapBtn.classList.add('active'));
-    snapBtn.addEventListener('mouseup',   ()=>snapBtn.classList.remove('active'));
-    snapBtn.addEventListener('mouseleave',()=>snapBtn.classList.remove('active'));
+    const viewLeg = ()=>{ const d=col.querySelector('.plot-dl-btn'); return d && d.dataset.dlLegend ? document.getElementById(d.dataset.dlLegend) : null; };
     snapBtn.onclick = ()=>{
       const dlBtn = col.querySelector('.plot-dl-btn');
-      const legEl = dlBtn && dlBtn.dataset.dlLegend ? document.getElementById(dlBtn.dataset.dlLegend) : null;
       const baseName = dlBtn && dlBtn.dataset.dlName ? dlBtn.dataset.dlName.replace(/\.[^.]+$/, '') : 'plot';
-      downloadSvgClean(this.svg, baseName+'_current.svg', legEl, true);
+      downloadSvgClean(this.svg, baseName+'_current.svg', viewLeg(), true);
     };
+    // Copy current view to the clipboard as a PNG (only where the API is available).
+    let copyBtn = null;
+    if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write){
+      copyBtn = document.createElement('button');
+      copyBtn.className = 'btn plot-tool-btn';
+      copyBtn.title = 'Copy image';
+      copyBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>`;
+      copyBtn.onclick = async ()=>{
+        copyBtn.classList.add('is-on');
+        try {
+          const blob = await downloadSvgClean(this.svg, 'plot.png', viewLeg(), true, true);
+          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+        } catch(e){ /* clipboard denied / unsupported — silently ignore */ }
+        finally { setTimeout(()=>copyBtn.classList.remove('is-on'), 200); }
+      };
+    }
 
     const sync = (mode)=>{
-      panBtn.classList.toggle('active', mode==='pan');
-      zoomBtn.classList.toggle('active', mode==='zoom');
+      panBtn.classList.toggle('is-on', mode==='pan');
+      zoomBtn.classList.toggle('is-on', mode==='zoom');
     };
     panBtn.onclick = ()=>{ this.setMode(this._mode==='pan'?null:'pan'); };
     zoomBtn.onclick = ()=>{ this.setMode(this._mode==='zoom'?null:'zoom'); };
     this._onModeChange = sync;
+    // Order (top→bottom): snapshot, copy, pan, zoom.
     div.appendChild(snapBtn);
+    if (copyBtn) div.appendChild(copyBtn);
     div.appendChild(panBtn);
     div.appendChild(zoomBtn);
     col.appendChild(div);
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
     this.setMode(this._mode || null);
+    // Normalise the CSV icon now that the plot (and its button) is on-screen.
+    fitCsvIcons(col);
   }
   _clearCrosshair(){ if (this.gCross) this.gCross.innerHTML=''; }
   // Draw a thin crosshair + a coordinate readout at the pointer (data coordinates via invX/invY)
@@ -416,15 +476,18 @@ class Plot{
     });
   }
 }
-window.addEventListener('resize', ()=>{ if (window._redrawAll) window._redrawAll(); });
-window._redrawAll = ()=>{
-  if (window._taucRedraw) window._taucRedraw();
-  if (window._xrdRedraw) window._xrdRedraw();
-  if (window._eprRedraw) window._eprRedraw();
-  if (window._gcRedraw) window._gcRedraw();
-};
+// Coalesce the burst of resize events fired during a window drag into one redraw
+// per animation frame — otherwise each event triggers a full synchronous redraw
+// and the drag feels like it hangs for seconds.
+let _resizeRAF = null;
+window.addEventListener('resize', ()=>{
+  if (_resizeRAF) return;
+  _resizeRAF = requestAnimationFrame(()=>{ _resizeRAF = null; redrawAll(); });
+});
 
-function downloadSvgClean(svgNode, filename, legendEl, currentView){
+// With asBlob=true, resolves to a PNG Blob of the (current-view) plot instead of
+// triggering a download — used by the "copy image" button.
+function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
   const ns = 'http://www.w3.org/2000/svg';
   const plotObj = svgNode._plot || null;
   const bbox = svgNode.getBoundingClientRect();
@@ -574,36 +637,43 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView){
   }
 
   const svgStr = new XMLSerializer().serializeToString(workSvg);
-  const fmt = settings.plotFmt || 'png';
+  const fmt = asBlob ? 'png' : (settings.plotFmt || 'png');
   const baseName = filename.replace(/\.[^.]+$/, '');
-  if (fmt === 'svg'){
+  if (!asBlob && fmt === 'svg'){
     const blob = new Blob([svgStr],{type:'image/svg+xml'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href=url; a.download=baseName+'.svg';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 1000);
-  } else {
-    const mimeMap = {png:'image/png', jpeg:'image/jpeg', webp:'image/webp'};
-    const mime = mimeMap[fmt] || 'image/png';
-    const scale = 2;
-    const cW = (w+padL)*scale, cH = (totalH+padT)*scale;
-    const canvas = document.createElement('canvas');
-    canvas.width = cW; canvas.height = cH;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(scale, scale);
+    return;
+  }
+  const mimeMap = {png:'image/png', jpeg:'image/jpeg', webp:'image/webp'};
+  const mime = asBlob ? 'image/png' : (mimeMap[fmt] || 'image/png');
+  const scale = 2;
+  const cW = (w+padL)*scale, cH = (totalH+padT)*scale;
+  const canvas = document.createElement('canvas');
+  canvas.width = cW; canvas.height = cH;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const svgBlob = new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});
+  const svgUrl = URL.createObjectURL(svgBlob);
+  const run = (resolve, reject)=>{
     const img = new Image();
-    const svgBlob = new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});
-    const svgUrl = URL.createObjectURL(svgBlob);
     img.onload = ()=>{
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(svgUrl);
+      if (asBlob){ canvas.toBlob(b=> b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png'); return; }
       const a = document.createElement('a');
       a.download = baseName+'.'+fmt;
       a.href = canvas.toDataURL(mime, fmt==='jpeg'?0.92:undefined);
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      resolve();
     };
+    img.onerror = ()=>{ URL.revokeObjectURL(svgUrl); reject(new Error('image load failed')); };
     img.src = svgUrl;
-  }
+  };
+  if (asBlob) return new Promise(run);
+  run(()=>{}, ()=>{});
 }
 document.addEventListener('click', e=>{
   const btn = e.target.closest('[data-dl-svg]');

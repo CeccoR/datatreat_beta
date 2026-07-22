@@ -1,3 +1,13 @@
+/* Inter (variable, Latin subset) — self-hosted so the app stays fully offline.
+   font-display:swap shows the system fallback until the font is ready. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('inter-latin.woff2') format('woff2');
+}
+
 :root {
   --bg: #0e1316;
   --panel: #161f24;
@@ -5,16 +15,19 @@
   --line: #26343b;
   --text: #dfe8ea;
   --muted: #7f97a0;
+  --white: #ffffff;          /* the single source of "white" across the UI */
   --accent: #ffb454;
   --accent2: #d98fd1;
   --good: #7fd17f;
-  --warn: #ffb454;
+  --warn: var(--accent);     /* warnings reuse the accent (were a near-identical orange) */
   --bad: #ff6b6b;
   --accent-hover: #ffc271;   /* primary button :hover */
   --accent-active: #e89a35;  /* primary button :active (pressed) */
   --on-accent: #06131f;      /* text drawn on top of the accent fill */
+  --ok: #2e9e4f;             /* "saved ✓" confirmation fill */
+  --ok-fg: var(--white);     /* text on the confirmation fill */
   --icon-tile: #0e1316;      /* home-card square icon tile background */
-  --sel-inset: #ffffff;      /* selected peak-row highlight border */
+  --sel-inset: var(--white); /* selected peak-row highlight border */
   --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
   --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
   --alert-bad-bg:  #3a1212;  --alert-bad-line:  #5a1c1c;
@@ -27,11 +40,12 @@
   --plot-cross: #c4ccd6;
   --plot-readout: #f0f4f6;
   --plot-readout-halo: #0b0f12;
+  --plot-errbar: #f0f4f6;
 }
 /* ===== Light theme ===== */
 :root[data-theme="light"] {
   --bg: #f3f5f6;
-  --panel: #ffffff;
+  --panel: var(--white);
   --panel2: #eceff1;
   --line: #d2d9dd;
   --text: #1a2327;
@@ -39,13 +53,13 @@
   --accent: #b96a10;
   --accent2: #9c4b93;
   --good: #2e8b4e;
-  --warn: #a9670a;
   --bad: #cc3b3b;
   --accent-hover: #a75e0b;
   --accent-active: #8c4e08;
-  --on-accent: #ffffff;
+  --on-accent: var(--white);
+  --ok: #2e8b4e;
   --icon-tile: #f3f5f6;
-  --sel-inset: #b96a10;
+  --sel-inset: var(--accent);
   --alert-warn-bg: #fbf1dd;  --alert-warn-line: #e4c583;
   --alert-good-bg: #e2f4ea;  --alert-good-line: #9dd3b3;
   --alert-bad-bg:  #fbe6e6;  --alert-bad-line:  #eaa9a9;
@@ -56,7 +70,8 @@
   --plot-label: #33424a;
   --plot-cross: #56676f;
   --plot-readout: #1a2327;
-  --plot-readout-halo: #ffffff;
+  --plot-readout-halo: var(--white);
+  --plot-errbar: #2a2f38;
 }
 /* Plot chrome follows the theme. CSS beats SVG presentation attributes, so these
    override the fills/strokes plot.js sets inline — no JS changes needed. */
@@ -66,16 +81,24 @@
 .plot-label  { fill: var(--plot-label); }
 .plot-crosshair { stroke: var(--plot-cross); }
 .plot-readout { fill: var(--plot-readout); stroke: var(--plot-readout-halo); }
+/* Error bars + their value labels: visible in both themes (override inline #fff) */
+.plot-errbar  { stroke: var(--plot-errbar); }
+.plot-errlabel { fill: var(--plot-errbar); }
+/* GC integration-interval lines: shared ('all') pair and selected sample use the
+   theme-aware grey (light on dark, dark on light) — never pure white. */
+.gc-int-hl { stroke: var(--plot-errbar); }
 
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
-  font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
+/* Tabular figures keep numeric columns/readouts aligned in the data tables */
+table, input, .stat, .pill, .plot-readout { font-variant-numeric: tabular-nums; }
 header {
   display: flex;
   align-items: center;
@@ -110,12 +133,13 @@ nav button {
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
+  flex-shrink: 0;                     /* keep size; the nav scrolls instead of shrinking */
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 /* Press feedback for non-active tabs: a filled-accent flash (distinct from the
    outline-accent hover) */
-nav button:not(.active):active {
+nav button:not(.is-on):active {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
@@ -125,33 +149,74 @@ nav button:not(.active):active {
   flex: 1;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  /* Scroll horizontally instead of wrapping to a taller header on narrow screens. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;              /* Firefox */
 }
-nav button:not(.nav-settings):not(.active):hover {
+#nav::-webkit-scrollbar { display: none; }
+nav button:not(.nav-settings):not(.is-on):hover {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--panel2);
 }
-nav button.active {
+nav button.is-on {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
-  font-weight: 600;
 }
 /* Saved-sessions table: keep columns usable on narrow screens by letting the
    table scroll horizontally instead of collapsing. */
 .sess-table-box { overflow-x: auto; }
 .sess-table { min-width: 620px; }
 @media (max-width: 600px) {
-  .sess-table .btn.small { padding: 5px 8px; }
+  .sess-table .btn.btn-sm { padding: 5px 8px; }
 }
-/* "Saved ✓" confirmation state — green, non-interactive, same box as the button */
-button.btn.saved-ok,
-button.btn.saved-ok:disabled,
-button.btn.secondary.saved-ok {
-  background: #2e9e4f !important;
-  color: #ffffff !important;
-  border-color: #2e9e4f !important;
+/* Rows open on click. Hover (grey) and press (light accent) are driven by JS
+   classes so the name-field area is excluded from the trigger. */
+.sess-row { cursor: pointer; }
+.sess-row.row-hot { background: var(--line); }
+.sess-row.row-press { background: color-mix(in srgb, var(--accent) 32%, var(--panel2)); }
+/* Inline-editable project name: looks like text until hovered/focused */
+.sess-row .proj-rename {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 5px 7px;
+  font-size: 13px;
+  color: var(--text);
+}
+.sess-row .proj-rename:hover { border-color: var(--line); background: var(--panel); }
+.sess-row .proj-rename:focus { border-color: var(--accent); background: var(--panel); outline: none; }
+/* Per-row action icons: only on row hover; bare, grey; exports light up, X reddens */
+.row-acts { text-align: right; }
+.row-acts-inner { display: flex; gap: 4px; justify-content: flex-end; }
+/* ===== Idle-dimmed controls =====
+   50% opacity at rest, full when the containing row/box (or the control itself) is
+   hovered. The standard for row/box action icons — add .idle-dim to new ones. ===== */
+.idle-dim { opacity: 0.5; transition: opacity 0.18s; }
+.idle-dim:hover,
+.sess-row:hover .idle-dim,
+.file-row:hover .idle-dim,
+.peak-row:hover .idle-dim { opacity: 1; }
+/* Destructive control: reddens (text + border) on hover. Shared standard. */
+.is-danger:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); }
+.row-ic {
+  background: none; border: none; padding: 2px;
+  color: var(--muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color 0.12s;
+}
+.row-ic svg { display: block; }
+.row-ic.pr-csv:hover, .row-ic.pr-json:hover { color: var(--text); }
+.row-ic.pr-del:hover { color: var(--bad); }
+/* "Saved ✓" confirmation state — green, non-interactive, same box as the button.
+   !important so it wins over .primary on the same Save button. */
+button.btn.is-saved,
+button.btn.is-saved:disabled {
+  --btn-bg: var(--ok) !important;
+  --btn-fg: var(--ok-fg) !important;
+  --btn-bd: var(--ok) !important;
   opacity: 1 !important;
   cursor: default;
 }
@@ -164,7 +229,11 @@ button.btn.secondary.saved-ok {
   margin-bottom: 10px;
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.proj-icon .proj-svg { width: 26px; height: 26px; display: block; }
+.proj-icon .proj-svg { width: 22px; height: 22px; display: block; }
+/* Project-bar export ICONS are icon buttons → muted grey like every other icon
+   button (nav, plot toolbar, table CSV). Scoped to .proj-icon so the bottom
+   text buttons (Save as / Export …) keep the white secondary-action text. */
+.btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del { --btn-fg: var(--muted); }
 /* Project bar: sits above the upload area, always visible. Name field on the far
    left, action icons on the far right, both vertically centered. */
 .card.project-bar {
@@ -174,18 +243,27 @@ button.btn.secondary.saved-ok {
   padding: 12px 16px;
 }
 .proj-actions { margin-left: auto; }
+/* Inline-editable project name (.txt-title look). While empty it stays a fully
+   visible dark field; once filled it collapses to plain title text and only the
+   name shows. Hovering a filled field brings the dark field back; focusing it
+   also lights the border with accent, but the fill stays dark. */
 .project-bar .project-name-input {
-  width: 25%;
-  min-width: 180px;
-  height: 54px;               /* ~1.5× the previous ~36px field */
-  font-size: 16px;
-  font-weight: 500;
-  padding: 0 14px;
-  transition: border-color 0.15s, color 0.15s;
+  width: 240px;
+  min-width: 0;
+  height: 29px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 0 10px;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
-.project-name-input::placeholder { font-weight: 400; color: var(--muted); }
-.project-name-input:hover { border-color: var(--muted); }
-.project-name-input:focus { border-color: var(--accent); outline: none; }
+.project-name-input::placeholder { font-weight: 400; font-size: 13px; color: var(--muted); }
+/* Empty → always a real dark field; hover/focus on a filled field reveal it too */
+.project-name-input:placeholder-shown,
+.project-name-input:hover { border-color: var(--line); background: var(--panel2); }
+.project-name-input:focus { border-color: var(--accent); background: var(--panel2); outline: none; }
 /* Empty-name feedback: red field + a brief shake, no browser dialog */
 .field-invalid, .field-invalid:hover, .field-invalid:focus {
   border-color: var(--bad) !important;
@@ -199,19 +277,6 @@ button.btn.secondary.saved-ok {
   55% { transform: translateX(-4px); }  75% { transform: translateX(4px); }
   90% { transform: translateX(-2px); }
 }
-@media (max-width: 640px) {
-  .project-bar .project-name-input { width: 45%; }
-}
-.pb-dirty {
-  display: none;
-  color: var(--accent);
-  font-weight: 700;
-  font-size: 22px;
-  line-height: 1;
-  width: 12px;
-  text-align: center;
-  flex-shrink: 0;
-}
 /* Bottom export card: the four project buttons in a 2×2 grid */
 .proj-actions-row {
   display: grid;
@@ -220,8 +285,8 @@ button.btn.secondary.saved-ok {
 }
 .proj-actions-row .btn { width: 100%; }
 button.btn.icon-save {
-  width: 34px;
-  height: 34px;
+  width: 29px;
+  height: 29px;
   padding: 0;
   display: inline-flex;
   visibility: hidden; /* space reserved; revealed by setTabLoaded once data loads */
@@ -244,13 +309,24 @@ nav button.nav-icon {
   color: var(--muted);
   flex-shrink: 0;
 }
-nav button.nav-right { margin-left: auto; }
+/* Explicit divider between the module tabs and the icon buttons (folder/theme/settings).
+   It carries the margin-left:auto so the icon cluster is pushed right and the divider
+   always sits in the gap — on desktop (big auto gap) and mobile (scrolling) alike. */
+.nav-divider {
+  margin-left: auto;           /* push the icon cluster right; the 8px flex gap sits on
+                                  each side, matching every other margin-to-margin gap */
+  align-self: center;
+  flex-shrink: 0;
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+}
 nav button.nav-icon:hover {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--panel2);
 }
-nav button.nav-icon.active {
+nav button.nav-icon.is-on {
   color: var(--on-accent);
   border-color: var(--accent);
   background: var(--accent);
@@ -287,7 +363,65 @@ main {
 }
 .tab.active {
   display: block;
+  animation: tab-fade 0.25s ease;
 }
+@keyframes tab-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Cross-fade colours during a light/dark toggle (scoped to .theme-anim so it only
+   runs on the switch, keeping normal hover/press feedback instant) */
+:root.theme-anim, :root.theme-anim * {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, fill 0.25s ease, stroke 0.25s ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab.active { animation: none; }
+  :root.theme-anim, :root.theme-anim * { transition: none !important; }
+}
+/* Keyboard-shortcut reference (Settings) */
+.shortcut-list { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--text); }
+.shortcut-list > div { display: flex; align-items: center; gap: 10px; }
+.shortcut-list > div > span:last-child { color: var(--muted); }
+.kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel2);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text);
+}
+/* Sticky "back to top" button — hidden until the page is scrolled down */
+#scrollTopBtn {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.15s ease, border-color 0.15s ease;
+  z-index: 900;
+}
+#scrollTopBtn.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+#scrollTopBtn:hover { color: var(--accent); border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { #scrollTopBtn { transition: opacity 0.2s ease; } }
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -317,18 +451,33 @@ main {
   .col,
   .mw520, .mw320, .mw280, .mw260, .mw220, .mw200 { min-width: 100%; }
 }
-h2 {
+/* ===== Text style tokens — the single source of text styling. Every text element
+   carries one of these classes explicitly (no bare-tag aliases); see also
+   .txt-mini / .txt-caption / .txt-meta below. ===== */
+.txt-title {                /* page / module title */
   margin-top: 0;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--text);
 }
-h3 {
+/* Module title sits above the project bar, aligned to the cards' left edge */
+.module-head { margin: 2px 2px 10px; }
+.txt-head {                 /* card / section header — forced uppercase, no hand-typed caps */
   font-size: 14px;
-  color: var(--muted);
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.08em;
   margin: 0 0 8px;
+  text-transform: uppercase;
 }
-label {
+.txt-tile {                 /* home technique-tile title (accent, natural case) */
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+.txt-label {                /* field label */
   font-size: 13px;
   color: var(--muted);
   display: block;
@@ -336,7 +485,6 @@ label {
 }
 input[type="text"],
 input[type="number"],
-input[type="datetime-local"],
 select {
   width: 100%;
   padding: 7px 9px;
@@ -350,18 +498,96 @@ input[type="file"] {
   font-size: 13px;
   color: var(--muted);
 }
-/* Dark-theme the native date/time picker and force its calendar icon white */
-input[type="datetime-local"] { color-scheme: dark; }
-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  filter: brightness(0) invert(1); /* → pure white regardless of the base glyph */
-  opacity: 0.85;
-  cursor: pointer;
+
+/* ===== Custom date-time field (segmented text + calendar button) ===== */
+.dt-field {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 6px 6px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
-input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
-button.btn {
-  background: var(--accent);
-  color: var(--on-accent);
+.dt-field:focus-within { border-color: var(--accent); }
+.dt-seg {
+  padding: 1px 2px;
+  border-radius: 3px;
+  cursor: text;
+  outline: none;
+  white-space: nowrap;
+}
+.dt-seg.empty { color: var(--muted); }
+.dt-seg.sel, .dt-seg:focus { background: var(--accent); color: var(--on-accent); }
+.dt-sep { color: var(--muted); padding: 0 1px; }
+.dt-cal-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
   border: none;
+  padding: 2px 2px 2px 6px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: color 0.15s;
+}
+.dt-cal-btn:hover { color: var(--text); }
+
+/* Calendar modal (inherits card bg/border/shadow from .modal-box) */
+.dt-modal { width: 300px; padding: 16px; }
+.dt-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.dt-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.dt-nav {
+  width: 30px; height: 30px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel2); color: var(--muted);
+  cursor: pointer; font-size: 15px; line-height: 1;
+}
+.dt-nav:hover { color: var(--accent); border-color: var(--accent); }
+.dt-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dt-week { margin-bottom: 4px; }
+.dt-wd { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0; }
+.dt-day {
+  aspect-ratio: 1 / 1;
+  border: 1px solid transparent; border-radius: 6px;
+  background: none; color: var(--text); cursor: pointer;
+  font-size: 12px; display: flex; align-items: center; justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.dt-day:hover { background: var(--panel); }
+.dt-day.today { border-color: var(--line); }
+.dt-day.sel { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.dt-day.empty { pointer-events: none; }
+.dt-time { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.dt-time-lbl { font-size: 13px; color: var(--muted); margin-right: auto; }
+.dt-time-field { display: inline-flex; align-items: center; gap: 4px; }
+.dt-time-field b { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.dt-colon { color: var(--muted); }
+.dt-step {
+  width: 22px; height: 20px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--panel2); color: var(--muted); cursor: pointer; font-size: 9px; line-height: 1; padding: 0;
+}
+.dt-step:hover { color: var(--accent); border-color: var(--accent); }
+.dt-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+/* ===== Buttons =====
+   Colours are driven by three per-button variables so variants/states only re-point
+   them — no hard-coded colours in the rules:
+     --btn-bg  fill        --btn-bd  border
+     --btn-fg  text/icon   → always one of three theme tokens:
+                             --on-accent (on the accent fill), --text (secondary
+                             actions) or --muted (icon / subtle buttons).
+   Base .btn is the neutral outline (the common case); .primary is the filled CTA. */
+button.btn {
+  --btn-bg: var(--panel2);
+  --btn-fg: var(--text);
+  --btn-bd: var(--line);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: 1px solid var(--btn-bd);
   border-radius: 8px;
   padding: 9px 16px;
   font-weight: 600;
@@ -369,35 +595,25 @@ button.btn {
   cursor: pointer;
   transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
-/* Primary (export-style, orange) buttons: distinct hover and pressed states */
-button.btn:not(.secondary):hover:not(:disabled) { background: var(--accent-hover); }
-button.btn:not(.secondary):active:not(:disabled) { background: var(--accent-active); }
-button.btn.secondary {
-  background: var(--panel2);
-  color: var(--text);
-  border: 1px solid var(--line);
+/* Outline (default): hover accents the outline; press greys the fill */
+button.btn:hover:not(:disabled)  { --btn-fg: var(--accent); --btn-bd: var(--accent); }
+button.btn:active:not(:disabled) { --btn-bg: var(--line); }
+/* Primary (filled accent): hover lightens the fill, press darkens it */
+button.btn.primary {
+  --btn-bg: var(--accent);
+  --btn-fg: var(--on-accent);
+  --btn-bd: var(--accent);
 }
-/* Secondary buttons: coherent, subtle hover/press */
-button.btn.secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-button.btn.secondary:active:not(:disabled) { background: var(--line); }
-/* Settings-button style for the click-only project/export buttons and the XRD
-   fit-settings buttons: neutral outline at rest, accent outline on hover, and a
-   distinct filled-accent flash on click. */
-button.btn.proj-saveas, button.btn.proj-csv, button.btn.proj-json,
-button.btn#xrdFitSettings, button.btn#xrdStdSettings {
-  background: var(--panel2);
-  color: var(--muted);
-  border: 1px solid var(--line);
+button.btn.primary:hover:not(:disabled)  { --btn-bg: var(--accent-hover);  --btn-fg: var(--on-accent); --btn-bd: var(--accent-hover); }
+button.btn.primary:active:not(:disabled) { --btn-bg: var(--accent-active); --btn-bd: var(--accent-active); }
+/* Permanent "on" toggle (armed +Add peak, etc.) — filled accent, held on hover too */
+button.btn.is-on,
+button.btn.is-on:hover:not(:disabled) {
+  --btn-bg: var(--accent);
+  --btn-fg: var(--on-accent);
+  --btn-bd: var(--accent);
 }
-button.btn.proj-saveas:hover:not(:disabled), button.btn.proj-csv:hover:not(:disabled), button.btn.proj-json:hover:not(:disabled),
-button.btn#xrdFitSettings:hover:not(:disabled), button.btn#xrdStdSettings:hover:not(:disabled) {
-  color: var(--accent); border-color: var(--accent); background: var(--panel2);
-}
-button.btn.proj-saveas:active:not(:disabled), button.btn.proj-csv:active:not(:disabled), button.btn.proj-json:active:not(:disabled),
-button.btn#xrdFitSettings:active:not(:disabled), button.btn#xrdStdSettings:active:not(:disabled) {
-  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
-}
-button.btn.small {
+button.btn.btn-sm {
   padding: 5px 10px;
   font-size: 12px;
 }
@@ -431,20 +647,25 @@ td input.label-input {
   width: 100%;
   min-width: 120px;
 }
+/* Sample counter (e.g. "3/12"): styled like the all/one mode-chip — small, muted,
+   rounded — so it and the nav arrows read as one control group. */
 .pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
   background: var(--panel2);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 3px 10px;
-  font-size: 12px;
+  border-radius: 11px;
+  padding: 0 8px;
+  font-size: 10px;
   color: var(--muted);
   margin-right: 6px;
 }
-.hint {
+/* Meta token: small secondary text (intro lines, empty-state notes, dropzone hints) */
+.txt-meta {
   font-size: 12px;
   color: var(--muted);
-  margin-top: 4px;
 }
 .flex-between {
   display: flex;
@@ -455,11 +676,21 @@ td input.label-input {
 }
 svg.plot {
   width: 100%;
-  height: 640px;
+  /* Golden-ratio landscape: height tracks the width (φ ≈ 1.618) in every layout,
+     on desktop and mobile alike. A floor keeps it from getting tiny; below the
+     floor the .plot-wrap scrolls horizontally instead of shrinking further. */
+  aspect-ratio: 1.618;
+  height: auto;
+  min-width: 460px;
   background: var(--panel2);
   border-radius: 8px;
   border: 1px solid var(--line);
   touch-action: none;
+}
+/* On mobile / small screens the columns already stack to full width, so drop the
+   min-width floor — otherwise every plot would overflow and scroll horizontally. */
+@media (max-width: 820px) {
+  svg.plot { min-width: 0; }
 }
 .legend {
   font-size: 12px;
@@ -562,7 +793,8 @@ svg.plot {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 0 18px 0 18px; /* height + left padding set by JS (sizeHomeTiles) */
+  padding: 0 18px 0 116px; /* left padding clears the default logo; JS (sizeHomeTiles) refines */
+  min-height: 100px;       /* floor so the row doesn't collapse before JS sizing */
 }
 .home-card:hover {
   border-color: var(--accent);
@@ -575,6 +807,11 @@ svg.plot {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
+  /* Sensible default so the logos aren't huge for a frame before sizeHomeTiles()
+     computes the exact size; JS then overrides these inline. */
+  left: 20px;
+  width: 84px;
+  height: 84px;
   background: var(--icon-tile);
   border: none;
   border-radius: 12px;
@@ -610,14 +847,6 @@ svg.plot {
   justify-content: center;
   gap: 8px;
 }
-.home-card h3 {
-  color: var(--accent);
-  font-size: 15px;
-  margin: 0;
-  text-transform: none;
-  letter-spacing: 0.04em;
-  font-weight: 700;
-}
 .home-card p {
   color: var(--muted);
   font-size: 12px;
@@ -630,6 +859,7 @@ footer {
   font-size: 12px;
   padding: 30px 0;
 }
+.app-version { color: var(--accent); font-variant-numeric: tabular-nums; }
 footer a {
   color: var(--muted);
   text-decoration: underline;
@@ -654,7 +884,7 @@ footer a:hover {
 }
 .dropzone.dragover {
   border-color: var(--accent);
-  background: #1a2433;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
 }
 .dropzone .dz-icon {
   font-size: 28px;
@@ -667,10 +897,6 @@ footer a:hover {
   color: var(--text);
   font-weight: 600;
   margin-bottom: 4px;
-}
-.dropzone .dz-hint {
-  font-size: 12px;
-  color: var(--muted);
 }
 .dropzone input[type="file"] {
   display: none;
@@ -710,7 +936,7 @@ footer a:hover {
   justify-content: center;
   vertical-align: middle;
 }
-.del-bare:hover { color: var(--bad); }
+.del-bare:hover { color: var(--text); }
 /* File-list actions cell: trim padding so download + remove always fit the column */
 .row-acts { padding-left: 0 !important; padding-right: 4px !important; }
 /* Download buttons: same bare style, but light up to a lighter grey, not red */
@@ -720,11 +946,7 @@ th .download-all { vertical-align: middle; }
 /* Both "all" buttons are always bold: thicker icon strokes than the per-row ones */
 th .download-all svg { stroke-width: 2.5; }
 th .remove-all svg { stroke-width: 2.8; }
-/* Row remove / download appear on row hover (unchanged behaviour) */
-.file-row .row-del,
-.file-row .dl-file { visibility: hidden; }
-.file-row:hover .row-del,
-.file-row:hover .dl-file { visibility: visible; }
+/* Row remove / download: dimmed until the row is hovered (see .idle-dim). */
 .dl-file svg, .download-all svg { vertical-align: middle; }
 td.fname {
   color: var(--muted);
@@ -832,7 +1054,7 @@ button.color-swatch:hover { border-color: var(--text); }
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--white);
   box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
   position: absolute;
   transform: translate(-50%,-50%);
@@ -851,7 +1073,7 @@ button.color-swatch:hover { border-color: var(--text); }
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--white);
   box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
   position: absolute;
   top: 50%;
@@ -924,7 +1146,7 @@ button.color-swatch:hover { border-color: var(--text); }
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--white);
   border: 2px solid rgba(0,0,0,0.22);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   cursor: pointer;
@@ -938,7 +1160,7 @@ button.color-swatch:hover { border-color: var(--text); }
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--white);
   border: 2px solid rgba(0,0,0,0.22);
   cursor: pointer;
 }
@@ -972,6 +1194,7 @@ button.color-swatch:hover { border-color: var(--text); }
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  overflow-x: auto;   /* if the plot hits its min-width floor, scroll here — not the page */
 }
 /* While a pan/zoom tool is armed, block text selection across the whole plot */
 .plot-wrap.tool-armed, .plot-wrap.tool-armed * {
@@ -980,15 +1203,15 @@ button.color-swatch:hover { border-color: var(--text); }
 }
 .plot-wrap .plot {
   flex: 1;
-  min-width: 0;
   width: auto;
+  /* min-width (460px floor) comes from svg.plot so the plot never shrinks to tiny */
 }
 .plot-btn-col {
   display: flex;
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
-  opacity: 0;
+  opacity: 0.5;                 /* dimmed by default, full on hovering the plot */
   transition: opacity 0.18s;
 }
 .plot-wrap:hover .plot-btn-col {
@@ -1033,6 +1256,80 @@ button.color-swatch:hover { border-color: var(--text); }
   border-color: var(--accent) !important;
   background: transparent !important;
 }
+/* Press feedback: grey fill, same as the standard outline button. Placed after the
+   hover rule so :active wins while the cursor is still over the button. */
+.plot-tool-btn:active:not(:disabled),
+.plot-dl-btn:active:not(:disabled) {
+  background: var(--line) !important;
+}
+/* Compact icon-only CSV button pinned to the far edge of a table header. Dimmed by
+   default, full opacity when the table (or the button) is hovered — matching the
+   plot toolbar buttons. */
+.table-csv-btn {
+  margin-left: auto;            /* push to the extreme right of its header row */
+  width: 30px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+  opacity: 0.5;
+  transition: opacity 0.18s, color 0.15s, border-color 0.15s, background 0.15s;
+}
+.peak-box:hover .table-csv-btn,
+.table-box:hover .table-csv-btn,
+.table-csv-btn:hover {
+  opacity: 1;
+}
+.table-csv-btn:hover {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  background: transparent !important;
+}
+/* PWA update toast */
+.pwa-toast {
+  position: fixed;
+  left: 50%;
+  top: 20px;
+  transform: translateX(-50%) translateY(-20px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px 10px 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  z-index: 9999;
+  font-size: 13px;
+  color: var(--text);
+  max-width: min(560px, calc(100vw - 20px));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+/* On phones give the confirm banner room so its message doesn't crush into a
+   sliver. The short update toast keeps sizing to its content. */
+@media (max-width: 640px) { .pwa-toast.pwa-confirm { width: calc(100vw - 20px); } }
+.pwa-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.pwa-toast .btn { padding: 4px 12px; }
+.pwa-toast-x {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.pwa-toast-x:hover { color: var(--text); }
 /* Icons render as centered blocks (no inline-baseline gap) so every icon's
    bounding box is centered in its button/cell and aligns with its neighbours */
 .plot-btn-icon, .x-icon, .dl-icon { display: block; }
@@ -1042,27 +1339,128 @@ button.color-swatch:hover { border-color: var(--text); }
   align-items: center;
   justify-content: center;
 }
-.alert-dismiss:hover { font-weight: normal; color: var(--bad); }
-.plot-tool-btn.active,
-.plot-dl-btn.active {
+.alert-dismiss:hover { font-weight: normal; }
+.plot-tool-btn.is-on,
+.plot-dl-btn.is-on {
   border: 1px solid var(--accent) !important;
   background: var(--accent) !important;
   color: var(--on-accent) !important;
 }
 
 /* ===== Sample navigation arrows ===== */
-.nav-arrow {
-  padding: 3px 10px;
-  font-size: 18px;
-  line-height: 1;
-  border-radius: 6px;
-}
-.plot-subtitle {
+/* Nav arrows: same chip box as the counter (.pill) — same height/shape, width just
+   fits the arrow, glyph perfectly centred; styled like the all/one mode-chip. */
+.btn.nav-arrow {
+  height: 22px;
+  min-width: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
   font-size: 13px;
-  color: var(--muted);
-  font-weight: 500;
-  margin: 0;
+  line-height: 1;
+  border-radius: 11px;
 }
+
+/* Instrumental-standard picker: sits in the plot header row, aligned with and the
+   same height as the "+ Add peak" corner button. Greyed while showing its ghost
+   placeholder (nothing chosen). */
+.std-select {
+  height: 30px;
+  width: 100%;
+  max-width: 340px;
+  padding: 0 9px;
+}
+.std-select.ghost { color: var(--muted); }
+
+/* ===== Plot header row: sample nav on the left, a corner action button whose
+   right edge lines up with the plot's right edge (padding-right = toolbar col:
+   32px button + 8px gap). The button is 1/3 of the plot width. ===== */
+.plot-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-right: 40px;
+}
+.plot-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.plot-corner-btn {
+  flex: 0 0 33.333%;
+  min-width: 0;
+  height: 30px;                /* match the sample-nav arrows so the row aligns */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 9px;
+}
+
+/* ===== Parameter panel: mini section header with the all/one chip, then a
+   3fr/2fr grid so every field sits on the title's row (title 3/5, field 2/5);
+   long titles wrap within their 3/5 column instead of overflowing. ===== */
+/* Mini-header token: PARAMETERS, DETECTED PEAKS, FITTED PEAKS … */
+.txt-mini {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* .param-head is layout-only now (the font comes from .txt-mini on the same tag) */
+.param-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+/* Desktop: drop the header down so its top lines up with the plot's top edge
+   (the plot sits below the sample-nav row: 35px nav + 6px gap). */
+.param-head.aligned { margin-top: 41px; }
+@media (max-width: 820px) { .param-head.aligned { margin-top: 0; } }
+.param-grid {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  column-gap: 10px;
+  row-gap: 9px;
+  align-items: center;
+}
+/* Grid layout for the title cells (font comes from .txt-label on the same element) */
+.param-grid > .txt-label,
+.param-grid > .pg-title {
+  margin: 0;
+  align-self: center;
+  line-height: 1.35;
+}
+/* Title cell that carries an inline all/one chip right after the text */
+.param-grid > .pg-title {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
+/* Info outputs: keep them full-width where they sit, but bare (no field box) —
+   they read like the titles, with the value in accent. */
+.param-grid > .pg-stat {
+  grid-column: 1 / -1;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text);          /* title in the light foreground colour */
+}
+.param-grid > .pg-stat b { color: var(--accent); }   /* value keeps the accent */
+.param-grid > .pg-stat.pg-gap { margin-top: 6px; }
 /* Remove top margin on first label in parameter panels */
 .col > label:first-child,
 .col > label:first-of-type {
@@ -1070,12 +1468,14 @@ button.color-swatch:hover { border-color: var(--text); }
 }
 
 /* ===== Chart titles in results ===== */
-.chart-title {
+/* Caption token: chart titles (block <p>) and current-sample labels (inline <span>) */
+.txt-caption {
   font-size: 13px;
   color: var(--muted);
   font-weight: 500;
   margin: 0 0 6px;
 }
+span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row */
 
 /* ===== Instruction block ===== */
 .instr-block {
@@ -1085,7 +1485,7 @@ button.color-swatch:hover { border-color: var(--text); }
   border-radius: 0 6px 6px 0;
   padding: 10px 14px;
   margin: 6px 0 12px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   line-height: 1.6;
 }
@@ -1096,6 +1496,7 @@ button.color-swatch:hover { border-color: var(--text); }
   border-radius: 8px;
   padding: 0 8px 8px;
   margin-top: 10px;
+  overflow-x: auto;   /* narrow screens: scroll the table instead of crushing columns */
 }
 .table-wrap-box table {
   table-layout: fixed;
@@ -1138,10 +1539,12 @@ button.color-swatch:hover { border-color: var(--text); }
 }
 .file-actions .pending-del:hover,
 .file-actions .pending-del-all:hover {
-  color: var(--bad);
-  border-color: var(--bad);
   background: transparent;
 }
+
+/* The "interval too small" alert sits at the end of the Parameters column;
+   give it a clear break from the stats above it. */
+#taucAlert:not(:empty) { margin-top: 16px; }
 
 /* ===== Tauc Eg summary table ===== */
 #taucEgTableWrap { overflow: hidden; }
@@ -1151,21 +1554,19 @@ button.color-swatch:hover { border-color: var(--text); }
 #taucEgTableWrap td:nth-child(2),
 #taucEgTableWrap td:nth-child(3) { text-align: center; }
 
-/* ===== XRD shared/per-sample segmented toggle ===== */
-.xrd-seg { display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
-.xrd-seg button { font-size:11px; padding:2px 7px; background:transparent; border:none; color:var(--muted); cursor:pointer; line-height:1.6; }
-.xrd-seg button.active { background:var(--accent); color:#fff; }
-.xrd-seg button:hover:not(.active) { background:var(--panel2); }
-
-/* Inline field + all/one toggle row (toggle matches the input height) */
+/* Inline field + all/one toggle row */
 .field-row { display:flex; gap:5px; align-items:stretch; }
 .field-row > input, .field-row > select { flex:1; min-width:0; }
-.field-row .xrd-seg { flex:0 0 auto; }
-/* Compact, understated all/one toggle — narrow so the input keeps its width */
-.mode-seg { border-color:var(--line); border-radius:6px; background:transparent; }
-.field-row .mode-seg button { display:flex; align-items:center; padding:0 6px; font-size:10px; letter-spacing:.02em; color:var(--muted); background:transparent; }
-.field-row .mode-seg button.active { background:var(--panel2); color:var(--text); font-weight:600; }
-.field-row .mode-seg button:hover:not(.active) { background:var(--panel2); color:var(--text); }
+
+/* ===== all/one flip-chip (GC-table style, reused for Tauc & XRD fields) ===== */
+.mode-chip {
+  font-size: 10px; padding: 1px 8px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel2); color: var(--muted); cursor: pointer;
+  text-transform: uppercase; letter-spacing: .05em; line-height: 1.6;
+}
+.mode-chip:hover { color: var(--accent); border-color: var(--accent); }
+.field-row .mode-chip { flex: 0 0 auto; align-self: center; }
 /* Two half-width sub-panels side by side */
 .field-half { display:flex; gap:10px; }
 .field-half > div { flex:1; min-width:0; }
@@ -1184,33 +1585,42 @@ button.color-swatch:hover { border-color: var(--text); }
   gap: 10px;
   margin-bottom: 8px;
 }
-.peak-box-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: .02em;
-}
 .peak-reset-btn {
   padding: 3px 12px !important;
   font-size: 12px;
   border-radius: 6px;
   line-height: 1.4;
 }
-#xrdPeakTableWrap table, #xrdFitTableWrap table { width: 100%; }
-#xrdPeakTableWrap .peak-row, #xrdFitTableWrap .peak-row { transition: background 0.1s; cursor: pointer; }
-#xrdPeakTableWrap .peak-row:hover, #xrdFitTableWrap .peak-row:hover { background: var(--panel); }
+#xrdPeakTableWrap table, #xrdFitTableWrap table, #xrdStdPeakTableWrap table { width: 100%; }
+#xrdPeakTableWrap .peak-row, #xrdFitTableWrap .peak-row, #xrdStdPeakTableWrap .peak-row { transition: background 0.1s; cursor: pointer; }
+#xrdPeakTableWrap .peak-row:hover, #xrdFitTableWrap .peak-row:hover, #xrdStdPeakTableWrap .peak-row:hover { background: var(--panel); }
 /* Manually added peaks: neutral grey tint (order matters: before hovering/selected) */
-#xrdPeakTableWrap .peak-row.manual-peak, #xrdFitTableWrap .peak-row.manual-peak { background: rgba(160, 170, 185, 0.14); }
-#xrdPeakTableWrap .peak-row.manual-peak:hover, #xrdFitTableWrap .peak-row.manual-peak:hover { background: rgba(160, 170, 185, 0.22); }
+#xrdPeakTableWrap .peak-row.manual-peak, #xrdFitTableWrap .peak-row.manual-peak, #xrdStdPeakTableWrap .peak-row.manual-peak { background: rgba(160, 170, 185, 0.14); }
+#xrdPeakTableWrap .peak-row.manual-peak:hover, #xrdFitTableWrap .peak-row.manual-peak:hover, #xrdStdPeakTableWrap .peak-row.manual-peak:hover { background: rgba(160, 170, 185, 0.22); }
 /* Temporary hover link (row↔peak): green, coherent with the hovered peak colour */
-#xrdPeakTableWrap .peak-row.hovering, #xrdFitTableWrap .peak-row.hovering,
-#xrdPeakTableWrap .peak-row.manual-peak.hovering, #xrdFitTableWrap .peak-row.manual-peak.hovering { background: rgba(95, 207, 106, 0.20); }
+#xrdPeakTableWrap .peak-row.hovering, #xrdFitTableWrap .peak-row.hovering, #xrdStdPeakTableWrap .peak-row.hovering,
+#xrdPeakTableWrap .peak-row.manual-peak.hovering, #xrdFitTableWrap .peak-row.manual-peak.hovering, #xrdStdPeakTableWrap .peak-row.manual-peak.hovering { background: rgba(95, 207, 106, 0.20); }
 /* Persistent selection: keep the normal background, add a uniform white outline.
    Applied per-cell (top+bottom on every cell, left on the first, right on the last)
    so the rectangle is even all around with no internal lines. */
-#xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset); }
-#xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset 2px 0 0 var(--sel-inset); }
-#xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
+#xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td, #xrdStdPeakTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset); }
+#xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child, #xrdStdPeakTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset 2px 0 0 var(--sel-inset); }
+#xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child, #xrdStdPeakTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
+
+/* ===== GC parameter table: grouped headers, all/one toggle, row↔plot interaction ===== */
+#gcParamTableWrap .gc-grp { text-align: left; }
+#gcParamTableWrap .gc-toggle { margin-left: 8px; vertical-align: 1px; }
+#gcParamTableWrap .gc-all-row { background: rgba(160, 170, 185, 0.08); }
+#gcParamTableWrap .gc-all-row .fname { color: var(--muted); }
+#gcParamTableWrap input[disabled] { opacity: .35; }
+#gcParamTableWrap input[readonly] { opacity: .6; cursor: default; }
+#gcParamTableWrap .gc-row { transition: background .1s; }
+#gcParamTableWrap .gc-row.hovering { background: rgba(95, 207, 106, 0.20); }
+/* Single outline on the row draws one clean rectangle; a per-cell box-shadow
+   (as the XRD peak table uses) leaves white seams at every cell boundary because
+   each cell clips its own shadow — very visible in dark theme on these wide rows. */
+#gcParamTableWrap .gc-row.selected td { box-shadow: none; }
+#gcParamTableWrap .gc-row.selected { outline: 2px solid var(--sel-inset); outline-offset: -2px; }
 /* Mean ± std crystallite-size summary under the analysis peak table */
 .size-summary {
   margin-top: 12px;
@@ -1224,8 +1634,8 @@ button.color-swatch:hover { border-color: var(--text); }
 .size-summary .ss-n { color: var(--muted); font-size: 12px; }
 
 /* ✕ delete button — bare glyph, no border/background; padding keeps a clickable hitbox */
-#xrdPeakTableWrap .peak-row .peak-del {
-  visibility: hidden;
+#xrdPeakTableWrap .peak-row .peak-del,
+#xrdStdPeakTableWrap .peak-row .peak-del {
   background: none;
   border: none;
   color: var(--muted);
@@ -1236,16 +1646,7 @@ button.color-swatch:hover { border-color: var(--text); }
   line-height: 1;
   transition: color 0.1s;
 }
-#xrdPeakTableWrap .peak-row:hover .peak-del { visibility: visible; }
-#xrdPeakTableWrap .peak-row .peak-del:hover {
-  color: var(--bad);
-}
-/* Add-peak mode toggle button */
-#xrdAddPeak.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
+/* +Add peak armed state is handled by the shared button.btn.is-on rule. */
 
 /* ===== XRD fit hyperparameters modal ===== */
 .modal-backdrop {
@@ -1297,7 +1698,7 @@ button.color-swatch:hover { border-color: var(--text); }
 .dropzone.dz-loading { pointer-events: none; }
 .dropzone.dz-loading .dz-icon,
 .dropzone.dz-loading .dz-title,
-.dropzone.dz-loading .dz-hint { opacity: 0.2; }
+.dropzone.dz-loading .txt-meta { opacity: 0.2; }
 .dropzone.dz-loading::before {
   content: '';
   position: absolute;
@@ -1338,7 +1739,7 @@ button.color-swatch:hover { border-color: var(--text); }
 }
 .instr-info svg { display: block; width: 15px; height: 15px; }
 .instr-info:hover { color: var(--accent); }
-.instr-info.active { color: var(--accent); }
+.instr-info.is-on { color: var(--accent); }
 /* Center the info icon vertically with the card title (falls back to vertical-align) */
 h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   display: inline-flex;

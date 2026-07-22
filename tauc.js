@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -8,61 +8,207 @@ import { Plot } from './plot.js';
   let files = []; // {name,label,wl[],FR[],hv[]}  (each on its own native axis)
   let currIndex=0;
   let plot;
-  let vlines = {};
+  let vlines = {};            // active interval lines (points at the current sample's set)
   let bestRegsAll = [];
+  let resPlot0=null, resPlot1=null;   // reused summary-plot instances (created once)
+  let _dragging=false;                // true while an interval line is being dragged
+
+  // ---- all/one analysis mode (single global toggle) ----
+  // 'shared': every sample uses one common parameter set AND one common set of
+  //           interval lines. 'per': each sample is fully independent — its own
+  //           exponent, smoothing/regression windows and interval-line positions.
+  let   taucMode = 'shared';                             // 'shared' | 'per'
+  const taucShared = { a:0.5, N:1, N2:20, M:25, M2:100 }; // common params (shared mode)
+  let   sharedVlines = {};                               // common interval lines (shared mode)
+  let   taucPer = [];                                    // per sample: {a,N,N2,M,M2,vlines:{v1..v4}}
+
+  const clampN = v => Math.max(1, Math.round(v));
+  const clampM = v => Math.max(2, Math.round(v));
+
+  // Default interval-line positions from a sample's own energy range
+  function defaultVlinesFor(i){
+    const hv = files[i].hv, lo = minArr(hv), hi = maxArr(hv), d = hi - lo;
+    return { v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d };
+  }
+
+  // ---- Auto-suggested interval-line positions ----
+  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
+  // linear/constant background has zero curvature, so it cancels). The "zero zones"
+  // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
+  // ε = 10%·max|Y''|. The region bounds are found from each spectrum end inward: the
+  // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
+  const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
+  const SUGG_CONT   = 25;     // required consecutive points above ε
+  function derivEdge(i){
+    const fp = getFileParams(i), hv = files[i].hv, fr = files[i].FR, n = hv.length;
+    if (n < 7) return null;
+    const Yraw = fr.map((v,k)=>Math.pow(v*hv[k], fp.a));
+    const Ys  = movingAverage(Yraw, fp.N);
+    const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);        // Y'
+    const d2  = movingAverage(gradientArr(dYs, hv), fp.N2);       // Y''
+    const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
+    // energy-ascending order of indices, so we can scan by energy regardless of layout
+    const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
+    const A = d2.reduce((m,v)=>Math.max(m, Math.abs(v)), 0) || 1;
+    const eps = SUGG_THRESH * A;
+    const ax = j => Math.abs(d2[ord[j]]);
+    const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
+    const inR = j => j>=margin && j<n-margin;
+    // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
+    const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
+    let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
+    for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
+    for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
+    return { v1, v2 };
+  }
+  function suggestOne(i){
+    const e = derivEdge(i);
+    if (!e) return null;
+    const hv = files[i].hv, n = hv.length;
+    const lo = Math.min(hv[0], hv[n-1]), hi = Math.max(hv[0], hv[n-1]);
+    const clamp = x => Math.max(lo, Math.min(hi, x));
+    // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span).
+    return { v1: clamp(e.v1), v2: clamp(e.v2), v3: clamp(e.v1-0.85), v4: clamp(e.v1-0.1) };
+  }
+  // Shared (all-mode) suggestion: linear region [max(v1), min(v2)] over all samples
+  // (widest common linear window), baseline computed once from max(v1).
+  function suggestShared(){
+    const ss = files.map((f,i)=>suggestOne(i)).filter(Boolean);
+    if (!ss.length) return null;
+    const maxV1 = Math.max(...ss.map(s=>s.v1)), minV2 = Math.min(...ss.map(s=>s.v2));
+    let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
+    const clamp = x => Math.max(lo, Math.min(hi, x));
+    return { v1: clamp(maxV1), v2: clamp(minV2), v3: clamp(maxV1-0.85), v4: clamp(maxV1-0.1) };
+  }
+  // Apply suggestions to the whole workspace (used once on first upload).
+  function autoSuggestAll(){
+    if (!files.length) return;
+    if (taucMode==='per'){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!taucPer[i]) taucPer[i]={}; taucPer[i].vlines = s; } }); }
+    else { const s = suggestShared(); if (s) sharedVlines = s; }
+  }
+  // The interval-line set used for sample i (shared object, or the sample's own)
+  function vlinesFor(i){
+    if (taucMode==='shared') return sharedVlines;
+    let pp = taucPer[i]; if (!pp) pp = taucPer[i] = {};
+    if (!pp.vlines || !isFinite(pp.vlines.v1)) pp.vlines = defaultVlinesFor(i);
+    return pp.vlines;
+  }
+  // Resolve the effective params for a given file index
+  function getFileParams(i){
+    const s = taucShared;
+    const src = (taucMode==='per') ? (taucPer[i] || {}) : s;
+    return {
+      a:  (src.a  ?? s.a),
+      N:  clampN(src.N  ?? s.N),
+      N2: clampN(src.N2 ?? s.N2),
+      M:  clampM(src.M  ?? s.M),
+      M2: clampM(src.M2 ?? s.M2),
+    };
+  }
+  function curParams(){ return getFileParams(currIndex); }
+
+  // Read the input fields into the active store (shared, or the current sample)
+  function readInputsToStore(){
+    const vals = {
+      a:  parseFloat(document.getElementById('taucA').value),
+      N:  clampN(+document.getElementById('taucN').value  || 1),
+      N2: clampN(+document.getElementById('taucN2').value || 1),
+      M:  clampM(+document.getElementById('taucM').value  || 2),
+      M2: clampM(+document.getElementById('taucM2').value || 2),
+    };
+    if (!isFinite(vals.a)) delete vals.a;
+    if (taucMode==='shared') Object.assign(taucShared, vals);
+    else { const pp = taucPer[currIndex] || (taucPer[currIndex]={}); Object.assign(pp, vals); }
+  }
+  // Push the current sample's stored params into the input fields
+  function writeStoreToInputs(){
+    const p = getFileParams(currIndex);
+    document.getElementById('taucA').value  = p.a;
+    document.getElementById('taucN').value  = p.N;
+    document.getElementById('taucN2').value = p.N2;
+    document.getElementById('taucM').value  = p.M;
+    document.getElementById('taucM2').value = p.M2;
+    document.getElementById('taucNExp').textContent = p.a;
+  }
+  function syncTaucModeButtons(){
+    const c = document.getElementById('taucModeAll');
+    if (c) c.textContent = taucMode==='shared' ? 'all' : 'one';
+  }
+
   // per-upload invalid names (files that were skipped); persists until all files are removed
   let invalidUploadNames = [];
   let taucUploadAlerts = '';
   let taucWarnDismissed = false;
 
-  window.dismissTaucInvalid = function(){ invalidUploadNames=[]; rebuildTaucAlerts(); };
-  window.dismissTaucWarn    = function(){ taucWarnDismissed=true; rebuildTaucAlerts(); };
-  window.dismissTaucUpload  = function(){ taucUploadAlerts=''; rebuildTaucAlerts(); };
+  // Delegated click handling for dynamically generated alert dismiss buttons.
+  document.getElementById('tab-tauc').addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if (!btn || !document.getElementById('tab-tauc').contains(btn)) return;
+    switch (btn.dataset.action){
+      case 'tauc-dismiss-invalid': invalidUploadNames=[]; rebuildTaucAlerts(); break;
+      case 'tauc-dismiss-warn':    taucWarnDismissed=true; rebuildTaucAlerts(); break;
+      case 'tauc-dismiss-upload':  taucUploadAlerts=''; rebuildTaucAlerts(); break;
+    }
+  });
 
   function rebuildTaucAlerts(){
     const warnNames = taucWarnDismissed ? [] : files.filter(f=>f.warn).map(f=>f.name);
     document.getElementById('taucAlerts').innerHTML =
-      buildAlertsHtml(invalidUploadNames, warnNames, undefined, 'dismissTaucInvalid()', 'dismissTaucWarn()') + taucUploadAlerts;
+      buildAlertsHtml(invalidUploadNames, warnNames, undefined, 'tauc-dismiss-invalid', 'tauc-dismiss-warn') + taucUploadAlerts;
   }
 
   function fileCallbacks(){
     return {
       onRemove(i){
         files.splice(i,1);
+        taucPer.splice(i,1);            // keep per-sample params aligned with files
         if (!files.length) invalidUploadNames = [];
         rebuildTaucAlerts();
         afterFilesChange();
       },
-      onReorder(from, to){ const [x]=files.splice(from,1); files.splice(to,0,x); rebuildTaucAlerts(); afterFilesChange(); },
+      onReorder(from, to){ [files,taucPer].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); rebuildTaucAlerts(); afterFilesChange(); },
       onLabelChange(i, v){ files[i].label=v; updateTaucResults(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateTaucResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; vlines={}; rebuildTaucAlerts(); afterFilesChange(); },
+      onRemoveAll(){ files.length=0; taucPer=[]; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; sharedVlines={}; rebuildTaucAlerts(); afterFilesChange(); },
     };
   }
 
   /* ---- Undo/redo: snapshot the reversible state (file order/labels/colors,
      the draggable line positions and the analysis parameters). Raw spectra
      arrays are shared by reference; only metadata is cloned. ---- */
-  const TAUC_PARAM_IDS = ['taucA','taucN','taucN2','taucM','taucM2'];
+  const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
   function taucSnapshot(){
     return {
       files: files.map(f=>({...f})),
-      vlines: {...vlines},
-      params: TAUC_PARAM_IDS.reduce((o,id)=>{ o[id]=document.getElementById(id).value; return o; }, {}),
+      mode: taucMode,
+      shared: {...taucShared},
+      sharedVlines: {...sharedVlines},
+      per: taucPer.map(clonePer),
     };
   }
   function taucRestore(s){
     files = s.files.map(f=>({...f}));
-    vlines = {...s.vlines};
-    for (const id of TAUC_PARAM_IDS) document.getElementById(id).value = s.params[id];
-    document.getElementById('taucNExp').textContent = document.getElementById('taucA').value;
+    taucMode = (typeof s.mode==='string') ? s.mode : 'shared';   // older snapshots stored a per-field object
+    if (s.shared) Object.assign(taucShared, s.shared);
+    sharedVlines = s.sharedVlines ? {...s.sharedVlines} : (s.vlines ? {...s.vlines} : {});
+    taucPer = s.per ? s.per.map(clonePer) : files.map(()=>({}));
+    // Backward compatibility with pre-all/one snapshots (params stored by input id)
+    if (s.params){
+      taucShared.a  = parseFloat(s.params.taucA);
+      taucShared.N  = +s.params.taucN;  taucShared.N2 = +s.params.taucN2;
+      taucShared.M  = +s.params.taucM;  taucShared.M2 = +s.params.taucM2;
+    }
+    if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
+    syncTaucModeButtons();
     afterFilesChange();
   }
   const hist = registerHistory('tauc', taucSnapshot, taucRestore);
-  registerTabRedraw('tauc', ()=>{ if (files.length) setupAnalysis(); });
+  // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.
+  registerTabRedraw('tauc', ()=>{ if (plot && files.length) updateTaucView(true); });
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
+    const hadFiles = files.length > 0;   // auto-suggest only on the first upload
     const existing = new Set(files.map(f=>f.name));
     const newInvalid = [];
     const alreadyLoaded = [];
@@ -106,13 +252,15 @@ import { Plot } from './plot.js';
         const b = parseFloat(parts[1].replace(',','.'));
         if (isFinite(a) && isFinite(b)){ wl.push(a); fr.push(b); }
       }
-      if (wl.length) files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes});
+      if (wl.length){ files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes}); taucPer.push({}); }
     }
     invalidUploadNames = newInvalid;
     taucWarnDismissed = false;
-    taucUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'dismissTaucUpload()') : '';
+    taucUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'tauc-dismiss-upload') : '';
     rebuildTaucAlerts();
     afterFilesChange();
+    // Once, when the first data lands: propose optimal interval-line positions.
+    if (!hadFiles && files.length){ autoSuggestAll(); writeStoreToInputs(); updateTaucView(); hist.commit(); }
   });
 
   function afterFilesChange(){
@@ -132,6 +280,10 @@ import { Plot } from './plot.js';
     files.forEach(f=>{ f.hv = f.wl.map(wl=>1240/wl); });
     if (currIndex >= files.length) currIndex = files.length-1;
     bestRegsAll = files.map(()=>null);
+    if (currIndex < 0) currIndex = 0;
+    if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
+    writeStoreToInputs();      // reflect the current sample's params in the inputs
+    syncTaucModeButtons();
     document.getElementById('taucWorkspace').style.display='block';
     document.getElementById('taucResults').style.display='block';
     document.getElementById('taucExportCard').style.display='block';
@@ -146,32 +298,27 @@ import { Plot } from './plot.js';
     plot = new Plot(document.getElementById('taucSvg'), {xlabel:'hν (eV)', ylabelSvg:'[F(R)·hν]<tspan baseline-shift="super" font-size="8">a</tspan>', xTickStep:0.5, noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const [hvMin, hvMax] = unionHv();
-    if (!isFinite(vlines.v1)){
-      vlines.v1 = hvMin + 0.6*(hvMax-hvMin);
-      vlines.v2 = hvMin + 0.8*(hvMax-hvMin);
-      vlines.v3 = hvMin + 0.2*(hvMax-hvMin);
-      vlines.v4 = hvMin + 0.4*(hvMax-hvMin);
+    if (!isFinite(sharedVlines.v1)){
+      sharedVlines.v1 = hvMin + 0.6*(hvMax-hvMin);
+      sharedVlines.v2 = hvMin + 0.8*(hvMax-hvMin);
+      sharedVlines.v3 = hvMin + 0.2*(hvMax-hvMin);
+      sharedVlines.v4 = hvMin + 0.4*(hvMax-hvMin);
     }
     updateTaucView();
   }
 
-  function curParams(){
-    return {
-      a: parseFloat(document.getElementById('taucA').value),
-      N: Math.max(1, Math.round(+document.getElementById('taucN').value||1)),
-      N2: Math.max(1, Math.round(+document.getElementById('taucN2').value||1)),
-      M: Math.max(2, Math.round(+document.getElementById('taucM').value||2)),
-      M2: Math.max(2, Math.round(+document.getElementById('taucM2').value||2)),
-    };
-  }
 
+  // Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
+  // minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
+  // by the y-range makes the criterion robust — it locks onto the steep linear edge
+  // instead of a flat low-value stretch that merely has a small absolute RMSE.
   function scanRegr(hv, frArr, a, N, M, x1, x2){
     const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], a));
     const Ys = movingAverage(Yraw, N);
     const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
     const idxSel = [];
     for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi) idxSel.push(i);
-    let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
+    let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,NRMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
     if (idxSel.length < M) return best;
     let bestScore = Infinity;
     for (let s=0; s<=idxSel.length-M; s++){
@@ -180,14 +327,17 @@ import { Plot } from './plot.js';
       if (yb.some(v=>!isFinite(v))) continue;
       const xb = block.map(i=>hv[i]);
       const r = fitLinear(xb, yb);
-      const score = r.rmse / r.R2;
+      const range = Math.max(...yb) - Math.min(...yb);
+      const nrmse = range>0 ? r.rmse/range : Infinity;
+      const score = nrmse / r.R2;
       if (score < bestScore){
         bestScore = score;
-        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB};
+        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB};
       }
     }
     return best;
   }
+
 
   function analyzeOneFile(hv, frArr, a,N,M,x1,x2,M2,x3,x4){
     const regs = scanRegr(hv, frArr, a, N, M, x1, x2);
@@ -215,15 +365,17 @@ import { Plot } from './plot.js';
     return {Eg,EgErr,EgInt,EgIntErr,regs,regs2};
   }
 
-  function processAll(p){
+  function processAll(){
     bestRegsAll = files.map((f,k)=>{
-      const r = analyzeOneFile(f.hv, f.FR, p.a, p.N, p.M, vlines.v1, vlines.v2, p.M2, vlines.v3, vlines.v4);
+      const fp = getFileParams(k), vl = vlinesFor(k);
+      const r = analyzeOneFile(f.hv, f.FR, fp.a, fp.N, fp.M, vl.v1, vl.v2, fp.M2, vl.v3, vl.v4);
       return {label:f.label, ...r};
     });
   }
 
   function updateTaucView(preserveView){
     if (!plot || !files.length) return;
+    vlines = vlinesFor(currIndex);   // point at the current sample's interval lines
     const p = curParams();
     const hv = files[currIndex].hv, frArr = files[currIndex].FR;
     document.getElementById('taucCurrentLabel').textContent = files[currIndex].label;
@@ -232,9 +384,10 @@ import { Plot } from './plot.js';
     const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], p.a));
     const Ys = movingAverage(Yraw, p.N);
     let dY = gradientArr(Ys, hv);
-    let dYs = movingAverage(dY, p.N2);
-    const dmin = minArr(dYs), dmax = maxArr(dYs), ymax = maxArr(Ys);
-    dYs = dYs.map(v=> (dmax-dmin)>0 ? (v-dmin)/(dmax-dmin)*ymax : v);
+    const dYsRaw = movingAverage(dY, p.N2);
+    const dmin = minArr(dYsRaw), dmax = maxArr(dYsRaw), ymax = maxArr(Ys);
+    const normD = v => (dmax-dmin)>0 ? (v-dmin)/(dmax-dmin)*ymax : v;
+    const dYs = dYsRaw.map(normD);
 
     // Capture current zoom so it can be kept across redraws (the full range
     // set below stays as the "home" reset target)
@@ -257,8 +410,8 @@ import { Plot } from './plot.js';
 
     if (sel1>=p.M){
       const regs = scanRegr(hv, frArr, p.a, p.N, p.M, vlines.v1, vlines.v2);
-      document.getElementById('taucRMSE1').textContent = isFinite(regs.RMSE)? regs.RMSE.toExponential(3): '-';
-      document.getElementById('taucR21').textContent = isFinite(regs.R2)? regs.R2.toFixed(3): '-';
+      document.getElementById('taucRMSE1').textContent = isFinite(regs.NRMSE)? regs.NRMSE.toFixed(4): '-';
+      document.getElementById('taucR21').textContent = isFinite(regs.R2)? regs.R2.toFixed(4): '-';
       if (regs.bestIdx.length){
         const xb = regs.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs.slope*x+regs.intercept);
@@ -272,8 +425,8 @@ import { Plot } from './plot.js';
     }
     if (sel2>=p.M2){
       const regs2 = scanRegr(hv, frArr, p.a, p.N, p.M2, vlines.v3, vlines.v4);
-      document.getElementById('taucRMSE2').textContent = isFinite(regs2.RMSE)? regs2.RMSE.toExponential(3): '-';
-      document.getElementById('taucR22').textContent = isFinite(regs2.R2)? regs2.R2.toFixed(3): '-';
+      document.getElementById('taucRMSE2').textContent = isFinite(regs2.NRMSE)? regs2.NRMSE.toFixed(4): '-';
+      document.getElementById('taucR22').textContent = isFinite(regs2.R2)? regs2.R2.toFixed(4): '-';
       if (regs2.bestIdx.length){
         const xb = regs2.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs2.slope*x+regs2.intercept);
@@ -290,20 +443,22 @@ import { Plot } from './plot.js';
     document.getElementById('taucEg').textContent = isFinite(res.Eg) ? (isFinite(res.EgErr) ? `${res.Eg.toFixed(3)} ± ${res.EgErr.toFixed(3)} eV` : `${res.Eg.toFixed(3)} eV`) : '-';
     document.getElementById('taucEgInt').textContent = isFinite(res.EgInt) ? (isFinite(res.EgIntErr) ? `${res.EgInt.toFixed(3)} ± ${res.EgIntErr.toFixed(3)} eV` : `${res.EgInt.toFixed(3)} eV`) : '-';
 
-    plot.vline(vlines.v1, '#ff5050', true, v=>{vlines.v1=v; throttledUpdate();}, v=>{vlines.v1=v; updateTaucView(true); hist.commit();});
-    plot.vline(vlines.v2, '#ff5050', true, v=>{vlines.v2=v; throttledUpdate();}, v=>{vlines.v2=v; updateTaucView(true); hist.commit();});
-    plot.vline(vlines.v3, '#d050ff', true, v=>{vlines.v3=v; throttledUpdate();}, v=>{vlines.v3=v; updateTaucView(true); hist.commit();});
-    plot.vline(vlines.v4, '#d050ff', true, v=>{vlines.v4=v; throttledUpdate();}, v=>{vlines.v4=v; updateTaucView(true); hist.commit();});
+    // While dragging a line: live-update only the interactive plot (below); the
+    // summary plots refresh once, on release. onDrag sets _dragging, onRelease clears it.
+    const onDrag = k => v=>{ vlines[k]=v; _dragging=true; throttledUpdate(); };
+    const onRelease = k => v=>{ vlines[k]=v; _dragging=false; updateTaucView(true); hist.commit(); };
+    plot.vline(vlines.v1, '#ff5050', true, onDrag('v1'), onRelease('v1'));
+    plot.vline(vlines.v2, '#ff5050', true, onDrag('v2'), onRelease('v2'));
+    plot.vline(vlines.v3, '#d050ff', true, onDrag('v3'), onRelease('v3'));
+    plot.vline(vlines.v4, '#d050ff', true, onDrag('v4'), onRelease('v4'));
 
-    updateTaucResults();
+    if (!_dragging) updateTaucResults();   // skip the heavy summaries mid-drag
   }
 
   function updateTaucResults(){
     if (!files.length) return;
-    const p = curParams();
-    processAll(p);
-    renderResView(p);
-    renderEgTable();
+    processAll();
+    renderResView();
   }
 
   let throttle=null;
@@ -312,47 +467,71 @@ import { Plot } from './plot.js';
     throttle = requestAnimationFrame(()=>{ throttle=null; updateTaucView(true); });
   }
 
-  // Live param updates — keep the current zoom (except when changing the
-  // exponent, which rescales the y-axis, so a full reset is clearer there)
+  // Param updates apply on confirm (blur / Enter), not while typing. taucA is a
+  // <select>, so its change already is a deliberate choice; the numeric fields are
+  // guarded (invalid input shakes + reverts) by guardNumberInputs, and their change
+  // fires only once a valid value is committed. Changing the exponent rescales the
+  // y-axis, so it does a full reset; the smoothing/window fields keep the zoom.
   ['taucA','taucN','taucN2','taucM','taucM2'].forEach(id=>{
     const el = document.getElementById(id);
-    el.addEventListener('input', ()=>{
+    el.addEventListener('change', ()=>{
+      readInputsToStore();  // route the edit to shared or this sample's slot
       if (id==='taucA') document.getElementById('taucNExp').textContent = el.value;
-      if(plot) updateTaucView(id!=='taucA');
+      if (plot) updateTaucView(id!=='taucA');
+      if (files.length) hist.commit();
     });
-    // Commit one undo step per completed edit (on change/blur, not each keystroke)
-    el.addEventListener('change', ()=>{ if (files.length) hist.commit(); });
   });
 
-  document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; updateTaucView(); };
-  document.getElementById('taucNext').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex+1)%files.length; updateTaucView(); };
-  window._taucRedraw = ()=>{ if (plot && files.length) updateTaucView(true); };
+  // Single all/one toggle: 'all' = one common param set + shared interval lines;
+  // 'one' = every sample fully independent (params AND interval-line positions).
+  document.getElementById('taucModeAll').addEventListener('click', ()=>{
+    {
+      const mode = taucMode==='shared' ? 'per' : 'shared';
+      taucMode = mode;
+      if (mode==='per'){
+        // Each sample becomes independent: params inherit the current shared values,
+        // interval lines are re-proposed per sample.
+        files.forEach((f,i)=>{
+          const pp = taucPer[i] || (taucPer[i]={});
+          ['a','N','N2','M','M2'].forEach(k=>{ if (pp[k]==null) pp[k]=taucShared[k]; });
+          const s = suggestOne(i);
+          pp.vlines = s ? {v1:s.v1,v2:s.v2,v3:s.v3,v4:s.v4} : (pp.vlines || defaultVlinesFor(i));
+        });
+      } else {
+        // Back to a single shared set: re-propose the common lines.
+        const s = suggestShared();
+        if (s) sharedVlines = s;
+      }
+      syncTaucModeButtons();
+      writeStoreToInputs();
+      if (files.length){ if (plot) updateTaucView(); hist.commit(); }
+    }
+  });
 
-  function renderEgTable(){
-    const wrap = document.getElementById('taucEgTableWrap');
-    let html = '<table><colgroup><col style="width:44%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th rowspan="2">Sample</th><th colspan="2" style="text-align:center">E<sub>g</sub> (eV)</th></tr><tr><th style="text-align:center">x-axis</th><th style="text-align:center">baseline</th></tr></thead><tbody>';
-    bestRegsAll.forEach(r=>{
-      const egNeg = isFinite(r.Eg) && r.Eg < 0;
-      const egiNeg = isFinite(r.EgInt) && r.EgInt < 0;
-      const eg = isFinite(r.Eg)
-        ? (egNeg
-            ? `<span style="color:var(--warn)">⚠ ${r.Eg.toFixed(3)}</span>`
-            : (isFinite(r.EgErr) ? `${r.Eg.toFixed(3)} ± ${r.EgErr.toFixed(3)}` : r.Eg.toFixed(3)))
-        : '—';
-      const egi = isFinite(r.EgInt)
-        ? (egiNeg
-            ? `<span style="color:var(--warn)">⚠ ${r.EgInt.toFixed(3)}</span>`
-            : (isFinite(r.EgIntErr) ? `${r.EgInt.toFixed(3)} ± ${r.EgIntErr.toFixed(3)}` : r.EgInt.toFixed(3)))
-        : '—';
-      html += `<tr><td>${r.label}</td><td>${eg}</td><td>${egi}</td></tr>`;
-    });
-    html += '</tbody></table>';
-    wrap.innerHTML = html;
-  }
+  document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; writeStoreToInputs(); updateTaucView(); };
+  document.getElementById('taucNext').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex+1)%files.length; writeStoreToInputs(); updateTaucView(); };
 
-  function renderResView(p){
-    // Plot 0: F(R) vs λ
-    const plot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a.u.)', xTickStep:50, noYTickLabels:true});
+  // Re-propose interval-line positions on demand: current sample in one-mode,
+  // the shared set in all-mode.
+  document.getElementById('taucSuggest').onclick = ()=>{
+    if (!files.length) return;
+    if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
+    else { const s=suggestShared(); if (s) sharedVlines=s; }
+    updateTaucView(); hist.commit();
+  };
+
+  function renderResView(){
+    // Effective exponent per file; when uniform, show it on the shared Tauc axis,
+    // otherwise fall back to a generic "a" (samples may use different exponents).
+    const aVals = files.map((f,k)=>getFileParams(k).a);
+    const aUniform = aVals.every(v=>v===aVals[0]);
+    const aLabel = aUniform ? aVals[0] : 'a';
+    // Plot 0: F(R) vs λ — reuse one Plot instance (create + attach tools once).
+    if (!resPlot0){
+      resPlot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a.u.)', xTickStep:50, noYTickLabels:true});
+      resPlot0.attachTools(resPlot0.svg.closest('.plot-wrap'));
+    }
+    const plot0 = resPlot0; plot0.clearData();
     const leg0 = document.getElementById('taucResLegend0'); leg0.innerHTML='';
     let ymax0=-Infinity;
     files.forEach((f,k)=>{ ymax0=Math.max(ymax0,maxArr(f.FR)); });
@@ -363,14 +542,19 @@ import { Plot } from './plot.js';
       plot0.line(f.wl, f.FR, f.color, 1.3);
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg0.appendChild(s);
     });
-    plot0.attachTools(plot0.svg.closest('.plot-wrap'));
 
-    // Plot 1: Tauc + regressions
-    const plot1 = new Plot(document.getElementById('taucResSvg1'), {xlabel:'Energy (eV)', ylabelSvg:`[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a.u.)`, xTickStep:0.5, noYTickLabels:true});
+    // Plot 1: Tauc + regressions — reused instance; its y-label depends on the exponent.
+    if (!resPlot1){
+      resPlot1 = new Plot(document.getElementById('taucResSvg1'), {xlabel:'Energy (eV)', xTickStep:0.5, noYTickLabels:true});
+      resPlot1.attachTools(resPlot1.svg.closest('.plot-wrap'));
+    }
+    const plot1 = resPlot1; plot1.clearData();
+    plot1.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a.u.)`;
     const leg1 = document.getElementById('taucResLegend1'); leg1.innerHTML='';
     const Ys_all = files.map((f,k)=>{
-      const Yraw = f.FR.map((v,i)=>Math.pow(v*f.hv[i], p.a));
-      return movingAverage(Yraw, p.N);
+      const fp = getFileParams(k);
+      const Yraw = f.FR.map((v,i)=>Math.pow(v*f.hv[i], fp.a));
+      return movingAverage(Yraw, fp.N);
     });
     const ymax1 = Math.max(...Ys_all.map(maxArr));
     const [hv0, hv1] = unionHv();
@@ -389,13 +573,12 @@ import { Plot } from './plot.js';
       }
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
     });
-    plot1.attachTools(plot1.svg.closest('.plot-wrap'));
 
-    // Plot 2: Eg bar chart
-    const aVal = document.getElementById('taucA').value;
-    const egLabel = aVal === '2' ? 'Direct' : 'Indirect';
+    // Plot 2: Eg bar chart. With mixed exponents (per-sample mode) there is no single
+    // Direct/Indirect qualifier, so drop it from the title and axis label.
+    const egLabel = aUniform ? (aVals[0]===2 ? 'Direct' : 'Indirect') : '';
     const barTitleEl = document.getElementById('taucBarTitle');
-    if (barTitleEl) barTitleEl.textContent = egLabel + ' Energy Band Gap';
+    if (barTitleEl) barTitleEl.textContent = (egLabel ? egLabel+' ' : '') + 'Energy Band Gap';
     const leg2 = document.getElementById('taucResLegend2'); leg2.innerHTML='';
     const barAlertDiv = document.getElementById('taucBarAlert'); barAlertDiv.innerHTML='';
     const egs = bestRegsAll.map(r=>r.Eg), egErrs = bestRegsAll.map(r=>r.EgErr);
@@ -410,48 +593,68 @@ import { Plot } from './plot.js';
     const posVals = egs.concat(egInts).filter(v=>isFinite(v)&&v>0);
     const noChart = !posVals.length;
     if (negWarns.length) barAlertDiv.innerHTML = negWarns.map((w,i)=>`<div class="alert warn"${noChart&&!i?' style="margin-top:0"':''}>${w}</div>`).join('');
-    const barSvg = document.getElementById('taucResSvg2');
-    const barWrap = barSvg.closest('.plot-wrap');
+    const barSvg  = document.getElementById('taucResSvg2');   // Eg (x-axis)
+    const barSvg3 = document.getElementById('taucResSvg3');   // Eg (baseline)
+    const barWrap  = barSvg.closest('.plot-wrap');
+    const barWrap3 = barSvg3.closest('.plot-wrap');
     if (noChart){
       barSvg.style.display='none'; barWrap.style.display='none';
+      barSvg3.style.display='none'; barWrap3.style.display='none';
+      leg2.innerHTML='';
     } else {
-      barSvg.style.display=''; barWrap.style.display='';
-      const plot2 = new Plot(barSvg, {xlabel:'', ylabelSvg:`${egLabel} Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, noXTickLabels:true});
-      const ymax2 = Math.max(...posVals)*1.3;
-      plot2.setRange(0, n+1, 0, ymax2||1);
-      plot2.drawAxes();
+      barSvg.style.display='';  barWrap.style.display='';
+      barSvg3.style.display=''; barWrap3.style.display='';
+      const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
+      const topOf = (v,e)=> v + (isFinite(e)?e:0);
+      // The two twin plots share one y-scale so their bars are directly comparable.
+      let maxValW = 0, maxTop = 0;
+      const mctxShared = document.createElement('canvas').getContext('2d');
+      mctxShared.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
       for (let k=0;k<n;k++){
-        const xc = k+1;
-        if (isFinite(egs[k])&&egs[k]>0){
-          const x0=xc-0.18, x1=xc-0.02;
-          drawBar(plot2,x0,x1,egs[k],'#3aa0ff');
-          if (isFinite(egErrs[k])) drawErrBar(plot2,(x0+x1)/2,egs[k],egErrs[k]);
-        }
-        if (isFinite(egInts[k])&&egInts[k]>0){
-          const x0=xc+0.02, x1=xc+0.18;
-          drawBar(plot2,x0,x1,egInts[k],'#ff7a59');
-          if (isFinite(egIntErrs[k])) drawErrBar(plot2,(x0+x1)/2,egInts[k],egIntErrs[k]);
-        }
-        plot2.tickLabel(xc, files[k].label);
+        if (isFinite(egs[k])&&egs[k]>0){ maxValW = Math.max(maxValW, mctxShared.measureText(fmtLab(egs[k],egErrs[k])).width); maxTop = Math.max(maxTop, topOf(egs[k],egErrs[k])); }
+        if (isFinite(egInts[k])&&egInts[k]>0){ maxValW = Math.max(maxValW, mctxShared.measureText(fmtLab(egInts[k],egIntErrs[k])).width); maxTop = Math.max(maxTop, topOf(egInts[k],egIntErrs[k])); }
       }
-      plot2.attachTools(barSvg.closest('.plot-wrap'));
+      const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
+      // Draws one series (a single centred bar per sample) into `svg`.
+      const drawEgBars = (svg, vals, errs, color)=>{
+        const mctx = document.createElement('canvas').getContext('2d');
+        mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+        const brect = svg.getBoundingClientRect();
+        const svgW = brect.width || 640, svgH = brect.height || 640;
+        const barSpacing = Math.max(30, (svgW-75)/(n+1));
+        const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, barSpacing, svgH));
+        let maxLbl = 0; barLabels.forEach(l=>{ maxLbl = Math.max(maxLbl, mctx.measureText(l).width); });
+        const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+        const mTop = 15, gap = 6;
+        const plotH = svgH - mTop - bottom;
+        const reserve = gap + maxValW + 6;               // px needed above the tallest bar
+        const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
+        const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
+        const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+        plot.setRange(0, n+1, 0, ymax||1);
+        plot.drawAxes();
+        // Bars are capped at 16px half-width but shrink to fit the per-sample
+        // spacing so many samples don't overlap. Computed once here (fixed px →
+        // stays constant on zoom).
+        const hw = Math.min(16, (plot.px(1)-plot.px(0))*0.3);
+        for (let k=0;k<n;k++){
+          const xc = k+1;
+          if (isFinite(vals[k])&&vals[k]>0){
+            drawBar(plot,xc,vals[k],color,hw,0);
+            if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
+            plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
+          }
+          plot.tickLabel(xc, barLabels[k], 30);
+        }
+        plot.attachTools(svg.closest('.plot-wrap'));
+      };
+      drawEgBars(barSvg,  egs,    egErrs,    '#3aa0ff');
+      drawEgBars(barSvg3, egInts, egIntErrs, '#ff7a59');
       leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
     }
-    // Align the table panel with the first visible content in the left col
-    const _leftCol = barSvg.closest('.col');
-    const _rightCol = _leftCol && _leftCol.nextElementSibling;
-    if (_rightCol) requestAnimationFrame(()=>{
-      const rowTop = _leftCol.parentElement.getBoundingClientRect().top;
-      let targetTop = rowTop;
-      for (const child of _leftCol.children){
-        const r = child.getBoundingClientRect();
-        if (r.height > 0){ targetTop = r.top; break; }
-      }
-      _rightCol.style.marginTop = Math.max(0, Math.round(targetTop - rowTop)) + 'px';
-    });
   }
-  function drawBar(plot, x0, x1, val, color){ plot.bar(x0, x1, 0, val, color); }
-  function drawErrBar(plot, xc, val, err){ plot.errbar(xc, val, err); }
+  function drawBar(plot, xc, val, color, hw, dx){ plot.barPx(xc, 0, val, color, hw, dx); }
+  function drawErrBar(plot, xc, val, err, dx){ plot.errbar(xc, val, err, dx); }
 
   // Assemble a "wide" CSV: each column is {h:header, v:[values]}, padded to the
   // longest so every sample keeps its own independent columns (no shared axis).
@@ -462,8 +665,7 @@ import { Plot } from './plot.js';
     return t;
   }
   function exportTaucZip(){
-    if (!files.length) return;
-    const p = curParams();
+    if (!files.length) return [];
     const entries = [];
     // reflectance_FR.csv — (wavelength, F(R)) per sample
     {
@@ -481,7 +683,7 @@ import { Plot } from './plot.js';
       files.forEach((f,k)=>{
         const r = bestRegsAll[k];
         cols.push({h:'energy_eV_'+f.label,       v:f.hv.map(x=>fmtNum(x,6))});
-        cols.push({h:f.label,                    v:f.hv.map((hv,i)=>fmtNum(Math.pow(f.FR[i]*hv, p.a),6))});
+        cols.push({h:f.label,                    v:f.hv.map((hv,i)=>fmtNum(Math.pow(f.FR[i]*hv, getFileParams(k).a),6))});
         cols.push({h:f.label+'_reg_linear',      v:f.hv.map(hv=> (r&&r.regs)  ? fmtNum(r.regs.slope*hv  + r.regs.intercept, 6)  : '')});
         cols.push({h:f.label+'_reg_baseline',    v:f.hv.map(hv=> (r&&r.regs2) ? fmtNum(r.regs2.slope*hv + r.regs2.intercept, 6) : '')});
       });
@@ -497,7 +699,31 @@ import { Plot } from './plot.js';
       });
       entries.push({name:'Eg.csv', text:t});
     }
-    downloadZip('tauc_export.zip', entries);
+    // tauc_regression.csv — per-sample regression settings & results (the info that
+    // is otherwise only readable off the Analysis plot). Endpoints are in eV, taken
+    // from the best-fit window; R²/NRMSE are the fit-quality metrics for each line.
+    {
+      let t = csvLine(['Sample','Tauc Exponent','Smoothing points',
+        'Tauc regression points','Tauc start (eV)','Tauc end (eV)','Tauc R^2','Tauc NRMSE',
+        'Baseline regression points','Baseline start (eV)','Baseline end (eV)','Baseline R^2','Baseline NRMSE']);
+      files.forEach((f,k)=>{
+        const fp = getFileParams(k), r = bestRegsAll[k] || {};
+        const span = (reg) => {
+          const idx = reg && reg.bestIdx;
+          if (!idx || !idx.length) return ['',''];
+          let lo=Infinity, hi=-Infinity;
+          idx.forEach(i=>{ const e=f.hv[i]; if(e<lo)lo=e; if(e>hi)hi=e; });
+          return [fmtNum(lo,6), fmtNum(hi,6)];
+        };
+        const [ts,te] = span(r.regs), [bs,be] = span(r.regs2);
+        t += csvLine([f.label, fp.a, fp.N, fp.M, ts, te,
+          r.regs&&isFinite(r.regs.R2)?fmtNum(r.regs.R2,6):'', r.regs&&isFinite(r.regs.NRMSE)?fmtNum(r.regs.NRMSE,6):'',
+          fp.M2, bs, be,
+          r.regs2&&isFinite(r.regs2.R2)?fmtNum(r.regs2.R2,6):'', r.regs2&&isFinite(r.regs2.NRMSE)?fmtNum(r.regs2.NRMSE,6):'']);
+      });
+      entries.push({name:'analysis_info.csv', text:t});
+    }
+    return entries;
   }
   registerCsvExport('tauc', exportTaucZip);
 })();

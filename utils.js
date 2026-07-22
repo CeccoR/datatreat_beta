@@ -261,7 +261,15 @@ const palettePickerUI = new PalettePickerUI();
 /* =========================================================
    SETTINGS
 ========================================================= */
+const SETTINGS_KEY = 'datatreat-settings';
 const settings = { decimal: '.', field: ';', plotFmt: 'png' };
+// Settings (image format + CSV decimal/field) persist across sessions, like the theme.
+try {
+  const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+  if (saved && typeof saved === 'object') Object.assign(settings, saved);
+} catch(e){}
+if (settings.decimal === ',' && settings.field === ',') settings.field = ';'; // guard invalid combo
+function saveSettings(){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){} }
 
 function fmtNum(v, decimals){
   if (!isFinite(v)) return '';
@@ -273,6 +281,11 @@ function csvLine(vals){ return csvJoin(vals) + '\n'; }
 (function initSettings(){
   const decSel = document.getElementById('settingDecimal');
   const fldSel = document.getElementById('settingField');
+  const fmtSel = document.getElementById('settingPlotFmt');
+  // Reflect the (possibly restored) settings in the controls.
+  decSel.value = settings.decimal;
+  fldSel.value = settings.field;
+  fmtSel.value = settings.plotFmt;
 
   function validate(){
     const d = decSel.value, f = fldSel.value;
@@ -283,12 +296,12 @@ function csvLine(vals){ return csvJoin(vals) + '\n'; }
     }
     settings.decimal = decSel.value;
     settings.field   = fldSel.value;
+    saveSettings();
   }
 
   decSel.addEventListener('change', validate);
   fldSel.addEventListener('change', validate);
-  const fmtSel = document.getElementById('settingPlotFmt');
-  fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; });
+  fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; saveSettings(); });
 })();
 
 function downloadBlob(filename, text){
@@ -393,7 +406,7 @@ function downloadBytes(filename, bytes){
 
 function makeDownloadLink(container, filename, text, label){
   const b = document.createElement('button');
-  b.className = 'btn secondary small';
+  b.className = 'btn btn-sm';
   b.style.marginRight = '8px'; b.style.marginBottom='6px';
   b.textContent = label || ('Download ' + filename);
   b.onclick = ()=>downloadBlob(filename, text);
@@ -497,7 +510,7 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
-  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
+  html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
@@ -506,14 +519,21 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
-    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del" data-i="${i}" title="Remove">${xIcon}</button></td>`;
+    html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
   wrap.innerHTML = html;
 
-  wrap.querySelector('.remove-all').addEventListener('click', ()=>{
-    if (callbacks.onRemoveAll) callbacks.onRemoveAll();
+  const REMOVE_ALL_MSG = 'Remove all files? Unsaved changes will be permanently lost.';
+  const rmAllBtn = wrap.querySelector('.remove-all');
+  // Exposed so other flows (e.g. the project-bar trash) can clear the module without
+  // re-showing the confirmation banner — they confirm once on their own.
+  rmAllBtn._clearNow = ()=>{ if (callbacks.onRemoveAll) callbacks.onRemoveAll(); };
+  rmAllBtn.addEventListener('click', async ()=>{
+    // Remove-all also drops the module's autosaved draft, so always confirm first.
+    if (!await confirmBanner(REMOVE_ALL_MSG)) return;
+    rmAllBtn._clearNow();
   });
   const palBtn = wrap.querySelector('.palette-pick-btn');
   if (palBtn) palBtn.addEventListener('click', e=>{
@@ -538,7 +558,13 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     });
   });
   wrap.querySelectorAll('.row-del').forEach(btn=>{
-    btn.addEventListener('click', e=>{ if (callbacks.onRemove) callbacks.onRemove(+e.currentTarget.dataset.i); });
+    btn.addEventListener('click', async e=>{
+      const i = +e.currentTarget.dataset.i;
+      // Removing the last remaining file clears the module + its draft, same as
+      // remove-all, so guard it with the same confirmation banner.
+      if (files.length === 1 && !await confirmBanner(REMOVE_ALL_MSG)) return;
+      if (callbacks.onRemove) callbacks.onRemove(i);
+    });
   });
   // Per-file download of the original uploaded content, byte-for-byte. A file
   // keeps its original bytes in `rawBytes`, or a `rawFiles` list (e.g. EPR's
@@ -761,21 +787,30 @@ const _tabRedraw = {}, _needsRedraw = {};
 // A module registers how to redraw its current view; goTab calls it the first
 // time the tab becomes visible after a session restore flagged it.
 function registerTabRedraw(mod, fn){ _tabRedraw[mod] = fn; }
+// Redraw only the visible tab's plots (on window resize). Hidden tabs render at
+// size 0, so redrawing them would be wasted work / could corrupt their view; they
+// are redrawn when shown (see goTab). Flag the others so they refresh on show.
+function redrawAll(){
+  const fn = _tabRedraw[_activeTab];
+  if (fn){ try{ fn(); }catch(e){} }
+  for (const m in _tabRedraw){ if (m !== _activeTab) _needsRedraw[m] = true; }
+}
 const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · DRS UV-Vis', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
   _activeTab = tab;
   document.querySelectorAll('#nav button').forEach(b=>{
     const on = b.dataset.tab===tab;
-    b.classList.toggle('active', on);
+    b.classList.toggle('is-on', on);
     if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
-  // A module whose plots were drawn while its tab was hidden (e.g. a session
-  // opened into a background tab) sized them to 0; redraw once now it's visible.
-  if (_needsRedraw[tab] && _tabRedraw[tab]){
+  // Plots drawn while their tab was hidden (background session restore, or any
+  // resize/edit while another tab was showing) are sized to 0 or stale; redraw
+  // whenever a module tab becomes visible so its charts always fit the viewport.
+  if (_tabRedraw[tab]){
     _needsRedraw[tab] = false;
     requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} });
   }
@@ -798,7 +833,9 @@ class UndoStack {
     this.states = []; this.index = -1; this._busy = false;
   }
   // Record the CURRENT state (called after a reversible change, and once as baseline).
-  commit(){
+  // `silent` records the state without firing change listeners — used for the
+  // baseline commit after a programmatic restore (not a user edit).
+  commit(silent){
     if (this._busy) return;
     const snap = this._snap();
     const cur = this.index >= 0 ? this.states[this.index] : null;
@@ -809,13 +846,17 @@ class UndoStack {
     this.states.push(snap);
     if (this.states.length > this._limit) this.states.shift();
     this.index = this.states.length - 1;
+    if (silent) return;
     // Fire (and clear) any one-shot change listeners for a real, recorded change.
     if (this._onceListeners && this._onceListeners.length){
       const cbs = this._onceListeners; this._onceListeners = [];
       cbs.forEach(cb=>{ try { cb(); } catch(e){} });
     }
+    // Persistent change listeners (e.g. autosave).
+    if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
   }
   onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
+  onCommit(cb){ (this._listeners || (this._listeners = [])).push(cb); }
   _apply(i){ this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; } }
   performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
@@ -841,6 +882,27 @@ document.addEventListener('keydown', e=>{
   const did = isUndo ? st.performUndo() : st.performRedo();
   if (did) e.preventDefault();
 });
+// ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
+const SAMPLE_NAV = { tauc:['taucPrev','taucNext'], xrd:['xrdPrev','xrdNext'] };
+document.addEventListener('keydown', e=>{
+  if (e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = document.activeElement, tag = el && el.tagName;
+  if (tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT' || (el && el.isContentEditable)) return;
+  const nav = SAMPLE_NAV[_activeTab];
+  if (!nav) return;
+  const btn = document.getElementById(e.key==='ArrowLeft' ? nav[0] : nav[1]);
+  if (btn && btn.offsetParent!==null){ btn.click(); e.preventDefault(); }
+});
+// Sticky "back to top" button — visible only once the page is scrolled down.
+(function initScrollTop(){
+  const btn = document.getElementById('scrollTopBtn');
+  if (!btn) return;
+  const onScroll = ()=> btn.classList.toggle('visible', window.scrollY > 280);
+  window.addEventListener('scroll', onScroll, { passive:true });
+  btn.addEventListener('click', ()=> window.scrollTo({ top:0, behavior:'smooth' }));
+  onScroll();
+})();
 // Give every module tab a permanent (invisible) round SVG dot so its slot is
 // always reserved — the tab width never changes when the badge appears.
 (function initTabDots(){
@@ -863,6 +925,9 @@ function setTabLoaded(tab, has){
   // The project-bar action buttons only appear once data is loaded
   document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"]')
     .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
+  // The delete button carries no data-module of its own; reveal it with the rest.
+  const del = document.querySelector('.project-bar[data-module="'+tab+'"] .proj-del');
+  if (del) del.style.visibility = has ? 'visible' : 'hidden';
   if (has) normalizeProjIcons(tab);
 }
 
@@ -899,14 +964,55 @@ function normalizeProjIcons(mod){
     // Exception: the JSON icon is the CSV icon with different text — render it at
     // the exact same scale so the arrow and font match CSV, not the equal-box rule.
     if (csvScale) fitIcon(q('proj-json'), csvScale);
+    const del = document.querySelector('.project-bar[data-module="'+mod+'"] .proj-del .proj-svg');
+    if (del) fitIcon(del);
   });
 }
 
-/* CSV export registry — each module registers how to build its .zip of CSVs so
-   the project buttons can trigger it. */
+/* CSV export registry — each module registers a builder returning its list of
+   {name,text} CSV entries. The group button zips them all; per-plot/table buttons
+   pick a subset by name. */
 const _csvExport = {};
-function registerCsvExport(mod, fn){ _csvExport[mod] = fn; }
-function runCsvExport(mod){ if (_csvExport[mod]) _csvExport[mod](); }
+function registerCsvExport(mod, buildFn){ _csvExport[mod] = buildFn; }
+function runCsvExport(mod){
+  const b = _csvExport[mod]; if (!b) return;
+  const e = b(); if (e && e.length) downloadZip(mod+'_export.zip', e);
+}
+// Download a subset of a module's CSVs by file name: a single file downloads as a
+// .csv, several bundle into a .zip.
+function downloadCsvFiles(mod, names){
+  const b = _csvExport[mod]; if (!b) return;
+  const all = b() || [];
+  const sel = all.filter(e=>names.includes(e.name));
+  if (!sel.length) return;
+  if (sel.length === 1) downloadBlob(sel[0].name, sel[0].text);
+  else downloadZip(mod+'_export.zip', sel);
+}
+// The project CSV icon, reused on every per-view download button.
+const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
+// Build a toolbar CSV button (same look/size as the other plot tool buttons, icon
+// normalised to the minimum-circumscribed-square rule). Downloads `names` for `mod`.
+function makeCsvButton(mod, names, title){
+  const btn = document.createElement('button');
+  btn.className = 'btn plot-tool-btn plot-csv-btn';
+  btn.title = title || 'Download CSV';
+  btn.dataset.csvMod = mod;
+  btn.dataset.csvNames = names;
+  btn.innerHTML = CSV_BTN_ICON;
+  requestAnimationFrame(()=>fitIcon(btn.querySelector('svg')));
+  return btn;
+}
+// Normalise any CSV icons that are now visible (idempotent; hidden ones retry later).
+function fitCsvIcons(root){
+  (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIcon(s));
+}
+// One delegated handler drives every per-view CSV button.
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-csv-mod]');
+  if (!btn) return;
+  const names = (btn.dataset.csvNames||'').split(',').map(s=>s.trim()).filter(Boolean);
+  downloadCsvFiles(btn.dataset.csvMod, names);
+});
 // Does a module currently hold loaded data? (drives the replace-on-open confirm)
 function moduleHasData(mod){
   const btn = document.querySelector('#nav button[data-tab="'+mod+'"]');
@@ -922,7 +1028,15 @@ const THEME_KEY = 'datatreat-theme';
 function currentTheme(){ return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
 function applyTheme(theme, persist){
   theme = theme === 'light' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', theme);
+  const root = document.documentElement;
+  // Smoothly cross-fade colours on a user-initiated switch (not the initial sync);
+  // a temporary class scopes the transition to the toggle so hovers stay snappy.
+  if (persist && root.getAttribute('data-theme') !== theme){
+    root.classList.add('theme-anim');
+    clearTimeout(applyTheme._t);
+    applyTheme._t = setTimeout(()=>root.classList.remove('theme-anim'), 320);
+  }
+  root.setAttribute('data-theme', theme);
   if (persist){ try { localStorage.setItem(THEME_KEY, theme); } catch(e){} }
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
@@ -946,7 +1060,7 @@ function applyTheme(theme, persist){
 /* Module state access for the session manager: reuse each module's registered
    undo snapshot()/restore() as the canonical serialize/deserialize. */
 const MODULES = ['tauc','xrd','gc','epr'];
-const MODULE_LABELS = { tauc:'DRS UV-Vis', xrd:'XRPD', gc:'GC', epr:'EPR' };
+const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR' };
 function getModuleState(mod){
   const st = _histories[mod];
   return st ? st._snap() : null;
@@ -957,7 +1071,7 @@ function restoreModuleState(mod, state){
   st._busy = true;
   try { st._restore(state); } finally { st._busy = false; }
   st.reset();
-  st.commit(); // fresh baseline so undo/redo start clean from the loaded session
+  st.commit(true); // fresh baseline (silent: a restore is not a user edit → no autosave)
   // Plots just drawn may be sized wrong if the tab is hidden; redraw on show.
   if (_activeTab === mod){ if (_tabRedraw[mod]) requestAnimationFrame(()=>{ try { _tabRedraw[mod](); } catch(e){} }); }
   else { _needsRedraw[mod] = true; }
@@ -966,6 +1080,23 @@ function restoreModuleState(mod, state){
 function onModuleChangeOnce(mod, cb){
   const st = _histories[mod];
   if (st) st.onceCommit(cb);
+}
+// Persistent: fire cb on every real change commit of a module (used for autosave).
+function onModuleChange(mod, cb){
+  const st = _histories[mod];
+  if (st) st.onCommit(cb);
+}
+// Temporarily load `state` into a module, run fn (e.g. build its CSV export from
+// the loaded globals), then restore the previous state — all with history frozen
+// so it doesn't commit, reset undo, or fire change listeners. Lets us export a
+// saved project's CSVs without disturbing what's currently open.
+function runWithModuleState(mod, state, fn){
+  const st = _histories[mod];
+  if (!st) return;
+  const backup = st._snap();
+  st._busy = true;
+  try { st._restore(state); fn(); }
+  finally { try { st._restore(backup); } finally { st._busy = false; } }
 }
 
 // Size each home card so its square icon tile spans 90% of the (common) card
@@ -1023,15 +1154,265 @@ window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true);
 })();
 
 /* =========================================================
+   NUMERIC INPUT VALIDATION FEEDBACK
+   Values out of range are already clamped in the analysis code, but silently.
+   These helpers correct the *displayed* value on blur and flash the field
+   (reusing the .field-invalid red + shake animation) so the user notices.
+========================================================= */
+function flashFieldInvalid(el){
+  el.classList.remove('field-invalid');
+  void el.offsetWidth;                 // reflow so the shake animation restarts
+  el.classList.add('field-invalid');
+  clearTimeout(el._flashT);
+  el._flashT = setTimeout(()=>el.classList.remove('field-invalid'), 450);
+}
+// Guard one input so it only ever commits a valid value: views update on confirm
+// (blur / Enter), and any invalid entry (empty, non-numeric, out of range, or a
+// non-integer where one is required) shakes the field and snaps it back to the
+// last value that was successfully confirmed — never a live/partial update.
+function guardNumericInput(el, opts){
+  if (!el) return;
+  const { min=null, max=null, integer=false, def=null } = opts || {};
+  const parse = ()=>{ const v = parseFloat(String(el.value).trim().replace(',', '.')); return isFinite(v) ? v : NaN; };
+  // Seed the "last confirmed" value from the field's initial (valid) content.
+  const seed = parse();
+  el._lastValid = isFinite(seed) ? seed : (def!=null ? def : (min!=null ? min : 0));
+  // Re-seed on focus so programmatic value changes (session restore, param sync)
+  // become the new revert target without every setter having to notify us.
+  el.addEventListener('focus', ()=>{ const v = parse(); if (isFinite(v)) el._lastValid = v; });
+  el.addEventListener('change', e=>{
+    const raw = String(el.value).trim().replace(',', '.');
+    const v = parseFloat(raw);
+    const bad = raw==='' || !isFinite(v)
+      || (integer && !Number.isInteger(v))
+      || (min!=null && v<min) || (max!=null && v>max);
+    if (bad){
+      // Reject: shake, restore the last confirmed value, and keep the invalid
+      // entry from reaching the module's own listeners (so views stay untouched).
+      flashFieldInvalid(el);
+      el.value = String(el._lastValid);
+      e.stopImmediatePropagation();
+      return;
+    }
+    el._lastValid = v;
+    el.value = String(v);
+    el.dispatchEvent(new Event('input', { bubbles:true })); // let input-based consumers re-read
+  });
+  el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
+}
+// Auto-wire every <input type="number"> under root, reading bounds from its
+// min/max attributes (step decides integer-ness). Covers most module fields.
+function guardNumberInputs(root){
+  (root || document).querySelectorAll('input[type="number"]').forEach(el=>{
+    const min = el.getAttribute('min')!==null && el.min!=='' ? +el.min : null;
+    const max = el.getAttribute('max')!==null && el.max!=='' ? +el.max : null;
+    const stepAttr = el.getAttribute('step');
+    const integer = !stepAttr || Number.isInteger(+stepAttr);
+    const def = el.defaultValue!=='' && isFinite(+el.defaultValue) ? +el.defaultValue : (min!=null ? min : 0);
+    guardNumericInput(el, { min, max, integer, def });
+  });
+}
+// Apply to all number inputs present in the page (modals included).
+guardNumberInputs(document);
+
+/* =========================================================
+   CUSTOM DATE-TIME FIELD  (GG/MM/AAAA hh:mm, 24h)
+   Fully custom so no browser-native picker chrome appears anywhere. The field is
+   made of individually focusable segments — Tab/Shift-Tab move one segment at a
+   time, digits type in place, ↑/↓ increment. A calendar button opens an in-app
+   modal styled like the rest of the UI.
+========================================================= */
+const DT_SEGS = [
+  { key:'day',   len:2, min:1, max:31,   ph:'GG'   },
+  { key:'month', len:2, min:1, max:12,   ph:'MM'   },
+  { key:'year',  len:4, min:1900, max:2100, ph:'AAAA' },
+  { key:'hour',  len:2, min:0, max:23,   ph:'hh'   },
+  { key:'min',   len:2, min:0, max:59,   ph:'mm'   },
+];
+const DT_SEP = { day:'/', month:'/', year:' ', hour:':' }; // separator drawn after each segment
+function dtDaysInMonth(y,m){ return new Date(y, m, 0).getDate(); } // m: 1-12
+function createDateTimeField(initial, onChange){
+  let val = { day:null, month:null, year:null, hour:null, min:null };
+  const load = d => { if (d instanceof Date && !isNaN(d)) val = { day:d.getDate(), month:d.getMonth()+1, year:d.getFullYear(), hour:d.getHours(), min:d.getMinutes() }; };
+  load(initial);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'dt-field';
+  const segEls = {};
+  DT_SEGS.forEach(s=>{
+    const el = document.createElement('span');
+    el.className = 'dt-seg'; el.tabIndex = 0; el.dataset.seg = s.key;
+    el.setAttribute('role','spinbutton'); el.setAttribute('aria-label', s.key);
+    segEls[s.key] = el; wrap.appendChild(el);
+    if (DT_SEP[s.key] != null){ const sep = document.createElement('span'); sep.className='dt-sep'; sep.textContent = DT_SEP[s.key]; wrap.appendChild(sep); }
+  });
+  const calBtn = document.createElement('button');
+  calBtn.type='button'; calBtn.className='dt-cal-btn'; calBtn.tabIndex=-1; calBtn.setAttribute('aria-label','Open calendar');
+  calBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>';
+  wrap.appendChild(calBtn);
+
+  const pad = (n,l)=>String(n).padStart(l,'0');
+  function render(){
+    DT_SEGS.forEach(s=>{
+      const v = val[s.key], el = segEls[s.key];
+      if (v==null){ el.textContent = s.ph; el.classList.add('empty'); }
+      else { el.textContent = pad(v, s.len); el.classList.remove('empty'); }
+    });
+  }
+  function currentDate(){
+    if (DT_SEGS.some(s=>val[s.key]==null)) return null;
+    const d = Math.min(val.day, dtDaysInMonth(val.year, val.month));
+    return new Date(val.year, val.month-1, d, val.hour, val.min, 0, 0);
+  }
+  function emit(){ const d = currentDate(); if (d) onChange(d); }
+
+  const idxOf = k => DT_SEGS.findIndex(s=>s.key===k);
+  const moveSeg = (k, dir)=>{ const i=idxOf(k)+dir; if (i>=0 && i<DT_SEGS.length) segEls[DT_SEGS[i].key].focus(); };
+  let buf = '';
+  DT_SEGS.forEach(s=>{
+    const el = segEls[s.key];
+    el.addEventListener('focus', ()=>{ buf=''; el.classList.add('sel'); });
+    el.addEventListener('blur', ()=>{ el.classList.remove('sel'); emit(); });
+    el.addEventListener('keydown', e=>{
+      if (e.key>='0' && e.key<='9'){
+        e.preventDefault();
+        buf = (buf.length>=s.len ? e.key : buf + e.key);
+        let n = parseInt(buf,10);
+        if (n > s.max){ n = parseInt(e.key,10); buf = e.key; }
+        val[s.key] = Math.max(s.min, n); render();
+        if (buf.length>=s.len || n*10 > s.max){ buf=''; moveSeg(s.key,+1); }
+      } else if (e.key==='ArrowUp' || e.key==='ArrowDown'){
+        e.preventDefault();
+        const step = e.key==='ArrowUp' ? 1 : -1;
+        let v = (val[s.key]==null) ? (step>0? s.min : s.max) : val[s.key]+step;
+        if (v > s.max) v = s.min; if (v < s.min) v = s.max;
+        val[s.key]=v; buf=''; render(); emit();
+      } else if (e.key==='ArrowLeft'){ e.preventDefault(); moveSeg(s.key,-1); }
+      else if (e.key==='ArrowRight'){ e.preventDefault(); moveSeg(s.key,+1); }
+      else if (e.key==='Backspace' || e.key==='Delete'){ e.preventDefault(); val[s.key]=null; buf=''; render(); }
+      // Tab falls through to the browser (moves to the next focusable segment)
+      e.stopPropagation(); // keep global arrow-nav / undo shortcuts from firing
+    });
+  });
+  calBtn.addEventListener('click', ()=> openDateModal(currentDate() || new Date(), d=>{ load(d); render(); emit(); }));
+
+  render();
+  return { el: wrap, get: currentDate, set: d=>{ load(d); render(); } };
+}
+
+// In-app modal calendar (month grid + time steppers). Calls onPick(Date) on OK.
+function openDateModal(baseDate, onPick){
+  const view = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+  const sel = new Date(baseDate);
+  const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop dt-modal-backdrop';
+  const modal = document.createElement('div'); modal.className = 'modal-box dt-modal'; backdrop.appendChild(modal);
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const WD = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+  const p2 = n => String(n).padStart(2,'0');
+  function build(){
+    const y=view.getFullYear(), m=view.getMonth();
+    let cells='';
+    const startDow = (new Date(y,m,1).getDay()+6)%7;      // 0 = Monday
+    const dim = dtDaysInMonth(y, m+1);
+    const today = new Date();
+    for (let i=0;i<startDow;i++) cells += '<span class="dt-day empty"></span>';
+    for (let d=1; d<=dim; d++){
+      const isSel = sel.getFullYear()===y && sel.getMonth()===m && sel.getDate()===d;
+      const isToday = today.getFullYear()===y && today.getMonth()===m && today.getDate()===d;
+      cells += `<button type="button" class="dt-day${isSel?' sel':''}${isToday?' today':''}" data-day="${d}">${d}</button>`;
+    }
+    modal.innerHTML = `
+      <div class="dt-modal-head">
+        <button type="button" class="dt-nav" data-nav="-1" aria-label="Previous month">&#8249;</button>
+        <span class="dt-title">${MONTHS[m]} ${y}</span>
+        <button type="button" class="dt-nav" data-nav="1" aria-label="Next month">&#8250;</button>
+      </div>
+      <div class="dt-grid dt-week">${WD.map(d=>`<span class="dt-wd">${d}</span>`).join('')}</div>
+      <div class="dt-grid dt-days">${cells}</div>
+      <div class="dt-time">
+        <span class="dt-time-lbl">Time</span>
+        <span class="dt-time-field"><button type="button" class="dt-step" data-t="h" data-d="1">&#9650;</button><b>${p2(sel.getHours())}</b><button type="button" class="dt-step" data-t="h" data-d="-1">&#9660;</button></span>
+        <b class="dt-colon">:</b>
+        <span class="dt-time-field"><button type="button" class="dt-step" data-t="m" data-d="1">&#9650;</button><b>${p2(sel.getMinutes())}</b><button type="button" class="dt-step" data-t="m" data-d="-1">&#9660;</button></span>
+      </div>
+      <div class="dt-modal-foot"><button type="button" class="btn dt-cancel">Cancel</button><button type="button" class="btn primary dt-ok">OK</button></div>`;
+  }
+  function close(){ document.removeEventListener('keydown', onKey); backdrop.remove(); }
+  function onKey(e){ if (e.key==='Escape') close(); }
+  build();
+  modal.addEventListener('click', e=>{
+    const nav = e.target.closest('.dt-nav');
+    if (nav){ view.setMonth(view.getMonth() + (+nav.dataset.nav)); build(); return; }
+    const day = e.target.closest('.dt-day');
+    if (day && !day.classList.contains('empty')){ sel.setFullYear(view.getFullYear(), view.getMonth(), +day.dataset.day); build(); return; }
+    const step = e.target.closest('.dt-step');
+    if (step){ const d=+step.dataset.d;
+      if (step.dataset.t==='h') sel.setHours((sel.getHours()+d+24)%24);
+      else sel.setMinutes((sel.getMinutes()+d+60)%60);
+      build(); return; }
+    if (e.target.closest('.dt-cancel')){ close(); return; }
+    if (e.target.closest('.dt-ok')){ onPick(new Date(sel)); close(); return; }
+  });
+  backdrop.addEventListener('click', e=>{ if (e.target===backdrop) close(); });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(backdrop);
+}
+
+/* =========================================================
+   CONFIRM BANNER (in-site, non-native)
+========================================================= */
+// In-site replacement for window.confirm(): a top-centered banner reusing the
+// PWA-toast styling. Returns a Promise<boolean> (true = confirmed).
+// Only one banner is shown at a time; a second call cancels the first.
+let _confirmBannerEl = null;
+function confirmBanner(message, confirmLabel){
+  return new Promise(resolve=>{
+    if (_confirmBannerEl){ _confirmBannerEl.remove(); _confirmBannerEl = null; }
+    const t = document.createElement('div');
+    t.className = 'pwa-toast pwa-confirm';
+    t.setAttribute('role', 'alertdialog');
+    t.setAttribute('aria-live', 'assertive');
+    const msg = document.createElement('span'); msg.textContent = message;
+    const ok = document.createElement('button');
+    ok.type = 'button'; ok.className = 'btn primary';
+    ok.textContent = confirmLabel || 'Remove';
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'pwa-toast-x'; x.setAttribute('aria-label', 'Cancel');
+    x.innerHTML = '&#10005;';
+    t.appendChild(msg); t.appendChild(ok); t.appendChild(x);
+    document.body.appendChild(t);
+    _confirmBannerEl = t;
+    requestAnimationFrame(()=> t.classList.add('show'));
+    const done = (val)=>{
+      if (_confirmBannerEl !== t){ resolve(val); return; }
+      _confirmBannerEl = null;
+      document.removeEventListener('keydown', onKey);
+      t.classList.remove('show');
+      setTimeout(()=> t.remove(), 200);
+      resolve(val);
+    };
+    const onKey = e=>{ if (e.key === 'Escape') done(false); };
+    ok.addEventListener('click', ()=> done(true));
+    x.addEventListener('click', ()=> done(false));
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+/* =========================================================
    ALERT HELPERS
 ========================================================= */
-function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidFn, dismissWarnFn){
-  const makeX = fn => `<button class="alert-dismiss" onclick="${fn||"this.closest('.alert').remove()"}" title="Dismiss">${X_SVG(13)}</button>`;
+// dismissInvalidAction / dismissWarnAction are data-action values handled by the
+// owning tab's delegated click listener; when omitted, the button just removes its
+// own alert inline (no global handler needed).
+function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
+  const makeX = act => act
+    ? `<button class="alert-dismiss is-danger" data-action="${act}" title="Dismiss">${X_SVG(13)}</button>`
+    : `<button class="alert-dismiss is-danger" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(13)}</button>`;
   let html = '';
   if (invalidNames.length)
-    html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidFn) + '</div>';
+    html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';
   if (warnNames.length)
-    html += '<div class="alert warn">⚠ ' + (warnHeader || 'Non-standard format — verify these files:') + '<br>' + warnNames.join('<br>') + makeX(dismissWarnFn) + '</div>';
+    html += '<div class="alert warn">⚠ ' + (warnHeader || 'Non-standard format — verify these files:') + '<br>' + warnNames.join('<br>') + makeX(dismissWarnAction) + '</div>';
   return html;
 }
 
@@ -1041,16 +1422,22 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
+/* Truncate a bar-chart axis label to a fixed maximum length (adding an ellipsis).
+   Extra args (mctx, barSpacing, chartH) are kept for call-site compatibility but
+   no longer used — the cap is a simple character count. */
+const TILT_LABEL_MAX = 25;
+function truncTiltLabel(mctx, text){
+  return text.length > TILT_LABEL_MAX ? text.slice(0, TILT_LABEL_MAX) + '…' : text;
+}
+
 /* =========================================================
    COLLAPSIBLE INSTRUCTIONS
    Each .instr-block is toggled by a small info icon placed next to the card's
-   title. Open by default; the collapsed choice is remembered per block.
+   title. Always starts collapsed on load; the choice is not remembered.
 ========================================================= */
 (function initInstrCollapse(){
   const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
   document.querySelectorAll('.instr-block').forEach((block, i)=>{
-    const section = block.closest('section.tab');
-    const key = 'datatreat-instr-' + (section ? section.id : 's') + '-' + i;
     // Attach the toggle to the nearest preceding heading; fall back to inline.
     // The heading may be wrapped (e.g. in a .section-head flex row), so also
     // look for a heading nested inside a preceding sibling.
@@ -1068,18 +1455,17 @@ function nextColor(existingFiles){
     btn.innerHTML = INFO_SVG;
     if (heading) heading.appendChild(btn);
     else block.parentNode.insertBefore(btn, block);
-    let collapsed = false;
-    try { collapsed = localStorage.getItem(key) === 'collapsed'; } catch(e){}
+    let collapsed = true;   // always start closed; the choice is not remembered
     const apply = ()=>{
       block.style.display = collapsed ? 'none' : '';
-      btn.classList.toggle('active', !collapsed); // highlighted while instructions are shown
+      btn.classList.toggle('is-on', !collapsed); // highlighted while instructions are shown
       btn.setAttribute('aria-expanded', String(!collapsed));
     };
     apply();
-    btn.addEventListener('click', ()=>{ collapsed = !collapsed; try { localStorage.setItem(key, collapsed ? 'collapsed' : 'open'); } catch(e){} apply(); });
+    btn.addEventListener('click', ()=>{ collapsed = !collapsed; apply(); });
   });
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, registerTabRedraw, registerCsvExport, runCsvExport, applyTheme, currentTheme
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons
 };

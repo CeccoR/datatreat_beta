@@ -8,10 +8,18 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, runCsvExport } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons } from './utils.js';
 
-/* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity) ---- */
-const DB_NAME = 'datatreat', STORE = 'sessions', DB_VER = 1;
+// Row action icons: the exact CSV/JSON glyphs used in the module toolbars
+// (text over a right-pointing arrow) and the rounded X for delete.
+const ROW_DOC = (txt, fs) => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="'+fs+'" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">'+txt+'</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
+const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 8.5), ROW_X = X_SVG(16);
+// Trash glyph for delete actions — same visual weight as the X it replaces.
+const ROW_TRASH = '<svg class="x-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+
+/* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity;
+   'drafts' holds one autosave per module for crash recovery) ---- */
+const DB_NAME = 'datatreat', STORE = 'sessions', DRAFTS = 'drafts', DB_VER = 2;
 function idb(){
   return new Promise((resolve, reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VER);
@@ -21,16 +29,19 @@ function idb(){
         const os = db.createObjectStore(STORE, { keyPath:'id' });
         os.createIndex('module', 'module', { unique:false });
       }
+      if (!db.objectStoreNames.contains(DRAFTS)){
+        db.createObjectStore(DRAFTS, { keyPath:'module' });
+      }
     };
     req.onsuccess = ()=> resolve(req.result);
     req.onerror   = ()=> reject(req.error);
   });
 }
-async function tx(mode, fn){
+async function txStore(store, mode, fn){
   const db = await idb();
   return new Promise((resolve, reject)=>{
-    const t = db.transaction(STORE, mode);
-    const os = t.objectStore(STORE);
+    const t = db.transaction(store, mode);
+    const os = t.objectStore(store);
     let out;
     Promise.resolve(fn(os)).then(v=>{ out = v; });
     t.oncomplete = ()=> resolve(out);
@@ -38,10 +49,14 @@ async function tx(mode, fn){
     t.onabort = ()=> reject(t.error);
   });
 }
+const tx = (mode, fn)=> txStore(STORE, mode, fn);
 const reqP = r => new Promise((res, rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
 async function allProjects(){ return tx('readonly', os=> reqP(os.getAll())); }
 async function putProject(rec){ return tx('readwrite', os=>{ os.put(rec); }); }
 async function deleteProject(id){ return tx('readwrite', os=>{ os.delete(id); }); }
+async function putDraft(rec){ return txStore(DRAFTS, 'readwrite', os=>{ os.put(rec); }); }
+async function getAllDrafts(){ return txStore(DRAFTS, 'readonly', os=> reqP(os.getAll())); }
+async function deleteDraft(mod){ return txStore(DRAFTS, 'readwrite', os=>{ os.delete(mod); }); }
 
 /* ---- helpers ---- */
 const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -74,15 +89,63 @@ function downloadTextFile(name, text, type){
 const current = {};   // mod -> { id, title }
 const dirty = {};     // mod -> bool
 
+/* ---- Autosave (crash-recovery draft) ----
+   5 s after the last change, save the module's state to the 'drafts' store whenever
+   the module holds data — named or not — so a reload (incl. Chrome's desktop/mobile
+   switch, which reloads the page) doesn't wipe unsaved work. Cleared on Save / data
+   loss. A draft ≠ a saved project: on restore it comes back as unsaved work that
+   still needs an explicit Save. */
+const AUTOSAVE_MS = 5000;
+const _autosaveTimers = {};
+function scheduleAutosave(mod){
+  if (_restoring) return;   // don't rewrite drafts while we're replaying them at startup
+  // No data (e.g. all files removed) → drop the module's draft right away so a reload
+  // doesn't bring back emptied work.
+  if (!moduleHasData(mod)){ clearDraft(mod); return; }
+  // Leading edge: save right away on the first change (e.g. as soon as data loads),
+  // so an immediate reload is already covered; then debounce the trailing save.
+  if (!_autosaveTimers[mod]) saveDraft(mod);
+  clearTimeout(_autosaveTimers[mod]);
+  _autosaveTimers[mod] = setTimeout(()=>{ _autosaveTimers[mod] = null; saveDraft(mod); }, AUTOSAVE_MS);
+}
+let _restoring = false;   // true while initDraftRecovery is replaying drafts
+async function saveDraft(mod){
+  if (!moduleHasData(mod)) return;   // autosave any module that still holds data
+  const inp = nameInput(mod);
+  const title = inp ? inp.value.trim() : '';
+  try {
+    const rec = { module: mod, title, state: encode(getModuleState(mod)), updatedAt: Date.now(),
+                  dirty: !!dirty[mod] };   // remember whether it matched its saved project
+    if (current[mod]) rec.id = current[mod].id;  // keep the association so Save updates the right project
+    await putDraft(rec);
+  } catch(e){}
+}
+function clearDraft(mod){
+  clearTimeout(_autosaveTimers[mod]);
+  deleteDraft(mod).catch(()=>{});
+}
+
 const CHECK_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 
 function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-module="'+mod+'"]')]; }
 function nameInput(mod){ return document.querySelector('.project-name-input[data-module="'+mod+'"]'); }
-function dirtyMark(mod){ return document.querySelector('.pb-dirty[data-module="'+mod+'"]'); }
+// Save-disk icon with a red asterisk badge (top-right): shown on the project-bar
+// Save button when an open project has unsaved changes — this replaces the old
+// "*" marker next to the name.
+const SAVE_STAR_ICON = '<svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/><g stroke="#ff5050" stroke-width="2.2"><line x1="19" y1="1.9" x2="19" y2="7.1"/><line x1="16.75" y1="3.2" x2="21.25" y2="5.8"/><line x1="16.75" y1="5.8" x2="21.25" y2="3.2"/></g></svg>';
+// Put the dirty (asterisk) or clean disk icon on the project-bar Save icon button.
+// origHtml is captured pristine at startup, so it is always the plain disk.
+function setSaveDirtyIcon(mod, dirtyState){
+  saveBtns(mod).forEach(b=>{
+    if (!b.classList.contains('proj-icon')) return;
+    b.innerHTML = dirtyState ? SAVE_STAR_ICON : (b.dataset.origHtml ?? b.innerHTML);
+  });
+  normalizeProjIcons(mod);
+}
 function restoreSaveBtns(mod){
   saveBtns(mod).forEach(b=>{
-    b.classList.remove('saved-ok'); b.disabled = false;
+    b.classList.remove('is-saved'); b.disabled = false;
     if (b.dataset.origHtml !== undefined) b.innerHTML = b.dataset.origHtml;
   });
 }
@@ -90,13 +153,16 @@ function restoreSaveBtns(mod){
 // one-shot listener so the next change flips back to dirty.
 function markSaved(mod){
   dirty[mod] = false;
+  // NB: the draft is kept even for saved projects — it is the persistent working
+  // state that gets auto-restored on the next load (cleared only when data is gone).
+  // Re-persist it so the draft records the saved (not-dirty) status for next load.
+  if (!_restoring) saveDraft(mod);
   saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
-    b.classList.add('saved-ok');
+    b.classList.add('is-saved');
     b.disabled = true;
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
-  const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit or a rename in the field). Losing all data clears
@@ -105,13 +171,14 @@ function markDirty(mod){
   if (!moduleHasData(mod)){
     delete current[mod]; dirty[mod] = false;
     const inp = nameInput(mod); if (inp) inp.value = '';
-    const dm = dirtyMark(mod); if (dm) dm.style.display = 'none';
     restoreSaveBtns(mod);
+    clearDraft(mod);   // no data left → nothing to recover
     return;
   }
   dirty[mod] = true;
   restoreSaveBtns(mod);
-  const dm = dirtyMark(mod); if (dm) dm.style.display = current[mod] ? 'inline-block' : 'none';
+  // Badge the Save icon with a red asterisk when an open project has changes.
+  setSaveDirtyIcon(mod, !!current[mod]);
 }
 
 /* ---- Save / Save as ----
@@ -261,61 +328,112 @@ function passesFilter(rec){
   if (name && !rec.title.toLowerCase().includes(name)) return false;
   return true;
 }
-function updateOpenSelectedState(){
-  const n = document.querySelectorAll('#sessListWrap .sess-check:checked').length;
-  const btn = document.getElementById('sessOpenSelected');
-  btn.disabled = n === 0;
-  btn.textContent = n > 1 ? ('Open selected ('+n+')') : 'Open selected';
+function selectedRecs(){
+  return [...document.querySelectorAll('#sessListWrap tr.sess-row')]
+    .filter(tr=> tr.querySelector('.sess-check') && tr.querySelector('.sess-check').checked)
+    .map(tr=> recById(tr.dataset.id)).filter(Boolean);
+}
+function updateBulkState(){
+  const n = selectedRecs().length;
+  document.getElementById('sessOpenSelected').disabled = n === 0;
+  ['sessDeleteSelected','sessCsvSelected','sessJsonSelected'].forEach(id=>{
+    const b = document.getElementById(id); if (b) b.disabled = n === 0;
+  });
 }
 async function renderList(){
   _cache = (await allProjects()).sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
   const wrap = document.getElementById('sessListWrap');
   if (!wrap) return;
   const rows = sortRows(_cache.filter(passesFilter));
-  if (!_cache.length){ wrap.innerHTML = '<p class="hint">No saved projects yet. Load data in a module and press “Save project”.</p>'; updateOpenSelectedState(); return; }
-  if (!rows.length){ wrap.innerHTML = '<p class="hint">No projects match the current filters.</p>'; updateOpenSelectedState(); return; }
-  let html = '<div class="table-wrap-box sess-table-box"><table class="sess-table"><colgroup><col style="width:30px"><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>'
+  if (!_cache.length){ wrap.innerHTML = '<p class="txt-meta">No saved projects yet. Load data in a module and press “Save project”.</p>'; updateBulkState(); return; }
+  if (!rows.length){ wrap.innerHTML = '<p class="txt-meta">No projects match the current filters.</p>'; updateBulkState(); return; }
+  // checkbox fixed, actions sized to its icons, the rest split the remaining space equally
+  let html = '<div class="table-wrap-box sess-table-box"><table class="sess-table"><colgroup><col style="width:30px"><col><col><col><col style="width:104px"></colgroup>'
     + '<thead><tr><th></th>'
     + '<th class="sess-sort" data-key="title" style="cursor:pointer">NAME'+arrow('title')+'</th>'
     + '<th class="sess-sort" data-key="module" style="cursor:pointer">MODULE'+arrow('module')+'</th>'
     + '<th class="sess-sort" data-key="updatedAt" style="cursor:pointer">SAVED'+arrow('updatedAt')+'</th>'
     + '<th></th></tr></thead><tbody>';
   rows.forEach(r=>{
-    html += '<tr data-id="'+r.id+'">'
+    html += '<tr class="sess-row" data-id="'+r.id+'" title="Click to open">'
       + '<td><input type="checkbox" class="sess-check" style="width:auto"></td>'
-      + '<td class="fname" title="'+r.title.replace(/"/g,'&quot;')+'">'+r.title+'</td>'
+      + '<td><input type="text" class="proj-rename" value="'+r.title.replace(/"/g,'&quot;')+'"></td>'
       + '<td style="white-space:nowrap"><span class="pill">'+(MODULE_LABELS[r.module]||r.module)+'</span></td>'
       + '<td style="color:var(--muted)">'+fmtDate(r.updatedAt)+'</td>'
-      + '<td style="text-align:right;white-space:nowrap">'
-        + '<button class="btn small sess-open">Open</button> '
-        + '<button class="btn secondary small sess-rename">Rename</button> '
-        + '<button class="btn secondary small sess-export">Export</button> '
-        + '<button class="btn secondary small sess-delete">Delete</button>'
-      + '</td></tr>';
+      + '<td class="row-acts"><div class="row-acts-inner idle-dim">'
+        + '<button class="row-ic pr-csv" title="Export .csv">'+ROW_CSV+'</button>'
+        + '<button class="row-ic pr-json" title="Export .json">'+ROW_JSON+'</button>'
+        + '<button class="row-ic pr-del" title="Delete">'+ROW_TRASH+'</button>'
+      + '</div></td></tr>';
   });
   html += '</tbody></table></div>';
   wrap.innerHTML = html;
-  updateOpenSelectedState();
+  updateBulkState();
 }
 function recById(id){ return _cache.find(s=> s.id === id); }
+function exportProjectCsv(rec){ runWithModuleState(rec.module, decode(rec.state), ()=> runCsvExport(rec.module)); }
+async function renameProject(rec, t){
+  t = (t||'').trim();
+  if (!t || t === rec.title) return;
+  await putProject({ ...rec, title:t, updatedAt: Date.now() });
+  if (current[rec.module] && current[rec.module].id === rec.id){
+    current[rec.module].title = t;
+    const inp = nameInput(rec.module); if (inp) inp.value = t;
+  }
+  renderList();
+}
+async function deleteProjectRec(rec){
+  await deleteProject(rec.id);
+  if (current[rec.module] && current[rec.module].id === rec.id){
+    delete current[rec.module];
+    const inp = nameInput(rec.module); if (inp) inp.value = '';
+    restoreSaveBtns(rec.module);
+    normalizeProjIcons(rec.module);
+  }
+}
+// Project-bar trash button. With an open project it deletes that project (the data
+// stays, now unsaved). With no saved project it clears the module — the same
+// "remove all" action (and confirmation banner) as the file table's remove-all.
+async function deleteOpenProject(mod){
+  const cur = current[mod];
+  const rmAll = document.querySelector('#'+mod+'FileTableWrap .remove-all');
+  if (cur){
+    // Delete the saved project AND clear the module (files + draft), one confirmation.
+    if (!await confirmBanner('Delete project “'+cur.title+'” and remove all files? Unsaved changes will be permanently lost.', 'Delete')) return;
+    await deleteProjectRec({ id: cur.id, module: mod, title: cur.title });
+    if (rmAll && rmAll._clearNow) rmAll._clearNow();
+    renderList();
+    return;
+  }
+  // No saved project → plain remove-all (with its own confirmation banner).
+  if (rmAll) rmAll.click();
+}
 
 /* ---- Wiring ---- */
+// Capture each Save button's pristine markup once, before any state swap, so the
+// disk icon / "Save project" text can always be restored (and never captured
+// while showing the check or the dirty-asterisk variant).
+document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML; });
+
 // Project action buttons (top icon row + bottom text row), via delegation
 document.addEventListener('click', e=>{
-  const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json');
+  const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del');
   if (!b || b.disabled) return;
-  const mod = b.dataset.module;
+  // The delete button carries no data-module of its own; take it from its project-bar.
+  const mod = b.dataset.module || (b.closest('.project-bar') || {}).dataset && b.closest('.project-bar').dataset.module;
   if (b.classList.contains('proj-save'))        doSave(mod, false);
   else if (b.classList.contains('proj-saveas')) doSave(mod, true);
   else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
   else if (b.classList.contains('proj-json'))   exportJson(mod);
+  else if (b.classList.contains('proj-del'))    deleteOpenProject(mod);
 });
 // Editing the project name is an unsaved change (a pending rename); typing also
 // clears the red "missing name" state.
 document.querySelectorAll('.project-name-input').forEach(inp=>{
+  const mod = inp.dataset.module;
   inp.addEventListener('input', ()=>{
     inp.classList.remove('field-invalid');
-    if (moduleHasData(inp.dataset.module)) markDirty(inp.dataset.module);
+    if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(mod); }
   });
 });
 
@@ -337,18 +455,25 @@ document.getElementById('projSaveAsInput').addEventListener('keydown', e=>{
 document.getElementById('sessFilterName').addEventListener('input', renderList);
 document.getElementById('sessFilterModule').addEventListener('change', renderList);
 document.getElementById('sessOpenSelected').addEventListener('click', ()=>{
-  const ids = [...document.querySelectorAll('#sessListWrap tr')]
-    .filter(tr=> tr.querySelector('.sess-check') && tr.querySelector('.sess-check').checked)
-    .map(tr=> tr.dataset.id);
-  const recs = ids.map(recById).filter(Boolean);
+  const recs = selectedRecs();
   if (recs.length) openProjects(recs);
 });
+document.getElementById('sessDeleteSelected').addEventListener('click', async ()=>{
+  const recs = selectedRecs();
+  if (!recs.length) return;
+  if (!await confirmBanner('Delete '+recs.length+' selected project'+(recs.length>1?'s':'')+'? This cannot be undone.', 'Delete')) return;
+  for (const r of recs) await deleteProjectRec(r);
+  renderList();
+});
+document.getElementById('sessCsvSelected').addEventListener('click', ()=>{ selectedRecs().forEach(exportProjectCsv); });
+document.getElementById('sessJsonSelected').addEventListener('click', ()=>{ selectedRecs().forEach(exportProjectRecord); });
 document.getElementById('sessImportBtn').addEventListener('click', ()=> document.getElementById('sessImportFile').click());
-document.getElementById('sessImportFile').addEventListener('change', e=>{
-  const f = e.target.files && e.target.files[0];
-  if (f) importProjectFile(f);
+document.getElementById('sessImportFile').addEventListener('change', async e=>{
+  const files = [...(e.target.files||[])];
+  for (const f of files) await importProjectFile(f);
   e.target.value = '';
 });
+// Sort headers, per-row icon actions, and click-row-to-open
 document.getElementById('sessListWrap').addEventListener('click', async e=>{
   const th = e.target.closest('.sess-sort');
   if (th){
@@ -357,49 +482,90 @@ document.getElementById('sessListWrap').addEventListener('click', async e=>{
     else { _sortKey = key; _sortDir = (key==='updatedAt') ? -1 : 1; }
     renderList(); return;
   }
-  const tr = e.target.closest('tr[data-id]');
+  const tr = e.target.closest('tr.sess-row');
   if (!tr) return;
   const rec = recById(tr.dataset.id);
   if (!rec) return;
-  if (e.target.classList.contains('sess-open'))   openProjects([rec]);
-  else if (e.target.classList.contains('sess-export')) exportProjectRecord(rec);
-  else if (e.target.classList.contains('sess-delete')){
-    if (confirm('Delete project “'+rec.title+'”? This cannot be undone.')){
-      await deleteProject(rec.id);
-      if (current[rec.module] && current[rec.module].id === rec.id){
-        delete current[rec.module];
-        const inp = nameInput(rec.module); if (inp) inp.value = '';
-        const dm = dirtyMark(rec.module); if (dm) dm.style.display = 'none';
-        restoreSaveBtns(rec.module);
-      }
-      renderList();
-    }
-  } else if (e.target.classList.contains('sess-rename')){
-    const t = (prompt('New name:', rec.title) || '').trim();
-    if (t && t !== rec.title){
-      await putProject({ ...rec, title:t, updatedAt: Date.now() });
-      if (current[rec.module] && current[rec.module].id === rec.id){
-        current[rec.module].title = t;
-        const inp = nameInput(rec.module); if (inp) inp.value = t;
-      }
-      renderList();
-    }
+  if (e.target.closest('.pr-csv'))  { exportProjectCsv(rec); return; }
+  if (e.target.closest('.pr-json')) { exportProjectRecord(rec); return; }
+  if (e.target.closest('.pr-del'))  {
+    if (await confirmBanner('Delete project “'+rec.title+'”? This cannot be undone.', 'Delete')){ await deleteProjectRec(rec); renderList(); }
+    return;
   }
+  // Clicks on the checkbox, the name field, or a button don't open the project
+  if (e.target.closest('input, button, .row-acts')) return;
+  openProjects([rec]);
 });
+// Inline rename (commit on Enter or blur); typing here must not open the row
+document.getElementById('sessListWrap').addEventListener('keydown', e=>{
+  if (e.target.classList.contains('proj-rename') && e.key==='Enter'){ e.preventDefault(); e.target.blur(); }
+});
+// Hover (grey) / press (light accent) highlight for the whole row EXCEPT the
+// name field. Driven by classes so we can exclude the name input from the trigger.
+(function(){
+  const wrap = document.getElementById('sessListWrap');
+  const overName = t => !!(t && t.closest && t.closest('.proj-rename'));
+  wrap.addEventListener('mouseover', e=>{
+    const row = e.target.closest && e.target.closest('.sess-row');
+    if (!row) return;
+    row.classList.toggle('row-hot', !overName(e.target));
+    if (overName(e.target)) row.classList.remove('row-press');
+  });
+  wrap.addEventListener('mouseout', e=>{
+    const row = e.target.closest && e.target.closest('.sess-row');
+    if (row && !row.contains(e.relatedTarget)) row.classList.remove('row-hot','row-press');
+  });
+  wrap.addEventListener('mousedown', e=>{
+    const row = e.target.closest && e.target.closest('.sess-row');
+    // Pressing the name field or the checkbox must not flash the row
+    if (row && !overName(e.target) && !e.target.closest('.sess-check')) row.classList.add('row-press');
+  });
+  document.addEventListener('mouseup', ()=> wrap.querySelectorAll('.sess-row.row-press').forEach(r=>r.classList.remove('row-press')));
+})();
 document.getElementById('sessListWrap').addEventListener('change', e=>{
-  if (e.target.classList.contains('sess-check')) updateOpenSelectedState();
+  if (e.target.classList.contains('sess-check')){ updateBulkState(); return; }
+  if (e.target.classList.contains('proj-rename')){
+    const tr = e.target.closest('tr.sess-row'); const rec = recById(tr && tr.dataset.id);
+    if (rec) renameProject(rec, e.target.value);
+  }
 });
 
 document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
 renderList();
 
-// Warn before leaving if a module has unsaved changes AND a non-empty project
-// name (a saved project, or one the user bothered to name — so it matters). One
-// native confirm covers all modules; unnamed drafts don't nag.
-window.addEventListener('beforeunload', e=>{
-  const unsaved = MODULES.some(m=>{
-    const inp = nameInput(m);
-    return dirty[m] && inp && inp.value.trim() !== '';
+/* ---- Autosave subscription + silent session restore ---- */
+MODULES.forEach(m=> onModuleChange(m, ()=> scheduleAutosave(m)));
+
+// On load, silently reload every module's draft — no banner, no confirmation. The
+// draft is the persistent working state, so the app comes back exactly as it was.
+async function initDraftRecovery(){
+  let drafts;
+  try { drafts = await getAllDrafts(); } catch(e){ return; }
+  drafts = (drafts || []).filter(d=> d && d.state);   // title may be empty (unnamed work)
+  if (!drafts.length) return;
+  _restoring = true;
+  drafts.forEach(d=>{
+    try {
+      restoreModuleState(d.module, decode(d.state));
+      const inp = nameInput(d.module); if (inp) inp.value = d.title || '';
+      if (d.id) current[d.module] = { id: d.id, title: d.title };
+      // A saved project (has an id and wasn't dirty when stored) comes back green;
+      // anything else comes back as unsaved work.
+      if (d.id && !d.dirty) markSaved(d.module);
+      else markDirty(d.module);
+    } catch(e){}
   });
-  if (unsaved){ e.preventDefault(); e.returnValue = ''; }
-});
+  _restoring = false;
+  renderList();
+}
+initDraftRecovery();
+
+// Flush pending drafts immediately when the page is hidden/unloaded (Chrome's
+// desktop⇄mobile switch reloads the page, tab close, refresh) so changes made in
+// the last few seconds aren't lost to the debounce. Best-effort: visibilitychange
+// (hidden) fires early enough for IndexedDB to commit; pagehide is the backstop.
+function flushDrafts(){ MODULES.forEach(m=>{ if (moduleHasData(m)) saveDraft(m); }); }
+document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState === 'hidden') flushDrafts(); });
+window.addEventListener('pagehide', flushDrafts);
+// No beforeunload nag: the session auto-restores on the next load, so a reload
+// never loses work.
