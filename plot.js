@@ -304,10 +304,11 @@ class Plot{
       const dlBtn = wrapEl.querySelector('.plot-dl-btn');
       if (dlBtn){
         wrapEl.insertBefore(col, dlBtn);
-        // Order (top→bottom): CSV, download image, then the tool buttons below.
+        // Order (top→bottom): download image (first), CSV, then the tool buttons below.
+        if (!dlBtn.title) dlBtn.title = 'Download image';   // hover description, like the others
+        col.appendChild(dlBtn);
         if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
           col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
-        col.appendChild(dlBtn);
         // Press feedback (grey fill) is handled by the shared button.btn:active CSS.
       }
       else { wrapEl.appendChild(col); }

@@ -131,6 +131,23 @@ const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" st
 
 function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-module="'+mod+'"]')]; }
 function nameInput(mod){ return document.querySelector('.project-name-input[data-module="'+mod+'"]'); }
+// Adaptive width for the project-name field: while it shows the ghost placeholder
+// (empty & unfocused) it keeps its default width; once focused/filled it grows with
+// the text, from just enough for the caret up to 3/4 of the project bar. Past that
+// the width sticks and the text scrolls (blurred → a trailing "…" via CSS ellipsis).
+const _nameCtx = document.createElement('canvas').getContext('2d');
+function fitNameField(mod){
+  const inp = nameInput(mod); if (!inp) return;
+  const focused = document.activeElement === inp;
+  if (!inp.value && !focused){ inp.style.width = ''; return; }   // ghost → CSS default width
+  const cs = getComputedStyle(inp);
+  _nameCtx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+  const bar = inp.closest('.project-bar');
+  const maxW = (bar ? bar.clientWidth : 600) * 0.75;
+  const pad = 24;   // 2×10 padding + 2×1 border + a little caret slack
+  inp.style.width = Math.min(Math.max(_nameCtx.measureText(inp.value).width + pad, pad), maxW) + 'px';
+}
+function fitAllNameFields(){ MODULES.forEach(fitNameField); }
 // Save-disk icon with a red asterisk badge (top-right): shown on the project-bar
 // Save button when an open project has unsaved changes — this replaces the old
 // "*" marker next to the name.
@@ -164,6 +181,7 @@ function markSaved(mod){
     b.disabled = true;
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
+  fitNameField(mod);
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit, a file removal, or a rename in the field). Removing
@@ -406,6 +424,7 @@ function resetModule(mod){
   if (DEFAULT_STATE[mod] != null) restoreModuleState(mod, decode(DEFAULT_STATE[mod]));  // params → defaults, files → empty (also refreshes the now-empty project bar)
   restoreSaveBtns(mod);
   normalizeProjIcons(mod);
+  fitNameField(mod);     // empty name → back to the ghost-width field
   refreshProjBar(mod);   // both name and files empty now → hide the buttons
   clearDraft(mod);
 }
@@ -479,10 +498,14 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
   const mod = inp.dataset.module;
   inp.addEventListener('input', ()=>{
     inp.classList.remove('field-invalid');
+    fitNameField(mod);
     refreshProjBar(mod);
     if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(mod); }
   });
+  inp.addEventListener('focus', ()=> fitNameField(mod));   // click triggers adaptivity
+  inp.addEventListener('blur',  ()=> fitNameField(mod));   // empty → ghost width; filled → ellipsis
 });
+window.addEventListener('resize', fitAllNameFields);   // 3/4-width cap tracks the bar
 
 // Save as… modal
 document.getElementById('projSaveAsCancel').addEventListener('click', closeSaveAsModal);
@@ -600,6 +623,7 @@ async function initDraftRecovery(){
       // anything else comes back as unsaved work.
       if (d.id && !d.dirty) markSaved(d.module);
       else markDirty(d.module);
+      fitNameField(d.module);
     } catch(e){}
   });
   _restoring = false;

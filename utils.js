@@ -1431,12 +1431,20 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
-/* Truncate a bar-chart axis label to a fixed maximum length (adding an ellipsis).
-   Extra args (mctx, barSpacing, chartH) are kept for call-site compatibility but
-   no longer used — the cap is a simple character count. */
-const TILT_LABEL_MAX = 25;
-function truncTiltLabel(mctx, text){
-  return text.length > TILT_LABEL_MAX ? text.slice(0, TILT_LABEL_MAX) + '…' : text;
+/* Truncate a 30°-tilted bar-chart axis label (adding an ellipsis) so it fits both:
+   • horizontally within one bar slot — `barSpacing/cos30` — i.e. the longest label
+     that, at the plot's width, doesn't run past the y-axis line; and
+   • vertically within a fixed fraction of the chart height — so every barplot caps
+     labels to the SAME relative tilted height, whatever its size (mctx is a canvas
+     2D context with the label font already set). */
+const TILT_LABEL_HEIGHT_FRAC = 0.15;   // max tilted-label height as a fraction of the chart height
+function truncTiltLabel(mctx, text, barSpacing, chartH){
+  const cos30 = Math.cos(Math.PI/6), sin30 = Math.sin(Math.PI/6);
+  const maxW = Math.min(barSpacing / cos30, TILT_LABEL_HEIGHT_FRAC * chartH / sin30);
+  if (mctx.measureText(text).width <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && mctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  return t + '…';
 }
 
 /* =========================================================
