@@ -1028,19 +1028,30 @@ function currentTheme(){ return document.documentElement.getAttribute('data-them
 function applyTheme(theme, persist){
   theme = theme === 'light' ? 'light' : 'dark';
   const root = document.documentElement;
-  // Smoothly cross-fade colours on a user-initiated switch (not the initial sync);
-  // a temporary class scopes the transition to the toggle so hovers stay snappy.
-  if (persist && root.getAttribute('data-theme') !== theme){
+  const changing = persist && root.getAttribute('data-theme') !== theme;
+  if (persist){ try { localStorage.setItem(THEME_KEY, theme); } catch(e){} }
+  const commit = ()=>{
+    root.setAttribute('data-theme', theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
+    const sel = document.getElementById('settingTheme');
+    if (sel) sel.value = theme;
+  };
+  const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (changing && !reduced && document.startViewTransition){
+    // One GPU-composited cross-fade of the whole viewport — uniform and smooth,
+    // unlike per-element colour transitions (which repaint hundreds of nodes and
+    // stutter at uneven rates).
+    document.startViewTransition(commit);
+  } else if (changing && !reduced){
+    // Fallback for browsers without View Transitions: scoped per-element cross-fade.
     root.classList.add('theme-anim');
     clearTimeout(applyTheme._t);
     applyTheme._t = setTimeout(()=>root.classList.remove('theme-anim'), 320);
+    commit();
+  } else {
+    commit();
   }
-  root.setAttribute('data-theme', theme);
-  if (persist){ try { localStorage.setItem(THEME_KEY, theme); } catch(e){} }
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
-  const sel = document.getElementById('settingTheme');
-  if (sel) sel.value = theme;
 }
 (function initTheme(){
   applyTheme(currentTheme(), false); // sync meta + settings select to the pre-painted attribute

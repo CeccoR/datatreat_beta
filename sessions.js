@@ -138,12 +138,15 @@ function nameInput(mod){ return document.querySelector('.project-name-input[data
 const _nameCtx = document.createElement('canvas').getContext('2d');
 function fitNameField(mod){
   const inp = nameInput(mod); if (!inp) return;
+  const bar = inp.closest('.project-bar');
+  // On a hidden tab the bar has zero width → don't size it (it would collapse to 0
+  // and hide the name); it gets sized when its tab is shown.
+  if (!bar || !bar.clientWidth) return;
   const focused = document.activeElement === inp;
   if (!inp.value && !focused){ inp.style.width = ''; return; }   // ghost → CSS default width
   const cs = getComputedStyle(inp);
   _nameCtx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
-  const bar = inp.closest('.project-bar');
-  const maxW = (bar ? bar.clientWidth : 600) * 0.75;
+  const maxW = bar.clientWidth * 0.75;
   const pad = 24;   // 2×10 padding + 2×1 border + a little caret slack
   inp.style.width = Math.min(Math.max(_nameCtx.measureText(inp.value).width + pad, pad), maxW) + 'px';
 }
@@ -506,6 +509,12 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
   inp.addEventListener('blur',  ()=> fitNameField(mod));   // empty → ghost width; filled → ellipsis
 });
 window.addEventListener('resize', fitAllNameFields);   // 3/4-width cap tracks the bar
+// Size a module's name field when its tab becomes visible (it can't be measured
+// while hidden — see fitNameField).
+document.getElementById('nav').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-tab]'); if (!b) return;
+  if (MODULES.includes(b.dataset.tab)) requestAnimationFrame(()=> fitNameField(b.dataset.tab));
+});
 
 // Save as… modal
 document.getElementById('projSaveAsCancel').addEventListener('click', closeSaveAsModal);
