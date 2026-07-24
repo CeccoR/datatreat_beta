@@ -1036,7 +1036,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const brect = svg.getBoundingClientRect();
     const svgW = brect.width || 640, svgH = brect.height || 420;
     const labels = rows.map(r=>truncTiltLabel(mctx, r.label));
-    let maxLbl=0; labels.forEach(l=>maxLbl=Math.max(maxLbl, mctx.measureText(l).width));
+    const labelWs = labels.map(l=>mctx.measureText(l).width);
+    let maxLbl=0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
     const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
     const topOf = (v,e)=> v + (isFinite(e)?e:0);
@@ -1049,7 +1050,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
     const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
     const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    const xpad = barPlotXPad(maxLbl, n, svgW-75);   // widen the x-range when labels would overflow the sides
+    const xpad = barPlotXPad(labelWs, n, svgW-75);   // widen only when a label would cross x=0
     plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
     plot.drawAxes();
     // Bar geometry is capped at the previous fixed sizes but shrinks to fit the

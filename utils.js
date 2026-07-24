@@ -177,6 +177,8 @@ class ColorPickerUI {
   }
 
   open(anchorBtn, currentColor, onChange){
+    // Clicking the same swatch again closes the picker (toggle).
+    if (this._anchorBtn === anchorBtn && this._el.style.display !== 'none'){ this.close(); return; }
     if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._anchorBtn = anchorBtn;
     anchorBtn.classList.add('cp-anchored');   // keep the swatch's border while open
@@ -245,7 +247,11 @@ class PalettePickerUI {
     });
   }
   open(anchorBtn, onChange){
+    // Clicking the same palette button again closes the picker (toggle).
+    if (this._anchorBtn === anchorBtn && this._el.style.display !== 'none'){ this.close(); return; }
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._anchorBtn = anchorBtn;
+    anchorBtn.classList.add('cp-anchored');   // keep the button's border while open
     this._onChange = onChange;
     this._el.style.display = 'block';
     const rect = anchorBtn.getBoundingClientRect();
@@ -256,7 +262,11 @@ class PalettePickerUI {
     this._el.style.left = Math.max(8,left)+'px';
     this._el.style.top = Math.max(8,top)+'px';
   }
-  close(){ this._el.style.display='none'; this._onChange=null; this._anchorBtn=null; }
+  close(){
+    this._el.style.display='none';
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
+    this._onChange=null; this._anchorBtn=null;
+  }
 }
 
 const palettePickerUI = new PalettePickerUI();
@@ -1461,19 +1471,24 @@ function truncTiltLabel(mctx, text){
   const front = Math.ceil(keep / 2), back = keep - front;
   return text.slice(0, front) + '…' + text.slice(text.length - back);
 }
-/* Extra x-range padding (in data units, per side) so the 30°-tilted labels of the
-   edge bars clear the plot frame instead of running off the side. Bars sit at
-   x = 1..n inside the base range [0, n+1]; use the returned p as range
-   [-p, n+1+p] (like a small symmetric zoom-out). maxLabelW = widest label px,
-   plotW = drawable width px (svg width − left/right margins). */
-function barPlotXPad(maxLabelW, n, plotW){
+/* Extra x-range padding (in data units, per side) so no 30°-tilted bar label runs
+   off the LEFT of the plot (its first character would land at a negative x). Bars
+   sit at x = 1..n inside the base range [0, n+1]; use the returned p as the range
+   [-p, n+1+p] (a small symmetric zoom-out that moves the edge bars inward). Returns
+   0 unless a label would actually cross x = 0 — i.e. only kicks in when truly needed.
+   `labelWs` = per-bar label pixel widths; plotW = drawable width px. */
+function barPlotXPad(labelWs, n, plotW){
   if (!(plotW > 0) || !(n > 0)) return 0;
-  const target = maxLabelW * Math.cos(Math.PI / 6) + 4;   // tilted horizontal extent + a small gap
-  const f = target / plotW;
-  if (f <= 0) return 0;
-  if (f >= 0.45) return n;                                 // pathological (huge labels) → hard cap
-  // Solve gap(frame → first bar) = target for the range [-p, n+1+p].
-  return Math.max(0, (f * (n + 1) - 1) / (1 - 2 * f));
+  const cos30 = Math.cos(Math.PI / 6);
+  let p = 0;
+  for (let k = 1; k <= n; k++){
+    const f = ((labelWs[k-1] || 0) * cos30) / plotW;   // label's tilted horizontal extent, as a fraction of plotW
+    if (f >= 0.5) return n;                             // pathological (huge label) → hard cap
+    // Bar k clears x=0 in [-p, n+1+p] when (k+p)/(n+1+2p) ≥ f. Solve for the min p.
+    const need = (f * (n + 1) - k) / (1 - 2 * f);       // > 0 only if the label crosses x=0 at base scale
+    if (need > p) p = need;
+  }
+  return Math.max(0, p);
 }
 
 /* =========================================================

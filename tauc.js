@@ -622,7 +622,8 @@ import { Plot } from './plot.js';
         const brect = svg.getBoundingClientRect();
         const svgW = brect.width || 640, svgH = brect.height || 640;
         const barLabels = files.map(f=>truncTiltLabel(mctx, f.label));
-        let maxLbl = 0; barLabels.forEach(l=>{ maxLbl = Math.max(maxLbl, mctx.measureText(l).width); });
+        const labelWs = barLabels.map(l=>mctx.measureText(l).width);
+        let maxLbl = 0; labelWs.forEach(w=>{ maxLbl = Math.max(maxLbl, w); });
         const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
         const mTop = 15, gap = 6;
         const plotH = svgH - mTop - bottom;
@@ -630,8 +631,8 @@ import { Plot } from './plot.js';
         const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
         const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
         const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-        // Widen the x-range symmetrically when long labels would run off the sides.
-        const xpad = barPlotXPad(maxLbl, n, svgW-75);
+        // Widen the x-range symmetrically only when a label would cross x=0.
+        const xpad = barPlotXPad(labelWs, n, svgW-75);
         plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
         plot.drawAxes();
         // Bars are capped at 16px half-width but shrink to fit the per-sample

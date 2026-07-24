@@ -1005,7 +1005,8 @@ button.palette-pick-btn {
     #3aa0ff 0 25%, #ff7a59 25% 50%, #5fcf6a 50% 75%, #d050ff 75%
   );
 }
-button.palette-pick-btn:hover { border-color: var(--text); }
+button.palette-pick-btn:hover,
+button.palette-pick-btn.cp-anchored { border-color: var(--text); }
 
 /* ===== Palette picker popup ===== */
 .pp-popup {
