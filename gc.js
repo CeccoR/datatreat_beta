@@ -480,7 +480,7 @@ import { Plot, svgEl } from './plot.js';
     const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
     const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
     const ymax = Math.max(Math.max(...finite.map(c=>c.cost))*1.2, maxTop/frac);
-    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     const xpad = barPlotXPad(labelWs, costResults.length, svgW-75);   // widen only when a label would cross x=0
     barPlot.setRange(-xpad, costResults.length+1+xpad, 0, ymax||1);
     barPlot.drawAxes();

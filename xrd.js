@@ -1049,7 +1049,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const mTop=15, gap=6, plotH=svgH-mTop-bottom, reserve=gap+maxValW+6;
     const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
     const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
-    const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+    const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     const xpad = barPlotXPad(labelWs, n, svgW-75);   // widen only when a label would cross x=0
     plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
     plot.drawAxes();

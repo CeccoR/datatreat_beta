@@ -630,7 +630,7 @@ import { Plot } from './plot.js';
         const reserve = gap + maxValW + 6;               // px needed above the tallest bar
         const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
         const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
-        const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+        const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
         // Widen the x-range symmetrically only when a label would cross x=0.
         const xpad = barPlotXPad(labelWs, n, svgW-75);
         plot.setRange(-xpad, n+1+xpad, 0, ymax||1);

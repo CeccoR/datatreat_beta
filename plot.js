@@ -109,7 +109,8 @@ class Plot{
     const xTicks = this._opts.xTickStep ? fixedTicks(this.xmin, this.xmax, this._opts.xTickStep) : niceTicks(this.xmin, this.xmax, 5);
     const drawXTick = (xv, anchor)=>{
       const px = this.px(xv);
-      this.gAxes.appendChild(svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'#262c35','class':'plot-grid'}));
+      if (!this._opts.noXGrid)
+        this.gAxes.appendChild(svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'#262c35','class':'plot-grid'}));
       if (!this.noXTickLabels){
         const t = svgEl('text',{x:px,y:h-m.b+16,'font-size':10,fill:'#93a0b0','text-anchor':anchor||'middle','class':'plot-tick'});
         t.textContent = fmtTick(xv); this.gAxes.appendChild(t);
@@ -122,11 +123,15 @@ class Plot{
       if (!xTicks.some(v=>Math.abs(v-this.xmin)<tol)) drawXTick(this.xmin, 'start');
       if (!xTicks.some(v=>Math.abs(v-this.xmax)<tol)) drawXTick(this.xmax, 'end');
     }
-    if (!this.noYTickLabels){
+    if (!this.noYTickLabels || this._opts.yGrid){
       for (const yv of niceTicks(this.ymin, this.ymax, 5)){
         const py = this.py(yv);
-        const t = svgEl('text',{x:m.l-6,y:py+3,'font-size':10,fill:'#93a0b0','text-anchor':'end','class':'plot-tick'});
-        t.textContent = fmtTick(yv); this.gAxes.appendChild(t);
+        if (this._opts.yGrid)   // horizontal grid line (used by bar charts)
+          this.gAxes.appendChild(svgEl('line',{x1:m.l,x2:w-m.r,y1:py,y2:py,stroke:'#262c35','class':'plot-grid'}));
+        if (!this.noYTickLabels){
+          const t = svgEl('text',{x:m.l-6,y:py+3,'font-size':10,fill:'#93a0b0','text-anchor':'end','class':'plot-tick'});
+          t.textContent = fmtTick(yv); this.gAxes.appendChild(t);
+        }
       }
     }
     const xl = svgEl('text',{x:w/2,y:h-4,'font-size':11,fill:'#c4ccd6','text-anchor':'middle','class':'plot-label'}); xl.textContent=this.xlabel;
