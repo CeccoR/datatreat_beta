@@ -177,7 +177,9 @@ class ColorPickerUI {
   }
 
   open(anchorBtn, currentColor, onChange){
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._anchorBtn = anchorBtn;
+    anchorBtn.classList.add('cp-anchored');   // keep the swatch's border while open
     this._onChange = onChange;
     this._hsv = _rgbToHsv(...Object.values(_hexToRgb(currentColor)));
     this._updateUI(false);
@@ -193,6 +195,7 @@ class ColorPickerUI {
 
   close(){
     this._el.style.display = 'none';
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._onChange = null;
     this._anchorBtn = null;
   }
@@ -1041,8 +1044,12 @@ function applyTheme(theme, persist){
   if (changing && !reduced && document.startViewTransition){
     // One GPU-composited cross-fade of the whole viewport — uniform and smooth,
     // unlike per-element colour transitions (which repaint hundreds of nodes and
-    // stutter at uneven rates).
-    document.startViewTransition(commit);
+    // stutter at uneven rates). Freeze every element's own transition during the
+    // switch so buttons snap to the new colour under the cross-fade instead of
+    // briefly flashing it via their 0.14s transition.
+    root.classList.add('theme-switching');
+    const vt = document.startViewTransition(commit);
+    vt.finished.finally(()=> root.classList.remove('theme-switching'));
   } else if (changing && !reduced){
     // Fallback for browsers without View Transitions: scoped per-element cross-fade.
     root.classList.add('theme-anim');
@@ -1444,20 +1451,29 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
-/* Truncate a 30°-tilted bar-chart axis label (adding an ellipsis) so it fits both:
-   • horizontally within one bar slot — `barSpacing/cos30` — i.e. the longest label
-     that, at the plot's width, doesn't run past the y-axis line; and
-   • vertically within a fixed fraction of the chart height — so every barplot caps
-     labels to the SAME relative tilted height, whatever its size (mctx is a canvas
-     2D context with the label font already set). */
-const TILT_LABEL_HEIGHT_FRAC = 0.15;   // max tilted-label height as a fraction of the chart height
-function truncTiltLabel(mctx, text, barSpacing, chartH){
-  const cos30 = Math.cos(Math.PI/6), sin30 = Math.sin(Math.PI/6);
-  const maxW = Math.min(barSpacing / cos30, TILT_LABEL_HEIGHT_FRAC * chartH / sin30);
-  if (mctx.measureText(text).width <= maxW) return text;
-  let t = text;
-  while (t.length > 1 && mctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
-  return t + '…';
+/* Truncate a bar-chart axis label to at most 20 characters, with the ellipsis in
+   the MIDDLE (start…end) so both ends of the name stay readable. Sideways overflow
+   past the plot frame is handled separately by widening the x-range (barPlotXPad). */
+const TILT_LABEL_MAX = 20;
+function truncTiltLabel(mctx, text){
+  if (text.length <= TILT_LABEL_MAX) return text;
+  const keep = TILT_LABEL_MAX - 1;                 // one char for the ellipsis
+  const front = Math.ceil(keep / 2), back = keep - front;
+  return text.slice(0, front) + '…' + text.slice(text.length - back);
+}
+/* Extra x-range padding (in data units, per side) so the 30°-tilted labels of the
+   edge bars clear the plot frame instead of running off the side. Bars sit at
+   x = 1..n inside the base range [0, n+1]; use the returned p as range
+   [-p, n+1+p] (like a small symmetric zoom-out). maxLabelW = widest label px,
+   plotW = drawable width px (svg width − left/right margins). */
+function barPlotXPad(maxLabelW, n, plotW){
+  if (!(plotW > 0) || !(n > 0)) return 0;
+  const target = maxLabelW * Math.cos(Math.PI / 6) + 4;   // tilted horizontal extent + a small gap
+  const f = target / plotW;
+  if (f <= 0) return 0;
+  if (f >= 0.45) return n;                                 // pathological (huge labels) → hard cap
+  // Solve gap(frame → first bar) = target for the range [-p, n+1+p].
+  return Math.max(0, (f * (n + 1) - 1) / (1 - 2 * f));
 }
 
 /* =========================================================
@@ -1497,5 +1513,5 @@ function truncTiltLabel(mctx, text, barSpacing, chartH){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, refreshProjBar
 };

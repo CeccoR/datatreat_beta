@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel, barPlotXPad } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 
 /* =========================================================
@@ -467,12 +467,9 @@ import { Plot, svgEl } from './plot.js';
     // changing the chart's footprint — the data area shrinks instead.
     const mctx = document.createElement('canvas').getContext('2d');
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-    // Truncate labels so a 30°-tilted name spans at most ~one bar spacing horizontally
-    // (keeps the leftmost label from spilling off the left edge on narrow screens).
     const rect = svg.getBoundingClientRect();
     const svgW = rect.width || 640, svgH = rect.height || 640;
-    const barSpacing = Math.max(30, (svgW-75)/(costResults.length+1));
-    const labels = costResults.map(c=>truncTiltLabel(mctx, c.label, barSpacing, svgH));
+    const labels = costResults.map(c=>truncTiltLabel(mctx, c.label));
     let maxLbl = 0;
     labels.forEach((lbl,k)=>{ if (isFinite(costResults[k].cost)) maxLbl = Math.max(maxLbl, mctx.measureText(lbl).width); });
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
@@ -484,7 +481,8 @@ import { Plot, svgEl } from './plot.js';
     const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
     const ymax = Math.max(Math.max(...finite.map(c=>c.cost))*1.2, maxTop/frac);
     const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    barPlot.setRange(0, costResults.length+1, 0, ymax||1);
+    const xpad = barPlotXPad(maxLbl, costResults.length, svgW-75);   // widen x-range when labels would overflow the sides
+    barPlot.setRange(-xpad, costResults.length+1+xpad, 0, ymax||1);
     barPlot.drawAxes();
     costResults.forEach((c,k)=>{
       if (!isFinite(c.cost)) return;

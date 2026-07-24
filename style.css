@@ -389,6 +389,9 @@ main {
 /* Theme toggle via the View Transitions API (Chrome/Safari/…): one smooth,
    uniform cross-fade of the whole viewport instead of per-element transitions. */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.32s; animation-timing-function: ease; }
+/* Freeze per-element transitions during the switch so nothing flashes the new
+   colour underneath the cross-fade — the View Transition is the only animation. */
+:root.theme-switching, :root.theme-switching * { transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
 }
@@ -1038,7 +1041,10 @@ button.color-swatch {
   width: 14px;
   height: 14px;
   padding: 0;
-  border: 1px solid rgba(255,255,255,0.18);
+  /* Idle: no visible border. The 1.5px transparent border keeps the box size fixed
+     (border-box) so revealing it on hover doesn't resize the square — it just draws
+     inside, eating a little of the colour. Thickness matches the palette button. */
+  border: 1.5px solid transparent;
   border-radius: 3px;
   cursor: pointer;
   vertical-align: middle;
@@ -1046,10 +1052,10 @@ button.color-swatch {
   flex-shrink: 0;
   display: inline-block;
 }
-/* Hover: a border the SAME thickness as the legend markers (1.6px), drawn INSIDE
-   the swatch (box-sizing:border-box, inherited) so it eats into the colour instead
-   of growing the square. */
-button.color-swatch:hover { border: 1.6px solid var(--text); }
+/* Border appears on hover and stays while this swatch's colour picker is open
+   (.cp-anchored), then returns to idle once the picker closes. */
+button.color-swatch:hover,
+button.color-swatch.cp-anchored { border-color: var(--text); }
 
 /* ===== Custom Color Picker popup ===== */
 .cp-popup {
