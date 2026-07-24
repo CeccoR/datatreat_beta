@@ -1006,7 +1006,9 @@ function fitCsvIcons(root){
 // One delegated handler drives every per-view CSV button.
 document.addEventListener('click', e=>{
   const btn = e.target.closest('[data-csv-mod]');
-  if (!btn) return;
+  // The image-download button carries data-csv-mod only as the source for building
+  // the separate CSV button — it must NOT itself export CSVs (it downloads the image).
+  if (!btn || btn.classList.contains('plot-dl-btn')) return;
   const names = (btn.dataset.csvNames||'').split(',').map(s=>s.trim()).filter(Boolean);
   downloadCsvFiles(btn.dataset.csvMod, names);
 });
