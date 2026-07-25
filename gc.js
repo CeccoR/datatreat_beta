@@ -545,12 +545,17 @@ import { Plot, svgEl } from './plot.js';
   function exportGcZip(){
     if (!dataTables.length) return [];
     const entries = [];
-    // Three columns per sample (own time axis), for the Analysis plots (full series,
-    // gc_raw.csv) and the Results plots (cut at the interval end, gc_results.csv).
-    const buildSeriesCsv = (tables)=>{
+    // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
+    // the full series with every intermediate quantity; gc_results.csv keeps only the
+    // three plotted columns, cut at the interval end.
+    const buildSeriesCsv = (tables, full)=>{
       const cols=[];
       tables.forEach(d=>{
-        cols.push({h:`Time (h) [${d.label}]`,       v:d.t.map(x=>fmtNum(x,5))});
+        cols.push({h:`Time (h) [${d.label}]`, v:d.t.map(x=>fmtNum(x,5))});
+        if (full){
+          cols.push({h:`H2 (%mol) [${d.label}]`,       v:d.h2pct.map(x=>fmtNum(x,5))});
+          cols.push({h:`H2 (umol h^-1) [${d.label}]`,  v:d.h2F.map(x=>fmtNum(x,5))});
+        }
         cols.push({h:`${LBL_RATE_CSV} [${d.label}]`, v:d.h2Fm.map(x=>fmtNum(x,5))});
         cols.push({h:`${LBL_CUM_CSV} [${d.label}]`,  v:d.h2FmInt.map(x=>fmtNum(x,5))});
       });
@@ -559,8 +564,8 @@ import { Plot, svgEl } from './plot.js';
       for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
       return t;
     };
-    entries.push({name:'gc_raw.csv',     text:buildSeriesCsv(dataTables)});
-    entries.push({name:'gc_results.csv', text:buildSeriesCsv(cutTables())});
+    entries.push({name:'gc_raw.csv',     text:buildSeriesCsv(dataTables, true)});
+    entries.push({name:'gc_results.csv', text:buildSeriesCsv(cutTables(), false)});
     // h2_rates.csv — bar-plot-like summary (one row per sample)
     let t2 = csvLine(['Sample','Mean '+LBL_RATE_CSV,'Interval duration (h)']);
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
