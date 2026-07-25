@@ -717,6 +717,8 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
    min-width floor — otherwise every plot would overflow and scroll horizontally. */
 @media (max-width: 820px) {
   svg.plot { min-width: 0; }
+  /* A 1 : 2φ strip is unreadable at phone widths — fall back to the standard box. */
+  svg.plot.plot-wide { aspect-ratio: 1.618; }
 }
 .legend {
   font-size: 12px;
