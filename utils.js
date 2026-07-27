@@ -177,7 +177,11 @@ class ColorPickerUI {
   }
 
   open(anchorBtn, currentColor, onChange){
+    // Clicking the same swatch again closes the picker (toggle).
+    if (this._anchorBtn === anchorBtn && this._el.style.display !== 'none'){ this.close(); return; }
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._anchorBtn = anchorBtn;
+    anchorBtn.classList.add('cp-anchored');   // keep the swatch's border while open
     this._onChange = onChange;
     this._hsv = _rgbToHsv(...Object.values(_hexToRgb(currentColor)));
     this._updateUI(false);
@@ -193,6 +197,7 @@ class ColorPickerUI {
 
   close(){
     this._el.style.display = 'none';
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._onChange = null;
     this._anchorBtn = null;
   }
@@ -242,7 +247,11 @@ class PalettePickerUI {
     });
   }
   open(anchorBtn, onChange){
+    // Clicking the same palette button again closes the picker (toggle).
+    if (this._anchorBtn === anchorBtn && this._el.style.display !== 'none'){ this.close(); return; }
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._anchorBtn = anchorBtn;
+    anchorBtn.classList.add('cp-anchored');   // keep the button's border while open
     this._onChange = onChange;
     this._el.style.display = 'block';
     const rect = anchorBtn.getBoundingClientRect();
@@ -253,7 +262,11 @@ class PalettePickerUI {
     this._el.style.left = Math.max(8,left)+'px';
     this._el.style.top = Math.max(8,top)+'px';
   }
-  close(){ this._el.style.display='none'; this._onChange=null; this._anchorBtn=null; }
+  close(){
+    this._el.style.display='none';
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
+    this._onChange=null; this._anchorBtn=null;
+  }
 }
 
 const palettePickerUI = new PalettePickerUI();
@@ -912,14 +925,20 @@ document.addEventListener('keydown', e=>{
 // Toggle the "data loaded" dot's visibility (the slot is already reserved).
 function setTabLoaded(tab, has){
   const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
-  if (btn) btn.classList.toggle('has-data', !!has);
-  // The project-bar action buttons only appear once data is loaded
-  document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"]')
-    .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
-  // The delete / new-project buttons carry no data-module; reveal them with the rest.
-  document.querySelectorAll('.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
-    .forEach(b=>{ b.style.visibility = has ? 'visible' : 'hidden'; });
-  if (has) normalizeProjIcons(tab);
+  if (btn) btn.classList.toggle('has-data', !!has);   // the nav dot tracks actual data
+  refreshProjBar(tab);
+}
+// Project-bar buttons show when the module has files OR a non-empty project name —
+// hidden only when both are empty. (Save/export still refuse an empty file list.)
+function refreshProjBar(tab){
+  const nameInp = document.querySelector('.project-name-input[data-module="'+tab+'"]');
+  const named = !!(nameInp && nameInp.value.trim());
+  const has = !!document.querySelector('#nav button[data-tab="'+tab+'"].has-data');
+  const show = has || named;
+  document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"], '
+    + '.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
+    .forEach(b=>{ b.style.visibility = show ? 'visible' : 'hidden'; });
+  if (show) normalizeProjIcons(tab);
 }
 
 /* Normalize a module's project icons so every icon's minimal bounding box is the
@@ -1000,7 +1019,9 @@ function fitCsvIcons(root){
 // One delegated handler drives every per-view CSV button.
 document.addEventListener('click', e=>{
   const btn = e.target.closest('[data-csv-mod]');
-  if (!btn) return;
+  // The image-download button carries data-csv-mod only as the source for building
+  // the separate CSV button — it must NOT itself export CSVs (it downloads the image).
+  if (!btn || btn.classList.contains('plot-dl-btn')) return;
   const names = (btn.dataset.csvNames||'').split(',').map(s=>s.trim()).filter(Boolean);
   downloadCsvFiles(btn.dataset.csvMod, names);
 });
@@ -1020,19 +1041,34 @@ function currentTheme(){ return document.documentElement.getAttribute('data-them
 function applyTheme(theme, persist){
   theme = theme === 'light' ? 'light' : 'dark';
   const root = document.documentElement;
-  // Smoothly cross-fade colours on a user-initiated switch (not the initial sync);
-  // a temporary class scopes the transition to the toggle so hovers stay snappy.
-  if (persist && root.getAttribute('data-theme') !== theme){
+  const changing = persist && root.getAttribute('data-theme') !== theme;
+  if (persist){ try { localStorage.setItem(THEME_KEY, theme); } catch(e){} }
+  const commit = ()=>{
+    root.setAttribute('data-theme', theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
+    const sel = document.getElementById('settingTheme');
+    if (sel) sel.value = theme;
+  };
+  const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (changing && !reduced && document.startViewTransition){
+    // One GPU-composited cross-fade of the whole viewport — uniform and smooth,
+    // unlike per-element colour transitions (which repaint hundreds of nodes and
+    // stutter at uneven rates). Freeze every element's own transition during the
+    // switch so buttons snap to the new colour under the cross-fade instead of
+    // briefly flashing it via their 0.14s transition.
+    root.classList.add('theme-switching');
+    const vt = document.startViewTransition(commit);
+    vt.finished.finally(()=> root.classList.remove('theme-switching'));
+  } else if (changing && !reduced){
+    // Fallback for browsers without View Transitions: scoped per-element cross-fade.
     root.classList.add('theme-anim');
     clearTimeout(applyTheme._t);
     applyTheme._t = setTimeout(()=>root.classList.remove('theme-anim'), 320);
+    commit();
+  } else {
+    commit();
   }
-  root.setAttribute('data-theme', theme);
-  if (persist){ try { localStorage.setItem(THEME_KEY, theme); } catch(e){} }
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
-  const sel = document.getElementById('settingTheme');
-  if (sel) sel.value = theme;
 }
 (function initTheme(){
   applyTheme(currentTheme(), false); // sync meta + settings select to the pre-painted attribute
@@ -1137,6 +1173,20 @@ function sizeHomeTiles(){
 requestAnimationFrame(sizeHomeTiles);
 window.addEventListener('load', sizeHomeTiles);
 window.addEventListener('resize', ()=>requestAnimationFrame(sizeHomeTiles));
+/* Narrow-layout switch. Side-by-side columns stack, and GC's wide strip plots fall
+   back to the golden-ratio box, once the window is at most half the screen wide —
+   the point where a side-by-side plot has shrunk to about half its full size. That
+   threshold depends on the monitor, so it can't be a fixed media query; the class
+   below carries it and style.css keys the layout rules off :root.narrow-layout.
+   The 820px floor keeps phones and small windows stacked, where the window already
+   fills the screen and the half-screen test never fires. */
+function updateNarrowLayout(){
+  const half = (screen.availWidth || screen.width || 0) / 2;
+  const narrow = window.innerWidth <= 820 || (half > 0 && window.innerWidth <= half);
+  document.documentElement.classList.toggle('narrow-layout', narrow);
+}
+updateNarrowLayout();
+window.addEventListener('resize', updateNarrowLayout);
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
 window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
 (function initHashRoute(){
@@ -1425,12 +1475,34 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
-/* Truncate a bar-chart axis label to a fixed maximum length (adding an ellipsis).
-   Extra args (mctx, barSpacing, chartH) are kept for call-site compatibility but
-   no longer used — the cap is a simple character count. */
-const TILT_LABEL_MAX = 25;
+/* Truncate a bar-chart axis label to at most 20 characters, with the ellipsis in
+   the MIDDLE (start…end) so both ends of the name stay readable. Sideways overflow
+   past the plot frame is handled separately by widening the x-range (barPlotXPad). */
+const TILT_LABEL_MAX = 20;
 function truncTiltLabel(mctx, text){
-  return text.length > TILT_LABEL_MAX ? text.slice(0, TILT_LABEL_MAX) + '…' : text;
+  if (text.length <= TILT_LABEL_MAX) return text;
+  const keep = TILT_LABEL_MAX - 1;                 // one char for the ellipsis
+  const front = Math.ceil(keep / 2), back = keep - front;
+  return text.slice(0, front) + '…' + text.slice(text.length - back);
+}
+/* Extra x-range padding (in data units, per side) so no 30°-tilted bar label runs
+   off the LEFT of the plot (its first character would land at a negative x). Bars
+   sit at x = 1..n inside the base range [0, n+1]; use the returned p as the range
+   [-p, n+1+p] (a small symmetric zoom-out that moves the edge bars inward). Returns
+   0 unless a label would actually cross x = 0 — i.e. only kicks in when truly needed.
+   `labelWs` = per-bar label pixel widths; plotW = drawable width px. */
+function barPlotXPad(labelWs, n, plotW){
+  if (!(plotW > 0) || !(n > 0)) return 0;
+  const cos30 = Math.cos(Math.PI / 6);
+  let p = 0;
+  for (let k = 1; k <= n; k++){
+    const f = ((labelWs[k-1] || 0) * cos30) / plotW;   // label's tilted horizontal extent, as a fraction of plotW
+    if (f >= 0.5) return n;                             // pathological (huge label) → hard cap
+    // Bar k clears x=0 in [-p, n+1+p] when (k+p)/(n+1+2p) ≥ f. Solve for the min p.
+    const need = (f * (n + 1) - k) / (1 - 2 * f);       // > 0 only if the label crosses x=0 at base scale
+    if (need > p) p = need;
+  }
+  return Math.max(0, p);
 }
 
 /* =========================================================
@@ -1470,5 +1542,5 @@ function truncTiltLabel(mctx, text){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, confirmBanner, normalizeProjIcons
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, refreshProjBar
 };

@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel, barPlotXPad } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 
 /* =========================================================
@@ -9,6 +9,16 @@ import { Plot, svgEl } from './plot.js';
   let ms=[], Qs=[], startArr=[], endArr=[], lightOnDates=[];
   let dataTables=[];
   let plot1, plot2;
+  let plotResRate, plotResCum;
+
+  // Axis titles. The SVG form carries the H₂ subscript and the g⁻¹/h⁻¹ superscripts;
+  // the plain form is the matching CSV header.
+  const SUB2 = '<tspan baseline-shift="sub" font-size="8">2</tspan>';
+  const SUP1 = '<tspan baseline-shift="super" font-size="8">-1</tspan>';
+  const LBL_RATE_SVG = `H${SUB2} Production Rate (mmol g${SUP1} h${SUP1})`;
+  const LBL_CUM_SVG  = `H${SUB2} Production (mmol g${SUP1})`;
+  const LBL_RATE_CSV = 'H2 Production Rate (mmol g^-1 h^-1)';
+  const LBL_CUM_CSV  = 'H2 Production (mmol g^-1)';
   // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
   // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
   let mMode='all', qMode='all', startMode='all', endMode='all';
@@ -180,7 +190,8 @@ import { Plot, svgEl } from './plot.js';
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
     if (!files.length){ wrap.innerHTML=''; return; }
-    const cg = `<colgroup><col style="width:15%"><col style="width:12%"><col style="width:12%"><col style="width:24%"><col style="width:11%"><col style="width:11%"><col style="width:15%"></colgroup>`;
+    // Sample 1/5 | m 1/10 | Q 1/10 | Light-on 1/5 | start 1/10 | end 1/10 | warnings 1/5
+    const cg = `<colgroup><col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:20%"></colgroup>`;
     const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
     const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
     // Column order: Sample | m | Q | Light-on | [Interval: start end] | warnings.
@@ -338,10 +349,12 @@ import { Plot, svgEl } from './plot.js';
 
   function renderGcPlots(){
     const legend = document.getElementById('gcLegend'); legend.innerHTML='';
-    plot1 = new Plot(document.getElementById('gcSvg1'), {xlabel:'Time (h)', ylabel:'H₂ Rate (mmol/h/g)'});
-    plot2 = new Plot(document.getElementById('gcSvg2'), {xlabel:'Time (h)', ylabel:'Cumulative H₂ (mmol/g)'});
+    plot1 = new Plot(document.getElementById('gcSvg1'), {xlabel:'Time (h)', ylabelSvg:LBL_RATE_SVG});
+    plot2 = new Plot(document.getElementById('gcSvg2'), {xlabel:'Time (h)', ylabelSvg:LBL_CUM_SVG});
+    const resLegend = document.getElementById('gcResLegend'); resLegend.innerHTML='';
     dataTables.forEach(d=>{
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${d.color}"></i>${d.label}`; legend.appendChild(s);
+      resLegend.appendChild(s.cloneNode(true));
     });
     plot1.attachTools(plot1.svg.closest('.plot-wrap'));
     plot2.attachTools(plot2.svg.closest('.plot-wrap'));
@@ -454,27 +467,60 @@ import { Plot, svgEl } from './plot.js';
       return {label:d.label, cost:rate, dt};
     });
     drawGcData();
+    // Show the Results card before drawing into it: plots sized from a hidden element
+    // would measure 0. It stays hidden while no sample has a valid integration interval.
+    const barCard = document.getElementById('gcResultsBar');
+    barCard.style.display = costResults.some(c=>isFinite(c.cost)) ? 'block' : 'none';
+    drawResultPlots();
     drawBarChart();
   }
 
+  // Results series: the Analysis curves truncated just past each sample's interval end.
+  // If the last point already falls at or before the end, nothing is cut.
+  function cutTables(){
+    return dataTables.map((d,k)=>{
+      const end = endOf(k);
+      const i = d.t.findIndex(t => t > end);
+      const n = i < 0 ? d.t.length : i+1;
+      return {...d, t:d.t.slice(0,n), h2Fm:d.h2Fm.slice(0,n), h2FmInt:d.h2FmInt.slice(0,n)};
+    });
+  }
+
+  // The two Results strip plots: same quantities as Analysis, cut at the interval end
+  // and without the interval overlay (Results shows the retained data only).
+  function drawResultPlots(){
+    const cut = cutTables();
+    if (!cut.length || !cut.some(d=>d.t.length)) return;
+    const allT = cut.flatMap(d=>d.t);
+    const tmin = Math.min(0, minArr(allT)), tmax = maxArr(allT);
+    const mk = (id, ylabelSvg, key, ymin0)=>{
+      const svg = document.getElementById(id);
+      const p = new Plot(svg, {xlabel:'Time (h)', ylabelSvg});
+      const ymax = Math.max(...cut.map(d=>maxArr(d[key])));
+      const ymin = ymin0 !== null ? ymin0 : Math.min(...cut.map(d=>minArr(d[key])));
+      p.setRange(tmin, tmax, ymin, ymax*1.05);
+      p.drawAxes(); p.clearData();
+      cut.forEach(d=> p.line(d.t, d[key], d.color, 1.3));
+      p.attachTools(svg.closest('.plot-wrap'));
+      return p;
+    };
+    plotResRate = mk('gcSvgRate', LBL_RATE_SVG, 'h2Fm', null);
+    plotResCum  = mk('gcSvgCum',  LBL_CUM_SVG,  'h2FmInt', 0);
+  }
+
   function drawBarChart(){
-    const barCard = document.getElementById('gcResultsBar');
     const finite = costResults.filter(c=>isFinite(c.cost));
-    if (!finite.length){ barCard.style.display='none'; return; }
-    barCard.style.display='block';
+    if (!finite.length) return;   // card visibility is handled by updateRegression
     const svg = document.getElementById('gcSvgBar');
     // Bottom margin adapts to the longest (30°-tilted) label so names fit without
     // changing the chart's footprint — the data area shrinks instead.
     const mctx = document.createElement('canvas').getContext('2d');
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-    // Truncate labels so a 30°-tilted name spans at most ~one bar spacing horizontally
-    // (keeps the leftmost label from spilling off the left edge on narrow screens).
     const rect = svg.getBoundingClientRect();
     const svgW = rect.width || 640, svgH = rect.height || 640;
-    const barSpacing = Math.max(30, (svgW-75)/(costResults.length+1));
-    const labels = costResults.map(c=>truncTiltLabel(mctx, c.label, barSpacing, svgH));
-    let maxLbl = 0;
-    labels.forEach((lbl,k)=>{ if (isFinite(costResults[k].cost)) maxLbl = Math.max(maxLbl, mctx.measureText(lbl).width); });
+    const labels = costResults.map(c=>truncTiltLabel(mctx, c.label));
+    const labelWs = labels.map((lbl,k)=> isFinite(costResults[k].cost) ? mctx.measureText(lbl).width : 0);
+    let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
     // Value label (vertical) above each bar, with reserved top headroom so it never clips.
     const fmtVal = v => v.toFixed(4);
@@ -483,8 +529,9 @@ import { Plot, svgEl } from './plot.js';
     const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
     const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
     const ymax = Math.max(Math.max(...finite.map(c=>c.cost))*1.2, maxTop/frac);
-    const barPlot = new Plot(svg, {xlabel:'', ylabel:'H₂ Rate (mmol/h/g)', noXTickLabels:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    barPlot.setRange(0, costResults.length+1, 0, ymax||1);
+    const barPlot = new Plot(svg, {xlabel:'', ylabelSvg:LBL_RATE_SVG, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+    const xpad = barPlotXPad(labelWs, costResults.length, svgW-75);   // widen only when a label would cross x=0
+    barPlot.setRange(-xpad, costResults.length+1+xpad, 0, ymax||1);
     barPlot.drawAxes();
     costResults.forEach((c,k)=>{
       if (!isFinite(c.cost)) return;
@@ -498,21 +545,29 @@ import { Plot, svgEl } from './plot.js';
   function exportGcZip(){
     if (!dataTables.length) return [];
     const entries = [];
-    // gc_timeseries.csv — each sample keeps its own independent columns (own time axis)
-    const cols=[];
-    dataTables.forEach(d=>{
-      cols.push({h:'Time_h_'+d.label,        v:d.t.map(x=>fmtNum(x,5))});
-      cols.push({h:'H2_molpct_'+d.label,     v:d.h2pct.map(x=>fmtNum(x,5))});
-      cols.push({h:'H2_umol_h_'+d.label,     v:d.h2F.map(x=>fmtNum(x,5))});
-      cols.push({h:'H2_mmol_h_g_'+d.label,   v:d.h2Fm.map(x=>fmtNum(x,5))});
-      cols.push({h:'H2_cumulative_'+d.label, v:d.h2FmInt.map(x=>fmtNum(x,5))});
-    });
-    const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
-    let t = csvLine(cols.map(c=>c.h));
-    for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-    entries.push({name:'gc_timeseries.csv', text:t});
+    // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
+    // the full series with every intermediate quantity; gc_results.csv keeps only the
+    // three plotted columns, cut at the interval end.
+    const buildSeriesCsv = (tables, full)=>{
+      const cols=[];
+      tables.forEach(d=>{
+        cols.push({h:`Time (h) [${d.label}]`, v:d.t.map(x=>fmtNum(x,5))});
+        if (full){
+          cols.push({h:`H2 (%mol) [${d.label}]`,       v:d.h2pct.map(x=>fmtNum(x,5))});
+          cols.push({h:`H2 (umol h^-1) [${d.label}]`,  v:d.h2F.map(x=>fmtNum(x,5))});
+        }
+        cols.push({h:`${LBL_RATE_CSV} [${d.label}]`, v:d.h2Fm.map(x=>fmtNum(x,5))});
+        cols.push({h:`${LBL_CUM_CSV} [${d.label}]`,  v:d.h2FmInt.map(x=>fmtNum(x,5))});
+      });
+      const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
+      let t = csvLine(cols.map(c=>c.h));
+      for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
+      return t;
+    };
+    entries.push({name:'gc_raw.csv',     text:buildSeriesCsv(dataTables, true)});
+    entries.push({name:'gc_results.csv', text:buildSeriesCsv(cutTables(), false)});
     // h2_rates.csv — bar-plot-like summary (one row per sample)
-    let t2 = csvLine(['Sample','Mean integral rate (mmol/h/g)','Interval duration (h)']);
+    let t2 = csvLine(['Sample','Mean '+LBL_RATE_CSV,'Interval duration (h)']);
     costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
     entries.push({name:'h2_rates.csv', text:t2});
     // gc_info.csv — per-sample inputs + the integration interval used

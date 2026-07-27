@@ -8,7 +8,7 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar } from './utils.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
@@ -131,6 +131,26 @@ const CHECK_SM = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" st
 
 function saveBtns(mod){ return [...document.querySelectorAll('.proj-save[data-module="'+mod+'"]')]; }
 function nameInput(mod){ return document.querySelector('.project-name-input[data-module="'+mod+'"]'); }
+// Adaptive width for the project-name field: while it shows the ghost placeholder
+// (empty & unfocused) it keeps its default width; once focused/filled it grows with
+// the text, from just enough for the caret up to 3/4 of the project bar. Past that
+// the width sticks and the text scrolls (blurred → a trailing "…" via CSS ellipsis).
+const _nameCtx = document.createElement('canvas').getContext('2d');
+function fitNameField(mod){
+  const inp = nameInput(mod); if (!inp) return;
+  const bar = inp.closest('.project-bar');
+  // On a hidden tab the bar has zero width → don't size it (it would collapse to 0
+  // and hide the name); it gets sized when its tab is shown.
+  if (!bar || !bar.clientWidth) return;
+  const focused = document.activeElement === inp;
+  if (!inp.value && !focused){ inp.style.width = ''; return; }   // ghost → CSS default width
+  const cs = getComputedStyle(inp);
+  _nameCtx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+  const maxW = bar.clientWidth * 0.75;
+  const pad = 24;   // 2×10 padding + 2×1 border + a little caret slack
+  inp.style.width = Math.min(Math.max(_nameCtx.measureText(inp.value).width + pad, pad), maxW) + 'px';
+}
+function fitAllNameFields(){ MODULES.forEach(fitNameField); }
 // Save-disk icon with a red asterisk badge (top-right): shown on the project-bar
 // Save button when an open project has unsaved changes — this replaces the old
 // "*" marker next to the name.
@@ -164,6 +184,7 @@ function markSaved(mod){
     b.disabled = true;
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
+  fitNameField(mod);
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit, a file removal, or a rename in the field). Removing
@@ -272,8 +293,10 @@ async function openProjects(recs){
     seen.add(r.module);
   }
   for (const r of recs){
-    if (moduleHasData(r.module)){
-      if (!confirm('The ' + (MODULE_LABELS[r.module]||r.module) + ' module already has data loaded. Replace it with “' + r.title + '”?')) return;
+    // Opening the project that's already loaded in that module is a no-op → no prompt.
+    // Otherwise, if the module holds other data, confirm the replace (in-site banner).
+    if (moduleHasData(r.module) && !(current[r.module] && current[r.module].id === r.id)){
+      if (!await confirmBanner('The ' + (MODULE_LABELS[r.module]||r.module) + ' module already has data loaded. Replace it with “' + r.title + '”?', 'Replace')) return;
     }
   }
   for (const r of recs){
@@ -400,11 +423,17 @@ MODULES.forEach(m=>{ try { DEFAULT_STATE[m] = encode(getModuleState(m)); } catch
 function resetModule(mod){
   delete current[mod];
   dirty[mod] = false;
-  if (DEFAULT_STATE[mod] != null) restoreModuleState(mod, decode(DEFAULT_STATE[mod]));  // params → defaults, files → empty
-  const inp = nameInput(mod); if (inp) inp.value = '';
+  const inp = nameInput(mod); if (inp) inp.value = '';   // clear name BEFORE the restore
+  if (DEFAULT_STATE[mod] != null) restoreModuleState(mod, decode(DEFAULT_STATE[mod]));  // params → defaults, files → empty (also refreshes the now-empty project bar)
   restoreSaveBtns(mod);
   normalizeProjIcons(mod);
+  fitNameField(mod);     // empty name → back to the ghost-width field
+  refreshProjBar(mod);   // both name and files empty now → hide the buttons
   clearDraft(mod);
+}
+// Is there anything for a reset to actually clear? (files, an open project, a name)
+function moduleHasSomething(mod){
+  return moduleHasData(mod) || !!current[mod] || !!(nameInput(mod) && nameInput(mod).value.trim());
 }
 
 // Project-bar trash button. Forces a decision, then wipes the module clean.
@@ -420,7 +449,9 @@ async function deleteOpenProject(mod){
     renderList();
     return;
   }
-  if (!moduleHasData(mod)) return;   // nothing loaded, nothing saved → nothing to do
+  // No files (only a leftover name / draft): nothing to save or lose — just clear
+  // the name and the draft, no prompt.
+  if (!moduleHasData(mod)){ if (moduleHasSomething(mod)){ resetModule(mod); renderList(); } return; }
   const res = await confirmBanner('Are you sure to discard all? All unsaved changes will be lost.', 'Save', 'Discard');
   if (res === false) return;                                   // cancel
   if (res === true){ if (!await doSave(mod, false)) return; }  // Save (empty name → shake, no reset)
@@ -430,7 +461,8 @@ async function deleteOpenProject(mod){
 // New project: force a Save / Don't save / cancel choice when there are unsaved
 // changes, then start from a clean default module. Saved+clean starts fresh at once.
 async function newProject(mod){
-  if (!moduleHasData(mod)) return;          // already empty → nothing to start over
+  // No files: nothing to save/lose — clear any leftover name + draft, no prompt.
+  if (!moduleHasData(mod)){ if (moduleHasSomething(mod)){ resetModule(mod); renderList(); } return; }
   if (dirty[mod] || !current[mod]){
     const res = await confirmBanner('Save the current project before starting a new one?', 'Save', "Don't save");
     if (res === false) return;                                   // cancel
@@ -447,11 +479,15 @@ async function newProject(mod){
 document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML; });
 
 // Project action buttons (top icon row + bottom text row), via delegation
-document.addEventListener('click', e=>{
+document.addEventListener('click', async e=>{
   const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del, .proj-new');
   if (!b || b.disabled) return;
   // The delete / new-project buttons carry no data-module; take it from their project-bar.
   const mod = b.dataset.module || (b.closest('.project-bar') || {}).dataset && b.closest('.project-bar').dataset.module;
+  const isExport = b.classList.contains('proj-save') || b.classList.contains('proj-saveas')
+                || b.classList.contains('proj-csv')  || b.classList.contains('proj-json');
+  // Save / Save as / export need files; with an empty list say so (delete & new are fine).
+  if (isExport && !moduleHasData(mod)){ await confirmBanner('Project file list is empty.', 'OK'); return; }
   if (b.classList.contains('proj-save'))        doSave(mod, false);
   else if (b.classList.contains('proj-saveas')) doSave(mod, true);
   else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
@@ -459,14 +495,25 @@ document.addEventListener('click', e=>{
   else if (b.classList.contains('proj-del'))    deleteOpenProject(mod);
   else if (b.classList.contains('proj-new'))    newProject(mod);
 });
-// Editing the project name is an unsaved change (a pending rename); typing also
-// clears the red "missing name" state.
+// Editing the project name marks a pending change, clears the red "missing name"
+// state, and updates the project-bar visibility (a name alone reveals the buttons).
 document.querySelectorAll('.project-name-input').forEach(inp=>{
   const mod = inp.dataset.module;
   inp.addEventListener('input', ()=>{
     inp.classList.remove('field-invalid');
+    fitNameField(mod);
+    refreshProjBar(mod);
     if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(mod); }
   });
+  inp.addEventListener('focus', ()=> fitNameField(mod));   // click triggers adaptivity
+  inp.addEventListener('blur',  ()=> fitNameField(mod));   // empty → ghost width; filled → ellipsis
+});
+window.addEventListener('resize', fitAllNameFields);   // 3/4-width cap tracks the bar
+// Size a module's name field when its tab becomes visible (it can't be measured
+// while hidden — see fitNameField).
+document.getElementById('nav').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-tab]'); if (!b) return;
+  if (MODULES.includes(b.dataset.tab)) requestAnimationFrame(()=> fitNameField(b.dataset.tab));
 });
 
 // Save as… modal
@@ -585,6 +632,7 @@ async function initDraftRecovery(){
       // anything else comes back as unsaved work.
       if (d.id && !d.dirty) markSaved(d.module);
       else markDirty(d.module);
+      fitNameField(d.module);
     } catch(e){}
   });
   _restoring = false;

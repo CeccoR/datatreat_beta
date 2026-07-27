@@ -250,16 +250,23 @@ button.btn.is-saved:disabled {
 .project-bar .project-name-input {
   width: 240px;
   min-width: 0;
+  max-width: 100%;
   height: 29px;
-  font-size: 20px;
-  font-weight: 700;
   color: var(--text);
   background: transparent;
   border: 1px solid transparent;
   padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;   /* when blurred, a too-long title shows "…" */
+  white-space: nowrap;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
+/* Project-name font token — a touch smaller than the module title. Scoped to the
+   project bar so it out-specifies the base input[type=text] font size. */
+.project-bar .txt-projname { font-size: 17px; font-weight: 700; }
 .project-name-input::placeholder { font-weight: 400; font-size: 13px; color: var(--muted); }
+/* Ghost text disappears the moment the field is clicked (not only once you type). */
+.project-name-input:focus::placeholder { color: transparent; }
 /* Empty → always a real dark field; hover/focus on a filled field reveal it too */
 .project-name-input:placeholder-shown,
 .project-name-input:hover { border-color: var(--line); background: var(--panel2); }
@@ -370,9 +377,23 @@ main {
   to   { opacity: 1; transform: translateY(0); }
 }
 /* Cross-fade colours during a light/dark toggle (scoped to .theme-anim so it only
-   runs on the switch, keeping normal hover/press feedback instant) */
+   runs on the switch, keeping normal hover/press feedback instant). Only the three
+   cheap colour properties animate; icons follow via `color` (they use currentColor),
+   and fill/stroke are deliberately NOT transitioned — animating them across every
+   SVG node (the plots hold hundreds each) is what made the toggle stutter. */
 :root.theme-anim, :root.theme-anim * {
-  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, fill 0.25s ease, stroke 0.25s ease !important;
+  transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease !important;
+}
+/* Belt-and-braces: opt the plots' inner nodes out of any transition during a toggle. */
+:root.theme-anim svg.plot, :root.theme-anim svg.plot * { transition: none !important; }
+/* Theme toggle via the View Transitions API (Chrome/Safari/…): one smooth,
+   uniform cross-fade of the whole viewport instead of per-element transitions. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.32s; animation-timing-function: ease; }
+/* Freeze per-element transitions during the switch so nothing flashes the new
+   colour underneath the cross-fade — the View Transition is the only animation. */
+:root.theme-switching, :root.theme-switching * { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tab.active { animation: none; }
@@ -446,11 +467,16 @@ main {
 .mw260 { min-width: 260px; }
 .mw220 { min-width: 220px; }
 .mw200 { min-width: 200px; }
-/* Tablet / phone: let columns shrink and stack instead of overflowing the viewport */
-@media (max-width: 820px) {
-  .col,
-  .mw520, .mw320, .mw280, .mw260, .mw220, .mw200 { min-width: 100%; }
-}
+/* Narrow layout: let columns shrink and stack instead of overflowing the viewport.
+   .narrow-layout is set by updateNarrowLayout() in utils.js — the threshold is half
+   the screen width (plus an 820px floor), which no fixed media query can express. */
+:root.narrow-layout .col,
+:root.narrow-layout .mw520,
+:root.narrow-layout .mw320,
+:root.narrow-layout .mw280,
+:root.narrow-layout .mw260,
+:root.narrow-layout .mw220,
+:root.narrow-layout .mw200 { min-width: 100%; }
 /* ===== Text style tokens — the single source of text styling. Every text element
    carries one of these classes explicitly (no bare-tag aliases); see also
    .txt-mini / .txt-caption / .txt-meta below. ===== */
@@ -677,21 +703,27 @@ td input.label-input {
 svg.plot {
   width: 100%;
   /* Golden-ratio landscape: height tracks the width (φ ≈ 1.618) in every layout,
-     on desktop and mobile alike. A floor keeps it from getting tiny; below the
-     floor the .plot-wrap scrolls horizontally instead of shrinking further. */
+     on desktop and mobile alike. The floor is low enough that side-by-side plots
+     shrink continuously down to ~half their full width and then wrap (once the
+     window is half the screen) — never hitting the floor first, so they never
+     scroll horizontally. */
   aspect-ratio: 1.618;
   height: auto;
-  min-width: 460px;
+  min-width: 320px;
   background: var(--panel2);
   border-radius: 8px;
   border: 1px solid var(--line);
   touch-action: none;
 }
-/* On mobile / small screens the columns already stack to full width, so drop the
-   min-width floor — otherwise every plot would overflow and scroll horizontally. */
-@media (max-width: 820px) {
-  svg.plot { min-width: 0; }
-}
+/* Exception (GC): full-width strip plots stacked one above the other, so a single
+   golden-ratio box would be far too tall. Twice the golden ratio (1 : 2φ) keeps the
+   pair roughly as tall as one standard plot. */
+svg.plot.plot-wide { aspect-ratio: 3.236; }
+/* Once the columns stack to full width the floor is pointless — and keeping it would
+   make every plot overflow and scroll horizontally on the narrowest screens. */
+:root.narrow-layout svg.plot { min-width: 0; }
+/* Same threshold: a 1 : 2φ strip gets unreadably short once the layout narrows. */
+:root.narrow-layout svg.plot.plot-wide { aspect-ratio: 1.618; }
 .legend {
   font-size: 12px;
   margin-top: 6px;
@@ -983,7 +1015,8 @@ button.palette-pick-btn {
     #3aa0ff 0 25%, #ff7a59 25% 50%, #5fcf6a 50% 75%, #d050ff 75%
   );
 }
-button.palette-pick-btn:hover { border-color: var(--text); }
+button.palette-pick-btn:hover,
+button.palette-pick-btn.cp-anchored { border-color: var(--text); }
 
 /* ===== Palette picker popup ===== */
 .pp-popup {
@@ -1019,7 +1052,10 @@ button.color-swatch {
   width: 14px;
   height: 14px;
   padding: 0;
-  border: 1px solid rgba(255,255,255,0.18);
+  /* Idle: no visible border. The 1.5px transparent border keeps the box size fixed
+     (border-box) so revealing it on hover doesn't resize the square — it just draws
+     inside, eating a little of the colour. Thickness matches the palette button. */
+  border: 1.5px solid transparent;
   border-radius: 3px;
   cursor: pointer;
   vertical-align: middle;
@@ -1027,7 +1063,10 @@ button.color-swatch {
   flex-shrink: 0;
   display: inline-block;
 }
-button.color-swatch:hover { border-color: var(--text); }
+/* Border appears on hover and stays while this swatch's colour picker is open
+   (.cp-anchored), then returns to idle once the picker closes. */
+button.color-swatch:hover,
+button.color-swatch.cp-anchored { border-color: var(--text); }
 
 /* ===== Custom Color Picker popup ===== */
 .cp-popup {
@@ -1424,7 +1463,7 @@ button.color-swatch:hover { border-color: var(--text); }
 /* Desktop: drop the header down so its top lines up with the plot's top edge
    (the plot sits below the sample-nav row: 35px nav + 6px gap). */
 .param-head.aligned { margin-top: 41px; }
-@media (max-width: 820px) { .param-head.aligned { margin-top: 0; } }
+:root.narrow-layout .param-head.aligned { margin-top: 0; }
 .param-grid {
   display: grid;
   grid-template-columns: 3fr 2fr;
