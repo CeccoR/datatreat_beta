@@ -250,21 +250,35 @@ button.btn.is-saved:disabled {
   border-bottom: 1px solid var(--line);
   padding: 3px 16px;
 }
+/* Info on the left, action buttons on the right, and the "Technique · Name" title
+   centred in the bar (the two 1fr side columns are equal, so the middle centres). */
 .pbar-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 8px;
+  --field-inset: 12px;   /* name field: its box left edge → first letter (border 1 + pad 10 + 1px centring slack) */
 }
-.proj-actions { margin-left: auto; }
+.pbar-info { justify-self: start; }
+.proj-actions { justify-self: end; }
 /* Collapsible technique info, inside the bar, below the main row. */
-.pbar-info-panel { margin: 6px 0 2px; }
+.pbar-info-panel { grid-column: 1 / -1; margin: 6px 0 2px; }
 .pbar-info-panel[hidden] { display: none; }
-/* The "·" sits an equal gap from the technique text and the name text. The flex
-   gap gives the left side; the name field's zeroed left padding matches it on the
-   right (its box edge and its text coincide, like the technique's). */
-.pbar-sep { color: var(--muted); font-weight: 700; }
-.pbar-tech { color: var(--text); white-space: nowrap; }
-.project-bar .project-name-input { padding-left: 0; }
+/* The technique name and the project field read as one centred line, same font.
+   The "·" is kept equidistant from the two texts: the flex gap gives the gap to
+   each box, and the technique's right padding matches the field's left inset (the
+   space its box adds before the first letter), so the DOT-to-character distance is
+   equal on both sides even though the field's box starts earlier. */
+.pbar-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pbar-sep { color: var(--muted); font-weight: 700; flex: 0 0 auto; }
+.pbar-tech { color: var(--text); white-space: nowrap; flex: 0 0 auto; padding-right: var(--field-inset); }
+.project-bar .project-name-input { text-align: center; }
 /* Info toggle: a bare muted icon that lights accent when the panel is open. */
 .pbar-info {
   display: inline-flex;
@@ -1770,7 +1784,8 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   box-sizing: border-box;
   padding: 6px 6px 6px 10px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  --ptab-r: 7px;              /* top-corner radius; the bottom fillets reuse it */
+  border-radius: var(--ptab-r);
   background: transparent;
   color: var(--muted);
   font-size: 13px;
@@ -1786,7 +1801,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .ptab.is-on {
   background: var(--bar);
   color: var(--text);
-  border-radius: 7px 7px 0 0;
+  border-radius: var(--ptab-r) var(--ptab-r) 0 0;
   /* Stretch down so the fill meets the project bar's with no seam. The negative
      margin cancels the extra height, so the row does not grow. */
   margin-bottom: -8px;
@@ -1803,17 +1818,17 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   content: '';
   position: absolute;
   bottom: 0;
-  width: 7px;
-  height: 7px;
+  width: var(--ptab-r);
+  height: var(--ptab-r);
   pointer-events: none;
 }
 .ptab.is-on::before {
-  left: -7px;
-  background: radial-gradient(circle at top left, transparent 7px, var(--bar) 7px);
+  left: calc(-1 * var(--ptab-r));
+  background: radial-gradient(circle at top left, transparent var(--ptab-r), var(--bar) var(--ptab-r));
 }
 .ptab.is-on::after {
-  right: -7px;
-  background: radial-gradient(circle at top right, transparent 7px, var(--bar) 7px);
+  right: calc(-1 * var(--ptab-r));
+  background: radial-gradient(circle at top right, transparent var(--ptab-r), var(--bar) var(--ptab-r));
 }
 .ptab-label {
   display: flex;
