@@ -12,7 +12,8 @@
    feels immediate even when the restore takes a moment.
 ========================================================= */
 import { MODULES, MODULE_LABELS, goTab, getModuleState, restoreModuleState,
-         getModuleHistory, setModuleHistory, confirmBanner } from './utils.js';
+         getModuleHistory, setModuleHistory, confirmBanner, moduleHasData, X_SVG,
+         onSectionChange } from './utils.js';
 import { allTabRecs, putTabRec, deleteTabRec, uid, encode, decode } from './db.js';
 
 const MAX_TABS = 20;
@@ -28,8 +29,9 @@ MODULES.forEach(m=>{ try { DEFAULT_STATE[m] = encode(getModuleState(m)); } catch
    `state` / `hist` are only meaningful while the tab is NOT active — the active
    tab's live state is the module itself. */
 const TABS = [];
-let _activeId = null;
-let _restoring = false;   // true while replaying persisted tabs at startup
+let _activeId = null;      // the tab whose state is live in its module
+let _onFixed = true;       // a fixed section (home / projects / settings) is showing
+let _restoring = false;    // true while replaying persisted tabs at startup
 
 const tabById = id => TABS.find(t=> t.id === id) || null;
 const activeTab = ()=> tabById(_activeId);
@@ -96,7 +98,7 @@ function syncProjectBar(t){
 /* ---- Open / activate / close --------------------------------------------- */
 // Open a project (or a blank technique) in a NEW tab and focus it. Opening a
 // project that is already open is a no-op: it never steals focus.
-async function openTab({ module, title, projectId, state, dirty }){
+async function openTab({ module, title, projectId, state, dirty, focus = true }){
   if (!MODULES.includes(module)) return null;
   if (projectId){
     const existing = tabByProject(projectId);
@@ -109,7 +111,10 @@ async function openTab({ module, title, projectId, state, dirty }){
   const t = { id: uid(), module, title: title || untitledName(module),
               projectId: projectId || null, dirty: !!dirty, state: state || null, hist: null };
   TABS.push(t);
-  activateTab(t.id);
+  // focus:false opens the tab in the background — opening a project from the
+  // Projects list leaves you on that list.
+  if (focus) activateTab(t.id);
+  else { renderTabs(); persistTab(t); }
   return t;
 }
 
@@ -117,13 +122,24 @@ async function openTab({ module, title, projectId, state, dirty }){
 // on the next frame — the restore plus redraw can take a beat on large projects.
 function activateTab(id){
   const t = tabById(id);
-  if (!t || _activeId === id) return;
+  if (!t) return;
+  // Already the live tab (we were just off on a fixed section) → only show it back.
+  if (_activeId === id){ goTab(t.module); return; }
   stashActive();
   _activeId = id;
   renderTabs();
   goTab(t.module);
   requestAnimationFrame(()=>{ loadTab(t); persistAll(); });
 }
+
+// Home / Projects / Settings belong to no tab, so none is highlighted while one of
+// them shows. The live tab is unchanged — clicking it back is instant.
+onSectionChange(tab=>{
+  const fixed = !MODULES.includes(tab);
+  if (_onFixed === fixed) return;
+  _onFixed = fixed;
+  renderTabs();
+});
 
 // Close a tab and land on the one before it; failing that the one after; failing
 // that Home. Closing the active tab loads the neighbour's state.
@@ -164,7 +180,6 @@ function setTabProject(id, projectId, title){
    ellipsises. The "*" marks unsaved changes; the close button sits at 50%
    opacity, reaches full opacity on tab hover and lights up on its own hover
    (all in CSS). The native title attribute carries the full label. */
-const X_MARK = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>';
 function renderTabs(){
   const bar = document.getElementById('tabBar');
   if (!bar) return;
@@ -172,10 +187,11 @@ function renderTabs(){
   TABS.forEach(t=>{
     const tech = MODULE_LABELS[t.module] || t.module;
     const el = document.createElement('div');
-    el.className = 'ptab' + (t.id === _activeId ? ' is-on' : '');
+    const on = !_onFixed && t.id === _activeId;
+    el.className = 'ptab' + (on ? ' is-on' : '');
     el.dataset.id = t.id;
     el.setAttribute('role', 'tab');
-    el.setAttribute('aria-selected', t.id === _activeId ? 'true' : 'false');
+    el.setAttribute('aria-selected', on ? 'true' : 'false');
     el.title = tech + ' · ' + t.title + (t.dirty ? ' *' : '');
     const label = document.createElement('span');
     label.className = 'ptab-label';
@@ -193,12 +209,10 @@ function renderTabs(){
     const x = document.createElement('button');
     x.type = 'button'; x.className = 'ptab-x';
     x.setAttribute('aria-label', 'Close ' + t.title);
-    x.innerHTML = X_MARK;
+    x.innerHTML = X_SVG(14);   // the same X the file list and the banners use
     el.append(label, x);
     bar.appendChild(el);
   });
-  const home = document.querySelector('#nav button[data-tab="home"]');
-  if (home) home.classList.toggle('is-on', _activeId === null && home.classList.contains('is-on'));
 }
 
 // One delegated handler for the whole bar: the close button first, then the tab.
@@ -214,6 +228,16 @@ function initBar(){
   });
 }
 
+// Is there any work in this tab to lose? For the active tab the module answers
+// directly; a parked one is empty when its state still matches the pristine
+// default (a typed name lives on the record, not in the module state).
+function isEmpty(t){
+  if (t.id === _activeId) return !moduleHasData(t.module);
+  if (!t.state) return true;
+  try { return JSON.stringify(t.state) === JSON.stringify(DEFAULT_STATE[t.module]); }
+  catch(e){ return false; }
+}
+
 /* Closing prompts to save unless the tab is already saved and unchanged.
    sessions.js supplies the save routine (it owns the project store). */
 let _saveForClose = null;
@@ -221,7 +245,9 @@ function onCloseSave(fn){ _saveForClose = fn; }
 async function requestClose(id){
   const t = tabById(id);
   if (!t) return;
-  if (t.projectId && !t.dirty){ closeTab(id); return; }   // saved and clean → just close
+  // Nothing to lose: an empty file list (whatever the name says) or a saved project
+  // with no pending change closes straight away.
+  if (isEmpty(t) || (t.projectId && !t.dirty)){ closeTab(id); return; }
   const res = await confirmBanner('Save “'+t.title+'” before closing?', 'Save', "Don't save");
   if (res === false) return;                               // cancel
   if (res === true){

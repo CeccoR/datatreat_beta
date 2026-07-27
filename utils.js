@@ -829,7 +829,13 @@ function goTab(tab, fromHash){
   }
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
   if (tab === 'home') requestAnimationFrame(sizeHomeTiles); // re-fit tiles after any resize while away
+  if (_sectionHook){ try { _sectionHook(tab); } catch(e){} }
 }
+// The tab manager listens here so it can drop the tab highlight while a fixed
+// section (home / projects / settings) is showing. A hook rather than an import,
+// which would be circular.
+let _sectionHook = null;
+function onSectionChange(fn){ _sectionHook = fn; }
 
 /* =========================================================
    UNDO / REDO — per-module snapshot stacks (command pattern)
@@ -1428,7 +1434,7 @@ function confirmBanner(message, confirmLabel, altLabel){
     ok.textContent = confirmLabel || 'Remove';
     const x = document.createElement('button');
     x.type = 'button'; x.className = 'pwa-toast-x'; x.setAttribute('aria-label', 'Cancel');
-    x.innerHTML = '&#10005;';
+    x.innerHTML = X_SVG(15);   // the same X the file list uses
     t.appendChild(msg);
     let alt = null;
     if (altLabel){
@@ -1548,5 +1554,5 @@ function barPlotXPad(labelWs, n, plotW){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, refreshProjBar
 };

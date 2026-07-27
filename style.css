@@ -857,9 +857,12 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 .home-card-icon .tech-icon {
   width: 62%;
   height: auto;
-  color: var(--accent);
+  /* Muted at rest, accent on hover — the same lift as the new-project picker. */
+  color: var(--muted);
+  transition: color 0.15s;
   display: block;
 }
+.home-card:hover .tech-icon { color: var(--accent); }
 .home-card-text {
   flex: 1;
   min-width: 0;
@@ -1363,15 +1366,17 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
 }
 .pwa-toast .btn { padding: 4px 12px; }
 .pwa-toast-x {
+  display: inline-flex;
+  align-items: center;
   background: none;
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 13px;
   padding: 2px 4px;
   line-height: 1;
+  transition: color 0.14s;
 }
-.pwa-toast-x:hover { color: var(--text); }
+.pwa-toast-x:hover { color: var(--accent); }
 /* Icons render as centered blocks (no inline-baseline gap) so every icon's
    bounding box is centered in its button/cell and aligns with its neighbours */
 .plot-btn-icon, .x-icon, .dl-icon { display: block; }
@@ -1757,25 +1762,23 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .ptab-tech { flex: 0 0 auto; white-space: pre; }   /* keep the space around the "·" */
 .ptab-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ptab-star { flex: 0 0 auto; padding-left: 2px; color: var(--accent); }
-/* Close button: half-visible at rest, full on tab hover, lit on its own hover. */
+/* Close button: a bare X — half-visible at rest, full on tab hover, accent on its
+   own hover. No background of its own at any point. */
 .ptab-x {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
+  padding: 0 2px;
   border: 0;
-  border-radius: 50%;
-  background: transparent;
+  background: none;
   color: inherit;
   opacity: 0.5;
   cursor: pointer;
-  transition: opacity 0.14s, background-color 0.14s, color 0.14s;
+  transition: opacity 0.14s, color 0.14s;
 }
 .ptab:hover .ptab-x { opacity: 1; }
-.ptab-x:hover { background: var(--panel); color: var(--accent); opacity: 1; }
+.ptab-x:hover { color: var(--accent); opacity: 1; }
 
 /* ===== New-project technique picker (mini home) ===== */
 .newproj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

@@ -223,7 +223,8 @@ async function commitSaveAs(){
    is skipped rather than focused (openTab handles that). */
 async function openProjects(recs){
   for (const r of recs){
-    await openTab({ module: r.module, title: r.title, projectId: r.id, state: r.state, dirty: false });
+    // Background: the tab appears in the bar but you stay on the Projects list.
+    await openTab({ module: r.module, title: r.title, projectId: r.id, state: r.state, dirty: false, focus: false });
   }
 }
 
@@ -339,6 +340,14 @@ async function deleteProjectRec(rec){
 async function deleteOpenProject(mod){
   const t = activeTab(); if (!t) return;
   const cur = curProject();
+  // An empty file list means there is nothing to lose, named or not: delete the
+  // stored project (if any) and close the tab without asking.
+  if (!moduleHasData(mod)){
+    if (cur) await deleteProject(cur.id);
+    closeTab(t.id);
+    renderList();
+    return;
+  }
   if (cur){
     if (!await confirmBanner('Are you sure to delete “'+cur.title+'”? This action is permanent.', 'Delete')) return;
     await deleteProject(cur.id);
