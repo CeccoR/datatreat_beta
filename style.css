@@ -1793,9 +1793,11 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   transition: background-color 0.14s, color 0.14s;
 }
 .ptab:hover { background: var(--panel2); color: var(--text); }
-/* A short hairline between two adjacent inactive tabs (shorter/lighter than the
-   nav dividers). It vanishes next to the active tab, whose fill owns the gap. */
-.ptab:not(.is-on) + .ptab:not(.is-on)::before {
+/* A short hairline between an inactive tab and the next inactive tab, and between
+   the last inactive tab and the "+" (shorter/lighter than the nav dividers). It
+   vanishes next to the active tab, whose fill owns the gap. */
+.ptab:not(.is-on) + .ptab:not(.is-on)::before,
+.ptab:not(.is-on) + .ptab-add::before {
   content: '';
   position: absolute;
   left: -3px;                  /* centred in the 6px tab-bar gap */
@@ -1805,6 +1807,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   height: 13px;
   background: var(--line);
 }
+.ptab-add { position: relative; }
 /* "+" shortcut to the new-project picker, at the tail of the tabs (or alone). */
 .ptab-add {
   flex: 0 0 auto;
@@ -1840,16 +1843,17 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   position: relative;
   z-index: 1;
 }
-/* Concave fillets flaring the active tab's bottom corners outward into the bar, so
-   the join reads as a smooth Chrome-style curve rather than a 90° step. Each sits
-   just BELOW the tab (in the bar), a bar-coloured square of side --ptab-r with a
-   quarter-circle of the same radius bitten out of the corner nearest the tab — so
-   the flare's curvature is exactly the tab's top-corner radius. */
+/* Concave fillets flaring the active tab's bottom corners outward, so the join with
+   the bar reads as a smooth Chrome-style curve rather than a 90° step. Each sits
+   beside the tab just ABOVE the seam (over the header), a bar-coloured square of
+   side --ptab-r with a quarter-circle of the same radius bitten out of the far
+   corner — the visible flare's curvature is exactly the tab's top-corner radius,
+   and the transparent bite reveals the header behind it. */
 .ptab.is-on::before,
 .ptab.is-on::after {
   content: '';
   position: absolute;
-  top: 100%;
+  bottom: 0;
   width: var(--ptab-r);
   height: var(--ptab-r);
   pointer-events: none;
