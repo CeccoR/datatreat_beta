@@ -234,7 +234,7 @@ button.btn.is-saved:disabled {
   margin-bottom: 10px;
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.proj-icon .proj-svg { width: 22px; height: 22px; display: block; }
+.proj-icon .proj-svg { width: 19px; height: 19px; display: block; }
 /* Project-bar export ICONS are icon buttons → muted grey like every other icon
    button (nav, plot toolbar, table CSV). Scoped to .proj-icon so the bottom
    text buttons (Save as / Export …) keep the white secondary-action text. */
@@ -247,7 +247,7 @@ button.btn.is-saved:disabled {
 .project-bar {
   background: var(--bar);
   border-bottom: 1px solid var(--line);
-  padding: 6px 16px;
+  padding: 3px 16px;
 }
 .pbar-main {
   display: flex;
@@ -256,10 +256,14 @@ button.btn.is-saved:disabled {
 }
 .proj-actions { margin-left: auto; }
 /* Collapsible technique info, inside the bar, below the main row. */
-.pbar-info-panel { margin: 8px 0 2px; }
+.pbar-info-panel { margin: 6px 0 2px; }
 .pbar-info-panel[hidden] { display: none; }
+/* The "·" sits an equal gap from the technique text and the name text. The flex
+   gap gives the left side; the name field's zeroed left padding matches it on the
+   right (its box edge and its text coincide, like the technique's). */
 .pbar-sep { color: var(--muted); font-weight: 700; }
 .pbar-tech { color: var(--text); white-space: nowrap; }
+.project-bar .project-name-input { padding-left: 0; }
 /* Info toggle: a bare muted icon that lights accent when the panel is open. */
 .pbar-info {
   display: inline-flex;
@@ -293,7 +297,7 @@ button.btn.is-saved:disabled {
 }
 /* Project-name font token — a touch smaller than the module title. Scoped to the
    project bar so it out-specifies the base input[type=text] font size. */
-.project-bar .txt-projname { font-size: 17px; font-weight: 700; }
+.project-bar .txt-projname { font-size: 16px; font-weight: 700; }
 .project-name-input::placeholder { font-weight: 400; font-size: 13px; color: var(--muted); }
 /* Ghost text disappears the moment the field is clicked (not only once you type). */
 .project-name-input:focus::placeholder { color: transparent; }
@@ -315,8 +319,8 @@ button.btn.is-saved:disabled {
   90% { transform: translateX(-2px); }
 }
 button.btn.icon-save {
-  width: 29px;
-  height: 29px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   display: inline-flex;
   visibility: hidden; /* space reserved; revealed by setTabLoaded once data loads */
@@ -325,7 +329,7 @@ button.btn.icon-save {
   flex-shrink: 0;
 }
 /* Circular icon buttons on the right of the nav (sessions, theme, settings) */
-nav button.nav-icon {
+#nav > button.nav-icon {
   font-size: 15px;
   font-weight: bold;
   width: 36px;
@@ -351,12 +355,12 @@ nav button.nav-icon {
   height: 20px;
   background: var(--line);
 }
-nav button.nav-icon:hover {
+#nav > button.nav-icon:hover {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--panel2);
 }
-nav button.nav-icon.is-on {
+#nav > button.nav-icon.is-on {
   color: var(--on-accent);
   border-color: var(--accent);
   background: var(--accent);
@@ -1776,8 +1780,8 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .ptab.is-on {
   background: var(--bar);
   color: var(--text);
-  margin-bottom: -10px;
-  padding-bottom: 16px;
+  margin-bottom: -18px;
+  padding-bottom: 24px;
   position: relative;
   z-index: 1;
 }
