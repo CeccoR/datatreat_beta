@@ -829,13 +829,13 @@ function goTab(tab, fromHash){
   }
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
   if (tab === 'home') requestAnimationFrame(sizeHomeTiles); // re-fit tiles after any resize while away
-  if (_sectionHook){ try { _sectionHook(tab); } catch(e){} }
+  _sectionHooks.forEach(fn=>{ try { fn(tab); } catch(e){} });
 }
-// The tab manager listens here so it can drop the tab highlight while a fixed
-// section (home / projects / settings) is showing. A hook rather than an import,
-// which would be circular.
-let _sectionHook = null;
-function onSectionChange(fn){ _sectionHook = fn; }
+// Listeners fired whenever the visible section changes. The tab manager uses it to
+// drop the tab highlight on a fixed section; the project bar uses it to hide. A
+// hook list rather than imports, which would be circular.
+const _sectionHooks = [];
+function onSectionChange(fn){ _sectionHooks.push(fn); }
 
 /* =========================================================
    UNDO / REDO — per-module snapshot stacks (command pattern)
@@ -1524,7 +1524,9 @@ function barPlotXPad(labelWs, n, plotW){
 ========================================================= */
 (function initInstrCollapse(){
   const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
-  document.querySelectorAll('.instr-block').forEach((block, i)=>{
+  // The project bar's technique panel is an .instr-block too, but it has its own
+  // toggle (the bar's info button) — skip it here.
+  document.querySelectorAll('.instr-block:not(.pbar-info-panel)').forEach((block, i)=>{
     // Attach the toggle to the nearest preceding heading; fall back to inline.
     // The heading may be wrapped (e.g. in a .section-head flex row), so also
     // look for a heading nested inside a preceding sibling.

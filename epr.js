@@ -144,11 +144,9 @@ import { Plot } from './plot.js';
     renderUnifiedFileList('eprFileTableWrap', files, fileCallbacks());
     if (files.length){
       document.getElementById('eprWorkspace').style.display='block';
-      document.getElementById('eprExportCard').style.display='block';
       updateEpr();
     } else {
       document.getElementById('eprWorkspace').style.display='none';
-      document.getElementById('eprExportCard').style.display='none';
       rebuildAlerts();
     }
     hist.commit();

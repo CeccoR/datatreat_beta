@@ -8,7 +8,7 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab, onSectionChange } from './utils.js';
 import { allProjects, putProject, deleteProject, uid, encode, decode } from './db.js';
 import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
          setTabDirty, setTabProject, onTabActivated, onCloseSave, initTabs,
@@ -414,9 +414,12 @@ document.addEventListener('click', async e=>{
 })();
 // Editing the project name marks a pending change, clears the red "missing name"
 // state, and updates the project-bar visibility (a name alone reveals the buttons).
+// One name field, rebound to the active module — read data-module at event time,
+// never captured, since the bar switches module under it.
 document.querySelectorAll('.project-name-input').forEach(inp=>{
-  const mod = inp.dataset.module;
+  const modOf = ()=> inp.dataset.module;
   inp.addEventListener('input', ()=>{
+    const mod = modOf();
     inp.classList.remove('field-invalid');
     fitNameField(mod);
     refreshProjBar(mod);
@@ -424,8 +427,8 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
     if (t) setTabTitle(t.id, inp.value.trim());   // the tab label tracks the field
     if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(); }
   });
-  inp.addEventListener('focus', ()=> fitNameField(mod));   // click triggers adaptivity
-  inp.addEventListener('blur',  ()=> fitNameField(mod));   // empty → ghost width; filled → ellipsis
+  inp.addEventListener('focus', ()=> fitNameField(modOf()));   // click triggers adaptivity
+  inp.addEventListener('blur',  ()=> fitNameField(modOf()));   // empty → ghost width; filled → ellipsis
 });
 window.addEventListener('resize', fitAllNameFields);   // 3/4-width cap tracks the bar
 
@@ -534,11 +537,41 @@ MODULES.forEach(m=> onModuleChange(m, ()=>{
   if (t && !t.projectId) markDirty(m);
 }));
 
-// Called by the tab manager once a tab's state is live in its module: put the
-// project bar in that tab's shape (name, saved/dirty buttons).
+/* ---- The single project bar ----
+   One bar serves every module: only one tab is live, so its selectors (name field,
+   Save buttons) are bound to the active module by rewriting the data-module of the
+   bar and its buttons. The bar hides on the fixed sections. */
+const TECH_INFO = {
+  tauc: 'Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (E<sub>g</sub>) can be inferred through Tauc Plot analysis.',
+  xrd:  'X-Ray Powder Diffraction. Diffractograms comparison, smoothing and normalization, with peak detection, Scherrer crystallite-size estimation and whole-pattern profile fitting.',
+  gc:   'Gas Chromatography for H₂ production-rate assessment. Computes mean H₂ production rates over a chosen integration interval from time-resolved injection measurements.',
+  epr:  'Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.',
+};
+const projectBar = document.getElementById('projectBar');
+const barInfoBtn = projectBar.querySelector('.pbar-info');
+const barInfoPanel = projectBar.querySelector('.pbar-info-panel');
+// Point the bar (and the data-module save/export buttons) at the active module.
+function bindProjectBar(mod){
+  projectBar.dataset.module = mod;
+  projectBar.querySelectorAll('.proj-save, .proj-saveas, .proj-csv, .proj-json').forEach(b=> b.dataset.module = mod);
+  const inp = projectBar.querySelector('.project-name-input'); if (inp) inp.dataset.module = mod;
+  projectBar.querySelector('.pbar-tech').textContent = MODULE_LABELS[mod] || mod;
+  barInfoPanel.innerHTML = TECH_INFO[mod] || '';
+}
+// Info toggle: opens the technique description inside the bar, below the main row.
+barInfoBtn.addEventListener('click', ()=>{
+  const open = barInfoPanel.hasAttribute('hidden');
+  barInfoPanel.toggleAttribute('hidden', !open);
+  barInfoBtn.setAttribute('aria-expanded', String(open));
+});
+
+// Called by the tab manager once a tab's state is live in its module: point the
+// bar at that module and put it in the tab's shape (name, saved/dirty buttons).
 onTabActivated(tab=>{
   if (!tab) return;
   const mod = tab.module;
+  bindProjectBar(mod);
+  projectBar.style.display = '';
   const inp = nameInput(mod);
   if (inp) inp.value = tab.title || '';
   if (tab.projectId && !tab.dirty) markSaved(mod);
@@ -546,6 +579,17 @@ onTabActivated(tab=>{
   refreshProjBar(mod);
   normalizeProjIcons(mod);
   requestAnimationFrame(()=> fitNameField(mod));
+});
+// The bar belongs to a live tab only — hide it (and close its info panel) whenever
+// a fixed section shows.
+onSectionChange(tab=>{
+  if (!MODULES.includes(tab)){
+    projectBar.style.display = 'none';
+    barInfoPanel.setAttribute('hidden', '');
+    barInfoBtn.setAttribute('aria-expanded', 'false');
+  } else {
+    projectBar.style.display = '';
+  }
 });
 // Closing a tab may offer to save it first; the tab manager has no access to the
 // project store, so it calls back in here.

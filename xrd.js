@@ -158,7 +158,6 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (files.length){
       document.getElementById('xrdFitCard').style.display='block';
       document.getElementById('xrdResults').style.display='block';
-      document.getElementById('xrdExportCard').style.display='block';
       if (curIdx >= files.length) curIdx = files.length-1;
       if (fitIdx >= files.length) fitIdx = files.length-1;
       populateStandardSelect();
@@ -170,7 +169,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       updateXrdFitting();
       updateXrdResults();
     } else {
-      ['xrdWorkspace','xrdStdCard','xrdFitCard','xrdResults','xrdExportCard'].forEach(id=>{ document.getElementById(id).style.display='none'; });
+      ['xrdWorkspace','xrdStdCard','xrdFitCard','xrdResults'].forEach(id=>{ document.getElementById(id).style.display='none'; });
     }
     hist.commit(); // baseline + file add/remove/reorder/palette
   }

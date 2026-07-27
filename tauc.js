@@ -270,7 +270,6 @@ import { Plot } from './plot.js';
     else {
       document.getElementById('taucWorkspace').style.display='none';
       document.getElementById('taucResults').style.display='none';
-      document.getElementById('taucExportCard').style.display='none';
     }
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
@@ -286,7 +285,6 @@ import { Plot } from './plot.js';
     syncTaucModeButtons();
     document.getElementById('taucWorkspace').style.display='block';
     document.getElementById('taucResults').style.display='block';
-    document.getElementById('taucExportCard').style.display='block';
     initTaucPlot();
   }
 

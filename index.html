@@ -39,6 +39,7 @@
 </head>
 
 <body>
+  <div id="topbar">
   <header>
     <h1 style="font-size:19px"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#0e1316"/><path d="M5 23 H12 V9 H20 V23 H27" fill="none" stroke="#ffb454" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>DataTreat</h1>
     <nav id="nav" role="tablist" aria-label="Open projects">
@@ -57,6 +58,19 @@
       <button data-tab="settings" class="nav-icon nav-settings" role="tab" aria-selected="false" aria-controls="tab-settings" aria-label="Settings" title="Settings">⚙</button>
     </nav>
   </header>
+  <!-- Single sticky project bar: shows the active tab's technique + project name,
+       with a collapsible technique-info panel that opens inside the bar, below. -->
+  <div id="projectBar" class="project-bar" data-module="" style="display:none">
+    <div class="pbar-main">
+      <button class="pbar-info" type="button" aria-expanded="false" aria-label="Technique info" title="About this technique"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg></button>
+      <span class="pbar-tech txt-projname"></span>
+      <span class="pbar-sep">·</span>
+      <input type="text" class="project-name-input txt-projname" placeholder="Project name…" aria-label="Project name">
+      <div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button><button class="btn icon-save proj-btn proj-new proj-icon" type="button" title="New project" aria-label="New project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><line x1="11" y1="12.5" x2="11" y2="18.5"/><line x1="8" y1="15.5" x2="14" y2="15.5"/></svg></button></div>
+    </div>
+    <div class="pbar-info-panel instr-block" hidden></div>
+  </div>
+  </div>
 
   <main>
 
@@ -176,9 +190,6 @@
 
     <!-- ============ TAUC ============ -->
     <section class="tab" id="tab-tauc" role="tabpanel" tabindex="0">
-      <div class="module-head"><h2 class="txt-title" style="margin:0">UV-Vis DRS</h2></div>
-      <div class="instr-block">Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (E<sub>g</sub>) can be inferred through Tauc Plot analysis.</div>
-      <div class="card project-bar" data-module="tauc"><input type="text" class="project-name-input txt-projname" data-module="tauc" placeholder="Project name…" aria-label="Project name"><div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" data-module="tauc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" data-module="tauc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" data-module="tauc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" data-module="tauc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button><button class="btn icon-save proj-btn proj-new proj-icon" type="button" title="New project" aria-label="New project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><line x1="11" y1="12.5" x2="11" y2="18.5"/><line x1="8" y1="15.5" x2="14" y2="15.5"/></svg></button></div></div>
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Cary 5000 Instrument. Upload files with two columns: wavelength (nm) and Kubelka-Munk computed absorbance F(R).</div>
@@ -286,22 +297,10 @@
         </div>
         <div id="taucResLegend2" class="legend"></div>
       </div>
-
-      <div class="card" id="taucExportCard" style="display:none">
-        <div class="proj-actions-row">
-          <button class="btn primary proj-btn proj-save" data-module="tauc" type="button">Save project</button>
-          <button class="btn proj-btn proj-saveas" data-module="tauc" type="button">Save project as…</button>
-          <button class="btn proj-btn proj-csv" data-module="tauc" type="button">Export .csv</button>
-          <button class="btn proj-btn proj-json" data-module="tauc" type="button">Export .json</button>
-        </div>
-      </div>
     </section>
 
     <!-- ============ XRD ============ -->
     <section class="tab" id="tab-xrd" role="tabpanel" tabindex="0">
-      <div class="module-head"><h2 class="txt-title" style="margin:0">XRPD</h2></div>
-      <div class="instr-block">X-Ray Powder Diffraction. Diffractograms comparison, smoothing and normalization, with peak detection, Scherrer crystallite-size estimation and whole-pattern profile fitting.</div>
-      <div class="card project-bar" data-module="xrd"><input type="text" class="project-name-input txt-projname" data-module="xrd" placeholder="Project name…" aria-label="Project name"><div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" data-module="xrd" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" data-module="xrd" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" data-module="xrd" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" data-module="xrd" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button><button class="btn icon-save proj-btn proj-new proj-icon" type="button" title="New project" aria-label="New project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><line x1="11" y1="12.5" x2="11" y2="18.5"/><line x1="8" y1="15.5" x2="14" y2="15.5"/></svg></button></div></div>
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with XPERT diffractometer. Accepts PANalytical XML format files.</div>
@@ -524,14 +523,6 @@
           </div>
         </div>
       </div>
-      <div class="card" id="xrdExportCard" style="display:none">
-        <div class="proj-actions-row">
-          <button class="btn primary proj-btn proj-save" data-module="xrd" type="button">Save project</button>
-          <button class="btn proj-btn proj-saveas" data-module="xrd" type="button">Save project as…</button>
-          <button class="btn proj-btn proj-csv" data-module="xrd" type="button">Export .csv</button>
-          <button class="btn proj-btn proj-json" data-module="xrd" type="button">Export .json</button>
-        </div>
-      </div>
       <div id="xrdFitModal" class="modal-backdrop" style="display:none">
         <div class="modal-box">
           <h3 class="txt-head" style="margin:0 0 4px">Sample fit — hyperparameters</h3>
@@ -612,9 +603,6 @@
 
     <!-- ============ GC ============ -->
     <section class="tab" id="tab-gc" role="tabpanel" tabindex="0">
-      <div class="module-head"><h2 class="txt-title" style="margin:0">GC</h2></div>
-      <div class="instr-block">Gas Chromatography for H₂ production-rate assessment. Computes mean H₂ production rates over a chosen integration interval from time-resolved injection measurements.</div>
-      <div class="card project-bar" data-module="gc"><input type="text" class="project-name-input txt-projname" data-module="gc" placeholder="Project name…" aria-label="Project name"><div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" data-module="gc" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" data-module="gc" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" data-module="gc" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" data-module="gc" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button><button class="btn icon-save proj-btn proj-new proj-icon" type="button" title="New project" aria-label="New project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><line x1="11" y1="12.5" x2="11" y2="18.5"/><line x1="8" y1="15.5" x2="14" y2="15.5"/></svg></button></div></div>
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) (%Mol)" column.</div>
@@ -672,22 +660,10 @@
           <button class="btn plot-dl-btn" data-dl-svg="gcSvgBar" data-csv-mod="gc" data-csv-names="h2_rates.csv" data-dl-name="GC_results.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
       </div>
-
-      <div class="card" id="gcExportCard" style="display:none">
-        <div class="proj-actions-row">
-          <button class="btn primary proj-btn proj-save" data-module="gc" type="button">Save project</button>
-          <button class="btn proj-btn proj-saveas" data-module="gc" type="button">Save project as…</button>
-          <button class="btn proj-btn proj-csv" data-module="gc" type="button">Export .csv</button>
-          <button class="btn proj-btn proj-json" data-module="gc" type="button">Export .json</button>
-        </div>
-      </div>
     </section>
 
     <!-- ============ EPR ============ -->
     <section class="tab" id="tab-epr" role="tabpanel" tabindex="0">
-      <div class="module-head"><h2 class="txt-title" style="margin:0">EPR</h2></div>
-      <div class="instr-block">Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.</div>
-      <div class="card project-bar" data-module="epr"><input type="text" class="project-name-input txt-projname" data-module="epr" placeholder="Project name…" aria-label="Project name"><div class="proj-actions"><button class="btn primary icon-save proj-btn proj-save proj-icon" data-module="epr" type="button" title="Save project" aria-label="Save project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button><button class="btn icon-save proj-btn proj-saveas proj-icon" data-module="epr" type="button" title="Save project as…" aria-label="Save project as"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 3v5h8"/><line x1="12" y1="12.5" x2="12" y2="18.5"/><line x1="9" y1="15.5" x2="15" y2="15.5"/></svg></button><button class="btn icon-save proj-btn proj-csv proj-icon" data-module="epr" type="button" title="Export .csv (zip)" aria-label="Export CSV"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-json proj-icon" data-module="epr" type="button" title="Export .json project" aria-label="Export JSON"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">JSON</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button><button class="btn icon-save proj-btn proj-del proj-icon is-danger" type="button" title="Delete project" aria-label="Delete project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button><button class="btn icon-save proj-btn proj-new proj-icon" type="button" title="New project" aria-label="New project"><svg class="proj-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><line x1="11" y1="12.5" x2="11" y2="18.5"/><line x1="8" y1="15.5" x2="14" y2="15.5"/></svg></button></div></div>
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
         <div class="instr-block" style="max-width:100%">Compatible with Bruker EPR spectrometers (BES3T format). Upload paired .DTA and .DSC files: both are required for each sample. Pairs are matched by filename stem.</div>
@@ -724,17 +700,9 @@
           </div>
         </div>
       </div>
-      <div class="card" id="eprExportCard" style="display:none">
-        <div class="proj-actions-row">
-          <button class="btn primary proj-btn proj-save" data-module="epr" type="button">Save project</button>
-          <button class="btn proj-btn proj-saveas" data-module="epr" type="button">Save project as…</button>
-          <button class="btn proj-btn proj-csv" data-module="epr" type="button">Export .csv</button>
-          <button class="btn proj-btn proj-json" data-module="epr" type="button">Export .json</button>
-        </div>
-      </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v180</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v181</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

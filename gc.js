@@ -118,12 +118,10 @@ import { Plot, svgEl } from './plot.js';
     renderGcParamTable();
     if (files.length){
       document.getElementById('gcResults').style.display='block';
-      document.getElementById('gcExportCard').style.display='block';
       computeAndRenderGc();
     } else {
       document.getElementById('gcResults').style.display='none';
       document.getElementById('gcResultsBar').style.display='none';
-      document.getElementById('gcExportCard').style.display='none';
       rebuildGcAlerts();
     }
     hist.commit();
