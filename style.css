@@ -468,9 +468,9 @@ main {
 .mw220 { min-width: 220px; }
 .mw200 { min-width: 200px; }
 /* Narrow layouts: let columns shrink and stack instead of overflowing the viewport.
-   The 1080px threshold is where a side-by-side plot has shrunk to 2/3 of the width it
-   has on the widest desktop — past that they stack rather than keep getting smaller. */
-@media (max-width: 1080px) {
+   The 820px threshold is where a side-by-side plot has shrunk to about half the width
+   it has on the widest desktop — past that they stack rather than keep getting smaller. */
+@media (max-width: 820px) {
   .col,
   .mw520, .mw320, .mw280, .mw260, .mw220, .mw200 { min-width: 100%; }
 }
@@ -701,7 +701,7 @@ svg.plot {
   width: 100%;
   /* Golden-ratio landscape: height tracks the width (φ ≈ 1.618) in every layout,
      on desktop and mobile alike. The floor is low enough that side-by-side plots
-     shrink continuously down to ~2/3 of their full width and then wrap (at the 1080px
+     shrink continuously down to ~half their full width and then wrap (at the 820px
      breakpoint) — never hitting the floor first, so they never scroll horizontally. */
   aspect-ratio: 1.618;
   height: auto;
@@ -717,7 +717,7 @@ svg.plot {
 svg.plot.plot-wide { aspect-ratio: 3.236; }
 /* Once the columns stack to full width the floor is pointless — and keeping it would
    make every plot overflow and scroll horizontally on the narrowest screens. */
-@media (max-width: 1080px) {
+@media (max-width: 820px) {
   svg.plot { min-width: 0; }
   /* Same threshold: a 1 : 2φ strip gets unreadably short once the layout narrows. */
   svg.plot.plot-wide { aspect-ratio: 1.618; }
@@ -1461,7 +1461,7 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
 /* Desktop: drop the header down so its top lines up with the plot's top edge
    (the plot sits below the sample-nav row: 35px nav + 6px gap). */
 .param-head.aligned { margin-top: 41px; }
-@media (max-width: 1080px) { .param-head.aligned { margin-top: 0; } }
+@media (max-width: 820px) { .param-head.aligned { margin-top: 0; } }
 .param-grid {
   display: grid;
   grid-template-columns: 3fr 2fr;
