@@ -1691,9 +1691,9 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 
 /* ===== GC parameter table: grouped headers, all/one toggle, row↔plot interaction ===== */
 .gc-param-table { min-width: 860px; }   /* scrolls in its overflow-x wrapper below this */
-/* On mobile the table already scrolls, so 5% extra width (860 → 903) is free room
-   for the columns. Kept right after the base rule so it wins (equal specificity). */
-@media (max-width: 600px) { .gc-param-table { min-width: 903px; } }
+/* On mobile the table already scrolls, so extra width is free room for the columns
+   (860 → 1200). Kept right after the base rule so it wins (equal specificity). */
+@media (max-width: 600px) { .gc-param-table { min-width: 1200px; } }
 #gcParamTableWrap .gc-grp { text-align: left; }
 #gcParamTableWrap .gc-toggle { margin-left: 8px; vertical-align: 1px; }
 #gcParamTableWrap .gc-all-row { background: rgba(160, 170, 185, 0.08); }
