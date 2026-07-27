@@ -213,6 +213,13 @@ function renderTabs(){
     el.append(label, x);
     bar.appendChild(el);
   });
+  // A "+" at the tail (or on its own when no tabs are open) is a shortcut to the
+  // new-project technique picker. sessions.js handles the click (it owns the modal).
+  const add = document.createElement('button');
+  add.type = 'button'; add.className = 'ptab-add';
+  add.setAttribute('aria-label', 'New project'); add.title = 'New project';
+  add.textContent = '+';
+  bar.appendChild(add);
 }
 
 // One delegated handler for the whole bar: the close button first, then the tab.

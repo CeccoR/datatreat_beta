@@ -411,6 +411,8 @@ document.addEventListener('click', async e=>{
   document.addEventListener('keydown', e=>{
     if (e.key === 'Escape' && modal.style.display === 'flex') closeTechniqueModal();
   });
+  // The "+" at the tail of the tab bar is a shortcut to the same picker.
+  document.addEventListener('click', e=>{ if (e.target.closest('.ptab-add')) openTechniqueModal(); });
 })();
 // Editing the project name marks a pending change, clears the red "missing name"
 // state, and updates the project-bar visibility (a name alone reveals the buttons).
