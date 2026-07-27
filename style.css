@@ -106,7 +106,7 @@ header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 6px 16px;
   background: var(--panel);
 }
 /* Header + project bar stick together as one unit below the top of the viewport. */
@@ -134,7 +134,7 @@ header h1 {
   background: var(--panel2);
   border: 1px solid var(--line);
   color: var(--muted);
-  padding: 7px 14px;
+  padding: 5px 12px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
@@ -331,10 +331,10 @@ button.btn.icon-save {
 }
 /* Circular icon buttons on the right of the nav (sessions, theme, settings) */
 #nav > button.nav-icon {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: bold;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -1789,10 +1789,31 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   border-radius: 7px 7px 0 0;
   /* Stretch down so the fill meets the project bar's with no seam. The negative
      margin cancels the extra height, so the row does not grow. */
-  margin-bottom: -15px;
-  padding-bottom: 21px;
+  margin-bottom: -8px;
+  padding-bottom: 14px;
   position: relative;
   z-index: 1;
+}
+/* Concave fillets flaring the active tab's bottom corners outward into the bar,
+   so the join reads as a smooth Chrome-style curve rather than a 90° step. Each
+   is a bar-coloured square with a transparent quarter-circle bitten out of the
+   corner nearest the tab. */
+.ptab.is-on::before,
+.ptab.is-on::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 7px;
+  height: 7px;
+  pointer-events: none;
+}
+.ptab.is-on::before {
+  left: -7px;
+  background: radial-gradient(circle at top left, transparent 7px, var(--bar) 7px);
+}
+.ptab.is-on::after {
+  right: -7px;
+  background: radial-gradient(circle at top right, transparent 7px, var(--bar) 7px);
 }
 .ptab-label {
   display: flex;
