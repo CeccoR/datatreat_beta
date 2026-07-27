@@ -1173,6 +1173,20 @@ function sizeHomeTiles(){
 requestAnimationFrame(sizeHomeTiles);
 window.addEventListener('load', sizeHomeTiles);
 window.addEventListener('resize', ()=>requestAnimationFrame(sizeHomeTiles));
+/* Narrow-layout switch. Side-by-side columns stack, and GC's wide strip plots fall
+   back to the golden-ratio box, once the window is at most half the screen wide —
+   the point where a side-by-side plot has shrunk to about half its full size. That
+   threshold depends on the monitor, so it can't be a fixed media query; the class
+   below carries it and style.css keys the layout rules off :root.narrow-layout.
+   The 820px floor keeps phones and small windows stacked, where the window already
+   fills the screen and the half-screen test never fires. */
+function updateNarrowLayout(){
+  const half = (screen.availWidth || screen.width || 0) / 2;
+  const narrow = window.innerWidth <= 820 || (half > 0 && window.innerWidth <= half);
+  document.documentElement.classList.toggle('narrow-layout', narrow);
+}
+updateNarrowLayout();
+window.addEventListener('resize', updateNarrowLayout);
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
 window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
 (function initHashRoute(){
