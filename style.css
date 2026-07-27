@@ -1764,12 +1764,11 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  /* overflow-x clips on every side, so the box is padded past the header's edge to
-     leave room for the active tab's downward bleed AND for the first/last tab's
-     side fillets; the equal negative margins keep the row's height, width and
-     centring exactly as they were. */
-  padding: 16px 8px;
-  margin: -16px -8px;
+  /* overflow-x clips vertically too, so the box is padded past the header's edge
+     to leave room for the active tab's downward bleed; the equal negative margins
+     keep the row's height and vertical centring exactly as they were. */
+  padding: 16px 0;
+  margin: -16px 0;
 }
 .tab-bar::-webkit-scrollbar { display: none; }
 .ptab {
@@ -1782,7 +1781,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   box-sizing: border-box;
   padding: 6px 6px 6px 10px;
   border: 1px solid transparent;
-  --ptab-r: 7px;              /* top-corner radius; the bottom fillets reuse it */
+  --ptab-r: 7px;              /* top-corner radius */
   border-radius: var(--ptab-r);
   background: transparent;
   color: var(--muted);
@@ -1842,29 +1841,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   padding-bottom: 12px;
   position: relative;
   z-index: 1;
-}
-/* Concave fillets flaring the active tab's bottom corners outward, so the join with
-   the bar reads as a smooth Chrome-style curve rather than a 90° step. Each sits
-   beside the tab just ABOVE the seam (over the header), a bar-coloured square of
-   side --ptab-r with a quarter-circle of the same radius bitten out of the far
-   corner — the visible flare's curvature is exactly the tab's top-corner radius,
-   and the transparent bite reveals the header behind it. */
-.ptab.is-on::before,
-.ptab.is-on::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  width: var(--ptab-r);
-  height: var(--ptab-r);
-  pointer-events: none;
-}
-.ptab.is-on::before {
-  left: calc(-1 * var(--ptab-r));
-  background: radial-gradient(circle at top left, transparent var(--ptab-r), var(--bar) var(--ptab-r));
-}
-.ptab.is-on::after {
-  right: calc(-1 * var(--ptab-r));
-  background: radial-gradient(circle at top right, transparent var(--ptab-r), var(--bar) var(--ptab-r));
 }
 .ptab-label {
   display: flex;
