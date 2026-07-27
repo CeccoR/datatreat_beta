@@ -8,7 +8,11 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar } from './utils.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab } from './utils.js';
+import { allProjects, putProject, deleteProject, uid, encode, decode } from './db.js';
+import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
+         setTabDirty, setTabProject, onTabActivated, onCloseSave, initTabs,
+         persistTab, isRestoring, UNTITLED } from './tabs.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
@@ -17,66 +21,6 @@ const ROW_CSV = ROW_DOC('CSV', 8.5), ROW_JSON = ROW_DOC('JSON', 8.5), ROW_X = X_
 // Trash glyph for delete actions — same visual weight as the X it replaces.
 const ROW_TRASH = '<svg class="x-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 
-/* ---- IndexedDB tiny wrapper (store kept as 'sessions' for data continuity;
-   'drafts' holds one autosave per module for crash recovery) ---- */
-const DB_NAME = 'datatreat', STORE = 'sessions', DRAFTS = 'drafts', DB_VER = 2;
-function idb(){
-  return new Promise((resolve, reject)=>{
-    const req = indexedDB.open(DB_NAME, DB_VER);
-    req.onupgradeneeded = ()=>{
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)){
-        const os = db.createObjectStore(STORE, { keyPath:'id' });
-        os.createIndex('module', 'module', { unique:false });
-      }
-      if (!db.objectStoreNames.contains(DRAFTS)){
-        db.createObjectStore(DRAFTS, { keyPath:'module' });
-      }
-    };
-    req.onsuccess = ()=> resolve(req.result);
-    req.onerror   = ()=> reject(req.error);
-  });
-}
-async function txStore(store, mode, fn){
-  const db = await idb();
-  return new Promise((resolve, reject)=>{
-    const t = db.transaction(store, mode);
-    const os = t.objectStore(store);
-    let out;
-    Promise.resolve(fn(os)).then(v=>{ out = v; });
-    t.oncomplete = ()=> resolve(out);
-    t.onerror = ()=> reject(t.error);
-    t.onabort = ()=> reject(t.error);
-  });
-}
-const tx = (mode, fn)=> txStore(STORE, mode, fn);
-const reqP = r => new Promise((res, rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
-async function allProjects(){ return tx('readonly', os=> reqP(os.getAll())); }
-async function putProject(rec){ return tx('readwrite', os=>{ os.put(rec); }); }
-async function deleteProject(id){ return tx('readwrite', os=>{ os.delete(id); }); }
-async function putDraft(rec){ return txStore(DRAFTS, 'readwrite', os=>{ os.put(rec); }); }
-async function getAllDrafts(){ return txStore(DRAFTS, 'readonly', os=> reqP(os.getAll())); }
-async function deleteDraft(mod){ return txStore(DRAFTS, 'readwrite', os=>{ os.delete(mod); }); }
-
-/* ---- helpers ---- */
-const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-// Encode module state into a JSON-safe form: typed arrays → plain arrays, Date
-// objects → a tagged marker. Same representation for IndexedDB and .json.
-function encode(v){
-  if (v instanceof Date) return { __t:'date', v:v.getTime() };
-  if (ArrayBuffer.isView(v)) return Array.from(v);
-  if (Array.isArray(v)) return v.map(encode);
-  if (v && typeof v === 'object'){ const o = {}; for (const k in v) o[k] = encode(v[k]); return o; }
-  return v;
-}
-function decode(v){
-  if (Array.isArray(v)) return v.map(decode);
-  if (v && typeof v === 'object'){
-    if (v.__t === 'date') return new Date(v.v);
-    const o = {}; for (const k in v) o[k] = decode(v[k]); return o;
-  }
-  return v;
-}
 function fmtDate(ts){ try { return new Date(ts).toLocaleString(); } catch(e){ return ''; } }
 function downloadTextFile(name, text, type){
   const url = URL.createObjectURL(new Blob([text], { type: type||'application/json' }));
@@ -85,45 +29,29 @@ function downloadTextFile(name, text, type){
   setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
 }
 
-/* ---- Per-module open-project state ---- */
-const current = {};   // mod -> { id, title }
-const dirty = {};     // mod -> bool
+/* ---- Open-project state ----
+   A tab IS the open project: its `projectId` is the saved record it belongs to (or
+   null when it was never saved) and its `dirty` flag drives the "*". Only the
+   active tab is live, so these read straight off it. `mod` arguments are kept for
+   readability — they always refer to the active tab's module. */
+const curProject = ()=>{ const t = activeTab(); return t && t.projectId ? { id:t.projectId, title:t.title } : null; };
+const isDirty = ()=>{ const t = activeTab(); return !!(t && t.dirty); };
 
-/* ---- Autosave (crash-recovery draft) ----
-   5 s after the last change, save the module's state to the 'drafts' store whenever
-   the module holds data — named or not — so a reload (incl. Chrome's desktop/mobile
-   switch, which reloads the page) doesn't wipe unsaved work. Cleared on Save / data
-   loss. A draft ≠ a saved project: on restore it comes back as unsaved work that
-   still needs an explicit Save. */
+/* ---- Autosave ----
+   5 s after the last change the active tab's state is written back to the tabs
+   store, so a reload (incl. Chrome's desktop/mobile switch, which reloads the
+   page) comes back with the same tabs and the same unsaved work. Persisting a tab
+   is not saving a project: a tab still needs an explicit Save to become one. */
 const AUTOSAVE_MS = 5000;
-const _autosaveTimers = {};
-function scheduleAutosave(mod){
-  if (_restoring) return;   // don't rewrite drafts while we're replaying them at startup
-  // Any edit — including removing files — just updates the draft. A full reset
-  // (delete / new project) clears it explicitly via resetModule(), not here.
-  // Leading edge: save right away on the first change (e.g. as soon as data loads),
-  // so an immediate reload is already covered; then debounce the trailing save.
-  if (!_autosaveTimers[mod]) saveDraft(mod);
-  clearTimeout(_autosaveTimers[mod]);
-  _autosaveTimers[mod] = setTimeout(()=>{ _autosaveTimers[mod] = null; saveDraft(mod); }, AUTOSAVE_MS);
-}
-let _restoring = false;   // true while initDraftRecovery is replaying drafts
-async function saveDraft(mod){
-  // Persist whatever state the module is in. Autosave only fires on real edits
-  // (commits), so a pristine empty module never reaches here; removing files is an
-  // edit and correctly updates the draft to the emptied state.
-  const inp = nameInput(mod);
-  const title = inp ? inp.value.trim() : '';
-  try {
-    const rec = { module: mod, title, state: encode(getModuleState(mod)), updatedAt: Date.now(),
-                  dirty: !!dirty[mod] };   // remember whether it matched its saved project
-    if (current[mod]) rec.id = current[mod].id;  // keep the association so Save updates the right project
-    await putDraft(rec);
-  } catch(e){}
-}
-function clearDraft(mod){
-  clearTimeout(_autosaveTimers[mod]);
-  deleteDraft(mod).catch(()=>{});
+let _autosaveTimer = null;
+function scheduleAutosave(){
+  if (isRestoring()) return;   // don't rewrite records while tabs are being replayed
+  const t = activeTab(); if (!t) return;
+  // Leading edge: persist at once on the first change (e.g. as soon as data loads),
+  // so an immediate reload is already covered; then debounce the trailing write.
+  if (!_autosaveTimer) persistTab(t);
+  clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(()=>{ _autosaveTimer = null; const a = activeTab(); if (a) persistTab(a); }, AUTOSAVE_MS);
 }
 
 const CHECK_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -173,11 +101,11 @@ function restoreSaveBtns(mod){
 // Saved state: green non-interactive Save buttons, no unsaved marker; arms a
 // one-shot listener so the next change flips back to dirty.
 function markSaved(mod){
-  dirty[mod] = false;
-  // NB: the draft is kept even for saved projects — it is the persistent working
-  // state that gets auto-restored on the next load (cleared only when data is gone).
-  // Re-persist it so the draft records the saved (not-dirty) status for next load.
-  if (!_restoring) saveDraft(mod);
+  const t = activeTab();
+  // The tab record is kept for saved projects too — it is the persistent working
+  // state that comes back on the next load. Re-persist it so it records the saved
+  // (not-dirty) status, and drop the "*" from the tab.
+  if (t){ setTabDirty(t.id, false); if (!isRestoring()) persistTab(t); }
   saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
     b.classList.add('is-saved');
@@ -188,13 +116,14 @@ function markSaved(mod){
   onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit, a file removal, or a rename in the field). Removing
-// files is a normal edit now — it never clears the project; only an explicit reset
-// (delete / new project) does. See resetModule().
+// files is a normal edit — it never clears the project; only deleting it does,
+// and that closes the tab.
 function markDirty(mod){
-  dirty[mod] = true;
+  const t = activeTab();
+  if (t) setTabDirty(t.id, true);   // "*" on the tab label
   restoreSaveBtns(mod);
   // Badge the Save icon with a red asterisk when an open project has changes.
-  setSaveDirtyIcon(mod, !!current[mod]);
+  setSaveDirtyIcon(mod, !!curProject());
 }
 
 /* ---- Save / Save as ----
@@ -211,41 +140,43 @@ function flashInvalid(inp){
 // Returns true when the project was actually written, false on any abort (no data,
 // missing name, or a declined overwrite) — callers like "New project" rely on this.
 async function doSave(mod, asNew){
-  if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return false; }
+  if (!moduleHasData(mod)){ await confirmBanner('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.', 'OK'); return false; }
   if (asNew){ openSaveAsModal(mod); return false; }
 
+  const t = activeTab();
   const inp = nameInput(mod);
   const now = Date.now();
   const title = inp ? inp.value.trim() : '';
   if (!title){ flashInvalid(inp); return false; }
   const state = encode(getModuleState(mod));
   const all = await allProjects();
-  const cur = current[mod];
+  const cur = curProject();
   if (cur){
     const clash = all.find(s=> s.module===mod && s.id!==cur.id && s.title.toLowerCase()===title.toLowerCase());
-    if (clash && !confirm('Another ' + (MODULE_LABELS[mod]||mod) + ' project is named “' + clash.title + '”. Save under this name anyway?')) return false;
+    if (clash && !await confirmBanner('Another ' + (MODULE_LABELS[mod]||mod) + ' project is named “' + clash.title + '”. Save under this name anyway?', 'Save')) return false;
     const rec = all.find(s=> s.id===cur.id);
     await putProject({ id: cur.id, module: mod, title, createdAt: rec ? rec.createdAt : now, state, updatedAt: now });
-    current[mod] = { id: cur.id, title };
+    if (t) setTabProject(t.id, cur.id, title);
   } else {
     const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
     let id;
     if (existing){
-      if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return false;
+      if (!await confirmBanner('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?', 'Overwrite')) return false;
       id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
     } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
-    current[mod] = { id, title };
+    if (t) setTabProject(t.id, id, title);
   }
   markSaved(mod); renderList();
   return true;
 }
 
 /* ---- Export current module as .json ---- */
-function exportJson(mod){
-  if (!moduleHasData(mod)){ alert('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.'); return; }
+async function exportJson(mod){
+  if (!moduleHasData(mod)){ await confirmBanner('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.', 'OK'); return; }
   const inp = nameInput(mod);
   const now = Date.now();
-  const title = (inp && inp.value.trim()) || (current[mod] ? current[mod].title : (MODULE_LABELS[mod]||mod));
+  const cur = curProject();
+  const title = (inp && inp.value.trim()) || (cur ? cur.title : (MODULE_LABELS[mod]||mod));
   const payload = { datatreat_session: 1, module: mod, title, createdAt: now, updatedAt: now,
                     state: encode(getModuleState(mod)) };
   const safe = title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
@@ -276,36 +207,24 @@ async function commitSaveAs(){
   const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
   let id;
   if (existing){
-    if (!confirm('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?')) return;
+    if (!await confirmBanner('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?', 'Overwrite')) return;
     id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
   } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
-  current[mod] = { id, title };
-  const fld = nameInput(mod); if (fld) fld.value = title;
-  markSaved(mod); renderList();
+  renderList();
   closeSaveAsModal();
+  // Save as makes a copy: the tab we came from keeps its own project untouched,
+  // and the copy opens alongside it in a tab of its own (already saved → clean).
+  await openTab({ module: mod, title, projectId: id, state, dirty: false });
 }
 
-/* ---- Open projects (from the Projects tab) ---- */
+/* ---- Open projects (from the Projects tab) ----
+   Each project opens in its own tab, so any number can be open at once, several on
+   the same technique. Nothing is ever replaced, and a project that is already open
+   is skipped rather than focused (openTab handles that). */
 async function openProjects(recs){
-  const seen = new Set();
   for (const r of recs){
-    if (seen.has(r.module)){ alert('You selected more than one ' + (MODULE_LABELS[r.module]||r.module) + ' project. Open only one project per module at a time.'); return; }
-    seen.add(r.module);
+    await openTab({ module: r.module, title: r.title, projectId: r.id, state: r.state, dirty: false });
   }
-  for (const r of recs){
-    // Opening the project that's already loaded in that module is a no-op → no prompt.
-    // Otherwise, if the module holds other data, confirm the replace (in-site banner).
-    if (moduleHasData(r.module) && !(current[r.module] && current[r.module].id === r.id)){
-      if (!await confirmBanner('The ' + (MODULE_LABELS[r.module]||r.module) + ' module already has data loaded. Replace it with “' + r.title + '”?', 'Replace')) return;
-    }
-  }
-  for (const r of recs){
-    restoreModuleState(r.module, decode(r.state));
-    current[r.module] = { id: r.id, title: r.title };
-    const inp = nameInput(r.module); if (inp) inp.value = r.title;
-    markSaved(r.module); // freshly opened → no unsaved changes
-  }
-  // Never switch tabs on open — the user stays on the Projects page.
 }
 
 /* ---- Export a saved project record / import a .json ---- */
@@ -318,9 +237,9 @@ function exportProjectRecord(rec){
 async function importProjectFile(file){
   let obj;
   try { obj = JSON.parse(await file.text()); }
-  catch(e){ alert('Not a valid JSON file.'); return; }
+  catch(e){ await confirmBanner('Not a valid JSON file.', 'OK'); return; }
   if (!obj || !obj.datatreat_session || !MODULES.includes(obj.module) || !obj.state){
-    alert('This file is not a DataTreat project.'); return;
+    await confirmBanner('This file is not a DataTreat project.', 'OK'); return;
   }
   const now = Date.now();
   await putProject({ id: uid(), module: obj.module, title: (obj.title||'Imported project').trim(),
@@ -397,79 +316,53 @@ async function renameProject(rec, t){
   t = (t||'').trim();
   if (!t || t === rec.title) return;
   await putProject({ ...rec, title:t, updatedAt: Date.now() });
-  if (current[rec.module] && current[rec.module].id === rec.id){
-    current[rec.module].title = t;
-    const inp = nameInput(rec.module); if (inp) inp.value = t;
+  // A renamed project that is open in a tab updates that tab's label (and the name
+  // field, when it happens to be the active one).
+  const open = tabByProject(rec.id);
+  if (open){
+    setTabTitle(open.id, t);
+    if (open === activeTab()){ const inp = nameInput(rec.module); if (inp) inp.value = t; }
   }
   renderList();
 }
+// Deleting a stored project closes the tab it is open in, if any — an open tab
+// always stands for a project that exists.
 async function deleteProjectRec(rec){
   await deleteProject(rec.id);
-  if (current[rec.module] && current[rec.module].id === rec.id){
-    delete current[rec.module];
-    const inp = nameInput(rec.module); if (inp) inp.value = '';
-    restoreSaveBtns(rec.module);
-    normalizeProjIcons(rec.module);
-  }
-}
-// Default (pristine) module states captured at startup — used to hard-reset a
-// module so a delete / new project leaves NO memory of the previous parameters.
-const DEFAULT_STATE = {};
-MODULES.forEach(m=>{ try { DEFAULT_STATE[m] = encode(getModuleState(m)); } catch(e){} });
-
-// Full reset of a module: files cleared, parameters back to their defaults, the
-// project association / name / draft all dropped. This is the "start clean" path
-// (delete, new project) — as opposed to remove-all, which is just an edit.
-function resetModule(mod){
-  delete current[mod];
-  dirty[mod] = false;
-  const inp = nameInput(mod); if (inp) inp.value = '';   // clear name BEFORE the restore
-  if (DEFAULT_STATE[mod] != null) restoreModuleState(mod, decode(DEFAULT_STATE[mod]));  // params → defaults, files → empty (also refreshes the now-empty project bar)
-  restoreSaveBtns(mod);
-  normalizeProjIcons(mod);
-  fitNameField(mod);     // empty name → back to the ghost-width field
-  refreshProjBar(mod);   // both name and files empty now → hide the buttons
-  clearDraft(mod);
-}
-// Is there anything for a reset to actually clear? (files, an open project, a name)
-function moduleHasSomething(mod){
-  return moduleHasData(mod) || !!current[mod] || !!(nameInput(mod) && nameInput(mod).value.trim());
+  const open = tabByProject(rec.id);
+  if (open) closeTab(open.id);
 }
 
-// Project-bar trash button. Forces a decision, then wipes the module clean.
-//  • Open saved project → confirm "delete «name»" (Delete + cancel), then reset.
-//  • Unsaved work        → Save / Discard / cancel (like New project). Save with an
-//    empty name just fires the "enter a name" shake, deleting nothing.
+// Project-bar trash button: delete the project this tab holds, then close the tab.
+//  • Saved project → confirm "delete «name»" (Delete + cancel).
+//  • Never saved   → nothing is stored yet, so just confirm losing the work.
 async function deleteOpenProject(mod){
-  const cur = current[mod];
+  const t = activeTab(); if (!t) return;
+  const cur = curProject();
   if (cur){
     if (!await confirmBanner('Are you sure to delete “'+cur.title+'”? This action is permanent.', 'Delete')) return;
     await deleteProject(cur.id);
-    resetModule(mod);
-    renderList();
-    return;
+  } else {
+    if (!await confirmBanner('“'+t.title+'” was never saved. Discard it? All work in this tab will be lost.', 'Discard')) return;
   }
-  // No files (only a leftover name / draft): nothing to save or lose — just clear
-  // the name and the draft, no prompt.
-  if (!moduleHasData(mod)){ if (moduleHasSomething(mod)){ resetModule(mod); renderList(); } return; }
-  const res = await confirmBanner('Are you sure to discard all? All unsaved changes will be lost.', 'Save', 'Discard');
-  if (res === false) return;                                   // cancel
-  if (res === true){ if (!await doSave(mod, false)) return; }  // Save (empty name → shake, no reset)
-  resetModule(mod);                                            // Save-then-clear, or Discard
+  closeTab(t.id);
   renderList();
 }
 // New project: force a Save / Don't save / cancel choice when there are unsaved
 // changes, then start from a clean default module. Saved+clean starts fresh at once.
-async function newProject(mod){
-  // No files: nothing to save/lose — clear any leftover name + draft, no prompt.
-  if (!moduleHasData(mod)){ if (moduleHasSomething(mod)){ resetModule(mod); renderList(); } return; }
-  if (dirty[mod] || !current[mod]){
-    const res = await confirmBanner('Save the current project before starting a new one?', 'Save', "Don't save");
-    if (res === false) return;                                   // cancel
-    if (res === true){ if (!await doSave(mod, false)) return; }  // save failed/aborted → keep working
-  }
-  resetModule(mod);
-  renderList();
+// New project: pick a technique in the mini-home modal, then open it in a tab of
+// its own. Nothing about the current tab changes — the new project sits beside it,
+// so there is nothing to save or discard first.
+function newProject(){ openTechniqueModal(); }
+
+/* ---- New-project technique picker (mini home) ---- */
+function openTechniqueModal(){
+  const m = document.getElementById('projNewModal');
+  if (m) m.style.display = 'flex';
+}
+function closeTechniqueModal(){
+  const m = document.getElementById('projNewModal');
+  if (m) m.style.display = 'none';
 }
 
 /* ---- Wiring ---- */
@@ -493,8 +386,23 @@ document.addEventListener('click', async e=>{
   else if (b.classList.contains('proj-csv'))    runCsvExport(mod);
   else if (b.classList.contains('proj-json'))   exportJson(mod);
   else if (b.classList.contains('proj-del'))    deleteOpenProject(mod);
-  else if (b.classList.contains('proj-new'))    newProject(mod);
+  else if (b.classList.contains('proj-new'))    newProject();
 });
+// Mini-home modal: pick a technique → a blank project opens in a new tab.
+(function initTechniqueModal(){
+  const modal = document.getElementById('projNewModal');
+  if (!modal) return;
+  modal.addEventListener('click', async e=>{
+    if (e.target === modal || e.target.closest('[data-new-cancel]')){ closeTechniqueModal(); return; }
+    const card = e.target.closest('[data-new-module]');
+    if (!card) return;
+    closeTechniqueModal();
+    await openTab({ module: card.dataset.newModule });
+  });
+  document.addEventListener('keydown', e=>{
+    if (e.key === 'Escape' && modal.style.display === 'flex') closeTechniqueModal();
+  });
+})();
 // Editing the project name marks a pending change, clears the red "missing name"
 // state, and updates the project-bar visibility (a name alone reveals the buttons).
 document.querySelectorAll('.project-name-input').forEach(inp=>{
@@ -503,18 +411,14 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
     inp.classList.remove('field-invalid');
     fitNameField(mod);
     refreshProjBar(mod);
-    if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(mod); }
+    const t = activeTab();
+    if (t) setTabTitle(t.id, inp.value.trim());   // the tab label tracks the field
+    if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(); }
   });
   inp.addEventListener('focus', ()=> fitNameField(mod));   // click triggers adaptivity
   inp.addEventListener('blur',  ()=> fitNameField(mod));   // empty → ghost width; filled → ellipsis
 });
 window.addEventListener('resize', fitAllNameFields);   // 3/4-width cap tracks the bar
-// Size a module's name field when its tab becomes visible (it can't be measured
-// while hidden — see fitNameField).
-document.getElementById('nav').addEventListener('click', e=>{
-  const b = e.target.closest('button[data-tab]'); if (!b) return;
-  if (MODULES.includes(b.dataset.tab)) requestAnimationFrame(()=> fitNameField(b.dataset.tab));
-});
 
 // Save as… modal
 document.getElementById('projSaveAsCancel').addEventListener('click', closeSaveAsModal);
@@ -612,40 +516,40 @@ document.getElementById('sessListWrap').addEventListener('change', e=>{
 document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
 renderList();
 
-/* ---- Autosave subscription + silent session restore ---- */
-MODULES.forEach(m=> onModuleChange(m, ()=> scheduleAutosave(m)));
+/* ---- Tab wiring ---- */
+MODULES.forEach(m=> onModuleChange(m, ()=>{
+  scheduleAutosave();
+  // A tab that was never saved is unsaved by definition, so any edit marks it —
+  // for saved projects the one-shot listener armed by markSaved does the job.
+  const t = activeTab();
+  if (t && !t.projectId) markDirty(m);
+}));
 
-// On load, silently reload every module's draft — no banner, no confirmation. The
-// draft is the persistent working state, so the app comes back exactly as it was.
-async function initDraftRecovery(){
-  let drafts;
-  try { drafts = await getAllDrafts(); } catch(e){ return; }
-  drafts = (drafts || []).filter(d=> d && d.state);   // title may be empty (unnamed work)
-  if (!drafts.length) return;
-  _restoring = true;
-  drafts.forEach(d=>{
-    try {
-      restoreModuleState(d.module, decode(d.state));
-      const inp = nameInput(d.module); if (inp) inp.value = d.title || '';
-      if (d.id) current[d.module] = { id: d.id, title: d.title };
-      // A saved project (has an id and wasn't dirty when stored) comes back green;
-      // anything else comes back as unsaved work.
-      if (d.id && !d.dirty) markSaved(d.module);
-      else markDirty(d.module);
-      fitNameField(d.module);
-    } catch(e){}
-  });
-  _restoring = false;
-  renderList();
-}
-initDraftRecovery();
+// Called by the tab manager once a tab's state is live in its module: put the
+// project bar in that tab's shape (name, saved/dirty buttons).
+onTabActivated(tab=>{
+  if (!tab) return;
+  const mod = tab.module;
+  const inp = nameInput(mod);
+  if (inp) inp.value = tab.title || '';
+  if (tab.projectId && !tab.dirty) markSaved(mod);
+  else { restoreSaveBtns(mod); setSaveDirtyIcon(mod, !!tab.projectId && tab.dirty); }
+  refreshProjBar(mod);
+  normalizeProjIcons(mod);
+  requestAnimationFrame(()=> fitNameField(mod));
+});
+// Closing a tab may offer to save it first; the tab manager has no access to the
+// project store, so it calls back in here.
+onCloseSave(tab=> doSave(tab.module, false));
 
-// Flush pending drafts immediately when the page is hidden/unloaded (Chrome's
+initTabs();
+
+// Flush the active tab immediately when the page is hidden/unloaded (Chrome's
 // desktop⇄mobile switch reloads the page, tab close, refresh) so changes made in
 // the last few seconds aren't lost to the debounce. Best-effort: visibilitychange
 // (hidden) fires early enough for IndexedDB to commit; pagehide is the backstop.
-function flushDrafts(){ MODULES.forEach(m=>{ if (moduleHasData(m)) saveDraft(m); }); }
-document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState === 'hidden') flushDrafts(); });
-window.addEventListener('pagehide', flushDrafts);
-// No beforeunload nag: the session auto-restores on the next load, so a reload
+function flushTabs(){ const t = activeTab(); if (t) persistTab(t); }
+document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState === 'hidden') flushTabs(); });
+window.addEventListener('pagehide', flushTabs);
+// No beforeunload nag: the open tabs come back on the next load, so a reload
 // never loses work.

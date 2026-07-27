@@ -781,9 +781,8 @@ document.getElementById('nav').addEventListener('click', e=>{
   if (!btn) return;
   goTab(btn.dataset.tab);
 });
-document.querySelectorAll('.home-card').forEach(c=>{
-  c.addEventListener('click', ()=>goTab(c.dataset.go));
-});
+// The home technique cards open a new project tab — wired in tabs.js, which owns
+// the tab model (goTab alone would show an empty module with no project behind it).
 document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
@@ -800,6 +799,9 @@ function redrawAll(){
   for (const m in _tabRedraw){ if (m !== _activeTab) _needsRedraw[m] = true; }
 }
 const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
+// The sections that keep a URL hash. Module sections are reached through an open
+// project tab, so they are deliberately not addressable.
+const HASH_TABS = ['home','projects','settings'];
 const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
@@ -819,8 +821,12 @@ function goTab(tab, fromHash){
     requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} });
   }
   if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
-  // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
-  if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
+  // Only the fixed sections are addressable: a module section is shown by activating
+  // an open project tab, whose id is per-session and means nothing in a URL.
+  if (!fromHash){
+    if (HASH_TABS.includes(tab)){ if (location.hash.slice(1) !== tab) location.hash = tab; }
+    else if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  }
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
   if (tab === 'home') requestAnimationFrame(sizeHomeTiles); // re-fit tiles after any resize while away
 }
@@ -907,25 +913,12 @@ document.addEventListener('keydown', e=>{
   btn.addEventListener('click', ()=> window.scrollTo({ top:0, behavior:'smooth' }));
   onScroll();
 })();
-// Give every module tab a permanent (invisible) round SVG dot so its slot is
-// always reserved — the tab width never changes when the badge appears.
-(function initTabDots(){
-  ['tauc','xrd','gc','epr'].forEach(tab=>{
-    const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
-    if (!btn || btn.querySelector('.tab-dot')) return;
-    btn.classList.add('has-dot-slot');
-    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    dot.setAttribute('class', 'tab-dot');
-    dot.setAttribute('viewBox', '0 0 10 10');
-    dot.setAttribute('aria-hidden', 'true');
-    dot.innerHTML = '<circle cx="5" cy="5" r="4.2" fill="currentColor"/>';
-    btn.appendChild(dot);
-  });
-})();
-// Toggle the "data loaded" dot's visibility (the slot is already reserved).
+// Record whether a module currently holds data. The nav no longer shows a dot for
+// it (the open-tab bar carries the unsaved "*" instead); the flag still drives the
+// project bar's button visibility.
+const _hasData = {};
 function setTabLoaded(tab, has){
-  const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
-  if (btn) btn.classList.toggle('has-data', !!has);   // the nav dot tracks actual data
+  _hasData[tab] = !!has;
   refreshProjBar(tab);
 }
 // Project-bar buttons show when the module has files OR a non-empty project name —
@@ -933,7 +926,7 @@ function setTabLoaded(tab, has){
 function refreshProjBar(tab){
   const nameInp = document.querySelector('.project-name-input[data-module="'+tab+'"]');
   const named = !!(nameInp && nameInp.value.trim());
-  const has = !!document.querySelector('#nav button[data-tab="'+tab+'"].has-data');
+  const has = !!_hasData[tab];
   const show = has || named;
   document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"], '
     + '.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
@@ -1025,11 +1018,9 @@ document.addEventListener('click', e=>{
   const names = (btn.dataset.csvNames||'').split(',').map(s=>s.trim()).filter(Boolean);
   downloadCsvFiles(btn.dataset.csvMod, names);
 });
-// Does a module currently hold loaded data? (drives the replace-on-open confirm)
-function moduleHasData(mod){
-  const btn = document.querySelector('#nav button[data-tab="'+mod+'"]');
-  return !!(btn && btn.classList.contains('has-data'));
-}
+// Does a module currently hold loaded data? Reported by the modules themselves
+// through setTabLoaded (it used to be read off the nav button's data dot).
+function moduleHasData(mod){ return !!_hasData[mod]; }
 
 /* =========================================================
    THEME — light / dark, remembered, defaulting to the OS preference.
@@ -1102,6 +1093,18 @@ function restoreModuleState(mod, state){
   // Plots just drawn may be sized wrong if the tab is hidden; redraw on show.
   if (_activeTab === mod){ if (_tabRedraw[mod]) requestAnimationFrame(()=>{ try { _tabRedraw[mod](); } catch(e){} }); }
   else { _needsRedraw[mod] = true; }
+}
+// Undo/redo stack contents. Only one instance of each module is live, so the tab
+// manager parks the outgoing tab's history here and restores the incoming one —
+// otherwise an undo after a tab switch would replay another project's states.
+function getModuleHistory(mod){
+  const st = _histories[mod];
+  return st ? { states: st.states.slice(), index: st.index } : null;
+}
+function setModuleHistory(mod, h){
+  const st = _histories[mod];
+  if (!st || !h) return;
+  st.states = h.states.slice(); st.index = h.index;
 }
 // Run cb once, the next time the module records a real change (edit/add/remove…).
 function onModuleChangeOnce(mod, cb){
@@ -1188,10 +1191,13 @@ function updateNarrowLayout(){
 updateNarrowLayout();
 window.addEventListener('resize', updateNarrowLayout);
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
-window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
+window.addEventListener('hashchange', ()=>{
+  const t = location.hash.slice(1);
+  if (HASH_TABS.includes(t)) goTab(t, true);
+});
 (function initHashRoute(){
   const t = location.hash.slice(1);
-  if (t && VALID_TABS.includes(t)) goTab(t, true);
+  if (HASH_TABS.includes(t)) goTab(t, true);
 })();
 
 /* =========================================================
@@ -1542,5 +1548,5 @@ function barPlotXPad(labelWs, n, plotW){
 })();
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, refreshProjBar
 };
