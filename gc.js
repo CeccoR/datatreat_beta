@@ -193,7 +193,7 @@ import { Plot, svgEl } from './plot.js';
     const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
     const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
     // Column order: Sample | m | Q | Light-on | [Interval: start end] | warnings.
-    let html = `<div style="overflow-x:auto"><table style="min-width:860px;width:100%;table-layout:fixed">${cg}<thead>
+    let html = `<div style="overflow-x:auto"><table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
       <tr><th rowspan="2">Sample</th>
         <th rowspan="2">m (g) ${modeChip('m',mMode)}</th>
         <th rowspan="2">Q (mL/min) ${modeChip('q',qMode)}</th>
