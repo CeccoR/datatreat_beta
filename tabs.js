@@ -223,6 +223,8 @@ function renderTabs(){
 }
 
 // One delegated handler for the whole bar: the close button first, then the tab.
+// A drag that actually moved swallows the click that follows it, so a reorder
+// never doubles as an activation.
 function initBar(){
   const bar = document.getElementById('tabBar');
   if (!bar) return;
@@ -231,8 +233,81 @@ function initBar(){
     const el = e.target.closest('.ptab');
     if (!el) return;
     if (x){ e.stopPropagation(); requestClose(el.dataset.id); return; }
+    if (_dragMoved){ _dragMoved = false; return; }
     activateTab(el.dataset.id);
   });
+  initDrag(bar);
+}
+
+/* ---- Drag to reorder (Chrome-style) ----------------------------------------
+   Pointer-driven: the grabbed tab follows the cursor while the others slide to
+   open a gap; on release the array is reordered and persisted. Only reorders
+   within the bar — no cross-window drag. */
+const TAB_GAP = 6;   // matches .tab-bar gap
+let _drag = null;
+let _dragMoved = false;
+function initDrag(bar){
+  bar.addEventListener('pointerdown', e=>{
+    if (e.button !== 0) return;
+    const el = e.target.closest('.ptab');
+    if (!el || e.target.closest('.ptab-x')) return;
+    const tabs = [...bar.querySelectorAll('.ptab')];
+    const idx = tabs.indexOf(el);
+    _drag = { pointerId: e.pointerId, el, startX: e.clientX, tabs,
+              rects: tabs.map(t=> t.getBoundingClientRect()), idx, target: idx, moved: false, captured: false };
+    _dragMoved = false;
+  });
+  bar.addEventListener('pointermove', e=>{
+    const d = _drag; if (!d) return;
+    const dx = e.clientX - d.startX;
+    if (!d.moved && Math.abs(dx) < 4) return;
+    if (!d.moved){
+      d.moved = true;
+      d.el.classList.add('ptab-dragging');
+      // Capture only once a real drag begins — capturing on pointerdown would
+      // redirect the click after a plain tap to the bar, breaking activation.
+      try { bar.setPointerCapture(d.pointerId); d.captured = true; } catch(err){}
+    }
+    d.el.style.transform = `translateX(${dx}px)`;
+    const w = d.rects[d.idx].width;
+    const center = d.rects[d.idx].left + w / 2 + dx;
+    let target = d.idx;
+    for (let i = 0; i < d.tabs.length; i++){
+      if (i === d.idx) continue;
+      const c = d.rects[i].left + d.rects[i].width / 2;
+      if (i < d.idx && center < c) target = Math.min(target, i);
+      if (i > d.idx && center > c) target = Math.max(target, i);
+    }
+    d.target = target;
+    d.tabs.forEach((t, i)=>{
+      if (i === d.idx) return;
+      let shift = 0;
+      if (target > d.idx && i > d.idx && i <= target) shift = -(w + TAB_GAP);
+      else if (target < d.idx && i >= target && i < d.idx) shift = w + TAB_GAP;
+      t.style.transition = 'transform .15s';
+      t.style.transform = shift ? `translateX(${shift}px)` : '';
+    });
+  });
+  const finish = ()=>{
+    const d = _drag; if (!d) return;
+    _drag = null;
+    if (d.captured){ try { bar.releasePointerCapture(d.pointerId); } catch(err){} }
+    // Inline transforms are cleared here directly, so a plain click (no move) needs
+    // no re-render — re-rendering would detach the element the click then fires on.
+    d.tabs.forEach(t=>{ t.style.transform = ''; t.style.transition = ''; t.classList.remove('ptab-dragging'); });
+    if (d.moved && d.target !== d.idx){ _dragMoved = true; moveTab(d.el.dataset.id, d.target); }
+  };
+  bar.addEventListener('pointerup', finish);
+  bar.addEventListener('pointercancel', finish);
+}
+// Move a tab to a new index in the bar order, then persist the new order.
+function moveTab(id, to){
+  const from = tabIndex(id);
+  if (from < 0 || to === from){ renderTabs(); return; }
+  const [t] = TABS.splice(from, 1);
+  TABS.splice(to, 0, t);
+  renderTabs();
+  persistAll();
 }
 
 // Is there any work in this tab to lose? For the active tab the module answers

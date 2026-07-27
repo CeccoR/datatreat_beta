@@ -1796,6 +1796,10 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   transition: background-color 0.14s, color 0.14s;
 }
 .ptab:hover { background: var(--panel2); color: var(--text); }
+/* Drag to reorder: the grabbed tab lifts above its neighbours and follows the
+   cursor (no transform transition so it tracks 1:1). */
+.ptab-dragging { z-index: 5; cursor: grabbing; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+.ptab-dragging::before, .ptab:has(+ .ptab-dragging)::before { display: none; }
 /* A short hairline between an inactive tab and the next inactive tab, and between
    the last inactive tab and the "+" (shorter/lighter than the nav dividers). It
    vanishes next to the active tab, whose fill owns the gap. */
