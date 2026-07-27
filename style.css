@@ -128,7 +128,7 @@ header h1 {
   display: block;
   flex-shrink: 0;
 }
-nav button {
+#nav > button {
   background: var(--panel2);
   border: 1px solid var(--line);
   color: var(--muted);
@@ -142,7 +142,7 @@ nav button {
 }
 /* Press feedback for non-active tabs: a filled-accent flash (distinct from the
    outline-accent hover) */
-nav button:not(.is-on):active {
+#nav > button:not(.is-on):active {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
@@ -158,12 +158,12 @@ nav button:not(.is-on):active {
   scrollbar-width: none;              /* Firefox */
 }
 #nav::-webkit-scrollbar { display: none; }
-nav button:not(.nav-settings):not(.is-on):hover {
+#nav > button:not(.nav-settings):not(.is-on):hover {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--panel2);
 }
-nav button.is-on {
+#nav > button.is-on {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
