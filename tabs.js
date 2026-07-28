@@ -68,20 +68,37 @@ function persistAll(){
 }
 
 /* ---- State swap ---------------------------------------------------------- */
-// Park the live module state (and undo history) of the currently active tab.
+// Which tab's state is actually loaded into its module right now. Tracked so a
+// superseded switch (see loadTabIfActive) neither stashes stale data nor reloads a
+// tab that is already live.
+let _liveId = null;
+// Park the live module state (and undo history) of the currently active tab — but
+// only if that tab is genuinely the live one. During rapid switching an outgoing
+// tab may never have been loaded (its deferred load was skipped); its record is
+// still valid on disk, so stashing the module (which holds someone else's data)
+// would corrupt it.
 function stashActive(){
   const t = activeTab();
-  if (!t) return;
+  if (!t || t.id !== _liveId) return;
   try { t.state = encode(getModuleState(t.module)); } catch(e){}
   t.hist = getModuleHistory(t.module);
 }
 // Load a tab's parked state into its module. restoreModuleState resets the undo
-// stack to a fresh baseline, so the parked history is put back afterwards.
+// stack to a fresh baseline, so the parked history is put back afterwards. If the
+// module already holds this tab's state, skip the heavy restore.
 function loadTab(t){
+  if (_liveId === t.id) return;
   const st = t.state || DEFAULT_STATE[t.module];
   try { if (st != null) restoreModuleState(t.module, decode(st)); } catch(e){}
   if (t.hist) setModuleHistory(t.module, t.hist);
-  syncProjectBar(t);
+  _liveId = t.id;
+}
+// Deferred loader guarded against fast switching: if the user has already moved on
+// to another tab by the time this runs, do nothing — only the final tab loads.
+function loadTabIfActive(t){
+  if (!t || t.id !== _activeId) return;
+  loadTab(t);
+  persistAll();
 }
 
 /* ---- Project bar sync -----------------------------------------------------
@@ -144,7 +161,8 @@ function activateTab(id){
   _activeId = id;
   renderTabs();
   goTab(t.module);
-  afterPaint(()=>{ loadTab(t); persistAll(); });
+  syncProjectBar(t);                    // project bar is cheap + data-independent: build it now
+  afterPaint(()=> loadTabIfActive(t));  // heavy restore after paint, skipped if superseded
 }
 
 // Home / Projects / Settings belong to no tab, so none is highlighted while one of
@@ -171,7 +189,8 @@ function closeTab(id){
   _activeId = next.id;
   renderTabs();
   goTab(next.module);
-  afterPaint(()=>{ loadTab(next); persistAll(); });
+  syncProjectBar(next);
+  afterPaint(()=> loadTabIfActive(next));
 }
 
 // Rename / dirty / project-association updates coming from sessions.js.
@@ -375,14 +394,16 @@ async function initTabs(){
   });
   const wanted = recs.find(r=> r.active) || recs[0];
   _activeId = wanted.id;
+  const at = tabById(_activeId);
   renderTabs();                          // tab bar + titles
-  goTab(tabById(_activeId).module);      // build the (empty) module shell
+  goTab(at.module);                      // build the (empty) module shell
+  syncProjectBar(at);                    // project bar built now, not piecemeal after
   // Reveal the fully-assembled shell in one fade, THEN run the heavy restore a paint
   // later — so the user sees a complete shell appear at once (not built piecemeal),
   // and the charts fill in after, without freezing the boot.
   requestAnimationFrame(()=>{
     revealApp();
-    requestAnimationFrame(()=>{ loadTab(tabById(_activeId)); _restoring = false; });
+    requestAnimationFrame(()=>{ loadTabIfActive(at); _restoring = false; });
   });
 }
 
