@@ -1509,8 +1509,8 @@ function confirmBanner(message, confirmLabel, altLabel){
 // own alert inline (no global handler needed).
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
   const makeX = act => act
-    ? `<button class="alert-dismiss is-danger" data-action="${act}" title="Dismiss">${X_SVG(13)}</button>`
-    : `<button class="alert-dismiss is-danger" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(13)}</button>`;
+    ? `<button class="alert-dismiss close-x" data-action="${act}" title="Dismiss">${X_SVG(13)}</button>`
+    : `<button class="alert-dismiss close-x" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(13)}</button>`;
   let html = '';
   if (invalidNames.length)
     html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';

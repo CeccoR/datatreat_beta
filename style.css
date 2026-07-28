@@ -826,10 +826,10 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
   color: inherit;
   line-height: 1;
   opacity: 0;
-  transition: font-weight 0s, opacity 0.15s;
+  transition: color 0.14s, opacity 0.15s;
 }
 .alert:hover .alert-dismiss { opacity: 1; }
-.alert-dismiss:hover { font-weight: bold; }
+/* hover colour comes from the shared .close-x rule (accent) */
 .alert.warn {
   background: var(--alert-warn-bg);
   color: var(--warn);
@@ -1418,7 +1418,6 @@ button.btn.table-csv-btn {
   line-height: 1;
   transition: color 0.14s;
 }
-.pwa-toast-x:hover { color: var(--accent); }
 /* Icons render as centered blocks (no inline-baseline gap) so every icon's
    bounding box is centered in its button/cell and aligns with its neighbours */
 .plot-btn-icon, .x-icon, .dl-icon { display: block; }
@@ -1428,10 +1427,15 @@ button.btn.table-csv-btn {
   align-items: center;
   justify-content: center;
 }
-.alert-dismiss:hover { font-weight: normal; }
-/* The XRD peak-table delete X carries .is-danger (for its shared markup) but reads
-   as accent here, not red — override the generic is-danger hover for it alone. */
-.peak-del.is-danger:hover:not(:disabled) { color: var(--accent) !important; border-color: transparent !important; }
+/* ===== X buttons: exactly two roles =====
+   .close-x  — dismisses a UI element (tab, banner, alert); nothing is deleted → accent
+   .is-danger — deletes data (a loaded file, a detected peak, a saved project) → bad
+   The tab and PWA/confirm-banner X's are close-X by construction, so they share the
+   accent rule without needing the class. peak-del carries .is-danger and is therefore
+   red like every other data removal — no exception. */
+.close-x:hover:not(:disabled),
+.ptab-x:hover,
+.pwa-toast-x:hover { color: var(--accent); }
 /* button.btn prefix so this out-specifies button.btn.plot-tool-btn (which sets the
    bare transparent fill) — without it the armed pan/zoom accent fill never showed. */
 button.btn.plot-tool-btn.is-on,
@@ -1763,6 +1767,11 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   top: -0.5px;
   transition: color 0.1s;
 }
+/* Delete X → bad on hover. Needs the same id scope as the base rule above: the
+   shared .is-danger:hover (a plain class rule) is out-specified by that id and
+   would otherwise never win here. */
+#xrdPeakTableWrap .peak-row .peak-del:hover:not(:disabled),
+#xrdStdPeakTableWrap .peak-row .peak-del:hover:not(:disabled) { color: var(--bad); }
 /* +Add peak armed state is handled by the shared button.btn.is-on rule. */
 
 /* ===== XRD fit hyperparameters modal ===== */
@@ -1910,7 +1919,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   transition: opacity 0.14s, color 0.14s;
 }
 .ptab:hover .ptab-x { opacity: 1; }
-.ptab-x:hover { color: var(--accent); opacity: 1; }
+.ptab-x:hover { opacity: 1; }   /* colour comes from the shared X-buttons rule */
 
 /* ===== New-project technique picker (mini home) ===== */
 .newproj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
