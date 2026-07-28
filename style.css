@@ -1349,8 +1349,8 @@ button.btn.table-csv-btn {
 .table-csv-btn:hover {
   opacity: 1;
 }
-button.btn.table-csv-btn:hover:not(:disabled) { --btn-fg: var(--accent); --btn-bd: transparent; }
-button.btn.table-csv-btn:active:not(:disabled) { --btn-bg: var(--line); --btn-bd: transparent; }
+button.btn.table-csv-btn:hover:not(:disabled) { --btn-bg: var(--iconbtn-hover); --btn-fg: var(--accent); --btn-bd: transparent; }
+button.btn.table-csv-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press); --btn-fg: var(--accent); --btn-bd: transparent; }
 .table-csv-btn .plot-btn-icon { width: 19px; height: 19px; }
 /* PWA update toast */
 .pwa-toast {
@@ -1726,10 +1726,17 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   border: none;
   color: var(--muted);
   padding: 2px 6px;
-  margin: -2px 0;
   font-size: 13px;
   cursor: pointer;
   line-height: 1;
+  vertical-align: middle;
+  /* An inline-flex button (align-items:center, not baseline) synthesises its own
+     "baseline" as its bottom edge, which the td's vertical-align:middle then
+     centres against — a geometric mismatch that leaves the icon a couple of
+     pixels off true centre. No layout-based fix removes that mismatch, so nudge
+     it back visually. */
+  position: relative;
+  top: -0.5px;
   transition: color 0.1s;
 }
 /* +Add peak armed state is handled by the shared button.btn.is-on rule. */
