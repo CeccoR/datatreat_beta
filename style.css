@@ -837,8 +837,8 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 }
 .alert-dismiss {
   position: absolute;
-  right: 9px;
-  top: 17px;                 /* centred on the first text line (alert padding-top 8 + ~half line) */
+  right: 11px;               /* right edge lines up with the file-list remove X */
+  top: 50%;                  /* vertically centred in the whole alert box */
   transform: translateY(-50%);
   background: none;
   border: none;

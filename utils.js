@@ -1521,6 +1521,32 @@ function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidActi
   return html;
 }
 
+// Every .alert gets a dismiss X, built in — regardless of how it was created.
+// Alerts that already carry their own (stateful) .alert-dismiss are left as-is;
+// any other alert (EPR unpaired, tauc/gc live warnings, …) gets a generic X that
+// just removes it. A MutationObserver keeps this true for alerts added at any time.
+function ensureAlertDismiss(node){
+  if (node.nodeType !== 1) return;
+  // Plot redraws add hundreds of SVG nodes; they never contain HTML alerts, so skip
+  // them wholesale to keep the (hot) redraw path cheap.
+  if (node.namespaceURI === 'http://www.w3.org/2000/svg') return;
+  const alerts = [];
+  if (node.classList && node.classList.contains('alert')) alerts.push(node);
+  if (node.querySelectorAll) node.querySelectorAll('.alert').forEach(a=>alerts.push(a));
+  for (const a of alerts){
+    if (a.querySelector(':scope > .alert-dismiss')) continue;
+    const btn = document.createElement('button');
+    btn.className = 'alert-dismiss close-x';
+    btn.title = 'Dismiss';
+    btn.innerHTML = X_SVG(15);
+    btn.addEventListener('click', ()=> a.remove());
+    a.appendChild(btn);
+  }
+}
+new MutationObserver(muts=>{
+  for (const m of muts) for (const n of m.addedNodes) ensureAlertDismiss(n);
+}).observe(document.documentElement, { childList:true, subtree:true });
+
 function nextColor(existingFiles){
   const used = new Set(existingFiles.map(f=>f.color));
   for (let i=0; i<COLORS.length*2; i++){ const c=colorOf(i); if (!used.has(c)) return c; }
