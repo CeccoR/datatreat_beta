@@ -33,6 +33,13 @@
      and press the darker --panel2. */
   --iconbtn-hover: var(--panel2);
   --iconbtn-press: var(--line);
+  /* Same idea, but for icon buttons living ON a --bar or --panel2 surface itself
+     (project bar, a peak-table card): --iconbtn-hover would sometimes exactly
+     match that surface's own colour and look like nothing happened on hover, so
+     these are picked to stay visibly lighter/darker than BOTH --bar and --panel2,
+     in both themes. */
+  --cardbtn-hover: var(--panel);
+  --cardbtn-press: var(--line);
   --sel-inset: var(--white); /* selected peak-row highlight border */
   --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
   --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
@@ -52,6 +59,11 @@
 :root[data-theme="dark"] {
   --iconbtn-hover: var(--line);
   --iconbtn-press: var(--panel2);
+  /* --bar (dark) sits lighter than --panel2, so the pair above would put the
+     card-button hover level with --bar itself; go one step further each way:
+     --line is lighter than --bar, --bg is darker than --panel2. */
+  --cardbtn-hover: var(--line);
+  --cardbtn-press: var(--bg);
 }
 /* ===== Light theme ===== */
 :root[data-theme="light"] {
@@ -236,14 +248,31 @@ button.btn.is-saved:disabled {
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .proj-icon .proj-svg { width: 19px; height: 19px; display: block; }
-/* Project-bar icon buttons are bare like the nav ones (same shape kept): no fill
-   or border at rest, muted icon; hover reveals the grey plate + accent icon; press
-   deepens to --line. Save keeps its filled look (border stripped); delete lights
-   red, not accent. */
-.btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new { --btn-fg: var(--muted); }
-.btn.proj-icon { --btn-bg: transparent; --btn-bd: transparent; }
-.btn.proj-icon:hover:not(:disabled)  { --btn-bg: var(--iconbtn-hover); --btn-fg: var(--accent); --btn-bd: transparent; }
-.btn.proj-icon:active:not(:disabled) { --btn-bg: var(--iconbtn-press); }
+/* Project-bar icon buttons (export/delete/new) and the per-table CSV export button
+   (below, .table-csv-btn) are THE SAME BUTTON: one shared rule block, so their
+   aesthetics can never drift apart. Bare at rest (no fill/border, muted icon);
+   hover/press use --cardbtn-hover/--cardbtn-press rather than the nav's
+   --iconbtn-hover/--iconbtn-press, because both of these live on a --bar or
+   --panel2 surface (the project bar, a peak-table card) — using the nav's tokens
+   would sometimes hover to the exact colour of that surface (e.g. a table card's
+   own --panel2 background) and look like nothing happened. --cardbtn-hover/press
+   are calibrated to stay visibly lighter/darker than both surfaces, in both
+   themes. Save keeps its filled look (border stripped); delete lights red, not
+   accent. */
+.btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new,
+button.btn.table-csv-btn {
+  --btn-bg: transparent;
+  --btn-bd: transparent;
+  --btn-fg: var(--muted);
+}
+.btn.proj-icon.proj-saveas:hover:not(:disabled), .btn.proj-icon.proj-csv:hover:not(:disabled), .btn.proj-icon.proj-json:hover:not(:disabled), .btn.proj-icon.proj-del:hover:not(:disabled), .btn.proj-icon.proj-new:hover:not(:disabled),
+button.btn.table-csv-btn:hover:not(:disabled) {
+  --btn-bg: var(--cardbtn-hover); --btn-fg: var(--accent); --btn-bd: transparent;
+}
+.btn.proj-icon.proj-saveas:active:not(:disabled), .btn.proj-icon.proj-csv:active:not(:disabled), .btn.proj-icon.proj-json:active:not(:disabled), .btn.proj-icon.proj-del:active:not(:disabled), .btn.proj-icon.proj-new:active:not(:disabled),
+button.btn.table-csv-btn:active:not(:disabled) {
+  --btn-bg: var(--cardbtn-press); --btn-fg: var(--accent); --btn-bd: transparent;
+}
 .btn.proj-icon.proj-del:hover:not(:disabled) { --btn-fg: var(--bad); border-color: transparent; }
 /* Save: unchanged filled look, only the border removed in every state. */
 .btn.proj-icon.proj-save { --btn-bd: transparent; }
@@ -1323,12 +1352,12 @@ button.btn.plot-tool-btn:hover:not(:disabled) { --btn-bg: var(--iconbtn-hover); 
 button.btn.plot-dl-btn:active:not(:disabled),
 button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press); }
 .plot-btn-icon { width: 19px; height: 19px; display: block; }
-/* Compact icon-only CSV button pinned to the far edge of a table header — same
-   button as the project bar's CSV export (26px box, bare look), dimmed to 50% by
-   default and full opacity when the table (or the button) is hovered. */
-/* button.btn.table-csv-btn (not just .table-csv-btn) so this out-specifies the
-   base button.btn rule's own --btn-bg/--btn-bd — otherwise those lose and the
-   button keeps the default grey-outline fill instead of going bare. */
+/* Compact icon-only CSV button pinned to the far edge of a table header — the
+   colour/hover/press logic lives with the project-bar buttons above (one shared
+   rule block); this is just its size/position/opacity, which the project-bar
+   button doesn't need (it isn't dimmed, and it isn't pinned to a header edge).
+   button.btn.table-csv-btn (not just .table-csv-btn) so this out-specifies the
+   base button.btn rule's own layout — otherwise it keeps the default padding. */
 button.btn.table-csv-btn {
   margin-left: auto;            /* push to the extreme right of its header row */
   width: 26px !important;
@@ -1339,9 +1368,6 @@ button.btn.table-csv-btn {
   justify-content: center;
   border-radius: 8px;
   opacity: 0.5;
-  --btn-bg: transparent;
-  --btn-bd: transparent;
-  --btn-fg: var(--muted);
   transition: opacity 0.18s, background 0.15s, color 0.15s;
 }
 .peak-box:hover .table-csv-btn,
@@ -1349,8 +1375,6 @@ button.btn.table-csv-btn {
 .table-csv-btn:hover {
   opacity: 1;
 }
-button.btn.table-csv-btn:hover:not(:disabled) { --btn-bg: var(--iconbtn-hover); --btn-fg: var(--accent); --btn-bd: transparent; }
-button.btn.table-csv-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press); --btn-fg: var(--accent); --btn-bd: transparent; }
 .table-csv-btn .plot-btn-icon { width: 19px; height: 19px; }
 /* PWA update toast */
 .pwa-toast {
