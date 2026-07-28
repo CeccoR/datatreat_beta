@@ -270,14 +270,11 @@ function initDrag(bar){
     }
     d.el.style.transform = `translateX(${dx}px)`;
     const w = d.rects[d.idx].width;
-    const center = d.rects[d.idx].left + w / 2 + dx;
-    let target = d.idx;
-    for (let i = 0; i < d.tabs.length; i++){
-      if (i === d.idx) continue;
-      const c = d.rects[i].left + d.rects[i].width / 2;
-      if (i < d.idx && center < c) target = Math.min(target, i);
-      if (i > d.idx && center > c) target = Math.max(target, i);
-    }
+    // Symmetric by construction: a neighbour steps aside as soon as the drag passes
+    // half a slot towards it, the same distance left as right (comparing against the
+    // neighbours' own centres would instead need a full slot in each direction).
+    const slot = w + TAB_GAP;
+    const target = Math.max(0, Math.min(d.tabs.length - 1, d.idx + Math.round(dx / slot)));
     d.target = target;
     d.tabs.forEach((t, i)=>{
       if (i === d.idx) return;
