@@ -1462,6 +1462,9 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 /* ===== Sample navigation arrows ===== */
 /* Nav arrows: same chip box as the counter (.pill) — same height/shape, width just
    fits the arrow, glyph perfectly centred; styled like the all/one mode-chip. */
+/* Sample-nav arrows join the hover-plate icon family (they sit on the module card,
+   a --panel surface): bare at rest, plate + accent glyph on hover, deeper plate on
+   press — instead of the secondary text-button's filled chip. */
 .btn.nav-arrow {
   height: 22px;
   min-width: 22px;
@@ -1472,7 +1475,10 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   font-size: 13px;
   line-height: 1;
   border-radius: 11px;
+  --btn-bg: transparent;
 }
+.btn.nav-arrow:hover:not(:disabled)  { --btn-bg: var(--iconbtn-hover); --btn-fg: var(--accent); }
+.btn.nav-arrow:active:not(:disabled) { --btn-bg: var(--iconbtn-press); --btn-fg: var(--accent); }
 
 /* Instrumental-standard picker: sits in the plot header row, aligned with and the
    same height as the "+ Add peak" corner button. Greyed while showing its ghost
@@ -1671,15 +1677,20 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .field-row > input, .field-row > select { flex:1; min-width:0; }
 
 /* ===== all/one flip-chip (GC-table style, reused for Tauc & XRD fields) ===== */
+/* Pill toggle = a small filled secondary button (it carries a --panel2 fill, so it
+   follows the secondary text-button pattern, NOT the bare icon-plate one: hovering
+   only recolours the text — its own fill already equals the plate colour — and a
+   press moves the fill one step toward the text). Only the pill radius and the
+   muted idle text set it apart. */
 .mode-chip {
   font-size: 10px; padding: 1px 8px;
-  border: 1px solid var(--line); border-radius: 10px;
+  border: none; border-radius: 10px;
   background: var(--panel2); color: var(--muted); cursor: pointer;
   text-transform: uppercase; letter-spacing: .05em; line-height: 1.6;
-  transition: background 0.14s, border-color 0.14s, color 0.14s;
+  transition: background 0.14s, color 0.14s;
 }
-/* Hover: outline gone, plate lightens, text goes accent — click doesn't change this. */
-.mode-chip:hover { color: var(--accent); border-color: transparent; background: var(--iconbtn-hover); }
+.mode-chip:hover  { color: var(--accent); }
+.mode-chip:active { color: var(--accent); background: var(--line); }
 .field-row .mode-chip { flex: 0 0 auto; align-self: center; }
 /* Two half-width sub-panels side by side */
 .field-half { display:flex; gap:10px; }
@@ -1881,7 +1892,10 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   cursor: pointer;
   transition: background-color 0.14s, color 0.14s;
 }
-.ptab-add:hover { color: var(--text); }
+/* Same hover-plate behaviour as the nav icon buttons (it sits on the same --panel
+   surface): plate on hover + accent glyph, deeper plate on press. */
+.ptab-add:hover { background: var(--iconbtn-hover); color: var(--accent); }
+.ptab-add:active { background: var(--iconbtn-press); color: var(--accent); }
 /* Active tab: takes the project bar's grey and stretches down into it (Chrome
    style). The negative bottom margin pulls it through the header's bottom padding
    so its fill meets the bar's with no seam. */
