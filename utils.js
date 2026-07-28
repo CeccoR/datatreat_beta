@@ -1382,14 +1382,17 @@ function createDateTimeField(initial, onChange){
       e.stopPropagation(); // keep global arrow-nav / undo shortcuts from firing
     });
   });
-  calBtn.addEventListener('click', ()=> openDateModal(currentDate() || new Date(), d=>{ load(d); render(); emit(); }));
+  calBtn.addEventListener('click', ()=>{
+    calBtn.classList.add('is-on');   // stays lit accent while the modal is open
+    openDateModal(currentDate() || new Date(), d=>{ load(d); render(); emit(); }, ()=> calBtn.classList.remove('is-on'));
+  });
 
   render();
   return { el: wrap, get: currentDate, set: d=>{ load(d); render(); } };
 }
 
 // In-app modal calendar (month grid + time steppers). Calls onPick(Date) on OK.
-function openDateModal(baseDate, onPick){
+function openDateModal(baseDate, onPick, onClose){
   const view = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
   const sel = new Date(baseDate);
   const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop dt-modal-backdrop';
@@ -1425,7 +1428,7 @@ function openDateModal(baseDate, onPick){
       </div>
       <div class="dt-modal-foot"><button type="button" class="btn dt-cancel">Cancel</button><button type="button" class="btn primary dt-ok">OK</button></div>`;
   }
-  function close(){ document.removeEventListener('keydown', onKey); backdrop.remove(); }
+  function close(){ document.removeEventListener('keydown', onKey); backdrop.remove(); if (onClose) onClose(); }
   function onKey(e){ if (e.key==='Escape') close(); }
   build();
   modal.addEventListener('click', e=>{

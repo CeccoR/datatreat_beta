@@ -214,7 +214,7 @@ header h1 {
   transition: color 0.12s;
 }
 .row-ic svg { display: block; }
-.row-ic.pr-csv:hover, .row-ic.pr-json:hover { color: var(--text); }
+.row-ic.pr-csv:hover, .row-ic.pr-json:hover { color: var(--accent); }
 .row-ic.pr-del:hover { color: var(--bad); }
 /* "Saved ✓" confirmation state — green, non-interactive, same box as the button.
    !important so it wins over .primary on the same Save button. */
@@ -595,7 +595,7 @@ input[type="file"] {
   color: var(--muted);
   transition: color 0.15s;
 }
-.dt-cal-btn:hover { color: var(--text); }
+.dt-cal-btn:hover, .dt-cal-btn.is-on { color: var(--accent); }
 
 /* Calendar modal (inherits card bg/border/shadow from .modal-box) */
 .dt-modal { width: 300px; padding: 16px; }
@@ -1008,7 +1008,7 @@ footer a:hover {
 /* File-list actions cell: trim padding so download + remove always fit the column */
 .row-acts { padding-left: 0 !important; padding-right: 4px !important; }
 /* Download buttons: same bare style, but light up to a lighter grey, not red */
-.dl-bare:hover { color: var(--text); }
+.dl-bare:hover { color: var(--accent); }
 th .remove-all { font-weight: 700; }
 th .download-all { vertical-align: middle; }
 /* Both "all" buttons are always bold: thicker icon strokes than the per-row ones */
@@ -1043,7 +1043,8 @@ button.palette-pick-btn {
   width: 14px;
   height: 14px;
   padding: 0;
-  border: 1.5px solid var(--muted);
+  /* Idle: no visible border (transparent keeps the box size fixed, border-box). */
+  border: 1.5px solid transparent;
   border-radius: 3px;
   cursor: pointer;
   flex-shrink: 0;
@@ -1051,8 +1052,9 @@ button.palette-pick-btn {
     #3aa0ff 0 25%, #ff7a59 25% 50%, #5fcf6a 50% 75%, #d050ff 75%
   );
 }
+/* Border appears (accent) on hover and stays while the palette picker is open. */
 button.palette-pick-btn:hover,
-button.palette-pick-btn.cp-anchored { border-color: var(--text); }
+button.palette-pick-btn.cp-anchored { border-color: var(--accent); }
 
 /* ===== Palette picker popup ===== */
 .pp-popup {
@@ -1102,7 +1104,7 @@ button.color-swatch {
 /* Border appears on hover and stays while this swatch's colour picker is open
    (.cp-anchored), then returns to idle once the picker closes. */
 button.color-swatch:hover,
-button.color-swatch.cp-anchored { border-color: var(--text); }
+button.color-swatch.cp-anchored { border-color: var(--accent); }
 
 /* ===== Custom Color Picker popup ===== */
 .cp-popup {
@@ -1323,33 +1325,32 @@ button.btn.plot-tool-btn:hover:not(:disabled) { --btn-bg: var(--iconbtn-hover); 
 button.btn.plot-dl-btn:active:not(:disabled),
 button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press); }
 .plot-btn-icon { width: 19px; height: 19px; display: block; }
-/* Compact icon-only CSV button pinned to the far edge of a table header. Dimmed by
-   default, full opacity when the table (or the button) is hovered — matching the
-   plot toolbar buttons. */
+/* Compact icon-only CSV button pinned to the far edge of a table header — same
+   button as the project bar's CSV export (26px box, bare look), dimmed to 50% by
+   default and full opacity when the table (or the button) is hovered. */
 .table-csv-btn {
   margin-left: auto;            /* push to the extreme right of its header row */
-  width: 30px !important;
-  height: 28px !important;
+  width: 26px !important;
+  height: 26px !important;
   padding: 0 !important;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  color: var(--muted) !important;
-  border-color: var(--line) !important;
+  border-radius: 8px;
   opacity: 0.5;
-  transition: opacity 0.18s, color 0.15s, border-color 0.15s, background 0.15s;
+  --btn-bg: transparent;
+  --btn-bd: transparent;
+  --btn-fg: var(--muted);
+  transition: opacity 0.18s, background 0.15s, color 0.15s;
 }
 .peak-box:hover .table-csv-btn,
 .table-box:hover .table-csv-btn,
 .table-csv-btn:hover {
   opacity: 1;
 }
-.table-csv-btn:hover {
-  color: var(--accent) !important;
-  border-color: var(--accent) !important;
-  background: transparent !important;
-}
+.table-csv-btn:hover:not(:disabled) { --btn-bg: var(--iconbtn-hover); --btn-fg: var(--accent); --btn-bd: transparent; }
+.table-csv-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press); }
+.table-csv-btn .plot-btn-icon { width: 19px; height: 19px; }
 /* PWA update toast */
 .pwa-toast {
   position: fixed;
@@ -1403,6 +1404,9 @@ button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press);
   justify-content: center;
 }
 .alert-dismiss:hover { font-weight: normal; }
+/* The XRD peak-table delete X carries .is-danger (for its shared markup) but reads
+   as accent here, not red — override the generic is-danger hover for it alone. */
+.peak-del.is-danger:hover:not(:disabled) { color: var(--accent) !important; border-color: transparent !important; }
 /* button.btn prefix so this out-specifies button.btn.plot-tool-btn (which sets the
    bare transparent fill) — without it the armed pan/zoom accent fill never showed. */
 button.btn.plot-tool-btn.is-on,
@@ -1639,8 +1643,10 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   border: 1px solid var(--line); border-radius: 10px;
   background: var(--panel2); color: var(--muted); cursor: pointer;
   text-transform: uppercase; letter-spacing: .05em; line-height: 1.6;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
-.mode-chip:hover { color: var(--accent); border-color: var(--accent); }
+/* Hover: outline gone, plate lightens, text goes accent — click doesn't change this. */
+.mode-chip:hover { color: var(--accent); border-color: transparent; background: var(--iconbtn-hover); }
 .field-row .mode-chip { flex: 0 0 auto; align-self: center; }
 /* Two half-width sub-panels side by side */
 .field-half { display:flex; gap:10px; }
