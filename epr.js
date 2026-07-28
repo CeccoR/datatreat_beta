@@ -20,6 +20,7 @@ import { Plot } from './plot.js';
     switch (btn.dataset.action){
       case 'epr-dismiss-invalid': loadAlerts=''; rebuildAlerts(); break;
       case 'epr-dismiss-upload':  uploadAlerts=''; rebuildAlerts(); break;
+      case 'epr-dismiss-pending': pending={}; renderPendingTable(); break;
     }
   });
 
@@ -44,19 +45,21 @@ import { Plot } from './plot.js';
     renderPendingTable();
   }
 
-  // Unpaired uploads (.DTA without its .DSC or vice-versa) surface as a classic
-  // yellow alert listing each orphan file by its full name, one per line.
+  // Unpaired uploads (.DTA without its .DSC or vice-versa) surface as a standard
+  // warn alert (buildAlertsHtml → built-in dismiss X) listing each orphan file by
+  // its full name, one per line.
   function renderPendingTable(){
     const wrap = document.getElementById('eprPendingWrap');
     const entries = Object.entries(pending);
     if (!entries.length){ wrap.innerHTML = ''; return; }
-    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const names = [];
     for (const [, pair] of entries){
-      if (pair.dta) names.push(esc(pair.dta.name));
-      if (pair.dsc) names.push(esc(pair.dsc.name));
+      if (pair.dta) names.push(pair.dta.name);
+      if (pair.dsc) names.push(pair.dsc.name);
     }
-    wrap.innerHTML = `<div class="alert warn">⚠ Unpaired file(s) uploaded. Upload both the .DTA and .DSC files to proceed:<br>${names.join('<br>')}</div>`;
+    wrap.innerHTML = buildAlertsHtml([], names,
+      'Unpaired file(s) uploaded. Upload both the .DTA and .DSC files to proceed:',
+      undefined, 'epr-dismiss-pending');
   }
 
   function parseDsc(text){
@@ -162,6 +165,8 @@ import { Plot } from './plot.js';
     document.getElementById('eprNorm').value = s.norm;
     document.getElementById('eprSmooth').value = s.smooth;
     afterFilesChange();
+    // Clear the previous tab's transient alerts + unpaired list, then rebuild.
+    loadAlerts = ''; uploadAlerts = ''; pending = {}; rebuildAlerts();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
   registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(true); });

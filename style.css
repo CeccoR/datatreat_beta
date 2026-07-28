@@ -837,7 +837,7 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 }
 .alert-dismiss {
   position: absolute;
-  right: 11px;               /* right edge lines up with the file-list remove X */
+  right: 15px;               /* glyph lines up with the file-list remove X (del-bare has 4px inner pad) */
   top: 50%;                  /* vertically centred in the whole alert box */
   transform: translateY(-50%);
   background: none;
@@ -1700,7 +1700,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
    keeps CSV pinned to the right). Shown only when peaks were edited (JS toggles the
    inline display — nav-arrow has no !important display to override it). */
 .peak-reset-btn {
-  margin-left: 4px;
+  margin-left: -3px;         /* pull in against the .peak-box-head 10px gap → ~7px from the title */
   font-size: 15px;
   line-height: 1;
 }

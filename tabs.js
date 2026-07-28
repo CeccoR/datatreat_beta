@@ -369,10 +369,12 @@ async function initTabs(){
   });
   const wanted = recs.find(r=> r.active) || recs[0];
   _activeId = wanted.id;
-  renderTabs();
-  goTab(tabById(_activeId).module);
-  loadTab(tabById(_activeId));
-  _restoring = false;
+  renderTabs();                          // tab bar + titles paint immediately
+  goTab(tabById(_activeId).module);      // show the (empty) module shell
+  // Defer the heavy state restore past the first paint so the page shows its tabs
+  // and shell right away instead of freezing on a large active tab (same idea as a
+  // tab switch). _restoring is cleared only once the restore has actually run.
+  afterPaint(()=>{ loadTab(tabById(_activeId)); _restoring = false; });
 }
 
 export { TABS, MAX_TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,

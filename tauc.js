@@ -202,6 +202,13 @@ import { Plot } from './plot.js';
     if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
     syncTaucModeButtons();
     afterFilesChange();
+    // Rebuild alerts for THIS tab's files: transient upload feedback (invalid /
+    // already-loaded) belongs to the upload action, not the project, so clear it;
+    // the non-standard-format warning is re-derived from the restored files' .warn
+    // flags. Without this a restored/switched tab shows no alerts (or inherits the
+    // previous tab's).
+    invalidUploadNames = []; taucUploadAlerts = ''; taucWarnDismissed = false;
+    rebuildTaucAlerts();
   }
   const hist = registerHistory('tauc', taucSnapshot, taucRestore);
   // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.

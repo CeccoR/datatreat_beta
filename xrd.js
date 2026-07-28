@@ -206,6 +206,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     document.getElementById('xrdNorm').value = s.norm;
     syncModeButtons();
     afterFilesChange();
+    // Clear the previous tab's transient upload alert and rebuild for this tab.
+    xrdUploadAlerts = ''; rebuildXrdAlerts();
   }
   function syncModeButtons(){
     Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{

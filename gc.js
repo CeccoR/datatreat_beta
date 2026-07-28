@@ -162,6 +162,8 @@ import { Plot, svgEl } from './plot.js';
     }
     gcSel=gcHov=null;
     afterFilesChange();
+    // Clear the previous tab's transient upload alerts and rebuild for this tab.
+    loadAlerts = ''; gcUploadAlerts = ''; rebuildGcAlerts();
   }
   const hist = registerHistory('gc', gcSnapshot, gcRestore);
   registerTabRedraw('gc', ()=>{ if (files.length) computeAndRenderGc(true); });
