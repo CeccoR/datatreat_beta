@@ -585,19 +585,24 @@ import { Plot } from './plot.js';
     const barTitleEl = document.getElementById('taucBarTitle');
     if (barTitleEl) barTitleEl.textContent = (egLabel ? egLabel+' ' : '') + 'Energy Band Gap';
     const leg2 = document.getElementById('taucResLegend2'); leg2.innerHTML='';
-    const barAlertDiv = document.getElementById('taucBarAlert'); barAlertDiv.innerHTML='';
+    const barAlertX = document.getElementById('taucBarAlertX'); barAlertX.innerHTML='';
+    const barAlertB = document.getElementById('taucBarAlertB'); barAlertB.innerHTML='';
     const egs = bestRegsAll.map(r=>r.Eg), egErrs = bestRegsAll.map(r=>r.EgErr);
     const egInts = bestRegsAll.map(r=>r.EgInt), egIntErrs = bestRegsAll.map(r=>r.EgIntErr);
     const n = files.length;
-    // Collect negative Eg warnings
-    const negWarns = [];
+    // Negative Eg → one alert per plot (x-axis / baseline), placed under its own
+    // chart and listing the affected samples one per line. Live-computed → no X.
+    const negX = [], negB = [];
     for (let k=0;k<n;k++){
-      if (isFinite(egs[k]) && egs[k]<0) negWarns.push(`⚠ Eg (x-axis) is negative for "${files[k].label}"!`);
-      if (isFinite(egInts[k]) && egInts[k]<0) negWarns.push(`⚠ Eg (baseline) is negative for "${files[k].label}"!`);
+      if (isFinite(egs[k]) && egs[k]<0) negX.push(files[k].label);
+      if (isFinite(egInts[k]) && egInts[k]<0) negB.push(files[k].label);
     }
+    const negWarnHtml = (label, list)=> list.length
+      ? `<div class="alert warn">⚠ Negative E<sub>g</sub> (${label}) for:<br>${list.join('<br>')}</div>` : '';
+    barAlertX.innerHTML = negWarnHtml('x-axis', negX);
+    barAlertB.innerHTML = negWarnHtml('baseline', negB);
     const posVals = egs.concat(egInts).filter(v=>isFinite(v)&&v>0);
     const noChart = !posVals.length;
-    if (negWarns.length) barAlertDiv.innerHTML = negWarns.map((w,i)=>`<div class="alert warn"${noChart&&!i?' style="margin-top:0"':''}>${w}</div>`).join('');
     const barSvg  = document.getElementById('taucResSvg2');   // Eg (x-axis)
     const barSvg3 = document.getElementById('taucResSvg3');   // Eg (baseline)
     const barWrap  = barSvg.closest('.plot-wrap');

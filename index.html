@@ -34,6 +34,9 @@
         var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
         document.documentElement.setAttribute('data-theme', theme);
       } catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
+      // Keep the app hidden until its shell is fully assembled, so the bars/icons
+      // don't visibly build up piece by piece; tabs.js fades it in once ready.
+      document.documentElement.classList.add('app-booting');
     })();
   </script>
 </head>
@@ -285,7 +288,6 @@
           </div>
         </div>
         <p class="txt-caption" id="taucBarTitle" style="margin:18px 0 8px">Energy Band Gap</p>
-        <div id="taucBarAlert"></div>
         <div class="row" style="align-items:flex-start;gap:16px">
           <div class="col" style="flex:1">
             <p class="txt-caption">E<sub>g</sub> (x-axis)</p>
@@ -293,6 +295,7 @@
               <svg class="plot" id="taucResSvg2"></svg>
               <button class="btn plot-dl-btn" data-dl-svg="taucResSvg2" data-csv-mod="tauc" data-csv-names="Eg.csv" data-dl-name="Eg_xaxis_bar_chart.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
+            <div id="taucBarAlertX" class="bar-alert"></div>
           </div>
           <div class="col" style="flex:1">
             <p class="txt-caption">E<sub>g</sub> (baseline)</p>
@@ -300,6 +303,7 @@
               <svg class="plot" id="taucResSvg3"></svg>
               <button class="btn plot-dl-btn" data-dl-svg="taucResSvg3" data-csv-mod="tauc" data-csv-names="Eg.csv" data-dl-name="Eg_baseline_bar_chart.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
+            <div id="taucBarAlertB" class="bar-alert"></div>
           </div>
         </div>
         <div id="taucResLegend2" class="legend"></div>
@@ -720,7 +724,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v214</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v215</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

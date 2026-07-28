@@ -104,6 +104,12 @@ function syncProjectBar(t){
 // charts fill in a moment later instead of the click feeling stuck.
 function afterPaint(fn){ requestAnimationFrame(()=> requestAnimationFrame(fn)); }
 
+// Fade the app in once its shell is assembled (see index.html head + style.css).
+function revealApp(){ document.documentElement.classList.remove('app-booting'); }
+// Safety nets so the app can never stay hidden if startup errors out.
+window.addEventListener('load', ()=> setTimeout(revealApp, 0));
+setTimeout(revealApp, 2500);
+
 /* ---- Open / activate / close --------------------------------------------- */
 // Open a project (or a blank technique) in a NEW tab and focus it. Opening a
 // project that is already open is a no-op: it never steals focus.
@@ -361,7 +367,7 @@ async function initTabs(){
   try { recs = await allTabRecs(); } catch(e){ recs = []; }
   recs = (recs || []).filter(r=> r && MODULES.includes(r.module))
                      .sort((a,b)=> (a.order||0) - (b.order||0));
-  if (!recs.length){ renderTabs(); return; }
+  if (!recs.length){ renderTabs(); afterPaint(revealApp); return; }
   _restoring = true;
   recs.forEach(r=>{
     TABS.push({ id:r.id, module:r.module, title:r.title || UNTITLED, projectId:r.projectId || null,
@@ -369,12 +375,15 @@ async function initTabs(){
   });
   const wanted = recs.find(r=> r.active) || recs[0];
   _activeId = wanted.id;
-  renderTabs();                          // tab bar + titles paint immediately
-  goTab(tabById(_activeId).module);      // show the (empty) module shell
-  // Defer the heavy state restore past the first paint so the page shows its tabs
-  // and shell right away instead of freezing on a large active tab (same idea as a
-  // tab switch). _restoring is cleared only once the restore has actually run.
-  afterPaint(()=>{ loadTab(tabById(_activeId)); _restoring = false; });
+  renderTabs();                          // tab bar + titles
+  goTab(tabById(_activeId).module);      // build the (empty) module shell
+  // Reveal the fully-assembled shell in one fade, THEN run the heavy restore a paint
+  // later — so the user sees a complete shell appear at once (not built piecemeal),
+  // and the charts fill in after, without freezing the boot.
+  requestAnimationFrame(()=>{
+    revealApp();
+    requestAnimationFrame(()=>{ loadTab(tabById(_activeId)); _restoring = false; });
+  });
 }
 
 export { TABS, MAX_TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,

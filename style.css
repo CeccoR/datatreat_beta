@@ -124,12 +124,17 @@
 * {
   box-sizing: border-box;
 }
+html { background: var(--bg); }   /* themed backdrop shows while the body is hidden at boot */
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
+  transition: opacity 0.18s ease;
 }
+/* Boot: keep the shell invisible (but laid out, so plots still measure) until
+   tabs.js has assembled it, then fade in. */
+html.app-booting body { opacity: 0; }
 /* Tabular figures keep numeric columns/readouts aligned in the data tables */
 table, input, .stat, .pill, .plot-readout { font-variant-numeric: tabular-nums; }
 header {
@@ -837,7 +842,7 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 }
 .alert-dismiss {
   position: absolute;
-  right: 15px;               /* glyph lines up with the file-list remove X (del-bare has 4px inner pad) */
+  right: 18px;               /* glyph lines up with the file-list remove X */
   top: 50%;                  /* vertically centred in the whole alert box */
   transform: translateY(-50%);
   background: none;
@@ -1332,6 +1337,11 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
   width: auto;
   /* min-width (460px floor) comes from svg.plot so the plot never shrinks to tiny */
 }
+/* Under-plot alert (e.g. negative Eg): span the plot's own width, i.e. the plot-wrap
+   minus its toolbar column (26px button + 8px gap = 34px), so it sits under the chart
+   and not under the download button. */
+.bar-alert { margin-right: 34px; }
+.bar-alert .alert { margin-bottom: 0; }
 .plot-btn-col {
   display: flex;
   flex-direction: column;
