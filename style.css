@@ -689,12 +689,12 @@ input[type="file"] {
    Base .btn is the neutral outline (the common case); .primary is the filled CTA. */
 /* Text buttons never show an outline: --btn-bd stays transparent in every state
    (the 1px transparent border is kept only so border-box sizing is unchanged).
-   Secondary (not .primary): a light-grey chip with muted text at rest (two greys);
-   hover darkens the fill and turns the text accent; press returns the light-grey
-   fill with the text still accent. Delete (.is-danger) is the same with --bad
-   instead of accent. Primary keeps its accent fill and only lightens/darkens. */
+   Secondary (not .primary): a dark chip with muted text at rest; hover turns the
+   text accent (fill held); press lifts the fill to light grey, text still accent.
+   Delete (.is-danger) is the same with --bad instead of accent. Primary keeps its
+   accent fill and only lightens/darkens. */
 button.btn {
-  --btn-bg: var(--line);
+  --btn-bg: var(--panel2);
   --btn-fg: var(--muted);
   --btn-bd: transparent;
   background: var(--btn-bg);
