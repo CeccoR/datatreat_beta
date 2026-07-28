@@ -1,4 +1,4 @@
-import { settings, redrawAll, makeCsvButton, fitCsvIcons } from './utils.js';
+import { settings, redrawAll, makeCsvButton, fitCsvIcons, fitPlotIcons } from './utils.js';
 
 /* =========================================================
    SVG PLOT HELPER (shared)
@@ -371,8 +371,10 @@ class Plot{
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
     this.setMode(this._mode || null);
-    // Normalise the CSV icon now that the plot (and its button) is on-screen.
+    // Normalise every toolbar icon (download, CSV, tools) by the minimum-square rule
+    // now the plot and its buttons are on-screen — matching the project-bar icons.
     fitCsvIcons(col);
+    fitPlotIcons(col);
   }
   _clearCrosshair(){ if (this.gCross) this.gCross.innerHTML=''; }
   // Draw a thin crosshair + a coordinate readout at the pointer (data coordinates via invX/invY)

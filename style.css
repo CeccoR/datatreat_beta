@@ -130,25 +130,21 @@ header h1 {
   display: block;
   flex-shrink: 0;
 }
+/* Nav buttons (Home + the icon cluster) are bare: no fill, no border at rest, just
+   the muted icon. Hover reveals the grey plate + accent icon; press deepens the
+   plate to --line (same as a secondary button's press); the active section keeps
+   the accent fill. Never a border. */
 #nav > button {
-  background: var(--panel2);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: none;
   color: var(--muted);
-  padding: 5px 12px;
-  border-radius: 8px;
+  padding: 0;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 400;
   flex-shrink: 0;                     /* keep size; the nav scrolls instead of shrinking */
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
-/* Press feedback for non-active tabs: a filled-accent flash (distinct from the
-   outline-accent hover) */
-#nav > button:not(.is-on):active {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent);
-}
+#nav > button:not(.is-on):hover { background: var(--panel2); color: var(--accent); }
+#nav > button:not(.is-on):active { background: var(--line); color: var(--accent); }
 #nav {
   display: flex;
   flex: 1;
@@ -161,15 +157,9 @@ header h1 {
   flex-wrap: nowrap;
   min-width: 0;
 }
-#nav > button:not(.nav-settings):not(.is-on):hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--panel2);
-}
 #nav > button.is-on {
   background: var(--accent);
   color: var(--on-accent);
-  border-color: var(--accent);
 }
 /* Saved-sessions table: keep columns usable on narrow screens by letting the
    table scroll horizontally instead of collapsing. */
@@ -236,10 +226,17 @@ button.btn.is-saved:disabled {
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .proj-icon .proj-svg { width: 19px; height: 19px; display: block; }
-/* Project-bar export ICONS are icon buttons → muted grey like every other icon
-   button (nav, plot toolbar, table CSV). Scoped to .proj-icon so the bottom
-   text buttons (Save as / Export …) keep the white secondary-action text. */
+/* Project-bar icon buttons are bare like the nav ones (same shape kept): no fill
+   or border at rest, muted icon; hover reveals the grey plate + accent icon; press
+   deepens to --line. Save keeps its filled look (border stripped); delete lights
+   red, not accent. */
 .btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new { --btn-fg: var(--muted); }
+.btn.proj-icon { --btn-bg: transparent; --btn-bd: transparent; }
+.btn.proj-icon:hover:not(:disabled)  { --btn-bg: var(--panel2); --btn-fg: var(--accent); --btn-bd: transparent; }
+.btn.proj-icon:active:not(:disabled) { --btn-bg: var(--line); }
+.btn.proj-icon.proj-del:hover:not(:disabled) { --btn-fg: var(--bad); border-color: transparent; }
+/* Save: unchanged filled look, only the border removed in every state. */
+.btn.proj-icon.proj-save { --btn-bd: transparent; }
 /* Project bar: sits above the upload area, always visible. Name field on the far
    left, action icons on the far right, both vertically centered. */
 /* Single project bar: one step lighter than the header, a low row directly under
@@ -339,21 +336,19 @@ button.btn.icon-save {
   justify-content: center;
   flex-shrink: 0;
 }
-/* Circular icon buttons on the right of the nav (sessions, theme, settings) */
+/* All nav buttons are circular icon buttons (Home, sessions, theme, settings). */
 #nav > button.nav-icon {
-  font-size: 14px;
-  font-weight: bold;
   width: 30px;
   height: 30px;
-  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border-color: var(--line);
-  color: var(--muted);
   flex-shrink: 0;
 }
+/* Size only — NOT display: the theme toggle's show/hide rules (display:none on the
+   off-theme icon) must keep winning, so only one of its two svgs is ever shown. */
+#nav > button.nav-icon > svg { width: 21px; height: 21px; }
 /* Explicit divider between the module tabs and the icon buttons (folder/theme/settings).
    It carries the margin-left:auto so the icon cluster is pushed right and the divider
    always sits in the gap — on desktop (big auto gap) and mobile (scrolling) alike. */
@@ -365,16 +360,6 @@ button.btn.icon-save {
   width: 1px;
   height: 20px;
   background: var(--line);
-}
-#nav > button.nav-icon:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--panel2);
-}
-#nav > button.nav-icon.is-on {
-  color: var(--on-accent);
-  border-color: var(--accent);
-  background: var(--accent);
 }
 /* Show only the icon matching the current theme */
 .theme-icon-light { display: none; }
@@ -1297,51 +1282,37 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
 .plot-wrap:hover .plot-btn-col {
   opacity: 1;
 }
-.plot-dl-btn {
-  flex-shrink: 0;
-  width: 32px !important;
-  height: 32px !important;
-  padding: 0 !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  color: var(--muted) !important;
-  border-color: var(--line) !important;
-  overflow: visible;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
 .plot-tool-btns {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.plot-tool-btn {
-  width: 32px !important;
-  height: 32px !important;
-  padding: 0 !important;
-  display: flex !important;
+/* Plot toolbar buttons match the project-bar icon buttons exactly (same 26px box,
+   same bare look): no fill/border at rest, muted icon; hover → grey plate + accent
+   icon; press → --line. The whole column carries the 0.5 idle opacity (see
+   .plot-btn-col). */
+button.btn.plot-dl-btn,
+button.btn.plot-tool-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  color: var(--muted) !important;
-  border-color: var(--line) !important;
+  border-radius: 8px;
   overflow: visible;
   line-height: 1;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  --btn-bg: transparent;
+  --btn-bd: transparent;
+  --btn-fg: var(--muted);
+  transition: background 0.15s, color 0.15s;
 }
-.plot-tool-btn:hover,
-.plot-dl-btn:hover {
-  color: var(--accent) !important;
-  border-color: var(--accent) !important;
-  background: transparent !important;
-}
-/* Press feedback: grey fill, same as the standard outline button. Placed after the
-   hover rule so :active wins while the cursor is still over the button. */
-.plot-tool-btn:active:not(:disabled),
-.plot-dl-btn:active:not(:disabled) {
-  background: var(--line) !important;
-}
+button.btn.plot-dl-btn:hover:not(:disabled),
+button.btn.plot-tool-btn:hover:not(:disabled) { --btn-bg: var(--panel2); --btn-fg: var(--accent); --btn-bd: transparent; }
+button.btn.plot-dl-btn:active:not(:disabled),
+button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--line); }
+.plot-btn-icon { width: 19px; height: 19px; display: block; }
 /* Compact icon-only CSV button pinned to the far edge of a table header. Dimmed by
    default, full opacity when the table (or the button) is hovered — matching the
    plot toolbar buttons. */
@@ -1424,9 +1395,9 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
 .alert-dismiss:hover { font-weight: normal; }
 .plot-tool-btn.is-on,
 .plot-dl-btn.is-on {
-  border: 1px solid var(--accent) !important;
-  background: var(--accent) !important;
-  color: var(--on-accent) !important;
+  --btn-bg: var(--accent);
+  --btn-fg: var(--on-accent);
+  --btn-bd: transparent;
 }
 
 /* ===== Sample navigation arrows ===== */
@@ -1809,7 +1780,8 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .ptab:not(.is-on) + .ptab-add::before {
   content: '';
   position: absolute;
-  left: -3.5px;                /* dead centre of the 6px tab-bar gap */
+  left: -4.5px;                /* dead centre of the gap: the tab's 1px border shifts
+                                  the abs-positioning origin, so -4.5 (not -3.5) lands mid-gap */
   top: 50%;
   transform: translateY(-50%);
   width: 1px;
@@ -1872,7 +1844,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   padding: 0 2px;
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--muted);   /* idle: the inactive-tab text colour, even on the active tab */
   opacity: 0.5;
   cursor: pointer;
   transition: opacity 0.14s, color 0.14s;

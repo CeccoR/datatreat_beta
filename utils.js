@@ -943,7 +943,7 @@ function refreshProjBar(tab){
 /* Normalize a module's project icons so every icon's minimal bounding box is the
    same size and centred in its button. Measures each icon's inked bbox (getBBox)
    and transforms it to centre (12,12) at a common target extent. Idempotent. */
-const PROJ_ICON_TARGET = 18;
+const PROJ_ICON_TARGET = 16.2;   /* min circumscribed square, 10% smaller than the old 18 */
 // Center an icon's inked content at (12,12). If `forceScale` is given, use it
 // (so one icon can match another's exact scale); otherwise scale so the icon's
 // larger side equals PROJ_ICON_TARGET. Returns the scale used.
@@ -964,6 +964,35 @@ function fitIcon(svg, forceScale){
   const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
   g.setAttribute('transform', `translate(12 12) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
   return s;
+}
+/* Nav icons are normalized by their minimum CIRCUMSCRIBED CIRCLE (bbox diagonal),
+   not the bounding square, so each icon fills its round button by the same amount.
+   All nav icons share one target circle diameter, in the 24-unit viewBox. */
+const NAV_ICON_DIAM = 22;
+function fitIconCircle(svg, targetDiam){
+  if (!svg) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  let g = svg.querySelector('g.icon-fit');
+  if (!g){
+    g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'icon-fit');
+    while (svg.firstChild) g.appendChild(svg.firstChild);
+    g.querySelectorAll('*').forEach(el=> el.setAttribute('vector-effect', 'non-scaling-stroke'));
+    svg.appendChild(g);
+  }
+  g.removeAttribute('transform');
+  let bb; try { bb = g.getBBox(); } catch(e){ return; }
+  if (!bb.width || !bb.height) return;
+  const s = targetDiam / Math.hypot(bb.width, bb.height);   // circumscribed-circle scale
+  const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
+  g.setAttribute('transform', `translate(12 12) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
+}
+function normalizeNavIcons(){
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('#nav > button.nav-icon > svg').forEach(svg=>{
+      if (!svg.getClientRects().length) return;   // hidden (e.g. the off-theme icon) — measures 0
+      fitIconCircle(svg, NAV_ICON_DIAM);
+    });
+  });
 }
 function normalizeProjIcons(mod){
   requestAnimationFrame(()=>{
@@ -1015,6 +1044,11 @@ function makeCsvButton(mod, names, title){
 function fitCsvIcons(root){
   (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIcon(s));
 }
+// Normalise every plot-toolbar icon by the same minimum-square rule as the project
+// bar, so a toolbar button and its project-bar twin (e.g. the CSV export) match.
+function fitPlotIcons(root){
+  (root||document).querySelectorAll('.plot-dl-btn .plot-btn-icon, .plot-tool-btn .plot-btn-icon').forEach(s=>fitIcon(s));
+}
 // One delegated handler drives every per-view CSV button.
 document.addEventListener('click', e=>{
   const btn = e.target.closest('[data-csv-mod]');
@@ -1046,6 +1080,7 @@ function applyTheme(theme, persist){
     if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
     const sel = document.getElementById('settingTheme');
     if (sel) sel.value = theme;
+    normalizeNavIcons();   // the theme toggle swapped which sun/moon svg is visible
   };
   const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (changing && !reduced && document.startViewTransition){
@@ -1555,6 +1590,11 @@ function barPlotXPad(labelWs, n, plotW){
   });
 })();
 
+// Normalise the nav icons once they can be measured (and again after full load, in
+// case the webfont/layout shifted the boxes).
+normalizeNavIcons();
+window.addEventListener('load', normalizeNavIcons);
+
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };
