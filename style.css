@@ -457,7 +457,7 @@ main {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  border: 1px solid var(--line);
+  border: none;
   background: var(--panel);
   color: var(--muted);
   font-size: 20px;
@@ -470,11 +470,11 @@ main {
   opacity: 0;
   transform: translateY(8px);
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.15s ease, background 0.15s ease;
   z-index: 900;
 }
 #scrollTopBtn.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
-#scrollTopBtn:hover { color: var(--accent); border-color: var(--accent); }
+#scrollTopBtn:hover { color: var(--accent); background: var(--iconbtn-hover); }
 @media (prefers-reduced-motion: reduce) { #scrollTopBtn { transition: opacity 0.2s ease; } }
 .card {
   background: var(--panel);
@@ -1043,8 +1043,7 @@ button.palette-pick-btn {
   width: 14px;
   height: 14px;
   padding: 0;
-  /* Idle: no visible border (transparent keeps the box size fixed, border-box). */
-  border: 1.5px solid transparent;
+  border: 1.5px solid var(--accent);
   border-radius: 3px;
   cursor: pointer;
   flex-shrink: 0;
@@ -1052,9 +1051,8 @@ button.palette-pick-btn {
     #3aa0ff 0 25%, #ff7a59 25% 50%, #5fcf6a 50% 75%, #d050ff 75%
   );
 }
-/* Border appears (accent) on hover and stays while the palette picker is open. */
 button.palette-pick-btn:hover,
-button.palette-pick-btn.cp-anchored { border-color: var(--accent); }
+button.palette-pick-btn.cp-anchored { border-color: var(--white); }
 
 /* ===== Palette picker popup ===== */
 .pp-popup {
@@ -1104,7 +1102,7 @@ button.color-swatch {
 /* Border appears on hover and stays while this swatch's colour picker is open
    (.cp-anchored), then returns to idle once the picker closes. */
 button.color-swatch:hover,
-button.color-swatch.cp-anchored { border-color: var(--accent); }
+button.color-swatch.cp-anchored { border-color: var(--white); }
 
 /* ===== Custom Color Picker popup ===== */
 .cp-popup {
@@ -1328,7 +1326,10 @@ button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press);
 /* Compact icon-only CSV button pinned to the far edge of a table header — same
    button as the project bar's CSV export (26px box, bare look), dimmed to 50% by
    default and full opacity when the table (or the button) is hovered. */
-.table-csv-btn {
+/* button.btn.table-csv-btn (not just .table-csv-btn) so this out-specifies the
+   base button.btn rule's own --btn-bg/--btn-bd — otherwise those lose and the
+   button keeps the default grey-outline fill instead of going bare. */
+button.btn.table-csv-btn {
   margin-left: auto;            /* push to the extreme right of its header row */
   width: 26px !important;
   height: 26px !important;
@@ -1348,8 +1349,8 @@ button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press);
 .table-csv-btn:hover {
   opacity: 1;
 }
-.table-csv-btn:hover:not(:disabled) { --btn-bg: var(--iconbtn-hover); --btn-fg: var(--accent); --btn-bd: transparent; }
-.table-csv-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press); }
+button.btn.table-csv-btn:hover:not(:disabled) { --btn-fg: var(--accent); --btn-bd: transparent; }
+button.btn.table-csv-btn:active:not(:disabled) { --btn-bg: var(--line); --btn-bd: transparent; }
 .table-csv-btn .plot-btn-icon { width: 19px; height: 19px; }
 /* PWA update toast */
 .pwa-toast {
@@ -1861,7 +1862,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 }
 .ptab-tech { flex: 0 0 auto; white-space: pre; }   /* keep the space around the "·" */
 .ptab-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ptab-star { flex: 0 0 auto; padding-left: 2px; color: var(--accent); }
+.ptab-star { flex: 0 0 auto; padding-left: 2px; color: var(--bad); }
 /* Close button: a bare X — half-visible at rest, full on tab hover, accent on its
    own hover. No background of its own at any point. */
 .ptab-x {
