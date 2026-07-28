@@ -842,7 +842,7 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 }
 .alert-dismiss {
   position: absolute;
-  right: 15px;               /* glyph lines up with the file-list remove X */
+  right: 15.5px;             /* glyph lines up with the file-list remove X */
   top: 50%;                  /* vertically centred in the whole alert box */
   transform: translateY(-50%);
   background: none;
