@@ -1411,6 +1411,16 @@ button.btn.plot-dl-btn.is-on {
   --btn-fg: var(--on-accent);
   --btn-bd: transparent;
 }
+/* Armed + hovered/pressed: same lighten/darken as the primary (Save) button,
+   instead of falling back to the bare button's grey hover/press plate. */
+button.btn.plot-tool-btn.is-on:hover:not(:disabled),
+button.btn.plot-dl-btn.is-on:hover:not(:disabled) {
+  --btn-bg: var(--accent-hover); --btn-fg: var(--on-accent); --btn-bd: transparent;
+}
+button.btn.plot-tool-btn.is-on:active:not(:disabled),
+button.btn.plot-dl-btn.is-on:active:not(:disabled) {
+  --btn-bg: var(--accent-active); --btn-bd: transparent;
+}
 
 /* ===== Sample navigation arrows ===== */
 /* Nav arrows: same chip box as the counter (.pill) — same height/shape, width just
