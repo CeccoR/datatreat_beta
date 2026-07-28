@@ -27,6 +27,15 @@ function fixedTicks(min, max, step){
   for (let v = start; v <= max + step * 1e-9; v += step) ticks.push(Math.round(v / step) * step);
   return ticks;
 }
+// "Wavelength (nm)" + 512.3  ->  "Wavelength = 512.3 nm". The unit is whatever sits
+// in the label's trailing parentheses; absent parentheses, just "<label> = <value>".
+function axisReadout(label, val, fmt){
+  const s = String(label||'');
+  const m = s.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  const name = (m ? m[1] : s).trim();
+  const unit = m ? m[2].trim() : '';
+  return `${name} = ${fmt(val)}${unit ? ' '+unit : ''}`;
+}
 function fmtTick(v){
   if (Math.abs(v) < 1e-10) return '0';
   const abs = Math.abs(v);
@@ -391,13 +400,13 @@ class Plot{
     add('line',{x1:cx,x2:cx,y1:m.t,y2:h-m.b,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
     add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
     // Readout: pinned to the top-left of the plot area (never follows the pointer),
-    // one axis per line — x label then y label — using each axis' own name + unit.
-    const xlab = this.xlabel || 'x';
-    const ylab = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
+    // one axis per line — x then y — as "AxisName = value unit" (the unit is pulled
+    // out of the axis label's trailing parentheses).
+    const ylabTxt = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
-    const l1=svgEl('tspan',{x:tx}); l1.textContent=`${xlab}: ${fmt(xv)}`;
-    const l2=svgEl('tspan',{x:tx,dy:16}); l2.textContent=`${ylab}: ${fmt(yv)}`;
+    const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt);
+    const l2=svgEl('tspan',{x:tx,dy:16}); l2.textContent=axisReadout(ylabTxt, yv, fmt);
     t.appendChild(l1); t.appendChild(l2);
     this.gCross.appendChild(t);
   }
@@ -697,5 +706,5 @@ document.addEventListener('click', e=>{
 
 
 export {
-  niceStep, niceTicks, fixedTicks, fmtTick, svgEl, Plot, downloadSvgClean
+  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, Plot, downloadSvgClean
 };

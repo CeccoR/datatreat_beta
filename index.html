@@ -365,7 +365,7 @@
         <div class="peak-box" id="xrdStdPeakBox" style="display:none">
           <div class="peak-box-head">
             <span class="txt-mini">Detected peaks</span>
-            <button class="btn table-csv-btn peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset removed peaks">&#8634;</button>
+            <button class="btn nav-arrow peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset removed peaks">&#8634;</button>
             <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="standard.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="xrdStdPeakTableWrap"></div>
@@ -424,14 +424,25 @@
               <input type="text" inputmode="decimal" class="pg-field" id="xrdK" value="0.9">
 
               <div class="txt-label pg-title">Wavelength &#955; (&#8491;) <button type="button" class="mode-chip" id="xrdModeL" title="Switch all / one">all</button></div>
-              <input type="text" inputmode="decimal" class="pg-field" id="xrdLambda" value="1.5406">
+              <div class="pg-field lambda-field">
+                <select id="xrdLambdaSel" class="lambda-sel" title="X-ray source / wavelength">
+                  <option value="1.540598">Cu Kα1</option>
+                  <option value="1.541838">Cu Kα</option>
+                  <option value="1.544426">Cu Kα2</option>
+                  <option value="0.709317">Mo Kα1</option>
+                  <option value="1.789010">Co Kα1</option>
+                  <option value="2.289760">Cr Kα1</option>
+                  <option value="custom">Custom</option>
+                </select>
+                <input type="text" inputmode="decimal" class="lambda-val" id="xrdLambda" value="1.540598" readonly title="Wavelength (Å)">
+              </div>
             </div>
           </div>
         </div>
         <div class="peak-box" id="xrdPeakBox">
           <div class="peak-box-head">
             <span class="txt-mini">Detected peaks</span>
-            <button class="btn table-csv-btn peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634;</button>
+            <button class="btn nav-arrow peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset removed peaks">&#8634;</button>
             <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
           </div>
           <div id="xrdPeakTableWrap"></div>
@@ -709,7 +720,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v210</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v211</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

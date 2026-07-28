@@ -619,7 +619,9 @@ input[type="file"] {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.dt-field:focus-within { border-color: var(--accent); }
+/* Focus illumination matches every other field (neutral, not accent): a light
+   contour — white in dark theme, dark in light — via --text. */
+.dt-field:focus-within { border-color: var(--text); }
 .dt-seg {
   padding: 1px 2px;
   border-radius: 3px;
@@ -1442,8 +1444,7 @@ button.btn.table-csv-btn {
 /* Icons render as centered blocks (no inline-baseline gap) so every icon's
    bounding box is centered in its button/cell and aligns with its neighbours */
 .plot-btn-icon, .x-icon, .dl-icon { display: block; }
-.alert-dismiss, .peak-del,
-.file-actions .pending-del, .file-actions .pending-del-all {
+.alert-dismiss, .peak-del {
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -1586,6 +1587,12 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   gap: 6px;
 }
 .param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
+/* Wavelength cell: split the field column into a source preset selector (left) and
+   the numeric value (right, read-only unless the preset is "Custom"). */
+.lambda-field { display: flex; gap: 6px; align-items: center; }
+.lambda-field .lambda-sel { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 4px; }
+.lambda-field .lambda-val { flex: 1 1 0; min-width: 0; }
+.lambda-field .lambda-val[readonly] { opacity: .7; cursor: default; }
 /* Info outputs: keep them full-width where they sit, but bare (no field box) —
    they read like the titles, with the value in accent. */
 .param-grid > .pg-stat {
@@ -1657,27 +1664,16 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .pending-row:hover .file-actions {
   visibility: visible;
 }
+/* The remove / remove-all X's use the shared bare .del-bare style (muted at rest,
+   red on hover via .is-danger; the header's remove-all is bold via th .remove-all),
+   so they read exactly like the file-list X's. Nothing extra here but the phantom
+   ↑↓ spacers, kept bare so no stray border is drawn. */
 .pending-row .file-actions button {
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 2px 7px;
-  font-size: 13px;
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
   cursor: pointer;
-  line-height: 1.4;
-  transition: color 0.1s, border-color 0.1s;
-}
-.file-actions .pending-del,
-.file-actions .pending-del-all {
-  background: transparent;
-  border-color: var(--pending-line);
-  color: var(--warn);
-}
-.file-actions .pending-del-all {
-  font-weight: 700;
-}
-.file-actions .pending-del:hover,
-.file-actions .pending-del-all:hover {
-  background: transparent;
+  line-height: 1;
 }
 
 /* The "interval too small" alert sits at the end of the Parameters column;
@@ -1728,16 +1724,15 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   gap: 10px;
   margin-bottom: 8px;
 }
-/* Reset button: same bare icon button as the table CSV export (shares
-   .table-csv-btn); only the ↺ return glyph, sized to fill the 26px box. It keeps
-   the shared margin-left:auto so it absorbs the free space and lands at the right;
-   the CSV button then drops its own auto margin (rule below) and sits right after
-   it with a small gap, so the two read as one cluster at the header's right edge. */
+/* Reset button: a nav-arrow-style pill (same look + behaviour) carrying only the ↺
+   return glyph. It sits just left of the table title (the CSV button's margin-left:auto
+   keeps CSV pinned to the right). Shown only when peaks were edited (JS toggles the
+   inline display — nav-arrow has no !important display to override it). */
 .peak-reset-btn {
-  font-size: 17px;
+  margin-left: 8px;
+  font-size: 15px;
   line-height: 1;
 }
-.peak-reset-btn + button.btn.table-csv-btn { margin-left: 6px; }
 #xrdPeakTableWrap table, #xrdFitTableWrap table, #xrdStdPeakTableWrap table { width: 100%; }
 #xrdPeakTableWrap .peak-row, #xrdFitTableWrap .peak-row, #xrdStdPeakTableWrap .peak-row { transition: background 0.1s; cursor: pointer; }
 #xrdPeakTableWrap .peak-row:hover, #xrdFitTableWrap .peak-row:hover, #xrdStdPeakTableWrap .peak-row:hover { background: var(--panel); }
