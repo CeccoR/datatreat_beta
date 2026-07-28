@@ -783,7 +783,7 @@ document.getElementById('nav').addEventListener('click', e=>{
 });
 // The home technique cards open a new project tab — wired in tabs.js, which owns
 // the tab model (goTab alone would show an empty module with no project behind it).
-document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
+document.querySelectorAll('.home-settings-link[data-tab], .home-quick-btn[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
 const _tabRedraw = {}, _needsRedraw = {};

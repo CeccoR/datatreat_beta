@@ -225,8 +225,9 @@ header h1 {
 .sess-row:hover .idle-dim,
 .file-row:hover .idle-dim,
 .peak-row:hover .idle-dim { opacity: 1; }
-/* Destructive control: reddens (text + border) on hover. Shared standard. */
-.is-danger:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); }
+/* Destructive control: reddens the text on hover (no border — buttons are
+   borderless now; bare glyphs never had one). Shared standard. */
+.is-danger:hover:not(:disabled) { color: var(--bad); }
 .row-ic {
   background: none; border: none; padding: 2px;
   color: var(--muted); cursor: pointer;
@@ -408,18 +409,31 @@ button.btn.icon-save {
 .theme-icon-light { display: none; }
 :root[data-theme="light"] .theme-icon-dark { display: none; }
 :root[data-theme="light"] .theme-icon-light { display: inline; }
-.home-settings-link {
-  background: none;
+.home-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   border: none;
+  background: transparent;
   color: var(--muted);
-  font-size: 12px;
   cursor: pointer;
   padding: 0;
-  opacity: 0.7;
-  transition: opacity 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
-.home-settings-link:hover {
-  opacity: 1;
+.home-quick-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.home-quick-btn:hover {
+  background: var(--plate-hover);
+  color: var(--accent);
+}
+.home-quick-btn:active {
+  background: var(--plate-press);
   color: var(--accent);
 }
 .settings-tab.active {
@@ -675,14 +689,13 @@ input[type="file"] {
    Base .btn is the neutral outline (the common case); .primary is the filled CTA. */
 /* Text buttons never show an outline: --btn-bd stays transparent in every state
    (the 1px transparent border is kept only so border-box sizing is unchanged).
-   Secondary (not .primary): a filled dark chip that behaves like the icon buttons
-   — idle text on the dark fill, hover recolours the text to accent (fill
-   unchanged), press moves the fill one step toward the text (lighter in dark,
-   darker in light) with the text still accent. Primary keeps its accent fill and
-   only lightens/darkens on hover/press. */
+   Secondary (not .primary): a light-grey chip with muted text at rest (two greys);
+   hover darkens the fill and turns the text accent; press returns the light-grey
+   fill with the text still accent. Delete (.is-danger) is the same with --bad
+   instead of accent. Primary keeps its accent fill and only lightens/darkens. */
 button.btn {
-  --btn-bg: var(--panel2);
-  --btn-fg: var(--text);
+  --btn-bg: var(--line);
+  --btn-fg: var(--muted);
   --btn-bd: transparent;
   background: var(--btn-bg);
   color: var(--btn-fg);
@@ -694,8 +707,8 @@ button.btn {
   cursor: pointer;
   transition: background 0.14s, color 0.14s;
 }
-button.btn:hover:not(:disabled)  { --btn-fg: var(--accent); }
-button.btn:active:not(:disabled) { --btn-bg: var(--line); --btn-fg: var(--accent); }
+button.btn:hover:not(:disabled)  { --btn-bg: var(--panel2); --btn-fg: var(--accent); }
+button.btn:active:not(:disabled) { --btn-bg: var(--line);   --btn-fg: var(--accent); }
 /* Primary (filled accent): hover lightens the fill, press darkens it */
 button.btn.primary {
   --btn-bg: var(--accent);
@@ -1467,8 +1480,9 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 /* Nav arrows: same chip box as the counter (.pill) — same height/shape, width just
    fits the arrow, glyph perfectly centred; styled like the all/one mode-chip. */
 /* Sample-nav arrows join the hover-plate icon family (they sit on the module card,
-   a --panel surface): bare at rest, plate + accent glyph on hover, deeper plate on
-   press — instead of the secondary text-button's filled chip. */
+   a --panel surface): an outlined dark chip — light-grey border, dark fill, muted
+   glyph at rest; hover turns the glyph white (border/fill held); press keeps the
+   white glyph and lifts the fill to the light grey. */
 .btn.nav-arrow {
   height: 22px;
   min-width: 22px;
@@ -1479,10 +1493,12 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   font-size: 13px;
   line-height: 1;
   border-radius: 11px;
-  --btn-bg: transparent;
+  --btn-bg: var(--panel2);
+  --btn-bd: var(--line);
+  --btn-fg: var(--muted);
 }
-.btn.nav-arrow:hover:not(:disabled)  { --btn-bg: var(--plate-hover); --btn-fg: var(--accent); }
-.btn.nav-arrow:active:not(:disabled) { --btn-bg: var(--plate-press); --btn-fg: var(--accent); }
+.btn.nav-arrow:hover:not(:disabled)  { --btn-fg: var(--text); }
+.btn.nav-arrow:active:not(:disabled) { --btn-bg: var(--line); --btn-fg: var(--text); }
 
 /* Instrumental-standard picker: sits in the plot header row, aligned with and the
    same height as the "+ Add peak" corner button. Greyed while showing its ghost
@@ -1497,13 +1513,13 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 
 /* ===== Plot header row: sample nav on the left, a corner action button whose
    right edge lines up with the plot's right edge (padding-right = toolbar col:
-   32px button + 8px gap). The button is 1/3 of the plot width. ===== */
+   26px button + 8px gap). The button is 1/3 of the plot width. ===== */
 .plot-nav-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  padding-right: 40px;
+  padding-right: 34px;
 }
 .plot-nav-left {
   display: flex;
@@ -1681,20 +1697,18 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .field-row > input, .field-row > select { flex:1; min-width:0; }
 
 /* ===== all/one flip-chip (GC-table style, reused for Tauc & XRD fields) ===== */
-/* Pill toggle = a small filled secondary button (it carries a --panel2 fill, so it
-   follows the secondary text-button pattern, NOT the bare icon-plate one: hovering
-   only recolours the text — its own fill already equals the plate colour — and a
-   press moves the fill one step toward the text). Only the pill radius and the
-   muted idle text set it apart. */
+/* all/one pill: an outlined dark chip, exactly like the sample-nav arrows —
+   light-grey border, dark fill, muted text at rest; hover turns the text white
+   (border/fill held); press keeps white text and lifts the fill to light grey. */
 .mode-chip {
   font-size: 10px; padding: 1px 8px;
-  border: none; border-radius: 10px;
+  border: 1px solid var(--line); border-radius: 10px;
   background: var(--panel2); color: var(--muted); cursor: pointer;
   text-transform: uppercase; letter-spacing: .05em; line-height: 1.6;
   transition: background 0.14s, color 0.14s;
 }
-.mode-chip:hover  { color: var(--accent); }
-.mode-chip:active { color: var(--accent); background: var(--line); }
+.mode-chip:hover  { color: var(--text); }
+.mode-chip:active { color: var(--text); background: var(--line); }
 .field-row .mode-chip { flex: 0 0 auto; align-self: center; }
 /* Two half-width sub-panels side by side */
 .field-half { display:flex; gap:10px; }
@@ -1742,7 +1756,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
    (860 → 1200). Kept right after the base rule so it wins (equal specificity). */
 @media (max-width: 600px) { .gc-param-table { min-width: 1200px; } }
 #gcParamTableWrap .gc-grp { text-align: left; }
-#gcParamTableWrap .gc-toggle { margin-left: 8px; vertical-align: 1px; }
+#gcParamTableWrap .gc-toggle { margin-left: 8px; vertical-align: middle; position: relative; top: -1px; }
 #gcParamTableWrap .gc-all-row { background: rgba(160, 170, 185, 0.08); }
 #gcParamTableWrap .gc-all-row .fname { color: var(--muted); }
 #gcParamTableWrap input[disabled] { opacity: .35; }
