@@ -1485,20 +1485,24 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       e.preventDefault(); e.stopPropagation();
       addIdx = pointToIdx(e); confirmAdd();
     }, true);
+    // Capture phase + stopImmediatePropagation so that while add-peak is armed
+    // it claims the arrow keys before the document-level sample-nav handler
+    // (utils.js) can fire — otherwise ← / → would change sample instead of
+    // nudging the guide.
     document.addEventListener('keydown', e=>{
       if (!addMode) return;
       const plot = getPlot(), idx = getIdx();
-      if (e.key==='Escape'){ setMode(false); return; }
+      if (e.key==='Escape'){ e.stopImmediatePropagation(); setMode(false); return; }
       if (e.key==='ArrowLeft' || e.key==='ArrowRight'){
-        e.preventDefault();
+        e.preventDefault(); e.stopImmediatePropagation();
         const x = files[idx].x;
         const a = nearestIdx(x, plot.xmin), b = nearestIdx(x, plot.xmax);
         const lo = Math.min(a,b), hi = Math.max(a,b);
         if (addIdx==null) addIdx = nearestIdx(x, (plot.xmin+plot.xmax)/2);
         addIdx = Math.max(lo, Math.min(hi, addIdx + (e.key==='ArrowRight'?1:-1)));
         drawGuide();
-      } else if (e.key==='Enter'){ e.preventDefault(); confirmAdd(); }
-    });
+      } else if (e.key==='Enter'){ e.preventDefault(); e.stopImmediatePropagation(); confirmAdd(); }
+    }, true);
     return { isAdding:()=>addMode, setMode };
   }
   const addPeakA = makeAddPeak('a', 'xrdSvg',    'xrdAddPeak',    ()=>anaPlot, ()=>curIdx);
