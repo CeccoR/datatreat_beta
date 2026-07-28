@@ -1454,9 +1454,14 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       addMode = !!on;
       addModeKey = addMode ? key : (addModeKey===key ? null : addModeKey);
       btn.classList.toggle('is-on', addMode);
+      // Drop focus once armed so the arrow keys (which nudge the guide) don't put
+      // the button into :focus-visible and paint a white selection outline.
+      if (addMode) btn.blur();
       svgNode.style.cursor = addMode ? 'crosshair' : '';
+      // While armed, suppress the plot's x/y hover readout + crosshair (same as pan/zoom).
+      svgNode._suppressReadout = addMode;
       const plot = getPlot();
-      if (addMode && plot) plot.setMode(null);
+      if (addMode && plot){ plot.setMode(null); plot._clearCrosshair(); }
       if (!addMode){ addIdx = null; clearGuide(); }
     }
     function confirmAdd(){

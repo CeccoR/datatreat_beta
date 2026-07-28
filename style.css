@@ -1728,12 +1728,16 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   gap: 10px;
   margin-bottom: 8px;
 }
+/* Reset button: same bare icon button as the table CSV export (shares
+   .table-csv-btn); only the ↺ return glyph, sized to fill the 26px box. It keeps
+   the shared margin-left:auto so it absorbs the free space and lands at the right;
+   the CSV button then drops its own auto margin (rule below) and sits right after
+   it with a small gap, so the two read as one cluster at the header's right edge. */
 .peak-reset-btn {
-  padding: 3px 12px !important;
-  font-size: 12px;
-  border-radius: 6px;
-  line-height: 1.4;
+  font-size: 17px;
+  line-height: 1;
 }
+.peak-reset-btn + button.btn.table-csv-btn { margin-left: 6px; }
 #xrdPeakTableWrap table, #xrdFitTableWrap table, #xrdStdPeakTableWrap table { width: 100%; }
 #xrdPeakTableWrap .peak-row, #xrdFitTableWrap .peak-row, #xrdStdPeakTableWrap .peak-row { transition: background 0.1s; cursor: pointer; }
 #xrdPeakTableWrap .peak-row:hover, #xrdFitTableWrap .peak-row:hover, #xrdStdPeakTableWrap .peak-row:hover { background: var(--panel); }

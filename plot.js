@@ -390,11 +390,15 @@ class Plot{
     const add=(tag,at)=>{ this.gCross.appendChild(svgEl(tag,at)); };
     add('line',{x1:cx,x2:cx,y1:m.t,y2:h-m.b,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
     add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
-    const nearRight = cx > w - m.r - 140;
-    const tx = nearRight ? m.l+8 : w-m.r-8;
-    const anchor = nearRight ? 'start' : 'end';
-    const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':anchor,fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
-    t.textContent = `x ${fmt(xv)}   y ${fmt(yv)}`;
+    // Readout: pinned to the top-left of the plot area (never follows the pointer),
+    // one axis per line — x label then y label — using each axis' own name + unit.
+    const xlab = this.xlabel || 'x';
+    const ylab = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
+    const tx = m.l+8;
+    const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
+    const l1=svgEl('tspan',{x:tx}); l1.textContent=`${xlab}: ${fmt(xv)}`;
+    const l2=svgEl('tspan',{x:tx,dy:16}); l2.textContent=`${ylab}: ${fmt(yv)}`;
+    t.appendChild(l1); t.appendChild(l2);
     this.gCross.appendChild(t);
   }
   _initInteraction(){
@@ -443,8 +447,8 @@ class Plot{
         zoomRect.setAttribute('y', Math.min(cy,zoomStart.cy));
         zoomRect.setAttribute('width', Math.abs(cx-zoomStart.cx));
         zoomRect.setAttribute('height', Math.abs(cy-zoomStart.cy));
-      } else if (P._mode){
-        P._clearCrosshair(); // pan/zoom tool armed → no position readout
+      } else if (P._mode || svg._suppressReadout){
+        P._clearCrosshair(); // pan/zoom tool or add-peak armed → no position readout
       } else {
         P._drawCrosshair(e.clientX, e.clientY); // hover readout (no tool active)
       }
