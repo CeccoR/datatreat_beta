@@ -1862,7 +1862,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 }
 .ptab-tech { flex: 0 0 auto; white-space: pre; }   /* keep the space around the "·" */
 .ptab-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ptab-star { flex: 0 0 auto; padding-left: 2px; color: var(--bad); }
+.ptab-star { flex: 0 0 auto; color: var(--bad); }
 /* Close button: a bare X — half-visible at rest, full on tab hover, accent on its
    own hover. No background of its own at any point. */
 .ptab-x {
