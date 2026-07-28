@@ -401,13 +401,15 @@ class Plot{
     add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
     // Readout: pinned to the top-left of the plot area (never follows the pointer),
     // one axis per line — x then y — as "AxisName = value unit" (the unit is pulled
-    // out of the axis label's trailing parentheses).
+    // out of the axis label's trailing parentheses). Bar plots have a categorical x
+    // (no meaningful x coordinate under the pointer), so they show the y line only.
     const ylabTxt = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
+    const isBar = this._stored && this._stored.some(e=>e.type==='bar' || e.type==='barpx');
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
-    const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt);
-    const l2=svgEl('tspan',{x:tx,dy:16}); l2.textContent=axisReadout(ylabTxt, yv, fmt);
-    t.appendChild(l1); t.appendChild(l2);
+    if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }
+    const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, yv, fmt);
+    t.appendChild(l2);
     this.gCross.appendChild(t);
   }
   _initInteraction(){

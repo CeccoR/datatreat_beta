@@ -837,18 +837,17 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 }
 .alert-dismiss {
   position: absolute;
-  right: 10px;
-  top: 50%;
+  right: 9px;
+  top: 17px;                 /* centred on the first text line (alert padding-top 8 + ~half line) */
   transform: translateY(-50%);
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
-  font-size: 13px;
   font-weight: normal;
   color: inherit;
   line-height: 1;
-  opacity: 0;
+  opacity: 0.5;              /* visible but dimmed at rest; full on alert hover */
   transition: color 0.14s, opacity 0.15s;
 }
 .alert:hover .alert-dismiss { opacity: 1; }
@@ -1648,34 +1647,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   width: 100%;
 }
 
-/* ===== EPR pending table ===== */
-.pending-table th,
-.pending-table td {
-  border-bottom: 1px solid var(--pending-line);
-  color: var(--warn);
-}
-.pending-row .file-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  visibility: hidden;
-  white-space: nowrap;
-}
-.pending-row:hover .file-actions {
-  visibility: visible;
-}
-/* The remove / remove-all X's use the shared bare .del-bare style (muted at rest,
-   red on hover via .is-danger; the header's remove-all is bold via th .remove-all),
-   so they read exactly like the file-list X's. Nothing extra here but the phantom
-   ↑↓ spacers, kept bare so no stray border is drawn. */
-.pending-row .file-actions button {
-  background: transparent;
-  border: none;
-  padding: 2px 4px;
-  cursor: pointer;
-  line-height: 1;
-}
-
 /* The "interval too small" alert sits at the end of the Parameters column;
    give it a clear break from the stats above it. */
 #taucAlert:not(:empty) { margin-top: 16px; }
@@ -1729,7 +1700,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
    keeps CSV pinned to the right). Shown only when peaks were edited (JS toggles the
    inline display — nav-arrow has no !important display to override it). */
 .peak-reset-btn {
-  margin-left: 8px;
+  margin-left: 4px;
   font-size: 15px;
   line-height: 1;
 }

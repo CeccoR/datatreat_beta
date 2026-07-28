@@ -95,6 +95,15 @@ function syncProjectBar(t){
   if (_onActivate){ try { _onActivate(t); } catch(e){} }
 }
 
+// Run fn only after the browser has painted at least one frame. A tab switch
+// toggles .tab.active (starting the 0.25s tab-fade) and then must restore the
+// module's state — a heavy, synchronous recompute + redraw on large projects. In a
+// single rAF that work runs *before* the fade's first paint and freezes the switch.
+// Deferring past one paint lets the fade start (opacity/transform animate on the
+// compositor, so they keep running while the main thread does the restore), then the
+// charts fill in a moment later instead of the click feeling stuck.
+function afterPaint(fn){ requestAnimationFrame(()=> requestAnimationFrame(fn)); }
+
 /* ---- Open / activate / close --------------------------------------------- */
 // Open a project (or a blank technique) in a NEW tab and focus it. Opening a
 // project that is already open is a no-op: it never steals focus.
@@ -129,7 +138,7 @@ function activateTab(id){
   _activeId = id;
   renderTabs();
   goTab(t.module);
-  requestAnimationFrame(()=>{ loadTab(t); persistAll(); });
+  afterPaint(()=>{ loadTab(t); persistAll(); });
 }
 
 // Home / Projects / Settings belong to no tab, so none is highlighted while one of
@@ -156,7 +165,7 @@ function closeTab(id){
   _activeId = next.id;
   renderTabs();
   goTab(next.module);
-  requestAnimationFrame(()=>{ loadTab(next); persistAll(); });
+  afterPaint(()=>{ loadTab(next); persistAll(); });
 }
 
 // Rename / dirty / project-association updates coming from sessions.js.

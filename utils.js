@@ -818,7 +818,9 @@ function goTab(tab, fromHash){
   // whenever a module tab becomes visible so its charts always fit the viewport.
   if (_tabRedraw[tab]){
     _needsRedraw[tab] = false;
-    requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} });
+    // Double rAF: let the tab-fade paint its first frame before the (potentially
+    // heavy) redraw runs, so switching to a loaded tab doesn't freeze the animation.
+    requestAnimationFrame(()=> requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} }));
   }
   if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
   // Only the fixed sections are addressable: a module section is shown by activating
@@ -1509,8 +1511,8 @@ function confirmBanner(message, confirmLabel, altLabel){
 // own alert inline (no global handler needed).
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
   const makeX = act => act
-    ? `<button class="alert-dismiss close-x" data-action="${act}" title="Dismiss">${X_SVG(13)}</button>`
-    : `<button class="alert-dismiss close-x" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(13)}</button>`;
+    ? `<button class="alert-dismiss close-x" data-action="${act}" title="Dismiss">${X_SVG(15)}</button>`
+    : `<button class="alert-dismiss close-x" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(15)}</button>`;
   let html = '';
   if (invalidNames.length)
     html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';
