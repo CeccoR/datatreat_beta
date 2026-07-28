@@ -28,16 +28,17 @@
   --ok-fg: var(--white);     /* text on the confirmation fill */
   --icon-tile: #0e1316;      /* home-card square icon tile background */
   --bar: #1d282e;            /* project bar + active tab: one step lighter than --panel */
-  /* Bare icon buttons (nav / project bar / plot toolbar): hover plate + press plate.
-     Default (and light) = grey→line; dark swaps them so hover is the lighter --line
-     and press the darker --panel2. */
-  --iconbtn-hover: var(--panel2);
-  --iconbtn-press: var(--line);
-  /* Same idea, but for icon buttons living ON a --bar or --panel2 surface itself
-     (project bar, a peak-table card): --iconbtn-hover would sometimes exactly
-     match that surface's own colour and look like nothing happened on hover, so
-     these are picked to stay visibly lighter/darker than BOTH --bar and --panel2,
-     in both themes. */
+  /* ONE plate for every bare icon button (nav, plot toolbar, tabs +, sample arrows,
+     project bar, table cards). --plate-hover/press is the hover/press fill; it is
+     surface-aware — its DEFAULT here suits buttons on --panel (nav/toolbar/cards'
+     page), and a container rule further down re-points it to --cardbtn-* for
+     buttons that sit ON a --bar or --panel2 surface (project bar, peak-table card),
+     where the default would sometimes equal the surface itself and look like
+     nothing happened. Default: grey→line; dark swaps so hover is the lighter --line
+     and press the darker --panel2. --cardbtn-* stays visibly off BOTH --bar and
+     --panel2 in both themes. */
+  --plate-hover: var(--panel2);
+  --plate-press: var(--line);
   --cardbtn-hover: var(--panel);
   --cardbtn-press: var(--line);
   --sel-inset: var(--white); /* selected peak-row highlight border */
@@ -55,15 +56,22 @@
   --plot-readout-halo: #0b0f12;
   --plot-errbar: #f0f4f6;
 }
-/* Dark only: swap the icon-button hover/press plates (hover lighter, press darker). */
+/* Dark only: swap the plate direction (hover lighter, press darker). */
 :root[data-theme="dark"] {
-  --iconbtn-hover: var(--line);
-  --iconbtn-press: var(--panel2);
+  --plate-hover: var(--line);
+  --plate-press: var(--panel2);
   /* --bar (dark) sits lighter than --panel2, so the pair above would put the
      card-button hover level with --bar itself; go one step further each way:
      --line is lighter than --bar, --bg is darker than --panel2. */
   --cardbtn-hover: var(--line);
   --cardbtn-press: var(--bg);
+}
+/* Surface-aware: buttons sitting ON a --bar or --panel2 card re-point the single
+   --plate token to the card-calibrated values, so the one shared plate rule set
+   works everywhere without a second token pair in the button rules. */
+.project-bar, .peak-box, .table-box {
+  --plate-hover: var(--cardbtn-hover);
+  --plate-press: var(--cardbtn-press);
 }
 /* ===== Light theme ===== */
 :root[data-theme="light"] {
@@ -165,8 +173,8 @@ header h1 {
   flex-shrink: 0;                     /* keep size; the nav scrolls instead of shrinking */
   transition: color 0.15s, background 0.15s;
 }
-#nav > button:not(.is-on):hover { background: var(--iconbtn-hover); color: var(--accent); }
-#nav > button:not(.is-on):active { background: var(--iconbtn-press); color: var(--accent); }
+#nav > button:not(.is-on):hover { background: var(--plate-hover); color: var(--accent); }
+#nav > button:not(.is-on):active { background: var(--plate-press); color: var(--accent); }
 #nav {
   display: flex;
   flex: 1;
@@ -249,16 +257,12 @@ button.btn.is-saved:disabled {
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .proj-icon .proj-svg { width: 19px; height: 19px; display: block; }
 /* Project-bar icon buttons (export/delete/new) and the per-table CSV export button
-   (below, .table-csv-btn) are THE SAME BUTTON: one shared rule block, so their
-   aesthetics can never drift apart. Bare at rest (no fill/border, muted icon);
-   hover/press use --cardbtn-hover/--cardbtn-press rather than the nav's
-   --iconbtn-hover/--iconbtn-press, because both of these live on a --bar or
-   --panel2 surface (the project bar, a peak-table card) — using the nav's tokens
-   would sometimes hover to the exact colour of that surface (e.g. a table card's
-   own --panel2 background) and look like nothing happened. --cardbtn-hover/press
-   are calibrated to stay visibly lighter/darker than both surfaces, in both
-   themes. Save keeps its filled look (border stripped); delete lights red, not
-   accent. */
+   (.table-csv-btn) are THE SAME BUTTON: one shared rule block, so their aesthetics
+   can never drift apart. Bare at rest (no fill/border, muted icon); hover/press use
+   the single --plate token like every other icon button — their card containers
+   (.project-bar / .peak-box / .table-box, above) re-point --plate to the
+   card-calibrated shade so it never matches the surface. Save keeps its filled look
+   (border stripped); delete lights red, not accent. */
 .btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new,
 button.btn.table-csv-btn {
   --btn-bg: transparent;
@@ -267,11 +271,11 @@ button.btn.table-csv-btn {
 }
 .btn.proj-icon.proj-saveas:hover:not(:disabled), .btn.proj-icon.proj-csv:hover:not(:disabled), .btn.proj-icon.proj-json:hover:not(:disabled), .btn.proj-icon.proj-del:hover:not(:disabled), .btn.proj-icon.proj-new:hover:not(:disabled),
 button.btn.table-csv-btn:hover:not(:disabled) {
-  --btn-bg: var(--cardbtn-hover); --btn-fg: var(--accent); --btn-bd: transparent;
+  --btn-bg: var(--plate-hover); --btn-fg: var(--accent); --btn-bd: transparent;
 }
 .btn.proj-icon.proj-saveas:active:not(:disabled), .btn.proj-icon.proj-csv:active:not(:disabled), .btn.proj-icon.proj-json:active:not(:disabled), .btn.proj-icon.proj-del:active:not(:disabled), .btn.proj-icon.proj-new:active:not(:disabled),
 button.btn.table-csv-btn:active:not(:disabled) {
-  --btn-bg: var(--cardbtn-press); --btn-fg: var(--accent); --btn-bd: transparent;
+  --btn-bg: var(--plate-press); --btn-fg: var(--accent); --btn-bd: transparent;
 }
 .btn.proj-icon.proj-del:hover:not(:disabled) { --btn-fg: var(--bad); border-color: transparent; }
 /* Save: unchanged filled look, only the border removed in every state. */
@@ -503,7 +507,7 @@ main {
   z-index: 900;
 }
 #scrollTopBtn.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
-#scrollTopBtn:hover { color: var(--accent); background: var(--iconbtn-hover); }
+#scrollTopBtn:hover { color: var(--accent); background: var(--plate-hover); }
 @media (prefers-reduced-motion: reduce) { #scrollTopBtn { transition: opacity 0.2s ease; } }
 .card {
   background: var(--panel);
@@ -1352,9 +1356,9 @@ button.btn.plot-tool-btn {
   transition: background 0.15s, color 0.15s;
 }
 button.btn.plot-dl-btn:hover:not(:disabled),
-button.btn.plot-tool-btn:hover:not(:disabled) { --btn-bg: var(--iconbtn-hover); --btn-fg: var(--accent); --btn-bd: transparent; }
+button.btn.plot-tool-btn:hover:not(:disabled) { --btn-bg: var(--plate-hover); --btn-fg: var(--accent); --btn-bd: transparent; }
 button.btn.plot-dl-btn:active:not(:disabled),
-button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--iconbtn-press); }
+button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--plate-press); }
 .plot-btn-icon { width: 19px; height: 19px; display: block; }
 /* Compact icon-only CSV button pinned to the far edge of a table header — the
    colour/hover/press logic lives with the project-bar buttons above (one shared
@@ -1477,8 +1481,8 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   border-radius: 11px;
   --btn-bg: transparent;
 }
-.btn.nav-arrow:hover:not(:disabled)  { --btn-bg: var(--iconbtn-hover); --btn-fg: var(--accent); }
-.btn.nav-arrow:active:not(:disabled) { --btn-bg: var(--iconbtn-press); --btn-fg: var(--accent); }
+.btn.nav-arrow:hover:not(:disabled)  { --btn-bg: var(--plate-hover); --btn-fg: var(--accent); }
+.btn.nav-arrow:active:not(:disabled) { --btn-bg: var(--plate-press); --btn-fg: var(--accent); }
 
 /* Instrumental-standard picker: sits in the plot header row, aligned with and the
    same height as the "+ Add peak" corner button. Greyed while showing its ghost
@@ -1894,8 +1898,8 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 }
 /* Same hover-plate behaviour as the nav icon buttons (it sits on the same --panel
    surface): plate on hover + accent glyph, deeper plate on press. */
-.ptab-add:hover { background: var(--iconbtn-hover); color: var(--accent); }
-.ptab-add:active { background: var(--iconbtn-press); color: var(--accent); }
+.ptab-add:hover { background: var(--plate-hover); color: var(--accent); }
+.ptab-add:active { background: var(--plate-press); color: var(--accent); }
 /* Active tab: takes the project bar's grey and stretches down into it (Chrome
    style). The negative bottom margin pulls it through the header's bottom padding
    so its fill meets the bar's with no seam. */
