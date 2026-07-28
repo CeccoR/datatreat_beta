@@ -234,7 +234,7 @@ button.btn.is-saved,
 button.btn.is-saved:disabled {
   --btn-bg: var(--ok) !important;
   --btn-fg: var(--ok-fg) !important;
-  --btn-bd: var(--ok) !important;
+  --btn-bd: transparent !important;
   opacity: 1 !important;
   cursor: default;
 }
@@ -669,10 +669,17 @@ input[type="file"] {
                              --on-accent (on the accent fill), --text (secondary
                              actions) or --muted (icon / subtle buttons).
    Base .btn is the neutral outline (the common case); .primary is the filled CTA. */
+/* Text buttons never show an outline: --btn-bd stays transparent in every state
+   (the 1px transparent border is kept only so border-box sizing is unchanged).
+   Secondary (not .primary): a filled dark chip that behaves like the icon buttons
+   — idle text on the dark fill, hover recolours the text to accent (fill
+   unchanged), press moves the fill one step toward the text (lighter in dark,
+   darker in light) with the text still accent. Primary keeps its accent fill and
+   only lightens/darkens on hover/press. */
 button.btn {
   --btn-bg: var(--panel2);
   --btn-fg: var(--text);
-  --btn-bd: var(--line);
+  --btn-bd: transparent;
   background: var(--btn-bg);
   color: var(--btn-fg);
   border: 1px solid var(--btn-bd);
@@ -681,25 +688,22 @@ button.btn {
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.14s, border-color 0.14s, color 0.14s;
+  transition: background 0.14s, color 0.14s;
 }
-/* Outline (default): hover accents the outline; press greys the fill */
-button.btn:hover:not(:disabled)  { --btn-fg: var(--accent); --btn-bd: var(--accent); }
-button.btn:active:not(:disabled) { --btn-bg: var(--line); }
+button.btn:hover:not(:disabled)  { --btn-fg: var(--accent); }
+button.btn:active:not(:disabled) { --btn-bg: var(--line); --btn-fg: var(--accent); }
 /* Primary (filled accent): hover lightens the fill, press darkens it */
 button.btn.primary {
   --btn-bg: var(--accent);
   --btn-fg: var(--on-accent);
-  --btn-bd: var(--accent);
 }
-button.btn.primary:hover:not(:disabled)  { --btn-bg: var(--accent-hover);  --btn-fg: var(--on-accent); --btn-bd: var(--accent-hover); }
-button.btn.primary:active:not(:disabled) { --btn-bg: var(--accent-active); --btn-bd: var(--accent-active); }
+button.btn.primary:hover:not(:disabled)  { --btn-bg: var(--accent-hover);  --btn-fg: var(--on-accent); }
+button.btn.primary:active:not(:disabled) { --btn-bg: var(--accent-active); }
 /* Permanent "on" toggle (armed +Add peak, etc.) — filled accent, held on hover too */
 button.btn.is-on,
 button.btn.is-on:hover:not(:disabled) {
   --btn-bg: var(--accent);
   --btn-fg: var(--on-accent);
-  --btn-bd: var(--accent);
 }
 button.btn.btn-sm {
   padding: 5px 10px;
