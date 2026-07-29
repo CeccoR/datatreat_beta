@@ -942,38 +942,23 @@ function refreshProjBar(tab){
   if (show) normalizeProjIcons(tab);
 }
 
-/* Normalize a module's project icons so every icon's minimal bounding box is the
-   same size and centred in its button. Measures each icon's inked bbox (getBBox)
-   and transforms it to centre (12,12) at a common target extent. Idempotent. */
-const PROJ_ICON_TARGET = 16.2;   /* min circumscribed square, 10% smaller than the old 18 */
-// Center an icon's inked content at (12,12). If `forceScale` is given, use it
-// (so one icon can match another's exact scale); otherwise scale so the icon's
-// larger side equals PROJ_ICON_TARGET. Returns the scale used.
-function fitIcon(svg, forceScale){
-  if (!svg) return null;
-  const NS = 'http://www.w3.org/2000/svg';
-  let g = svg.querySelector('g.icon-fit');
-  if (!g){
-    g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'icon-fit');
-    while (svg.firstChild) g.appendChild(svg.firstChild);
-    g.querySelectorAll('*').forEach(el=> el.setAttribute('vector-effect','non-scaling-stroke'));
-    svg.appendChild(g);
-  }
-  g.removeAttribute('transform');
-  let bb; try { bb = g.getBBox(); } catch(e){ return null; }
-  if (!bb.width || !bb.height) return null; // not rendered yet (hidden tab)
-  const s = forceScale || (PROJ_ICON_TARGET / Math.max(bb.width, bb.height));
-  const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
-  g.setAttribute('transform', `translate(12 12) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
-  return s;
-}
-/* Nav icons are normalized by their minimum CIRCUMSCRIBED CIRCLE (bbox diagonal),
-   not the bounding square, so each icon fills its round button by the same amount.
-   All nav icons share one target circle diameter, in the 24-unit viewBox. */
-const NAV_ICON_DIAM = 22;
-function fitIconCircle(svg, targetDiam){
+/* ONE icon-sizing rule for every icon button: the smallest circle circumscribing the
+   inked logo is set to ICON_CIRCLE_RATIO of the button's minimum dimension (its side
+   for square buttons, its diameter for round ones) and centred on the button. So two
+   buttons of the same size always show the same circle — regardless of the icon's
+   aspect or the svg's own CSS size — which the transform below compensates for.
+   ICON_CIRCLE_RATIO is the single tuning knob. */
+const ICON_CIRCLE_RATIO = 0.85;
+function fitIconCircle(svg, ratio){
   if (!svg) return;
+  ratio = ratio || ICON_CIRCLE_RATIO;
   const NS = 'http://www.w3.org/2000/svg';
+  const btn = svg.closest('button, a') || svg.parentElement;
+  if (!btn) return;
+  const cr = btn.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+  const cmin = Math.min(cr.width, cr.height);     // container min side (px)
+  const svgPx = Math.min(sr.width, sr.height);    // svg's own rendered size (px)
+  if (!cmin || !svgPx) return;                    // not laid out yet (hidden)
   let g = svg.querySelector('g.icon-fit');
   if (!g){
     g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'icon-fit');
@@ -981,31 +966,37 @@ function fitIconCircle(svg, targetDiam){
     g.querySelectorAll('*').forEach(el=> el.setAttribute('vector-effect', 'non-scaling-stroke'));
     svg.appendChild(g);
   }
+  svg.style.overflow = 'visible';                 // don't clip an icon scaled past the viewBox
   g.removeAttribute('transform');
   let bb; try { bb = g.getBBox(); } catch(e){ return; }
   if (!bb.width || !bb.height) return;
-  const s = targetDiam / Math.hypot(bb.width, bb.height);   // circumscribed-circle scale
+  const vb = svg.viewBox && svg.viewBox.baseVal;
+  const vbW = (vb && vb.width) ? vb.width : 24, vbH = (vb && vb.height) ? vb.height : 24;
+  const vcx = (vb ? vb.x : 0) + vbW/2, vcy = (vb ? vb.y : 0) + vbH/2;
+  const D = Math.hypot(bb.width, bb.height);      // circumscribed-circle Ø, viewBox units
+  // Rendered Ø = (s·D/vbW)·svgPx ; solve for the scale that makes it ratio·cmin.
+  const s = (ratio * cmin * vbW) / (D * svgPx);
   const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
-  g.setAttribute('transform', `translate(12 12) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
+  g.setAttribute('transform', `translate(${vcx} ${vcy}) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
 }
+// Back-compat alias: every caller now goes through the single circle rule.
+const fitIcon = fitIconCircle;
 function normalizeNavIcons(){
   requestAnimationFrame(()=>{
     document.querySelectorAll('#nav > button.nav-icon > svg').forEach(svg=>{
       if (!svg.getClientRects().length) return;   // hidden (e.g. the off-theme icon) — measures 0
-      fitIconCircle(svg, NAV_ICON_DIAM);
+      fitIconCircle(svg);
     });
   });
 }
 function normalizeProjIcons(mod){
   requestAnimationFrame(()=>{
-    const q = cls => document.querySelector('.project-bar .'+cls+'[data-module="'+mod+'"] .proj-svg');
-    fitIcon(q('proj-save')); fitIcon(q('proj-saveas'));
-    const csvScale = fitIcon(q('proj-csv'));
-    // Exception: the JSON icon is the CSV icon with different text — render it at
-    // the exact same scale so the arrow and font match CSV, not the equal-box rule.
-    if (csvScale) fitIcon(q('proj-json'), csvScale);
+    ['proj-save','proj-saveas','proj-csv','proj-json'].forEach(cls=>{
+      const svg = document.querySelector('.project-bar .'+cls+'[data-module="'+mod+'"] .proj-svg');
+      if (svg) fitIconCircle(svg);
+    });
     document.querySelectorAll('.project-bar[data-module="'+mod+'"] .proj-del .proj-svg, .project-bar[data-module="'+mod+'"] .proj-new .proj-svg')
-      .forEach(svg=> fitIcon(svg));
+      .forEach(svg=> fitIconCircle(svg));
   });
 }
 
