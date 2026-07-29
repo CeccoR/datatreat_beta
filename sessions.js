@@ -572,6 +572,7 @@ barInfoBtn.addEventListener('click', ()=>{
 onTabActivated(tab=>{
   if (!tab) return;
   const mod = tab.module;
+  projectBar.classList.add('no-anim');   // snap Save/name state on switch, no 140ms fade
   bindProjectBar(mod);
   projectBar.style.display = '';
   const inp = nameInput(mod);
@@ -580,7 +581,7 @@ onTabActivated(tab=>{
   else { restoreSaveBtns(mod); setSaveDirtyIcon(mod, !!tab.projectId && tab.dirty); }
   refreshProjBar(mod);
   normalizeProjIcons(mod);
-  requestAnimationFrame(()=> fitNameField(mod));
+  requestAnimationFrame(()=>{ fitNameField(mod); projectBar.classList.remove('no-anim'); });
 });
 // The bar belongs to a live tab only — hide it (and close its info panel) whenever
 // a fixed section shows.

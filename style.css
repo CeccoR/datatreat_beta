@@ -700,6 +700,10 @@ input[type="file"] {
    text accent (fill held); press lifts the fill to light grey, text still accent.
    Delete (.is-danger) is the same with --bad instead of accent. Primary keeps its
    accent fill and only lightens/darkens. */
+/* While a tab switch snaps the project bar to the new tab's state, kill transitions
+   so the Save button (saved↔dirty) doesn't fade in over 140ms — it should be there
+   instantly, like the rest of the bar. Restored on the next frame. */
+.project-bar.no-anim, .project-bar.no-anim * { transition: none !important; }
 button.btn {
   --btn-bg: var(--panel2);
   --btn-fg: var(--muted);
