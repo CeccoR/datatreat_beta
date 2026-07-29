@@ -414,33 +414,39 @@ button.btn.icon-save {
 .theme-icon-light { display: none; }
 :root[data-theme="light"] .theme-icon-dark { display: none; }
 :root[data-theme="light"] .theme-icon-light { display: inline; }
-.home-quick-btn {
+/* Home header: technique title on the left, the Projects/Settings actions on the
+   right so they read as clear, labelled entry points (not tiny corner icons). */
+.home-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.home-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.home-action-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  color: var(--muted);
+  gap: 8px;
+  padding: 9px 15px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 0;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.home-quick-btn svg {
-  width: 20px;
-  height: 20px;
-  display: block;
-}
-.home-quick-btn:hover {
-  background: var(--plate-hover);
+.home-action-btn svg { width: 18px; height: 18px; display: block; color: var(--accent); }
+.home-action-btn:hover {
+  border-color: var(--accent);
+  background: var(--panel);
   color: var(--accent);
 }
-.home-quick-btn:active {
-  background: var(--plate-press);
-  color: var(--accent);
-}
+.home-action-btn:hover svg { color: var(--accent); }
+.home-action-btn:active { background: var(--line); }
 .settings-tab.active {
   display: block;
   padding-top: 40px;
@@ -1997,6 +2003,30 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   color: var(--accent);
 }
 @keyframes dz-spin { to { transform: rotate(360deg); } }
+
+/* Module loader: covers the content area (everything below the project bar) with the
+   themed backdrop + a spinner while a tab's charts are (re)built on open / tab switch,
+   so the plots don't visibly assemble. Not used on resize. */
+.module-loader {
+  position: fixed;
+  left: 0; right: 0; bottom: 0; top: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.module-loader.show { opacity: 1; pointer-events: auto; }
+.module-loader-spin {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  animation: dz-spin 0.7s linear infinite;
+}
 
 /* ===== Collapsible instructions: an info icon next to the card title ===== */
 .instr-info {

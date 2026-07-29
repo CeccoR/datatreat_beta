@@ -96,9 +96,11 @@ function loadTab(t){
 // Deferred loader guarded against fast switching: if the user has already moved on
 // to another tab by the time this runs, do nothing — only the final tab loads.
 function loadTabIfActive(t){
-  if (!t || t.id !== _activeId) return;
+  if (!t || t.id !== _activeId) return;  // superseded — the newer switch owns the loader
   loadTab(t);
   persistAll();
+  // Charts finish drawing a frame after the restore; drop the loader once they have.
+  requestAnimationFrame(()=> requestAnimationFrame(hideModuleLoader));
 }
 
 /* ---- Project bar sync -----------------------------------------------------
@@ -120,6 +122,24 @@ function syncProjectBar(t){
 // compositor, so they keep running while the main thread does the restore), then the
 // charts fill in a moment later instead of the click feeling stuck.
 function afterPaint(fn){ requestAnimationFrame(()=> requestAnimationFrame(fn)); }
+
+// Module loader: a themed overlay + spinner covering the content below the top bar
+// while a tab's charts are (re)built on open / tab switch. Shown synchronously so it
+// masks the build; hidden a couple of frames after the restore, once the charts have
+// drawn. Never used on resize.
+let _loaderEl = null;
+function showModuleLoader(){
+  if (!_loaderEl){
+    _loaderEl = document.createElement('div');
+    _loaderEl.className = 'module-loader';
+    _loaderEl.innerHTML = '<div class="module-loader-spin"></div>';
+    document.body.appendChild(_loaderEl);
+  }
+  const topbar = document.getElementById('topbar');
+  _loaderEl.style.top = (topbar ? Math.max(0, Math.round(topbar.getBoundingClientRect().bottom)) : 0) + 'px';
+  _loaderEl.classList.add('show');
+}
+function hideModuleLoader(){ if (_loaderEl) _loaderEl.classList.remove('show'); }
 
 // Fade the app in once its shell is assembled (see index.html head + style.css).
 function revealApp(){ document.documentElement.classList.remove('app-booting'); }
@@ -162,6 +182,7 @@ function activateTab(id){
   renderTabs();
   goTab(t.module);
   syncProjectBar(t);                    // project bar is cheap + data-independent: build it now
+  showModuleLoader();                   // mask the chart build until it's ready
   afterPaint(()=> loadTabIfActive(t));  // heavy restore after paint, skipped if superseded
 }
 
@@ -169,6 +190,7 @@ function activateTab(id){
 // them shows. The live tab is unchanged — clicking it back is instant.
 onSectionChange(tab=>{
   const fixed = !MODULES.includes(tab);
+  if (fixed) hideModuleLoader();   // never leave the loader hanging over a fixed section
   if (_onFixed === fixed) return;
   _onFixed = fixed;
   renderTabs();
@@ -190,6 +212,7 @@ function closeTab(id){
   renderTabs();
   goTab(next.module);
   syncProjectBar(next);
+  showModuleLoader();
   afterPaint(()=> loadTabIfActive(next));
 }
 
@@ -398,6 +421,7 @@ async function initTabs(){
   renderTabs();                          // tab bar + titles
   goTab(at.module);                      // build the (empty) module shell
   syncProjectBar(at);                    // project bar built now, not piecemeal after
+  showModuleLoader();                    // spinner over the content area while it loads
   // Reveal the fully-assembled shell in one fade, THEN run the heavy restore a paint
   // later — so the user sees a complete shell appear at once (not built piecemeal),
   // and the charts fill in after, without freezing the boot.

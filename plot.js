@@ -532,7 +532,13 @@ window.addEventListener('resize', ()=>{
     });
   });
   clearTimeout(_resizeSettle);
-  _resizeSettle = setTimeout(()=> redrawAll(), 180);
+  _resizeSettle = setTimeout(()=>{
+    // Drop any live re-projection still queued so it can't run after (and undo) the
+    // full redraw, and do the final recompute a frame later — once the browser has
+    // settled the new layout — so plots never end up sized to a transient width.
+    if (_resizeRAF){ cancelAnimationFrame(_resizeRAF); _resizeRAF = null; }
+    requestAnimationFrame(()=> redrawAll());
+  }, 180);
 });
 
 // With asBlob=true, resolves to a PNG Blob of the (current-view) plot instead of
