@@ -107,6 +107,17 @@ class Plot{
   }
   px(x){ const {w}=this.size(); const m=this.margin; return m.l + (x-this.xmin)/(this.xmax-this.xmin)*(w-m.l-m.r); }
   py(y){ const {h}=this.size(); const m=this.margin; return h-m.b - (y-this.ymin)/(this.ymax-this.ymin)*(h-m.t-m.b); }
+  // Precompute the x/y projection ONCE (one getBoundingClientRect for the whole
+  // pass). Hot loops (line/point rendering) use this instead of px()/py() per point,
+  // which each called size() → a layout read per coordinate (tens of thousands per
+  // redraw on large spectra).
+  _projector(){
+    const {w,h}=this.size(); const m=this.margin;
+    const sx=(w-m.l-m.r)/(this.xmax-this.xmin);
+    const sy=(h-m.t-m.b)/(this.ymax-this.ymin);
+    const xmin=this.xmin, ymin=this.ymin, yb=h-m.b, xl=m.l;
+    return { px:x=> xl + (x-xmin)*sx, py:y=> yb - (y-ymin)*sy };
+  }
   invX(px){ const {w}=this.size(); const m=this.margin; return this.xmin + (px-m.l)/(w-m.l-m.r)*(this.xmax-this.xmin); }
   invY(py){ const {h}=this.size(); const m=this.margin; return this.ymin + (h-m.b-py)/(h-m.t-m.b)*(this.ymax-this.ymin); }
   drawAxes(){
@@ -159,22 +170,24 @@ class Plot{
     this._stored.push(entry);
     return this._renderPoints(entry);
   }
-  _renderPoints(entry){
+  _renderPoints(entry, proj){
+    const {px,py} = proj || this._projector();
     const g = svgEl('g',{}); const rr = entry.r;
     for (let i=0;i<entry.xs.length;i++){
       const xv=entry.xs[i], yv=entry.ys[i];
       if (!isFinite(xv)||!isFinite(yv)) continue;
       if (xv<this.xmin||xv>this.xmax) continue; // cull off-view for speed
-      g.appendChild(svgEl('circle',{cx:this.px(xv).toFixed(2), cy:this.py(yv).toFixed(2), r:rr, fill:'none', stroke:entry.color, 'stroke-width':1}));
+      g.appendChild(svgEl('circle',{cx:px(xv).toFixed(2), cy:py(yv).toFixed(2), r:rr, fill:'none', stroke:entry.color, 'stroke-width':1}));
     }
     this.gData.appendChild(g);
     return g;
   }
-  _renderLine(entry){
+  _renderLine(entry, proj){
+    const {px,py} = proj || this._projector();
     let d='';
     for (let i=0;i<entry.xs.length;i++){
       if (!isFinite(entry.xs[i])||!isFinite(entry.ys[i])) continue;
-      d += (d===''?'M':'L') + this.px(entry.xs[i]).toFixed(2) + ',' + this.py(entry.ys[i]).toFixed(2) + ' ';
+      d += (d===''?'M':'L') + px(entry.xs[i]).toFixed(2) + ',' + py(entry.ys[i]).toFixed(2) + ' ';
     }
     const p = svgEl('path',{d, fill:'none', stroke:entry.color, 'stroke-width':entry.width||1.5});
     if (entry.dash) p.setAttribute('stroke-dasharray', entry.dash);
@@ -295,9 +308,10 @@ class Plot{
   }
   _redrawFromStored(){
     this.gData.innerHTML=''; this.gOverlay.innerHTML='';
+    const proj = this._projector();
     for (const e of this._stored){
-      if (e.type==='line') this._renderLine(e);
-      else if (e.type==='points') this._renderPoints(e);
+      if (e.type==='line') this._renderLine(e, proj);
+      else if (e.type==='points') this._renderPoints(e, proj);
       else if (e.type==='bar') this._renderBar(e);
       else if (e.type==='barpx') this._renderBarPx(e);
       else if (e.type==='errbar') this._renderErrbar(e);
