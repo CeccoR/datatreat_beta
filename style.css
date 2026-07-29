@@ -424,29 +424,47 @@ button.btn.icon-save {
   flex-wrap: wrap;
   margin-bottom: 18px;
 }
-.home-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.home-actions { display: flex; gap: 12px; flex-shrink: 0; }
+/* Mini technique-tile: a darker square logo box on the left (logo grey → accent on
+   hover) with the label beside it — same language as the module cards, scaled down.
+   Height is ~1.5x the old pill; both buttons take the wider one's width (set by JS). */
 .home-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 15px;
-  border-radius: 9px;
+  gap: 12px;
+  height: 54px;
+  padding: 0 18px 0 0;
+  border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--panel2);
   color: var(--text);
+  cursor: pointer;
+  overflow: hidden;                 /* clip the square box to the button's rounded corner */
+  transition: background 0.15s, border-color 0.15s;
+}
+.home-action-icon {
+  flex: 0 0 auto;
+  align-self: stretch;
+  aspect-ratio: 1 / 1;              /* square: side = button height */
+  background: var(--icon-tile);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-action-icon svg {
+  width: 60%; height: 60%;          /* pre-size; the circumscribed-circle rule refines it */
+  display: block;
+  color: var(--muted);
+  transition: color 0.15s;
+}
+.home-action-label {
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  letter-spacing: 0.06em;          /* same lettering as the tile titles / headers */
+  color: var(--text);
 }
-.home-action-btn svg { width: 18px; height: 18px; display: block; color: var(--accent); }
-.home-action-btn:hover {
-  border-color: var(--accent);
-  background: var(--panel);
-  color: var(--accent);
-}
-.home-action-btn:hover svg { color: var(--accent); }
-.home-action-btn:active { background: var(--line); }
+.home-action-btn:hover { border-color: var(--accent); }
+.home-action-btn:hover .home-action-icon svg { color: var(--accent); }
 .settings-tab.active {
   display: block;
   padding-top: 40px;
@@ -591,7 +609,7 @@ main {
   font-size: 15px;
   font-weight: 700;
   color: var(--accent);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;   /* match the section headers (.txt-mini, e.g. FILE) */
   margin: 0;
 }
 .txt-label {                /* field label */
@@ -1858,7 +1876,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   user-select: none;
   transition: background-color 0.14s, color 0.14s;
 }
-.ptab:hover { background: var(--panel2); color: var(--text); }
+.ptab:hover { background: var(--panel2); color: var(--accent); }
 /* Drag to reorder: the grabbed tab rides above its neighbours and follows the
    cursor (no transform transition so it tracks 1:1), with no shadow. A dragged
    inactive tab wears its hover look at half opacity; the active one keeps its own. */

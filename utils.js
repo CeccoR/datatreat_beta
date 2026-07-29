@@ -786,9 +786,15 @@ document.getElementById('nav').addEventListener('click', e=>{
 document.querySelectorAll('.home-action-btn[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
-// Size the Home action icons (folder / gear) by the same circumscribed-circle rule as
-// every other icon button, so the project folder matches the nav bar's.
-requestAnimationFrame(()=> document.querySelectorAll('.home-action-btn svg').forEach(s=> fitIconCircle(s)));
+// Home action mini-tiles: size the logo by the circumscribed-circle rule (container =
+// its square icon box), then give both buttons the wider one's width.
+requestAnimationFrame(()=>{
+  const btns = [...document.querySelectorAll('.home-action-btn')];
+  btns.forEach(b=>{ const s = b.querySelector('svg'); if (s) fitIconCircle(s); });
+  btns.forEach(b=> b.style.width = '');
+  const maxW = Math.max(0, ...btns.map(b=> b.getBoundingClientRect().width));
+  if (maxW) btns.forEach(b=> b.style.width = Math.ceil(maxW) + 'px');
+});
 const _tabRedraw = {}, _needsRedraw = {};
 // A module registers how to redraw its current view; goTab calls it the first
 // time the tab becomes visible after a session restore flagged it.
@@ -979,7 +985,9 @@ function fitIconCircle(svg, ratio, forceScale){
   const vcx = (vb ? vb.x : 0) + vbW/2, vcy = (vb ? vb.y : 0) + vbH/2;
   let s = forceScale;
   if (s == null){
-    const btn = svg.closest('button, a') || svg.parentElement;
+    // The container is the svg's own parent — the button for icon-only buttons, or a
+    // dedicated square icon box (e.g. the Home action tiles) when one wraps the svg.
+    const btn = svg.parentElement;
     if (!btn) return null;
     const cr = btn.getBoundingClientRect(), sr = svg.getBoundingClientRect();
     const cmin = Math.min(cr.width, cr.height);   // container min side (px) — shape-agnostic
