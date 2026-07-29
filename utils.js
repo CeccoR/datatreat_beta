@@ -786,6 +786,9 @@ document.getElementById('nav').addEventListener('click', e=>{
 document.querySelectorAll('.home-action-btn[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
 });
+// Size the Home action icons (folder / gear) by the same circumscribed-circle rule as
+// every other icon button, so the project folder matches the nav bar's.
+requestAnimationFrame(()=> document.querySelectorAll('.home-action-btn svg').forEach(s=> fitIconCircle(s)));
 const _tabRedraw = {}, _needsRedraw = {};
 // A module registers how to redraw its current view; goTab calls it the first
 // time the tab becomes visible after a session restore flagged it.
@@ -942,23 +945,24 @@ function refreshProjBar(tab){
   if (show) normalizeProjIcons(tab);
 }
 
-/* ONE icon-sizing rule for every icon button: the smallest circle circumscribing the
-   inked logo is set to ICON_CIRCLE_RATIO of the button's minimum dimension (its side
-   for square buttons, its diameter for round ones) and centred on the button. So two
-   buttons of the same size always show the same circle — regardless of the icon's
-   aspect or the svg's own CSS size — which the transform below compensates for.
-   ICON_CIRCLE_RATIO is the single tuning knob. */
-const ICON_CIRCLE_RATIO = 0.67;
-function fitIconCircle(svg, ratio){
-  if (!svg) return;
-  ratio = ratio || ICON_CIRCLE_RATIO;
+/* THE icon-sizing rule (one rule for every icon button, any container shape):
+   the smallest circle circumscribing the inked logo is set to `ratio` of the button's
+   MINIMUM dimension — its side for a square button, its diameter for a round one, its
+   height for a pill — and centred on the button. So two buttons of the same size show
+   an identical circle regardless of the icon's aspect or the svg's own CSS size (the
+   transform compensates for both). Each button-creation / normalize site passes its
+   ratio EXPLICITLY (see ICON_RATIO); ICON_RATIO.default is the fallback.
+   `forceScale` overrides the computed scale with a given one — used so the JSON export
+   icon renders its arrow + text at the exact same size as the CSV icon. Returns the
+   scale applied, so one icon can be matched to another. */
+const ICON_RATIO = {
+  default: 0.67,   // nav, save/save-as/delete/new, plot download & tools
+  csv: 0.75,       // CSV export buttons (per-table / per-plot / project bar)
+};
+function fitIconCircle(svg, ratio, forceScale){
+  if (!svg) return null;
+  ratio = ratio || ICON_RATIO.default;
   const NS = 'http://www.w3.org/2000/svg';
-  const btn = svg.closest('button, a') || svg.parentElement;
-  if (!btn) return;
-  const cr = btn.getBoundingClientRect(), sr = svg.getBoundingClientRect();
-  const cmin = Math.min(cr.width, cr.height);     // container min side (px)
-  const svgPx = Math.min(sr.width, sr.height);    // svg's own rendered size (px)
-  if (!cmin || !svgPx) return;                    // not laid out yet (hidden)
   let g = svg.querySelector('g.icon-fit');
   if (!g){
     g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'icon-fit');
@@ -968,16 +972,26 @@ function fitIconCircle(svg, ratio){
   }
   svg.style.overflow = 'visible';                 // don't clip an icon scaled past the viewBox
   g.removeAttribute('transform');
-  let bb; try { bb = g.getBBox(); } catch(e){ return; }
-  if (!bb.width || !bb.height) return;
+  let bb; try { bb = g.getBBox(); } catch(e){ return null; }
+  if (!bb.width || !bb.height) return null;
   const vb = svg.viewBox && svg.viewBox.baseVal;
   const vbW = (vb && vb.width) ? vb.width : 24, vbH = (vb && vb.height) ? vb.height : 24;
   const vcx = (vb ? vb.x : 0) + vbW/2, vcy = (vb ? vb.y : 0) + vbH/2;
-  const D = Math.hypot(bb.width, bb.height);      // circumscribed-circle Ø, viewBox units
-  // Rendered Ø = (s·D/vbW)·svgPx ; solve for the scale that makes it ratio·cmin.
-  const s = (ratio * cmin * vbW) / (D * svgPx);
+  let s = forceScale;
+  if (s == null){
+    const btn = svg.closest('button, a') || svg.parentElement;
+    if (!btn) return null;
+    const cr = btn.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+    const cmin = Math.min(cr.width, cr.height);   // container min side (px) — shape-agnostic
+    const svgPx = Math.min(sr.width, sr.height);  // svg's own rendered size (px)
+    if (!cmin || !svgPx) return null;             // not laid out yet (hidden)
+    const D = Math.hypot(bb.width, bb.height);    // circumscribed-circle Ø, viewBox units
+    // Rendered circle Ø = (s·D/vbW)·svgPx ; solve for the scale that makes it ratio·cmin.
+    s = (ratio * cmin * vbW) / (D * svgPx);
+  }
   const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
   g.setAttribute('transform', `translate(${vcx} ${vcy}) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
+  return s;
 }
 // Back-compat alias: every caller now goes through the single circle rule.
 const fitIcon = fitIconCircle;
@@ -991,12 +1005,13 @@ function normalizeNavIcons(){
 }
 function normalizeProjIcons(mod){
   requestAnimationFrame(()=>{
-    ['proj-save','proj-saveas','proj-csv','proj-json'].forEach(cls=>{
-      const svg = document.querySelector('.project-bar .'+cls+'[data-module="'+mod+'"] .proj-svg');
-      if (svg) fitIconCircle(svg);
-    });
+    const q = cls => document.querySelector('.project-bar .'+cls+'[data-module="'+mod+'"] .proj-svg');
+    fitIconCircle(q('proj-save'));                            // default ratio
+    fitIconCircle(q('proj-saveas'));                          // default ratio
+    const csvScale = fitIconCircle(q('proj-csv'), ICON_RATIO.csv);  // CSV export → 0.75
+    fitIconCircle(q('proj-json'), null, csvScale);           // JSON matches CSV's arrow + font
     document.querySelectorAll('.project-bar[data-module="'+mod+'"] .proj-del .proj-svg, .project-bar[data-module="'+mod+'"] .proj-new .proj-svg')
-      .forEach(svg=> fitIconCircle(svg));
+      .forEach(svg=> fitIconCircle(svg));                     // default ratio
   });
 }
 
@@ -1021,8 +1036,8 @@ function downloadCsvFiles(mod, names){
 }
 // The project CSV icon, reused on every per-view download button.
 const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
-// Build a toolbar CSV button (same look/size as the other plot tool buttons, icon
-// normalised to the minimum-circumscribed-square rule). Downloads `names` for `mod`.
+// Build a toolbar CSV button (same look/size as the other plot tool buttons; icon
+// sized by the CSV circle ratio). Downloads `names` for `mod`.
 function makeCsvButton(mod, names, title){
   const btn = document.createElement('button');
   btn.className = 'btn plot-tool-btn plot-csv-btn';
@@ -1030,17 +1045,16 @@ function makeCsvButton(mod, names, title){
   btn.dataset.csvMod = mod;
   btn.dataset.csvNames = names;
   btn.innerHTML = CSV_BTN_ICON;
-  requestAnimationFrame(()=>fitIcon(btn.querySelector('svg')));
+  requestAnimationFrame(()=>fitIconCircle(btn.querySelector('svg'), ICON_RATIO.csv));
   return btn;
 }
-// Normalise any CSV icons that are now visible (idempotent; hidden ones retry later).
+// CSV export icons (per-plot / per-table) → the CSV ratio (0.75).
 function fitCsvIcons(root){
-  (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIcon(s));
+  (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIconCircle(s, ICON_RATIO.csv));
 }
-// Normalise every plot-toolbar icon by the same minimum-square rule as the project
-// bar, so a toolbar button and its project-bar twin (e.g. the CSV export) match.
+// Plot-toolbar download / tool icons → the default ratio.
 function fitPlotIcons(root){
-  (root||document).querySelectorAll('.plot-dl-btn .plot-btn-icon, .plot-tool-btn .plot-btn-icon').forEach(s=>fitIcon(s));
+  (root||document).querySelectorAll('.plot-dl-btn .plot-btn-icon, .plot-tool-btn .plot-btn-icon').forEach(s=>fitIconCircle(s));
 }
 // One delegated handler drives every per-view CSV button.
 document.addEventListener('click', e=>{
