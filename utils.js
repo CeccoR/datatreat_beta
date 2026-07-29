@@ -948,7 +948,7 @@ function refreshProjBar(tab){
    buttons of the same size always show the same circle — regardless of the icon's
    aspect or the svg's own CSS size — which the transform below compensates for.
    ICON_CIRCLE_RATIO is the single tuning knob. */
-const ICON_CIRCLE_RATIO = 0.85;
+const ICON_CIRCLE_RATIO = 0.75;
 function fitIconCircle(svg, ratio){
   if (!svg) return;
   ratio = ratio || ICON_CIRCLE_RATIO;
