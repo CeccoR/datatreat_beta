@@ -516,10 +516,23 @@ class Plot{
 // Coalesce the burst of resize events fired during a window drag into one redraw
 // per animation frame — otherwise each event triggers a full synchronous redraw
 // and the drag feels like it hangs for seconds.
-let _resizeRAF = null;
+// Resize handling has two speeds. Recomputing a module's analysis (Kubelka-Munk,
+// smoothing, regression search…) every frame of a window drag is far too heavy on
+// large datasets. But the analysis results don't change with the window size — only
+// the pixel geometry does — so during the drag we just RE-PROJECT each visible plot
+// from its already-computed data (cheap: one getBoundingClientRect per plot, plain
+// arithmetic per point). The full recompute runs once, after the resize settles.
+let _resizeRAF = null, _resizeSettle = null;
 window.addEventListener('resize', ()=>{
-  if (_resizeRAF) return;
-  _resizeRAF = requestAnimationFrame(()=>{ _resizeRAF = null; redrawAll(); });
+  if (!_resizeRAF) _resizeRAF = requestAnimationFrame(()=>{
+    _resizeRAF = null;
+    document.querySelectorAll('svg.plot').forEach(svg=>{
+      const P = svg._plot;
+      if (P && svg.getClientRects().length){ try { P._refresh(); } catch(e){} }
+    });
+  });
+  clearTimeout(_resizeSettle);
+  _resizeSettle = setTimeout(()=> redrawAll(), 180);
 });
 
 // With asBlob=true, resolves to a PNG Blob of the (current-view) plot instead of
