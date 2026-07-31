@@ -431,21 +431,24 @@ button.btn.icon-save {
 .home-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
   height: 54px;
-  padding: 0 18px 0 0;
+  padding: 0 18px 0 5px;            /* left inset detaches the icon box from the edge */
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--panel2);
   color: var(--text);
   cursor: pointer;
-  overflow: hidden;                 /* clip the square box to the button's rounded corner */
   transition: background 0.15s, border-color 0.15s;
 }
+/* Rounded square logo box, detached from the button edges (~like the module tiles),
+   not stretched to them. The icon inside still follows the circumscribed-circle rule
+   against THIS box (so it shrinks with it). */
 .home-action-icon {
   flex: 0 0 auto;
-  align-self: stretch;
-  aspect-ratio: 1 / 1;              /* square: side = button height */
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
   background: var(--icon-tile);
   display: flex;
   align-items: center;
