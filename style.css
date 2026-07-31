@@ -461,7 +461,7 @@ button.btn.icon-save {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.06em;          /* same lettering as the tile titles / headers */
-  color: var(--text);
+  color: var(--accent);            /* accent in every state, like the tile titles */
 }
 .home-action-btn:hover { border-color: var(--accent); }
 .home-action-btn:hover .home-action-icon svg { color: var(--accent); }
@@ -861,12 +861,18 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
   display: inline-block;
   margin-right: 5px;
 }
+/* Every banner is an .alert. It hugs its content (never wider than needed) but never
+   overflows its container — so a short message doesn't stretch uselessly across a wide
+   card or, on a narrow/mobile window, past the viewport. */
 .alert {
   padding: 8px 36px 8px 12px;
   border-radius: 8px;
   font-size: 13px;
   margin: 8px 0;
   position: relative;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .alert-dismiss {
   position: absolute;
