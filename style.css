@@ -861,18 +861,12 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
   display: inline-block;
   margin-right: 5px;
 }
-/* Every banner is an .alert. It hugs its content (never wider than needed) but never
-   overflows its container — so a short message doesn't stretch uselessly across a wide
-   card or, on a narrow/mobile window, past the viewport. */
 .alert {
   padding: 8px 36px 8px 12px;
   border-radius: 8px;
   font-size: 13px;
   margin: 8px 0;
   position: relative;
-  width: fit-content;
-  max-width: 100%;
-  box-sizing: border-box;
 }
 .alert-dismiss {
   position: absolute;
@@ -1464,9 +1458,9 @@ button.btn.table-csv-btn {
   pointer-events: none;
   transition: opacity 0.2s, transform 0.2s;
 }
-/* On phones give the confirm banner room so its message doesn't crush into a
-   sliver. The short update toast keeps sizing to its content. */
-@media (max-width: 640px) { .pwa-toast.pwa-confirm { width: calc(100vw - 20px); } }
+/* Confirm banner sizes to its content like the update toast — capped by the shared
+   max-width above — so a short prompt (e.g. "Delete project?") isn't stretched to the
+   full width of a narrow / mobile window. */
 .pwa-toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
