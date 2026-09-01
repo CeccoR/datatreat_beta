@@ -180,7 +180,7 @@ import { Plot } from './plot.js';
     // current zoom on a resize / tab-switch redraw instead of snapping to full range.
     const old = document.getElementById('eprSvg')._plot;
     const prev = (preserveView && old && isFinite(old.xmin)) ? {xmin:old.xmin,xmax:old.xmax,ymin:old.ymin,ymax:old.ymax} : null;
-    const plot = new Plot(document.getElementById('eprSvg'), {xlabel:'Magnetic Field (mT)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    const plot = new Plot(document.getElementById('eprSvg'), {xlabel:'Magnetic Field (mT)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById('eprLegend'); legend.innerHTML='';
     const n = Y.length;

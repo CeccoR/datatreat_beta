@@ -531,7 +531,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const baseD  = interpLinear(f.x, pr.baseline, dense);
 
     const svgNode = document.getElementById(svgId);
-    const plot  = new Plot(svgNode, {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    const plot  = new Plot(svgNode, {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(svgNode.closest('.plot-wrap'));
     plot.setRange(minArr(f.x), maxArr(f.x), 0, 1.1);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
@@ -615,7 +615,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const delAll = document.getElementById('xrdDelAllFitsBtn'); if (delAll) delAll.disabled = !savedFits.some(Boolean);
 
     const svgEl = document.getElementById('xrdFitSvg');
-    const plot  = new Plot(svgEl, {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    const plot  = new Plot(svgEl, {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(svgEl.closest('.plot-wrap'));
     plot.setRange(minArr(f.x), maxArr(f.x), 0, 1.1);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
@@ -797,7 +797,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     files.forEach((f,k)=>{ if (f.name!==standardName && curves[k]) shown.push(k); });
     const n = shown.length, baseOf = j => -j * 1.1;
     const gmax = Math.max(1, ...shown.map(k=>maxArr(curves[k])));
-    const plot = new Plot(document.getElementById(svgId), {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    const plot = new Plot(document.getElementById(svgId), {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById(legendId); legend.innerHTML='';
     let lo=Infinity, hi=-Infinity;
@@ -1474,7 +1474,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       plot.svg.appendChild(svgEl('circle',{cx:px,cy:py,r:3.5,fill:'#ffd24a','pointer-events':'none','class':'add-guide'}));
       // Readout follows the drawn vertical guide (flips to the left near the right
       // edge), two lines using the plot's axis names + units:
-      // "2θ = 45.123 °" / "Intensity = 0.520 a.u.".
+      // "2θ = 45.123 °" / "Intensity = 0.520 a. u.".
       const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
       const flip = px > w - m.r - 130;
       const tx = px + (flip ? -8 : 8);

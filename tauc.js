@@ -400,7 +400,7 @@ import { Plot } from './plot.js';
     plot.setRange(minArr(hv), maxArr(hv), 0, maxArr(Yraw)*1.05);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
     plot.clearData();
-    plot.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a.u.)`;
+    plot.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a. u.)`;
     plot.drawAxes();
     plot.line(hv, Yraw, '#ffffff', 1);
     plot.line(hv, Ys, '#3aa0ff', 1.4);
@@ -533,7 +533,7 @@ import { Plot } from './plot.js';
     const aLabel = aUniform ? aVals[0] : 'a';
     // Plot 0: F(R) vs λ — reuse one Plot instance (create + attach tools once).
     if (!resPlot0){
-      resPlot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a.u.)', xTickStep:50, noYTickLabels:true});
+      resPlot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a. u.)', xTickStep:50, noYTickLabels:true});
       resPlot0.attachTools(resPlot0.svg.closest('.plot-wrap'));
     }
     const plot0 = resPlot0; plot0.clearData();
@@ -554,7 +554,7 @@ import { Plot } from './plot.js';
       resPlot1.attachTools(resPlot1.svg.closest('.plot-wrap'));
     }
     const plot1 = resPlot1; plot1.clearData();
-    plot1.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a.u.)`;
+    plot1.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a. u.)`;
     const leg1 = document.getElementById('taucResLegend1'); leg1.innerHTML='';
     const Ys_all = files.map((f,k)=>{
       const fp = getFileParams(k);
