@@ -27,6 +27,20 @@
   --ok: #2e9e4f;             /* "saved ✓" confirmation fill */
   --ok-fg: var(--white);     /* text on the confirmation fill */
   --icon-tile: #0e1316;      /* home-card square icon tile background */
+  --bar: #1d282e;            /* project bar + active tab: one step lighter than --panel */
+  /* ONE plate for every bare icon button (nav, plot toolbar, tabs +, sample arrows,
+     project bar, table cards). --plate-hover/press is the hover/press fill; it is
+     surface-aware — its DEFAULT here suits buttons on --panel (nav/toolbar/cards'
+     page), and a container rule further down re-points it to --cardbtn-* for
+     buttons that sit ON a --bar or --panel2 surface (project bar, peak-table card),
+     where the default would sometimes equal the surface itself and look like
+     nothing happened. Default: grey→line; dark swaps so hover is the lighter --line
+     and press the darker --panel2. --cardbtn-* stays visibly off BOTH --bar and
+     --panel2 in both themes. */
+  --plate-hover: var(--panel2);
+  --plate-press: var(--line);
+  --cardbtn-hover: var(--panel);
+  --cardbtn-press: var(--line);
   --sel-inset: var(--white); /* selected peak-row highlight border */
   --alert-warn-bg: #3a2c0f;  --alert-warn-line: #5a430f;
   --alert-good-bg: #0f3a26;  --alert-good-line: #1c5a3c;
@@ -41,6 +55,23 @@
   --plot-readout: #f0f4f6;
   --plot-readout-halo: #0b0f12;
   --plot-errbar: #f0f4f6;
+}
+/* Dark only: swap the plate direction (hover lighter, press darker). */
+:root[data-theme="dark"] {
+  --plate-hover: var(--line);
+  --plate-press: var(--panel2);
+  /* --bar (dark) sits lighter than --panel2, so the pair above would put the
+     card-button hover level with --bar itself; go one step further each way:
+     --line is lighter than --bar, --bg is darker than --panel2. */
+  --cardbtn-hover: var(--line);
+  --cardbtn-press: var(--bg);
+}
+/* Surface-aware: buttons sitting ON a --bar or --panel2 card re-point the single
+   --plate token to the card-calibrated values, so the one shared plate rule set
+   works everywhere without a second token pair in the button rules. */
+.project-bar, .peak-box, .table-box {
+  --plate-hover: var(--cardbtn-hover);
+  --plate-press: var(--cardbtn-press);
 }
 /* ===== Light theme ===== */
 :root[data-theme="light"] {
@@ -59,6 +90,8 @@
   --on-accent: var(--white);
   --ok: #2e8b4e;
   --icon-tile: #f3f5f6;
+  --bar: #e6eaec;            /* light theme: --panel is white, so the bar reads as the
+                                adjacent band rather than a lighter one */
   --sel-inset: var(--accent);
   --alert-warn-bg: #fbf1dd;  --alert-warn-line: #e4c583;
   --alert-good-bg: #e2f4ea;  --alert-good-line: #9dd3b3;
@@ -91,21 +124,28 @@
 * {
   box-sizing: border-box;
 }
+html { background: var(--bg); }   /* themed backdrop shows while the body is hidden at boot */
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
+  transition: opacity 0.18s ease;
 }
+/* Boot: keep the shell invisible (but laid out, so plots still measure) until
+   tabs.js has assembled it, then fade in. */
+html.app-booting body { opacity: 0; }
 /* Tabular figures keep numeric columns/readouts aligned in the data tables */
 table, input, .stat, .pill, .plot-readout { font-variant-numeric: tabular-nums; }
 header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 6px 16px;
   background: var(--panel);
-  border-bottom: 1px solid var(--line);
+}
+/* Header + project bar stick together as one unit below the top of the viewport. */
+#topbar {
   position: sticky;
   top: 0;
   z-index: 20;
@@ -125,45 +165,36 @@ header h1 {
   display: block;
   flex-shrink: 0;
 }
-nav button {
-  background: var(--panel2);
-  border: 1px solid var(--line);
+/* Nav buttons (Home + the icon cluster) are bare: no fill, no border at rest, just
+   the muted icon. Hover reveals the grey plate + accent icon; press deepens the
+   plate to --line (same as a secondary button's press); the active section keeps
+   the accent fill. Never a border. */
+#nav > button {
+  background: transparent;
+  border: none;
   color: var(--muted);
-  padding: 7px 14px;
-  border-radius: 8px;
+  padding: 0;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 400;
   flex-shrink: 0;                     /* keep size; the nav scrolls instead of shrinking */
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
-/* Press feedback for non-active tabs: a filled-accent flash (distinct from the
-   outline-accent hover) */
-nav button:not(.is-on):active {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent);
-}
+#nav > button:not(.is-on):hover { background: var(--plate-hover); color: var(--accent); }
+#nav > button:not(.is-on):active { background: var(--plate-press); color: var(--accent); }
 #nav {
   display: flex;
   flex: 1;
   gap: 8px;
   align-items: center;
-  /* Scroll horizontally instead of wrapping to a taller header on narrow screens. */
+  /* No overflow here: it would clip the active tab where it stretches down into
+     the project bar. The tab bar scrolls on its own instead — but that only works
+     if the nav may shrink, hence the explicit min-width (a scroll container used
+     to get it for free). */
   flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;              /* Firefox */
+  min-width: 0;
 }
-#nav::-webkit-scrollbar { display: none; }
-nav button:not(.nav-settings):not(.is-on):hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--panel2);
-}
-nav button.is-on {
+#nav > button.is-on {
   background: var(--accent);
   color: var(--on-accent);
-  border-color: var(--accent);
 }
 /* Saved-sessions table: keep columns usable on narrow screens by letting the
    table scroll horizontally instead of collapsing. */
@@ -199,8 +230,9 @@ nav button.is-on {
 .sess-row:hover .idle-dim,
 .file-row:hover .idle-dim,
 .peak-row:hover .idle-dim { opacity: 1; }
-/* Destructive control: reddens (text + border) on hover. Shared standard. */
-.is-danger:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); }
+/* Destructive control: reddens the text on hover (no border — buttons are
+   borderless now; bare glyphs never had one). Shared standard. */
+.is-danger:hover:not(:disabled) { color: var(--bad); }
 .row-ic {
   background: none; border: none; padding: 2px;
   color: var(--muted); cursor: pointer;
@@ -208,7 +240,7 @@ nav button.is-on {
   transition: color 0.12s;
 }
 .row-ic svg { display: block; }
-.row-ic.pr-csv:hover, .row-ic.pr-json:hover { color: var(--text); }
+.row-ic.pr-csv:hover, .row-ic.pr-json:hover { color: var(--accent); }
 .row-ic.pr-del:hover { color: var(--bad); }
 /* "Saved ✓" confirmation state — green, non-interactive, same box as the button.
    !important so it wins over .primary on the same Save button. */
@@ -216,7 +248,7 @@ button.btn.is-saved,
 button.btn.is-saved:disabled {
   --btn-bg: var(--ok) !important;
   --btn-fg: var(--ok-fg) !important;
-  --btn-bd: var(--ok) !important;
+  --btn-bd: transparent !important;
   opacity: 1 !important;
   cursor: default;
 }
@@ -229,20 +261,79 @@ button.btn.is-saved:disabled {
   margin-bottom: 10px;
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.proj-icon .proj-svg { width: 22px; height: 22px; display: block; }
-/* Project-bar export ICONS are icon buttons → muted grey like every other icon
-   button (nav, plot toolbar, table CSV). Scoped to .proj-icon so the bottom
-   text buttons (Save as / Export …) keep the white secondary-action text. */
-.btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new { --btn-fg: var(--muted); }
+.proj-icon .proj-svg { width: 19px; height: 19px; display: block; }
+/* Project-bar icon buttons (export/delete/new) and the per-table CSV export button
+   (.table-csv-btn) are THE SAME BUTTON: one shared rule block, so their aesthetics
+   can never drift apart. Bare at rest (no fill/border, muted icon); hover/press use
+   the single --plate token like every other icon button — their card containers
+   (.project-bar / .peak-box / .table-box, above) re-point --plate to the
+   card-calibrated shade so it never matches the surface. Save keeps its filled look
+   (border stripped); delete lights red, not accent. */
+.btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new,
+button.btn.table-csv-btn {
+  --btn-bg: transparent;
+  --btn-bd: transparent;
+  --btn-fg: var(--muted);
+}
+.btn.proj-icon.proj-saveas:hover:not(:disabled), .btn.proj-icon.proj-csv:hover:not(:disabled), .btn.proj-icon.proj-json:hover:not(:disabled), .btn.proj-icon.proj-del:hover:not(:disabled), .btn.proj-icon.proj-new:hover:not(:disabled),
+button.btn.table-csv-btn:hover:not(:disabled) {
+  --btn-bg: var(--plate-hover); --btn-fg: var(--accent); --btn-bd: transparent;
+}
+.btn.proj-icon.proj-saveas:active:not(:disabled), .btn.proj-icon.proj-csv:active:not(:disabled), .btn.proj-icon.proj-json:active:not(:disabled), .btn.proj-icon.proj-del:active:not(:disabled), .btn.proj-icon.proj-new:active:not(:disabled),
+button.btn.table-csv-btn:active:not(:disabled) {
+  --btn-bg: var(--plate-press); --btn-fg: var(--accent); --btn-bd: transparent;
+}
+.btn.proj-icon.proj-del:hover:not(:disabled) { --btn-fg: var(--bad); border-color: transparent; }
+/* Save: unchanged filled look, only the border removed in every state. */
+.btn.proj-icon.proj-save { --btn-bd: transparent; }
 /* Project bar: sits above the upload area, always visible. Name field on the far
    left, action icons on the far right, both vertically centered. */
-.card.project-bar {
+/* Single project bar: one step lighter than the header, a low row directly under
+   it, always visible while scrolling a module. The technique-info panel opens
+   below the main row, inside the bar. */
+.project-bar {
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  padding: 3px 16px;
+}
+/* Info on the left, then the "Technique · Name" title, action buttons on the right. */
+.pbar-main {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 8px;
+  --field-inset: 12px;   /* name field: its box left edge → first letter (border 1 + pad 10 + 1px centring slack) */
 }
 .proj-actions { margin-left: auto; }
+/* Collapsible technique info, inside the bar, below the main row. */
+.pbar-info-panel { margin: 6px 0 2px; }
+.pbar-info-panel[hidden] { display: none; }
+/* The technique name and the project field read as one centred line, same font.
+   The "·" is kept equidistant from the two texts: the flex gap gives the gap to
+   each box, and the technique's right padding matches the field's left inset (the
+   space its box adds before the first letter), so the DOT-to-character distance is
+   equal on both sides even though the field's box starts earlier. */
+.pbar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pbar-sep { color: var(--muted); font-weight: 700; flex: 0 0 auto; }
+.pbar-tech { color: var(--text); white-space: nowrap; flex: 0 0 auto; padding-right: var(--field-inset); }
+.project-bar .project-name-input { text-align: center; }
+/* Info toggle: a bare muted icon that lights accent when the panel is open. */
+.pbar-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  padding: 0; border: 0; border-radius: 6px;
+  background: none; color: var(--muted);
+  cursor: pointer;
+  transition: color 0.14s;
+}
+.pbar-info:hover, .pbar-info[aria-expanded="true"] { color: var(--accent); }
+.pbar-info svg { width: 17px; height: 17px; display: block; }
 /* Inline-editable project name (.txt-title look). While empty it stays a fully
    visible dark field; once filled it collapses to plain title text and only the
    name shows. Hovering a filled field brings the dark field back; focusing it
@@ -263,7 +354,7 @@ button.btn.is-saved:disabled {
 }
 /* Project-name font token — a touch smaller than the module title. Scoped to the
    project bar so it out-specifies the base input[type=text] font size. */
-.project-bar .txt-projname { font-size: 17px; font-weight: 700; }
+.project-bar .txt-projname { font-size: 16px; font-weight: 700; }
 .project-name-input::placeholder { font-weight: 400; font-size: 13px; color: var(--muted); }
 /* Ghost text disappears the moment the field is clicked (not only once you type). */
 .project-name-input:focus::placeholder { color: transparent; }
@@ -284,16 +375,9 @@ button.btn.is-saved:disabled {
   55% { transform: translateX(-4px); }  75% { transform: translateX(4px); }
   90% { transform: translateX(-2px); }
 }
-/* Bottom export card: the four project buttons in a 2×2 grid */
-.proj-actions-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.proj-actions-row .btn { width: 100%; }
 button.btn.icon-save {
-  width: 29px;
-  height: 29px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   display: inline-flex;
   visibility: hidden; /* space reserved; revealed by setTabLoaded once data loads */
@@ -301,21 +385,19 @@ button.btn.icon-save {
   justify-content: center;
   flex-shrink: 0;
 }
-/* Circular icon buttons on the right of the nav (sessions, theme, settings) */
-nav button.nav-icon {
-  font-size: 15px;
-  font-weight: bold;
-  width: 36px;
-  height: 36px;
-  padding: 0;
+/* All nav buttons are circular icon buttons (Home, sessions, theme, settings). */
+#nav > button.nav-icon {
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border-color: var(--line);
-  color: var(--muted);
   flex-shrink: 0;
 }
+/* Size only — NOT display: the theme toggle's show/hide rules (display:none on the
+   off-theme icon) must keep winning, so only one of its two svgs is ever shown. */
+#nav > button.nav-icon > svg { width: 21px; height: 21px; }
 /* Explicit divider between the module tabs and the icon buttons (folder/theme/settings).
    It carries the margin-left:auto so the icon cluster is pushed right and the divider
    always sits in the gap — on desktop (big auto gap) and mobile (scrolling) alike. */
@@ -328,34 +410,64 @@ nav button.nav-icon {
   height: 20px;
   background: var(--line);
 }
-nav button.nav-icon:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--panel2);
-}
-nav button.nav-icon.is-on {
-  color: var(--on-accent);
-  border-color: var(--accent);
-  background: var(--accent);
-}
 /* Show only the icon matching the current theme */
 .theme-icon-light { display: none; }
 :root[data-theme="light"] .theme-icon-dark { display: none; }
 :root[data-theme="light"] .theme-icon-light { display: inline; }
-.home-settings-link {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 12px;
+/* Home header: technique title on the left, the Projects/Settings actions on the
+   right so they read as clear, labelled entry points (not tiny corner icons). */
+.home-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.home-actions { display: flex; gap: 12px; flex-shrink: 0; }
+/* Mini technique-tile: a darker square logo box on the left (logo grey → accent on
+   hover) with the label beside it — same language as the module cards, scaled down.
+   Height is ~1.5x the old pill; both buttons take the wider one's width (set by JS). */
+.home-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  height: 54px;
+  padding: 0 18px 0 5px;            /* left inset detaches the icon box from the edge */
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--text);
   cursor: pointer;
-  padding: 0;
-  opacity: 0.7;
-  transition: opacity 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
-.home-settings-link:hover {
-  opacity: 1;
-  color: var(--accent);
+/* Rounded square logo box, detached from the button edges (~like the module tiles),
+   not stretched to them. The icon inside still follows the circumscribed-circle rule
+   against THIS box (so it shrinks with it). */
+.home-action-icon {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  background: var(--icon-tile);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+.home-action-icon svg {
+  width: 60%; height: 60%;          /* pre-size; the circumscribed-circle rule refines it */
+  display: block;
+  color: var(--muted);
+  transition: color 0.15s;
+}
+.home-action-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;          /* same lettering as the tile titles / headers */
+  color: var(--accent);            /* accent in every state, like the tile titles */
+}
+.home-action-btn:hover { border-color: var(--accent); }
+.home-action-btn:hover .home-action-icon svg { color: var(--accent); }
 .settings-tab.active {
   display: block;
   padding-top: 40px;
@@ -424,7 +536,7 @@ main {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  border: 1px solid var(--line);
+  border: none;
   background: var(--panel);
   color: var(--muted);
   font-size: 20px;
@@ -437,11 +549,11 @@ main {
   opacity: 0;
   transform: translateY(8px);
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.15s ease, background 0.15s ease;
   z-index: 900;
 }
 #scrollTopBtn.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
-#scrollTopBtn:hover { color: var(--accent); border-color: var(--accent); }
+#scrollTopBtn:hover { color: var(--accent); background: var(--plate-hover); }
 @media (prefers-reduced-motion: reduce) { #scrollTopBtn { transition: opacity 0.2s ease; } }
 .card {
   background: var(--panel);
@@ -500,7 +612,7 @@ main {
   font-size: 15px;
   font-weight: 700;
   color: var(--accent);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;   /* match the section headers (.txt-mini, e.g. FILE) */
   margin: 0;
 }
 .txt-label {                /* field label */
@@ -539,7 +651,9 @@ input[type="file"] {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.dt-field:focus-within { border-color: var(--accent); }
+/* Focus illumination matches every other field (neutral, not accent): a light
+   contour — white in dark theme, dark in light — via --text. */
+.dt-field:focus-within { border-color: var(--text); }
 .dt-seg {
   padding: 1px 2px;
   border-radius: 3px;
@@ -562,7 +676,7 @@ input[type="file"] {
   color: var(--muted);
   transition: color 0.15s;
 }
-.dt-cal-btn:hover { color: var(--text); }
+.dt-cal-btn:hover, .dt-cal-btn.is-on { color: var(--accent); }
 
 /* Calendar modal (inherits card bg/border/shadow from .modal-box) */
 .dt-modal { width: 300px; padding: 16px; }
@@ -607,10 +721,20 @@ input[type="file"] {
                              --on-accent (on the accent fill), --text (secondary
                              actions) or --muted (icon / subtle buttons).
    Base .btn is the neutral outline (the common case); .primary is the filled CTA. */
+/* Text buttons never show an outline: --btn-bd stays transparent in every state
+   (the 1px transparent border is kept only so border-box sizing is unchanged).
+   Secondary (not .primary): a dark chip with muted text at rest; hover turns the
+   text accent (fill held); press lifts the fill to light grey, text still accent.
+   Delete (.is-danger) is the same with --bad instead of accent. Primary keeps its
+   accent fill and only lightens/darkens. */
+/* While a tab switch snaps the project bar to the new tab's state, kill transitions
+   so the Save button (saved↔dirty) doesn't fade in over 140ms — it should be there
+   instantly, like the rest of the bar. Restored on the next frame. */
+.project-bar.no-anim, .project-bar.no-anim * { transition: none !important; }
 button.btn {
   --btn-bg: var(--panel2);
-  --btn-fg: var(--text);
-  --btn-bd: var(--line);
+  --btn-fg: var(--muted);
+  --btn-bd: transparent;
   background: var(--btn-bg);
   color: var(--btn-fg);
   border: 1px solid var(--btn-bd);
@@ -619,25 +743,22 @@ button.btn {
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.14s, border-color 0.14s, color 0.14s;
+  transition: background 0.14s, color 0.14s;
 }
-/* Outline (default): hover accents the outline; press greys the fill */
-button.btn:hover:not(:disabled)  { --btn-fg: var(--accent); --btn-bd: var(--accent); }
-button.btn:active:not(:disabled) { --btn-bg: var(--line); }
+button.btn:hover:not(:disabled)  { --btn-bg: var(--panel2); --btn-fg: var(--accent); }
+button.btn:active:not(:disabled) { --btn-bg: var(--line);   --btn-fg: var(--accent); }
 /* Primary (filled accent): hover lightens the fill, press darkens it */
 button.btn.primary {
   --btn-bg: var(--accent);
   --btn-fg: var(--on-accent);
-  --btn-bd: var(--accent);
 }
-button.btn.primary:hover:not(:disabled)  { --btn-bg: var(--accent-hover);  --btn-fg: var(--on-accent); --btn-bd: var(--accent-hover); }
-button.btn.primary:active:not(:disabled) { --btn-bg: var(--accent-active); --btn-bd: var(--accent-active); }
+button.btn.primary:hover:not(:disabled)  { --btn-bg: var(--accent-hover);  --btn-fg: var(--on-accent); }
+button.btn.primary:active:not(:disabled) { --btn-bg: var(--accent-active); }
 /* Permanent "on" toggle (armed +Add peak, etc.) — filled accent, held on hover too */
 button.btn.is-on,
 button.btn.is-on:hover:not(:disabled) {
   --btn-bg: var(--accent);
   --btn-fg: var(--on-accent);
-  --btn-bd: var(--accent);
 }
 button.btn.btn-sm {
   padding: 5px 10px;
@@ -752,22 +873,21 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 }
 .alert-dismiss {
   position: absolute;
-  right: 10px;
-  top: 50%;
+  right: 15.5px;             /* glyph lines up with the file-list remove X */
+  top: 50%;                  /* vertically centred in the whole alert box */
   transform: translateY(-50%);
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
-  font-size: 13px;
   font-weight: normal;
   color: inherit;
   line-height: 1;
-  opacity: 0;
-  transition: font-weight 0s, opacity 0.15s;
+  opacity: 0.5;              /* visible but dimmed at rest; full on alert hover */
+  transition: color 0.14s, opacity 0.15s;
 }
 .alert:hover .alert-dismiss { opacity: 1; }
-.alert-dismiss:hover { font-weight: bold; }
+/* hover colour comes from the shared .close-x rule (accent) */
 .alert.warn {
   background: var(--alert-warn-bg);
   color: var(--warn);
@@ -854,9 +974,12 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 .home-card-icon .tech-icon {
   width: 62%;
   height: auto;
-  color: var(--accent);
+  /* Muted at rest, accent on hover — the same lift as the new-project picker. */
+  color: var(--muted);
+  transition: color 0.15s;
   display: block;
 }
+.home-card:hover .tech-icon { color: var(--accent); }
 .home-card-text {
   flex: 1;
   min-width: 0;
@@ -972,7 +1095,7 @@ footer a:hover {
 /* File-list actions cell: trim padding so download + remove always fit the column */
 .row-acts { padding-left: 0 !important; padding-right: 4px !important; }
 /* Download buttons: same bare style, but light up to a lighter grey, not red */
-.dl-bare:hover { color: var(--text); }
+.dl-bare:hover { color: var(--accent); }
 th .remove-all { font-weight: 700; }
 th .download-all { vertical-align: middle; }
 /* Both "all" buttons are always bold: thicker icon strokes than the per-row ones */
@@ -1007,7 +1130,7 @@ button.palette-pick-btn {
   width: 14px;
   height: 14px;
   padding: 0;
-  border: 1.5px solid var(--muted);
+  border: 1.5px solid var(--accent);
   border-radius: 3px;
   cursor: pointer;
   flex-shrink: 0;
@@ -1016,7 +1139,7 @@ button.palette-pick-btn {
   );
 }
 button.palette-pick-btn:hover,
-button.palette-pick-btn.cp-anchored { border-color: var(--text); }
+button.palette-pick-btn.cp-anchored { border-color: var(--white); }
 
 /* ===== Palette picker popup ===== */
 .pp-popup {
@@ -1066,7 +1189,7 @@ button.color-swatch {
 /* Border appears on hover and stays while this swatch's colour picker is open
    (.cp-anchored), then returns to idle once the picker closes. */
 button.color-swatch:hover,
-button.color-swatch.cp-anchored { border-color: var(--text); }
+button.color-swatch.cp-anchored { border-color: var(--white); }
 
 /* ===== Custom Color Picker popup ===== */
 .cp-popup {
@@ -1245,6 +1368,11 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
   width: auto;
   /* min-width (460px floor) comes from svg.plot so the plot never shrinks to tiny */
 }
+/* Under-plot alert (e.g. negative Eg): span the plot's own width, i.e. the plot-wrap
+   minus its toolbar column (26px button + 8px gap = 34px), so it sits under the chart
+   and not under the download button. */
+.bar-alert { margin-right: 34px; }
+.bar-alert .alert { margin-bottom: 0; }
 .plot-btn-col {
   display: flex;
   flex-direction: column;
@@ -1256,78 +1384,61 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
 .plot-wrap:hover .plot-btn-col {
   opacity: 1;
 }
-.plot-dl-btn {
-  flex-shrink: 0;
-  width: 32px !important;
-  height: 32px !important;
-  padding: 0 !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  color: var(--muted) !important;
-  border-color: var(--line) !important;
-  overflow: visible;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
 .plot-tool-btns {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.plot-tool-btn {
-  width: 32px !important;
-  height: 32px !important;
-  padding: 0 !important;
-  display: flex !important;
+/* Plot toolbar buttons match the project-bar icon buttons exactly (same 26px box,
+   same bare look): no fill/border at rest, muted icon; hover → grey plate + accent
+   icon; press → --line. The whole column carries the 0.5 idle opacity (see
+   .plot-btn-col). */
+button.btn.plot-dl-btn,
+button.btn.plot-tool-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  color: var(--muted) !important;
-  border-color: var(--line) !important;
+  border-radius: 8px;
   overflow: visible;
   line-height: 1;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  --btn-bg: transparent;
+  --btn-bd: transparent;
+  --btn-fg: var(--muted);
+  transition: background 0.15s, color 0.15s;
 }
-.plot-tool-btn:hover,
-.plot-dl-btn:hover {
-  color: var(--accent) !important;
-  border-color: var(--accent) !important;
-  background: transparent !important;
-}
-/* Press feedback: grey fill, same as the standard outline button. Placed after the
-   hover rule so :active wins while the cursor is still over the button. */
-.plot-tool-btn:active:not(:disabled),
-.plot-dl-btn:active:not(:disabled) {
-  background: var(--line) !important;
-}
-/* Compact icon-only CSV button pinned to the far edge of a table header. Dimmed by
-   default, full opacity when the table (or the button) is hovered — matching the
-   plot toolbar buttons. */
-.table-csv-btn {
+button.btn.plot-dl-btn:hover:not(:disabled),
+button.btn.plot-tool-btn:hover:not(:disabled) { --btn-bg: var(--plate-hover); --btn-fg: var(--accent); --btn-bd: transparent; }
+button.btn.plot-dl-btn:active:not(:disabled),
+button.btn.plot-tool-btn:active:not(:disabled) { --btn-bg: var(--plate-press); }
+.plot-btn-icon { width: 19px; height: 19px; display: block; }
+/* Compact icon-only CSV button pinned to the far edge of a table header — the
+   colour/hover/press logic lives with the project-bar buttons above (one shared
+   rule block); this is just its size/position/opacity, which the project-bar
+   button doesn't need (it isn't dimmed, and it isn't pinned to a header edge).
+   button.btn.table-csv-btn (not just .table-csv-btn) so this out-specifies the
+   base button.btn rule's own layout — otherwise it keeps the default padding. */
+button.btn.table-csv-btn {
   margin-left: auto;            /* push to the extreme right of its header row */
-  width: 30px !important;
-  height: 28px !important;
+  width: 26px !important;
+  height: 26px !important;
   padding: 0 !important;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  color: var(--muted) !important;
-  border-color: var(--line) !important;
+  border-radius: 8px;
   opacity: 0.5;
-  transition: opacity 0.18s, color 0.15s, border-color 0.15s, background 0.15s;
+  transition: opacity 0.18s, background 0.15s, color 0.15s;
 }
 .peak-box:hover .table-csv-btn,
 .table-box:hover .table-csv-btn,
 .table-csv-btn:hover {
   opacity: 1;
 }
-.table-csv-btn:hover {
-  color: var(--accent) !important;
-  border-color: var(--accent) !important;
-  background: transparent !important;
-}
+.table-csv-btn .plot-btn-icon { width: 19px; height: 19px; }
 /* PWA update toast */
 .pwa-toast {
   position: fixed;
@@ -1350,9 +1461,9 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
   pointer-events: none;
   transition: opacity 0.2s, transform 0.2s;
 }
-/* On phones give the confirm banner room so its message doesn't crush into a
-   sliver. The short update toast keeps sizing to its content. */
-@media (max-width: 640px) { .pwa-toast.pwa-confirm { width: calc(100vw - 20px); } }
+/* Confirm banner sizes to its content like the update toast — capped by the shared
+   max-width above — so a short prompt (e.g. "Delete project?") isn't stretched to the
+   full width of a narrow / mobile window. */
 .pwa-toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
@@ -1360,35 +1471,59 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
 }
 .pwa-toast .btn { padding: 4px 12px; }
 .pwa-toast-x {
+  display: inline-flex;
+  align-items: center;
   background: none;
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 13px;
   padding: 2px 4px;
   line-height: 1;
+  transition: color 0.14s;
 }
-.pwa-toast-x:hover { color: var(--text); }
 /* Icons render as centered blocks (no inline-baseline gap) so every icon's
    bounding box is centered in its button/cell and aligns with its neighbours */
 .plot-btn-icon, .x-icon, .dl-icon { display: block; }
-.alert-dismiss, .peak-del,
-.file-actions .pending-del, .file-actions .pending-del-all {
+.alert-dismiss, .peak-del {
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
 }
-.alert-dismiss:hover { font-weight: normal; }
-.plot-tool-btn.is-on,
-.plot-dl-btn.is-on {
-  border: 1px solid var(--accent) !important;
-  background: var(--accent) !important;
-  color: var(--on-accent) !important;
+/* ===== X buttons: exactly two roles =====
+   .close-x  — dismisses a UI element (tab, banner, alert); nothing is deleted → accent
+   .is-danger — deletes data (a loaded file, a detected peak, a saved project) → bad
+   The tab and PWA/confirm-banner X's are close-X by construction, so they share the
+   accent rule without needing the class. peak-del carries .is-danger and is therefore
+   red like every other data removal — no exception. */
+.close-x:hover:not(:disabled),
+.ptab-x:hover,
+.pwa-toast-x:hover { color: var(--accent); }
+/* button.btn prefix so this out-specifies button.btn.plot-tool-btn (which sets the
+   bare transparent fill) — without it the armed pan/zoom accent fill never showed. */
+button.btn.plot-tool-btn.is-on,
+button.btn.plot-dl-btn.is-on {
+  --btn-bg: var(--accent);
+  --btn-fg: var(--on-accent);
+  --btn-bd: transparent;
+}
+/* Armed + hovered/pressed: same lighten/darken as the primary (Save) button,
+   instead of falling back to the bare button's grey hover/press plate. */
+button.btn.plot-tool-btn.is-on:hover:not(:disabled),
+button.btn.plot-dl-btn.is-on:hover:not(:disabled) {
+  --btn-bg: var(--accent-hover); --btn-fg: var(--on-accent); --btn-bd: transparent;
+}
+button.btn.plot-tool-btn.is-on:active:not(:disabled),
+button.btn.plot-dl-btn.is-on:active:not(:disabled) {
+  --btn-bg: var(--accent-active); --btn-bd: transparent;
 }
 
 /* ===== Sample navigation arrows ===== */
 /* Nav arrows: same chip box as the counter (.pill) — same height/shape, width just
    fits the arrow, glyph perfectly centred; styled like the all/one mode-chip. */
+/* Sample-nav arrows join the hover-plate icon family (they sit on the module card,
+   a --panel surface): an outlined dark chip — light-grey border, dark fill, muted
+   glyph at rest; hover turns the glyph white (border/fill held); press keeps the
+   white glyph and lifts the fill to the light grey. */
 .btn.nav-arrow {
   height: 22px;
   min-width: 22px;
@@ -1399,7 +1534,12 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
   font-size: 13px;
   line-height: 1;
   border-radius: 11px;
+  --btn-bg: var(--panel2);
+  --btn-bd: var(--line);
+  --btn-fg: var(--muted);
 }
+.btn.nav-arrow:hover:not(:disabled)  { --btn-fg: var(--text); }
+.btn.nav-arrow:active:not(:disabled) { --btn-bg: var(--line); --btn-fg: var(--text); }
 
 /* Instrumental-standard picker: sits in the plot header row, aligned with and the
    same height as the "+ Add peak" corner button. Greyed while showing its ghost
@@ -1414,13 +1554,13 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
 
 /* ===== Plot header row: sample nav on the left, a corner action button whose
    right edge lines up with the plot's right edge (padding-right = toolbar col:
-   32px button + 8px gap). The button is 1/3 of the plot width. ===== */
+   26px button + 8px gap). The button is 1/3 of the plot width. ===== */
 .plot-nav-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  padding-right: 40px;
+  padding-right: 34px;
 }
 .plot-nav-left {
   display: flex;
@@ -1487,6 +1627,12 @@ button.color-swatch.cp-anchored { border-color: var(--text); }
   gap: 6px;
 }
 .param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
+/* Wavelength cell: split the field column into a source preset selector (left) and
+   the numeric value (right, read-only unless the preset is "Custom"). */
+.lambda-field { display: flex; gap: 6px; align-items: center; }
+.lambda-field .lambda-sel { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 4px; }
+.lambda-field .lambda-val { flex: 1 1 0; min-width: 0; }
+.lambda-field .lambda-val[readonly] { opacity: .7; cursor: default; }
 /* Info outputs: keep them full-width where they sit, but bare (no field box) —
    they read like the titles, with the value in accent. */
 .param-grid > .pg-stat {
@@ -1542,45 +1688,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   width: 100%;
 }
 
-/* ===== EPR pending table ===== */
-.pending-table th,
-.pending-table td {
-  border-bottom: 1px solid var(--pending-line);
-  color: var(--warn);
-}
-.pending-row .file-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  visibility: hidden;
-  white-space: nowrap;
-}
-.pending-row:hover .file-actions {
-  visibility: visible;
-}
-.pending-row .file-actions button {
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 2px 7px;
-  font-size: 13px;
-  cursor: pointer;
-  line-height: 1.4;
-  transition: color 0.1s, border-color 0.1s;
-}
-.file-actions .pending-del,
-.file-actions .pending-del-all {
-  background: transparent;
-  border-color: var(--pending-line);
-  color: var(--warn);
-}
-.file-actions .pending-del-all {
-  font-weight: 700;
-}
-.file-actions .pending-del:hover,
-.file-actions .pending-del-all:hover {
-  background: transparent;
-}
-
 /* The "interval too small" alert sits at the end of the Parameters column;
    give it a clear break from the stats above it. */
 #taucAlert:not(:empty) { margin-top: 16px; }
@@ -1598,13 +1705,18 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .field-row > input, .field-row > select { flex:1; min-width:0; }
 
 /* ===== all/one flip-chip (GC-table style, reused for Tauc & XRD fields) ===== */
+/* all/one pill: an outlined dark chip, exactly like the sample-nav arrows —
+   light-grey border, dark fill, muted text at rest; hover turns the text white
+   (border/fill held); press keeps white text and lifts the fill to light grey. */
 .mode-chip {
   font-size: 10px; padding: 1px 8px;
   border: 1px solid var(--line); border-radius: 10px;
   background: var(--panel2); color: var(--muted); cursor: pointer;
   text-transform: uppercase; letter-spacing: .05em; line-height: 1.6;
+  transition: background 0.14s, color 0.14s;
 }
-.mode-chip:hover { color: var(--accent); border-color: var(--accent); }
+.mode-chip:hover  { color: var(--text); }
+.mode-chip:active { color: var(--text); background: var(--line); }
 .field-row .mode-chip { flex: 0 0 auto; align-self: center; }
 /* Two half-width sub-panels side by side */
 .field-half { display:flex; gap:10px; }
@@ -1624,11 +1736,14 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   gap: 10px;
   margin-bottom: 8px;
 }
+/* Reset button: a nav-arrow-style pill (same look + behaviour) carrying only the ↺
+   return glyph. It sits just left of the table title (the CSV button's margin-left:auto
+   keeps CSV pinned to the right). Shown only when peaks were edited (JS toggles the
+   inline display — nav-arrow has no !important display to override it). */
 .peak-reset-btn {
-  padding: 3px 12px !important;
-  font-size: 12px;
-  border-radius: 6px;
-  line-height: 1.4;
+  margin-left: -3px;         /* pull in against the .peak-box-head 10px gap → ~7px from the title */
+  font-size: 15px;
+  line-height: 1;
 }
 #xrdPeakTableWrap table, #xrdFitTableWrap table, #xrdStdPeakTableWrap table { width: 100%; }
 #xrdPeakTableWrap .peak-row, #xrdFitTableWrap .peak-row, #xrdStdPeakTableWrap .peak-row { transition: background 0.1s; cursor: pointer; }
@@ -1647,8 +1762,12 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 #xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child, #xrdStdPeakTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
 
 /* ===== GC parameter table: grouped headers, all/one toggle, row↔plot interaction ===== */
+.gc-param-table { min-width: 860px; }   /* scrolls in its overflow-x wrapper below this */
+/* On mobile the table already scrolls, so extra width is free room for the columns
+   (860 → 1200). Kept right after the base rule so it wins (equal specificity). */
+@media (max-width: 600px) { .gc-param-table { min-width: 1200px; } }
 #gcParamTableWrap .gc-grp { text-align: left; }
-#gcParamTableWrap .gc-toggle { margin-left: 8px; vertical-align: 1px; }
+#gcParamTableWrap .gc-toggle { margin-left: 8px; vertical-align: middle; position: relative; top: -1px; }
 #gcParamTableWrap .gc-all-row { background: rgba(160, 170, 185, 0.08); }
 #gcParamTableWrap .gc-all-row .fname { color: var(--muted); }
 #gcParamTableWrap input[disabled] { opacity: .35; }
@@ -1679,12 +1798,24 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   border: none;
   color: var(--muted);
   padding: 2px 6px;
-  margin: -2px 0;
   font-size: 13px;
   cursor: pointer;
   line-height: 1;
+  vertical-align: middle;
+  /* An inline-flex button (align-items:center, not baseline) synthesises its own
+     "baseline" as its bottom edge, which the td's vertical-align:middle then
+     centres against — a geometric mismatch that leaves the icon a couple of
+     pixels off true centre. No layout-based fix removes that mismatch, so nudge
+     it back visually. */
+  position: relative;
+  top: -0.5px;
   transition: color 0.1s;
 }
+/* Delete X → bad on hover. Needs the same id scope as the base rule above: the
+   shared .is-danger:hover (a plain class rule) is out-specified by that id and
+   would otherwise never win here. */
+#xrdPeakTableWrap .peak-row .peak-del:hover:not(:disabled),
+#xrdStdPeakTableWrap .peak-row .peak-del:hover:not(:disabled) { color: var(--bad); }
 /* +Add peak armed state is handled by the shared button.btn.is-on rule. */
 
 /* ===== XRD fit hyperparameters modal ===== */
@@ -1707,23 +1838,153 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 
 /* ===== "Data loaded" dot on nav tabs — subtle dot after the name, inheriting the
    text colour so it tracks hover/active states ===== */
-/* The dot is absolutely positioned so the tab keeps its un-badged size; it sits
-   midway in the right padding (≈ halfway between the last letter and the edge),
-   vertically centered. */
-#nav button.has-dot-slot { position: relative; }
-.tab-dot {
-  position: absolute;
-  top: 50%;
-  right: 3.5px;
-  transform: translateY(-50%);
-  width: 7px;
-  height: 7px;
-  color: inherit;
-  opacity: 0;
-  transition: opacity 0.12s;
-  pointer-events: none;
+
+/* ===== Open project tabs =====
+   One tab per open project, between Home and the icon cluster. Adaptive width:
+   each tab asks for TAB_MAX and gives way down to TAB_MIN as more open; past that
+   the bar scrolls. The label is "Technique · Name" — the technique never
+   truncates, the name ellipsises. */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* overflow-x clips vertically too, so the box is padded past the header's edge
+     to leave room for the active tab's downward bleed; the equal negative margins
+     keep the row's height and vertical centring exactly as they were. */
+  padding: 16px 0;
+  margin: -16px 0;
 }
-#nav button.has-data .tab-dot { opacity: 1; }
+.tab-bar::-webkit-scrollbar { display: none; }
+.ptab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 200px;             /* cap when few are open… */
+  min-width: 120px;            /* …floor before the bar starts scrolling */
+  box-sizing: border-box;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid transparent;
+  --ptab-r: 7px;              /* top-corner radius */
+  border-radius: var(--ptab-r);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.14s, color 0.14s;
+}
+.ptab:hover { background: var(--panel2); color: var(--accent); }
+/* Drag to reorder: the grabbed tab rides above its neighbours and follows the
+   cursor (no transform transition so it tracks 1:1), with no shadow. A dragged
+   inactive tab wears its hover look at half opacity; the active one keeps its own. */
+.ptab-dragging { z-index: 5; cursor: grabbing; }
+.ptab-dragging:not(.is-on) { background: var(--panel2); color: var(--text); opacity: 0.5; }
+.ptab-dragging::before, .ptab:has(+ .ptab-dragging)::before { display: none; }
+/* A short hairline between an inactive tab and the next inactive tab, and between
+   the last inactive tab and the "+" (shorter/lighter than the nav dividers). It
+   vanishes next to the active tab, whose fill owns the gap. */
+.ptab:not(.is-on) + .ptab:not(.is-on)::before,
+.ptab:not(.is-on) + .ptab-add::before {
+  content: '';
+  position: absolute;
+  left: -4.5px;                /* dead centre of the gap: the tab's 1px border shifts
+                                  the abs-positioning origin, so -4.5 (not -3.5) lands mid-gap */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 13px;
+  background: var(--line);
+}
+.ptab-add { position: relative; }
+/* "+" shortcut to the new-project picker, at the tail of the tabs (or alone). */
+.ptab-add {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.14s, color 0.14s;
+}
+/* Same hover-plate behaviour as the nav icon buttons (it sits on the same --panel
+   surface): plate on hover + accent glyph, deeper plate on press. */
+.ptab-add:hover { background: var(--plate-hover); color: var(--accent); }
+.ptab-add:active { background: var(--plate-press); color: var(--accent); }
+/* Active tab: takes the project bar's grey and stretches down into it (Chrome
+   style). The negative bottom margin pulls it through the header's bottom padding
+   so its fill meets the bar's with no seam. */
+.ptab.is-on {
+  background: var(--bar);
+  color: var(--text);
+  border-radius: var(--ptab-r) var(--ptab-r) 0 0;
+  /* Stretch down PAST the project bar's top edge. Both carry the same fill, so the
+     overlap is invisible, and no sub-pixel rounding can open a seam. The negative
+     margin cancels the extra height, so the row does not grow. */
+  margin-bottom: -10px;
+  padding-bottom: 16px;
+  position: relative;
+  z-index: 1;
+}
+.ptab-label {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+.ptab-tech { flex: 0 0 auto; white-space: pre; }   /* keep the space around the "·" */
+.ptab-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ptab-star { flex: 0 0 auto; color: var(--bad); }
+/* Close button: a bare X — half-visible at rest, full on tab hover, accent on its
+   own hover. No background of its own at any point. */
+.ptab-x {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--muted);   /* idle: the inactive-tab text colour, even on the active tab */
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.14s, color 0.14s;
+}
+.ptab:hover .ptab-x { opacity: 1; }
+.ptab-x:hover { opacity: 1; }   /* colour comes from the shared X-buttons rule */
+
+/* ===== New-project technique picker (mini home) ===== */
+.newproj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.newproj-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s;
+}
+.newproj-card:hover { border-color: var(--accent); color: var(--accent); }
+.newproj-card .tech-icon { width: 44px; height: 26px; }
 
 /* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
 .legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }
@@ -1763,6 +2024,30 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   color: var(--accent);
 }
 @keyframes dz-spin { to { transform: rotate(360deg); } }
+
+/* Module loader: covers the content area (everything below the project bar) with the
+   themed backdrop + a spinner while a tab's charts are (re)built on open / tab switch,
+   so the plots don't visibly assemble. Not used on resize. */
+.module-loader {
+  position: fixed;
+  left: 0; right: 0; bottom: 0; top: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.module-loader.show { opacity: 1; pointer-events: auto; }
+.module-loader-spin {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  animation: dz-spin 0.7s linear infinite;
+}
 
 /* ===== Collapsible instructions: an info icon next to the card title ===== */
 .instr-info {

@@ -781,11 +781,19 @@ document.getElementById('nav').addEventListener('click', e=>{
   if (!btn) return;
   goTab(btn.dataset.tab);
 });
-document.querySelectorAll('.home-card').forEach(c=>{
-  c.addEventListener('click', ()=>goTab(c.dataset.go));
-});
-document.querySelectorAll('.home-settings-link[data-tab]').forEach(c=>{
+// The home technique cards open a new project tab — wired in tabs.js, which owns
+// the tab model (goTab alone would show an empty module with no project behind it).
+document.querySelectorAll('.home-action-btn[data-tab]').forEach(c=>{
   c.addEventListener('click', ()=>goTab(c.dataset.tab));
+});
+// Home action mini-tiles: size the logo by the circumscribed-circle rule (container =
+// its square icon box), then give both buttons the wider one's width.
+requestAnimationFrame(()=>{
+  const btns = [...document.querySelectorAll('.home-action-btn')];
+  btns.forEach(b=>{ const s = b.querySelector('svg'); if (s) fitIconCircle(s); });
+  btns.forEach(b=> b.style.width = '');
+  const maxW = Math.max(0, ...btns.map(b=> b.getBoundingClientRect().width));
+  if (maxW) btns.forEach(b=> b.style.width = Math.ceil(maxW) + 'px');
 });
 const _tabRedraw = {}, _needsRedraw = {};
 // A module registers how to redraw its current view; goTab calls it the first
@@ -800,6 +808,9 @@ function redrawAll(){
   for (const m in _tabRedraw){ if (m !== _activeTab) _needsRedraw[m] = true; }
 }
 const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
+// The sections that keep a URL hash. Module sections are reached through an open
+// project tab, so they are deliberately not addressable.
+const HASH_TABS = ['home','projects','settings'];
 const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
@@ -816,14 +827,26 @@ function goTab(tab, fromHash){
   // whenever a module tab becomes visible so its charts always fit the viewport.
   if (_tabRedraw[tab]){
     _needsRedraw[tab] = false;
-    requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} });
+    // Double rAF: let the tab-fade paint its first frame before the (potentially
+    // heavy) redraw runs, so switching to a loaded tab doesn't freeze the animation.
+    requestAnimationFrame(()=> requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} }));
   }
   if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
-  // Reflect the current section in the URL hash (so reloads and shared #xrd links land here)
-  if (!fromHash && location.hash.slice(1) !== tab) location.hash = tab;
+  // Only the fixed sections are addressable: a module section is shown by activating
+  // an open project tab, whose id is per-session and means nothing in a URL.
+  if (!fromHash){
+    if (HASH_TABS.includes(tab)){ if (location.hash.slice(1) !== tab) location.hash = tab; }
+    else if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  }
   document.title = TAB_TITLES[tab] || 'DataTreat'; // ease finding the right tab among many windows
   if (tab === 'home') requestAnimationFrame(sizeHomeTiles); // re-fit tiles after any resize while away
+  _sectionHooks.forEach(fn=>{ try { fn(tab); } catch(e){} });
 }
+// Listeners fired whenever the visible section changes. The tab manager uses it to
+// drop the tab highlight on a fixed section; the project bar uses it to hide. A
+// hook list rather than imports, which would be circular.
+const _sectionHooks = [];
+function onSectionChange(fn){ _sectionHooks.push(fn); }
 
 /* =========================================================
    UNDO / REDO — per-module snapshot stacks (command pattern)
@@ -907,25 +930,12 @@ document.addEventListener('keydown', e=>{
   btn.addEventListener('click', ()=> window.scrollTo({ top:0, behavior:'smooth' }));
   onScroll();
 })();
-// Give every module tab a permanent (invisible) round SVG dot so its slot is
-// always reserved — the tab width never changes when the badge appears.
-(function initTabDots(){
-  ['tauc','xrd','gc','epr'].forEach(tab=>{
-    const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
-    if (!btn || btn.querySelector('.tab-dot')) return;
-    btn.classList.add('has-dot-slot');
-    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    dot.setAttribute('class', 'tab-dot');
-    dot.setAttribute('viewBox', '0 0 10 10');
-    dot.setAttribute('aria-hidden', 'true');
-    dot.innerHTML = '<circle cx="5" cy="5" r="4.2" fill="currentColor"/>';
-    btn.appendChild(dot);
-  });
-})();
-// Toggle the "data loaded" dot's visibility (the slot is already reserved).
+// Record whether a module currently holds data. The nav no longer shows a dot for
+// it (the open-tab bar carries the unsaved "*" instead); the flag still drives the
+// project bar's button visibility.
+const _hasData = {};
 function setTabLoaded(tab, has){
-  const btn = document.querySelector('#nav button[data-tab="'+tab+'"]');
-  if (btn) btn.classList.toggle('has-data', !!has);   // the nav dot tracks actual data
+  _hasData[tab] = !!has;
   refreshProjBar(tab);
 }
 // Project-bar buttons show when the module has files OR a non-empty project name —
@@ -933,7 +943,7 @@ function setTabLoaded(tab, has){
 function refreshProjBar(tab){
   const nameInp = document.querySelector('.project-name-input[data-module="'+tab+'"]');
   const named = !!(nameInp && nameInp.value.trim());
-  const has = !!document.querySelector('#nav button[data-tab="'+tab+'"].has-data');
+  const has = !!_hasData[tab];
   const show = has || named;
   document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"], '
     + '.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
@@ -941,41 +951,75 @@ function refreshProjBar(tab){
   if (show) normalizeProjIcons(tab);
 }
 
-/* Normalize a module's project icons so every icon's minimal bounding box is the
-   same size and centred in its button. Measures each icon's inked bbox (getBBox)
-   and transforms it to centre (12,12) at a common target extent. Idempotent. */
-const PROJ_ICON_TARGET = 18;
-// Center an icon's inked content at (12,12). If `forceScale` is given, use it
-// (so one icon can match another's exact scale); otherwise scale so the icon's
-// larger side equals PROJ_ICON_TARGET. Returns the scale used.
-function fitIcon(svg, forceScale){
+/* THE icon-sizing rule (one rule for every icon button, any container shape):
+   the smallest circle circumscribing the inked logo is set to `ratio` of the button's
+   MINIMUM dimension — its side for a square button, its diameter for a round one, its
+   height for a pill — and centred on the button. So two buttons of the same size show
+   an identical circle regardless of the icon's aspect or the svg's own CSS size (the
+   transform compensates for both). Each button-creation / normalize site passes its
+   ratio EXPLICITLY (see ICON_RATIO); ICON_RATIO.default is the fallback.
+   `forceScale` overrides the computed scale with a given one — used so the JSON export
+   icon renders its arrow + text at the exact same size as the CSV icon. Returns the
+   scale applied, so one icon can be matched to another. */
+const ICON_RATIO = {
+  default: 0.67,   // nav, save/save-as/delete/new, plot download & tools
+  csv: 0.75,       // CSV export buttons (per-table / per-plot / project bar)
+};
+function fitIconCircle(svg, ratio, forceScale){
   if (!svg) return null;
+  ratio = ratio || ICON_RATIO.default;
   const NS = 'http://www.w3.org/2000/svg';
   let g = svg.querySelector('g.icon-fit');
   if (!g){
     g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'icon-fit');
     while (svg.firstChild) g.appendChild(svg.firstChild);
-    g.querySelectorAll('*').forEach(el=> el.setAttribute('vector-effect','non-scaling-stroke'));
+    g.querySelectorAll('*').forEach(el=> el.setAttribute('vector-effect', 'non-scaling-stroke'));
     svg.appendChild(g);
   }
+  svg.style.overflow = 'visible';                 // don't clip an icon scaled past the viewBox
   g.removeAttribute('transform');
   let bb; try { bb = g.getBBox(); } catch(e){ return null; }
-  if (!bb.width || !bb.height) return null; // not rendered yet (hidden tab)
-  const s = forceScale || (PROJ_ICON_TARGET / Math.max(bb.width, bb.height));
+  if (!bb.width || !bb.height) return null;
+  const vb = svg.viewBox && svg.viewBox.baseVal;
+  const vbW = (vb && vb.width) ? vb.width : 24, vbH = (vb && vb.height) ? vb.height : 24;
+  const vcx = (vb ? vb.x : 0) + vbW/2, vcy = (vb ? vb.y : 0) + vbH/2;
+  let s = forceScale;
+  if (s == null){
+    // The container is the svg's own parent — the button for icon-only buttons, or a
+    // dedicated square icon box (e.g. the Home action tiles) when one wraps the svg.
+    const btn = svg.parentElement;
+    if (!btn) return null;
+    const cr = btn.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+    const cmin = Math.min(cr.width, cr.height);   // container min side (px) — shape-agnostic
+    const svgPx = Math.min(sr.width, sr.height);  // svg's own rendered size (px)
+    if (!cmin || !svgPx) return null;             // not laid out yet (hidden)
+    const D = Math.hypot(bb.width, bb.height);    // circumscribed-circle Ø, viewBox units
+    // Rendered circle Ø = (s·D/vbW)·svgPx ; solve for the scale that makes it ratio·cmin.
+    s = (ratio * cmin * vbW) / (D * svgPx);
+  }
   const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
-  g.setAttribute('transform', `translate(12 12) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
+  g.setAttribute('transform', `translate(${vcx} ${vcy}) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
   return s;
+}
+// Back-compat alias: every caller now goes through the single circle rule.
+const fitIcon = fitIconCircle;
+function normalizeNavIcons(){
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('#nav > button.nav-icon > svg').forEach(svg=>{
+      if (!svg.getClientRects().length) return;   // hidden (e.g. the off-theme icon) — measures 0
+      fitIconCircle(svg);
+    });
+  });
 }
 function normalizeProjIcons(mod){
   requestAnimationFrame(()=>{
     const q = cls => document.querySelector('.project-bar .'+cls+'[data-module="'+mod+'"] .proj-svg');
-    fitIcon(q('proj-save')); fitIcon(q('proj-saveas'));
-    const csvScale = fitIcon(q('proj-csv'));
-    // Exception: the JSON icon is the CSV icon with different text — render it at
-    // the exact same scale so the arrow and font match CSV, not the equal-box rule.
-    if (csvScale) fitIcon(q('proj-json'), csvScale);
+    fitIconCircle(q('proj-save'));                            // default ratio
+    fitIconCircle(q('proj-saveas'));                          // default ratio
+    const csvScale = fitIconCircle(q('proj-csv'), ICON_RATIO.csv);  // CSV export → 0.75
+    fitIconCircle(q('proj-json'), null, csvScale);           // JSON matches CSV's arrow + font
     document.querySelectorAll('.project-bar[data-module="'+mod+'"] .proj-del .proj-svg, .project-bar[data-module="'+mod+'"] .proj-new .proj-svg')
-      .forEach(svg=> fitIcon(svg));
+      .forEach(svg=> fitIconCircle(svg));                     // default ratio
   });
 }
 
@@ -1000,8 +1044,8 @@ function downloadCsvFiles(mod, names){
 }
 // The project CSV icon, reused on every per-view download button.
 const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
-// Build a toolbar CSV button (same look/size as the other plot tool buttons, icon
-// normalised to the minimum-circumscribed-square rule). Downloads `names` for `mod`.
+// Build a toolbar CSV button (same look/size as the other plot tool buttons; icon
+// sized by the CSV circle ratio). Downloads `names` for `mod`.
 function makeCsvButton(mod, names, title){
   const btn = document.createElement('button');
   btn.className = 'btn plot-tool-btn plot-csv-btn';
@@ -1009,12 +1053,16 @@ function makeCsvButton(mod, names, title){
   btn.dataset.csvMod = mod;
   btn.dataset.csvNames = names;
   btn.innerHTML = CSV_BTN_ICON;
-  requestAnimationFrame(()=>fitIcon(btn.querySelector('svg')));
+  requestAnimationFrame(()=>fitIconCircle(btn.querySelector('svg'), ICON_RATIO.csv));
   return btn;
 }
-// Normalise any CSV icons that are now visible (idempotent; hidden ones retry later).
+// CSV export icons (per-plot / per-table) → the CSV ratio (0.75).
 function fitCsvIcons(root){
-  (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIcon(s));
+  (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIconCircle(s, ICON_RATIO.csv));
+}
+// Plot-toolbar download / tool icons → the default ratio.
+function fitPlotIcons(root){
+  (root||document).querySelectorAll('.plot-dl-btn .plot-btn-icon, .plot-tool-btn .plot-btn-icon').forEach(s=>fitIconCircle(s));
 }
 // One delegated handler drives every per-view CSV button.
 document.addEventListener('click', e=>{
@@ -1025,11 +1073,9 @@ document.addEventListener('click', e=>{
   const names = (btn.dataset.csvNames||'').split(',').map(s=>s.trim()).filter(Boolean);
   downloadCsvFiles(btn.dataset.csvMod, names);
 });
-// Does a module currently hold loaded data? (drives the replace-on-open confirm)
-function moduleHasData(mod){
-  const btn = document.querySelector('#nav button[data-tab="'+mod+'"]');
-  return !!(btn && btn.classList.contains('has-data'));
-}
+// Does a module currently hold loaded data? Reported by the modules themselves
+// through setTabLoaded (it used to be read off the nav button's data dot).
+function moduleHasData(mod){ return !!_hasData[mod]; }
 
 /* =========================================================
    THEME — light / dark, remembered, defaulting to the OS preference.
@@ -1049,6 +1095,7 @@ function applyTheme(theme, persist){
     if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f6' : '#0e1316');
     const sel = document.getElementById('settingTheme');
     if (sel) sel.value = theme;
+    normalizeNavIcons();   // the theme toggle swapped which sun/moon svg is visible
   };
   const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (changing && !reduced && document.startViewTransition){
@@ -1102,6 +1149,18 @@ function restoreModuleState(mod, state){
   // Plots just drawn may be sized wrong if the tab is hidden; redraw on show.
   if (_activeTab === mod){ if (_tabRedraw[mod]) requestAnimationFrame(()=>{ try { _tabRedraw[mod](); } catch(e){} }); }
   else { _needsRedraw[mod] = true; }
+}
+// Undo/redo stack contents. Only one instance of each module is live, so the tab
+// manager parks the outgoing tab's history here and restores the incoming one —
+// otherwise an undo after a tab switch would replay another project's states.
+function getModuleHistory(mod){
+  const st = _histories[mod];
+  return st ? { states: st.states.slice(), index: st.index } : null;
+}
+function setModuleHistory(mod, h){
+  const st = _histories[mod];
+  if (!st || !h) return;
+  st.states = h.states.slice(); st.index = h.index;
 }
 // Run cb once, the next time the module records a real change (edit/add/remove…).
 function onModuleChangeOnce(mod, cb){
@@ -1188,10 +1247,13 @@ function updateNarrowLayout(){
 updateNarrowLayout();
 window.addEventListener('resize', updateNarrowLayout);
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
-window.addEventListener('hashchange', ()=>{ goTab(location.hash.slice(1), true); });
+window.addEventListener('hashchange', ()=>{
+  const t = location.hash.slice(1);
+  if (HASH_TABS.includes(t)) goTab(t, true);
+});
 (function initHashRoute(){
   const t = location.hash.slice(1);
-  if (t && VALID_TABS.includes(t)) goTab(t, true);
+  if (HASH_TABS.includes(t)) goTab(t, true);
 })();
 
 /* =========================================================
@@ -1335,14 +1397,17 @@ function createDateTimeField(initial, onChange){
       e.stopPropagation(); // keep global arrow-nav / undo shortcuts from firing
     });
   });
-  calBtn.addEventListener('click', ()=> openDateModal(currentDate() || new Date(), d=>{ load(d); render(); emit(); }));
+  calBtn.addEventListener('click', ()=>{
+    calBtn.classList.add('is-on');   // stays lit accent while the modal is open
+    openDateModal(currentDate() || new Date(), d=>{ load(d); render(); emit(); }, ()=> calBtn.classList.remove('is-on'));
+  });
 
   render();
   return { el: wrap, get: currentDate, set: d=>{ load(d); render(); } };
 }
 
 // In-app modal calendar (month grid + time steppers). Calls onPick(Date) on OK.
-function openDateModal(baseDate, onPick){
+function openDateModal(baseDate, onPick, onClose){
   const view = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
   const sel = new Date(baseDate);
   const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop dt-modal-backdrop';
@@ -1378,7 +1443,7 @@ function openDateModal(baseDate, onPick){
       </div>
       <div class="dt-modal-foot"><button type="button" class="btn dt-cancel">Cancel</button><button type="button" class="btn primary dt-ok">OK</button></div>`;
   }
-  function close(){ document.removeEventListener('keydown', onKey); backdrop.remove(); }
+  function close(){ document.removeEventListener('keydown', onKey); backdrop.remove(); if (onClose) onClose(); }
   function onKey(e){ if (e.key==='Escape') close(); }
   build();
   modal.addEventListener('click', e=>{
@@ -1422,7 +1487,7 @@ function confirmBanner(message, confirmLabel, altLabel){
     ok.textContent = confirmLabel || 'Remove';
     const x = document.createElement('button');
     x.type = 'button'; x.className = 'pwa-toast-x'; x.setAttribute('aria-label', 'Cancel');
-    x.innerHTML = '&#10005;';
+    x.innerHTML = X_SVG(15);   // the same X the file list uses
     t.appendChild(msg);
     let alt = null;
     if (altLabel){
@@ -1459,8 +1524,8 @@ function confirmBanner(message, confirmLabel, altLabel){
 // own alert inline (no global handler needed).
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
   const makeX = act => act
-    ? `<button class="alert-dismiss is-danger" data-action="${act}" title="Dismiss">${X_SVG(13)}</button>`
-    : `<button class="alert-dismiss is-danger" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(13)}</button>`;
+    ? `<button class="alert-dismiss close-x" data-action="${act}" title="Dismiss">${X_SVG(15)}</button>`
+    : `<button class="alert-dismiss close-x" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(15)}</button>`;
   let html = '';
   if (invalidNames.length)
     html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';
@@ -1512,7 +1577,9 @@ function barPlotXPad(labelWs, n, plotW){
 ========================================================= */
 (function initInstrCollapse(){
   const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
-  document.querySelectorAll('.instr-block').forEach((block, i)=>{
+  // The project bar's technique panel is an .instr-block too, but it has its own
+  // toggle (the bar's info button) — skip it here.
+  document.querySelectorAll('.instr-block:not(.pbar-info-panel)').forEach((block, i)=>{
     // Attach the toggle to the nearest preceding heading; fall back to inline.
     // The heading may be wrapped (e.g. in a .section-head flex row), so also
     // look for a heading nested inside a preceding sibling.
@@ -1541,6 +1608,11 @@ function barPlotXPad(labelWs, n, plotW){
   });
 })();
 
+// Normalise the nav icons once they can be measured (and again after full load, in
+// case the webfont/layout shifted the boxes).
+normalizeNavIcons();
+window.addEventListener('load', normalizeNavIcons);
+
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

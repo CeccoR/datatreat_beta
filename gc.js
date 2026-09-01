@@ -118,12 +118,10 @@ import { Plot, svgEl } from './plot.js';
     renderGcParamTable();
     if (files.length){
       document.getElementById('gcResults').style.display='block';
-      document.getElementById('gcExportCard').style.display='block';
       computeAndRenderGc();
     } else {
       document.getElementById('gcResults').style.display='none';
       document.getElementById('gcResultsBar').style.display='none';
-      document.getElementById('gcExportCard').style.display='none';
       rebuildGcAlerts();
     }
     hist.commit();
@@ -164,6 +162,8 @@ import { Plot, svgEl } from './plot.js';
     }
     gcSel=gcHov=null;
     afterFilesChange();
+    // Clear the previous tab's transient upload alerts and rebuild for this tab.
+    loadAlerts = ''; gcUploadAlerts = ''; rebuildGcAlerts();
   }
   const hist = registerHistory('gc', gcSnapshot, gcRestore);
   registerTabRedraw('gc', ()=>{ if (files.length) computeAndRenderGc(true); });
@@ -190,12 +190,12 @@ import { Plot, svgEl } from './plot.js';
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
     if (!files.length){ wrap.innerHTML=''; return; }
-    // Sample 1/5 | m 1/10 | Q 1/10 | Light-on 1/5 | start 1/10 | end 1/10 | warnings 1/5
-    const cg = `<colgroup><col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:20%"><col style="width:10%"><col style="width:10%"><col style="width:20%"></colgroup>`;
+    // Sample x | m 1/9 | Q 1/9 | Light-on 2/9 | start 1/9 | end 1/9 | warnings x, x=(1-6/9)/2=1/6
+    const cg = `<colgroup><col style="width:16.667%"><col style="width:11.111%"><col style="width:11.111%"><col style="width:22.222%"><col style="width:11.111%"><col style="width:11.111%"><col style="width:16.667%"></colgroup>`;
     const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
     const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
     // Column order: Sample | m | Q | Light-on | [Interval: start end] | warnings.
-    let html = `<div style="overflow-x:auto"><table style="min-width:860px;width:100%;table-layout:fixed">${cg}<thead>
+    let html = `<div style="overflow-x:auto"><table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
       <tr><th rowspan="2">Sample</th>
         <th rowspan="2">m (g) ${modeChip('m',mMode)}</th>
         <th rowspan="2">Q (mL/min) ${modeChip('q',qMode)}</th>

@@ -1,4 +1,4 @@
-import { settings, redrawAll, makeCsvButton, fitCsvIcons } from './utils.js';
+import { settings, redrawAll, makeCsvButton, fitCsvIcons, fitPlotIcons } from './utils.js';
 
 /* =========================================================
    SVG PLOT HELPER (shared)
@@ -26,6 +26,15 @@ function fixedTicks(min, max, step){
   const start = Math.ceil(min / step - 1e-9) * step;
   for (let v = start; v <= max + step * 1e-9; v += step) ticks.push(Math.round(v / step) * step);
   return ticks;
+}
+// "Wavelength (nm)" + 512.3  ->  "Wavelength = 512.3 nm". The unit is whatever sits
+// in the label's trailing parentheses; absent parentheses, just "<label> = <value>".
+function axisReadout(label, val, fmt){
+  const s = String(label||'');
+  const m = s.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  const name = (m ? m[1] : s).trim();
+  const unit = m ? m[2].trim() : '';
+  return `${name} = ${fmt(val)}${unit ? ' '+unit : ''}`;
 }
 function fmtTick(v){
   if (Math.abs(v) < 1e-10) return '0';
@@ -98,6 +107,17 @@ class Plot{
   }
   px(x){ const {w}=this.size(); const m=this.margin; return m.l + (x-this.xmin)/(this.xmax-this.xmin)*(w-m.l-m.r); }
   py(y){ const {h}=this.size(); const m=this.margin; return h-m.b - (y-this.ymin)/(this.ymax-this.ymin)*(h-m.t-m.b); }
+  // Precompute the x/y projection ONCE (one getBoundingClientRect for the whole
+  // pass). Hot loops (line/point rendering) use this instead of px()/py() per point,
+  // which each called size() → a layout read per coordinate (tens of thousands per
+  // redraw on large spectra).
+  _projector(){
+    const {w,h}=this.size(); const m=this.margin;
+    const sx=(w-m.l-m.r)/(this.xmax-this.xmin);
+    const sy=(h-m.t-m.b)/(this.ymax-this.ymin);
+    const xmin=this.xmin, ymin=this.ymin, yb=h-m.b, xl=m.l;
+    return { px:x=> xl + (x-xmin)*sx, py:y=> yb - (y-ymin)*sy };
+  }
   invX(px){ const {w}=this.size(); const m=this.margin; return this.xmin + (px-m.l)/(w-m.l-m.r)*(this.xmax-this.xmin); }
   invY(py){ const {h}=this.size(); const m=this.margin; return this.ymin + (h-m.b-py)/(h-m.t-m.b)*(this.ymax-this.ymin); }
   drawAxes(){
@@ -150,22 +170,24 @@ class Plot{
     this._stored.push(entry);
     return this._renderPoints(entry);
   }
-  _renderPoints(entry){
+  _renderPoints(entry, proj){
+    const {px,py} = proj || this._projector();
     const g = svgEl('g',{}); const rr = entry.r;
     for (let i=0;i<entry.xs.length;i++){
       const xv=entry.xs[i], yv=entry.ys[i];
       if (!isFinite(xv)||!isFinite(yv)) continue;
       if (xv<this.xmin||xv>this.xmax) continue; // cull off-view for speed
-      g.appendChild(svgEl('circle',{cx:this.px(xv).toFixed(2), cy:this.py(yv).toFixed(2), r:rr, fill:'none', stroke:entry.color, 'stroke-width':1}));
+      g.appendChild(svgEl('circle',{cx:px(xv).toFixed(2), cy:py(yv).toFixed(2), r:rr, fill:'none', stroke:entry.color, 'stroke-width':1}));
     }
     this.gData.appendChild(g);
     return g;
   }
-  _renderLine(entry){
+  _renderLine(entry, proj){
+    const {px,py} = proj || this._projector();
     let d='';
     for (let i=0;i<entry.xs.length;i++){
       if (!isFinite(entry.xs[i])||!isFinite(entry.ys[i])) continue;
-      d += (d===''?'M':'L') + this.px(entry.xs[i]).toFixed(2) + ',' + this.py(entry.ys[i]).toFixed(2) + ' ';
+      d += (d===''?'M':'L') + px(entry.xs[i]).toFixed(2) + ',' + py(entry.ys[i]).toFixed(2) + ' ';
     }
     const p = svgEl('path',{d, fill:'none', stroke:entry.color, 'stroke-width':entry.width||1.5});
     if (entry.dash) p.setAttribute('stroke-dasharray', entry.dash);
@@ -286,9 +308,10 @@ class Plot{
   }
   _redrawFromStored(){
     this.gData.innerHTML=''; this.gOverlay.innerHTML='';
+    const proj = this._projector();
     for (const e of this._stored){
-      if (e.type==='line') this._renderLine(e);
-      else if (e.type==='points') this._renderPoints(e);
+      if (e.type==='line') this._renderLine(e, proj);
+      else if (e.type==='points') this._renderPoints(e, proj);
       else if (e.type==='bar') this._renderBar(e);
       else if (e.type==='barpx') this._renderBarPx(e);
       else if (e.type==='errbar') this._renderErrbar(e);
@@ -371,8 +394,10 @@ class Plot{
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
     this.setMode(this._mode || null);
-    // Normalise the CSV icon now that the plot (and its button) is on-screen.
+    // Normalise every toolbar icon (download, CSV, tools) by the minimum-square rule
+    // now the plot and its buttons are on-screen — matching the project-bar icons.
     fitCsvIcons(col);
+    fitPlotIcons(col);
   }
   _clearCrosshair(){ if (this.gCross) this.gCross.innerHTML=''; }
   // Draw a thin crosshair + a coordinate readout at the pointer (data coordinates via invX/invY)
@@ -388,11 +413,17 @@ class Plot{
     const add=(tag,at)=>{ this.gCross.appendChild(svgEl(tag,at)); };
     add('line',{x1:cx,x2:cx,y1:m.t,y2:h-m.b,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
     add('line',{x1:m.l,x2:w-m.r,y1:cy,y2:cy,stroke:'#c4ccd6','stroke-width':1,'stroke-dasharray':'4,3','opacity':0.75,'class':'plot-crosshair'});
-    const nearRight = cx > w - m.r - 140;
-    const tx = nearRight ? m.l+8 : w-m.r-8;
-    const anchor = nearRight ? 'start' : 'end';
-    const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':anchor,fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
-    t.textContent = `x ${fmt(xv)}   y ${fmt(yv)}`;
+    // Readout: pinned to the top-left of the plot area (never follows the pointer),
+    // one axis per line — x then y — as "AxisName = value unit" (the unit is pulled
+    // out of the axis label's trailing parentheses). Bar plots have a categorical x
+    // (no meaningful x coordinate under the pointer), so they show the y line only.
+    const ylabTxt = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
+    const isBar = this._stored && this._stored.some(e=>e.type==='bar' || e.type==='barpx');
+    const tx = m.l+8;
+    const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
+    if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }
+    const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, yv, fmt);
+    t.appendChild(l2);
     this.gCross.appendChild(t);
   }
   _initInteraction(){
@@ -441,8 +472,8 @@ class Plot{
         zoomRect.setAttribute('y', Math.min(cy,zoomStart.cy));
         zoomRect.setAttribute('width', Math.abs(cx-zoomStart.cx));
         zoomRect.setAttribute('height', Math.abs(cy-zoomStart.cy));
-      } else if (P._mode){
-        P._clearCrosshair(); // pan/zoom tool armed → no position readout
+      } else if (P._mode || svg._suppressReadout){
+        P._clearCrosshair(); // pan/zoom tool or add-peak armed → no position readout
       } else {
         P._drawCrosshair(e.clientX, e.clientY); // hover readout (no tool active)
       }
@@ -485,10 +516,29 @@ class Plot{
 // Coalesce the burst of resize events fired during a window drag into one redraw
 // per animation frame — otherwise each event triggers a full synchronous redraw
 // and the drag feels like it hangs for seconds.
-let _resizeRAF = null;
+// Resize handling has two speeds. Recomputing a module's analysis (Kubelka-Munk,
+// smoothing, regression search…) every frame of a window drag is far too heavy on
+// large datasets. But the analysis results don't change with the window size — only
+// the pixel geometry does — so during the drag we just RE-PROJECT each visible plot
+// from its already-computed data (cheap: one getBoundingClientRect per plot, plain
+// arithmetic per point). The full recompute runs once, after the resize settles.
+let _resizeRAF = null, _resizeSettle = null;
 window.addEventListener('resize', ()=>{
-  if (_resizeRAF) return;
-  _resizeRAF = requestAnimationFrame(()=>{ _resizeRAF = null; redrawAll(); });
+  if (!_resizeRAF) _resizeRAF = requestAnimationFrame(()=>{
+    _resizeRAF = null;
+    document.querySelectorAll('svg.plot').forEach(svg=>{
+      const P = svg._plot;
+      if (P && svg.getClientRects().length){ try { P._refresh(); } catch(e){} }
+    });
+  });
+  clearTimeout(_resizeSettle);
+  _resizeSettle = setTimeout(()=>{
+    // Drop any live re-projection still queued so it can't run after (and undo) the
+    // full redraw, and do the final recompute a frame later — once the browser has
+    // settled the new layout — so plots never end up sized to a transient width.
+    if (_resizeRAF){ cancelAnimationFrame(_resizeRAF); _resizeRAF = null; }
+    requestAnimationFrame(()=> redrawAll());
+  }, 180);
 });
 
 // With asBlob=true, resolves to a PNG Blob of the (current-view) plot instead of
@@ -691,5 +741,5 @@ document.addEventListener('click', e=>{
 
 
 export {
-  niceStep, niceTicks, fixedTicks, fmtTick, svgEl, Plot, downloadSvgClean
+  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, Plot, downloadSvgClean
 };

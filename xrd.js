@@ -1,5 +1,5 @@
 import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, truncTiltLabel, barPlotXPad, confirmBanner } from './utils.js';
-import { svgEl, Plot } from './plot.js';
+import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
 /* =========================================================
@@ -158,7 +158,6 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (files.length){
       document.getElementById('xrdFitCard').style.display='block';
       document.getElementById('xrdResults').style.display='block';
-      document.getElementById('xrdExportCard').style.display='block';
       if (curIdx >= files.length) curIdx = files.length-1;
       if (fitIdx >= files.length) fitIdx = files.length-1;
       populateStandardSelect();
@@ -170,7 +169,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       updateXrdFitting();
       updateXrdResults();
     } else {
-      ['xrdWorkspace','xrdStdCard','xrdFitCard','xrdResults','xrdExportCard'].forEach(id=>{ document.getElementById(id).style.display='none'; });
+      ['xrdWorkspace','xrdStdCard','xrdFitCard','xrdResults'].forEach(id=>{ document.getElementById(id).style.display='none'; });
     }
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
@@ -207,6 +206,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     document.getElementById('xrdNorm').value = s.norm;
     syncModeButtons();
     afterFilesChange();
+    // Clear the previous tab's transient upload alert and rebuild for this tab.
+    xrdUploadAlerts = ''; rebuildXrdAlerts();
   }
   function syncModeButtons(){
     Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
@@ -260,6 +261,20 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   function writeStoreToInputs(){
     const p = getFileParams(curIdx);
     for (const key in FIELD_INPUT) document.getElementById(FIELD_INPUT[key]).value = p[key];
+    syncLambdaSelect();
+  }
+
+  // Keep the wavelength preset selector in step with the numeric λ value: pick the
+  // matching source preset (else "Custom"), and lock the value field unless Custom.
+  function syncLambdaSelect(){
+    const inp = document.getElementById('xrdLambda');
+    const sel = document.getElementById('xrdLambdaSel');
+    if (!inp || !sel) return;
+    const v = parseFloat(String(inp.value).replace(',','.'));
+    let matched = 'custom';
+    for (const o of sel.options){ if (o.value!=='custom' && Math.abs(parseFloat(o.value)-v) < 5e-5){ matched = o.value; break; } }
+    sel.value = matched;
+    inp.readOnly = (matched !== 'custom');
   }
 
   // Standard's own parameter inputs (no all/one toggle, no K/λ, no normalization choice)
@@ -516,7 +531,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const baseD  = interpLinear(f.x, pr.baseline, dense);
 
     const svgNode = document.getElementById(svgId);
-    const plot  = new Plot(svgNode, {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    const plot  = new Plot(svgNode, {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(svgNode.closest('.plot-wrap'));
     plot.setRange(minArr(f.x), maxArr(f.x), 0, 1.1);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
@@ -600,7 +615,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const delAll = document.getElementById('xrdDelAllFitsBtn'); if (delAll) delAll.disabled = !savedFits.some(Boolean);
 
     const svgEl = document.getElementById('xrdFitSvg');
-    const plot  = new Plot(svgEl, {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    const plot  = new Plot(svgEl, {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(svgEl.closest('.plot-wrap'));
     plot.setRange(minArr(f.x), maxArr(f.x), 0, 1.1);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
@@ -782,7 +797,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     files.forEach((f,k)=>{ if (f.name!==standardName && curves[k]) shown.push(k); });
     const n = shown.length, baseOf = j => -j * 1.1;
     const gmax = Math.max(1, ...shown.map(k=>maxArr(curves[k])));
-    const plot = new Plot(document.getElementById(svgId), {xlabel:'2θ (°)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    const plot = new Plot(document.getElementById(svgId), {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById(legendId); legend.innerHTML='';
     let lo=Infinity, hi=-Infinity;
@@ -893,7 +908,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const sizeRawCell = sizeCol ? `<td>${fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
       const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
       const sel = panels[key].sel!=null && Math.abs(pk.pos-panels[key].sel)<1e-9 ? ' selected' : '';
-      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:right"><button class="peak-del is-danger idle-dim" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
+      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
     });
     html+='</tbody></table>';
     if (!isStd){
@@ -1374,6 +1389,17 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     el.addEventListener('change', apply);
     el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
   });
+  // Wavelength preset selector: choosing a source fills + locks the λ value and
+  // recomputes; "Custom" unlocks the field for a free value.
+  (()=>{
+    const sel = document.getElementById('xrdLambdaSel'), inp = document.getElementById('xrdLambda');
+    if (!sel || !inp) return;
+    sel.addEventListener('change', ()=>{
+      if (sel.value === 'custom'){ inp.readOnly = false; inp.focus(); if (inp.select) inp.select(); }
+      else { inp.readOnly = true; inp.value = parseFloat(sel.value); inp.dispatchEvent(new Event('change', { bubbles:true })); }
+    });
+    syncLambdaSelect();
+  })();
 
   // Run fn while keeping the card the user is currently looking at fixed in the
   // viewport: if a redraw (e.g. a table with a different row count) shifts the
@@ -1446,18 +1472,30 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const px = plot.px(xv), py = plot.py(yval);
       plot.svg.appendChild(svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'#ffd24a','stroke-width':1.5,'stroke-dasharray':'4,3','pointer-events':'none','class':'add-guide'}));
       plot.svg.appendChild(svgEl('circle',{cx:px,cy:py,r:3.5,fill:'#ffd24a','pointer-events':'none','class':'add-guide'}));
-      const flip = px > w - m.r - 110;
-      const t = svgEl('text',{x:px+(flip?-8:8),y:m.t+14,'font-size':11,fill:'#ffd24a','text-anchor':flip?'end':'start','pointer-events':'none','class':'add-guide'});
-      t.textContent = `2θ=${xv.toFixed(3)}, y=${yval.toFixed(3)}`;
+      // Readout follows the drawn vertical guide (flips to the left near the right
+      // edge), two lines using the plot's axis names + units:
+      // "2θ = 45.123 °" / "Intensity = 0.520 a. u.".
+      const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
+      const flip = px > w - m.r - 130;
+      const tx = px + (flip ? -8 : 8);
+      const t = svgEl('text',{x:tx,y:m.t+14,'font-size':12,fill:'#ffd24a',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','text-anchor':flip?'end':'start','pointer-events':'none','class':'add-guide'});
+      const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(plot.xlabel||'2θ', xv, fmt);
+      const l2=svgEl('tspan',{x:tx,dy:16}); l2.textContent=axisReadout(plot.ylabel||'Intensity', yval, fmt);
+      t.appendChild(l1); t.appendChild(l2);
       plot.svg.appendChild(t);
     }
     function setMode(on){
       addMode = !!on;
       addModeKey = addMode ? key : (addModeKey===key ? null : addModeKey);
       btn.classList.toggle('is-on', addMode);
+      // Drop focus once armed so the arrow keys (which nudge the guide) don't put
+      // the button into :focus-visible and paint a white selection outline.
+      if (addMode) btn.blur();
       svgNode.style.cursor = addMode ? 'crosshair' : '';
+      // While armed, suppress the plot's x/y hover readout + crosshair (same as pan/zoom).
+      svgNode._suppressReadout = addMode;
       const plot = getPlot();
-      if (addMode && plot) plot.setMode(null);
+      if (addMode && plot){ plot.setMode(null); plot._clearCrosshair(); }
       if (!addMode){ addIdx = null; clearGuide(); }
     }
     function confirmAdd(){
@@ -1486,20 +1524,24 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       e.preventDefault(); e.stopPropagation();
       addIdx = pointToIdx(e); confirmAdd();
     }, true);
+    // Capture phase + stopImmediatePropagation so that while add-peak is armed
+    // it claims the arrow keys before the document-level sample-nav handler
+    // (utils.js) can fire — otherwise ← / → would change sample instead of
+    // nudging the guide.
     document.addEventListener('keydown', e=>{
       if (!addMode) return;
       const plot = getPlot(), idx = getIdx();
-      if (e.key==='Escape'){ setMode(false); return; }
+      if (e.key==='Escape'){ e.stopImmediatePropagation(); setMode(false); return; }
       if (e.key==='ArrowLeft' || e.key==='ArrowRight'){
-        e.preventDefault();
+        e.preventDefault(); e.stopImmediatePropagation();
         const x = files[idx].x;
         const a = nearestIdx(x, plot.xmin), b = nearestIdx(x, plot.xmax);
         const lo = Math.min(a,b), hi = Math.max(a,b);
         if (addIdx==null) addIdx = nearestIdx(x, (plot.xmin+plot.xmax)/2);
         addIdx = Math.max(lo, Math.min(hi, addIdx + (e.key==='ArrowRight'?1:-1)));
         drawGuide();
-      } else if (e.key==='Enter'){ e.preventDefault(); confirmAdd(); }
-    });
+      } else if (e.key==='Enter'){ e.preventDefault(); e.stopImmediatePropagation(); confirmAdd(); }
+    }, true);
     return { isAdding:()=>addMode, setMode };
   }
   const addPeakA = makeAddPeak('a', 'xrdSvg',    'xrdAddPeak',    ()=>anaPlot, ()=>curIdx);

@@ -20,8 +20,7 @@ import { Plot } from './plot.js';
     switch (btn.dataset.action){
       case 'epr-dismiss-invalid': loadAlerts=''; rebuildAlerts(); break;
       case 'epr-dismiss-upload':  uploadAlerts=''; rebuildAlerts(); break;
-      case 'epr-remove-pending':  delete pending[btn.dataset.stem]; renderPendingTable(); break;
-      case 'epr-remove-all-pending': for (const k of Object.keys(pending)) delete pending[k]; renderPendingTable(); break;
+      case 'epr-dismiss-pending': pending={}; renderPendingTable(); break;
     }
   });
 
@@ -46,20 +45,21 @@ import { Plot } from './plot.js';
     renderPendingTable();
   }
 
+  // Unpaired uploads (.DTA without its .DSC or vice-versa) surface as a standard
+  // warn alert (buildAlertsHtml → built-in dismiss X) listing each orphan file by
+  // its full name, one per line.
   function renderPendingTable(){
     const wrap = document.getElementById('eprPendingWrap');
     const entries = Object.entries(pending);
     if (!entries.length){ wrap.innerHTML = ''; return; }
-    const phantoms = `<button style="opacity:0;pointer-events:none">↑</button><button style="opacity:0;pointer-events:none">↓</button>`;
-    const rows = entries.map(([stem, pair]) => {
-      const dtaCell = pair.dta ? `<span style="color:var(--good)">✓ .DTA</span>` : `<span style="color:var(--bad)">✗ .DTA</span>`;
-      const dscCell = pair.dsc ? `<span style="color:var(--good)">✓ .DSC</span>` : `<span style="color:var(--bad)">✗ .DSC</span>`;
-      const esc = stem.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-      return `<tr class="pending-row"><td class="fname">${stem}</td><td>${dtaCell}</td><td>${dscCell}</td><td><div class="file-actions">${phantoms}<button class="pending-del is-danger" data-stem="${esc}" data-action="epr-remove-pending">${X_SVG(13)}</button></div></td></tr>`;
-    }).join('');
-    const colgroup = `<colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>`;
-    const header = `<tr><th>FILE</th><th>.DTA</th><th>.DSC</th><th><div class="file-actions" style="display:flex;gap:4px;align-items:center;visibility:visible;white-space:nowrap">${phantoms}<button class="pending-del-all is-danger" data-action="epr-remove-all-pending">${X_SVG(13)}</button></div></th></tr>`;
-    wrap.innerHTML = `<div style="background:#3a2c0f;border:1px solid #5a430f;border-radius:8px;padding:0 8px 8px;margin-top:10px"><div style="padding:8px 0 6px;font-size:12px;color:var(--warn)">⚠ Waiting for pair:</div><table class="pending-table" style="table-layout:fixed;width:100%">${colgroup}<thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
+    const names = [];
+    for (const [, pair] of entries){
+      if (pair.dta) names.push(pair.dta.name);
+      if (pair.dsc) names.push(pair.dsc.name);
+    }
+    wrap.innerHTML = buildAlertsHtml([], names,
+      'Unpaired file(s) uploaded. Upload both the .DTA and .DSC files to proceed:',
+      undefined, 'epr-dismiss-pending');
   }
 
   function parseDsc(text){
@@ -144,11 +144,9 @@ import { Plot } from './plot.js';
     renderUnifiedFileList('eprFileTableWrap', files, fileCallbacks());
     if (files.length){
       document.getElementById('eprWorkspace').style.display='block';
-      document.getElementById('eprExportCard').style.display='block';
       updateEpr();
     } else {
       document.getElementById('eprWorkspace').style.display='none';
-      document.getElementById('eprExportCard').style.display='none';
       rebuildAlerts();
     }
     hist.commit();
@@ -167,6 +165,8 @@ import { Plot } from './plot.js';
     document.getElementById('eprNorm').value = s.norm;
     document.getElementById('eprSmooth').value = s.smooth;
     afterFilesChange();
+    // Clear the previous tab's transient alerts + unpaired list, then rebuild.
+    loadAlerts = ''; uploadAlerts = ''; pending = {}; rebuildAlerts();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
   registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(true); });
@@ -180,7 +180,7 @@ import { Plot } from './plot.js';
     // current zoom on a resize / tab-switch redraw instead of snapping to full range.
     const old = document.getElementById('eprSvg')._plot;
     const prev = (preserveView && old && isFinite(old.xmin)) ? {xmin:old.xmin,xmax:old.xmax,ymin:old.ymin,ymax:old.ymax} : null;
-    const plot = new Plot(document.getElementById('eprSvg'), {xlabel:'Magnetic Field (mT)', ylabel:'Intensity (a.u.)', noYTickLabels:true});
+    const plot = new Plot(document.getElementById('eprSvg'), {xlabel:'Magnetic Field (mT)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById('eprLegend'); legend.innerHTML='';
     const n = Y.length;

@@ -202,6 +202,13 @@ import { Plot } from './plot.js';
     if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
     syncTaucModeButtons();
     afterFilesChange();
+    // Rebuild alerts for THIS tab's files: transient upload feedback (invalid /
+    // already-loaded) belongs to the upload action, not the project, so clear it;
+    // the non-standard-format warning is re-derived from the restored files' .warn
+    // flags. Without this a restored/switched tab shows no alerts (or inherits the
+    // previous tab's).
+    invalidUploadNames = []; taucUploadAlerts = ''; taucWarnDismissed = false;
+    rebuildTaucAlerts();
   }
   const hist = registerHistory('tauc', taucSnapshot, taucRestore);
   // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.
@@ -270,7 +277,6 @@ import { Plot } from './plot.js';
     else {
       document.getElementById('taucWorkspace').style.display='none';
       document.getElementById('taucResults').style.display='none';
-      document.getElementById('taucExportCard').style.display='none';
     }
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
@@ -286,7 +292,6 @@ import { Plot } from './plot.js';
     syncTaucModeButtons();
     document.getElementById('taucWorkspace').style.display='block';
     document.getElementById('taucResults').style.display='block';
-    document.getElementById('taucExportCard').style.display='block';
     initTaucPlot();
   }
 
@@ -395,7 +400,7 @@ import { Plot } from './plot.js';
     plot.setRange(minArr(hv), maxArr(hv), 0, maxArr(Yraw)*1.05);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
     plot.clearData();
-    plot.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a.u.)`;
+    plot.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a. u.)`;
     plot.drawAxes();
     plot.line(hv, Yraw, '#ffffff', 1);
     plot.line(hv, Ys, '#3aa0ff', 1.4);
@@ -528,7 +533,7 @@ import { Plot } from './plot.js';
     const aLabel = aUniform ? aVals[0] : 'a';
     // Plot 0: F(R) vs λ — reuse one Plot instance (create + attach tools once).
     if (!resPlot0){
-      resPlot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a.u.)', xTickStep:50, noYTickLabels:true});
+      resPlot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a. u.)', xTickStep:50, noYTickLabels:true});
       resPlot0.attachTools(resPlot0.svg.closest('.plot-wrap'));
     }
     const plot0 = resPlot0; plot0.clearData();
@@ -549,7 +554,7 @@ import { Plot } from './plot.js';
       resPlot1.attachTools(resPlot1.svg.closest('.plot-wrap'));
     }
     const plot1 = resPlot1; plot1.clearData();
-    plot1.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a.u.)`;
+    plot1.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a. u.)`;
     const leg1 = document.getElementById('taucResLegend1'); leg1.innerHTML='';
     const Ys_all = files.map((f,k)=>{
       const fp = getFileParams(k);
@@ -580,19 +585,24 @@ import { Plot } from './plot.js';
     const barTitleEl = document.getElementById('taucBarTitle');
     if (barTitleEl) barTitleEl.textContent = (egLabel ? egLabel+' ' : '') + 'Energy Band Gap';
     const leg2 = document.getElementById('taucResLegend2'); leg2.innerHTML='';
-    const barAlertDiv = document.getElementById('taucBarAlert'); barAlertDiv.innerHTML='';
+    const barAlertX = document.getElementById('taucBarAlertX'); barAlertX.innerHTML='';
+    const barAlertB = document.getElementById('taucBarAlertB'); barAlertB.innerHTML='';
     const egs = bestRegsAll.map(r=>r.Eg), egErrs = bestRegsAll.map(r=>r.EgErr);
     const egInts = bestRegsAll.map(r=>r.EgInt), egIntErrs = bestRegsAll.map(r=>r.EgIntErr);
     const n = files.length;
-    // Collect negative Eg warnings
-    const negWarns = [];
+    // Negative Eg → one alert per plot (x-axis / baseline), placed under its own
+    // chart and listing the affected samples one per line. Live-computed → no X.
+    const negX = [], negB = [];
     for (let k=0;k<n;k++){
-      if (isFinite(egs[k]) && egs[k]<0) negWarns.push(`⚠ Eg (x-axis) is negative for "${files[k].label}"!`);
-      if (isFinite(egInts[k]) && egInts[k]<0) negWarns.push(`⚠ Eg (baseline) is negative for "${files[k].label}"!`);
+      if (isFinite(egs[k]) && egs[k]<0) negX.push(files[k].label);
+      if (isFinite(egInts[k]) && egInts[k]<0) negB.push(files[k].label);
     }
+    const negWarnHtml = (label, list)=> list.length
+      ? `<div class="alert warn">⚠ Negative E<sub>g</sub> (${label}) for:<br>${list.join('<br>')}</div>` : '';
+    barAlertX.innerHTML = negWarnHtml('x-axis', negX);
+    barAlertB.innerHTML = negWarnHtml('baseline', negB);
     const posVals = egs.concat(egInts).filter(v=>isFinite(v)&&v>0);
     const noChart = !posVals.length;
-    if (negWarns.length) barAlertDiv.innerHTML = negWarns.map((w,i)=>`<div class="alert warn"${noChart&&!i?' style="margin-top:0"':''}>${w}</div>`).join('');
     const barSvg  = document.getElementById('taucResSvg2');   // Eg (x-axis)
     const barSvg3 = document.getElementById('taucResSvg3');   // Eg (baseline)
     const barWrap  = barSvg.closest('.plot-wrap');
