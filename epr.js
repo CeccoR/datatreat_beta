@@ -11,6 +11,7 @@ import { Plot } from './plot.js';
   let pending = {};
   let loadAlerts = '';
   let uploadAlerts = '';
+  let pendingAlerts = '';   // ephemeral notice about unpaired uploads
 
   // Delegated click handling for dynamically generated buttons (alerts + pending
   // table), so no per-button global onclick handlers are needed.
@@ -20,7 +21,7 @@ import { Plot } from './plot.js';
     switch (btn.dataset.action){
       case 'epr-dismiss-invalid': loadAlerts=''; rebuildAlerts(); break;
       case 'epr-dismiss-upload':  uploadAlerts=''; rebuildAlerts(); break;
-      case 'epr-dismiss-pending': pending={}; renderPendingTable(); break;
+      case 'epr-dismiss-pending': pendingAlerts=''; rebuildAlerts(); break;
     }
   });
 
@@ -36,30 +37,29 @@ import { Plot } from './plot.js';
       onLabelChange(i, v){ files[i].label=v; updateEpr(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateEpr(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; pending={}; loadAlerts=''; uploadAlerts=''; rebuildAlerts(); afterFilesChange(); },
+      onRemoveAll(){ files.length=0; pending={}; loadAlerts=''; uploadAlerts=''; pendingAlerts=''; rebuildAlerts(); afterFilesChange(); },
     };
   }
 
   function rebuildAlerts(){
     document.getElementById('eprAlerts').innerHTML = loadAlerts + uploadAlerts;
-    renderPendingTable();
+    document.getElementById('eprPendingWrap').innerHTML = pendingAlerts;
   }
 
-  // Unpaired uploads (.DTA without its .DSC or vice-versa) surface as a standard
-  // warn alert (buildAlertsHtml → built-in dismiss X) listing each orphan file by
-  // its full name, one per line.
-  function renderPendingTable(){
-    const wrap = document.getElementById('eprPendingWrap');
-    const entries = Object.entries(pending);
-    if (!entries.length){ wrap.innerHTML = ''; return; }
+  // Notice about unpaired uploads (.DTA without its .DSC or vice-versa). Like the
+  // other upload warnings this is an EPHEMERAL snapshot taken at upload time — not a
+  // live view of `pending` — so it can be dismissed and is replaced by the next
+  // upload. `pending` itself is untouched, so dropping the notice never throws away
+  // a file that is still waiting for its partner.
+  function buildPendingAlert(){
     const names = [];
-    for (const [, pair] of entries){
+    for (const [, pair] of Object.entries(pending)){
       if (pair.dta) names.push(pair.dta.name);
       if (pair.dsc) names.push(pair.dsc.name);
     }
-    wrap.innerHTML = buildAlertsHtml([], names,
+    pendingAlerts = names.length ? buildAlertsHtml([], names,
       'Unpaired file(s) uploaded. Upload both the .DTA and .DSC files to proceed:',
-      undefined, 'epr-dismiss-pending');
+      undefined, 'epr-dismiss-pending') : '';
   }
 
   function parseDsc(text){
@@ -135,6 +135,7 @@ import { Plot } from './plot.js';
 
     loadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'epr-dismiss-invalid') : '';
     uploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'epr-dismiss-upload') : '';
+    buildPendingAlert();
     rebuildAlerts();
     afterFilesChange();
   });
@@ -166,7 +167,7 @@ import { Plot } from './plot.js';
     document.getElementById('eprSmooth').value = s.smooth;
     afterFilesChange();
     // Clear the previous tab's transient alerts + unpaired list, then rebuild.
-    loadAlerts = ''; uploadAlerts = ''; pending = {}; rebuildAlerts();
+    loadAlerts = ''; uploadAlerts = ''; pendingAlerts = ''; pending = {}; rebuildAlerts();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
   registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(true); });
