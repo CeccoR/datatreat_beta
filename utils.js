@@ -52,6 +52,26 @@ function _hsvToRgb(h,s,v){
   return {r:Math.round(r*255),g:Math.round(g*255),b:Math.round(b*255)};
 }
 
+/* Recently picked colours, shared by every colour picker in the app (file list and
+   figure composer alike) and kept across sessions. Most recent first, no repeats. */
+const CP_RECENT_KEY = 'dt-recent-colors', CP_RECENT_MAX = 12;
+let _cpRecent = null;
+function recentColors(){
+  if (_cpRecent) return _cpRecent;
+  try { _cpRecent = JSON.parse(localStorage.getItem(CP_RECENT_KEY)) || []; }
+  catch(e){ _cpRecent = []; }
+  if (!Array.isArray(_cpRecent)) _cpRecent = [];
+  return _cpRecent;
+}
+function pushRecentColor(hex){
+  if (!hex) return;
+  const c = String(hex).toLowerCase();
+  const list = recentColors().filter(x=>x.toLowerCase() !== c);
+  list.unshift(c);
+  _cpRecent = list.slice(0, CP_RECENT_MAX);
+  try { localStorage.setItem(CP_RECENT_KEY, JSON.stringify(_cpRecent)); } catch(e){}
+}
+
 class ColorPickerUI {
   constructor(){
     this._onChange = null;
@@ -80,7 +100,9 @@ class ColorPickerUI {
         <div class="cp-rgb-row"><span>G</span><input type="range" class="cp-slider cp-g-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
         <div class="cp-rgb-row"><span>B</span><input type="range" class="cp-slider cp-b-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
       </div>
-      <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>`;
+      <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>
+      <div class="cp-recent-head">Recent colors</div>
+      <div class="cp-presets cp-recent"></div>`;
     document.body.appendChild(el);
     this._el = el;
     this._map = el.querySelector('.cp-map');
@@ -94,6 +116,7 @@ class ColorPickerUI {
     this._bSl = el.querySelector('.cp-b-sl');
     const nums = el.querySelectorAll('.cp-num');
     this._rNum = nums[0]; this._gNum = nums[1]; this._bNum = nums[2];
+    this._recentEl = el.querySelector('.cp-recent');
 
     // 2D map — pointer drag
     const onMapMove = e=>{
@@ -141,21 +164,31 @@ class ColorPickerUI {
       if (v.length===6 || v.length===3){
         this._hsv = _rgbToHsv(...Object.values(_hexToRgb('#'+v)));
         this._updateUI(true);
-        if (this._onChange) this._onChange(_rgbToHex(...Object.values(_hsvToRgb(this._hsv.h,this._hsv.s,this._hsv.v))));
+        this._picked = _rgbToHex(...Object.values(_hsvToRgb(this._hsv.h,this._hsv.s,this._hsv.v)));
+        if (this._onChange) this._onChange(this._picked);
       }
     });
 
-    // Preset swatches
-    el.querySelectorAll('.cp-preset').forEach(p=>p.addEventListener('click', ()=>{
+    // Preset and recent swatches (delegated: the recent row is rebuilt on open).
+    el.addEventListener('click', e=>{
+      const p = e.target.closest('.cp-preset');
+      if (!p) return;
       this._hsv = _rgbToHsv(...Object.values(_hexToRgb(p.dataset.color)));
       this._emit();
-    }));
+    });
   }
 
   _emit(){
     this._updateUI(false);
     const {r,g,b} = _hsvToRgb(this._hsv.h, this._hsv.s, this._hsv.v);
-    if (this._onChange) this._onChange(_rgbToHex(r,g,b));
+    this._picked = _rgbToHex(r,g,b);
+    if (this._onChange) this._onChange(this._picked);
+  }
+
+  _renderRecent(){
+    this._recentEl.innerHTML = recentColors().map(c=>
+      `<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')
+      || '<span class="cp-recent-empty">none yet</span>';
   }
 
   _updateUI(skipHex){
@@ -184,7 +217,9 @@ class ColorPickerUI {
     anchorBtn.classList.add('cp-anchored');   // keep the swatch's border while open
     this._onChange = onChange;
     this._hsv = _rgbToHsv(...Object.values(_hexToRgb(currentColor)));
+    this._picked = null;
     this._updateUI(false);
+    this._renderRecent();
     this._el.style.display = 'block';
     const rect = anchorBtn.getBoundingClientRect();
     const pw = this._el.offsetWidth || 260, ph = this._el.offsetHeight || 430;
@@ -196,6 +231,9 @@ class ColorPickerUI {
   }
 
   close(){
+    // Only the colour the user settled on is remembered, not every drag step.
+    if (this._picked) pushRecentColor(this._picked);
+    this._picked = null;
     this._el.style.display = 'none';
     if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._onChange = null;
@@ -1614,5 +1652,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

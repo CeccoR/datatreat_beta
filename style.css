@@ -1350,6 +1350,12 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
   transition: transform 0.1s, border-color 0.1s;
 }
 .cp-preset:hover { transform: scale(1.25); border-color: rgba(255,255,255,0.5); }
+.cp-recent-head {
+  margin: 9px 10px 0; font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.cp-recent { padding-top: 5px; }
+.cp-recent-empty { font-size: 11px; color: var(--muted); }
 
 /* ===== Plot wrapper with side download button ===== */
 .plot-wrap {
@@ -2121,6 +2127,12 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 .fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; }
 .fig-serie select { flex: 0 0 auto; max-width: 74px; padding: 3px 2px; }
 .fig-serie input[type="number"] { width: 46px; padding: 3px 4px; }
+.fig-serie .color-swatch { margin: 0 1px; }
+.fig-kind { color: var(--muted); font-size: 10px; }
+/* Section header that carries controls of its own (the Series palette picker). */
+.fig-sechead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.fig-sechead h4 { margin: 0; }
+.fig-sechead select { margin-left: auto; font-size: 11px; padding: 3px 4px; }
 /* Panel-axes matrix: one row per side, one column per toggle. The header labels
    the checkbox columns, so both grids must share the same template. */
 .fig-axhead, .fig-axrow {

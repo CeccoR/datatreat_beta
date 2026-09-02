@@ -1,4 +1,5 @@
 import { svgEl, niceTicks, fmtTick } from './plot.js';
+import { colorPickerUI, palettePickerUI } from './utils.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
 // image mime types (and to save an already-built Blob for PNG).
@@ -39,14 +40,23 @@ let backdrop = null, previewSvg = null, controlsEl = null;
 
 /* ---- Model ---------------------------------------------------------------- */
 
+// A plot's drawn content, turned into editable series. Curves come straight from
+// the stored line/point entries; a bar chart has no such entry — it is a pile of
+// individual rectangles — so bars sharing a colour are regrouped into one series,
+// with the plot's tick labels kept as the category names for the X axis.
 function seriesFromPlot(plot, legendEl){
   const labels = legendEl ? [...legendEl.querySelectorAll('span')].map(s=>s.textContent.trim()) : [];
+  const stored = plot._stored || [];
   const out = [];
-  (plot._stored || []).forEach((e, i)=>{
+  const cats = stored.filter(e=> e.type === 'ticklabel')
+                     .map(e=>({ x: e.xv, text: e.text, rot: e.rot || 0 }));
+
+  stored.forEach((e, i)=>{
     if (e.type !== 'line' && e.type !== 'points') return;
     if (!e.xs || !e.ys || !e.xs.length) return;
     out.push({
       id: 's' + i,
+      kind: 'curve',
       label: labels[out.length] || ('Series ' + (out.length + 1)),
       panel: 0,
       color: e.color || '#3aa0ff',
@@ -61,7 +71,41 @@ function seriesFromPlot(plot, legendEl){
       ys: (e.raw && e.raw.ys) || e.ys,
     });
   });
-  return out;
+
+  // Bars: one series per colour, in the order the colours first appear. Error bars
+  // are matched back to their bar by centre and pixel offset.
+  const groups = new Map();
+  for (const e of stored){
+    if (e.type !== 'bar' && e.type !== 'barpx') continue;
+    const color = e.color || '#3aa0ff';
+    if (!groups.has(color)) groups.set(color, { color, xs: [], ys: [], errs: [], keys: [] });
+    const g = groups.get(color);
+    g.xs.push(e.type === 'barpx' ? e.xc : (e.x0 + e.x1) / 2);
+    g.ys.push(e.type === 'barpx' ? e.y1 : e.y1);
+    g.errs.push(0);
+    g.keys.push(e.type === 'barpx' ? (e.xc + '@' + (e.dx || 0)) : null);
+  }
+  if (groups.size){
+    const errs = new Map();
+    for (const e of stored) if (e.type === 'errbar') errs.set(e.xc + '@' + (e.dx || 0), e.yerr);
+    let gi = 0;
+    for (const g of groups.values()){
+      g.keys.forEach((k, j)=>{ if (k != null && errs.has(k)) g.errs[j] = errs.get(k); });
+      out.push({
+        id: 'b' + gi,
+        kind: 'bar',
+        label: labels[out.length] || ('Bars ' + (gi + 1)),
+        panel: 0,
+        color: g.color,
+        width: 0.8,                 // bar width as a fraction of the category slot
+        dash: '', marker: 'none',
+        show: true,
+        xs: g.xs, ys: g.ys, errs: g.errs,
+      });
+      gi++;
+    }
+  }
+  return { series: out, cats };
 }
 
 /* Per-panel axis configuration. Each of the four sides is independent:
@@ -80,6 +124,7 @@ function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '', axes: newAxes()
 
 function buildModel(plot, opts){
   const strip = s => String(s || '').replace(/<[^>]*>/g, '');
+  const { series, cats } = seriesFromPlot(plot, opts && opts.legendEl);
   return {
     wmm: 160, hmm: 110, dpi: 300,
     rows: 1, cols: 1,
@@ -90,10 +135,27 @@ function buildModel(plot, opts){
     ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
+    xStep: 0, yStep: 0,                 // major tick interval; 0 = pick a nice one
+    palScope: 'series',                 // 'series' = one run of colours across all
+                                        // series; 'panel' = every panel restarts it
     panels: [ newPanel(0, 0) ],
-    series: seriesFromPlot(plot, opts && opts.legendEl),
+    series,
+    cats,                               // category labels of a bar chart, if any
     name: (opts && opts.name) || 'figure',
   };
+}
+
+// Major ticks for a range: a fixed step when the user set one, else a nice default.
+function majorTicks(lo, hi, step){
+  if (!(step > 0)) return niceTicks(lo, hi, 4).filter(t=> t >= lo && t <= hi);
+  const out = [], first = Math.ceil(lo / step) * step;
+  // Snap to the step grid so 0.30000000000000004 never reaches a tick label.
+  for (let k = 0; out.length < 400; k++){
+    const v = first + k * step;
+    if (v > hi + step * 1e-9) break;
+    out.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toPrecision(12));
+  }
+  return out;
 }
 
 /* ---- Geometry -------------------------------------------------------------- */
@@ -106,16 +168,21 @@ function extentOf(panelIdxs){
     for (let i = 0; i < s.xs.length; i++){
       const x = s.xs[i], y = s.ys[i];
       if (!isFinite(x) || !isFinite(y)) continue;
+      // Error bars are part of the mark, so they must fit inside the range too.
+      const e = (s.errs && isFinite(s.errs[i]) && s.errs[i] > 0) ? s.errs[i] : 0;
       any = true;
       if (x < x0) x0 = x; if (x > x1) x1 = x;
-      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (y - e < y0) y0 = y - e; if (y + e > y1) y1 = y + e;
     }
   }
   if (!any) return null;
+  // Bars stand on a zero baseline and need half a category slot of air either side.
+  const bars = F.series.some(s=> s.show && s.kind === 'bar' && panelIdxs.includes(s.panel));
+  if (bars){ x0 -= 0.7; x1 += 0.7; y0 = Math.min(0, y0); }
   if (x1 === x0){ x0 -= 0.5; x1 += 0.5; }
   if (y1 === y0){ y0 -= 0.5; y1 += 0.5; }
   const pad = (y1 - y0) * 0.05;
-  return { x0, x1, y0: y0 - pad, y1: y1 + pad };
+  return { x0, x1, y0: bars ? y0 : y0 - pad, y1: y1 + pad };
 }
 
 // Panels overlapping a given column / row (span-aware).
@@ -165,6 +232,15 @@ function computeRanges(){
 
 /* ---- Renderer -------------------------------------------------------------- */
 
+// Legend key: a filled box for bars, a stroked line for curves.
+function legendMark(add, s, xa, xb, y){
+  if (s.kind === 'bar') add('rect', { x:xa, y:y-3, width:xb-xa, height:6, fill:s.color });
+  else {
+    const e = add('line', { x1:xa, x2:xb, y1:y, y2:y, stroke:s.color, 'stroke-width':s.width });
+    if (s.dash) e.setAttribute('stroke-dasharray', s.dash);
+  }
+}
+
 const measCtx = document.createElement('canvas').getContext('2d');
 function textW(txt, px, weight){
   measCtx.font = `${weight||''} ${px}px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif`;
@@ -189,7 +265,7 @@ function renderInto(svg, ink, paper){
   // below, and (for a global legend) a strip under that.
   let maxYNum = 0;
   for (let r = 0; r < F.rows; r++)
-    for (const t of niceTicks(yOf[r][0], yOf[r][1], 4)) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
+    for (const t of majorTicks(yOf[r][0], yOf[r][1], F.yStep)) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
   // Only reserve room on a side that some panel actually decorates.
   const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
   const room = (side, vert) =>
@@ -220,8 +296,33 @@ function renderInto(svg, ink, paper){
 
     // Series
     const g = add('g', { 'clip-path': `url(#${clipId})` });
+    // Bars of different series sharing a category sit side by side inside the slot.
+    const barSeries = F.series.filter(s=> s.show && s.kind === 'bar' && s.panel === pi);
     for (const s of F.series){
       if (!s.show || s.panel !== pi) continue;
+      if (s.kind === 'bar'){
+        const nb = barSeries.length, bi = barSeries.indexOf(s);
+        const slot = Math.abs(X(1) - X(0));           // one category, in px
+        const wPx = Math.max(1, slot * s.width / nb);
+        const off = (bi - (nb - 1) / 2) * wPx;
+        const zero = Y(Math.max(y0, Math.min(y1, 0)));
+        s.xs.forEach((xv, j)=>{
+          const yv = s.ys[j];
+          if (!isFinite(xv) || !isFinite(yv)) return;
+          const cx = X(xv) + off, yy = Y(yv);
+          add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
+                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2), fill:s.color }, g);
+          const err = s.errs && s.errs[j];
+          if (isFinite(err) && err > 0){
+            const yA = Y(yv - err), yB = Y(yv + err), cap = Math.min(4, wPx / 3);
+            const st = { stroke:ink, 'stroke-width':0.8 };
+            add('line', { x1:cx, x2:cx, y1:yA, y2:yB, ...st }, g);
+            add('line', { x1:cx-cap, x2:cx+cap, y1:yA, y2:yA, ...st }, g);
+            add('line', { x1:cx-cap, x2:cx+cap, y1:yB, y2:yB, ...st }, g);
+          }
+        });
+        continue;
+      }
       if (s.marker !== 'none'){
         for (let i = 0; i < s.xs.length; i++){
           if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
@@ -243,8 +344,11 @@ function renderInto(svg, ink, paper){
     // ---- Axes: four independent sides ------------------------------------
     const A = p.axes || (p.axes = newAxes());
     const free = sideFree(pi);
-    const xMaj = niceTicks(x0, x1, 4).filter(t=> t >= x0 && t <= x1);
-    const yMaj = niceTicks(y0, y1, 4).filter(t=> t >= y0 && t <= y1);
+    const xMaj = majorTicks(x0, x1, F.xStep);
+    const yMaj = majorTicks(y0, y1, F.yStep);
+    // A bar chart's X axis is categorical: the tick labels carried over from the
+    // source plot replace the numbers, one per category inside the panel's range.
+    const cats = F.cats && F.cats.length ? F.cats.filter(c=> c.x >= x0 && c.x <= x1) : null;
     // Base coordinate of each side, and the outward normal direction along the axis
     // that ticks/labels/titles grow into.
     const GEO = {
@@ -282,6 +386,17 @@ function renderInto(svg, ink, paper){
       // touches a neighbour can carry tick marks but nothing that would overlap it.
       if (!free[side]) continue;
 
+      if (a.labels && cats && !g0.vert){
+        for (const c of cats){
+          const q = X(c.x), rot = c.rot || 0;
+          const at = side === 'bottom' ? { x:q, y:g0.base + fTick*1.15 } : { x:q, y:g0.base - fTick*0.5 };
+          const el = add('text', { ...at, 'font-size':fTick, fill:ink,
+                                   'text-anchor': rot ? 'end' : 'middle' });
+          if (rot) el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
+          el.textContent = c.text;
+        }
+        continue;
+      }
       if (a.labels){
         for (const t of majors){
           const q = proj(t), txt = fmtTick(t);
@@ -330,7 +445,7 @@ function renderInto(svg, ink, paper){
         const ly = py0 + fLeg * (1.3 + k * 1.35) + (p.title ? fTitle*1.2 : 0);
         const lx = px0 + pw - 6;
         const tw = textW(s.label, fLeg);
-        add('line', { x1:lx-tw-16, x2:lx-tw-4, y1:ly-fLeg*0.32, y2:ly-fLeg*0.32, stroke:s.color, 'stroke-width':s.width });
+        legendMark(add, s, lx-tw-16, lx-tw-4, ly-fLeg*0.32);
         const el = add('text', { x:lx, y:ly, 'font-size':fLeg, fill:ink, 'text-anchor':'end' });
         el.textContent = s.label;
       });
@@ -349,7 +464,7 @@ function renderInto(svg, ink, paper){
     let x = mL + Math.max(0, (innerW - (total - gap)) / 2);
     const y = H - fLeg * 0.6;
     items.forEach(s=>{
-      add('line', { x1:x, x2:x+lw, y1:y-fLeg*0.32, y2:y-fLeg*0.32, stroke:s.color, 'stroke-width':s.width });
+      legendMark(add, s, x, x+lw, y-fLeg*0.32);
       const el = add('text', { x:x+lw+4, y, 'font-size':fLeg, fill:ink });
       el.textContent = s.label;
       x += lw + 4 + textW(s.label, fLeg) + gap;
@@ -436,21 +551,32 @@ function controlsHtml(){
     <button class="btn btn-sm" data-add-panel type="button">+ Add panel</button>
   </section>
 
-  <section class="fig-sec"><h4>Series</h4>
+  <section class="fig-sec">
+    <div class="fig-sechead">
+      <h4>Series</h4>
+      <button class="palette-pick-btn fig-pal" type="button" title="Apply color palette"></button>
+      <select data-k="palScope" title="How a palette is spread">
+        <option value="series"${F.palScope==='series'?' selected':''}>by series</option>
+        <option value="panel"${F.palScope==='panel'?' selected':''}>by panel</option>
+      </select>
+    </div>
     ${F.series.map((s,i)=>`
       <div class="fig-serie" data-s="${i}">
         <input type="checkbox" data-sk="show" data-s="${i}"${s.show?' checked':''} title="Show">
-        <input type="color" data-sk="color" data-s="${i}" value="${s.color}">
+        <button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>
         <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
         <select data-sk="panel" data-s="${i}" title="Panel">${panelOptions(s.panel)}</select>
-        <input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.2" max="6" step="0.1" title="Line width">
-        <select data-sk="dash" data-s="${i}" title="Line style">
-          ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
-        </select>
-        <select data-sk="marker" data-s="${i}" title="Markers">
-          ${['none','circle','both'].map(m=>`<option value="${m}"${s.marker===m?' selected':''}>${m}</option>`).join('')}
-        </select>
-      </div>`).join('') || '<p class="txt-meta">This plot has no line series.</p>'}
+        ${s.kind === 'bar'
+          ? `<input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.1" max="1" step="0.05" title="Bar width (fraction of the category slot)">
+             <span class="fig-kind">bars</span>`
+          : `<input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.2" max="6" step="0.1" title="Line width">
+             <select data-sk="dash" data-s="${i}" title="Line style">
+               ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
+             </select>
+             <select data-sk="marker" data-s="${i}" title="Markers">
+               ${['none','circle','both'].map(m=>`<option value="${m}"${s.marker===m?' selected':''}>${m}</option>`).join('')}
+             </select>`}
+      </div>`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
   </section>
 
   <section class="fig-sec"><h4>Axes</h4>
@@ -462,6 +588,8 @@ function controlsHtml(){
     ${F.xAuto?'':`${num('X min','xmin',-1e9,1e9,'any')}${num('X max','xmax',-1e9,1e9,'any')}`}
     <label class="fig-check"><input type="checkbox" data-k="yAuto"${F.yAuto?' checked':''}> Y auto range</label>
     ${F.yAuto?'':`${num('Y min','ymin',-1e9,1e9,'any')}${num('Y max','ymax',-1e9,1e9,'any')}`}
+    ${num('X tick step','xStep',0,1e9,'any')}${num('Y tick step','yStep',0,1e9,'any')}
+    <p class="txt-meta">Tick step 0 picks a round interval automatically.</p>
   </section>
 
   <section class="fig-sec"><h4>Panel axes</h4>
@@ -514,6 +642,24 @@ function clampPanels(){
   F.series.forEach(s=>{ if (s.panel >= F.panels.length) s.panel = 0; });
 }
 
+// Spread a palette over the series. 'series' scope walks every series once, so no
+// two share a colour; 'panel' scope restarts the palette inside each panel, so the
+// same colours repeat panel by panel — useful when panels compare like with like.
+function applyPalette(colors){
+  if (!colors || !colors.length) return;
+  if (F.palScope === 'panel'){
+    const seen = new Map();
+    F.series.forEach(s=>{
+      const k = seen.get(s.panel) || 0;
+      s.color = colors[k % colors.length];
+      seen.set(s.panel, k + 1);
+    });
+  } else {
+    F.series.forEach((s, i)=>{ s.color = colors[i % colors.length]; });
+  }
+  refresh(true);
+}
+
 function refresh(rebuild){
   clampPanels();
   if (rebuild) controlsEl.innerHTML = controlsHtml();
@@ -521,7 +667,7 @@ function refresh(rebuild){
 }
 
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax']);
+  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep']);
   controlsEl.addEventListener('input', e=>{
     const t = e.target;
     let rebuild = false;
@@ -567,6 +713,19 @@ function wireControls(){
   });
   controlsEl.addEventListener('change', e=>{ if (e.target.tagName === 'SELECT') refresh(false); });
   controlsEl.addEventListener('click', e=>{
+    const sw = e.target.closest('.color-swatch');
+    if (sw){
+      const s = F.series[+sw.dataset.sw]; if (!s) return;
+      colorPickerUI.open(sw, s.color, color=>{
+        s.color = color; sw.dataset.color = color; sw.style.background = color;
+        refresh(false);
+      });
+      return;
+    }
+    if (e.target.closest('.fig-pal')){
+      palettePickerUI.open(e.target.closest('.fig-pal'), colors=> applyPalette(colors));
+      return;
+    }
     const addB = e.target.closest('[data-add-panel]');
     const delB = e.target.closest('[data-del-panel]');
     if (addB){
