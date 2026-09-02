@@ -7,14 +7,11 @@ import { Plot } from './plot.js';
 (function(){
   let files = []; // {name, label, b[], a[]}
   let lastY = [];
-  // pending unpaired files: stem → {dta: File|null, dsc: File|null}
-  let pending = {};
   let loadAlerts = '';
   let uploadAlerts = '';
   let pendingAlerts = '';   // ephemeral notice about unpaired uploads
 
-  // Delegated click handling for dynamically generated buttons (alerts + pending
-  // table), so no per-button global onclick handlers are needed.
+  // Delegated click handling for the dynamically generated alert dismiss buttons.
   document.getElementById('tab-epr').addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-action]');
     if (!btn || !document.getElementById('tab-epr').contains(btn)) return;
@@ -37,7 +34,7 @@ import { Plot } from './plot.js';
       onLabelChange(i, v){ files[i].label=v; updateEpr(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateEpr(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; pending={}; loadAlerts=''; uploadAlerts=''; pendingAlerts=''; rebuildAlerts(); afterFilesChange(); },
+      onRemoveAll(){ files.length=0; loadAlerts=''; uploadAlerts=''; pendingAlerts=''; rebuildAlerts(); afterFilesChange(); },
     };
   }
 
@@ -46,19 +43,11 @@ import { Plot } from './plot.js';
     document.getElementById('eprPendingWrap').innerHTML = pendingAlerts;
   }
 
-  // Notice about unpaired uploads (.DTA without its .DSC or vice-versa). Like the
-  // other upload warnings this is an EPHEMERAL snapshot taken at upload time — not a
-  // live view of `pending` — so it can be dismissed and is replaced by the next
-  // upload. `pending` itself is untouched, so dropping the notice never throws away
-  // a file that is still waiting for its partner.
-  function buildPendingAlert(){
-    const names = [];
-    for (const [, pair] of Object.entries(pending)){
-      if (pair.dta) names.push(pair.dta.name);
-      if (pair.dsc) names.push(pair.dsc.name);
-    }
+  // A .DTA/.DSC arriving without its partner in the same drop is simply not loaded —
+  // nothing is held back waiting for it. This is just the ephemeral warning saying so.
+  function buildPendingAlert(names){
     pendingAlerts = names.length ? buildAlertsHtml([], names,
-      'Unpaired file(s) uploaded. Upload both the .DTA and .DSC files to proceed:',
+      'Not loaded — a .DTA and its .DSC must be uploaded together:',
       undefined, 'epr-dismiss-pending') : '';
   }
 
@@ -113,29 +102,32 @@ import { Plot } from './plot.js';
     const invalidFiles = [];
     const alreadyLoaded = [];
 
+    // Group by stem WITHIN THIS DROP only — nothing is carried over between uploads.
+    const groups = {};
     for (const f of fileList){
       const ext  = f.name.split('.').pop().toLowerCase();
       const stem = f.name.replace(/\.[^.]+$/, '');
       if (ext !== 'dta' && ext !== 'dsc'){ invalidFiles.push(f.name); continue; }
       if (existingStems.has(stem)){ alreadyLoaded.push(f.name); continue; }
-      if (!pending[stem]) pending[stem] = {dta: null, dsc: null};
-      if (ext === 'dta') pending[stem].dta = f;
-      else               pending[stem].dsc = f;
+      if (!groups[stem]) groups[stem] = { dta: null, dsc: null };
+      groups[stem][ext] = f;
     }
 
-    // Try to process complete pairs
-    for (const [stem, pair] of Object.entries(pending)){
+    // Complete pairs load; a lone half is reported and dropped.
+    const unpaired = [];
+    for (const [stem, pair] of Object.entries(groups)){
       if (pair.dta && pair.dsc){
         const result = await processPair(stem, pair.dta, pair.dsc);
         if (result){ result.color = nextColor(files); files.push(result); existingStems.add(stem); }
         else { invalidFiles.push(stem); }
-        delete pending[stem];
+      } else {
+        unpaired.push((pair.dta || pair.dsc).name);
       }
     }
 
     loadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'epr-dismiss-invalid') : '';
     uploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'epr-dismiss-upload') : '';
-    buildPendingAlert();
+    buildPendingAlert(unpaired);
     rebuildAlerts();
     afterFilesChange();
   });
@@ -166,8 +158,8 @@ import { Plot } from './plot.js';
     document.getElementById('eprNorm').value = s.norm;
     document.getElementById('eprSmooth').value = s.smooth;
     afterFilesChange();
-    // Clear the previous tab's transient alerts + unpaired list, then rebuild.
-    loadAlerts = ''; uploadAlerts = ''; pendingAlerts = ''; pending = {}; rebuildAlerts();
+    // Clear the previous tab's transient alerts, then rebuild.
+    loadAlerts = ''; uploadAlerts = ''; pendingAlerts = ''; rebuildAlerts();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
   registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(true); });
