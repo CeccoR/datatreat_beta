@@ -386,8 +386,26 @@ class Plot{
     zoomBtn.onclick = ()=>{ this.setMode(this._mode==='zoom'?null:'zoom'); };
     this._onModeChange = sync;
     // Order (top→bottom): snapshot, copy, pan, zoom.
+    // Advanced figure composer — sits with the image buttons. Loaded on demand so
+    // the editor's code isn't parsed until someone actually opens it (and so
+    // figure.js can import from here without a static import cycle).
+    const figBtn = document.createElement('button');
+    figBtn.className = 'btn plot-tool-btn';
+    figBtn.title = 'Figure composer (advanced export)';
+    figBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="3" y1="12" x2="21" y2="12"/></svg>`;
+    figBtn.onclick = async ()=>{
+      const dlBtn = wrapEl.querySelector('.plot-dl-btn');
+      const legId = dlBtn && dlBtn.dataset.dlLegend;
+      const name = (dlBtn && dlBtn.dataset.dlName || 'figure').replace(/\.[^.]+$/, '');
+      try {
+        const mod = await import('./figure.js');
+        mod.openFigureEditor(this, { legendEl: legId ? document.getElementById(legId) : null, name });
+      } catch(err){ console.error('figure composer failed to load', err); }
+    };
+
     div.appendChild(snapBtn);
     if (copyBtn) div.appendChild(copyBtn);
+    div.appendChild(figBtn);
     div.appendChild(panBtn);
     div.appendChild(zoomBtn);
     col.appendChild(div);

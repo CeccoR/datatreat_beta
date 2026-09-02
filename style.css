@@ -2069,3 +2069,63 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   display: inline-flex;
   align-items: center;
 }
+
+/* ===== Figure composer (advanced export modal) =====
+   Wide two-pane modal: live preview of the real-size figure on the left, the
+   controls on the right. Export-only — it never writes back to the page plot. */
+.fig-backdrop { align-items: stretch; justify-content: stretch; padding: 20px; }
+.fig-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column;
+  width: 100%; height: 100%; overflow: hidden;
+}
+.fig-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0;
+}
+.fig-x {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 4px 6px; transition: color 0.14s;
+}
+.fig-body { display: flex; flex: 1; min-height: 0; }
+.fig-preview {
+  flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); overflow: auto; padding: 12px;
+}
+.fig-svg { box-shadow: 0 2px 14px rgba(0,0,0,0.35); background: #fff; }
+.fig-controls {
+  width: 340px; flex-shrink: 0; overflow-y: auto;
+  border-left: 1px solid var(--line); padding: 4px 14px 18px;
+}
+.fig-sec { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.fig-sec:last-child { border-bottom: none; }
+.fig-sec h4 {
+  margin: 0 0 10px; font-size: 12px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+}
+.fig-row { display: flex; align-items: center; gap: 8px; margin: 0 0 7px; font-size: 12px; }
+.fig-row > span { flex: 0 0 118px; color: var(--muted); }
+.fig-row input, .fig-row select { flex: 1; min-width: 0; }
+.fig-check { display: flex; align-items: center; gap: 7px; margin: 0 0 7px; font-size: 12px; color: var(--muted); }
+.fig-check input { flex: 0 0 auto; width: auto; }
+.fig-panel, .fig-serie {
+  display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 11px;
+}
+.fig-panel > b { flex: 0 0 22px; color: var(--muted); }
+.fig-panel label { display: flex; align-items: center; gap: 2px; color: var(--muted); margin: 0; }
+.fig-panel input[type="number"] { width: 38px; padding: 3px 4px; }
+.fig-ptitle { flex: 1; min-width: 0; padding: 3px 5px; }
+.fig-serie input[type="color"] { width: 26px; height: 22px; padding: 0; flex: 0 0 auto; }
+.fig-serie input[type="checkbox"] { flex: 0 0 auto; width: auto; }
+.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; }
+.fig-serie select { flex: 0 0 auto; max-width: 74px; padding: 3px 2px; }
+.fig-serie input[type="number"] { width: 46px; padding: 3px 4px; }
+.fig-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; border-top: 1px solid var(--line); flex-shrink: 0;
+}
+@media (max-width: 900px) {
+  .fig-body { flex-direction: column; }
+  .fig-controls { width: auto; border-left: none; border-top: 1px solid var(--line); }
+}
