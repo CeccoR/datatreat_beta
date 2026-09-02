@@ -269,16 +269,35 @@ function renderInto(svg, ink, paper){
   let maxYNum = 0;
   for (let r = 0; r < F.rows; r++)
     for (const t of majorTicks(yOf[r][0], yOf[r][1], F.yStep)) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
+  // How far the X labels stick out sideways and downwards. A number is centred on
+  // its tick, so the outermost ones overhang the frame by half their width; tilted
+  // category names hang below the axis and lean past its left end.
+  let halfX = 0, catDrop = 0, catLean = 0;
+  for (let c = 0; c < F.cols; c++)
+    for (const t of majorTicks(xOf[c][0], xOf[c][1], F.xStep)) halfX = Math.max(halfX, textW(fmtTick(t), fTick) / 2);
+  if (F.cats && F.cats.length){
+    for (const cat of F.cats){
+      const w = textW(cat.text, fTick), rad = (cat.rot || 0) * Math.PI / 180;
+      catDrop = Math.max(catDrop, w * Math.sin(rad) + fTick * Math.cos(rad));
+      catLean = Math.max(catLean, cat.rot ? w * Math.cos(rad) : w / 2);
+    }
+    halfX = Math.max(halfX, catLean);
+  }
+  const xDrop = F.cats && F.cats.length ? Math.max(fTick * 1.7, catDrop + fTick * 0.6) : fTick * 1.7;
+
   // Only reserve room on a side that some panel actually decorates.
   const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
   const room = (side, vert) =>
-    (anySide(side, 'labels') ? (vert ? maxYNum + 8 : fTick * 1.7) : 0) +
-    (anySide(side, 'title') && (vert ? F.ylabel : F.xlabel) ? fAxis * 1.35 : 0);
-  const mL = 6 + room('left', true);
-  const mR = 8 + room('right', true);
-  const mT = 8 + room('top', false);
+    (anySide(side, 'labels') ? (vert ? maxYNum + 8 : xDrop) : 0) +
+    (anySide(side, 'title') && (vert ? F.ylabel : F.xlabel) ? fAxis * 1.5 : 0);
+  // Whatever the sides ask for, never less than the overhang of the outermost X
+  // label — that is what used to spill outside the figure.
+  const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
+  const mL = Math.max(10 + room('left', true), sideX);
+  const mR = Math.max(10 + room('right', true), sideX);
+  const mT = 10 + room('top', false);
   const legendH = (F.legendMode === 'global') ? fLeg * 2.1 : 0;
-  const mB = 6 + room('bottom', false) + legendH;
+  const mB = 10 + room('bottom', false) + legendH;
 
   const innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
   const cw = innerW / F.cols, ch = innerH / F.rows;
@@ -424,7 +443,7 @@ function renderInto(svg, ink, paper){
       // mode the four figure-level titles below replace these.
       const label = g0.vert ? F.ylabel : F.xlabel;
       if (a.title && label && F.titleMode !== 'shared'){
-        const clear = a.labels ? (g0.vert ? maxYNum + 8 : fTick * 1.7) : 6;
+        const clear = a.labels ? (g0.vert ? maxYNum + 8 : xDrop) : 6;
         if (g0.vert){
           const yc = py0 + ph/2, x = g0.base + g0.out * (clear + fAxis*0.9);
           add('text', { x, y:yc, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
@@ -672,6 +691,15 @@ function clampPanels(){
   F.series.forEach(s=>{ if (s.panel >= F.panels.length) s.panel = 0; });
 }
 
+// Deal the series out over the panels in order, as evenly as the counts allow —
+// 8 series over 3 panels give 3 / 3 / 2. Run whenever a panel is added, so a new
+// panel arrives with its share of the data instead of empty.
+function distributeSeries(){
+  const n = F.series.length, P = F.panels.length;
+  if (!n || !P) return;
+  F.series.forEach((s, i)=>{ s.panel = Math.floor(i * P / n); });
+}
+
 // Spread a palette over the series. 'series' scope walks every series once, so no
 // two share a colour; 'panel' scope restarts the palette inside each panel, so the
 // same colours repeat panel by panel — useful when panels compare like with like.
@@ -768,6 +796,7 @@ function wireControls(){
       for (let r = 0; r < F.rows && !spot; r++) for (let c = 0; c < F.cols && !spot; c++) if (!taken.has(r+','+c)) spot = [r,c];
       if (!spot){ F.rows += 1; spot = [F.rows-1, 0]; }
       F.panels.push(newPanel(spot[0], spot[1]));
+      distributeSeries();
       refresh(true);
     } else if (delB){
       const i = +delB.dataset.delPanel;
