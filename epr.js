@@ -190,7 +190,8 @@ import { Plot } from './plot.js';
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
     plot.drawAxes();
     Y.forEach((y,k)=>{
-      plot.line(files[k].b, y, files[k].color, 1.3);
+      // Draw the offset/normalised trace, but hand the composer the CSV values.
+      plot.line(files[k].b, y, files[k].color, 1.3, undefined, { xs: files[k].b, ys: files[k].a });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`; legend.appendChild(s);
     });
     lastY = Y;

@@ -2095,8 +2095,8 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 }
 .fig-svg { box-shadow: 0 2px 14px rgba(0,0,0,0.35); background: #fff; }
 .fig-controls {
-  width: 340px; flex-shrink: 0; overflow-y: auto;
-  border-left: 1px solid var(--line); padding: 4px 14px 18px;
+  width: 420px; flex-shrink: 0; overflow-y: auto;
+  border-left: 1px solid var(--line); padding: 4px 16px 18px;
 }
 .fig-sec { border-bottom: 1px solid var(--line); padding: 12px 0; }
 .fig-sec:last-child { border-bottom: none; }
@@ -2121,6 +2121,18 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 .fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; }
 .fig-serie select { flex: 0 0 auto; max-width: 74px; padding: 3px 2px; }
 .fig-serie input[type="number"] { width: 46px; padding: 3px 4px; }
+/* Panel-axes matrix: one row per side, one column per toggle. The header labels
+   the checkbox columns, so both grids must share the same template. */
+.fig-axhead, .fig-axrow {
+  display: grid; grid-template-columns: 52px repeat(5, 1fr) 62px;
+  align-items: center; gap: 4px; font-size: 11px;
+}
+.fig-axhead { color: var(--muted); margin-bottom: 5px; }
+.fig-axhead span { text-align: center; font-size: 10px; letter-spacing: .03em; }
+.fig-axrow { margin-bottom: 5px; }
+.fig-axrow > b { color: var(--muted); font-weight: 500; }
+.fig-axrow input[type="checkbox"] { justify-self: center; margin: 0; }
+.fig-axrow select { padding: 3px 2px; min-width: 0; }
 .fig-foot {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 16px; border-top: 1px solid var(--line); flex-shrink: 0;

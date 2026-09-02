@@ -54,13 +54,29 @@ function seriesFromPlot(plot, legendEl){
       dash: e.dash || '',
       marker: e.type === 'points' ? 'circle' : 'none',
       show: true,
-      xs: e.xs, ys: e.ys,
+      // Prefer the undisplaced data a module attached to the entry: a stacked
+      // overview draws offset/normalised traces, but a figure must carry the same
+      // numbers as the exported CSV.
+      xs: (e.raw && e.raw.xs) || e.xs,
+      ys: (e.raw && e.raw.ys) || e.ys,
     });
   });
   return out;
 }
 
-function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '' }; }
+/* Per-panel axis configuration. Each of the four sides is independent:
+     on     — draw the axis line itself
+     major  — major tick marks
+     minor  — minor tick marks (4 between each pair of majors)
+     dir    — 'out' | 'in' | 'both'
+     labels — tick numbers
+     title  — the figure's X (bottom/top) or Y (left/right) title next to this side
+   Defaults follow the usual convention: a full left+bottom pair, bare right+top. */
+const SIDES = ['left', 'bottom', 'right', 'top'];
+const newSide = full => ({ on:true, major:true, minor:false, dir:'out', labels:full, title:full });
+const newAxes = () => ({ left:newSide(true), bottom:newSide(true), right:newSide(false), top:newSide(false) });
+
+function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '', axes: newAxes() }; }
 
 function buildModel(plot, opts){
   const strip = s => String(s || '').replace(/<[^>]*>/g, '');
@@ -106,6 +122,31 @@ function extentOf(panelIdxs){
 const panelsInCol = c => F.panels.map((p,i)=>i).filter(i=>{ const p=F.panels[i]; return c >= p.c && c < p.c + p.cs; });
 const panelsInRow = r => F.panels.map((p,i)=>i).filter(i=>{ const p=F.panels[i]; return r >= p.r && r < p.r + p.rs; });
 
+// True when nothing sits immediately beyond `side` of panel `i` — i.e. there is
+// room outside that edge for tick numbers and an axis title. Panels touch, so a
+// side facing a neighbour can only carry tick marks.
+function sideFree(i){
+  const p = F.panels[i];
+  const occupied = (r, c) => F.panels.some((q, k)=> k !== i && r >= q.r && r < q.r + q.rs && c >= q.c && c < q.c + q.cs);
+  const span = (from, n, fn) => { for (let k = from; k < from + n; k++) if (occupied(...fn(k))) return false; return true; };
+  return {
+    left:   p.c === 0                 || span(p.r, p.rs, r => [r, p.c - 1]),
+    right:  p.c + p.cs >= F.cols      || span(p.r, p.rs, r => [r, p.c + p.cs]),
+    top:    p.r === 0                 || span(p.c, p.cs, c => [p.r - 1, c]),
+    bottom: p.r + p.rs >= F.rows      || span(p.c, p.cs, c => [p.r + p.rs, c]),
+  };
+}
+
+// 4 minor ticks between each pair of majors, extended one interval past both ends.
+function minorTicks(majors, lo, hi){
+  if (majors.length < 2) return [];
+  const step = (majors[1] - majors[0]) / 5, out = [];
+  for (let v = majors[0] - 5 * step; v <= majors[majors.length-1] + 5 * step + step/2; v += step){
+    if (v >= lo && v <= hi) out.push(v);
+  }
+  return out;
+}
+
 // Resolve the X/Y range that applies to each panel, honouring the share toggles.
 function computeRanges(){
   const all = F.panels.map((_, i)=> i);
@@ -149,11 +190,16 @@ function renderInto(svg, ink, paper){
   let maxYNum = 0;
   for (let r = 0; r < F.rows; r++)
     for (const t of niceTicks(yOf[r][0], yOf[r][1], 4)) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
-  const mL = 6 + (F.ylabel ? fAxis * 1.35 : 0) + maxYNum + 8;
-  const mR = 8;
-  const mT = 8;
+  // Only reserve room on a side that some panel actually decorates.
+  const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
+  const room = (side, vert) =>
+    (anySide(side, 'labels') ? (vert ? maxYNum + 8 : fTick * 1.7) : 0) +
+    (anySide(side, 'title') && (vert ? F.ylabel : F.xlabel) ? fAxis * 1.35 : 0);
+  const mL = 6 + room('left', true);
+  const mR = 8 + room('right', true);
+  const mT = 8 + room('top', false);
   const legendH = (F.legendMode === 'global') ? fLeg * 2.1 : 0;
-  const mB = 6 + fTick * 1.7 + (F.xlabel ? fAxis * 1.35 : 0) + legendH;
+  const mB = 6 + room('bottom', false) + legendH;
 
   const innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
   const cw = innerW / F.cols, ch = innerH / F.rows;
@@ -194,36 +240,81 @@ function renderInto(svg, ink, paper){
       }
     }
 
-    // Frame
-    add('rect', { x:px0, y:py0, width:pw, height:ph, fill:'none', stroke:ink, 'stroke-width':0.8 });
+    // ---- Axes: four independent sides ------------------------------------
+    const A = p.axes || (p.axes = newAxes());
+    const free = sideFree(pi);
+    const xMaj = niceTicks(x0, x1, 4).filter(t=> t >= x0 && t <= x1);
+    const yMaj = niceTicks(y0, y1, 4).filter(t=> t >= y0 && t <= y1);
+    // Base coordinate of each side, and the outward normal direction along the axis
+    // that ticks/labels/titles grow into.
+    const GEO = {
+      left:   { vert:true,  base:px0,    out:-1 },
+      right:  { vert:true,  base:px0+pw, out:+1 },
+      top:    { vert:false, base:py0,    out:-1 },
+      bottom: { vert:false, base:py0+ph, out:+1 },
+    };
+    const TICK_MAJ = 4, TICK_MIN = 2.2;
 
-    // Ticks — numbers only where they can't collide: X under the bottom-most
-    // panels, Y left of the first column.
-    const atBottom = (p.r + p.rs) >= F.rows;
-    const atLeft = p.c === 0;
-    // A number that would spill across an INTERNAL edge is dropped: with touching
-    // panels it would otherwise collide with the neighbour's first/last number.
-    const innerL = p.c > 0, innerR = (p.c + p.cs) < F.cols;
-    const innerT = p.r > 0, innerB = (p.r + p.rs) < F.rows;
-    for (const t of niceTicks(x0, x1, 4)){
-      if (t < x0 || t > x1) continue;
-      const xx = X(t);
-      add('line', { x1:xx, x2:xx, y1:py0+ph, y2:py0+ph-4, stroke:ink, 'stroke-width':0.8 });
-      if (!atBottom) continue;
-      const hw = textW(fmtTick(t), fTick) / 2;
-      if ((innerL && xx - hw < px0 + 1) || (innerR && xx + hw > px0 + pw - 1)) continue;
-      const el = add('text', { x:xx, y:py0+ph+fTick*1.25, 'font-size':fTick, fill:ink, 'text-anchor':'middle' });
-      el.textContent = fmtTick(t);
-    }
-    for (const t of niceTicks(y0, y1, 4)){
-      if (t < y0 || t > y1) continue;
-      const yy = Y(t);
-      add('line', { x1:px0, x2:px0+4, y1:yy, y2:yy, stroke:ink, 'stroke-width':0.8 });
-      if (!atLeft) continue;
-      const hh = fTick * 0.55;
-      if ((innerT && yy - hh < py0 + 1) || (innerB && yy + hh > py0 + ph - 1)) continue;
-      const el = add('text', { x:px0-5, y:yy+fTick*0.36, 'font-size':fTick, fill:ink, 'text-anchor':'end' });
-      el.textContent = fmtTick(t);
+    for (const side of SIDES){
+      const a = A[side], g0 = GEO[side];
+      if (!a.on && !a.major && !a.minor && !a.labels && !a.title) continue;
+      if (a.on){
+        const e = g0.vert ? { x1:g0.base, x2:g0.base, y1:py0, y2:py0+ph }
+                          : { x1:px0, x2:px0+pw, y1:g0.base, y2:g0.base };
+        add('line', { ...e, stroke:ink, 'stroke-width':0.8 });
+      }
+
+      // Tick marks. `dir` decides which side of the axis line they stick out of.
+      const mark = (pos, len)=>{
+        const o = g0.out * len;
+        const from = a.dir === 'in' ? 0 : (a.dir === 'both' ? -o : 0);
+        const to   = a.dir === 'in' ? -o : o;
+        const e = g0.vert ? { x1:g0.base+from, x2:g0.base+to, y1:pos, y2:pos }
+                          : { x1:pos, x2:pos, y1:g0.base+from, y2:g0.base+to };
+        add('line', { ...e, stroke:ink, 'stroke-width':0.8 });
+      };
+      const proj = g0.vert ? Y : X;
+      const majors = g0.vert ? yMaj : xMaj;
+      if (a.major) majors.forEach(t=> mark(proj(t), TICK_MAJ));
+      if (a.minor) minorTicks(majors, ...(g0.vert ? [y0, y1] : [x0, x1])).forEach(t=> mark(proj(t), TICK_MIN));
+
+      // Numbers and title only where there is room outside the panel; a side that
+      // touches a neighbour can carry tick marks but nothing that would overlap it.
+      if (!free[side]) continue;
+
+      if (a.labels){
+        for (const t of majors){
+          const q = proj(t), txt = fmtTick(t);
+          let at;
+          if (g0.vert){
+            // Drop a number that would spill past an edge shared with a neighbour.
+            const hh = fTick * 0.55;
+            if ((!free.top && q - hh < py0 + 1) || (!free.bottom && q + hh > py0 + ph - 1)) continue;
+            at = side === 'left'
+              ? { x:g0.base-5, y:q+fTick*0.36, 'text-anchor':'end' }
+              : { x:g0.base+5, y:q+fTick*0.36, 'text-anchor':'start' };
+          } else {
+            const hw = textW(txt, fTick) / 2;
+            if ((!free.left && q - hw < px0 + 1) || (!free.right && q + hw > px0 + pw - 1)) continue;
+            at = { x:q, y: side === 'bottom' ? g0.base+fTick*1.25 : g0.base-fTick*0.5, 'text-anchor':'middle' };
+          }
+          add('text', { ...at, 'font-size':fTick, fill:ink }).textContent = txt;
+        }
+      }
+
+      // Axis title, pushed clear of the numbers when they are present.
+      const label = g0.vert ? F.ylabel : F.xlabel;
+      if (a.title && label){
+        const clear = a.labels ? (g0.vert ? maxYNum + 8 : fTick * 1.7) : 6;
+        if (g0.vert){
+          const yc = py0 + ph/2, x = g0.base + g0.out * (clear + fAxis*0.9);
+          add('text', { x, y:yc, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
+                        transform:`rotate(${side === 'left' ? -90 : 90} ${x} ${yc})` }).textContent = label;
+        } else {
+          const y = g0.base + g0.out * (clear + fAxis * (side === 'bottom' ? 1.0 : 0.4));
+          add('text', { x:px0+pw/2, y, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = label;
+        }
+      }
     }
 
     // Panel title (top-left, inside)
@@ -246,17 +337,8 @@ function renderInto(svg, ink, paper){
     }
   });
 
-  // Axis titles (one per figure — the quantity is shared even when ranges aren't)
-  if (F.xlabel){
-    const el = add('text', { x: mL + innerW/2, y: H - legendH - 4, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' });
-    el.textContent = F.xlabel;
-  }
-  if (F.ylabel){
-    const yc = mT + innerH/2;
-    const el = add('text', { x: fAxis*1.1, y: yc, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
-                             transform:`rotate(-90 ${fAxis*1.1} ${yc})` });
-    el.textContent = F.ylabel;
-  }
+  // Axis titles are drawn per panel side (see the axes loop above), so nothing
+  // figure-level is left here.
 
   // Global legend: one centred row under everything
   if (F.legendMode === 'global'){
@@ -324,6 +406,8 @@ const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'
 const num = (label, key, min, max, step)=>
   `<label class="fig-row"><span>${label}</span><input type="number" data-k="${key}" value="${F[key]}" min="${min}" max="${max}" step="${step||1}"></label>`;
 
+let axSel = 0;                // panel whose axes the "Panel axes" section edits
+
 function panelOptions(sel){
   return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1} (r${p.r+1},c${p.c+1})</option>`).join('');
 }
@@ -380,6 +464,22 @@ function controlsHtml(){
     ${F.yAuto?'':`${num('Y min','ymin',-1e9,1e9,'any')}${num('Y max','ymax',-1e9,1e9,'any')}`}
   </section>
 
+  <section class="fig-sec"><h4>Panel axes</h4>
+    <label class="fig-row"><span>Panel</span>
+      <select data-k="axSel">${panelOptions(axSel)}</select></label>
+    <div class="fig-axhead"><span></span><span>axis</span><span>major</span><span>minor</span><span>numbers</span><span>title</span><span>ticks</span></div>
+    ${SIDES.map(side=>{
+      const a = (((F.panels[axSel] || {}).axes) || newAxes())[side];
+      const cb = (k)=>`<input type="checkbox" data-ak="${k}" data-side="${side}"${a[k]?' checked':''}>`;
+      return `<div class="fig-axrow"><b>${side}</b>
+        ${cb('on')}${cb('major')}${cb('minor')}${cb('labels')}${cb('title')}
+        <select data-ak="dir" data-side="${side}">
+          ${['out','in','both'].map(d=>`<option value="${d}"${a.dir===d?' selected':''}>${d}</option>`).join('')}
+        </select></div>`;
+    }).join('')}
+    <p class="txt-meta">Numbers and titles are drawn only where a panel edge has free space beside it — a side facing a neighbouring panel keeps its tick marks only.</p>
+  </section>
+
   <section class="fig-sec"><h4>Legend &amp; type</h4>
     <label class="fig-row"><span>Legend</span>
       <select data-k="legendMode">
@@ -408,7 +508,9 @@ function clampPanels(){
     p.rs = Math.min(Math.max(1, p.rs), F.rows - p.r);
     p.cs = Math.min(Math.max(1, p.cs), F.cols - p.c);
     if (overlaps(i, p.r, p.c, p.rs, p.cs)){ p.rs = 1; p.cs = 1; }
+    if (!p.axes) p.axes = newAxes();
   });
+  if (axSel >= F.panels.length) axSel = 0;
   F.series.forEach(s=>{ if (s.panel >= F.panels.length) s.panel = 0; });
 }
 
@@ -425,9 +527,14 @@ function wireControls(){
     let rebuild = false;
     if (t.dataset.k){
       const k = t.dataset.k;
+      if (k === 'axSel'){ axSel = +t.value; refresh(true); return; }
       F[k] = t.type === 'checkbox' ? t.checked : (numKeys.has(k) ? parseFloat(t.value) : t.value);
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
       if (k === 'xAuto' || k === 'yAuto') rebuild = true;
+    } else if (t.dataset.ak){
+      const p = F.panels[axSel]; if (!p) return;
+      const a = (p.axes || (p.axes = newAxes()))[t.dataset.side]; if (!a) return;
+      a[t.dataset.ak] = t.type === 'checkbox' ? t.checked : t.value;
     } else if (t.dataset.f){
       F.font[t.dataset.f] = parseFloat(t.value) || 8;
     } else if (t.dataset.pk){
@@ -486,6 +593,7 @@ function wireControls(){
 export function openFigureEditor(plot, opts){
   if (!plot) return;
   F = buildModel(plot, opts || {});
+  axSel = 0;
   if (!F.series.length){ /* still open — the user may only want axes/labels */ }
 
   backdrop = document.createElement('div');

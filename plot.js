@@ -159,8 +159,11 @@ class Plot{
     if(this.ylabelSvg) yl.innerHTML=this.ylabelSvg; else yl.textContent=this.ylabel;
     this.gAxes.appendChild(xl); this.gAxes.appendChild(yl);
   }
-  line(xs, ys, color, width, dash){
-    const entry = {type:'line', xs, ys, color, width, dash};
+  // `raw` ({xs, ys}) is the undisplaced data behind a trace that is drawn offset or
+  // rescaled for readability (stacked overviews). It is never plotted — it's what the
+  // figure composer exports, so a composed figure carries the same numbers as the CSV.
+  line(xs, ys, color, width, dash, raw){
+    const entry = {type:'line', xs, ys, color, width, dash, raw};
     this._stored.push(entry);
     return this._renderLine(entry);
   }
