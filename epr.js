@@ -189,9 +189,16 @@ import { Plot } from './plot.js';
     plot.setRange(minArr(allB), maxArr(allB), baseOf(n-1), baseOf(0)+1.1);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
     plot.drawAxes();
+    // The composer gets the CSV's own "Smoothed_" column: moving average, background
+    // taken as the first point, divided by the peak-to-peak the chosen normalisation
+    // uses. Same numbers as the export, without the stacking offset.
+    const sms = files.map(f=>movingAverage(f.a, N));
+    const ppks = sms.map(sm => (maxArr(sm)-minArr(sm)) || 1);
+    const gPP = Math.max(...ppks);
     Y.forEach((y,k)=>{
-      // Draw the offset/normalised trace, but hand the composer the CSV values.
-      plot.line(files[k].b, y, files[k].color, 1.3, undefined, { xs: files[k].b, ys: files[k].a });
+      const sm = sms[k], bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP;
+      const csvY = sm.map(v=>(v-bg)/div);
+      plot.line(files[k].b, y, files[k].color, 1.3, undefined, { xs: files[k].b, ys: csvY });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`; legend.appendChild(s);
     });
     lastY = Y;
