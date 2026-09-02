@@ -1,5 +1,5 @@
 import { svgEl, niceTicks, fmtTick } from './plot.js';
-import { colorPickerUI, palettePickerUI } from './utils.js';
+import { colorPickerUI, palettePickerUI, fmtNum } from './utils.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
 // image mime types (and to save an already-built Blob for PNG).
@@ -86,11 +86,19 @@ function seriesFromPlot(plot, legendEl){
     g.keys.push(e.type === 'barpx' ? (e.xc + '@' + (e.dx || 0)) : null);
   }
   if (groups.size){
-    const errs = new Map();
-    for (const e of stored) if (e.type === 'errbar') errs.set(e.xc + '@' + (e.dx || 0), e.yerr);
+    const errs = new Map(), texts = new Map();
+    for (const e of stored){
+      if (e.type === 'errbar') errs.set(e.xc + '@' + (e.dx || 0), e.yerr);
+      // The source plot already formatted "value ± error" for each bar; reuse it.
+      if (e.type === 'barlabel') texts.set(e.xv + '@' + (e.dx || 0), e.text);
+    }
     let gi = 0;
     for (const g of groups.values()){
-      g.keys.forEach((k, j)=>{ if (k != null && errs.has(k)) g.errs[j] = errs.get(k); });
+      const txt = [];
+      g.keys.forEach((k, j)=>{
+        if (k != null && errs.has(k)) g.errs[j] = errs.get(k);
+        txt[j] = (k != null && texts.has(k)) ? texts.get(k) : null;
+      });
       out.push({
         id: 'b' + gi,
         kind: 'bar',
@@ -100,7 +108,7 @@ function seriesFromPlot(plot, legendEl){
         width: 0.8,                 // bar width as a fraction of the category slot
         dash: '', marker: 'none',
         show: true,
-        xs: g.xs, ys: g.ys, errs: g.errs,
+        xs: g.xs, ys: g.ys, errs: g.errs, texts: txt,
       });
       gi++;
     }
@@ -136,6 +144,11 @@ function buildModel(plot, opts){
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
     xStep: 0, yStep: 0,                 // major tick interval; 0 = pick a nice one
+    minorCount: 4,                      // minor ticks between two majors
+    grid: { x:false, y:false, minor:false, dash:'2,3' },
+    // Value labels drawn on the data. `scope` picks what carries them; a bar keeps
+    // the text the source plot already formatted (value ± error) when it has one.
+    dataLabels: { scope:'none', dec:2, pos:'above', rot:0, size:7, off:3 },
     titleMode: 'per-panel',             // 'per-panel' = a title beside each panel
                                         // side that asks for one; 'shared' = one
                                         // per side for the whole figure
@@ -207,11 +220,12 @@ function sideFree(i){
   };
 }
 
-// 4 minor ticks between each pair of majors, extended one interval past both ends.
+// `n` minor ticks between each pair of majors, extended one interval past both ends.
 function minorTicks(majors, lo, hi){
-  if (majors.length < 2) return [];
-  const step = (majors[1] - majors[0]) / 5, out = [];
-  for (let v = majors[0] - 5 * step; v <= majors[majors.length-1] + 5 * step + step/2; v += step){
+  const n = Math.max(0, Math.round(F.minorCount));
+  if (majors.length < 2 || !n) return [];
+  const div = n + 1, step = (majors[1] - majors[0]) / div, out = [];
+  for (let v = majors[0] - div * step; v <= majors[majors.length-1] + div * step + step/2; v += step){
     if (v >= lo && v <= hi) out.push(v);
   }
   return out;
@@ -316,8 +330,43 @@ function renderInto(svg, ink, paper){
     cp.appendChild(svgEl('rect', { x:px0, y:py0, width:pw, height:ph }));
     defs.appendChild(cp);
 
+    // Grid, under everything. Built from the same ticks the axes use, so it always
+    // lines up with the numbers whatever the tick step is.
+    const gx = majorTicks(x0, x1, F.xStep), gy = majorTicks(y0, y1, F.yStep);
+    if (F.grid.x || F.grid.y){
+      const gg = add('g', { 'clip-path': `url(#${clipId})` });
+      const rule = (a, minor)=> add('line', { ...a, stroke:ink, 'stroke-width': minor ? 0.3 : 0.5,
+                                              'stroke-dasharray':F.grid.dash, opacity: minor ? 0.28 : 0.45 }, gg);
+      if (F.grid.x){
+        for (const t of gx) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph });
+        if (F.grid.minor) for (const t of minorTicks(gx, x0, x1)) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph }, true);
+      }
+      if (F.grid.y){
+        for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) });
+        if (F.grid.minor) for (const t of minorTicks(gy, y0, y1)) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
+      }
+    }
+
     // Series
     const g = add('g', { 'clip-path': `url(#${clipId})` });
+    const DL = F.dataLabels;
+    const wantsLabels = s => DL.scope === 'all' || (DL.scope === 'bars' && s.kind === 'bar');
+    // One value label. `pos` is relative to the mark; the text rotates about its own
+    // anchor so a tilted label still starts where it points.
+    const valueLabel = (s, j, cx, yMark, yTop, yBot)=>{
+      const txt = (s.texts && s.texts[j]) != null ? s.texts[j] : fmtNum(s.ys[j], DL.dec);
+      if (txt == null || txt === '') return;
+      const size = DL.size * PT_PX, o = DL.off;
+      let y = yMark, anchor = 'middle', baseline = 'auto';
+      if (DL.pos === 'above'){ y = yTop - o; }
+      else if (DL.pos === 'below'){ y = yBot + o + size * 0.8; }
+      else if (DL.pos === 'inside'){ y = yTop + o + size * 0.9; }
+      else if (DL.pos === 'center'){ y = (yTop + yBot) / 2; baseline = 'central'; }
+      const at = { x:cx, y, 'font-size':size, fill:ink, 'text-anchor':anchor };
+      if (baseline !== 'auto') at['dominant-baseline'] = baseline;
+      if (DL.rot){ at['text-anchor'] = 'start'; at.transform = `rotate(-${DL.rot} ${cx} ${y})`; }
+      add('text', at, g).textContent = txt;
+    };
     // Bars of different series sharing a category sit side by side inside the slot.
     const barSeries = F.series.filter(s=> s.show && s.kind === 'bar' && s.panel === pi);
     for (const s of F.series){
@@ -342,6 +391,11 @@ function renderInto(svg, ink, paper){
             add('line', { x1:cx-cap, x2:cx+cap, y1:yA, y2:yA, ...st }, g);
             add('line', { x1:cx-cap, x2:cx+cap, y1:yB, y2:yB, ...st }, g);
           }
+          if (wantsLabels(s)){
+            // Measure from the whisker when there is one, so a label never sits on it.
+            const e = (isFinite(err) && err > 0) ? err : 0;
+            valueLabel(s, j, cx, yy, Math.min(Y(yv + e), zero), Math.max(Y(yv - e), zero));
+          }
         });
         continue;
       }
@@ -361,13 +415,19 @@ function renderInto(svg, ink, paper){
         const path = add('path', { d, fill:'none', stroke:s.color, 'stroke-width':s.width }, g);
         if (s.dash) path.setAttribute('stroke-dasharray', s.dash);
       }
+      if (wantsLabels(s)){
+        for (let i = 0; i < s.xs.length; i++){
+          if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
+          const yy = Y(s.ys[i]);
+          valueLabel(s, i, X(s.xs[i]), yy, yy, yy);
+        }
+      }
     }
 
     // ---- Axes: four independent sides ------------------------------------
     const A = p.axes || (p.axes = newAxes());
     const free = sideFree(pi);
-    const xMaj = majorTicks(x0, x1, F.xStep);
-    const yMaj = majorTicks(y0, y1, F.yStep);
+    const xMaj = gx, yMaj = gy;
     // A bar chart's X axis is categorical: the tick labels carried over from the
     // source plot replace the numbers, one per category inside the panel's range.
     const cats = F.cats && F.cats.length ? F.cats.filter(c=> c.x >= x0 && c.x <= x1) : null;
@@ -568,14 +628,23 @@ function panelOptions(sel){
   return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1} (r${p.r+1},c${p.c+1})</option>`).join('');
 }
 
+const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
+
+const chk = (label, key, obj)=>
+  `<label class="fig-check"><input type="checkbox" data-${obj||'k'}="${key}"${(obj==='g'?F.grid[key]:obj==='dl'?F.dataLabels[key]:F[key])?' checked':''}> ${label}</label>`;
+const sel = (label, key, opts, cur, attr)=>
+  `<label class="fig-row"><span>${label}</span><select data-${attr||'k'}="${key}">${
+    opts.map(([v,t])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${t}</option>`).join('')}</select></label>`;
+
 function controlsHtml(){
+  const DL = F.dataLabels;
   return `
   <section class="fig-sec"><h4>Figure</h4>
     ${num('Width (mm)','wmm',20,400)}${num('Height (mm)','hmm',20,400)}${num('Export DPI','dpi',72,1200,1)}
-    <label class="fig-row"><span>Name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
+    <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
   </section>
 
-  <section class="fig-sec"><h4>Grid</h4>
+  <section class="fig-sec"><h4>Layout</h4>
     ${num('Rows','rows',1,8)}${num('Columns','cols',1,8)}
     <div class="fig-panels">
       ${F.panels.map((p,i)=>`
@@ -583,13 +652,14 @@ function controlsHtml(){
           <b>P${i+1}</b>
           <label>row<input type="number" data-pk="r" data-p="${i}" value="${p.r+1}" min="1" max="${F.rows}"></label>
           <label>col<input type="number" data-pk="c" data-p="${i}" value="${p.c+1}" min="1" max="${F.cols}"></label>
-          <label>↕<input type="number" data-pk="rs" data-p="${i}" value="${p.rs}" min="1" max="${F.rows}"></label>
-          <label>↔<input type="number" data-pk="cs" data-p="${i}" value="${p.cs}" min="1" max="${F.cols}"></label>
-          <input type="text" class="fig-ptitle" data-pk="title" data-p="${i}" value="${esc(p.title)}" placeholder="title">
-          <button class="btn is-danger btn-sm" data-del-panel="${i}" title="Remove panel">✕</button>
+          <label>&#8597;<input type="number" data-pk="rs" data-p="${i}" value="${p.rs}" min="1" max="${F.rows}"></label>
+          <label>&#8596;<input type="number" data-pk="cs" data-p="${i}" value="${p.cs}" min="1" max="${F.cols}"></label>
+          <input type="text" class="fig-ptitle" data-pk="title" data-p="${i}" value="${esc(p.title)}" placeholder="panel title">
+          <button class="btn is-danger btn-sm" data-del-panel="${i}" title="Remove panel">&#10005;</button>
         </div>`).join('')}
     </div>
     <button class="btn btn-sm" data-add-panel type="button">+ Add panel</button>
+    <p class="txt-meta">Panels tile the grid and always touch. Adding one deals the series out evenly.</p>
   </section>
 
   <section class="fig-sec">
@@ -597,45 +667,52 @@ function controlsHtml(){
       <h4>Series</h4>
       <button class="palette-pick-btn fig-pal" type="button" title="Apply color palette"></button>
       <select data-k="palScope" title="How a palette is spread">
-        <option value="series"${F.palScope==='series'?' selected':''}>by series</option>
-        <option value="panel"${F.palScope==='panel'?' selected':''}>by panel</option>
+        <option value="series"${F.palScope==='series'?' selected':''}>palette by series</option>
+        <option value="panel"${F.palScope==='panel'?' selected':''}>palette by panel</option>
       </select>
     </div>
-    ${F.series.map((s,i)=>`
-      <div class="fig-serie" data-s="${i}">
-        <input type="checkbox" data-sk="show" data-s="${i}"${s.show?' checked':''} title="Show">
-        <button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>
-        <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
-        <select data-sk="panel" data-s="${i}" title="Panel">${panelOptions(s.panel)}</select>
-        ${s.kind === 'bar'
-          ? `<input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.1" max="1" step="0.05" title="Bar width (fraction of the category slot)">
-             <span class="fig-kind">bars</span>`
-          : `<input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.2" max="6" step="0.1" title="Line width">
-             <select data-sk="dash" data-s="${i}" title="Line style">
-               ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
-             </select>
-             <select data-sk="marker" data-s="${i}" title="Markers">
-               ${['none','circle','both'].map(m=>`<option value="${m}"${s.marker===m?' selected':''}>${m}</option>`).join('')}
-             </select>`}
-      </div>`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
+    <div class="fig-series">
+      ${F.series.map((s,i)=>`
+        <div class="fig-serie" data-s="${i}">
+          <span class="fig-grip" title="Drag to reorder">${GRIP}</span>
+          <input type="checkbox" data-sk="show" data-s="${i}"${s.show?' checked':''} title="Show">
+          <button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>
+          <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
+          <select data-sk="panel" data-s="${i}" title="Panel">${panelOptions(s.panel)}</select>
+          ${s.kind === 'bar'
+            ? `<input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.1" max="1" step="0.05" title="Bar width (fraction of the category slot)">
+               <span class="fig-kind">bars</span>`
+            : `<input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.2" max="6" step="0.1" title="Line width">
+               <select data-sk="dash" data-s="${i}" title="Line style">
+                 ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
+               </select>
+               <select data-sk="marker" data-s="${i}" title="Markers">
+                 ${['none','circle','both'].map(m=>`<option value="${m}"${s.marker===m?' selected':''}>${m}</option>`).join('')}
+               </select>`}
+        </div>`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
+    </div>
   </section>
 
-  <section class="fig-sec"><h4>Axes</h4>
+  <section class="fig-sec"><h4>Axes &amp; scale</h4>
     <label class="fig-row"><span>X title</span><input type="text" data-k="xlabel" value="${esc(F.xlabel)}"></label>
     <label class="fig-row"><span>Y title</span><input type="text" data-k="ylabel" value="${esc(F.ylabel)}"></label>
-    <label class="fig-check"><input type="checkbox" data-k="shareX"${F.shareX?' checked':''}> Share X (off = one range per column)</label>
-    <label class="fig-check"><input type="checkbox" data-k="shareY"${F.shareY?' checked':''}> Share Y (off = one range per row)</label>
-    <label class="fig-check"><input type="checkbox" data-k="xAuto"${F.xAuto?' checked':''}> X auto range</label>
+    ${sel('Title placing','titleMode',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleMode)}
+    <div class="fig-subhead">Range</div>
+    ${chk('Share X across panels (off: one range per column)','shareX')}
+    ${chk('Share Y across panels (off: one range per row)','shareY')}
+    ${chk('X auto range','xAuto')}
     ${F.xAuto?'':`${num('X min','xmin',-1e9,1e9,'any')}${num('X max','xmax',-1e9,1e9,'any')}`}
-    <label class="fig-check"><input type="checkbox" data-k="yAuto"${F.yAuto?' checked':''}> Y auto range</label>
+    ${chk('Y auto range','yAuto')}
     ${F.yAuto?'':`${num('Y min','ymin',-1e9,1e9,'any')}${num('Y max','ymax',-1e9,1e9,'any')}`}
-    <label class="fig-row"><span>Axis titles</span>
-      <select data-k="titleMode">
-        <option value="per-panel"${F.titleMode==='per-panel'?' selected':''}>one per panel</option>
-        <option value="shared"${F.titleMode==='shared'?' selected':''}>shared by all panels</option>
-      </select></label>
-    ${num('X tick step','xStep',0,1e9,'any')}${num('Y tick step','yStep',0,1e9,'any')}
-    <p class="txt-meta">Tick step 0 picks a round interval automatically.</p>
+    <div class="fig-subhead">Ticks</div>
+    ${num('X major step','xStep',0,1e9,'any')}${num('Y major step','yStep',0,1e9,'any')}
+    ${num('Minors per major','minorCount',0,20,1)}
+    <p class="txt-meta">A major step of 0 picks a round interval automatically.</p>
+    <div class="fig-subhead">Grid</div>
+    ${chk('Vertical lines (X ticks)','x','g')}
+    ${chk('Horizontal lines (Y ticks)','y','g')}
+    ${chk('Include minor ticks','minor','g')}
+    ${sel('Line style','dash',Object.entries(DASHES),F.grid.dash,'g')}
   </section>
 
   <section class="fig-sec"><h4>Panel axes</h4>
@@ -657,15 +734,24 @@ function controlsHtml(){
     <p class="txt-meta">Numbers and titles are drawn only where a panel edge has free space beside it — a side facing a neighbouring panel keeps its tick marks only.</p>
   </section>
 
+  <section class="fig-sec"><h4>Data labels</h4>
+    ${sel('Show on','scope',[['none','nothing'],['bars','bar series only'],['all','every series']],DL.scope,'dl')}
+    ${DL.scope==='none' ? '' : `
+      ${sel('Position','pos',[['above','above the mark'],['inside','inside, at the top'],['center','centred'],['below','below the mark']],DL.pos,'dl')}
+      <label class="fig-row"><span>Rotation (&deg;)</span><input type="number" data-dl="rot" value="${DL.rot}" min="0" max="90" step="5"></label>
+      <label class="fig-row"><span>Distance (px)</span><input type="number" data-dl="off" value="${DL.off}" min="0" max="40" step="1"></label>
+      <label class="fig-row"><span>Decimals</span><input type="number" data-dl="dec" value="${DL.dec}" min="0" max="6" step="1"></label>
+      <label class="fig-row"><span>Size (pt)</span><input type="number" data-dl="size" value="${DL.size}" min="3" max="24" step="0.5"></label>
+      <p class="txt-meta">Bars keep the text the source plot formatted (value &plusmn; error); everything else shows its Y value.</p>`}
+  </section>
+
   <section class="fig-sec"><h4>Legend &amp; type</h4>
-    <label class="fig-row"><span>Legend</span>
-      <select data-k="legendMode">
-        ${['none','per-panel','global'].map(m=>`<option value="${m}"${F.legendMode===m?' selected':''}>${m}</option>`).join('')}
-      </select></label>
-    <label class="fig-row"><span>Ticks (pt)</span><input type="number" data-f="tick" value="${F.font.tick}" min="4" max="24" step="0.5"></label>
-    <label class="fig-row"><span>Axis titles (pt)</span><input type="number" data-f="axis" value="${F.font.axis}" min="4" max="24" step="0.5"></label>
-    <label class="fig-row"><span>Legend (pt)</span><input type="number" data-f="legend" value="${F.font.legend}" min="4" max="24" step="0.5"></label>
-    <label class="fig-row"><span>Panel titles (pt)</span><input type="number" data-f="title" value="${F.font.title}" min="4" max="24" step="0.5"></label>
+    ${sel('Legend','legendMode',[['none','none'],['per-panel','one per panel'],['global','one for the figure']],F.legendMode)}
+    <div class="fig-subhead">Font sizes (pt)</div>
+    <label class="fig-row"><span>Tick numbers</span><input type="number" data-f="tick" value="${F.font.tick}" min="4" max="24" step="0.5"></label>
+    <label class="fig-row"><span>Axis titles</span><input type="number" data-f="axis" value="${F.font.axis}" min="4" max="24" step="0.5"></label>
+    <label class="fig-row"><span>Legend</span><input type="number" data-f="legend" value="${F.font.legend}" min="4" max="24" step="0.5"></label>
+    <label class="fig-row"><span>Panel titles</span><input type="number" data-f="title" value="${F.font.title}" min="4" max="24" step="0.5"></label>
   </section>`;
 }
 
@@ -720,12 +806,50 @@ function applyPalette(colors){
 
 function refresh(rebuild){
   clampPanels();
-  if (rebuild) controlsEl.innerHTML = controlsHtml();
+  if (rebuild){ controlsEl.innerHTML = controlsHtml(); wireSeriesDrag(); }
   renderPreview();
 }
 
+// Drag-to-reorder over the series rows, same grip-and-drop feel as the file list:
+// press the handle, move over the row you want the series to land on, release.
+function wireSeriesDrag(){
+  const rows = [...controlsEl.querySelectorAll('.fig-serie')];
+  const rowAt = y => rows.find(r=>{ const b = r.getBoundingClientRect(); return y >= b.top && y <= b.bottom; }) || null;
+  let from = null;
+  rows.forEach(row=>{
+    const handle = row.querySelector('.fig-grip');
+    if (!handle) return;
+    handle.addEventListener('pointerdown', e=>{
+      e.preventDefault();
+      from = +row.dataset.s;
+      row.classList.add('dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch(_){}
+    });
+    handle.addEventListener('pointermove', e=>{
+      if (from == null) return;
+      const t = rowAt(e.clientY);
+      rows.forEach(r=> r.classList.toggle('drag-over', r === t && +r.dataset.s !== from));
+    });
+    const finish = e=>{
+      if (from == null) return;
+      const t = rowAt(e.clientY), to = t ? +t.dataset.s : null;
+      const f = from; from = null;
+      rows.forEach(r=> r.classList.remove('drag-over', 'dragging'));
+      if (to == null || to === f) return;
+      const [moved] = F.series.splice(f, 1);
+      F.series.splice(to, 0, moved);
+      refresh(true);
+    };
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', ()=>{
+      from = null; rows.forEach(r=> r.classList.remove('drag-over','dragging'));
+    });
+  });
+}
+
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep']);
+  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorCount']);
+  const dlNum = new Set(['rot','off','dec','size']);
   controlsEl.addEventListener('input', e=>{
     const t = e.target;
     let rebuild = false;
@@ -741,6 +865,12 @@ function wireControls(){
         const p = F.panels[pi]; if (!p) continue;
         (p.axes || (p.axes = newAxes()))[t.dataset.side][t.dataset.ak] = v;
       }
+    } else if (t.dataset.g){
+      F.grid[t.dataset.g] = t.type === 'checkbox' ? t.checked : t.value;
+    } else if (t.dataset.dl){
+      const k = t.dataset.dl;
+      F.dataLabels[k] = dlNum.has(k) ? (parseFloat(t.value) || 0) : t.value;
+      if (k === 'scope') rebuild = true;      // the rest of the section appears/hides
     } else if (t.dataset.f){
       F.font[t.dataset.f] = parseFloat(t.value) || 8;
     } else if (t.dataset.pk){
@@ -841,6 +971,7 @@ export function openFigureEditor(plot, opts){
   controlsEl = backdrop.querySelector('.fig-controls');
   controlsEl.innerHTML = controlsHtml();
   wireControls();
+  wireSeriesDrag();
 
   const close = ()=>{
     window.removeEventListener('resize', onResize);

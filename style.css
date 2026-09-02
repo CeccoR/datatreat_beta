@@ -2128,6 +2128,21 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 .fig-serie select { flex: 0 0 auto; max-width: 74px; padding: 3px 2px; }
 .fig-serie input[type="number"] { width: 46px; padding: 3px 4px; }
 .fig-serie .color-swatch { margin: 0 1px; }
+.fig-grip {
+  flex: 0 0 11px; width: 11px; color: var(--muted);
+  cursor: grab; touch-action: none; display: flex; align-items: center;
+}
+.fig-grip svg { width: 11px; height: 11px; }
+.fig-grip:hover { color: var(--accent); }
+.fig-serie.dragging { opacity: 0.45; }
+.fig-serie.drag-over { box-shadow: inset 0 -2px 0 var(--accent); }
+/* Sub-heading inside a section, for grouping related rows. */
+.fig-subhead {
+  margin: 12px 0 6px; font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+  border-top: 1px solid var(--line); padding-top: 9px;
+}
+.fig-sec > .fig-subhead:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
 .fig-kind { color: var(--muted); font-size: 10px; }
 /* Section header that carries controls of its own (the Series palette picker). */
 .fig-sechead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
