@@ -136,6 +136,9 @@ function buildModel(plot, opts){
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
     xStep: 0, yStep: 0,                 // major tick interval; 0 = pick a nice one
+    titleMode: 'per-panel',             // 'per-panel' = a title beside each panel
+                                        // side that asks for one; 'shared' = one
+                                        // per side for the whole figure
     palScope: 'series',                 // 'series' = one run of colours across all
                                         // series; 'panel' = every panel restarts it
     panels: [ newPanel(0, 0) ],
@@ -417,9 +420,10 @@ function renderInto(svg, ink, paper){
         }
       }
 
-      // Axis title, pushed clear of the numbers when they are present.
+      // Axis title, pushed clear of the numbers when they are present. In shared
+      // mode the four figure-level titles below replace these.
       const label = g0.vert ? F.ylabel : F.xlabel;
-      if (a.title && label){
+      if (a.title && label && F.titleMode !== 'shared'){
         const clear = a.labels ? (g0.vert ? maxYNum + 8 : fTick * 1.7) : 6;
         if (g0.vert){
           const yc = py0 + ph/2, x = g0.base + g0.out * (clear + fAxis*0.9);
@@ -452,8 +456,22 @@ function renderInto(svg, ink, paper){
     }
   });
 
-  // Axis titles are drawn per panel side (see the axes loop above), so nothing
-  // figure-level is left here.
+  // Shared titles: one per side for the whole grid, centred on the inner area and
+  // sitting in the outer margin. A side gets one when any panel asked for it.
+  if (F.titleMode === 'shared'){
+    const want = side => F.panels.some(p=> (p.axes || (p.axes = newAxes()))[side].title);
+    const cx = mL + innerW / 2, cy = mT + innerH / 2;
+    if (F.xlabel && want('bottom'))
+      add('text', { x:cx, y:H - legendH - 4, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
+    if (F.xlabel && want('top'))
+      add('text', { x:cx, y:fAxis, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
+    if (F.ylabel && want('left'))
+      add('text', { x:fAxis*1.1, y:cy, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
+                    transform:`rotate(-90 ${fAxis*1.1} ${cy})` }).textContent = F.ylabel;
+    if (F.ylabel && want('right'))
+      add('text', { x:W - fAxis*1.1, y:cy, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
+                    transform:`rotate(90 ${W - fAxis*1.1} ${cy})` }).textContent = F.ylabel;
+  }
 
   // Global legend: one centred row under everything
   if (F.legendMode === 'global'){
@@ -521,7 +539,11 @@ const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'
 const num = (label, key, min, max, step)=>
   `<label class="fig-row"><span>${label}</span><input type="number" data-k="${key}" value="${F[key]}" min="${min}" max="${max}" step="${step||1}"></label>`;
 
-let axSel = 0;                // panel whose axes the "Panel axes" section edits
+// Panel whose axes the "Panel axes" section edits. The sentinel 'all' edits every
+// panel at once; the fields then show panel 1's settings as the starting point.
+let axSel = 0;
+const axTargets = () => axSel === 'all' ? F.panels.map((_, i)=> i) : [axSel];
+const axShown = () => ((F.panels[axSel === 'all' ? 0 : axSel] || {}).axes) || newAxes();
 
 function panelOptions(sel){
   return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1} (r${p.r+1},c${p.c+1})</option>`).join('');
@@ -588,16 +610,24 @@ function controlsHtml(){
     ${F.xAuto?'':`${num('X min','xmin',-1e9,1e9,'any')}${num('X max','xmax',-1e9,1e9,'any')}`}
     <label class="fig-check"><input type="checkbox" data-k="yAuto"${F.yAuto?' checked':''}> Y auto range</label>
     ${F.yAuto?'':`${num('Y min','ymin',-1e9,1e9,'any')}${num('Y max','ymax',-1e9,1e9,'any')}`}
+    <label class="fig-row"><span>Axis titles</span>
+      <select data-k="titleMode">
+        <option value="per-panel"${F.titleMode==='per-panel'?' selected':''}>one per panel</option>
+        <option value="shared"${F.titleMode==='shared'?' selected':''}>shared by all panels</option>
+      </select></label>
     ${num('X tick step','xStep',0,1e9,'any')}${num('Y tick step','yStep',0,1e9,'any')}
     <p class="txt-meta">Tick step 0 picks a round interval automatically.</p>
   </section>
 
   <section class="fig-sec"><h4>Panel axes</h4>
     <label class="fig-row"><span>Panel</span>
-      <select data-k="axSel">${panelOptions(axSel)}</select></label>
+      <select data-k="axSel">
+        <option value="all"${axSel==='all'?' selected':''}>All panels</option>
+        ${panelOptions(axSel)}
+      </select></label>
     <div class="fig-axhead"><span></span><span>axis</span><span>major</span><span>minor</span><span>numbers</span><span>title</span><span>ticks</span></div>
     ${SIDES.map(side=>{
-      const a = (((F.panels[axSel] || {}).axes) || newAxes())[side];
+      const a = axShown()[side];
       const cb = (k)=>`<input type="checkbox" data-ak="${k}" data-side="${side}"${a[k]?' checked':''}>`;
       return `<div class="fig-axrow"><b>${side}</b>
         ${cb('on')}${cb('major')}${cb('minor')}${cb('labels')}${cb('title')}
@@ -638,7 +668,7 @@ function clampPanels(){
     if (overlaps(i, p.r, p.c, p.rs, p.cs)){ p.rs = 1; p.cs = 1; }
     if (!p.axes) p.axes = newAxes();
   });
-  if (axSel >= F.panels.length) axSel = 0;
+  if (axSel !== 'all' && axSel >= F.panels.length) axSel = 0;
   F.series.forEach(s=>{ if (s.panel >= F.panels.length) s.panel = 0; });
 }
 
@@ -673,14 +703,16 @@ function wireControls(){
     let rebuild = false;
     if (t.dataset.k){
       const k = t.dataset.k;
-      if (k === 'axSel'){ axSel = +t.value; refresh(true); return; }
+      if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return; }
       F[k] = t.type === 'checkbox' ? t.checked : (numKeys.has(k) ? parseFloat(t.value) : t.value);
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
       if (k === 'xAuto' || k === 'yAuto') rebuild = true;
     } else if (t.dataset.ak){
-      const p = F.panels[axSel]; if (!p) return;
-      const a = (p.axes || (p.axes = newAxes()))[t.dataset.side]; if (!a) return;
-      a[t.dataset.ak] = t.type === 'checkbox' ? t.checked : t.value;
+      const v = t.type === 'checkbox' ? t.checked : t.value;
+      for (const pi of axTargets()){
+        const p = F.panels[pi]; if (!p) continue;
+        (p.axes || (p.axes = newAxes()))[t.dataset.side][t.dataset.ak] = v;
+      }
     } else if (t.dataset.f){
       F.font[t.dataset.f] = parseFloat(t.value) || 8;
     } else if (t.dataset.pk){
