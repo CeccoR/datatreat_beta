@@ -146,12 +146,12 @@ function buildModel(plot, opts){
     xStep: 0, yStep: 0,                 // major tick interval; 0 = pick a nice one
     minorCount: 4,                      // minor ticks between two majors
     grid: { x:false, y:false, minor:false, dash:'2,3' },
-    // Value labels drawn on the data. `scope` picks what carries them; a bar keeps
-    // the text the source plot already formatted (value ± error) when it has one.
-    dataLabels: { scope:'none', dec:2, pos:'above', rot:0, size:7, off:3 },
-    titleMode: 'per-panel',             // 'per-panel' = a title beside each panel
-                                        // side that asks for one; 'shared' = one
-                                        // per side for the whole figure
+    // Value labels drawn on the data. A bar keeps the text the source plot already
+    // formatted (value ± error) when it has one; anything else shows its Y value.
+    dataLabels: { on:false, dec:2, pos:'above', rot:0, size:7, off:3 },
+    // 'per-panel' = a title beside each panel side that asks for one;
+    // 'shared' = one for the whole figure. Set independently for X and Y.
+    titleModeX: 'per-panel', titleModeY: 'per-panel',
     palScope: 'series',                 // 'series' = one run of colours across all
                                         // series; 'panel' = every panel restarts it
     panels: [ newPanel(0, 0) ],
@@ -266,7 +266,9 @@ function textW(txt, px, weight){
 
 // Draw the whole figure into `svg` at its real size in px. `ink`/`paper` let the
 // export force a light, print-ready palette regardless of the app theme.
-function renderInto(svg, ink, paper){
+// One drawing pass. `extra` widens the computed margins — renderInto() uses it to
+// feed back what actually stuck out on the previous pass.
+function drawFigure(svg, ink, paper, extra){
   const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('width', W); svg.setAttribute('height', H);
@@ -307,11 +309,17 @@ function renderInto(svg, ink, paper){
   // Whatever the sides ask for, never less than the overhang of the outermost X
   // label — that is what used to spill outside the figure.
   const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
-  const mL = Math.max(10 + room('left', true), sideX);
-  const mR = Math.max(10 + room('right', true), sideX);
-  const mT = 10 + room('top', false);
   const legendH = (F.legendMode === 'global') ? fLeg * 2.1 : 0;
-  const mB = 10 + room('bottom', false) + legendH;
+  let mL = Math.max(10 + room('left', true), sideX) + extra.L;
+  let mR = Math.max(10 + room('right', true), sideX) + extra.R;
+  let mT = 10 + room('top', false) + extra.T;
+  let mB = 10 + room('bottom', false) + legendH + extra.B;
+  // Margins never eat more than this much of the page. Without the cap, a request
+  // that cannot fit (a title longer than the figure) would grow them past the page
+  // and push the panels off it; with it, the figure stays sane and the text clips.
+  const capW = W * 0.62, capH = H * 0.62;
+  if (mL + mR > capW){ const k = capW / (mL + mR); mL *= k; mR *= k; }
+  if (mT + mB > capH){ const k = capH / (mT + mB); mT *= k; mB *= k; }
 
   const innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
   const cw = innerW / F.cols, ch = innerH / F.rows;
@@ -350,7 +358,7 @@ function renderInto(svg, ink, paper){
     // Series
     const g = add('g', { 'clip-path': `url(#${clipId})` });
     const DL = F.dataLabels;
-    const wantsLabels = s => DL.scope === 'all' || (DL.scope === 'bars' && s.kind === 'bar');
+    const wantsLabels = () => DL.on;
     // One value label. `pos` is relative to the mark; the text rotates about its own
     // anchor so a tilted label still starts where it points.
     const valueLabel = (s, j, cx, yMark, yTop, yBot)=>{
@@ -391,7 +399,7 @@ function renderInto(svg, ink, paper){
             add('line', { x1:cx-cap, x2:cx+cap, y1:yA, y2:yA, ...st }, g);
             add('line', { x1:cx-cap, x2:cx+cap, y1:yB, y2:yB, ...st }, g);
           }
-          if (wantsLabels(s)){
+          if (wantsLabels()){
             // Measure from the whisker when there is one, so a label never sits on it.
             const e = (isFinite(err) && err > 0) ? err : 0;
             valueLabel(s, j, cx, yy, Math.min(Y(yv + e), zero), Math.max(Y(yv - e), zero));
@@ -415,7 +423,7 @@ function renderInto(svg, ink, paper){
         const path = add('path', { d, fill:'none', stroke:s.color, 'stroke-width':s.width }, g);
         if (s.dash) path.setAttribute('stroke-dasharray', s.dash);
       }
-      if (wantsLabels(s)){
+      if (wantsLabels()){
         for (let i = 0; i < s.xs.length; i++){
           if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
           const yy = Y(s.ys[i]);
@@ -502,7 +510,7 @@ function renderInto(svg, ink, paper){
       // Axis title, pushed clear of the numbers when they are present. In shared
       // mode the four figure-level titles below replace these.
       const label = g0.vert ? F.ylabel : F.xlabel;
-      if (a.title && label && F.titleMode !== 'shared'){
+      if (a.title && label && (g0.vert ? F.titleModeY : F.titleModeX) !== 'shared'){
         const clear = a.labels ? (g0.vert ? maxYNum + 8 : xDrop) : 6;
         if (g0.vert){
           const yc = py0 + ph/2, x = g0.base + g0.out * (clear + fAxis*0.9);
@@ -537,17 +545,18 @@ function renderInto(svg, ink, paper){
 
   // Shared titles: one per side for the whole grid, centred on the inner area and
   // sitting in the outer margin. A side gets one when any panel asked for it.
-  if (F.titleMode === 'shared'){
+  {
     const want = side => F.panels.some(p=> (p.axes || (p.axes = newAxes()))[side].title);
+    const shX = F.titleModeX === 'shared', shY = F.titleModeY === 'shared';
     const cx = mL + innerW / 2, cy = mT + innerH / 2;
-    if (F.xlabel && want('bottom'))
+    if (shX && F.xlabel && want('bottom'))
       add('text', { x:cx, y:H - legendH - 4, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
-    if (F.xlabel && want('top'))
+    if (shX && F.xlabel && want('top'))
       add('text', { x:cx, y:fAxis, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
-    if (F.ylabel && want('left'))
+    if (shY && F.ylabel && want('left'))
       add('text', { x:fAxis*1.1, y:cy, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
                     transform:`rotate(-90 ${fAxis*1.1} ${cy})` }).textContent = F.ylabel;
-    if (F.ylabel && want('right'))
+    if (shY && F.ylabel && want('right'))
       add('text', { x:W - fAxis*1.1, y:cy, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
                     transform:`rotate(90 ${W - fAxis*1.1} ${cy})` }).textContent = F.ylabel;
   }
@@ -566,6 +575,54 @@ function renderInto(svg, ink, paper){
       el.textContent = s.label;
       x += lw + 4 + textW(s.label, fLeg) + gap;
     });
+  }
+}
+
+/* How far the drawn ink pokes out of the figure box, per side, in figure units.
+   Clipped groups are skipped: their contents are cut to the panel by construction,
+   and getBoundingClientRect() would report the uncut geometry. Needs the svg to be
+   laid out, so a detached one (the export) is parked off-screen first. */
+function measureOverflow(svg){
+  const detached = !svg.isConnected;
+  if (detached){
+    svg.style.position = 'fixed'; svg.style.left = '-10000px'; svg.style.top = '0';
+    document.body.appendChild(svg);
+  }
+  const vb = svg.viewBox.baseVal, R = svg.getBoundingClientRect();
+  const k = (R.width / vb.width) || 1;
+  const o = { L:0, R:0, T:0, B:0 };
+  for (const el of svg.querySelectorAll('text,line,rect,path,circle')){
+    if (el.closest('defs') || el.closest('[clip-path]')) continue;
+    const q = el.getBoundingClientRect();
+    if (!q.width && !q.height) continue;
+    o.L = Math.max(o.L, (R.left - q.left) / k);
+    o.R = Math.max(o.R, (q.right - R.right) / k);
+    o.T = Math.max(o.T, (R.top - q.top) / k);
+    o.B = Math.max(o.B, (q.bottom - R.bottom) / k);
+  }
+  if (detached){
+    svg.remove();
+    svg.style.position = svg.style.left = svg.style.top = '';
+  }
+  return o;
+}
+
+/* Draw, measure what spilled outside the page, widen those margins, draw again.
+   The analytic estimate inside drawFigure() gets it right most of the time; this
+   catches whatever it can't predict — a long axis title, a tall rotated data
+   label, a legend key wider than expected. Two corrective passes are plenty. */
+function renderInto(svg, ink, paper){
+  let extra = { L:0, R:0, T:0, B:0 }, worst = Infinity;
+  for (let pass = 0; pass < 3; pass++){
+    drawFigure(svg, ink, paper, extra);
+    const o = measureOverflow(svg);
+    const now = Math.max(o.L, o.R, o.T, o.B);
+    if (now < 0.5) break;
+    // Give up rather than thrash when a pass stops helping: that means the content
+    // simply cannot fit the page at this size, and the margin cap has kicked in.
+    if (now >= worst) break;
+    worst = now;
+    extra = { L:extra.L + o.L, R:extra.R + o.R, T:extra.T + o.T, B:extra.B + o.B };
   }
 }
 
@@ -696,7 +753,8 @@ function controlsHtml(){
   <section class="fig-sec"><h4>Axes &amp; scale</h4>
     <label class="fig-row"><span>X title</span><input type="text" data-k="xlabel" value="${esc(F.xlabel)}"></label>
     <label class="fig-row"><span>Y title</span><input type="text" data-k="ylabel" value="${esc(F.ylabel)}"></label>
-    ${sel('Title placing','titleMode',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleMode)}
+    ${sel('X title placing','titleModeX',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeX)}
+    ${sel('Y title placing','titleModeY',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeY)}
     <div class="fig-subhead">Range</div>
     ${chk('Share X across panels (off: one range per column)','shareX')}
     ${chk('Share Y across panels (off: one range per row)','shareY')}
@@ -735,8 +793,8 @@ function controlsHtml(){
   </section>
 
   <section class="fig-sec"><h4>Data labels</h4>
-    ${sel('Show on','scope',[['none','nothing'],['bars','bar series only'],['all','every series']],DL.scope,'dl')}
-    ${DL.scope==='none' ? '' : `
+    ${chk('Show a value on every data point','on','dl')}
+    ${!DL.on ? '' : `
       ${sel('Position','pos',[['above','above the mark'],['inside','inside, at the top'],['center','centred'],['below','below the mark']],DL.pos,'dl')}
       <label class="fig-row"><span>Rotation (&deg;)</span><input type="number" data-dl="rot" value="${DL.rot}" min="0" max="90" step="5"></label>
       <label class="fig-row"><span>Distance (px)</span><input type="number" data-dl="off" value="${DL.off}" min="0" max="40" step="1"></label>
@@ -869,8 +927,9 @@ function wireControls(){
       F.grid[t.dataset.g] = t.type === 'checkbox' ? t.checked : t.value;
     } else if (t.dataset.dl){
       const k = t.dataset.dl;
-      F.dataLabels[k] = dlNum.has(k) ? (parseFloat(t.value) || 0) : t.value;
-      if (k === 'scope') rebuild = true;      // the rest of the section appears/hides
+      F.dataLabels[k] = t.type === 'checkbox' ? t.checked
+                      : dlNum.has(k) ? (parseFloat(t.value) || 0) : t.value;
+      if (k === 'on') rebuild = true;         // the rest of the section appears/hides
     } else if (t.dataset.f){
       F.font[t.dataset.f] = parseFloat(t.value) || 8;
     } else if (t.dataset.pk){
