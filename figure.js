@@ -372,7 +372,22 @@ function drawFigure(svg, ink, paper, extra){
       else if (DL.pos === 'center'){ y = (yTop + yBot) / 2; baseline = 'central'; }
       const at = { x:cx, y, 'font-size':size, fill:ink, 'text-anchor':anchor };
       if (baseline !== 'auto') at['dominant-baseline'] = baseline;
-      if (DL.rot){ at['text-anchor'] = 'start'; at.transform = `rotate(-${DL.rot} ${cx} ${y})`; }
+      if (DL.rot){
+        // Rotating about the anchor sends the text away from the mark, so the anchor
+        // becomes the near end (the far end for a label below), and the glyph box is
+        // centred on the baseline so the label straddles the mark instead of sitting
+        // half a cap-height to one side. At an angle the text still runs off
+        // sideways, so the anchor slides back by half the width it projects onto the
+        // X axis — which is nothing at 90 degrees and a full half-width at 0, exactly
+        // matching the unrotated centred case.
+        const rad = DL.rot * Math.PI / 180;
+        const back = textW(txt, size) * Math.cos(rad) / 2;
+        const ax = cx + (DL.pos === 'below' ? back : -back);
+        at.x = ax;
+        at['text-anchor'] = DL.pos === 'below' ? 'end' : 'start';
+        at['dominant-baseline'] = 'central';
+        at.transform = `rotate(-${DL.rot} ${ax} ${y})`;
+      }
       add('text', at, g).textContent = txt;
     };
     // Bars of different series sharing a category sit side by side inside the slot.
