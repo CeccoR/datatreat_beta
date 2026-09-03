@@ -35,6 +35,19 @@ function saveBlob(filename, data, mime){
 
 const PX_MM = 96 / 25.4;      // CSS px per mm at the nominal 96 dpi
 const PT_PX = 96 / 72;        // CSS px per typographic point
+/* One font for the whole figure. The stack is what both the preview and the export
+   use, so what you see is what you get; Inter is the app's own face and is embedded
+   in the exported file, the rest are faces every system already has. */
+const FONTS = {
+  'Inter':      { label: 'Inter',           stack: `Inter, sans-serif`,                       embed: true },
+  'Helvetica':  { label: 'Helvetica / Arial', stack: `Helvetica, Arial, sans-serif` },
+  'Arial':      { label: 'Arial',           stack: `Arial, Helvetica, sans-serif` },
+  'Times':      { label: 'Times New Roman', stack: `'Times New Roman', Times, serif` },
+  'Georgia':    { label: 'Georgia',         stack: `Georgia, 'Times New Roman', serif` },
+  'Courier':    { label: 'Courier New',     stack: `'Courier New', Courier, monospace` },
+};
+const fontStack = () => (FONTS[F && F.font && F.font.family] || FONTS.Inter).stack;
+
 const DASHES = { 'none': 'no line', '': 'solid', '5,4': 'dashed', '2,3': 'dotted', '8,3,2,3': 'dash-dot' };
 // Point symbols. `-o` is an outline, `-f` is filled; the label carries the glyph so
 // the dropdown reads as the shape it draws.
@@ -169,7 +182,7 @@ function buildModel(plot, opts){
     legendCols: 0,                      // global: 0 = one row, else wrap into N columns
     legendFrame: false,                 // draw a box behind it
     legendGap: 6,                       // distance from the panel corner / panels
-    font: { tick: 8, axis: 9, legend: 8, title: 9 },   // points
+    font: { family: 'Inter', tick: 8, axis: 9, legend: 8, title: 9 },   // sizes in points
     xlabel: strip(plot.xlabel) || '',
     ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
     // Always the whole data set, whatever the page plot is zoomed to.
@@ -308,7 +321,9 @@ function legendMark(add, s, xa, xb, y){
 
 const measCtx = document.createElement('canvas').getContext('2d');
 function textW(txt, px, weight){
-  measCtx.font = `${weight||''} ${px}px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif`;
+  // Measured in the very font the figure will be drawn in, so the margins the
+  // measurement feeds are right for the chosen face and not just for Inter.
+  measCtx.font = `${weight||''} ${px}px ${fontStack()}`;
   return measCtx.measureText(String(txt)).width;
 }
 
@@ -322,6 +337,9 @@ function drawFigure(svg, ink, paper, extra){
   svg.setAttribute('width', W); svg.setAttribute('height', H);
   svg.innerHTML = '';
   const add = (tag, at, parent)=>{ const e = svgEl(tag, at); (parent||svg).appendChild(e); return e; };
+  // Stated on the root rather than inherited, so the preview and the exported file
+  // render in the same face instead of each falling back to its own default.
+  svg.setAttribute('font-family', fontStack());
   add('rect', { x:0, y:0, width:W, height:H, fill: paper });
 
   const fTick = F.font.tick * PT_PX, fAxis = F.font.axis * PT_PX;
@@ -751,22 +769,49 @@ function renderPreview(){
 
 /* ---- Export ---------------------------------------------------------------- */
 
-function figureSvgString(){
+/* Inter as a base64 @font-face, fetched once. An exported SVG is a standalone
+   document and a PNG is rasterised from one inside an <img>: neither can reach the
+   page's stylesheet or fetch a font of its own, so without this the file would
+   silently fall back to the viewer's default sans and stop matching the preview. */
+let _interCss = null;
+async function interFontCss(){
+  if (_interCss !== null) return _interCss;
+  try {
+    const buf = await (await fetch('./inter-latin.woff2')).arrayBuffer();
+    let bin = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    _interCss = `@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;`
+              + `src:url(data:font/woff2;base64,${btoa(bin)}) format('woff2');}`;
+  } catch(e){ _interCss = ''; }   // no font file: the stack's fallbacks take over
+  return _interCss;
+}
+
+async function figureSvgString(){
   const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   tmp.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   renderInto(tmp, '#000000', '#ffffff');
+  const face = FONTS[F.font.family] || FONTS.Inter;
+  if (face.embed){
+    const css = await interFontCss();
+    if (css){
+      const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      style.textContent = css;
+      tmp.insertBefore(style, tmp.firstChild);
+    }
+  }
   // Physical size so the file lands at the right scale in Word/Illustrator/LaTeX.
   tmp.setAttribute('width', F.wmm + 'mm');
   tmp.setAttribute('height', F.hmm + 'mm');
   return new XMLSerializer().serializeToString(tmp);
 }
 
-function exportSVG(){
-  saveBlob(F.name + '.svg', figureSvgString(), 'image/svg+xml');
+async function exportSVG(){
+  saveBlob(F.name + '.svg', await figureSvgString(), 'image/svg+xml');
 }
 
-function exportPNG(){
-  const str = figureSvgString();
+async function exportPNG(){
+  const str = await figureSvgString();
   const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
   const scale = F.dpi / 96;                       // px at the requested dpi
   const canvas = document.createElement('canvas');
@@ -1069,6 +1114,8 @@ function controlsHtml(){
       ${sel('Alignment','legendAlign',[['left','left'],['center','centred'],['right','right']],F.legendAlign)}
       ${num('Columns (0 = one row)','legendCols',0,12)}` : ''}
     ${F.legendMode === 'none' ? '' : `${num('Distance (px)','legendGap',0,40)}${chk('Draw a frame behind it','legendFrame')}`}
+    <div class="fig-subhead">Type</div>
+    ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
     <div class="fig-subhead">Font sizes (pt)</div>
     <label class="fig-row"><span>Tick numbers</span>${numField('data-f="tick"', F.font.tick, 4, 24)}</label>
     <label class="fig-row"><span>Axis titles</span>${numField('data-f="axis"', F.font.axis, 4, 24)}</label>
@@ -1229,8 +1276,8 @@ function wireControls(){
       else F.dataLabels[k] = t.type === 'checkbox' ? t.checked : t.value;
       if (k === 'on') rebuild = true;         // the rest of the section appears/hides
     } else if (t.dataset.f){
-      const v = readNum(t); if (v === null) return null;
-      F.font[t.dataset.f] = v;
+      if (t.dataset.f === 'family'){ F.font.family = t.value; }
+      else { const v = readNum(t); if (v === null) return null; F.font[t.dataset.f] = v; }
     } else if (t.dataset.pk){
       const i = +t.dataset.p, p = F.panels[i]; if (!p) return null;
       const k = t.dataset.pk;
