@@ -325,8 +325,10 @@ class Plot{
   }
   _refresh(){ this.drawAxes(); this._redrawFromStored(); if (this._onView) this._onView(); }
   attachTools(wrapEl){
+    // The previous tool row is dropped at the END of this function, not here: it
+    // holds the page's download button (and the CSV button built from it), which
+    // are adopted rather than recreated, so removing it first would lose them.
     const old = wrapEl.querySelector('.plot-tool-btns');
-    if (old) old.remove();
     // Group the download button + tool buttons into a single column
     let col = wrapEl.querySelector('.plot-btn-col');
     if (!col){
@@ -401,8 +403,8 @@ class Plot{
     // Order, top to bottom: composer, CSV, download image, snapshot, copy, pan, zoom.
     // The download button belongs to the page, so it is adopted rather than created;
     // the CSV button is built from the descriptors it carries.
-    const dlBtn2 = col.querySelector('.plot-dl-btn') || wrapEl.querySelector('.plot-dl-btn');
-    let csvBtn = col.querySelector('.plot-csv-btn');
+    const dlBtn2 = wrapEl.querySelector('.plot-dl-btn');
+    let csvBtn = wrapEl.querySelector('.plot-csv-btn');
     if (!csvBtn && dlBtn2 && dlBtn2.dataset.csvMod && dlBtn2.dataset.csvNames)
       csvBtn = makeCsvButton(dlBtn2.dataset.csvMod, dlBtn2.dataset.csvNames);
     if (dlBtn2 && !dlBtn2.title) dlBtn2.title = 'Download image';   // like the others
@@ -413,6 +415,7 @@ class Plot{
     if (copyBtn) div.appendChild(copyBtn);
     div.appendChild(panBtn);
     div.appendChild(zoomBtn);
+    if (old) old.remove();
     col.innerHTML = '';
     col.appendChild(div);
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
