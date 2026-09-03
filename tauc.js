@@ -571,8 +571,10 @@ import { Plot } from './plot.js';
     plot1.setRange(hv0, hv1, 0, ymax1);
     plot1.drawAxes();
     files.forEach((f,k)=>{
-      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: `${f.label} tauc` });
+      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: f.label });
       const r = bestRegsAll[k];
+      // regs fits the flat interval below the edge (the baseline), regs2 the steep
+      // edge itself (the Tauc region) — their intercepts cross at Eg.
       if (r && isFinite(r.regs.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs.slope*x+r.regs.intercept), f.color, 1, '5,4',
@@ -581,7 +583,7 @@ import { Plot } from './plot.js';
       if (r && isFinite(r.regs2.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs2.slope*x+r.regs2.intercept), f.color, 1, '2,3',
-                   { label: `${f.label} baseline` });
+                   { label: `${f.label} Tauc` });
       }
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
     });
