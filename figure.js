@@ -82,7 +82,7 @@ function markerShape(kind, cx, cy, r, color, width){
 }
 
 let F = null;                 // the figure model
-let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null;
+let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, presetBar = null;
 
 /* ---- Model ---------------------------------------------------------------- */
 
@@ -970,19 +970,6 @@ function controlsHtml(){
   <section class="fig-sec"><h4>Figure</h4>
     ${num('Width (mm)','wmm',5,2000)}${num('Height (mm)','hmm',5,2000)}${num('Export DPI','dpi',1,20000)}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
-    <div class="fig-subhead">Preset</div>
-    <label class="fig-row"><span>Apply</span>
-      <select data-preset="load">
-        <option value="">choose a preset…</option>
-        ${Object.keys(loadPresets()).sort().map(n=>`<option value="${esc(n)}"${n===presetSel?' selected':''}>${esc(n)}</option>`).join('')}
-      </select>
-      <button class="btn is-danger btn-sm" data-preset="del" type="button" title="Delete the chosen preset">&#10005;</button>
-    </label>
-    <label class="fig-row"><span>Save as</span>
-      <input type="text" data-preset="name" placeholder="preset name">
-      <button class="btn btn-sm" data-preset="save" type="button">Save</button>
-    </label>
-    <p class="txt-meta">Presets are stored in this browser and apply to any plot in any project.</p>
   </section>
 
   <section class="fig-sec"><h4>Layout</h4>
@@ -1219,6 +1206,54 @@ function wireSeriesDrag(){
   });
 }
 
+/* The preset bar sits in the footer, beside the export buttons: a picker that
+   applies, "Save" to write these settings back into the preset you are on, and
+   "Save as" to make a new one. Rebuilt whenever the stored list changes. */
+function renderPresetBar(){
+  if (!presetBar) return;
+  const names = Object.keys(loadPresets()).sort();
+  presetBar.querySelector('[data-preset="load"]').innerHTML =
+    `<option value="">preset…</option>` +
+    names.map(n=>`<option value="${esc(n)}"${n === presetSel ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  presetBar.querySelector('[data-preset="save"]').disabled = !presetSel;
+  presetBar.querySelector('[data-preset="del"]').disabled = !presetSel;
+}
+
+function wirePresetBar(){
+  const nameIn = presetBar.querySelector('[data-preset="name"]');
+  presetBar.addEventListener('click', e=>{
+    const btn = e.target.closest('[data-preset]');
+    if (!btn || btn.tagName !== 'BUTTON') return;
+    const presets = loadPresets();
+    const act = btn.dataset.preset;
+    if (act === 'saveas'){
+      const name = (nameIn.value || '').trim();
+      if (!name){ nameIn.focus(); return; }
+      presets[name] = settingsSnapshot();
+      presetSel = name;
+      nameIn.value = '';
+    } else if (act === 'save'){
+      if (!presetSel) return;
+      presets[presetSel] = settingsSnapshot();
+      btn.classList.add('is-saved');
+      setTimeout(()=> btn.classList.remove('is-saved'), 700);
+    } else if (act === 'del'){
+      if (!presetSel) return;
+      delete presets[presetSel];
+      presetSel = '';
+    } else return;
+    savePresets(presets);
+    renderPresetBar();
+  });
+  presetBar.addEventListener('change', e=>{
+    if (e.target.dataset.preset !== 'load') return;
+    presetSel = e.target.value;
+    const snap = loadPresets()[presetSel];
+    if (snap){ applySettings(snap); pushUndo(); refresh(true); }
+    renderPresetBar();
+  });
+}
+
 function wireControls(){
   const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap']);
   const dlNum = new Set(['rot','off','dec','size']);
@@ -1328,34 +1363,8 @@ function wireControls(){
   controlsEl.addEventListener('keydown', e=>{
     if (e.key === 'Enter' && e.target.dataset.num){ e.preventDefault(); run(e.target); }
   });
-  controlsEl.addEventListener('change', e=>{
-    if (e.target.dataset && e.target.dataset.preset === 'load'){
-      presetSel = e.target.value;
-      const snap = loadPresets()[presetSel];
-      if (snap){ applySettings(snap); pushUndo(); refresh(true); }
-      return;
-    }
-    if (e.target.tagName === 'SELECT') refresh(false);
-  });
+  controlsEl.addEventListener('change', e=>{ if (e.target.tagName === 'SELECT') refresh(false); });
   controlsEl.addEventListener('click', e=>{
-    const pb = e.target.closest('[data-preset="save"], [data-preset="del"]');
-    if (pb){
-      const presets = loadPresets();
-      if (pb.dataset.preset === 'save'){
-        const inp = controlsEl.querySelector('[data-preset="name"]');
-        const name = (inp.value || '').trim();
-        if (!name){ inp.focus(); return; }
-        presets[name] = settingsSnapshot();
-        presetSel = name;
-      } else {
-        if (!presetSel) return;
-        delete presets[presetSel];
-        presetSel = '';
-      }
-      savePresets(presets);
-      refresh(true);
-      return;
-    }
     const sw = e.target.closest('.color-swatch');
     if (sw){
       const s = F.series[+sw.dataset.sw]; if (!s) return;
@@ -1424,6 +1433,13 @@ export function openFigureEditor(plot, opts){
       <div class="fig-foot">
         <span class="txt-meta fig-dim"></span>
         <span style="flex:1"></span>
+        <div class="fig-presets">
+          <select data-preset="load" title="Apply a saved preset"></select>
+          <button class="btn btn-sm" type="button" data-preset="save" title="Save these settings into the selected preset">Save</button>
+          <input type="text" data-preset="name" placeholder="new preset name">
+          <button class="btn btn-sm" type="button" data-preset="saveas" title="Save these settings as a new preset">Save as</button>
+          <button class="btn is-danger btn-sm" type="button" data-preset="del" title="Delete the selected preset">&#10005;</button>
+        </div>
         <button class="btn" type="button" data-fig-svg>Export SVG</button>
         <button class="btn primary" type="button" data-fig-png>Export PNG</button>
       </div>
@@ -1431,15 +1447,18 @@ export function openFigureEditor(plot, opts){
   document.body.appendChild(backdrop);
   previewSvg = backdrop.querySelector('.fig-svg');
   controlsEl = backdrop.querySelector('.fig-controls');
+  presetBar = backdrop.querySelector('.fig-presets');
   controlsEl.innerHTML = controlsHtml();
   wireControls();
   wireSeriesDrag();
+  wirePresetBar();
+  renderPresetBar();
 
   const close = ()=>{
     rememberSettings();
     window.removeEventListener('resize', onResize);
     document.removeEventListener('keydown', onKey);
-    backdrop.remove(); backdrop = null; F = null; dimEl = null;
+    backdrop.remove(); backdrop = null; F = null; dimEl = null; presetBar = null;
   };
   const onKey = e => {
     if (e.key === 'Escape'){ close(); return; }
