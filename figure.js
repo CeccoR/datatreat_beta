@@ -777,8 +777,21 @@ function exportPNG(){
 /* ---- Controls -------------------------------------------------------------- */
 
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const num = (label, key, min, max, step)=>
-  `<label class="fig-row"><span>${label}</span><input type="number" data-k="${key}" value="${F[key]}" min="${min}" max="${max}" step="${step||1}"></label>`;
+/* Numeric fields are plain text boxes, not <input type="number">: Chrome renders a
+   number input's value with the BROWSER's decimal separator whatever lang says, and
+   a figure has to read with a point. Typing a comma is still accepted — it is
+   translated on commit — and `data-num` marks the field as commit-on-change, so a
+   value only takes effect once confirmed instead of on every keystroke. */
+const numField = (attrs, value, min, max)=>
+  `<input type="text" inputmode="decimal" data-num="1" data-min="${min}" data-max="${max}" ${attrs} value="${value}">`;
+const num = (label, key, min, max)=>
+  `<label class="fig-row"><span>${label}</span>${numField(`data-k="${key}"`, F[key], min, max)}</label>`;
+const readNum = t=>{
+  const v = parseFloat(String(t.value).replace(',', '.'));
+  if (!isFinite(v)) return null;
+  const lo = parseFloat(t.dataset.min), hi = parseFloat(t.dataset.max);
+  return Math.min(isFinite(hi) ? hi : Infinity, Math.max(isFinite(lo) ? lo : -Infinity, v));
+};
 
 // Panel whose axes the "Panel axes" section edits. The sentinel 'all' edits every
 // panel at once; the fields then show panel 1's settings as the starting point.
@@ -896,14 +909,14 @@ function manNum(label, bag, selKey, end){
   const r = computeRanges();
   const auto = bag === 'xMan' ? (r.xOf[i] || [0,1]) : (r.yOf[i] || [0,1]);
   const v = cur ? cur[end] : auto[end];
-  return `<label class="fig-row"><span>${label}</span><input type="number" data-man="${bag}" data-end="${end}" value="${+(+v).toPrecision(6)}" step="any"></label>`;
+  return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+v).toPrecision(6), -1e12, 1e12)}</label>`;
 }
 
 function controlsHtml(){
   const DL = F.dataLabels;
   return `
   <section class="fig-sec"><h4>Figure</h4>
-    ${num('Width (mm)','wmm',20,400)}${num('Height (mm)','hmm',20,400)}${num('Export DPI','dpi',72,1200,1)}
+    ${num('Width (mm)','wmm',20,400)}${num('Height (mm)','hmm',20,400)}${num('Export DPI','dpi',72,1200)}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
     <div class="fig-subhead">Preset</div>
     <label class="fig-row"><span>Apply</span>
@@ -926,10 +939,10 @@ function controlsHtml(){
       ${F.panels.map((p,i)=>`
         <div class="fig-panel" data-p="${i}">
           <b>P${i+1}</b>
-          <label>row<input type="number" data-pk="r" data-p="${i}" value="${p.r+1}" min="1" max="${F.rows}"></label>
-          <label>col<input type="number" data-pk="c" data-p="${i}" value="${p.c+1}" min="1" max="${F.cols}"></label>
-          <label>&#8597;<input type="number" data-pk="rs" data-p="${i}" value="${p.rs}" min="1" max="${F.rows}"></label>
-          <label>&#8596;<input type="number" data-pk="cs" data-p="${i}" value="${p.cs}" min="1" max="${F.cols}"></label>
+          <label>row${numField(`data-pk="r" data-p="${i}"`, p.r+1, 1, F.rows)}</label>
+          <label>col${numField(`data-pk="c" data-p="${i}"`, p.c+1, 1, F.cols)}</label>
+          <label>&#8597;${numField(`data-pk="rs" data-p="${i}"`, p.rs, 1, F.rows)}</label>
+          <label>&#8596;${numField(`data-pk="cs" data-p="${i}"`, p.cs, 1, F.cols)}</label>
           <input type="text" class="fig-ptitle" data-pk="title" data-p="${i}" value="${esc(p.title)}" placeholder="panel title">
           <button class="btn is-danger btn-sm" data-del-panel="${i}" title="Remove panel">&#10005;</button>
         </div>`).join('')}
@@ -954,7 +967,7 @@ function controlsHtml(){
           <input type="checkbox" data-all="show"${F.series.every(s=>s.show)?' checked':''} title="Show all / hide all">
           <span class="fig-alllabel">all series</span>
           <select data-all="panel" title="Send every series to one panel"><option value="">panel…</option>${panelOptions(-1)}</select>
-          <input type="number" data-all="width" placeholder="w" min="0.1" max="6" step="0.1" title="Line / bar width for every series">
+          <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6" placeholder="w" title="Line / bar width for every series">
           <select data-all="dash" title="Line style for every series"><option value="">line…</option>
             ${Object.entries(DASHES).map(([v,n])=>`<option value="${v||'solid'}">${n}</option>`).join('')}</select>
           <select data-all="marker" title="Symbol for every series"><option value="">symbol…</option>
@@ -968,9 +981,9 @@ function controlsHtml(){
           <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
           <select data-sk="panel" data-s="${i}" title="Panel">${panelOptions(s.panel)}</select>
           ${s.kind === 'bar'
-            ? `<input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.1" max="1" step="0.05" title="Bar width (fraction of the category slot)">
+            ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}
                <span class="fig-kind">bars</span>`
-            : `<input type="number" data-sk="width" data-s="${i}" value="${s.width}" min="0.2" max="6" step="0.1" title="Line width">
+            : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
                <select data-sk="dash" data-s="${i}" title="Line style">
                  ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
                </select>
@@ -991,17 +1004,17 @@ function controlsHtml(){
     ${chk('Share Y across panels (off: one range per row)','shareY')}
     ${chk('X auto range','xAuto')}
     ${F.xAuto ? '' : (F.shareX
-      ? `${num('X min','xmin',-1e9,1e9,'any')}${num('X max','xmax',-1e9,1e9,'any')}`
+      ? `${num('X min','xmin',-1e9,1e9)}${num('X max','xmax',-1e9,1e9)}`
       : `${sel('Column','rangeCol', Array.from({length:F.cols},(_,c)=>[c,'Column '+(c+1)]), F.rangeCol)}
          ${manNum('X min','xMan','rangeCol',0)}${manNum('X max','xMan','rangeCol',1)}`)}
     ${chk('Y auto range','yAuto')}
     ${F.yAuto ? '' : (F.shareY
-      ? `${num('Y min','ymin',-1e9,1e9,'any')}${num('Y max','ymax',-1e9,1e9,'any')}`
+      ? `${num('Y min','ymin',-1e9,1e9)}${num('Y max','ymax',-1e9,1e9)}`
       : `${sel('Row','rangeRow', Array.from({length:F.rows},(_,r)=>[r,'Row '+(r+1)]), F.rangeRow)}
          ${manNum('Y min','yMan','rangeRow',0)}${manNum('Y max','yMan','rangeRow',1)}`)}
     <div class="fig-subhead">Ticks</div>
-    ${num('X major step','xStep',0,1e9,'any')}${num('Y major step','yStep',0,1e9,'any')}
-    ${num('X minors per major','minorX',0,20,1)}${num('Y minors per major','minorY',0,20,1)}
+    ${num('X major step','xStep',0,1e9)}${num('Y major step','yStep',0,1e9)}
+    ${num('X minors per major','minorX',0,20)}${num('Y minors per major','minorY',0,20)}
     <p class="txt-meta">A major step of 0 picks a round interval automatically.</p>
     <div class="fig-subhead">Grid</div>
     ${chk('Vertical lines (X ticks)','x','g')}
@@ -1033,10 +1046,10 @@ function controlsHtml(){
     ${chk('Show a value on every data point','on','dl')}
     ${!DL.on ? '' : `
       ${sel('Position','pos',[['above','above the mark'],['inside','inside, at the top'],['center','centred'],['below','below the mark']],DL.pos,'dl')}
-      <label class="fig-row"><span>Rotation (&deg;)</span><input type="number" data-dl="rot" value="${DL.rot}" min="0" max="90" step="5"></label>
-      <label class="fig-row"><span>Distance (px)</span><input type="number" data-dl="off" value="${DL.off}" min="0" max="40" step="1"></label>
-      <label class="fig-row"><span>Decimals</span><input type="number" data-dl="dec" value="${DL.dec}" min="0" max="6" step="1"></label>
-      <label class="fig-row"><span>Size (pt)</span><input type="number" data-dl="size" value="${DL.size}" min="3" max="24" step="0.5"></label>
+      <label class="fig-row"><span>Rotation (&deg;)</span>${numField('data-dl="rot"', DL.rot, 0, 90)}</label>
+      <label class="fig-row"><span>Distance (px)</span>${numField('data-dl="off"', DL.off, 0, 40)}</label>
+      <label class="fig-row"><span>Decimals</span>${numField('data-dl="dec"', DL.dec, 0, 6)}</label>
+      <label class="fig-row"><span>Size (pt)</span>${numField('data-dl="size"', DL.size, 3, 24)}</label>
       <p class="txt-meta">Bars keep the text the source plot formatted (value &plusmn; error); everything else shows its Y value.</p>`}
   </section>
 
@@ -1047,13 +1060,13 @@ function controlsHtml(){
     ${F.legendMode === 'global' ? `
       ${sel('Placing','legendPlace',[['bottom','below the panels'],['top','above the panels']],F.legendPlace)}
       ${sel('Alignment','legendAlign',[['left','left'],['center','centred'],['right','right']],F.legendAlign)}
-      ${num('Columns (0 = one row)','legendCols',0,12,1)}` : ''}
-    ${F.legendMode === 'none' ? '' : `${num('Distance (px)','legendGap',0,40,1)}${chk('Draw a frame behind it','legendFrame')}`}
+      ${num('Columns (0 = one row)','legendCols',0,12)}` : ''}
+    ${F.legendMode === 'none' ? '' : `${num('Distance (px)','legendGap',0,40)}${chk('Draw a frame behind it','legendFrame')}`}
     <div class="fig-subhead">Font sizes (pt)</div>
-    <label class="fig-row"><span>Tick numbers</span><input type="number" data-f="tick" value="${F.font.tick}" min="4" max="24" step="0.5"></label>
-    <label class="fig-row"><span>Axis titles</span><input type="number" data-f="axis" value="${F.font.axis}" min="4" max="24" step="0.5"></label>
-    <label class="fig-row"><span>Legend</span><input type="number" data-f="legend" value="${F.font.legend}" min="4" max="24" step="0.5"></label>
-    <label class="fig-row"><span>Panel titles</span><input type="number" data-f="title" value="${F.font.title}" min="4" max="24" step="0.5"></label>
+    <label class="fig-row"><span>Tick numbers</span>${numField('data-f="tick"', F.font.tick, 4, 24)}</label>
+    <label class="fig-row"><span>Axis titles</span>${numField('data-f="axis"', F.font.axis, 4, 24)}</label>
+    <label class="fig-row"><span>Legend</span>${numField('data-f="legend"', F.font.legend, 4, 24)}</label>
+    <label class="fig-row"><span>Panel titles</span>${numField('data-f="title"', F.font.title, 4, 24)}</label>
   </section>`;
 }
 
@@ -1154,15 +1167,20 @@ function wireSeriesDrag(){
 function wireControls(){
   const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap']);
   const dlNum = new Set(['rot','off','dec','size']);
-  controlsEl.addEventListener('input', e=>{
-    const t = e.target;
+
+  /* Routes one control to the model and says whether the sidebar has to be rebuilt.
+     Numeric fields (data-num) reach this from 'change', i.e. on blur or Enter, so a
+     half-typed value never redraws and a rebuild can never steal the caret; every
+     other control reaches it from 'input' and stays immediate. */
+  const applyControl = t=>{
     let rebuild = false;
     if (t.dataset.k){
       const k = t.dataset.k;
-      if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return; }
-      if (k === 'palScope'){ F.palScope = t.value; applyPalette(); pushUndo(); refresh(true); return; }
-      if (k === 'rangeCol' || k === 'rangeRow'){ F[k] = +t.value; refresh(true); return; }
-      F[k] = t.type === 'checkbox' ? t.checked : (numKeys.has(k) ? parseFloat(t.value) : t.value);
+      if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return null; }
+      if (k === 'palScope'){ F.palScope = t.value; applyPalette(); pushUndo(); refresh(true); return null; }
+      if (k === 'rangeCol' || k === 'rangeRow'){ F[k] = +t.value; refresh(true); return null; }
+      if (numKeys.has(k)){ const v = readNum(t); if (v === null) return null; F[k] = v; }
+      else F[k] = t.type === 'checkbox' ? t.checked : t.value;
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
       if (k === 'xAuto' || k === 'yAuto' || k === 'shareX' || k === 'shareY' || k === 'legendMode') rebuild = true;
     } else if (t.dataset.ak){
@@ -1175,15 +1193,16 @@ function wireControls(){
       const bag = t.dataset.man, i = F[bag === 'xMan' ? 'rangeCol' : 'rangeRow'] | 0;
       const r = computeRanges();
       const cur = F[bag][i] || (bag === 'xMan' ? (r.xOf[i] || [0,1]).slice() : (r.yOf[i] || [0,1]).slice());
-      cur[+t.dataset.end] = parseFloat(t.value);
+      const v = readNum(t); if (v === null) return null;
+      cur[+t.dataset.end] = v;
       F[bag][i] = cur;
     } else if (t.dataset.all){
       // One control, applied to every series at once.
       const k = t.dataset.all, v = t.value;
       if (k === 'show') F.series.forEach(s=>{ s.show = t.checked; });
-      else if (v === '') return;
+      else if (v === '') return null;
       else if (k === 'panel') F.series.forEach(s=>{ s.panel = +v; });
-      else if (k === 'width') F.series.forEach(s=>{ s.width = parseFloat(v) || 1; });
+      else if (k === 'width'){ const w = readNum(t); if (w === null) return null; F.series.forEach(s=>{ s.width = w; }); }
       else if (k === 'dash') F.series.forEach(s=>{ s.dash = (v === 'solid' ? '' : v); });
       else F.series.forEach(s=>{ s.marker = v; });
       rebuild = true;
@@ -1191,13 +1210,14 @@ function wireControls(){
       F.grid[t.dataset.g] = t.type === 'checkbox' ? t.checked : t.value;
     } else if (t.dataset.dl){
       const k = t.dataset.dl;
-      F.dataLabels[k] = t.type === 'checkbox' ? t.checked
-                      : dlNum.has(k) ? (parseFloat(t.value) || 0) : t.value;
+      if (dlNum.has(k)){ const v = readNum(t); if (v === null) return null; F.dataLabels[k] = v; }
+      else F.dataLabels[k] = t.type === 'checkbox' ? t.checked : t.value;
       if (k === 'on') rebuild = true;         // the rest of the section appears/hides
     } else if (t.dataset.f){
-      F.font[t.dataset.f] = parseFloat(t.value) || 8;
+      const v = readNum(t); if (v === null) return null;
+      F.font[t.dataset.f] = v;
     } else if (t.dataset.pk){
-      const i = +t.dataset.p, p = F.panels[i]; if (!p) return;
+      const i = +t.dataset.p, p = F.panels[i]; if (!p) return null;
       const k = t.dataset.pk;
       if (k === 'title'){ p.title = t.value; }
       else {
@@ -1215,15 +1235,36 @@ function wireControls(){
         }
       }
     } else if (t.dataset.sk){
-      const s = F.series[+t.dataset.s]; if (!s) return;
+      const s = F.series[+t.dataset.s]; if (!s) return null;
       const k = t.dataset.sk;
       if (k === 'show') s.show = t.checked;
       else if (k === 'panel'){ s.panel = +t.value; applyPalette(); rebuild = true; }
-      else if (k === 'width') s.width = parseFloat(t.value) || 1;
+      else if (k === 'width'){ const v = readNum(t); if (v === null) return null; s.width = v; }
       else s[k] = t.value;
-    } else return;
+    } else return null;
+    return rebuild;
+  };
+
+  const run = t=>{
+    const rebuild = applyControl(t);
+    if (rebuild === null) return;
+    // Echo the committed value back with a decimal point, so a comma typed by hand
+    // is accepted but never left standing in the field.
+    if (t.dataset.num && !rebuild){
+      const v = readNum(t);
+      if (v !== null) t.value = String(v);
+    }
     pushUndo();
     refresh(rebuild);
+  };
+
+  // Live for everything that is a single decisive act; deferred to 'change' for the
+  // fields you type a number into, so the figure follows the value you confirmed.
+  controlsEl.addEventListener('input', e=>{ if (!e.target.dataset.num) run(e.target); });
+  controlsEl.addEventListener('change', e=>{ if (e.target.dataset.num) run(e.target); });
+  // Enter commits without leaving the field.
+  controlsEl.addEventListener('keydown', e=>{
+    if (e.key === 'Enter' && e.target.dataset.num){ e.preventDefault(); run(e.target); }
   });
   controlsEl.addEventListener('change', e=>{
     if (e.target.dataset && e.target.dataset.preset === 'load'){

@@ -2121,13 +2121,13 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 }
 .fig-panel > b { flex: 0 0 22px; color: var(--muted); }
 .fig-panel label { display: flex; align-items: center; gap: 2px; color: var(--muted); margin: 0; }
-.fig-panel input[type="number"] { width: 38px; padding: 3px 4px; }
+.fig-panel input[data-num] { width: 34px; padding: 3px 4px; text-align: center; }
 .fig-ptitle { flex: 1; min-width: 0; padding: 3px 5px; }
 .fig-serie input[type="color"] { width: 26px; height: 22px; padding: 0; flex: 0 0 auto; }
 .fig-serie input[type="checkbox"] { flex: 0 0 auto; width: auto; }
 .fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; }
 .fig-serie select { flex: 0 0 auto; max-width: 74px; padding: 3px 2px; }
-.fig-serie input[type="number"] { width: 46px; padding: 3px 4px; }
+.fig-serie input[data-num] { width: 42px; padding: 3px 4px; text-align: center; }
 .fig-serie .color-swatch { margin: 0 1px; }
 .fig-grip {
   flex: 0 0 11px; width: 11px; color: var(--muted);
@@ -2140,7 +2140,7 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 .fig-serie-all {
   border-bottom: 1px solid var(--line); padding-bottom: 7px; margin-bottom: 8px;
 }
-.fig-serie-all select, .fig-serie-all input[type="number"] { font-size: 10px; }
+.fig-serie-all select, .fig-serie-all input[data-num] { font-size: 10px; }
 .fig-alllabel { flex: 1; min-width: 0; color: var(--muted); font-size: 11px; }
 .fig-grip-off { visibility: hidden; }
 .fig-serie.drag-over { box-shadow: inset 0 -2px 0 var(--accent); }
