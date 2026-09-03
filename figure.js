@@ -847,22 +847,19 @@ function settingsSnapshot(){
 }
 /* Applies settings without touching the data: scalars wholesale, per-series looks
    positionally. A plot with more series than the source keeps its own for the rest.
-   `kind` and `id` are never copied — they say what a series IS, and letting a preset
-   made on line plots turn a bar series into a curve would erase the bars. A preset
-   leaves the names alone too; the per-plot memory restores them, since there they
-   are the names the user typed for these very series. */
-const IDENTITY = ['kind', 'id', 'xs', 'ys', 'errs'];
-function applySettings(snap, keepNames){
+   `kind`, `id`, `label` and the data are never copied — they say what a series IS,
+   not how it looks. Letting a preset made on line plots turn a bar series into a
+   curve would erase the bars, and carrying names over would show the sample labels
+   of whatever plot the settings came from; the names always come from the project's
+   own legend, so renaming a sample there shows up here at once. */
+const IDENTITY = ['kind', 'id', 'label', 'xs', 'ys', 'errs'];
+function applySettings(snap){
   if (!snap) return;
   Object.assign(F, JSON.parse(JSON.stringify(snap.scalars)));
   F.series.forEach((s, i)=>{
     const rest = snap.series[i] && snap.series[i].rest;
     if (!rest) return;
-    for (const k in rest){
-      if (IDENTITY.includes(k)) continue;
-      if (k === 'label' && !keepNames) continue;
-      s[k] = rest[k];
-    }
+    for (const k in rest) if (!IDENTITY.includes(k)) s[k] = rest[k];
   });
   clampPanels();
 }
@@ -873,7 +870,7 @@ function applySettings(snap, keepNames){
 const MEMORY = new Map();
 const memKey = name => ((activeTab() || {}).id || 'none') + '/' + name;
 function rememberSettings(){ if (F) MEMORY.set(memKey(F.name), settingsSnapshot()); }
-function recallSettings(){ applySettings(MEMORY.get(memKey(F.name)), true); }
+function recallSettings(){ applySettings(MEMORY.get(memKey(F.name))); }
 
 let axSel = 0;
 const axTargets = () => axSel === 'all' ? F.panels.map((_, i)=> i) : [axSel];
