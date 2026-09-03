@@ -1047,17 +1047,62 @@ function manNum(label, bag, end){
    things that notation is for and a tray of characters a keyboard does not offer. */
 const RICH_CHARS = 'α β γ δ ε ζ η θ κ λ μ ν ξ π ρ σ τ φ χ ψ ω Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω · × ÷ ± ∓ ° ′ ″ Å ℏ ∞ ≈ ≠ ≤ ≥ → ← ↔ ‰ √ ∫ ∂ ∆ ⟨ ⟩'.split(' ');
 
+/* Character map: an anchored popup that behaves like the colour picker — click the
+   same button again to close it, click anywhere else to dismiss, Escape closes it
+   without closing the composer behind it. */
+const charPicker = {
+  el: null, anchor: null, onPick: null,
+  build(){
+    if (this.el) return;
+    const el = document.createElement('div');
+    el.className = 'char-popup';
+    el.style.display = 'none';
+    el.innerHTML = RICH_CHARS.map(c=>`<button type="button" data-ch="${esc(c)}">${esc(c)}</button>`).join('');
+    document.body.appendChild(el);
+    this.el = el;
+    el.addEventListener('click', e=>{
+      const b = e.target.closest('[data-ch]');
+      if (b && this.onPick) this.onPick(b.dataset.ch);
+    });
+    document.addEventListener('pointerdown', e=>{
+      if (el.style.display === 'none') return;
+      if (!el.contains(e.target) && e.target !== this.anchor && !this.anchor?.contains(e.target)) this.close();
+    }, true);
+    document.addEventListener('keydown', e=>{
+      if (e.key === 'Escape' && el.style.display !== 'none'){ e.stopPropagation(); this.close(); }
+    }, true);
+  },
+  open(anchor, onPick){
+    this.build();
+    if (this.anchor === anchor && this.el.style.display !== 'none'){ this.close(); return; }
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
+    this.anchor = anchor; anchor.classList.add('cp-anchored');
+    this.onPick = onPick;
+    this.el.style.display = 'flex';
+    const r = anchor.getBoundingClientRect();
+    const pw = this.el.offsetWidth || 240, ph = this.el.offsetHeight || 200;
+    let left = r.left, top = r.bottom + 6;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (top + ph > window.innerHeight - 8) top = r.top - ph - 6;
+    this.el.style.left = Math.max(8, left) + 'px';
+    this.el.style.top = Math.max(8, top) + 'px';
+  },
+  close(){
+    if (!this.el) return;
+    this.el.style.display = 'none';
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
+    this.anchor = null; this.onPick = null;
+  },
+};
+
 function titleField(label, key){
   return `<div class="fig-titlefield">
     <label class="fig-row"><span>${label}</span><input type="text" data-k="${key}" data-rich="${key}" value="${esc(F[key])}"></label>
     <div class="fig-richbar">
-      <button class="btn btn-sm" type="button" data-rich-act="^" data-for="${key}" title="Superscript the selection">x²</button>
-      <button class="btn btn-sm" type="button" data-rich-act="_" data-for="${key}" title="Subscript the selection">x₂</button>
-      <button class="btn btn-sm" type="button" data-rich-act="chars" data-for="${key}" title="Insert a special character">Ω</button>
+      <button class="btn btn-sm" type="button" data-rich-act="^" data-for="${key}" title="Superscript the selection">x<sup>2</sup></button>
+      <button class="btn btn-sm" type="button" data-rich-act="_" data-for="${key}" title="Subscript the selection">x<sub>2</sub></button>
+      <button class="btn btn-sm" type="button" data-rich-act="chars" data-for="${key}" title="Insert a special character">&#937;</button>
       <span class="txt-meta">^{ } raises, _{ } lowers</span>
-    </div>
-    <div class="fig-chars" data-chars="${key}" hidden>
-      ${RICH_CHARS.map(c=>`<button type="button" data-rich-char="${esc(c)}" data-for="${key}">${esc(c)}</button>`).join('')}
     </div>
   </div>`;
 }
@@ -1480,24 +1525,25 @@ function wireControls(){
   });
   controlsEl.addEventListener('change', e=>{ if (e.target.tagName === 'SELECT') refresh(false); });
   controlsEl.addEventListener('click', e=>{
-    const rb = e.target.closest('[data-rich-act], [data-rich-char]');
+    const rb = e.target.closest('[data-rich-act]');
     if (rb){
       const key = rb.dataset.for;
       const input = controlsEl.querySelector(`input[data-rich="${key}"]`);
-      const tray = controlsEl.querySelector(`[data-chars="${key}"]`);
-      if (rb.dataset.richAct === 'chars'){ tray.hidden = !tray.hidden; return; }
-      const a = input.selectionStart ?? input.value.length;
-      const b = input.selectionEnd ?? a;
-      const sel = input.value.slice(a, b);
-      // Wrapping an empty selection leaves the caret inside the braces, ready to type.
-      const ins = rb.dataset.richChar != null ? rb.dataset.richChar
-                                              : `${rb.dataset.richAct}{${sel}}`;
-      input.value = input.value.slice(0, a) + ins + input.value.slice(b);
-      const caret = rb.dataset.richChar != null ? a + ins.length
-                                                : a + ins.length - (sel ? 0 : 1);
-      input.focus(); input.setSelectionRange(caret, caret);
-      F[key] = input.value;
-      pushUndo(); refresh(false);
+      // Where the caret was before the button took focus, so an insert lands there.
+      const insertAt = (text, wrap)=>{
+        const a = input.selectionStart ?? input.value.length;
+        const b = input.selectionEnd ?? a;
+        const sel = input.value.slice(a, b);
+        const ins = wrap ? `${wrap}{${sel}}` : text;
+        input.value = input.value.slice(0, a) + ins + input.value.slice(b);
+        // Wrapping an empty selection leaves the caret inside the braces, ready to type.
+        const caret = a + ins.length - (wrap && !sel ? 1 : 0);
+        input.focus(); input.setSelectionRange(caret, caret);
+        F[key] = input.value;
+        pushUndo(); refresh(false);
+      };
+      if (rb.dataset.richAct === 'chars') charPicker.open(rb, ch=> insertAt(ch, null));
+      else insertAt(null, rb.dataset.richAct);
       return;
     }
     const sw = e.target.closest('.color-swatch');
@@ -1594,6 +1640,7 @@ export function openFigureEditor(plot, opts){
   const close = ()=>{
     rememberSettings();
     window.removeEventListener('resize', onResize);
+    charPicker.close();
     document.removeEventListener('keydown', onKey);
     backdrop.remove(); backdrop = null; F = null; dimEl = null; presetBar = null;
     srcPlot = null; srcOpts = null;

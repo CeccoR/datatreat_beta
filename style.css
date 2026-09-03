@@ -2122,18 +2122,28 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   margin-left: 126px; font-size: 10px;
 }
 .fig-richbar .btn { padding: 2px 7px; font-size: 11px; line-height: 1.3; flex: 0 0 auto; }
-/* display:flex would out-specify the UA's [hidden] rule, so hide it explicitly. */
-.fig-chars[hidden] { display: none; }
-.fig-chars {
+/* The x² / x₂ marks are drawn with real sup/sub in the button's own font, so both
+   read as the same typeface — the Unicode subscript digits fall back to another. */
+.fig-richbar .btn sup, .fig-richbar .btn sub {
+  font-size: 0.72em; font-weight: 700; line-height: 0;
+}
+.fig-richbar .btn sup { vertical-align: super; }
+.fig-richbar .btn sub { vertical-align: sub; }
+
+/* Character map, anchored under its button like the colour picker. */
+.char-popup {
+  position: fixed; z-index: 9999;
   display: flex; flex-wrap: wrap; gap: 3px;
-  margin: 6px 0 0 126px; max-width: 260px;
+  width: 246px; padding: 8px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.35);
 }
-.fig-chars button {
-  width: 22px; height: 22px; padding: 0; font-size: 12px; cursor: pointer;
-  background: var(--panel); color: var(--text);
-  border: 1px solid var(--line); border-radius: 4px;
+.char-popup button {
+  width: 24px; height: 24px; padding: 0; font-size: 13px; cursor: pointer;
+  background: transparent; color: var(--text);
+  border: 1px solid transparent; border-radius: 4px;
 }
-.fig-chars button:hover { border-color: var(--accent); color: var(--accent); }
+.char-popup button:hover { border-color: var(--accent); color: var(--accent); }
 .fig-check { display: flex; align-items: center; gap: 7px; margin: 0 0 7px; font-size: 12px; color: var(--muted); }
 .fig-check input { flex: 0 0 auto; width: auto; }
 .fig-panel, .fig-serie {
