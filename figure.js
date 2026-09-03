@@ -84,6 +84,7 @@ function markerShape(kind, cx, cy, r, color, width){
 let F = null;                 // the figure model
 let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, presetBar = null;
 let lastInner = { w: 0, h: 0 };   // drawing area of the last pass, in mm
+let view = { z: 1, x: 0, y: 0 };  // preview zoom and pan, on top of the fit scale
 let srcPlot = null, srcOpts = null;   // what the composer was opened on, for Reset
 
 /* ---- Model ---------------------------------------------------------------- */
@@ -636,7 +637,11 @@ function drawFigure(svg, ink, paper, extra){
       if (a.on){
         const e = g0.vert ? { x1:g0.base, x2:g0.base, y1:py0, y2:py0+ph }
                           : { x1:px0, x2:px0+pw, y1:g0.base, y2:g0.base };
-        add('line', { ...e, stroke:ink, 'stroke-width':0.8 });
+        // Square caps: a stroke is centred on its path, so two lines meeting at a
+        // corner with the default butt cap each stop half a width short of filling
+        // it, leaving a small notch. A square cap runs the stroke on by exactly that
+        // half width, so the corner closes.
+        add('line', { ...e, stroke:ink, 'stroke-width':0.8, 'stroke-linecap':'square' });
       }
 
       // Tick marks. `dir` decides which side of the axis line they stick out of.
@@ -847,6 +852,55 @@ function updateDim(){
     + `${Math.round(F.wmm / 25.4 * F.dpi)}×${Math.round(F.hmm / 25.4 * F.dpi)} px @ ${F.dpi} dpi`;
 }
 
+/* The preview is a fixed-size drawing scaled to fit its pane; this puts a zoom and a
+   pan on top of that, purely for looking at it. The figure itself is untouched — the
+   transform lives on the element, not in the model, so nothing here reaches an
+   export. Zoom keeps the point under the cursor still. */
+function applyView(){
+  if (!previewSvg) return;
+  previewSvg.style.transformOrigin = 'center center';
+  previewSvg.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.z})`;
+}
+
+function resetView(){ view = { z: 1, x: 0, y: 0 }; applyView(); }
+
+function wirePreviewView(){
+  const host = previewSvg.parentElement;
+  // The untransformed drawing is centred in the pane by the layout, so the pane's
+  // centre is the fixed point every calculation here is measured from.
+  const centre = ()=>{ const r = host.getBoundingClientRect(); return [r.left + r.width/2, r.top + r.height/2]; };
+
+  host.addEventListener('wheel', e=>{
+    // Always swallowed, so the page behind never scrolls or zooms with it.
+    e.preventDefault();
+    const [cx, cy] = centre();
+    const k = Math.exp(-e.deltaY * 0.0015);
+    const z2 = Math.min(24, Math.max(0.25, view.z * k));
+    const sx = (e.clientX - cx - view.x) / view.z, sy = (e.clientY - cy - view.y) / view.z;
+    view.x = e.clientX - cx - z2 * sx;
+    view.y = e.clientY - cy - z2 * sy;
+    view.z = z2;
+    applyView();
+  }, { passive: false });
+
+  let drag = null;
+  host.addEventListener('pointerdown', e=>{
+    if (e.button !== 0) return;
+    drag = { x: e.clientX - view.x, y: e.clientY - view.y };
+    host.setPointerCapture(e.pointerId);
+    host.classList.add('is-panning');
+  });
+  host.addEventListener('pointermove', e=>{
+    if (!drag) return;
+    view.x = e.clientX - drag.x; view.y = e.clientY - drag.y;
+    applyView();
+  });
+  const end = ()=>{ drag = null; host.classList.remove('is-panning'); };
+  host.addEventListener('pointerup', end);
+  host.addEventListener('pointercancel', end);
+  host.addEventListener('dblclick', resetView);   // back to fit
+}
+
 function renderPreview(){
   renderInto(previewSvg, '#1a2327', '#ffffff');
   // Fit the real-size figure inside the preview pane without distorting it.
@@ -856,6 +910,7 @@ function renderPreview(){
   const k = Math.min(availW / W, availH / H, 1);
   previewSvg.style.width = (W * k) + 'px';
   previewSvg.style.height = (H * k) + 'px';
+  applyView();
   updateDim();
 }
 
@@ -1377,6 +1432,7 @@ function resetFigure(){
   F = buildModel(srcPlot, srcOpts);
   axSel = 0; presetSel = '';
   applyPalette();
+  resetView();
   pushUndo();
   refresh(true);
   renderPresetBar();
@@ -1651,6 +1707,8 @@ export function openFigureEditor(plot, opts){
   controlsEl.innerHTML = controlsHtml();
   wireControls();
   wireSeriesDrag();
+  wirePreviewView();
+  resetView();
   wirePresetBar();
   renderPresetBar();
 
