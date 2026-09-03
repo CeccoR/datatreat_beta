@@ -572,6 +572,35 @@ function drawFigure(svg, ink, paper, extra){
       }
     }
 
+    /* Where another panel actually puts its numbers on the same side. A number at a
+       shared edge only has to give way when the neighbour draws one within a line of
+       it — checking merely "is the edge shared" dropped perfectly clear numbers, e.g.
+       the 0 at the foot of every stacked panel but the last. */
+    const neighbourMarks = (side, edge, vert)=>{
+      const marks = [];
+      F.panels.forEach((q, k)=>{
+        if (k === pi) return;
+        const touches =
+          edge === 'top'    ? (q.r + q.rs === p.r && q.c < p.c + p.cs && p.c < q.c + q.cs) :
+          edge === 'bottom' ? (q.r === p.r + p.rs && q.c < p.c + p.cs && p.c < q.c + q.cs) :
+          edge === 'left'   ? (q.c + q.cs === p.c && q.r < p.r + p.rs && p.r < q.r + q.rs) :
+                              (q.c === p.c + p.cs && q.r < p.r + p.rs && p.r < q.r + q.rs);
+        if (!touches) return;
+        const qa = q.axes || (q.axes = newAxes());
+        if (!qa[side].labels) return;
+        const qx0 = mL + q.c * cw, qy0 = mT + q.r * ch;
+        const qw = Math.max(4, q.cs * cw), qh = Math.max(4, q.rs * ch);
+        if (vert){
+          const [a, z] = yOf[k] || [0, 1];
+          for (const t of majorTicks(a, z, F.yStep)) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
+        } else {
+          const [a, z] = xOf[k] || [0, 1];
+          for (const t of majorTicks(a, z, F.xStep)) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: textW(fmtTick(t), fTick) / 2 });
+        }
+      });
+      return marks;
+    };
+
     // ---- Axes: four independent sides ------------------------------------
     const A = p.axes || (p.axes = newAxes());
     const free = sideFree(pi);
@@ -632,15 +661,18 @@ function drawFigure(svg, ink, paper, extra){
           const q = proj(t), txt = fmtTick(t);
           let at;
           if (g0.vert){
-            // Drop a number that would spill past an edge shared with a neighbour.
             const hh = fTick * 0.55;
-            if ((!free.top && q - hh < py0 + 1) || (!free.bottom && q + hh > py0 + ph - 1)) continue;
+            const near = e => Math.abs(e - q) < fTick * 1.1;
+            if (q - hh < py0 + 1 && !free.top && neighbourMarks(side, 'top', true).some(near)) continue;
+            if (q + hh > py0 + ph - 1 && !free.bottom && neighbourMarks(side, 'bottom', true).some(near)) continue;
             at = side === 'left'
               ? { x:g0.base-5, y:q+fTick*0.36, 'text-anchor':'end' }
               : { x:g0.base+5, y:q+fTick*0.36, 'text-anchor':'start' };
           } else {
             const hw = textW(txt, fTick) / 2;
-            if ((!free.left && q - hw < px0 + 1) || (!free.right && q + hw > px0 + pw - 1)) continue;
+            const clash = m => Math.abs(m.q - q) < m.w + hw + 2;
+            if (q - hw < px0 + 1 && !free.left && neighbourMarks(side, 'left', false).some(clash)) continue;
+            if (q + hw > px0 + pw - 1 && !free.right && neighbourMarks(side, 'right', false).some(clash)) continue;
             at = { x:q, y: side === 'bottom' ? g0.base+fTick*1.25 : g0.base-fTick*0.5, 'text-anchor':'middle' };
           }
           add('text', { ...at, 'font-size':fTick, fill:ink }).textContent = txt;
