@@ -874,7 +874,7 @@ function wirePreviewView(){
     // Always swallowed, so the page behind never scrolls or zooms with it.
     e.preventDefault();
     const [cx, cy] = centre();
-    const k = Math.exp(-e.deltaY * 0.0015);
+    const k = Math.exp(-e.deltaY * 0.004);
     const z2 = Math.min(24, Math.max(0.25, view.z * k));
     const sx = (e.clientX - cx - view.x) / view.z, sy = (e.clientY - cy - view.y) / view.z;
     view.x = e.clientX - cx - z2 * sx;

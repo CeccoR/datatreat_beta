@@ -2101,6 +2101,7 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   flex: 0 0 60%; min-width: 0; display: flex; align-items: center; justify-content: center;
   background: var(--bg); overflow: hidden; padding: 12px;
   cursor: grab; touch-action: none;
+  user-select: none; -webkit-user-select: none;
 }
 .fig-preview.is-panning { cursor: grabbing; }
 .fig-svg { will-change: transform; }
