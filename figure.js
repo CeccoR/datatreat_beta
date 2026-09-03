@@ -23,13 +23,14 @@ function saveBlob(filename, data, mime){
 
    Layout model: a rows x cols table of panels. Panels are all the same cell size
    and always touch; a panel may span several cells (rowSpan/colSpan) and cells may
-   be left empty. Because panels touch, tick numbers can only live on the outer
-   edges of the table — so the ranges are scoped to match what those numbers
-   actually describe:
-     shareX on  -> one X range for the whole figure
-     shareX off -> one X range per COLUMN   (numbers under each column are correct)
-     shareY on  -> one Y range for the whole figure
-     shareY off -> one Y range per ROW      (numbers left of each row are correct)
+   be left empty.
+
+   Ranges: share on -> one range for the whole figure; share off -> every panel gets
+   its own, auto from its own data or set by hand. Panels touch, so tick numbers can
+   only be drawn on an edge with free space beside it (see sideFree): with sharing
+   off, the numbers along a shared border belong to the panel that owns that edge and
+   describe that panel alone. Leave a gap in the grid, or turn the numbers on for the
+   side you want, when each panel needs its own scale spelled out.
 ========================================================= */
 
 const PX_MM = 96 / 25.4;      // CSS px per mm at the nominal 96 dpi
@@ -173,9 +174,9 @@ function buildModel(plot, opts){
     ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
-    // With sharing off the range is per column (X) / per row (Y), so a manual range
-    // has to be per column / per row too. Keyed by index; missing = fall back to auto.
-    xMan: {}, yMan: {}, rangeCol: 0, rangeRow: 0,
+    // With sharing off each panel has its own range, so a manual one is per panel
+    // too. Keyed by panel index; missing = that panel stays on its own auto range.
+    xMan: {}, yMan: {}, rangePanel: 0,
     xStep: 0, yStep: 0,                 // major tick interval; 0 = pick a nice one
     minorX: 4, minorY: 4,               // minor ticks between two majors, per axis
     grid: { x:false, y:false, minor:false, dash:'2,3' },
@@ -238,10 +239,6 @@ function extentOf(panelIdxs){
   return { x0, x1, y0: bars ? y0 : y0 - pad, y1: y1 + pad };
 }
 
-// Panels overlapping a given column / row (span-aware).
-const panelsInCol = c => F.panels.map((p,i)=>i).filter(i=>{ const p=F.panels[i]; return c >= p.c && c < p.c + p.cs; });
-const panelsInRow = r => F.panels.map((p,i)=>i).filter(i=>{ const p=F.panels[i]; return r >= p.r && r < p.r + p.rs; });
-
 // True when nothing sits immediately beyond `side` of panel `i` — i.e. there is
 // room outside that edge for tick numbers and an axis title. Panels touch, so a
 // side facing a neighbour can only carry tick marks.
@@ -277,21 +274,19 @@ function minorTicks(majors, lo, hi, n){
   return out;
 }
 
-// Resolve the X/Y range that applies to each panel, honouring the share toggles.
+// The X/Y range of every panel, indexed by panel. Shared means they all get the
+// figure-wide one; otherwise each panel resolves its own, manual if it has one set.
 function computeRanges(){
-  const all = F.panels.map((_, i)=> i);
-  const globalExt = extentOf(all) || { x0:0, x1:1, y0:0, y1:1 };
+  const globalExt = extentOf(F.panels.map((_, i)=> i)) || { x0:0, x1:1, y0:0, y1:1 };
   const xOf = [], yOf = [];
-  for (let c = 0; c < F.cols; c++){
-    const e = F.shareX ? globalExt : (extentOf(panelsInCol(c)) || globalExt);
-    const man = F.shareX ? [F.xmin, F.xmax] : F.xMan[c];
-    xOf[c] = (F.xAuto || !man) ? [e.x0, e.x1] : man.slice();
-  }
-  for (let r = 0; r < F.rows; r++){
-    const e = F.shareY ? globalExt : (extentOf(panelsInRow(r)) || globalExt);
-    const man = F.shareY ? [F.ymin, F.ymax] : F.yMan[r];
-    yOf[r] = (F.yAuto || !man) ? [e.y0, e.y1] : man.slice();
-  }
+  F.panels.forEach((p, i)=>{
+    const own = extentOf([i]) || globalExt;
+    const ex = F.shareX ? globalExt : own, ey = F.shareY ? globalExt : own;
+    const manX = F.shareX ? [F.xmin, F.xmax] : F.xMan[i];
+    const manY = F.shareY ? [F.ymin, F.ymax] : F.yMan[i];
+    xOf[i] = (F.xAuto || !manX) ? [ex.x0, ex.x1] : manX.slice();
+    yOf[i] = (F.yAuto || !manY) ? [ey.y0, ey.y1] : manY.slice();
+  });
   return { xOf, yOf, globalExt };
 }
 
@@ -335,14 +330,16 @@ function drawFigure(svg, ink, paper, extra){
   // Outer margins: room for the Y numbers + title on the left, X numbers + title
   // below, and (for a global legend) a strip under that.
   let maxYNum = 0;
-  for (let r = 0; r < F.rows; r++)
-    for (const t of majorTicks(yOf[r][0], yOf[r][1], F.yStep)) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
+  F.panels.forEach((p, i)=>{
+    for (const t of majorTicks(yOf[i][0], yOf[i][1], F.yStep)) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
+  });
   // How far the X labels stick out sideways and downwards. A number is centred on
   // its tick, so the outermost ones overhang the frame by half their width; tilted
   // category names hang below the axis and lean past its left end.
   let halfX = 0, catDrop = 0, catLean = 0;
-  for (let c = 0; c < F.cols; c++)
-    for (const t of majorTicks(xOf[c][0], xOf[c][1], F.xStep)) halfX = Math.max(halfX, textW(fmtTick(t), fTick) / 2);
+  F.panels.forEach((p, i)=>{
+    for (const t of majorTicks(xOf[i][0], xOf[i][1], F.xStep)) halfX = Math.max(halfX, textW(fmtTick(t), fTick) / 2);
+  });
   if (F.cats && F.cats.length){
     for (const cat of F.cats){
       const w = textW(cat.text, fTick), rad = (cat.rot || 0) * Math.PI / 180;
@@ -382,8 +379,8 @@ function drawFigure(svg, ink, paper, extra){
   F.panels.forEach((p, pi)=>{
     const px0 = mL + p.c * cw, py0 = mT + p.r * ch;
     const pw = Math.max(4, p.cs * cw), ph = Math.max(4, p.rs * ch);
-    const [x0, x1] = xOf[Math.min(p.c, F.cols-1)] || [0,1];
-    const [y0, y1] = yOf[Math.min(p.r, F.rows-1)] || [0,1];
+    const [x0, x1] = xOf[pi] || [0, 1];
+    const [y0, y1] = yOf[pi] || [0, 1];
     const X = v => px0 + (v - x0) / (x1 - x0 || 1) * pw;
     const Y = v => py0 + ph - (v - y0) / (y1 - y0 || 1) * ph;
 
@@ -903,8 +900,8 @@ const sel = (label, key, opts, cur, attr)=>
 
 // One end of the manual range for the currently selected column / row. Shows the
 // resolved auto value when nothing has been typed yet, so the field starts sensible.
-function manNum(label, bag, selKey, end){
-  const i = F[selKey] | 0;
+function manNum(label, bag, end){
+  const i = F.rangePanel | 0;
   const cur = F[bag][i];
   const r = computeRanges();
   const auto = bag === 'xMan' ? (r.xOf[i] || [0,1]) : (r.yOf[i] || [0,1]);
@@ -1000,18 +997,18 @@ function controlsHtml(){
     ${sel('X title placing','titleModeX',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeX)}
     ${sel('Y title placing','titleModeY',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeY)}
     <div class="fig-subhead">Range</div>
-    ${chk('Share X across panels (off: one range per column)','shareX')}
-    ${chk('Share Y across panels (off: one range per row)','shareY')}
+    ${chk('Share one X range across all panels','shareX')}
+    ${chk('Share one Y range across all panels','shareY')}
+    ${(!F.shareX && !F.xAuto) || (!F.shareY && !F.yAuto)
+      ? sel('Range of panel','rangePanel', F.panels.map((p,i)=>[i,'P'+(i+1)]), F.rangePanel) : ''}
     ${chk('X auto range','xAuto')}
     ${F.xAuto ? '' : (F.shareX
       ? `${num('X min','xmin',-1e9,1e9)}${num('X max','xmax',-1e9,1e9)}`
-      : `${sel('Column','rangeCol', Array.from({length:F.cols},(_,c)=>[c,'Column '+(c+1)]), F.rangeCol)}
-         ${manNum('X min','xMan','rangeCol',0)}${manNum('X max','xMan','rangeCol',1)}`)}
+      : `${manNum('X min','xMan',0)}${manNum('X max','xMan',1)}`)}
     ${chk('Y auto range','yAuto')}
     ${F.yAuto ? '' : (F.shareY
       ? `${num('Y min','ymin',-1e9,1e9)}${num('Y max','ymax',-1e9,1e9)}`
-      : `${sel('Row','rangeRow', Array.from({length:F.rows},(_,r)=>[r,'Row '+(r+1)]), F.rangeRow)}
-         ${manNum('Y min','yMan','rangeRow',0)}${manNum('Y max','yMan','rangeRow',1)}`)}
+      : `${manNum('Y min','yMan',0)}${manNum('Y max','yMan',1)}`)}
     <div class="fig-subhead">Ticks</div>
     ${num('X major step','xStep',0,1e9)}${num('Y major step','yStep',0,1e9)}
     ${num('X minors per major','minorX',0,20)}${num('Y minors per major','minorY',0,20)}
@@ -1089,6 +1086,7 @@ function clampPanels(){
     if (!p.axes) p.axes = newAxes();
   });
   if (axSel !== 'all' && axSel >= F.panels.length) axSel = 0;
+  if (F.rangePanel >= F.panels.length) F.rangePanel = 0;
   F.series.forEach(s=>{ if (s.panel >= F.panels.length) s.panel = 0; });
 }
 
@@ -1178,7 +1176,7 @@ function wireControls(){
       const k = t.dataset.k;
       if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return null; }
       if (k === 'palScope'){ F.palScope = t.value; applyPalette(); pushUndo(); refresh(true); return null; }
-      if (k === 'rangeCol' || k === 'rangeRow'){ F[k] = +t.value; refresh(true); return null; }
+      if (k === 'rangePanel'){ F.rangePanel = +t.value; refresh(true); return null; }
       if (numKeys.has(k)){ const v = readNum(t); if (v === null) return null; F[k] = v; }
       else F[k] = t.type === 'checkbox' ? t.checked : t.value;
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
@@ -1190,7 +1188,7 @@ function wireControls(){
         (p.axes || (p.axes = newAxes()))[t.dataset.side][t.dataset.ak] = v;
       }
     } else if (t.dataset.man){
-      const bag = t.dataset.man, i = F[bag === 'xMan' ? 'rangeCol' : 'rangeRow'] | 0;
+      const bag = t.dataset.man, i = F.rangePanel | 0;
       const r = computeRanges();
       const cur = F[bag][i] || (bag === 'xMan' ? (r.xOf[i] || [0,1]).slice() : (r.yOf[i] || [0,1]).slice());
       const v = readNum(t); if (v === null) return null;
