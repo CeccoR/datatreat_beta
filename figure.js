@@ -83,6 +83,7 @@ function markerShape(kind, cx, cy, r, color, width){
 
 let F = null;                 // the figure model
 let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, presetBar = null;
+let lastInner = { w: 0, h: 0 };   // drawing area of the last pass, in mm
 let srcPlot = null, srcOpts = null;   // what the composer was opened on, for Reset
 
 /* ---- Model ---------------------------------------------------------------- */
@@ -220,6 +221,10 @@ function buildModel(plot, opts){
   const { series, cats } = seriesFromPlot(plot, opts && opts.legendEl);
   return {
     wmm: 160, hmm: 110, dpi: 300,
+    // The drawing area itself, in mm. On auto it is whatever the margins leave; set
+    // it by hand and the page keeps its size while the slack moves to the right and
+    // bottom margins, which are the ones no label is pinned to.
+    plotAuto: true, plotW: 0, plotH: 0,
     rows: 1, cols: 1,
     shareX: true, shareY: true,
     legendMode: 'per-panel',            // 'none' | 'per-panel' | 'global'
@@ -439,7 +444,14 @@ function drawFigure(svg, ink, paper, extra){
   if (mL + mR > capW){ const k = capW / (mL + mR); mL *= k; mR *= k; }
   if (mT + mB > capH){ const k = capH / (mT + mB); mT *= k; mB *= k; }
 
-  const innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
+  let innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
+  if (!F.plotAuto){
+    // Room is still kept for the outward tick marks on the far sides, so a plot area
+    // asked bigger than the page can hold stops short of the edge instead of on it.
+    innerW = Math.min(Math.max(20, F.plotW * PX_MM), W - mL - 8);
+    innerH = Math.min(Math.max(20, F.plotH * PX_MM), H - mT - 8);
+  }
+  lastInner = { w: +(innerW / PX_MM).toFixed(2), h: +(innerH / PX_MM).toFixed(2) };
   const cw = innerW / F.cols, ch = innerH / F.rows;
 
   F.panels.forEach((p, pi)=>{
@@ -831,7 +843,8 @@ function renderInto(svg, ink, paper){
 // this off the events meant the line reported the value from before the last commit.
 function updateDim(){
   if (!dimEl || !F) return;
-  dimEl.textContent = `${F.wmm}×${F.hmm} mm · ${Math.round(F.wmm / 25.4 * F.dpi)}×${Math.round(F.hmm / 25.4 * F.dpi)} px @ ${F.dpi} dpi`;
+  dimEl.textContent = `${F.wmm}×${F.hmm} mm (plot ${lastInner.w}×${lastInner.h}) · `
+    + `${Math.round(F.wmm / 25.4 * F.dpi)}×${Math.round(F.hmm / 25.4 * F.dpi)} px @ ${F.dpi} dpi`;
 }
 
 function renderPreview(){
@@ -1112,6 +1125,8 @@ function controlsHtml(){
   return `
   <section class="fig-sec"><h4>Figure</h4>
     ${num('Width (mm)','wmm',5,2000)}${num('Height (mm)','hmm',5,2000)}${num('Export DPI','dpi',1,20000)}
+    ${chk('Plot area fills what the margins leave','plotAuto')}
+    ${F.plotAuto ? '' : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}`}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
   </section>
 
@@ -1413,7 +1428,7 @@ function wirePresetBar(){
 }
 
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap']);
+  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','plotW','plotH']);
   const dlNum = new Set(['rot','off','dec','size']);
 
   /* Routes one control to the model and says whether the sidebar has to be rebuilt.
@@ -1429,6 +1444,8 @@ function wireControls(){
       if (k === 'rangePanel'){ F.rangePanel = +t.value; refresh(true); return null; }
       // Turning an auto range off must hand you the range you are looking at, not
       // the model's placeholder 0..1, so the bounds are read while auto still holds.
+      if (k === 'plotAuto' && !t.checked){ F.plotW = lastInner.w; F.plotH = lastInner.h; rebuild = true; }
+      if (k === 'plotAuto' && t.checked) rebuild = true;
       if ((k === 'xAuto' || k === 'yAuto') && !t.checked){
         const r = computeRanges(), i = F.rangePanel | 0;
         if (k === 'xAuto'){ const [a, z] = r.xOf[i] || r.xOf[0] || [0, 1]; F.xmin = a; F.xmax = z; }
