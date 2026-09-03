@@ -69,7 +69,7 @@ function markerShape(kind, cx, cy, r, color, width){
 }
 
 let F = null;                 // the figure model
-let backdrop = null, previewSvg = null, controlsEl = null;
+let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null;
 
 /* ---- Model ---------------------------------------------------------------- */
 
@@ -729,6 +729,14 @@ function renderInto(svg, ink, paper){
   }
 }
 
+// Physical size and pixel count of the export, shown in the footer. Driven by the
+// redraw rather than by input events: numeric fields commit on 'change', and hanging
+// this off the events meant the line reported the value from before the last commit.
+function updateDim(){
+  if (!dimEl || !F) return;
+  dimEl.textContent = `${F.wmm}×${F.hmm} mm · ${Math.round(F.wmm / 25.4 * F.dpi)}×${Math.round(F.hmm / 25.4 * F.dpi)} px @ ${F.dpi} dpi`;
+}
+
 function renderPreview(){
   renderInto(previewSvg, '#1a2327', '#ffffff');
   // Fit the real-size figure inside the preview pane without distorting it.
@@ -738,6 +746,7 @@ function renderPreview(){
   const k = Math.min(availW / W, availH / H, 1);
   previewSvg.style.width = (W * k) + 'px';
   previewSvg.style.height = (H * k) + 'px';
+  updateDim();
 }
 
 /* ---- Export ---------------------------------------------------------------- */
@@ -914,7 +923,7 @@ function controlsHtml(){
   const DL = F.dataLabels;
   return `
   <section class="fig-sec"><h4>Figure</h4>
-    ${num('Width (mm)','wmm',20,400)}${num('Height (mm)','hmm',20,400)}${num('Export DPI','dpi',72,1200)}
+    ${num('Width (mm)','wmm',5,2000)}${num('Height (mm)','hmm',5,2000)}${num('Export DPI','dpi',1,20000)}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
     <div class="fig-subhead">Preset</div>
     <label class="fig-row"><span>Apply</span>
@@ -1383,7 +1392,7 @@ export function openFigureEditor(plot, opts){
     rememberSettings();
     window.removeEventListener('resize', onResize);
     document.removeEventListener('keydown', onKey);
-    backdrop.remove(); backdrop = null; F = null;
+    backdrop.remove(); backdrop = null; F = null; dimEl = null;
   };
   const onKey = e => {
     if (e.key === 'Escape'){ close(); return; }
@@ -1401,11 +1410,6 @@ export function openFigureEditor(plot, opts){
   backdrop.querySelector('[data-fig-svg]').addEventListener('click', exportSVG);
   backdrop.querySelector('[data-fig-png]').addEventListener('click', exportPNG);
 
-  requestAnimationFrame(()=>{
-    renderPreview();
-    const dim = backdrop.querySelector('.fig-dim');
-    const upd = ()=>{ dim.textContent = `${F.wmm}×${F.hmm} mm · ${Math.round(F.wmm/25.4*F.dpi)}×${Math.round(F.hmm/25.4*F.dpi)} px @ ${F.dpi} dpi`; };
-    upd();
-    controlsEl.addEventListener('input', upd);
-  });
+  dimEl = backdrop.querySelector('.fig-dim');
+  requestAnimationFrame(renderPreview);
 }
