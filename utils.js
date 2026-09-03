@@ -221,7 +221,18 @@ class ColorPickerUI {
     this._updateUI(false);
     this._renderRecent();
     this._el.style.display = 'block';
-    const rect = anchorBtn.getBoundingClientRect();
+    this._reposition();
+    // Scroll never bubbles, but a capture-phase listener on the window still sees it
+    // fire on any scrollable ancestor, so the popup can follow its button wherever
+    // the scroll happened.
+    if (!this._onScroll) this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+  }
+
+  _reposition(){
+    if (!this._anchorBtn) return;
+    const rect = this._anchorBtn.getBoundingClientRect();
     const pw = this._el.offsetWidth || 260, ph = this._el.offsetHeight || 430;
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
@@ -236,6 +247,10 @@ class ColorPickerUI {
     this._picked = null;
     this._el.style.display = 'none';
     if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
     this._onChange = null;
     this._anchorBtn = null;
   }
@@ -292,7 +307,14 @@ class PalettePickerUI {
     anchorBtn.classList.add('cp-anchored');   // keep the button's border while open
     this._onChange = onChange;
     this._el.style.display = 'block';
-    const rect = anchorBtn.getBoundingClientRect();
+    this._reposition();
+    if (!this._onScroll) this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+  }
+  _reposition(){
+    if (!this._anchorBtn) return;
+    const rect = this._anchorBtn.getBoundingClientRect();
     const pw = this._el.offsetWidth || 236, ph = this._el.offsetHeight || 260;
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
@@ -303,6 +325,10 @@ class PalettePickerUI {
   close(){
     this._el.style.display='none';
     if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
     this._onChange=null; this._anchorBtn=null;
   }
 }

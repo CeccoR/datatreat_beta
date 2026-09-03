@@ -571,17 +571,17 @@ import { Plot } from './plot.js';
     plot1.setRange(hv0, hv1, 0, ymax1);
     plot1.drawAxes();
     files.forEach((f,k)=>{
-      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: f.label });
+      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: `${f.label} tauc` });
       const r = bestRegsAll[k];
       if (r && isFinite(r.regs.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs.slope*x+r.regs.intercept), f.color, 1, '5,4',
-                   { label: `${f.label} baseline 1` });
+                   { label: `${f.label} baseline` });
       }
       if (r && isFinite(r.regs2.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs2.slope*x+r.regs2.intercept), f.color, 1, '2,3',
-                   { label: `${f.label} baseline 2` });
+                   { label: `${f.label} baseline` });
       }
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
     });

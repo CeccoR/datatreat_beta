@@ -1147,7 +1147,14 @@ const charPicker = {
     this.anchor = anchor; anchor.classList.add('cp-anchored');
     this.onPick = onPick;
     this.el.style.display = 'flex';
-    const r = anchor.getBoundingClientRect();
+    this.reposition();
+    if (!this._onScroll) this._onScroll = ()=> this.reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+  },
+  reposition(){
+    if (!this.anchor) return;
+    const r = this.anchor.getBoundingClientRect();
     const pw = this.el.offsetWidth || 240, ph = this.el.offsetHeight || 200;
     let left = r.left, top = r.bottom + 6;
     if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
@@ -1159,6 +1166,10 @@ const charPicker = {
     if (!this.el) return;
     this.el.style.display = 'none';
     if (this.anchor) this.anchor.classList.remove('cp-anchored');
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
     this.anchor = null; this.onPick = null;
   },
 };
