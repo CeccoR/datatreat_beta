@@ -155,6 +155,52 @@ function seriesFromPlot(plot, legendEl){
   return { series: out, cats };
 }
 
+/* ---- Rich axis titles ------------------------------------------------------
+   Titles are held as plain text with two markers: ^{...} raises, _{...} lowers.
+   That keeps them editable in an ordinary text field — and copy-pasteable — while
+   still exporting real tspans. A source plot states its label as SVG, so it is
+   translated into this notation on the way in rather than having its tags stripped,
+   which is what used to flatten a Tauc exponent onto the baseline. */
+const RICH_RE = /([\^_])\{([^}]*)\}/g;
+
+function svgLabelToRich(html){
+  return String(html || '')
+    .replace(/<tspan[^>]*baseline-shift\s*=\s*["']?super[^>]*>([\s\S]*?)<\/tspan>/gi, '^{$1}')
+    .replace(/<tspan[^>]*baseline-shift\s*=\s*["']?sub[^>]*>([\s\S]*?)<\/tspan>/gi, '_{$1}')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+}
+
+// The pieces of a rich string, in order: {t: text, r: 'super'|'sub'|null}.
+function richParts(str){
+  const out = [];
+  let last = 0;
+  String(str || '').replace(RICH_RE, (m, mark, body, i)=>{
+    if (i > last) out.push({ t: str.slice(last, i), r: null });
+    out.push({ t: body, r: mark === '^' ? 'super' : 'sub' });
+    last = i + m.length;
+    return m;
+  });
+  if (last < String(str || '').length) out.push({ t: String(str).slice(last), r: null });
+  return out;
+}
+
+const RICH_SCALE = 0.72;   // size of a raised/lowered run, relative to the body
+
+// Draws `str` as one <text> with a tspan per run. `at` carries x/y/anchor/transform.
+function richText(add, str, at, px, ink){
+  const el = add('text', { ...at, 'font-size': px, fill: ink });
+  for (const p of richParts(str)){
+    if (!p.t) continue;
+    const sp = svgEl('tspan', p.r
+      ? { 'baseline-shift': p.r, 'font-size': (px * RICH_SCALE).toFixed(2) }
+      : {});
+    sp.textContent = p.t;
+    el.appendChild(sp);
+  }
+  return el;
+}
+
 /* Per-panel axis configuration. Each of the four sides is independent:
      on     — draw the axis line itself
      major  — major tick marks
@@ -170,7 +216,7 @@ const newAxes = () => ({ left:newSide(true), bottom:newSide(true), right:newSide
 function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '', axes: newAxes() }; }
 
 function buildModel(plot, opts){
-  const strip = s => String(s || '').replace(/<[^>]*>/g, '');
+  const strip = svgLabelToRich;
   const { series, cats } = seriesFromPlot(plot, opts && opts.legendEl);
   return {
     wmm: 160, hmm: 110, dpi: 300,
@@ -608,11 +654,11 @@ function drawFigure(svg, ink, paper, extra){
         const clear = a.labels ? (g0.vert ? maxYNum + 8 : xDrop) : 6;
         if (g0.vert){
           const yc = py0 + ph/2, x = g0.base + g0.out * (clear + fAxis*0.9);
-          add('text', { x, y:yc, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
-                        transform:`rotate(${side === 'left' ? -90 : 90} ${x} ${yc})` }).textContent = label;
+          richText(add, label, { x, y:yc, 'text-anchor':'middle',
+                                 transform:`rotate(${side === 'left' ? -90 : 90} ${x} ${yc})` }, fAxis, ink);
         } else {
           const y = g0.base + g0.out * (clear + fAxis * (side === 'bottom' ? 1.0 : 0.4));
-          add('text', { x:px0+pw/2, y, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = label;
+          richText(add, label, { x:px0+pw/2, y, 'text-anchor':'middle' }, fAxis, ink);
         }
       }
     }
@@ -654,15 +700,15 @@ function drawFigure(svg, ink, paper, extra){
     const shX = F.titleModeX === 'shared', shY = F.titleModeY === 'shared';
     const cx = mL + innerW / 2, cy = mT + innerH / 2;
     if (shX && F.xlabel && want('bottom'))
-      add('text', { x:cx, y:H - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
+      richText(add, F.xlabel, { x:cx, y:H - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'text-anchor':'middle' }, fAxis, ink);
     if (shX && F.xlabel && want('top'))
-      add('text', { x:cx, y:fAxis, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
+      richText(add, F.xlabel, { x:cx, y:fAxis, 'text-anchor':'middle' }, fAxis, ink);
     if (shY && F.ylabel && want('left'))
-      add('text', { x:fAxis*1.1, y:cy, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
-                    transform:`rotate(-90 ${fAxis*1.1} ${cy})` }).textContent = F.ylabel;
+      richText(add, F.ylabel, { x:fAxis*1.1, y:cy, 'text-anchor':'middle',
+                                transform:`rotate(-90 ${fAxis*1.1} ${cy})` }, fAxis, ink);
     if (shY && F.ylabel && want('right'))
-      add('text', { x:W - fAxis*1.1, y:cy, 'font-size':fAxis, fill:ink, 'text-anchor':'middle',
-                    transform:`rotate(90 ${W - fAxis*1.1} ${cy})` }).textContent = F.ylabel;
+      richText(add, F.ylabel, { x:W - fAxis*1.1, y:cy, 'text-anchor':'middle',
+                                transform:`rotate(90 ${W - fAxis*1.1} ${cy})` }, fAxis, ink);
   }
 
   // Global legend: a strip above or below the panels, in one row or N columns.
@@ -965,6 +1011,25 @@ function manNum(label, bag, end){
   return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+v).toPrecision(6), -1e12, 1e12)}</label>`;
 }
 
+/* Axis-title editor: an ordinary text field over the ^{}/_{} notation, plus the two
+   things that notation is for and a tray of characters a keyboard does not offer. */
+const RICH_CHARS = 'α β γ δ ε ζ η θ κ λ μ ν ξ π ρ σ τ φ χ ψ ω Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω · × ÷ ± ∓ ° ′ ″ Å ℏ ∞ ≈ ≠ ≤ ≥ → ← ↔ ‰ √ ∫ ∂ ∆ ⟨ ⟩'.split(' ');
+
+function titleField(label, key){
+  return `<div class="fig-titlefield">
+    <label class="fig-row"><span>${label}</span><input type="text" data-k="${key}" data-rich="${key}" value="${esc(F[key])}"></label>
+    <div class="fig-richbar">
+      <button class="btn btn-sm" type="button" data-rich-act="^" data-for="${key}" title="Superscript the selection">x²</button>
+      <button class="btn btn-sm" type="button" data-rich-act="_" data-for="${key}" title="Subscript the selection">x₂</button>
+      <button class="btn btn-sm" type="button" data-rich-act="chars" data-for="${key}" title="Insert a special character">Ω</button>
+      <span class="txt-meta">^{ } raises, _{ } lowers</span>
+    </div>
+    <div class="fig-chars" data-chars="${key}" hidden>
+      ${RICH_CHARS.map(c=>`<button type="button" data-rich-char="${esc(c)}" data-for="${key}">${esc(c)}</button>`).join('')}
+    </div>
+  </div>`;
+}
+
 function controlsHtml(){
   const DL = F.dataLabels;
   return `
@@ -1037,8 +1102,8 @@ function controlsHtml(){
   </section>
 
   <section class="fig-sec"><h4>Axes &amp; scale</h4>
-    <label class="fig-row"><span>X title</span><input type="text" data-k="xlabel" value="${esc(F.xlabel)}"></label>
-    <label class="fig-row"><span>Y title</span><input type="text" data-k="ylabel" value="${esc(F.ylabel)}"></label>
+    ${titleField('X title', 'xlabel')}
+    ${titleField('Y title', 'ylabel')}
     ${sel('X title placing','titleModeX',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeX)}
     ${sel('Y title placing','titleModeY',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeY)}
     <div class="fig-subhead">Range</div>
@@ -1383,6 +1448,26 @@ function wireControls(){
   });
   controlsEl.addEventListener('change', e=>{ if (e.target.tagName === 'SELECT') refresh(false); });
   controlsEl.addEventListener('click', e=>{
+    const rb = e.target.closest('[data-rich-act], [data-rich-char]');
+    if (rb){
+      const key = rb.dataset.for;
+      const input = controlsEl.querySelector(`input[data-rich="${key}"]`);
+      const tray = controlsEl.querySelector(`[data-chars="${key}"]`);
+      if (rb.dataset.richAct === 'chars'){ tray.hidden = !tray.hidden; return; }
+      const a = input.selectionStart ?? input.value.length;
+      const b = input.selectionEnd ?? a;
+      const sel = input.value.slice(a, b);
+      // Wrapping an empty selection leaves the caret inside the braces, ready to type.
+      const ins = rb.dataset.richChar != null ? rb.dataset.richChar
+                                              : `${rb.dataset.richAct}{${sel}}`;
+      input.value = input.value.slice(0, a) + ins + input.value.slice(b);
+      const caret = rb.dataset.richChar != null ? a + ins.length
+                                                : a + ins.length - (sel ? 0 : 1);
+      input.focus(); input.setSelectionRange(caret, caret);
+      F[key] = input.value;
+      pushUndo(); refresh(false);
+      return;
+    }
     const sw = e.target.closest('.color-swatch');
     if (sw){
       const s = F.series[+sw.dataset.sw]; if (!s) return;
