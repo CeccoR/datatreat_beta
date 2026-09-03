@@ -1196,6 +1196,13 @@ function wireControls(){
       if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return null; }
       if (k === 'palScope'){ F.palScope = t.value; applyPalette(); pushUndo(); refresh(true); return null; }
       if (k === 'rangePanel'){ F.rangePanel = +t.value; refresh(true); return null; }
+      // Turning an auto range off must hand you the range you are looking at, not
+      // the model's placeholder 0..1, so the bounds are read while auto still holds.
+      if ((k === 'xAuto' || k === 'yAuto') && !t.checked){
+        const r = computeRanges(), i = F.rangePanel | 0;
+        if (k === 'xAuto'){ const [a, z] = r.xOf[i] || r.xOf[0] || [0, 1]; F.xmin = a; F.xmax = z; }
+        else { const [a, z] = r.yOf[i] || r.yOf[0] || [0, 1]; F.ymin = a; F.ymax = z; }
+      }
       if (numKeys.has(k)){ const v = readNum(t); if (v === null) return null; F[k] = v; }
       else F[k] = t.type === 'checkbox' ? t.checked : t.value;
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
