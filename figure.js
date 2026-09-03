@@ -119,7 +119,7 @@ function seriesFromPlot(plot, legendEl){
 /* Per-panel axis configuration. Each of the four sides is independent:
      on     — draw the axis line itself
      major  — major tick marks
-     minor  — minor tick marks (4 between each pair of majors)
+     minor  — minor tick marks (count set per axis, see minorX / minorY)
      dir    — 'out' | 'in' | 'both'
      labels — tick numbers
      title  — the figure's X (bottom/top) or Y (left/right) title next to this side
@@ -144,7 +144,7 @@ function buildModel(plot, opts){
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
     xStep: 0, yStep: 0,                 // major tick interval; 0 = pick a nice one
-    minorCount: 4,                      // minor ticks between two majors
+    minorX: 4, minorY: 4,               // minor ticks between two majors, per axis
     grid: { x:false, y:false, minor:false, dash:'2,3' },
     // Value labels drawn on the data. A bar keeps the text the source plot already
     // formatted (value ± error) when it has one; anything else shows its Y value.
@@ -221,12 +221,21 @@ function sideFree(i){
 }
 
 // `n` minor ticks between each pair of majors, extended one interval past both ends.
-function minorTicks(majors, lo, hi){
-  const n = Math.max(0, Math.round(F.minorCount));
+// Positions that land on a major are dropped — a minor tick under a major one is
+// invisible except for the shorter mark poking out of it.
+function minorTicks(majors, lo, hi, n){
+  n = Math.max(0, Math.round(n));
   if (majors.length < 2 || !n) return [];
   const div = n + 1, step = (majors[1] - majors[0]) / div, out = [];
-  for (let v = majors[0] - div * step; v <= majors[majors.length-1] + div * step + step/2; v += step){
-    if (v >= lo && v <= hi) out.push(v);
+  const first = majors[0];
+  for (let k = -div; ; k++){
+    const v = first + k * step;
+    if (v > hi + step / 2) break;
+    if (v > majors[majors.length-1] + div * step) break;
+    if (v < lo) continue;
+    if (v > hi) continue;
+    if (((k % div) + div) % div === 0) continue;   // sits on a major
+    out.push(v);
   }
   return out;
 }
@@ -347,11 +356,11 @@ function drawFigure(svg, ink, paper, extra){
                                               'stroke-dasharray':F.grid.dash, opacity: minor ? 0.28 : 0.45 }, gg);
       if (F.grid.x){
         for (const t of gx) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph });
-        if (F.grid.minor) for (const t of minorTicks(gx, x0, x1)) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph }, true);
+        if (F.grid.minor) for (const t of minorTicks(gx, x0, x1, F.minorX)) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph }, true);
       }
       if (F.grid.y){
         for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) });
-        if (F.grid.minor) for (const t of minorTicks(gy, y0, y1)) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
+        if (F.grid.minor) for (const t of minorTicks(gy, y0, y1, F.minorY)) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
       }
     }
 
@@ -485,7 +494,7 @@ function drawFigure(svg, ink, paper, extra){
       const proj = g0.vert ? Y : X;
       const majors = g0.vert ? yMaj : xMaj;
       if (a.major) majors.forEach(t=> mark(proj(t), TICK_MAJ));
-      if (a.minor) minorTicks(majors, ...(g0.vert ? [y0, y1] : [x0, x1])).forEach(t=> mark(proj(t), TICK_MIN));
+      if (a.minor) minorTicks(majors, ...(g0.vert ? [y0, y1, F.minorY] : [x0, x1, F.minorX])).forEach(t=> mark(proj(t), TICK_MIN));
 
       // Numbers and title only where there is room outside the panel; a side that
       // touches a neighbour can carry tick marks but nothing that would overlap it.
@@ -779,7 +788,7 @@ function controlsHtml(){
     ${F.yAuto?'':`${num('Y min','ymin',-1e9,1e9,'any')}${num('Y max','ymax',-1e9,1e9,'any')}`}
     <div class="fig-subhead">Ticks</div>
     ${num('X major step','xStep',0,1e9,'any')}${num('Y major step','yStep',0,1e9,'any')}
-    ${num('Minors per major','minorCount',0,20,1)}
+    ${num('X minors per major','minorX',0,20,1)}${num('Y minors per major','minorY',0,20,1)}
     <p class="txt-meta">A major step of 0 picks a round interval automatically.</p>
     <div class="fig-subhead">Grid</div>
     ${chk('Vertical lines (X ticks)','x','g')}
@@ -921,7 +930,7 @@ function wireSeriesDrag(){
 }
 
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorCount']);
+  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY']);
   const dlNum = new Set(['rot','off','dec','size']);
   controlsEl.addEventListener('input', e=>{
     const t = e.target;
