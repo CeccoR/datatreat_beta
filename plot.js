@@ -159,11 +159,16 @@ class Plot{
     if(this.ylabelSvg) yl.innerHTML=this.ylabelSvg; else yl.textContent=this.ylabel;
     this.gAxes.appendChild(xl); this.gAxes.appendChild(yl);
   }
-  // `raw` ({xs, ys}) is the undisplaced data behind a trace that is drawn offset or
-  // rescaled for readability (stacked overviews). It is never plotted — it's what the
-  // figure composer exports, so a composed figure carries the same numbers as the CSV.
-  line(xs, ys, color, width, dash, raw){
-    const entry = {type:'line', xs, ys, color, width, dash, raw};
+  /* `meta` describes the trace for anything that reads a plot back rather than looks
+     at it — today, the figure composer:
+       raw   {xs, ys}  the undisplaced data behind a trace drawn offset or rescaled
+                       for readability, so a composed figure carries the CSV's numbers
+       label string    what this trace is called, for plots whose legend does not
+                       name every line (fits, baselines, extensions)
+     Neither is ever drawn. */
+  line(xs, ys, color, width, dash, meta){
+    const entry = {type:'line', xs, ys, color, width, dash,
+                   raw: meta && meta.raw, label: meta && meta.label};
     this._stored.push(entry);
     return this._renderLine(entry);
   }

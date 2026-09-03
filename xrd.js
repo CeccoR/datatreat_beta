@@ -820,7 +820,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const norm1 = raw.map(v=> v/mx);            // exactly the CSV's own column
       const y = norm1.map(v=> v + baseOf(j) + 0.05);
       // Draw the stacked trace, but hand the composer the un-offset CSV values.
-      plot.line(files[k].x, y, files[k].color, 1.3, undefined, { xs: files[k].x, ys: norm1 });
+      plot.line(files[k].x, y, files[k].color, 1.3, undefined,
+                { raw: { xs: files[k].x, ys: norm1 }, label: files[k].label });
       const s=document.createElement('span');
       s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`;
       legend.appendChild(s);

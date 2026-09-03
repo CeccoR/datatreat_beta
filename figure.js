@@ -104,13 +104,13 @@ function seriesFromPlot(plot, legendEl){
     out.push({
       id: 's' + i,
       kind: 'curve',
-      label: labels[out.length] || ('Series ' + (out.length + 1)),
+      label: e.label || labels[out.length] || ('Series ' + (out.length + 1)),
       panel: 0,
       color: e.color || '#3aa0ff',
       width: e.width || 1.5,
       dash: e.type === 'points' ? 'none' : (e.dash || ''),
       marker: e.type === 'points' ? 'circle-o' : 'none',
-      show: true,
+      show: true, inLegend: true,
       // Prefer the undisplaced data a module attached to the entry: a stacked
       // overview draws offset/normalised traces, but a figure must carry the same
       // numbers as the exported CSV.
@@ -146,7 +146,7 @@ function seriesFromPlot(plot, legendEl){
         color: g.color,
         width: 0.8,                 // bar width as a fraction of the category slot
         dash: '', marker: 'none',
-        show: true,
+        show: true, inLegend: true,
         xs: g.xs, ys: g.ys, errs: g.errs,
       });
       gi++;
@@ -378,9 +378,9 @@ function drawFigure(svg, ink, paper, extra){
   // Whatever the sides ask for, never less than the overhang of the outermost X
   // label — that is what used to spill outside the figure.
   const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
-  const legendRows = (F.legendMode === 'global' && F.series.some(s=>s.show))
-    ? Math.ceil(F.series.filter(s=>s.show).length /
-        Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, F.series.filter(s=>s.show).length))) : 0;
+  const legendItems = F.series.filter(s=> s.show && s.inLegend !== false).length;
+  const legendRows = (F.legendMode === 'global' && legendItems)
+    ? Math.ceil(legendItems / Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, legendItems))) : 0;
   const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
   let mL = Math.max(10 + room('left', true), sideX) + extra.L;
   let mR = Math.max(10 + room('right', true), sideX) + extra.R;
@@ -625,7 +625,7 @@ function drawFigure(svg, ink, paper, extra){
 
     // Per-panel legend, in the chosen corner
     if (F.legendMode === 'per-panel'){
-      const mine = F.series.filter(s=> s.show && s.panel === pi);
+      const mine = F.series.filter(s=> s.show && s.inLegend !== false && s.panel === pi);
       if (mine.length){
         const gap = F.legendGap, lw = 14, pad = 4;
         const rowH = fLeg * 1.35;
@@ -667,7 +667,7 @@ function drawFigure(svg, ink, paper, extra){
 
   // Global legend: a strip above or below the panels, in one row or N columns.
   if (F.legendMode === 'global'){
-    const items = F.series.filter(s=>s.show);
+    const items = F.series.filter(s=> s.show && s.inLegend !== false);
     if (items.length){
       const gap = 14, lw = 16, rowH = fLeg * 1.35;
       const cols = Math.max(1, Math.min(Math.round(F.legendCols) || items.length, items.length));
@@ -1004,7 +1004,8 @@ function controlsHtml(){
       ${F.series.length ? `
         <div class="fig-serie fig-serie-all">
           <span class="fig-grip fig-grip-off"></span>
-          <input type="checkbox" data-all="show"${F.series.every(s=>s.show)?' checked':''} title="Show all / hide all">
+          <input type="checkbox" data-all="show"${F.series.every(s=>s.show)?' checked':''} title="Draw all / draw none">
+          <input type="checkbox" data-all="inLegend"${F.series.every(s=>s.inLegend!==false)?' checked':''} title="List all in the legend / none" class="fig-legbox">
           <span class="fig-alllabel">all series</span>
           <select data-all="panel" title="Send every series to one panel"><option value="">panel…</option>${panelOptions(-1)}</select>
           <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6" placeholder="w" title="Line / bar width for every series">
@@ -1016,7 +1017,8 @@ function controlsHtml(){
       ${F.series.map((s,i)=>`
         <div class="fig-serie" data-s="${i}">
           <span class="fig-grip" title="Drag to reorder">${GRIP}</span>
-          <input type="checkbox" data-sk="show" data-s="${i}"${s.show?' checked':''} title="Show">
+          <input type="checkbox" data-sk="show" data-s="${i}"${s.show?' checked':''} title="Draw this series">
+          <input type="checkbox" data-sk="inLegend" data-s="${i}"${s.inLegend!==false?' checked':''} title="List it in the legend" class="fig-legbox">
           <button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>
           <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
           <select data-sk="panel" data-s="${i}" title="Panel">${panelOptions(s.panel)}</select>
@@ -1311,6 +1313,7 @@ function wireControls(){
       // One control, applied to every series at once.
       const k = t.dataset.all, v = t.value;
       if (k === 'show') F.series.forEach(s=>{ s.show = t.checked; });
+      else if (k === 'inLegend') F.series.forEach(s=>{ s.inLegend = t.checked; });
       else if (v === '') return null;
       else if (k === 'panel') F.series.forEach(s=>{ s.panel = +v; });
       else if (k === 'width'){ const w = readNum(t); if (w === null) return null; F.series.forEach(s=>{ s.width = w; }); }
@@ -1349,6 +1352,7 @@ function wireControls(){
       const s = F.series[+t.dataset.s]; if (!s) return null;
       const k = t.dataset.sk;
       if (k === 'show') s.show = t.checked;
+      else if (k === 'inLegend') s.inLegend = t.checked;
       else if (k === 'panel'){ s.panel = +t.value; applyPalette(); rebuild = true; }
       else if (k === 'width'){ const v = readNum(t); if (v === null) return null; s.width = v; }
       else s[k] = t.value;
