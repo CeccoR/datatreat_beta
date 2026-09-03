@@ -83,6 +83,7 @@ function markerShape(kind, cx, cy, r, color, width){
 
 let F = null;                 // the figure model
 let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, presetBar = null;
+let srcPlot = null, srcOpts = null;   // what the composer was opened on, for Reset
 
 /* ---- Model ---------------------------------------------------------------- */
 
@@ -1209,6 +1210,19 @@ function wireSeriesDrag(){
 /* The preset bar sits in the footer, beside the export buttons: a picker that
    applies, "Save" to write these settings back into the preset you are on, and
    "Save as" to make a new one. Rebuilt whenever the stored list changes. */
+/* Back to square one: the model is rebuilt from the source plot, so the data and the
+   names come from the project as they are now, and every setting returns to its
+   default — no remembered state, no preset applied. Undoable like any other edit. */
+function resetFigure(){
+  if (!srcPlot) return;
+  F = buildModel(srcPlot, srcOpts);
+  axSel = 0; presetSel = '';
+  applyPalette();
+  pushUndo();
+  refresh(true);
+  renderPresetBar();
+}
+
 function renderPresetBar(){
   if (!presetBar) return;
   const names = Object.keys(loadPresets()).sort();
@@ -1407,7 +1421,8 @@ function wireControls(){
 
 export function openFigureEditor(plot, opts){
   if (!plot) return;
-  F = buildModel(plot, opts || {});
+  srcPlot = plot; srcOpts = opts || {};
+  F = buildModel(plot, srcOpts);
   axSel = 0; presetSel = '';
   recallSettings();
   applyPalette();
@@ -1433,6 +1448,7 @@ export function openFigureEditor(plot, opts){
       <div class="fig-foot">
         <span class="txt-meta fig-dim"></span>
         <span style="flex:1"></span>
+        <button class="btn btn-sm fig-reset" type="button" data-fig-reset title="Back to the defaults, as if this plot's composer had just been opened">Reset</button>
         <div class="fig-presets">
           <select data-preset="load" title="Apply a saved preset"></select>
           <button class="btn btn-sm" type="button" data-preset="save" title="Save these settings into the selected preset">Save</button>
@@ -1459,6 +1475,7 @@ export function openFigureEditor(plot, opts){
     window.removeEventListener('resize', onResize);
     document.removeEventListener('keydown', onKey);
     backdrop.remove(); backdrop = null; F = null; dimEl = null; presetBar = null;
+    srcPlot = null; srcOpts = null;
   };
   const onKey = e => {
     if (e.key === 'Escape'){ close(); return; }
@@ -1473,6 +1490,7 @@ export function openFigureEditor(plot, opts){
   backdrop.addEventListener('click', e=>{ if (e.target === backdrop) close(); });
   document.addEventListener('keydown', onKey);
   window.addEventListener('resize', onResize);
+  backdrop.querySelector('[data-fig-reset]').addEventListener('click', resetFigure);
   backdrop.querySelector('[data-fig-svg]').addEventListener('click', exportSVG);
   backdrop.querySelector('[data-fig-png]').addEventListener('click', exportPNG);
 

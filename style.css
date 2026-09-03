@@ -2175,6 +2175,7 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 }
 .fig-presets select { max-width: 150px; font-size: 11px; padding: 4px 6px; }
 .fig-presets .btn { white-space: nowrap; flex-shrink: 0; }
+.fig-reset { white-space: nowrap; flex-shrink: 0; margin-right: 4px; }
 .fig-presets input[type="text"] { width: 120px; font-size: 11px; padding: 4px 6px; }
 @media (max-width: 900px){
   .fig-presets input[type="text"] { width: 80px; }
