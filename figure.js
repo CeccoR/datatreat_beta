@@ -81,6 +81,7 @@ function seriesFromPlot(plot, legendEl){
   const labels = legendEl ? [...legendEl.querySelectorAll('span')].map(s=>s.textContent.trim()) : [];
   const stored = plot._stored || [];
   const out = [];
+  let rescaled = false;   // true when a series is drawn on different Y values than it carries
   const cats = stored.filter(e=> e.type === 'ticklabel')
                      .map(e=>({ x: e.xv, text: e.text, rot: e.rot || 0 }));
 
@@ -103,6 +104,7 @@ function seriesFromPlot(plot, legendEl){
       xs: (e.raw && e.raw.xs) || e.xs,
       ys: (e.raw && e.raw.ys) || e.ys,
     });
+    if (e.raw) rescaled = true;
   });
 
   // Bars: one series per colour, in the order the colours first appear. Error bars
@@ -138,7 +140,7 @@ function seriesFromPlot(plot, legendEl){
       gi++;
     }
   }
-  return { series: out, cats };
+  return { series: out, cats, rescaled };
 }
 
 /* Per-panel axis configuration. Each of the four sides is independent:
@@ -157,7 +159,15 @@ function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '', axes: newAxes()
 
 function buildModel(plot, opts){
   const strip = s => String(s || '').replace(/<[^>]*>/g, '');
-  const { series, cats } = seriesFromPlot(plot, opts && opts.legendEl);
+  const { series, cats, rescaled } = seriesFromPlot(plot, opts && opts.legendEl);
+  /* Open on the view you are looking at, not on the full data extent: if the plot is
+     zoomed or panned, the figure starts from that. X always carries over — it is the
+     same axis in both. Y only when the plot draws the very values the composer got:
+     a stacked overview draws offsets, so its Y view says nothing about the real data
+     and that axis starts on auto instead. */
+  const view = isFinite(plot.xmin) && isFinite(plot.xmax);
+  const zoomedX = view && (plot.xmin !== plot._origXmin || plot.xmax !== plot._origXmax);
+  const zoomedY = view && !rescaled && (plot.ymin !== plot._origYmin || plot.ymax !== plot._origYmax);
   return {
     wmm: 160, hmm: 110, dpi: 300,
     rows: 1, cols: 1,
@@ -172,8 +182,15 @@ function buildModel(plot, opts){
     font: { tick: 8, axis: 9, legend: 8, title: 9 },   // points
     xlabel: strip(plot.xlabel) || '',
     ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
-    xAuto: true, xmin: 0, xmax: 1,
-    yAuto: true, ymin: 0, ymax: 1,
+    xAuto: !zoomedX, xmin: view ? plot.xmin : 0, xmax: view ? plot.xmax : 1,
+    yAuto: !zoomedY, ymin: zoomedY ? plot.ymin : 0, ymax: zoomedY ? plot.ymax : 1,
+    // Re-applied after the per-plot memory, so a zoom you just made on the page wins
+    // over the range this plot's composer was last left on. Empty when not zoomed,
+    // and then the remembered range stands.
+    _seed: {
+      ...(zoomedX ? { xAuto:false, xmin:plot.xmin, xmax:plot.xmax } : {}),
+      ...(zoomedY ? { yAuto:false, ymin:plot.ymin, ymax:plot.ymax } : {}),
+    },
     // With sharing off each panel has its own range, so a manual one is per panel
     // too. Keyed by panel index; missing = that panel stays on its own auto range.
     xMan: {}, yMan: {}, rangePanel: 0,
@@ -800,7 +817,9 @@ const SHARED = ['xs', 'ys', 'errs'];
 function snapshot(){
   const clone = v => JSON.parse(JSON.stringify(v));
   return {
-    scalars: clone(Object.fromEntries(Object.entries(F).filter(([k]) => k !== 'series' && k !== 'cats'))),
+    // `_seed` is about THIS opening (the page plot's zoom), never a saved setting.
+    scalars: clone(Object.fromEntries(Object.entries(F).filter(([k]) =>
+      k !== 'series' && k !== 'cats' && k !== '_seed'))),
     series: F.series.map(s=>{
       const o = {}; for (const k in s) if (!SHARED.includes(k)) o[k] = s[k];
       return { keep: SHARED.map(k=> s[k]), rest: clone(o) };
@@ -1336,7 +1355,9 @@ export function openFigureEditor(plot, opts){
   if (!plot) return;
   F = buildModel(plot, opts || {});
   axSel = 0; presetSel = '';
+  const seed = F._seed;
   recallSettings();
+  Object.assign(F, seed);
   applyPalette();
   undoStack = [snapshot()]; redoStack = [];
   if (!F.series.length){ /* still open — the user may only want axes/labels */ }
