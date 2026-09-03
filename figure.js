@@ -1,5 +1,6 @@
 import { svgEl, niceTicks, fmtTick } from './plot.js';
-import { colorPickerUI, palettePickerUI, fmtNum } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES } from './utils.js';
+import { activeTab } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
 // image mime types (and to save an already-built Blob for PNG).
@@ -33,7 +34,38 @@ function saveBlob(filename, data, mime){
 
 const PX_MM = 96 / 25.4;      // CSS px per mm at the nominal 96 dpi
 const PT_PX = 96 / 72;        // CSS px per typographic point
-const DASHES = { '': 'solid', '5,4': 'dashed', '2,3': 'dotted', '8,3,2,3': 'dash-dot' };
+const DASHES = { 'none': 'no line', '': 'solid', '5,4': 'dashed', '2,3': 'dotted', '8,3,2,3': 'dash-dot' };
+// Point symbols. `-o` is an outline, `-f` is filled; the label carries the glyph so
+// the dropdown reads as the shape it draws.
+const MARKERS = {
+  'none': 'none',
+  'circle-o': '○ circle', 'circle-f': '● circle',
+  'square-o': '□ square', 'square-f': '■ square',
+  'triangle-o': '△ triangle', 'triangle-f': '▲ triangle',
+  'star-o': '☆ star', 'star-f': '★ star',
+};
+
+// One point symbol centred on (cx, cy), sized so every shape reads at the same
+// weight. Returns the tag and attributes for the caller to add().
+function markerShape(kind, cx, cy, r, color, width){
+  const [shape, fillMode] = String(kind).split('-');
+  const filled = fillMode === 'f';
+  const paint = filled ? { fill: color, stroke: color, 'stroke-width': width * 0.5 }
+                       : { fill: 'none', stroke: color, 'stroke-width': width * 0.9 };
+  if (shape === 'circle') return ['circle', { cx, cy, r, ...paint }];
+  if (shape === 'square') return ['rect', { x: cx - r, y: cy - r, width: r * 2, height: r * 2, ...paint }];
+  if (shape === 'triangle'){
+    const h = r * 1.15;
+    return ['polygon', { points: `${cx},${cy-h} ${cx-h*0.95},${cy+h*0.72} ${cx+h*0.95},${cy+h*0.72}`, ...paint }];
+  }
+  // Five-pointed star: alternate outer and inner radii every 36 degrees.
+  const pts = [];
+  for (let i = 0; i < 10; i++){
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = (i % 2 ? r * 0.45 : r * 1.25);
+    pts.push((cx + rr * Math.cos(a)).toFixed(2) + ',' + (cy + rr * Math.sin(a)).toFixed(2));
+  }
+  return ['polygon', { points: pts.join(' '), ...paint }];
+}
 
 let F = null;                 // the figure model
 let backdrop = null, previewSvg = null, controlsEl = null;
@@ -61,8 +93,8 @@ function seriesFromPlot(plot, legendEl){
       panel: 0,
       color: e.color || '#3aa0ff',
       width: e.width || 1.5,
-      dash: e.dash || '',
-      marker: e.type === 'points' ? 'circle' : 'none',
+      dash: e.type === 'points' ? 'none' : (e.dash || ''),
+      marker: e.type === 'points' ? 'circle-o' : 'none',
       show: true,
       // Prefer the undisplaced data a module attached to the entry: a stacked
       // overview draws offset/normalised traces, but a figure must carry the same
@@ -86,19 +118,11 @@ function seriesFromPlot(plot, legendEl){
     g.keys.push(e.type === 'barpx' ? (e.xc + '@' + (e.dx || 0)) : null);
   }
   if (groups.size){
-    const errs = new Map(), texts = new Map();
-    for (const e of stored){
-      if (e.type === 'errbar') errs.set(e.xc + '@' + (e.dx || 0), e.yerr);
-      // The source plot already formatted "value ± error" for each bar; reuse it.
-      if (e.type === 'barlabel') texts.set(e.xv + '@' + (e.dx || 0), e.text);
-    }
+    const errs = new Map();
+    for (const e of stored) if (e.type === 'errbar') errs.set(e.xc + '@' + (e.dx || 0), e.yerr);
     let gi = 0;
     for (const g of groups.values()){
-      const txt = [];
-      g.keys.forEach((k, j)=>{
-        if (k != null && errs.has(k)) g.errs[j] = errs.get(k);
-        txt[j] = (k != null && texts.has(k)) ? texts.get(k) : null;
-      });
+      g.keys.forEach((k, j)=>{ if (k != null && errs.has(k)) g.errs[j] = errs.get(k); });
       out.push({
         id: 'b' + gi,
         kind: 'bar',
@@ -108,7 +132,7 @@ function seriesFromPlot(plot, legendEl){
         width: 0.8,                 // bar width as a fraction of the category slot
         dash: '', marker: 'none',
         show: true,
-        xs: g.xs, ys: g.ys, errs: g.errs, texts: txt,
+        xs: g.xs, ys: g.ys, errs: g.errs,
       });
       gi++;
     }
@@ -138,11 +162,20 @@ function buildModel(plot, opts){
     rows: 1, cols: 1,
     shareX: true, shareY: true,
     legendMode: 'per-panel',            // 'none' | 'per-panel' | 'global'
+    legendCorner: 'tr',                 // per-panel: which corner it sits in
+    legendPlace: 'bottom',              // global: above or below the panels
+    legendAlign: 'center',              // global: where along that strip
+    legendCols: 0,                      // global: 0 = one row, else wrap into N columns
+    legendFrame: false,                 // draw a box behind it
+    legendGap: 6,                       // distance from the panel corner / panels
     font: { tick: 8, axis: 9, legend: 8, title: 9 },   // points
     xlabel: strip(plot.xlabel) || '',
     ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
+    // With sharing off the range is per column (X) / per row (Y), so a manual range
+    // has to be per column / per row too. Keyed by index; missing = fall back to auto.
+    xMan: {}, yMan: {}, rangeCol: 0, rangeRow: 0,
     xStep: 0, yStep: 0,                 // major tick interval; 0 = pick a nice one
     minorX: 4, minorY: 4,               // minor ticks between two majors, per axis
     grid: { x:false, y:false, minor:false, dash:'2,3' },
@@ -152,7 +185,11 @@ function buildModel(plot, opts){
     // 'per-panel' = a title beside each panel side that asks for one;
     // 'shared' = one for the whole figure. Set independently for X and Y.
     titleModeX: 'per-panel', titleModeY: 'per-panel',
-    palScope: 'series',                 // 'series' = one run of colours across all
+    // The palette is part of the model, so any change that shuffles the assignment
+    // (scope, order, panel) re-colours everything immediately. Picking a colour by
+    // hand clears it, which is what stops the next change from undoing that pick.
+    palette: CP_PALETTES[0].colors.slice(),
+    palScope: 'panel',                  // 'series' = one run of colours across all
                                         // series; 'panel' = every panel restarts it
     panels: [ newPanel(0, 0) ],
     series,
@@ -247,11 +284,13 @@ function computeRanges(){
   const xOf = [], yOf = [];
   for (let c = 0; c < F.cols; c++){
     const e = F.shareX ? globalExt : (extentOf(panelsInCol(c)) || globalExt);
-    xOf[c] = F.xAuto ? [e.x0, e.x1] : [F.xmin, F.xmax];
+    const man = F.shareX ? [F.xmin, F.xmax] : F.xMan[c];
+    xOf[c] = (F.xAuto || !man) ? [e.x0, e.x1] : man.slice();
   }
   for (let r = 0; r < F.rows; r++){
     const e = F.shareY ? globalExt : (extentOf(panelsInRow(r)) || globalExt);
-    yOf[r] = F.yAuto ? [e.y0, e.y1] : [F.ymin, F.ymax];
+    const man = F.shareY ? [F.ymin, F.ymax] : F.yMan[r];
+    yOf[r] = (F.yAuto || !man) ? [e.y0, e.y1] : man.slice();
   }
   return { xOf, yOf, globalExt };
 }
@@ -260,10 +299,14 @@ function computeRanges(){
 
 // Legend key: a filled box for bars, a stroked line for curves.
 function legendMark(add, s, xa, xb, y){
-  if (s.kind === 'bar') add('rect', { x:xa, y:y-3, width:xb-xa, height:6, fill:s.color });
-  else {
+  if (s.kind === 'bar'){ add('rect', { x:xa, y:y-3, width:xb-xa, height:6, fill:s.color }); return; }
+  if (s.dash !== 'none'){
     const e = add('line', { x1:xa, x2:xb, y1:y, y2:y, stroke:s.color, 'stroke-width':s.width });
     if (s.dash) e.setAttribute('stroke-dasharray', s.dash);
+  }
+  if (s.marker !== 'none'){
+    const [tag, at] = markerShape(s.marker, (xa + xb) / 2, y, Math.max(1.2, s.width * 1.3), s.color, s.width);
+    add(tag, at);
   }
 }
 
@@ -318,11 +361,14 @@ function drawFigure(svg, ink, paper, extra){
   // Whatever the sides ask for, never less than the overhang of the outermost X
   // label — that is what used to spill outside the figure.
   const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
-  const legendH = (F.legendMode === 'global') ? fLeg * 2.1 : 0;
+  const legendRows = (F.legendMode === 'global' && F.series.some(s=>s.show))
+    ? Math.ceil(F.series.filter(s=>s.show).length /
+        Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, F.series.filter(s=>s.show).length))) : 0;
+  const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
   let mL = Math.max(10 + room('left', true), sideX) + extra.L;
   let mR = Math.max(10 + room('right', true), sideX) + extra.R;
-  let mT = 10 + room('top', false) + extra.T;
-  let mB = 10 + room('bottom', false) + legendH + extra.B;
+  let mT = 10 + room('top', false) + (F.legendPlace === 'top' ? legendH : 0) + extra.T;
+  let mB = 10 + room('bottom', false) + (F.legendPlace === 'top' ? 0 : legendH) + extra.B;
   // Margins never eat more than this much of the page. Without the cap, a request
   // that cannot fit (a title longer than the figure) would grow them past the page
   // and push the panels off it; with it, the figure stays sane and the text clips.
@@ -371,8 +417,14 @@ function drawFigure(svg, ink, paper, extra){
     // One value label. `pos` is relative to the mark; the text rotates about its own
     // anchor so a tilted label still starts where it points.
     const valueLabel = (s, j, cx, yMark, yTop, yBot)=>{
-      const txt = (s.texts && s.texts[j]) != null ? s.texts[j] : fmtNum(s.ys[j], DL.dec);
-      if (txt == null || txt === '') return;
+      // Always formatted here, so the decimals setting means something; a series
+      // that carries an uncertainty keeps it, at the same number of decimals.
+      // A figure always reads with a decimal point, whatever separator the CSV
+      // export is set to, so this formats directly instead of going through fmtNum.
+      const dec = v => v.toFixed(Math.max(0, Math.min(6, DL.dec | 0)));
+      const e = s.errs && s.errs[j];
+      const txt = dec(s.ys[j]) + (isFinite(e) && e > 0 ? ' \u00b1 ' + dec(e) : '');
+      if (!isFinite(s.ys[j])) return;
       const size = DL.size * PT_PX, o = DL.off;
       let y = yMark, anchor = 'middle', baseline = 'auto';
       if (DL.pos === 'above'){ y = yTop - o; }
@@ -432,13 +484,14 @@ function drawFigure(svg, ink, paper, extra){
         continue;
       }
       if (s.marker !== 'none'){
+        const r = Math.max(0.9, s.width * 1.3);
         for (let i = 0; i < s.xs.length; i++){
           if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
-          add('circle', { cx:X(s.xs[i]).toFixed(2), cy:Y(s.ys[i]).toFixed(2), r:Math.max(0.8, s.width),
-                          fill:'none', stroke:s.color, 'stroke-width':s.width*0.8 }, g);
+          const [tag, at] = markerShape(s.marker, +X(s.xs[i]).toFixed(2), +Y(s.ys[i]).toFixed(2), r, s.color, s.width);
+          add(tag, at, g);
         }
       }
-      if (s.marker === 'none' || s.marker === 'both'){
+      if (s.dash !== 'none'){
         let d = '';
         for (let i = 0; i < s.xs.length; i++){
           if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
@@ -553,17 +606,27 @@ function drawFigure(svg, ink, paper, extra){
       el.textContent = p.title;
     }
 
-    // Per-panel legend, top-right inside
+    // Per-panel legend, in the chosen corner
     if (F.legendMode === 'per-panel'){
       const mine = F.series.filter(s=> s.show && s.panel === pi);
-      mine.forEach((s, k)=>{
-        const ly = py0 + fLeg * (1.3 + k * 1.35) + (p.title ? fTitle*1.2 : 0);
-        const lx = px0 + pw - 6;
-        const tw = textW(s.label, fLeg);
-        legendMark(add, s, lx-tw-16, lx-tw-4, ly-fLeg*0.32);
-        const el = add('text', { x:lx, y:ly, 'font-size':fLeg, fill:ink, 'text-anchor':'end' });
-        el.textContent = s.label;
-      });
+      if (mine.length){
+        const gap = F.legendGap, lw = 14, pad = 4;
+        const rowH = fLeg * 1.35;
+        const wide = Math.max(...mine.map(s=> textW(s.label, fLeg))) + lw + 6;
+        const right = F.legendCorner.endsWith('r'), top = F.legendCorner.startsWith('t');
+        const titleDrop = (top && p.title) ? fTitle * 1.2 : 0;
+        const boxX = right ? px0 + pw - gap - wide : px0 + gap;
+        const boxY = top ? py0 + gap + titleDrop : py0 + ph - gap - mine.length * rowH;
+        if (F.legendFrame)
+          add('rect', { x:boxX-pad, y:boxY-pad, width:wide+pad*2, height:mine.length*rowH+pad*2,
+                        fill:paper, stroke:ink, 'stroke-width':0.5, rx:2 });
+        mine.forEach((s, k)=>{
+          const cy = boxY + rowH * (k + 0.5);
+          legendMark(add, s, boxX, boxX + lw, cy);
+          add('text', { x:boxX + lw + 6, y:cy, 'font-size':fLeg, fill:ink,
+                        'dominant-baseline':'central' }).textContent = s.label;
+        });
+      }
     }
   });
 
@@ -574,7 +637,7 @@ function drawFigure(svg, ink, paper, extra){
     const shX = F.titleModeX === 'shared', shY = F.titleModeY === 'shared';
     const cx = mL + innerW / 2, cy = mT + innerH / 2;
     if (shX && F.xlabel && want('bottom'))
-      add('text', { x:cx, y:H - legendH - 4, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
+      add('text', { x:cx, y:H - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
     if (shX && F.xlabel && want('top'))
       add('text', { x:cx, y:fAxis, 'font-size':fAxis, fill:ink, 'text-anchor':'middle' }).textContent = F.xlabel;
     if (shY && F.ylabel && want('left'))
@@ -585,20 +648,38 @@ function drawFigure(svg, ink, paper, extra){
                     transform:`rotate(90 ${W - fAxis*1.1} ${cy})` }).textContent = F.ylabel;
   }
 
-  // Global legend: one centred row under everything
+  // Global legend: a strip above or below the panels, in one row or N columns.
   if (F.legendMode === 'global'){
     const items = F.series.filter(s=>s.show);
-    const gap = 14, lw = 16;
-    let total = 0;
-    items.forEach(s=> total += lw + 4 + textW(s.label, fLeg) + gap);
-    let x = mL + Math.max(0, (innerW - (total - gap)) / 2);
-    const y = H - fLeg * 0.6;
-    items.forEach(s=>{
-      legendMark(add, s, x, x+lw, y-fLeg*0.32);
-      const el = add('text', { x:x+lw+4, y, 'font-size':fLeg, fill:ink });
-      el.textContent = s.label;
-      x += lw + 4 + textW(s.label, fLeg) + gap;
-    });
+    if (items.length){
+      const gap = 14, lw = 16, rowH = fLeg * 1.35;
+      const cols = Math.max(1, Math.min(Math.round(F.legendCols) || items.length, items.length));
+      const rows = Math.ceil(items.length / cols);
+      // Column widths follow the widest label in each column, so entries line up.
+      const colW = [];
+      for (let c = 0; c < cols; c++){
+        let w = 0;
+        for (let r = 0; r < rows; r++){
+          const s = items[r * cols + c];
+          if (s) w = Math.max(w, lw + 4 + textW(s.label, fLeg));
+        }
+        colW[c] = w;
+      }
+      const total = colW.reduce((a, b)=> a + b, 0) + gap * (cols - 1);
+      const x0 = F.legendAlign === 'left' ? mL
+               : F.legendAlign === 'right' ? mL + innerW - total
+               : mL + Math.max(0, (innerW - total) / 2);
+      const yTop = F.legendPlace === 'top' ? mT - F.legendGap - rows * rowH
+                                           : mT + innerH + (H - mT - innerH - rows * rowH) / 2;
+      items.forEach((s, i)=>{
+        const c = i % cols, r = (i / cols) | 0;
+        let x = x0; for (let k = 0; k < c; k++) x += colW[k] + gap;
+        const cy = yTop + rowH * (r + 0.5);
+        legendMark(add, s, x, x + lw, cy);
+        add('text', { x:x + lw + 4, y:cy, 'font-size':fLeg, fill:ink,
+                      'dominant-baseline':'central' }).textContent = s.label;
+      });
+    }
   }
 }
 
@@ -701,12 +782,105 @@ const num = (label, key, min, max, step)=>
 
 // Panel whose axes the "Panel axes" section edits. The sentinel 'all' edits every
 // panel at once; the fields then show panel 1's settings as the starting point.
+/* Undo / redo. A snapshot clones everything except the data arrays, which are
+   shared by reference — they never change, and copying them per keystroke would
+   cost far more than the whole rest of the model. */
+let undoStack = [], redoStack = [], undoTimer = null;
+const SHARED = ['xs', 'ys', 'errs'];
+function snapshot(){
+  const clone = v => JSON.parse(JSON.stringify(v));
+  return {
+    scalars: clone(Object.fromEntries(Object.entries(F).filter(([k]) => k !== 'series' && k !== 'cats'))),
+    series: F.series.map(s=>{
+      const o = {}; for (const k in s) if (!SHARED.includes(k)) o[k] = s[k];
+      return { keep: SHARED.map(k=> s[k]), rest: clone(o) };
+    }),
+  };
+}
+function applySnapshot(snap){
+  Object.assign(F, JSON.parse(JSON.stringify(snap.scalars)));
+  F.series = snap.series.map(e=>{
+    const s = JSON.parse(JSON.stringify(e.rest));
+    SHARED.forEach((k, i)=>{ if (e.keep[i] !== undefined) s[k] = e.keep[i]; });
+    return s;
+  });
+}
+// Coalesce a burst of edits (dragging a slider, typing in a field) into one step.
+function pushUndo(){
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(()=>{
+    undoStack.push(snapshot());
+    if (undoStack.length > 60) undoStack.shift();
+    redoStack.length = 0;
+  }, 250);
+}
+function undo(){
+  clearTimeout(undoTimer);
+  if (undoStack.length < 2) return;          // the first entry is the opening state
+  redoStack.push(undoStack.pop());
+  applySnapshot(undoStack[undoStack.length - 1]);
+  refresh(true);
+}
+function redo(){
+  clearTimeout(undoTimer);
+  const snap = redoStack.pop();
+  if (!snap) return;
+  undoStack.push(snap);
+  applySnapshot(snap);
+  refresh(true);
+}
+
+/* Named presets: a whole set of figure settings, saved to localStorage so it
+   outlives the session and can be applied to any plot in any project. Holds the
+   same thing the per-plot memory does — everything but the data itself. */
+const PRESET_KEY = 'dt-figure-presets';
+let presetSel = '';           // survives the control rebuild an apply triggers
+function loadPresets(){
+  try { const o = JSON.parse(localStorage.getItem(PRESET_KEY)); return (o && typeof o === 'object') ? o : {}; }
+  catch(e){ return {}; }
+}
+function savePresets(o){ try { localStorage.setItem(PRESET_KEY, JSON.stringify(o)); } catch(e){} }
+function settingsSnapshot(){
+  const snap = snapshot();
+  snap.series = snap.series.map(e=>({ keep: [], rest: e.rest }));
+  return snap;
+}
+/* Applies settings without touching the data: scalars wholesale, per-series looks
+   positionally. A plot with more series than the source keeps its own for the rest.
+   `kind` and `id` are never copied — they say what a series IS, and letting a preset
+   made on line plots turn a bar series into a curve would erase the bars. A preset
+   leaves the names alone too; the per-plot memory restores them, since there they
+   are the names the user typed for these very series. */
+const IDENTITY = ['kind', 'id', 'xs', 'ys', 'errs'];
+function applySettings(snap, keepNames){
+  if (!snap) return;
+  Object.assign(F, JSON.parse(JSON.stringify(snap.scalars)));
+  F.series.forEach((s, i)=>{
+    const rest = snap.series[i] && snap.series[i].rest;
+    if (!rest) return;
+    for (const k in rest){
+      if (IDENTITY.includes(k)) continue;
+      if (k === 'label' && !keepNames) continue;
+      s[k] = rest[k];
+    }
+  });
+  clampPanels();
+}
+
+/* Last settings used for each plot, so reopening the composer on the same plot
+   picks up where you left it. Keyed by tab and plot, so two projects — and two
+   plots in one project — never share a memory. Lives for the session. */
+const MEMORY = new Map();
+const memKey = name => ((activeTab() || {}).id || 'none') + '/' + name;
+function rememberSettings(){ if (F) MEMORY.set(memKey(F.name), settingsSnapshot()); }
+function recallSettings(){ applySettings(MEMORY.get(memKey(F.name)), true); }
+
 let axSel = 0;
 const axTargets = () => axSel === 'all' ? F.panels.map((_, i)=> i) : [axSel];
 const axShown = () => ((F.panels[axSel === 'all' ? 0 : axSel] || {}).axes) || newAxes();
 
 function panelOptions(sel){
-  return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1} (r${p.r+1},c${p.c+1})</option>`).join('');
+  return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1}</option>`).join('');
 }
 
 const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
@@ -717,12 +891,36 @@ const sel = (label, key, opts, cur, attr)=>
   `<label class="fig-row"><span>${label}</span><select data-${attr||'k'}="${key}">${
     opts.map(([v,t])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${t}</option>`).join('')}</select></label>`;
 
+// One end of the manual range for the currently selected column / row. Shows the
+// resolved auto value when nothing has been typed yet, so the field starts sensible.
+function manNum(label, bag, selKey, end){
+  const i = F[selKey] | 0;
+  const cur = F[bag][i];
+  const r = computeRanges();
+  const auto = bag === 'xMan' ? (r.xOf[i] || [0,1]) : (r.yOf[i] || [0,1]);
+  const v = cur ? cur[end] : auto[end];
+  return `<label class="fig-row"><span>${label}</span><input type="number" data-man="${bag}" data-end="${end}" value="${+(+v).toPrecision(6)}" step="any"></label>`;
+}
+
 function controlsHtml(){
   const DL = F.dataLabels;
   return `
   <section class="fig-sec"><h4>Figure</h4>
     ${num('Width (mm)','wmm',20,400)}${num('Height (mm)','hmm',20,400)}${num('Export DPI','dpi',72,1200,1)}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
+    <div class="fig-subhead">Preset</div>
+    <label class="fig-row"><span>Apply</span>
+      <select data-preset="load">
+        <option value="">choose a preset…</option>
+        ${Object.keys(loadPresets()).sort().map(n=>`<option value="${esc(n)}"${n===presetSel?' selected':''}>${esc(n)}</option>`).join('')}
+      </select>
+      <button class="btn is-danger btn-sm" data-preset="del" type="button" title="Delete the chosen preset">&#10005;</button>
+    </label>
+    <label class="fig-row"><span>Save as</span>
+      <input type="text" data-preset="name" placeholder="preset name">
+      <button class="btn btn-sm" data-preset="save" type="button">Save</button>
+    </label>
+    <p class="txt-meta">Presets are stored in this browser and apply to any plot in any project.</p>
   </section>
 
   <section class="fig-sec"><h4>Layout</h4>
@@ -753,6 +951,18 @@ function controlsHtml(){
       </select>
     </div>
     <div class="fig-series">
+      ${F.series.length ? `
+        <div class="fig-serie fig-serie-all">
+          <span class="fig-grip fig-grip-off"></span>
+          <input type="checkbox" data-all="show"${F.series.every(s=>s.show)?' checked':''} title="Show all / hide all">
+          <span class="fig-alllabel">all series</span>
+          <select data-all="panel" title="Send every series to one panel"><option value="">panel…</option>${panelOptions(-1)}</select>
+          <input type="number" data-all="width" placeholder="w" min="0.1" max="6" step="0.1" title="Line / bar width for every series">
+          <select data-all="dash" title="Line style for every series"><option value="">line…</option>
+            ${Object.entries(DASHES).map(([v,n])=>`<option value="${v||'solid'}">${n}</option>`).join('')}</select>
+          <select data-all="marker" title="Symbol for every series"><option value="">symbol…</option>
+            ${Object.entries(MARKERS).map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select>
+        </div>` : ''}
       ${F.series.map((s,i)=>`
         <div class="fig-serie" data-s="${i}">
           <span class="fig-grip" title="Drag to reorder">${GRIP}</span>
@@ -767,8 +977,8 @@ function controlsHtml(){
                <select data-sk="dash" data-s="${i}" title="Line style">
                  ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
                </select>
-               <select data-sk="marker" data-s="${i}" title="Markers">
-                 ${['none','circle','both'].map(m=>`<option value="${m}"${s.marker===m?' selected':''}>${m}</option>`).join('')}
+               <select data-sk="marker" data-s="${i}" title="Symbol">
+                 ${Object.entries(MARKERS).map(([v,n])=>`<option value="${v}"${s.marker===v?' selected':''}>${n}</option>`).join('')}
                </select>`}
         </div>`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
     </div>
@@ -783,9 +993,15 @@ function controlsHtml(){
     ${chk('Share X across panels (off: one range per column)','shareX')}
     ${chk('Share Y across panels (off: one range per row)','shareY')}
     ${chk('X auto range','xAuto')}
-    ${F.xAuto?'':`${num('X min','xmin',-1e9,1e9,'any')}${num('X max','xmax',-1e9,1e9,'any')}`}
+    ${F.xAuto ? '' : (F.shareX
+      ? `${num('X min','xmin',-1e9,1e9,'any')}${num('X max','xmax',-1e9,1e9,'any')}`
+      : `${sel('Column','rangeCol', Array.from({length:F.cols},(_,c)=>[c,'Column '+(c+1)]), F.rangeCol)}
+         ${manNum('X min','xMan','rangeCol',0)}${manNum('X max','xMan','rangeCol',1)}`)}
     ${chk('Y auto range','yAuto')}
-    ${F.yAuto?'':`${num('Y min','ymin',-1e9,1e9,'any')}${num('Y max','ymax',-1e9,1e9,'any')}`}
+    ${F.yAuto ? '' : (F.shareY
+      ? `${num('Y min','ymin',-1e9,1e9,'any')}${num('Y max','ymax',-1e9,1e9,'any')}`
+      : `${sel('Row','rangeRow', Array.from({length:F.rows},(_,r)=>[r,'Row '+(r+1)]), F.rangeRow)}
+         ${manNum('Y min','yMan','rangeRow',0)}${manNum('Y max','yMan','rangeRow',1)}`)}
     <div class="fig-subhead">Ticks</div>
     ${num('X major step','xStep',0,1e9,'any')}${num('Y major step','yStep',0,1e9,'any')}
     ${num('X minors per major','minorX',0,20,1)}${num('Y minors per major','minorY',0,20,1)}
@@ -829,6 +1045,13 @@ function controlsHtml(){
 
   <section class="fig-sec"><h4>Legend &amp; type</h4>
     ${sel('Legend','legendMode',[['none','none'],['per-panel','one per panel'],['global','one for the figure']],F.legendMode)}
+    ${F.legendMode === 'per-panel' ? sel('Corner','legendCorner',
+        [['tl','top left'],['tr','top right'],['bl','bottom left'],['br','bottom right']],F.legendCorner) : ''}
+    ${F.legendMode === 'global' ? `
+      ${sel('Placing','legendPlace',[['bottom','below the panels'],['top','above the panels']],F.legendPlace)}
+      ${sel('Alignment','legendAlign',[['left','left'],['center','centred'],['right','right']],F.legendAlign)}
+      ${num('Columns (0 = one row)','legendCols',0,12,1)}` : ''}
+    ${F.legendMode === 'none' ? '' : `${num('Distance (px)','legendGap',0,40,1)}${chk('Draw a frame behind it','legendFrame')}`}
     <div class="fig-subhead">Font sizes (pt)</div>
     <label class="fig-row"><span>Tick numbers</span><input type="number" data-f="tick" value="${F.font.tick}" min="4" max="24" step="0.5"></label>
     <label class="fig-row"><span>Axis titles</span><input type="number" data-f="axis" value="${F.font.axis}" min="4" max="24" step="0.5"></label>
@@ -872,7 +1095,9 @@ function distributeSeries(){
 // two share a colour; 'panel' scope restarts the palette inside each panel, so the
 // same colours repeat panel by panel — useful when panels compare like with like.
 function applyPalette(colors){
+  colors = colors || F.palette;
   if (!colors || !colors.length) return;
+  F.palette = colors.slice();
   if (F.palScope === 'panel'){
     const seen = new Map();
     F.series.forEach(s=>{
@@ -883,7 +1108,6 @@ function applyPalette(colors){
   } else {
     F.series.forEach((s, i)=>{ s.color = colors[i % colors.length]; });
   }
-  refresh(true);
 }
 
 function refresh(rebuild){
@@ -920,7 +1144,8 @@ function wireSeriesDrag(){
       if (to == null || to === f) return;
       const [moved] = F.series.splice(f, 1);
       F.series.splice(to, 0, moved);
-      refresh(true);
+      applyPalette();
+      pushUndo(); refresh(true);
     };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', ()=>{
@@ -930,7 +1155,7 @@ function wireSeriesDrag(){
 }
 
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY']);
+  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap']);
   const dlNum = new Set(['rot','off','dec','size']);
   controlsEl.addEventListener('input', e=>{
     const t = e.target;
@@ -938,15 +1163,33 @@ function wireControls(){
     if (t.dataset.k){
       const k = t.dataset.k;
       if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return; }
+      if (k === 'palScope'){ F.palScope = t.value; applyPalette(); pushUndo(); refresh(true); return; }
+      if (k === 'rangeCol' || k === 'rangeRow'){ F[k] = +t.value; refresh(true); return; }
       F[k] = t.type === 'checkbox' ? t.checked : (numKeys.has(k) ? parseFloat(t.value) : t.value);
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
-      if (k === 'xAuto' || k === 'yAuto') rebuild = true;
+      if (k === 'xAuto' || k === 'yAuto' || k === 'shareX' || k === 'shareY' || k === 'legendMode') rebuild = true;
     } else if (t.dataset.ak){
       const v = t.type === 'checkbox' ? t.checked : t.value;
       for (const pi of axTargets()){
         const p = F.panels[pi]; if (!p) continue;
         (p.axes || (p.axes = newAxes()))[t.dataset.side][t.dataset.ak] = v;
       }
+    } else if (t.dataset.man){
+      const bag = t.dataset.man, i = F[bag === 'xMan' ? 'rangeCol' : 'rangeRow'] | 0;
+      const r = computeRanges();
+      const cur = F[bag][i] || (bag === 'xMan' ? (r.xOf[i] || [0,1]).slice() : (r.yOf[i] || [0,1]).slice());
+      cur[+t.dataset.end] = parseFloat(t.value);
+      F[bag][i] = cur;
+    } else if (t.dataset.all){
+      // One control, applied to every series at once.
+      const k = t.dataset.all, v = t.value;
+      if (k === 'show') F.series.forEach(s=>{ s.show = t.checked; });
+      else if (v === '') return;
+      else if (k === 'panel') F.series.forEach(s=>{ s.panel = +v; });
+      else if (k === 'width') F.series.forEach(s=>{ s.width = parseFloat(v) || 1; });
+      else if (k === 'dash') F.series.forEach(s=>{ s.dash = (v === 'solid' ? '' : v); });
+      else F.series.forEach(s=>{ s.marker = v; });
+      rebuild = true;
     } else if (t.dataset.g){
       F.grid[t.dataset.g] = t.type === 'checkbox' ? t.checked : t.value;
     } else if (t.dataset.dl){
@@ -978,25 +1221,53 @@ function wireControls(){
       const s = F.series[+t.dataset.s]; if (!s) return;
       const k = t.dataset.sk;
       if (k === 'show') s.show = t.checked;
-      else if (k === 'panel') s.panel = +t.value;
+      else if (k === 'panel'){ s.panel = +t.value; applyPalette(); rebuild = true; }
       else if (k === 'width') s.width = parseFloat(t.value) || 1;
       else s[k] = t.value;
     } else return;
+    pushUndo();
     refresh(rebuild);
   });
-  controlsEl.addEventListener('change', e=>{ if (e.target.tagName === 'SELECT') refresh(false); });
+  controlsEl.addEventListener('change', e=>{
+    if (e.target.dataset && e.target.dataset.preset === 'load'){
+      presetSel = e.target.value;
+      const snap = loadPresets()[presetSel];
+      if (snap){ applySettings(snap); pushUndo(); refresh(true); }
+      return;
+    }
+    if (e.target.tagName === 'SELECT') refresh(false);
+  });
   controlsEl.addEventListener('click', e=>{
+    const pb = e.target.closest('[data-preset="save"], [data-preset="del"]');
+    if (pb){
+      const presets = loadPresets();
+      if (pb.dataset.preset === 'save'){
+        const inp = controlsEl.querySelector('[data-preset="name"]');
+        const name = (inp.value || '').trim();
+        if (!name){ inp.focus(); return; }
+        presets[name] = settingsSnapshot();
+        presetSel = name;
+      } else {
+        if (!presetSel) return;
+        delete presets[presetSel];
+        presetSel = '';
+      }
+      savePresets(presets);
+      refresh(true);
+      return;
+    }
     const sw = e.target.closest('.color-swatch');
     if (sw){
       const s = F.series[+sw.dataset.sw]; if (!s) return;
       colorPickerUI.open(sw, s.color, color=>{
         s.color = color; sw.dataset.color = color; sw.style.background = color;
-        refresh(false);
+        F.palette = null;         // hand-picked: stop re-applying a palette over it
+        pushUndo(); refresh(false);
       });
       return;
     }
     if (e.target.closest('.fig-pal')){
-      palettePickerUI.open(e.target.closest('.fig-pal'), colors=> applyPalette(colors));
+      palettePickerUI.open(e.target.closest('.fig-pal'), colors=>{ applyPalette(colors); pushUndo(); refresh(true); });
       return;
     }
     const addB = e.target.closest('[data-add-panel]');
@@ -1010,13 +1281,15 @@ function wireControls(){
       if (!spot){ F.rows += 1; spot = [F.rows-1, 0]; }
       F.panels.push(newPanel(spot[0], spot[1]));
       distributeSeries();
-      refresh(true);
+      applyPalette();
+      pushUndo(); refresh(true);
     } else if (delB){
       const i = +delB.dataset.delPanel;
       if (F.panels.length <= 1) return;
       F.panels.splice(i, 1);
       F.series.forEach(s=>{ if (s.panel === i) s.panel = 0; else if (s.panel > i) s.panel--; });
-      refresh(true);
+      applyPalette();
+      pushUndo(); refresh(true);
     }
   });
 }
@@ -1026,11 +1299,17 @@ function wireControls(){
 export function openFigureEditor(plot, opts){
   if (!plot) return;
   F = buildModel(plot, opts || {});
-  axSel = 0;
+  axSel = 0; presetSel = '';
+  recallSettings();
+  applyPalette();
+  undoStack = [snapshot()]; redoStack = [];
   if (!F.series.length){ /* still open — the user may only want axes/labels */ }
 
   backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop fig-backdrop';
+  // Force an English locale inside the modal: number inputs then use a decimal
+  // point everywhere, whatever the browser's locale would otherwise render.
+  backdrop.lang = 'en';
   backdrop.innerHTML = `
     <div class="fig-box">
       <div class="fig-head">
@@ -1057,11 +1336,19 @@ export function openFigureEditor(plot, opts){
   wireSeriesDrag();
 
   const close = ()=>{
+    rememberSettings();
     window.removeEventListener('resize', onResize);
     document.removeEventListener('keydown', onKey);
     backdrop.remove(); backdrop = null; F = null;
   };
-  const onKey = e => { if (e.key === 'Escape') close(); };
+  const onKey = e => {
+    if (e.key === 'Escape'){ close(); return; }
+    const z = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z';
+    const y = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y';
+    if (!z && !y) return;
+    e.preventDefault(); e.stopPropagation();
+    (y || e.shiftKey) ? redo() : undo();
+  };
   const onResize = ()=> renderPreview();
   backdrop.querySelector('.fig-x').addEventListener('click', close);
   backdrop.addEventListener('click', e=>{ if (e.target === backdrop) close(); });

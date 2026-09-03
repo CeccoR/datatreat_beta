@@ -333,16 +333,8 @@ class Plot{
       col = document.createElement('div');
       col.className = 'plot-btn-col';
       const dlBtn = wrapEl.querySelector('.plot-dl-btn');
-      if (dlBtn){
-        wrapEl.insertBefore(col, dlBtn);
-        // Order (top→bottom): download image (first), CSV, then the tool buttons below.
-        if (!dlBtn.title) dlBtn.title = 'Download image';   // hover description, like the others
-        col.appendChild(dlBtn);
-        if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
-          col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
-        // Press feedback (grey fill) is handled by the shared button.btn:active CSS.
-      }
-      else { wrapEl.appendChild(col); }
+      if (dlBtn) wrapEl.insertBefore(col, dlBtn);
+      else wrapEl.appendChild(col);
     }
     const div = document.createElement('div');
     div.className = 'plot-tool-btns';
@@ -406,11 +398,22 @@ class Plot{
       } catch(err){ console.error('figure composer failed to load', err); }
     };
 
+    // Order, top to bottom: composer, CSV, download image, snapshot, copy, pan, zoom.
+    // The download button belongs to the page, so it is adopted rather than created;
+    // the CSV button is built from the descriptors it carries.
+    const dlBtn2 = col.querySelector('.plot-dl-btn') || wrapEl.querySelector('.plot-dl-btn');
+    let csvBtn = col.querySelector('.plot-csv-btn');
+    if (!csvBtn && dlBtn2 && dlBtn2.dataset.csvMod && dlBtn2.dataset.csvNames)
+      csvBtn = makeCsvButton(dlBtn2.dataset.csvMod, dlBtn2.dataset.csvNames);
+    if (dlBtn2 && !dlBtn2.title) dlBtn2.title = 'Download image';   // like the others
+    div.appendChild(figBtn);
+    if (csvBtn) div.appendChild(csvBtn);
+    if (dlBtn2) div.appendChild(dlBtn2);
     div.appendChild(snapBtn);
     if (copyBtn) div.appendChild(copyBtn);
-    div.appendChild(figBtn);
     div.appendChild(panBtn);
     div.appendChild(zoomBtn);
+    col.innerHTML = '';
     col.appendChild(div);
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
