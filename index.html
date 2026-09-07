@@ -115,7 +115,7 @@
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H10 C13 22 13 8 16 8 C19 8 19 22 22 22 H28 C32 22 31 14 34 14 C37 14 37 22 40 22 H42"/></svg></div>
             <div class="home-card-text">
               <h3 class="txt-tile">GC</h3>
-              <p>Gas Chromatography for H₂ production rate assessment.</p>
+              <p>Gas Chromatography for H₂ and O₂ production rate assessment.</p>
             </div>
           </div>
           <div class="home-card" data-go="epr">
@@ -631,7 +631,7 @@
     <section class="tab" id="tab-gc" role="tabpanel" tabindex="0">
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
-        <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) (%Mol)" column.</div>
+        <div class="instr-block" style="max-width:100%">Compatible with Agilent Gas Chromatographer. Accepts comma-separated value files with an "Injection date" column and an "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]" column.</div>
         <div class="dropzone" id="gcDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
@@ -653,13 +653,12 @@
           </div>
           <div id="gcParamTableWrap"></div>
         </div>
-        <div class="gc-gas-bar"><span class="txt-mini">Gas</span><span class="gc-gas-sel" data-gas-sel="a"></span></div>
-        <p class="txt-caption">Production Rate</p>
+        <div class="plot-title-row"><p class="txt-caption">Production Rate</p><span class="gc-gas-sel" data-gas-sec="a"></span></div>
         <div class="plot-wrap">
           <svg class="plot plot-wide" id="gcSvg1"></svg>
           <button class="btn plot-dl-btn" data-dl-svg="gcSvg1" data-csv-mod="gc" data-csv-names="gc_raw.csv" data-dl-name="GC_rate.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
-        <p class="txt-caption" style="margin-top:14px">Production</p>
+        <div class="plot-title-row" style="margin-top:14px"><p class="txt-caption">Production</p><span class="gc-gas-sel" data-gas-sec="a"></span></div>
         <div class="plot-wrap">
           <svg class="plot plot-wide" id="gcSvg2"></svg>
           <button class="btn plot-dl-btn" data-dl-svg="gcSvg2" data-csv-mod="gc" data-csv-names="gc_raw.csv" data-dl-name="GC_cumulative.svg" data-dl-legend="gcLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
@@ -670,23 +669,23 @@
       <!-- Bar chart + Summary card -->
       <div class="card" id="gcResultsBar" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
-        <div class="gc-gas-bar"><span class="txt-mini">Gas</span><span class="gc-gas-sel" data-gas-sel="r"></span></div>
-        <p class="txt-caption">Production Rate</p>
+        <div class="plot-title-row"><p class="txt-caption">Production Rate</p><span class="gc-gas-sel" data-gas-sec="r"></span></div>
         <div class="plot-wrap">
           <svg class="plot plot-wide" id="gcSvgRate"></svg>
           <button class="btn plot-dl-btn" data-dl-svg="gcSvgRate" data-csv-mod="gc" data-csv-names="gc_results.csv" data-dl-name="GC_results_rate.svg" data-dl-legend="gcResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
-        <p class="txt-caption" style="margin-top:14px">Production</p>
+        <div class="plot-title-row" style="margin-top:14px"><p class="txt-caption">Production</p><span class="gc-gas-sel" data-gas-sec="r"></span></div>
         <div class="plot-wrap">
           <svg class="plot plot-wide" id="gcSvgCum"></svg>
           <button class="btn plot-dl-btn" data-dl-svg="gcSvgCum" data-csv-mod="gc" data-csv-names="gc_results.csv" data-dl-name="GC_results_cumulative.svg" data-dl-legend="gcResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
         <div id="gcResLegend" class="legend" style="margin-top:8px"></div>
-        <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>
+        <div class="plot-title-row" style="margin-top:14px"><p class="txt-caption">Mean Production Rate</p><span class="gc-gas-sel" data-gas-sec="r"></span></div>
         <div class="plot-wrap">
           <svg class="plot plot-wide" id="gcSvgBar"></svg>
-          <button class="btn plot-dl-btn" data-dl-svg="gcSvgBar" data-csv-mod="gc" data-csv-names="mean_rates.csv" data-dl-name="GC_results.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+          <button class="btn plot-dl-btn" data-dl-svg="gcSvgBar" data-csv-mod="gc" data-csv-names="mean_rates.csv" data-dl-name="GC_results.svg" data-dl-legend="gcBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
+        <div id="gcBarLegend" class="legend" style="margin-top:8px"></div>
       </div>
     </section>
 
@@ -730,7 +729,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v269</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v270</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

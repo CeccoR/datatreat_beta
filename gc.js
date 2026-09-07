@@ -26,14 +26,20 @@ import { Plot, svgEl } from './plot.js';
      treatment — %mol, molar flow, per gram, integrated — since the instrument hands
      over calibrated mole fractions for each. */
   const GASES = [
-    { key:'h2', txt:'H\u2082', csv:'H2', dash:'',    col:/(^|[^a-z0-9])h2([^a-z0-9]|$)/ },
-    { key:'o2', txt:'O\u2082', csv:'O2', dash:'5,4', col:/(^|[^a-z0-9])o2([^a-z0-9]|$)/ },
+    { key:'h2', label:'H<sub>2</sub>', csv:'H2', dash:'',    bar:'#3aa0ff',
+      col:/(^|[^a-z0-9])h2([^a-z0-9]|$)/ },
+    { key:'o2', label:'O<sub>2</sub>', csv:'O2', dash:'5,4', bar:'#ff7a59',
+      col:/(^|[^a-z0-9])o2([^a-z0-9]|$)/ },
   ];
-  const gasOf = k => GASES.find(g=>g.key===k);
-  let gasMode = 'both';                                   // 'h2' | 'o2' | 'both'
-  const activeGases = ()=> gasMode==='both' ? GASES : GASES.filter(g=>g.key===gasMode);
+  // Plain-text form for series names, where markup would be drawn literally.
+  const gasTxt = g => g.csv.replace('2', '\u2082');
+  /* Analysis and Results choose their gas separately, but every plot inside a section
+     follows that section's choice — the chips beside each title are views of one
+     value, not five independent ones. */
+  let gasMode = { a:'both', r:'both' };
+  const activeGases = sec => gasMode[sec]==='both' ? GASES : GASES.filter(g=>g.key===gasMode[sec]);
   // Gases actually present in the loaded files, intersected with what is selected.
-  const shownGases = ()=> activeGases().filter(g=> files.some(f=> f.gas[g.key]));
+  const shownGases = sec => activeGases(sec).filter(g=> files.some(f=> f.gas[g.key]));
   // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
   // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
   let mMode='all', qMode='all', startMode='all', endMode='all';
@@ -166,12 +172,14 @@ import { Plot, svgEl } from './plot.js';
       ms: ms.slice(), Qs: Qs.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
       lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
       mMode, qMode, startMode, endMode, mShared, qShared, startShared, endShared,
-      gasMode,
+      gasMode: {...gasMode},
     };
   }
   function gcRestore(s){
     files = s.files.map(f=>({...f}));
-    gasMode = s.gasMode || 'both';        // projects saved before O2 existed
+    // Projects saved before O2 existed, or before the two sections chose separately.
+    gasMode = (s.gasMode && typeof s.gasMode === 'object') ? {...s.gasMode}
+            : { a: s.gasMode || 'both', r: s.gasMode || 'both' };
     ms = s.ms.slice(); Qs = s.Qs.slice();
     lightOnDates = s.lightOnDates.map(t=> t!=null ? new Date(t) : null);
     if (s.mMode !== undefined){
@@ -403,7 +411,7 @@ import { Plot, svgEl } from './plot.js';
       });
     });
   }
-  const seriesName = (label, g, shown)=> shown.length > 1 ? `${label} ${g.txt}` : label;
+  const seriesName = (label, g, shown)=> shown.length > 1 ? `${label} ${gasTxt(g)}` : label;
 
   // Legend entries follow the same rule, with a dashed key for a dashed gas.
   function gasLegendHtml(d, shown){
@@ -420,26 +428,47 @@ import { Plot, svgEl } from './plot.js';
      does not change shape from one data set to the next. */
   function renderGasSel(){
     const present = k => files.some(f=> f.gas[k]);
-    const opts = [...GASES.map(g=>({ v:g.key, t:g.txt, ok:present(g.key) })),
+    const opts = [...GASES.map(g=>({ v:g.key, t:g.label, ok:present(g.key) })),
                   { v:'both', t:'Both', ok: GASES.every(g=>present(g.key)) }];
-    const html = opts.map(o=>
-      `<button type="button" class="btn btn-sm gc-gas-btn${gasMode===o.v?' is-on':''}"`
-      + ` data-gas="${o.v}"${o.ok?'':' disabled'}>${o.t}</button>`).join('');
-    document.querySelectorAll('.gc-gas-sel').forEach(el=> el.innerHTML = html);
     // A selection the current files cannot honour falls back to what they do have.
-    const chosen = opts.find(o=>o.v===gasMode);
-    if (files.length && chosen && !chosen.ok){
-      const first = opts.find(o=>o.ok);
-      if (first){ gasMode = first.v; renderGasSel(); }
+    for (const sec of ['a','r']){
+      const chosen = opts.find(o=>o.v===gasMode[sec]);
+      if (files.length && chosen && !chosen.ok){
+        const first = opts.find(o=>o.ok);
+        if (first) gasMode[sec] = first.v;
+      }
     }
+    document.querySelectorAll('.gc-gas-sel').forEach(el=>{
+      const sec = el.dataset.gasSec;
+      el.innerHTML = opts.map(o=>
+        `<button type="button" class="mode-chip gc-gas-chip${gasMode[sec]===o.v?' is-on':''}"`
+        + ` data-gas="${o.v}" data-sec="${sec}"${o.ok?'':' disabled'}>${o.t}</button>`).join('');
+    });
   }
 
   document.getElementById('tab-gc').addEventListener('click', e=>{
-    const b = e.target.closest('.gc-gas-btn');
+    const b = e.target.closest('.gc-gas-chip');
     if (!b || b.disabled) return;
-    gasMode = b.dataset.gas;
+    const sec = b.dataset.sec;
+    if (gasMode[sec] === b.dataset.gas) return;
+    // Switching changes how tall the legend is, which would shift everything below it
+    // under the pointer. Hold the clicked chip still and let the page move around it.
+    // The chips are rebuilt, so the one to measure afterwards is found by which group
+    // it belongs to, not by its selector — every plot in the section has a matching
+    // chip and the first one is metres away from the one under the pointer.
+    const groups = [...document.querySelectorAll('.gc-gas-sel')];
+    const gi = groups.indexOf(b.parentElement);
+    const before = b.getBoundingClientRect().top;
+    gasMode[sec] = b.dataset.gas;
     renderGasSel();
-    computeAndRenderGc(true);
+    computeAndRenderGc(false);     // ranges are rescaled to the gases now on show
+    // Measured after the redraw is laid out: the legends reflow on the next frame, so
+    // compensating synchronously would correct against the old geometry.
+    requestAnimationFrame(()=> requestAnimationFrame(()=>{
+      const grp = document.querySelectorAll('.gc-gas-sel')[gi];
+      const after = grp && grp.querySelector('.gc-gas-chip.is-on');
+      if (after) window.scrollBy(0, after.getBoundingClientRect().top - before);
+    }));
     hist.commit();
   });
 
@@ -448,10 +477,8 @@ import { Plot, svgEl } from './plot.js';
     plot1 = new Plot(document.getElementById('gcSvg1'), {xlabel:'Time (h)', ylabelSvg:LBL_RATE_SVG});
     plot2 = new Plot(document.getElementById('gcSvg2'), {xlabel:'Time (h)', ylabelSvg:LBL_CUM_SVG});
     const resLegend = document.getElementById('gcResLegend'); resLegend.innerHTML='';
-    const shown = shownGases();
-    const html = dataTables.map(d=> gasLegendHtml(d, shown)).join('');
-    legend.innerHTML = html;
-    resLegend.innerHTML = html;
+    legend.innerHTML   = dataTables.map(d=> gasLegendHtml(d, shownGases('a'))).join('');
+    resLegend.innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
     plot1.attachTools(plot1.svg.closest('.plot-wrap'));
     plot2.attachTools(plot2.svg.closest('.plot-wrap'));
     updateRegression();
@@ -470,7 +497,7 @@ import { Plot, svgEl } from './plot.js';
     const tmin = Math.min(0, minArr(allT), ...intPts);
     const tmax = Math.max(maxArr(allT), ...intPts);
     // Every shown gas shares the axis: they are the same quantity in the same units.
-    const shown = shownGases();
+    const shown = shownGases('a');
     const span = key => dataTables.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
     const rateArrs = span('Fm'), cumArrs = span('FmInt');
     if (!rateArrs.length) return;
@@ -600,7 +627,7 @@ import { Plot, svgEl } from './plot.js';
     if (!cut.length || !cut.some(d=>d.t.length)) return;
     const allT = cut.flatMap(d=>d.t);
     const tmin = Math.min(0, minArr(allT)), tmax = maxArr(allT);
-    const shown = shownGases();
+    const shown = shownGases('r');
     const mk = (id, ylabelSvg, key, ymin0)=>{
       const svg = document.getElementById(id);
       const p = new Plot(svg, {xlabel:'Time (h)', ylabelSvg});
@@ -619,7 +646,7 @@ import { Plot, svgEl } from './plot.js';
   }
 
   function drawBarChart(){
-    const shown = shownGases();
+    const shown = shownGases('r');
     const has = c => shown.some(g=>isFinite(c.rate[g.key]));
     const finite = costResults.filter(has);
     if (!finite.length || !shown.length) return;   // card visibility handled by updateRegression
@@ -663,13 +690,16 @@ import { Plot, svgEl } from './plot.js';
         const off = (gi - (n-1)/2) * dx * 2;
         // Same hue as the sample, but the dashed gas is drawn lighter so the pair is
         // told apart the way the curves are.
-        barPlot.barPx(k+1, 0, v, g.dash ? dataTables[k].color + '99' : dataTables[k].color, hw, off,
-                      { label: seriesName(c.label, g, shown) });
+        // Gas-coloured here rather than sample-coloured: the samples are already told
+        // apart by their position on the axis, the gases were not told apart at all.
+        barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: `${c.label} ${gasTxt(g)}` });
         barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
       });
       barPlot.tickLabel(k+1, labels[k], 30);
     });
     barPlot.attachTools(svg.closest('.plot-wrap'));
+    document.getElementById('gcBarLegend').innerHTML =
+      shown.map(g=>`<span><i class="mk-box" style="background:${g.bar}"></i>${gasTxt(g)}</span>`).join('');
   }
 
   function exportGcZip(){
@@ -678,8 +708,8 @@ import { Plot, svgEl } from './plot.js';
     // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
     // the full series with every intermediate quantity; gc_results.csv keeps only the
     // three plotted columns, cut at the interval end.
-    // Only what the plots are showing: pick H2, O2 or both and the export follows.
-    const shown = shownGases();
+    // Only what the Results plots are showing: pick H2, O2 or both and it follows.
+    const shown = shownGases('r');
     const buildSeriesCsv = (tables, full)=>{
       const cols=[];
       tables.forEach(d=>{

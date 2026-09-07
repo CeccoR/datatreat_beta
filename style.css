@@ -637,11 +637,23 @@ input[type="file"] {
   color: var(--muted);
 }
 
-/* GC gas selector: a small segmented control above each card's plots. */
-.gc-gas-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
-.gc-gas-sel { display: inline-flex; gap: 4px; }
-.gc-gas-btn { padding: 3px 12px; font-size: 11px; }
-.gc-gas-btn:disabled { opacity: 0.4; cursor: default; }
+/* A plot's title line, with its own controls pushed to the right. */
+.plot-title-row { display: flex; align-items: center; gap: 10px; }
+.plot-title-row > .txt-caption { margin: 0; }
+.plot-title-row > .gc-gas-sel { margin-left: auto; }
+
+/* GC gas chips: the ALL/ONE chip, one per gas plus Both, beside each plot title.
+   They keep .mode-chip's uppercase, which is what makes them read as the same
+   control — only the subscript needs saying. */
+.gc-gas-sel { display: inline-flex; gap: 4px; flex: 0 0 auto; }
+/* Real sub, in the chip's own font: the Unicode subscript two has no glyph in Inter
+   and fell back to another face, so H2 and O2 did not read as a pair. */
+.gc-gas-chip sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
+.gc-gas-chip.is-on {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.gc-gas-chip.is-on:hover { color: #fff; }
+.gc-gas-chip:disabled { opacity: 0.4; cursor: default; }
 
 /* ===== Custom date-time field (segmented text + calendar button) ===== */
 .dt-field {
