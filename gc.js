@@ -469,13 +469,12 @@ import { Plot, svgEl } from './plot.js';
                      : GASES.map(g=>g.key).filter(k=> k===key || gasSel[sec].includes(k));
     renderGasSel();
     computeAndRenderGc(false);     // ranges are rescaled to the gases now on show
-    // Measured after the redraw is laid out: the legends reflow on the next frame, so
-    // compensating synchronously would correct against the old geometry.
-    requestAnimationFrame(()=> requestAnimationFrame(()=>{
-      const grp = document.querySelectorAll('.gc-gas-sel')[gi];
-      const after = grp && grp.querySelector('.gc-gas-chip');
-      if (after) window.scrollBy(0, after.getBoundingClientRect().top - before);
-    }));
+    // Corrected in the same task, not on a later frame: reading the chip's box forces
+    // the layout, so the final position is known before anything is painted and the
+    // page never shows the shifted state on its way back.
+    const grp = document.querySelectorAll('.gc-gas-sel')[gi];
+    const after = grp && grp.querySelector('.gc-gas-chip');
+    if (after) window.scrollBy({ top: after.getBoundingClientRect().top - before, behavior: 'instant' });
     hist.commit();
   });
 
