@@ -652,10 +652,13 @@ input[type="file"] {
    and fell back to another face, so H2 and O2 did not read as a pair. */
 .gc-gas-chip sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
 .gc-gas-chip { background: var(--panel); }
-/* Dark ink on the accent fill: white had too little contrast against it. Fixed
-   rather than themed, because the fill it sits on is the same in both themes. */
-.gc-gas-chip.is-on,
-.gc-gas-chip.is-on:hover { background: var(--accent); border-color: var(--accent); color: #1a2327; }
+/* Selected reads as a primary button (Fit sample and friends): the accent fill with
+   --on-accent text, lightening on hover and darkening on press. The tokens are the
+   ones .btn.primary uses, so the pair stays in step and each theme gets the text
+   colour it needs on top of its own accent. */
+.gc-gas-chip.is-on         { background: var(--accent);        border-color: var(--accent);        color: var(--on-accent); }
+.gc-gas-chip.is-on:hover   { background: var(--accent-hover);  border-color: var(--accent-hover);  color: var(--on-accent); }
+.gc-gas-chip.is-on:active  { background: var(--accent-active); border-color: var(--accent-active); color: var(--on-accent); }
 .gc-gas-chip:disabled { opacity: 0.35; cursor: default; }
 .gc-gas-chip:disabled:hover { color: var(--muted); }
 
