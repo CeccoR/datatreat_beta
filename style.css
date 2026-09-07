@@ -651,7 +651,6 @@ input[type="file"] {
 /* Real sub, in the chip's own font: the Unicode subscript two has no glyph in Inter
    and fell back to another face, so H2 and O2 did not read as a pair. */
 .gc-gas-chip sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
-.gc-gas-chip { background: var(--panel); }
 /* Selected reads as a primary button (Fit sample and friends): the accent fill with
    --on-accent text, lightening on hover and darkening on press. The tokens are the
    ones .btn.primary uses, so the pair stays in step and each theme gets the text
