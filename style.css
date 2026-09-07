@@ -637,9 +637,9 @@ input[type="file"] {
   color: var(--muted);
 }
 
-/* GC gas chips: ALL/ONE chips laid over the plot's own data area, top right. They
-   ride the plot toolbar's convention — dimmed until the plot is hovered — so they
-   stay out of the way of the data they sit on. */
+/* GC gas chips: ALL/ONE chips laid over the plot's own data area, top right. Dimmed
+   until pointed at, so they stay out of the way of the data they sit on; the group
+   lights as a whole, since hovering one chip is hovering the set it belongs to. */
 .gc-gas-sel {
   /* Clear of the toolbar column and the plot's own right margin, so the chips
      land inside the data area rather than on the frame or the buttons. */
@@ -647,7 +647,7 @@ input[type="file"] {
   display: inline-flex; gap: 4px;
   opacity: 0.5; transition: opacity 0.18s;
 }
-.plot-wrap:hover .gc-gas-sel { opacity: 1; }
+.gc-gas-sel:hover { opacity: 1; }
 /* Real sub, in the chip's own font: the Unicode subscript two has no glyph in Inter
    and fell back to another face, so H2 and O2 did not read as a pair. */
 .gc-gas-chip sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
