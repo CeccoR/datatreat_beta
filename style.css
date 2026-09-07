@@ -637,6 +637,12 @@ input[type="file"] {
   color: var(--muted);
 }
 
+/* GC gas selector: a small segmented control above each card's plots. */
+.gc-gas-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.gc-gas-sel { display: inline-flex; gap: 4px; }
+.gc-gas-btn { padding: 3px 12px; font-size: 11px; }
+.gc-gas-btn:disabled { opacity: 0.4; cursor: default; }
+
 /* ===== Custom date-time field (segmented text + calendar button) ===== */
 .dt-field {
   display: flex;
@@ -1998,6 +2004,13 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 /* Hollow ring marker (open circles in the plot, e.g. raw XRPD data) */
 .legend i.mk-ring { width: 9px; height: 9px; border-radius: 50%; background: transparent; border: 1.6px solid; box-sizing: border-box; vertical-align: middle; }
 .legend i.mk-box { width: 11px; height: 11px; border-radius: 2px; }
+/* Dashed key: matches a series drawn with a dash pattern (the GC second gas). The
+   dashes come from a repeating gradient so the key uses the series colour as-is. */
+.legend i.mk-dash {
+  background-image: repeating-linear-gradient(to right,
+    currentColor 0 5px, transparent 5px 9px);
+  background-color: transparent !important;
+}
 
 /* ===== Dropzone loading state ===== */
 .dropzone { position: relative; }

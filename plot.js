@@ -217,8 +217,10 @@ class Plot{
   /* Bar with a fixed PIXEL width, centred at data-x `xc` (+ optional pixel offset `dx`).
      Width stays constant regardless of the sample count or the zoom level — only the
      centre reprojects. `hw` is the half-width in px. */
-  barPx(xc, y0, y1, color, hw, dx){
-    const entry = {type:'barpx', xc, y0, y1, color, hw:hw||14, dx:dx||0};
+  // `meta.label` names the bar's series for anything reading the plot back (the
+  // figure composer), the way line()'s does; bars carry no series of their own.
+  barPx(xc, y0, y1, color, hw, dx, meta){
+    const entry = {type:'barpx', xc, y0, y1, color, hw:hw||14, dx:dx||0, label: meta && meta.label};
     this._stored.push(entry);
     return this._renderBarPx(entry);
   }

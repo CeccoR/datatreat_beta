@@ -127,8 +127,10 @@ function seriesFromPlot(plot, legendEl){
   for (const e of stored){
     if (e.type !== 'bar' && e.type !== 'barpx') continue;
     const color = e.color || '#3aa0ff';
-    if (!groups.has(color)) groups.set(color, { color, xs: [], ys: [], errs: [], keys: [] });
-    const g = groups.get(color);
+    // Grouped by the name the plot gave the bar when it has one, else by colour.
+    const gk = e.label || color;
+    if (!groups.has(gk)) groups.set(gk, { color, name: e.label, xs: [], ys: [], errs: [], keys: [] });
+    const g = groups.get(gk);
     g.xs.push(e.type === 'barpx' ? e.xc : (e.x0 + e.x1) / 2);
     g.ys.push(e.type === 'barpx' ? e.y1 : e.y1);
     g.errs.push(0);
@@ -143,7 +145,7 @@ function seriesFromPlot(plot, legendEl){
       out.push({
         id: 'b' + gi,
         kind: 'bar',
-        label: labels[out.length] || ('Bars ' + (gi + 1)),
+        label: g.name || labels[out.length] || ('Bars ' + (gi + 1)),
         panel: 0,
         color: g.color,
         width: 0.8,                 // bar width as a fraction of the category slot

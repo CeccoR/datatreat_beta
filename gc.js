@@ -15,10 +15,25 @@ import { Plot, svgEl } from './plot.js';
   // the plain form is the matching CSV header.
   const SUB2 = '<tspan baseline-shift="sub" font-size="8">2</tspan>';
   const SUP1 = '<tspan baseline-shift="super" font-size="8">-1</tspan>';
-  const LBL_RATE_SVG = `H${SUB2} Production Rate (mmol g${SUP1} h${SUP1})`;
-  const LBL_CUM_SVG  = `H${SUB2} Production (mmol g${SUP1})`;
-  const LBL_RATE_CSV = 'H2 Production Rate (mmol g^-1 h^-1)';
-  const LBL_CUM_CSV  = 'H2 Production (mmol g^-1)';
+  const LBL_RATE_SVG = `Production Rate (mmol g${SUP1} h${SUP1})`;
+  const LBL_CUM_SVG  = `Production (mmol g${SUP1})`;
+  const LBL_RATE_CSV = 'Production Rate (mmol g^-1 h^-1)';
+  const LBL_CUM_CSV  = 'Production (mmol g^-1)';
+
+  /* The gases the module can read, in display order. `col` finds the column: the name
+     has to carry the formula as a word of its own, or "O2" would also match the "CO2"
+     column that sits beside it in a typical GC export. Both gases get the identical
+     treatment — %mol, molar flow, per gram, integrated — since the instrument hands
+     over calibrated mole fractions for each. */
+  const GASES = [
+    { key:'h2', txt:'H\u2082', csv:'H2', dash:'',    col:/(^|[^a-z0-9])h2([^a-z0-9]|$)/ },
+    { key:'o2', txt:'O\u2082', csv:'O2', dash:'5,4', col:/(^|[^a-z0-9])o2([^a-z0-9]|$)/ },
+  ];
+  const gasOf = k => GASES.find(g=>g.key===k);
+  let gasMode = 'both';                                   // 'h2' | 'o2' | 'both'
+  const activeGases = ()=> gasMode==='both' ? GASES : GASES.filter(g=>g.key===gasMode);
+  // Gases actually present in the loaded files, intersected with what is selected.
+  const shownGases = ()=> activeGases().filter(g=> files.some(f=> f.gas[g.key]));
   // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
   // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
   let mMode='all', qMode='all', startMode='all', endMode='all';
@@ -91,18 +106,34 @@ import { Plot, svgEl } from './plot.js';
       const delim = lines[0].includes(';') ? ';' : (lines[0].includes(',')? ',' : '\t');
       const header = splitCSVLine(lines[0], delim);
       const idxDate = header.findIndex(h=>h.toLowerCase().includes('injection date'));
-      const idxH2   = header.findIndex(h=>{ const lo=h.toLowerCase(); return lo.includes('h2') && lo.includes('%mol'); });
-      if (idxDate<0 || idxH2<0){ invalidFiles.push(f.name); continue; }
-      const injDates=[], h2=[];
+      // A file needs a date column and at least one gas; whichever gases it has are
+      // read, the rest simply are not there for that sample.
+      const idxGas = {};
+      for (const g of GASES){
+        const i = header.findIndex(h=>{ const lo=h.toLowerCase(); return g.col.test(lo) && lo.includes('%mol'); });
+        if (i >= 0) idxGas[g.key] = i;
+      }
+      if (idxDate<0 || !Object.keys(idxGas).length){ invalidFiles.push(f.name); continue; }
+      const injDates=[], gas={};
+      for (const k in idxGas) gas[k] = [];
       for (let i=1;i<lines.length;i++){
         const parts = splitCSVLine(lines[i], delim);
         const d = parseGCDate(parts[idxDate]||'');
-        const v = parseFloat((parts[idxH2]||'').replace(',','.'));
-        if (d && isFinite(v)){ injDates.push(d); h2.push(v); }
+        if (!d) continue;
+        const vals = {};
+        let any = false;
+        for (const k in idxGas){
+          const v = parseFloat((parts[idxGas[k]]||'').replace(',','.'));
+          vals[k] = isFinite(v) ? v : NaN;
+          if (isFinite(v)) any = true;
+        }
+        // One row, every gas kept on the same time axis; a blank cell stays NaN so the
+        // columns never slip out of step with the dates.
+        if (any){ injDates.push(d); for (const k in idxGas) gas[k].push(vals[k]); }
       }
       if (!injDates.length){ invalidFiles.push(f.name); continue; }
       const sorted = injDates.slice().sort((a,b)=>a-b);
-      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, h2, color:nextColor(files), rawBytes});
+      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, gas, color:nextColor(files), rawBytes});
       ms.push(15); Qs.push(2); startArr.push(0); endArr.push(24);
       lightOnDates.push(new Date(sorted[0]));
     }
@@ -135,10 +166,12 @@ import { Plot, svgEl } from './plot.js';
       ms: ms.slice(), Qs: Qs.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
       lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
       mMode, qMode, startMode, endMode, mShared, qShared, startShared, endShared,
+      gasMode,
     };
   }
   function gcRestore(s){
     files = s.files.map(f=>({...f}));
+    gasMode = s.gasMode || 'both';        // projects saved before O2 existed
     ms = s.ms.slice(); Qs = s.Qs.slice();
     lightOnDates = s.lightOnDates.map(t=> t!=null ? new Date(t) : null);
     if (s.mMode !== undefined){
@@ -197,7 +230,7 @@ import { Plot, svgEl } from './plot.js';
     // Column order: Sample | m | Q | Light-on | [Interval: start end] | warnings.
     let html = `<div style="overflow-x:auto"><table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
       <tr><th rowspan="2">Sample</th>
-        <th rowspan="2">m (g) ${modeChip('m',mMode)}</th>
+        <th rowspan="2">m (mg) ${modeChip('m',mMode)}</th>
         <th rowspan="2">Q (mL/min) ${modeChip('q',qMode)}</th>
         <th rowspan="2">Light-on date/time</th>
         <th colspan="2" class="gc-grp">Interval (h)</th>
@@ -327,35 +360,98 @@ import { Plot, svgEl } from './plot.js';
     _gcPrev1 = (preserveView && o1 && isFinite(o1.xmin)) ? {xmin:o1.xmin,xmax:o1.xmax,ymin:o1.ymin,ymax:o1.ymax} : null;
     _gcPrev2 = (preserveView && o2 && isFinite(o2.xmin)) ? {xmin:o2.xmin,xmax:o2.xmax,ymin:o2.ymin,ymax:o2.ymax} : null;
     dataTables = files.map((f,h)=>{
-      const pairs = f.injDates.map((d,i)=>({d, v:f.h2[i]})).sort((a,b)=>a.d-b.d);
       const lightOn = lightOnDates[h];
+      // Rows on one shared time axis, with the light-on instant inserted as an extra
+      // point carrying the last reading before it (zero if the run starts after it).
+      const rows = f.injDates.map((d,i)=>{
+        const v = {}; for (const k in f.gas) v[k] = f.gas[k][i];
+        return { d, v };
+      }).sort((a,b)=>a.d-b.d);
       let idxBefore = -1;
-      for (let i=0;i<pairs.length;i++) if (pairs[i].d < lightOn) idxBefore = i;
-      let h2New;
-      if (idxBefore<0){ h2New=0; } else h2New = pairs[idxBefore].v;
-      pairs.push({d: lightOn, v: h2New});
-      pairs.sort((a,b)=>a.d-b.d);
-      const tHours = pairs.map(p=>(p.d - lightOn)/3600000);
-      const h2pct = pairs.map(p=>p.v);
+      for (let i=0;i<rows.length;i++) if (rows[i].d < lightOn) idxBefore = i;
+      const atLight = {};
+      for (const k in f.gas) atLight[k] = idxBefore<0 ? 0 : rows[idxBefore].v[k];
+      rows.push({ d: lightOn, v: atLight });
+      rows.sort((a,b)=>a.d-b.d);
+
+      const tHours = rows.map(r=>(r.d - lightOn)/3600000);
+      // Total molar flow: mL/min -> L/h -> mol/h at standard molar volume.
       const F = qOf(h)/1000*60/22.41396954;
-      const h2F = h2pct.map(v=> v/100*F*1e6);
-      const h2Fm = h2F.map(v=> v/mOf(h));
-      const h2FmInt = cumtrapz(tHours, h2Fm);
-      return {t:tHours, h2pct, h2F, h2Fm, h2FmInt, label:f.label, color:f.color};
+      const gas = {};
+      for (const k in f.gas){
+        const pct = rows.map(r=> isFinite(r.v[k]) ? r.v[k] : 0);
+        const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
+        const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
+        gas[k] = { pct, flow, Fm: flowM, FmInt: cumtrapz(tHours, flowM) };
+      }
+      return {t:tHours, gas, label:f.label, color:f.color};
     });
     document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts;
+    renderGasSel();
     renderGcPlots();
   }
+
+  /* One line per sample per gas, the sample's colour throughout and the gas told by
+     the dash pattern, so a sample stays recognisable across both gases. The name
+     carries the gas only when more than one is on show. */
+  function drawGasLines(plot, tables, shown, key){
+    tables.forEach(d=>{
+      shown.forEach(g=>{
+        const q = d.gas[g.key];
+        if (!q) return;
+        plot.line(d.t, q[key], d.color, 1.3, g.dash, { label: seriesName(d.label, g, shown) });
+      });
+    });
+  }
+  const seriesName = (label, g, shown)=> shown.length > 1 ? `${label} ${g.txt}` : label;
+
+  // Legend entries follow the same rule, with a dashed key for a dashed gas.
+  function gasLegendHtml(d, shown){
+    return shown.filter(g=>d.gas[g.key]).map(g=>{
+      const key = g.dash
+        ? `<i class="mk-dash" style="color:${d.color}"></i>`
+        : `<i style="background:${d.color}"></i>`;
+      return `<span>${key}${seriesName(d.label, g, shown)}</span>`;
+    }).join('');
+  }
+
+  /* The gas selector, rendered into both cards and driving one shared state. Options
+     the loaded files cannot supply are disabled rather than hidden, so the control
+     does not change shape from one data set to the next. */
+  function renderGasSel(){
+    const present = k => files.some(f=> f.gas[k]);
+    const opts = [...GASES.map(g=>({ v:g.key, t:g.txt, ok:present(g.key) })),
+                  { v:'both', t:'Both', ok: GASES.every(g=>present(g.key)) }];
+    const html = opts.map(o=>
+      `<button type="button" class="btn btn-sm gc-gas-btn${gasMode===o.v?' is-on':''}"`
+      + ` data-gas="${o.v}"${o.ok?'':' disabled'}>${o.t}</button>`).join('');
+    document.querySelectorAll('.gc-gas-sel').forEach(el=> el.innerHTML = html);
+    // A selection the current files cannot honour falls back to what they do have.
+    const chosen = opts.find(o=>o.v===gasMode);
+    if (files.length && chosen && !chosen.ok){
+      const first = opts.find(o=>o.ok);
+      if (first){ gasMode = first.v; renderGasSel(); }
+    }
+  }
+
+  document.getElementById('tab-gc').addEventListener('click', e=>{
+    const b = e.target.closest('.gc-gas-btn');
+    if (!b || b.disabled) return;
+    gasMode = b.dataset.gas;
+    renderGasSel();
+    computeAndRenderGc(true);
+    hist.commit();
+  });
 
   function renderGcPlots(){
     const legend = document.getElementById('gcLegend'); legend.innerHTML='';
     plot1 = new Plot(document.getElementById('gcSvg1'), {xlabel:'Time (h)', ylabelSvg:LBL_RATE_SVG});
     plot2 = new Plot(document.getElementById('gcSvg2'), {xlabel:'Time (h)', ylabelSvg:LBL_CUM_SVG});
     const resLegend = document.getElementById('gcResLegend'); resLegend.innerHTML='';
-    dataTables.forEach(d=>{
-      const s=document.createElement('span'); s.innerHTML=`<i style="background:${d.color}"></i>${d.label}`; legend.appendChild(s);
-      resLegend.appendChild(s.cloneNode(true));
-    });
+    const shown = shownGases();
+    const html = dataTables.map(d=> gasLegendHtml(d, shown)).join('');
+    legend.innerHTML = html;
+    resLegend.innerHTML = html;
     plot1.attachTools(plot1.svg.closest('.plot-wrap'));
     plot2.attachTools(plot2.svg.closest('.plot-wrap'));
     updateRegression();
@@ -373,16 +469,21 @@ import { Plot, svgEl } from './plot.js';
     const intPts = dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
     const tmin = Math.min(0, minArr(allT), ...intPts);
     const tmax = Math.max(maxArr(allT), ...intPts);
-    const ymax1 = Math.max(...dataTables.map(d=>maxArr(d.h2Fm))), ymin1 = Math.min(...dataTables.map(d=>minArr(d.h2Fm)));
+    // Every shown gas shares the axis: they are the same quantity in the same units.
+    const shown = shownGases();
+    const span = key => dataTables.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
+    const rateArrs = span('Fm'), cumArrs = span('FmInt');
+    if (!rateArrs.length) return;
+    const ymax1 = Math.max(...rateArrs.map(maxArr)), ymin1 = Math.min(...rateArrs.map(minArr));
     plot1.setRange(tmin, tmax, ymin1, ymax1*1.05);
     if (prev1){ plot1.xmin=prev1.xmin; plot1.xmax=prev1.xmax; plot1.ymin=prev1.ymin; plot1.ymax=prev1.ymax; }
     plot1.drawAxes(); plot1.clearData();
-    dataTables.forEach(d=> plot1.line(d.t, d.h2Fm, d.color, 1.3));
-    const ymax2 = Math.max(...dataTables.map(d=>maxArr(d.h2FmInt)));
+    drawGasLines(plot1, dataTables, shown, 'Fm');
+    const ymax2 = Math.max(...cumArrs.map(maxArr));
     plot2.setRange(tmin, tmax, 0, ymax2*1.05);
     if (prev2){ plot2.xmin=prev2.xmin; plot2.xmax=prev2.xmax; plot2.ymin=prev2.ymin; plot2.ymax=prev2.ymax; }
     plot2.drawAxes(); plot2.clearData();
-    dataTables.forEach(d=> plot2.line(d.t, d.h2FmInt, d.color, 1.3));
+    drawGasLines(plot2, dataTables, shown, 'FmInt');
     plot1._onView = ()=> drawGcIntervals(plot1);
     plot2._onView = ()=> drawGcIntervals(plot2);
     drawGcIntervals(plot1); drawGcIntervals(plot2);
@@ -460,17 +561,19 @@ import { Plot, svgEl } from './plot.js';
         if (d.t[i] >= xStart && startIdx < 0) startIdx = i;
         if (d.t[i] <= xEnd) endIdx = i;
       }
-      if (startIdx < 0 || endIdx < 0 || startIdx >= endIdx) return {label:d.label, cost:NaN, dt:NaN};
+      if (startIdx < 0 || endIdx < 0 || startIdx >= endIdx) return {label:d.label, rate:{}, dt:NaN};
       const dt = d.t[endIdx] - d.t[startIdx];
-      if (dt === 0) return {label:d.label, cost:NaN, dt:NaN};
-      const rate = (d.h2FmInt[endIdx] - d.h2FmInt[startIdx]) / dt;
-      return {label:d.label, cost:rate, dt};
+      if (dt === 0) return {label:d.label, rate:{}, dt:NaN};
+      // Mean rate over the interval: the cumulative rise divided by its duration.
+      const rate = {};
+      for (const key in d.gas) rate[key] = (d.gas[key].FmInt[endIdx] - d.gas[key].FmInt[startIdx]) / dt;
+      return {label:d.label, rate, dt};
     });
     drawGcData();
     // Show the Results card before drawing into it: plots sized from a hidden element
     // would measure 0. It stays hidden while no sample has a valid integration interval.
     const barCard = document.getElementById('gcResultsBar');
-    barCard.style.display = costResults.some(c=>isFinite(c.cost)) ? 'block' : 'none';
+    barCard.style.display = costResults.some(c=> GASES.some(g=>isFinite(c.rate[g.key]))) ? 'block' : 'none';
     drawResultPlots();
     drawBarChart();
   }
@@ -482,7 +585,11 @@ import { Plot, svgEl } from './plot.js';
       const end = endOf(k);
       const i = d.t.findIndex(t => t > end);
       const n = i < 0 ? d.t.length : i+1;
-      return {...d, t:d.t.slice(0,n), h2Fm:d.h2Fm.slice(0,n), h2FmInt:d.h2FmInt.slice(0,n)};
+      const gas = {};
+      for (const key in d.gas)
+        gas[key] = { ...d.gas[key], Fm:d.gas[key].Fm.slice(0,n), FmInt:d.gas[key].FmInt.slice(0,n),
+                     pct:d.gas[key].pct.slice(0,n), flow:d.gas[key].flow.slice(0,n) };
+      return {...d, t:d.t.slice(0,n), gas};
     });
   }
 
@@ -493,24 +600,29 @@ import { Plot, svgEl } from './plot.js';
     if (!cut.length || !cut.some(d=>d.t.length)) return;
     const allT = cut.flatMap(d=>d.t);
     const tmin = Math.min(0, minArr(allT)), tmax = maxArr(allT);
+    const shown = shownGases();
     const mk = (id, ylabelSvg, key, ymin0)=>{
       const svg = document.getElementById(id);
       const p = new Plot(svg, {xlabel:'Time (h)', ylabelSvg});
-      const ymax = Math.max(...cut.map(d=>maxArr(d[key])));
-      const ymin = ymin0 !== null ? ymin0 : Math.min(...cut.map(d=>minArr(d[key])));
+      const arrs = cut.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
+      if (!arrs.length) return p;
+      const ymax = Math.max(...arrs.map(maxArr));
+      const ymin = ymin0 !== null ? ymin0 : Math.min(...arrs.map(minArr));
       p.setRange(tmin, tmax, ymin, ymax*1.05);
       p.drawAxes(); p.clearData();
-      cut.forEach(d=> p.line(d.t, d[key], d.color, 1.3));
+      drawGasLines(p, cut, shown, key);
       p.attachTools(svg.closest('.plot-wrap'));
       return p;
     };
-    plotResRate = mk('gcSvgRate', LBL_RATE_SVG, 'h2Fm', null);
-    plotResCum  = mk('gcSvgCum',  LBL_CUM_SVG,  'h2FmInt', 0);
+    plotResRate = mk('gcSvgRate', LBL_RATE_SVG, 'Fm', null);
+    plotResCum  = mk('gcSvgCum',  LBL_CUM_SVG,  'FmInt', 0);
   }
 
   function drawBarChart(){
-    const finite = costResults.filter(c=>isFinite(c.cost));
-    if (!finite.length) return;   // card visibility is handled by updateRegression
+    const shown = shownGases();
+    const has = c => shown.some(g=>isFinite(c.rate[g.key]));
+    const finite = costResults.filter(has);
+    if (!finite.length || !shown.length) return;   // card visibility handled by updateRegression
     const svg = document.getElementById('gcSvgBar');
     // Bottom margin adapts to the longest (30°-tilted) label so names fit without
     // changing the chart's footprint — the data area shrinks instead.
@@ -519,24 +631,42 @@ import { Plot, svgEl } from './plot.js';
     const rect = svg.getBoundingClientRect();
     const svgW = rect.width || 640, svgH = rect.height || 640;
     const labels = costResults.map(c=>truncTiltLabel(mctx, c.label));
-    const labelWs = labels.map((lbl,k)=> isFinite(costResults[k].cost) ? mctx.measureText(lbl).width : 0);
+    const labelWs = labels.map((lbl,k)=> has(costResults[k]) ? mctx.measureText(lbl).width : 0);
     let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
     // Value label (vertical) above each bar, with reserved top headroom so it never clips.
     const fmtVal = v => v.toFixed(4);
     let maxValW = 0, maxTop = 0;
-    costResults.forEach(c=>{ if (isFinite(c.cost)){ maxValW = Math.max(maxValW, mctx.measureText(fmtVal(c.cost)).width); maxTop = Math.max(maxTop, c.cost); } });
+    costResults.forEach(c=> shown.forEach(g=>{
+      const v = c.rate[g.key];
+      if (isFinite(v)){ maxValW = Math.max(maxValW, mctx.measureText(fmtVal(v)).width); maxTop = Math.max(maxTop, v); }
+    }));
     const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
     const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
-    const ymax = Math.max(Math.max(...finite.map(c=>c.cost))*1.2, maxTop/frac);
+    const allVals = finite.flatMap(c=> shown.map(g=>c.rate[g.key]).filter(isFinite));
+    const ymax = Math.max(Math.max(...allVals)*1.2, maxTop/frac);
     const barPlot = new Plot(svg, {xlabel:'', ylabelSvg:LBL_RATE_SVG, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     const xpad = barPlotXPad(labelWs, costResults.length, svgW-75);   // widen only when a label would cross x=0
     barPlot.setRange(-xpad, costResults.length+1+xpad, 0, ymax||1);
     barPlot.drawAxes();
+    // With both gases the pair sits side by side in the sample's slot, the way the
+    // XRPD size chart pairs raw and corrected. Widths shrink so the pair still fits.
+    const n = shown.length;
+    const pxSlot = barPlot.px(1) - barPlot.px(0);
+    const hw = n > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);
+    const dx = n > 1 ? Math.min(12, pxSlot*0.24) : 0;
     costResults.forEach((c,k)=>{
-      if (!isFinite(c.cost)) return;
-      barPlot.barPx(k+1, 0, c.cost, dataTables[k].color, 16);
-      barPlot.barLabel(k+1, c.cost, fmtVal(c.cost), {gap});
+      if (!has(c)) return;
+      shown.forEach((g,gi)=>{
+        const v = c.rate[g.key];
+        if (!isFinite(v)) return;
+        const off = (gi - (n-1)/2) * dx * 2;
+        // Same hue as the sample, but the dashed gas is drawn lighter so the pair is
+        // told apart the way the curves are.
+        barPlot.barPx(k+1, 0, v, g.dash ? dataTables[k].color + '99' : dataTables[k].color, hw, off,
+                      { label: seriesName(c.label, g, shown) });
+        barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
+      });
       barPlot.tickLabel(k+1, labels[k], 30);
     });
     barPlot.attachTools(svg.closest('.plot-wrap'));
@@ -548,16 +678,25 @@ import { Plot, svgEl } from './plot.js';
     // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
     // the full series with every intermediate quantity; gc_results.csv keeps only the
     // three plotted columns, cut at the interval end.
+    // Only what the plots are showing: pick H2, O2 or both and the export follows.
+    const shown = shownGases();
     const buildSeriesCsv = (tables, full)=>{
       const cols=[];
       tables.forEach(d=>{
+        // A sample with none of the shown gases contributes nothing, not a bare time
+        // column with empty space beside it.
+        if (!shown.some(g=>d.gas[g.key])) return;
         cols.push({h:`Time (h) [${d.label}]`, v:d.t.map(x=>fmtNum(x,5))});
-        if (full){
-          cols.push({h:`H2 (%mol) [${d.label}]`,       v:d.h2pct.map(x=>fmtNum(x,5))});
-          cols.push({h:`H2 (umol h^-1) [${d.label}]`,  v:d.h2F.map(x=>fmtNum(x,5))});
-        }
-        cols.push({h:`${LBL_RATE_CSV} [${d.label}]`, v:d.h2Fm.map(x=>fmtNum(x,5))});
-        cols.push({h:`${LBL_CUM_CSV} [${d.label}]`,  v:d.h2FmInt.map(x=>fmtNum(x,5))});
+        shown.forEach(g=>{
+          const q = d.gas[g.key];
+          if (!q) return;
+          if (full){
+            cols.push({h:`${g.csv} (%mol) [${d.label}]`,      v:q.pct.map(x=>fmtNum(x,5))});
+            cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:q.flow.map(x=>fmtNum(x,5))});
+          }
+          cols.push({h:`${g.csv} ${LBL_RATE_CSV} [${d.label}]`, v:q.Fm.map(x=>fmtNum(x,5))});
+          cols.push({h:`${g.csv} ${LBL_CUM_CSV} [${d.label}]`,  v:q.FmInt.map(x=>fmtNum(x,5))});
+        });
       });
       const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
       let t = csvLine(cols.map(c=>c.h));
@@ -567,12 +706,12 @@ import { Plot, svgEl } from './plot.js';
     entries.push({name:'gc_raw.csv',     text:buildSeriesCsv(dataTables, true)});
     entries.push({name:'gc_results.csv', text:buildSeriesCsv(cutTables(), false)});
     // h2_rates.csv — bar-plot-like summary (one row per sample)
-    let t2 = csvLine(['Sample','Mean '+LBL_RATE_CSV,'Interval duration (h)']);
-    costResults.forEach(c=> t2 += csvLine([c.label, fmtNum(c.cost,6), fmtNum(c.dt,4)]));
-    entries.push({name:'h2_rates.csv', text:t2});
+    let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`), 'Interval duration (h)']);
+    costResults.forEach(c=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)), fmtNum(c.dt,4)]));
+    entries.push({name:'mean_rates.csv', text:t2});
     // gc_info.csv — per-sample inputs + the integration interval used
     const fmtDate = d => d ? new Date(d).toISOString().slice(0,16).replace('T',' ') : '';
-    let t3 = csvLine(['Sample','m (g)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)']);
+    let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)']);
     dataTables.forEach((d,k)=> t3 += csvLine([d.label, mOf(k), qOf(k), fmtDate(lightOnDates[k]), startOf(k), endOf(k)]));
     entries.push({name:'gc_info.csv', text:t3});
     return entries;
