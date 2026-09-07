@@ -637,23 +637,27 @@ input[type="file"] {
   color: var(--muted);
 }
 
-/* A plot's title line, with its own controls pushed to the right. */
-.plot-title-row { display: flex; align-items: center; gap: 10px; }
-.plot-title-row > .txt-caption { margin: 0; }
-.plot-title-row > .gc-gas-sel { margin-left: auto; }
-
-/* GC gas chips: the ALL/ONE chip, one per gas plus Both, beside each plot title.
-   They keep .mode-chip's uppercase, which is what makes them read as the same
-   control — only the subscript needs saying. */
-.gc-gas-sel { display: inline-flex; gap: 4px; flex: 0 0 auto; }
+/* GC gas chips: ALL/ONE chips laid over the plot's own data area, top right. They
+   ride the plot toolbar's convention — dimmed until the plot is hovered — so they
+   stay out of the way of the data they sit on. */
+.gc-gas-sel {
+  /* Clear of the toolbar column and the plot's own right margin, so the chips
+     land inside the data area rather than on the frame or the buttons. */
+  position: absolute; top: 21px; right: 56px; z-index: 2;
+  display: inline-flex; gap: 4px;
+  opacity: 0.5; transition: opacity 0.18s;
+}
+.plot-wrap:hover .gc-gas-sel { opacity: 1; }
 /* Real sub, in the chip's own font: the Unicode subscript two has no glyph in Inter
    and fell back to another face, so H2 and O2 did not read as a pair. */
 .gc-gas-chip sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
-.gc-gas-chip.is-on {
-  background: var(--accent); border-color: var(--accent); color: #fff;
-}
-.gc-gas-chip.is-on:hover { color: #fff; }
-.gc-gas-chip:disabled { opacity: 0.4; cursor: default; }
+.gc-gas-chip { background: var(--panel); }
+/* Dark ink on the accent fill: white had too little contrast against it. Fixed
+   rather than themed, because the fill it sits on is the same in both themes. */
+.gc-gas-chip.is-on,
+.gc-gas-chip.is-on:hover { background: var(--accent); border-color: var(--accent); color: #1a2327; }
+.gc-gas-chip:disabled { opacity: 0.35; cursor: default; }
+.gc-gas-chip:disabled:hover { color: var(--muted); }
 
 /* ===== Custom date-time field (segmented text + calendar button) ===== */
 .dt-field {
@@ -1381,6 +1385,7 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
   align-items: flex-start;
   gap: 8px;
   overflow-x: auto;   /* if the plot hits its min-width floor, scroll here — not the page */
+  position: relative; /* anchors controls laid over the plot (the GC gas chips) */
 }
 /* While a pan/zoom tool is armed, block text selection across the whole plot */
 .plot-wrap.tool-armed, .plot-wrap.tool-armed * {

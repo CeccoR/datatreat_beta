@@ -33,13 +33,15 @@ import { Plot, svgEl } from './plot.js';
   ];
   // Plain-text form for series names, where markup would be drawn literally.
   const gasTxt = g => g.csv.replace('2', '\u2082');
-  /* Analysis and Results choose their gas separately, but every plot inside a section
-     follows that section's choice — the chips beside each title are views of one
-     value, not five independent ones. */
-  let gasMode = { a:'both', r:'both' };
-  const activeGases = sec => gasMode[sec]==='both' ? GASES : GASES.filter(g=>g.key===gasMode[sec]);
-  // Gases actually present in the loaded files, intersected with what is selected.
-  const shownGases = sec => activeGases(sec).filter(g=> files.some(f=> f.gas[g.key]));
+  /* Analysis and Results choose their gases separately, but every plot inside a
+     section follows that section's choice — the chips on each plot are views of one
+     set, not five independent ones. Each section holds a SET of gas keys rather than
+     one mode, so any combination is reachable and a third gas would need no new
+     option; the only rule is that a section can never end up with none. */
+  let gasSel = { a: GASES.map(g=>g.key), r: GASES.map(g=>g.key) };
+  const gasPresent = k => files.some(f=> f.gas[k]);
+  // What a section actually draws: chosen, and present in at least one sample.
+  const shownGases = sec => GASES.filter(g=> gasSel[sec].includes(g.key) && gasPresent(g.key));
   // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
   // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
   let mMode='all', qMode='all', startMode='all', endMode='all';
@@ -172,14 +174,15 @@ import { Plot, svgEl } from './plot.js';
       ms: ms.slice(), Qs: Qs.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
       lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
       mMode, qMode, startMode, endMode, mShared, qShared, startShared, endShared,
-      gasMode: {...gasMode},
+      gasSel: { a:gasSel.a.slice(), r:gasSel.r.slice() },
     };
   }
   function gcRestore(s){
     files = s.files.map(f=>({...f}));
-    // Projects saved before O2 existed, or before the two sections chose separately.
-    gasMode = (s.gasMode && typeof s.gasMode === 'object') ? {...s.gasMode}
-            : { a: s.gasMode || 'both', r: s.gasMode || 'both' };
+    // Projects saved before O2 existed, or under the older single-mode selector.
+    const fromMode = m => (!m || m === 'both') ? GASES.map(g=>g.key) : [m];
+    gasSel = s.gasSel ? { a:s.gasSel.a.slice(), r:s.gasSel.r.slice() }
+           : { a: fromMode(s.gasMode && s.gasMode.a), r: fromMode(s.gasMode && s.gasMode.r) };
     ms = s.ms.slice(); Qs = s.Qs.slice();
     lightOnDates = s.lightOnDates.map(t=> t!=null ? new Date(t) : null);
     if (s.mMode !== undefined){
@@ -427,30 +430,33 @@ import { Plot, svgEl } from './plot.js';
      the loaded files cannot supply are disabled rather than hidden, so the control
      does not change shape from one data set to the next. */
   function renderGasSel(){
-    const present = k => files.some(f=> f.gas[k]);
-    const opts = [...GASES.map(g=>({ v:g.key, t:g.label, ok:present(g.key) })),
-                  { v:'both', t:'Both', ok: GASES.every(g=>present(g.key)) }];
-    // A selection the current files cannot honour falls back to what they do have.
+    // A gas no sample carries cannot be chosen; if the files leave a section empty,
+    // it falls back to every gas that is there.
     for (const sec of ['a','r']){
-      const chosen = opts.find(o=>o.v===gasMode[sec]);
-      if (files.length && chosen && !chosen.ok){
-        const first = opts.find(o=>o.ok);
-        if (first) gasMode[sec] = first.v;
-      }
+      gasSel[sec] = gasSel[sec].filter(gasPresent);
+      if (files.length && !gasSel[sec].length) gasSel[sec] = GASES.filter(g=>gasPresent(g.key)).map(g=>g.key);
     }
     document.querySelectorAll('.gc-gas-sel').forEach(el=>{
       const sec = el.dataset.gasSec;
-      el.innerHTML = opts.map(o=>
-        `<button type="button" class="mode-chip gc-gas-chip${gasMode[sec]===o.v?' is-on':''}"`
-        + ` data-gas="${o.v}" data-sec="${sec}"${o.ok?'':' disabled'}>${o.t}</button>`).join('');
+      el.innerHTML = GASES.map(g=>{
+        const on = gasSel[sec].includes(g.key);
+        // The last one standing cannot be switched off — the plot would be empty.
+        const only = on && gasSel[sec].length === 1;
+        const title = !gasPresent(g.key) ? `No ${g.csv} in the loaded files`
+                    : only ? `${g.csv} — the only one shown` : `Show / hide ${g.csv}`;
+        return `<button type="button" class="mode-chip gc-gas-chip${on?' is-on':''}"`
+             + ` data-gas="${g.key}" data-sec="${sec}" title="${title}"`
+             + `${gasPresent(g.key) ? '' : ' disabled'}>${g.label}</button>`;
+      }).join('');
     });
   }
 
   document.getElementById('tab-gc').addEventListener('click', e=>{
     const b = e.target.closest('.gc-gas-chip');
     if (!b || b.disabled) return;
-    const sec = b.dataset.sec;
-    if (gasMode[sec] === b.dataset.gas) return;
+    const sec = b.dataset.sec, key = b.dataset.gas;
+    const on = gasSel[sec].includes(key);
+    if (on && gasSel[sec].length === 1) return;    // never leave a section with none
     // Switching changes how tall the legend is, which would shift everything below it
     // under the pointer. Hold the clicked chip still and let the page move around it.
     // The chips are rebuilt, so the one to measure afterwards is found by which group
@@ -459,14 +465,15 @@ import { Plot, svgEl } from './plot.js';
     const groups = [...document.querySelectorAll('.gc-gas-sel')];
     const gi = groups.indexOf(b.parentElement);
     const before = b.getBoundingClientRect().top;
-    gasMode[sec] = b.dataset.gas;
+    gasSel[sec] = on ? gasSel[sec].filter(k=>k!==key)
+                     : GASES.map(g=>g.key).filter(k=> k===key || gasSel[sec].includes(k));
     renderGasSel();
     computeAndRenderGc(false);     // ranges are rescaled to the gases now on show
     // Measured after the redraw is laid out: the legends reflow on the next frame, so
     // compensating synchronously would correct against the old geometry.
     requestAnimationFrame(()=> requestAnimationFrame(()=>{
       const grp = document.querySelectorAll('.gc-gas-sel')[gi];
-      const after = grp && grp.querySelector('.gc-gas-chip.is-on');
+      const after = grp && grp.querySelector('.gc-gas-chip');
       if (after) window.scrollBy(0, after.getBoundingClientRect().top - before);
     }));
     hist.commit();
