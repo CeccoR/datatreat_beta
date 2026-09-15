@@ -1124,7 +1124,11 @@ function settingsSnapshot(){
    not how it looks. Letting a preset made on line plots turn a bar series into a
    curve would erase the bars, and carrying names over would show the sample labels
    of whatever plot the settings came from; the names always come from the project's
-   own legend, so renaming a sample there shows up here at once. */
+   own legend, so renaming a sample there shows up here at once.
+
+   A name typed into the composer is the exception: it is a choice about this figure,
+   not about the project, so it is kept in `rename` — which is not identity — and put
+   back over the label when the settings are applied again. */
 const IDENTITY = ['kind', 'id', 'label', 'xs', 'ys', 'errs'];
 /* `name` says which plot the figure IS, not how it looks: it is the key the per-plot
    memory is filed under. A preset carrying its origin's name over would make the plot
@@ -1139,6 +1143,7 @@ function applySettings(snap){
     const rest = snap.series[i] && snap.series[i].rest;
     if (!rest) return;
     for (const k in rest) if (!IDENTITY.includes(k)) s[k] = rest[k];
+    if (s.rename) s.label = s.rename;
   });
   clampPanels();
 }
@@ -1158,12 +1163,21 @@ function loadMemory(){
 function rememberSettings(){
   if (!F) return;
   const all = loadMemory();
-  all[memKey(F.name)] = settingsSnapshot();
+  const snap = settingsSnapshot();
+  // Which preset the figure was left on, so reopening it says so instead of coming
+  // back with the settings of a preset and no sign of which one.
+  snap.preset = presetSel;
+  all[memKey(F.name)] = snap;
   const live = new Set(TABS.map(t=>t.id));
   for (const k of Object.keys(all)) if (!live.has(k.slice(0, k.indexOf('/')))) delete all[k];
   try { localStorage.setItem(MEM_KEY, JSON.stringify(all)); } catch(e){}
 }
-function recallSettings(){ applySettings(loadMemory()[memKey(F.name)]); }
+function recallSettings(){
+  const snap = loadMemory()[memKey(F.name)];
+  applySettings(snap);
+  // Only if that preset is still around: one deleted meanwhile names nothing.
+  presetSel = (snap && snap.preset && loadPresets()[snap.preset]) ? snap.preset : '';
+}
 
 let axSel = 0;
 const axTargets = () => axSel === 'all' ? F.panels.map((_, i)=> i) : [axSel];
@@ -1783,7 +1797,7 @@ function wireControls(){
       const [i, k] = t.dataset.dk.split(':').map(Number);
       const s = F.series[i]; if (!s) return null;
       // Renaming the first division renames the series: they are the same name.
-      if (k === 0) s.label = t.value;
+      if (k === 0) s.label = s.rename = t.value;
       else { s.divs = divsOf(s).slice(); s.divs[k] = { ...s.divs[k], name: t.value }; }
     } else if (t.dataset.dmap){
       const [i, j] = t.dataset.dmap.split(':').map(Number);
@@ -1797,6 +1811,7 @@ function wireControls(){
       else if (k === 'inLegend') s.inLegend = t.checked;
       else if (k === 'panel'){ s.panel = +t.value; applyPalette(); rebuild = true; }
       else if (k === 'width'){ const v = readNum(t); if (v === null) return null; s.width = v; }
+      else if (k === 'label'){ s.label = s.rename = t.value; }
       else s[k] = t.value;
     } else return null;
     return rebuild;
