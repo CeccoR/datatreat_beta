@@ -291,7 +291,6 @@ import { Plot, svgEl } from './plot.js';
     const wireNum = (inp, apply)=>{
       guardNumericInput(inp, { min:0.001 });
       const shared = inp.classList.contains('gcShared');
-      if (shared) inp.addEventListener('input', ()=> mirrorShared(inp.dataset.f, inp.value));
       inp.addEventListener('change', ()=>{
         apply(+inp.value);
         if (shared) mirrorShared(inp.dataset.f, inp.value);
@@ -339,9 +338,10 @@ import { Plot, svgEl } from './plot.js';
   // effective counterpart so that end>start holds for every affected sample. Invalid
   // input shakes the field and reverts.
   /* With a parameter set to "all", the per-sample cells are read-only echoes of the
-     shared value and nothing redraws them on their own, so they are kept in step as
-     the shared field is typed in — otherwise the rows go on showing the old number
-     until the next full render. */
+     shared value and nothing redraws them on their own, so they are brought into step
+     when the shared field is confirmed — otherwise the rows go on showing the old
+     number until the next full render. Not while it is typed: a half-written number
+     is not a value the samples have. */
   function mirrorShared(field, value){
     document.querySelectorAll(`#gcParamTableWrap .gcCell[data-f="${field}"]`)
       .forEach(inp=>{ inp.value = value; });
@@ -351,7 +351,6 @@ import { Plot, svgEl } from './plot.js';
     if (!inp) return;
     guardNumericInput(inp, {});
     const echo = ()=>{ if (isShared) mirrorShared(which, inp.value); };
-    if (isShared) inp.addEventListener('input', echo);
     inp.addEventListener('change', ()=>{
       const cur = isShared ? (which==='start'?startShared:endShared) : (which==='start'?startArr[i]:endArr[i]);
       const v = parseIntervalField(inp.value);
