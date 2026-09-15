@@ -290,7 +290,13 @@ import { Plot, svgEl } from './plot.js';
     // m/Q inputs (shared + per-sample) — recompute the whole series on a valid change.
     const wireNum = (inp, apply)=>{
       guardNumericInput(inp, { min:0.001 });
-      inp.addEventListener('change', ()=>{ apply(+inp.value); computeAndRenderGc(); hist.commit(); });
+      const shared = inp.classList.contains('gcShared');
+      if (shared) inp.addEventListener('input', ()=> mirrorShared(inp.dataset.f, inp.value));
+      inp.addEventListener('change', ()=>{
+        apply(+inp.value);
+        if (shared) mirrorShared(inp.dataset.f, inp.value);
+        computeAndRenderGc(); hist.commit();
+      });
     };
     wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mMode==='all' && wireNum(inp, v=>mShared=v));
     wrap.querySelectorAll('.gcShared[data-f="q"]').forEach(inp=> qMode==='all' && wireNum(inp, v=>qShared=v));
@@ -332,13 +338,24 @@ import { Plot, svgEl } from './plot.js';
   // two bounds can be in different all/one modes, each input validates against the
   // effective counterpart so that end>start holds for every affected sample. Invalid
   // input shakes the field and reverts.
+  /* With a parameter set to "all", the per-sample cells are read-only echoes of the
+     shared value and nothing redraws them on their own, so they are kept in step as
+     the shared field is typed in — otherwise the rows go on showing the old number
+     until the next full render. */
+  function mirrorShared(field, value){
+    document.querySelectorAll(`#gcParamTableWrap .gcCell[data-f="${field}"]`)
+      .forEach(inp=>{ inp.value = value; });
+  }
+
   function wireBoundInput(inp, which, isShared, i){
     if (!inp) return;
     guardNumericInput(inp, {});
+    const echo = ()=>{ if (isShared) mirrorShared(which, inp.value); };
+    if (isShared) inp.addEventListener('input', echo);
     inp.addEventListener('change', ()=>{
       const cur = isShared ? (which==='start'?startShared:endShared) : (which==='start'?startArr[i]:endArr[i]);
       const v = parseIntervalField(inp.value);
-      if (v===null){ inp.value = cur; return; }
+      if (v===null){ inp.value = cur; echo(); return; }
       let ok;
       if (which==='start'){
         // A shared start must stay below every sample's end; a per-sample start below its own end.
@@ -348,9 +365,10 @@ import { Plot, svgEl } from './plot.js';
         const startBound = isShared ? (startMode==='all' ? startShared : Math.max(...startArr)) : startOf(i);
         ok = v > startBound;
       }
-      if (!ok){ flashFieldInvalid(inp); inp.value = cur; return; }
+      if (!ok){ flashFieldInvalid(inp); inp.value = cur; echo(); return; }
       if (isShared){ if (which==='start') startShared=v; else endShared=v; }
       else { if (which==='start') startArr[i]=v; else endArr[i]=v; }
+      echo();
       updateRegression(); hist.commit();
     });
     inp.addEventListener('keydown', e=>{ if (e.key==='Enter') inp.blur(); });
