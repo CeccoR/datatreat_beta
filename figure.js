@@ -151,6 +151,9 @@ function seriesFromPlot(plot, legendEl){
         width: 0.8,                 // bar width as a fraction of the category slot
         dash: '', marker: 'none',
         show: true, inLegend: true,
+        // perBar off: every bar takes the series colour. On: barColors[j] rules, so
+        // each category can be told apart on its own rather than by series.
+        perBar: false, barColors: g.xs.map(()=> g.color),
         xs: g.xs, ys: g.ys, errs: g.errs,
       });
       gi++;
@@ -432,7 +435,7 @@ function drawFigure(svg, ink, paper, extra){
   // Whatever the sides ask for, never less than the overhang of the outermost X
   // label — that is what used to spill outside the figure.
   const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
-  const legendItems = F.series.filter(s=> s.show && s.inLegend !== false).length;
+  const legendItems = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false)).length;
   const legendRows = (F.legendMode === 'global' && legendItems)
     ? Math.ceil(legendItems / Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, legendItems))) : 0;
   const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
@@ -544,7 +547,7 @@ function drawFigure(svg, ink, paper, extra){
           if (!isFinite(xv) || !isFinite(yv)) return;
           const cx = X(xv) + off, yy = Y(yv);
           add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
-                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2), fill:s.color }, g);
+                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2), fill:barColor(s, j) }, g);
           const err = s.errs && s.errs[j];
           if (isFinite(err) && err > 0){
             const yA = Y(yv - err), yB = Y(yv + err), cap = Math.min(4, wPx / 3);
@@ -722,7 +725,7 @@ function drawFigure(svg, ink, paper, extra){
 
     // Per-panel legend, in the chosen corner
     if (F.legendMode === 'per-panel'){
-      const mine = F.series.filter(s=> s.show && s.inLegend !== false && s.panel === pi);
+      const mine = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false && s.panel === pi));
       if (mine.length){
         const gap = F.legendGap, lw = 14, pad = 4;
         const rowH = fLeg * 1.35;
@@ -764,7 +767,7 @@ function drawFigure(svg, ink, paper, extra){
 
   // Global legend: a strip above or below the panels, in one row or N columns.
   if (F.legendMode === 'global'){
-    const items = F.series.filter(s=> s.show && s.inLegend !== false);
+    const items = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false));
     if (items.length){
       const gap = 14, lw = 16, rowH = fLeg * 1.35;
       const cols = Math.max(1, Math.min(Math.round(F.legendCols) || items.length, items.length));
@@ -1264,7 +1267,8 @@ function controlsHtml(){
           <select data-sk="panel" data-s="${i}" title="Panel">${panelOptions(s.panel)}</select>
           ${s.kind === 'bar'
             ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}
-               <span class="fig-kind">bars</span>`
+               <label class="fig-perbar" title="Give every bar its own colour">
+                 <input type="checkbox" data-sk="perBar" data-s="${i}"${s.perBar?' checked':''}>per bar</label>`
             : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
                <select data-sk="dash" data-s="${i}" title="Line style">
                  ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
@@ -1272,7 +1276,9 @@ function controlsHtml(){
                <select data-sk="marker" data-s="${i}" title="Symbol">
                  ${Object.entries(MARKERS).map(([v,n])=>`<option value="${v}"${s.marker===v?' selected':''}>${n}</option>`).join('')}
                </select>`}
-        </div>`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
+        </div>
+        ${s.kind === 'bar' && s.perBar ? `<div class="fig-barcolors">${s.xs.map((_,j)=>
+          `<button class="color-swatch" data-bsw="${i}:${j}" data-color="${barColor(s,j)}" style="background:${barColor(s,j)}" title="${esc(barName(s,j))}"></button>`).join('')}</div>` : ''}`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
     </div>
   </section>
 
@@ -1402,6 +1408,29 @@ function samePositionSeries(i){
   return F.series.filter((_, k)=> posOf[k] === posOf[i]);
 }
 
+// The colour of one bar: its own when the series is coloured per bar, else the
+// series colour. Used by the drawing, the legend and the swatches alike.
+const barColor = (s, j)=> (s.perBar && s.barColors && s.barColors[j]) || s.color;
+
+// The name of one bar: the category it stands on, failing that its place in the series.
+function barName(s, j){
+  const cat = F.cats && F.cats.find(c=> c.x === s.xs[j]);
+  return cat ? cat.text : `${s.label} ${j + 1}`;
+}
+
+/* A series contributes one legend entry — except a bar series coloured per bar, which
+   contributes one per bar. A single key there would claim one colour for bars drawn in
+   several, which is the thing the option exists to allow. */
+function legendEntries(list){
+  const out = [];
+  for (const s of list){
+    if (s.kind === 'bar' && s.perBar)
+      s.xs.forEach((_, j)=> out.push({ ...s, color: barColor(s, j), label: barName(s, j) }));
+    else out.push(s);
+  }
+  return out;
+}
+
 // Spread a palette over the series. 'series' scope walks every series once, so no
 // two share a colour; 'panel' scope restarts the palette inside each panel, so the
 // same colours repeat panel by panel — useful when panels compare like with like.
@@ -1419,11 +1448,26 @@ function applyPalette(colors){
   } else {
     F.series.forEach((s, i)=>{ s.color = colors[i % colors.length]; });
   }
+  // A per-bar series is read bar by bar, so it takes the palette bar by bar rather
+  // than spending a single colour on the whole of it.
+  F.series.forEach(s=>{
+    if (s.kind === 'bar' && s.perBar) s.barColors = s.xs.map((_, j)=> colors[j % colors.length]);
+  });
 }
+
+/* True while the sidebar is being replaced. Throwing away a focused field makes the
+   browser fire one last 'change' on it, carrying the value the rebuild has just
+   superseded — applying that would quietly undo whatever caused the rebuild (loading
+   a preset, say). Those events are ignored. */
+let rebuilding = false;
 
 function refresh(rebuild){
   clampPanels();
-  if (rebuild){ controlsEl.innerHTML = controlsHtml(); wireSeriesDrag(); }
+  if (rebuild){
+    rebuilding = true;
+    try { controlsEl.innerHTML = controlsHtml(); } finally { rebuilding = false; }
+    wireSeriesDrag();
+  }
   renderPreview();
 }
 
@@ -1612,6 +1656,14 @@ function wireControls(){
       const k = t.dataset.sk;
       if (k === 'show') s.show = t.checked;
       else if (k === 'inLegend') s.inLegend = t.checked;
+      else if (k === 'perBar'){
+        s.perBar = t.checked;
+        // Turning it on starts from what is drawn now, so nothing changes until a
+        // bar is actually re-coloured.
+        if (s.perBar && (!s.barColors || s.barColors.length !== s.xs.length))
+          s.barColors = s.xs.map(()=> s.color);
+        rebuild = true;
+      }
       else if (k === 'panel'){ s.panel = +t.value; applyPalette(); rebuild = true; }
       else if (k === 'width'){ const v = readNum(t); if (v === null) return null; s.width = v; }
       else s[k] = t.value;
@@ -1620,6 +1672,7 @@ function wireControls(){
   };
 
   const run = t=>{
+    if (rebuilding || !t.isConnected) return;
     const rebuild = applyControl(t);
     if (rebuild === null) return;
     // Echo the committed value back with a decimal point, so a comma typed by hand
@@ -1661,6 +1714,18 @@ function wireControls(){
       };
       if (rb.dataset.richAct === 'chars') charPicker.open(rb, ch=> insertAt(ch, null));
       else insertAt(null, rb.dataset.richAct);
+      return;
+    }
+    const bsw = e.target.closest('.color-swatch[data-bsw]');
+    if (bsw){
+      const [i, j] = bsw.dataset.bsw.split(':').map(Number);
+      const s = F.series[i]; if (!s) return;
+      colorPickerUI.open(bsw, barColor(s, j), color=>{
+        s.barColors = s.xs.map((_, k)=> barColor(s, k));
+        s.barColors[j] = color;
+        F.palette = null;
+        pushUndo(); refresh(true);
+      });
       return;
     }
     const sw = e.target.closest('.color-swatch');

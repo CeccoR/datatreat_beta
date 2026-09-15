@@ -2224,6 +2224,17 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 }
 .fig-sec > .fig-subhead:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
 .fig-kind { color: var(--muted); font-size: 10px; }
+.fig-perbar {
+  display: flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  color: var(--muted); font-size: 10px; white-space: nowrap; cursor: pointer;
+}
+.fig-perbar input[type="checkbox"] { flex: 0 0 auto; width: auto; margin: 0; }
+/* One swatch per bar, hanging under the series row it belongs to. */
+.fig-barcolors {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin: -4px 0 8px 26px; padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
 /* Section header that carries controls of its own (the Series palette picker). */
 .fig-sechead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .fig-sechead h4 { margin: 0; }
