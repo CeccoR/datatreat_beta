@@ -991,20 +991,46 @@ async function exportSVG(){
   saveBlob(F.name + '.svg', await figureSvgString(), 'image/svg+xml');
 }
 
-async function exportPNG(){
+// The figure rasterised at the chosen dpi, as a PNG blob — saved to a file or handed
+// to the clipboard, which wants the very same bytes.
+async function figurePngBlob(){
   const str = await figureSvgString();
   const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
   const scale = F.dpi / 96;                       // px at the requested dpi
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(W * scale); canvas.height = Math.round(H * scale);
   const ctx = canvas.getContext('2d');
-  const img = new Image();
-  img.onload = ()=>{
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob(b=>{ if (b) saveBlob(F.name + '.png', b); }, 'image/png');
-  };
-  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str);
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(b=> b ? resolve(b) : reject(new Error('no blob')), 'image/png');
+    };
+    img.onerror = ()=> reject(new Error('render failed'));
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str);
+  });
+}
+
+async function exportPNG(){
+  saveBlob(F.name + '.png', await figurePngBlob());
+}
+
+/* Safari only honours a clipboard write made in the same turn as the click, so the
+   item is handed the promise of the blob rather than the blob itself where that is
+   supported; elsewhere the plain await is fine. */
+async function copyPNG(btn){
+  if (!(navigator.clipboard && window.ClipboardItem && navigator.clipboard.write)) return;
+  const done = txt => { btn.textContent = txt; setTimeout(()=>{ btn.textContent = 'Copy PNG'; }, 1200); };
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': figurePngBlob() })]);
+    done('Copied');
+  } catch(e){
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': await figurePngBlob() })]);
+      done('Copied');
+    } catch(e2){ done('Copy failed'); }
+  }
 }
 
 /* ---- Controls -------------------------------------------------------------- */
@@ -1924,8 +1950,9 @@ export function openFigureEditor(plot, opts){
           <button class="btn btn-sm" type="button" data-preset="saveas" title="Save these settings as a new preset">Save as</button>
           <button class="btn is-danger btn-sm" type="button" data-preset="del" title="Delete the selected preset">&#10005;</button>
         </div>
-        <button class="btn" type="button" data-fig-svg>Export SVG</button>
-        <button class="btn primary" type="button" data-fig-png>Export PNG</button>
+        <button class="btn btn-sm" type="button" data-fig-svg title="Save the figure as a vector file">Export SVG</button>
+        <button class="btn btn-sm" type="button" data-fig-png title="Save the figure as an image file">Export PNG</button>
+        <button class="btn primary" type="button" data-fig-copy title="Copy the figure to the clipboard, ready to paste">Copy PNG</button>
       </div>
     </div>`;
   document.body.appendChild(backdrop);
@@ -1965,6 +1992,12 @@ export function openFigureEditor(plot, opts){
   backdrop.querySelector('[data-fig-reset]').addEventListener('click', resetFigure);
   backdrop.querySelector('[data-fig-svg]').addEventListener('click', exportSVG);
   backdrop.querySelector('[data-fig-png]').addEventListener('click', exportPNG);
+  const copyBtn = backdrop.querySelector('[data-fig-copy]');
+  // Without clipboard images there is nothing the button could do, so PNG export
+  // takes its place as the main action rather than leaving a button that fails.
+  if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write)
+    copyBtn.addEventListener('click', ()=> copyPNG(copyBtn));
+  else { copyBtn.remove(); backdrop.querySelector('[data-fig-png]').classList.replace('btn-sm', 'primary'); }
 
   dimEl = backdrop.querySelector('.fig-dim');
   requestAnimationFrame(renderPreview);
