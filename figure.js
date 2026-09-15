@@ -1431,7 +1431,7 @@ function controlsHtml(){
     ${!DL.on ? '' : `
       ${sel('Position','pos',[['above','above the mark'],['inside','inside, at the top'],['center','centred'],['below','below the mark']],DL.pos,'dl')}
       <label class="fig-row"><span>Rotation (&deg;)</span>${numField('data-dl="rot"', DL.rot, 0, 90)}</label>
-      <label class="fig-row"><span>Distance (px)</span>${numField('data-dl="off"', DL.off, -40, 40)}</label>
+      <label class="fig-row"><span>Distance (px)</span>${numField('data-dl="off"', DL.off, -100, 100)}</label>
       <label class="fig-row"><span>Decimals</span>${numField('data-dl="dec"', DL.dec, 0, 6)}</label>
       <label class="fig-row"><span>Size (pt)</span>${numField('data-dl="size"', DL.size, 3, 24)}</label>
       ${chk('Colour each label for contrast with what is behind it','autoInk','dl')}
