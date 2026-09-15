@@ -1071,9 +1071,15 @@ function settingsSnapshot(){
    of whatever plot the settings came from; the names always come from the project's
    own legend, so renaming a sample there shows up here at once. */
 const IDENTITY = ['kind', 'id', 'label', 'xs', 'ys', 'errs'];
+/* `name` says which plot the figure IS, not how it looks: it is the key the per-plot
+   memory is filed under. A preset carrying its origin's name over would make the plot
+   save its settings under the other plot's name and find nothing on reopening. */
+const SCALAR_IDENTITY = ['name'];
 function applySettings(snap){
   if (!snap) return;
-  Object.assign(F, JSON.parse(JSON.stringify(snap.scalars)));
+  const scalars = JSON.parse(JSON.stringify(snap.scalars));
+  for (const k of SCALAR_IDENTITY) delete scalars[k];
+  Object.assign(F, scalars);
   F.series.forEach((s, i)=>{
     const rest = snap.series[i] && snap.series[i].rest;
     if (!rest) return;
