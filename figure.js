@@ -251,7 +251,7 @@ function buildModel(plot, opts){
     grid: { x:false, y:false, minor:false, dash:'2,3' },
     // Value labels drawn on the data. A bar keeps the text the source plot already
     // formatted (value ± error) when it has one; anything else shows its Y value.
-    dataLabels: { on:false, dec:2, pos:'above', rot:0, size:7, off:3 },
+    dataLabels: { on:false, dec:2, pos:'above', rot:0, size:7, off:3, autoInk:false },
     // 'per-panel' = a title beside each panel side that asks for one;
     // 'shared' = one for the whole figure. Set independently for X and Y.
     titleModeX: 'per-panel', titleModeY: 'per-panel',
@@ -382,6 +382,23 @@ function textW(txt, px, weight){
   return measCtx.measureText(String(txt)).width;
 }
 
+/* Black or white, whichever a reader can see against `bg` — the usual relative
+   luminance, with the threshold where the two contrast ratios cross. */
+function contrastInk(bg){
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(bg || '').trim());
+  let r = 255, g = 255, b = 255;
+  if (m){
+    const h = m[1].length === 3 ? m[1].replace(/./g, c=> c + c) : m[1];
+    r = parseInt(h.slice(0,2), 16); g = parseInt(h.slice(2,4), 16); b = parseInt(h.slice(4,6), 16);
+  } else {
+    const rgb = /rgba?\(([^)]+)\)/i.exec(String(bg || ''));
+    if (rgb){ const p = rgb[1].split(',').map(Number); r = p[0]; g = p[1]; b = p[2]; }
+  }
+  const lin = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L > 0.179 ? '#000000' : '#ffffff';
+}
+
 // Draw the whole figure into `svg` at its real size in px. `ink`/`paper` let the
 // export force a light, print-ready palette regardless of the app theme.
 // One drawing pass. `extra` widens the computed margins — renderInto() uses it to
@@ -494,7 +511,7 @@ function drawFigure(svg, ink, paper, extra){
     const wantsLabels = () => DL.on;
     // One value label. `pos` is relative to the mark; the text rotates about its own
     // anchor so a tilted label still starts where it points.
-    const valueLabel = (s, j, cx, yMark, yTop, yBot)=>{
+    const valueLabel = (s, j, cx, yMark, yTop, yBot, box)=>{
       // Always formatted here, so the decimals setting means something; a series
       // that carries an uncertainty keeps it, at the same number of decimals.
       // A figure always reads with a decimal point, whatever separator the CSV
@@ -505,11 +522,24 @@ function drawFigure(svg, ink, paper, extra){
       if (!isFinite(s.ys[j])) return;
       const size = DL.size * PT_PX, o = DL.off;
       let y = yMark, anchor = 'middle', baseline = 'auto';
+      // `off` is a plain signed distance from where the position puts the label, so a
+      // negative one walks it back the other way — into the bar, typically.
       if (DL.pos === 'above'){ y = yTop - o; }
       else if (DL.pos === 'below'){ y = yBot + o + size * 0.8; }
       else if (DL.pos === 'inside'){ y = yTop + o + size * 0.9; }
-      else if (DL.pos === 'center'){ y = (yTop + yBot) / 2; baseline = 'central'; }
-      const at = { x:cx, y, 'font-size':size, fill:ink, 'text-anchor':anchor };
+      else if (DL.pos === 'center'){ y = (yTop + yBot) / 2 + o; baseline = 'central'; }
+      /* With auto contrast on, the label takes black or white against whatever it
+         actually lands on: the bar when the text falls inside it, the page otherwise.
+         The text box is the cap height around the baseline (or centred on it), which
+         is close enough to tell "on the bar" from "off it". */
+      let fill = ink;
+      if (DL.autoInk){
+        const top = baseline === 'central' ? y - size * 0.5 : y - size * 0.72;
+        const bot = baseline === 'central' ? y + size * 0.5 : y + size * 0.1;
+        const over = box && top < box.bottom && bot > box.top;
+        fill = contrastInk(over ? box.color : paper);
+      }
+      const at = { x:cx, y, 'font-size':size, fill, 'text-anchor':anchor };
       if (baseline !== 'auto') at['dominant-baseline'] = baseline;
       if (DL.rot){
         // Rotating about the anchor sends the text away from the mark, so the anchor
@@ -556,7 +586,9 @@ function drawFigure(svg, ink, paper, extra){
           if (wantsLabels()){
             // Measure from the whisker when there is one, so a label never sits on it.
             const e = (isFinite(err) && err > 0) ? err : 0;
-            valueLabel(s, j, cx, yy, Math.min(Y(yv + e), zero), Math.max(Y(yv - e), zero));
+            valueLabel(s, j, cx, yy, Math.min(Y(yv + e), zero), Math.max(Y(yv - e), zero),
+                       { color: divColor(s, divOfBar(s, j)),
+                         top: Math.min(yy, zero), bottom: Math.max(yy, zero) });
           }
         });
         continue;
@@ -1359,9 +1391,10 @@ function controlsHtml(){
     ${!DL.on ? '' : `
       ${sel('Position','pos',[['above','above the mark'],['inside','inside, at the top'],['center','centred'],['below','below the mark']],DL.pos,'dl')}
       <label class="fig-row"><span>Rotation (&deg;)</span>${numField('data-dl="rot"', DL.rot, 0, 90)}</label>
-      <label class="fig-row"><span>Distance (px)</span>${numField('data-dl="off"', DL.off, 0, 40)}</label>
+      <label class="fig-row"><span>Distance (px)</span>${numField('data-dl="off"', DL.off, -40, 40)}</label>
       <label class="fig-row"><span>Decimals</span>${numField('data-dl="dec"', DL.dec, 0, 6)}</label>
       <label class="fig-row"><span>Size (pt)</span>${numField('data-dl="size"', DL.size, 3, 24)}</label>
+      ${chk('Colour each label for contrast with what is behind it','autoInk','dl')}
       <p class="txt-meta">Bars keep the text the source plot formatted (value &plusmn; error); everything else shows its Y value.</p>`}
   </section>
 
