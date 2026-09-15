@@ -527,7 +527,14 @@ function drawFigure(svg, ink, paper, extra){
       if (DL.pos === 'above'){ y = yTop - o; }
       else if (DL.pos === 'below'){ y = yBot + o + size * 0.8; }
       else if (DL.pos === 'inside'){ y = yTop + o + size * 0.9; }
-      else if (DL.pos === 'center'){ y = (yTop + yBot) / 2 + o; baseline = 'central'; }
+      /* Centred sits in the middle of the mark — for a bar, the middle of the bar as
+         it is actually drawn: from its top down to wherever it ends on screen, which
+         is the baseline, or the bottom of the panel when the range cuts it off. The
+         whiskers are no part of the bar, so they do not move its centre. */
+      else if (DL.pos === 'center'){
+        y = (box ? (box.top + box.bottom) / 2 : (yTop + yBot) / 2) + o;
+        baseline = 'central';
+      }
       /* With auto contrast on, the label takes black or white against whatever it
          actually lands on: the bar when the text falls inside it, the page otherwise.
          The text box is the cap height around the baseline (or centred on it), which
@@ -586,9 +593,12 @@ function drawFigure(svg, ink, paper, extra){
           if (wantsLabels()){
             // Measure from the whisker when there is one, so a label never sits on it.
             const e = (isFinite(err) && err > 0) ? err : 0;
+            // The bar as the reader sees it: clipped to the panel, so a bar running
+            // past the top of the range is centred on the part that shows.
+            const bTop = Math.min(Math.max(Math.min(yy, zero), py0), py0 + ph);
+            const bBot = Math.min(Math.max(Math.max(yy, zero), py0), py0 + ph);
             valueLabel(s, j, cx, yy, Math.min(Y(yv + e), zero), Math.max(Y(yv - e), zero),
-                       { color: divColor(s, divOfBar(s, j)),
-                         top: Math.min(yy, zero), bottom: Math.max(yy, zero) });
+                       { color: divColor(s, divOfBar(s, j)), top: bTop, bottom: bBot });
           }
         });
         continue;
