@@ -698,7 +698,10 @@ import { Plot, svgEl } from './plot.js';
         // told apart the way the curves are.
         // Gas-coloured here rather than sample-coloured: the samples are already told
         // apart by their position on the axis, the gases were not told apart at all.
-        barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: `${c.label} ${gasTxt(g)}` });
+        // Named by gas alone, like the legend under the chart: the samples are told
+        // apart by their category on the axis, so one series per gas spans them all —
+        // the shape every other bar chart here has, and the one a split works on.
+        barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: gasTxt(g) });
         barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
       });
       barPlot.tickLabel(k+1, labels[k], 30);

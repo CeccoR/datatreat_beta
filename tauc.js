@@ -635,7 +635,7 @@ import { Plot } from './plot.js';
       }
       const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
       // Draws one series (a single centred bar per sample) into `svg`.
-      const drawEgBars = (svg, vals, errs, color)=>{
+      const drawEgBars = (svg, vals, errs, color, name)=>{
         const mctx = document.createElement('canvas').getContext('2d');
         mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
         const brect = svg.getBoundingClientRect();
@@ -661,7 +661,7 @@ import { Plot } from './plot.js';
         for (let k=0;k<n;k++){
           const xc = k+1;
           if (isFinite(vals[k])&&vals[k]>0){
-            drawBar(plot,xc,vals[k],color,hw,0);
+            drawBar(plot,xc,vals[k],color,hw,0,name);
             if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
             plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
           }
@@ -669,12 +669,14 @@ import { Plot } from './plot.js';
         }
         plot.attachTools(svg.closest('.plot-wrap'));
       };
-      drawEgBars(barSvg,  egs,    egErrs,    '#3aa0ff');
-      drawEgBars(barSvg3, egInts, egIntErrs, '#ff7a59');
+      drawEgBars(barSvg,  egs,    egErrs,    '#3aa0ff', 'Eg (x-axis)');
+      drawEgBars(barSvg3, egInts, egIntErrs, '#ff7a59', 'Eg (baseline)');
       leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
     }
   }
-  function drawBar(plot, xc, val, color, hw, dx){ plot.barPx(xc, 0, val, color, hw, dx); }
+  // `name` names the series the bar belongs to, the way the legend under the chart
+  // does, so the figure composer sees one series of bars rather than nameless ones.
+  function drawBar(plot, xc, val, color, hw, dx, name){ plot.barPx(xc, 0, val, color, hw, dx, { label: name }); }
   function drawErrBar(plot, xc, val, err, dx){ plot.errbar(xc, val, err, dx); }
 
   // Assemble a "wide" CSV: each column is {h:header, v:[values]}, padded to the

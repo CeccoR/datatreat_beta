@@ -1414,10 +1414,15 @@ function samePositionSeries(i){
   return F.series.filter((_, k)=> posOf[k] === posOf[i]);
 }
 
-// The name of one bar: the category it stands on, failing that its place in the series.
+/* The name of one bar: the category it stands on, failing that its place in the series.
+   Where several bar series share those categories — raw against corrected, H2 against
+   O2 — the category alone would name two different bars the same, so the series it
+   came from is kept alongside it. */
 function barName(s, j){
   const cat = F.cats && F.cats.find(c=> c.x === s.xs[j]);
-  return cat ? cat.text : `${s.label} ${j + 1}`;
+  if (!cat) return `${s.label} ${j + 1}`;
+  const many = F.series.filter(t=> t.kind === 'bar' && (t.split ? t.split.id : t.id) !== s.id).length > 0;
+  return many ? `${cat.text} ${s.label}` : cat.text;
 }
 
 /* Bars of one series all share its colour, because they are one quantity read across
