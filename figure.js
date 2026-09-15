@@ -1,6 +1,6 @@
 import { svgEl, niceTicks, fmtTick } from './plot.js';
 import { colorPickerUI, palettePickerUI, CP_PALETTES } from './utils.js';
-import { activeTab } from './tabs.js';
+import { activeTab, TABS } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
 // image mime types (and to save an already-built Blob for PNG).
@@ -1023,6 +1023,7 @@ function applySnapshot(snap){
 function pushUndo(){
   clearTimeout(undoTimer);
   undoTimer = setTimeout(()=>{
+    if (!F) return;          // the modal was closed inside the coalescing window
     undoStack.push(snapshot());
     if (undoStack.length > 60) undoStack.shift();
     redoStack.length = 0;
@@ -1078,13 +1079,27 @@ function applySettings(snap){
   clampPanels();
 }
 
-/* Last settings used for each plot, so reopening the composer on the same plot
-   picks up where you left it. Keyed by tab and plot, so two projects — and two
-   plots in one project — never share a memory. Lives for the session. */
-const MEMORY = new Map();
+/* Last settings used for each plot, so reopening the composer on the same plot picks
+   up where you left it. Keyed by tab and plot, so two projects — and two plots in one
+   project — never share a memory; tab ids are themselves persisted, so the key still
+   points at the same plot after a reload. Kept in localStorage rather than in memory
+   for exactly that reason, and pruned of tabs that no longer exist so it cannot grow
+   without bound. Reset is the way out of a memory you no longer want. */
+const MEM_KEY = 'dt-figure-memory';
 const memKey = name => ((activeTab() || {}).id || 'none') + '/' + name;
-function rememberSettings(){ if (F) MEMORY.set(memKey(F.name), settingsSnapshot()); }
-function recallSettings(){ applySettings(MEMORY.get(memKey(F.name))); }
+function loadMemory(){
+  try { const o = JSON.parse(localStorage.getItem(MEM_KEY)); return (o && typeof o === 'object') ? o : {}; }
+  catch(e){ return {}; }
+}
+function rememberSettings(){
+  if (!F) return;
+  const all = loadMemory();
+  all[memKey(F.name)] = settingsSnapshot();
+  const live = new Set(TABS.map(t=>t.id));
+  for (const k of Object.keys(all)) if (!live.has(k.slice(0, k.indexOf('/')))) delete all[k];
+  try { localStorage.setItem(MEM_KEY, JSON.stringify(all)); } catch(e){}
+}
+function recallSettings(){ applySettings(loadMemory()[memKey(F.name)]); }
 
 let axSel = 0;
 const axTargets = () => axSel === 'all' ? F.panels.map((_, i)=> i) : [axSel];
@@ -1371,6 +1386,22 @@ function distributeSeries(){
   F.series.forEach((s, i)=>{ s.panel = Math.floor(i * P / n); });
 }
 
+/* The series a colour change reaches. By series, that is the one picked; by panel, it
+   is that one plus whichever series sits at the same place in every other panel. */
+function samePositionSeries(i){
+  const picked = F.series[i];
+  if (!picked) return [];
+  if (F.palScope !== 'panel') return [picked];
+  const seen = new Map();
+  const posOf = [];
+  F.series.forEach((s, k)=>{
+    const n = seen.get(s.panel) || 0;
+    posOf[k] = n;
+    seen.set(s.panel, n + 1);
+  });
+  return F.series.filter((_, k)=> posOf[k] === posOf[i]);
+}
+
 // Spread a palette over the series. 'series' scope walks every series once, so no
 // two share a colour; 'panel' scope restarts the palette inside each panel, so the
 // same colours repeat panel by panel — useful when panels compare like with like.
@@ -1634,11 +1665,14 @@ function wireControls(){
     }
     const sw = e.target.closest('.color-swatch');
     if (sw){
-      const s = F.series[+sw.dataset.sw]; if (!s) return;
+      const i = +sw.dataset.sw, s = F.series[i]; if (!s) return;
       colorPickerUI.open(sw, s.color, color=>{
-        s.color = color; sw.dataset.color = color; sw.style.background = color;
+        // Under "palette by panel" the panels are meant to read alike, so a colour is
+        // a property of a position within a panel, not of one series: every series
+        // holding that position in its own panel takes the new colour too.
+        for (const t of samePositionSeries(i)) t.color = color;
         F.palette = null;         // hand-picked: stop re-applying a palette over it
-        pushUndo(); refresh(false);
+        pushUndo(); refresh(true);
       });
       return;
     }
@@ -1726,6 +1760,7 @@ export function openFigureEditor(plot, opts){
   renderPresetBar();
 
   const close = ()=>{
+    clearTimeout(undoTimer);   // nothing left to record once the model is gone
     rememberSettings();
     window.removeEventListener('resize', onResize);
     charPicker.close();
