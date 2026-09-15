@@ -432,7 +432,7 @@ function drawFigure(svg, ink, paper, extra){
   // Whatever the sides ask for, never less than the overhang of the outermost X
   // label — that is what used to spill outside the figure.
   const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
-  const legendItems = F.series.filter(s=> s.show && s.inLegend !== false).length;
+  const legendItems = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false)).length;
   const legendRows = (F.legendMode === 'global' && legendItems)
     ? Math.ceil(legendItems / Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, legendItems))) : 0;
   const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
@@ -544,7 +544,7 @@ function drawFigure(svg, ink, paper, extra){
           if (!isFinite(xv) || !isFinite(yv)) return;
           const cx = X(xv) + off, yy = Y(yv);
           add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
-                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2), fill:s.color }, g);
+                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2), fill:divColor(s, divOfBar(s, j)) }, g);
           const err = s.errs && s.errs[j];
           if (isFinite(err) && err > 0){
             const yA = Y(yv - err), yB = Y(yv + err), cap = Math.min(4, wPx / 3);
@@ -722,7 +722,7 @@ function drawFigure(svg, ink, paper, extra){
 
     // Per-panel legend, in the chosen corner
     if (F.legendMode === 'per-panel'){
-      const mine = F.series.filter(s=> s.show && s.inLegend !== false && s.panel === pi);
+      const mine = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false && s.panel === pi));
       if (mine.length){
         const gap = F.legendGap, lw = 14, pad = 4;
         const rowH = fLeg * 1.35;
@@ -764,7 +764,7 @@ function drawFigure(svg, ink, paper, extra){
 
   // Global legend: a strip above or below the panels, in one row or N columns.
   if (F.legendMode === 'global'){
-    const items = F.series.filter(s=> s.show && s.inLegend !== false);
+    const items = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false));
     if (items.length){
       const gap = 14, lw = 16, rowH = fLeg * 1.35;
       const cols = Math.max(1, Math.min(Math.round(F.legendCols) || items.length, items.length));
@@ -1067,7 +1067,7 @@ function settingsSnapshot(){
    curve would erase the bars, and carrying names over would show the sample labels
    of whatever plot the settings came from; the names always come from the project's
    own legend, so renaming a sample there shows up here at once. */
-const IDENTITY = ['kind', 'id', 'label', 'xs', 'ys', 'errs', 'split'];
+const IDENTITY = ['kind', 'id', 'label', 'xs', 'ys', 'errs'];
 /* `name` says which plot the figure IS, not how it looks: it is the key the per-plot
    memory is filed under. A preset carrying its origin's name over would make the plot
    save its settings under the other plot's name and find nothing on reopening. */
@@ -1077,12 +1077,6 @@ function applySettings(snap){
   const scalars = JSON.parse(JSON.stringify(snap.scalars));
   for (const k of SCALAR_IDENTITY) delete scalars[k];
   Object.assign(F, scalars);
-  /* Bar series the settings were saved with split are split again first: a split
-     changes how many series there are, and the looks below are matched by position. */
-  const wasSplit = new Set(snap.series.map(e=> e.rest && e.rest.split && e.rest.split.id).filter(Boolean));
-  if (wasSplit.size)
-    for (let i = F.series.length - 1; i >= 0; i--)
-      if (!F.series[i].split && wasSplit.has(F.series[i].id)) splitSeries(i);
   F.series.forEach((s, i)=>{
     const rest = snap.series[i] && snap.series[i].rest;
     if (!rest) return;
@@ -1119,6 +1113,29 @@ const axShown = () => ((F.panels[axSel === 'all' ? 0 : axSel] || {}).axes) || ne
 
 function panelOptions(sel){
   return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1}</option>`).join('');
+}
+
+/* The divisions of one bar series, and — once there is more than one — which division
+   each bar belongs to. Both sit under the series row they belong to. */
+function divisionsHtml(s, i){
+  const divs = divsOf(s);
+  const rows = divs.map((d, k)=>`
+    <span class="fig-div">
+      <button class="color-swatch" data-dsw="${i}:${k}" data-color="${divColor(s,k)}" style="background:${divColor(s,k)}" title="Pick the colour of this division"></button>
+      <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">
+      ${k ? `<button type="button" class="btn btn-sm fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${'\u00d7'}</button>` : ''}
+    </span>`).join('');
+  const map = divs.length > 1 ? `
+    <div class="fig-divmap">${s.xs.map((_, j)=>`
+      <label title="Division of this bar"><span>${esc(barName(s, j))}</span>
+        <select data-dmap="${i}:${j}">${divs.map((_, k)=>
+          `<option value="${k}"${divOfBar(s,j)===k?' selected':''}>${esc(divName(s,k))}</option>`).join('')}</select>
+      </label>`).join('')}</div>` : '';
+  return `<div class="fig-divs">${rows}
+    ${divs.length < s.xs.length
+      ? `<button type="button" class="btn btn-sm fig-divadd" data-adddiv="${i}" title="Split the bars of this series into one more colour group">+ division</button>`
+      : ''}
+  </div>${map}`;
 }
 
 const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
@@ -1276,7 +1293,7 @@ function controlsHtml(){
           <select data-sk="panel" data-s="${i}" title="Panel">${panelOptions(s.panel)}</select>
           ${s.kind === 'bar'
             ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}
-               ${barSplitBtn(s, i)}`
+               <span class="fig-kind">bars</span>`
             : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
                <select data-sk="dash" data-s="${i}" title="Line style">
                  ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
@@ -1284,7 +1301,8 @@ function controlsHtml(){
                <select data-sk="marker" data-s="${i}" title="Symbol">
                  ${Object.entries(MARKERS).map(([v,n])=>`<option value="${v}"${s.marker===v?' selected':''}>${n}</option>`).join('')}
                </select>`}
-        </div>`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
+        </div>
+        ${s.kind === 'bar' ? divisionsHtml(s, i) : ''}`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
     </div>
   </section>
 
@@ -1421,50 +1439,71 @@ function samePositionSeries(i){
 function barName(s, j){
   const cat = F.cats && F.cats.find(c=> c.x === s.xs[j]);
   if (!cat) return `${s.label} ${j + 1}`;
-  const many = F.series.filter(t=> t.kind === 'bar' && (t.split ? t.split.id : t.id) !== s.id).length > 0;
+  const many = F.series.some(t=> t.kind === 'bar' && t.id !== s.id);
   return many ? `${cat.text} ${s.label}` : cat.text;
 }
 
-/* Bars of one series all share its colour, because they are one quantity read across
-   categories. Splitting turns each bar into a series of its own, named after the
-   category it stands on: from there a bar is coloured, hidden, renamed or kept out of
-   the legend like any other series, with no special case anywhere else. `split` keeps
-   what it takes to put the pieces back together in their original order. */
-const splitParts = id => F.series.filter(s=> s.split && s.split.id === id);
+/* Divisions: colour groups inside one bar series. A bar chart draws one quantity per
+   series — a gas, a gap, a size — and the bars of a series are all the same colour
+   because they are all the same quantity. A division re-colours part of them under a
+   name of its own, to set apart samples that share some feature, and it is what the
+   legend lists: the series says what is measured, the divisions say what is worth
+   seeing. Bars keep their places whatever the divisions do, so a chart does not
+   change shape when one is added — which is the whole difference from making the
+   parts series of their own.
 
-function splitSeries(i){
+   Every bar series has at least one division, and that first one simply follows the
+   series' own name and colour, so a plot nobody has divided behaves exactly as before
+   and a palette still reaches it. */
+const divsOf = s => (s.divs && s.divs.length) ? s.divs : [{}];
+const divName = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].name) || s.label;
+const divColor = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].color) || s.color;
+const divOfBar = (s, j)=> Math.min(Math.max((s.divOf && s.divOf[j]) || 0, 0), divsOf(s).length - 1);
+
+// A new division takes an even share of the bars, the way a new panel takes an even
+// share of the series; from there each bar can be moved by hand.
+function spreadDivs(s){
+  const n = divsOf(s).length, m = s.xs.length;
+  s.divOf = s.xs.map((_, j)=> Math.min(n - 1, Math.floor(j * n / m)));
+}
+
+function addDiv(i){
   const s = F.series[i];
-  if (!s || s.kind !== 'bar' || s.split || s.xs.length < 2) return false;
-  const parts = s.xs.map((x, j)=> ({
-    ...s,
-    id: `${s.id}#${j}`,
-    label: barName(s, j),
-    xs: [x], ys: [s.ys[j]], errs: s.errs ? [s.errs[j]] : s.errs,
-    split: { id: s.id, label: s.label, j },
-  }));
-  F.series.splice(i, 1, ...parts);
+  // One division per bar at most: past that there is nothing left to divide.
+  if (!s || s.kind !== 'bar' || divsOf(s).length >= s.xs.length) return false;
+  // Avoid every colour already on the figure, not just this series' own: a division
+  // that repeated a neighbouring series' colour would read as that series.
+  const taken = new Set();
+  F.series.forEach(t=> divsOf(t).forEach((_, k)=> taken.add(divColor(t, k))));
+  const pool = F.palette || CP_PALETTES[0].colors;
+  const k = divsOf(s).length;
+  s.divs = divsOf(s).slice();
+  s.divs.push({ name: `${s.label} ${k + 1}`,
+                color: pool.find(c=> !taken.has(c)) || pool[k % pool.length] });
+  spreadDivs(s);
   return true;
 }
 
-function mergeSeries(i){
+function delDiv(i, k){
   const s = F.series[i];
-  if (!s || !s.split) return false;
-  const parts = splitParts(s.split.id).sort((a, b)=> a.split.j - b.split.j);
-  const at = F.series.indexOf(parts[0]);
-  const whole = { ...parts[0], id: s.split.id, label: s.split.label,
-    xs: parts.map(p=> p.xs[0]), ys: parts.map(p=> p.ys[0]),
-    errs: parts[0].errs ? parts.map(p=> p.errs[0]) : parts[0].errs };
-  delete whole.split;
-  F.series = F.series.filter(t=> !(t.split && t.split.id === s.split.id));
-  F.series.splice(at, 0, whole);
+  if (!s || k === 0 || !s.divs || k >= s.divs.length) return false;
+  s.divs.splice(k, 1);
+  spreadDivs(s);
   return true;
 }
 
-const barSplitBtn = (s, i)=> s.split
-  ? `<button type="button" class="btn btn-sm fig-split" data-merge="${i}" title="Put the bars of “${esc(s.split.label)}” back into one series">merge</button>`
-  : (s.xs.length > 1
-    ? `<button type="button" class="btn btn-sm fig-split" data-split="${i}" title="One series per bar, so each can be coloured on its own">split</button>`
-    : '');
+/* A series is one legend entry — a bar series is one per division, since the legend
+   speaks of divisions. With a single division that comes to the same thing, because
+   it carries the series' own name and colour. */
+function legendEntries(list){
+  const out = [];
+  for (const s of list){
+    if (s.kind === 'bar')
+      divsOf(s).forEach((_, k)=> out.push({ ...s, color: divColor(s, k), label: divName(s, k) }));
+    else out.push(s);
+  }
+  return out;
+}
 
 // Spread a palette over the series. 'series' scope walks every series once, so no
 // two share a colour; 'panel' scope restarts the palette inside each panel, so the
@@ -1681,6 +1720,17 @@ function wireControls(){
           rebuild = true;   // reject: re-render the controls so the field snaps back
         }
       }
+    } else if (t.dataset.dk){
+      const [i, k] = t.dataset.dk.split(':').map(Number);
+      const s = F.series[i]; if (!s) return null;
+      // Renaming the first division renames the series: they are the same name.
+      if (k === 0) s.label = t.value;
+      else { s.divs = divsOf(s).slice(); s.divs[k] = { ...s.divs[k], name: t.value }; }
+    } else if (t.dataset.dmap){
+      const [i, j] = t.dataset.dmap.split(':').map(Number);
+      const s = F.series[i]; if (!s) return null;
+      s.divOf = s.xs.map((_, n)=> divOfBar(s, n));
+      s.divOf[j] = +t.value;
     } else if (t.dataset.sk){
       const s = F.series[+t.dataset.s]; if (!s) return null;
       const k = t.dataset.sk;
@@ -1738,6 +1788,20 @@ function wireControls(){
       else insertAt(null, rb.dataset.richAct);
       return;
     }
+    const dsw = e.target.closest('.color-swatch[data-dsw]');
+    if (dsw){
+      const [i, k] = dsw.dataset.dsw.split(':').map(Number);
+      const s = F.series[i]; if (!s) return;
+      colorPickerUI.open(dsw, divColor(s, k), color=>{
+        // The first division IS the series' colour, so re-colouring it re-colours the
+        // series — anything else would leave the row's own swatch saying otherwise.
+        if (k === 0) s.color = color;
+        else { s.divs = divsOf(s).slice(); s.divs[k] = { ...s.divs[k], color }; }
+        F.palette = null;
+        pushUndo(); refresh(true);
+      });
+      return;
+    }
     const sw = e.target.closest('.color-swatch');
     if (sw){
       const i = +sw.dataset.sw, s = F.series[i]; if (!s) return;
@@ -1755,12 +1819,12 @@ function wireControls(){
       palettePickerUI.open(e.target.closest('.fig-pal'), colors=>{ applyPalette(colors); pushUndo(); refresh(true); });
       return;
     }
-    const splitB = e.target.closest('[data-split], [data-merge]');
-    if (splitB){
-      const i = +(splitB.dataset.split ?? splitB.dataset.merge);
-      const done = splitB.dataset.split !== undefined ? splitSeries(i) : mergeSeries(i);
+    const divB = e.target.closest('[data-adddiv], [data-deldiv]');
+    if (divB){
+      const done = divB.dataset.adddiv !== undefined
+        ? addDiv(+divB.dataset.adddiv)
+        : delDiv(...divB.dataset.deldiv.split(':').map(Number));
       if (!done) return;
-      applyPalette();           // the parts are series now, so they take their own colours
       pushUndo(); refresh(true);
       return;
     }

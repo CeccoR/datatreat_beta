@@ -2224,8 +2224,20 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 }
 .fig-sec > .fig-subhead:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
 .fig-kind { color: var(--muted); font-size: 10px; }
-/* Splits a bar series into one series per bar, and puts it back. */
-.fig-split { flex: 0 0 auto; font-size: 10px; padding: 3px 6px; }
+/* Colour groups inside a bar series, and the division each bar belongs to. */
+.fig-divs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: -4px 0 6px 26px; padding-left: 8px; border-left: 1px solid var(--line);
+}
+.fig-div { display: flex; align-items: center; gap: 4px; }
+.fig-div .fig-slabel { width: 96px; font-size: 11px; padding: 3px 5px; }
+.fig-divx, .fig-divadd { flex: 0 0 auto; font-size: 10px; padding: 3px 6px; }
+.fig-divmap {
+  display: flex; flex-wrap: wrap; gap: 4px 10px;
+  margin: 0 0 8px 26px; padding-left: 8px; border-left: 1px solid var(--line);
+}
+.fig-divmap label { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--muted); }
+.fig-divmap select { font-size: 10px; padding: 2px 3px; max-width: 110px; }
 /* Section header that carries controls of its own (the Series palette picker). */
 .fig-sechead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .fig-sechead h4 { margin: 0; }
