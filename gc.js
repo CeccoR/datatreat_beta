@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel, barPlotXPad } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel, barLabelFit, barPlotXPad } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 
 /* =========================================================
@@ -680,10 +680,12 @@ import { Plot, svgEl } from './plot.js';
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
     const rect = svg.getBoundingClientRect();
     const svgW = rect.width || 640, svgH = rect.height || 640;
-    const labels = costResults.map(c=>truncTiltLabel(mctx, c.label));
+    // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
+    const fit = barLabelFit(mctx, Math.max(60, svgW - 75), costResults.length);
+    const labels = costResults.map(c=>truncTiltLabel(mctx, c.label, fit.cap));
     const labelWs = labels.map((lbl,k)=> has(costResults[k]) ? mctx.measureText(lbl).width : 0);
     let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
-    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
     // Value label (vertical) above each bar, with reserved top headroom so it never clips.
     const fmtVal = v => v.toFixed(4);
     let maxValW = 0, maxTop = 0;
@@ -696,7 +698,7 @@ import { Plot, svgEl } from './plot.js';
     const allVals = finite.flatMap(c=> shown.map(g=>c.rate[g.key]).filter(isFinite));
     const ymax = Math.max(Math.max(...allVals)*1.2, maxTop/frac);
     const barPlot = new Plot(svg, {xlabel:'', ylabelSvg:LBL_RATE_SVG, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    const xpad = barPlotXPad(labelWs, costResults.length, svgW-75);   // widen only when a label would cross x=0
+    const xpad = barPlotXPad(labelWs, costResults.length, svgW-75, fit.rot);   // widen only when a label would cross x=0
     barPlot.setRange(-xpad, costResults.length+1+xpad, 0, ymax||1);
     barPlot.drawAxes();
     // With both gases the pair sits side by side in the sample's slot, the way the
@@ -721,7 +723,7 @@ import { Plot, svgEl } from './plot.js';
         barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: gasTxt(g) });
         barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
       });
-      barPlot.tickLabel(k+1, labels[k], 30);
+      barPlot.tickLabel(k+1, labels[k], fit.rot);
     });
     barPlot.attachTools(svg.closest('.plot-wrap'));
     document.getElementById('gcBarLegend').innerHTML =

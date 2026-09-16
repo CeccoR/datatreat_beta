@@ -2350,10 +2350,13 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   .fig-presets { flex: 1 1 100%; border-right: none; padding-right: 0; margin-right: 0; flex-wrap: wrap; }
   .fig-presets select { flex: 1 1 90px; max-width: none; }
   .fig-presets input[type="text"] { flex: 1 1 90px; width: auto; }
-  /* Reset rides with the export buttons rather than claiming a row of its own. */
+  /* Reset rides with the two exports on one row; the main action, copying the
+     figure, takes the row under them so it is the one thumb finds. */
   .fig-reset { order: 3; flex: 0 0 auto; }
-  .fig-foot [data-fig-svg] { order: 4; flex: 1 1 0; }
+  .fig-foot [data-fig-svg]  { order: 4; flex: 1 1 0; }
   .fig-foot [data-fig-png]  { order: 5; flex: 1 1 0; }
+  .fig-foot [data-fig-copy] { order: 6; flex: 1 0 100%; }
+  .fig-foot .btn { white-space: nowrap; }
 
   .char-popup { width: min(246px, calc(100vw - 24px)); }
 }

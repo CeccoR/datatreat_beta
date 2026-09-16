@@ -1608,11 +1608,28 @@ function nextColor(existingFiles){
    the MIDDLE (start…end) so both ends of the name stay readable. Sideways overflow
    past the plot frame is handled separately by widening the x-range (barPlotXPad). */
 const TILT_LABEL_MAX = 20;
-function truncTiltLabel(mctx, text){
-  if (text.length <= TILT_LABEL_MAX) return text;
-  const keep = TILT_LABEL_MAX - 1;                 // one char for the ellipsis
+function truncTiltLabel(mctx, text, cap){
+  const max = Math.max(4, Math.round(cap || TILT_LABEL_MAX));
+  if (text.length <= max) return text;
+  const keep = max - 1;                            // one char for the ellipsis
   const front = Math.ceil(keep / 2), back = keep - front;
   return text.slice(0, front) + '…' + text.slice(text.length - back);
+}
+
+/* How a bar chart's category labels have to be drawn to stay apart in the width it
+   has. On a phone, or with many samples, the slot per bar shrinks until twenty
+   characters at 30° no longer fit: tilting further narrows what a label spans across
+   the axis, and a shorter name narrows it again. Returns the angle to draw at and the
+   number of characters that fits at it, so the chart keeps its footprint rather than
+   letting the names run into one another. */
+function barLabelFit(mctx, plotW, n){
+  const slot = n > 0 ? plotW / n : plotW;
+  const rot = slot < 30 ? 70 : slot < 42 ? 55 : slot < 58 ? 45 : 30;
+  const em = (mctx && mctx.measureText ? mctx.measureText('mn').width / 2 : 5) || 5;
+  // What a label may measure before its horizontal span exceeds its own slot.
+  const room = slot / Math.cos(rot * Math.PI / 180);
+  const cap = Math.max(6, Math.min(TILT_LABEL_MAX, Math.floor(room / em)));
+  return { rot, cap, sin: Math.sin(rot * Math.PI / 180), cos: Math.cos(rot * Math.PI / 180) };
 }
 /* Extra x-range padding (in data units, per side) so no 30°-tilted bar label runs
    off the LEFT of the plot (its first character would land at a negative x). Bars
@@ -1620,9 +1637,9 @@ function truncTiltLabel(mctx, text){
    [-p, n+1+p] (a small symmetric zoom-out that moves the edge bars inward). Returns
    0 unless a label would actually cross x = 0 — i.e. only kicks in when truly needed.
    `labelWs` = per-bar label pixel widths; plotW = drawable width px. */
-function barPlotXPad(labelWs, n, plotW){
+function barPlotXPad(labelWs, n, plotW, rot){
   if (!(plotW > 0) || !(n > 0)) return 0;
-  const cos30 = Math.cos(Math.PI / 6);
+  const cos30 = Math.cos((rot == null ? 30 : rot) * Math.PI / 180);
   let p = 0;
   for (let k = 1; k <= n; k++){
     const f = ((labelWs[k-1] || 0) * cos30) / plotW;   // label's tilted horizontal extent, as a fraction of plotW
@@ -1678,5 +1695,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barLabelFit, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

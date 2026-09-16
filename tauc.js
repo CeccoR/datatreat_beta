@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barPlotXPad } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barLabelFit, barPlotXPad } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -640,10 +640,12 @@ import { Plot } from './plot.js';
         mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
         const brect = svg.getBoundingClientRect();
         const svgW = brect.width || 640, svgH = brect.height || 640;
-        const barLabels = files.map(f=>truncTiltLabel(mctx, f.label));
+        // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
+        const fit = barLabelFit(mctx, Math.max(60, svgW - 75), files.length);
+        const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, fit.cap));
         const labelWs = barLabels.map(l=>mctx.measureText(l).width);
         let maxLbl = 0; labelWs.forEach(w=>{ maxLbl = Math.max(maxLbl, w); });
-        const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+        const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
         const mTop = 15, gap = 6;
         const plotH = svgH - mTop - bottom;
         const reserve = gap + maxValW + 6;               // px needed above the tallest bar
@@ -651,7 +653,7 @@ import { Plot } from './plot.js';
         const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
         const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
         // Widen the x-range symmetrically only when a label would cross x=0.
-        const xpad = barPlotXPad(labelWs, n, svgW-75);
+        const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);
         plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
         plot.drawAxes();
         // Bars are capped at 16px half-width but shrink to fit the per-sample
@@ -665,7 +667,7 @@ import { Plot } from './plot.js';
             if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
             plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
           }
-          plot.tickLabel(xc, barLabels[k], 30);
+          plot.tickLabel(xc, barLabels[k], fit.rot);
         }
         plot.attachTools(svg.closest('.plot-wrap'));
       };
