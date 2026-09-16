@@ -1732,9 +1732,10 @@ function barName(s, j){
    change shape when one is added — which is the whole difference from making the
    parts series of their own.
 
-   Every bar series has at least one division, and that first one simply follows the
-   series' own name and colour, so a plot nobody has divided behaves exactly as before
-   and a palette still reaches it. */
+   Every bar series has at least one division, and that first one follows the series'
+   own name and colour until it is given ones of its own — so a plot nobody has divided
+   behaves exactly as before and a palette still reaches it, while a series and its
+   first division can still be named apart where that reads better. */
 const divsOf = s => (s.divs && s.divs.length) ? s.divs : [{}];
 const divName = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].name) || s.label;
 const divColor = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].color) || s.color;
@@ -2074,9 +2075,10 @@ function wireControls(){
     } else if (t.dataset.dk){
       const [i, k] = t.dataset.dk.split(':').map(Number);
       const s = F.series[i]; if (!s) return null;
-      // Renaming the first division renames the series: they are the same name.
-      if (k === 0) s.label = s.rename = t.value;
-      else { s.divs = divsOf(s).slice(); s.divs[k] = { ...s.divs[k], name: t.value }; }
+      // Every division holds its own name, the first one included: until it is typed
+      // in it shows the series' name, and from then on the two are free to differ.
+      s.divs = divsOf(s).slice();
+      s.divs[k] = { ...s.divs[k], name: t.value };
     } else if (t.dataset.share){
       const p = F.panels[+t.dataset.p]; if (!p) return null;
       p[t.dataset.share] = t.value === '' ? null : +t.value;
@@ -2093,13 +2095,13 @@ function wireControls(){
     return rebuild;
   };
 
-  /* A series and its first division share one name, so typing in either box shows
-     the new name in the other at once. Done by hand rather than by rebuilding the
-     sidebar, which would take the caret out of the field mid-word. */
-  const mirrorName = (i, v, toDiv)=>{
-    const el = controlsEl.querySelector(toDiv
-      ? `[data-dk="${i}:0"]`
-      : `.fig-serie [data-sk="label"][data-s="${i}"]`);
+  /* The first division's box shows the series' name for as long as it has none of
+     its own, so renaming the series shows there at once. Done by hand rather than by
+     rebuilding the sidebar, which would take the caret out of the field mid-word. */
+  const mirrorName = (i, v)=>{
+    const s = F.series[i];
+    if (!s || (s.divs && s.divs[0] && s.divs[0].name)) return;
+    const el = controlsEl.querySelector(`[data-dk="${i}:0"]`);
     if (el && el.value !== v) el.value = v;
   };
 
@@ -2107,8 +2109,9 @@ function wireControls(){
     if (rebuilding || !t.isConnected) return;
     const rebuild = applyControl(t);
     if (rebuild === null) return;
-    if (t.dataset.sk === 'label') mirrorName(+t.dataset.s, t.value, true);
-    else if (t.dataset.dk && t.dataset.dk.endsWith(':0')) mirrorName(+t.dataset.dk.split(':')[0], t.value, false);
+    // While the first division is still borrowing the series' name, its box follows
+    // what is typed in the series row. Once it has a name of its own it keeps it.
+    if (t.dataset.sk === 'label') mirrorName(+t.dataset.s, t.value);
     // Echo the committed value back with a decimal point, so a comma typed by hand
     // is accepted but never left standing in the field.
     if (t.dataset.num && !rebuild){
