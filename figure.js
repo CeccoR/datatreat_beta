@@ -217,7 +217,26 @@ const SIDES = ['left', 'bottom', 'right', 'top'];
 const newSide = full => ({ on:true, major:true, minor:false, dir:'out', labels:full, title:full });
 const newAxes = () => ({ left:newSide(true), bottom:newSide(true), right:newSide(false), top:newSide(false) });
 
-function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '', axes: newAxes() }; }
+/* `shareXWith` / `shareYWith` point at the panel this one takes its range from, or
+   at itself when it stands alone. They only matter while figure-wide sharing is off:
+   that is what lets eight panels be scaled in pairs rather than all together or each
+   on its own. */
+function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '', axes: newAxes(),
+                                  shareXWith: null, shareYWith: null }; }
+
+// The panel whose range a panel follows, chasing the links and stopping at a cycle.
+function rangeRoot(i, key){
+  let k = i;
+  for (let guard = 0; guard < F.panels.length + 1; guard++){
+    const p = F.panels[k];
+    const nxt = p && p[key];
+    if (nxt == null || nxt === k || !F.panels[nxt]) return k;
+    k = nxt;
+  }
+  return i;
+}
+// Every panel that ends up on the same root — the ones scaled together.
+const rangeGroup = (i, key)=> F.panels.map((_, k)=> k).filter(k=> rangeRoot(k, key) === rangeRoot(i, key));
 
 function buildModel(plot, opts){
   const strip = svgLabelToRich;
@@ -236,6 +255,8 @@ function buildModel(plot, opts){
     legendAlign: 'center',              // global: where along that strip
     legendCols: 0,                      // global: 0 = one row, else wrap into N columns
     legendFrame: false,                 // draw a box behind it
+    legendFrameLine: true,              // ... with an outline
+    legendFrameAlpha: 1,                // ... and how opaque its background is
     legendGap: 6,                       // distance from the panel corner / panels
     font: { family: 'Inter', tick: 8, axis: 9, legend: 8, title: 9 },   // sizes in points
     xlabel: strip(plot.xlabel) || '',
@@ -246,8 +267,19 @@ function buildModel(plot, opts){
     // With sharing off each panel has its own range, so a manual one is per panel
     // too. Keyed by panel index; missing = that panel stays on its own auto range.
     xMan: {}, yMan: {}, rangePanel: 0,
-    xStep: 0, yStep: 0,                 // major tick interval; 0 = pick a nice one
-    minorX: 4, minorY: 4,               // minor ticks between two majors, per axis
+    /* Tick spacing. Each has an "automatic" switch of its own: while it is on the
+       figure picks the interval and the field only reports what it picked. */
+    xStep: 0, yStep: 0, xStepAuto: true, yStepAuto: true,
+    minorX: 4, minorY: 4, minorXAuto: true, minorYAuto: true,
+    // Where the plot area sits inside the margins when it does not fill them: one of
+    // the nine positions, vertical letter then horizontal ('cc' is centred).
+    align: 'cc',
+    // Tick labels and axis titles are kept off panel edges that face a neighbour,
+    // where they would collide with it — unless this is turned off.
+    innerClean: true,
+    // One colour for everything drawn but the data itself: frame, ticks, numbers,
+    // titles, legend text and its frame.
+    inkColor: '#000000',
     grid: { x:false, y:false, minor:false, dash:'2,3' },
     // Value labels drawn on the data. A bar keeps the text the source plot already
     // formatted (value ± error) when it has one; anything else shows its Y value.
@@ -267,6 +299,13 @@ function buildModel(plot, opts){
     name: (opts && opts.name) || 'figure',
   };
 }
+
+/* What the axes actually use: the automatic switch wins over whatever number the
+   field is showing, so nothing has to be zeroed to mean "pick one for me". */
+const stepX = ()=> F.xStepAuto ? 0 : F.xStep;
+const stepY = ()=> F.yStepAuto ? 0 : F.yStep;
+const minorsX = ()=> F.minorXAuto ? 4 : F.minorX;
+const minorsY = ()=> F.minorYAuto ? 4 : F.minorY;
 
 // Major ticks for a range: a fixed step when the user set one, else a nice default.
 function majorTicks(lo, hi, step){
@@ -349,10 +388,13 @@ function computeRanges(){
   const globalExt = extentOf(F.panels.map((_, i)=> i)) || { x0:0, x1:1, y0:0, y1:1 };
   const xOf = [], yOf = [];
   F.panels.forEach((p, i)=>{
-    const own = extentOf([i]) || globalExt;
-    const ex = F.shareX ? globalExt : own, ey = F.shareY ? globalExt : own;
-    const manX = F.shareX ? [F.xmin, F.xmax] : F.xMan[i];
-    const manY = F.shareY ? [F.ymin, F.ymax] : F.yMan[i];
+    // Off the figure-wide switch, a panel is scaled with whatever group it shares
+    // with — itself alone, unless it was pointed at another panel.
+    const exX = F.shareX ? globalExt : (extentOf(rangeGroup(i, 'shareXWith')) || globalExt);
+    const exY = F.shareY ? globalExt : (extentOf(rangeGroup(i, 'shareYWith')) || globalExt);
+    const ex = exX, ey = exY;
+    const manX = F.shareX ? [F.xmin, F.xmax] : F.xMan[rangeRoot(i, 'shareXWith')];
+    const manY = F.shareY ? [F.ymin, F.ymax] : F.yMan[rangeRoot(i, 'shareYWith')];
     xOf[i] = (F.xAuto || !manX) ? [ex.x0, ex.x1] : manX.slice();
     yOf[i] = (F.yAuto || !manY) ? [ey.y0, ey.y1] : manY.slice();
   });
@@ -404,6 +446,8 @@ function contrastInk(bg){
 // One drawing pass. `extra` widens the computed margins — renderInto() uses it to
 // feed back what actually stuck out on the previous pass.
 function drawFigure(svg, ink, paper, extra){
+  // One chosen colour for every line and letter the figure draws around the data.
+  if (F.inkColor) ink = F.inkColor;
   const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('width', W); svg.setAttribute('height', H);
@@ -422,14 +466,14 @@ function drawFigure(svg, ink, paper, extra){
   // below, and (for a global legend) a strip under that.
   let maxYNum = 0;
   F.panels.forEach((p, i)=>{
-    for (const t of majorTicks(yOf[i][0], yOf[i][1], F.yStep)) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
+    for (const t of majorTicks(yOf[i][0], yOf[i][1], stepY())) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
   });
   // How far the X labels stick out sideways and downwards. A number is centred on
   // its tick, so the outermost ones overhang the frame by half their width; tilted
   // category names hang below the axis and lean past its left end.
   let halfX = 0, catDrop = 0, catLean = 0;
   F.panels.forEach((p, i)=>{
-    for (const t of majorTicks(xOf[i][0], xOf[i][1], F.xStep)) halfX = Math.max(halfX, textW(fmtTick(t), fTick) / 2);
+    for (const t of majorTicks(xOf[i][0], xOf[i][1], stepX())) halfX = Math.max(halfX, textW(fmtTick(t), fTick) / 2);
   });
   if (F.cats && F.cats.length){
     for (const cat of F.cats){
@@ -472,10 +516,18 @@ function drawFigure(svg, ink, paper, extra){
     innerH = Math.min(Math.max(20, F.plotH * PX_MM), H - mT - 8);
   }
   lastInner = { w: +(innerW / PX_MM).toFixed(2), h: +(innerH / PX_MM).toFixed(2) };
+  /* A plot area smaller than the space the margins leave has that space to spare,
+     and `align` says where in it the area sits — centred unless asked otherwise. */
+  const AL = { t:0, l:0, c:0.5, b:1, r:1 };
+  const av = String(F.align || 'cc');
+  const fy = AL[av[0]] !== undefined ? AL[av[0]] : 0.5;
+  const fx = AL[av[1]] !== undefined ? AL[av[1]] : 0.5;
+  const oX = mL + Math.max(0, (W - mL - mR) - innerW) * fx;
+  const oY = mT + Math.max(0, (H - mT - mB) - innerH) * fy;
   const cw = innerW / F.cols, ch = innerH / F.rows;
 
   F.panels.forEach((p, pi)=>{
-    const px0 = mL + p.c * cw, py0 = mT + p.r * ch;
+    const px0 = oX + p.c * cw, py0 = oY + p.r * ch;
     const pw = Math.max(4, p.cs * cw), ph = Math.max(4, p.rs * ch);
     const [x0, x1] = xOf[pi] || [0, 1];
     const [y0, y1] = yOf[pi] || [0, 1];
@@ -490,18 +542,18 @@ function drawFigure(svg, ink, paper, extra){
 
     // Grid, under everything. Built from the same ticks the axes use, so it always
     // lines up with the numbers whatever the tick step is.
-    const gx = majorTicks(x0, x1, F.xStep), gy = majorTicks(y0, y1, F.yStep);
+    const gx = majorTicks(x0, x1, stepX()), gy = majorTicks(y0, y1, stepY());
     if (F.grid.x || F.grid.y){
       const gg = add('g', { 'clip-path': `url(#${clipId})` });
       const rule = (a, minor)=> add('line', { ...a, stroke:ink, 'stroke-width': minor ? 0.3 : 0.5,
                                               'stroke-dasharray':F.grid.dash, opacity: minor ? 0.28 : 0.45 }, gg);
       if (F.grid.x){
         for (const t of gx) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph });
-        if (F.grid.minor) for (const t of minorTicks(gx, x0, x1, F.minorX)) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph }, true);
+        if (F.grid.minor) for (const t of minorTicks(gx, x0, x1, minorsX())) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph }, true);
       }
       if (F.grid.y){
         for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) });
-        if (F.grid.minor) for (const t of minorTicks(gy, y0, y1, F.minorY)) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
+        if (F.grid.minor) for (const t of minorTicks(gy, y0, y1, minorsY())) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
       }
     }
 
@@ -645,14 +697,14 @@ function drawFigure(svg, ink, paper, extra){
         if (!touches) return;
         const qa = q.axes || (q.axes = newAxes());
         if (!qa[side].labels) return;
-        const qx0 = mL + q.c * cw, qy0 = mT + q.r * ch;
+        const qx0 = oX + q.c * cw, qy0 = oY + q.r * ch;
         const qw = Math.max(4, q.cs * cw), qh = Math.max(4, q.rs * ch);
         if (vert){
           const [a, z] = yOf[k] || [0, 1];
-          for (const t of majorTicks(a, z, F.yStep)) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
+          for (const t of majorTicks(a, z, stepY())) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
         } else {
           const [a, z] = xOf[k] || [0, 1];
-          for (const t of majorTicks(a, z, F.xStep)) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: textW(fmtTick(t), fTick) / 2 });
+          for (const t of majorTicks(a, z, stepX())) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: textW(fmtTick(t), fTick) / 2 });
         }
       });
       return marks;
@@ -700,11 +752,12 @@ function drawFigure(svg, ink, paper, extra){
       const proj = g0.vert ? Y : X;
       const majors = g0.vert ? yMaj : xMaj;
       if (a.major) majors.forEach(t=> mark(proj(t), TICK_MAJ));
-      if (a.minor) minorTicks(majors, ...(g0.vert ? [y0, y1, F.minorY] : [x0, x1, F.minorX])).forEach(t=> mark(proj(t), TICK_MIN));
+      if (a.minor) minorTicks(majors, ...(g0.vert ? [y0, y1, minorsY()] : [x0, x1, minorsX()])).forEach(t=> mark(proj(t), TICK_MIN));
 
       // Numbers and title only where there is room outside the panel; a side that
-      // touches a neighbour can carry tick marks but nothing that would overlap it.
-      if (!free[side]) continue;
+      // touches a neighbour can carry tick marks but nothing that would overlap it —
+      // unless the figure has been told to label every edge regardless.
+      if (!free[side] && F.innerClean) continue;
 
       if (a.labels && cats && !g0.vert){
         for (const c of cats){
@@ -774,8 +827,7 @@ function drawFigure(svg, ink, paper, extra){
         const boxX = right ? px0 + pw - gap - wide : px0 + gap;
         const boxY = top ? py0 + gap + titleDrop : py0 + ph - gap - mine.length * rowH;
         if (F.legendFrame)
-          add('rect', { x:boxX-pad, y:boxY-pad, width:wide+pad*2, height:mine.length*rowH+pad*2,
-                        fill:paper, stroke:ink, 'stroke-width':0.5, rx:2 });
+          legendFrameRect(add, boxX-pad, boxY-pad, wide+pad*2, mine.length*rowH+pad*2, ink, paper);
         mine.forEach((s, k)=>{
           const cy = boxY + rowH * (k + 0.5);
           legendMark(add, s, boxX, boxX + lw, cy);
@@ -791,7 +843,7 @@ function drawFigure(svg, ink, paper, extra){
   {
     const want = side => F.panels.some(p=> (p.axes || (p.axes = newAxes()))[side].title);
     const shX = F.titleModeX === 'shared', shY = F.titleModeY === 'shared';
-    const cx = mL + innerW / 2, cy = mT + innerH / 2;
+    const cx = oX + innerW / 2, cy = oY + innerH / 2;
     if (shX && F.xlabel && want('bottom'))
       richText(add, F.xlabel, { x:cx, y:H - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'text-anchor':'middle' }, fAxis, ink);
     if (shX && F.xlabel && want('top'))
@@ -822,11 +874,15 @@ function drawFigure(svg, ink, paper, extra){
         colW[c] = w;
       }
       const total = colW.reduce((a, b)=> a + b, 0) + gap * (cols - 1);
-      const x0 = F.legendAlign === 'left' ? mL
-               : F.legendAlign === 'right' ? mL + innerW - total
-               : mL + Math.max(0, (innerW - total) / 2);
-      const yTop = F.legendPlace === 'top' ? mT - F.legendGap - rows * rowH
-                                           : mT + innerH + (H - mT - innerH - rows * rowH) / 2;
+      const x0 = F.legendAlign === 'left' ? oX
+               : F.legendAlign === 'right' ? oX + innerW - total
+               : oX + Math.max(0, (innerW - total) / 2);
+      const yTop = F.legendPlace === 'top' ? oY - F.legendGap - rows * rowH
+                                           : oY + innerH + (H - oY - innerH - rows * rowH) / 2;
+      if (F.legendFrame){
+        const pad = 4;
+        legendFrameRect(add, x0-pad, yTop-pad, total+pad*2, rows*rowH+pad*2, ink, paper);
+      }
       items.forEach((s, i)=>{
         const c = i % cols, r = (i / cols) | 0;
         let x = x0; for (let k = 0; k < c; k++) x += colW[k] + gap;
@@ -837,6 +893,16 @@ function drawFigure(svg, ink, paper, extra){
       });
     }
   }
+}
+
+/* The box behind a legend. Its outline and how much of the page it hides are set
+   separately: a frame can be a plain outline over the figure, a solid block that
+   covers whatever it sits on, or anything between. */
+function legendFrameRect(add, x, y, w, h, ink, paper){
+  const at = { x, y, width:w, height:h, rx:2, fill:paper,
+               'fill-opacity': Math.max(0, Math.min(1, F.legendFrameAlpha)) };
+  if (F.legendFrameLine){ at.stroke = ink; at['stroke-width'] = 0.5; }
+  add('rect', at);
 }
 
 /* How far the drawn ink pokes out of the figure box, per side, in figure units.
@@ -1189,7 +1255,7 @@ function recallSettings(){
   presetSel = (snap && snap.preset && loadPresets()[snap.preset]) ? snap.preset : '';
 }
 
-let axSel = 0;
+let axSel = 'all';
 const axTargets = () => axSel === 'all' ? F.panels.map((_, i)=> i) : [axSel];
 const axShown = () => ((F.panels[axSel === 'all' ? 0 : axSel] || {}).axes) || newAxes();
 
@@ -1197,28 +1263,38 @@ function panelOptions(sel){
   return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1}</option>`).join('');
 }
 
-/* The divisions of one bar series, and — once there is more than one — which division
-   each bar belongs to. Both sit under the series row they belong to. */
+/* The divisions of one bar series: each one a titled group, with the bars that
+   belong to it listed inside. A bar changes division by being dragged from one group
+   to another — the same gesture that moves a series between panels. */
 function divisionsHtml(s, i){
   const divs = divsOf(s);
-  const rows = divs.map((d, k)=>`
-    <span class="fig-div">
-      <button class="color-swatch" data-dsw="${i}:${k}" data-color="${divColor(s,k)}" style="background:${divColor(s,k)}" title="Pick the colour of this division"></button>
-      <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">
-      ${k ? `<button type="button" class="btn btn-sm fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${'\u00d7'}</button>` : ''}
-    </span>`).join('');
-  const map = divs.length > 1 ? `
-    <div class="fig-divmap">${s.xs.map((_, j)=>`
-      <label title="Division of this bar"><span>${esc(barName(s, j))}</span>
-        <select data-dmap="${i}:${j}">${divs.map((_, k)=>
-          `<option value="${k}"${divOfBar(s,j)===k?' selected':''}>${esc(divName(s,k))}</option>`).join('')}</select>
-      </label>`).join('')}</div>` : '';
-  return `<div class="fig-divs">${rows}
+  const many = divs.length > 1;
+  const group = (d, k)=>`
+    <div class="fig-dgroup" data-dg="${i}:${k}">
+      <div class="fig-dgroup-h">
+        <button class="color-swatch" data-dsw="${i}:${k}" data-color="${divColor(s,k)}" style="background:${divColor(s,k)}" title="Pick the colour of this division"></button>
+        <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">
+        ${k ? `<button type="button" class="btn btn-sm fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${'\u00d7'}</button>` : ''}
+      </div>
+      ${many ? `<div class="fig-dbars">${
+        s.xs.map((_, j)=> divOfBar(s, j) === k
+          ? `<span class="fig-barchip" data-bar="${i}:${j}" title="Drag into another division">${esc(barName(s, j))}</span>` : '').join('')
+        || '<span class="txt-meta">drag bars here</span>'}</div>` : ''}
+    </div>`;
+  return `<div class="fig-divs">
+    ${divs.map(group).join('')}
     ${divs.length < s.xs.length
-      ? `<button type="button" class="btn btn-sm fig-divadd" data-adddiv="${i}" title="Split the bars of this series into one more colour group">+ division</button>`
+      ? `<button type="button" class="btn btn-sm fig-divadd" data-adddiv="${i}" title="Another colour group inside this series">+ division</button>`
       : ''}
-  </div>${map}`;
+  </div>`;
 }
+
+/* The two per-series toggles say different things — draw it at all, and list it in
+   the legend — so they carry different marks instead of being two identical boxes. */
+const ICON_DRAW = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="2,12 6,7 9,9.5 14,3.5"/></svg>`;
+const ICON_LEGEND = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><line x1="2" y1="4.5" x2="5" y2="4.5"/><line x1="7.5" y1="4.5" x2="14" y2="4.5"/><line x1="2" y1="8" x2="5" y2="8"/><line x1="7.5" y1="8" x2="14" y2="8"/><line x1="2" y1="11.5" x2="5" y2="11.5"/><line x1="7.5" y1="11.5" x2="14" y2="11.5"/></svg>`;
+const figToggle = (attrs, on, icon, title)=>
+  `<label class="fig-cbox" title="${title}"><input type="checkbox" ${attrs}${on ? ' checked' : ''}><span class="fig-cbox-i">${icon}</span></label>`;
 
 const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
@@ -1227,6 +1303,97 @@ const chk = (label, key, obj)=>
 const sel = (label, key, opts, cur, attr)=>
   `<label class="fig-row"><span>${label}</span><select data-${attr||'k'}="${key}">${
     opts.map(([v,t])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${t}</option>`).join('')}</select></label>`;
+
+/* A number the figure works out for itself until you say otherwise: while the
+   automatic switch is on the field shows what was chosen and cannot be typed in. */
+const autoNum = (label, key, autoKey, min, max, autoVal)=>
+  `<label class="fig-row"><span>${label}</span>${F[autoKey]
+    ? `<input type="text" value="${autoVal}" disabled title="Chosen automatically">`
+    : numField(`data-k="${key}"`, F[key], min, max)}</label>`;
+
+// The interval the automatic ticks are actually landing on, for that field to show.
+function autoStepOf(axis){
+  const { xOf, yOf } = computeRanges();
+  const i = Math.min(Math.max(0, F.rangePanel | 0), F.panels.length - 1);
+  const [a, z] = ((axis === 'x' ? xOf : yOf)[i]) || [0, 1];
+  const t = majorTicks(a, z, 0);
+  return t.length > 1 ? +(t[1] - t[0]).toPrecision(6) : '';
+}
+
+/* Which panels are scaled together while figure-wide sharing is off. Pointing a panel
+   at another puts the two on one range; several panels pointed at the same one make a
+   group, so eight panels can be scaled in pairs. */
+function shareWithHtml(axis){
+  const key = axis === 'x' ? 'shareXWith' : 'shareYWith';
+  return `<div class="fig-subhead">${axis.toUpperCase()} range shared with</div>
+    ${F.panels.map((p, i)=>`<label class="fig-row"><span>P${i+1}</span>
+      <select data-share="${key}" data-p="${i}">
+        <option value="">on its own</option>
+        ${F.panels.map((q, k)=> k === i ? '' :
+          `<option value="${k}"${p[key] === k ? ' selected' : ''}>P${k+1}</option>`).join('')}
+      </select></label>`).join('')}`;
+}
+
+/* The nine placings of the plot area, drawn as a little square with a dot where the
+   area would sit. The button shows the one in force; clicking it opens the rest. */
+const ALIGN_CELLS = ['tl','tc','tr','cl','cc','cr','bl','bc','br'];
+const ALIGN_NAMES = { tl:'top left', tc:'top', tr:'top right', cl:'left', cc:'centred',
+                      cr:'right', bl:'bottom left', bc:'bottom', br:'bottom right' };
+function ALIGN_ICON(code){
+  const v = { t:2.5, c:6.5, b:10.5 }[String(code || 'cc')[0]] ?? 6.5;
+  const h = { l:2.5, c:6.5, r:10.5 }[String(code || 'cc')[1]] ?? 6.5;
+  return `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+    <rect x="1.5" y="1.5" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"/>
+    <rect x="${h}" y="${v}" width="3" height="3" fill="currentColor"/></svg>`;
+}
+
+/* Same manners as the colour picker: a small panel under the button it came from,
+   closing on the next click elsewhere and following the button as the page scrolls. */
+const alignPicker = {
+  el: null, anchor: null, onPick: null,
+  open(anchor, onPick){
+    this.close();
+    this.anchor = anchor; this.onPick = onPick;
+    const el = document.createElement('div');
+    el.className = 'fig-alignpop';
+    el.innerHTML = ALIGN_CELLS.map(c=>
+      `<button type="button" class="btn btn-sm${c === F.align ? ' is-on' : ''}" data-al="${c}" title="${ALIGN_NAMES[c]}">${ALIGN_ICON(c)}</button>`).join('');
+    document.body.appendChild(el);
+    this.el = el;
+    el.addEventListener('click', e=>{
+      const b = e.target.closest('[data-al]');
+      if (!b) return;
+      const pick = this.onPick;
+      const v = b.dataset.al;
+      this.close();
+      if (pick) pick(v);
+    });
+    this._reposition();
+    this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+    setTimeout(()=>{
+      this._away = ev=>{ if (this.el && !this.el.contains(ev.target) && ev.target !== anchor) this.close(); };
+      document.addEventListener('pointerdown', this._away);
+    }, 0);
+  },
+  _reposition(){
+    if (!this.el || !this.anchor) return;
+    const b = this.anchor.getBoundingClientRect();
+    this.el.style.left = Math.max(6, Math.min(window.innerWidth - 130, b.left)) + 'px';
+    this.el.style.top = (b.bottom + 4) + 'px';
+  },
+  close(){
+    if (this._away) document.removeEventListener('pointerdown', this._away);
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
+    this._away = this._onScroll = null;
+    if (this.el) this.el.remove();
+    this.el = null; this.anchor = null; this.onPick = null;
+  },
+};
 
 // One end of the manual range for the currently selected column / row. Shows the
 // resolved auto value when nothing has been typed yet, so the field starts sensible.
@@ -1314,13 +1481,50 @@ function titleField(label, key){
   </div>`;
 }
 
+/* One series row. Which panel it is in is said by the group it sits in, so the row
+   itself carries no panel selector: a series moves by being dragged into another
+   group, the way a bar moves between divisions. */
+function serieRowHtml(s, i){
+  return `
+    <div class="fig-serie" data-s="${i}">
+      <span class="fig-grip" title="Drag to reorder, or into another panel">${GRIP}</span>
+      ${figToggle(`data-sk="show" data-s="${i}"`, s.show, ICON_DRAW, 'Draw this series')}
+      ${figToggle(`data-sk="inLegend" data-s="${i}"`, s.inLegend !== false, ICON_LEGEND, 'List it in the legend')}
+      <button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>
+      <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
+      ${s.kind === 'bar'
+        ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}
+           <span class="fig-kind">bars</span>`
+        : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
+           <select data-sk="dash" data-s="${i}" title="Line style">
+             ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
+           </select>
+           <select data-sk="marker" data-s="${i}" title="Symbol">
+             ${Object.entries(MARKERS).map(([v,n])=>`<option value="${v}"${s.marker===v?' selected':''}>${n}</option>`).join('')}
+           </select>`}
+    </div>
+    ${s.kind === 'bar' ? divisionsHtml(s, i) : ''}`;
+}
+
+// The series listed under the panel they are drawn in, one titled group per panel.
+function panelGroupsHtml(){
+  return F.panels.map((p, pi)=>`
+    <div class="fig-group" data-pg="${pi}">
+      <div class="fig-group-h">P${pi+1}${p.title ? ' — ' + esc(p.title) : ''}</div>
+      ${F.series.map((s, i)=> s.panel === pi ? serieRowHtml(s, i) : '').join('')
+        || '<p class="txt-meta fig-group-empty">Drag a series here.</p>'}
+    </div>`).join('');
+}
+
 function controlsHtml(){
   const DL = F.dataLabels;
   return `
   <section class="fig-sec"><h4>Figure</h4>
     ${num('Width (mm)','wmm',5,2000)}${num('Height (mm)','hmm',5,2000)}${num('Export DPI','dpi',1,20000)}
     ${chk('Plot area fills what the margins leave','plotAuto')}
-    ${F.plotAuto ? '' : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}`}
+    ${F.plotAuto ? '' : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}
+      <label class="fig-row"><span>Where the plot area sits</span>
+        <button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot area inside the margins">${ALIGN_ICON(F.align)}</button></label>`}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
   </section>
 
@@ -1355,37 +1559,18 @@ function controlsHtml(){
       ${F.series.length ? `
         <div class="fig-serie fig-serie-all">
           <span class="fig-grip fig-grip-off"></span>
-          <input type="checkbox" data-all="show"${F.series.every(s=>s.show)?' checked':''} title="Draw all / draw none">
-          <input type="checkbox" data-all="inLegend"${F.series.every(s=>s.inLegend!==false)?' checked':''} title="List all in the legend / none" class="fig-legbox">
+          ${figToggle('data-all="show"', F.series.every(s=>s.show), ICON_DRAW, 'Draw all / draw none')}
+          ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
           <span class="fig-alllabel">all series</span>
-          <select data-all="panel" title="Send every series to one panel"><option value="">panel…</option>${panelOptions(-1)}</select>
           <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6" placeholder="w" title="Line / bar width for every series">
           <select data-all="dash" title="Line style for every series"><option value="">line…</option>
             ${Object.entries(DASHES).map(([v,n])=>`<option value="${v||'solid'}">${n}</option>`).join('')}</select>
           <select data-all="marker" title="Symbol for every series"><option value="">symbol…</option>
             ${Object.entries(MARKERS).map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select>
         </div>` : ''}
-      ${F.series.map((s,i)=>`
-        <div class="fig-serie" data-s="${i}">
-          <span class="fig-grip" title="Drag to reorder">${GRIP}</span>
-          <input type="checkbox" data-sk="show" data-s="${i}"${s.show?' checked':''} title="Draw this series">
-          <input type="checkbox" data-sk="inLegend" data-s="${i}"${s.inLegend!==false?' checked':''} title="List it in the legend" class="fig-legbox">
-          <button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>
-          <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
-          <select data-sk="panel" data-s="${i}" title="Panel">${panelOptions(s.panel)}</select>
-          ${s.kind === 'bar'
-            ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}
-               <span class="fig-kind">bars</span>`
-            : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
-               <select data-sk="dash" data-s="${i}" title="Line style">
-                 ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
-               </select>
-               <select data-sk="marker" data-s="${i}" title="Symbol">
-                 ${Object.entries(MARKERS).map(([v,n])=>`<option value="${v}"${s.marker===v?' selected':''}>${n}</option>`).join('')}
-               </select>`}
-        </div>
-        ${s.kind === 'bar' ? divisionsHtml(s, i) : ''}`).join('') || '<p class="txt-meta">This plot has no series to compose.</p>'}
+      ${F.series.length ? panelGroupsHtml() : '<p class="txt-meta">This plot has no series to compose.</p>'}
     </div>
+    <p class="txt-meta">Drag a series by its handle to reorder it, or into another panel's group to move it there.</p>
   </section>
 
   <section class="fig-sec"><h4>Axes &amp; scale</h4>
@@ -1396,6 +1581,8 @@ function controlsHtml(){
     <div class="fig-subhead">Range</div>
     ${chk('Share one X range across all panels','shareX')}
     ${chk('Share one Y range across all panels','shareY')}
+    ${F.panels.length > 1 && !F.shareX ? shareWithHtml('x') : ''}
+    ${F.panels.length > 1 && !F.shareY ? shareWithHtml('y') : ''}
     ${(!F.shareX && !F.xAuto) || (!F.shareY && !F.yAuto)
       ? sel('Range of panel','rangePanel', F.panels.map((p,i)=>[i,'P'+(i+1)]), F.rangePanel) : ''}
     ${chk('X auto range','xAuto')}
@@ -1407,9 +1594,14 @@ function controlsHtml(){
       ? `${num('Y min','ymin',-1e9,1e9)}${num('Y max','ymax',-1e9,1e9)}`
       : `${manNum('Y min','yMan',0)}${manNum('Y max','yMan',1)}`)}
     <div class="fig-subhead">Ticks</div>
-    ${num('X major step','xStep',0,1e9)}${num('Y major step','yStep',0,1e9)}
-    ${num('X minors per major','minorX',0,20)}${num('Y minors per major','minorY',0,20)}
-    <p class="txt-meta">A major step of 0 picks a round interval automatically.</p>
+    ${chk('X major step chosen automatically','xStepAuto')}
+    ${autoNum('X major step','xStep','xStepAuto',0,1e9, autoStepOf('x'))}
+    ${chk('Y major step chosen automatically','yStepAuto')}
+    ${autoNum('Y major step','yStep','yStepAuto',0,1e9, autoStepOf('y'))}
+    ${chk('X minors per major chosen automatically','minorXAuto')}
+    ${autoNum('X minors per major','minorX','minorXAuto',0,20, 4)}
+    ${chk('Y minors per major chosen automatically','minorYAuto')}
+    ${autoNum('Y minors per major','minorY','minorYAuto',0,20, 4)}
     <div class="fig-subhead">Grid</div>
     ${chk('Vertical lines (X ticks)','x','g')}
     ${chk('Horizontal lines (Y ticks)','y','g')}
@@ -1423,7 +1615,7 @@ function controlsHtml(){
         <option value="all"${axSel==='all'?' selected':''}>All panels</option>
         ${panelOptions(axSel)}
       </select></label>
-    <div class="fig-axhead"><span></span><span>axis</span><span>major</span><span>minor</span><span>numbers</span><span>title</span><span>ticks</span></div>
+    <div class="fig-axhead"><span></span><span>Axis</span><span>Major</span><span>Minor</span><span>Labels</span><span>Title</span><span>Ticks</span></div>
     ${SIDES.map(side=>{
       const a = axShown()[side];
       const cb = (k)=>`<input type="checkbox" data-ak="${k}" data-side="${side}"${a[k]?' checked':''}>`;
@@ -1433,7 +1625,8 @@ function controlsHtml(){
           ${['out','in','both'].map(d=>`<option value="${d}"${a.dir===d?' selected':''}>${d}</option>`).join('')}
         </select></div>`;
     }).join('')}
-    <p class="txt-meta">Numbers and titles are drawn only where a panel edge has free space beside it — a side facing a neighbouring panel keeps its tick marks only.</p>
+    ${chk('Keep labels and titles off edges that face another panel','innerClean')}
+    <p class="txt-meta">With that on, a side facing a neighbouring panel keeps its tick marks only — which is what stops two panels' numbers from running into each other.</p>
   </section>
 
   <section class="fig-sec"><h4>Data labels</h4>
@@ -1456,9 +1649,13 @@ function controlsHtml(){
       ${sel('Placing','legendPlace',[['bottom','below the panels'],['top','above the panels']],F.legendPlace)}
       ${sel('Alignment','legendAlign',[['left','left'],['center','centred'],['right','right']],F.legendAlign)}
       ${num('Columns (0 = one row)','legendCols',0,12)}` : ''}
-    ${F.legendMode === 'none' ? '' : `${num('Distance (px)','legendGap',0,40)}${chk('Draw a frame behind it','legendFrame')}`}
+    ${F.legendMode === 'none' ? '' : `${num('Distance (px)','legendGap',0,40)}${chk('Draw a frame behind it','legendFrame')}
+      ${F.legendFrame ? `${chk('Outline around the frame','legendFrameLine')}
+        ${num('Frame background opacity (0–1)','legendFrameAlpha',0,1)}` : ''}`}
     <div class="fig-subhead">Type</div>
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
+    <label class="fig-row"><span>Colour of every line and letter</span>
+      <button class="color-swatch" data-inksw data-color="${F.inkColor}" style="background:${F.inkColor}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></label>
     <div class="fig-subhead">Font sizes (pt)</div>
     <label class="fig-row"><span>Tick numbers</span>${numField('data-f="tick"', F.font.tick, 4, 24)}</label>
     <label class="fig-row"><span>Axis titles</span>${numField('data-f="axis"', F.font.axis, 4, 24)}</label>
@@ -1627,7 +1824,13 @@ function refresh(rebuild){
 // press the handle, move over the row you want the series to land on, release.
 function wireSeriesDrag(){
   const rows = [...controlsEl.querySelectorAll('.fig-serie')];
+  const groups = [...controlsEl.querySelectorAll('.fig-group')];
+  const at = (sel, list) => (x, y)=> list.find(el=>{
+    const b = el.getBoundingClientRect();
+    return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right;
+  }) || null;
   const rowAt = y => rows.find(r=>{ const b = r.getBoundingClientRect(); return y >= b.top && y <= b.bottom; }) || null;
+  const groupAt = at('.fig-group', groups);
   let from = null;
   rows.forEach(row=>{
     const handle = row.querySelector('.fig-grip');
@@ -1640,23 +1843,83 @@ function wireSeriesDrag(){
     });
     handle.addEventListener('pointermove', e=>{
       if (from == null) return;
-      const t = rowAt(e.clientY);
+      const t = rowAt(e.clientY), gp = groupAt(e.clientX, e.clientY);
       rows.forEach(r=> r.classList.toggle('drag-over', r === t && +r.dataset.s !== from));
+      groups.forEach(g=> g.classList.toggle('drag-into', g === gp));
     });
     const finish = e=>{
       if (from == null) return;
-      const t = rowAt(e.clientY), to = t ? +t.dataset.s : null;
+      const t = rowAt(e.clientY), gp = groupAt(e.clientX, e.clientY);
       const f = from; from = null;
       rows.forEach(r=> r.classList.remove('drag-over', 'dragging'));
-      if (to == null || to === f) return;
-      const [moved] = F.series.splice(f, 1);
-      F.series.splice(to, 0, moved);
+      groups.forEach(g=> g.classList.remove('drag-into'));
+      const moved = F.series[f];
+      if (!moved) return;
+      // Dropped on a row: take its place. Dropped anywhere else in a group: join that
+      // panel at the end. Either way the panel is the group the pointer ended over.
+      const panel = gp ? +gp.dataset.pg : moved.panel;
+      const to = t ? +t.dataset.s : null;
+      if (panel === moved.panel && (to == null || to === f)) return;
+      moved.panel = panel;
+      if (to != null && to !== f){
+        F.series.splice(f, 1);
+        F.series.splice(to, 0, moved);
+      }
       applyPalette();
       pushUndo(); refresh(true);
     };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', ()=>{
-      from = null; rows.forEach(r=> r.classList.remove('drag-over','dragging'));
+      from = null;
+      rows.forEach(r=> r.classList.remove('drag-over','dragging'));
+      groups.forEach(g=> g.classList.remove('drag-into'));
+    });
+  });
+  wireBarDrag();
+}
+
+// The same gesture for the bars of a divided series: pick a chip up, drop it in the
+// division it belongs to.
+function wireBarDrag(){
+  const chips = [...controlsEl.querySelectorAll('.fig-barchip')];
+  const groups = [...controlsEl.querySelectorAll('.fig-dgroup')];
+  const groupAt = (x, y)=> groups.find(el=>{
+    const b = el.getBoundingClientRect();
+    return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right;
+  }) || null;
+  chips.forEach(chip=>{
+    let dragging = false;
+    chip.addEventListener('pointerdown', e=>{
+      e.preventDefault();
+      dragging = true;
+      chip.classList.add('dragging');
+      try { chip.setPointerCapture(e.pointerId); } catch(_){}
+    });
+    chip.addEventListener('pointermove', e=>{
+      if (!dragging) return;
+      const gp = groupAt(e.clientX, e.clientY);
+      groups.forEach(g=> g.classList.toggle('drag-into', g === gp));
+    });
+    const finish = e=>{
+      if (!dragging) return;
+      dragging = false;
+      chip.classList.remove('dragging');
+      const gp = groupAt(e.clientX, e.clientY);
+      groups.forEach(g=> g.classList.remove('drag-into'));
+      if (!gp) return;
+      const [i, j] = chip.dataset.bar.split(':').map(Number);
+      const [gi, k] = gp.dataset.dg.split(':').map(Number);
+      const s = F.series[i];
+      if (!s || gi !== i || divOfBar(s, j) === k) return;
+      s.divOf = s.xs.map((_, n)=> divOfBar(s, n));
+      s.divOf[j] = k;
+      pushUndo(); refresh(true);
+    };
+    chip.addEventListener('pointerup', finish);
+    chip.addEventListener('pointercancel', ()=>{
+      dragging = false;
+      chip.classList.remove('dragging');
+      groups.forEach(g=> g.classList.remove('drag-into'));
     });
   });
 }
@@ -1670,7 +1933,7 @@ function wireSeriesDrag(){
 function resetFigure(){
   if (!srcPlot) return;
   F = buildModel(srcPlot, srcOpts);
-  axSel = 0; presetSel = '';
+  axSel = 'all'; presetSel = '';
   applyPalette();
   resetView();
   pushUndo();
@@ -1723,8 +1986,12 @@ function wirePresetBar(){
   });
 }
 
+/* Settings that change the shape of the sidebar itself. */
+const SHOWS_MORE = new Set(['xAuto','yAuto','shareX','shareY','legendMode','legendFrame',
+  'xStepAuto','yStepAuto','minorXAuto','minorYAuto']);
+
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','plotW','plotH']);
+  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','legendFrameAlpha','plotW','plotH']);
   const dlNum = new Set(['rot','off','dec','size']);
 
   /* Routes one control to the model and says whether the sidebar has to be rebuilt.
@@ -1750,7 +2017,9 @@ function wireControls(){
       if (numKeys.has(k)){ const v = readNum(t); if (v === null) return null; F[k] = v; }
       else F[k] = t.type === 'checkbox' ? t.checked : t.value;
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
-      if (k === 'xAuto' || k === 'yAuto' || k === 'shareX' || k === 'shareY' || k === 'legendMode') rebuild = true;
+      // Keys that decide which controls are on show have to redraw the sidebar, not
+      // just the figure — the fields they reveal or lock are part of their effect.
+      if (SHOWS_MORE.has(k)) rebuild = true;
     } else if (t.dataset.ak){
       const v = t.type === 'checkbox' ? t.checked : t.value;
       for (const pi of axTargets()){
@@ -1770,7 +2039,6 @@ function wireControls(){
       if (k === 'show') F.series.forEach(s=>{ s.show = t.checked; });
       else if (k === 'inLegend') F.series.forEach(s=>{ s.inLegend = t.checked; });
       else if (v === '') return null;
-      else if (k === 'panel') F.series.forEach(s=>{ s.panel = +v; });
       else if (k === 'width'){ const w = readNum(t); if (w === null) return null; F.series.forEach(s=>{ s.width = w; }); }
       else if (k === 'dash') F.series.forEach(s=>{ s.dash = (v === 'solid' ? '' : v); });
       else F.series.forEach(s=>{ s.marker = v; });
@@ -1809,17 +2077,15 @@ function wireControls(){
       // Renaming the first division renames the series: they are the same name.
       if (k === 0) s.label = s.rename = t.value;
       else { s.divs = divsOf(s).slice(); s.divs[k] = { ...s.divs[k], name: t.value }; }
-    } else if (t.dataset.dmap){
-      const [i, j] = t.dataset.dmap.split(':').map(Number);
-      const s = F.series[i]; if (!s) return null;
-      s.divOf = s.xs.map((_, n)=> divOfBar(s, n));
-      s.divOf[j] = +t.value;
+    } else if (t.dataset.share){
+      const p = F.panels[+t.dataset.p]; if (!p) return null;
+      p[t.dataset.share] = t.value === '' ? null : +t.value;
+      rebuild = true;
     } else if (t.dataset.sk){
       const s = F.series[+t.dataset.s]; if (!s) return null;
       const k = t.dataset.sk;
       if (k === 'show') s.show = t.checked;
       else if (k === 'inLegend') s.inLegend = t.checked;
-      else if (k === 'panel'){ s.panel = +t.value; applyPalette(); rebuild = true; }
       else if (k === 'width'){ const v = readNum(t); if (v === null) return null; s.width = v; }
       else if (k === 'label'){ s.label = s.rename = t.value; }
       else s[k] = t.value;
@@ -1827,10 +2093,22 @@ function wireControls(){
     return rebuild;
   };
 
+  /* A series and its first division share one name, so typing in either box shows
+     the new name in the other at once. Done by hand rather than by rebuilding the
+     sidebar, which would take the caret out of the field mid-word. */
+  const mirrorName = (i, v, toDiv)=>{
+    const el = controlsEl.querySelector(toDiv
+      ? `[data-dk="${i}:0"]`
+      : `.fig-serie [data-sk="label"][data-s="${i}"]`);
+    if (el && el.value !== v) el.value = v;
+  };
+
   const run = t=>{
     if (rebuilding || !t.isConnected) return;
     const rebuild = applyControl(t);
     if (rebuild === null) return;
+    if (t.dataset.sk === 'label') mirrorName(+t.dataset.s, t.value, true);
+    else if (t.dataset.dk && t.dataset.dk.endsWith(':0')) mirrorName(+t.dataset.dk.split(':')[0], t.value, false);
     // Echo the committed value back with a decimal point, so a comma typed by hand
     // is accepted but never left standing in the field.
     if (t.dataset.num && !rebuild){
@@ -1870,6 +2148,16 @@ function wireControls(){
       };
       if (rb.dataset.richAct === 'chars') charPicker.open(rb, ch=> insertAt(ch, null));
       else insertAt(null, rb.dataset.richAct);
+      return;
+    }
+    const alignB = e.target.closest('[data-align-btn]');
+    if (alignB){
+      alignPicker.open(alignB, code=>{ F.align = code; pushUndo(); refresh(true); });
+      return;
+    }
+    const inkB = e.target.closest('.color-swatch[data-inksw]');
+    if (inkB){
+      colorPickerUI.open(inkB, F.inkColor, color=>{ F.inkColor = color; pushUndo(); refresh(true); });
       return;
     }
     const dsw = e.target.closest('.color-swatch[data-dsw]');
@@ -1942,7 +2230,7 @@ export function openFigureEditor(plot, opts){
   if (!plot) return;
   srcPlot = plot; srcOpts = opts || {};
   F = buildModel(plot, srcOpts);
-  axSel = 0; presetSel = '';
+  axSel = 'all'; presetSel = '';
   recallSettings();
   applyPalette();
   undoStack = [snapshot()]; redoStack = [];
@@ -1997,6 +2285,7 @@ export function openFigureEditor(plot, opts){
     rememberSettings();
     window.removeEventListener('resize', onResize);
     charPicker.close();
+    alignPicker.close();
     document.removeEventListener('keydown', onKey);
     backdrop.remove(); backdrop = null; F = null; dimEl = null; presetBar = null;
     srcPlot = null; srcOpts = null;
