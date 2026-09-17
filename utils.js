@@ -271,46 +271,124 @@ const CP_PALETTES = [
   { name: 'Pastel',       colors: ['#fbb4ae','#b3cde3','#ccebc5','#decbe4','#fed9a6','#ffffcc','#e5d8bd','#fddaec','#f2f2f2'] },
 ];
 
+/* Palettes the user saved from a set of colours they had already arranged. Kept
+   beside the built-in ones and offered the same way; applying either wraps, so three
+   colours over seven series run 1,2,3,1,2,3,1. */
+const USER_PAL_KEY = 'dt-user-palettes';
+function userPalettes(){
+  try { const a = JSON.parse(localStorage.getItem(USER_PAL_KEY)); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+function saveUserPalettes(list){
+  try { localStorage.setItem(USER_PAL_KEY, JSON.stringify(list)); } catch(e){}
+}
+
+/* The palette picker: one popup wherever colours are handed out in bulk — the file
+   list and the figure composer alike. The composer passes a scope, which adds the
+   by-panel / by-series choice at the foot; everything else is the same popup. */
 class PalettePickerUI {
   constructor(){
     this._onChange = null;
     this._anchorBtn = null;
-    this._build();
+    this._opts = {};
+    this._el = document.createElement('div');
+    this._el.className = 'pp-popup';
+    this._el.style.display = 'none';
+    document.body.appendChild(this._el);
     document.addEventListener('pointerdown', e=>{
       if (this._el.style.display==='none') return;
       if (!this._el.contains(e.target) && e.target !== this._anchorBtn) this.close();
     }, true);
   }
-  _build(){
-    const el = document.createElement('div');
-    el.className = 'pp-popup';
-    el.style.display = 'none';
-    el.innerHTML = CP_PALETTES.map((p,i)=>{
+  _list(){ return CP_PALETTES.concat(userPalettes()); }
+  _render(){
+    const mine = userPalettes().length;
+    const rows = this._list().map((p,i)=>{
       const swatches = Array.from({length:12}, (_,k)=>
         `<span class="pp-swatch" style="background:${p.colors[k%p.colors.length]}"></span>`).join('');
-      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${p.name}</span><div class="pp-swatches">${swatches}</div></div>`;
+      const own = i >= CP_PALETTES.length;
+      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${p.name}</span>
+        <div class="pp-swatches">${swatches}</div>
+        ${own ? `<button type="button" class="pp-del" data-del="${i - CP_PALETTES.length}" title="Delete this palette">&#10005;</button>` : ''}</div>`;
     }).join('');
-    document.body.appendChild(el);
-    this._el = el;
-    el.querySelectorAll('.pp-row').forEach(row=>{
-      row.addEventListener('click', ()=>{
-        if (this._onChange) this._onChange(CP_PALETTES[+row.dataset.idx].colors);
+    const scope = this._opts.scope ? `
+      <div class="pp-scope">
+        ${[['panel','by panel'],['series','by series']].map(([v,t])=>
+          `<label class="pp-radio"><input type="radio" name="pp-scope" value="${v}"${this._opts.scope === v ? ' checked' : ''}><span>${t}</span></label>`).join('')}
+      </div>` : '';
+    this._el.innerHTML = `${rows || ''}${scope}
+      <div class="pp-save">
+        <input type="text" class="pp-save-name" placeholder="palette name" spellcheck="false">
+        <button type="button" class="btn btn-sm pp-save-btn">Save palette</button>
+      </div>
+      <p class="pp-hint">Saves the colours in use now. A palette shorter than the data repeats.</p>`;
+    void mine;
+  }
+  _wire(){
+    this._el.querySelectorAll('.pp-row').forEach(row=>{
+      row.addEventListener('click', e=>{
+        if (e.target.closest('.pp-del')) return;
+        const p = this._list()[+row.dataset.idx];
+        if (p && this._onChange) this._onChange(p.colors.slice());
         this.close();
       });
     });
+    this._el.querySelectorAll('.pp-del').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        const list = userPalettes();
+        list.splice(+btn.dataset.del, 1);
+        saveUserPalettes(list);
+        this._render(); this._wire(); this._reposition();
+      });
+    });
+    this._el.querySelectorAll('input[name="pp-scope"]').forEach(r=>{
+      r.addEventListener('change', ()=>{
+        this._opts.scope = r.value;
+        if (this._opts.onScope) this._opts.onScope(r.value);
+      });
+    });
+    const nameIn = this._el.querySelector('.pp-save-name');
+    const saveBtn = this._el.querySelector('.pp-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', ()=>{
+      const colors = (this._opts.colors ? this._opts.colors() : []).filter(Boolean);
+      if (!colors.length) return;
+      // The combination as it stands, each colour kept once and in the order it is used.
+      const seen = new Set(), uniq = [];
+      for (const c of colors){ const k = String(c).toLowerCase(); if (!seen.has(k)){ seen.add(k); uniq.push(c); } }
+      const list = userPalettes();
+      const name = (nameIn.value || '').trim() || `Palette ${list.length + 1}`;
+      const at = list.findIndex(p=> p.name === name);
+      if (at >= 0) list[at] = { name, colors: uniq }; else list.push({ name, colors: uniq });
+      saveUserPalettes(list);
+      nameIn.value = '';
+      this._render(); this._wire(); this._reposition();
+    });
   }
-  open(anchorBtn, onChange){
+  open(anchorBtn, onChange, opts){
     // Clicking the same palette button again closes the picker (toggle).
     if (this._anchorBtn === anchorBtn && this._el.style.display !== 'none'){ this.close(); return; }
     if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._anchorBtn = anchorBtn;
     anchorBtn.classList.add('cp-anchored');   // keep the button's border while open
     this._onChange = onChange;
+    this._opts = opts || {};
+    this._render();
+    this._wire();
     this._el.style.display = 'block';
     this._reposition();
     if (!this._onScroll) this._onScroll = ()=> this._reposition();
     window.addEventListener('scroll', this._onScroll, true);
     window.addEventListener('resize', this._onScroll);
+  }
+  /* The caller redrew the button the popup is hanging from — a scope change rebuilds
+     the composer's sidebar — so it is pointed at the new one and stays put. */
+  reanchor(btn){
+    if (!btn || this._el.style.display === 'none') return;
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
+    this._anchorBtn = btn;
+    btn.classList.add('cp-anchored');
+    this._reposition();
   }
   _reposition(){
     if (!this._anchorBtn) return;
@@ -329,7 +407,7 @@ class PalettePickerUI {
       window.removeEventListener('scroll', this._onScroll, true);
       window.removeEventListener('resize', this._onScroll);
     }
-    this._onChange=null; this._anchorBtn=null;
+    this._onChange=null; this._anchorBtn=null; this._opts={};
   }
 }
 
@@ -613,6 +691,9 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     e.stopPropagation();
     palettePickerUI.open(palBtn, colors=>{
       if (callbacks.onPaletteChange) callbacks.onPaletteChange(colors);
+    }, {
+      // What "save palette" would keep: the colours these files are wearing now.
+      colors: ()=> [...wrap.querySelectorAll('.color-swatch')].map(b=> b.dataset.color),
     });
   });
   wrap.querySelectorAll('.color-swatch').forEach(btn=>{

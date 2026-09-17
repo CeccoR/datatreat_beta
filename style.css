@@ -1194,6 +1194,29 @@ button.palette-pick-btn.cp-anchored { border-color: var(--white); }
 }
 .pp-swatches { display: flex; gap: 2px; flex: 1; }
 .pp-swatch { flex: 1; height: 14px; border-radius: 2px; }
+/* Deleting a palette of one's own. */
+.pp-del {
+  border: none; background: none; color: var(--muted); cursor: pointer;
+  font-size: 11px; padding: 0 2px; flex: 0 0 auto;
+}
+.pp-del:hover { color: var(--danger, #e05252); }
+/* How a palette is spread, offered where a palette is chosen rather than beside it. */
+.pp-scope {
+  display: flex; gap: 14px; align-items: center;
+  border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px;
+}
+.pp-radio { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.pp-radio input { width: auto; margin: 0; accent-color: var(--accent); }
+/* Keeping the colours in use now as a palette of one's own. */
+.pp-save {
+  display: flex; gap: 6px; align-items: center;
+  border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px;
+}
+.pp-save input[type="text"] { flex: 1 1 auto; width: auto; font-size: 11px; padding: 4px 6px; }
+.pp-save .btn { flex: 0 0 auto; font-size: 11px; padding: 4px 8px; white-space: nowrap; }
+.pp-hint { margin: 6px 0 0; font-size: 10px; color: var(--muted); }
+/* What the all-series row says about the list under it. */
+.fig-allcount { flex: 1; min-width: 40px; font-size: 11px; color: var(--muted); }
 
 button.color-swatch {
   width: 14px;

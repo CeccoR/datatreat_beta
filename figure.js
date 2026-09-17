@@ -1552,7 +1552,7 @@ function allSeriesHtml(){
       <span class="fig-grip fig-grip-off"></span>
       <span class="fig-cap fig-cap-box"></span>
       <span class="fig-cap fig-cap-box"></span>
-      <span class="fig-cap fig-cap-box">col</span>
+      <span class="fig-cap fig-cap-box"></span>
       <span class="fig-cap fig-cap-name">name</span>
       <span class="fig-cap fig-cap-num">width</span>
       <span class="fig-cap fig-cap-sel">line</span>
@@ -1562,8 +1562,8 @@ function allSeriesHtml(){
       <span class="fig-grip fig-grip-off"></span>
       ${figToggle('data-all="show"', F.series.every(s=>s.show), ICON_DRAW, 'Draw all / draw none')}
       ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
-      <span class="fig-cap fig-cap-box"></span>
-      <span class="fig-cap fig-cap-name"></span>
+      <button class="palette-pick-btn fig-pal" type="button" title="Apply a colour palette to every series"></button>
+      <span class="fig-allcount">${F.series.length} series${F.panels.length > 1 ? ` in ${F.panels.length} panels` : ''}</span>
       <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
              value="${w === null ? '' : w}" placeholder="—" title="Line / bar width for every series">
       <select data-all="dash" title="Line style for every series">
@@ -1647,11 +1647,6 @@ function controlsHtml(){
   <section class="fig-sec">
     <div class="fig-sechead">
       <h4>Series</h4>
-      <button class="palette-pick-btn fig-pal" type="button" title="Apply color palette"></button>
-      <select data-k="palScope" title="How a palette is spread">
-        <option value="series"${F.palScope==='series'?' selected':''}>palette by series</option>
-        <option value="panel"${F.palScope==='panel'?' selected':''}>palette by panel</option>
-      </select>
     </div>
     <div class="fig-series">
       ${F.series.length ? allSeriesHtml() : ''}
@@ -2332,7 +2327,17 @@ function wireControls(){
       return;
     }
     if (e.target.closest('.fig-pal')){
-      palettePickerUI.open(e.target.closest('.fig-pal'), colors=>{ applyPalette(colors); pushUndo(); refresh(true); });
+      palettePickerUI.open(e.target.closest('.fig-pal'),
+        colors=>{ applyPalette(colors); pushUndo(); refresh(true); },
+        {
+          // Only the composer spreads a palette two ways, so only it offers the choice.
+          scope: F.palScope,
+          onScope: v=>{
+            F.palScope = v; applyPalette(); pushUndo(); refresh(true);
+            palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
+          },
+          colors: ()=> F.series.map(s=> s.color),
+        });
       return;
     }
     const divB = e.target.closest('[data-adddiv], [data-deldiv]');
