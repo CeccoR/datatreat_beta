@@ -1548,11 +1548,10 @@ function allSeriesHtml(){
   const marker = commonOf(s=> s.marker);
   const DASH_MIX = dash === null, MARK_MIX = marker === null;
   return `
-    <div class="fig-subhead fig-allhead">All series</div>
     <div class="fig-serie fig-serie-caps">
       <span class="fig-grip fig-grip-off"></span>
-      <span class="fig-cap fig-cap-box" title="Draw it">${ICON_DRAW}</span>
-      <span class="fig-cap fig-cap-box" title="List it in the legend">${ICON_LEGEND}</span>
+      <span class="fig-cap fig-cap-box"></span>
+      <span class="fig-cap fig-cap-box"></span>
       <span class="fig-cap fig-cap-box">col</span>
       <span class="fig-cap fig-cap-name">name</span>
       <span class="fig-cap fig-cap-num">width</span>
