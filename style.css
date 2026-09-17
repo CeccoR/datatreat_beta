@@ -2244,8 +2244,12 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-serie input[data-num],
 .fig-serie input.fig-slabel { height: var(--fig-field-h); }
 .fig-serie .color-swatch,
+.fig-serie .palette-pick-btn,
 .fig-serie .fig-cbox-i { height: var(--fig-field-h); }
-.fig-serie .color-swatch { width: var(--fig-field-h); margin: 0; }
+/* The palette button stands in the colour column, so it is the size of the swatches
+   below it rather than the 14px it takes where it heads a table. */
+.fig-serie .color-swatch,
+.fig-serie .palette-pick-btn { width: var(--fig-field-h); margin: 0; flex: 0 0 var(--fig-field-h); }
 .fig-serie .fig-cbox-i { width: var(--fig-field-h); }
 .fig-serie .fig-grip { height: var(--fig-field-h); }
 .fig-grip {
