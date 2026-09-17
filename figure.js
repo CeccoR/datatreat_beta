@@ -1366,7 +1366,7 @@ function rangeColHtml(axis){
         ? numField(`data-k="${X ? (end ? 'xmax' : 'xmin') : (end ? 'ymax' : 'ymin')}"`, +(+bound(end)).toPrecision(6), -1e12, 1e12)
         : numField(`data-man="${X ? 'xMan' : 'yMan'}" data-end="${end}"`, +(+bound(end)).toPrecision(6), -1e12, 1e12));
   return `<div class="fig-rangecol">
-    <div class="fig-rangehead">${A}</div>
+    <div class="fig-rangehead">${A} axes</div>
     <label class="fig-check"><input type="checkbox" data-k="${X ? 'shareX' : 'shareY'}"${shared ? ' checked' : ''}> Share across all panels</label>
     <label class="fig-row"><span>Panel</span>
       <select data-k="${panelKey}"${dis(!shared)}>${F.panels.map((q, k)=>
