@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, truncTiltLabel, barPlotXPad, confirmBanner } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, truncTiltLabel, barLabelFit, barPlotXPad, confirmBanner } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -31,6 +31,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     f: { wrap:'xrdFitTableWrap',     box:'xrdFitPeakBox', sel:null, hov:null, plot:()=>fitPlot },
   };
   let resPlot;
+  let xrdLoadAlerts = '';
   let xrdUploadAlerts = '';
 
   // Per-field mode: 'shared' | 'per'. Defaults: peak-search fields per-sample, rest shared.
@@ -70,6 +71,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const btn = e.target.closest('[data-action]');
     if (!btn || !document.getElementById('tab-xrd').contains(btn)) return;
     if (btn.dataset.action === 'xrd-dismiss-upload'){ xrdUploadAlerts=''; rebuildXrdAlerts(); }
+    if (btn.dataset.action === 'xrd-dismiss-invalid'){ xrdLoadAlerts=''; rebuildXrdAlerts(); }
   });
 
   // Global-fit hyperparameters (editable in the modal)
@@ -78,7 +80,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   const stdHP = { profile:'voigt', asym:true, asymMode:'fcj', calib:true, SL:0.02, HL:0.02, bgDegree:4, maxIter:60, tol:1e-12, lambda0:1e-3, bgAnchor:0.3 };
 
   function rebuildXrdAlerts(){
-    document.getElementById('xrdAlerts').innerHTML = xrdUploadAlerts;
+    document.getElementById('xrdAlerts').innerHTML = xrdLoadAlerts + xrdUploadAlerts;
   }
 
   function fileCallbacks(){
@@ -88,16 +90,16 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       onLabelChange(i, v){ files[i].label=v; renderPeakTable(); updateXrdResults(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateXrdResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; savedFits=[]; panels.a.sel=panels.a.hov=panels.f.sel=panels.f.hov=null; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
+      onRemoveAll(){ files.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; savedFits=[]; panels.a.sel=panels.a.hov=panels.f.sel=panels.f.hov=null; xrdLoadAlerts=''; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
     };
   }
 
   setupDropzone('xrdDropzone', 'xrdFiles', async (fileList)=>{
     const existing = new Set(files.map(f=>f.name));
     const alreadyLoaded = [];
+    const invalidFiles = [];
     for (const f of fileList){
       if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
-      existing.add(f.name);
       // f.text() auto-detects encoding (incl. UTF-16 via BOM); rawBytes keeps the
       // original bytes for byte-exact re-download.
       const rawBytes = new Uint8Array(await f.arrayBuffer());
@@ -108,13 +110,19 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       let start=null, end=null;
       for (const pos of positions){
         if (pos.getAttribute('axis')==='2Theta'){
-          start = parseFloat(pos.getElementsByTagName('startPosition')[0].textContent);
-          end   = parseFloat(pos.getElementsByTagName('endPosition')[0].textContent);
+          // A malformed <positions> block (missing start/end) counts as invalid, not fatal.
+          try {
+            start = parseFloat(pos.getElementsByTagName('startPosition')[0].textContent);
+            end   = parseFloat(pos.getElementsByTagName('endPosition')[0].textContent);
+          } catch(e){ start = end = null; }
           break;
         }
       }
       const intensNode = xml.getElementsByTagName('intensities')[0];
-      if (!intensNode || start===null) continue;
+      // Not an .xrdml we can read (wrong format, or dropped past the file picker's
+      // accept filter) — report it instead of dropping it on the floor.
+      if (!intensNode || !isFinite(start) || !isFinite(end)){ invalidFiles.push(f.name); continue; }
+      existing.add(f.name);
       const y = intensNode.textContent.trim().split(/\s+/).map(Number);
       const x = linspace(start, end, y.length);
       // Keep the raw intensities untouched (no minimum subtraction): the constant
@@ -125,6 +133,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       manualPeaks.push([]);
       removedPeaks.push([]);
     }
+    xrdLoadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'xrd-dismiss-invalid') : '';
     xrdUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'xrd-dismiss-upload') : '';
     rebuildXrdAlerts();
     afterFilesChange();
@@ -207,7 +216,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     syncModeButtons();
     afterFilesChange();
     // Clear the previous tab's transient upload alert and rebuild for this tab.
-    xrdUploadAlerts = ''; rebuildXrdAlerts();
+    xrdLoadAlerts = ''; xrdUploadAlerts = ''; rebuildXrdAlerts();
   }
   function syncModeButtons(){
     Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
@@ -808,8 +817,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     shown.forEach((k, j)=>{
       const raw = curves[k];
       const mx = norm==='local' ? (maxArr(raw)||1) : gmax;
-      const y = raw.map(v=> v/mx + baseOf(j) + 0.05);
-      plot.line(files[k].x, y, files[k].color, 1.3);
+      const norm1 = raw.map(v=> v/mx);            // exactly the CSV's own column
+      const y = norm1.map(v=> v + baseOf(j) + 0.05);
+      // Draw the stacked trace, but hand the composer the un-offset CSV values.
+      plot.line(files[k].x, y, files[k].color, 1.3, undefined,
+                { raw: { xs: files[k].x, ys: norm1 }, label: files[k].label });
       const s=document.createElement('span');
       s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`;
       legend.appendChild(s);
@@ -1050,10 +1062,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
     const brect = svg.getBoundingClientRect();
     const svgW = brect.width || 640, svgH = brect.height || 420;
-    const labels = rows.map(r=>truncTiltLabel(mctx, r.label));
+    // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
+    const fit = barLabelFit(mctx, Math.max(60, svgW - 75), n);
+    const labels = rows.map(r=>truncTiltLabel(mctx, r.label, fit.cap));
     const labelWs = labels.map(l=>mctx.measureText(l).width);
     let maxLbl=0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
-    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
     const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
     const topOf = (v,e)=> v + (isFinite(e)?e:0);
     let maxValW=0, maxTop=0;
@@ -1065,7 +1079,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
     const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
     const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    const xpad = barPlotXPad(labelWs, n, svgW-75);   // widen only when a label would cross x=0
+    const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);   // widen only when a label would cross x=0
     plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
     plot.drawAxes();
     // Bar geometry is capped at the previous fixed sizes but shrinks to fit the
@@ -1084,7 +1098,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       } else if (isFinite(raws[k])&&raws[k]>0){
         plot.barPx(xc,0,raws[k],'#3aa0ff',sHw,0); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
       }
-      plot.tickLabel(xc, labels[k], 30);
+      plot.tickLabel(xc, labels[k], fit.rot);
     }
     plot.attachTools(wrap);
     if (legend) legend.innerHTML = anyCorr

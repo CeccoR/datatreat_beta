@@ -637,6 +637,30 @@ input[type="file"] {
   color: var(--muted);
 }
 
+/* GC gas chips: ALL/ONE chips laid over the plot's own data area, top right. Dimmed
+   until pointed at, so they stay out of the way of the data they sit on; the group
+   lights as a whole, since hovering one chip is hovering the set it belongs to. */
+.gc-gas-sel {
+  /* Clear of the toolbar column and the plot's own right margin, so the chips
+     land inside the data area rather than on the frame or the buttons. */
+  position: absolute; top: 21px; right: 56px; z-index: 2;
+  display: inline-flex; gap: 4px;
+  opacity: 0.5; transition: opacity 0.18s;
+}
+.gc-gas-sel:hover { opacity: 1; }
+/* Real sub, in the chip's own font: the Unicode subscript two has no glyph in Inter
+   and fell back to another face, so H2 and O2 did not read as a pair. */
+.gc-gas-chip sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
+/* Selected reads as a primary button (Fit sample and friends): the accent fill with
+   --on-accent text, lightening on hover and darkening on press. The tokens are the
+   ones .btn.primary uses, so the pair stays in step and each theme gets the text
+   colour it needs on top of its own accent. */
+.gc-gas-chip.is-on         { background: var(--accent);        border-color: var(--accent);        color: var(--on-accent); }
+.gc-gas-chip.is-on:hover   { background: var(--accent-hover);  border-color: var(--accent-hover);  color: var(--on-accent); }
+.gc-gas-chip.is-on:active  { background: var(--accent-active); border-color: var(--accent-active); color: var(--on-accent); }
+.gc-gas-chip:disabled { opacity: 0.35; cursor: default; }
+.gc-gas-chip:disabled:hover { color: var(--muted); }
+
 /* ===== Custom date-time field (segmented text + calendar button) ===== */
 .dt-field {
   display: flex;
@@ -1350,6 +1374,12 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
   transition: transform 0.1s, border-color 0.1s;
 }
 .cp-preset:hover { transform: scale(1.25); border-color: rgba(255,255,255,0.5); }
+.cp-recent-head {
+  margin: 9px 10px 0; font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.cp-recent { padding-top: 5px; }
+.cp-recent-empty { font-size: 11px; color: var(--muted); }
 
 /* ===== Plot wrapper with side download button ===== */
 .plot-wrap {
@@ -1357,6 +1387,7 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
   align-items: flex-start;
   gap: 8px;
   overflow-x: auto;   /* if the plot hits its min-width floor, scroll here — not the page */
+  position: relative; /* anchors controls laid over the plot (the GC gas chips) */
 }
 /* While a pan/zoom tool is armed, block text selection across the whole plot */
 .plot-wrap.tool-armed, .plot-wrap.tool-armed * {
@@ -1992,6 +2023,13 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 /* Hollow ring marker (open circles in the plot, e.g. raw XRPD data) */
 .legend i.mk-ring { width: 9px; height: 9px; border-radius: 50%; background: transparent; border: 1.6px solid; box-sizing: border-box; vertical-align: middle; }
 .legend i.mk-box { width: 11px; height: 11px; border-radius: 2px; }
+/* Dashed key: matches a series drawn with a dash pattern (the GC second gas). The
+   dashes come from a repeating gradient so the key uses the series colour as-is. */
+.legend i.mk-dash {
+  background-image: repeating-linear-gradient(to right,
+    currentColor 0 5px, transparent 5px 9px);
+  background-color: transparent !important;
+}
 
 /* ===== Dropzone loading state ===== */
 .dropzone { position: relative; }
@@ -2068,4 +2106,318 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   display: inline-flex;
   align-items: center;
+}
+
+/* ===== Figure composer (advanced export modal) =====
+   Wide two-pane modal: live preview of the real-size figure on the left, the
+   controls on the right. Export-only — it never writes back to the page plot. */
+.fig-backdrop { align-items: stretch; justify-content: stretch; padding: 20px; }
+.fig-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column;
+  width: 100%; height: 100%; overflow: hidden;
+}
+.fig-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0;
+}
+.fig-x {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 4px 6px; transition: color 0.14s;
+}
+.fig-body { display: flex; flex: 1; min-height: 0; }
+/* Pan surface for the preview: the drawing is transformed, the pane clips it. */
+.fig-preview {
+  /* 60 / 40 split with the controls; both basis-driven so neither can push the other. */
+  flex: 0 0 60%; min-width: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); overflow: hidden; padding: 12px;
+  cursor: grab; touch-action: none;
+  user-select: none; -webkit-user-select: none;
+}
+.fig-preview.is-panning { cursor: grabbing; }
+.fig-svg { will-change: transform; }
+.fig-svg { box-shadow: 0 2px 14px rgba(0,0,0,0.35); background: #fff; }
+.fig-controls {
+  flex: 0 0 40%; min-width: 0; overflow-y: auto;
+  border-left: 1px solid var(--line); padding: 4px 16px 18px;
+}
+.fig-sec { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.fig-sec:last-child { border-bottom: none; }
+.fig-sec h4 {
+  margin: 0 0 10px; font-size: 12px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+}
+.fig-row { display: flex; align-items: center; gap: 8px; margin: 0 0 7px; font-size: 12px; }
+.fig-row > span { flex: 0 0 118px; color: var(--muted); }
+.fig-row input, .fig-row select { flex: 1; min-width: 0; }
+.fig-row .btn-sm { flex: 0 0 auto; }
+/* Axis-title editor: the field, a thin toolbar under it, and a character tray. */
+.fig-titlefield { margin-bottom: 8px; }
+.fig-titlefield .fig-row { margin-bottom: 4px; }
+.fig-richbar {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: 126px; font-size: 10px;
+}
+.fig-richbar .btn { padding: 2px 7px; font-size: 11px; line-height: 1.3; flex: 0 0 auto; }
+/* The x² / x₂ marks are drawn with real sup/sub in the button's own font, so both
+   read as the same typeface — the Unicode subscript digits fall back to another. */
+.fig-richbar .btn sup, .fig-richbar .btn sub {
+  font-size: 0.72em; font-weight: 700; line-height: 0;
+}
+.fig-richbar .btn sup { vertical-align: super; }
+.fig-richbar .btn sub { vertical-align: sub; }
+
+/* Character map, anchored under its button like the colour picker. */
+.char-popup {
+  position: fixed; z-index: 9999;
+  display: flex; flex-wrap: wrap; gap: 3px;
+  width: 246px; padding: 8px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+.char-popup button {
+  width: 24px; height: 24px; padding: 0; font-size: 13px; cursor: pointer;
+  background: transparent; color: var(--text);
+  border: 1px solid transparent; border-radius: 4px;
+}
+.char-popup button:hover { border-color: var(--accent); color: var(--accent); }
+.fig-check { display: flex; align-items: center; gap: 7px; margin: 0 0 7px; font-size: 12px; color: var(--muted); }
+.fig-check input { flex: 0 0 auto; width: auto; }
+.fig-panel, .fig-serie {
+  display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 11px;
+}
+.fig-panel > b { flex: 0 0 22px; color: var(--muted); }
+.fig-panel label { display: flex; align-items: center; gap: 2px; color: var(--muted); margin: 0; }
+.fig-panel input[data-num] { width: 34px; padding: 3px 4px; text-align: center; }
+.fig-ptitle { flex: 1; min-width: 0; padding: 3px 5px; }
+.fig-serie input[type="color"] { width: 26px; height: 22px; padding: 0; flex: 0 0 auto; }
+.fig-serie input[type="checkbox"] { flex: 0 0 auto; width: auto; }
+/* The two series toggles: same size as a checkbox, each carrying its own mark, so
+   "draw it" and "list it in the legend" cannot be mistaken for one another. */
+.fig-cbox { display: inline-flex; flex: 0 0 auto; cursor: pointer; margin: 0; }
+.fig-cbox input { position: absolute; opacity: 0; width: 0; height: 0; }
+.fig-cbox-i {
+  width: 17px; height: 17px; border-radius: 4px; display: flex;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+}
+.fig-cbox-i svg { width: 12px; height: 12px; }
+.fig-cbox input:checked + .fig-cbox-i {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+}
+.fig-cbox input:focus-visible + .fig-cbox-i { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Written as input.fig-slabel so it outweighs the global input[type="text"] rule:
+   otherwise the name box keeps that rule's larger padding and stands a third taller
+   than the width box beside it. */
+input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; }
+/* Every control on a series row stands the same height, so the row reads as one
+   line rather than a row of boxes of four different sizes. */
+.fig-serie { --fig-field-h: 23px; }
+.fig-serie select { flex: 0 0 74px; width: 74px; max-width: 74px; padding: 1px 2px; }
+.fig-serie input[data-num] { width: 42px; padding: 3px 4px; text-align: center; }
+.fig-serie select,
+.fig-serie input[data-num],
+.fig-serie input.fig-slabel { height: var(--fig-field-h); }
+.fig-serie .color-swatch,
+.fig-serie .fig-cbox-i { height: var(--fig-field-h); }
+.fig-serie .color-swatch { width: var(--fig-field-h); margin: 0; }
+.fig-serie .fig-cbox-i { width: var(--fig-field-h); }
+.fig-serie .fig-grip { height: var(--fig-field-h); }
+.fig-grip {
+  flex: 0 0 11px; width: 11px; color: var(--muted);
+  cursor: grab; touch-action: none; display: flex; align-items: center;
+}
+.fig-grip svg { width: 11px; height: 11px; }
+
+.fig-serie.dragging { opacity: 0.45; }
+/* The "all series" row: same shape as a series row, visually set apart. */
+.fig-serie-all {
+  border-bottom: 1px solid var(--line); padding-bottom: 7px; margin-bottom: 8px;
+}
+.fig-serie-all select, .fig-serie-all input[data-num] { font-size: 10px; }
+/* Column names over the series list, built to the same measurements as a row so
+   every field sits under the name of what it is. */
+/* Indented by what a panel group's border and padding add, so the captions and the
+   all-series row stand over the columns of the rows inside the groups. */
+.fig-allhead { margin-bottom: 4px; padding-left: 9px; }
+.fig-serie-caps, .fig-serie-all { padding: 0 9px; }
+.fig-serie-caps { margin-bottom: 4px; }
+.fig-cap {
+  font-size: 9px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); display: flex; align-items: center; justify-content: center;
+  overflow: hidden; white-space: nowrap;
+}
+.fig-cap svg { width: 11px; height: 11px; }
+.fig-cap-box { flex: 0 0 23px; }
+.fig-cap-name { flex: 1; min-width: 40px; justify-content: flex-start; }
+.fig-cap-num { flex: 0 0 42px; }
+.fig-cap-sel { flex: 0 0 74px; }
+/* Some series drawn and some not: neither a tick nor an empty box. */
+.fig-cbox input:indeterminate + .fig-cbox-i {
+  background: var(--panel2); border-color: var(--accent); color: var(--accent);
+}
+.fig-grip-off { visibility: hidden; }
+/* Where the dragged series would land: a bar in the gap between two rows, midway
+   between them, rather than a line along the edge of one of them. */
+.fig-serie { position: relative; }
+.fig-serie.drag-over::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -4px;
+  height: 2px; border-radius: 1px; background: var(--accent);
+}
+/* The Range section: X and Y side by side, each column the same ladder of controls
+   so the two can be read across as well as down. */
+.fig-rangecols { display: flex; gap: 10px; }
+.fig-rangecol { flex: 1 1 0; min-width: 0; }
+.fig-rangehead {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 5px;
+}
+.fig-rangecol .fig-row { flex-wrap: wrap; gap: 2px 6px; }
+.fig-rangecol .fig-row > span { flex: 1 0 100%; }
+.fig-rangecol .fig-row input, .fig-rangecol .fig-row select { flex: 1 1 auto; width: 100%; }
+.fig-rangecol .fig-check { font-size: 11px; align-items: flex-start; }
+
+/* Sub-heading inside a section, for grouping related rows. */
+.fig-subhead {
+  margin: 12px 0 6px; font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+  border-top: 1px solid var(--line); padding-top: 9px;
+}
+.fig-sec > .fig-subhead:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+.fig-kind { color: var(--muted); font-size: 10px; }
+/* Series grouped by the panel they are drawn in; a series moves by being dragged
+   from one group into another. */
+.fig-group {
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 8px; margin-bottom: 8px;
+}
+.fig-group-h {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 6px;
+}
+.fig-group.drag-into, .fig-dgroup.drag-into { border-color: var(--accent); background: rgba(255,138,61,0.07); }
+.fig-group-empty { margin: 2px 0 0; }
+
+/* Colour groups inside a bar series, with the bars that belong to each. */
+.fig-divs { margin: -2px 0 8px 26px; padding-left: 8px; border-left: 1px solid var(--line); }
+.fig-dgroup { border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; margin-bottom: 5px; }
+.fig-dgroup-h { display: flex; align-items: center; gap: 5px; }
+.fig-dgroup-h .fig-slabel { flex: 1; min-width: 40px; font-size: 11px; padding: 3px 5px; }
+.fig-dbars { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.fig-barchip {
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px;
+  font-size: 10px; color: var(--muted); background: var(--panel2);
+  cursor: grab; touch-action: none; user-select: none;
+}
+.fig-barchip.dragging { opacity: 0.45; }
+.fig-divx, .fig-divadd { flex: 0 0 auto; font-size: 10px; padding: 3px 6px; }
+
+/* The nine placings of the plot area, in a little grid under the button. */
+.fig-align svg { display: block; }
+.fig-alignpop {
+  position: fixed; z-index: 1200;
+  display: grid; grid-template-columns: repeat(3, auto); gap: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 6px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+}
+.fig-alignpop button { padding: 4px; line-height: 0; }
+.fig-alignpop button.is-on { border-color: var(--accent); color: var(--accent); }
+.fig-row input[disabled] { opacity: 0.6; cursor: not-allowed; }
+/* Section header that carries controls of its own (the Series palette picker). */
+.fig-sechead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.fig-sechead h4 { margin: 0; }
+.fig-sechead select { margin-left: auto; font-size: 11px; padding: 3px 4px; }
+/* Panel-axes matrix: one row per side, one column per toggle. The header labels
+   the checkbox columns, so both grids must share the same template. */
+.fig-axhead, .fig-axrow {
+  display: grid; grid-template-columns: 52px repeat(5, 1fr) 62px;
+  align-items: center; gap: 4px; font-size: 11px;
+}
+.fig-axhead { color: var(--muted); margin-bottom: 5px; }
+.fig-axhead span { text-align: center; font-size: 10px; letter-spacing: .03em; }
+.fig-axrow { margin-bottom: 5px; }
+.fig-axrow > b { color: var(--muted); font-weight: 500; }
+.fig-axrow input[type="checkbox"] { justify-self: center; margin: 0; }
+.fig-axrow select { padding: 3px 2px; min-width: 0; }
+/* Preset controls live in the footer, grouped and set off from the export buttons. */
+.fig-presets {
+  display: flex; align-items: center; gap: 5px;
+  padding-right: 10px; margin-right: 4px; border-right: 1px solid var(--line);
+}
+.fig-presets select { max-width: 150px; font-size: 11px; padding: 4px 6px; }
+.fig-presets .btn { white-space: nowrap; flex-shrink: 0; }
+.fig-reset { white-space: nowrap; flex-shrink: 0; margin-right: 4px; }
+.fig-presets input[type="text"] { width: 120px; font-size: 11px; padding: 4px 6px; }
+@media (max-width: 900px){
+  .fig-presets input[type="text"] { width: 80px; }
+  .fig-presets select { max-width: 100px; }
+}
+.fig-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; border-top: 1px solid var(--line); flex-shrink: 0;
+}
+@media (max-width: 900px) {
+  /* Stacked: the preview keeps a guaranteed share of the height instead of being
+     squeezed to nothing by the controls' own content, which is what `flex: 1 1 auto`
+     on both did — the controls are tall, so they won every time. */
+  .fig-body { flex-direction: column; }
+  .fig-preview { flex: 0 0 34vh; min-height: 180px; }
+  .fig-controls { flex: 1 1 auto; min-height: 0; border-left: none; border-top: 1px solid var(--line); }
+}
+
+/* The sidebar is 40% of the modal, so it is already too narrow for a single-line
+   series row well before phone widths — these wrap from the point it stops fitting. */
+@media (max-width: 1100px) {
+  .fig-serie, .fig-panel { flex-wrap: wrap; row-gap: 6px; }
+  .fig-slabel { flex: 1 1 100px; }
+  .fig-serie select { max-width: none; flex: 1 1 auto; }
+  .fig-panel label { flex: 0 0 auto; }
+  .fig-ptitle { flex: 1 1 100%; }
+  .fig-cap-name { flex: 1 1 60px; }
+}
+
+/* ---- Phones -------------------------------------------------------------- */
+@media (max-width: 700px) {
+  .fig-backdrop { padding: 6px; }
+  .fig-box { border-radius: 8px; }
+  .fig-head { padding: 8px 10px; gap: 8px; }
+  .fig-head .txt-meta { display: none; }        /* the strapline is desktop-only */
+  .fig-controls { padding: 4px 10px 14px; }
+
+  /* Label above field: a 118px label column leaves nothing for the input here. */
+  .fig-row { flex-wrap: wrap; gap: 3px 8px; }
+  .fig-row > span { flex: 1 0 100%; }
+  .fig-row input, .fig-row select { flex: 1 1 auto; }
+  .fig-richbar, .fig-chars { margin-left: 0; }
+
+  .fig-axhead, .fig-axrow { grid-template-columns: 42px repeat(5, 1fr) 54px; gap: 2px; }
+  .fig-axhead span { font-size: 9px; }
+
+  /* The footer was one non-wrapping row 622px wide inside a 348px bar, so the
+     export buttons sat off-screen. It wraps now, readout first, actions after. */
+  .fig-foot { flex-wrap: wrap; padding: 8px 10px; gap: 6px; }
+  .fig-foot .fig-dim { flex: 1 0 100%; font-size: 10px; }
+  .fig-foot > span[style] { display: none; }     /* the desktop spacer */
+  .fig-presets { flex: 1 1 100%; border-right: none; padding-right: 0; margin-right: 0; flex-wrap: wrap; }
+  .fig-presets select { flex: 1 1 90px; max-width: none; }
+  .fig-presets input[type="text"] { flex: 1 1 90px; width: auto; }
+  /* Reset rides with the two exports on one row; the main action, copying the
+     figure, takes the row under them so it is the one thumb finds. */
+  .fig-reset { order: 3; flex: 0 0 auto; }
+  .fig-foot [data-fig-svg]  { order: 4; flex: 1 1 0; }
+  .fig-foot [data-fig-png]  { order: 5; flex: 1 1 0; }
+  .fig-foot [data-fig-copy] { order: 6; flex: 1 0 100%; }
+  .fig-foot .btn { white-space: nowrap; }
+
+  .char-popup { width: min(246px, calc(100vw - 24px)); }
+}
+
+/* Landscape phones: the modal is short, so a 34vh preview with a 180px floor left
+   the controls a sliver. Give the preview less and let the controls have the rest. */
+@media (max-height: 520px) and (max-width: 900px) {
+  .fig-preview { flex: 0 0 40%; min-height: 0; }
+  .fig-controls { flex: 1 1 0; }
+  .fig-head { padding: 6px 10px; }
+  .fig-foot { padding: 6px 10px; }
 }

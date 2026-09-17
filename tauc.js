@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barPlotXPad } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barLabelFit, barPlotXPad } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -402,9 +402,12 @@ import { Plot } from './plot.js';
     plot.clearData();
     plot.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a. u.)`;
     plot.drawAxes();
-    plot.line(hv, Yraw, '#ffffff', 1);
-    plot.line(hv, Ys, '#3aa0ff', 1.4);
-    plot.line(hv, dYs, '#5fcf6a', 1);
+    // Named for the figure composer: this plot has no legend, so without these the
+    // traces would reach it as "Series 1..n".
+    const nm = files[currIndex].label;
+    plot.line(hv, Yraw, '#ffffff', 1,   undefined, { label: `${nm} raw` });
+    plot.line(hv, Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed` });
+    plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative` });
 
     const lo1=Math.min(vlines.v1,vlines.v2), hi1=Math.max(vlines.v1,vlines.v2);
     const lo2=Math.min(vlines.v3,vlines.v4), hi2=Math.max(vlines.v3,vlines.v4);
@@ -420,9 +423,10 @@ import { Plot } from './plot.js';
       if (regs.bestIdx.length){
         const xb = regs.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs.slope*x+regs.intercept);
-        plot.line(xb, yb, '#ff5050', 2.2);
+        plot.line(xb, yb, '#ff5050', 2.2, undefined, { label: `${nm} regression 1` });
         const xExt = linspace(minArr(hv), maxArr(hv), 100);
-        plot.line(xExt, xExt.map(x=>regs.slope*x+regs.intercept), '#ff5050', 1, '5,4');
+        plot.line(xExt, xExt.map(x=>regs.slope*x+regs.intercept), '#ff5050', 1, '5,4',
+                  { label: `${nm} baseline 1` });
       }
     } else {
       document.getElementById('taucRMSE1').textContent='-'; document.getElementById('taucR21').textContent='-';
@@ -435,9 +439,10 @@ import { Plot } from './plot.js';
       if (regs2.bestIdx.length){
         const xb = regs2.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs2.slope*x+regs2.intercept);
-        plot.line(xb, yb, '#d050ff', 2.2);
+        plot.line(xb, yb, '#d050ff', 2.2, undefined, { label: `${nm} regression 2` });
         const xExt = linspace(minArr(hv), maxArr(hv), 100);
-        plot.line(xExt, xExt.map(x=>regs2.slope*x+regs2.intercept), '#d050ff', 1, '5,4');
+        plot.line(xExt, xExt.map(x=>regs2.slope*x+regs2.intercept), '#d050ff', 1, '5,4',
+                  { label: `${nm} baseline 2` });
       }
     } else {
       document.getElementById('taucRMSE2').textContent='-'; document.getElementById('taucR22').textContent='-';
@@ -544,7 +549,7 @@ import { Plot } from './plot.js';
     plot0.setRange(wl0, wl1, 0, ymax0);
     plot0.drawAxes();
     files.forEach((f,k)=>{
-      plot0.line(f.wl, f.FR, f.color, 1.3);
+      plot0.line(f.wl, f.FR, f.color, 1.3, undefined, { label: f.label });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg0.appendChild(s);
     });
 
@@ -566,15 +571,19 @@ import { Plot } from './plot.js';
     plot1.setRange(hv0, hv1, 0, ymax1);
     plot1.drawAxes();
     files.forEach((f,k)=>{
-      plot1.line(f.hv, Ys_all[k], f.color, 1.1);
+      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: f.label });
       const r = bestRegsAll[k];
+      // regs fits the flat interval below the edge (the baseline), regs2 the steep
+      // edge itself (the Tauc region) — their intercepts cross at Eg.
       if (r && isFinite(r.regs.slope)){
         const xExt = linspace(hv0, hv1, 100);
-        plot1.line(xExt, xExt.map(x=>r.regs.slope*x+r.regs.intercept), f.color, 1, '5,4');
+        plot1.line(xExt, xExt.map(x=>r.regs.slope*x+r.regs.intercept), f.color, 1, '5,4',
+                   { label: `${f.label} baseline` });
       }
       if (r && isFinite(r.regs2.slope)){
         const xExt = linspace(hv0, hv1, 100);
-        plot1.line(xExt, xExt.map(x=>r.regs2.slope*x+r.regs2.intercept), f.color, 1, '2,3');
+        plot1.line(xExt, xExt.map(x=>r.regs2.slope*x+r.regs2.intercept), f.color, 1, '2,3',
+                   { label: `${f.label} Tauc` });
       }
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
     });
@@ -626,15 +635,17 @@ import { Plot } from './plot.js';
       }
       const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
       // Draws one series (a single centred bar per sample) into `svg`.
-      const drawEgBars = (svg, vals, errs, color)=>{
+      const drawEgBars = (svg, vals, errs, color, name)=>{
         const mctx = document.createElement('canvas').getContext('2d');
         mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
         const brect = svg.getBoundingClientRect();
         const svgW = brect.width || 640, svgH = brect.height || 640;
-        const barLabels = files.map(f=>truncTiltLabel(mctx, f.label));
+        // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
+        const fit = barLabelFit(mctx, Math.max(60, svgW - 75), files.length);
+        const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, fit.cap));
         const labelWs = barLabels.map(l=>mctx.measureText(l).width);
         let maxLbl = 0; labelWs.forEach(w=>{ maxLbl = Math.max(maxLbl, w); });
-        const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*Math.sin(Math.PI/6)));
+        const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
         const mTop = 15, gap = 6;
         const plotH = svgH - mTop - bottom;
         const reserve = gap + maxValW + 6;               // px needed above the tallest bar
@@ -642,7 +653,7 @@ import { Plot } from './plot.js';
         const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
         const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
         // Widen the x-range symmetrically only when a label would cross x=0.
-        const xpad = barPlotXPad(labelWs, n, svgW-75);
+        const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);
         plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
         plot.drawAxes();
         // Bars are capped at 16px half-width but shrink to fit the per-sample
@@ -652,20 +663,22 @@ import { Plot } from './plot.js';
         for (let k=0;k<n;k++){
           const xc = k+1;
           if (isFinite(vals[k])&&vals[k]>0){
-            drawBar(plot,xc,vals[k],color,hw,0);
+            drawBar(plot,xc,vals[k],color,hw,0,name);
             if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
             plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
           }
-          plot.tickLabel(xc, barLabels[k], 30);
+          plot.tickLabel(xc, barLabels[k], fit.rot);
         }
         plot.attachTools(svg.closest('.plot-wrap'));
       };
-      drawEgBars(barSvg,  egs,    egErrs,    '#3aa0ff');
-      drawEgBars(barSvg3, egInts, egIntErrs, '#ff7a59');
+      drawEgBars(barSvg,  egs,    egErrs,    '#3aa0ff', 'Eg (x-axis)');
+      drawEgBars(barSvg3, egInts, egIntErrs, '#ff7a59', 'Eg (baseline)');
       leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
     }
   }
-  function drawBar(plot, xc, val, color, hw, dx){ plot.barPx(xc, 0, val, color, hw, dx); }
+  // `name` names the series the bar belongs to, the way the legend under the chart
+  // does, so the figure composer sees one series of bars rather than nameless ones.
+  function drawBar(plot, xc, val, color, hw, dx, name){ plot.barPx(xc, 0, val, color, hw, dx, { label: name }); }
   function drawErrBar(plot, xc, val, err, dx){ plot.errbar(xc, val, err, dx); }
 
   // Assemble a "wide" CSV: each column is {h:header, v:[values]}, padded to the

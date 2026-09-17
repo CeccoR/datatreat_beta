@@ -7,20 +7,18 @@ import { Plot } from './plot.js';
 (function(){
   let files = []; // {name, label, b[], a[]}
   let lastY = [];
-  // pending unpaired files: stem → {dta: File|null, dsc: File|null}
-  let pending = {};
   let loadAlerts = '';
   let uploadAlerts = '';
+  let pendingAlerts = '';   // ephemeral notice about unpaired uploads
 
-  // Delegated click handling for dynamically generated buttons (alerts + pending
-  // table), so no per-button global onclick handlers are needed.
+  // Delegated click handling for the dynamically generated alert dismiss buttons.
   document.getElementById('tab-epr').addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-action]');
     if (!btn || !document.getElementById('tab-epr').contains(btn)) return;
     switch (btn.dataset.action){
       case 'epr-dismiss-invalid': loadAlerts=''; rebuildAlerts(); break;
       case 'epr-dismiss-upload':  uploadAlerts=''; rebuildAlerts(); break;
-      case 'epr-dismiss-pending': pending={}; renderPendingTable(); break;
+      case 'epr-dismiss-pending': pendingAlerts=''; rebuildAlerts(); break;
     }
   });
 
@@ -36,30 +34,21 @@ import { Plot } from './plot.js';
       onLabelChange(i, v){ files[i].label=v; updateEpr(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateEpr(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; pending={}; loadAlerts=''; uploadAlerts=''; rebuildAlerts(); afterFilesChange(); },
+      onRemoveAll(){ files.length=0; loadAlerts=''; uploadAlerts=''; pendingAlerts=''; rebuildAlerts(); afterFilesChange(); },
     };
   }
 
   function rebuildAlerts(){
     document.getElementById('eprAlerts').innerHTML = loadAlerts + uploadAlerts;
-    renderPendingTable();
+    document.getElementById('eprPendingWrap').innerHTML = pendingAlerts;
   }
 
-  // Unpaired uploads (.DTA without its .DSC or vice-versa) surface as a standard
-  // warn alert (buildAlertsHtml → built-in dismiss X) listing each orphan file by
-  // its full name, one per line.
-  function renderPendingTable(){
-    const wrap = document.getElementById('eprPendingWrap');
-    const entries = Object.entries(pending);
-    if (!entries.length){ wrap.innerHTML = ''; return; }
-    const names = [];
-    for (const [, pair] of entries){
-      if (pair.dta) names.push(pair.dta.name);
-      if (pair.dsc) names.push(pair.dsc.name);
-    }
-    wrap.innerHTML = buildAlertsHtml([], names,
-      'Unpaired file(s) uploaded. Upload both the .DTA and .DSC files to proceed:',
-      undefined, 'epr-dismiss-pending');
+  // A .DTA/.DSC arriving without its partner in the same drop is simply not loaded —
+  // nothing is held back waiting for it. This is just the ephemeral warning saying so.
+  function buildPendingAlert(names){
+    pendingAlerts = names.length ? buildAlertsHtml([], names,
+      'Not loaded — a .DTA and its .DSC must be uploaded together:',
+      undefined, 'epr-dismiss-pending') : '';
   }
 
   function parseDsc(text){
@@ -113,28 +102,32 @@ import { Plot } from './plot.js';
     const invalidFiles = [];
     const alreadyLoaded = [];
 
+    // Group by stem WITHIN THIS DROP only — nothing is carried over between uploads.
+    const groups = {};
     for (const f of fileList){
       const ext  = f.name.split('.').pop().toLowerCase();
       const stem = f.name.replace(/\.[^.]+$/, '');
       if (ext !== 'dta' && ext !== 'dsc'){ invalidFiles.push(f.name); continue; }
       if (existingStems.has(stem)){ alreadyLoaded.push(f.name); continue; }
-      if (!pending[stem]) pending[stem] = {dta: null, dsc: null};
-      if (ext === 'dta') pending[stem].dta = f;
-      else               pending[stem].dsc = f;
+      if (!groups[stem]) groups[stem] = { dta: null, dsc: null };
+      groups[stem][ext] = f;
     }
 
-    // Try to process complete pairs
-    for (const [stem, pair] of Object.entries(pending)){
+    // Complete pairs load; a lone half is reported and dropped.
+    const unpaired = [];
+    for (const [stem, pair] of Object.entries(groups)){
       if (pair.dta && pair.dsc){
         const result = await processPair(stem, pair.dta, pair.dsc);
         if (result){ result.color = nextColor(files); files.push(result); existingStems.add(stem); }
         else { invalidFiles.push(stem); }
-        delete pending[stem];
+      } else {
+        unpaired.push((pair.dta || pair.dsc).name);
       }
     }
 
     loadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'epr-dismiss-invalid') : '';
     uploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'epr-dismiss-upload') : '';
+    buildPendingAlert(unpaired);
     rebuildAlerts();
     afterFilesChange();
   });
@@ -165,8 +158,8 @@ import { Plot } from './plot.js';
     document.getElementById('eprNorm').value = s.norm;
     document.getElementById('eprSmooth').value = s.smooth;
     afterFilesChange();
-    // Clear the previous tab's transient alerts + unpaired list, then rebuild.
-    loadAlerts = ''; uploadAlerts = ''; pending = {}; rebuildAlerts();
+    // Clear the previous tab's transient alerts, then rebuild.
+    loadAlerts = ''; uploadAlerts = ''; pendingAlerts = ''; rebuildAlerts();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
   registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(true); });
@@ -196,8 +189,17 @@ import { Plot } from './plot.js';
     plot.setRange(minArr(allB), maxArr(allB), baseOf(n-1), baseOf(0)+1.1);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
     plot.drawAxes();
+    // The composer gets the CSV's own "Smoothed_" column: moving average, background
+    // taken as the first point, divided by the peak-to-peak the chosen normalisation
+    // uses. Same numbers as the export, without the stacking offset.
+    const sms = files.map(f=>movingAverage(f.a, N));
+    const ppks = sms.map(sm => (maxArr(sm)-minArr(sm)) || 1);
+    const gPP = Math.max(...ppks);
     Y.forEach((y,k)=>{
-      plot.line(files[k].b, y, files[k].color, 1.3);
+      const sm = sms[k], bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP;
+      const csvY = sm.map(v=>(v-bg)/div);
+      plot.line(files[k].b, y, files[k].color, 1.3, undefined,
+                { raw: { xs: files[k].b, ys: csvY }, label: files[k].label });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`; legend.appendChild(s);
     });
     lastY = Y;

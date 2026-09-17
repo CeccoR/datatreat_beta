@@ -52,6 +52,26 @@ function _hsvToRgb(h,s,v){
   return {r:Math.round(r*255),g:Math.round(g*255),b:Math.round(b*255)};
 }
 
+/* Recently picked colours, shared by every colour picker in the app (file list and
+   figure composer alike) and kept across sessions. Most recent first, no repeats. */
+const CP_RECENT_KEY = 'dt-recent-colors', CP_RECENT_MAX = 12;
+let _cpRecent = null;
+function recentColors(){
+  if (_cpRecent) return _cpRecent;
+  try { _cpRecent = JSON.parse(localStorage.getItem(CP_RECENT_KEY)) || []; }
+  catch(e){ _cpRecent = []; }
+  if (!Array.isArray(_cpRecent)) _cpRecent = [];
+  return _cpRecent;
+}
+function pushRecentColor(hex){
+  if (!hex) return;
+  const c = String(hex).toLowerCase();
+  const list = recentColors().filter(x=>x.toLowerCase() !== c);
+  list.unshift(c);
+  _cpRecent = list.slice(0, CP_RECENT_MAX);
+  try { localStorage.setItem(CP_RECENT_KEY, JSON.stringify(_cpRecent)); } catch(e){}
+}
+
 class ColorPickerUI {
   constructor(){
     this._onChange = null;
@@ -80,7 +100,9 @@ class ColorPickerUI {
         <div class="cp-rgb-row"><span>G</span><input type="range" class="cp-slider cp-g-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
         <div class="cp-rgb-row"><span>B</span><input type="range" class="cp-slider cp-b-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
       </div>
-      <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>`;
+      <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>
+      <div class="cp-recent-head">Recent colors</div>
+      <div class="cp-presets cp-recent"></div>`;
     document.body.appendChild(el);
     this._el = el;
     this._map = el.querySelector('.cp-map');
@@ -94,6 +116,7 @@ class ColorPickerUI {
     this._bSl = el.querySelector('.cp-b-sl');
     const nums = el.querySelectorAll('.cp-num');
     this._rNum = nums[0]; this._gNum = nums[1]; this._bNum = nums[2];
+    this._recentEl = el.querySelector('.cp-recent');
 
     // 2D map — pointer drag
     const onMapMove = e=>{
@@ -141,21 +164,31 @@ class ColorPickerUI {
       if (v.length===6 || v.length===3){
         this._hsv = _rgbToHsv(...Object.values(_hexToRgb('#'+v)));
         this._updateUI(true);
-        if (this._onChange) this._onChange(_rgbToHex(...Object.values(_hsvToRgb(this._hsv.h,this._hsv.s,this._hsv.v))));
+        this._picked = _rgbToHex(...Object.values(_hsvToRgb(this._hsv.h,this._hsv.s,this._hsv.v)));
+        if (this._onChange) this._onChange(this._picked);
       }
     });
 
-    // Preset swatches
-    el.querySelectorAll('.cp-preset').forEach(p=>p.addEventListener('click', ()=>{
+    // Preset and recent swatches (delegated: the recent row is rebuilt on open).
+    el.addEventListener('click', e=>{
+      const p = e.target.closest('.cp-preset');
+      if (!p) return;
       this._hsv = _rgbToHsv(...Object.values(_hexToRgb(p.dataset.color)));
       this._emit();
-    }));
+    });
   }
 
   _emit(){
     this._updateUI(false);
     const {r,g,b} = _hsvToRgb(this._hsv.h, this._hsv.s, this._hsv.v);
-    if (this._onChange) this._onChange(_rgbToHex(r,g,b));
+    this._picked = _rgbToHex(r,g,b);
+    if (this._onChange) this._onChange(this._picked);
+  }
+
+  _renderRecent(){
+    this._recentEl.innerHTML = recentColors().map(c=>
+      `<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')
+      || '<span class="cp-recent-empty">none yet</span>';
   }
 
   _updateUI(skipHex){
@@ -184,9 +217,22 @@ class ColorPickerUI {
     anchorBtn.classList.add('cp-anchored');   // keep the swatch's border while open
     this._onChange = onChange;
     this._hsv = _rgbToHsv(...Object.values(_hexToRgb(currentColor)));
+    this._picked = null;
     this._updateUI(false);
+    this._renderRecent();
     this._el.style.display = 'block';
-    const rect = anchorBtn.getBoundingClientRect();
+    this._reposition();
+    // Scroll never bubbles, but a capture-phase listener on the window still sees it
+    // fire on any scrollable ancestor, so the popup can follow its button wherever
+    // the scroll happened.
+    if (!this._onScroll) this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+  }
+
+  _reposition(){
+    if (!this._anchorBtn) return;
+    const rect = this._anchorBtn.getBoundingClientRect();
     const pw = this._el.offsetWidth || 260, ph = this._el.offsetHeight || 430;
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
@@ -196,8 +242,15 @@ class ColorPickerUI {
   }
 
   close(){
+    // Only the colour the user settled on is remembered, not every drag step.
+    if (this._picked) pushRecentColor(this._picked);
+    this._picked = null;
     this._el.style.display = 'none';
     if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
     this._onChange = null;
     this._anchorBtn = null;
   }
@@ -254,7 +307,14 @@ class PalettePickerUI {
     anchorBtn.classList.add('cp-anchored');   // keep the button's border while open
     this._onChange = onChange;
     this._el.style.display = 'block';
-    const rect = anchorBtn.getBoundingClientRect();
+    this._reposition();
+    if (!this._onScroll) this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+  }
+  _reposition(){
+    if (!this._anchorBtn) return;
+    const rect = this._anchorBtn.getBoundingClientRect();
     const pw = this._el.offsetWidth || 236, ph = this._el.offsetHeight || 260;
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
@@ -265,6 +325,10 @@ class PalettePickerUI {
   close(){
     this._el.style.display='none';
     if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
     this._onChange=null; this._anchorBtn=null;
   }
 }
@@ -1544,11 +1608,28 @@ function nextColor(existingFiles){
    the MIDDLE (start…end) so both ends of the name stay readable. Sideways overflow
    past the plot frame is handled separately by widening the x-range (barPlotXPad). */
 const TILT_LABEL_MAX = 20;
-function truncTiltLabel(mctx, text){
-  if (text.length <= TILT_LABEL_MAX) return text;
-  const keep = TILT_LABEL_MAX - 1;                 // one char for the ellipsis
+function truncTiltLabel(mctx, text, cap){
+  const max = Math.max(4, Math.round(cap || TILT_LABEL_MAX));
+  if (text.length <= max) return text;
+  const keep = max - 1;                            // one char for the ellipsis
   const front = Math.ceil(keep / 2), back = keep - front;
   return text.slice(0, front) + '…' + text.slice(text.length - back);
+}
+
+/* How a bar chart's category labels have to be drawn to stay apart in the width it
+   has. On a phone, or with many samples, the slot per bar shrinks until twenty
+   characters at 30° no longer fit: tilting further narrows what a label spans across
+   the axis, and a shorter name narrows it again. Returns the angle to draw at and the
+   number of characters that fits at it, so the chart keeps its footprint rather than
+   letting the names run into one another. */
+function barLabelFit(mctx, plotW, n){
+  const slot = n > 0 ? plotW / n : plotW;
+  const rot = slot < 30 ? 70 : slot < 42 ? 55 : slot < 58 ? 45 : 30;
+  const em = (mctx && mctx.measureText ? mctx.measureText('mn').width / 2 : 5) || 5;
+  // What a label may measure before its horizontal span exceeds its own slot.
+  const room = slot / Math.cos(rot * Math.PI / 180);
+  const cap = Math.max(6, Math.min(TILT_LABEL_MAX, Math.floor(room / em)));
+  return { rot, cap, sin: Math.sin(rot * Math.PI / 180), cos: Math.cos(rot * Math.PI / 180) };
 }
 /* Extra x-range padding (in data units, per side) so no 30°-tilted bar label runs
    off the LEFT of the plot (its first character would land at a negative x). Bars
@@ -1556,9 +1637,9 @@ function truncTiltLabel(mctx, text){
    [-p, n+1+p] (a small symmetric zoom-out that moves the edge bars inward). Returns
    0 unless a label would actually cross x = 0 — i.e. only kicks in when truly needed.
    `labelWs` = per-bar label pixel widths; plotW = drawable width px. */
-function barPlotXPad(labelWs, n, plotW){
+function barPlotXPad(labelWs, n, plotW, rot){
   if (!(plotW > 0) || !(n > 0)) return 0;
-  const cos30 = Math.cos(Math.PI / 6);
+  const cos30 = Math.cos((rot == null ? 30 : rot) * Math.PI / 180);
   let p = 0;
   for (let k = 1; k <= n; k++){
     const f = ((labelWs[k-1] || 0) * cos30) / plotW;   // label's tilted horizontal extent, as a fraction of plotW
@@ -1614,5 +1695,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barLabelFit, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

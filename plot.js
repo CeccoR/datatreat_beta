@@ -159,8 +159,16 @@ class Plot{
     if(this.ylabelSvg) yl.innerHTML=this.ylabelSvg; else yl.textContent=this.ylabel;
     this.gAxes.appendChild(xl); this.gAxes.appendChild(yl);
   }
-  line(xs, ys, color, width, dash){
-    const entry = {type:'line', xs, ys, color, width, dash};
+  /* `meta` describes the trace for anything that reads a plot back rather than looks
+     at it — today, the figure composer:
+       raw   {xs, ys}  the undisplaced data behind a trace drawn offset or rescaled
+                       for readability, so a composed figure carries the CSV's numbers
+       label string    what this trace is called, for plots whose legend does not
+                       name every line (fits, baselines, extensions)
+     Neither is ever drawn. */
+  line(xs, ys, color, width, dash, meta){
+    const entry = {type:'line', xs, ys, color, width, dash,
+                   raw: meta && meta.raw, label: meta && meta.label};
     this._stored.push(entry);
     return this._renderLine(entry);
   }
@@ -209,8 +217,10 @@ class Plot{
   /* Bar with a fixed PIXEL width, centred at data-x `xc` (+ optional pixel offset `dx`).
      Width stays constant regardless of the sample count or the zoom level — only the
      centre reprojects. `hw` is the half-width in px. */
-  barPx(xc, y0, y1, color, hw, dx){
-    const entry = {type:'barpx', xc, y0, y1, color, hw:hw||14, dx:dx||0};
+  // `meta.label` names the bar's series for anything reading the plot back (the
+  // figure composer), the way line()'s does; bars carry no series of their own.
+  barPx(xc, y0, y1, color, hw, dx, meta){
+    const entry = {type:'barpx', xc, y0, y1, color, hw:hw||14, dx:dx||0, label: meta && meta.label};
     this._stored.push(entry);
     return this._renderBarPx(entry);
   }
@@ -322,24 +332,18 @@ class Plot{
   }
   _refresh(){ this.drawAxes(); this._redrawFromStored(); if (this._onView) this._onView(); }
   attachTools(wrapEl){
+    // The previous tool row is dropped at the END of this function, not here: it
+    // holds the page's download button (and the CSV button built from it), which
+    // are adopted rather than recreated, so removing it first would lose them.
     const old = wrapEl.querySelector('.plot-tool-btns');
-    if (old) old.remove();
     // Group the download button + tool buttons into a single column
     let col = wrapEl.querySelector('.plot-btn-col');
     if (!col){
       col = document.createElement('div');
       col.className = 'plot-btn-col';
       const dlBtn = wrapEl.querySelector('.plot-dl-btn');
-      if (dlBtn){
-        wrapEl.insertBefore(col, dlBtn);
-        // Order (top→bottom): download image (first), CSV, then the tool buttons below.
-        if (!dlBtn.title) dlBtn.title = 'Download image';   // hover description, like the others
-        col.appendChild(dlBtn);
-        if (dlBtn.dataset.csvMod && dlBtn.dataset.csvNames)
-          col.appendChild(makeCsvButton(dlBtn.dataset.csvMod, dlBtn.dataset.csvNames));
-        // Press feedback (grey fill) is handled by the shared button.btn:active CSS.
-      }
-      else { wrapEl.appendChild(col); }
+      if (dlBtn) wrapEl.insertBefore(col, dlBtn);
+      else wrapEl.appendChild(col);
     }
     const div = document.createElement('div');
     div.className = 'plot-tool-btns';
@@ -386,10 +390,40 @@ class Plot{
     zoomBtn.onclick = ()=>{ this.setMode(this._mode==='zoom'?null:'zoom'); };
     this._onModeChange = sync;
     // Order (top→bottom): snapshot, copy, pan, zoom.
+    // Advanced figure composer — sits with the image buttons. Loaded on demand so
+    // the editor's code isn't parsed until someone actually opens it (and so
+    // figure.js can import from here without a static import cycle).
+    const figBtn = document.createElement('button');
+    figBtn.className = 'btn plot-tool-btn';
+    figBtn.title = 'Figure composer (advanced export)';
+    figBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="3" y1="12" x2="21" y2="12"/></svg>`;
+    figBtn.onclick = async ()=>{
+      const dlBtn = wrapEl.querySelector('.plot-dl-btn');
+      const legId = dlBtn && dlBtn.dataset.dlLegend;
+      const name = (dlBtn && dlBtn.dataset.dlName || 'figure').replace(/\.[^.]+$/, '');
+      try {
+        const mod = await import('./figure.js');
+        mod.openFigureEditor(this, { legendEl: legId ? document.getElementById(legId) : null, name });
+      } catch(err){ console.error('figure composer failed to load', err); }
+    };
+
+    // Order, top to bottom: composer, CSV, download image, snapshot, copy, pan, zoom.
+    // The download button belongs to the page, so it is adopted rather than created;
+    // the CSV button is built from the descriptors it carries.
+    const dlBtn2 = wrapEl.querySelector('.plot-dl-btn');
+    let csvBtn = wrapEl.querySelector('.plot-csv-btn');
+    if (!csvBtn && dlBtn2 && dlBtn2.dataset.csvMod && dlBtn2.dataset.csvNames)
+      csvBtn = makeCsvButton(dlBtn2.dataset.csvMod, dlBtn2.dataset.csvNames);
+    if (dlBtn2 && !dlBtn2.title) dlBtn2.title = 'Download image';   // like the others
+    div.appendChild(figBtn);
+    if (csvBtn) div.appendChild(csvBtn);
+    if (dlBtn2) div.appendChild(dlBtn2);
     div.appendChild(snapBtn);
     if (copyBtn) div.appendChild(copyBtn);
     div.appendChild(panBtn);
     div.appendChild(zoomBtn);
+    if (old) old.remove();
+    col.innerHTML = '';
     col.appendChild(div);
     // Re-assert the current mode onto the freshly built buttons/cursor so a re-run
     // of attachTools (e.g. on data refresh) can't leave a stale/partial state.
