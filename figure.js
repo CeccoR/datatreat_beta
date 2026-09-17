@@ -222,7 +222,10 @@ const newAxes = () => ({ left:newSide(true), bottom:newSide(true), right:newSide
    that is what lets eight panels be scaled in pairs rather than all together or each
    on its own. */
 function newPanel(r, c){ return { r, c, rs: 1, cs: 1, title: '', axes: newAxes(),
-                                  shareXWith: null, shareYWith: null }; }
+                                  shareXWith: null, shareYWith: null,
+                                  // Off figure-wide sharing, each panel is on its own
+                                  // automatic range until told otherwise.
+                                  xAuto: true, yAuto: true }; }
 
 // The panel whose range a panel follows, chasing the links and stopping at a cycle.
 function rangeRoot(i, key){
@@ -266,7 +269,10 @@ function buildModel(plot, opts){
     yAuto: true, ymin: 0, ymax: 1,
     // With sharing off each panel has its own range, so a manual one is per panel
     // too. Keyed by panel index; missing = that panel stays on its own auto range.
-    xMan: {}, yMan: {}, rangePanel: 0,
+    /* Manual ranges per panel, and which panel the Range column is editing — one
+       choice per axis, since X and Y are set independently. While sharing is on the
+       figure-wide xAuto/xmin/xmax rule instead, for every panel at once. */
+    xMan: {}, yMan: {}, rangePanel: 0, xPanel: 0, yPanel: 0,
     /* Tick spacing. Each has an "automatic" switch of its own: while it is on the
        figure picks the interval and the field only reports what it picked. */
     xStep: 0, yStep: 0, xStepAuto: true, yStepAuto: true,
@@ -395,8 +401,14 @@ function computeRanges(){
     const ex = exX, ey = exY;
     const manX = F.shareX ? [F.xmin, F.xmax] : F.xMan[rangeRoot(i, 'shareXWith')];
     const manY = F.shareY ? [F.ymin, F.ymax] : F.yMan[rangeRoot(i, 'shareYWith')];
-    xOf[i] = (F.xAuto || !manX) ? [ex.x0, ex.x1] : manX.slice();
-    yOf[i] = (F.yAuto || !manY) ? [ey.y0, ey.y1] : manY.slice();
+    // Whose automatic switch applies: the figure's while sharing, else the panel
+    // the group is rooted on, so panels sharing a range also share that choice.
+    const rx = F.panels[rangeRoot(i, 'shareXWith')] || p;
+    const ry = F.panels[rangeRoot(i, 'shareYWith')] || p;
+    const autoX = F.shareX ? F.xAuto : rx.xAuto !== false;
+    const autoY = F.shareY ? F.yAuto : ry.yAuto !== false;
+    xOf[i] = (autoX || !manX) ? [ex.x0, ex.x1] : manX.slice();
+    yOf[i] = (autoY || !manY) ? [ey.y0, ey.y1] : manY.slice();
   });
   return { xOf, yOf, globalExt };
 }
@@ -1320,18 +1332,55 @@ function autoStepOf(axis){
   return t.length > 1 ? +(t[1] - t[0]).toPrecision(6) : '';
 }
 
-/* Which panels are scaled together while figure-wide sharing is off. Pointing a panel
-   at another puts the two on one range; several panels pointed at the same one make a
-   group, so eight panels can be scaled in pairs. */
-function shareWithHtml(axis){
-  const key = axis === 'x' ? 'shareXWith' : 'shareYWith';
-  return `<div class="fig-subhead">${axis.toUpperCase()} range shared with</div>
-    ${F.panels.map((p, i)=>`<label class="fig-row"><span>P${i+1}</span>
-      <select data-share="${key}" data-p="${i}">
-        <option value="">on its own</option>
+/* One column of the Range section, for one axis. The two are laid out side by side
+   and read top to bottom: share it across the figure or not; which panel the rest of
+   the column is about; which panel that one takes its range from; automatic or not;
+   and the two bounds. Each control below the share switch is about one panel while
+   sharing is off, and about the whole figure while it is on — so the ones that no
+   longer mean anything are shown disabled rather than taken away, and the column
+   keeps its shape as the switches move. */
+function rangeColHtml(axis){
+  const X = axis === 'x';
+  const shared = X ? F.shareX : F.shareY;
+  const withKey = X ? 'shareXWith' : 'shareYWith';
+  const panelKey = X ? 'xPanel' : 'yPanel';
+  const i = Math.min(Math.max(0, F[panelKey] | 0), F.panels.length - 1);
+  const p = F.panels[i] || F.panels[0];
+  /* A panel that shares with another is scaled by that one, so the switch and the
+     bounds below belong to the panel at the head of the group, not to this one —
+     otherwise a range typed here would be recorded where nothing reads it. */
+  const root = shared ? i : rangeRoot(i, withKey);
+  const rp = F.panels[root] || p;
+  const auto = shared ? (X ? F.xAuto : F.yAuto) : (rp[X ? 'xAuto' : 'yAuto'] !== false);
+  const dis = on => on ? '' : ' disabled';
+  const A = axis.toUpperCase();
+  const r = computeRanges();
+  const live = (X ? r.xOf[i] : r.yOf[i]) || [0, 1];
+  const man = F[X ? 'xMan' : 'yMan'][root];
+  const bound = end => shared
+    ? (X ? (end ? F.xmax : F.xmin) : (end ? F.ymax : F.ymin))
+    : (man ? man[end] : live[end]);
+  const field = end => auto
+    ? `<input type="text" value="${+(+live[end]).toPrecision(6)}" disabled title="Chosen automatically">`
+    : (shared
+        ? numField(`data-k="${X ? (end ? 'xmax' : 'xmin') : (end ? 'ymax' : 'ymin')}"`, +(+bound(end)).toPrecision(6), -1e12, 1e12)
+        : numField(`data-man="${X ? 'xMan' : 'yMan'}" data-end="${end}"`, +(+bound(end)).toPrecision(6), -1e12, 1e12));
+  return `<div class="fig-rangecol">
+    <div class="fig-rangehead">${A}</div>
+    <label class="fig-check"><input type="checkbox" data-k="${X ? 'shareX' : 'shareY'}"${shared ? ' checked' : ''}> Share across all panels</label>
+    <label class="fig-row"><span>Panel</span>
+      <select data-k="${panelKey}"${dis(!shared)}>${F.panels.map((q, k)=>
+        `<option value="${k}"${k === i ? ' selected' : ''}>P${k+1}</option>`).join('')}</select></label>
+    <label class="fig-row"><span>Shares with</span>
+      <select data-share="${withKey}" data-p="${i}"${dis(!shared)}>
+        <option value="">none</option>
         ${F.panels.map((q, k)=> k === i ? '' :
-          `<option value="${k}"${p[key] === k ? ' selected' : ''}>P${k+1}</option>`).join('')}
-      </select></label>`).join('')}`;
+          `<option value="${k}"${p[withKey] === k ? ' selected' : ''}>P${k+1}</option>`).join('')}
+      </select></label>
+    <label class="fig-check"><input type="checkbox" data-rauto="${axis}"${auto ? ' checked' : ''}> Automatic range</label>
+    <label class="fig-row"><span>Min</span>${field(0)}</label>
+    <label class="fig-row"><span>Max</span>${field(1)}</label>
+  </div>`;
 }
 
 /* The nine placings of the plot area, drawn as a little square with a dot where the
@@ -1579,20 +1628,7 @@ function controlsHtml(){
     ${sel('X title placing','titleModeX',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeX)}
     ${sel('Y title placing','titleModeY',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeY)}
     <div class="fig-subhead">Range</div>
-    ${chk('Share one X range across all panels','shareX')}
-    ${chk('Share one Y range across all panels','shareY')}
-    ${F.panels.length > 1 && !F.shareX ? shareWithHtml('x') : ''}
-    ${F.panels.length > 1 && !F.shareY ? shareWithHtml('y') : ''}
-    ${(!F.shareX && !F.xAuto) || (!F.shareY && !F.yAuto)
-      ? sel('Range of panel','rangePanel', F.panels.map((p,i)=>[i,'P'+(i+1)]), F.rangePanel) : ''}
-    ${chk('X auto range','xAuto')}
-    ${F.xAuto ? '' : (F.shareX
-      ? `${num('X min','xmin',-1e9,1e9)}${num('X max','xmax',-1e9,1e9)}`
-      : `${manNum('X min','xMan',0)}${manNum('X max','xMan',1)}`)}
-    ${chk('Y auto range','yAuto')}
-    ${F.yAuto ? '' : (F.shareY
-      ? `${num('Y min','ymin',-1e9,1e9)}${num('Y max','ymax',-1e9,1e9)}`
-      : `${manNum('Y min','yMan',0)}${manNum('Y max','yMan',1)}`)}
+    <div class="fig-rangecols">${rangeColHtml('x')}${rangeColHtml('y')}</div>
     <div class="fig-subhead">Ticks</div>
     ${chk('X major step chosen automatically','xStepAuto')}
     ${autoNum('X major step','xStep','xStepAuto',0,1e9, autoStepOf('x'))}
@@ -1684,6 +1720,8 @@ function clampPanels(){
   });
   if (axSel !== 'all' && axSel >= F.panels.length) axSel = 0;
   if (F.rangePanel >= F.panels.length) F.rangePanel = 0;
+  if (F.xPanel >= F.panels.length) F.xPanel = 0;
+  if (F.yPanel >= F.panels.length) F.yPanel = 0;
   F.series.forEach(s=>{ if (s.panel >= F.panels.length) s.panel = 0; });
 }
 
@@ -2006,12 +2044,15 @@ function wireControls(){
       if (k === 'axSel'){ axSel = t.value === 'all' ? 'all' : +t.value; refresh(true); return null; }
       if (k === 'palScope'){ F.palScope = t.value; applyPalette(); pushUndo(); refresh(true); return null; }
       if (k === 'rangePanel'){ F.rangePanel = +t.value; refresh(true); return null; }
+      // Which panel the Range column is about: nothing in the model changes, only
+      // what the column shows, so it rebuilds and stops there.
+      if (k === 'xPanel' || k === 'yPanel'){ F[k] = +t.value; F.rangePanel = +t.value; refresh(true); return null; }
       // Turning an auto range off must hand you the range you are looking at, not
       // the model's placeholder 0..1, so the bounds are read while auto still holds.
       if (k === 'plotAuto' && !t.checked){ F.plotW = lastInner.w; F.plotH = lastInner.h; rebuild = true; }
       if (k === 'plotAuto' && t.checked) rebuild = true;
       if ((k === 'xAuto' || k === 'yAuto') && !t.checked){
-        const r = computeRanges(), i = F.rangePanel | 0;
+        const r = computeRanges(), i = (k === 'xAuto' ? F.xPanel : F.yPanel) | 0;
         if (k === 'xAuto'){ const [a, z] = r.xOf[i] || r.xOf[0] || [0, 1]; F.xmin = a; F.xmax = z; }
         else { const [a, z] = r.yOf[i] || r.yOf[0] || [0, 1]; F.ymin = a; F.ymax = z; }
       }
@@ -2021,6 +2062,30 @@ function wireControls(){
       // Keys that decide which controls are on show have to redraw the sidebar, not
       // just the figure — the fields they reveal or lock are part of their effect.
       if (SHOWS_MORE.has(k)) rebuild = true;
+    } else if (t.dataset.rauto){
+      const X = t.dataset.rauto === 'x';
+      const shared = X ? F.shareX : F.shareY;
+      const sel = Math.min(Math.max(0, (X ? F.xPanel : F.yPanel) | 0), F.panels.length - 1);
+      // The panel at the head of the group this one is scaled with.
+      const i = shared ? sel : rangeRoot(sel, X ? 'shareXWith' : 'shareYWith');
+      if (shared){
+        // Same as the figure-wide switch: hand over the range on screen, so turning
+        // it off starts from what is drawn rather than from a placeholder.
+        const r = computeRanges();
+        if (!t.checked){
+          const [a, z] = (X ? r.xOf[i] : r.yOf[i]) || [0, 1];
+          if (X){ F.xmin = a; F.xmax = z; } else { F.ymin = a; F.ymax = z; }
+        }
+        F[X ? 'xAuto' : 'yAuto'] = t.checked;
+      } else {
+        const p = F.panels[i]; if (!p) return null;
+        if (!t.checked && !F[X ? 'xMan' : 'yMan'][i]){
+          const r = computeRanges();
+          F[X ? 'xMan' : 'yMan'][i] = ((X ? r.xOf[i] : r.yOf[i]) || [0, 1]).slice();
+        }
+        p[X ? 'xAuto' : 'yAuto'] = t.checked;
+      }
+      rebuild = true;
     } else if (t.dataset.ak){
       const v = t.type === 'checkbox' ? t.checked : t.value;
       for (const pi of axTargets()){
@@ -2028,7 +2093,9 @@ function wireControls(){
         (p.axes || (p.axes = newAxes()))[t.dataset.side][t.dataset.ak] = v;
       }
     } else if (t.dataset.man){
-      const bag = t.dataset.man, i = F.rangePanel | 0;
+      const bag = t.dataset.man;
+      const selP = Math.min(Math.max(0, (bag === 'xMan' ? F.xPanel : F.yPanel) | 0), F.panels.length - 1);
+      const i = rangeRoot(selP, bag === 'xMan' ? 'shareXWith' : 'shareYWith');
       const r = computeRanges();
       const cur = F[bag][i] || (bag === 'xMan' ? (r.xOf[i] || [0,1]).slice() : (r.yOf[i] || [0,1]).slice());
       const v = readNum(t); if (v === null) return null;

@@ -2245,6 +2245,19 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   content: ''; position: absolute; left: 0; right: 0; bottom: -4px;
   height: 2px; border-radius: 1px; background: var(--accent);
 }
+/* The Range section: X and Y side by side, each column the same ladder of controls
+   so the two can be read across as well as down. */
+.fig-rangecols { display: flex; gap: 10px; }
+.fig-rangecol { flex: 1 1 0; min-width: 0; }
+.fig-rangehead {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 5px;
+}
+.fig-rangecol .fig-row { flex-wrap: wrap; gap: 2px 6px; }
+.fig-rangecol .fig-row > span { flex: 1 0 100%; }
+.fig-rangecol .fig-row input, .fig-rangecol .fig-row select { flex: 1 1 auto; width: 100%; }
+.fig-rangecol .fig-check { font-size: 11px; align-items: flex-start; }
+
 /* Sub-heading inside a section, for grouping related rows. */
 .fig-subhead {
   margin: 12px 0 6px; font-size: 10px; letter-spacing: .06em;
