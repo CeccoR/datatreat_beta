@@ -2214,14 +2214,14 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 /* Every control on a series row stands the same height, so the row reads as one
    line rather than a row of boxes of four different sizes. */
 .fig-serie { --fig-field-h: 23px; }
-.fig-serie select { flex: 0 0 auto; max-width: 74px; padding: 1px 2px; }
+.fig-serie select { flex: 0 0 74px; width: 74px; max-width: 74px; padding: 1px 2px; }
 .fig-serie input[data-num] { width: 42px; padding: 3px 4px; text-align: center; }
 .fig-serie select,
 .fig-serie input[data-num],
 .fig-serie input.fig-slabel { height: var(--fig-field-h); }
 .fig-serie .color-swatch,
 .fig-serie .fig-cbox-i { height: var(--fig-field-h); }
-.fig-serie .color-swatch { width: var(--fig-field-h); margin: 0 1px; }
+.fig-serie .color-swatch { width: var(--fig-field-h); margin: 0; }
 .fig-serie .fig-cbox-i { width: var(--fig-field-h); }
 .fig-serie .fig-grip { height: var(--fig-field-h); }
 .fig-grip {
@@ -2236,7 +2236,27 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   border-bottom: 1px solid var(--line); padding-bottom: 7px; margin-bottom: 8px;
 }
 .fig-serie-all select, .fig-serie-all input[data-num] { font-size: 10px; }
-.fig-alllabel { flex: 1; min-width: 0; color: var(--muted); font-size: 11px; }
+/* Column names over the series list, built to the same measurements as a row so
+   every field sits under the name of what it is. */
+/* Indented by what a panel group's border and padding add, so the captions and the
+   all-series row stand over the columns of the rows inside the groups. */
+.fig-allhead { margin-bottom: 4px; padding-left: 9px; }
+.fig-serie-caps, .fig-serie-all { padding: 0 9px; }
+.fig-serie-caps { margin-bottom: 4px; }
+.fig-cap {
+  font-size: 9px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); display: flex; align-items: center; justify-content: center;
+  overflow: hidden; white-space: nowrap;
+}
+.fig-cap svg { width: 11px; height: 11px; }
+.fig-cap-box { flex: 0 0 23px; }
+.fig-cap-name { flex: 1; min-width: 40px; justify-content: flex-start; }
+.fig-cap-num { flex: 0 0 42px; }
+.fig-cap-sel { flex: 0 0 74px; }
+/* Some series drawn and some not: neither a tick nor an empty box. */
+.fig-cbox input:indeterminate + .fig-cbox-i {
+  background: var(--panel2); border-color: var(--accent); color: var(--accent);
+}
 .fig-grip-off { visibility: hidden; }
 /* Where the dragged series would land: a bar in the gap between two rows, midway
    between them, rather than a line along the edge of one of them. */
@@ -2354,7 +2374,7 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   .fig-serie select { max-width: none; flex: 1 1 auto; }
   .fig-panel label { flex: 0 0 auto; }
   .fig-ptitle { flex: 1 1 100%; }
-  .fig-alllabel { flex: 1 1 100%; }
+  .fig-cap-name { flex: 1 1 60px; }
 }
 
 /* ---- Phones -------------------------------------------------------------- */

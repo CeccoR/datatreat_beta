@@ -1530,6 +1530,56 @@ function titleField(label, key){
   </div>`;
 }
 
+/* What every series says for one property, or null when they disagree — which is
+   what the "all series" row shows: a value only where there is one to show, and a
+   dash where the series differ, so the row reports as well as sets. */
+function commonOf(get){
+  if (!F.series.length) return null;
+  const first = get(F.series[0]);
+  return F.series.every(s=> get(s) === first) ? first : null;
+}
+
+/* The head of the series list: the column names, and under them one row that sets
+   the same property on every series at once. Both are built to the same measurements
+   as a series row, so the columns line up down the whole list. */
+function allSeriesHtml(){
+  const w = commonOf(s=> s.width);
+  const dash = commonOf(s=> s.dash);
+  const marker = commonOf(s=> s.marker);
+  const DASH_MIX = dash === null, MARK_MIX = marker === null;
+  return `
+    <div class="fig-subhead fig-allhead">All series</div>
+    <div class="fig-serie fig-serie-caps">
+      <span class="fig-grip fig-grip-off"></span>
+      <span class="fig-cap fig-cap-box" title="Draw it">${ICON_DRAW}</span>
+      <span class="fig-cap fig-cap-box" title="List it in the legend">${ICON_LEGEND}</span>
+      <span class="fig-cap fig-cap-box">col</span>
+      <span class="fig-cap fig-cap-name">name</span>
+      <span class="fig-cap fig-cap-num">width</span>
+      <span class="fig-cap fig-cap-sel">line</span>
+      <span class="fig-cap fig-cap-sel">symbol</span>
+    </div>
+    <div class="fig-serie fig-serie-all">
+      <span class="fig-grip fig-grip-off"></span>
+      ${figToggle('data-all="show"', F.series.every(s=>s.show), ICON_DRAW, 'Draw all / draw none')}
+      ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
+      <span class="fig-cap fig-cap-box"></span>
+      <span class="fig-cap fig-cap-name"></span>
+      <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
+             value="${w === null ? '' : w}" placeholder="—" title="Line / bar width for every series">
+      <select data-all="dash" title="Line style for every series">
+        ${DASH_MIX ? '<option value="" selected>—</option>' : ''}
+        ${Object.entries(DASHES).map(([v,n])=>
+          `<option value="${v||'solid'}"${!DASH_MIX && dash === v ? ' selected' : ''}>${n}</option>`).join('')}
+      </select>
+      <select data-all="marker" title="Symbol for every series">
+        ${MARK_MIX ? '<option value="" selected>—</option>' : ''}
+        ${Object.entries(MARKERS).map(([v,n])=>
+          `<option value="${v}"${!MARK_MIX && marker === v ? ' selected' : ''}>${n}</option>`).join('')}
+      </select>
+    </div>`;
+}
+
 /* One series row. Which panel it is in is said by the group it sits in, so the row
    itself carries no panel selector: a series moves by being dragged into another
    group, the way a bar moves between divisions. */
@@ -1605,18 +1655,7 @@ function controlsHtml(){
       </select>
     </div>
     <div class="fig-series">
-      ${F.series.length ? `
-        <div class="fig-serie fig-serie-all">
-          <span class="fig-grip fig-grip-off"></span>
-          ${figToggle('data-all="show"', F.series.every(s=>s.show), ICON_DRAW, 'Draw all / draw none')}
-          ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
-          <span class="fig-alllabel">all series</span>
-          <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6" placeholder="w" title="Line / bar width for every series">
-          <select data-all="dash" title="Line style for every series"><option value="">line…</option>
-            ${Object.entries(DASHES).map(([v,n])=>`<option value="${v||'solid'}">${n}</option>`).join('')}</select>
-          <select data-all="marker" title="Symbol for every series"><option value="">symbol…</option>
-            ${Object.entries(MARKERS).map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select>
-        </div>` : ''}
+      ${F.series.length ? allSeriesHtml() : ''}
       ${F.series.length ? panelGroupsHtml() : '<p class="txt-meta">This plot has no series to compose.</p>'}
     </div>
     <p class="txt-meta">Drag a series by its handle to reorder it, or into another panel's group to move it there.</p>
@@ -1856,7 +1895,43 @@ function refresh(rebuild){
     try { controlsEl.innerHTML = controlsHtml(); } finally { rebuilding = false; }
     wireSeriesDrag();
   }
+  markMixedToggles();
   renderPreview();
+}
+
+/* The all-series row reports as well as sets, so it is brought back into line with
+   the series after every change — including the ones that do not rebuild the sidebar.
+   A field the pointer is typing in is left alone. "Neither on nor off" can only be
+   said to the DOM: there is no markup for an indeterminate checkbox. */
+function markMixedToggles(){
+  if (!controlsEl || !F.series.length) return;
+  const el = sel => controlsEl.querySelector('.fig-serie-all ' + sel);
+  const box = (sel, get)=>{
+    const e = el(sel); if (!e) return;
+    const on = F.series.filter(get).length;
+    e.checked = on === F.series.length;
+    e.indeterminate = on > 0 && on < F.series.length;
+  };
+  box('input[data-all="show"]', s=> s.show);
+  box('input[data-all="inLegend"]', s=> s.inLegend !== false);
+
+  const field = (sel, value, mixedText)=>{
+    const e = el(sel);
+    if (!e || e === document.activeElement) return;
+    if (e.tagName === 'SELECT'){
+      const opt = [...e.options].find(o=> o.value === '');
+      if (value === null){
+        if (!opt) e.insertBefore(new Option(mixedText, ''), e.firstChild);
+        e.value = '';
+      } else {
+        if (opt) opt.remove();
+        e.value = value === '' ? 'solid' : value;
+      }
+    } else e.value = value === null ? '' : value;
+  };
+  field('input[data-all="width"]', commonOf(s=> s.width));
+  field('select[data-all="dash"]', commonOf(s=> s.dash), '—');
+  field('select[data-all="marker"]', commonOf(s=> s.marker), '—');
 }
 
 // Drag-to-reorder over the series rows, same grip-and-drop feel as the file list:
