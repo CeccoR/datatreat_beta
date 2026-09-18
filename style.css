@@ -1208,12 +1208,14 @@ button.palette-pick-btn.cp-anchored { border-color: var(--white); }
 .pp-radio { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); cursor: pointer; }
 .pp-radio input { width: auto; margin: 0; accent-color: var(--accent); }
 /* Keeping the colours in use now as a palette of one's own. */
+/* Name above, button under it: the popup is 244px wide and the two side by side left
+   the button hanging over its edge. */
 .pp-save {
-  display: flex; gap: 6px; align-items: center;
+  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
   border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px;
 }
-.pp-save input[type="text"] { flex: 1 1 auto; width: auto; font-size: 11px; padding: 4px 6px; }
-.pp-save .btn { flex: 0 0 auto; font-size: 11px; padding: 4px 8px; white-space: nowrap; }
+.pp-save input[type="text"] { width: 100%; font-size: 11px; padding: 4px 6px; box-sizing: border-box; }
+.pp-save .btn { width: 100%; font-size: 11px; padding: 5px 8px; white-space: nowrap; }
 .pp-hint { margin: 6px 0 0; font-size: 10px; color: var(--muted); }
 /* The one thing the all-series row offers in the name column: the project's names
    back. It fills that column, so it is as wide as the name fields under it. */

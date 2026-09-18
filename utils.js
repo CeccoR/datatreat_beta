@@ -319,7 +319,7 @@ class PalettePickerUI {
     this._el.innerHTML = `${rows || ''}${scope}
       <div class="pp-save">
         <input type="text" class="pp-save-name" placeholder="palette name" spellcheck="false">
-        <button type="button" class="btn btn-sm pp-save-btn">Save palette</button>
+        <button type="button" class="btn btn-sm primary pp-save-btn">Save palette</button>
       </div>
       <p class="pp-hint">Saves the colours in use now. A palette shorter than the data repeats.</p>`;
     void mine;
