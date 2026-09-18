@@ -1222,6 +1222,8 @@ button.palette-pick-btn.cp-anchored { border-color: var(--white); }
 .fig-restore {
   flex: 1; min-width: 40px; height: var(--fig-field-h); padding: 0 8px;
   font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Reads from the left edge, like the names in the fields under it. */
+  text-align: left;
 }
 .fig-restore:disabled { opacity: 0.45; cursor: default; }
 
