@@ -1224,7 +1224,7 @@ button.palette-pick-btn.cp-anchored { border-color: var(--white); }
   flex: 0 0 auto; height: var(--fig-field-h); padding: 0 8px;
   font-size: 12px; white-space: nowrap;
 }
-.fig-restore.is-off { display: none; }
+.fig-restore:disabled { opacity: 0.45; cursor: default; }
 
 button.color-swatch {
   width: 14px;

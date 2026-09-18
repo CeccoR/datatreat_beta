@@ -1942,12 +1942,13 @@ function markMixedToggles(){
       }
     } else e.value = value === null ? '' : value;
   };
-  /* Offered only when there is something to put back. Typing a name does not rebuild
-     the sidebar — that would take the caret away mid-word — so the button appears and
-     goes from here, with the rest of what this row reports. */
+  /* Always in its place, live only when there is something to put back — so the row
+     keeps its shape and the button says whether any name has been typed over. Typing
+     one does not rebuild the sidebar, which would take the caret away mid-word, so it
+     is enabled and disabled from here with the rest of what this row reports. */
   const restore = controlsEl.querySelector('[data-restore]');
-  if (restore) restore.classList.toggle('is-off',
-    !F.series.some(s=> s.rename || (s.divs && s.divs[0] && s.divs[0].name)));
+  if (restore) restore.disabled =
+    !F.series.some(s=> s.rename || (s.divs && s.divs[0] && s.divs[0].name));
 
   field('input[data-all="width"]', commonOf(s=> s.width));
   field('select[data-all="dash"]', commonOf(s=> s.dash), '—');
