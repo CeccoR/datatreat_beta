@@ -2251,6 +2251,13 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-serie .color-swatch,
 .fig-serie .palette-pick-btn,
 .fig-serie .fig-cbox-i { height: var(--fig-field-h); }
+/* Every button on a series row is rounded like the fields it stands beside — the
+   7px of an input, not the 3px a swatch takes where it is a small square. */
+.fig-serie .color-swatch,
+.fig-serie .palette-pick-btn,
+.fig-serie .fig-cbox-i,
+.fig-serie .fig-restore,
+.fig-dgroup-h .color-swatch { border-radius: 7px; }
 /* The palette button stands in the colour column, so it is the size of the swatches
    below it rather than the 14px it takes where it heads a table. */
 .fig-serie .color-swatch,
@@ -2332,7 +2339,9 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-divs { margin: -2px 0 8px 26px; padding-left: 8px; border-left: 1px solid var(--line); }
 .fig-dgroup { border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; margin-bottom: 5px; }
 .fig-dgroup-h { display: flex; align-items: center; gap: 5px; }
-.fig-dgroup-h .fig-slabel { flex: 1; min-width: 40px; font-size: 11px; padding: 3px 5px; }
+.fig-dgroup-h .fig-slabel { flex: 1; min-width: 40px; font-size: 12px; padding: 1px 5px; height: 23px; }
+/* The division's swatch matches its name field, as the series swatches match theirs. */
+.fig-dgroup-h .color-swatch { width: 23px; height: 23px; flex: 0 0 23px; }
 .fig-dbars { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
 .fig-barchip {
   border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px;
