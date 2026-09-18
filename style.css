@@ -1222,8 +1222,11 @@ button.palette-pick-btn.cp-anchored { border-color: var(--white); }
 .fig-restore {
   flex: 1; min-width: 40px; height: var(--fig-field-h); padding: 0 8px;
   font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  /* Reads from the left edge, like the names in the fields under it. */
-  text-align: left;
+  /* Reads from the left edge, like the names in the fields under it, and sits on the
+     row's middle line: a button with a set height leaves its label where the line box
+     falls, which is a shade high at this size. */
+  display: flex; align-items: center; justify-content: flex-start;
+  text-align: left; line-height: 1;
 }
 .fig-restore:disabled { opacity: 0.45; cursor: default; }
 
