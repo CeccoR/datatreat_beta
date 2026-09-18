@@ -1563,7 +1563,11 @@ function allSeriesHtml(){
       ${figToggle('data-all="show"', F.series.every(s=>s.show), ICON_DRAW, 'Draw all / draw none')}
       ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
       <button class="palette-pick-btn fig-pal" type="button" title="Apply a colour palette to every series"></button>
-      <span class="fig-allcount">${F.series.length} series${F.panels.length > 1 ? ` in ${F.panels.length} panels` : ''}</span>
+      <span class="fig-allname">
+        <span class="fig-allcount">${F.series.length} series${F.panels.length > 1 ? ` in ${F.panels.length} panels` : ''}</span>
+        <button type="button" class="btn btn-sm fig-restore" data-restore
+                title="Drop the names typed here and take the project's own again">restore names</button>
+      </span>
       <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
              value="${w === null ? '' : w}" placeholder="—" title="Line / bar width for every series">
       <select data-all="dash" title="Line style for every series">
@@ -1882,6 +1886,21 @@ function applyPalette(colors){
    a preset, say). Those events are ignored. */
 let rebuilding = false;
 
+/* The names this plot's project gives, back over the ones typed into the composer —
+   the first division's included, since that is the series' name said twice. Anything
+   a series does not get from the project, like the name of a second division, is left
+   alone: there is nothing to put back. */
+function restoreNames(){
+  if (!srcPlot) return;
+  const fresh = seriesFromPlot(srcPlot, srcOpts && srcOpts.legendEl).series;
+  F.series.forEach((s, i)=>{
+    const src = fresh.find(t=> t.id === s.id) || fresh[i];
+    if (src) s.label = src.label;
+    delete s.rename;
+    if (s.divs && s.divs[0]) s.divs[0] = { ...s.divs[0], name: '' };
+  });
+}
+
 function refresh(rebuild){
   clampPanels();
   if (rebuild){
@@ -1923,6 +1942,13 @@ function markMixedToggles(){
       }
     } else e.value = value === null ? '' : value;
   };
+  /* Offered only when there is something to put back. Typing a name does not rebuild
+     the sidebar — that would take the caret away mid-word — so the button appears and
+     goes from here, with the rest of what this row reports. */
+  const restore = controlsEl.querySelector('[data-restore]');
+  if (restore) restore.classList.toggle('is-off',
+    !F.series.some(s=> s.rename || (s.divs && s.divs[0] && s.divs[0].name)));
+
   field('input[data-all="width"]', commonOf(s=> s.width));
   field('select[data-all="dash"]', commonOf(s=> s.dash), '—');
   field('select[data-all="marker"]', commonOf(s=> s.marker), '—');
@@ -2289,6 +2315,11 @@ function wireControls(){
       else insertAt(null, rb.dataset.richAct);
       return;
     }
+    if (e.target.closest('[data-restore]')){
+      restoreNames();
+      pushUndo(); refresh(true);
+      return;
+    }
     const alignB = e.target.closest('[data-align-btn]');
     if (alignB){
       alignPicker.open(alignB, code=>{ F.align = code; pushUndo(); refresh(true); });
@@ -2422,6 +2453,7 @@ export function openFigureEditor(plot, opts){
   controlsEl = backdrop.querySelector('.fig-controls');
   presetBar = backdrop.querySelector('.fig-presets');
   controlsEl.innerHTML = controlsHtml();
+  markMixedToggles();
   wireControls();
   wireSeriesDrag();
   wirePreviewView();
