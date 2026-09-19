@@ -166,7 +166,7 @@ function seriesFromPlot(plot, legendEl){
         width: 0.8,                 // bar width as a fraction of the category slot
         dash: '', marker: 'none',
         // Bars are told apart by their fill, not by a line style or a symbol.
-        texture: 'solid', fillOpacity: 1,
+        texture: 'solid', texInv: false,
         show: true, inLegend: true,
         xs: g.xs, ys: g.ys, errs: g.errs,
       });
@@ -439,8 +439,8 @@ function computeRanges(){
 function legendMark(add, s, xa, xb, y){
   // A bar's key is a swatch of the very fill the bars carry, texture and all.
   if (s.kind === 'bar'){
-    add('rect', { x:xa, y:y-3, width:xb-xa, height:6, fill:barFill(add, s.color, s.texture),
-                  'fill-opacity':(s.fillOpacity == null ? 1 : s.fillOpacity) });
+    add('rect', { x:xa, y:y-3, width:xb-xa, height:6,
+                  fill:barFill(add, s.color, s.texture, s.texInv) });
     return;
   }
   if (s.dash !== 'none'){
@@ -676,8 +676,8 @@ function drawFigure(svg, ink, paper, extra){
           const cx = X(xv) + off, yy = Y(yv);
           add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
                         width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2),
-                        fill:barFill(add, divColor(s, divOfBar(s, j)), s.texture),
-                        'fill-opacity':(s.fillOpacity == null ? 1 : s.fillOpacity) }, g);
+                        fill:barFill(add, divColor(s, divOfBar(s, j)),
+                                     divTexture(s, divOfBar(s, j)), divInv(s, divOfBar(s, j))) }, g);
           const err = s.errs && s.errs[j];
           if (isFinite(err) && err > 0){
             const yA = Y(yv - err), yB = Y(yv + err), cap = Math.min(4, wPx / 3);
@@ -944,9 +944,9 @@ function drawFigure(svg, ink, paper, extra){
    defs and referenced from there, so a hundred bars of one series cost one definition.
    Patterns are part of the document, so they survive export and rasterising. */
 let patDefs = null, patSeen = null;
-function barFill(add, color, texture){
+function barFill(add, color, texture, inv){
   if (!texture || texture === 'solid' || !TEXTURES[texture]) return color;
-  const key = texture + color;
+  const key = texture + color + (inv ? '!' : '');
   if (!patSeen) return color;
   if (!patSeen.has(key)){
     const id = 'ftex' + patSeen.size;
@@ -956,9 +956,13 @@ function barFill(add, color, texture){
     const put = (tag, at)=> pat.appendChild(svgEl(tag, at));
     // The tile is painted on the bar's own colour, so the texture reads as that colour
     // lightened rather than as a second hue laid over white.
-    put('rect', { x:0, y:0, width:P, height:P, fill:color, opacity:0.32 });
-    const line = (x1,y1,x2,y2)=> put('line', { x1, y1, x2, y2, stroke:color, 'stroke-width':1.4, 'stroke-linecap':'square' });
-    if (texture === 'dots') put('circle', { cx:P/2, cy:P/2, r:1.5, fill:color });
+    // Two ways round: the texture drawn dark on a pale ground, or cut out of a solid
+    // one. Which reads better depends on the colour, so it is a choice.
+    const groundOp = inv ? 1 : 0.32;
+    const markCol = inv ? '#ffffff' : color;
+    put('rect', { x:0, y:0, width:P, height:P, fill:color, opacity:groundOp });
+    const line = (x1,y1,x2,y2)=> put('line', { x1, y1, x2, y2, stroke:markCol, 'stroke-width':1.4, 'stroke-linecap':'square' });
+    if (texture === 'dots') put('circle', { cx:P/2, cy:P/2, r:1.5, fill:markCol });
     if (texture === 'fwd'  || texture === 'cross'){ line(-1,P+1,P+1,-1); line(P-1,P+1,P+1,P-1); line(-1,1,1,-1); }
     if (texture === 'back' || texture === 'cross'){ line(-1,-1,P+1,P+1); line(-1,P-1,1,P+1); line(P-1,-1,P+1,1); }
     if (texture === 'horiz' || texture === 'grid') line(0,P/2,P,P/2);
@@ -1352,6 +1356,7 @@ function divisionsHtml(s, i){
     <div class="fig-dgroup" data-dg="${i}:${k}">
       <div class="fig-dgroup-h">
         <button class="color-swatch" data-dsw="${i}:${k}" data-color="${divColor(s,k)}" style="background:${divColor(s,k)}" title="Pick the colour of this division"></button>
+        <button type="button" class="fig-fill" data-fill="${i}:${k}" title="How this division's bars are filled">${fillPreview(divTexture(s,k), divInv(s,k))}</button>
         <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">
         ${k ? `<button type="button" class="btn btn-sm fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${'\u00d7'}</button>` : ''}
       </div>
@@ -1464,42 +1469,41 @@ function ALIGN_ICON(code){
 
 /* A little square showing exactly what a bar of this series looks like: its colour,
    its texture and its opacity, drawn with the same tile the figure uses. */
-function texturePaint(texture, color){
+function texturePaint(texture, color, inv){
   const P = 6;
-  const line = (x1,y1,x2,y2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1.4" stroke-linecap="square"/>`;
+  const mark = inv ? '#ffffff' : color;
+  const line = (x1,y1,x2,y2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${mark}" stroke-width="1.4" stroke-linecap="square"/>`;
   let marks = '';
-  if (texture === 'dots') marks = `<circle cx="${P/2}" cy="${P/2}" r="1.5" fill="${color}"/>`;
+  if (texture === 'dots') marks = `<circle cx="${P/2}" cy="${P/2}" r="1.5" fill="${mark}"/>`;
   if (texture === 'fwd'  || texture === 'cross') marks += line(-1,P+1,P+1,-1) + line(P-1,P+1,P+1,P-1) + line(-1,1,1,-1);
   if (texture === 'back' || texture === 'cross') marks += line(-1,-1,P+1,P+1) + line(-1,P-1,1,P+1) + line(P-1,-1,P+1,1);
   if (texture === 'horiz' || texture === 'grid') marks += line(0,P/2,P,P/2);
   if (texture === 'vert'  || texture === 'grid') marks += line(P/2,0,P/2,P);
-  return { marks, base: texture === 'solid' ? 1 : 0.32 };
+  return { marks, base: (texture === 'solid' || inv) ? 1 : 0.32 };
 }
-function fillPreview(s, size){
-  const color = s.color || '#888888';
-  const tex = s.texture || 'solid';
-  const op = s.fillOpacity == null ? 1 : s.fillOpacity;
-  const { marks, base } = texturePaint(tex, color);
+/* Always drawn in one neutral grey, whatever the bars are coloured: the button and
+   the tiles say which texture, and colour is said by the swatch beside them. */
+const TEX_NEUTRAL = '#8a8f98';
+function fillPreview(tex, inv, size){
+  const { marks, base } = texturePaint(tex || 'solid', TEX_NEUTRAL, inv);
   const px = size || 17, id = 'tp' + Math.random().toString(36).slice(2, 8);
-  return `<svg class="fig-fill-sw" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-hidden="true" style="opacity:${op}">
+  return `<svg class="fig-fill-sw" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-hidden="true">
     <defs><pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse">
-      <rect width="6" height="6" fill="${color}" opacity="${base}"/>${marks}</pattern></defs>
-    <rect x="0.5" y="0.5" width="${px-1}" height="${px-1}" rx="3" fill="url(#${id})" stroke="rgba(128,128,128,0.45)"/>
+      <rect width="6" height="6" fill="${TEX_NEUTRAL}" opacity="${base}"/>${marks}</pattern></defs>
+    <rect x="0.5" y="0.5" width="${px-1}" height="${px-1}" rx="5" fill="url(#${id})" stroke="rgba(128,128,128,0.45)"/>
   </svg>`;
 }
 
-/* How a series' bars are filled, chosen in one place: the texture, the colour it is
-   drawn in and how much of the page shows through. Opens under its button and behaves
-   like the colour picker — click away to dismiss, follows the button as the page
-   scrolls — and every change reaches the figure at once. */
+/* Which texture a series' or a division's bars carry, and which way round it is drawn
+   — dark on a pale ground, or cut out of a solid one. Nothing about colour: that is
+   the swatch beside this button. Opens under its button and behaves like the colour
+   picker, and every change reaches the figure at once. */
 const fillPicker = {
   el: null, anchor: null, state: null, onChange: null,
-  open(anchor, state, onChange, opts){
+  open(anchor, state, onChange){
     this.close();
     this.anchor = anchor; this.onChange = onChange;
-    this.state = { texture: state.texture || 'solid', color: state.color || '#888888',
-                   opacity: state.opacity == null ? 1 : state.opacity };
-    this.opts = opts || {};
+    this.state = { texture: state.texture || 'solid', inv: !!state.inv };
     const el = document.createElement('div');
     el.className = 'fig-fillpop';
     document.body.appendChild(el);
@@ -1512,8 +1516,7 @@ const fillPicker = {
     setTimeout(()=>{
       this._away = ev=>{
         if (!this.el) return;
-        // The colour picker opens on top of this one; a click inside it is not a click away.
-        if (this.el.contains(ev.target) || ev.target === anchor || ev.target.closest('.cp-popup')) return;
+        if (this.el.contains(ev.target) || ev.target === anchor || ev.target.closest('.fig-fill')) return;
         this.close();
       };
       document.addEventListener('pointerdown', this._away);
@@ -1525,39 +1528,27 @@ const fillPicker = {
       <div class="fig-fillgrid">
         ${Object.entries(TEXTURES).map(([v,n])=>
           `<button type="button" class="fig-filltile${st.texture === v ? ' is-on' : ''}" data-tex="${v}" title="${n}">
-             ${fillPreview({ texture:v, color:st.color, fillOpacity:1 }, 22)}</button>`).join('')}
+             ${fillPreview(v, st.inv, 20)}</button>`).join('')}
       </div>
-      ${this.opts.noColor ? '' : `
-      <label class="fig-fillrow"><span>Colour</span>
-        <button class="color-swatch fig-fillcol" type="button" data-color="${st.color}" style="background:${st.color}"></button>
-      </label>`}
-      <label class="fig-fillrow"><span>Opacity</span>
-        <input type="range" min="10" max="100" step="5" value="${Math.round(st.opacity * 100)}" class="fig-fillop">
-        <b>${Math.round(st.opacity * 100)}%</b>
-      </label>`;
+      <div class="fig-fillinv">
+        ${[[false,'texture on a pale ground'],[true,'texture cut out of the colour']].map(([v,t])=>
+          `<button type="button" class="fig-filltile${st.inv === v ? ' is-on' : ''}" data-inv="${v}" title="${t}">
+             ${fillPreview(st.texture === 'solid' ? 'fwd' : st.texture, v, 20)}</button>`).join('')}
+      </div>`;
     this.el.querySelectorAll('[data-tex]').forEach(b=> b.addEventListener('click', ()=>{
       this.state.texture = b.dataset.tex;
       this._render(); this._emit();
     }));
-    const sw = this.el.querySelector('.fig-fillcol');
-    if (sw) sw.addEventListener('click', ()=>{
-      colorPickerUI.open(sw, this.state.color, color=>{
-        this.state.color = color;
-        this._render(); this._emit();
-      });
-    });
-    const op = this.el.querySelector('.fig-fillop');
-    op.addEventListener('input', ()=>{
-      this.state.opacity = (+op.value) / 100;
-      this.el.querySelector('.fig-fillrow b').textContent = op.value + '%';
-      this._emit();
-    });
+    this.el.querySelectorAll('[data-inv]').forEach(b=> b.addEventListener('click', ()=>{
+      this.state.inv = b.dataset.inv === 'true';
+      this._render(); this._emit();
+    }));
   },
   _emit(){ if (this.onChange) this.onChange({ ...this.state }); },
   _reposition(){
     if (!this.el || !this.anchor) return;
     const b = this.anchor.getBoundingClientRect();
-    const w = this.el.offsetWidth || 190, h = this.el.offsetHeight || 190;
+    const w = this.el.offsetWidth || 150, h = this.el.offsetHeight || 120;
     this.el.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, b.left)) + 'px';
     this.el.style.top = Math.max(6, Math.min(window.innerHeight - h - 6, b.bottom + 4)) + 'px';
   },
@@ -1728,7 +1719,7 @@ function allSeriesHtml(){
   const dash = commonOf(s=> s.dash);
   const marker = commonOf(s=> s.marker);
   const texture = commonOf(s=> s.texture || 'solid');
-  const DASH_MIX = dash === null, MARK_MIX = marker === null, TEX_MIX = texture === null;
+  const DASH_MIX = dash === null, MARK_MIX = marker === null;
   const bars = barMode();
   return `
     <div class="fig-serie fig-serie-caps">
@@ -1736,25 +1727,23 @@ function allSeriesHtml(){
       <span class="fig-cap fig-cap-box"></span>
       <span class="fig-cap fig-cap-box"></span>
       <span class="fig-cap fig-cap-box"></span>
+      ${bars ? '<span class="fig-cap fig-cap-box"></span>' : ''}
       <span class="fig-cap fig-cap-name">name</span>
       <span class="fig-cap fig-cap-num">width</span>
-      <span class="fig-cap fig-cap-sel">${bars ? 'texture' : 'line'}</span>
-      ${bars ? '' : '<span class="fig-cap fig-cap-sel">symbol</span>'}
+      ${bars ? '' : '<span class="fig-cap fig-cap-sel">line</span><span class="fig-cap fig-cap-sel">symbol</span>'}
     </div>
     <div class="fig-serie fig-serie-all">
       <span class="fig-grip fig-grip-off"></span>
       ${figToggle('data-all="show"', F.series.every(s=>s.show), ICON_DRAW, 'Draw all / draw none')}
       ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
       <button class="palette-pick-btn fig-pal" type="button" title="Apply a colour palette to every series"></button>
+      ${bars ? `<button type="button" class="fig-fill" data-fill="all" title="Fill for every series">${
+        fillPreview(texture === null ? 'solid' : texture, commonOf(s=> !!s.texInv) === true)}</button>` : ''}
       <button type="button" class="btn btn-sm primary fig-restore" data-restore
               title="Drop the names typed here and take the project's own again">Restore</button>
       <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
              value="${w === null ? '' : w}" placeholder="—" title="Line / bar width for every series">
-      ${bars ? `
-        <button type="button" class="fig-fill" data-fill="all" title="Fill for every series">
-          ${TEX_MIX ? '<span class="fig-fill-sw"></span><span>—</span>'
-                    : `${fillPreview({ texture, color:'#888888', fillOpacity: commonOf(s=> s.fillOpacity == null ? 1 : s.fillOpacity) })}<span>${TEXTURES[texture]}</span>`}
-        </button>` : `
+      ${bars ? '' : `
         <select data-all="dash" title="Line style for every series">
           ${DASH_MIX ? '<option value="" selected>—</option>' : ''}
           ${Object.entries(DASHES).map(([v,n])=>
@@ -1778,15 +1767,12 @@ function serieRowHtml(s, i){
       ${figToggle(`data-sk="show" data-s="${i}"`, s.show, ICON_DRAW, 'Draw this series')}
       ${figToggle(`data-sk="inLegend" data-s="${i}"`, s.inLegend !== false, ICON_LEGEND, 'List it in the legend')}
       ${s.kind === 'bar'
-        ? `<button class="palette-pick-btn fig-spal" type="button" data-spal="${i}" title="Apply a colour palette to this series' divisions"></button>`
+        ? `<button class="palette-pick-btn fig-spal" type="button" data-spal="${i}" title="Apply a colour palette to this series' divisions"></button>
+           <button type="button" class="fig-fill" data-fill="${i}" title="How this series' bars are filled">${fillPreview(s.texture, s.texInv)}</button>`
         : `<button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>`}
       <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
       ${s.kind === 'bar'
-        ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}
-           <button type="button" class="fig-fill" data-fill="${i}" title="How this series' bars are filled">
-             ${fillPreview(s)}<span>${TEXTURES[s.texture || 'solid']}</span>
-           </button>
-           ${barMode() ? '' : '<span class="fig-cap fig-cap-sel"></span>'}`
+        ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}`
         : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
            <select data-sk="dash" data-s="${i}" title="Line style">
              ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
@@ -2013,6 +1999,11 @@ function barName(s, j){
 const divsOf = s => (s.divs && s.divs.length) ? s.divs : [{}];
 const divName = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].name) || s.label;
 const divColor = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].color) || s.color;
+const divTexture = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].texture) || s.texture || 'solid';
+const divInv = (s, k)=>{
+  const d = divsOf(s)[k];
+  return (d && d.texInv != null) ? d.texInv : !!s.texInv;
+};
 const divOfBar = (s, j)=> Math.min(Math.max((s.divOf && s.divOf[j]) || 0, 0), divsOf(s).length - 1);
 
 // A new division takes an even share of the bars, the way a new panel takes an even
@@ -2054,7 +2045,8 @@ function legendEntries(list){
   const out = [];
   for (const s of list){
     if (s.kind === 'bar')
-      divsOf(s).forEach((_, k)=> out.push({ ...s, color: divColor(s, k), label: divName(s, k) }));
+      divsOf(s).forEach((_, k)=> out.push({ ...s, color: divColor(s, k), label: divName(s, k),
+                                            texture: divTexture(s, k), texInv: divInv(s, k) }));
     else out.push(s);
   }
   return out;
@@ -2185,10 +2177,19 @@ function syncSwatches(){
     b.dataset.color = s.color; b.style.background = s.color;
   });
   controlsEl.querySelectorAll('.fig-fill').forEach(b=>{
-    if (b.dataset.fill === 'all') return;
-    const s = F.series[+b.dataset.fill]; if (!s) return;
+    const ref = b.dataset.fill;
+    let tex, inv;
+    if (ref === 'all'){
+      tex = commonOf(t=> t.texture || 'solid') || 'solid';
+      inv = commonOf(t=> !!t.texInv) === true;
+    } else {
+      const [i, k] = ref.split(':').map(Number);
+      const s = F.series[i]; if (!s) return;
+      tex = k == null ? (s.texture || 'solid') : divTexture(s, k);
+      inv = k == null ? !!s.texInv : divInv(s, k);
+    }
     const sw = b.querySelector('.fig-fill-sw');
-    if (sw) sw.outerHTML = fillPreview(s);
+    if (sw) sw.outerHTML = fillPreview(tex, inv);
   });
 }
 
@@ -2576,30 +2577,38 @@ function wireControls(){
     }
     const fillB = e.target.closest('[data-fill]');
     if (fillB){
-      const all = fillB.dataset.fill === 'all';
-      const s0 = all ? null : F.series[+fillB.dataset.fill];
+      const ref = fillB.dataset.fill;
+      const all = ref === 'all';
+      const [si, dk] = all ? [] : ref.split(':').map(Number);
+      const s0 = all ? null : F.series[si];
       if (!all && !s0) return;
-      const bars = ()=> all ? F.series.filter(t=> t.kind === 'bar') : [s0];
       const cur = all
-        ? { texture: commonOf(t=> t.texture || 'solid') || 'solid', color: '#888888',
-            opacity: commonOf(t=> t.fillOpacity == null ? 1 : t.fillOpacity) ?? 1 }
-        : { texture: s0.texture || 'solid', color: divColor(s0, 0), opacity: s0.fillOpacity == null ? 1 : s0.fillOpacity };
+        ? { texture: commonOf(t=> t.texture || 'solid') || 'solid', inv: commonOf(t=> !!t.texInv) === true }
+        : (dk == null
+            ? { texture: s0.texture || 'solid', inv: !!s0.texInv }
+            : { texture: divTexture(s0, dk), inv: divInv(s0, dk) });
       fillPicker.open(fillB, cur, st=>{
-        bars().forEach(t=>{ t.texture = st.texture; t.fillOpacity = st.opacity; });
-        // A colour set here is the series' own — its first division's, which is the
-        // same thing — so picking one stops a palette from spreading over it again.
-        if (!all && st.color !== cur.color){ s0.color = st.color; F.palette = null; }
+        if (all){
+          // Set on every series and cleared from the divisions, so the figure really
+          // does read one way through rather than keeping older choices underneath.
+          F.series.forEach(t=>{
+            if (t.kind !== 'bar') return;
+            t.texture = st.texture; t.texInv = st.inv;
+            if (t.divs) t.divs = t.divs.map(d=> ({ ...d, texture: null, texInv: null }));
+          });
+        } else if (dk == null){
+          s0.texture = st.texture; s0.texInv = st.inv;
+          if (s0.divs) s0.divs = s0.divs.map(d=> ({ ...d, texture: null, texInv: null }));
+        } else {
+          s0.divs = divsOf(s0).slice();
+          s0.divs[dk] = { ...s0.divs[dk], texture: st.texture, texInv: st.inv };
+        }
         pushUndo();
         refresh(false);
-        // The button carries a picture of the fill, so it is redrawn where it stands
-        // rather than by rebuilding the row out from under the open popup.
-        const sw = fillB.querySelector('.fig-fill-sw');
-        const txt = fillB.querySelector('span:last-child');
-        const paint = all ? { texture: st.texture, color: '#888888', fillOpacity: st.opacity } : s0;
-        if (sw) sw.outerHTML = fillPreview(paint);
-        if (txt) txt.textContent = TEXTURES[st.texture];
+        // The buttons carry a picture of the fill, so they are redrawn where they
+        // stand rather than by rebuilding the row out from under the open panel.
         syncSwatches();
-      }, { noColor: all });
+      });
       return;
     }
     const spal = e.target.closest('[data-spal]');
