@@ -461,6 +461,26 @@ function textW(txt, px, weight){
   return measCtx.measureText(String(txt)).width;
 }
 
+/* The pale companion of a colour: the same hue mixed towards white, which is what a
+   texture is drawn on — or in, the other way round. Being a colour rather than a thin
+   veil, it holds up over a grid line or a neighbouring bar. */
+function rgbOf(c){
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c || '').trim());
+  if (m){
+    const h = m[1].length === 3 ? m[1].replace(/./g, ch=> ch + ch) : m[1];
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+  }
+  const rgb = /rgba?\(([^)]+)\)/i.exec(String(c || ''));
+  if (rgb){ const p = rgb[1].split(',').map(Number); return [p[0]||0, p[1]||0, p[2]||0]; }
+  return [136, 136, 136];
+}
+function lightShade(color, amount){
+  const k = amount == null ? 0.68 : amount;
+  const [r, g, b] = rgbOf(color);
+  const mix = v => Math.round(v + (255 - v) * k);
+  return '#' + [mix(r), mix(g), mix(b)].map(v=> v.toString(16).padStart(2, '0')).join('');
+}
+
 /* Black or white, whichever a reader can see against `bg` — the usual relative
    luminance, with the threshold where the two contrast ratios cross. */
 function contrastInk(bg){
@@ -956,11 +976,13 @@ function barFill(add, color, texture, inv){
     const put = (tag, at)=> pat.appendChild(svgEl(tag, at));
     // The tile is painted on the bar's own colour, so the texture reads as that colour
     // lightened rather than as a second hue laid over white.
-    // Two ways round: the texture drawn dark on a pale ground, or cut out of a solid
-    // one. Which reads better depends on the colour, so it is a choice.
-    const groundOp = inv ? 1 : 0.32;
-    const markCol = inv ? '#ffffff' : color;
-    put('rect', { x:0, y:0, width:P, height:P, fill:color, opacity:groundOp });
+    /* Two ways round, both in the one colour: the marks in it over its pale shade, or
+       its pale shade over the colour. Which reads better depends on the colour, so it
+       is a choice rather than a rule. */
+    const pale = lightShade(color);
+    const ground = inv ? color : pale;
+    const markCol = inv ? pale : color;
+    put('rect', { x:0, y:0, width:P, height:P, fill:ground });
     const line = (x1,y1,x2,y2)=> put('line', { x1, y1, x2, y2, stroke:markCol, 'stroke-width':1.4, 'stroke-linecap':'square' });
     if (texture === 'dots') put('circle', { cx:P/2, cy:P/2, r:1.5, fill:markCol });
     if (texture === 'fwd'  || texture === 'cross'){ line(-1,P+1,P+1,-1); line(P-1,P+1,P+1,P-1); line(-1,1,1,-1); }
@@ -1471,7 +1493,7 @@ function ALIGN_ICON(code){
    its texture and its opacity, drawn with the same tile the figure uses. */
 function texturePaint(texture, color, inv){
   const P = 6;
-  const mark = inv ? '#ffffff' : color;
+  const mark = inv ? lightShade(color) : color;
   const line = (x1,y1,x2,y2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${mark}" stroke-width="1.4" stroke-linecap="square"/>`;
   let marks = '';
   if (texture === 'dots') marks = `<circle cx="${P/2}" cy="${P/2}" r="1.5" fill="${mark}"/>`;
@@ -1479,17 +1501,17 @@ function texturePaint(texture, color, inv){
   if (texture === 'back' || texture === 'cross') marks += line(-1,-1,P+1,P+1) + line(-1,P-1,1,P+1) + line(P-1,-1,P+1,1);
   if (texture === 'horiz' || texture === 'grid') marks += line(0,P/2,P,P/2);
   if (texture === 'vert'  || texture === 'grid') marks += line(P/2,0,P/2,P);
-  return { marks, base: (texture === 'solid' || inv) ? 1 : 0.32 };
+  return { marks, ground: texture === 'solid' ? color : (inv ? color : lightShade(color)) };
 }
 /* Always drawn in one neutral grey, whatever the bars are coloured: the button and
    the tiles say which texture, and colour is said by the swatch beside them. */
 const TEX_NEUTRAL = '#8a8f98';
 function fillPreview(tex, inv, size){
-  const { marks, base } = texturePaint(tex || 'solid', TEX_NEUTRAL, inv);
+  const { marks, ground } = texturePaint(tex || 'solid', TEX_NEUTRAL, inv);
   const px = size || 17, id = 'tp' + Math.random().toString(36).slice(2, 8);
   return `<svg class="fig-fill-sw" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-hidden="true">
     <defs><pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse">
-      <rect width="6" height="6" fill="${TEX_NEUTRAL}" opacity="${base}"/>${marks}</pattern></defs>
+      <rect width="6" height="6" fill="${ground}"/>${marks}</pattern></defs>
     <rect x="0.5" y="0.5" width="${px-1}" height="${px-1}" rx="5" fill="url(#${id})" stroke="rgba(128,128,128,0.45)"/>
   </svg>`;
 }
