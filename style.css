@@ -2415,11 +2415,20 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
    series row well before phone widths — these wrap from the point it stops fitting. */
 @media (max-width: 1100px) {
   .fig-serie, .fig-panel { flex-wrap: wrap; row-gap: 6px; }
-  .fig-slabel { flex: 1 1 100px; }
-  .fig-serie select { max-width: none; flex: 1 1 auto; }
+  /* Wrapped rows share the line by these bases rather than by their contents: a
+     select holding "dashed" would otherwise take more of the line than one holding
+     "—", and the name field of a series would end up a different width from the
+     button above it. */
+  input.fig-slabel { flex: 1 1 100px; min-width: 0; }
+  .fig-serie select { max-width: none; flex: 1 1 64px; min-width: 0; }
   .fig-panel label { flex: 0 0 auto; }
   .fig-ptitle { flex: 1 1 100%; }
   .fig-cap-name { flex: 1 1 60px; }
+  /* Once the rows wrap, the fixed columns are gone and the captions would stand over
+     whatever happened to land under them, so they step aside. The button takes the
+     name field's share of the line instead of a share of its own. */
+  .fig-serie-caps { display: none; }
+  .fig-restore { flex: 1 1 100px; min-width: 0; }
 }
 
 /* ---- Phones -------------------------------------------------------------- */

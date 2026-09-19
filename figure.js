@@ -1564,7 +1564,7 @@ function allSeriesHtml(){
       ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
       <button class="palette-pick-btn fig-pal" type="button" title="Apply a colour palette to every series"></button>
       <button type="button" class="btn btn-sm primary fig-restore" data-restore
-              title="Drop the names typed here and take the project's own again">Restore names</button>
+              title="Drop the names typed here and take the project's own again">Restore</button>
       <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
              value="${w === null ? '' : w}" placeholder="—" title="Line / bar width for every series">
       <select data-all="dash" title="Line style for every series">
