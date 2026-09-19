@@ -323,6 +323,10 @@ function buildModel(plot, opts){
     /* A category name changed here, kept by the category's own x so every bar series
        standing on it reads the same name — it is one sample, drawn several times. */
     catNames: {},
+    /* How far the X tick labels are tilted. Starts where the plot had them — a bar
+       chart tilts its sample names to fit, a numeric axis writes them straight — and
+       from there it is one setting for the whole figure. */
+    catRot: (cats && cats.length && cats[0].rot) || 0,
     name: (opts && opts.name) || 'figure',
   };
 }
@@ -535,18 +539,25 @@ function drawFigure(svg, ink, paper, extra){
   // its tick, so the outermost ones overhang the frame by half their width; tilted
   // category names hang below the axis and lean past its left end.
   let halfX = 0, catDrop = 0, catLean = 0;
+  const xRot = Math.max(0, Math.min(90, F.catRot || 0));
+  const xRad = xRot * Math.PI / 180;
   F.panels.forEach((p, i)=>{
-    for (const t of majorTicks(xOf[i][0], xOf[i][1], stepX())) halfX = Math.max(halfX, textW(fmtTick(t), fTick) / 2);
+    for (const t of majorTicks(xOf[i][0], xOf[i][1], stepX())){
+      const w = textW(fmtTick(t), fTick);
+      halfX = Math.max(halfX, xRot ? w * Math.cos(xRad) : w / 2);
+      if (xRot) catDrop = Math.max(catDrop, w * Math.sin(xRad) + fTick * Math.cos(xRad));
+    }
   });
   if (F.cats && F.cats.length){
     for (const cat of F.cats){
-      const w = textW(catText(cat.x), fTick), rad = (cat.rot || 0) * Math.PI / 180;
+      const w = textW(catText(cat.x), fTick), rad = xRad;
       catDrop = Math.max(catDrop, w * Math.sin(rad) + fTick * Math.cos(rad));
-      catLean = Math.max(catLean, cat.rot ? w * Math.cos(rad) : w / 2);
+      catLean = Math.max(catLean, xRot ? w * Math.cos(rad) : w / 2);
     }
     halfX = Math.max(halfX, catLean);
   }
-  const xDrop = F.cats && F.cats.length ? Math.max(fTick * 1.7, catDrop + fTick * 0.6) : fTick * 1.7;
+  const xDrop = (F.cats && F.cats.length) || xRot
+    ? Math.max(fTick * 1.7, catDrop + fTick * 0.6) : fTick * 1.7;
 
   // Only reserve room on a side that some panel actually decorates.
   const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
@@ -826,7 +837,7 @@ function drawFigure(svg, ink, paper, extra){
 
       if (a.labels && cats && !g0.vert){
         for (const c of cats){
-          const q = X(c.x), rot = c.rot || 0;
+          const q = X(c.x), rot = Math.max(0, Math.min(90, F.catRot || 0));
           const at = side === 'bottom' ? { x:q, y:g0.base + fTick*1.15 } : { x:q, y:g0.base - fTick*0.5 };
           const el = add('text', { ...at, 'font-size':fTick, fill:ink,
                                    'text-anchor': rot ? 'end' : 'middle' });
@@ -854,7 +865,14 @@ function drawFigure(svg, ink, paper, extra){
             if (q + hw > px0 + pw - 1 && !free.right && neighbourMarks(side, 'right', false).some(clash)) continue;
             at = { x:q, y: side === 'bottom' ? g0.base+fTick*1.25 : g0.base-fTick*0.5, 'text-anchor':'middle' };
           }
-          add('text', { ...at, 'font-size':fTick, fill:ink }).textContent = txt;
+          const el = add('text', { ...at, 'font-size':fTick, fill:ink });
+          // Numbers tilt with the category names, around the point they label.
+          const rot = g0.vert ? 0 : Math.max(0, Math.min(90, F.catRot || 0));
+          if (rot){
+            el.setAttribute('text-anchor', 'end');
+            el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
+          }
+          el.textContent = txt;
         }
       }
 
@@ -1936,6 +1954,7 @@ function controlsHtml(){
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
     <label class="fig-row"><span>Colour of every line and letter</span>
       <button class="color-swatch" data-inksw data-color="${F.inkColor}" style="background:${F.inkColor}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></label>
+    <label class="fig-row"><span>X tick labels tilt (&deg;)</span>${numField('data-k="catRot"', F.catRot, 0, 90)}</label>
     <div class="fig-subhead">Font sizes (pt)</div>
     <label class="fig-row"><span>Tick numbers</span>${numField('data-f="tick"', F.font.tick, 4, 24)}</label>
     <label class="fig-row"><span>Axis titles</span>${numField('data-f="axis"', F.font.axis, 4, 24)}</label>
@@ -2410,7 +2429,7 @@ const SHOWS_MORE = new Set(['xAuto','yAuto','shareX','shareY','legendMode','lege
   'xStepAuto','yStepAuto','minorXAuto','minorYAuto']);
 
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','legendFrameAlpha','plotW','plotH']);
+  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','legendFrameAlpha','plotW','plotH','catRot']);
   const dlNum = new Set(['rot','off','dec','size']);
 
   /* Routes one control to the model and says whether the sidebar has to be rebuilt.
