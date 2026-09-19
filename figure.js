@@ -49,6 +49,21 @@ const FONTS = {
 const fontStack = () => (FONTS[F && F.font && F.font.family] || FONTS.Inter).stack;
 
 const DASHES = { 'none': 'no line', '': 'solid', '5,4': 'dashed', '2,3': 'dotted', '8,3,2,3': 'dash-dot' };
+
+/* How a bar is filled. Colour says which division a bar belongs to; texture says
+   which series it is, so the two can be read at once — and a figure printed in grey
+   still tells its series apart. Each is drawn as an SVG pattern in the colour of the
+   bar, so it exports and rasterises with everything else. */
+const TEXTURES = {
+  solid:   'solid',
+  dots:    'dots',
+  fwd:     'diagonal /',
+  back:    'diagonal \\',
+  cross:   'crosshatch ×',
+  grid:    'grid +',
+  horiz:   'horizontal lines',
+  vert:    'vertical lines',
+};
 // Point symbols. `-o` is an outline, `-f` is filled; the label carries the glyph so
 // the dropdown reads as the shape it draws.
 const MARKERS = {
@@ -150,6 +165,8 @@ function seriesFromPlot(plot, legendEl){
         color: g.color,
         width: 0.8,                 // bar width as a fraction of the category slot
         dash: '', marker: 'none',
+        // Bars are told apart by their fill, not by a line style or a symbol.
+        texture: 'solid', fillOpacity: 1,
         show: true, inLegend: true,
         xs: g.xs, ys: g.ys, errs: g.errs,
       });
@@ -302,6 +319,9 @@ function buildModel(plot, opts){
     panels: [ newPanel(0, 0) ],
     series,
     cats,                               // category labels of a bar chart, if any
+    /* A category name changed here, kept by the category's own x so every bar series
+       standing on it reads the same name — it is one sample, drawn several times. */
+    catNames: {},
     name: (opts && opts.name) || 'figure',
   };
 }
@@ -417,7 +437,12 @@ function computeRanges(){
 
 // Legend key: a filled box for bars, a stroked line for curves.
 function legendMark(add, s, xa, xb, y){
-  if (s.kind === 'bar'){ add('rect', { x:xa, y:y-3, width:xb-xa, height:6, fill:s.color }); return; }
+  // A bar's key is a swatch of the very fill the bars carry, texture and all.
+  if (s.kind === 'bar'){
+    add('rect', { x:xa, y:y-3, width:xb-xa, height:6, fill:barFill(add, s.color, s.texture),
+                  'fill-opacity':(s.fillOpacity == null ? 1 : s.fillOpacity) });
+    return;
+  }
   if (s.dash !== 'none'){
     const e = add('line', { x1:xa, x2:xb, y1:y, y2:y, stroke:s.color, 'stroke-width':s.width });
     if (s.dash) e.setAttribute('stroke-dasharray', s.dash);
@@ -460,6 +485,8 @@ function contrastInk(bg){
 function drawFigure(svg, ink, paper, extra){
   // One chosen colour for every line and letter the figure draws around the data.
   if (F.inkColor) ink = F.inkColor;
+  patSeen = new Map();
+  patDefs = null;
   const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('width', W); svg.setAttribute('height', H);
@@ -468,6 +495,9 @@ function drawFigure(svg, ink, paper, extra){
   // Stated on the root rather than inherited, so the preview and the exported file
   // render in the same face instead of each falling back to its own default.
   svg.setAttribute('font-family', fontStack());
+  // Patterns live in one defs block at the head of the figure, before anything that
+  // might reference them.
+  patDefs = add('defs', {});
   add('rect', { x:0, y:0, width:W, height:H, fill: paper });
 
   const fTick = F.font.tick * PT_PX, fAxis = F.font.axis * PT_PX;
@@ -489,7 +519,7 @@ function drawFigure(svg, ink, paper, extra){
   });
   if (F.cats && F.cats.length){
     for (const cat of F.cats){
-      const w = textW(cat.text, fTick), rad = (cat.rot || 0) * Math.PI / 180;
+      const w = textW(catText(cat.x), fTick), rad = (cat.rot || 0) * Math.PI / 180;
       catDrop = Math.max(catDrop, w * Math.sin(rad) + fTick * Math.cos(rad));
       catLean = Math.max(catLean, cat.rot ? w * Math.cos(rad) : w / 2);
     }
@@ -645,7 +675,9 @@ function drawFigure(svg, ink, paper, extra){
           if (!isFinite(xv) || !isFinite(yv)) return;
           const cx = X(xv) + off, yy = Y(yv);
           add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
-                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2), fill:divColor(s, divOfBar(s, j)) }, g);
+                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2),
+                        fill:barFill(add, divColor(s, divOfBar(s, j)), s.texture),
+                        'fill-opacity':(s.fillOpacity == null ? 1 : s.fillOpacity) }, g);
           const err = s.errs && s.errs[j];
           if (isFinite(err) && err > 0){
             const yA = Y(yv - err), yB = Y(yv + err), cap = Math.min(4, wPx / 3);
@@ -778,7 +810,7 @@ function drawFigure(svg, ink, paper, extra){
           const el = add('text', { ...at, 'font-size':fTick, fill:ink,
                                    'text-anchor': rot ? 'end' : 'middle' });
           if (rot) el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
-          el.textContent = c.text;
+          el.textContent = catText(c.x);
         }
         continue;
       }
@@ -905,6 +937,35 @@ function drawFigure(svg, ink, paper, extra){
       });
     }
   }
+}
+
+/* A bar's fill: its colour plainly, or that colour drawn as a pattern when the series
+   carries a texture. One pattern per colour-and-texture pair is put in the figure's
+   defs and referenced from there, so a hundred bars of one series cost one definition.
+   Patterns are part of the document, so they survive export and rasterising. */
+let patDefs = null, patSeen = null;
+function barFill(add, color, texture){
+  if (!texture || texture === 'solid' || !TEXTURES[texture]) return color;
+  const key = texture + color;
+  if (!patSeen) return color;
+  if (!patSeen.has(key)){
+    const id = 'ftex' + patSeen.size;
+    patSeen.set(key, id);
+    const P = 6;                               // pattern tile, in figure px
+    const pat = svgEl('pattern', { id, width:P, height:P, patternUnits:'userSpaceOnUse' });
+    const put = (tag, at)=> pat.appendChild(svgEl(tag, at));
+    // The tile is painted on the bar's own colour, so the texture reads as that colour
+    // lightened rather than as a second hue laid over white.
+    put('rect', { x:0, y:0, width:P, height:P, fill:color, opacity:0.32 });
+    const line = (x1,y1,x2,y2)=> put('line', { x1, y1, x2, y2, stroke:color, 'stroke-width':1.4, 'stroke-linecap':'square' });
+    if (texture === 'dots') put('circle', { cx:P/2, cy:P/2, r:1.5, fill:color });
+    if (texture === 'fwd'  || texture === 'cross'){ line(-1,P+1,P+1,-1); line(P-1,P+1,P+1,P-1); line(-1,1,1,-1); }
+    if (texture === 'back' || texture === 'cross'){ line(-1,-1,P+1,P+1); line(-1,P-1,1,P+1); line(P-1,-1,P+1,1); }
+    if (texture === 'horiz' || texture === 'grid') line(0,P/2,P,P/2);
+    if (texture === 'vert'  || texture === 'grid') line(P/2,0,P/2,P);
+    if (patDefs) patDefs.appendChild(pat);
+  }
+  return `url(#${patSeen.get(key)})`;
 }
 
 /* The box behind a legend. Its outline and how much of the page it hides are set
@@ -1275,12 +1336,18 @@ function panelOptions(sel){
   return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1}</option>`).join('');
 }
 
-/* The divisions of one bar series: each one a titled group, with the bars that
-   belong to it listed inside. A bar changes division by being dragged from one group
-   to another — the same gesture that moves a series between panels. */
+/* The divisions of one bar series, and the samples under them. Every sample is listed
+   whatever the divisions do — one per row, named where it stands, and dragged by its
+   handle into the division it belongs to. A bar chart has no other list of its samples,
+   so this one is always on show rather than appearing once a series is divided. */
 function divisionsHtml(s, i){
   const divs = divsOf(s);
-  const many = divs.length > 1;
+  const barRow = j => `
+    <div class="fig-barrow" data-bar="${i}:${j}">
+      <span class="fig-grip" title="Drag into another division">${GRIP}</span>
+      <input type="text" data-bark="${i}:${j}" value="${esc(catText(s.xs[j]))}" class="fig-slabel"
+             title="The sample's name, on the axis and in every series">
+    </div>`;
   const group = (d, k)=>`
     <div class="fig-dgroup" data-dg="${i}:${k}">
       <div class="fig-dgroup-h">
@@ -1288,10 +1355,9 @@ function divisionsHtml(s, i){
         <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">
         ${k ? `<button type="button" class="btn btn-sm fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${'\u00d7'}</button>` : ''}
       </div>
-      ${many ? `<div class="fig-dbars">${
-        s.xs.map((_, j)=> divOfBar(s, j) === k
-          ? `<span class="fig-barchip" data-bar="${i}:${j}" title="Drag into another division">${esc(barName(s, j))}</span>` : '').join('')
-        || '<span class="txt-meta">drag bars here</span>'}</div>` : ''}
+      <div class="fig-dbars">${
+        s.xs.map((_, j)=> divOfBar(s, j) === k ? barRow(j) : '').join('')
+        || '<span class="txt-meta">drag samples here</span>'}</div>
     </div>`;
   return `<div class="fig-divs">
     ${divs.map(group).join('')}
@@ -1395,6 +1461,117 @@ function ALIGN_ICON(code){
     <rect x="1.5" y="1.5" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1"/>
     <rect x="${h}" y="${v}" width="3" height="3" fill="currentColor"/></svg>`;
 }
+
+/* A little square showing exactly what a bar of this series looks like: its colour,
+   its texture and its opacity, drawn with the same tile the figure uses. */
+function texturePaint(texture, color){
+  const P = 6;
+  const line = (x1,y1,x2,y2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="1.4" stroke-linecap="square"/>`;
+  let marks = '';
+  if (texture === 'dots') marks = `<circle cx="${P/2}" cy="${P/2}" r="1.5" fill="${color}"/>`;
+  if (texture === 'fwd'  || texture === 'cross') marks += line(-1,P+1,P+1,-1) + line(P-1,P+1,P+1,P-1) + line(-1,1,1,-1);
+  if (texture === 'back' || texture === 'cross') marks += line(-1,-1,P+1,P+1) + line(-1,P-1,1,P+1) + line(P-1,-1,P+1,1);
+  if (texture === 'horiz' || texture === 'grid') marks += line(0,P/2,P,P/2);
+  if (texture === 'vert'  || texture === 'grid') marks += line(P/2,0,P/2,P);
+  return { marks, base: texture === 'solid' ? 1 : 0.32 };
+}
+function fillPreview(s, size){
+  const color = s.color || '#888888';
+  const tex = s.texture || 'solid';
+  const op = s.fillOpacity == null ? 1 : s.fillOpacity;
+  const { marks, base } = texturePaint(tex, color);
+  const px = size || 17, id = 'tp' + Math.random().toString(36).slice(2, 8);
+  return `<svg class="fig-fill-sw" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-hidden="true" style="opacity:${op}">
+    <defs><pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect width="6" height="6" fill="${color}" opacity="${base}"/>${marks}</pattern></defs>
+    <rect x="0.5" y="0.5" width="${px-1}" height="${px-1}" rx="3" fill="url(#${id})" stroke="rgba(128,128,128,0.45)"/>
+  </svg>`;
+}
+
+/* How a series' bars are filled, chosen in one place: the texture, the colour it is
+   drawn in and how much of the page shows through. Opens under its button and behaves
+   like the colour picker — click away to dismiss, follows the button as the page
+   scrolls — and every change reaches the figure at once. */
+const fillPicker = {
+  el: null, anchor: null, state: null, onChange: null,
+  open(anchor, state, onChange, opts){
+    this.close();
+    this.anchor = anchor; this.onChange = onChange;
+    this.state = { texture: state.texture || 'solid', color: state.color || '#888888',
+                   opacity: state.opacity == null ? 1 : state.opacity };
+    this.opts = opts || {};
+    const el = document.createElement('div');
+    el.className = 'fig-fillpop';
+    document.body.appendChild(el);
+    this.el = el;
+    this._render();
+    this._reposition();
+    this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+    setTimeout(()=>{
+      this._away = ev=>{
+        if (!this.el) return;
+        // The colour picker opens on top of this one; a click inside it is not a click away.
+        if (this.el.contains(ev.target) || ev.target === anchor || ev.target.closest('.cp-popup')) return;
+        this.close();
+      };
+      document.addEventListener('pointerdown', this._away);
+    }, 0);
+  },
+  _render(){
+    const st = this.state;
+    this.el.innerHTML = `
+      <div class="fig-fillgrid">
+        ${Object.entries(TEXTURES).map(([v,n])=>
+          `<button type="button" class="fig-filltile${st.texture === v ? ' is-on' : ''}" data-tex="${v}" title="${n}">
+             ${fillPreview({ texture:v, color:st.color, fillOpacity:1 }, 22)}</button>`).join('')}
+      </div>
+      ${this.opts.noColor ? '' : `
+      <label class="fig-fillrow"><span>Colour</span>
+        <button class="color-swatch fig-fillcol" type="button" data-color="${st.color}" style="background:${st.color}"></button>
+      </label>`}
+      <label class="fig-fillrow"><span>Opacity</span>
+        <input type="range" min="10" max="100" step="5" value="${Math.round(st.opacity * 100)}" class="fig-fillop">
+        <b>${Math.round(st.opacity * 100)}%</b>
+      </label>`;
+    this.el.querySelectorAll('[data-tex]').forEach(b=> b.addEventListener('click', ()=>{
+      this.state.texture = b.dataset.tex;
+      this._render(); this._emit();
+    }));
+    const sw = this.el.querySelector('.fig-fillcol');
+    if (sw) sw.addEventListener('click', ()=>{
+      colorPickerUI.open(sw, this.state.color, color=>{
+        this.state.color = color;
+        this._render(); this._emit();
+      });
+    });
+    const op = this.el.querySelector('.fig-fillop');
+    op.addEventListener('input', ()=>{
+      this.state.opacity = (+op.value) / 100;
+      this.el.querySelector('.fig-fillrow b').textContent = op.value + '%';
+      this._emit();
+    });
+  },
+  _emit(){ if (this.onChange) this.onChange({ ...this.state }); },
+  _reposition(){
+    if (!this.el || !this.anchor) return;
+    const b = this.anchor.getBoundingClientRect();
+    const w = this.el.offsetWidth || 190, h = this.el.offsetHeight || 190;
+    this.el.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, b.left)) + 'px';
+    this.el.style.top = Math.max(6, Math.min(window.innerHeight - h - 6, b.bottom + 4)) + 'px';
+  },
+  close(){
+    if (this._away) document.removeEventListener('pointerdown', this._away);
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
+    this._away = this._onScroll = null;
+    if (this.el) this.el.remove();
+    this.el = null; this.anchor = null; this.onChange = null; this.state = null;
+  },
+};
 
 /* Same manners as the colour picker: a small panel under the button it came from,
    closing on the next click elsewhere and following the button as the page scrolls. */
@@ -1530,6 +1707,10 @@ function titleField(label, key){
   </div>`;
 }
 
+/* A figure of bars only. There is no line to style and no symbol to pick, and the
+   series list says different things there, so it is asked before the list is built. */
+const barMode = ()=> F.series.length > 0 && F.series.every(s=> s.kind === 'bar');
+
 /* What every series says for one property, or null when they disagree — which is
    what the "all series" row shows: a value only where there is one to show, and a
    dash where the series differ, so the row reports as well as sets. */
@@ -1546,7 +1727,9 @@ function allSeriesHtml(){
   const w = commonOf(s=> s.width);
   const dash = commonOf(s=> s.dash);
   const marker = commonOf(s=> s.marker);
-  const DASH_MIX = dash === null, MARK_MIX = marker === null;
+  const texture = commonOf(s=> s.texture || 'solid');
+  const DASH_MIX = dash === null, MARK_MIX = marker === null, TEX_MIX = texture === null;
+  const bars = barMode();
   return `
     <div class="fig-serie fig-serie-caps">
       <span class="fig-grip fig-grip-off"></span>
@@ -1555,8 +1738,8 @@ function allSeriesHtml(){
       <span class="fig-cap fig-cap-box"></span>
       <span class="fig-cap fig-cap-name">name</span>
       <span class="fig-cap fig-cap-num">width</span>
-      <span class="fig-cap fig-cap-sel">line</span>
-      <span class="fig-cap fig-cap-sel">symbol</span>
+      <span class="fig-cap fig-cap-sel">${bars ? 'texture' : 'line'}</span>
+      ${bars ? '' : '<span class="fig-cap fig-cap-sel">symbol</span>'}
     </div>
     <div class="fig-serie fig-serie-all">
       <span class="fig-grip fig-grip-off"></span>
@@ -1567,16 +1750,21 @@ function allSeriesHtml(){
               title="Drop the names typed here and take the project's own again">Restore</button>
       <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
              value="${w === null ? '' : w}" placeholder="—" title="Line / bar width for every series">
-      <select data-all="dash" title="Line style for every series">
-        ${DASH_MIX ? '<option value="" selected>—</option>' : ''}
-        ${Object.entries(DASHES).map(([v,n])=>
-          `<option value="${v||'solid'}"${!DASH_MIX && dash === v ? ' selected' : ''}>${n}</option>`).join('')}
-      </select>
-      <select data-all="marker" title="Symbol for every series">
-        ${MARK_MIX ? '<option value="" selected>—</option>' : ''}
-        ${Object.entries(MARKERS).map(([v,n])=>
-          `<option value="${v}"${!MARK_MIX && marker === v ? ' selected' : ''}>${n}</option>`).join('')}
-      </select>
+      ${bars ? `
+        <button type="button" class="fig-fill" data-fill="all" title="Fill for every series">
+          ${TEX_MIX ? '<span class="fig-fill-sw"></span><span>—</span>'
+                    : `${fillPreview({ texture, color:'#888888', fillOpacity: commonOf(s=> s.fillOpacity == null ? 1 : s.fillOpacity) })}<span>${TEXTURES[texture]}</span>`}
+        </button>` : `
+        <select data-all="dash" title="Line style for every series">
+          ${DASH_MIX ? '<option value="" selected>—</option>' : ''}
+          ${Object.entries(DASHES).map(([v,n])=>
+            `<option value="${v||'solid'}"${!DASH_MIX && dash === v ? ' selected' : ''}>${n}</option>`).join('')}
+        </select>
+        <select data-all="marker" title="Symbol for every series">
+          ${MARK_MIX ? '<option value="" selected>—</option>' : ''}
+          ${Object.entries(MARKERS).map(([v,n])=>
+            `<option value="${v}"${!MARK_MIX && marker === v ? ' selected' : ''}>${n}</option>`).join('')}
+        </select>`}
     </div>`;
 }
 
@@ -1589,11 +1777,16 @@ function serieRowHtml(s, i){
       <span class="fig-grip" title="Drag to reorder, or into another panel">${GRIP}</span>
       ${figToggle(`data-sk="show" data-s="${i}"`, s.show, ICON_DRAW, 'Draw this series')}
       ${figToggle(`data-sk="inLegend" data-s="${i}"`, s.inLegend !== false, ICON_LEGEND, 'List it in the legend')}
-      <button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>
+      ${s.kind === 'bar'
+        ? `<button class="palette-pick-btn fig-spal" type="button" data-spal="${i}" title="Apply a colour palette to this series' divisions"></button>`
+        : `<button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>`}
       <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
       ${s.kind === 'bar'
         ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}
-           <span class="fig-kind">bars</span>`
+           <button type="button" class="fig-fill" data-fill="${i}" title="How this series' bars are filled">
+             ${fillPreview(s)}<span>${TEXTURES[s.texture || 'solid']}</span>
+           </button>
+           ${barMode() ? '' : '<span class="fig-cap fig-cap-sel"></span>'}`
         : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
            <select data-sk="dash" data-s="${i}" title="Line style">
              ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
@@ -1784,6 +1977,14 @@ function samePositionSeries(i){
   return F.series.filter((_, k)=> posOf[k] === posOf[i]);
 }
 
+// A category's name: the one typed into the composer, else the one the plot came with.
+function catText(x){
+  const own = F.catNames && F.catNames[x];
+  if (own != null && own !== '') return own;
+  const cat = F.cats && F.cats.find(c=> c.x === x);
+  return cat ? cat.text : '';
+}
+
 /* The name of one bar: the category it stands on, failing that its place in the series.
    Where several bar series share those categories — raw against corrected, H2 against
    O2 — the category alone would name two different bars the same, so the series it
@@ -1791,8 +1992,9 @@ function samePositionSeries(i){
 function barName(s, j){
   const cat = F.cats && F.cats.find(c=> c.x === s.xs[j]);
   if (!cat) return `${s.label} ${j + 1}`;
+  const txt = catText(s.xs[j]);
   const many = F.series.some(t=> t.kind === 'bar' && t.id !== s.id);
-  return many ? `${cat.text} ${s.label}` : cat.text;
+  return many ? `${txt} ${s.label}` : txt;
 }
 
 /* Divisions: colour groups inside one bar series. A bar chart draws one quantity per
@@ -1865,16 +2067,29 @@ function applyPalette(colors){
   colors = colors || F.palette;
   if (!colors || !colors.length) return;
   F.palette = colors.slice();
+  const lines = F.series.filter(s=> s.kind !== 'bar');
   if (F.palScope === 'panel'){
     const seen = new Map();
-    F.series.forEach(s=>{
+    lines.forEach(s=>{
       const k = seen.get(s.panel) || 0;
       s.color = colors[k % colors.length];
       seen.set(s.panel, k + 1);
     });
   } else {
-    F.series.forEach((s, i)=>{ s.color = colors[i % colors.length]; });
+    lines.forEach((s, i)=>{ s.color = colors[i % colors.length]; });
   }
+  // A bar series is read by division, not by series — the series is told apart by its
+  // texture — so the palette runs across its divisions, and every bar series takes the
+  // same run. One palette applied to the figure therefore colours like with like.
+  F.series.filter(s=> s.kind === 'bar').forEach(s=> paletteOnSeries(s, colors));
+}
+
+// The same spread over one series' divisions, for the palette button on its own row.
+function paletteOnSeries(s, colors){
+  if (!colors || !colors.length) return;
+  s.color = colors[0];
+  if (s.divs && s.divs.length)
+    s.divs = s.divs.map((d, k)=> k === 0 ? { ...d, color: null } : { ...d, color: colors[k % colors.length] });
 }
 
 /* True while the sidebar is being replaced. Throwing away a focused field makes the
@@ -1947,9 +2162,34 @@ function markMixedToggles(){
   if (restore) restore.disabled =
     !F.series.some(s=> s.rename || (s.divs && s.divs[0] && s.divs[0].name));
 
+  // Swatches show a colour the popup may have just changed; they are redrawn in place
+  // for the same reason the fill button is.
+  syncSwatches();
+
   field('input[data-all="width"]', commonOf(s=> s.width));
   field('select[data-all="dash"]', commonOf(s=> s.dash), '—');
   field('select[data-all="marker"]', commonOf(s=> s.marker), '—');
+}
+
+// Every colour square in the sidebar, brought back to the colour it stands for.
+function syncSwatches(){
+  if (!controlsEl) return;
+  controlsEl.querySelectorAll('.color-swatch[data-dsw]').forEach(b=>{
+    const [i, k] = b.dataset.dsw.split(':').map(Number);
+    const s = F.series[i]; if (!s) return;
+    const c = divColor(s, k);
+    b.dataset.color = c; b.style.background = c;
+  });
+  controlsEl.querySelectorAll('.color-swatch[data-sw]').forEach(b=>{
+    const s = F.series[+b.dataset.sw]; if (!s) return;
+    b.dataset.color = s.color; b.style.background = s.color;
+  });
+  controlsEl.querySelectorAll('.fig-fill').forEach(b=>{
+    if (b.dataset.fill === 'all') return;
+    const s = F.series[+b.dataset.fill]; if (!s) return;
+    const sw = b.querySelector('.fig-fill-sw');
+    if (sw) sw.outerHTML = fillPreview(s);
+  });
 }
 
 // Drag-to-reorder over the series rows, same grip-and-drop feel as the file list:
@@ -2010,24 +2250,25 @@ function wireSeriesDrag(){
   wireBarDrag();
 }
 
-// The same gesture for the bars of a divided series: pick a chip up, drop it in the
-// division it belongs to.
+// The same gesture for the samples of a bar series: pick a row up by its handle and
+// drop it in the division it belongs to.
 function wireBarDrag(){
-  const chips = [...controlsEl.querySelectorAll('.fig-barchip')];
+  const chips = [...controlsEl.querySelectorAll('.fig-barrow')];
   const groups = [...controlsEl.querySelectorAll('.fig-dgroup')];
   const groupAt = (x, y)=> groups.find(el=>{
     const b = el.getBoundingClientRect();
     return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right;
   }) || null;
   chips.forEach(chip=>{
+    const handle = chip.querySelector('.fig-grip') || chip;
     let dragging = false;
-    chip.addEventListener('pointerdown', e=>{
+    handle.addEventListener('pointerdown', e=>{
       e.preventDefault();
       dragging = true;
       chip.classList.add('dragging');
-      try { chip.setPointerCapture(e.pointerId); } catch(_){}
+      try { handle.setPointerCapture(e.pointerId); } catch(_){}
     });
-    chip.addEventListener('pointermove', e=>{
+    handle.addEventListener('pointermove', e=>{
       if (!dragging) return;
       const gp = groupAt(e.clientX, e.clientY);
       groups.forEach(g=> g.classList.toggle('drag-into', g === gp));
@@ -2047,8 +2288,8 @@ function wireBarDrag(){
       s.divOf[j] = k;
       pushUndo(); refresh(true);
     };
-    chip.addEventListener('pointerup', finish);
-    chip.addEventListener('pointercancel', ()=>{
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', ()=>{
       dragging = false;
       chip.classList.remove('dragging');
       groups.forEach(g=> g.classList.remove('drag-into'));
@@ -2232,6 +2473,11 @@ function wireControls(){
           rebuild = true;   // reject: re-render the controls so the field snaps back
         }
       }
+    } else if (t.dataset.bark){
+      const [i, j] = t.dataset.bark.split(':').map(Number);
+      const s = F.series[i]; if (!s) return null;
+      // Held by the category, so every series standing on that sample reads it.
+      F.catNames = { ...F.catNames, [s.xs[j]]: t.value };
     } else if (t.dataset.dk){
       const [i, k] = t.dataset.dk.split(':').map(Number);
       const s = F.series[i]; if (!s) return null;
@@ -2326,6 +2572,44 @@ function wireControls(){
     const inkB = e.target.closest('.color-swatch[data-inksw]');
     if (inkB){
       colorPickerUI.open(inkB, F.inkColor, color=>{ F.inkColor = color; pushUndo(); refresh(true); });
+      return;
+    }
+    const fillB = e.target.closest('[data-fill]');
+    if (fillB){
+      const all = fillB.dataset.fill === 'all';
+      const s0 = all ? null : F.series[+fillB.dataset.fill];
+      if (!all && !s0) return;
+      const bars = ()=> all ? F.series.filter(t=> t.kind === 'bar') : [s0];
+      const cur = all
+        ? { texture: commonOf(t=> t.texture || 'solid') || 'solid', color: '#888888',
+            opacity: commonOf(t=> t.fillOpacity == null ? 1 : t.fillOpacity) ?? 1 }
+        : { texture: s0.texture || 'solid', color: divColor(s0, 0), opacity: s0.fillOpacity == null ? 1 : s0.fillOpacity };
+      fillPicker.open(fillB, cur, st=>{
+        bars().forEach(t=>{ t.texture = st.texture; t.fillOpacity = st.opacity; });
+        // A colour set here is the series' own — its first division's, which is the
+        // same thing — so picking one stops a palette from spreading over it again.
+        if (!all && st.color !== cur.color){ s0.color = st.color; F.palette = null; }
+        pushUndo();
+        refresh(false);
+        // The button carries a picture of the fill, so it is redrawn where it stands
+        // rather than by rebuilding the row out from under the open popup.
+        const sw = fillB.querySelector('.fig-fill-sw');
+        const txt = fillB.querySelector('span:last-child');
+        const paint = all ? { texture: st.texture, color: '#888888', fillOpacity: st.opacity } : s0;
+        if (sw) sw.outerHTML = fillPreview(paint);
+        if (txt) txt.textContent = TEXTURES[st.texture];
+        syncSwatches();
+      }, { noColor: all });
+      return;
+    }
+    const spal = e.target.closest('[data-spal]');
+    if (spal){
+      const s = F.series[+spal.dataset.spal]; if (!s) return;
+      palettePickerUI.open(spal, colors=>{
+        paletteOnSeries(s, colors);
+        F.palette = null;     // one series coloured by hand: stop re-spreading over it
+        pushUndo(); refresh(true);
+      }, { colors: ()=> divsOf(s).map((_, k)=> divColor(s, k)) });
       return;
     }
     const dsw = e.target.closest('.color-swatch[data-dsw]');
@@ -2465,6 +2749,7 @@ export function openFigureEditor(plot, opts){
     window.removeEventListener('resize', onResize);
     charPicker.close();
     alignPicker.close();
+    fillPicker.close();
     document.removeEventListener('keydown', onKey);
     backdrop.remove(); backdrop = null; F = null; dimEl = null; presetBar = null;
     srcPlot = null; srcOpts = null;
