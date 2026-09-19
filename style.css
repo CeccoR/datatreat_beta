@@ -2343,10 +2343,18 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-group-empty { margin: 2px 0 0; }
 
 /* Colour groups inside a bar series, with the bars that belong to each. */
-/* Indented so a division's colour and fill buttons stand directly under the series'
-   palette and fill buttons: grip, two toggles and their gaps, less what the group's
-   own border and padding add back. */
-.fig-divs { margin: -2px 0 8px 64px; }
+/* Indented so a division's × sits in the column of the series' legend toggle and its
+   colour and fill buttons stand under the series' palette and fill buttons. */
+.fig-divs { margin: -2px 0 8px 36px; }
+/* Removing a division — the same square as the toggles it lines up with. */
+.fig-divx {
+  flex: 0 0 var(--fig-field-h, 23px); width: var(--fig-field-h, 23px); height: var(--fig-field-h, 23px);
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--panel);
+  color: var(--muted); font-size: 11px; cursor: pointer;
+}
+.fig-divx:hover { border-color: var(--accent); color: var(--accent); }
+.fig-divx-off { border-color: transparent; background: none; }
 .fig-dgroup { border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; margin-bottom: 5px; }
 .fig-dgroup-h { display: flex; align-items: center; gap: 5px; }
 .fig-dgroup-h .fig-slabel { flex: 1; min-width: 40px; font-size: 12px; padding: 1px 5px; height: 23px; }
@@ -2356,10 +2364,12 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-dgroup-h .color-swatch { width: 23px; height: 23px; flex: 0 0 23px; margin: 0; }
 /* How a bar series is filled: a button showing the fill itself, and the panel it
    opens — textures, the colour they are drawn in, and how much shows through. */
+/* Same square as a colour swatch, and the same manners: a quiet border at rest so the
+   two read as one size, the light one on hover and while its panel is open. */
 .fig-fill {
   flex: 0 0 var(--fig-field-h, 23px); width: var(--fig-field-h, 23px); height: var(--fig-field-h, 23px);
   display: flex; align-items: center; justify-content: center; padding: 0;
-  border: 1.5px solid transparent; border-radius: 7px; background: none;
+  border: 1.5px solid rgba(138,143,152,0.55); border-radius: 7px; background: none;
   cursor: pointer; overflow: hidden;
 }
 .fig-fill:hover, .fig-fill.cp-anchored { border-color: var(--white); }
@@ -2385,11 +2395,16 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 /* The samples of a bar series: one row each, named where it stands, dragged by its
    handle. Built like a series row so the two read as the same kind of list. */
 .fig-dbars { display: flex; flex-direction: column; gap: 4px; margin-top: 5px; }
-.fig-barrow { display: flex; align-items: center; gap: 5px; }
+/* The sample rows hang under the name column — under the Restore button and the
+   series names — with the handle just outside it. */
+/* The right inset matches what the width and texture columns take out of a series
+   row, so a sample's name box is the very size of the Restore button above it. */
+.fig-barrow { display: flex; align-items: center; gap: 5px; padding: 0 38px 0 68px; }
+.fig-dgroup-h { padding-right: 38px; }
 .fig-barrow .fig-grip { flex: 0 0 11px; height: 23px; }
 .fig-barrow .fig-slabel { flex: 1; min-width: 40px; font-size: 12px; padding: 1px 5px; height: 23px; }
 .fig-barrow.dragging { opacity: 0.45; }
-.fig-divx, .fig-divadd { flex: 0 0 auto; font-size: 10px; padding: 3px 6px; }
+.fig-divadd { flex: 0 0 auto; font-size: 10px; padding: 3px 6px; margin-left: 28px; }
 
 /* The nine placings of the plot area, in a little grid under the button. */
 .fig-align svg { display: block; }
@@ -2453,7 +2468,9 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
      "—", and the name field of a series would end up a different width from the
      button above it. */
   input.fig-slabel { flex: 1 1 100px; min-width: 0; }
-  .fig-serie select, .fig-fill { max-width: none; flex: 1 1 64px; min-width: 0; width: auto; }
+  .fig-serie select { max-width: none; flex: 1 1 64px; min-width: 0; width: auto; }
+  /* The fill button is a swatch, not a field: it keeps its square whatever the width. */
+  .fig-fill { flex: 0 0 var(--fig-field-h, 23px); width: var(--fig-field-h, 23px); }
   .fig-panel label { flex: 0 0 auto; }
   .fig-ptitle { flex: 1 1 100%; }
   .fig-cap-name { flex: 1 1 60px; }

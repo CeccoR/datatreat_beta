@@ -667,7 +667,7 @@ import { Plot } from './plot.js';
             if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
             plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
           }
-          plot.tickLabel(xc, barLabels[k], fit.rot);
+          plot.tickLabel(xc, barLabels[k], fit.rot, files[k].label);
         }
         plot.attachTools(svg.closest('.plot-wrap'));
       };

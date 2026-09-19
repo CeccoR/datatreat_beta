@@ -723,7 +723,7 @@ import { Plot, svgEl } from './plot.js';
         barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: gasTxt(g) });
         barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
       });
-      barPlot.tickLabel(k+1, labels[k], fit.rot);
+      barPlot.tickLabel(k+1, labels[k], fit.rot, c.label);
     });
     barPlot.attachTools(svg.closest('.plot-wrap'));
     document.getElementById('gcBarLegend').innerHTML =

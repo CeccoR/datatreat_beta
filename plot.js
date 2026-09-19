@@ -242,8 +242,11 @@ class Plot{
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1,y2:y1,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1:y2,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
   }
-  tickLabel(xv, text, rot){
-    const entry = {type:'ticklabel', xv, text, rot: rot||0};
+  /* `full` is the name before it was shortened to fit the axis. The plot draws the
+     short one; anything reading the plot back — the figure composer — wants the name
+     the sample actually has. */
+  tickLabel(xv, text, rot, full){
+    const entry = {type:'ticklabel', xv, text, rot: rot||0, full: full || text};
     this._stored.push(entry);
     return this._renderTickLabel(entry);
   }

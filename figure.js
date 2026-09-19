@@ -113,7 +113,8 @@ function seriesFromPlot(plot, legendEl){
   const stored = plot._stored || [];
   const out = [];
   const cats = stored.filter(e=> e.type === 'ticklabel')
-                     .map(e=>({ x: e.xv, text: e.text, rot: e.rot || 0 }));
+                     // The whole name, not the one the axis had room for.
+                     .map(e=>({ x: e.xv, text: e.full || e.text, rot: e.rot || 0 }));
 
   stored.forEach((e, i)=>{
     if (e.type !== 'line' && e.type !== 'points') return;
@@ -1374,13 +1375,16 @@ function divisionsHtml(s, i){
       <input type="text" data-bark="${i}:${j}" value="${esc(catText(s.xs[j]))}" class="fig-slabel"
              title="The sample's name, on the axis and in every series">
     </div>`;
+  const many = divs.length > 1;
   const group = (d, k)=>`
     <div class="fig-dgroup" data-dg="${i}:${k}">
       <div class="fig-dgroup-h">
+        ${many
+          ? `<button type="button" class="fig-divx" data-deldiv="${i}:${k}" title="Remove this division">&#10005;</button>`
+          : '<span class="fig-divx fig-divx-off"></span>'}
         <button class="color-swatch" data-dsw="${i}:${k}" data-color="${divColor(s,k)}" style="background:${divColor(s,k)}" title="Pick the colour of this division"></button>
         <button type="button" class="fig-fill" data-fill="${i}:${k}" title="How this division's bars are filled">${fillPreview(divTexture(s,k), divInv(s,k))}</button>
         <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">
-        ${k ? `<button type="button" class="btn btn-sm fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${'\u00d7'}</button>` : ''}
       </div>
       <div class="fig-dbars">${
         s.xs.map((_, j)=> divOfBar(s, j) === k ? barRow(j) : '').join('')
@@ -1389,7 +1393,7 @@ function divisionsHtml(s, i){
   return `<div class="fig-divs">
     ${divs.map(group).join('')}
     ${divs.length < s.xs.length
-      ? `<button type="button" class="btn btn-sm fig-divadd" data-adddiv="${i}" title="Another colour group inside this series">+ division</button>`
+      ? `<button type="button" class="btn btn-sm fig-divadd" data-adddiv="${i}" title="Another colour group inside this series">+ Division</button>`
       : ''}
   </div>`;
 }
@@ -1523,8 +1527,12 @@ function fillPreview(tex, inv, size){
 const fillPicker = {
   el: null, anchor: null, state: null, onChange: null,
   open(anchor, state, onChange){
+    // Clicking the button it is already hanging from closes it, as the colour picker does.
+    const again = this.anchor === anchor;
     this.close();
+    if (again) return;
     this.anchor = anchor; this.onChange = onChange;
+    anchor.classList.add('cp-anchored');     // holds the button's border while open
     this.state = { texture: state.texture || 'solid', inv: !!state.inv };
     const el = document.createElement('div');
     el.className = 'fig-fillpop';
@@ -1582,6 +1590,7 @@ const fillPicker = {
     }
     this._away = this._onScroll = null;
     if (this.el) this.el.remove();
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
     this.el = null; this.anchor = null; this.onChange = null; this.state = null;
   },
 };
@@ -2052,11 +2061,25 @@ function addDiv(i){
   return true;
 }
 
+/* Any division can be removed once there is more than one, the first included — the
+   one after it then leads, keeping the name and colour it was given. Bars in the
+   division that goes fall to the first; the rest keep the division they were in. */
 function delDiv(i, k){
   const s = F.series[i];
-  if (!s || k === 0 || !s.divs || k >= s.divs.length) return false;
-  s.divs.splice(k, 1);
-  spreadDivs(s);
+  const divs = divsOf(s);
+  if (!s || divs.length < 2 || k >= divs.length) return false;
+  const keep = divs.slice();
+  const gone = keep.splice(k, 1)[0];
+  // The first division shows the series' own name and colour when it has none of its
+  // own, so a division promoted to first is given what it was already showing.
+  if (k === 0 && keep[0] && !keep[0].color) keep[0] = { ...keep[0], color: divColor(s, 1) };
+  if (k === 0 && keep[0] && !keep[0].name) keep[0] = { ...keep[0], name: divName(s, 1) };
+  void gone;
+  s.divOf = s.xs.map((_, j)=>{
+    const d = divOfBar(s, j);
+    return d === k ? 0 : (d > k ? d - 1 : d);
+  });
+  s.divs = keep;
   return true;
 }
 

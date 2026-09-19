@@ -1098,7 +1098,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       } else if (isFinite(raws[k])&&raws[k]>0){
         plot.barPx(xc,0,raws[k],'#3aa0ff',sHw,0); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
       }
-      plot.tickLabel(xc, labels[k], fit.rot);
+      plot.tickLabel(xc, labels[k], fit.rot, rows[k].label);
     }
     plot.attachTools(wrap);
     if (legend) legend.innerHTML = anyCorr
