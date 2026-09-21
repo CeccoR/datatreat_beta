@@ -51,6 +51,19 @@ function _hsvToRgb(h,s,v){
   }
   return {r:Math.round(r*255),g:Math.round(g*255),b:Math.round(b*255)};
 }
+/* HSV and HSL say the same colours in different words, and the hue is the same word
+   in both. Going through these rather than through RGB keeps a hue that RGB cannot
+   hold — grey and black have none — so dragging lightness to the ends and back
+   returns the colour you started from. */
+function _hsvToHsl(h,s,v){
+  const l = v * (1 - s/2);
+  const d = Math.min(l, 1-l);
+  return {h, s: d ? (v - l) / d : 0, l};
+}
+function _hslToHsv(h,s,l){
+  const v = l + s * Math.min(l, 1-l);
+  return {h, s: v ? 2 * (1 - l/v) : 0, v};
+}
 
 /* Recently picked colours, shared by every colour picker in the app (file list and
    figure composer alike) and kept across sessions. Most recent first, no repeats. */
@@ -76,6 +89,10 @@ class ColorPickerUI {
   constructor(){
     this._onChange = null;
     this._hsv = {h:0,s:1,v:1};
+    /* Black and white have no saturation to read back, so the HSL row would forget
+       it the moment lightness reached an end and hand back grey on the way up. The
+       last one that meant something is kept, as HSV keeps a hue through grey. */
+    this._hslS = 1;
     this._anchorBtn = null;
     this._build();
     document.addEventListener('pointerdown', e=>{
@@ -100,6 +117,11 @@ class ColorPickerUI {
         <div class="cp-rgb-row"><span>G</span><input type="range" class="cp-slider cp-g-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
         <div class="cp-rgb-row"><span>B</span><input type="range" class="cp-slider cp-b-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
       </div>
+      <div class="cp-hsl">
+        <div class="cp-rgb-row"><span>H</span><input type="range" class="cp-slider cp-h-sl" min="0" max="360"><input type="number" class="cp-num" min="0" max="360"></div>
+        <div class="cp-rgb-row"><span>S</span><input type="range" class="cp-slider cp-s-sl" min="0" max="100"><input type="number" class="cp-num" min="0" max="100"></div>
+        <div class="cp-rgb-row"><span>L</span><input type="range" class="cp-slider cp-l-sl" min="0" max="100"><input type="number" class="cp-num" min="0" max="100"></div>
+      </div>
       <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>
       <div class="cp-recent-head">Recent colors</div>
       <div class="cp-presets cp-recent"></div>`;
@@ -114,8 +136,13 @@ class ColorPickerUI {
     this._rSl = el.querySelector('.cp-r-sl');
     this._gSl = el.querySelector('.cp-g-sl');
     this._bSl = el.querySelector('.cp-b-sl');
-    const nums = el.querySelectorAll('.cp-num');
-    this._rNum = nums[0]; this._gNum = nums[1]; this._bNum = nums[2];
+    this._hSl = el.querySelector('.cp-h-sl');
+    this._sSl = el.querySelector('.cp-s-sl');
+    this._lSl = el.querySelector('.cp-l-sl');
+    const rgbNums = el.querySelectorAll('.cp-rgb .cp-num');
+    this._rNum = rgbNums[0]; this._gNum = rgbNums[1]; this._bNum = rgbNums[2];
+    const hslNums = el.querySelectorAll('.cp-hsl .cp-num');
+    this._hNum = hslNums[0]; this._sNum = hslNums[1]; this._lNum = hslNums[2];
     this._recentEl = el.querySelector('.cp-recent');
 
     // 2D map — pointer drag
@@ -157,6 +184,19 @@ class ColorPickerUI {
       this._emit();
     };
     [this._rNum, this._gNum, this._bNum].forEach(n=>n.addEventListener('change', onNum));
+
+    /* HSL, the same colour said the other way: hue, how much of it, how light. The
+       sliders read straight from these fields, so the hue survives a colour dragged
+       to black or grey, which going round by RGB would lose. */
+    const readHsl = (hEl, sEl, lEl)=>{
+      const cl = (v, hi)=> Math.max(0, Math.min(hi, +v || 0));
+      this._hsv = _hslToHsv(cl(hEl.value, 360) / 360, cl(sEl.value, 100) / 100, cl(lEl.value, 100) / 100);
+      this._emit();
+    };
+    [this._hSl, this._sSl, this._lSl].forEach(s=>
+      s.addEventListener('input', ()=> readHsl(this._hSl, this._sSl, this._lSl)));
+    [this._hNum, this._sNum, this._lNum].forEach(n=>
+      n.addEventListener('change', ()=> readHsl(this._hNum, this._sNum, this._lNum)));
 
     // Hex input
     this._hexIn.addEventListener('input', ()=>{
@@ -207,6 +247,17 @@ class ColorPickerUI {
     this._rSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(0,${g},${b}),rgb(255,${g},${b}))`);
     this._gSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(${r},0,${b}),rgb(${r},255,${b}))`);
     this._bSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(${r},${g},0),rgb(${r},${g},255))`);
+    const hsl = _hsvToHsl(h, s, v);
+    const flat = hsl.l === 0 || hsl.l === 1;
+    if (!flat) this._hslS = hsl.s;
+    const H = Math.round(hsl.h*360), S = Math.round((flat ? this._hslS : hsl.s)*100), L = Math.round(hsl.l*100);
+    this._hSl.value = H; this._sSl.value = S; this._lSl.value = L;
+    this._hNum.value = H; this._sNum.value = S; this._lNum.value = L;
+    // Each slider shows where it would take the colour, the other two held still.
+    this._hSl.style.setProperty('--cp-grad',
+      `linear-gradient(to right,${[0,60,120,180,240,300,360].map(d=>`hsl(${d},${S}%,${L}%)`).join(',')})`);
+    this._sSl.style.setProperty('--cp-grad',`linear-gradient(to right,hsl(${H},0%,${L}%),hsl(${H},100%,${L}%))`);
+    this._lSl.style.setProperty('--cp-grad',`linear-gradient(to right,#000,hsl(${H},${S}%,50%),#fff)`);
   }
 
   open(anchorBtn, currentColor, onChange){

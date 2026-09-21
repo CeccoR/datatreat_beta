@@ -995,7 +995,10 @@ function drawFigure(svg, ink, paper, extra){
    Patterns are part of the document, so they survive export and rasterising. */
 let patDefs = null, patSeen = null;
 function barFill(add, color, texture, inv){
-  if (!texture || texture === 'solid' || !TEXTURES[texture]) return color;
+  // A plain bar has the two ways round as well: the colour, or the pale shade the
+  // textures are drawn over — so a series can be told apart by weight alone.
+  if (!texture || !TEXTURES[texture] || texture === 'solid')
+    return inv ? lightShade(color) : color;
   const key = texture + color + (inv ? '!' : '');
   if (!patSeen) return color;
   if (!patSeen.has(key)){
@@ -1534,7 +1537,8 @@ function texturePaint(texture, color, inv){
   if (texture === 'back' || texture === 'cross') marks += line(-1,-1,P+1,P+1) + line(-1,P-1,1,P+1) + line(P-1,-1,P+1,1);
   if (texture === 'horiz' || texture === 'grid') marks += line(0,P/2,P,P/2);
   if (texture === 'vert'  || texture === 'grid') marks += line(P/2,0,P/2,P);
-  return { marks, ground: texture === 'solid' ? color : (inv ? color : lightShade(color)) };
+  return { marks, ground: texture === 'solid' ? (inv ? lightShade(color) : color)
+                                              : (inv ? color : lightShade(color)) };
 }
 /* Always drawn in one neutral grey, whatever the bars are coloured: the button and
    the tiles say which texture, and colour is said by the swatch beside them. */
@@ -1559,7 +1563,7 @@ const TEX_PALETTES = [
   { name: 'Classic',  tex: ['solid','fwd','dots','cross','horiz','back','grid','vert'] },
   { name: 'Hatching', tex: ['fwd','back','cross','grid','horiz','vert'] },
   { name: 'Lines',    tex: ['horiz','vert','grid','fwd','back','cross'] },
-  { name: 'Both ways',tex: ['solid','fwd','fwd!','back','back!','dots','dots!'] },
+  { name: 'Both ways',tex: ['solid','solid!','fwd','fwd!','back','back!','dots','dots!'] },
 ];
 const texName = e => String(e || 'solid').replace('!', '');
 const texInvOf = e => String(e || '').endsWith('!');
@@ -1761,9 +1765,11 @@ const fillPicker = {
              ${fillPreview(v, st.inv, 20)}</button>`).join('')}
       </div>
       <div class="fig-fillinv">
-        ${[[false,'texture on a pale ground'],[true,'texture cut out of the colour']].map(([v,t])=>
+        ${(st.texture === 'solid'
+            ? [[false,'the colour itself'],[true,'its pale shade']]
+            : [[false,'texture on a pale ground'],[true,'texture cut out of the colour']]).map(([v,t])=>
           `<button type="button" class="fig-filltile${st.inv === v ? ' is-on' : ''}" data-inv="${v}" title="${t}">
-             ${fillPreview(st.texture === 'solid' ? 'fwd' : st.texture, v, 20)}</button>`).join('')}
+             ${fillPreview(st.texture, v, 20)}</button>`).join('')}
       </div>`;
     this.el.querySelectorAll('[data-tex]').forEach(b=> b.addEventListener('click', ()=>{
       this.state.texture = b.dataset.tex;
