@@ -285,7 +285,8 @@ function saveUserPalettes(list){
 
 /* The palette picker: one popup wherever colours are handed out in bulk — the file
    list and the figure composer alike. The composer passes a scope, which adds the
-   by-panel / by-series choice at the foot; everything else is the same popup. */
+   by-panel switch at the foot, and on a bar chart a by-division one beside it;
+   everything else is the same popup. */
 class PalettePickerUI {
   constructor(){
     this._onChange = null;
@@ -311,10 +312,13 @@ class PalettePickerUI {
         <div class="pp-swatches">${swatches}</div>
         ${own ? `<button type="button" class="pp-del" data-del="${i - CP_PALETTES.length}" title="Delete this palette">&#10005;</button>` : ''}</div>`;
     }).join('');
+    // One box rather than two choices: off is "by series", the only other way there is.
     const scope = this._opts.scope ? `
       <div class="pp-scope">
-        ${[['panel','by panel'],['series','by series']].map(([v,t])=>
-          `<label class="pp-radio"><input type="radio" name="pp-scope" value="${v}"${this._opts.scope === v ? ' checked' : ''}><span>${t}</span></label>`).join('')}
+        <label class="pp-check"><input type="checkbox" class="pp-panel"${
+          this._opts.scope === 'panel' ? ' checked' : ''}><span>by panel</span></label>
+        ${this._opts.byDiv != null ? `<label class="pp-check"><input type="checkbox" class="pp-bydiv"${
+          this._opts.byDiv ? ' checked' : ''}><span>by division</span></label>` : ''}
       </div>` : '';
     this._el.innerHTML = `${rows || ''}${scope}
       <div class="pp-save">
@@ -342,11 +346,15 @@ class PalettePickerUI {
         this._render(); this._wire(); this._reposition();
       });
     });
-    this._el.querySelectorAll('input[name="pp-scope"]').forEach(r=>{
-      r.addEventListener('change', ()=>{
-        this._opts.scope = r.value;
-        if (this._opts.onScope) this._opts.onScope(r.value);
-      });
+    const scopeBox = this._el.querySelector('.pp-panel');
+    if (scopeBox) scopeBox.addEventListener('change', ()=>{
+      this._opts.scope = scopeBox.checked ? 'panel' : 'series';
+      if (this._opts.onScope) this._opts.onScope(this._opts.scope);
+    });
+    const divBox = this._el.querySelector('.pp-bydiv');
+    if (divBox) divBox.addEventListener('change', ()=>{
+      this._opts.byDiv = divBox.checked;
+      if (this._opts.onByDiv) this._opts.onByDiv(divBox.checked);
     });
     const nameIn = this._el.querySelector('.pp-save-name');
     const saveBtn = this._el.querySelector('.pp-save-btn');

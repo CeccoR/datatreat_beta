@@ -317,6 +317,17 @@ function buildModel(plot, opts){
     palette: CP_PALETTES[0].colors.slice(),
     palScope: 'panel',                  // 'series' = one run of colours across all
                                         // series; 'panel' = every panel restarts it
+    /* On a bar chart a colour tells divisions apart, so the palette runs inside each
+       series. Turned off, a bar takes one colour like any other series and its
+       divisions follow it — which is what a chart with no divisions wants. */
+    palByDiv: true,
+    /* The same three settings for textures, kept apart from the colours': a figure
+       that runs its colours across divisions may still want one texture per series,
+       which is the pair that makes both readable at once. No set until one is
+       chosen: bars start solid and stay there until asked otherwise. */
+    texPalette: null,
+    texScope: 'panel',
+    texByDiv: true,
     panels: [ newPanel(0, 0) ],
     series,
     cats,                               // category labels of a bar chart, if any
@@ -1528,14 +1539,185 @@ function texturePaint(texture, color, inv){
 /* Always drawn in one neutral grey, whatever the bars are coloured: the button and
    the tiles say which texture, and colour is said by the swatch beside them. */
 const TEX_NEUTRAL = '#8a8f98';
-function fillPreview(tex, inv, size){
+/* `r` is the corner: the buttons round theirs like the fields they stand beside, a
+   palette row keeps its tiles nearly square like the colour swatches above them. */
+function fillPreview(tex, inv, size, r){
   const { marks, ground } = texturePaint(tex || 'solid', TEX_NEUTRAL, inv);
   const px = size || 17, id = 'tp' + Math.random().toString(36).slice(2, 8);
   return `<svg class="fig-fill-sw" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-hidden="true">
     <defs><pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse">
       <rect width="6" height="6" fill="${ground}"/>${marks}</pattern></defs>
-    <rect x="0.5" y="0.5" width="${px-1}" height="${px-1}" rx="5" fill="url(#${id})" stroke="rgba(128,128,128,0.45)"/>
+    <rect x="0.5" y="0.5" width="${px-1}" height="${px-1}" rx="${r == null ? 5 : r}" fill="url(#${id})" stroke="rgba(128,128,128,0.45)"/>
   </svg>`;
+}
+
+/* An ordered set of textures, handed out the way a colour palette hands out colours.
+   An entry is a texture name, with '!' for the way round that cuts the texture out of
+   the colour instead of laying it on a pale ground — the same spelling the fill
+   patterns are keyed by. A set shorter than the data repeats, as a palette does. */
+const TEX_PALETTES = [
+  { name: 'Classic',  tex: ['solid','fwd','dots','cross','horiz','back','grid','vert'] },
+  { name: 'Hatching', tex: ['fwd','back','cross','grid','horiz','vert'] },
+  { name: 'Lines',    tex: ['horiz','vert','grid','fwd','back','cross'] },
+  { name: 'Both ways',tex: ['solid','fwd','fwd!','back','back!','dots','dots!'] },
+];
+const texName = e => String(e || 'solid').replace('!', '');
+const texInvOf = e => String(e || '').endsWith('!');
+const texEntry = (tex, inv)=> (tex || 'solid') + (inv ? '!' : '');
+
+const USER_TEXPAL_KEY = 'dt-user-tex-palettes';
+function userTexPalettes(){
+  try { const a = JSON.parse(localStorage.getItem(USER_TEXPAL_KEY)); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+function saveUserTexPalettes(list){
+  try { localStorage.setItem(USER_TEXPAL_KEY, JSON.stringify(list)); } catch(e){}
+}
+
+/* The texture palette picker: the colour palette picker's twin, tiles instead of
+   swatches. Same popup, same rows, same way of saving what is in use — so the two
+   buttons that sit side by side on the all-series row behave alike. */
+const texPalettePicker = {
+  el: null, anchor: null, onPick: null, opts: null,
+  _list(){ return TEX_PALETTES.concat(userTexPalettes()); },
+  open(anchor, onPick, opts){
+    const again = this.anchor === anchor && this.el;
+    this.close();
+    if (again) return;
+    this.anchor = anchor; this.onPick = onPick; this.opts = opts || {};
+    anchor.classList.add('cp-anchored');
+    const el = document.createElement('div');
+    el.className = 'pp-popup pp-texpop';
+    document.body.appendChild(el);
+    this.el = el;
+    this._render();
+    this._reposition();
+    this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+    setTimeout(()=>{
+      this._away = ev=>{
+        if (!this.el) return;
+        if (this.el.contains(ev.target) || ev.target === this.anchor) return;
+        this.close();
+      };
+      document.addEventListener('pointerdown', this._away);
+    }, 0);
+  },
+  _render(){
+    const rows = this._list().map((p, i)=>{
+      const tiles = Array.from({ length: 8 }, (_, k)=>{
+        const e = p.tex[k % p.tex.length];
+        return `<span class="pp-tex">${fillPreview(texName(e), texInvOf(e), 14, 2)}</span>`;
+      }).join('');
+      const own = i >= TEX_PALETTES.length;
+      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${esc(p.name)}</span>
+        <div class="pp-swatches">${tiles}</div>
+        ${own ? `<button type="button" class="pp-del" data-del="${i - TEX_PALETTES.length}" title="Delete this palette">&#10005;</button>` : ''}</div>`;
+    }).join('');
+    const scope = this.opts.scope ? `
+      <div class="pp-scope">
+        <label class="pp-check"><input type="checkbox" class="pp-panel"${
+          this.opts.scope === 'panel' ? ' checked' : ''}><span>by panel</span></label>
+        <label class="pp-check"><input type="checkbox" class="pp-bydiv"${
+          this.opts.byDiv ? ' checked' : ''}><span>by division</span></label>
+      </div>` : '';
+    this.el.innerHTML = `${rows}${scope}
+      <div class="pp-save">
+        <input type="text" class="pp-save-name" placeholder="palette name" spellcheck="false">
+        <button type="button" class="btn btn-sm primary pp-save-btn">Save palette</button>
+      </div>
+      <p class="pp-hint">Saves the textures in use now. A palette shorter than the data repeats.</p>`;
+    this._wire();
+  },
+  _wire(){
+    this.el.querySelectorAll('.pp-row').forEach(row=>{
+      row.addEventListener('click', e=>{
+        if (e.target.closest('.pp-del')) return;
+        const p = this._list()[+row.dataset.idx];
+        if (p && this.onPick) this.onPick(p.tex.slice());
+        this.close();
+      });
+    });
+    this.el.querySelectorAll('.pp-del').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        const list = userTexPalettes();
+        list.splice(+btn.dataset.del, 1);
+        saveUserTexPalettes(list);
+        this._render(); this._reposition();
+      });
+    });
+    const scopeBox = this.el.querySelector('.pp-panel');
+    if (scopeBox) scopeBox.addEventListener('change', ()=>{
+      this.opts.scope = scopeBox.checked ? 'panel' : 'series';
+      if (this.opts.onScope) this.opts.onScope(this.opts.scope);
+    });
+    const divBox = this.el.querySelector('.pp-bydiv');
+    if (divBox) divBox.addEventListener('change', ()=>{
+      this.opts.byDiv = divBox.checked;
+      if (this.opts.onByDiv) this.opts.onByDiv(divBox.checked);
+    });
+    const nameIn = this.el.querySelector('.pp-save-name');
+    this.el.querySelector('.pp-save-btn').addEventListener('click', ()=>{
+      const used = (this.opts.textures ? this.opts.textures() : []).filter(Boolean);
+      if (!used.length) return;
+      const seen = new Set(), uniq = [];
+      for (const t of used) if (!seen.has(t)){ seen.add(t); uniq.push(t); }
+      const list = userTexPalettes();
+      const name = (nameIn.value || '').trim() || `Textures ${list.length + 1}`;
+      const at = list.findIndex(p=> p.name === name);
+      if (at >= 0) list[at] = { name, tex: uniq }; else list.push({ name, tex: uniq });
+      saveUserTexPalettes(list);
+      nameIn.value = '';
+      this._render(); this._reposition();
+    });
+  },
+  /* The sidebar was rebuilt under the popup — a scope change does that — so it is
+     pointed at the button that took the old one's place and stays put. */
+  reanchor(btn){
+    if (!btn || !this.el) return;
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
+    this.anchor = btn;
+    btn.classList.add('cp-anchored');
+    this._reposition();
+  },
+  _reposition(){
+    if (!this.el || !this.anchor) return;
+    const b = this.anchor.getBoundingClientRect();
+    const w = this.el.offsetWidth || 244, h = this.el.offsetHeight || 260;
+    let left = b.right + 10, top = b.top - 4;
+    if (left + w > window.innerWidth - 8) left = b.left - w - 10;
+    if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+    this.el.style.left = Math.max(8, left) + 'px';
+    this.el.style.top = Math.max(8, top) + 'px';
+  },
+  close(){
+    if (this._away) document.removeEventListener('pointerdown', this._away);
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
+    this._away = this._onScroll = null;
+    if (this.el) this.el.remove();
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
+    this.el = null; this.anchor = null; this.onPick = null; this.opts = null;
+  },
+};
+
+/* The button the texture palette hangs from: four textures in one square, the way the
+   colour palette button shows four colours. */
+function texPalIcon(){
+  const tiles = ['fwd','dots','cross','horiz'];
+  return `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${
+    tiles.map((t, i)=>{
+      const { marks, ground } = texturePaint(t, TEX_NEUTRAL, false);
+      const id = 'tpi' + Math.random().toString(36).slice(2, 8);
+      const x = (i % 2) * 8, y = Math.floor(i / 2) * 8;
+      return `<defs><pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="${ground}"/>${marks}</pattern></defs>
+      <rect x="${x}" y="${y}" width="8" height="8" fill="url(#${id})"/>`;
+    }).join('')}</svg>`;
 }
 
 /* Which texture a series' or a division's bars carry, and which way round it is drawn
@@ -1767,7 +1949,6 @@ function allSeriesHtml(){
   const w = commonOf(s=> s.width);
   const dash = commonOf(s=> s.dash);
   const marker = commonOf(s=> s.marker);
-  const texture = commonOf(s=> s.texture || 'solid');
   const DASH_MIX = dash === null, MARK_MIX = marker === null;
   const bars = barMode();
   return `
@@ -1786,8 +1967,8 @@ function allSeriesHtml(){
       ${figToggle('data-all="show"', F.series.every(s=>s.show), ICON_DRAW, 'Draw all / draw none')}
       ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
       <button class="palette-pick-btn fig-pal" type="button" title="Apply a colour palette to every series"></button>
-      ${bars ? `<button type="button" class="fig-fill" data-fill="all" title="Fill for every series">${
-        fillPreview(texture === null ? 'solid' : texture, commonOf(s=> !!s.texInv) === true)}</button>` : ''}
+      ${bars ? `<button class="palette-pick-btn fig-texpal" type="button" data-texpal
+                        title="Apply a texture palette to every series">${texPalIcon()}</button>` : ''}
       <button type="button" class="btn btn-sm primary fig-restore" data-restore
               title="Drop the names typed here and take the project's own again">Restore</button>
       <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
@@ -1816,8 +1997,12 @@ function serieRowHtml(s, i){
       ${figToggle(`data-sk="show" data-s="${i}"`, s.show, ICON_DRAW, 'Draw this series')}
       ${figToggle(`data-sk="inLegend" data-s="${i}"`, s.inLegend !== false, ICON_LEGEND, 'List it in the legend')}
       ${s.kind === 'bar'
-        ? `<button class="palette-pick-btn fig-spal" type="button" data-spal="${i}" title="Apply a colour palette to this series' divisions"></button>
-           <button type="button" class="fig-fill" data-fill="${i}" title="How this series' bars are filled">${fillPreview(s.texture, s.texInv)}</button>`
+        ? `${F.palByDiv
+             ? `<button class="palette-pick-btn fig-spal" type="button" data-spal="${i}" title="Apply a colour palette to this series' divisions"></button>`
+             : `<button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick the colour of this series and its divisions"></button>`}
+           ${F.texByDiv
+             ? `<button class="palette-pick-btn fig-texpal" type="button" data-stexpal="${i}" title="Apply a texture palette to this series' divisions">${texPalIcon()}</button>`
+             : `<button type="button" class="fig-fill" data-fill="${i}" title="How this series' bars are filled">${fillPreview(s.texture, s.texInv)}</button>`}`
         : `<button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>`}
       <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
       ${s.kind === 'bar'
@@ -2074,8 +2259,10 @@ function addDiv(i){
   const pool = F.palette || CP_PALETTES[0].colors;
   const k = divsOf(s).length;
   s.divs = divsOf(s).slice();
+  // Where colour tells series apart rather than divisions, a new division starts in
+  // the series' own colour instead of taking one of its own.
   s.divs.push({ name: `${s.label} ${k + 1}`,
-                color: pool.find(c=> !taken.has(c)) || pool[k % pool.length] });
+                color: F.palByDiv ? (pool.find(c=> !taken.has(c)) || pool[k % pool.length]) : null });
   spreadDivs(s);
   return true;
 }
@@ -2116,28 +2303,39 @@ function legendEntries(list){
   return out;
 }
 
-// Spread a palette over the series. 'series' scope walks every series once, so no
-// two share a colour; 'panel' scope restarts the palette inside each panel, so the
-// same colours repeat panel by panel — useful when panels compare like with like.
+/* Hand a set out over a list of series, one item each: 'series' scope walks them all
+   once, so no two share an item; 'panel' scope starts the set again inside each panel,
+   so the same run repeats panel by panel — useful when panels compare like with like. */
+function spreadByScope(list, scope, put){
+  if (scope === 'panel'){
+    const seen = new Map();
+    list.forEach(s=>{
+      const n = seen.get(s.panel) || 0;
+      put(s, n);
+      seen.set(s.panel, n + 1);
+    });
+  } else list.forEach((s, i)=> put(s, i));
+}
+
+// A division with no colour of its own draws in the series' — which is what "one
+// colour per series" means once the divisions are there. Same for its texture.
+const clearDivColors = s=>{ if (s.divs) s.divs = s.divs.map(d=> ({ ...d, color: null })); };
+const clearDivTex = s=>{ if (s.divs) s.divs = s.divs.map(d=> ({ ...d, texture: null, texInv: null })); };
+
+/* Spread a palette over the figure. A bar series read by division takes the whole run
+   across its divisions — the series itself is told apart by its texture — and every
+   bar series takes the same run, so one palette colours like with like. Read by
+   series instead, a bar is dealt one colour like any line and its divisions follow. */
 function applyPalette(colors){
   colors = colors || F.palette;
   if (!colors || !colors.length) return;
   F.palette = colors.slice();
-  const lines = F.series.filter(s=> s.kind !== 'bar');
-  if (F.palScope === 'panel'){
-    const seen = new Map();
-    lines.forEach(s=>{
-      const k = seen.get(s.panel) || 0;
-      s.color = colors[k % colors.length];
-      seen.set(s.panel, k + 1);
-    });
-  } else {
-    lines.forEach((s, i)=>{ s.color = colors[i % colors.length]; });
-  }
-  // A bar series is read by division, not by series — the series is told apart by its
-  // texture — so the palette runs across its divisions, and every bar series takes the
-  // same run. One palette applied to the figure therefore colours like with like.
-  F.series.filter(s=> s.kind === 'bar').forEach(s=> paletteOnSeries(s, colors));
+  const byDiv = s=> s.kind === 'bar' && F.palByDiv;
+  spreadByScope(F.series.filter(s=> !byDiv(s)), F.palScope, (s, n)=>{
+    s.color = colors[n % colors.length];
+    if (s.kind === 'bar') clearDivColors(s);
+  });
+  F.series.filter(byDiv).forEach(s=> paletteOnSeries(s, colors));
 }
 
 // The same spread over one series' divisions, for the palette button on its own row.
@@ -2146,6 +2344,38 @@ function paletteOnSeries(s, colors){
   s.color = colors[0];
   if (s.divs && s.divs.length)
     s.divs = s.divs.map((d, k)=> k === 0 ? { ...d, color: null } : { ...d, color: colors[k % colors.length] });
+}
+
+// The same two ways for textures, on the bar series alone: nothing else is filled.
+function applyTexPalette(tex){
+  tex = tex || F.texPalette;
+  if (!tex || !tex.length) return;
+  F.texPalette = tex.slice();
+  const bars = F.series.filter(s=> s.kind === 'bar');
+  if (F.texByDiv) bars.forEach(s=> texPaletteOnSeries(s, tex));
+  else spreadByScope(bars, F.texScope, (s, n)=>{
+    const e = tex[n % tex.length];
+    s.texture = texName(e); s.texInv = texInvOf(e);
+    clearDivTex(s);
+  });
+}
+
+function texPaletteOnSeries(s, tex){
+  if (!tex || !tex.length) return;
+  s.texture = texName(tex[0]); s.texInv = texInvOf(tex[0]);
+  if (s.divs && s.divs.length)
+    s.divs = s.divs.map((d, k)=> k === 0
+      ? { ...d, texture: null, texInv: null }
+      : { ...d, texture: texName(tex[k % tex.length]), texInv: texInvOf(tex[k % tex.length]) });
+}
+
+// Every texture the figure is wearing, in the order it hands them out — what "save
+// palette" keeps, read from the divisions or the series as the setting says.
+function texturesInUse(){
+  const bars = F.series.filter(s=> s.kind === 'bar');
+  return F.texByDiv
+    ? (bars[0] ? divsOf(bars[0]).map((_, k)=> texEntry(divTexture(bars[0], k), divInv(bars[0], k))) : [])
+    : bars.map(s=> texEntry(s.texture, s.texInv));
 }
 
 /* True while the sidebar is being replaced. Throwing away a focused field makes the
@@ -2241,17 +2471,10 @@ function syncSwatches(){
     b.dataset.color = s.color; b.style.background = s.color;
   });
   controlsEl.querySelectorAll('.fig-fill').forEach(b=>{
-    const ref = b.dataset.fill;
-    let tex, inv;
-    if (ref === 'all'){
-      tex = commonOf(t=> t.texture || 'solid') || 'solid';
-      inv = commonOf(t=> !!t.texInv) === true;
-    } else {
-      const [i, k] = ref.split(':').map(Number);
-      const s = F.series[i]; if (!s) return;
-      tex = k == null ? (s.texture || 'solid') : divTexture(s, k);
-      inv = k == null ? !!s.texInv : divInv(s, k);
-    }
+    const [i, k] = b.dataset.fill.split(':').map(Number);
+    const s = F.series[i]; if (!s) return;
+    const tex = k == null ? (s.texture || 'solid') : divTexture(s, k);
+    const inv = k == null ? !!s.texInv : divInv(s, k);
     const sw = b.querySelector('.fig-fill-sw');
     if (sw) sw.outerHTML = fillPreview(tex, inv);
   });
@@ -2641,28 +2864,17 @@ function wireControls(){
     }
     const fillB = e.target.closest('[data-fill]');
     if (fillB){
-      const ref = fillB.dataset.fill;
-      const all = ref === 'all';
-      const [si, dk] = all ? [] : ref.split(':').map(Number);
-      const s0 = all ? null : F.series[si];
-      if (!all && !s0) return;
-      const cur = all
-        ? { texture: commonOf(t=> t.texture || 'solid') || 'solid', inv: commonOf(t=> !!t.texInv) === true }
-        : (dk == null
-            ? { texture: s0.texture || 'solid', inv: !!s0.texInv }
-            : { texture: divTexture(s0, dk), inv: divInv(s0, dk) });
+      const [si, dk] = fillB.dataset.fill.split(':').map(Number);
+      const s0 = F.series[si];
+      if (!s0) return;
+      const cur = dk == null
+        ? { texture: s0.texture || 'solid', inv: !!s0.texInv }
+        : { texture: divTexture(s0, dk), inv: divInv(s0, dk) };
       fillPicker.open(fillB, cur, st=>{
-        if (all){
-          // Set on every series and cleared from the divisions, so the figure really
-          // does read one way through rather than keeping older choices underneath.
-          F.series.forEach(t=>{
-            if (t.kind !== 'bar') return;
-            t.texture = st.texture; t.texInv = st.inv;
-            if (t.divs) t.divs = t.divs.map(d=> ({ ...d, texture: null, texInv: null }));
-          });
-        } else if (dk == null){
+        if (dk == null){
           s0.texture = st.texture; s0.texInv = st.inv;
-          if (s0.divs) s0.divs = s0.divs.map(d=> ({ ...d, texture: null, texInv: null }));
+          clearDivTex(s0);
+          F.texPalette = null;    // picked by hand: stop re-spreading a set over it
         } else {
           s0.divs = divsOf(s0).slice();
           s0.divs[dk] = { ...s0.divs[dk], texture: st.texture, texInv: st.inv };
@@ -2683,6 +2895,16 @@ function wireControls(){
         F.palette = null;     // one series coloured by hand: stop re-spreading over it
         pushUndo(); refresh(true);
       }, { colors: ()=> divsOf(s).map((_, k)=> divColor(s, k)) });
+      return;
+    }
+    const stexpal = e.target.closest('[data-stexpal]');
+    if (stexpal){
+      const s = F.series[+stexpal.dataset.stexpal]; if (!s) return;
+      texPalettePicker.open(stexpal, tex=>{
+        texPaletteOnSeries(s, tex);
+        F.texPalette = null;  // one series textured by hand: stop re-spreading over it
+        pushUndo(); refresh(true);
+      }, { textures: ()=> divsOf(s).map((_, k)=> texEntry(divTexture(s, k), divInv(s, k))) });
       return;
     }
     const dsw = e.target.closest('.color-swatch[data-dsw]');
@@ -2706,7 +2928,12 @@ function wireControls(){
         // Under "palette by panel" the panels are meant to read alike, so a colour is
         // a property of a position within a panel, not of one series: every series
         // holding that position in its own panel takes the new colour too.
-        for (const t of samePositionSeries(i)) t.color = color;
+        for (const t of samePositionSeries(i)){
+          t.color = color;
+          // A bar reaches this swatch only where colour says series rather than
+          // division, so its divisions take the colour with it.
+          if (t.kind === 'bar') clearDivColors(t);
+        }
         F.palette = null;         // hand-picked: stop re-applying a palette over it
         pushUndo(); refresh(true);
       });
@@ -2722,8 +2949,38 @@ function wireControls(){
             F.palScope = v; applyPalette(); pushUndo(); refresh(true);
             palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
           },
-          colors: ()=> F.series.map(s=> s.color),
+          // Divisions are a bar chart's affair, so the choice is offered there only.
+          byDiv: barMode() ? F.palByDiv : null,
+          onByDiv: v=>{
+            F.palByDiv = v;
+            // Off, the divisions have no colours of their own — with or without a
+            // palette to spread, which is what makes the switch show at once.
+            if (!v) F.series.forEach(s=>{ if (s.kind === 'bar') clearDivColors(s); });
+            applyPalette(); pushUndo(); refresh(true);
+            palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
+          },
+          colors: ()=> F.series.flatMap(s=> s.kind === 'bar' && F.palByDiv
+            ? divsOf(s).map((_, k)=> divColor(s, k)) : [s.color]),
         });
+      return;
+    }
+    const texpalB = e.target.closest('[data-texpal]');
+    if (texpalB){
+      texPalettePicker.open(texpalB, tex=>{ applyTexPalette(tex); pushUndo(); refresh(true); }, {
+        scope: F.texScope,
+        onScope: v=>{
+          F.texScope = v; applyTexPalette(); pushUndo(); refresh(true);
+          texPalettePicker.reanchor(controlsEl.querySelector('[data-texpal]'));
+        },
+        byDiv: F.texByDiv,
+        onByDiv: v=>{
+          F.texByDiv = v;
+          if (!v) F.series.forEach(s=>{ if (s.kind === 'bar') clearDivTex(s); });
+          applyTexPalette(); pushUndo(); refresh(true);
+          texPalettePicker.reanchor(controlsEl.querySelector('[data-texpal]'));
+        },
+        textures: texturesInUse,
+      });
       return;
     }
     const divB = e.target.closest('[data-adddiv], [data-deldiv]');

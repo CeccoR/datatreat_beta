@@ -1205,8 +1205,12 @@ button.palette-pick-btn.cp-anchored { border-color: var(--white); }
   display: flex; gap: 14px; align-items: center;
   border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px;
 }
-.pp-radio { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); cursor: pointer; }
-.pp-radio input { width: auto; margin: 0; accent-color: var(--accent); }
+.pp-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.pp-check input { width: auto; margin: 0; accent-color: var(--accent); }
+/* A texture palette is the same popup with tiles where the colours are: one row per
+   set, the tiles in the order the set hands them out. */
+.pp-tex { flex: 1; height: 14px; display: flex; }
+.pp-tex .fig-fill-sw { width: 100%; height: 14px; }
 /* Keeping the colours in use now as a palette of one's own. */
 /* Name above, button under it: the popup is 244px wide and the two side by side left
    the button hanging over its edge. */
@@ -2374,6 +2378,13 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 }
 .fig-fill:hover, .fig-fill.cp-anchored { border-color: var(--white); }
 .fig-fill-sw { flex: 0 0 auto; display: block; width: 100%; height: 100%; }
+/* The texture palette button stands in the fill column and is sized by the palette
+   button rules it shares, but it shows textures, so the colour wheel is taken off. */
+.fig-texpal {
+  background: none; display: flex; align-items: center; justify-content: center;
+  padding: 0; overflow: hidden;
+}
+.fig-texpal svg { display: block; width: 100%; height: 100%; }
 .fig-fillpop {
   position: fixed; z-index: 1200; width: 150px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
