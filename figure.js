@@ -1,5 +1,5 @@
 import { svgEl, niceTicks, fmtTick } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG } from './utils.js';
 import { activeTab, TABS } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
@@ -1491,8 +1491,8 @@ function divisionsHtml(s, i){
     <div class="fig-dgroup" data-dg="${i}:${k}">
       <div class="fig-dgroup-h">
         ${many
-          ? `<button type="button" class="fig-divx" data-deldiv="${i}:${k}" title="Remove this division">&#10005;</button>`
-          : '<span class="fig-divx fig-divx-off"></span>'}
+          ? `<button type="button" class="fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${X_SVG(13)}</button>`
+          : '<span class="fig-divx-gap"></span>'}
         <button class="color-swatch" data-dsw="${i}:${k}" data-color="${divColor(s,k)}" style="background:${divColor(s,k)}" title="Pick the colour of this division"></button>
         <button type="button" class="fig-fill" data-fill="${i}:${k}" title="How this division's bars are filled">${fillPreview(divTexture(s,k), divInv(s,k))}</button>
         <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">

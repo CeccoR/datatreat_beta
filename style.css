@@ -2353,14 +2353,18 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
    colour and fill buttons stand under the series' palette and fill buttons. */
 .fig-divs { margin: -2px 0 8px 36px; }
 /* Removing a division — the same square as the toggles it lines up with. */
-.fig-divx {
+/* Removing a division is a bare x, the file list's own glyph, with no box of its own;
+   the whole field-sized square still takes the click. A series with one division has
+   nothing to remove, and gets an empty, inert gap of the same size instead, so its
+   colour and name stay in the column every other division uses. */
+.fig-divx, .fig-divx-gap {
   flex: 0 0 var(--fig-field-h, 23px); width: var(--fig-field-h, 23px); height: var(--fig-field-h, 23px);
-  display: flex; align-items: center; justify-content: center; padding: 0;
-  border: 1px solid var(--line); border-radius: 7px; background: var(--panel);
-  color: var(--muted); font-size: 11px; cursor: pointer;
 }
-.fig-divx:hover { border-color: var(--accent); color: var(--accent); }
-.fig-divx-off { border-color: transparent; background: none; }
+.fig-divx {
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  border: none; background: none; color: var(--muted); cursor: pointer;
+}
+.fig-divx:hover { color: var(--accent); }
 .fig-dgroup { border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; margin-bottom: 5px; }
 .fig-dgroup-h { display: flex; align-items: center; gap: 5px; }
 .fig-dgroup-h .fig-slabel { flex: 1; min-width: 40px; font-size: 12px; padding: 1px 5px; height: 23px; }
