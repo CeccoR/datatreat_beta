@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel, barLabelFit, barPlotXPad } from './utils.js';
+import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, truncTiltLabel, barLabelFit, barPlotXPad, barChipYmax } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 
 /* =========================================================
@@ -700,23 +700,30 @@ import { Plot, svgEl } from './plot.js';
     const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
     const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
     const allVals = finite.flatMap(c=> shown.map(g=>c.rate[g.key]).filter(isFinite));
-    const ymax = Math.max(Math.max(...allVals)*1.2, maxTop/frac);
-    const barPlot = new Plot(svg, {xlabel:'', ylabelSvg:LBL_RATE_SVG, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     const xpad = barPlotXPad(labelWs, costResults.length, svgW-75, fit.rot);   // widen only when a label would cross x=0
-    barPlot.setRange(-xpad, costResults.length+1+xpad, 0, ymax||1);
-    barPlot.drawAxes();
+    const x0 = -xpad, x1 = costResults.length+1+xpad;
     // With both gases the pair sits side by side in the sample's slot, the way the
     // XRPD size chart pairs raw and corrected. Widths shrink so the pair still fits.
     const n = shown.length;
-    const pxSlot = barPlot.px(1) - barPlot.px(0);
+    const pxSlot = (svgW - 75) / (x1 - x0);
     const hw = n > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);
     const dx = n > 1 ? Math.min(12, pxSlot*0.24) : 0;
+    const offOf = gi => (gi - (n-1)/2) * dx * 2;
+    const underChips = [];
+    costResults.forEach((c,k)=>{ if (has(c)) shown.forEach((g,gi)=>{ const v = c.rate[g.key];
+      if (isFinite(v)) underChips.push({ x:k+1, dx:offOf(gi), top:v, w:mctx.measureText(fmtVal(v)).width }); }); });
+    const ymax = Math.max(Math.max(...allVals)*1.2, maxTop/frac,
+      barChipYmax(svg.closest('.plot-wrap').querySelector('.gc-gas-sel'), svg, underChips,
+                  { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0, x1 }));
+    const barPlot = new Plot(svg, {xlabel:'', ylabelSvg:LBL_RATE_SVG, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+    barPlot.setRange(x0, x1, 0, ymax||1);
+    barPlot.drawAxes();
     costResults.forEach((c,k)=>{
       if (!has(c)) return;
       shown.forEach((g,gi)=>{
         const v = c.rate[g.key];
         if (!isFinite(v)) return;
-        const off = (gi - (n-1)/2) * dx * 2;
+        const off = offOf(gi);
         // Same hue as the sample, but the dashed gas is drawn lighter so the pair is
         // told apart the way the curves are.
         // Gas-coloured here rather than sample-coloured: the samples are already told

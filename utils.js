@@ -1793,6 +1793,27 @@ function barPlotXPad(labelWs, n, plotW, rot){
   return Math.max(0, p);
 }
 
+/* The y-range a bar chart needs so that no value label runs up under the series chips
+   laid on its data area, top right (GC's gases, Tauc's Eg methods). Only the bars
+   standing under the chips count, so a chart whose bars keep clear of them is drawn
+   exactly as without. `bars` are {x, dx, top, w}: category x, pixel offset in the
+   slot, top of the bar (error included) and length of its vertical label, in px; `g`
+   is the chart's geometry {W, ml, mr, mTop, plotH, gap, x0, x1}. 0 if none needs it. */
+function barChipYmax(chips, svg, bars, g){
+  if (!chips || !chips.offsetWidth) return 0;
+  const s = svg.getBoundingClientRect(), c = chips.getBoundingClientRect();
+  const left = c.left - s.left, below = c.bottom - s.top + 4;   // the chips' box, in the svg's px
+  const px = x => g.ml + (x - g.x0) / (g.x1 - g.x0) * (g.W - g.ml - g.mr);
+  let ymax = 0;
+  for (const b of bars){
+    if (px(b.x) + (b.dx || 0) + 6 < left) continue;             // a vertical label is ~12 px across
+    // Its top, at mTop + plotH·(1 − top/ymax) − gap − w, has to end below the chips.
+    const room = g.mTop + g.plotH - g.gap - b.w - below;
+    if (room > 0) ymax = Math.max(ymax, b.top * g.plotH / room);
+  }
+  return ymax;
+}
+
 /* =========================================================
    COLLAPSIBLE INSTRUCTIONS
    Each .instr-block is toggled by a small info icon placed next to the card's
@@ -1837,5 +1858,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barLabelFit, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barLabelFit, barPlotXPad, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

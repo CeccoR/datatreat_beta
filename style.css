@@ -662,6 +662,8 @@ input[type="file"] {
 .gc-gas-chip.is-on:active, .plot-chip.is-on:active { background: var(--accent-active); border-color: var(--accent-active); color: var(--on-accent); }
 .gc-gas-chip:disabled, .plot-chip:disabled { opacity: 0.35; cursor: default; }
 .gc-gas-chip:disabled:hover, .plot-chip:disabled:hover { color: var(--muted); }
+/* "x-axis" and "baseline" are names, not labels to shout: lower case as written. */
+.mode-chip.plot-chip { text-transform: none; }
 
 /* ===== Custom date-time field (segmented text + calendar button) ===== */
 .dt-field {
@@ -862,18 +864,15 @@ svg.plot {
   border: 1px solid var(--line);
   touch-action: none;
 }
-/* Exception (GC): full-width strip plots stacked one above the other, so a single
-   golden-ratio box would be far too tall. Twice the golden ratio (1 : 2φ) keeps the
-   pair roughly as tall as one standard plot. */
+/* Exception (GC, and Tauc's Eg bar chart, built like GC's): full-width strip plots
+   stacked one above the other, so a single golden-ratio box would be far too tall.
+   Twice the golden ratio (1 : 2φ) keeps the pair roughly as tall as one standard plot. */
 svg.plot.plot-wide { aspect-ratio: 3.236; }
-/* Tauc's Eg bar chart: one full-width chart holding both methods, 2 : 1. */
-svg.plot.plot-bar { aspect-ratio: 2; }
 /* Once the columns stack to full width the floor is pointless — and keeping it would
    make every plot overflow and scroll horizontally on the narrowest screens. */
 :root.narrow-layout svg.plot { min-width: 0; }
 /* Same threshold: a 1 : 2φ strip gets unreadably short once the layout narrows. */
-:root.narrow-layout svg.plot.plot-wide,
-:root.narrow-layout svg.plot.plot-bar { aspect-ratio: 1.618; }
+:root.narrow-layout svg.plot.plot-wide { aspect-ratio: 1.618; }
 .legend {
   font-size: 12px;
   margin-top: 6px;

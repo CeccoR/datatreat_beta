@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barLabelFit, barPlotXPad } from './utils.js';
+import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barLabelFit, barPlotXPad, barChipYmax } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -628,55 +628,59 @@ import { Plot } from './plot.js';
       return;
     }
     barSvg.style.display=''; barWrap.style.display='';
-    const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
-    const topOf = (v,e)=> v + (isFinite(e)?e:0);
+    /* From here on, GC's mean-rate chart (gc.js drawBarChart) step for step — sizes,
+       margins, headroom, bar widths — so the two charts look and resize alike; only
+       the values differ, carrying their error bars and "±". */
+    const has = k => shown.some(m=> isFinite(vals[m.key][k]) && vals[m.key][k] > 0);
     const mctx = document.createElement('canvas').getContext('2d');
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+    const rect = barSvg.getBoundingClientRect();
+    const svgW = rect.width || 640, svgH = rect.height || 640;
+    // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
+    const fit = barLabelFit(mctx, Math.max(60, svgW - 75), n);
+    const labels = files.map(f=>truncTiltLabel(mctx, f.label, fit.cap));
+    const labelWs = labels.map((lbl,k)=> has(k) ? mctx.measureText(lbl).width : 0);
+    let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
+    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
+    // Value label (vertical) above each bar, with reserved top headroom so it never clips.
+    const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
+    const topOf = (v,e)=> v + (isFinite(e)?e:0);
     let maxValW = 0, maxTop = 0;
     for (const m of shown) for (let k=0;k<n;k++){
       const v = vals[m.key][k], e = errs[m.key][k];
       if (isFinite(v) && v>0){ maxValW = Math.max(maxValW, mctx.measureText(fmtLab(v,e)).width); maxTop = Math.max(maxTop, topOf(v,e)); }
     }
-    const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
-    const brect = barSvg.getBoundingClientRect();
-    const svgW = brect.width || 640, svgH = brect.height || 320;
-    // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
-    const fit = barLabelFit(mctx, Math.max(60, svgW - 75), n);
-    const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, fit.cap));
-    const labelWs = barLabels.map(l=>mctx.measureText(l).width);
-    let maxLbl = 0; labelWs.forEach(w=>{ maxLbl = Math.max(maxLbl, w); });
-    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
-    const mTop = 15, gap = 6;
-    const plotH = svgH - mTop - bottom;
-    // The chips sit on the data area's top edge, and an "Eg ± err" label is long
-    // enough to run up under them on a narrow chart: the headroom kept above the
-    // tallest bar reaches down past them too.
-    const chipsEl = document.getElementById('taucEgSel');
-    const chipRoom = chipsEl ? Math.max(0, chipsEl.offsetTop + chipsEl.offsetHeight - mTop) : 0;
-    const reserve = gap + maxValW + 6 + chipRoom;    // px needed above the tallest bar
+    const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
     const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
-    const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
-    const bp = new Plot(barSvg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    // Widen the x-range symmetrically only when a label would cross x=0.
-    const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);
-    bp.setRange(-xpad, n+1+xpad, 0, ymax||1);
-    bp.drawAxes();
-    // Both methods side by side in the sample's slot, the way GC pairs its gases;
-    // widths shrink so the pair still fits. Fixed px, so they hold on zoom.
-    const pxSlot = bp.px(1) - bp.px(0);
+    const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);   // widen only when a label would cross x=0
+    const x0 = -xpad, x1 = n+1+xpad;
+    // Both methods side by side in the sample's slot, the way GC pairs its gases.
+    // Widths shrink so the pair still fits.
+    const pxSlot = (svgW - 75) / (x1 - x0);
     const hw = shown.length > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);
     const dx = shown.length > 1 ? Math.min(12, pxSlot*0.24) : 0;
+    const offOf = mi => (mi - (shown.length-1)/2) * dx * 2;
+    const underChips = [];
+    for (let k=0;k<n;k++) shown.forEach((m, mi)=>{ const v = vals[m.key][k], e = errs[m.key][k];
+      if (isFinite(v) && v>0) underChips.push({ x:k+1, dx:offOf(mi), top:topOf(v,e), w:mctx.measureText(fmtLab(v,e)).width }); });
+    const ymax = Math.max(Math.max(...posVals)*1.2, maxTop/frac,
+      barChipYmax(document.getElementById('taucEgSel'), barSvg, underChips,
+                  { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0, x1 }));
+    const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
+    const bp = new Plot(barSvg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+    bp.setRange(x0, x1, 0, ymax||1);
+    bp.drawAxes();
     for (let k=0;k<n;k++){
-      const xc = k+1;
+      if (!has(k)) continue;
       shown.forEach((m, mi)=>{
         const v = vals[m.key][k], e = errs[m.key][k];
         if (!(isFinite(v) && v>0)) return;
-        const off = (mi - (shown.length-1)/2) * dx * 2;
-        drawBar(bp, xc, v, m.color, hw, off, m.name);
-        if (isFinite(e)) drawErrBar(bp, xc, v, e, off);
-        bp.barLabel(xc, topOf(v,e), fmtLab(v,e), {gap, dx:off});
+        const off = offOf(mi);
+        drawBar(bp, k+1, v, m.color, hw, off, m.name);
+        if (isFinite(e)) drawErrBar(bp, k+1, v, e, off);
+        bp.barLabel(k+1, topOf(v,e), fmtLab(v,e), {gap, dx:off});
       });
-      bp.tickLabel(xc, barLabels[k], fit.rot, files[k].label, files[k].name);
+      bp.tickLabel(k+1, labels[k], fit.rot, files[k].label, files[k].name);
     }
     bp.attachTools(barWrap);
     leg2.innerHTML = shown.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
