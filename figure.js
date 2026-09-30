@@ -1294,22 +1294,32 @@ function applySnapshot(snap){
 // Coalesce a burst of edits (dragging a slider, typing in a field) into one step.
 function pushUndo(){
   clearTimeout(undoTimer);
-  undoTimer = setTimeout(()=>{
-    if (!F) return;          // the modal was closed inside the coalescing window
-    undoStack.push(snapshot());
-    if (undoStack.length > 60) undoStack.shift();
-    redoStack.length = 0;
-  }, 250);
+  undoTimer = setTimeout(recordUndo, 250);
+}
+function recordUndo(){
+  undoTimer = null;
+  if (!F) return;            // the modal was closed inside the coalescing window
+  undoStack.push(snapshot());
+  if (undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+/* An edit still inside its coalescing window is an edit all the same: recorded before
+   undo, so undo takes back that one and not the step before it with it, and before
+   redo, which it makes void like any new edit. Dropping it would lose it for good. */
+function flushUndo(){
+  if (undoTimer === null) return;
+  clearTimeout(undoTimer);
+  recordUndo();
 }
 function undo(){
-  clearTimeout(undoTimer);
+  flushUndo();
   if (undoStack.length < 2) return;          // the first entry is the opening state
   redoStack.push(undoStack.pop());
   applySnapshot(undoStack[undoStack.length - 1]);
   refresh(true);
 }
 function redo(){
-  clearTimeout(undoTimer);
+  flushUndo();
   const snap = redoStack.pop();
   if (!snap) return;
   undoStack.push(snap);
@@ -3161,7 +3171,7 @@ export function openFigureEditor(plot, opts){
   renderPresetBar();
 
   const close = ()=>{
-    clearTimeout(undoTimer);   // nothing left to record once the model is gone
+    clearTimeout(undoTimer); undoTimer = null;   // nothing left to record once the model is gone
     rememberSettings();
     window.removeEventListener('resize', onResize);
     // Every popup the composer can open goes with it; left behind they would float
