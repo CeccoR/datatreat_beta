@@ -406,7 +406,9 @@ import { Plot } from './plot.js';
     // traces would reach it as "Series 1..n". Keyed by role, not by sample: the plot
     // shows one sample at a time, and a trace keeps its looks from one to the next.
     const nm = files[currIndex].label;
-    plot.line(hv, Yraw, '#ffffff', 1,   undefined, { label: `${nm} raw`, key: 'raw' });
+    // The grey XRPD draws its raw pattern in: white vanished on the light theme and on
+    // the white of every exported image.
+    plot.line(hv, Yraw, '#6a7585', 1,   undefined, { label: `${nm} raw`, key: 'raw' });
     plot.line(hv, Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed`, key: 'smoothed' });
     plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative`, key: 'derivative' });
 
