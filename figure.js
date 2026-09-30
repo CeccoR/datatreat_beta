@@ -126,6 +126,7 @@ function seriesFromPlot(plot, legendEl){
       // Which series this is, however it is named: what remembered settings are
       // matched back to (applySettings). The plot says so where the name can change.
       key: e.key || label,
+      given: label,
       label,
       panel: 0,
       color: e.color || '#3aa0ff',
@@ -167,6 +168,7 @@ function seriesFromPlot(plot, legendEl){
         id: 'b' + gi,
         kind: 'bar',
         key: label,
+        given: label,
         label,
         panel: 0,
         color: g.color,
@@ -1345,6 +1347,7 @@ function settingsSnapshot(){
     ? { keep: [], rest: e.rest, bx: F.series[i].xs.slice() }
     : { keep: [], rest: e.rest });
   snap.cats = F.cats.map(c=>({ x: c.x, key: c.key }));
+  snap.ownDivNames = true;      // see applySettings
   return snap;
 }
 /* Which saved entry each entry of the plot is, by key: a series or a sample keeps its
@@ -1376,7 +1379,7 @@ function pairUp(saved, now, gone){
    A name typed into the composer is the exception: it is a choice about this figure,
    not about the project, so it is kept in `rename` — which is not identity — and put
    back over the label when the settings are applied again. */
-const IDENTITY = ['kind', 'id', 'key', 'label', 'xs', 'ys', 'errs'];
+const IDENTITY = ['kind', 'id', 'key', 'given', 'label', 'xs', 'ys', 'errs'];
 /* `name` is the file this figure is exported as. It belongs to this figure alone, like
    a series' data: a preset made on another plot carrying it over would export this
    one under the other's file name. The per-plot memory, which is about this figure,
@@ -1409,6 +1412,14 @@ function applySettings(snap){
       s.divOf = s.xs.map(x=> div.get(x) || 0);
     }
     if (s.rename) s.label = s.rename;
+  });
+  // Settings from before v328, when an unnamed first division showed the series'
+  // name, typed-over one included: it is given that name, so the legend reads as it
+  // did when the settings were saved.
+  if (!snap.ownDivNames) F.series.forEach(s=>{
+    if (s.kind !== 'bar' || !s.rename || (divsOf(s)[0] && divsOf(s)[0].name)) return;
+    s.divs = divsOf(s).slice();
+    s.divs[0] = { ...s.divs[0], name: s.rename };
   });
   const slots = F.series.map((_, i)=> i).filter(i=> pair[i] >= 0);
   const order = slots.slice().sort((a, b)=> pair[a] - pair[b]).map(i=> F.series[i]);
@@ -2319,11 +2330,13 @@ function barName(s, j){
    parts series of their own.
 
    Every bar series has at least one division, and that first one follows the series'
-   own name and colour until it is given ones of its own — so a plot nobody has divided
-   behaves exactly as before and a palette still reaches it, while a series and its
-   first division can still be named apart where that reads better. */
+   own colour until it is given one of its own — so a plot nobody has divided behaves
+   exactly as before and a palette still reaches it. Its name is its own from the
+   start: the one the page gives the series, the way a new division starts from the
+   series' name when it is made. Renaming the series afterwards leaves it alone, and
+   renaming it leaves the series alone. */
 const divsOf = s => (s.divs && s.divs.length) ? s.divs : [{}];
-const divName = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].name) || s.label;
+const divName = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].name) || (k === 0 && s.given) || s.label;
 const divColor = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].color) || s.color;
 const divTexture = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].texture) || s.texture || 'solid';
 const divInv = (s, k)=>{
@@ -2873,8 +2886,8 @@ function wireControls(){
     } else if (t.dataset.dk){
       const [i, k] = t.dataset.dk.split(':').map(Number);
       const s = F.series[i]; if (!s) return null;
-      // Every division holds its own name, the first one included: until it is typed
-      // in it shows the series' name, and from then on the two are free to differ.
+      // Every division holds its own name, the first one included; the series' name
+      // is another thing (divName).
       s.divs = divsOf(s).slice();
       s.divs[k] = { ...s.divs[k], name: t.value };
     } else if (t.dataset.share){
@@ -2893,23 +2906,10 @@ function wireControls(){
     return rebuild;
   };
 
-  /* The first division's box shows the series' name for as long as it has none of
-     its own, so renaming the series shows there at once. Done by hand rather than by
-     rebuilding the sidebar, which would take the caret out of the field mid-word. */
-  const mirrorName = (i, v)=>{
-    const s = F.series[i];
-    if (!s || (s.divs && s.divs[0] && s.divs[0].name)) return;
-    const el = controlsEl.querySelector(`[data-dk="${i}:0"]`);
-    if (el && el.value !== v) el.value = v;
-  };
-
   const run = t=>{
     if (rebuilding || !t.isConnected) return;
     const rebuild = applyControl(t);
     if (rebuild === null) return;
-    // While the first division is still borrowing the series' name, its box follows
-    // what is typed in the series row. Once it has a name of its own it keeps it.
-    if (t.dataset.sk === 'label') mirrorName(+t.dataset.s, t.value);
     // Echo the committed value back with a decimal point, so a comma typed by hand
     // is accepted but never left standing in the field.
     if (t.dataset.num && !rebuild){
