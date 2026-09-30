@@ -436,10 +436,10 @@ import { Plot } from './plot.js';
       if (regs.bestIdx.length){
         const xb = regs.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs.slope*x+regs.intercept);
-        plot.line(xb, yb, '#ff5050', 2.2, undefined, { label: `${nm} regression 1`, key: 'regs' });
+        plot.line(xb, yb, '#ff5050', 2.2, undefined, { label: `${nm} Tauc region`, key: 'regs' });
         const xExt = linspace(minArr(hv), maxArr(hv), 100);
         plot.line(xExt, xExt.map(x=>regs.slope*x+regs.intercept), '#ff5050', 1, '5,4',
-                  { label: `${nm} baseline 1`, key: 'regs line' });
+                  { label: `${nm} Tauc region, extended`, key: 'regs line' });
       }
     } else {
       document.getElementById('taucRMSE1').textContent='-'; document.getElementById('taucR21').textContent='-';
@@ -452,10 +452,10 @@ import { Plot } from './plot.js';
       if (regs2.bestIdx.length){
         const xb = regs2.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs2.slope*x+regs2.intercept);
-        plot.line(xb, yb, '#d050ff', 2.2, undefined, { label: `${nm} regression 2`, key: 'regs2' });
+        plot.line(xb, yb, '#d050ff', 2.2, undefined, { label: `${nm} baseline`, key: 'regs2' });
         const xExt = linspace(minArr(hv), maxArr(hv), 100);
         plot.line(xExt, xExt.map(x=>regs2.slope*x+regs2.intercept), '#d050ff', 1, '5,4',
-                  { label: `${nm} baseline 2`, key: 'regs2 line' });
+                  { label: `${nm} baseline, extended`, key: 'regs2 line' });
       }
     } else {
       document.getElementById('taucRMSE2').textContent='-'; document.getElementById('taucR22').textContent='-';
@@ -586,17 +586,18 @@ import { Plot } from './plot.js';
     files.forEach((f,k)=>{
       plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: f.label, key: f.name });
       const r = bestRegsAll[k];
-      // regs fits the flat interval below the edge (the baseline), regs2 the steep
-      // edge itself (the Tauc region) — their intercepts cross at Eg.
+      // regs fits the steep edge between the red lines (the Tauc region: its x-axis
+      // intercept is Eg), regs2 the flat stretch between the magenta ones (the
+      // baseline: where the two cross is Eg from the baseline).
       if (r && isFinite(r.regs.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs.slope*x+r.regs.intercept), f.color, 1, '5,4',
-                   { label: `${f.label} baseline`, key: `${f.name}/regs line` });
+                   { label: `${f.label} Tauc`, key: `${f.name}/regs line` });
       }
       if (r && isFinite(r.regs2.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs2.slope*x+r.regs2.intercept), f.color, 1, '2,3',
-                   { label: `${f.label} Tauc`, key: `${f.name}/regs2 line` });
+                   { label: `${f.label} baseline`, key: `${f.name}/regs2 line` });
       }
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
     });
