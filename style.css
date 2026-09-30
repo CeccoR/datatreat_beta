@@ -637,17 +637,19 @@ input[type="file"] {
   color: var(--muted);
 }
 
-/* GC gas chips: ALL/ONE chips laid over the plot's own data area, top right. Dimmed
-   until pointed at, so they stay out of the way of the data they sit on; the group
-   lights as a whole, since hovering one chip is hovering the set it belongs to. */
-.gc-gas-sel {
+/* Series chips — GC's gases, Tauc's two Eg methods — laid over the plot's own data
+   area, top right. Dimmed until pointed at, so they stay out of the way of the data
+   they sit on; the group lights as a whole, since hovering one chip is hovering the
+   set it belongs to. .plot-chips/.plot-chip are the same thing under a name that
+   does not say GC. */
+.gc-gas-sel, .plot-chips {
   /* Clear of the toolbar column and the plot's own right margin, so the chips
      land inside the data area rather than on the frame or the buttons. */
   position: absolute; top: 21px; right: 56px; z-index: 2;
   display: inline-flex; gap: 4px;
   opacity: 0.5; transition: opacity 0.18s;
 }
-.gc-gas-sel:hover { opacity: 1; }
+.gc-gas-sel:hover, .plot-chips:hover { opacity: 1; }
 /* Real sub, in the chip's own font: the Unicode subscript two has no glyph in Inter
    and fell back to another face, so H2 and O2 did not read as a pair. */
 .gc-gas-chip sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
@@ -655,11 +657,11 @@ input[type="file"] {
    --on-accent text, lightening on hover and darkening on press. The tokens are the
    ones .btn.primary uses, so the pair stays in step and each theme gets the text
    colour it needs on top of its own accent. */
-.gc-gas-chip.is-on         { background: var(--accent);        border-color: var(--accent);        color: var(--on-accent); }
-.gc-gas-chip.is-on:hover   { background: var(--accent-hover);  border-color: var(--accent-hover);  color: var(--on-accent); }
-.gc-gas-chip.is-on:active  { background: var(--accent-active); border-color: var(--accent-active); color: var(--on-accent); }
-.gc-gas-chip:disabled { opacity: 0.35; cursor: default; }
-.gc-gas-chip:disabled:hover { color: var(--muted); }
+.gc-gas-chip.is-on,        .plot-chip.is-on        { background: var(--accent);        border-color: var(--accent);        color: var(--on-accent); }
+.gc-gas-chip.is-on:hover,  .plot-chip.is-on:hover  { background: var(--accent-hover);  border-color: var(--accent-hover);  color: var(--on-accent); }
+.gc-gas-chip.is-on:active, .plot-chip.is-on:active { background: var(--accent-active); border-color: var(--accent-active); color: var(--on-accent); }
+.gc-gas-chip:disabled, .plot-chip:disabled { opacity: 0.35; cursor: default; }
+.gc-gas-chip:disabled:hover, .plot-chip:disabled:hover { color: var(--muted); }
 
 /* ===== Custom date-time field (segmented text + calendar button) ===== */
 .dt-field {
@@ -864,11 +866,14 @@ svg.plot {
    golden-ratio box would be far too tall. Twice the golden ratio (1 : 2φ) keeps the
    pair roughly as tall as one standard plot. */
 svg.plot.plot-wide { aspect-ratio: 3.236; }
+/* Tauc's Eg bar chart: one full-width chart holding both methods, 2 : 1. */
+svg.plot.plot-bar { aspect-ratio: 2; }
 /* Once the columns stack to full width the floor is pointless — and keeping it would
    make every plot overflow and scroll horizontally on the narrowest screens. */
 :root.narrow-layout svg.plot { min-width: 0; }
 /* Same threshold: a 1 : 2φ strip gets unreadably short once the layout narrows. */
-:root.narrow-layout svg.plot.plot-wide { aspect-ratio: 1.618; }
+:root.narrow-layout svg.plot.plot-wide,
+:root.narrow-layout svg.plot.plot-bar { aspect-ratio: 1.618; }
 .legend {
   font-size: 12px;
   margin-top: 6px;

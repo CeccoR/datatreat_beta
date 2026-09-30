@@ -11,6 +11,12 @@ import { Plot } from './plot.js';
   let vlines = {};            // active interval lines (points at the current sample's set)
   let bestRegsAll = [];
   let resPlot0=null, resPlot1=null;   // reused summary-plot instances (created once)
+  // How Eg is read off the Tauc plot, and which of the two the bar chart shows.
+  const EG_METHODS = [
+    { key: 'x', label: 'x-axis',   name: 'Eg (x-axis)',   color: '#3aa0ff' },
+    { key: 'b', label: 'baseline', name: 'Eg (baseline)', color: '#ff7a59' },
+  ];
+  let egSel = EG_METHODS.map(m=>m.key);
   let _dragging=false;                // true while an interval line is being dragged
 
   // ---- all/one analysis mode (single global toggle) ----
@@ -185,6 +191,7 @@ import { Plot } from './plot.js';
       shared: {...taucShared},
       sharedVlines: {...sharedVlines},
       per: taucPer.map(clonePer),
+      egSel: egSel.slice(),
     };
   }
   function taucRestore(s){
@@ -193,6 +200,9 @@ import { Plot } from './plot.js';
     if (s.shared) Object.assign(taucShared, s.shared);
     sharedVlines = s.sharedVlines ? {...s.sharedVlines} : (s.vlines ? {...s.vlines} : {});
     taucPer = s.per ? s.per.map(clonePer) : files.map(()=>({}));
+    // Older snapshots had two charts and no choice: both methods on show.
+    const eg = Array.isArray(s.egSel) ? s.egSel.filter(k=> EG_METHODS.some(m=>m.key===k)) : [];
+    egSel = eg.length ? eg : EG_METHODS.map(m=>m.key);
     // Backward compatibility with pre-all/one snapshots (params stored by input id)
     if (s.params){
       taucShared.a  = parseFloat(s.params.taucA);
@@ -597,88 +607,101 @@ import { Plot } from './plot.js';
     const barTitleEl = document.getElementById('taucBarTitle');
     if (barTitleEl) barTitleEl.textContent = (egLabel ? egLabel+' ' : '') + 'Energy Band Gap';
     const leg2 = document.getElementById('taucResLegend2'); leg2.innerHTML='';
-    const barAlertX = document.getElementById('taucBarAlertX'); barAlertX.innerHTML='';
-    const barAlertB = document.getElementById('taucBarAlertB'); barAlertB.innerHTML='';
-    const egs = bestRegsAll.map(r=>r.Eg), egErrs = bestRegsAll.map(r=>r.EgErr);
-    const egInts = bestRegsAll.map(r=>r.EgInt), egIntErrs = bestRegsAll.map(r=>r.EgIntErr);
+    renderEgSel();
+    const shown = EG_METHODS.filter(m=> egSel.includes(m.key));
+    const vals = { x: bestRegsAll.map(r=>r.Eg),    b: bestRegsAll.map(r=>r.EgInt) };
+    const errs = { x: bestRegsAll.map(r=>r.EgErr), b: bestRegsAll.map(r=>r.EgIntErr) };
     const n = files.length;
-    // Negative Eg → one alert per plot (x-axis / baseline), placed under its own
-    // chart and listing the affected samples one per line. Live-computed → no X.
-    const negX = [], negB = [];
-    for (let k=0;k<n;k++){
-      if (isFinite(egs[k]) && egs[k]<0) negX.push(files[k].label);
-      if (isFinite(egInts[k]) && egInts[k]<0) negB.push(files[k].label);
-    }
-    const negWarnHtml = (label, list)=> list.length
-      ? `<div class="alert warn">⚠ Negative E<sub>g</sub> (${label}) for:<br>${list.join('<br>')}</div>` : '';
-    barAlertX.innerHTML = negWarnHtml('x-axis', negX);
-    barAlertB.innerHTML = negWarnHtml('baseline', negB);
-    const posVals = egs.concat(egInts).filter(v=>isFinite(v)&&v>0);
-    const noChart = !posVals.length;
-    const barSvg  = document.getElementById('taucResSvg2');   // Eg (x-axis)
-    const barSvg3 = document.getElementById('taucResSvg3');   // Eg (baseline)
-    const barWrap  = barSvg.closest('.plot-wrap');
-    const barWrap3 = barSvg3.closest('.plot-wrap');
-    if (noChart){
+    // Negative Eg → one alert per method on show, under the chart, listing the
+    // affected samples one per line. Live-computed → no X.
+    const negWarnHtml = m=>{
+      const list = files.filter((f,k)=> isFinite(vals[m.key][k]) && vals[m.key][k] < 0).map(f=>f.label);
+      return list.length ? `<div class="alert warn">⚠ Negative E<sub>g</sub> (${m.label}) for:<br>${list.join('<br>')}</div>` : '';
+    };
+    document.getElementById('taucBarAlert').innerHTML = shown.map(negWarnHtml).join('');
+    const posVals = shown.flatMap(m=> vals[m.key]).filter(v=>isFinite(v)&&v>0);
+    const barSvg  = document.getElementById('taucResSvg2');
+    const barWrap = barSvg.closest('.plot-wrap');
+    if (!posVals.length){
       barSvg.style.display='none'; barWrap.style.display='none';
-      barSvg3.style.display='none'; barWrap3.style.display='none';
-      leg2.innerHTML='';
-    } else {
-      barSvg.style.display='';  barWrap.style.display='';
-      barSvg3.style.display=''; barWrap3.style.display='';
-      const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
-      const topOf = (v,e)=> v + (isFinite(e)?e:0);
-      // The two twin plots share one y-scale so their bars are directly comparable.
-      let maxValW = 0, maxTop = 0;
-      const mctxShared = document.createElement('canvas').getContext('2d');
-      mctxShared.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-      for (let k=0;k<n;k++){
-        if (isFinite(egs[k])&&egs[k]>0){ maxValW = Math.max(maxValW, mctxShared.measureText(fmtLab(egs[k],egErrs[k])).width); maxTop = Math.max(maxTop, topOf(egs[k],egErrs[k])); }
-        if (isFinite(egInts[k])&&egInts[k]>0){ maxValW = Math.max(maxValW, mctxShared.measureText(fmtLab(egInts[k],egIntErrs[k])).width); maxTop = Math.max(maxTop, topOf(egInts[k],egIntErrs[k])); }
-      }
-      const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
-      // Draws one series (a single centred bar per sample) into `svg`.
-      const drawEgBars = (svg, vals, errs, color, name)=>{
-        const mctx = document.createElement('canvas').getContext('2d');
-        mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-        const brect = svg.getBoundingClientRect();
-        const svgW = brect.width || 640, svgH = brect.height || 640;
-        // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
-        const fit = barLabelFit(mctx, Math.max(60, svgW - 75), files.length);
-        const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, fit.cap));
-        const labelWs = barLabels.map(l=>mctx.measureText(l).width);
-        let maxLbl = 0; labelWs.forEach(w=>{ maxLbl = Math.max(maxLbl, w); });
-        const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
-        const mTop = 15, gap = 6;
-        const plotH = svgH - mTop - bottom;
-        const reserve = gap + maxValW + 6;               // px needed above the tallest bar
-        const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
-        const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
-        const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-        // Widen the x-range symmetrically only when a label would cross x=0.
-        const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);
-        plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
-        plot.drawAxes();
-        // Bars are capped at 16px half-width but shrink to fit the per-sample
-        // spacing so many samples don't overlap. Computed once here (fixed px →
-        // stays constant on zoom).
-        const hw = Math.min(16, (plot.px(1)-plot.px(0))*0.3);
-        for (let k=0;k<n;k++){
-          const xc = k+1;
-          if (isFinite(vals[k])&&vals[k]>0){
-            drawBar(plot,xc,vals[k],color,hw,0,name);
-            if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
-            plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
-          }
-          plot.tickLabel(xc, barLabels[k], fit.rot, files[k].label, files[k].name);
-        }
-        plot.attachTools(svg.closest('.plot-wrap'));
-      };
-      drawEgBars(barSvg,  egs,    egErrs,    '#3aa0ff', 'Eg (x-axis)');
-      drawEgBars(barSvg3, egInts, egIntErrs, '#ff7a59', 'Eg (baseline)');
-      leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
+      return;
     }
+    barSvg.style.display=''; barWrap.style.display='';
+    const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
+    const topOf = (v,e)=> v + (isFinite(e)?e:0);
+    const mctx = document.createElement('canvas').getContext('2d');
+    mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+    let maxValW = 0, maxTop = 0;
+    for (const m of shown) for (let k=0;k<n;k++){
+      const v = vals[m.key][k], e = errs[m.key][k];
+      if (isFinite(v) && v>0){ maxValW = Math.max(maxValW, mctx.measureText(fmtLab(v,e)).width); maxTop = Math.max(maxTop, topOf(v,e)); }
+    }
+    const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
+    const brect = barSvg.getBoundingClientRect();
+    const svgW = brect.width || 640, svgH = brect.height || 320;
+    // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
+    const fit = barLabelFit(mctx, Math.max(60, svgW - 75), n);
+    const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, fit.cap));
+    const labelWs = barLabels.map(l=>mctx.measureText(l).width);
+    let maxLbl = 0; labelWs.forEach(w=>{ maxLbl = Math.max(maxLbl, w); });
+    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
+    const mTop = 15, gap = 6;
+    const plotH = svgH - mTop - bottom;
+    // The chips sit on the data area's top edge, and an "Eg ± err" label is long
+    // enough to run up under them on a narrow chart: the headroom kept above the
+    // tallest bar reaches down past them too.
+    const chipsEl = document.getElementById('taucEgSel');
+    const chipRoom = chipsEl ? Math.max(0, chipsEl.offsetTop + chipsEl.offsetHeight - mTop) : 0;
+    const reserve = gap + maxValW + 6 + chipRoom;    // px needed above the tallest bar
+    const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
+    const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
+    const bp = new Plot(barSvg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+    // Widen the x-range symmetrically only when a label would cross x=0.
+    const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);
+    bp.setRange(-xpad, n+1+xpad, 0, ymax||1);
+    bp.drawAxes();
+    // Both methods side by side in the sample's slot, the way GC pairs its gases;
+    // widths shrink so the pair still fits. Fixed px, so they hold on zoom.
+    const pxSlot = bp.px(1) - bp.px(0);
+    const hw = shown.length > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);
+    const dx = shown.length > 1 ? Math.min(12, pxSlot*0.24) : 0;
+    for (let k=0;k<n;k++){
+      const xc = k+1;
+      shown.forEach((m, mi)=>{
+        const v = vals[m.key][k], e = errs[m.key][k];
+        if (!(isFinite(v) && v>0)) return;
+        const off = (mi - (shown.length-1)/2) * dx * 2;
+        drawBar(bp, xc, v, m.color, hw, off, m.name);
+        if (isFinite(e)) drawErrBar(bp, xc, v, e, off);
+        bp.barLabel(xc, topOf(v,e), fmtLab(v,e), {gap, dx:off});
+      });
+      bp.tickLabel(xc, barLabels[k], fit.rot, files[k].label, files[k].name);
+    }
+    bp.attachTools(barWrap);
+    leg2.innerHTML = shown.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
   }
+
+  /* The two ways Eg is read, as GC's gases are: one chart, a chip per method to show or
+     hide it, and never both hidden — the chart would be empty. */
+  function renderEgSel(){
+    const el = document.getElementById('taucEgSel');
+    if (!el) return;
+    el.innerHTML = EG_METHODS.map(m=>{
+      const on = egSel.includes(m.key), only = on && egSel.length === 1;
+      return `<button type="button" class="mode-chip plot-chip${on ? ' is-on' : ''}" data-eg="${m.key}"`
+           + ` title="${only ? `${m.name} — the only one shown` : `Show / hide ${m.name}`}">${m.label}</button>`;
+    }).join('');
+  }
+  document.getElementById('taucEgSel').addEventListener('click', e=>{
+    const b = e.target.closest('[data-eg]');
+    if (!b) return;
+    const key = b.dataset.eg, on = egSel.includes(key);
+    if (on && egSel.length === 1) return;
+    egSel = EG_METHODS.map(m=>m.key).filter(k=> k === key ? !on : egSel.includes(k));
+    renderResView();
+    hist.commit();
+  });
+
   // `name` names the series the bar belongs to, the way the legend under the chart
   // does, so the figure composer sees one series of bars rather than nameless ones.
   function drawBar(plot, xc, val, color, hw, dx, name){ plot.barPx(xc, 0, val, color, hw, dx, { label: name }); }
