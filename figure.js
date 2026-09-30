@@ -2124,9 +2124,9 @@ function controlsHtml(){
   return `
   <section class="fig-sec"><h4>Figure</h4>
     ${num('Width (mm)','wmm',5,2000)}${num('Height (mm)','hmm',5,2000)}${num('Export DPI','dpi',1,20000)}
-    ${chk('Plot area fills what the margins leave','plotAuto')}
+    ${chk('Auto margins','plotAuto')}
     ${F.plotAuto ? '' : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}
-      <label class="fig-row"><span>Where the plot area sits</span>
+      <label class="fig-row"><span>Alignment</span>
         <button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot area inside the margins">${ALIGN_ICON(F.align)}</button></label>`}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
   </section>
