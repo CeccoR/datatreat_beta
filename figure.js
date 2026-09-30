@@ -1671,7 +1671,8 @@ const texPalettePicker = {
     setTimeout(()=>{
       this._away = ev=>{
         if (!this.el) return;
-        if (this.el.contains(ev.target) || ev.target === this.anchor) return;
+        // The button holds an icon, which is what a press on it usually lands on.
+        if (this.el.contains(ev.target) || this.anchor.contains(ev.target)) return;
         this.close();
       };
       document.addEventListener('pointerdown', this._away);
@@ -1875,8 +1876,12 @@ const fillPicker = {
 const alignPicker = {
   el: null, anchor: null, onPick: null,
   open(anchor, onPick){
+    // Toggles and holds its button lit while open, like every other picker here.
+    const again = this.anchor === anchor;
     this.close();
+    if (again) return;
     this.anchor = anchor; this.onPick = onPick;
+    anchor.classList.add('cp-anchored');
     const el = document.createElement('div');
     el.className = 'fig-alignpop';
     el.innerHTML = ALIGN_CELLS.map(c=>
@@ -1896,7 +1901,7 @@ const alignPicker = {
     window.addEventListener('scroll', this._onScroll, true);
     window.addEventListener('resize', this._onScroll);
     setTimeout(()=>{
-      this._away = ev=>{ if (this.el && !this.el.contains(ev.target) && ev.target !== anchor) this.close(); };
+      this._away = ev=>{ if (this.el && !this.el.contains(ev.target) && !anchor.contains(ev.target)) this.close(); };
       document.addEventListener('pointerdown', this._away);
     }, 0);
   },
@@ -1914,6 +1919,7 @@ const alignPicker = {
     }
     this._away = this._onScroll = null;
     if (this.el) this.el.remove();
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
     this.el = null; this.anchor = null; this.onPick = null;
   },
 };
@@ -2532,9 +2538,15 @@ function markMixedToggles(){
   field('select[data-all="marker"]', commonOf(s=> s.marker), '—');
 }
 
-// Every colour square in the sidebar, brought back to the colour it stands for.
+/* Every colour square in the sidebar, brought back to the colour it stands for. A pick
+   from the colour picker redraws through here, never by rebuilding the sidebar: the
+   picker hangs from its swatch, and a rebuilt one would leave it following a button
+   that is no longer on the page — unlit, deaf to a second click, and thrown to the
+   corner by the next scroll. */
 function syncSwatches(){
   if (!controlsEl) return;
+  const ink = controlsEl.querySelector('.color-swatch[data-inksw]');
+  if (ink){ ink.dataset.color = F.inkColor; ink.style.background = F.inkColor; }
   controlsEl.querySelectorAll('.color-swatch[data-dsw]').forEach(b=>{
     const [i, k] = b.dataset.dsw.split(':').map(Number);
     const s = F.series[i]; if (!s) return;
@@ -2934,7 +2946,7 @@ function wireControls(){
     }
     const inkB = e.target.closest('.color-swatch[data-inksw]');
     if (inkB){
-      colorPickerUI.open(inkB, F.inkColor, color=>{ F.inkColor = color; pushUndo(); refresh(true); });
+      colorPickerUI.open(inkB, F.inkColor, color=>{ F.inkColor = color; pushUndo(); refresh(false); });
       return;
     }
     const fillB = e.target.closest('[data-fill]');
@@ -2992,7 +3004,7 @@ function wireControls(){
         if (k === 0) s.color = color;
         else { s.divs = divsOf(s).slice(); s.divs[k] = { ...s.divs[k], color }; }
         F.palette = null;
-        pushUndo(); refresh(true);
+        pushUndo(); refresh(false);
       });
       return;
     }
@@ -3010,7 +3022,7 @@ function wireControls(){
           if (t.kind === 'bar') clearDivColors(t);
         }
         F.palette = null;         // hand-picked: stop re-applying a palette over it
-        pushUndo(); refresh(true);
+        pushUndo(); refresh(false);
       });
       return;
     }
@@ -3152,9 +3164,14 @@ export function openFigureEditor(plot, opts){
     clearTimeout(undoTimer);   // nothing left to record once the model is gone
     rememberSettings();
     window.removeEventListener('resize', onResize);
+    // Every popup the composer can open goes with it; left behind they would float
+    // over the page, still writing into a figure that is gone.
     charPicker.close();
     alignPicker.close();
     fillPicker.close();
+    texPalettePicker.close();
+    colorPickerUI.close();
+    palettePickerUI.close();
     document.removeEventListener('keydown', onKey);
     backdrop.remove(); backdrop = null; F = null; dimEl = null; presetBar = null;
     srcPlot = null; srcOpts = null;

@@ -95,9 +95,11 @@ class ColorPickerUI {
     this._hslS = 1;
     this._anchorBtn = null;
     this._build();
+    // "On the button" includes what the button holds: a press on an icon inside it
+    // must not close the popup only for the click that follows to open it again.
     document.addEventListener('pointerdown', e=>{
       if (this._el.style.display==='none') return;
-      if (!this._el.contains(e.target) && e.target !== this._anchorBtn)
+      if (!this._el.contains(e.target) && !(this._anchorBtn && this._anchorBtn.contains(e.target)))
         this.close();
     }, true);
   }
@@ -349,7 +351,7 @@ class PalettePickerUI {
     document.body.appendChild(this._el);
     document.addEventListener('pointerdown', e=>{
       if (this._el.style.display==='none') return;
-      if (!this._el.contains(e.target) && e.target !== this._anchorBtn) this.close();
+      if (!this._el.contains(e.target) && !(this._anchorBtn && this._anchorBtn.contains(e.target))) this.close();
     }, true);
   }
   _list(){ return CP_PALETTES.concat(userPalettes()); }
