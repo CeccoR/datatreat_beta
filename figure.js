@@ -1338,9 +1338,10 @@ function settingsSnapshot(){
    not about the project, so it is kept in `rename` — which is not identity — and put
    back over the label when the settings are applied again. */
 const IDENTITY = ['kind', 'id', 'label', 'xs', 'ys', 'errs'];
-/* `name` says which plot the figure IS, not how it looks: it is the key the per-plot
-   memory is filed under. A preset carrying its origin's name over would make the plot
-   save its settings under the other plot's name and find nothing on reopening. */
+/* `name` is the file this figure is exported as. It belongs to this figure alone, like
+   a series' data: a preset made on another plot carrying it over would export this
+   one under the other's file name. The per-plot memory, which is about this figure,
+   does bring it back (recallSettings). */
 const SCALAR_IDENTITY = ['name'];
 function applySettings(snap){
   if (!snap) return;
@@ -1361,9 +1362,13 @@ function applySettings(snap){
    project — never share a memory; tab ids are themselves persisted, so the key still
    points at the same plot after a reload. Kept in localStorage rather than in memory
    for exactly that reason, and pruned of tabs that no longer exist so it cannot grow
-   without bound. Reset is the way out of a memory you no longer want. */
+   without bound. Reset is the way out of a memory you no longer want.
+
+   The plot is named by the page (srcOpts), never by the "File name" field: that one
+   is yours to edit, and a key that followed it would file the settings under the new
+   name on closing and look for them under the page's on reopening. */
 const MEM_KEY = 'dt-figure-memory';
-const memKey = name => ((activeTab() || {}).id || 'none') + '/' + name;
+const memKey = ()=> ((activeTab() || {}).id || 'none') + '/' + ((srcOpts && srcOpts.name) || 'figure');
 function loadMemory(){
   try { const o = JSON.parse(localStorage.getItem(MEM_KEY)); return (o && typeof o === 'object') ? o : {}; }
   catch(e){ return {}; }
@@ -1375,14 +1380,15 @@ function rememberSettings(){
   // Which preset the figure was left on, so reopening it says so instead of coming
   // back with the settings of a preset and no sign of which one.
   snap.preset = presetSel;
-  all[memKey(F.name)] = snap;
+  all[memKey()] = snap;
   const live = new Set(TABS.map(t=>t.id));
   for (const k of Object.keys(all)) if (!live.has(k.slice(0, k.indexOf('/')))) delete all[k];
   try { localStorage.setItem(MEM_KEY, JSON.stringify(all)); } catch(e){}
 }
 function recallSettings(){
-  const snap = loadMemory()[memKey(F.name)];
+  const snap = loadMemory()[memKey()];
   applySettings(snap);
+  if (snap && typeof snap.scalars.name === 'string') F.name = snap.scalars.name;
   // Only if that preset is still around: one deleted meanwhile names nothing.
   presetSel = (snap && snap.preset && loadPresets()[snap.preset]) ? snap.preset : '';
 }
