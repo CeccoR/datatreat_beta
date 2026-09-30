@@ -403,11 +403,12 @@ import { Plot } from './plot.js';
     plot.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a. u.)`;
     plot.drawAxes();
     // Named for the figure composer: this plot has no legend, so without these the
-    // traces would reach it as "Series 1..n".
+    // traces would reach it as "Series 1..n". Keyed by role, not by sample: the plot
+    // shows one sample at a time, and a trace keeps its looks from one to the next.
     const nm = files[currIndex].label;
-    plot.line(hv, Yraw, '#ffffff', 1,   undefined, { label: `${nm} raw` });
-    plot.line(hv, Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed` });
-    plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative` });
+    plot.line(hv, Yraw, '#ffffff', 1,   undefined, { label: `${nm} raw`, key: 'raw' });
+    plot.line(hv, Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed`, key: 'smoothed' });
+    plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative`, key: 'derivative' });
 
     const lo1=Math.min(vlines.v1,vlines.v2), hi1=Math.max(vlines.v1,vlines.v2);
     const lo2=Math.min(vlines.v3,vlines.v4), hi2=Math.max(vlines.v3,vlines.v4);
@@ -423,10 +424,10 @@ import { Plot } from './plot.js';
       if (regs.bestIdx.length){
         const xb = regs.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs.slope*x+regs.intercept);
-        plot.line(xb, yb, '#ff5050', 2.2, undefined, { label: `${nm} regression 1` });
+        plot.line(xb, yb, '#ff5050', 2.2, undefined, { label: `${nm} regression 1`, key: 'regs' });
         const xExt = linspace(minArr(hv), maxArr(hv), 100);
         plot.line(xExt, xExt.map(x=>regs.slope*x+regs.intercept), '#ff5050', 1, '5,4',
-                  { label: `${nm} baseline 1` });
+                  { label: `${nm} baseline 1`, key: 'regs line' });
       }
     } else {
       document.getElementById('taucRMSE1').textContent='-'; document.getElementById('taucR21').textContent='-';
@@ -439,10 +440,10 @@ import { Plot } from './plot.js';
       if (regs2.bestIdx.length){
         const xb = regs2.bestIdx.map(i=>hv[i]);
         const yb = xb.map(x=>regs2.slope*x+regs2.intercept);
-        plot.line(xb, yb, '#d050ff', 2.2, undefined, { label: `${nm} regression 2` });
+        plot.line(xb, yb, '#d050ff', 2.2, undefined, { label: `${nm} regression 2`, key: 'regs2' });
         const xExt = linspace(minArr(hv), maxArr(hv), 100);
         plot.line(xExt, xExt.map(x=>regs2.slope*x+regs2.intercept), '#d050ff', 1, '5,4',
-                  { label: `${nm} baseline 2` });
+                  { label: `${nm} baseline 2`, key: 'regs2 line' });
       }
     } else {
       document.getElementById('taucRMSE2').textContent='-'; document.getElementById('taucR22').textContent='-';
@@ -549,7 +550,7 @@ import { Plot } from './plot.js';
     plot0.setRange(wl0, wl1, 0, ymax0);
     plot0.drawAxes();
     files.forEach((f,k)=>{
-      plot0.line(f.wl, f.FR, f.color, 1.3, undefined, { label: f.label });
+      plot0.line(f.wl, f.FR, f.color, 1.3, undefined, { label: f.label, key: f.name });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg0.appendChild(s);
     });
 
@@ -571,19 +572,19 @@ import { Plot } from './plot.js';
     plot1.setRange(hv0, hv1, 0, ymax1);
     plot1.drawAxes();
     files.forEach((f,k)=>{
-      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: f.label });
+      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: f.label, key: f.name });
       const r = bestRegsAll[k];
       // regs fits the flat interval below the edge (the baseline), regs2 the steep
       // edge itself (the Tauc region) — their intercepts cross at Eg.
       if (r && isFinite(r.regs.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs.slope*x+r.regs.intercept), f.color, 1, '5,4',
-                   { label: `${f.label} baseline` });
+                   { label: `${f.label} baseline`, key: `${f.name}/regs line` });
       }
       if (r && isFinite(r.regs2.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs2.slope*x+r.regs2.intercept), f.color, 1, '2,3',
-                   { label: `${f.label} Tauc` });
+                   { label: `${f.label} Tauc`, key: `${f.name}/regs2 line` });
       }
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
     });
@@ -667,7 +668,7 @@ import { Plot } from './plot.js';
             if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
             plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
           }
-          plot.tickLabel(xc, barLabels[k], fit.rot, files[k].label);
+          plot.tickLabel(xc, barLabels[k], fit.rot, files[k].label, files[k].name);
         }
         plot.attachTools(svg.closest('.plot-wrap'));
       };

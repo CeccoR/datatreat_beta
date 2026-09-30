@@ -165,10 +165,13 @@ class Plot{
                        for readability, so a composed figure carries the CSV's numbers
        label string    what this trace is called, for plots whose legend does not
                        name every line (fits, baselines, extensions)
-     Neither is ever drawn. */
+       key   string    what this trace IS, where the label can change under it — the
+                       sample's file name rather than the label the user gives it —
+                       so settings kept for a trace find it again
+     None is ever drawn. */
   line(xs, ys, color, width, dash, meta){
     const entry = {type:'line', xs, ys, color, width, dash,
-                   raw: meta && meta.raw, label: meta && meta.label};
+                   raw: meta && meta.raw, label: meta && meta.label, key: meta && meta.key};
     this._stored.push(entry);
     return this._renderLine(entry);
   }
@@ -244,9 +247,9 @@ class Plot{
   }
   /* `full` is the name before it was shortened to fit the axis. The plot draws the
      short one; anything reading the plot back — the figure composer — wants the name
-     the sample actually has. */
-  tickLabel(xv, text, rot, full){
-    const entry = {type:'ticklabel', xv, text, rot: rot||0, full: full || text};
+     the sample actually has, and `key` for which sample it is (as line()'s meta.key). */
+  tickLabel(xv, text, rot, full, key){
+    const entry = {type:'ticklabel', xv, text, rot: rot||0, full: full || text, key};
     this._stored.push(entry);
     return this._renderTickLabel(entry);
   }

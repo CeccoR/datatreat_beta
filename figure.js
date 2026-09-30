@@ -114,15 +114,19 @@ function seriesFromPlot(plot, legendEl){
   const out = [];
   const cats = stored.filter(e=> e.type === 'ticklabel')
                      // The whole name, not the one the axis had room for.
-                     .map(e=>({ x: e.xv, text: e.full || e.text, rot: e.rot || 0 }));
+                     .map(e=>({ x: e.xv, text: e.full || e.text, rot: e.rot || 0, key: e.key || e.full || e.text }));
 
   stored.forEach((e, i)=>{
     if (e.type !== 'line' && e.type !== 'points') return;
     if (!e.xs || !e.ys || !e.xs.length) return;
+    const label = e.label || labels[out.length] || ('Series ' + (out.length + 1));
     out.push({
       id: 's' + i,
       kind: 'curve',
-      label: e.label || labels[out.length] || ('Series ' + (out.length + 1)),
+      // Which series this is, however it is named: what remembered settings are
+      // matched back to (applySettings). The plot says so where the name can change.
+      key: e.key || label,
+      label,
       panel: 0,
       color: e.color || '#3aa0ff',
       width: e.width || 1.5,
@@ -158,10 +162,12 @@ function seriesFromPlot(plot, legendEl){
     let gi = 0;
     for (const g of groups.values()){
       g.keys.forEach((k, j)=>{ if (k != null && errs.has(k)) g.errs[j] = errs.get(k); });
+      const label = g.name || labels[out.length] || ('Bars ' + (gi + 1));
       out.push({
         id: 'b' + gi,
         kind: 'bar',
-        label: g.name || labels[out.length] || ('Bars ' + (gi + 1)),
+        key: label,
+        label,
         panel: 0,
         color: g.color,
         width: 0.8,                 // bar width as a fraction of the category slot
@@ -1323,13 +1329,36 @@ function loadPresets(){
 function savePresets(o){ try { localStorage.setItem(PRESET_KEY, JSON.stringify(o)); } catch(e){} }
 function settingsSnapshot(){
   const snap = snapshot();
-  snap.series = snap.series.map(e=>({ keep: [], rest: e.rest }));
+  // No data, but where each bar stood and which sample stood there: that is what lets
+  // the divisions and the typed sample names follow their samples (applySettings).
+  snap.series = snap.series.map((e, i)=> F.series[i].kind === 'bar'
+    ? { keep: [], rest: e.rest, bx: F.series[i].xs.slice() }
+    : { keep: [], rest: e.rest });
+  snap.cats = F.cats.map(c=>({ x: c.x, key: c.key }));
   return snap;
 }
-/* Applies settings without touching the data: scalars wholesale, per-series looks
-   positionally. A plot with more series than the source keeps its own for the rest.
-   `kind`, `id`, `label` and the data are never copied — they say what a series IS,
-   not how it looks. Letting a preset made on line plots turn a bar series into a
+/* Which saved entry each entry of the plot is, by key: a series or a sample keeps its
+   settings wherever it now stands, and one new to the plot gets none, whatever was
+   added, removed or renamed around it. Only when no key matches at all — a preset
+   made on another plot, or settings saved before keys were kept — do the entries pair
+   up by position, as a template would; `gone` ones (see rememberSettings) never do.
+   Gives the saved index for each entry of `now`, or -1. */
+function pairUp(saved, now, gone){
+  const used = saved.map(()=> false);
+  const out = now.map(k=>{
+    const j = k == null ? -1 : saved.findIndex((t, n)=> !used[n] && t === k);
+    if (j >= 0) used[j] = true;
+    return j;
+  });
+  if (out.some(j=> j >= 0)) return out;
+  const spare = saved.map((_, n)=> n).filter(n=> !(gone && gone[n]));
+  return now.map((_, i)=> i < spare.length ? spare[i] : -1);
+}
+/* Applies settings without touching the data: scalars wholesale, per-series looks to
+   the series they were made for (pairUp), in the order they were left in; a series new
+   to the plot keeps its own looks and the place the plot gives it.
+   `kind`, `id`, `key`, `label` and the data are never copied — they say what a series
+   IS, not how it looks. Letting a preset made on line plots turn a bar series into a
    curve would erase the bars, and carrying names over would show the sample labels
    of whatever plot the settings came from; the names always come from the project's
    own legend, so renaming a sample there shows up here at once.
@@ -1337,7 +1366,7 @@ function settingsSnapshot(){
    A name typed into the composer is the exception: it is a choice about this figure,
    not about the project, so it is kept in `rename` — which is not identity — and put
    back over the label when the settings are applied again. */
-const IDENTITY = ['kind', 'id', 'label', 'xs', 'ys', 'errs'];
+const IDENTITY = ['kind', 'id', 'key', 'label', 'xs', 'ys', 'errs'];
 /* `name` is the file this figure is exported as. It belongs to this figure alone, like
    a series' data: a preset made on another plot carrying it over would export this
    one under the other's file name. The per-plot memory, which is about this figure,
@@ -1347,13 +1376,33 @@ function applySettings(snap){
   if (!snap) return;
   const scalars = JSON.parse(JSON.stringify(snap.scalars));
   for (const k of SCALAR_IDENTITY) delete scalars[k];
+  // Sample names and divisions are held by the sample's x, so they move with it.
+  const moveX = new Map();
+  if (snap.cats){
+    pairUp(snap.cats.map(c=> c.key), F.cats.map(c=> c.key))
+      .forEach((j, i)=>{ if (j >= 0) moveX.set(snap.cats[j].x, F.cats[i].x); });
+    const names = {};
+    for (const x in scalars.catNames || {}) if (moveX.has(+x)) names[moveX.get(+x)] = scalars.catNames[x];
+    scalars.catNames = names;
+  }
   Object.assign(F, scalars);
+  const saved = snap.series || [];
+  const key = r => (r && r.key != null) ? r.kind + '\n' + r.key : null;
+  const pair = pairUp(saved.map(e=> key(e.rest)), F.series.map(key), saved.map(e=> !!e.gone));
   F.series.forEach((s, i)=>{
-    const rest = snap.series[i] && snap.series[i].rest;
+    const e = saved[pair[i]], rest = e && e.rest;
     if (!rest) return;
     for (const k in rest) if (!IDENTITY.includes(k)) s[k] = rest[k];
+    if (rest.divOf && e.bx && snap.cats){
+      const div = new Map();
+      e.bx.forEach((x, j)=>{ if (moveX.has(x)) div.set(moveX.get(x), rest.divOf[j]); });
+      s.divOf = s.xs.map(x=> div.get(x) || 0);
+    }
     if (s.rename) s.label = s.rename;
   });
+  const slots = F.series.map((_, i)=> i).filter(i=> pair[i] >= 0);
+  const order = slots.slice().sort((a, b)=> pair[a] - pair[b]).map(i=> F.series[i]);
+  slots.forEach((i, n)=>{ F.series[i] = order[n]; });
   clampPanels();
 }
 
@@ -1380,6 +1429,20 @@ function rememberSettings(){
   // Which preset the figure was left on, so reopening it says so instead of coming
   // back with the settings of a preset and no sign of which one.
   snap.preset = presetSel;
+  /* A series the plot is not drawing right now — a gas switched off, a sample taken
+     out — keeps its settings for when it is back, in the place it had among the
+     others. It is found again by key only: it is not the series of any other sample. */
+  const prev = all[memKey()];
+  if (prev && prev.series){
+    const same = (a, b)=> a.rest.key === b.rest.key && a.rest.kind === b.rest.kind;
+    let at = 0;
+    for (const e of prev.series){
+      if (!e.rest || e.rest.key == null) continue;
+      const k = snap.series.findIndex(m=> same(m, e));
+      if (k >= 0){ at = k + 1; continue; }
+      snap.series.splice(at++, 0, { ...e, gone: true });
+    }
+  }
   all[memKey()] = snap;
   const live = new Set(TABS.map(t=>t.id));
   for (const k of Object.keys(all)) if (!live.has(k.slice(0, k.indexOf('/')))) delete all[k];

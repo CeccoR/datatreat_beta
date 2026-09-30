@@ -821,7 +821,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const y = norm1.map(v=> v + baseOf(j) + 0.05);
       // Draw the stacked trace, but hand the composer the un-offset CSV values.
       plot.line(files[k].x, y, files[k].color, 1.3, undefined,
-                { raw: { xs: files[k].x, ys: norm1 }, label: files[k].label });
+                { raw: { xs: files[k].x, ys: norm1 }, label: files[k].label, key: files[k].name });
       const s=document.createElement('span');
       s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`;
       legend.appendChild(s);
@@ -1048,7 +1048,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const svg = document.getElementById(svgId); if (!svg) return;
     const wrap = svg.closest('.plot-wrap'), legend = document.getElementById(legendId);
     const idxs = files.map((f,k)=>k).filter(k=>files[k].name!==standardName);
-    const rows = idxs.map(k=>({label:files[k].label, ...statsFn(k)}));
+    const rows = idxs.map(k=>({name:files[k].name, label:files[k].label, ...statsFn(k)}));
     const raws=rows.map(r=>r.rawMean), rawE=rows.map(r=>r.rawStd);
     const corrs=rows.map(r=>r.corrMean), corrE=rows.map(r=>r.corrStd);
     const anyCorr = rows.some(r=>isFinite(r.corrMean));
@@ -1098,7 +1098,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       } else if (isFinite(raws[k])&&raws[k]>0){
         plot.barPx(xc,0,raws[k],'#3aa0ff',sHw,0); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
       }
-      plot.tickLabel(xc, labels[k], fit.rot, rows[k].label);
+      plot.tickLabel(xc, labels[k], fit.rot, rows[k].label, rows[k].name);
     }
     plot.attachTools(wrap);
     if (legend) legend.innerHTML = anyCorr

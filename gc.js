@@ -412,7 +412,7 @@ import { Plot, svgEl } from './plot.js';
         const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
         gas[k] = { pct, flow, Fm: flowM, FmInt: cumtrapz(tHours, flowM) };
       }
-      return {t:tHours, gas, label:f.label, color:f.color};
+      return {t:tHours, gas, name:f.name, label:f.label, color:f.color};
     });
     document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts;
     renderGasSel();
@@ -427,7 +427,7 @@ import { Plot, svgEl } from './plot.js';
       shown.forEach(g=>{
         const q = d.gas[g.key];
         if (!q) return;
-        plot.line(d.t, q[key], d.color, 1.3, g.dash, { label: seriesName(d.label, g, shown) });
+        plot.line(d.t, q[key], d.color, 1.3, g.dash, { label: seriesName(d.label, g, shown), key: d.name + '/' + g.key });
       });
     });
   }
@@ -611,13 +611,13 @@ import { Plot, svgEl } from './plot.js';
         if (d.t[i] >= xStart && startIdx < 0) startIdx = i;
         if (d.t[i] <= xEnd) endIdx = i;
       }
-      if (startIdx < 0 || endIdx < 0 || startIdx >= endIdx) return {label:d.label, rate:{}, dt:NaN};
+      if (startIdx < 0 || endIdx < 0 || startIdx >= endIdx) return {name:d.name, label:d.label, rate:{}, dt:NaN};
       const dt = d.t[endIdx] - d.t[startIdx];
-      if (dt === 0) return {label:d.label, rate:{}, dt:NaN};
+      if (dt === 0) return {name:d.name, label:d.label, rate:{}, dt:NaN};
       // Mean rate over the interval: the cumulative rise divided by its duration.
       const rate = {};
       for (const key in d.gas) rate[key] = (d.gas[key].FmInt[endIdx] - d.gas[key].FmInt[startIdx]) / dt;
-      return {label:d.label, rate, dt};
+      return {name:d.name, label:d.label, rate, dt};
     });
     drawGcData();
     // Show the Results card before drawing into it: plots sized from a hidden element
@@ -723,7 +723,7 @@ import { Plot, svgEl } from './plot.js';
         barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: gasTxt(g) });
         barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
       });
-      barPlot.tickLabel(k+1, labels[k], fit.rot, c.label);
+      barPlot.tickLabel(k+1, labels[k], fit.rot, c.label, c.name);
     });
     barPlot.attachTools(svg.closest('.plot-wrap'));
     document.getElementById('gcBarLegend').innerHTML =

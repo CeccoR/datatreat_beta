@@ -199,7 +199,7 @@ import { Plot } from './plot.js';
       const sm = sms[k], bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP;
       const csvY = sm.map(v=>(v-bg)/div);
       plot.line(files[k].b, y, files[k].color, 1.3, undefined,
-                { raw: { xs: files[k].b, ys: csvY }, label: files[k].label });
+                { raw: { xs: files[k].b, ys: csvY }, label: files[k].label, key: files[k].name });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`; legend.appendChild(s);
     });
     lastY = Y;
