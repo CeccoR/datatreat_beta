@@ -1848,6 +1848,11 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 #gcParamTableWrap .gc-all-row .fname { color: var(--muted); }
 #gcParamTableWrap input[disabled] { opacity: .35; }
 #gcParamTableWrap input[readonly] { opacity: .6; cursor: default; }
+/* The injection delay's row sits a step above the table, on its columns. Locked by
+   Auto its value is still the one in force, so it reads like the read-only echoes,
+   not like a cell that does not apply. */
+#gcParamTableWrap .gc-delay { margin-bottom: 8px; }
+#gcParamTableWrap .gc-delay input[disabled] { opacity: .6; cursor: default; }
 #gcParamTableWrap .gc-row { transition: background .1s; }
 #gcParamTableWrap .gc-row.hovering { background: rgba(95, 207, 106, 0.20); }
 /* Single outline on the row draws one clean rectangle; a per-cell box-shadow

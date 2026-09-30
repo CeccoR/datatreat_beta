@@ -46,6 +46,13 @@ import { Plot, svgEl } from './plot.js';
   // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
   let mMode='all', qMode='all', startMode='all', endMode='all';
   let mShared=15, qShared=2, startShared=0, endShared=24;
+  /* The injection date is stamped when the run starts, and the sample is injected a
+     little later: every injection is moved on by this delay, in seconds, before it is
+     set against light-on. "Auto" is the method's own figure, shown in the field. */
+  const INJ_DELAY_AUTO = 60;
+  let delayAuto = true, delayMan = INJ_DELAY_AUTO;
+  const injDelay = ()=> delayAuto ? INJ_DELAY_AUTO : delayMan;
+  const injectedAt = d => new Date(+d + injDelay()*1000);
   let costResults=[];
   let gcSel=null, gcHov=null;   // selected / hovered sample index (interval interaction)
   let loadAlerts='';
@@ -179,6 +186,7 @@ import { Plot, svgEl } from './plot.js';
       lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
       mMode, qMode, startMode, endMode, mShared, qShared, startShared, endShared,
       gasSel: { a:gasSel.a.slice(), r:gasSel.r.slice() },
+      delayAuto, delayMan,
     };
   }
   function gcRestore(s){
@@ -189,6 +197,10 @@ import { Plot, svgEl } from './plot.js';
            : { a: fromMode(s.gasMode && s.gasMode.a), r: fromMode(s.gasMode && s.gasMode.r) };
     ms = s.ms.slice(); Qs = s.Qs.slice();
     lightOnDates = s.lightOnDates.map(t=> t!=null ? new Date(t) : null);
+    // Projects from before the delay existed take it too, on Auto: the timestamps they
+    // were computed from are just as late.
+    delayAuto = s.delayAuto !== false;
+    delayMan = isFinite(s.delayMan) ? s.delayMan : INJ_DELAY_AUTO;
     if (s.mMode !== undefined){
       // Current format: four independent per-parameter modes.
       mMode = s.mMode; qMode = s.qMode; startMode = s.startMode; endMode = s.endMode;
@@ -220,7 +232,13 @@ import { Plot, svgEl } from './plot.js';
   function lightOnWarn(i){
     const f = files[i], lo = lightOnDates[i];
     if (!f || !lo || isNaN(+lo)) return false;
-    return !f.injDates.some(d => d < lo);
+    return !f.injDates.some(d => injectedAt(d) < lo);
+  }
+  function refreshLightOnWarnings(){
+    document.querySelectorAll('#gcParamTableWrap .gc-row').forEach(r=>{
+      const wc = r.querySelector('.gc-warn-cell');
+      if (wc) wc.innerHTML = lightOnWarnHtml(+r.dataset.i);
+    });
   }
   function lightOnWarnHtml(i){
     return lightOnWarn(i)
@@ -243,7 +261,14 @@ import { Plot, svgEl } from './plot.js';
     const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
     const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
     // Column order: Sample | m | Q | Light-on | [Interval: start end] | warnings.
-    let html = `<div style="overflow-x:auto"><table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
+    // The delay, one for every sample, on a row of its own above the table and on its
+    // columns: its name under Sample, its value under m, the Auto switch under Q.
+    let html = `<div style="overflow-x:auto"><table class="gc-param-table gc-delay" style="width:100%;table-layout:fixed">${cg}<tbody>
+      <tr><td class="fname">Injection delay (s)</td>
+        <td>${numCell('gcDelay', 'title="From the logged injection date to the actual injection, in seconds"', injDelay(), delayAuto ? 'off' : 'on')}</td>
+        <td><label class="pp-check" title="Use the method's delay, ${INJ_DELAY_AUTO} s"><input type="checkbox" class="gcDelayAuto"${delayAuto ? ' checked' : ''}> Auto</label></td>
+        <td colspan="4"></td></tr></tbody></table>
+      <table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
       <tr><th rowspan="2">Sample</th>
         <th rowspan="2">m (mg) ${modeChip('m',mMode)}</th>
         <th rowspan="2">Q (mL/min) ${modeChip('q',qMode)}</th>
@@ -274,6 +299,19 @@ import { Plot, svgEl } from './plot.js';
     html += `</tbody></table></div>`;
     wrap.innerHTML = html;
     fitCsvIcons();
+
+    const delayIn = wrap.querySelector('.gcDelay'), delayBox = wrap.querySelector('.gcDelayAuto');
+    guardNumericInput(delayIn, { min:0 });
+    delayIn.addEventListener('change', ()=>{
+      delayMan = +delayIn.value;
+      refreshLightOnWarnings(); computeAndRenderGc(); hist.commit();
+    });
+    // Off, the field opens on the value that was in force, ready to be changed.
+    delayBox.addEventListener('change', ()=>{
+      if (!delayBox.checked && delayAuto) delayMan = INJ_DELAY_AUTO;
+      delayAuto = delayBox.checked;
+      renderGcParamTable(); computeAndRenderGc(); hist.commit();
+    });
 
     // all/one toggles: flip a parameter, seeding across the boundary (one→all from
     // sample 0, all→one from the shared value), then re-render + recompute.
@@ -397,7 +435,7 @@ import { Plot, svgEl } from './plot.js';
       // point carrying the last reading before it (zero if the run starts after it).
       const rows = f.injDates.map((d,i)=>{
         const v = {}; for (const k in f.gas) v[k] = f.gas[k][i];
-        return { d, v };
+        return { d: injectedAt(d), v };
       }).sort((a,b)=>a.d-b.d);
       let idxBefore = -1;
       for (let i=0;i<rows.length;i++) if (rows[i].d < lightOn) idxBefore = i;
@@ -780,8 +818,8 @@ import { Plot, svgEl } from './plot.js';
     entries.push({name:'mean_rates.csv', text:t2});
     // gc_info.csv — per-sample inputs + the integration interval used
     const fmtDate = d => d ? new Date(d).toISOString().slice(0,16).replace('T',' ') : '';
-    let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)']);
-    dataTables.forEach((d,k)=> t3 += csvLine([d.label, mOf(k), qOf(k), fmtDate(lightOnDates[k]), startOf(k), endOf(k)]));
+    let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
+    dataTables.forEach((d,k)=> t3 += csvLine([d.label, mOf(k), qOf(k), fmtDate(lightOnDates[k]), startOf(k), endOf(k), fmtNum(injDelay())]));
     entries.push({name:'gc_info.csv', text:t3});
     return entries;
   }
