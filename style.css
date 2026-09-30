@@ -2421,14 +2421,21 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 
 /* The nine placings of the plot area, in a little grid under the button. */
 .fig-align svg { display: block; }
+/* Open, the button is outlined and drawn in the accent — held, so it says "open"
+   rather than "hovered", on either theme (the swatches' white border would not). */
+button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--accent); }
 .fig-alignpop {
   position: fixed; z-index: 1200;
   display: grid; grid-template-columns: repeat(3, auto); gap: 4px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 6px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
 }
-.fig-alignpop button { padding: 4px; line-height: 0; }
-.fig-alignpop button.is-on { border-color: var(--accent); color: var(--accent); }
+/* Square cells: button.btn.btn-sm would give each its text padding and make them
+   wide. The one in force is an ordinary .is-on button, its icon in --on-accent. */
+.fig-alignpop button.btn.btn-sm {
+  width: 28px; height: 28px; padding: 0; line-height: 0;
+  display: grid; place-items: center;
+}
 .fig-row input[disabled] { opacity: 0.6; cursor: not-allowed; }
 /* Section header that carries controls of its own (the Series palette picker). */
 .fig-sechead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
