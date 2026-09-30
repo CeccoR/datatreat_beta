@@ -2451,6 +2451,12 @@ function applyTexPalette(tex){
   });
 }
 
+/* Any change to the divisions — one added or removed, a sample moved into another —
+   deals the palettes in force out again, so division k wears the k-th colour and the
+   k-th texture exactly as if the palettes had just been applied. A palette overridden
+   by hand is null and is left alone, and with it whatever was picked. */
+function redealPalettes(){ applyPalette(); applyTexPalette(); }
+
 function texPaletteOnSeries(s, tex){
   if (!tex || !tex.length) return;
   s.texture = texName(tex[0]); s.texInv = texInvOf(tex[0]);
@@ -2671,6 +2677,7 @@ function wireBarDrag(){
       if (!s || gi !== i || divOfBar(s, j) === k) return;
       s.divOf = s.xs.map((_, n)=> divOfBar(s, n));
       s.divOf[j] = k;
+      redealPalettes();
       pushUndo(); refresh(true);
     };
     handle.addEventListener('pointerup', finish);
@@ -3086,6 +3093,7 @@ function wireControls(){
         ? addDiv(+divB.dataset.adddiv)
         : delDiv(...divB.dataset.deldiv.split(':').map(Number));
       if (!done) return;
+      redealPalettes();
       pushUndo(); refresh(true);
       return;
     }
