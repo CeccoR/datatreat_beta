@@ -143,7 +143,11 @@ import { Plot, svgEl } from './plot.js';
       const sorted = injDates.slice().sort((a,b)=>a-b);
       files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, gas, color:nextColor(files), rawBytes});
       ms.push(15); Qs.push(2); startArr.push(0); endArr.push(24);
-      lightOnDates.push(new Date(sorted[0]));
+      // The first injection, to the minute: the field shows and sets minutes only, so
+      // a default carrying the seconds would change the moment the field was merely
+      // tabbed through — results shifting, and an undo step, with nothing touched.
+      const lightOn = new Date(sorted[0]); lightOn.setSeconds(0, 0);
+      lightOnDates.push(lightOn);
     }
     loadAlerts = buildAlertsHtml(invalidFiles, [], undefined, 'gc-dismiss-invalid');
     gcUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'gc-dismiss-upload') : '';
