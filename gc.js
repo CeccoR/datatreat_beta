@@ -817,7 +817,11 @@ import { Plot, svgEl } from './plot.js';
     costResults.forEach(c=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)), fmtNum(c.dt,4)]));
     entries.push({name:'mean_rates.csv', text:t2});
     // gc_info.csv — per-sample inputs + the integration interval used
-    const fmtDate = d => d ? new Date(d).toISOString().slice(0,16).replace('T',' ') : '';
+    // Local time, as the light-on field shows it and as the instrument logged it:
+    // toISOString() wrote UTC, two hours early in Italian summer time.
+    const pad = n => String(n).padStart(2, '0');
+    const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
     let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
     dataTables.forEach((d,k)=> t3 += csvLine([d.label, mOf(k), qOf(k), fmtDate(lightOnDates[k]), startOf(k), endOf(k), fmtNum(injDelay())]));
     entries.push({name:'gc_info.csv', text:t3});
