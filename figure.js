@@ -330,12 +330,12 @@ function buildModel(plot, opts){
        divisions follow it — which is what a chart with no divisions wants. */
     palByDiv: true,
     /* The same three settings for textures, kept apart from the colours': a figure
-       that runs its colours across divisions may still want one texture per series,
-       which is the pair that makes both readable at once. No set until one is
-       chosen: bars start solid and stay there until asked otherwise. */
-    texPalette: null,
+       that runs its colours across divisions wants one texture per series, which is
+       the pair that makes both readable at once — so that is where it starts, "Both
+       ways" dealt series by series within each panel: solid, then its pale shade. */
+    texPalette: TEX_PALETTES[0].tex.slice(),
     texScope: 'panel',
-    texByDiv: true,
+    texByDiv: false,
     panels: [ newPanel(0, 0) ],
     series,
     cats,                               // category labels of a bar chart, if any
@@ -1649,11 +1649,12 @@ function fillPreview(tex, inv, size, r){
    An entry is a texture name, with '!' for the way round that cuts the texture out of
    the colour instead of laying it on a pale ground — the same spelling the fill
    patterns are keyed by. A set shorter than the data repeats, as a palette does. */
+// The first is the one a new figure starts with (buildModel).
 const TEX_PALETTES = [
+  { name: 'Both ways',tex: ['solid','solid!','fwd','fwd!','back','back!','dots','dots!'] },
   { name: 'Classic',  tex: ['solid','fwd','dots','cross','horiz','back','grid','vert'] },
   { name: 'Hatching', tex: ['fwd','back','cross','grid','horiz','vert'] },
   { name: 'Lines',    tex: ['horiz','vert','grid','fwd','back','cross'] },
-  { name: 'Both ways',tex: ['solid','solid!','fwd','fwd!','back','back!','dots','dots!'] },
 ];
 const texName = e => String(e || 'solid').replace('!', '');
 const texInvOf = e => String(e || '').endsWith('!');
@@ -2464,10 +2465,11 @@ function applyTexPalette(tex){
   });
 }
 
-/* Any change to the divisions — one added or removed, a sample moved into another —
-   deals the palettes in force out again, so division k wears the k-th colour and the
-   k-th texture exactly as if the palettes had just been applied. A palette overridden
-   by hand is null and is left alone, and with it whatever was picked. */
+/* Any change to what the palettes are dealt over — a division added or removed, a
+   sample moved into another, a series moved or a panel added — deals the palettes in
+   force out again, colours and textures both, exactly as if they had just been
+   applied. A palette overridden by hand is null and is left alone, and with it
+   whatever was picked. */
 function redealPalettes(){ applyPalette(); applyTexPalette(); }
 
 function texPaletteOnSeries(s, tex){
@@ -2641,7 +2643,7 @@ function wireSeriesDrag(){
         F.series.splice(f, 1);
         F.series.splice(to, 0, moved);
       }
-      applyPalette();
+      redealPalettes();
       pushUndo(); refresh(true);
     };
     handle.addEventListener('pointerup', finish);
@@ -2712,7 +2714,7 @@ function resetFigure(){
   if (!srcPlot) return;
   F = buildModel(srcPlot, srcOpts);
   axSel = 'all'; presetSel = '';
-  applyPalette();
+  redealPalettes();
   resetView();
   pushUndo();
   refresh(true);
@@ -3108,14 +3110,14 @@ function wireControls(){
       if (!spot){ F.rows += 1; spot = [F.rows-1, 0]; }
       F.panels.push(newPanel(spot[0], spot[1]));
       distributeSeries();
-      applyPalette();
+      redealPalettes();
       pushUndo(); refresh(true);
     } else if (delB){
       const i = +delB.dataset.delPanel;
       if (F.panels.length <= 1) return;
       F.panels.splice(i, 1);
       F.series.forEach(s=>{ if (s.panel === i) s.panel = 0; else if (s.panel > i) s.panel--; });
-      applyPalette();
+      redealPalettes();
       pushUndo(); refresh(true);
     }
   });
@@ -3129,7 +3131,7 @@ export function openFigureEditor(plot, opts){
   F = buildModel(plot, srcOpts);
   axSel = 'all'; presetSel = '';
   recallSettings();
-  applyPalette();
+  redealPalettes();
   undoStack = [snapshot()]; redoStack = [];
   if (!F.series.length){ /* still open — the user may only want axes/labels */ }
 
