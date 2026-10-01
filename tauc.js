@@ -88,6 +88,34 @@ import { Plot } from './plot.js';
   const fmtE = (v, e, unit, k = 3, scale = 1)=> !isFinite(v) ? '-'
     : isFinite(e) ? `${(v*scale).toFixed(k)} ± ${(e*scale).toFixed(k)} ${unit}` : `${(v*scale).toFixed(k)} ${unit}`;
 
+  // ---- Auto-suggested Tauc interval lines ----
+  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
+  // linear/constant background has zero curvature, so it cancels). The "zero zones"
+  // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
+  // ε = 10%·max|Y''|. The region bounds are found from each spectrum end inward: the
+  // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
+  const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
+  const SUGG_CONT   = 25;     // required consecutive points above ε
+  function curvatureEdge(c, p){
+    const hv = c.hv, n = hv.length;
+    if (n < 7) return null;
+    const d2  = movingAverage(gradientArr(c.dYs, hv), p.N2);      // Y''
+    const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
+    // energy-ascending order of indices, so we can scan by energy regardless of layout
+    const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
+    const A = d2.reduce((m,v)=>Math.max(m, Math.abs(v)), 0) || 1;
+    const eps = SUGG_THRESH * A;
+    const ax = j => Math.abs(d2[ord[j]]);
+    const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
+    const inR = j => j>=margin && j<n-margin;
+    // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
+    const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
+    let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
+    for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
+    for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
+    return { v1, v2 };
+  }
+
   /* =========================================================
      ANALYSIS PANEL
      One card: the current sample's curve against hν, the interval lines that pick
@@ -97,12 +125,8 @@ import { Plot } from './plot.js';
      describes. Each card keeps its own parameters, lines and all/one mode; its
      elements are its prefix plus the same suffixes (taucSvg, taucUSvg, ...).
   ========================================================= */
-  // The tail cuts are per cent of the energy range at each end, under keys of their
-  // own: the cutLo/cutHi v337 saved were per cent of the points, and read as a range
-  // they would cut something else.
-  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2', tailLo:'CutLo', tailHi:'CutHi', step:'Step', pat:'Pat', run:'Run' };
-  const clampCut = v => Math.max(0, Math.min(45, +v || 0));
-  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM, tailLo: clampCut, tailHi: clampCut, step: clampN, pat: clampN, run: clampN };
+  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
+  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM };
   function makePanel(spec){
     const { prefix, keys, windows } = spec;
     const $ = id => document.getElementById(prefix + id);
@@ -129,7 +153,6 @@ import { Plot } from './plot.js';
       const dYs = movingAverage(gradientArr(Ys, hv), p.N2);        // Y'
       return { hv, Yraw, Ys, dYs };
     }
-    const secondDeriv = (c, p)=> movingAverage(gradientArr(c.dYs, c.hv), p.N2);   // Y''
 
     // Resolve the effective params for a given file index
     P.params = i =>{
@@ -158,79 +181,21 @@ import { Plot } from './plot.js';
     };
 
     // ---- Auto-suggested interval-line positions ----
-    // Second-derivative method. The region is the edge: the span around its steepest
-    // point (the max of Y') where Y'' is NON-zero — a linear/constant background has
-    // zero curvature, so it cancels. From the steepest point the search walks out to
-    // each side one point at a time, and stops where |Y''| has stayed below
-    // ε = 10%·max|Y''| for `run` points running: the bound is where that run began
-    // (interpolated). Walking out from the edge rather than in from the ends, it meets
-    // the curvature it is after before any noise further out.
-    //
-    // Two things come first. The ends of the spectrum are cut off, `tailLo`/`tailHi`
-    // per cent of its energy range at the low and the high end, apart, and nothing
-    // outside is looked at. And the max that sets ε is the edge's, not the noise's:
-    // it is looked for outward from the steepest point, in a window grown by `step`
-    // points on each side at a time until it has not changed for `pat` steps running.
-    // Taken over the whole spectrum, the spikes of a noisy pre-edge — which a log
-    // blows up — set it, and ε then sits above the very curvature it is meant to find.
-    const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
-    function derivEdge(i){
-      const p = P.params(i), n = files[i].hv.length;
-      if (n < 7) return null;
-      const c = curves(i, p), hv = c.hv, d2 = secondDeriv(c, p);
-      // energy-ascending order of indices, so we can scan by energy regardless of layout
-      const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
-      const E = j => hv[ord[j]];
-      const span = E(n-1) - E(0);
-      const eLo = E(0) + span*p.tailLo/100, eHi = E(n-1) - span*p.tailHi/100;
-      let lo = 0;   while (lo < n-1 && E(lo) < eLo) lo++;
-      let hi = n-1; while (hi > 0 && E(hi) > eHi) hi--;
-      if (hi - lo < 7) return null;            // cut down to nothing to look in
-      const absD2 = j =>{ const v = Math.abs(d2[ord[j]]); return isFinite(v) ? v : 0; };
-      let j0 = lo;
-      for (let j=lo;j<=hi;j++) if (c.dYs[ord[j]] > c.dYs[ord[j0]] || !isFinite(c.dYs[ord[j0]])) j0 = j;
-      let A = absD2(j0), wLo = j0, wHi = j0, still = 0;
-      while (still < p.pat && (wLo > lo || wHi < hi)){
-        const nLo = Math.max(lo, wLo - p.step), nHi = Math.min(hi, wHi + p.step);
-        let m = A;
-        for (let j=nLo;j<wLo;j++) m = Math.max(m, absD2(j));
-        for (let j=wHi+1;j<=nHi;j++) m = Math.max(m, absD2(j));
-        wLo = nLo; wHi = nHi;
-        if (m > A){ A = m; still = 0; } else still++;
-      }
-      A = A || 1;
-      const eps = SUGG_THRESH * A;
-      const below = j => !(absD2(j) >= eps);
-      // Where |Y''| crosses ε between the last point above it (k) and the first below (j).
-      const cross = (k, j)=>{ const a = absD2(k), b = absD2(j); const t = (a - eps)/((a - b) || 1); return E(k) + t*(E(j) - E(k)); };
-      const walk = dir =>{
-        let j = j0, quiet = 0;
-        while (j + dir >= lo && j + dir <= hi){
-          j += dir;
-          if (!below(j)){ quiet = 0; continue; }
-          if (++quiet < p.run) continue;
-          const first = j - dir*(p.run - 1), last = first - dir;
-          return below(last) ? E(first) : cross(last, first);
-        }
-        return E(j);                           // reached the cut: the bound is the cut
-      };
-      return { v1: walk(-1), v2: walk(+1), A, from: E(j0), search: [E(wLo), E(wHi)], cut: [E(lo), E(hi)] };
-    }
+    // Where the lines go is the spec's to say: `suggest` places them for one sample,
+    // `combine` makes one set for every sample out of theirs (all mode). Either is
+    // kept inside the energy range it applies to.
     const clampTo = (lo, hi)=> l =>{ const o = {}; for (const k in l) o[k] = Math.max(lo, Math.min(hi, l[k])); return o; };
     function suggestOne(i){
-      const e = derivEdge(i);
-      if (!e) return null;
+      const p = P.params(i), l = spec.suggest(i, p, ()=> curves(i, p));
+      if (!l) return null;
       const hv = files[i].hv, n = hv.length;
-      return clampTo(Math.min(hv[0], hv[n-1]), Math.max(hv[0], hv[n-1]))(spec.fromEdge(e));
+      return clampTo(Math.min(hv[0], hv[n-1]), Math.max(hv[0], hv[n-1]))(l);
     }
-    // Shared (all-mode) suggestion: the region [max(v1), min(v2)] over all samples
-    // (widest common window), anything placed from it computed once from max(v1).
     function suggestShared(){
-      const ss = files.map((f,i)=> derivEdge(i)).filter(Boolean);
+      const ss = files.map((f,i)=>suggestOne(i)).filter(Boolean);
       if (!ss.length) return null;
-      const e = { v1: Math.max(...ss.map(s=>s.v1)), v2: Math.min(...ss.map(s=>s.v2)) };
       let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
-      return clampTo(lo, hi)(spec.fromEdge(e));
+      return clampTo(lo, hi)(spec.combine(ss));
     }
     // Apply suggestions to the whole workspace (used once on first upload).
     P.autoSuggestAll = ()=>{
@@ -301,21 +266,6 @@ import { Plot } from './plot.js';
       plot.line(hv, c.Yraw, '#6a7585', 1,   undefined, { label: `${nm} raw`, key: 'raw' });
       plot.line(hv, c.Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed`, key: 'smoothed' });
       plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative`, key: 'derivative' });
-      const edge = spec.debugCurvature ? derivEdge(currIndex) : null;
-      if (edge){
-        // What the interval suggestion looks at: |Y''| scaled so that the max it found
-        // reaches the top of the curve, the ε it has to stay above for a sustained run
-        // to count as the region, and the window that max was looked for in.
-        const d2 = secondDeriv(c, p).map(Math.abs);
-        plot.line(hv, onSpan(d2, 0, edge.A), DEBUG_COLOR, 1, '3,3', { label: `${nm} |second derivative| (debug)`, key: 'd2' });
-        const yEps = yLo + SUGG_THRESH*(yHi - yLo);
-        plot.line([minArr(hv), maxArr(hv)], [yEps, yEps], DEBUG_COLOR, 1, '1,3', { label: 'ε threshold (debug)', key: 'eps' });
-        plot.line(edge.search, [yHi, yHi], DEBUG_COLOR, 3, undefined, { label: 'max search window (debug)', key: 'search' });
-        // Where the tails were cut: nothing outside is looked at.
-        const yTop = spec.zeroFloor ? rHi*1.05 : rHi + pad;
-        edge.cut.forEach((x, k)=> plot.line([x, x], [rLo - pad, yTop], DEBUG_COLOR, 1, '1,3',
-          { label: `${k ? 'high' : 'low'}-energy tail cut (debug)`, key: k ? 'cut hi' : 'cut lo' }));
-      }
 
       const fits = [];
       let tooSmall = false;
@@ -429,12 +379,11 @@ import { Plot } from './plot.js';
   }
 
   const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
-  const URBACH_COLOR = '#ff7f0e', DEBUG_COLOR = '#9b8cff';
+  const URBACH_COLOR = '#ff7f0e';
   const tauc = makePanel({
     prefix: 'tauc',
-    keys: ['a','N','N2','M','M2','tailLo','tailHi','step','pat','run'],
-    defaults: { a:0.5, N:1, N2:20, M:25, M2:100, tailLo:10, tailHi:10, step:10, pat:10, run:25 },
-    debugCurvature: true,
+    keys: ['a','N','N2','M','M2'],
+    defaults: { a:0.5, N:1, N2:20, M:25, M2:100 },
     curve: (fr, hv, p)=> Math.pow(fr*hv, p.a),
     yLabel: p => `[F(R)·hν]${sup(p.a)}`,
     zeroFloor: true,
@@ -445,24 +394,30 @@ import { Plot } from './plot.js';
     defaultLines: (lo, d)=> ({ v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d }),
     // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span); the
     // baseline is placed just below where the edge starts.
-    fromEdge: e => ({ v1: e.v1, v2: e.v2, v3: e.v1-0.85, v4: e.v1-0.1 }),
+    suggest: (i, p, curves)=>{ const e = curvatureEdge(curves(), p); return e && { v1: e.v1, v2: e.v2, v3: e.v1-0.85, v4: e.v1-0.1 }; },
+    // Linear region [max(v1), min(v2)] over all samples (widest common linear
+    // window), baseline computed once from max(v1).
+    combine: ss =>{ const v1 = Math.max(...ss.map(s=>s.v1)), v2 = Math.min(...ss.map(s=>s.v2)); return { v1, v2, v3: v1-0.85, v4: v1-0.1 }; },
     results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
     show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
     onSettled: ()=> updateTaucResults(),
   });
   const urbach = makePanel({
     prefix: 'taucU',
-    keys: ['N','N2','M','tailLo','tailHi','step','pat','run'],
-    defaults: { N:1, N2:20, M:25, tailLo:10, tailHi:10, step:10, pat:10, run:25 },
+    keys: ['N','N2','M'],
+    defaults: { N:1, N2:20, M:25 },
     curve: fr => fr > 0 ? Math.log(fr) : NaN,
     yLabel: ()=> 'ln[F(R)]',
     zeroFloor: false,
-    debugCurvature: true,
     windows: [
       { lo:'v1', hi:'v2', M:'M', color: URBACH_COLOR, name:'Urbach region', key:'regs', stats:['RMSE1','R21'] },
     ],
     defaultLines: (lo, d)=> ({ v1: lo+0.4*d, v2: lo+0.6*d }),
-    fromEdge: e => ({ v1: e.v1, v2: e.v2 }),
+    /* The tail lies just below the gap, so the region is the eV under the Tauc
+       analysis' own E_g (x-axis) for the sample; in all mode, under the lowest
+       of them, so that it stays below every sample's gap. */
+    suggest: i =>{ const eg = tauc.analyze(i).Eg; return isFinite(eg) ? { v1: eg - 1, v2: eg } : null; },
+    combine: ss =>{ const v2 = Math.min(...ss.map(s=>s.v2)); return { v1: v2 - 1, v2 }; },
     results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
     show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
   });
