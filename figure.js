@@ -1,4 +1,4 @@
-import { svgEl, niceTicks, fmtTick } from './plot.js';
+import { svgEl, niceTicks, fmtTick, SUB_DROP } from './plot.js';
 import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG } from './utils.js';
 import { activeTab, TABS } from './tabs.js';
 
@@ -218,12 +218,14 @@ function richParts(str){
 const RICH_SCALE = 0.72;   // size of a raised/lowered run, relative to the body
 
 // Draws `str` as one <text> with a tspan per run. `at` carries x/y/anchor/transform.
+// A lowered run drops by a set fraction of `px`, as the page's plots do: "sub" would
+// leave it hanging as far below the line as "super" raises the other above it.
 function richText(add, str, at, px, ink){
   const el = add('text', { ...at, 'font-size': px, fill: ink });
   for (const p of richParts(str)){
     if (!p.t) continue;
     const sp = svgEl('tspan', p.r
-      ? { 'baseline-shift': p.r, 'font-size': (px * RICH_SCALE).toFixed(2) }
+      ? { 'baseline-shift': p.r === 'sub' ? (-SUB_DROP * px).toFixed(2) : p.r, 'font-size': (px * RICH_SCALE).toFixed(2) }
       : {});
     sp.textContent = p.t;
     el.appendChild(sp);

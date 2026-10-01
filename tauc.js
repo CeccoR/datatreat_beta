@@ -11,8 +11,9 @@ import { Plot } from './plot.js';
   let resPlot0=null, resPlot1=null, resPlot3=null;   // reused summary-plot instances (created once)
   // How Eg is read off the Tauc plot, and which of the two the bar chart shows.
   const EG_METHODS = [
-    { key: 'x', label: 'x-axis',   name: 'Eg (x-axis)',   color: '#3aa0ff' },
-    { key: 'b', label: 'baseline', name: 'Eg (baseline)', color: '#ff7a59' },
+    // Named E_g in plain text: a legend's sub run sits badly beside its swatch.
+    { key: 'x', label: 'x-axis',   name: 'E_g (x-axis)',   color: '#3aa0ff' },
+    { key: 'b', label: 'baseline', name: 'E_g (baseline)', color: '#ff7a59' },
   ];
   let egSel = EG_METHODS.map(m=>m.key);
   // The Urbach analysis is opt-in: off, none of it is computed, drawn or exported.
@@ -763,11 +764,11 @@ import { Plot } from './plot.js';
 
     // Plot 4: E_U bar chart, in meV as the Urbach card shows it.
     const leg4 = document.getElementById('taucResLegend4'); leg4.innerHTML='';
-    const eu = { key: 'u', name: 'Eu', color: URBACH_COLOR, vals: fits.map(r=> r.Eu*1000), errs: fits.map(r=> r.EuErr*1000) };
+    const eu = { key: 'u', name: 'E_U', color: URBACH_COLOR, vals: fits.map(r=> r.Eu*1000), errs: fits.map(r=> r.EuErr*1000) };
     document.getElementById('taucEuAlert').innerHTML = negWarnHtml(eu.vals, 'E<sub>U</sub>');
     const yLabel = 'Urbach Energy E<tspan baseline-shift="sub" font-size="8">U</tspan> (meV)';
     if (drawValueBars(document.getElementById('taucResSvg4'), [eu], { yLabel, digits: 1 }))
-      leg4.innerHTML = `<span><i class="mk-box" style="background:${eu.color}"></i>E<sub>U</sub></span>`;
+      leg4.innerHTML = `<span><i class="mk-box" style="background:${eu.color}"></i>${eu.name}</span>`;
   }
 
   // Negative values → one alert per series on show, under its chart, listing the

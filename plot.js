@@ -46,6 +46,17 @@ function fmtTick(v){
   if (abs >= 0.1)  return parseFloat(v.toFixed(4)) + '';
   return parseFloat(v.toPrecision(3)) + '';
 }
+/* Chrome drops a baseline-shift="sub" run as far as it raises a "super" one, about
+   0.4 em, which leaves a subscript hanging well under the line; 0.2 em of the text it
+   sits in is where one belongs. Written as a number the drop also survives in exports,
+   where it is redone for the export's own label size. */
+const SUB_DROP = 0.2;
+function lowerSubs(text, fs){
+  text.querySelectorAll('tspan[baseline-shift="sub"]').forEach(t=>{
+    t.setAttribute('baseline-shift', (-SUB_DROP * fs).toFixed(2));
+    t.classList.add('plot-sub');
+  });
+}
 function svgEl(tag, attrs){
   const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
   for (const k in attrs) e.setAttribute(k, attrs[k]);
@@ -156,7 +167,7 @@ class Plot{
     }
     const xl = svgEl('text',{x:w/2,y:h-4,'font-size':11,fill:'#c4ccd6','text-anchor':'middle','class':'plot-label'}); xl.textContent=this.xlabel;
     const yl = svgEl('text',{x:12,y:h/2,'font-size':11,fill:'#c4ccd6','text-anchor':'middle',transform:`rotate(-90 12 ${h/2})`,'class':'plot-label'});
-    if(this.ylabelSvg) yl.innerHTML=this.ylabelSvg; else yl.textContent=this.ylabel;
+    if(this.ylabelSvg){ yl.innerHTML=this.ylabelSvg; lowerSubs(yl, 11); } else yl.textContent=this.ylabel;
     this.gAxes.appendChild(xl); this.gAxes.appendChild(yl);
   }
   /* `meta` describes the trace for anything that reads a plot back rather than looks
@@ -311,6 +322,7 @@ class Plot{
       const t = svgEl('text',{x, y, 'font-size':fs, fill:entry.color, 'text-anchor':'start', 'class':'plot-reflabel',
         'dominant-baseline':'central', 'pointer-events':'none', transform:`rotate(-90 ${x} ${y})`});
       t.innerHTML = ref.label;
+      lowerSubs(t, fs);
       this.gOverlay.appendChild(t);
     }
     if (entry.draggable){
@@ -637,7 +649,9 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
   workSvg.querySelectorAll('.plot-label').forEach(el=>{
     el.setAttribute('fill','#333333');
     el.setAttribute('font-family','Arial, sans-serif');
-    el.setAttribute('font-size', Math.round(parseFloat(el.getAttribute('font-size')||11) * 1.6));
+    const fs = Math.round(parseFloat(el.getAttribute('font-size')||11) * 1.6);
+    el.setAttribute('font-size', fs);
+    el.querySelectorAll('.plot-sub').forEach(t=> t.setAttribute('baseline-shift', (-SUB_DROP * fs).toFixed(2)));
   });
 
   // Add tick marks (primary + secondary, inner + outer, mirrored on all sides)
@@ -695,15 +709,12 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
     }
   }
 
-  // Parse legend. A <sub> in an entry (E<sub>U</sub>) is kept as a lowered run rather
-  // than flattened into the text beside it.
+  // Parse legend
   const legItems = [];
   if (legendEl) legendEl.querySelectorAll('span').forEach(span=>{
     const col = span.querySelector('i') ? span.querySelector('i').style.background : '#888';
     const txt = span.textContent.trim();
-    const parts = [...span.childNodes].filter(nd=> nd.nodeName !== 'I')
-      .map(nd=> ({ t: nd.textContent, sub: nd.nodeName === 'SUB' })).filter(p=> p.t);
-    if (txt) legItems.push({col, txt, parts});
+    if (txt) legItems.push({col, txt});
   });
   const fontSize = 15, iH = 13, rowH = 24, legPadT = 12, legMarginL = 56, gap = 22;
   // Measure label widths precisely so legend entries never overlap
@@ -743,14 +754,7 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
         const t = document.createElementNS(ns,'text');
         t.setAttribute('x',x+iH+5); t.setAttribute('y',cy+2);
         t.setAttribute('font-size',fontSize); t.setAttribute('fill','#333333');
-        t.setAttribute('font-family','Arial, sans-serif');
-        if (item.parts.some(p=> p.sub)) item.parts.forEach((p, pi)=>{
-          const sp = document.createElementNS(ns,'tspan');
-          if (p.sub){ sp.setAttribute('baseline-shift','sub'); sp.setAttribute('font-size', fontSize*0.72); }
-          sp.textContent = pi === 0 ? p.t.replace(/^\s+/, '') : p.t;
-          t.appendChild(sp);
-        });
-        else t.textContent=item.txt;
+        t.setAttribute('font-family','Arial, sans-serif'); t.textContent=item.txt;
         legG.appendChild(t);
       });
     });
@@ -806,5 +810,5 @@ document.addEventListener('click', e=>{
 
 
 export {
-  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, Plot, downloadSvgClean
+  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, SUB_DROP, Plot, downloadSvgClean
 };
