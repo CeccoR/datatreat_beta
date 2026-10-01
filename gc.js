@@ -49,7 +49,7 @@ import { Plot, svgEl } from './plot.js';
   /* The injection date is stamped when the run starts, and the sample is injected a
      little later: every injection is moved on by this delay, in seconds, before it is
      set against light-on. "Auto" is the method's own figure, shown in the field. */
-  const INJ_DELAY_AUTO = 60;
+  const INJ_DELAY_AUTO = 60.6;
   let delayAuto = true, delayMan = INJ_DELAY_AUTO;
   const injDelay = ()=> delayAuto ? INJ_DELAY_AUTO : delayMan;
   const injectedAt = d => new Date(+d + injDelay()*1000);
