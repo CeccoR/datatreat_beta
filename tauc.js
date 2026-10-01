@@ -97,7 +97,8 @@ import { Plot } from './plot.js';
      describes. Each card keeps its own parameters, lines and all/one mode; its
      elements are its prefix plus the same suffixes (taucSvg, taucUSvg, ...).
   ========================================================= */
-  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
+  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2', step:'Step', pat:'Pat' };
+  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM, step: clampN, pat: clampN };
   function makePanel(spec){
     const { prefix, keys, windows } = spec;
     const $ = id => document.getElementById(prefix + id);
@@ -131,10 +132,7 @@ import { Plot } from './plot.js';
       const s = P.shared;
       const src = (P.mode==='per') ? (P.per[i] || {}) : s;
       const out = {};
-      for (const k of keys){
-        const v = src[k] ?? s[k];
-        out[k] = k === 'a' ? v : (k[0] === 'N' ? clampN(v) : clampM(v));
-      }
+      for (const k of keys) out[k] = CLAMP[k](src[k] ?? s[k]);
       return out;
     };
     const defaultVlinesFor = i =>{
@@ -161,6 +159,13 @@ import { Plot } from './plot.js';
     // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
     // ε = 10%·max|Y''|. The region bounds are found from each spectrum end inward: the
     // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
+    //
+    // The max that sets ε is the edge's, not the noise's: the ends of the spectrum are
+    // cut off first, and inside what is left it is looked for outward from the
+    // steepest point (the max of Y'), in a window grown by `step` points on each side
+    // at a time until the max has not changed for `pat` steps running. Taken over the
+    // whole spectrum, the spikes of a noisy pre-edge — which a log blows up — set it,
+    // and ε then sits above the very curvature it is meant to find.
     const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
     const SUGG_CONT   = 25;     // required consecutive points above ε
     function derivEdge(i){
@@ -170,7 +175,20 @@ import { Plot } from './plot.js';
       const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
       // energy-ascending order of indices, so we can scan by energy regardless of layout
       const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
-      const A = d2.reduce((m,v)=> isFinite(v) ? Math.max(m, Math.abs(v)) : m, 0) || 1;
+      const lo = margin, hi = n-1-margin;
+      const absD2 = j =>{ const v = Math.abs(d2[ord[j]]); return isFinite(v) ? v : 0; };
+      let j0 = lo;
+      for (let j=lo;j<=hi;j++) if (c.dYs[ord[j]] > c.dYs[ord[j0]] || !isFinite(c.dYs[ord[j0]])) j0 = j;
+      let A = absD2(j0), wLo = j0, wHi = j0, still = 0;
+      while (still < p.pat && (wLo > lo || wHi < hi)){
+        const nLo = Math.max(lo, wLo - p.step), nHi = Math.min(hi, wHi + p.step);
+        let m = A;
+        for (let j=nLo;j<wLo;j++) m = Math.max(m, absD2(j));
+        for (let j=wHi+1;j<=nHi;j++) m = Math.max(m, absD2(j));
+        wLo = nLo; wHi = nHi;
+        if (m > A){ A = m; still = 0; } else still++;
+      }
+      A = A || 1;
       const eps = SUGG_THRESH * A;
       const ax = j => Math.abs(d2[ord[j]]);
       const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
@@ -180,7 +198,7 @@ import { Plot } from './plot.js';
       let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
       for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
       for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
-      return { v1, v2 };
+      return { v1, v2, A, from: hv[ord[j0]], search: [hv[ord[wLo]], hv[ord[wHi]]] };
     }
     const clampTo = (lo, hi)=> l =>{ const o = {}; for (const k in l) o[k] = Math.max(lo, Math.min(hi, l[k])); return o; };
     function suggestOne(i){
@@ -211,7 +229,7 @@ import { Plot } from './plot.js';
       for (const k of keys){
         const raw = $(FIELD[k]).value;
         if (k === 'a'){ const v = parseFloat(raw); if (isFinite(v)) vals.a = v; }
-        else vals[k] = k[0] === 'N' ? clampN(+raw || 1) : clampM(+raw || 2);
+        else vals[k] = CLAMP[k](+raw || 0);
       }
       if (P.mode==='shared') Object.assign(P.shared, vals);
       else { const pp = P.per[currIndex] || (P.per[currIndex]={}); Object.assign(pp, vals); }
@@ -267,13 +285,16 @@ import { Plot } from './plot.js';
       plot.line(hv, c.Yraw, '#6a7585', 1,   undefined, { label: `${nm} raw`, key: 'raw' });
       plot.line(hv, c.Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed`, key: 'smoothed' });
       plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative`, key: 'derivative' });
-      if (spec.debugCurvature){
-        // What the interval suggestion looks at: |Y''| on the same span, and the ε it
-        // has to stay above for a sustained run to count as the region.
-        const d2 = secondDeriv(c, p).map(Math.abs), A = maxArr(d2);
-        plot.line(hv, onSpan(d2, 0, A), DEBUG_COLOR, 1, '3,3', { label: `${nm} |second derivative| (debug)`, key: 'd2' });
+      const edge = spec.debugCurvature ? derivEdge(currIndex) : null;
+      if (edge){
+        // What the interval suggestion looks at: |Y''| scaled so that the max it found
+        // reaches the top of the curve, the ε it has to stay above for a sustained run
+        // to count as the region, and the window that max was looked for in.
+        const d2 = secondDeriv(c, p).map(Math.abs);
+        plot.line(hv, onSpan(d2, 0, edge.A), DEBUG_COLOR, 1, '3,3', { label: `${nm} |second derivative| (debug)`, key: 'd2' });
         const yEps = yLo + SUGG_THRESH*(yHi - yLo);
         plot.line([minArr(hv), maxArr(hv)], [yEps, yEps], DEBUG_COLOR, 1, '1,3', { label: 'ε threshold (debug)', key: 'eps' });
+        plot.line(edge.search, [yHi, yHi], DEBUG_COLOR, 3, undefined, { label: 'max search window (debug)', key: 'search' });
       }
 
       const fits = [];
@@ -391,8 +412,8 @@ import { Plot } from './plot.js';
   const URBACH_COLOR = '#ff7f0e', DEBUG_COLOR = '#9b8cff';
   const tauc = makePanel({
     prefix: 'tauc',
-    keys: ['a','N','N2','M','M2'],
-    defaults: { a:0.5, N:1, N2:20, M:25, M2:100 },
+    keys: ['a','N','N2','M','M2','step','pat'],
+    defaults: { a:0.5, N:1, N2:20, M:25, M2:100, step:10, pat:10 },
     curve: (fr, hv, p)=> Math.pow(fr*hv, p.a),
     yLabel: p => `[F(R)·hν]${sup(p.a)}`,
     zeroFloor: true,
@@ -410,8 +431,8 @@ import { Plot } from './plot.js';
   });
   const urbach = makePanel({
     prefix: 'taucU',
-    keys: ['N','N2','M'],
-    defaults: { N:1, N2:20, M:25 },
+    keys: ['N','N2','M','step','pat'],
+    defaults: { N:1, N2:20, M:25, step:10, pat:10 },
     curve: fr => fr > 0 ? Math.log(fr) : NaN,
     yLabel: ()=> 'ln[F(R)]',
     zeroFloor: false,

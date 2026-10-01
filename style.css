@@ -1733,6 +1733,8 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 }
 .pg-result > .pg-stat { font-size: 13px; color: var(--text); }
 .pg-result > .pg-stat b { color: var(--accent); }
+/* A group of its own at the foot of the column: settings for checking, not for use. */
+.param-grid > .pg-head { grid-column: 1 / -1; margin: 18px 0 0; }
 /* Remove top margin on first label in parameter panels */
 .col > label:first-child,
 .col > label:first-of-type {
