@@ -273,9 +273,10 @@
         </div>
       </div>
 
-      <div class="card" id="taucUrbach" style="display:none">
+      <div class="card is-off" id="taucUrbach" style="display:none">
+        <button type="button" class="mode-chip plot-chip card-switch" id="taucUOn" aria-pressed="false" title="Switch the Urbach analysis on">off</button>
         <h3 class="txt-head" style="margin:0 0 12px">Analysis: Urbach energy</h3>
-        <div class="instr-block">Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. Drag the orange lines to set the Urbach region, or press <b>✦ Suggest intervals</b> to place it, for every sample, in the eV just below the gap: from E<sub>g</sub> − 1 eV to E<sub>g</sub>, with E<sub>g</sub> (x-axis) taken from the Tauc analysis of the sample (in <b>all</b> mode, the lowest E<sub>g</sub> of the samples, so the region stays below every gap). The lines are placed once; move them as needed. The dashed lines mark the sample's E<sub>g</sub> from the Tauc analysis, x-axis (red) and baseline (magenta), in the colours of the Tauc fits they come from. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. Not part of the Results yet.</div>
+        <div class="instr-block">Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. Drag the orange lines to set the Urbach region, or press <b>✦ Suggest intervals</b> to place it, for every sample, in the eV just below the gap: from E<sub>g</sub> − 1 eV to E<sub>g</sub>, with E<sub>g</sub> (x-axis) taken from the Tauc analysis of the sample (in <b>all</b> mode, the lowest E<sub>g</sub> of the samples, so the region stays below every gap). The lines are placed once; move them as needed. The dashed lines mark the sample's E<sub>g</sub> from the Tauc analysis, x-axis (red) and baseline (magenta), in the colours of the Tauc fits they come from. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. The analysis is <b>off</b> by default: the chip at the top right switches it on, and while it is off nothing of it is computed, drawn or exported, in this card or in the Results. The first time it is switched on, its lines are suggested from the Tauc gaps of that moment.</div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
             <div class="plot-nav-row">
@@ -346,7 +347,7 @@
             <div id="taucBarAlert" class="bar-alert"></div>
           </div>
         </div>
-        <div class="row res-row" id="taucResUrbach">
+        <div class="row res-row" id="taucResUrbach" style="display:none">
           <div class="col">
             <p class="txt-caption">Urbach Plot</p>
             <div class="plot-wrap">
@@ -788,7 +789,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v344</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v345</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

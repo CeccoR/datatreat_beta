@@ -264,6 +264,14 @@ button.btn.is-saved:disabled {
   margin-bottom: 10px;
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
+/* A card's on/off switch at its top right. Floated beside the title rather than
+   sharing a flex row with it, so the title sits on the same line box, at the same
+   height, as every other card's. */
+.mode-chip.card-switch { float: right; }
+/* An analysis switched off keeps its card, title, switch and instructions, so it is
+   still there to be found and read about; only its workspace is gone. */
+.card.is-off > .row { display: none; }
+.card.is-off > .txt-head { color: var(--muted); }
 .proj-icon .proj-svg { width: 19px; height: 19px; display: block; }
 /* Project-bar icon buttons (export/delete/new) and the per-table CSV export button
    (.table-csv-btn) are THE SAME BUTTON: one shared rule block, so their aesthetics

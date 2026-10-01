@@ -15,6 +15,8 @@ import { Plot } from './plot.js';
     { key: 'b', label: 'baseline', name: 'Eg (baseline)', color: '#ff7a59' },
   ];
   let egSel = EG_METHODS.map(m=>m.key);
+  // The Urbach analysis is opt-in: off, none of it is computed, drawn or exported.
+  let urbachOn = false;
 
   const clampN = v => Math.max(1, Math.round(v));
   const clampM = v => Math.max(2, Math.round(v));
@@ -147,6 +149,7 @@ import { Plot } from './plot.js';
       shared: { ...spec.defaults },                   // common params (shared mode)
       sharedVlines: {},                               // common interval lines (shared mode)
       per: [],                                        // per sample: {params..., vlines:{v1..}}
+      suggested: false,                               // lines placed by a suggestion yet
     };
     let plot = null;
     let vlines = {};          // active interval lines (points at the current sample's set)
@@ -209,6 +212,7 @@ import { Plot } from './plot.js';
     // mode only decides whether they share one set of lines or each keep its own.
     P.autoSuggestAll = ()=>{
       if (!files.length) return;
+      P.suggested = true;
       if (P.mode==='per'){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!P.per[i]) P.per[i]={}; P.per[i].vlines = s; } }); }
       else { const s = suggestShared(); if (s) P.sharedVlines = s; }
     };
@@ -322,12 +326,14 @@ import { Plot } from './plot.js';
     P.fit = ()=>{ if (P.per.length !== files.length) P.per = files.map((_,i)=> P.per[i] || {}); };
 
     const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
-    P.snapshot = ()=>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer) });
+    P.snapshot = ()=>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer), suggested: P.suggested });
     P.restore = s =>{
       P.mode = (typeof s.mode==='string') ? s.mode : 'shared';   // older snapshots stored a per-field object
       P.shared = { ...spec.defaults, ...(s.shared || {}) };
       P.sharedVlines = s.sharedVlines ? {...s.sharedVlines} : (s.vlines ? {...s.vlines} : {});
       P.per = s.per ? s.per.map(clonePer) : files.map(()=>({}));
+      // Snapshots from before the flag had their lines suggested whenever they had any.
+      P.suggested = s.suggested != null ? !!s.suggested : isFinite((s.sharedVlines || s.vlines || {}).v1);
       // Backward compatibility with pre-all/one snapshots (params stored by input id)
       if (s.params){
         for (const k of keys){ const v = s.params[prefix + FIELD[k]]; if (v != null) P.shared[k] = k === 'a' ? parseFloat(v) : +v; }
@@ -411,7 +417,7 @@ import { Plot } from './plot.js';
     results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
     show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
     // The Urbach card marks this card's E_g, so it follows every settled change here.
-    onSettled: ()=>{ updateTaucResults(); if (urbach.hasPlot()) urbach.update(true); },
+    onSettled: ()=>{ updateTaucResults(); if (urbachOn && urbach.hasPlot()) urbach.update(true); },
   });
   const urbach = makePanel({
     prefix: 'taucU',
@@ -445,14 +451,41 @@ import { Plot } from './plot.js';
     },
   });
   const panels = [tauc, urbach];
-  // The Results and their CSVs are made from the Tauc analysis alone.
+  // The cards being worked in: the Urbach one only while its analysis is on.
+  const livePanels = ()=> urbachOn ? panels : [tauc];
+  // The Tauc parts of the Results and their CSVs come from the Tauc analysis.
   const getFileParams = i => tauc.params(i);
 
   // Every card shows the same sample, so stepping in one steps them all.
   function showSample(k){
     currIndex = k;
-    panels.forEach(p=>{ p.writeStoreToInputs(); p.update(); });
+    livePanels().forEach(p=>{ p.writeStoreToInputs(); p.update(); });
   }
+
+  // The Urbach card's switch, and what of the analysis hangs on it: the card's
+  // workspace and its row of the Results.
+  function syncUrbach(){
+    const chip = document.getElementById('taucUOn');
+    document.getElementById('taucUrbach').classList.toggle('is-off', !urbachOn);
+    chip.classList.toggle('is-on', urbachOn);
+    chip.textContent = urbachOn ? 'on' : 'off';
+    chip.setAttribute('aria-pressed', String(urbachOn));
+    chip.title = `Switch the Urbach analysis ${urbachOn ? 'off' : 'on'}`;
+    document.getElementById('taucResUrbach').style.display = urbachOn ? '' : 'none';
+  }
+  document.getElementById('taucUOn').addEventListener('click', ()=>{
+    urbachOn = !urbachOn;
+    syncUrbach();
+    if (urbachOn && files.length){
+      // The first time on, its lines come from the gaps the Tauc card gives now.
+      if (!urbach.suggested) urbach.autoSuggestAll();
+      urbach.writeStoreToInputs();
+      urbach.syncModeButton();
+      // Out of the layout while off, so sized afresh; its settling draws its Results row.
+      urbach.initPlot();
+    }
+    hist.commit();
+  });
 
   // per-upload invalid names (files that were skipped); persists until all files are removed
   let invalidUploadNames = [];
@@ -502,19 +535,20 @@ import { Plot } from './plot.js';
       files: files.map(f=>({...f})),
       ...tauc.snapshot(),
       urbach: urbach.snapshot(),
+      urbachOn,
       egSel: egSel.slice(),
     };
   }
   function taucRestore(s){
     files = s.files.map(f=>({...f}));
     tauc.restore(s);
-    // Projects from before the Urbach card existed get its defaults, with lines
-    // suggested on their own ln F(R).
+    // Projects from before the Urbach card existed get its defaults; their lines are
+    // suggested when the analysis is first switched on, as for a new project.
     urbach.restore(s.urbach || {});
+    urbachOn = s.urbachOn === true;
     // Older snapshots had two charts and no choice: both methods on show.
     const eg = Array.isArray(s.egSel) ? s.egSel.filter(k=> EG_METHODS.some(m=>m.key===k)) : [];
     egSel = eg.length ? eg : EG_METHODS.map(m=>m.key);
-    if (!s.urbach && files.length){ files.forEach(f=>{ f.hv = f.wl.map(wl=>1240/wl); }); urbach.autoSuggestAll(); }
     afterFilesChange();
     // Rebuild alerts for THIS tab's files: transient upload feedback (invalid /
     // already-loaded) belongs to the upload action, not the project, so clear it;
@@ -526,7 +560,7 @@ import { Plot } from './plot.js';
   }
   const hist = registerHistory('tauc', taucSnapshot, taucRestore);
   // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.
-  registerTabRedraw('tauc', ()=>{ if (files.length) panels.forEach(p=>{ if (p.hasPlot()) p.update(true); }); });
+  registerTabRedraw('tauc', ()=>{ if (files.length) livePanels().forEach(p=>{ if (p.hasPlot()) p.update(true); }); });
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
     const hadFiles = files.length > 0;   // auto-suggest only on the first upload
@@ -581,7 +615,7 @@ import { Plot } from './plot.js';
     rebuildTaucAlerts();
     afterFilesChange();
     // Once, when the first data lands: propose optimal interval-line positions.
-    if (!hadFiles && files.length){ panels.forEach(p=>{ p.autoSuggestAll(); p.writeStoreToInputs(); p.update(); }); hist.commit(); }
+    if (!hadFiles && files.length){ livePanels().forEach(p=>{ p.autoSuggestAll(); p.writeStoreToInputs(); p.update(); }); hist.commit(); }
   });
 
   const CARDS = ['taucWorkspace','taucUrbach','taucResults'];
@@ -605,8 +639,9 @@ import { Plot } from './plot.js';
       p.writeStoreToInputs();      // reflect the current sample's params in the inputs
       p.syncModeButton();
     });
+    syncUrbach();
     // Urbach first, so the Tauc card's settling redraw of the Results is the last word.
-    urbach.initPlot();
+    if (urbachOn) urbach.initPlot();
     tauc.initPlot();
   }
 
@@ -704,7 +739,7 @@ import { Plot } from './plot.js';
   // The Urbach row of the Results: every sample's ln F(R) with its Urbach fit, drawn
   // as the Tauc plot is, and E_U beside it as the gaps are.
   function renderUrbachRes(){
-    if (!files.length) return;
+    if (!files.length || !urbachOn) return;
     const fits = files.map((f,k)=> urbach.analyze(k));
     if (!resPlot3){
       resPlot3 = new Plot(document.getElementById('taucResSvg3'), {xlabel:'Energy (eV)', ylabelSvg:'ln[F(R)] (a. u.)', xTickStep:0.5, noYTickLabels:true});
@@ -882,7 +917,7 @@ import { Plot } from './plot.js';
     }
     // urbach_plot.csv — per sample: energy, ln F(R) and the Urbach regression, on the
     // sample's own grid (F(R) ≤ 0 has no logarithm: left empty)
-    {
+    if (urbachOn){
       const cols=[];
       files.forEach((f,k)=>{
         const r = urbach.analyze(k).regs;
@@ -893,7 +928,7 @@ import { Plot } from './plot.js';
       entries.push({name:'urbach_plot.csv', text:wideCsv(cols)});
     }
     // Eu.csv — bar-plot-like summary, E_U and its error in meV as the chart shows them
-    {
+    if (urbachOn){
       let t = csvLine(['Sample','Eu_meV','Eu_err_meV']);
       files.forEach((f,k)=>{
         const r = urbach.analyze(k);
