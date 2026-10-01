@@ -653,6 +653,10 @@ input[type="file"] {
   font-size: 13px;
   color: var(--muted);
 }
+/* Every checkbox is the same native box in the accent: filled with it when checked, the
+   tick black or white as the theme's accent needs. Set once here, so a checkbox added
+   anywhere (a modal, the Projects table) cannot fall back to the browser's blue. */
+input[type="checkbox"] { accent-color: var(--accent); }
 
 /* Series chips — GC's gases, Tauc's two Eg methods — laid over the plot's own data
    area, top right. Dimmed until pointed at, so they stay out of the way of the data
@@ -1230,7 +1234,7 @@ button.palette-pick-btn.cp-anchored { border-color: var(--white); }
   border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px;
 }
 .pp-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); cursor: pointer; }
-.pp-check input { width: auto; margin: 0; accent-color: var(--accent); }
+.pp-check input { width: auto; margin: 0; }
 /* A texture palette is the same popup with tiles where the colours are: one row per
    set, the tiles in the order the set hands them out. */
 .pp-tex { flex: 1; height: 14px; display: flex; }
