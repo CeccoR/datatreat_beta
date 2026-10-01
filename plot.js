@@ -51,6 +51,9 @@ function fmtTick(v){
    sits in is where one belongs. Written as a number the drop also survives in exports,
    where it is redone for the export's own label size. */
 const SUB_DROP = 0.2;
+// How far a tilted label's baseline sits under its pivot for the pivot to fall on the
+// middle of its letters (half the x-height and a little: Inter and Arial alike).
+const TILT_DY = '0.35em';
 function lowerSubs(text, fs){
   text.querySelectorAll('tspan[baseline-shift="sub"]').forEach(t=>{
     t.setAttribute('baseline-shift', (-SUB_DROP * fs).toFixed(2));
@@ -268,9 +271,11 @@ class Plot{
     const {h}=this.size(); const m=this.margin;
     const x = this.px(entry.xv);
     if (entry.rot){
-      // Tilted labels: anchor at the tick's right end so long names don't overlap
+      // Tilted labels: anchor at the tick's right end so long names don't overlap. The
+      // pivot is the middle of the last character, not its baseline: dy brings the
+      // glyphs' centre onto it, so that character sits under the tick at any angle.
       const y = h-m.b+14;
-      const t = svgEl('text',{x, y, 'font-size':10, fill:'#93a0b0', 'text-anchor':'end', 'class':'plot-tick', transform:`rotate(-${entry.rot} ${x} ${y})`});
+      const t = svgEl('text',{x, y, dy:TILT_DY, 'font-size':10, fill:'#93a0b0', 'text-anchor':'end', 'class':'plot-tick', transform:`rotate(-${entry.rot} ${x} ${y})`});
       t.textContent = entry.text;
       this.gAxes.appendChild(t);
       return t;
@@ -810,5 +815,5 @@ document.addEventListener('click', e=>{
 
 
 export {
-  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, SUB_DROP, Plot, downloadSvgClean
+  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot, downloadSvgClean
 };

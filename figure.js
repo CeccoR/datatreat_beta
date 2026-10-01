@@ -1,4 +1,4 @@
-import { svgEl, niceTicks, fmtTick, SUB_DROP } from './plot.js';
+import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
 import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG } from './utils.js';
 import { activeTab, TABS } from './tabs.js';
 
@@ -862,7 +862,8 @@ function drawFigure(svg, ink, paper, extra){
           const at = side === 'bottom' ? { x:q, y:g0.base + fTick*1.15 } : { x:q, y:g0.base - fTick*0.5 };
           const el = add('text', { ...at, 'font-size':fTick, fill:ink,
                                    'text-anchor': rot ? 'end' : 'middle' });
-          if (rot) el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
+          // Tilted, it turns about the middle of its last character, as on the page.
+          if (rot){ el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`); el.setAttribute('dy', TILT_DY); }
           el.textContent = catText(c.x);
         }
         continue;
@@ -892,6 +893,7 @@ function drawFigure(svg, ink, paper, extra){
           if (rot){
             el.setAttribute('text-anchor', 'end');
             el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
+            el.setAttribute('dy', TILT_DY);
           }
           el.textContent = txt;
         }

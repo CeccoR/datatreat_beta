@@ -1746,10 +1746,10 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
-/* Truncate a bar-chart axis label to at most 20 characters, with the ellipsis in
+/* Truncate a bar-chart axis label to at most 30 characters, with the ellipsis in
    the MIDDLE (start…end) so both ends of the name stay readable. Sideways overflow
    past the plot frame is handled separately by widening the x-range (barPlotXPad). */
-const TILT_LABEL_MAX = 20;
+const TILT_LABEL_MAX = 30;
 function truncTiltLabel(mctx, text, cap){
   const max = Math.max(4, Math.round(cap || TILT_LABEL_MAX));
   if (text.length <= max) return text;
