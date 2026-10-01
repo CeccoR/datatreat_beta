@@ -296,6 +296,7 @@ import { Plot } from './plot.js';
       });
       $('Alert').innerHTML = tooSmall ? '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>' : '';
       spec.show($, P.analyze(currIndex));
+      if (spec.marks) spec.marks(currIndex).forEach(r=> plot.vline(r.x, r.color, false, null, null, r));
 
       // While dragging a line: live-update only the interactive plot (below); the
       // summary plots refresh once, on release. onDrag sets dragging, onRelease clears it.
@@ -387,6 +388,7 @@ import { Plot } from './plot.js';
 
   const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
   const URBACH_COLOR = '#ff7f0e';
+  const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
   const tauc = makePanel({
     prefix: 'tauc',
     keys: ['a','N','N2','M','M2'],
@@ -395,8 +397,8 @@ import { Plot } from './plot.js';
     yLabel: p => `[F(R)·hν]${sup(p.a)}`,
     zeroFloor: true,
     windows: [
-      { lo:'v1', hi:'v2', M:'M',  color:'#ff5050', name:'Tauc region', key:'regs',  stats:['RMSE1','R21'] },
-      { lo:'v3', hi:'v4', M:'M2', color:'#d050ff', name:'baseline',    key:'regs2', stats:['RMSE2','R22'] },
+      { lo:'v1', hi:'v2', M:'M',  color: TAUC_COLORS.regs,  name:'Tauc region', key:'regs',  stats:['RMSE1','R21'] },
+      { lo:'v3', hi:'v4', M:'M2', color: TAUC_COLORS.regs2, name:'baseline',    key:'regs2', stats:['RMSE2','R22'] },
     ],
     defaultLines: (lo, d)=> ({ v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d }),
     // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span); the
@@ -408,7 +410,8 @@ import { Plot } from './plot.js';
     combine: ss =>{ const v1 = Math.min(...ss.map(s=>s.v1)), v2 = Math.max(...ss.map(s=>s.v2)); return { v1, v2, v3: v1-0.85, v4: v1-0.1 }; },
     results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
     show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
-    onSettled: ()=> updateTaucResults(),
+    // The Urbach card marks this card's E_g, so it follows every settled change here.
+    onSettled: ()=>{ updateTaucResults(); if (urbach.hasPlot()) urbach.update(true); },
   });
   const urbach = makePanel({
     prefix: 'taucU',
@@ -428,6 +431,17 @@ import { Plot } from './plot.js';
     combine: ss =>{ const v2 = Math.min(...ss.map(s=>s.v2)); return { v1: v2 - 1, v2 }; },
     results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
     show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
+    // The sample's two Tauc gaps, dashed in the colours of the Tauc fits they come
+    // from, so the tail can be read against where the gap is. Each label goes on the
+    // outer side of the pair, as the two usually sit a few pixels apart.
+    marks: i =>{
+      const r = tauc.analyze(i), sub = '<tspan baseline-shift="sub" font-size="7">g</tspan>';
+      const m = [{ v: r.Eg,    color: TAUC_COLORS.regs,  name: 'x-axis' },
+                 { v: r.EgInt, color: TAUC_COLORS.regs2, name: 'baseline' }].filter(e=> isFinite(e.v));
+      const lo = Math.min(...m.map(e=> e.v));
+      return m.map(e=> ({ x: e.v, color: e.color, dash: '5,4', width: 1.2, side: e.v === lo && m.length > 1 ? -1 : 1,
+        label: `E${sub} (${e.name}) = ${e.v.toFixed(3)} eV` }));
+    },
   });
   const panels = [tauc, urbach];
   // The Results and their CSVs are made from the Tauc analysis alone.

@@ -288,16 +288,31 @@ class Plot{
     this.gData.appendChild(t);
     return t;
   }
-  vline(xv, color, draggable, onDrag, onDragEnd){
-    const entry = {type:'vline', xv, color, draggable, onDrag, onDragEnd};
+  /* `ref` (optional) makes it a reference mark rather than a bound: `dash` and `width`
+     for its stroke, and `label` (SVG markup) written along it in its colour, reading
+     upward from the bottom on `side` (-1 left, 1 right; flipped where that would leave
+     the plot area). */
+  vline(xv, color, draggable, onDrag, onDragEnd, ref){
+    const entry = {type:'vline', xv, color, draggable, onDrag, onDragEnd, ref};
     this._stored.push(entry);
     return this._renderVline(entry);
   }
   _renderVline(entry){
-    const {h}=this.size(); const m=this.margin;
-    const x0 = this.px(entry.xv);
-    const line = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:entry.color,'stroke-width':2,'pointer-events':'none'});
+    const {w,h}=this.size(); const m=this.margin;
+    const x0 = this.px(entry.xv), ref = entry.ref;
+    const line = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:entry.color,'stroke-width':(ref && ref.width)||2,'pointer-events':'none'});
+    if (ref && ref.dash) line.setAttribute('stroke-dasharray', ref.dash);
     this.gOverlay.appendChild(line);
+    if (ref && ref.label){
+      const fs = 10, off = 3 + fs/2;
+      let side = ref.side || 1;
+      if (x0 + side*(off + fs/2) > w - m.r || x0 + side*(off + fs/2) < m.l) side = -side;
+      const x = x0 + side*off, y = h - m.b - 6;
+      const t = svgEl('text',{x, y, 'font-size':fs, fill:entry.color, 'text-anchor':'start', 'class':'plot-reflabel',
+        'dominant-baseline':'central', 'pointer-events':'none', transform:`rotate(-90 ${x} ${y})`});
+      t.innerHTML = ref.label;
+      this.gOverlay.appendChild(t);
+    }
     if (entry.draggable){
       const hit = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'ew-resize'});
       this.gOverlay.appendChild(hit);

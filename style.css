@@ -117,6 +117,9 @@
 /* Error bars + their value labels: visible in both themes (override inline #fff) */
 .plot-errbar  { stroke: var(--plot-errbar); }
 .plot-errlabel { fill: var(--plot-errbar); }
+/* A label written along a reference line crosses the curves: a halo in the plot's own
+   background keeps it legible over them. */
+.plot-reflabel { paint-order: stroke; stroke: var(--panel2); stroke-width: 3px; stroke-linejoin: round; }
 /* GC integration-interval lines: shared ('all') pair and selected sample use the
    theme-aware grey (light on dark, dark on light) — never pure white. */
 .gc-int-hl { stroke: var(--plot-errbar); }
