@@ -205,7 +205,8 @@ import { Plot } from './plot.js';
       let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
       return clampTo(lo, hi)(spec.combine(ss));
     }
-    // Apply suggestions to the whole workspace (used once on first upload).
+    // Apply suggestions to the whole workspace: every sample, whatever the mode; the
+    // mode only decides whether they share one set of lines or each keep its own.
     P.autoSuggestAll = ()=>{
       if (!files.length) return;
       if (P.mode==='per'){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!P.per[i]) P.per[i]={}; P.per[i].vlines = s; } }); }
@@ -375,12 +376,10 @@ import { Plot } from './plot.js';
     $('Prev').onclick = ()=>{ if (files.length) showSample((currIndex-1+files.length)%files.length); };
     $('Next').onclick = ()=>{ if (files.length) showSample((currIndex+1)%files.length); };
 
-    // Re-propose interval-line positions on demand: current sample in one-mode,
-    // the shared set in all-mode.
+    // Re-propose interval-line positions on demand, for every sample.
     $('Suggest').onclick = ()=>{
       if (!files.length) return;
-      if (P.mode==='per'){ const s=suggestOne(currIndex); if (s){ if(!P.per[currIndex]) P.per[currIndex]={}; P.per[currIndex].vlines=s; } }
-      else { const s=suggestShared(); if (s) P.sharedVlines=s; }
+      P.autoSuggestAll();
       P.update(); hist.commit();
     };
     return P;
