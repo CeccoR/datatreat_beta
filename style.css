@@ -1722,6 +1722,17 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 }
 .param-grid > .pg-stat b { color: var(--accent); }   /* value keeps the accent */
 .param-grid > .pg-stat.pg-gap { margin-top: 6px; }
+/* What the fits give (Eg, E_U): a line further down than the statistics above it,
+   in a box like the plots' and tables', across the whole column. */
+.param-grid > .pg-result {
+  grid-column: 1 / -1;
+  margin-top: 24px;
+  display: grid; row-gap: 9px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px;
+}
+.pg-result > .pg-stat { font-size: 13px; color: var(--text); }
+.pg-result > .pg-stat b { color: var(--accent); }
 /* Remove top margin on first label in parameter panels */
 .col > label:first-child,
 .col > label:first-of-type {
@@ -1766,7 +1777,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 
 /* The "interval too small" alert sits at the end of the Parameters column;
    give it a clear break from the stats above it. */
-#taucAlert:not(:empty) { margin-top: 16px; }
+#taucAlert:not(:empty), #taucUAlert:not(:empty) { margin-top: 16px; }
 
 /* ===== Tauc Eg summary table ===== */
 #taucEgTableWrap { overflow: hidden; }

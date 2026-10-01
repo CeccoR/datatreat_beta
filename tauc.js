@@ -6,9 +6,7 @@ import { Plot } from './plot.js';
 ========================================================= */
 (function(){
   let files = []; // {name,label,wl[],FR[],hv[]}  (each on its own native axis)
-  let currIndex=0;
-  let plot;
-  let vlines = {};            // active interval lines (points at the current sample's set)
+  let currIndex=0;                    // the sample every analysis card shows
   let bestRegsAll = [];
   let resPlot0=null, resPlot1=null;   // reused summary-plot instances (created once)
   // How Eg is read off the Tauc plot, and which of the two the bar chart shows.
@@ -17,128 +15,423 @@ import { Plot } from './plot.js';
     { key: 'b', label: 'baseline', name: 'Eg (baseline)', color: '#ff7a59' },
   ];
   let egSel = EG_METHODS.map(m=>m.key);
-  let _dragging=false;                // true while an interval line is being dragged
-
-  // ---- all/one analysis mode (single global toggle) ----
-  // 'shared': every sample uses one common parameter set AND one common set of
-  //           interval lines. 'per': each sample is fully independent — its own
-  //           exponent, smoothing/regression windows and interval-line positions.
-  let   taucMode = 'shared';                             // 'shared' | 'per'
-  const taucShared = { a:0.5, N:1, N2:20, M:25, M2:100 }; // common params (shared mode)
-  let   sharedVlines = {};                               // common interval lines (shared mode)
-  let   taucPer = [];                                    // per sample: {a,N,N2,M,M2,vlines:{v1..v4}}
 
   const clampN = v => Math.max(1, Math.round(v));
   const clampM = v => Math.max(2, Math.round(v));
+  // Two-sided 99% confidence: the 99.5% quantile of Student's t, the factor every
+  // error reported here (Eg, E_U) is multiplied by.
+  const T_Q = 0.995;
 
-  // Default interval-line positions from a sample's own energy range
-  function defaultVlinesFor(i){
-    const hv = files[i].hv, lo = minArr(hv), hi = maxArr(hv), d = hi - lo;
-    return { v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d };
+  // Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
+  // minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
+  // by the y-range makes the criterion robust — it locks onto the steep linear edge
+  // instead of a flat low-value stretch that merely has a small absolute RMSE.
+  // `Ys` is the curve as analysed: already smoothed.
+  function scanRegr(hv, Ys, M, x1, x2){
+    const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
+    const idxSel = [];
+    for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi) idxSel.push(i);
+    let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,NRMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
+    if (idxSel.length < M) return best;
+    let bestScore = Infinity;
+    for (let s=0; s<=idxSel.length-M; s++){
+      const block = idxSel.slice(s, s+M);
+      const yb = block.map(i=>Ys[i]);
+      if (yb.some(v=>!isFinite(v))) continue;
+      const xb = block.map(i=>hv[i]);
+      const r = fitLinear(xb, yb);
+      const range = Math.max(...yb) - Math.min(...yb);
+      const nrmse = range>0 ? r.rmse/range : Infinity;
+      const score = nrmse / r.R2;
+      if (score < bestScore){
+        bestScore = score;
+        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB};
+      }
+    }
+    return best;
   }
 
-  // ---- Auto-suggested interval-line positions ----
-  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
-  // linear/constant background has zero curvature, so it cancels). The "zero zones"
-  // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
-  // ε = 10%·max|Y''|. The region bounds are found from each spectrum end inward: the
-  // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
-  const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
-  const SUGG_CONT   = 25;     // required consecutive points above ε
-  function derivEdge(i){
-    const fp = getFileParams(i), hv = files[i].hv, fr = files[i].FR, n = hv.length;
-    if (n < 7) return null;
-    const Yraw = fr.map((v,k)=>Math.pow(v*hv[k], fp.a));
-    const Ys  = movingAverage(Yraw, fp.N);
-    const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);        // Y'
-    const d2  = movingAverage(gradientArr(dYs, hv), fp.N2);       // Y''
-    const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
-    // energy-ascending order of indices, so we can scan by energy regardless of layout
-    const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
-    const A = d2.reduce((m,v)=>Math.max(m, Math.abs(v)), 0) || 1;
-    const eps = SUGG_THRESH * A;
-    const ax = j => Math.abs(d2[ord[j]]);
-    const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
-    const inR = j => j>=margin && j<n-margin;
-    // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
-    const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
-    let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
-    for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
-    for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
-    return { v1, v2 };
+  /* Eg from the two Tauc fits: where the Tauc line crosses the x-axis, and where it
+     crosses the baseline. Each error is the fit's own (co)variances carried through
+     the formula, every term scaled by the t factor of the fit it comes from. */
+  function taucEg(regs, regs2, M, M2){
+    let Eg=NaN, EgErr=NaN, EgInt=NaN, EgIntErr=NaN;
+    if ([regs.slope,regs.intercept,regs2.slope,regs2.intercept].every(isFinite)){
+      const xInt = (regs2.intercept - regs.intercept)/(regs.slope - regs2.slope);
+      const dxdb1 = -1/(regs.slope-regs2.slope), dxdb2 = 1/(regs.slope-regs2.slope);
+      const dxdm1 = (regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
+      const dxdm2 = -dxdm1;
+      const t1 = tinv(T_Q, M-2), t2 = tinv(T_Q, M2-2);
+      const varX = dxdb1*dxdb1*regs.varB*t1*t1 + dxdb2*dxdb2*regs2.varB*t2*t2 +
+                   dxdm1*dxdm1*regs.varM*t1*t1 + dxdm2*dxdm2*regs2.varM*t2*t2 +
+                   2*dxdb1*dxdm1*regs.covMB*t1*t1 + 2*dxdb2*dxdm2*regs2.covMB*t2*t2;
+      EgInt = xInt;
+      EgIntErr = varX>0 ? Math.sqrt(varX) : NaN;
+    }
+    if (regs.slope !== 0 && isFinite(regs.slope)){
+      Eg = -regs.intercept/regs.slope;
+      if ([regs.varM,regs.varB,regs.covMB].every(isFinite)){
+        const varEg = (regs.intercept**2/regs.slope**4)*regs.varM + (1/regs.slope**2)*regs.varB - 2*(regs.intercept/regs.slope**3)*regs.covMB;
+        EgErr = varEg>=0 ? Math.sqrt(varEg)*tinv(T_Q, M-2) : NaN;
+      }
+    }
+    return {Eg,EgErr,EgInt,EgIntErr};
   }
-  function suggestOne(i){
-    const e = derivEdge(i);
-    if (!e) return null;
-    const hv = files[i].hv, n = hv.length;
-    const lo = Math.min(hv[0], hv[n-1]), hi = Math.max(hv[0], hv[n-1]);
-    const clamp = x => Math.max(lo, Math.min(hi, x));
-    // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span).
-    return { v1: clamp(e.v1), v2: clamp(e.v2), v3: clamp(e.v1-0.85), v4: clamp(e.v1-0.1) };
+  /* The Urbach energy is the inverse of the tail's slope in ln F(R) against hν, so
+     its error is the slope's, σ_m/m², times the same t factor. */
+  function urbachEu(regs, M){
+    const m = regs.slope;
+    if (!isFinite(m) || m === 0) return { Eu: NaN, EuErr: NaN };
+    const err = isFinite(regs.varM) && regs.varM >= 0 ? Math.sqrt(regs.varM)/(m*m)*tinv(T_Q, M-2) : NaN;
+    return { Eu: 1/m, EuErr: err };
   }
-  // Shared (all-mode) suggestion: linear region [max(v1), min(v2)] over all samples
-  // (widest common linear window), baseline computed once from max(v1).
-  function suggestShared(){
-    const ss = files.map((f,i)=>suggestOne(i)).filter(Boolean);
-    if (!ss.length) return null;
-    const maxV1 = Math.max(...ss.map(s=>s.v1)), minV2 = Math.min(...ss.map(s=>s.v2));
-    let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
-    const clamp = x => Math.max(lo, Math.min(hi, x));
-    return { v1: clamp(maxV1), v2: clamp(minV2), v3: clamp(maxV1-0.85), v4: clamp(maxV1-0.1) };
-  }
-  // Apply suggestions to the whole workspace (used once on first upload).
-  function autoSuggestAll(){
-    if (!files.length) return;
-    if (taucMode==='per'){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!taucPer[i]) taucPer[i]={}; taucPer[i].vlines = s; } }); }
-    else { const s = suggestShared(); if (s) sharedVlines = s; }
-  }
-  // The interval-line set used for sample i (shared object, or the sample's own)
-  function vlinesFor(i){
-    if (taucMode==='shared') return sharedVlines;
-    let pp = taucPer[i]; if (!pp) pp = taucPer[i] = {};
-    if (!pp.vlines || !isFinite(pp.vlines.v1)) pp.vlines = defaultVlinesFor(i);
-    return pp.vlines;
-  }
-  // Resolve the effective params for a given file index
-  function getFileParams(i){
-    const s = taucShared;
-    const src = (taucMode==='per') ? (taucPer[i] || {}) : s;
-    return {
-      a:  (src.a  ?? s.a),
-      N:  clampN(src.N  ?? s.N),
-      N2: clampN(src.N2 ?? s.N2),
-      M:  clampM(src.M  ?? s.M),
-      M2: clampM(src.M2 ?? s.M2),
+  const fmtE = (v, e, unit, k = 3, scale = 1)=> !isFinite(v) ? '-'
+    : isFinite(e) ? `${(v*scale).toFixed(k)} ± ${(e*scale).toFixed(k)} ${unit}` : `${(v*scale).toFixed(k)} ${unit}`;
+
+  /* =========================================================
+     ANALYSIS PANEL
+     One card: the current sample's curve against hν, the interval lines that pick
+     the regions to fit, the parameters beside it and what the fits give. Built from
+     one recipe for every kind of analysis — Tauc on [F(R)hν]^a with a Tauc region
+     and a baseline, Urbach on ln F(R) with one region — which the spec passed in
+     describes. Each card keeps its own parameters, lines and all/one mode; its
+     elements are its prefix plus the same suffixes (taucSvg, taucUSvg, ...).
+  ========================================================= */
+  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
+  function makePanel(spec){
+    const { prefix, keys, windows } = spec;
+    const $ = id => document.getElementById(prefix + id);
+    const P = {
+      // ---- all/one analysis mode (single toggle) ----
+      // 'shared': every sample uses one common parameter set AND one common set of
+      //           interval lines. 'per': each sample is fully independent — its own
+      //           parameters and interval-line positions.
+      mode: 'shared',
+      shared: { ...spec.defaults },                   // common params (shared mode)
+      sharedVlines: {},                               // common interval lines (shared mode)
+      per: [],                                        // per sample: {params..., vlines:{v1..}}
     };
-  }
-  function curParams(){ return getFileParams(currIndex); }
+    let plot = null;
+    let vlines = {};          // active interval lines (points at the current sample's set)
+    let dragging = false;     // true while an interval line is being dragged
+    let throttle = null;
 
-  // Read the input fields into the active store (shared, or the current sample)
-  function readInputsToStore(){
-    const vals = {
-      a:  parseFloat(document.getElementById('taucA').value),
-      N:  clampN(+document.getElementById('taucN').value  || 1),
-      N2: clampN(+document.getElementById('taucN2').value || 1),
-      M:  clampM(+document.getElementById('taucM').value  || 2),
-      M2: clampM(+document.getElementById('taucM2').value || 2),
+    // The curve and the derivatives the panel works from, for sample i.
+    function curves(i, p){
+      const hv = files[i].hv;
+      const Yraw = files[i].FR.map((v,k)=> spec.curve(v, hv[k], p));
+      const Ys  = movingAverage(Yraw, p.N);
+      const dYs = movingAverage(gradientArr(Ys, hv), p.N2);        // Y'
+      return { hv, Yraw, Ys, dYs };
+    }
+    const secondDeriv = (c, p)=> movingAverage(gradientArr(c.dYs, c.hv), p.N2);   // Y''
+
+    // Resolve the effective params for a given file index
+    P.params = i =>{
+      const s = P.shared;
+      const src = (P.mode==='per') ? (P.per[i] || {}) : s;
+      const out = {};
+      for (const k of keys){
+        const v = src[k] ?? s[k];
+        out[k] = k === 'a' ? v : (k[0] === 'N' ? clampN(v) : clampM(v));
+      }
+      return out;
     };
-    if (!isFinite(vals.a)) delete vals.a;
-    if (taucMode==='shared') Object.assign(taucShared, vals);
-    else { const pp = taucPer[currIndex] || (taucPer[currIndex]={}); Object.assign(pp, vals); }
+    const defaultVlinesFor = i =>{
+      const hv = files[i].hv, lo = minArr(hv), d = maxArr(hv) - lo;
+      return spec.defaultLines(lo, d);
+    };
+    // The interval-line set used for sample i (shared object, or the sample's own)
+    P.vlinesFor = i =>{
+      if (P.mode==='shared') return P.sharedVlines;
+      let pp = P.per[i]; if (!pp) pp = P.per[i] = {};
+      if (!pp.vlines || !isFinite(pp.vlines.v1)) pp.vlines = defaultVlinesFor(i);
+      return pp.vlines;
+    };
+    // Every fit of sample k, and what the spec makes of them.
+    P.analyze = k =>{
+      const p = P.params(k), vl = P.vlinesFor(k), c = curves(k, p);
+      const fits = windows.map(w=> scanRegr(c.hv, c.Ys, p[w.M], vl[w.lo], vl[w.hi]));
+      return { ...spec.results(fits, p), fits };
+    };
+
+    // ---- Auto-suggested interval-line positions ----
+    // Second-derivative method. The region is the span where Y'' is NON-zero (a
+    // linear/constant background has zero curvature, so it cancels). The "zero zones"
+    // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
+    // ε = 10%·max|Y''|. The region bounds are found from each spectrum end inward: the
+    // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
+    const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
+    const SUGG_CONT   = 25;     // required consecutive points above ε
+    function derivEdge(i){
+      const p = P.params(i), n = files[i].hv.length;
+      if (n < 7) return null;
+      const c = curves(i, p), hv = c.hv, d2 = secondDeriv(c, p);
+      const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
+      // energy-ascending order of indices, so we can scan by energy regardless of layout
+      const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
+      const A = d2.reduce((m,v)=> isFinite(v) ? Math.max(m, Math.abs(v)) : m, 0) || 1;
+      const eps = SUGG_THRESH * A;
+      const ax = j => Math.abs(d2[ord[j]]);
+      const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
+      const inR = j => j>=margin && j<n-margin;
+      // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
+      const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || !(ax(jj)>=eps)) return false; } return true; };
+      let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
+      for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
+      for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
+      return { v1, v2 };
+    }
+    const clampTo = (lo, hi)=> l =>{ const o = {}; for (const k in l) o[k] = Math.max(lo, Math.min(hi, l[k])); return o; };
+    function suggestOne(i){
+      const e = derivEdge(i);
+      if (!e) return null;
+      const hv = files[i].hv, n = hv.length;
+      return clampTo(Math.min(hv[0], hv[n-1]), Math.max(hv[0], hv[n-1]))(spec.fromEdge(e));
+    }
+    // Shared (all-mode) suggestion: the region [max(v1), min(v2)] over all samples
+    // (widest common window), anything placed from it computed once from max(v1).
+    function suggestShared(){
+      const ss = files.map((f,i)=> derivEdge(i)).filter(Boolean);
+      if (!ss.length) return null;
+      const e = { v1: Math.max(...ss.map(s=>s.v1)), v2: Math.min(...ss.map(s=>s.v2)) };
+      let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
+      return clampTo(lo, hi)(spec.fromEdge(e));
+    }
+    // Apply suggestions to the whole workspace (used once on first upload).
+    P.autoSuggestAll = ()=>{
+      if (!files.length) return;
+      if (P.mode==='per'){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!P.per[i]) P.per[i]={}; P.per[i].vlines = s; } }); }
+      else { const s = suggestShared(); if (s) P.sharedVlines = s; }
+    };
+
+    // Read the input fields into the active store (shared, or the current sample)
+    function readInputsToStore(){
+      const vals = {};
+      for (const k of keys){
+        const raw = $(FIELD[k]).value;
+        if (k === 'a'){ const v = parseFloat(raw); if (isFinite(v)) vals.a = v; }
+        else vals[k] = k[0] === 'N' ? clampN(+raw || 1) : clampM(+raw || 2);
+      }
+      if (P.mode==='shared') Object.assign(P.shared, vals);
+      else { const pp = P.per[currIndex] || (P.per[currIndex]={}); Object.assign(pp, vals); }
+    }
+    // Push the current sample's stored params into the input fields
+    P.writeStoreToInputs = ()=>{
+      const p = P.params(currIndex);
+      for (const k of keys) $(FIELD[k]).value = p[k];
+      if ($('NExp')) $('NExp').textContent = p.a;
+    };
+    P.syncModeButton = ()=>{ const c = $('ModeAll'); if (c) c.textContent = P.mode==='shared' ? 'all' : 'one'; };
+
+    P.initPlot = ()=>{
+      plot = new Plot($('Svg'), {xlabel:'hν (eV)', ylabelSvg: spec.yLabel(P.params(currIndex)), xTickStep:0.5, noYTickLabels:true});
+      plot.attachTools(plot.svg.closest('.plot-wrap'));
+      if (!isFinite(P.sharedVlines.v1)){
+        const [lo, hi] = unionHv();
+        P.sharedVlines = spec.defaultLines(lo, hi - lo);
+      }
+      P.update();
+    };
+    P.hasPlot = ()=> !!plot;
+
+    P.update = preserveView =>{
+      if (!plot || !files.length) return;
+      vlines = P.vlinesFor(currIndex);   // point at the current sample's interval lines
+      const p = P.params(currIndex);
+      const c = curves(currIndex, p), hv = c.hv;
+      $('CurrentLabel').textContent = files[currIndex].label;
+      $('Idx').textContent = (currIndex+1)+'/'+files.length;
+
+      // The derivatives are drawn rescaled onto the curve's own span, from the floor
+      // the curve is drawn from: zero for Tauc, its own minimum for a log.
+      const yLo = spec.zeroFloor ? 0 : minArr(c.Ys), yHi = maxArr(c.Ys);
+      const onSpan = (arr, lo, hi)=> arr.map(v=> (hi-lo)>0 ? yLo + (v-lo)/(hi-lo)*(yHi-yLo) : v);
+      const dYs = onSpan(c.dYs, minArr(c.dYs), maxArr(c.dYs));
+
+      // Capture current zoom so it can be kept across redraws (the full range
+      // set below stays as the "home" reset target)
+      const prev = (preserveView && isFinite(plot.xmin)) ? {xmin:plot.xmin, xmax:plot.xmax, ymin:plot.ymin, ymax:plot.ymax} : null;
+      const rLo = spec.zeroFloor ? 0 : minArr(c.Yraw), rHi = maxArr(c.Yraw), pad = spec.zeroFloor ? 0 : 0.05*(rHi - rLo);
+      plot.setRange(minArr(hv), maxArr(hv), rLo - pad, spec.zeroFloor ? rHi*1.05 : rHi + pad);
+      if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
+      plot.clearData();
+      plot.ylabelSvg = spec.yLabel(p) + ' (a. u.)';
+      plot.drawAxes();
+      // Named for the figure composer: this plot has no legend, so without these the
+      // traces would reach it as "Series 1..n". Keyed by role, not by sample: the plot
+      // shows one sample at a time, and a trace keeps its looks from one to the next.
+      const nm = files[currIndex].label;
+      // The grey XRPD draws its raw pattern in: white vanished on the light theme and on
+      // the white of every exported image.
+      plot.line(hv, c.Yraw, '#6a7585', 1,   undefined, { label: `${nm} raw`, key: 'raw' });
+      plot.line(hv, c.Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed`, key: 'smoothed' });
+      plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative`, key: 'derivative' });
+      if (spec.debugCurvature){
+        // What the interval suggestion looks at: |Y''| on the same span, and the ε it
+        // has to stay above for a sustained run to count as the region.
+        const d2 = secondDeriv(c, p).map(Math.abs), A = maxArr(d2);
+        plot.line(hv, onSpan(d2, 0, A), DEBUG_COLOR, 1, '3,3', { label: `${nm} |second derivative| (debug)`, key: 'd2' });
+        const yEps = yLo + SUGG_THRESH*(yHi - yLo);
+        plot.line([minArr(hv), maxArr(hv)], [yEps, yEps], DEBUG_COLOR, 1, '1,3', { label: 'ε threshold (debug)', key: 'eps' });
+      }
+
+      const fits = [];
+      let tooSmall = false;
+      windows.forEach((w, wi)=>{
+        const lo = Math.min(vlines[w.lo], vlines[w.hi]), hi = Math.max(vlines[w.lo], vlines[w.hi]);
+        const sel = hv.filter(v=> v>=lo && v<=hi).length;
+        const reg = sel >= p[w.M] ? scanRegr(hv, c.Ys, p[w.M], vlines[w.lo], vlines[w.hi]) : null;
+        fits.push(reg);
+        $(w.stats[0]).textContent = reg && isFinite(reg.NRMSE) ? reg.NRMSE.toFixed(4) : '-';
+        $(w.stats[1]).textContent = reg && isFinite(reg.R2) ? reg.R2.toFixed(4) : '-';
+        if (!reg){ tooSmall = true; return; }
+        if (reg.bestIdx.length){
+          const xb = reg.bestIdx.map(i=>hv[i]);
+          plot.line(xb, xb.map(x=>reg.slope*x+reg.intercept), w.color, 2.2, undefined, { label: `${nm} ${w.name}`, key: w.key });
+          const xExt = linspace(minArr(hv), maxArr(hv), 100);
+          plot.line(xExt, xExt.map(x=>reg.slope*x+reg.intercept), w.color, 1, '5,4',
+                    { label: `${nm} ${w.name}, extended`, key: w.key + ' line' });
+        }
+      });
+      $('Alert').innerHTML = tooSmall ? '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>' : '';
+      spec.show($, P.analyze(currIndex));
+
+      // While dragging a line: live-update only the interactive plot (below); the
+      // summary plots refresh once, on release. onDrag sets dragging, onRelease clears it.
+      const onDrag = k => v=>{ vlines[k]=v; dragging=true; throttledUpdate(); };
+      const onRelease = k => v=>{ vlines[k]=v; dragging=false; P.update(true); hist.commit(); };
+      windows.forEach(w=>{
+        plot.vline(vlines[w.lo], w.color, true, onDrag(w.lo), onRelease(w.lo));
+        plot.vline(vlines[w.hi], w.color, true, onDrag(w.hi), onRelease(w.hi));
+      });
+
+      if (!dragging && spec.onSettled) spec.onSettled();   // skip the heavy summaries mid-drag
+    };
+    function throttledUpdate(){
+      if (throttle) return;
+      throttle = requestAnimationFrame(()=>{ throttle=null; P.update(true); });
+    }
+
+    // Per-sample slots follow the file list.
+    P.removeAt = i => P.per.splice(i, 1);
+    P.move = (from, to)=>{ const [x] = P.per.splice(from, 1); P.per.splice(to, 0, x); };
+    P.add = ()=> P.per.push({});
+    P.clear = ()=>{ P.per = []; P.sharedVlines = {}; };
+    P.fit = ()=>{ if (P.per.length !== files.length) P.per = files.map((_,i)=> P.per[i] || {}); };
+
+    const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
+    P.snapshot = ()=>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer) });
+    P.restore = s =>{
+      P.mode = (typeof s.mode==='string') ? s.mode : 'shared';   // older snapshots stored a per-field object
+      P.shared = { ...spec.defaults, ...(s.shared || {}) };
+      P.sharedVlines = s.sharedVlines ? {...s.sharedVlines} : (s.vlines ? {...s.vlines} : {});
+      P.per = s.per ? s.per.map(clonePer) : files.map(()=>({}));
+      // Backward compatibility with pre-all/one snapshots (params stored by input id)
+      if (s.params){
+        for (const k of keys){ const v = s.params[prefix + FIELD[k]]; if (v != null) P.shared[k] = k === 'a' ? parseFloat(v) : +v; }
+      }
+      P.fit();
+      P.syncModeButton();
+    };
+
+    // Param updates apply on confirm (blur / Enter), not while typing. The exponent is
+    // a <select>, so its change already is a deliberate choice; the numeric fields are
+    // guarded (invalid input shakes + reverts) by guardNumberInputs, and their change
+    // fires only once a valid value is committed. Changing the exponent rescales the
+    // y-axis, so it does a full reset; the smoothing/window fields keep the zoom.
+    keys.forEach(k=>{
+      const el = $(FIELD[k]);
+      el.addEventListener('change', ()=>{
+        readInputsToStore();  // route the edit to shared or this sample's slot
+        if (k === 'a' && $('NExp')) $('NExp').textContent = el.value;
+        if (plot) P.update(k !== 'a');
+        if (files.length) hist.commit();
+      });
+    });
+
+    // Single all/one toggle: 'all' = one common param set + shared interval lines;
+    // 'one' = every sample fully independent (params AND interval-line positions).
+    $('ModeAll').addEventListener('click', ()=>{
+      const mode = P.mode==='shared' ? 'per' : 'shared';
+      P.mode = mode;
+      if (mode==='per'){
+        // Each sample becomes independent: params inherit the current shared values,
+        // interval lines are re-proposed per sample.
+        files.forEach((f,i)=>{
+          const pp = P.per[i] || (P.per[i]={});
+          keys.forEach(k=>{ if (pp[k]==null) pp[k]=P.shared[k]; });
+          pp.vlines = suggestOne(i) || pp.vlines || defaultVlinesFor(i);
+        });
+      } else {
+        // Back to a single shared set: re-propose the common lines.
+        const s = suggestShared();
+        if (s) P.sharedVlines = s;
+      }
+      P.syncModeButton();
+      P.writeStoreToInputs();
+      if (files.length){ if (plot) P.update(); hist.commit(); }
+    });
+
+    $('Prev').onclick = ()=>{ if (files.length) showSample((currIndex-1+files.length)%files.length); };
+    $('Next').onclick = ()=>{ if (files.length) showSample((currIndex+1)%files.length); };
+
+    // Re-propose interval-line positions on demand: current sample in one-mode,
+    // the shared set in all-mode.
+    $('Suggest').onclick = ()=>{
+      if (!files.length) return;
+      if (P.mode==='per'){ const s=suggestOne(currIndex); if (s){ if(!P.per[currIndex]) P.per[currIndex]={}; P.per[currIndex].vlines=s; } }
+      else { const s=suggestShared(); if (s) P.sharedVlines=s; }
+      P.update(); hist.commit();
+    };
+    return P;
   }
-  // Push the current sample's stored params into the input fields
-  function writeStoreToInputs(){
-    const p = getFileParams(currIndex);
-    document.getElementById('taucA').value  = p.a;
-    document.getElementById('taucN').value  = p.N;
-    document.getElementById('taucN2').value = p.N2;
-    document.getElementById('taucM').value  = p.M;
-    document.getElementById('taucM2').value = p.M2;
-    document.getElementById('taucNExp').textContent = p.a;
-  }
-  function syncTaucModeButtons(){
-    const c = document.getElementById('taucModeAll');
-    if (c) c.textContent = taucMode==='shared' ? 'all' : 'one';
+
+  const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
+  const URBACH_COLOR = '#ff7f0e', DEBUG_COLOR = '#9b8cff';
+  const tauc = makePanel({
+    prefix: 'tauc',
+    keys: ['a','N','N2','M','M2'],
+    defaults: { a:0.5, N:1, N2:20, M:25, M2:100 },
+    curve: (fr, hv, p)=> Math.pow(fr*hv, p.a),
+    yLabel: p => `[F(R)·hν]${sup(p.a)}`,
+    zeroFloor: true,
+    windows: [
+      { lo:'v1', hi:'v2', M:'M',  color:'#ff5050', name:'Tauc region', key:'regs',  stats:['RMSE1','R21'] },
+      { lo:'v3', hi:'v4', M:'M2', color:'#d050ff', name:'baseline',    key:'regs2', stats:['RMSE2','R22'] },
+    ],
+    defaultLines: (lo, d)=> ({ v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d }),
+    // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span); the
+    // baseline is placed just below where the edge starts.
+    fromEdge: e => ({ v1: e.v1, v2: e.v2, v3: e.v1-0.85, v4: e.v1-0.1 }),
+    results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
+    show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
+    onSettled: ()=> updateTaucResults(),
+  });
+  const urbach = makePanel({
+    prefix: 'taucU',
+    keys: ['N','N2','M'],
+    defaults: { N:1, N2:20, M:25 },
+    curve: fr => fr > 0 ? Math.log(fr) : NaN,
+    yLabel: ()=> 'ln[F(R)]',
+    zeroFloor: false,
+    debugCurvature: true,
+    windows: [
+      { lo:'v1', hi:'v2', M:'M', color: URBACH_COLOR, name:'Urbach region', key:'regs', stats:['RMSE1','R21'] },
+    ],
+    defaultLines: (lo, d)=> ({ v1: lo+0.4*d, v2: lo+0.6*d }),
+    fromEdge: e => ({ v1: e.v1, v2: e.v2 }),
+    results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
+    show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
+  });
+  const panels = [tauc, urbach];
+  // The Results and their CSVs are made from the Tauc analysis alone.
+  const getFileParams = i => tauc.params(i);
+
+  // Every card shows the same sample, so stepping in one steps them all.
+  function showSample(k){
+    currIndex = k;
+    panels.forEach(p=>{ p.writeStoreToInputs(); p.update(); });
   }
 
   // per-upload invalid names (files that were skipped); persists until all files are removed
@@ -167,50 +460,41 @@ import { Plot } from './plot.js';
     return {
       onRemove(i){
         files.splice(i,1);
-        taucPer.splice(i,1);            // keep per-sample params aligned with files
+        panels.forEach(p=> p.removeAt(i));   // keep per-sample params aligned with files
         if (!files.length) invalidUploadNames = [];
         rebuildTaucAlerts();
         afterFilesChange();
       },
-      onReorder(from, to){ [files,taucPer].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); rebuildTaucAlerts(); afterFilesChange(); },
+      onReorder(from, to){ const [x]=files.splice(from,1); files.splice(to,0,x); panels.forEach(p=> p.move(from, to)); rebuildTaucAlerts(); afterFilesChange(); },
       onLabelChange(i, v){ files[i].label=v; updateTaucResults(); hist.commit(); },
       onColorChange(i, v){ files[i].color=v; updateTaucResults(); hist.commit(); },
       onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; taucPer=[]; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; sharedVlines={}; rebuildTaucAlerts(); afterFilesChange(); },
+      onRemoveAll(){ files.length=0; panels.forEach(p=> p.clear()); invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; rebuildTaucAlerts(); afterFilesChange(); },
     };
   }
 
-  /* ---- Undo/redo: snapshot the reversible state (file order/labels/colors,
-     the draggable line positions and the analysis parameters). Raw spectra
-     arrays are shared by reference; only metadata is cloned. ---- */
-  const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
+  /* ---- Undo/redo: snapshot the reversible state (file order/labels/colors, the
+     draggable line positions and the parameters of every analysis card). Raw spectra
+     arrays are shared by reference; only metadata is cloned. The Tauc analysis keeps
+     the top-level keys it always had, so older snapshots still restore into it. ---- */
   function taucSnapshot(){
     return {
       files: files.map(f=>({...f})),
-      mode: taucMode,
-      shared: {...taucShared},
-      sharedVlines: {...sharedVlines},
-      per: taucPer.map(clonePer),
+      ...tauc.snapshot(),
+      urbach: urbach.snapshot(),
       egSel: egSel.slice(),
     };
   }
   function taucRestore(s){
     files = s.files.map(f=>({...f}));
-    taucMode = (typeof s.mode==='string') ? s.mode : 'shared';   // older snapshots stored a per-field object
-    if (s.shared) Object.assign(taucShared, s.shared);
-    sharedVlines = s.sharedVlines ? {...s.sharedVlines} : (s.vlines ? {...s.vlines} : {});
-    taucPer = s.per ? s.per.map(clonePer) : files.map(()=>({}));
+    tauc.restore(s);
+    // Projects from before the Urbach card existed get its defaults, with lines
+    // suggested on their own ln F(R).
+    urbach.restore(s.urbach || {});
     // Older snapshots had two charts and no choice: both methods on show.
     const eg = Array.isArray(s.egSel) ? s.egSel.filter(k=> EG_METHODS.some(m=>m.key===k)) : [];
     egSel = eg.length ? eg : EG_METHODS.map(m=>m.key);
-    // Backward compatibility with pre-all/one snapshots (params stored by input id)
-    if (s.params){
-      taucShared.a  = parseFloat(s.params.taucA);
-      taucShared.N  = +s.params.taucN;  taucShared.N2 = +s.params.taucN2;
-      taucShared.M  = +s.params.taucM;  taucShared.M2 = +s.params.taucM2;
-    }
-    if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
-    syncTaucModeButtons();
+    if (!s.urbach && files.length){ files.forEach(f=>{ f.hv = f.wl.map(wl=>1240/wl); }); urbach.autoSuggestAll(); }
     afterFilesChange();
     // Rebuild alerts for THIS tab's files: transient upload feedback (invalid /
     // already-loaded) belongs to the upload action, not the project, so clear it;
@@ -222,7 +506,7 @@ import { Plot } from './plot.js';
   }
   const hist = registerHistory('tauc', taucSnapshot, taucRestore);
   // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.
-  registerTabRedraw('tauc', ()=>{ if (plot && files.length) updateTaucView(true); });
+  registerTabRedraw('tauc', ()=>{ if (files.length) panels.forEach(p=>{ if (p.hasPlot()) p.update(true); }); });
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
     const hadFiles = files.length > 0;   // auto-suggest only on the first upload
@@ -269,7 +553,7 @@ import { Plot } from './plot.js';
         const b = parseFloat(parts[1].replace(',','.'));
         if (isFinite(a) && isFinite(b)){ wl.push(a); fr.push(b); }
       }
-      if (wl.length){ files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes}); taucPer.push({}); }
+      if (wl.length){ files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes}); panels.forEach(p=> p.add()); }
     }
     invalidUploadNames = newInvalid;
     taucWarnDismissed = false;
@@ -277,17 +561,15 @@ import { Plot } from './plot.js';
     rebuildTaucAlerts();
     afterFilesChange();
     // Once, when the first data lands: propose optimal interval-line positions.
-    if (!hadFiles && files.length){ autoSuggestAll(); writeStoreToInputs(); updateTaucView(); hist.commit(); }
+    if (!hadFiles && files.length){ panels.forEach(p=>{ p.autoSuggestAll(); p.writeStoreToInputs(); p.update(); }); hist.commit(); }
   });
 
+  const CARDS = ['taucWorkspace','taucUrbach','taucResults'];
   function afterFilesChange(){
     setTabLoaded('tauc', files.length);
     renderUnifiedFileList('taucFileTableWrap', files, fileCallbacks());
     if (files.length) setupAnalysis();
-    else {
-      document.getElementById('taucWorkspace').style.display='none';
-      document.getElementById('taucResults').style.display='none';
-    }
+    else CARDS.forEach(id=> document.getElementById(id).style.display='none');
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
 
@@ -297,185 +579,23 @@ import { Plot } from './plot.js';
     if (currIndex >= files.length) currIndex = files.length-1;
     bestRegsAll = files.map(()=>null);
     if (currIndex < 0) currIndex = 0;
-    if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
-    writeStoreToInputs();      // reflect the current sample's params in the inputs
-    syncTaucModeButtons();
-    document.getElementById('taucWorkspace').style.display='block';
-    document.getElementById('taucResults').style.display='block';
-    initTaucPlot();
+    CARDS.forEach(id=> document.getElementById(id).style.display='block');
+    panels.forEach(p=>{
+      p.fit();
+      p.writeStoreToInputs();      // reflect the current sample's params in the inputs
+      p.syncModeButton();
+    });
+    // Urbach first, so the Tauc card's settling redraw of the Results is the last word.
+    urbach.initPlot();
+    tauc.initPlot();
   }
 
   // Union of all files' ranges (for shared overlay axes)
   function unionWl(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.wl)); hi=Math.max(hi,maxArr(f.wl)); }); return [lo,hi]; }
   function unionHv(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); }); return [lo,hi]; }
 
-  function initTaucPlot(){
-    plot = new Plot(document.getElementById('taucSvg'), {xlabel:'hν (eV)', ylabelSvg:'[F(R)·hν]<tspan baseline-shift="super" font-size="8">a</tspan>', xTickStep:0.5, noYTickLabels:true});
-    plot.attachTools(plot.svg.closest('.plot-wrap'));
-    const [hvMin, hvMax] = unionHv();
-    if (!isFinite(sharedVlines.v1)){
-      sharedVlines.v1 = hvMin + 0.6*(hvMax-hvMin);
-      sharedVlines.v2 = hvMin + 0.8*(hvMax-hvMin);
-      sharedVlines.v3 = hvMin + 0.2*(hvMax-hvMin);
-      sharedVlines.v4 = hvMin + 0.4*(hvMax-hvMin);
-    }
-    updateTaucView();
-  }
-
-
-  // Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
-  // minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
-  // by the y-range makes the criterion robust — it locks onto the steep linear edge
-  // instead of a flat low-value stretch that merely has a small absolute RMSE.
-  function scanRegr(hv, frArr, a, N, M, x1, x2){
-    const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], a));
-    const Ys = movingAverage(Yraw, N);
-    const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
-    const idxSel = [];
-    for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi) idxSel.push(i);
-    let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,NRMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
-    if (idxSel.length < M) return best;
-    let bestScore = Infinity;
-    for (let s=0; s<=idxSel.length-M; s++){
-      const block = idxSel.slice(s, s+M);
-      const yb = block.map(i=>Ys[i]);
-      if (yb.some(v=>!isFinite(v))) continue;
-      const xb = block.map(i=>hv[i]);
-      const r = fitLinear(xb, yb);
-      const range = Math.max(...yb) - Math.min(...yb);
-      const nrmse = range>0 ? r.rmse/range : Infinity;
-      const score = nrmse / r.R2;
-      if (score < bestScore){
-        bestScore = score;
-        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB};
-      }
-    }
-    return best;
-  }
-
-
-  function analyzeOneFile(hv, frArr, a,N,M,x1,x2,M2,x3,x4){
-    const regs = scanRegr(hv, frArr, a, N, M, x1, x2);
-    const regs2 = scanRegr(hv, frArr, a, N, M2, x3, x4);
-    let Eg=NaN, EgErr=NaN, EgInt=NaN, EgIntErr=NaN;
-    if ([regs.slope,regs.intercept,regs2.slope,regs2.intercept].every(isFinite)){
-      const xInt = (regs2.intercept - regs.intercept)/(regs.slope - regs2.slope);
-      const dxdb1 = -1/(regs.slope-regs2.slope), dxdb2 = 1/(regs.slope-regs2.slope);
-      const dxdm1 = (regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
-      const dxdm2 = -dxdm1;
-      const t1 = tinv(0.995, M-2), t2 = tinv(0.995, M2-2);
-      const varX = dxdb1*dxdb1*regs.varB*t1*t1 + dxdb2*dxdb2*regs2.varB*t2*t2 +
-                   dxdm1*dxdm1*regs.varM*t1*t1 + dxdm2*dxdm2*regs2.varM*t2*t2 +
-                   2*dxdb1*dxdm1*regs.covMB*t1*t1 + 2*dxdb2*dxdm2*regs2.covMB*t2*t2;
-      EgInt = xInt;
-      EgIntErr = varX>0 ? Math.sqrt(varX) : NaN;
-    }
-    if (regs.slope !== 0 && isFinite(regs.slope)){
-      Eg = -regs.intercept/regs.slope;
-      if ([regs.varM,regs.varB,regs.covMB].every(isFinite)){
-        const varEg = (regs.intercept**2/regs.slope**4)*regs.varM + (1/regs.slope**2)*regs.varB - 2*(regs.intercept/regs.slope**3)*regs.covMB;
-        EgErr = varEg>=0 ? Math.sqrt(varEg)*tinv(0.995, M-2) : NaN;
-      }
-    }
-    return {Eg,EgErr,EgInt,EgIntErr,regs,regs2};
-  }
-
   function processAll(){
-    bestRegsAll = files.map((f,k)=>{
-      const fp = getFileParams(k), vl = vlinesFor(k);
-      const r = analyzeOneFile(f.hv, f.FR, fp.a, fp.N, fp.M, vl.v1, vl.v2, fp.M2, vl.v3, vl.v4);
-      return {label:f.label, ...r};
-    });
-  }
-
-  function updateTaucView(preserveView){
-    if (!plot || !files.length) return;
-    vlines = vlinesFor(currIndex);   // point at the current sample's interval lines
-    const p = curParams();
-    const hv = files[currIndex].hv, frArr = files[currIndex].FR;
-    document.getElementById('taucCurrentLabel').textContent = files[currIndex].label;
-    document.getElementById('taucIdx').textContent = (currIndex+1)+'/'+files.length;
-
-    const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], p.a));
-    const Ys = movingAverage(Yraw, p.N);
-    let dY = gradientArr(Ys, hv);
-    const dYsRaw = movingAverage(dY, p.N2);
-    const dmin = minArr(dYsRaw), dmax = maxArr(dYsRaw), ymax = maxArr(Ys);
-    const normD = v => (dmax-dmin)>0 ? (v-dmin)/(dmax-dmin)*ymax : v;
-    const dYs = dYsRaw.map(normD);
-
-    // Capture current zoom so it can be kept across redraws (the full range
-    // set below stays as the "home" reset target)
-    const prev = (preserveView && isFinite(plot.xmin)) ? {xmin:plot.xmin, xmax:plot.xmax, ymin:plot.ymin, ymax:plot.ymax} : null;
-    plot.setRange(minArr(hv), maxArr(hv), 0, maxArr(Yraw)*1.05);
-    if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
-    plot.clearData();
-    plot.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a. u.)`;
-    plot.drawAxes();
-    // Named for the figure composer: this plot has no legend, so without these the
-    // traces would reach it as "Series 1..n". Keyed by role, not by sample: the plot
-    // shows one sample at a time, and a trace keeps its looks from one to the next.
-    const nm = files[currIndex].label;
-    // The grey XRPD draws its raw pattern in: white vanished on the light theme and on
-    // the white of every exported image.
-    plot.line(hv, Yraw, '#6a7585', 1,   undefined, { label: `${nm} raw`, key: 'raw' });
-    plot.line(hv, Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed`, key: 'smoothed' });
-    plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative`, key: 'derivative' });
-
-    const lo1=Math.min(vlines.v1,vlines.v2), hi1=Math.max(vlines.v1,vlines.v2);
-    const lo2=Math.min(vlines.v3,vlines.v4), hi2=Math.max(vlines.v3,vlines.v4);
-    const sel1 = hv.filter(v=>v>=lo1&&v<=hi1).length;
-    const sel2 = hv.filter(v=>v>=lo2&&v<=hi2).length;
-    const alertDiv = document.getElementById('taucAlert');
-    alertDiv.innerHTML='';
-
-    if (sel1>=p.M){
-      const regs = scanRegr(hv, frArr, p.a, p.N, p.M, vlines.v1, vlines.v2);
-      document.getElementById('taucRMSE1').textContent = isFinite(regs.NRMSE)? regs.NRMSE.toFixed(4): '-';
-      document.getElementById('taucR21').textContent = isFinite(regs.R2)? regs.R2.toFixed(4): '-';
-      if (regs.bestIdx.length){
-        const xb = regs.bestIdx.map(i=>hv[i]);
-        const yb = xb.map(x=>regs.slope*x+regs.intercept);
-        plot.line(xb, yb, '#ff5050', 2.2, undefined, { label: `${nm} Tauc region`, key: 'regs' });
-        const xExt = linspace(minArr(hv), maxArr(hv), 100);
-        plot.line(xExt, xExt.map(x=>regs.slope*x+regs.intercept), '#ff5050', 1, '5,4',
-                  { label: `${nm} Tauc region, extended`, key: 'regs line' });
-      }
-    } else {
-      document.getElementById('taucRMSE1').textContent='-'; document.getElementById('taucR21').textContent='-';
-      alertDiv.innerHTML = '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>';
-    }
-    if (sel2>=p.M2){
-      const regs2 = scanRegr(hv, frArr, p.a, p.N, p.M2, vlines.v3, vlines.v4);
-      document.getElementById('taucRMSE2').textContent = isFinite(regs2.NRMSE)? regs2.NRMSE.toFixed(4): '-';
-      document.getElementById('taucR22').textContent = isFinite(regs2.R2)? regs2.R2.toFixed(4): '-';
-      if (regs2.bestIdx.length){
-        const xb = regs2.bestIdx.map(i=>hv[i]);
-        const yb = xb.map(x=>regs2.slope*x+regs2.intercept);
-        plot.line(xb, yb, '#d050ff', 2.2, undefined, { label: `${nm} baseline`, key: 'regs2' });
-        const xExt = linspace(minArr(hv), maxArr(hv), 100);
-        plot.line(xExt, xExt.map(x=>regs2.slope*x+regs2.intercept), '#d050ff', 1, '5,4',
-                  { label: `${nm} baseline, extended`, key: 'regs2 line' });
-      }
-    } else {
-      document.getElementById('taucRMSE2').textContent='-'; document.getElementById('taucR22').textContent='-';
-      if (!alertDiv.innerHTML) alertDiv.innerHTML = '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>';
-    }
-
-    const res = analyzeOneFile(hv, frArr, p.a, p.N, p.M, vlines.v1, vlines.v2, p.M2, vlines.v3, vlines.v4);
-    document.getElementById('taucEg').textContent = isFinite(res.Eg) ? (isFinite(res.EgErr) ? `${res.Eg.toFixed(3)} ± ${res.EgErr.toFixed(3)} eV` : `${res.Eg.toFixed(3)} eV`) : '-';
-    document.getElementById('taucEgInt').textContent = isFinite(res.EgInt) ? (isFinite(res.EgIntErr) ? `${res.EgInt.toFixed(3)} ± ${res.EgIntErr.toFixed(3)} eV` : `${res.EgInt.toFixed(3)} eV`) : '-';
-
-    // While dragging a line: live-update only the interactive plot (below); the
-    // summary plots refresh once, on release. onDrag sets _dragging, onRelease clears it.
-    const onDrag = k => v=>{ vlines[k]=v; _dragging=true; throttledUpdate(); };
-    const onRelease = k => v=>{ vlines[k]=v; _dragging=false; updateTaucView(true); hist.commit(); };
-    plot.vline(vlines.v1, '#ff5050', true, onDrag('v1'), onRelease('v1'));
-    plot.vline(vlines.v2, '#ff5050', true, onDrag('v2'), onRelease('v2'));
-    plot.vline(vlines.v3, '#d050ff', true, onDrag('v3'), onRelease('v3'));
-    plot.vline(vlines.v4, '#d050ff', true, onDrag('v4'), onRelease('v4'));
-
-    if (!_dragging) updateTaucResults();   // skip the heavy summaries mid-drag
+    bestRegsAll = files.map((f,k)=>{ const r = tauc.analyze(k); return {label:f.label, ...r}; });
   }
 
   function updateTaucResults(){
@@ -483,65 +603,6 @@ import { Plot } from './plot.js';
     processAll();
     renderResView();
   }
-
-  let throttle=null;
-  function throttledUpdate(){
-    if (throttle) return;
-    throttle = requestAnimationFrame(()=>{ throttle=null; updateTaucView(true); });
-  }
-
-  // Param updates apply on confirm (blur / Enter), not while typing. taucA is a
-  // <select>, so its change already is a deliberate choice; the numeric fields are
-  // guarded (invalid input shakes + reverts) by guardNumberInputs, and their change
-  // fires only once a valid value is committed. Changing the exponent rescales the
-  // y-axis, so it does a full reset; the smoothing/window fields keep the zoom.
-  ['taucA','taucN','taucN2','taucM','taucM2'].forEach(id=>{
-    const el = document.getElementById(id);
-    el.addEventListener('change', ()=>{
-      readInputsToStore();  // route the edit to shared or this sample's slot
-      if (id==='taucA') document.getElementById('taucNExp').textContent = el.value;
-      if (plot) updateTaucView(id!=='taucA');
-      if (files.length) hist.commit();
-    });
-  });
-
-  // Single all/one toggle: 'all' = one common param set + shared interval lines;
-  // 'one' = every sample fully independent (params AND interval-line positions).
-  document.getElementById('taucModeAll').addEventListener('click', ()=>{
-    {
-      const mode = taucMode==='shared' ? 'per' : 'shared';
-      taucMode = mode;
-      if (mode==='per'){
-        // Each sample becomes independent: params inherit the current shared values,
-        // interval lines are re-proposed per sample.
-        files.forEach((f,i)=>{
-          const pp = taucPer[i] || (taucPer[i]={});
-          ['a','N','N2','M','M2'].forEach(k=>{ if (pp[k]==null) pp[k]=taucShared[k]; });
-          const s = suggestOne(i);
-          pp.vlines = s ? {v1:s.v1,v2:s.v2,v3:s.v3,v4:s.v4} : (pp.vlines || defaultVlinesFor(i));
-        });
-      } else {
-        // Back to a single shared set: re-propose the common lines.
-        const s = suggestShared();
-        if (s) sharedVlines = s;
-      }
-      syncTaucModeButtons();
-      writeStoreToInputs();
-      if (files.length){ if (plot) updateTaucView(); hist.commit(); }
-    }
-  });
-
-  document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; writeStoreToInputs(); updateTaucView(); };
-  document.getElementById('taucNext').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex+1)%files.length; writeStoreToInputs(); updateTaucView(); };
-
-  // Re-propose interval-line positions on demand: current sample in one-mode,
-  // the shared set in all-mode.
-  document.getElementById('taucSuggest').onclick = ()=>{
-    if (!files.length) return;
-    if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
-    else { const s=suggestShared(); if (s) sharedVlines=s; }
-    updateTaucView(); hist.commit();
-  };
 
   function renderResView(){
     // Effective exponent per file; when uniform, show it on the shared Tauc axis,
