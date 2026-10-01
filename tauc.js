@@ -465,16 +465,14 @@ import { Plot } from './plot.js';
   // The Urbach card's switch, and what of the analysis hangs on it: the card's
   // workspace and its row of the Results.
   function syncUrbach(){
-    const chip = document.getElementById('taucUOn');
+    const box = document.getElementById('taucUOn');
     document.getElementById('taucUrbach').classList.toggle('is-off', !urbachOn);
-    chip.classList.toggle('is-on', urbachOn);
-    chip.textContent = urbachOn ? 'on' : 'off';
-    chip.setAttribute('aria-pressed', String(urbachOn));
-    chip.title = `Switch the Urbach analysis ${urbachOn ? 'off' : 'on'}`;
+    box.checked = urbachOn;
+    box.closest('label').title = `Switch the Urbach analysis ${urbachOn ? 'off' : 'on'}`;
     document.getElementById('taucResUrbach').style.display = urbachOn ? '' : 'none';
   }
-  document.getElementById('taucUOn').addEventListener('click', ()=>{
-    urbachOn = !urbachOn;
+  document.getElementById('taucUOn').addEventListener('change', e=>{
+    urbachOn = e.target.checked;
     syncUrbach();
     if (urbachOn && files.length){
       // The first time on, its lines come from the gaps the Tauc card gives now.
@@ -769,7 +767,7 @@ import { Plot } from './plot.js';
     document.getElementById('taucEuAlert').innerHTML = negWarnHtml(eu.vals, 'E<sub>U</sub>');
     const yLabel = 'Urbach Energy E<tspan baseline-shift="sub" font-size="8">U</tspan> (meV)';
     if (drawValueBars(document.getElementById('taucResSvg4'), [eu], { yLabel, digits: 1 }))
-      leg4.innerHTML = `<span><i class="mk-box" style="background:${eu.color}"></i>${eu.name}</span>`;
+      leg4.innerHTML = `<span><i class="mk-box" style="background:${eu.color}"></i>E<sub>U</sub></span>`;
   }
 
   // Negative values → one alert per series on show, under its chart, listing the

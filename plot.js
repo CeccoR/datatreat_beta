@@ -695,12 +695,15 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
     }
   }
 
-  // Parse legend
+  // Parse legend. A <sub> in an entry (E<sub>U</sub>) is kept as a lowered run rather
+  // than flattened into the text beside it.
   const legItems = [];
   if (legendEl) legendEl.querySelectorAll('span').forEach(span=>{
     const col = span.querySelector('i') ? span.querySelector('i').style.background : '#888';
     const txt = span.textContent.trim();
-    if (txt) legItems.push({col, txt});
+    const parts = [...span.childNodes].filter(nd=> nd.nodeName !== 'I')
+      .map(nd=> ({ t: nd.textContent, sub: nd.nodeName === 'SUB' })).filter(p=> p.t);
+    if (txt) legItems.push({col, txt, parts});
   });
   const fontSize = 15, iH = 13, rowH = 24, legPadT = 12, legMarginL = 56, gap = 22;
   // Measure label widths precisely so legend entries never overlap
@@ -740,7 +743,14 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
         const t = document.createElementNS(ns,'text');
         t.setAttribute('x',x+iH+5); t.setAttribute('y',cy+2);
         t.setAttribute('font-size',fontSize); t.setAttribute('fill','#333333');
-        t.setAttribute('font-family','Arial, sans-serif'); t.textContent=item.txt;
+        t.setAttribute('font-family','Arial, sans-serif');
+        if (item.parts.some(p=> p.sub)) item.parts.forEach((p, pi)=>{
+          const sp = document.createElementNS(ns,'tspan');
+          if (p.sub){ sp.setAttribute('baseline-shift','sub'); sp.setAttribute('font-size', fontSize*0.72); }
+          sp.textContent = pi === 0 ? p.t.replace(/^\s+/, '') : p.t;
+          t.appendChild(sp);
+        });
+        else t.textContent=item.txt;
         legG.appendChild(t);
       });
     });

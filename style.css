@@ -264,14 +264,20 @@ button.btn.is-saved:disabled {
   margin-bottom: 10px;
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
-/* A card's on/off switch at its top right. Floated beside the title rather than
-   sharing a flex row with it, so the title sits on the same line box, at the same
-   height, as every other card's. */
-.mode-chip.card-switch { float: right; }
+/* A card's on/off switch: the composer's square toggle, empty, filled when on. It
+   floats beside the title rather than sharing a flex row with it, so the title keeps
+   the line box, and the height, of every other card's. That line box sets the title
+   --head-drop below its top: the box drops as much, to sit centred on the title, and
+   ends as far from the card's right edge as the title starts from its left. */
+.card { --head-drop: 2px; }
+.fig-cbox.card-switch { float: right; margin-top: var(--head-drop); }
 /* An analysis switched off keeps its card, title, switch and instructions, so it is
-   still there to be found and read about; only its workspace is gone. */
+   still there to be found and read about; only its workspace is gone. Closed, the
+   card ends as far below the title's centre as it starts above it; instructions
+   opened meanwhile keep their usual 12 px under the title. */
 .card.is-off > .row { display: none; }
-.card.is-off > .txt-head { color: var(--muted); }
+.card.is-off > .txt-head { color: var(--muted); margin-bottom: var(--head-drop) !important; }
+.card.is-off > .instr-block { margin-top: calc(6px + 12px - var(--head-drop)); }
 .proj-icon .proj-svg { width: 19px; height: 19px; display: block; }
 /* Project-bar icon buttons (export/delete/new) and the per-table CSV export button
    (.table-csv-btn) are THE SAME BUTTON: one shared rule block, so their aesthetics
