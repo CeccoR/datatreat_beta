@@ -271,6 +271,9 @@ button.btn.is-saved:disabled {
    ends as far from the card's right edge as the title starts from its left. */
 .card { --head-drop: 2px; }
 .fig-cbox.card-switch { float: right; margin-top: var(--head-drop); }
+/* Off, the composer's pale outline vanishes on a card: the muted ink the native
+   checkboxes are drawn in, on the recessed fill, keeps the empty box readable. */
+.fig-cbox.card-switch input:not(:checked) + .fig-cbox-i { border-color: var(--muted); background: var(--panel2); }
 /* An analysis switched off keeps its card, title, switch and instructions, so it is
    still there to be found and read about; only its workspace is gone. Closed, the
    card ends as far below the title's centre as it starts above it; instructions
