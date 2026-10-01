@@ -271,6 +271,60 @@
         </div>
       </div>
 
+      <div class="card" id="taucDebug" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Debug</h3>
+        <div class="instr-block">The same analysis run on <b>F(R)<sup>a</sup></b> instead of <b>[F(R)hν]<sup>a</sup></b>, to see how much the hν factor moves E<sub>g</sub>. It has its own parameters, interval lines and <b>all / one</b> mode, and follows the sample shown in Analysis. Nothing here reaches the Results or the CSV files.</div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left">
+                <button class="btn nav-arrow" id="taucDbgPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
+                <span id="taucDbgIdx" class="pill" style="margin:0">1/1</span>
+                <button class="btn nav-arrow" id="taucDbgNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
+                <span class="txt-caption" id="taucDbgCurrentLabel">—</span>
+              </div>
+              <button class="btn plot-corner-btn" id="taucDbgSuggest" title="Propose optimal Tauc-region and baseline intervals from the absorption edge">&#10022; Suggest intervals</button>
+            </div>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucDbgSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucDbgSvg" data-dl-name="Tauc_debug.svg" data-dl-legend="taucDbgLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div class="legend" id="taucDbgLegend">
+              <span><i style="background:#6a7585"></i>original</span>
+              <span><i style="background:#3aa0ff"></i>smoothed</span>
+              <span><i style="background:#5fcf6a"></i>derivative</span>
+              <span><i style="background:#ff5050"></i>Tauc linear region</span>
+              <span><i style="background:#d050ff"></i>baseline</span>
+            </div>
+          </div>
+          <div class="col mw280" style="align-self:flex-start">
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucDbgModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
+            <div class="param-grid">
+              <label class="txt-label">Tauc exponent</label>
+              <select id="taucDbgA" class="pg-field">
+                <option value="0.5" selected>0.5</option>
+                <option value="2">2</option>
+              </select>
+              <label class="txt-label">F(R)<sup id="taucDbgNExp">0.5</sup> smoothing window</label>
+              <input type="number" class="pg-field" id="taucDbgN" value="1" min="1">
+              <label class="txt-label">Derivative smoothing window</label>
+              <input type="number" class="pg-field" id="taucDbgN2" value="20" min="1">
+              <label class="txt-label">Tauc linear region regression window</label>
+              <input type="number" class="pg-field" id="taucDbgM" value="25" min="2">
+              <div class="pg-stat">NRMSE: <b id="taucDbgRMSE1">-</b></div>
+              <div class="pg-stat">R²: <b id="taucDbgR21">-</b></div>
+              <label class="txt-label">Baseline regression window</label>
+              <input type="number" class="pg-field" id="taucDbgM2" value="100" min="2">
+              <div class="pg-stat">NRMSE: <b id="taucDbgRMSE2">-</b></div>
+              <div class="pg-stat">R²: <b id="taucDbgR22">-</b></div>
+              <div class="pg-stat pg-gap">Eg (x-axis): <b id="taucDbgEg">-</b></div>
+              <div class="pg-stat">Eg (baseline): <b id="taucDbgEgInt">-</b></div>
+            </div>
+            <div id="taucDbgAlert"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="card" id="taucResults" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
         <div class="row" style="align-items:flex-start;gap:16px">
@@ -722,7 +776,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v332</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v333</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
