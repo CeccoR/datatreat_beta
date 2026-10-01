@@ -870,9 +870,9 @@ svg.plot {
   border: 1px solid var(--line);
   touch-action: none;
 }
-/* Exception (GC, and Tauc's Eg bar chart, built like GC's): full-width strip plots
-   stacked one above the other, so a single golden-ratio box would be far too tall.
-   Twice the golden ratio (1 : 2φ) keeps the pair roughly as tall as one standard plot. */
+/* Exception (GC, and Tauc's Kubelka-Munk plot heading its Results): full-width strip
+   plots, where a single golden-ratio box would be far too tall. Twice the golden ratio
+   (1 : 2φ) keeps one roughly as tall as a standard plot in a half-width column. */
 svg.plot.plot-wide { aspect-ratio: 3.236; }
 /* Once the columns stack to full width the floor is pointless — and keeping it would
    make every plot overflow and scroll horizontally on the narrowest screens. */
@@ -1454,6 +1454,9 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
    minus its toolbar column (26px button + 8px gap = 34px), so it sits under the chart
    and not under the download button. */
 .bar-alert { margin-right: 34px; }
+/* Results rows under a full-width plot: a pair of standard plots side by side, set off
+   from what is above by the space a caption used to have. */
+.res-row { margin-top: 18px; align-items: flex-start; }
 .bar-alert .alert { margin-bottom: 0; }
 .plot-btn-col {
   display: flex;

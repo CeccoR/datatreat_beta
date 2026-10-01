@@ -8,7 +8,7 @@ import { Plot } from './plot.js';
   let files = []; // {name,label,wl[],FR[],hv[]}  (each on its own native axis)
   let currIndex=0;                    // the sample every analysis card shows
   let bestRegsAll = [];
-  let resPlot0=null, resPlot1=null;   // reused summary-plot instances (created once)
+  let resPlot0=null, resPlot1=null, resPlot3=null;   // reused summary-plot instances (created once)
   // How Eg is read off the Tauc plot, and which of the two the bar chart shows.
   const EG_METHODS = [
     { key: 'x', label: 'x-axis',   name: 'Eg (x-axis)',   color: '#3aa0ff' },
@@ -431,6 +431,7 @@ import { Plot } from './plot.js';
     combine: ss =>{ const v2 = Math.min(...ss.map(s=>s.v2)); return { v1: v2 - 1, v2 }; },
     results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
     show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
+    onSettled: ()=> renderUrbachRes(),
     // The sample's two Tauc gaps, dashed in the colours of the Tauc fits they come
     // from, so the tail can be read against where the gap is. Each label goes on the
     // outer side of the pair, as the two usually sit a few pixels apart.
@@ -689,29 +690,76 @@ import { Plot } from './plot.js';
     if (barTitleEl) barTitleEl.textContent = (egLabel ? egLabel+' ' : '') + 'Energy Band Gap';
     const leg2 = document.getElementById('taucResLegend2'); leg2.innerHTML='';
     renderEgSel();
-    const shown = EG_METHODS.filter(m=> egSel.includes(m.key));
     const vals = { x: bestRegsAll.map(r=>r.Eg),    b: bestRegsAll.map(r=>r.EgInt) };
     const errs = { x: bestRegsAll.map(r=>r.EgErr), b: bestRegsAll.map(r=>r.EgIntErr) };
-    const n = files.length;
-    // Negative Eg → one alert per method on show, under the chart, listing the
-    // affected samples one per line. Live-computed → no X.
-    const negWarnHtml = m=>{
-      const list = files.filter((f,k)=> isFinite(vals[m.key][k]) && vals[m.key][k] < 0).map(f=>f.label);
-      return list.length ? `<div class="alert warn">⚠ Negative E<sub>g</sub> (${m.label}) for:<br>${list.join('<br>')}</div>` : '';
-    };
-    document.getElementById('taucBarAlert').innerHTML = shown.map(negWarnHtml).join('');
-    const posVals = shown.flatMap(m=> vals[m.key]).filter(v=>isFinite(v)&&v>0);
-    const barSvg  = document.getElementById('taucResSvg2');
+    const shown = EG_METHODS.filter(m=> egSel.includes(m.key)).map(m=> ({ ...m, vals: vals[m.key], errs: errs[m.key] }));
+    document.getElementById('taucBarAlert').innerHTML = shown.map(m=> negWarnHtml(m.vals, `E<sub>g</sub> (${m.label})`)).join('');
+    const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
+    if (drawValueBars(document.getElementById('taucResSvg2'), shown, { chips: document.getElementById('taucEgSel'), yLabel, digits: 3 }))
+      leg2.innerHTML = shown.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
+
+    renderUrbachRes();
+  }
+
+  // The Urbach row of the Results: every sample's ln F(R) with its Urbach fit, drawn
+  // as the Tauc plot is, and E_U beside it as the gaps are.
+  function renderUrbachRes(){
+    if (!files.length) return;
+    const fits = files.map((f,k)=> urbach.analyze(k));
+    if (!resPlot3){
+      resPlot3 = new Plot(document.getElementById('taucResSvg3'), {xlabel:'Energy (eV)', ylabelSvg:'ln[F(R)] (a. u.)', xTickStep:0.5, noYTickLabels:true});
+      resPlot3.attachTools(resPlot3.svg.closest('.plot-wrap'));
+    }
+    const plot3 = resPlot3; plot3.clearData();
+    const leg3 = document.getElementById('taucResLegend3'); leg3.innerHTML='';
+    const Ys = files.map((f,k)=> movingAverage(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), urbach.params(k).N));
+    const yLo = Math.min(...Ys.map(minArr)), yHi = Math.max(...Ys.map(maxArr)), pad = 0.05*(yHi - yLo);
+    const [hv0, hv1] = unionHv();
+    plot3.setRange(hv0, hv1, yLo - pad, yHi + pad);
+    plot3.drawAxes();
+    files.forEach((f,k)=>{
+      plot3.line(f.hv, Ys[k], f.color, 1.1, undefined, { label: f.label, key: f.name });
+      const r = fits[k].regs;
+      if (isFinite(r.slope)){
+        const xExt = linspace(hv0, hv1, 100);
+        plot3.line(xExt, xExt.map(x=>r.slope*x+r.intercept), f.color, 1, '5,4',
+                   { label: `${f.label} Urbach`, key: `${f.name}/regs line` });
+      }
+      const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg3.appendChild(s);
+    });
+
+    // Plot 4: E_U bar chart, in meV as the Urbach card shows it.
+    const leg4 = document.getElementById('taucResLegend4'); leg4.innerHTML='';
+    const eu = { key: 'u', name: 'Eu', color: URBACH_COLOR, vals: fits.map(r=> r.Eu*1000), errs: fits.map(r=> r.EuErr*1000) };
+    document.getElementById('taucEuAlert').innerHTML = negWarnHtml(eu.vals, 'E<sub>U</sub>');
+    const yLabel = 'Urbach Energy E<tspan baseline-shift="sub" font-size="8">U</tspan> (meV)';
+    if (drawValueBars(document.getElementById('taucResSvg4'), [eu], { yLabel, digits: 1 }))
+      leg4.innerHTML = `<span><i class="mk-box" style="background:${eu.color}"></i>${eu.name}</span>`;
+  }
+
+  // Negative values → one alert per series on show, under its chart, listing the
+  // affected samples one per line. Live-computed → no X.
+  function negWarnHtml(vals, what){
+    const list = files.filter((f,k)=> isFinite(vals[k]) && vals[k] < 0).map(f=>f.label);
+    return list.length ? `<div class="alert warn">⚠ Negative ${what} for:<br>${list.join('<br>')}</div>` : '';
+  }
+
+  /* One chart of a value per sample ± its error: GC's mean-rate chart (gc.js
+     drawBarChart) step for step — sizes, margins, headroom, bar widths — so the charts
+     look and resize alike. `shown` are the series side by side in each sample's slot,
+     as GC pairs its gases: {name, color, vals[], errs[]}. `chips` is the plot's chip
+     row, if it has one, which the value labels keep clear of. Nothing positive to show
+     hides the chart; returns whether it was drawn. */
+  function drawValueBars(barSvg, shown, { chips, yLabel, digits }){
     const barWrap = barSvg.closest('.plot-wrap');
+    const n = files.length;
+    const posVals = shown.flatMap(m=> m.vals).filter(v=>isFinite(v)&&v>0);
     if (!posVals.length){
       barSvg.style.display='none'; barWrap.style.display='none';
-      return;
+      return false;
     }
     barSvg.style.display=''; barWrap.style.display='';
-    /* From here on, GC's mean-rate chart (gc.js drawBarChart) step for step — sizes,
-       margins, headroom, bar widths — so the two charts look and resize alike; only
-       the values differ, carrying their error bars and "±". */
-    const has = k => shown.some(m=> isFinite(vals[m.key][k]) && vals[m.key][k] > 0);
+    const has = k => shown.some(m=> isFinite(m.vals[k]) && m.vals[k] > 0);
     const mctx = document.createElement('canvas').getContext('2d');
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
     const rect = barSvg.getBoundingClientRect();
@@ -723,37 +771,34 @@ import { Plot } from './plot.js';
     let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
     const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
     // Value label (vertical) above each bar, with reserved top headroom so it never clips.
-    const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
+    const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(digits)}±${e.toFixed(digits)}` : v.toFixed(digits);
     const topOf = (v,e)=> v + (isFinite(e)?e:0);
     let maxValW = 0, maxTop = 0;
     for (const m of shown) for (let k=0;k<n;k++){
-      const v = vals[m.key][k], e = errs[m.key][k];
+      const v = m.vals[k], e = m.errs[k];
       if (isFinite(v) && v>0){ maxValW = Math.max(maxValW, mctx.measureText(fmtLab(v,e)).width); maxTop = Math.max(maxTop, topOf(v,e)); }
     }
     const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
     const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
     const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);   // widen only when a label would cross x=0
     const x0 = -xpad, x1 = n+1+xpad;
-    // Both methods side by side in the sample's slot, the way GC pairs its gases.
-    // Widths shrink so the pair still fits.
+    // Widths shrink so a pair still fits the slot.
     const pxSlot = (svgW - 75) / (x1 - x0);
     const hw = shown.length > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);
     const dx = shown.length > 1 ? Math.min(12, pxSlot*0.24) : 0;
     const offOf = mi => (mi - (shown.length-1)/2) * dx * 2;
     const underChips = [];
-    for (let k=0;k<n;k++) shown.forEach((m, mi)=>{ const v = vals[m.key][k], e = errs[m.key][k];
+    for (let k=0;k<n;k++) shown.forEach((m, mi)=>{ const v = m.vals[k], e = m.errs[k];
       if (isFinite(v) && v>0) underChips.push({ x:k+1, dx:offOf(mi), top:topOf(v,e), w:mctx.measureText(fmtLab(v,e)).width }); });
     const ymax = Math.max(Math.max(...posVals)*1.2, maxTop/frac,
-      barChipYmax(document.getElementById('taucEgSel'), barSvg, underChips,
-                  { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0, x1 }));
-    const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
+      barChipYmax(chips, barSvg, underChips, { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0, x1 }));
     const bp = new Plot(barSvg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     bp.setRange(x0, x1, 0, ymax||1);
     bp.drawAxes();
     for (let k=0;k<n;k++){
       if (!has(k)) continue;
       shown.forEach((m, mi)=>{
-        const v = vals[m.key][k], e = errs[m.key][k];
+        const v = m.vals[k], e = m.errs[k];
         if (!(isFinite(v) && v>0)) return;
         const off = offOf(mi);
         drawBar(bp, k+1, v, m.color, hw, off, m.name);
@@ -763,7 +808,7 @@ import { Plot } from './plot.js';
       bp.tickLabel(k+1, labels[k], fit.rot, files[k].label, files[k].name);
     }
     bp.attachTools(barWrap);
-    leg2.innerHTML = shown.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
+    return true;
   }
 
   /* The two ways Eg is read, as GC's gases are: one chart, a chip per method to show or
@@ -834,6 +879,27 @@ import { Plot } from './plot.js';
           r?fmtNum(r.Eg,6):'', r?fmtNum(r.EgErr,6):'', r?fmtNum(r.EgInt,6):'', r?fmtNum(r.EgIntErr,6):'']);
       });
       entries.push({name:'Eg.csv', text:t});
+    }
+    // urbach_plot.csv — per sample: energy, ln F(R) and the Urbach regression, on the
+    // sample's own grid (F(R) ≤ 0 has no logarithm: left empty)
+    {
+      const cols=[];
+      files.forEach((f,k)=>{
+        const r = urbach.analyze(k).regs;
+        cols.push({h:'energy_eV_'+f.label,  v:f.hv.map(x=>fmtNum(x,6))});
+        cols.push({h:f.label,               v:f.FR.map(v=> v > 0 ? fmtNum(Math.log(v),6) : '')});
+        cols.push({h:f.label+'_reg_urbach', v:f.hv.map(hv=> isFinite(r.slope) ? fmtNum(r.slope*hv + r.intercept, 6) : '')});
+      });
+      entries.push({name:'urbach_plot.csv', text:wideCsv(cols)});
+    }
+    // Eu.csv — bar-plot-like summary, E_U and its error in meV as the chart shows them
+    {
+      let t = csvLine(['Sample','Eu_meV','Eu_err_meV']);
+      files.forEach((f,k)=>{
+        const r = urbach.analyze(k);
+        t += csvLine([f.label, isFinite(r.Eu)?fmtNum(r.Eu*1000,6):'', isFinite(r.EuErr)?fmtNum(r.EuErr*1000,6):'']);
+      });
+      entries.push({name:'Eu.csv', text:t});
     }
     // tauc_regression.csv — per-sample regression settings & results (the info that
     // is otherwise only readable off the Analysis plot). Endpoints are in eV, taken

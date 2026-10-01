@@ -320,16 +320,14 @@
 
       <div class="card" id="taucResults" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
-        <div class="row" style="align-items:flex-start;gap:16px">
-          <div class="col" style="flex:1">
-            <p class="txt-caption">Kubelka-Munk Function</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="taucResSvg0"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg0" data-csv-mod="tauc" data-csv-names="reflectance_FR.csv" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="taucResLegend0" class="legend"></div>
-          </div>
-          <div class="col" style="flex:1">
+        <p class="txt-caption">Kubelka-Munk Function</p>
+        <div class="plot-wrap">
+          <svg class="plot plot-wide" id="taucResSvg0"></svg>
+          <button class="btn plot-dl-btn" data-dl-svg="taucResSvg0" data-csv-mod="tauc" data-csv-names="reflectance_FR.csv" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+        </div>
+        <div id="taucResLegend0" class="legend"></div>
+        <div class="row res-row">
+          <div class="col">
             <p class="txt-caption">Tauc Plot</p>
             <div class="plot-wrap">
               <svg class="plot" id="taucResSvg1"></svg>
@@ -337,15 +335,36 @@
             </div>
             <div id="taucResLegend1" class="legend"></div>
           </div>
+          <div class="col">
+            <p class="txt-caption" id="taucBarTitle">Energy Band Gap</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvg2"></svg>
+              <span class="plot-chips" id="taucEgSel"></span>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg2" data-csv-mod="tauc" data-csv-names="Eg.csv" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="taucResLegend2" class="legend"></div>
+            <div id="taucBarAlert" class="bar-alert"></div>
+          </div>
         </div>
-        <p class="txt-caption" id="taucBarTitle" style="margin:18px 0 8px">Energy Band Gap</p>
-        <div class="plot-wrap">
-          <svg class="plot plot-wide" id="taucResSvg2"></svg>
-          <span class="plot-chips" id="taucEgSel"></span>
-          <button class="btn plot-dl-btn" data-dl-svg="taucResSvg2" data-csv-mod="tauc" data-csv-names="Eg.csv" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+        <div class="row res-row" id="taucResUrbach">
+          <div class="col">
+            <p class="txt-caption">Urbach Plot</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvg3"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg3" data-csv-mod="tauc" data-csv-names="urbach_plot.csv" data-dl-name="Urbach_plot.svg" data-dl-legend="taucResLegend3"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="taucResLegend3" class="legend"></div>
+          </div>
+          <div class="col">
+            <p class="txt-caption">Urbach Energy</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvg4"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg4" data-csv-mod="tauc" data-csv-names="Eu.csv" data-dl-name="Eu_bar_chart.svg" data-dl-legend="taucResLegend4"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="taucResLegend4" class="legend"></div>
+            <div id="taucEuAlert" class="bar-alert"></div>
+          </div>
         </div>
-        <div id="taucResLegend2" class="legend" style="margin-top:8px"></div>
-        <div id="taucBarAlert" class="bar-alert"></div>
       </div>
     </section>
 
@@ -769,7 +788,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v343</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v344</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
