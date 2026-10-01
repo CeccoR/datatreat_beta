@@ -97,8 +97,9 @@ import { Plot } from './plot.js';
      describes. Each card keeps its own parameters, lines and all/one mode; its
      elements are its prefix plus the same suffixes (taucSvg, taucUSvg, ...).
   ========================================================= */
-  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2', step:'Step', pat:'Pat' };
-  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM, step: clampN, pat: clampN };
+  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2', cutLo:'CutLo', cutHi:'CutHi', step:'Step', pat:'Pat' };
+  const clampCut = v => Math.max(0, Math.min(90, Math.round(+v || 0)));     // % of the points
+  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM, cutLo: clampCut, cutHi: clampCut, step: clampN, pat: clampN };
   function makePanel(spec){
     const { prefix, keys, windows } = spec;
     const $ = id => document.getElementById(prefix + id);
@@ -161,7 +162,10 @@ import { Plot } from './plot.js';
     // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
     //
     // The max that sets ε is the edge's, not the noise's: the ends of the spectrum are
-    // cut off first, and inside what is left it is looked for outward from the
+    // cut off first — `cutLo`/`cutHi` per cent of the points at the low- and the
+    // high-energy end, set apart because a noisy pre-edge can hold half the points of
+    // a scan even in λ while the other end is clean — and inside what is left it is
+    // looked for outward from the
     // steepest point (the max of Y'), in a window grown by `step` points on each side
     // at a time until the max has not changed for `pat` steps running. Taken over the
     // whole spectrum, the spikes of a noisy pre-edge — which a log blows up — set it,
@@ -172,10 +176,11 @@ import { Plot } from './plot.js';
       const p = P.params(i), n = files[i].hv.length;
       if (n < 7) return null;
       const c = curves(i, p), hv = c.hv, d2 = secondDeriv(c, p);
-      const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
+      const cut = pct => Math.max(2, Math.round(n*pct/100));
+      const lo = cut(p.cutLo), hi = n-1-cut(p.cutHi);
+      if (hi - lo < 7) return null;            // cut down to nothing to look in
       // energy-ascending order of indices, so we can scan by energy regardless of layout
       const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
-      const lo = margin, hi = n-1-margin;
       const absD2 = j =>{ const v = Math.abs(d2[ord[j]]); return isFinite(v) ? v : 0; };
       let j0 = lo;
       for (let j=lo;j<=hi;j++) if (c.dYs[ord[j]] > c.dYs[ord[j0]] || !isFinite(c.dYs[ord[j0]])) j0 = j;
@@ -192,13 +197,13 @@ import { Plot } from './plot.js';
       const eps = SUGG_THRESH * A;
       const ax = j => Math.abs(d2[ord[j]]);
       const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
-      const inR = j => j>=margin && j<n-margin;
+      const inR = j => j>=lo && j<=hi;
       // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
       const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || !(ax(jj)>=eps)) return false; } return true; };
-      let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
-      for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
-      for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
-      return { v1, v2, A, from: hv[ord[j0]], search: [hv[ord[wLo]], hv[ord[wHi]]] };
+      let v1=hv[ord[lo]], v2=hv[ord[hi]];
+      for (let j=lo;j<=hi;j++){ if (runGE(j,+1)){ v1 = j>lo?cross(j-1,j):hv[ord[j]]; break; } }
+      for (let j=hi;j>=lo;j--){ if (runGE(j,-1)){ v2 = j<hi?cross(j+1,j):hv[ord[j]]; break; } }
+      return { v1, v2, A, from: hv[ord[j0]], search: [hv[ord[wLo]], hv[ord[wHi]]], cut: [hv[ord[lo]], hv[ord[hi]]] };
     }
     const clampTo = (lo, hi)=> l =>{ const o = {}; for (const k in l) o[k] = Math.max(lo, Math.min(hi, l[k])); return o; };
     function suggestOne(i){
@@ -295,6 +300,10 @@ import { Plot } from './plot.js';
         const yEps = yLo + SUGG_THRESH*(yHi - yLo);
         plot.line([minArr(hv), maxArr(hv)], [yEps, yEps], DEBUG_COLOR, 1, '1,3', { label: 'ε threshold (debug)', key: 'eps' });
         plot.line(edge.search, [yHi, yHi], DEBUG_COLOR, 3, undefined, { label: 'max search window (debug)', key: 'search' });
+        // Where the tails were cut: nothing outside is looked at.
+        const yTop = spec.zeroFloor ? rHi*1.05 : rHi + pad;
+        edge.cut.forEach((x, k)=> plot.line([x, x], [rLo - pad, yTop], DEBUG_COLOR, 1, '1,3',
+          { label: `${k ? 'high' : 'low'}-energy tail cut (debug)`, key: k ? 'cut hi' : 'cut lo' }));
       }
 
       const fits = [];
@@ -412,8 +421,9 @@ import { Plot } from './plot.js';
   const URBACH_COLOR = '#ff7f0e', DEBUG_COLOR = '#9b8cff';
   const tauc = makePanel({
     prefix: 'tauc',
-    keys: ['a','N','N2','M','M2','step','pat'],
-    defaults: { a:0.5, N:1, N2:20, M:25, M2:100, step:10, pat:10 },
+    keys: ['a','N','N2','M','M2','cutLo','cutHi','step','pat'],
+    defaults: { a:0.5, N:1, N2:20, M:25, M2:100, cutLo:2, cutHi:2, step:10, pat:10 },
+    debugCurvature: true,
     curve: (fr, hv, p)=> Math.pow(fr*hv, p.a),
     yLabel: p => `[F(R)·hν]${sup(p.a)}`,
     zeroFloor: true,
@@ -431,8 +441,8 @@ import { Plot } from './plot.js';
   });
   const urbach = makePanel({
     prefix: 'taucU',
-    keys: ['N','N2','M','step','pat'],
-    defaults: { N:1, N2:20, M:25, step:10, pat:10 },
+    keys: ['N','N2','M','cutLo','cutHi','step','pat'],
+    defaults: { N:1, N2:20, M:25, cutLo:2, cutHi:2, step:10, pat:10 },
     curve: fr => fr > 0 ? Math.log(fr) : NaN,
     yLabel: ()=> 'ln[F(R)]',
     zeroFloor: false,
