@@ -92,27 +92,35 @@ import { Plot } from './plot.js';
   // Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
   // linear/constant background has zero curvature, so it cancels). The "zero zones"
   // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
-  // ε = 10%·max|Y''|. The region bounds are found from each spectrum end inward: the
-  // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
+  // ε = 10%·max|Y''|. The outer 10% of the energy range on each side is skimmed off
+  // first: the tails are where the spectrum is noisiest and the moving averages are
+  // one-sided, so neither ε nor the bounds are taken from them. The region bounds are
+  // found from each end of what is kept inward: the first start of a sustained run of
+  // CONT points with |Y''| >= ε (interpolated).
   const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
   const SUGG_CONT   = 25;     // required consecutive points above ε
+  const SUGG_TAIL   = 0.10;   // fraction of the energy range skimmed off each end
   function curvatureEdge(c, p){
     const hv = c.hv, n = hv.length;
     if (n < 7) return null;
     const d2  = movingAverage(gradientArr(c.dYs, hv), p.N2);      // Y''
-    const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
     // energy-ascending order of indices, so we can scan by energy regardless of layout
     const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
-    const A = d2.reduce((m,v)=>Math.max(m, Math.abs(v)), 0) || 1;
-    const eps = SUGG_THRESH * A;
+    const eLo = hv[ord[0]], eHi = hv[ord[n-1]], cut = SUGG_TAIL * (eHi - eLo);
+    let a = 0, b = n-1;                                           // kept span, energy order
+    while (a < n && hv[ord[a]] < eLo + cut) a++;
+    while (b >= 0 && hv[ord[b]] > eHi - cut) b--;
+    if (b - a < 2) return null;
     const ax = j => Math.abs(d2[ord[j]]);
+    let A = 0; for (let j=a;j<=b;j++) A = Math.max(A, ax(j));
+    const eps = SUGG_THRESH * (A || 1);
     const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
-    const inR = j => j>=margin && j<n-margin;
+    const inR = j => j>=a && j<=b;
     // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
     const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
-    let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
-    for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
-    for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
+    let v1=hv[ord[a]], v2=hv[ord[b]];
+    for (let j=a;j<=b;j++){ if (runGE(j,+1)){ v1 = j>a?cross(j-1,j):hv[ord[j]]; break; } }
+    for (let j=b;j>=a;j--){ if (runGE(j,-1)){ v2 = j<b?cross(j+1,j):hv[ord[j]]; break; } }
     return { v1, v2 };
   }
 
@@ -395,9 +403,10 @@ import { Plot } from './plot.js';
     // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span); the
     // baseline is placed just below where the edge starts.
     suggest: (i, p, curves)=>{ const e = curvatureEdge(curves(), p); return e && { v1: e.v1, v2: e.v2, v3: e.v1-0.85, v4: e.v1-0.1 }; },
-    // Linear region [max(v1), min(v2)] over all samples (widest common linear
-    // window), baseline computed once from max(v1).
-    combine: ss =>{ const v1 = Math.max(...ss.map(s=>s.v1)), v2 = Math.min(...ss.map(s=>s.v2)); return { v1, v2, v3: v1-0.85, v4: v1-0.1 }; },
+    // Linear region [min(v1), max(v2)] over all samples, so every sample's edge lies
+    // inside it (the window scan then finds each one's linear part); baseline computed
+    // once from min(v1), below every edge.
+    combine: ss =>{ const v1 = Math.min(...ss.map(s=>s.v1)), v2 = Math.max(...ss.map(s=>s.v2)); return { v1, v2, v3: v1-0.85, v4: v1-0.1 }; },
     results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
     show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
     onSettled: ()=> updateTaucResults(),

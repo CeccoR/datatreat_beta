@@ -837,6 +837,9 @@ td input.label-input {
   color: var(--muted);
   margin-right: 6px;
 }
+/* A sample counter beside the nav arrows is as wide as "000/000" from the start, so it
+   keeps its size while stepping through samples and the › arrow stays under the pointer. */
+.pill.nav-count { min-width: calc(7ch + 18px); }
 /* Meta token: small secondary text (intro lines, empty-state notes, dropzone hints) */
 .txt-meta {
   font-size: 12px;

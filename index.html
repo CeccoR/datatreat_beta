@@ -225,7 +225,7 @@
             <div class="plot-nav-row">
               <div class="plot-nav-left">
                 <button class="btn nav-arrow" id="taucPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
-                <span id="taucIdx" class="pill" style="margin:0">1/1</span>
+                <span id="taucIdx" class="pill nav-count" style="margin:0">1/1</span>
                 <button class="btn nav-arrow" id="taucNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
                 <span class="txt-caption" id="taucCurrentLabel">—</span>
               </div>
@@ -281,7 +281,7 @@
             <div class="plot-nav-row">
               <div class="plot-nav-left">
                 <button class="btn nav-arrow" id="taucUPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
-                <span id="taucUIdx" class="pill" style="margin:0">1/1</span>
+                <span id="taucUIdx" class="pill nav-count" style="margin:0">1/1</span>
                 <button class="btn nav-arrow" id="taucUNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
                 <span class="txt-caption" id="taucUCurrentLabel">—</span>
               </div>
@@ -425,7 +425,7 @@
             <div class="plot-nav-row">
               <div class="plot-nav-left">
                 <button class="btn nav-arrow" id="xrdPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
-                <span id="xrdIdx" class="pill" style="margin:0">1/1</span>
+                <span id="xrdIdx" class="pill nav-count" style="margin:0">1/1</span>
                 <button class="btn nav-arrow" id="xrdNext" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
                 <span class="txt-caption" id="xrdCurrentLabel">—</span>
               </div>
@@ -498,7 +498,7 @@
         <div class="instr-block">Cu Kα₂-deconvolved whole-pattern fit. The raw pattern (open circles) and the peaks inherited from the Analysis peak search are shown; press <b>Fit sample</b>/<b>Fit all</b> to fit a sum of Kα₁/Kα₂ doublets (Kα₁ + ½·Kα₂ at +Δ2θ) plus a polynomial background, all refined together (Levenberg–Marquardt). Profile, asymmetry and other hyperparameters are in <i>Sample fit settings</i>. By default each fit restarts from the SNIP baseline and the current peak search (manual peaks kept); a setting lets it instead continue from the last fit. A chosen <b>standard</b> (LaB₆…) is fitted with the FCJ axial-divergence kernel via <b>Fit standard</b> to calibrate the instrument geometry. The fitted doublet, its Kα₁/Kα₂ components and the residual (with Rwp) appear once a fit exists.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <button class="btn nav-arrow" id="xrdFitPrev" aria-label="Previous sample">&#8249;</button>
-          <span id="xrdFitIdx" class="pill" style="margin:0">1/1</span>
+          <span id="xrdFitIdx" class="pill nav-count" style="margin:0">1/1</span>
           <button class="btn nav-arrow" id="xrdFitNext" aria-label="Next sample">&#8250;</button>
           <span class="txt-caption" id="xrdFitLabel">—</span>
         </div>
@@ -769,7 +769,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v339</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v340</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
