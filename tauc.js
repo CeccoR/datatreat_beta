@@ -179,10 +179,14 @@ import { Plot } from './plot.js';
       return spec.defaultLines(lo, d);
     };
     // The interval-line set used for sample i (shared object, or the sample's own)
+    // A spec with `ownLines` keeps every sample's lines its own whatever the mode, which
+    // then decides the parameters alone; a sample with none yet starts from the common
+    // set an older project kept, if there is one.
     P.vlinesFor = i =>{
-      if (P.mode==='shared') return P.sharedVlines;
+      if (P.mode==='shared' && !spec.ownLines) return P.sharedVlines;
       let pp = P.per[i]; if (!pp) pp = P.per[i] = {};
-      if (!pp.vlines || !isFinite(pp.vlines.v1)) pp.vlines = defaultVlinesFor(i);
+      if (!pp.vlines || !isFinite(pp.vlines.v1))
+        pp.vlines = spec.ownLines && isFinite(P.sharedVlines.v1) ? {...P.sharedVlines} : defaultVlinesFor(i);
       return pp.vlines;
     };
     // Every fit of sample k, and what the spec makes of them.
@@ -214,7 +218,7 @@ import { Plot } from './plot.js';
     P.autoSuggestAll = ()=>{
       if (!files.length) return;
       P.suggested = true;
-      if (P.mode==='per'){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!P.per[i]) P.per[i]={}; P.per[i].vlines = s; } }); }
+      if (P.mode==='per' || spec.ownLines){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!P.per[i]) P.per[i]={}; P.per[i].vlines = s; } }); }
       else { const s = suggestShared(); if (s) P.sharedVlines = s; }
     };
 
@@ -369,9 +373,9 @@ import { Plot } from './plot.js';
         files.forEach((f,i)=>{
           const pp = P.per[i] || (P.per[i]={});
           keys.forEach(k=>{ if (pp[k]==null) pp[k]=P.shared[k]; });
-          pp.vlines = suggestOne(i) || pp.vlines || defaultVlinesFor(i);
+          if (!spec.ownLines) pp.vlines = suggestOne(i) || pp.vlines || defaultVlinesFor(i);
         });
-      } else {
+      } else if (!spec.ownLines){
         // Back to a single shared set: re-propose the common lines.
         const s = suggestShared();
         if (s) P.sharedVlines = s;
@@ -433,14 +437,15 @@ import { Plot } from './plot.js';
     defaultLines: (lo, d)=> ({ v1: lo+0.4*d, v2: lo+0.6*d }),
     /* The region is 1 eV astride the sample's Tauc linear region (the band on this
        plot): the window scan inside it then finds the tail's straightest stretch by
-       itself. In all mode, astride the mean of the samples' bands. */
+       itself. Each sample's tail sits where its own edge is, so its lines are its own
+       in either mode, and all/one is about the parameters only. */
+    ownLines: true,
     suggest: i =>{
       const idx = tauc.analyze(i).regs.bestIdx;
       if (!idx || !idx.length) return null;
       const xs = idx.map(k=> files[i].hv[k]), c = (Math.min(...xs) + Math.max(...xs)) / 2;
       return { v1: c - 0.5, v2: c + 0.5 };
     },
-    combine: ss =>{ const c = ss.reduce((a, s)=> a + (s.v1 + s.v2) / 2, 0) / ss.length; return { v1: c - 0.5, v2: c + 0.5 }; },
     results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
     show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
     onSettled: ()=> renderUrbachRes(),

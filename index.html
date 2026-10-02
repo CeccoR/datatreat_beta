@@ -276,7 +276,7 @@
       <div class="card is-off" id="taucUrbach" style="display:none">
         <label class="fig-cbox card-switch" title="Switch the Urbach analysis on"><input type="checkbox" id="taucUOn" aria-label="Urbach analysis"><span class="fig-cbox-i"></span></label>
         <h3 class="txt-head" style="margin:0 0 12px">Analysis: Urbach energy</h3>
-        <div class="instr-block">Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. Drag the orange lines to set the Urbach region, or press <b>✦ Suggest intervals</b> to place it, for every sample, 1 eV wide, centred on the sample's Tauc linear region (the red band), where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself (in <b>all</b> mode, centred on the mean of the samples' bands). The lines are placed once; move them as needed. The red band is the sample's Tauc linear region, the window the Tauc fit settled on, so the tail can be read against where the edge is. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. The analysis is <b>off</b> by default: the box at the top right switches it on, and while it is off nothing of it is computed, drawn or exported, in this card or in the Results. The first time it is switched on, its lines are suggested from the Tauc gaps of that moment.</div>
+        <div class="instr-block">Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. Drag the orange lines to set the Urbach region, or press <b>✦ Suggest intervals</b> to place it, for every sample, 1 eV wide, centred on the sample's Tauc linear region (the red band), where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. The lines are placed once; move them as needed. The red band is the sample's Tauc linear region, the window the Tauc fit settled on, so the tail can be read against where the edge is. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. The analysis is <b>off</b> by default: the box at the top right switches it on, and while it is off nothing of it is computed, drawn or exported, in this card or in the Results. The first time it is switched on, its lines are suggested from the Tauc gaps of that moment.</div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
             <div class="plot-nav-row">
@@ -301,7 +301,7 @@
             </div>
           </div>
           <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucUModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucUModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own.">all</button></div>
             <div class="param-grid">
               <label class="txt-label">ln[F(R)] smoothing window</label>
               <input type="number" class="pg-field" id="taucUN" value="1" min="1">
@@ -790,7 +790,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v358</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v359</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
