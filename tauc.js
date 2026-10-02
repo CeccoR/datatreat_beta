@@ -419,7 +419,8 @@ import { Plot } from './plot.js';
      reference: by default the nearest Tauc card above it, or one chosen by hand, or
      none.
   ========================================================= */
-  const KINDS = { tauc: 'Tauc plot', urbach: 'Urbach energy' };
+  // As the menus list them; the card titles set them in capitals.
+  const KINDS = { tauc: 'Tauc Plot', urbach: 'Urbach Energy' };
   let analyses = [];          // in card order
   const live = new Map();     // id → { card, panel, res, resPlot }
   // While set, a settling panel leaves the Results alone: whoever set it redraws
@@ -534,7 +535,7 @@ import { Plot } from './plot.js';
   const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
   const GRIP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>';
   const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
-  const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+ Analysis</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
+  const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
   const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 0.5 for indirect semiconductors and 2 for direct semiconductors. Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
   const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is centred on it again once the change is made (a Tauc line released, a value confirmed), and a new reference centres them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
 
@@ -630,7 +631,7 @@ import { Plot } from './plot.js';
     return `
         <div class="an-head">
           <button type="button" class="an-ic an-grip" title="Drag to move this analysis" aria-label="Move analysis">${GRIP_SVG}</button>
-          <h3 class="txt-head an-title">Analysis:<span class="an-kind"><span class="an-type-wrap"><select class="an-type" aria-label="Kind of analysis">${Object.entries(KINDS).map(([k, l])=> `<option value="${k}"${k === a.type ? ' selected' : ''}>${l}</option>`).join('')}</select></span><button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false">${INFO_SVG}</button></span></h3>
+          <h3 class="txt-head an-title">Analysis:<span class="an-kind"><button type="button" class="an-type" data-kind="${a.type}" aria-haspopup="menu" aria-expanded="false" title="Change the kind of analysis">${KINDS[a.type]}</button><button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false">${INFO_SVG}</button></span></h3>
           <span class="an-acts">
             <button type="button" class="an-ic an-close" title="Close this analysis" aria-label="Close analysis">${X_SVG(15)}</button>
             <button type="button" class="an-ic an-fold">${CHEVRON_SVG}</button>
@@ -677,9 +678,11 @@ import { Plot } from './plot.js';
 
   function wireCard(a, card){
     const q = s => card.querySelector(s);
-    q('.an-type').addEventListener('change', e=> switchKind(a, e.target.value));
+    const kind = q('.an-type');
+    kind.addEventListener('click', ()=> kindMenu.open(kind, t=> switchKind(a, t), { current: a.type }));
     const name = q('.an-name');
     name.addEventListener('change', ()=> rename(a, name.value));
+    ['input', 'focus', 'blur'].forEach(t=> name.addEventListener(t, ()=> fitName(a)));
     name.addEventListener('keydown', e=>{
       if (e.key === 'Enter') name.blur();
       else if (e.key === 'Escape'){ name.value = a.name; name.blur(); }
@@ -907,12 +910,27 @@ import { Plot } from './plot.js';
     wrap.querySelectorAll('.plot-dl-btn').forEach(b=>{ b.dataset.dlName = svgName; if (csvName) b.dataset.csvNames = csvName; });
     if (csvName) wrap.querySelectorAll('.plot-csv-btn').forEach(b=>{ b.dataset.csvNames = csvName; });
   }
+  // The name field is as wide as the name, as the project name's is: from room for the
+  // caret up to 3/4 of the card, past which the text scrolls (blurred, a "…").
+  const nameCtx = document.createElement('canvas').getContext('2d');
+  function fitName(a){
+    const e = live.get(a.id);
+    if (!e) return;
+    const field = e.card.querySelector('.an-name'), cc = getComputedStyle(e.card);
+    const room = e.card.clientWidth - parseFloat(cc.paddingLeft) - parseFloat(cc.paddingRight);
+    if (room <= 0) return;   // not laid out (a hidden tab, no files yet): sized when shown
+    const cs = getComputedStyle(field);
+    nameCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const pad = 24;          // 2×9 padding + 2×1 border + a little caret slack
+    field.style.width = Math.min(nameCtx.measureText(field.value).width + pad, room * 0.75) + 'px';
+  }
   function paintName(a){
     const e = live.get(a.id);
     if (!e) return;
     const field = e.card.querySelector('.an-name');
     if (document.activeElement !== field) field.value = a.name;
     field.placeholder = autoName(a);
+    fitName(a);
     const n = fileSafe(a.name), t = a.type === 'tauc';
     nameDownloads(e.card.querySelector('.plot-wrap'), `${n} - sample.svg`, t ? `${n} - analysis_info.csv` : '');
     if (e.res && e.res.dataset.kind === a.type){
@@ -979,48 +997,61 @@ import { Plot } from './plot.js';
     hist.commit();
   }
 
-  /* "+ Analysis": an anchored menu of the kinds, as the composer's pickers are — the
-     button again or a click anywhere else closes it, so does Escape. */
+  /* The kinds' menu, anchored as the composer's pickers are: the "+" bar opens it to
+     add a card, a card's title to change its kind. The anchor again or a click
+     anywhere else closes it, so does Escape; the anchor stays lit while it is open.
+     A menu of our own rather than a <select>: the title's capitals would carry into
+     a native list, which some systems draw with the select's own styling. */
+  const kindMenu = (()=>{
+    const el = document.createElement('div');
+    el.className = 'an-menu';
+    el.setAttribute('role', 'menu');
+    el.hidden = true;
+    el.innerHTML = Object.entries(KINDS).map(([k, l])=> `<button type="button" role="menuitem" data-kind="${k}">${l}</button>`).join('');
+    document.body.appendChild(el);
+    let anchor = null, pick = null, centred = false;
+    const place = ()=>{
+      const r = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+      let top = r.bottom + 6;
+      if (top + h > window.innerHeight - 8) top = r.top - h - 6;
+      const left = centred ? r.left + r.width/2 - w/2 : r.left;
+      el.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, left)) + 'px';
+      el.style.top = Math.max(8, top) + 'px';
+    };
+    const close = ()=>{
+      el.hidden = true;
+      if (anchor){ anchor.classList.remove('cp-anchored'); anchor.setAttribute('aria-expanded', 'false'); }
+      anchor = pick = null;
+    };
+    const open = (a, onPick, { current, centre } = {})=>{
+      if (anchor === a){ close(); return; }
+      close();
+      anchor = a; pick = onPick; centred = !!centre;
+      el.querySelectorAll('[data-kind]').forEach(b=> b.classList.toggle('is-current', b.dataset.kind === current));
+      el.hidden = false;
+      a.classList.add('cp-anchored');
+      a.setAttribute('aria-expanded', 'true');
+      place();
+    };
+    el.addEventListener('click', e=>{
+      const b = e.target.closest('[data-kind]');
+      if (!b) return;
+      const f = pick;
+      close();
+      f(b.dataset.kind);
+    });
+    document.addEventListener('pointerdown', e=>{
+      if (!el.hidden && !el.contains(e.target) && !anchor.contains(e.target)) close();
+    }, true);
+    document.addEventListener('keydown', e=>{
+      if (e.key === 'Escape' && !el.hidden){ e.stopPropagation(); close(); }
+    }, true);
+    window.addEventListener('scroll', ()=>{ if (!el.hidden) place(); }, true);
+    window.addEventListener('resize', ()=>{ if (!el.hidden) place(); });
+    return { open, close };
+  })();
   const addBtn = document.getElementById('taucAddAn');
-  const addMenu = document.createElement('div');
-  addMenu.className = 'an-menu';
-  addMenu.setAttribute('role', 'menu');
-  addMenu.hidden = true;
-  addMenu.innerHTML = Object.entries(KINDS).map(([k, l])=> `<button type="button" role="menuitem" data-kind="${k}">${l}</button>`).join('');
-  document.body.appendChild(addMenu);
-  function placeAddMenu(){
-    const r = addBtn.getBoundingClientRect(), w = addMenu.offsetWidth, h = addMenu.offsetHeight;
-    let top = r.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = r.top - h - 6;
-    addMenu.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width/2 - w/2)) + 'px';
-    addMenu.style.top = Math.max(8, top) + 'px';
-  }
-  function closeAddMenu(){
-    addMenu.hidden = true;
-    addBtn.classList.remove('cp-anchored');
-    addBtn.setAttribute('aria-expanded', 'false');
-  }
-  addBtn.addEventListener('click', ()=>{
-    if (!addMenu.hidden){ closeAddMenu(); return; }
-    addMenu.hidden = false;
-    addBtn.classList.add('cp-anchored');
-    addBtn.setAttribute('aria-expanded', 'true');
-    placeAddMenu();
-  });
-  addMenu.addEventListener('click', e=>{
-    const b = e.target.closest('[data-kind]');
-    if (!b) return;
-    closeAddMenu();
-    addAnalysis(b.dataset.kind);
-  });
-  document.addEventListener('pointerdown', e=>{
-    if (!addMenu.hidden && !addMenu.contains(e.target) && !addBtn.contains(e.target)) closeAddMenu();
-  }, true);
-  document.addEventListener('keydown', e=>{
-    if (e.key === 'Escape' && !addMenu.hidden){ e.stopPropagation(); closeAddMenu(); }
-  }, true);
-  window.addEventListener('scroll', ()=>{ if (!addMenu.hidden) placeAddMenu(); }, true);
-  window.addEventListener('resize', ()=>{ if (!addMenu.hidden) placeAddMenu(); });
+  addBtn.addEventListener('click', ()=> kindMenu.open(addBtn, addAnalysis, { centre: true }));
 
   // per-upload invalid names (files that were skipped); persists until all files are removed
   let invalidUploadNames = [];
@@ -1161,6 +1192,7 @@ import { Plot } from './plot.js';
   // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.
   registerTabRedraw('tauc', ()=>{
     if (!files.length) return;
+    analyses.forEach(fitName);
     quietly(()=> livePanels().forEach(p=>{ if (p.hasPlot()) p.update(true); }));
     renderResView();
   });
