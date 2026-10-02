@@ -220,6 +220,8 @@ import { Plot } from './plot.js';
       if (P.mode==='per' || spec.ownLines){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!P.per[i]) P.per[i]={}; P.per[i].vlines = s; } }); }
       else { const s = suggestShared(); if (s) P.sharedVlines = s; }
     };
+    // One sample's own lines placed again by the suggestion (a spec with `ownLines`).
+    P.suggestAt = i =>{ const s = suggestOne(i); if (s){ if (!P.per[i]) P.per[i] = {}; P.per[i].vlines = s; } };
 
     // Read the input fields into the active store (shared, or the current sample)
     function readInputsToStore(){
@@ -473,12 +475,13 @@ import { Plot } from './plot.js';
       hidden: ()=> isFolded(a),
       // The automatic name carries the exponent.
       onParams: ()=> refreshNames(),
-      // The Urbach cards read against this one show its linear region, so they follow
-      // every settled change.
+      // The Urbach cards read against this one follow its linear region once a change
+      // settles (a line released, a parameter confirmed), not while a line is dragged.
       onSettled: ()=>{
         if (quiet) return;
         renderAnalysisRes(a);
-        analyses.forEach(u=>{ if (u.type === 'urbach' && u.ref === a.id){ const P = panelOf(u); if (P && P.hasPlot()) P.update(true); } });
+        follow(a);
+        followers(a).forEach(refreshCard);
       },
     };
   }
@@ -533,7 +536,7 @@ import { Plot } from './plot.js';
   const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
   const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+ Analysis</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
   const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 0.5 for indirect semiconductors and 2 for direct semiconductors. Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
-  const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. By default the reference is the nearest Tauc card above this one; choosing one by hand moves this card right under it. With <b>None</b> there is no band, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
+  const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is centred on it again once the change is made (a Tauc line released, a value confirmed), and a new reference centres them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
 
   const navRow = (p, suggestTitle)=> `
           <div class="plot-nav-row">
@@ -825,10 +828,40 @@ import { Plot } from './plot.js';
     });
     return changed;
   }
-  // An Urbach card's plot shows its reference's band: redrawn when that changes.
+  /* The Urbach region follows its reference: a sample whose Tauc linear region moves
+     (a line released, parameters, Suggest, all/one) gets its Urbach lines centred on it
+     again, and a new reference re-centres them all. Lines moved by hand stay until
+     then. What each Tauc card's regions were is kept by file name, and taken afresh
+     (`see`) whenever a state is loaded rather than edited, so loading moves nothing. */
+  const followers = a => analyses.filter(u=> u.type === 'urbach' && u.ref === a.id && live.has(u.id));
+  function regionsSeen(a){ const e = live.get(a.id); return e.seen || (e.seen = new Map()); }
+  const regionKey = (a, i)=>{ const w = taucWindow(panelOf(a), i); return w ? w.join() : ''; };
+  function see(a){
+    if (a.type !== 'tauc' || !files.length) return;
+    const seen = regionsSeen(a);
+    files.forEach((f, i)=> seen.set(f.name, regionKey(a, i)));
+  }
+  // Re-centre the followers on the samples whose region moved.
+  function follow(a){
+    const seen = regionsSeen(a), moved = [];
+    files.forEach((f, i)=>{
+      const k = regionKey(a, i), was = seen.get(f.name);
+      seen.set(f.name, k);
+      if (was !== undefined && was !== k && k) moved.push(i);
+    });
+    if (moved.length) followers(a).forEach(u=> moved.forEach(i=> panelOf(u).suggestAt(i)));
+  }
+  // A card's view and its Results, after something outside it changed its data.
+  function refreshCard(u){
+    const U = panelOf(u);
+    if (U.hasPlot() && !isFolded(u)) U.update(true);
+    else renderAnalysisRes(u);
+  }
+  // An Urbach card given a new reference: centred on it (None leaves the lines be).
   function syncRefView(u){
-    const P = panelOf(u);
-    if (P && P.hasPlot()) quietly(()=> P.update(true));
+    if (!files.length) return;
+    if (refPanel(u)) panelOf(u).autoSuggestAll();
+    refreshCard(u);
   }
   // What follows any change to the list of cards: references, names, Results order.
   function afterCardsChange(){
@@ -906,6 +939,7 @@ import { Plot } from './plot.js';
     const P = panelOf(a);
     P.fit(); P.writeStoreToInputs(); P.syncModeButton();
     quietly(()=> P.initPlot());
+    see(a);
     renderAnalysisRes(a);
   }
   function addAnalysis(type){
@@ -936,19 +970,13 @@ import { Plot } from './plot.js';
     if (files.length){ const P = panelOf(a); P.fit(); if (!P.suggested) P.autoSuggestAll(); startPanel(a); }
     hist.commit();
   }
-  // A reference chosen by hand takes the card right under it; None leaves it where it is.
+  // A reference chosen by hand stays, wherever the cards are moved, while it is a Tauc card.
   function chooseRef(a, v){
     a.refAuto = false;
     a.ref = v === '' ? null : +v;
-    if (a.ref != null){
-      analyses = analyses.filter(x=> x !== a);
-      analyses.splice(analyses.indexOf(byId(a.ref)) + 1, 0, a);
-      placeCards();
-    }
     afterCardsChange();
     syncRefView(a);
     hist.commit();
-    live.get(a.id).card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
   /* "+ Analysis": an anchored menu of the kinds, as the composer's pickers are — the
@@ -1199,6 +1227,7 @@ import { Plot } from './plot.js';
       quietly(()=> ['tauc', 'urbach'].forEach(t=> analyses.filter(a=> a.type === t).forEach(a=>{
         const P = panelOf(a); P.autoSuggestAll(); P.writeStoreToInputs(); P.update();
       })));
+      analyses.forEach(see);
       refreshNames();
       renderResView();
       hist.commit();
@@ -1228,6 +1257,7 @@ import { Plot } from './plot.js';
       p.syncModeButton();
       p.initPlot();
     }));
+    analyses.forEach(see);
     refreshNames();
     renderResView();
   }

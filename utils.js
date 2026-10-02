@@ -1797,7 +1797,7 @@ function tiltFor(ws, qs, lo, hi, h, sides = true, from = TILT_MIN, to = TILT_MAX
    fixed at [0, n+1] over a plot `plotW` px wide that starts `ml` px in. Each is kept
    whole up to BAR_NAME_MAX, then all are tilted by the least angle (30–60°) that keeps
    them between the plot's sides and apart. If no angle does, the first that keeps them
-   apart going down from 60° to 45° is taken (60° if none), the steep end first so that
+   apart going down from 60° to 30° is taken (60° if none), the steep end first so that
    as little as possible has to go, and only the names that would still cross the left
    side are cut back to it. `shown[k]` false is a category with no bar, whose name is not
    drawn. Returns { rot, labels, sin }. */
@@ -1809,7 +1809,7 @@ function barNames(mctx, names, plotW, ml, shown){
   let rot = tiltFor(ws(), qs, ml, ml + plotW, h);
   if (rot == null){
     rot = TILT_MAX;
-    for (let r = TILT_MAX; r >= 45; r -= TILT_STEP) if (tiltFits(ws(), qs, ml, ml + plotW, h, r, false)){ rot = r; break; }
+    for (let r = TILT_MAX; r >= TILT_MIN; r -= TILT_STEP) if (tiltFits(ws(), qs, ml, ml + plotW, h, r, false)){ rot = r; break; }
     const r = rot * Math.PI / 180;
     labels = labels.map((t, k)=> cutToWidth(mctx, t, Math.max(0, (qs[k] - ml - h / 2 * Math.sin(r)) / Math.cos(r))));
   }
