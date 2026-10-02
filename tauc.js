@@ -271,6 +271,7 @@ import { Plot } from './plot.js';
       plot.clearData();
       plot.ylabelSvg = spec.yLabel(p) + ' (a. u.)';
       plot.drawAxes();
+      if (spec.bands) spec.bands(currIndex).forEach(b=> plot.vband(b.x0, b.x1, b.color, b.opacity));
       // Named for the figure composer: this plot has no legend, so without these the
       // traces would reach it as "Series 1..n". Keyed by role, not by sample: the plot
       // shows one sample at a time, and a trace keeps its looks from one to the next.
@@ -301,7 +302,6 @@ import { Plot } from './plot.js';
       });
       $('Alert').innerHTML = tooSmall ? '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>' : '';
       spec.show($, P.analyze(currIndex));
-      if (spec.marks) spec.marks(currIndex).forEach(r=> plot.vline(r.x, r.color, false, null, null, r));
 
       // While dragging a line: live-update only the interactive plot (below); the
       // summary plots refresh once, on release. onDrag sets dragging, onRelease clears it.
@@ -417,7 +417,7 @@ import { Plot } from './plot.js';
     combine: ss =>{ const v1 = Math.min(...ss.map(s=>s.v1)), v2 = Math.max(...ss.map(s=>s.v2)); return { v1, v2, v3: v1-0.85, v4: v1-0.1 }; },
     results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
     show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
-    // The Urbach card marks this card's E_g, so it follows every settled change here.
+    // The Urbach card shows this card's linear region, so it follows every settled change.
     onSettled: ()=>{ updateTaucResults(); if (urbachOn && urbach.hasPlot()) urbach.update(true); },
   });
   const urbach = makePanel({
@@ -439,16 +439,14 @@ import { Plot } from './plot.js';
     results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
     show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
     onSettled: ()=> renderUrbachRes(),
-    // The sample's two Tauc gaps, dashed in the colours of the Tauc fits they come
-    // from, so the tail can be read against where the gap is. Each label goes on the
-    // outer side of the pair, as the two usually sit a few pixels apart.
-    marks: i =>{
-      const r = tauc.analyze(i), sub = '<tspan baseline-shift="sub" font-size="7">g</tspan>';
-      const m = [{ v: r.Eg,    color: TAUC_COLORS.regs,  name: 'x-axis' },
-                 { v: r.EgInt, color: TAUC_COLORS.regs2, name: 'baseline' }].filter(e=> isFinite(e.v));
-      const lo = Math.min(...m.map(e=> e.v));
-      return m.map(e=> ({ x: e.v, color: e.color, dash: '5,4', width: 1.2, side: e.v === lo && m.length > 1 ? -1 : 1,
-        label: `E${sub} (${e.name}) = ${e.v.toFixed(3)} eV` }));
+    // The sample's Tauc linear region (the window its Tauc fit settled on), shaded in
+    // the Tauc region's red behind the curves: the tail is read against where the edge
+    // is, and below it.
+    bands: i =>{
+      const idx = tauc.analyze(i).regs.bestIdx, hv = files[i].hv;
+      if (!idx || !idx.length) return [];
+      const xs = idx.map(k=> hv[k]);
+      return [{ x0: Math.min(...xs), x1: Math.max(...xs), color: TAUC_COLORS.regs, opacity: 0.18 }];
     },
   });
   const panels = [tauc, urbach];

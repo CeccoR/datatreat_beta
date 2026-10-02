@@ -304,32 +304,31 @@ class Plot{
     this.gData.appendChild(t);
     return t;
   }
-  /* `ref` (optional) makes it a reference mark rather than a bound: `dash` and `width`
-     for its stroke, and `label` (SVG markup) written along it in its colour, reading
-     upward from the bottom on `side` (-1 left, 1 right; flipped where that would leave
-     the plot area). */
-  vline(xv, color, draggable, onDrag, onDragEnd, ref){
-    const entry = {type:'vline', xv, color, draggable, onDrag, onDragEnd, ref};
+  /* A vertical band over the whole plot height from x0 to x1, in data units: a span of
+     the x-axis to read the curves against. Drawn with the data (clipped, and kept in
+     exports), so it is laid down before the curves it sits behind. */
+  vband(x0, x1, color, opacity){
+    const entry = {type:'vband', x0, x1, color, opacity};
+    this._stored.push(entry);
+    return this._renderVband(entry);
+  }
+  _renderVband(entry){
+    const {h}=this.size(); const m=this.margin;
+    const a = this.px(Math.min(entry.x0, entry.x1)), b = this.px(Math.max(entry.x0, entry.x1));
+    const r = svgEl('rect',{x:a, y:m.t, width:Math.max(0, b-a), height:Math.max(0, h-m.t-m.b), fill:entry.color, 'fill-opacity':entry.opacity, 'pointer-events':'none'});
+    this.gData.appendChild(r);
+    return r;
+  }
+  vline(xv, color, draggable, onDrag, onDragEnd){
+    const entry = {type:'vline', xv, color, draggable, onDrag, onDragEnd};
     this._stored.push(entry);
     return this._renderVline(entry);
   }
   _renderVline(entry){
-    const {w,h}=this.size(); const m=this.margin;
-    const x0 = this.px(entry.xv), ref = entry.ref;
-    const line = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:entry.color,'stroke-width':(ref && ref.width)||2,'pointer-events':'none'});
-    if (ref && ref.dash) line.setAttribute('stroke-dasharray', ref.dash);
+    const {h}=this.size(); const m=this.margin;
+    const x0 = this.px(entry.xv);
+    const line = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:entry.color,'stroke-width':2,'pointer-events':'none'});
     this.gOverlay.appendChild(line);
-    if (ref && ref.label){
-      const fs = 10, off = 3 + fs/2;
-      let side = ref.side || 1;
-      if (x0 + side*(off + fs/2) > w - m.r || x0 + side*(off + fs/2) < m.l) side = -side;
-      const x = x0 + side*off, y = h - m.b - 6;
-      const t = svgEl('text',{x, y, 'font-size':fs, fill:entry.color, 'text-anchor':'start', 'class':'plot-reflabel',
-        'dominant-baseline':'central', 'pointer-events':'none', transform:`rotate(-90 ${x} ${y})`});
-      t.innerHTML = ref.label;
-      lowerSubs(t, fs);
-      this.gOverlay.appendChild(t);
-    }
     if (entry.draggable){
       const hit = svgEl('line',{x1:x0,x2:x0,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'ew-resize'});
       this.gOverlay.appendChild(hit);
@@ -366,6 +365,7 @@ class Plot{
       else if (e.type==='ticklabel') this._renderTickLabel(e);
       else if (e.type==='barlabel') this._renderBarLabel(e);
       else if (e.type==='vline') this._renderVline(e);
+      else if (e.type==='vband') this._renderVband(e);
     }
   }
   _refresh(){ this.drawAxes(); this._redrawFromStored(); if (this._onView) this._onView(); }
