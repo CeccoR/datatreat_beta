@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barLabelFit, barPlotXPad, barChipYmax } from './utils.js';
+import { colorOf, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barLabelFit, barPlotXPad, barChipYmax } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -762,9 +762,10 @@ import { Plot } from './plot.js';
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg3.appendChild(s);
     });
 
-    // Plot 4: E_U bar chart, in meV as the Urbach card shows it.
+    // Plot 4: E_U bar chart, in meV as the Urbach card shows it. One series, so the
+    // first colour of the DataTreat palette, as any chart's first series gets.
     const leg4 = document.getElementById('taucResLegend4'); leg4.innerHTML='';
-    const eu = { key: 'u', name: 'E_U', color: URBACH_COLOR, vals: fits.map(r=> r.Eu*1000), errs: fits.map(r=> r.EuErr*1000) };
+    const eu = { key: 'u', name: 'E_U', color: colorOf(0), vals: fits.map(r=> r.Eu*1000), errs: fits.map(r=> r.EuErr*1000) };
     document.getElementById('taucEuAlert').innerHTML = negWarnHtml(eu.vals, 'E<sub>U</sub>');
     const yLabel = 'Urbach Energy E<tspan baseline-shift="sub" font-size="8">U</tspan> (meV)';
     if (drawValueBars(document.getElementById('taucResSvg4'), [eu], { yLabel, digits: 1 }))
