@@ -431,16 +431,16 @@ import { Plot } from './plot.js';
       { lo:'v1', hi:'v2', M:'M', color: URBACH_COLOR, name:'Urbach region', key:'regs', stats:['RMSE1','R21'] },
     ],
     defaultLines: (lo, d)=> ({ v1: lo+0.4*d, v2: lo+0.6*d }),
-    /* The tail lies just below the absorption edge, so the region is the eV that ends
-       where the sample's Tauc linear region (the band on this plot) begins; in all
-       mode, below the lowest of them, so that it stays under every sample's edge. */
+    /* The region is 1 eV astride the sample's Tauc linear region (the band on this
+       plot): the window scan inside it then finds the tail's straightest stretch by
+       itself. In all mode, astride the mean of the samples' bands. */
     suggest: i =>{
       const idx = tauc.analyze(i).regs.bestIdx;
       if (!idx || !idx.length) return null;
-      const v2 = Math.min(...idx.map(k=> files[i].hv[k]));
-      return { v1: v2 - 1, v2 };
+      const xs = idx.map(k=> files[i].hv[k]), c = (Math.min(...xs) + Math.max(...xs)) / 2;
+      return { v1: c - 0.5, v2: c + 0.5 };
     },
-    combine: ss =>{ const v2 = Math.min(...ss.map(s=>s.v2)); return { v1: v2 - 1, v2 }; },
+    combine: ss =>{ const c = ss.reduce((a, s)=> a + (s.v1 + s.v2) / 2, 0) / ss.length; return { v1: c - 0.5, v2: c + 0.5 }; },
     results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
     show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
     onSettled: ()=> renderUrbachRes(),
