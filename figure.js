@@ -568,7 +568,8 @@ function drawFigure(svg, ink, paper, extra){
     // category names hang below the axis and lean past its left end.
     let halfX = 0, catDrop = 0, catLean = 0;
     const xRad = xRot * Math.PI / 180;
-    F.panels.forEach((p, i)=>{
+    // A category axis draws its names, never numbers: those take no room of their own.
+    if (!catWs.length) F.panels.forEach((p, i)=>{
       for (const t of majorTicks(xOf[i][0], xOf[i][1], stepX())){
         const w = textW(fmtTick(t), fTick);
         halfX = Math.max(halfX, xRot ? w * Math.cos(xRad) : w / 2);
@@ -629,21 +630,25 @@ function drawFigure(svg, ink, paper, extra){
     return { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch };
   };
   // Tilt chosen automatically: the least, from 30° to 90° in 5° steps, at which every
-  // panel's names stay between its sides and clear of one another; failing that 90°,
-  // with the margins widened as for a set tilt.
-  const namesIn = L => F.panels.every((p, pi)=>{
+  // panel's names stay between its sides and clear of one another; failing that 90°.
+  // It is chosen on the X axis as it stands: kept inside, the names ask nothing of the
+  // side margins, so no angle tried moves the panels it is tried against, and only a
+  // change of range or layout changes the tilt.
+  const namesIn = (L, rot) => F.panels.every((p, pi)=>{
     const ax = p.axes || (p.axes = newAxes()), fr = sideFree(pi);
     const drawn = ['bottom', 'top'].some(sd => ax[sd].labels && (fr[sd] || !F.innerClean));
     if (!drawn) return true;
     const px0 = L.oX + p.c * L.cw, pw = Math.max(4, p.cs * L.cw), [x0, x1] = xOf[pi] || [0, 1];
     const inRange = F.cats.map(c=> c.x >= x0 && c.x <= x1);
     const qs = F.cats.map(c=> px0 + (c.x - x0) / (x1 - x0 || 1) * pw);
-    return tiltFits(catWs.map((w, k)=> inRange[k] ? w : 0), qs, px0, px0 + pw, fTick * 1.2, L.xRot);
+    return tiltFits(catWs.map((w, k)=> inRange[k] ? w : 0), qs, px0, px0 + pw, fTick * 1.2, rot);
   });
-  let lay = null;
+  let lay;
   if (F.catRotAuto && catWs.length){
-    for (let rot = 30; rot <= 90 && !lay; rot += 5){ const L = layoutFor(rot, false); if (namesIn(L)) lay = L; }
-    if (!lay) lay = layoutFor(90, true);
+    const here = layoutFor(30, false);
+    let rot = 90;
+    for (let r = 30; r <= 90; r += 5) if (namesIn(here, r)){ rot = r; break; }
+    lay = layoutFor(rot, false);
   } else lay = layoutFor(Math.max(0, Math.min(90, F.catRot || 0)), true);
   lastCatRot = lay.xRot;
   const { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch } = lay;
