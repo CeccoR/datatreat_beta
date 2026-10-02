@@ -1,4 +1,4 @@
-import { colorOf, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barLabelFit, barPlotXPad, barChipYmax } from './utils.js';
+import { colorOf, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -799,12 +799,12 @@ import { Plot } from './plot.js';
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
     const rect = barSvg.getBoundingClientRect();
     const svgW = rect.width || 640, svgH = rect.height || 640;
-    // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
-    const fit = barLabelFit(mctx, Math.max(60, svgW - 75), n);
-    const labels = files.map(f=>truncTiltLabel(mctx, f.label, fit.cap));
+    // How the names are cut and tilted — see barNames.
+    const fit = barNames(mctx, files.map(f=> f.label), Math.max(60, svgW - 75), 55, files.map((f,k)=> has(k)));
+    const labels = fit.labels;
     const labelWs = labels.map((lbl,k)=> has(k) ? mctx.measureText(lbl).width : 0);
     let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
-    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
+    const bottom = Math.round(26 + maxLbl*fit.sin);
     // Value label (vertical) above each bar, with reserved top headroom so it never clips.
     const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(digits)}±${e.toFixed(digits)}` : v.toFixed(digits);
     const topOf = (v,e)=> v + (isFinite(e)?e:0);
@@ -815,8 +815,8 @@ import { Plot } from './plot.js';
     }
     const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
     const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
-    const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);   // widen only when a label would cross x=0
-    const x0 = -xpad, x1 = n+1+xpad;
+    // Fixed at [0, n+1]: the names are made to fit it, not the other way round.
+    const x0 = 0, x1 = n+1;
     // Widths shrink so a pair still fits the slot.
     const pxSlot = (svgW - 75) / (x1 - x0);
     const hw = shown.length > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);

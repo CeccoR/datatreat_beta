@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, truncTiltLabel, barLabelFit, barPlotXPad, confirmBanner } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -1062,12 +1062,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
     const brect = svg.getBoundingClientRect();
     const svgW = brect.width || 640, svgH = brect.height || 420;
-    // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
-    const fit = barLabelFit(mctx, Math.max(60, svgW - 75), n);
-    const labels = rows.map(r=>truncTiltLabel(mctx, r.label, fit.cap));
+    // How the names are cut and tilted — see barNames.
+    const fit = barNames(mctx, rows.map(r=> r.label), Math.max(60, svgW - 75), 55);
+    const labels = fit.labels;
     const labelWs = labels.map(l=>mctx.measureText(l).width);
     let maxLbl=0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
-    const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
+    const bottom = Math.round(26 + maxLbl*fit.sin);
     const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
     const topOf = (v,e)=> v + (isFinite(e)?e:0);
     let maxValW=0, maxTop=0;
@@ -1079,8 +1079,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
     const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
     const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);   // widen only when a label would cross x=0
-    plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
+    // Fixed at [0, n+1]: the names are made to fit it, not the other way round.
+    plot.setRange(0, n+1, 0, ymax||1);
     plot.drawAxes();
     // Bar geometry is capped at the previous fixed sizes but shrinks to fit the
     // per-sample spacing so many samples don't overlap. Paired bars (size + corr.)

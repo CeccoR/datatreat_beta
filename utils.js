@@ -1746,51 +1746,71 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
-/* Truncate a bar-chart axis label to at most 30 characters, with the ellipsis in
-   the MIDDLE (start…end) so both ends of the name stay readable. Sideways overflow
-   past the plot frame is handled separately by widening the x-range (barPlotXPad). */
-const TILT_LABEL_MAX = 30;
-function truncTiltLabel(mctx, text, cap){
-  const max = Math.max(4, Math.round(cap || TILT_LABEL_MAX));
-  if (text.length <= max) return text;
-  const keep = max - 1;                            // one char for the ellipsis
-  const front = Math.ceil(keep / 2), back = keep - front;
-  return text.slice(0, front) + '…' + text.slice(text.length - back);
+/* ---- Tilted category names under a bar chart ----
+   Every name hangs down-left from its tick and turns about the middle of its last
+   letter (Plot's tilted tick labels). On the page no name measures more than
+   BAR_NAME_MAX px: a longer one is cut in the middle (start…end) so both ends stay
+   readable, each name on its own and only where it has to be. */
+const BAR_NAME_MAX = 80;
+const TILT_MIN = 30, TILT_MAX = 60, TILT_STEP = 5;
+
+// `text` as it is, or cut in the middle until it measures at most `maxW` px.
+function cutToWidth(mctx, text, maxW){
+  if (mctx.measureText(text).width <= maxW) return text;
+  for (let keep = text.length - 1; keep >= 2; keep--){
+    const front = Math.ceil(keep / 2), back = keep - front;
+    const cut = text.slice(0, front) + '…' + text.slice(text.length - back);
+    if (mctx.measureText(cut).width <= maxW) return cut;
+  }
+  return text.slice(0, 1) + '…';
 }
 
-/* How a bar chart's category labels have to be drawn to stay apart in the width it
-   has. On a phone, or with many samples, the slot per bar shrinks until twenty
-   characters at 30° no longer fit: tilting further narrows what a label spans across
-   the axis, and a shorter name narrows it again. Returns the angle to draw at and the
-   number of characters that fits at it, so the chart keeps its footprint rather than
-   letting the names run into one another. */
-function barLabelFit(mctx, plotW, n){
-  const slot = n > 0 ? plotW / n : plotW;
-  const rot = slot < 30 ? 70 : slot < 42 ? 55 : slot < 58 ? 45 : 30;
-  const em = (mctx && mctx.measureText ? mctx.measureText('mn').width / 2 : 5) || 5;
-  // What a label may measure before its horizontal span exceeds its own slot.
-  const room = slot / Math.cos(rot * Math.PI / 180);
-  const cap = Math.max(6, Math.min(TILT_LABEL_MAX, Math.floor(room / em)));
-  return { rot, cap, sin: Math.sin(rot * Math.PI / 180), cos: Math.cos(rot * Math.PI / 180) };
-}
-/* Extra x-range padding (in data units, per side) so no 30°-tilted bar label runs
-   off the LEFT of the plot (its first character would land at a negative x). Bars
-   sit at x = 1..n inside the base range [0, n+1]; use the returned p as the range
-   [-p, n+1+p] (a small symmetric zoom-out that moves the edge bars inward). Returns
-   0 unless a label would actually cross x = 0 — i.e. only kicks in when truly needed.
-   `labelWs` = per-bar label pixel widths; plotW = drawable width px. */
-function barPlotXPad(labelWs, n, plotW, rot){
-  if (!(plotW > 0) || !(n > 0)) return 0;
-  const cos30 = Math.cos((rot == null ? 30 : rot) * Math.PI / 180);
-  let p = 0;
-  for (let k = 1; k <= n; k++){
-    const f = ((labelWs[k-1] || 0) * cos30) / plotW;   // label's tilted horizontal extent, as a fraction of plotW
-    if (f >= 0.5) return n;                             // pathological (huge label) → hard cap
-    // Bar k clears x=0 in [-p, n+1+p] when (k+p)/(n+1+2p) ≥ f. Solve for the min p.
-    const need = (f * (n + 1) - k) / (1 - 2 * f);       // > 0 only if the label crosses x=0 at base scale
-    if (need > p) p = need;
+/* Whether names `ws` px long, on ticks at `qs` px (ascending), tilted by `rot` degrees,
+   stay within [lo, hi] (unless `sides` is false) and clear of one another. A name is a
+   band `h` thick along its line: down-left it reaches w·cos + h/2·sin past its tick,
+   rightwards h/2·sin. Two bands overlap when they lie under h apart (d·sin, d the
+   ticks' distance) and the later name reaches back past the earlier's tick (w > d·cos).
+   A width of 0 is a name not drawn. */
+function tiltFits(ws, qs, lo, hi, h, rot, sides = true){
+  const r = rot * Math.PI / 180, sn = Math.sin(r), cs = Math.cos(r);
+  for (let i = 0; i < qs.length; i++){
+    if (!ws[i]) continue;
+    if (sides && (qs[i] - ws[i] * cs - h / 2 * sn < lo - 0.5 || qs[i] + h / 2 * sn > hi + 0.5)) return false;
+    for (let j = i + 1; j < qs.length; j++){
+      if (!ws[j]) continue;
+      const d = qs[j] - qs[i];
+      if (d * sn < h && ws[j] > d * cs) return false;
+    }
   }
-  return Math.max(0, p);
+  return true;
+}
+// The least tilt from `from` to `to` degrees, in 5° steps, that tiltFits; null if none.
+function tiltFor(ws, qs, lo, hi, h, sides = true, from = TILT_MIN, to = TILT_MAX){
+  for (let rot = from; rot <= to; rot += TILT_STEP) if (tiltFits(ws, qs, lo, hi, h, rot, sides)) return rot;
+  return null;
+}
+
+/* The names under a page bar chart of n categories, standing at x = 1..n of a range
+   fixed at [0, n+1] over a plot `plotW` px wide that starts `ml` px in. Each is kept
+   whole up to BAR_NAME_MAX, then all are tilted by the least angle (30–60°) that keeps
+   them between the plot's sides and apart. If no angle does, the first that keeps them
+   apart going down from 60° to 45° is taken (60° if none), the steep end first so that
+   as little as possible has to go, and only the names that would still cross the left
+   side are cut back to it. `shown[k]` false is a category with no bar, whose name is not
+   drawn. Returns { rot, labels, sin }. */
+function barNames(mctx, names, plotW, ml, shown){
+  const n = names.length, h = 12;   // a 10 px line
+  const qs = names.map((_, k)=> ml + (k + 1) * plotW / (n + 1));
+  let labels = names.map(t=> cutToWidth(mctx, t, BAR_NAME_MAX));
+  const ws = ()=> labels.map((t, k)=> (!shown || shown[k]) ? mctx.measureText(t).width : 0);
+  let rot = tiltFor(ws(), qs, ml, ml + plotW, h);
+  if (rot == null){
+    rot = TILT_MAX;
+    for (let r = TILT_MAX; r >= 45; r -= TILT_STEP) if (tiltFits(ws(), qs, ml, ml + plotW, h, r, false)){ rot = r; break; }
+    const r = rot * Math.PI / 180;
+    labels = labels.map((t, k)=> cutToWidth(mctx, t, Math.max(0, (qs[k] - ml - h / 2 * Math.sin(r)) / Math.cos(r))));
+  }
+  return { rot, labels, sin: Math.sin(rot * Math.PI / 180) };
 }
 
 /* The y-range a bar chart needs so that no value label runs up under the series chips
@@ -1858,5 +1878,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barLabelFit, barPlotXPad, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

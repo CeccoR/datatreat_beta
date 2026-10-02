@@ -1,5 +1,5 @@
 import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits } from './utils.js';
 import { activeTab, TABS } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
@@ -99,6 +99,7 @@ function markerShape(kind, cx, cy, r, color, width){
 let F = null;                 // the figure model
 let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, presetBar = null;
 let lastInner = { w: 0, h: 0 };   // drawing area of the last pass, in mm
+let lastCatRot = 30;              // X label tilt the last pass drew, for its locked field
 let view = { z: 1, x: 0, y: 0 };  // preview zoom and pan, on top of the fit scale
 let srcPlot = null, srcOpts = null;   // what the composer was opened on, for Reset
 
@@ -348,6 +349,7 @@ function buildModel(plot, opts){
        chart tilts its sample names to fit, a numeric axis writes them straight — and
        from there it is one setting for the whole figure. */
     catRot: (cats && cats.length && cats[0].rot) || 0,
+    catRotAuto: true,
     name: (opts && opts.name) || 'figure',
   };
 }
@@ -556,70 +558,96 @@ function drawFigure(svg, ink, paper, extra){
   F.panels.forEach((p, i)=>{
     for (const t of majorTicks(yOf[i][0], yOf[i][1], stepY())) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
   });
-  // How far the X labels stick out sideways and downwards. A number is centred on
-  // its tick, so the outermost ones overhang the frame by half their width; tilted
-  // category names hang below the axis and lean past its left end.
-  let halfX = 0, catDrop = 0, catLean = 0;
-  const xRot = Math.max(0, Math.min(90, F.catRot || 0));
-  const xRad = xRot * Math.PI / 180;
-  F.panels.forEach((p, i)=>{
-    for (const t of majorTicks(xOf[i][0], xOf[i][1], stepX())){
-      const w = textW(fmtTick(t), fTick);
-      halfX = Math.max(halfX, xRot ? w * Math.cos(xRad) : w / 2);
-      if (xRot) catDrop = Math.max(catDrop, w * Math.sin(xRad) + fTick * Math.cos(xRad));
+  // The category names, measured once: whole, as the figure always draws them.
+  const catWs = (F.cats || []).map(cat=> textW(catText(cat.x), fTick));
+  // Margins and placing for a given tilt of the X labels. `lean` reserves room for
+  // names that hang past their panel's left side.
+  const layoutFor = (xRot, lean)=>{
+    // How far the X labels stick out sideways and downwards. A number is centred on
+    // its tick, so the outermost ones overhang the frame by half their width; tilted
+    // category names hang below the axis and lean past its left end.
+    let halfX = 0, catDrop = 0, catLean = 0;
+    const xRad = xRot * Math.PI / 180;
+    F.panels.forEach((p, i)=>{
+      for (const t of majorTicks(xOf[i][0], xOf[i][1], stepX())){
+        const w = textW(fmtTick(t), fTick);
+        halfX = Math.max(halfX, xRot ? w * Math.cos(xRad) : w / 2);
+        if (xRot) catDrop = Math.max(catDrop, w * Math.sin(xRad) + fTick * Math.cos(xRad));
+      }
+    });
+    if (F.cats && F.cats.length){
+      F.cats.forEach((cat, k)=>{
+        const w = catWs[k], rad = xRad;
+        catDrop = Math.max(catDrop, w * Math.sin(rad) + fTick * Math.cos(rad));
+        catLean = Math.max(catLean, xRot ? w * Math.cos(rad) : w / 2);
+      });
+      // Names tilted to stay inside their panel need no margin to lean into.
+      if (lean) halfX = Math.max(halfX, catLean);
     }
+    const xDrop = (F.cats && F.cats.length) || xRot
+      ? Math.max(fTick * 1.7, catDrop + fTick * 0.6) : fTick * 1.7;
+
+    // Only reserve room on a side that some panel actually decorates.
+    const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
+    const room = (side, vert) =>
+      (anySide(side, 'labels') ? (vert ? maxYNum + 8 : xDrop) : 0) +
+      (anySide(side, 'title') && (vert ? F.ylabel : F.xlabel) ? fAxis * 1.5 : 0);
+    // Whatever the sides ask for, never less than the overhang of the outermost X
+    // label — that is what used to spill outside the figure.
+    const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
+    const legendItems = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false)).length;
+    const legendRows = (F.legendMode === 'global' && legendItems)
+      ? Math.ceil(legendItems / Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, legendItems))) : 0;
+    const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
+    let mL = Math.max(10 + room('left', true), sideX) + extra.L;
+    let mR = Math.max(10 + room('right', true), sideX) + extra.R;
+    let mT = 10 + room('top', false) + (F.legendPlace === 'top' ? legendH : 0) + extra.T;
+    let mB = 10 + room('bottom', false) + (F.legendPlace === 'top' ? 0 : legendH) + extra.B;
+    // Margins never eat more than this much of the page. Without the cap, a request
+    // that cannot fit (a title longer than the figure) would grow them past the page
+    // and push the panels off it; with it, the figure stays sane and the text clips.
+    const capW = W * 0.62, capH = H * 0.62;
+    if (mL + mR > capW){ const k = capW / (mL + mR); mL *= k; mR *= k; }
+    if (mT + mB > capH){ const k = capH / (mT + mB); mT *= k; mB *= k; }
+
+    let innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
+    if (!F.plotAuto){
+      // Room is still kept for the outward tick marks on the far sides, so a plot area
+      // asked bigger than the page can hold stops short of the edge instead of on it.
+      innerW = Math.min(Math.max(20, F.plotW * PX_MM), W - mL - 8);
+      innerH = Math.min(Math.max(20, F.plotH * PX_MM), H - mT - 8);
+    }
+    /* A plot area smaller than the space the margins leave has that space to spare,
+       and `align` says where in it the area sits — centred unless asked otherwise. */
+    const AL = { t:0, l:0, c:0.5, b:1, r:1 };
+    const av = String(F.align || 'cc');
+    const fy = AL[av[0]] !== undefined ? AL[av[0]] : 0.5;
+    const fx = AL[av[1]] !== undefined ? AL[av[1]] : 0.5;
+    const oX = mL + Math.max(0, (W - mL - mR) - innerW) * fx;
+    const oY = mT + Math.max(0, (H - mT - mB) - innerH) * fy;
+    const cw = innerW / F.cols, ch = innerH / F.rows;
+    return { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch };
+  };
+  // Tilt chosen automatically: the least, from 30° to 90° in 5° steps, at which every
+  // panel's names stay between its sides and clear of one another; failing that 90°,
+  // with the margins widened as for a set tilt.
+  const namesIn = L => F.panels.every((p, pi)=>{
+    const ax = p.axes || (p.axes = newAxes()), fr = sideFree(pi);
+    const drawn = ['bottom', 'top'].some(sd => ax[sd].labels && (fr[sd] || !F.innerClean));
+    if (!drawn) return true;
+    const px0 = L.oX + p.c * L.cw, pw = Math.max(4, p.cs * L.cw), [x0, x1] = xOf[pi] || [0, 1];
+    const inRange = F.cats.map(c=> c.x >= x0 && c.x <= x1);
+    const qs = F.cats.map(c=> px0 + (c.x - x0) / (x1 - x0 || 1) * pw);
+    return tiltFits(catWs.map((w, k)=> inRange[k] ? w : 0), qs, px0, px0 + pw, fTick * 1.2, L.xRot);
   });
-  if (F.cats && F.cats.length){
-    for (const cat of F.cats){
-      const w = textW(catText(cat.x), fTick), rad = xRad;
-      catDrop = Math.max(catDrop, w * Math.sin(rad) + fTick * Math.cos(rad));
-      catLean = Math.max(catLean, xRot ? w * Math.cos(rad) : w / 2);
-    }
-    halfX = Math.max(halfX, catLean);
-  }
-  const xDrop = (F.cats && F.cats.length) || xRot
-    ? Math.max(fTick * 1.7, catDrop + fTick * 0.6) : fTick * 1.7;
-
-  // Only reserve room on a side that some panel actually decorates.
-  const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
-  const room = (side, vert) =>
-    (anySide(side, 'labels') ? (vert ? maxYNum + 8 : xDrop) : 0) +
-    (anySide(side, 'title') && (vert ? F.ylabel : F.xlabel) ? fAxis * 1.5 : 0);
-  // Whatever the sides ask for, never less than the overhang of the outermost X
-  // label — that is what used to spill outside the figure.
-  const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
-  const legendItems = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false)).length;
-  const legendRows = (F.legendMode === 'global' && legendItems)
-    ? Math.ceil(legendItems / Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, legendItems))) : 0;
-  const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
-  let mL = Math.max(10 + room('left', true), sideX) + extra.L;
-  let mR = Math.max(10 + room('right', true), sideX) + extra.R;
-  let mT = 10 + room('top', false) + (F.legendPlace === 'top' ? legendH : 0) + extra.T;
-  let mB = 10 + room('bottom', false) + (F.legendPlace === 'top' ? 0 : legendH) + extra.B;
-  // Margins never eat more than this much of the page. Without the cap, a request
-  // that cannot fit (a title longer than the figure) would grow them past the page
-  // and push the panels off it; with it, the figure stays sane and the text clips.
-  const capW = W * 0.62, capH = H * 0.62;
-  if (mL + mR > capW){ const k = capW / (mL + mR); mL *= k; mR *= k; }
-  if (mT + mB > capH){ const k = capH / (mT + mB); mT *= k; mB *= k; }
-
-  let innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
-  if (!F.plotAuto){
-    // Room is still kept for the outward tick marks on the far sides, so a plot area
-    // asked bigger than the page can hold stops short of the edge instead of on it.
-    innerW = Math.min(Math.max(20, F.plotW * PX_MM), W - mL - 8);
-    innerH = Math.min(Math.max(20, F.plotH * PX_MM), H - mT - 8);
-  }
+  let lay = null;
+  if (F.catRotAuto && catWs.length){
+    for (let rot = 30; rot <= 90 && !lay; rot += 5){ const L = layoutFor(rot, false); if (namesIn(L)) lay = L; }
+    if (!lay) lay = layoutFor(90, true);
+  } else lay = layoutFor(Math.max(0, Math.min(90, F.catRot || 0)), true);
+  lastCatRot = lay.xRot;
+  const { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch } = lay;
   lastInner = { w: +(innerW / PX_MM).toFixed(2), h: +(innerH / PX_MM).toFixed(2) };
-  /* A plot area smaller than the space the margins leave has that space to spare,
-     and `align` says where in it the area sits — centred unless asked otherwise. */
-  const AL = { t:0, l:0, c:0.5, b:1, r:1 };
-  const av = String(F.align || 'cc');
-  const fy = AL[av[0]] !== undefined ? AL[av[0]] : 0.5;
-  const fx = AL[av[1]] !== undefined ? AL[av[1]] : 0.5;
-  const oX = mL + Math.max(0, (W - mL - mR) - innerW) * fx;
-  const oY = mT + Math.max(0, (H - mT - mB) - innerH) * fy;
-  const cw = innerW / F.cols, ch = innerH / F.rows;
 
   F.panels.forEach((p, pi)=>{
     const px0 = oX + p.c * cw, py0 = oY + p.r * ch;
@@ -858,7 +886,7 @@ function drawFigure(svg, ink, paper, extra){
 
       if (a.labels && cats && !g0.vert){
         for (const c of cats){
-          const q = X(c.x), rot = Math.max(0, Math.min(90, F.catRot || 0));
+          const q = X(c.x), rot = xRot;
           const at = side === 'bottom' ? { x:q, y:g0.base + fTick*1.15 } : { x:q, y:g0.base - fTick*0.5 };
           const el = add('text', { ...at, 'font-size':fTick, fill:ink,
                                    'text-anchor': rot ? 'end' : 'middle' });
@@ -889,7 +917,7 @@ function drawFigure(svg, ink, paper, extra){
           }
           const el = add('text', { ...at, 'font-size':fTick, fill:ink });
           // Numbers tilt with the category names, around the point they label.
-          const rot = g0.vert ? 0 : Math.max(0, Math.min(90, F.catRot || 0));
+          const rot = g0.vert ? 0 : xRot;
           if (rot){
             el.setAttribute('text-anchor', 'end');
             el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
@@ -1095,6 +1123,9 @@ function renderInto(svg, ink, paper){
     worst = now;
     extra = { L:extra.L + o.L, R:extra.R + o.R, T:extra.T + o.T, B:extra.B + o.B };
   }
+  // The locked tilt field shows the tilt this drawing settled on.
+  const rotField = controlsEl && controlsEl.querySelector('[data-autorot]');
+  if (rotField) rotField.value = lastCatRot;
 }
 
 // Physical size and pixel count of the export, shown in the footer. Driven by the
@@ -2246,7 +2277,10 @@ function controlsHtml(){
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
     <label class="fig-row"><span>Colour of every line and letter</span>
       <button class="color-swatch" data-inksw data-color="${F.inkColor}" style="background:${F.inkColor}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></label>
-    <label class="fig-row"><span>X tick labels tilt (&deg;)</span>${numField('data-k="catRot"', F.catRot, 0, 90)}</label>
+    ${chk('X tick labels tilt chosen automatically','catRotAuto')}
+    <label class="fig-row"><span>X tick labels tilt (&deg;)</span>${F.catRotAuto
+      ? `<input type="text" value="${lastCatRot}" data-autorot disabled title="Chosen automatically: the least that keeps the names inside their panel and apart">`
+      : numField('data-k="catRot"', F.catRot, 0, 90)}</label>
     <div class="fig-subhead">Font sizes (pt)</div>
     <label class="fig-row"><span>Tick numbers</span>${numField('data-f="tick"', F.font.tick, 4, 24)}</label>
     <label class="fig-row"><span>Axis titles</span>${numField('data-f="axis"', F.font.axis, 4, 24)}</label>
@@ -2772,7 +2806,7 @@ function wirePresetBar(){
 
 /* Settings that change the shape of the sidebar itself. */
 const SHOWS_MORE = new Set(['xAuto','yAuto','shareX','shareY','legendMode','legendFrame',
-  'xStepAuto','yStepAuto','minorXAuto','minorYAuto']);
+  'xStepAuto','yStepAuto','minorXAuto','minorYAuto','catRotAuto']);
 
 function wireControls(){
   const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','legendFrameAlpha','plotW','plotH','catRot']);
@@ -2796,6 +2830,8 @@ function wireControls(){
       // the model's placeholder 0..1, so the bounds are read while auto still holds.
       if (k === 'plotAuto' && !t.checked){ F.plotW = lastInner.w; F.plotH = lastInner.h; rebuild = true; }
       if (k === 'plotAuto' && t.checked) rebuild = true;
+      // Off, the tilt opens on the one the figure was drawn with.
+      if (k === 'catRotAuto' && !t.checked) F.catRot = lastCatRot;
       if ((k === 'xAuto' || k === 'yAuto') && !t.checked){
         const r = computeRanges(), i = (k === 'xAuto' ? F.xPanel : F.yPanel) | 0;
         if (k === 'xAuto'){ const [a, z] = r.xOf[i] || r.xOf[0] || [0, 1]; F.xmin = a; F.xmax = z; }
