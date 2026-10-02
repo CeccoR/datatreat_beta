@@ -2282,10 +2282,10 @@ function controlsHtml(){
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
     <label class="fig-row"><span>Colour of every line and letter</span>
       <button class="color-swatch" data-inksw data-color="${F.inkColor}" style="background:${F.inkColor}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></label>
-    ${chk('X tick labels tilt chosen automatically','catRotAuto')}
-    <label class="fig-row"><span>X tick labels tilt (&deg;)</span>${F.catRotAuto
+    <div class="fig-row"><span>X tick labels tilt (&deg;)</span>${F.catRotAuto
       ? `<input type="text" value="${lastCatRot}" data-autorot disabled title="Chosen automatically: the least that keeps the names inside their panel and apart">`
-      : numField('data-k="catRot"', F.catRot, 0, 90)}</label>
+      : numField('data-k="catRot"', F.catRot, 0, 90)}
+      <label class="fig-check fig-rowcheck" title="Tilt chosen automatically: the least that keeps the names inside their panel and apart"><input type="checkbox" data-k="catRotAuto"${F.catRotAuto ? ' checked' : ''}> Auto</label></div>
     <div class="fig-subhead">Font sizes (pt)</div>
     <label class="fig-row"><span>Tick numbers</span>${numField('data-f="tick"', F.font.tick, 4, 24)}</label>
     <label class="fig-row"><span>Axis titles</span>${numField('data-f="axis"', F.font.axis, 4, 24)}</label>

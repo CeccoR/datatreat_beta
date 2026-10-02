@@ -2243,6 +2243,10 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 .fig-row > span { flex: 0 0 118px; color: var(--muted); }
 .fig-row input, .fig-row select { flex: 1; min-width: 0; }
 .fig-row .btn-sm { flex: 0 0 auto; }
+/* An "Auto" box at the end of a field's row: the field gives up the room it takes, on
+   a phone too, where a row's field otherwise claims a line of its own. */
+.fig-row .fig-rowcheck { flex: 0 0 auto; margin: 0; }
+.fig-row:has(.fig-rowcheck) > input { flex: 1 1 0; min-width: 0; }
 /* Axis-title editor: the field, a thin toolbar under it, and a character tray. */
 .fig-titlefield { margin-bottom: 8px; }
 .fig-titlefield .fig-row { margin-bottom: 4px; }
