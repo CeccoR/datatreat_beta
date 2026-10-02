@@ -18,9 +18,6 @@ import { Plot } from './plot.js';
   let egSel = EG_METHODS.map(m=>m.key);
   // The Urbach analysis is opt-in: off, none of it is computed, drawn or exported.
   let urbachOn = false;
-  // Debug view on the Urbach card: the Tauc baseline on its plot, and the tail fitted
-  // with that baseline taken out.
-  let urbachDebug = false;
 
   const clampN = v => Math.max(1, Math.round(v));
   const clampM = v => Math.max(2, Math.round(v));
@@ -307,7 +304,6 @@ import { Plot } from './plot.js';
                     { label: `${nm} ${w.name}, extended`, key: w.key + ' line' });
         }
       });
-      if (spec.extra) spec.extra(plot, currIndex, p, vlines, nm);
       $('Alert').innerHTML = tooSmall ? '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>' : '';
       spec.show($, P.analyze(currIndex));
 
@@ -453,7 +449,6 @@ import { Plot } from './plot.js';
     results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
     show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
     onSettled: ()=> renderUrbachRes(),
-    extra: (plot, i, p, vl, nm)=> drawUrbachDebug(plot, i, p, vl, nm),
     // The sample's Tauc linear region (the window its Tauc fit settled on), shaded in
     // the Tauc region's red behind the curves: the tail is read against where the edge
     // is, and below it.
@@ -478,54 +473,6 @@ import { Plot } from './plot.js';
 
   // The Urbach card's switch, and what of the analysis hangs on it: the card's
   // workspace and its row of the Results.
-  /* The Tauc baseline of sample i taken back to this plot. It is a line in the Tauc
-     plot, Y_b = m·hν + b in [F(R)·hν]^a, so in F(R) it is F_b = Y_b^(1/a) / hν where
-     Y_b > 0, and nothing where it is not. Subtracted in F(R), where absorption adds up,
-     the rest goes through the Urbach card's own treatment: ln, smoothing over N, the
-     window scan between the same lines. */
-  const DEBUG_SUB = '#9575cd';
-  function drawUrbachDebug(plot, i, p, vl, nm){
-    const out = { RMSE: '-', R2: '-', Eu: '-' };
-    const r = urbachDebug ? tauc.analyze(i).regs2 : null;
-    if (r && isFinite(r.slope)){
-      const a = tauc.params(i).a, hv = files[i].hv, FR = files[i].FR;
-      const Fb = hv.map(e=>{ const y = r.slope * e + r.intercept; return y > 0 ? Math.pow(y, 1 / a) / e : 0; });
-      const lnFb = Fb.map(v=> v > 0 ? Math.log(v) : NaN);
-      const Ys = movingAverage(FR.map((v, k)=> v - Fb[k] > 0 ? Math.log(v - Fb[k]) : NaN), p.N);
-      plot.line(hv, lnFb, TAUC_COLORS.regs2, 1.2, '5,4', { label: `${nm} Tauc baseline`, key: 'debug baseline' });
-      plot.line(hv, Ys, DEBUG_SUB, 1.2, undefined, { label: `${nm} baseline subtracted`, key: 'debug subtracted' });
-      const reg = scanRegr(hv, Ys, p.M, vl.v1, vl.v2);
-      if (reg.bestIdx.length){
-        const xb = reg.bestIdx.map(k=> hv[k]);
-        plot.line(xb, xb.map(x=> reg.slope * x + reg.intercept), DEBUG_SUB, 2.2, undefined, { label: `${nm} baseline subtracted, Urbach region`, key: 'debug regs' });
-        const xExt = linspace(minArr(hv), maxArr(hv), 100);
-        plot.line(xExt, xExt.map(x=> reg.slope * x + reg.intercept), DEBUG_SUB, 1, '5,4', { label: `${nm} baseline subtracted, extended`, key: 'debug regs line' });
-        const e = urbachEu(reg, p.M);
-        out.RMSE = isFinite(reg.NRMSE) ? reg.NRMSE.toFixed(4) : '-';
-        out.R2 = isFinite(reg.R2) ? reg.R2.toFixed(4) : '-';
-        out.Eu = fmtE(e.Eu, e.EuErr, 'meV', 1, 1000);
-      }
-    }
-    document.getElementById('taucUDbgRMSE').textContent = out.RMSE;
-    document.getElementById('taucUDbgR2').textContent = out.R2;
-    document.getElementById('taucUDbgEu').textContent = out.Eu;
-  }
-  // The legend lists the debug traces only while they are drawn.
-  function syncUrbachDebug(){
-    document.getElementById('taucUDbg').checked = urbachDebug;
-    const leg = document.getElementById('taucULegend');
-    leg.querySelectorAll('.urb-dbg').forEach(e=> e.remove());
-    if (urbachDebug) leg.insertAdjacentHTML('beforeend',
-      `<span class="urb-dbg"><i style="background:${TAUC_COLORS.regs2}"></i>Tauc baseline</span>`
-      + `<span class="urb-dbg"><i style="background:${DEBUG_SUB}"></i>baseline subtracted</span>`);
-  }
-  document.getElementById('taucUDbg').addEventListener('change', e=>{
-    urbachDebug = e.target.checked;
-    syncUrbachDebug();
-    if (urbachOn && urbach.hasPlot()) urbach.update(true);
-    hist.commit();
-  });
-
   function syncUrbach(){
     const box = document.getElementById('taucUOn');
     document.getElementById('taucUrbach').classList.toggle('is-off', !urbachOn);
@@ -595,7 +542,7 @@ import { Plot } from './plot.js';
       files: files.map(f=>({...f})),
       ...tauc.snapshot(),
       urbach: urbach.snapshot(),
-      urbachOn, urbachDebug,
+      urbachOn,
       egSel: egSel.slice(),
     };
   }
@@ -606,8 +553,6 @@ import { Plot } from './plot.js';
     // suggested when the analysis is first switched on, as for a new project.
     urbach.restore(s.urbach || {});
     urbachOn = s.urbachOn === true;
-    urbachDebug = s.urbachDebug === true;
-    syncUrbachDebug();
     // Older snapshots had two charts and no choice: both methods on show.
     const eg = Array.isArray(s.egSel) ? s.egSel.filter(k=> EG_METHODS.some(m=>m.key===k)) : [];
     egSel = eg.length ? eg : EG_METHODS.map(m=>m.key);
