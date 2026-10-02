@@ -1116,7 +1116,9 @@ document.addEventListener('keydown', e=>{
   if (did) e.preventDefault();
 });
 // ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
-const SAMPLE_NAV = { tauc:['taucPrev','taucNext'], xrd:['xrdPrev','xrdNext'] };
+// Selectors: the Tauc cards are built at run time, each with its own pair, and the
+// first one on show is the one pressed (every card steps the same sample).
+const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#xrdPrev','#xrdNext'] };
 document.addEventListener('keydown', e=>{
   if (e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1124,8 +1126,8 @@ document.addEventListener('keydown', e=>{
   if (tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT' || (el && el.isContentEditable)) return;
   const nav = SAMPLE_NAV[_activeTab];
   if (!nav) return;
-  const btn = document.getElementById(e.key==='ArrowLeft' ? nav[0] : nav[1]);
-  if (btn && btn.offsetParent!==null){ btn.click(); e.preventDefault(); }
+  const btn = [...document.querySelectorAll(e.key==='ArrowLeft' ? nav[0] : nav[1])].find(b=> b.offsetParent!==null);
+  if (btn){ btn.click(); e.preventDefault(); }
 });
 // Sticky "back to top" button — visible only once the page is scrolled down.
 (function initScrollTop(){
@@ -1510,7 +1512,8 @@ function guardNumericInput(el, opts){
   el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
 }
 // Auto-wire every <input type="number"> under root, reading bounds from its
-// min/max attributes (step decides integer-ness). Covers most module fields.
+// min/max attributes (step decides integer-ness). Covers most module fields; one
+// built later (a Tauc analysis card) is wired by its builder.
 function guardNumberInputs(root){
   (root || document).querySelectorAll('input[type="number"]').forEach(el=>{
     const min = el.getAttribute('min')!==null && el.min!=='' ? +el.min : null;
@@ -1878,5 +1881,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

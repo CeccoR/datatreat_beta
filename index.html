@@ -217,107 +217,9 @@
         <div id="taucFileTableWrap"></div>
       </div>
 
-      <div class="card" id="taucWorkspace" style="display:none">
-        <h3 class="txt-head" style="margin:0 0 12px">Analysis: Tauc plot</h3>
-        <div class="instr-block">Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 0.5 for indirect semiconductors and 2 for direct semiconductors. Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent.</div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-nav-row">
-              <div class="plot-nav-left">
-                <button class="btn nav-arrow" id="taucPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
-                <span id="taucIdx" class="pill nav-count" style="margin:0">1/1</span>
-                <button class="btn nav-arrow" id="taucNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
-                <span class="txt-caption" id="taucCurrentLabel">—</span>
-              </div>
-              <button class="btn plot-corner-btn" id="taucSuggest" title="Propose optimal Tauc-region and baseline intervals from the absorption edge">&#10022; Suggest intervals</button>
-            </div>
-            <div class="plot-wrap">
-              <svg class="plot" id="taucSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="taucSvg" data-csv-mod="tauc" data-csv-names="analysis_info.csv" data-dl-name="Tauc_sample.svg" data-dl-legend="taucLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div class="legend" id="taucLegend">
-              <span><i style="background:#6a7585"></i>original</span>
-              <span><i style="background:#3aa0ff"></i>smoothed</span>
-              <span><i style="background:#5fcf6a"></i>derivative</span>
-              <span><i style="background:#ff5050"></i>Tauc linear region</span>
-              <span><i style="background:#d050ff"></i>baseline</span>
-            </div>
-          </div>
-          <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
-            <div class="param-grid">
-              <label class="txt-label">Tauc exponent</label>
-              <select id="taucA" class="pg-field">
-                <option value="0.5" selected>0.5</option>
-                <option value="2">2</option>
-              </select>
-              <label class="txt-label">[F(R)hν]<sup id="taucNExp">0.5</sup> smoothing window</label>
-              <input type="number" class="pg-field" id="taucN" value="1" min="1">
-              <label class="txt-label">Derivative smoothing window</label>
-              <input type="number" class="pg-field" id="taucN2" value="20" min="1">
-              <label class="txt-label">Tauc linear region regression window</label>
-              <input type="number" class="pg-field" id="taucM" value="25" min="2">
-              <div class="pg-stat">NRMSE: <b id="taucRMSE1">-</b></div>
-              <div class="pg-stat">R²: <b id="taucR21">-</b></div>
-              <label class="txt-label">Baseline regression window</label>
-              <input type="number" class="pg-field" id="taucM2" value="100" min="2">
-              <div class="pg-stat">NRMSE: <b id="taucRMSE2">-</b></div>
-              <div class="pg-stat">R²: <b id="taucR22">-</b></div>
-              <div class="pg-result">
-                <div class="pg-stat">E<sub>g</sub> (x-axis): <b id="taucEg">-</b></div>
-                <div class="pg-stat">E<sub>g</sub> (baseline): <b id="taucEgInt">-</b></div>
-              </div>
-            </div>
-            <div id="taucAlert"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card is-off" id="taucUrbach" style="display:none">
-        <label class="fig-cbox card-switch" title="Switch the Urbach analysis on"><input type="checkbox" id="taucUOn" aria-label="Urbach analysis"><span class="fig-cbox-i"></span></label>
-        <h3 class="txt-head" style="margin:0 0 12px">Analysis: Urbach energy</h3>
-        <div class="instr-block">Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. Drag the orange lines to set the Urbach region, or press <b>✦ Suggest intervals</b> to place it, for every sample, 1 eV wide, centred on the sample's Tauc linear region (the red band), where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. The lines are placed once; move them as needed. The red band is the sample's Tauc linear region, the window the Tauc fit settled on, so the tail can be read against where the edge is. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. The analysis is <b>off</b> by default: the box at the top right switches it on, and while it is off nothing of it is computed, drawn or exported, in this card or in the Results. The first time it is switched on, its lines are suggested from the Tauc gaps of that moment.</div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-nav-row">
-              <div class="plot-nav-left">
-                <button class="btn nav-arrow" id="taucUPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
-                <span id="taucUIdx" class="pill nav-count" style="margin:0">1/1</span>
-                <button class="btn nav-arrow" id="taucUNext" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
-                <span class="txt-caption" id="taucUCurrentLabel">—</span>
-              </div>
-              <button class="btn plot-corner-btn" id="taucUSuggest" title="Place a 1 eV Urbach region centred on the Tauc linear region">&#10022; Suggest intervals</button>
-            </div>
-            <div class="plot-wrap">
-              <svg class="plot" id="taucUSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="taucUSvg" data-dl-name="Urbach_sample.svg" data-dl-legend="taucULegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div class="legend" id="taucULegend">
-              <span><i style="background:#6a7585"></i>original</span>
-              <span><i style="background:#3aa0ff"></i>smoothed</span>
-              <span><i style="background:#5fcf6a"></i>derivative</span>
-              <span><i style="background:#ff7f0e"></i>Urbach region</span>
-              <span><i style="background:rgba(255,80,80,0.35)"></i>Tauc linear region</span>
-            </div>
-          </div>
-          <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="taucUModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own.">all</button></div>
-            <div class="param-grid">
-              <label class="txt-label">ln[F(R)] smoothing window</label>
-              <input type="number" class="pg-field" id="taucUN" value="1" min="1">
-              <label class="txt-label">Derivative smoothing window</label>
-              <input type="number" class="pg-field" id="taucUN2" value="20" min="1">
-              <label class="txt-label">Urbach linear region regression window</label>
-              <input type="number" class="pg-field" id="taucUM" value="25" min="2">
-              <div class="pg-stat">NRMSE: <b id="taucURMSE1">-</b></div>
-              <div class="pg-stat">R²: <b id="taucUR21">-</b></div>
-              <div class="pg-result">
-                <div class="pg-stat">E<sub>U</sub>: <b id="taucUEu">-</b></div>
-              </div>
-            </div>
-            <div id="taucUAlert"></div>
-          </div>
-        </div>
+      <!-- The analysis cards are built by tauc.js, above the "+ Analysis" bar. -->
+      <div id="taucAnalyses" style="display:none">
+        <div class="an-add-bar" id="taucAddBar"><button type="button" class="btn an-add" id="taucAddAn" aria-haspopup="menu" aria-expanded="false" title="Add another analysis">+ Analysis</button></div>
       </div>
 
       <div class="card" id="taucResults" style="display:none">
@@ -328,45 +230,8 @@
           <button class="btn plot-dl-btn" data-dl-svg="taucResSvg0" data-csv-mod="tauc" data-csv-names="reflectance_FR.csv" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
         </div>
         <div id="taucResLegend0" class="legend"></div>
-        <div class="row res-row">
-          <div class="col">
-            <p class="txt-caption">Tauc Plot</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="taucResSvg1"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg1" data-csv-mod="tauc" data-csv-names="tauc_plot.csv" data-dl-name="Tauc_plot.svg" data-dl-legend="taucResLegend1"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="taucResLegend1" class="legend"></div>
-          </div>
-          <div class="col">
-            <p class="txt-caption" id="taucBarTitle">Energy Band Gap</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="taucResSvg2"></svg>
-              <span class="plot-chips" id="taucEgSel"></span>
-              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg2" data-csv-mod="tauc" data-csv-names="Eg.csv" data-dl-name="Eg_bar_chart.svg" data-dl-legend="taucResLegend2"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="taucResLegend2" class="legend"></div>
-            <div id="taucBarAlert" class="bar-alert"></div>
-          </div>
-        </div>
-        <div class="row res-row" id="taucResUrbach" style="display:none">
-          <div class="col">
-            <p class="txt-caption">Urbach Plot</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="taucResSvg3"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg3" data-csv-mod="tauc" data-csv-names="urbach_plot.csv" data-dl-name="Urbach_plot.svg" data-dl-legend="taucResLegend3"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="taucResLegend3" class="legend"></div>
-          </div>
-          <div class="col">
-            <p class="txt-caption">Urbach Energy</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="taucResSvg4"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg4" data-csv-mod="tauc" data-csv-names="Eu.csv" data-dl-name="Eu_bar_chart.svg" data-dl-legend="taucResLegend4"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="taucResLegend4" class="legend"></div>
-            <div id="taucEuAlert" class="bar-alert"></div>
-          </div>
-        </div>
+        <!-- Each analysis card's pair of charts, in card order (tauc.js). -->
+        <div id="taucResList"></div>
       </div>
     </section>
 
@@ -790,7 +655,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v361</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v362</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

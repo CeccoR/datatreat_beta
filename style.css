@@ -261,23 +261,6 @@ button.btn.is-saved:disabled {
   margin-bottom: 10px;
 }
 .proj-actions { display: flex; gap: 6px; flex-shrink: 0; }
-/* A card's on/off switch: the composer's square toggle, empty, filled when on. It
-   floats beside the title rather than sharing a flex row with it, so the title keeps
-   the line box, and the height, of every other card's. That line box sets the title
-   --head-drop below its top: the box drops as much, to sit centred on the title, and
-   ends as far from the card's right edge as the title starts from its left. */
-.card { --head-drop: 2px; }
-.fig-cbox.card-switch { float: right; margin-top: var(--head-drop); }
-/* Off, the composer's pale outline vanishes on a card: the muted ink the native
-   checkboxes are drawn in, on the recessed fill, keeps the empty box readable. */
-.fig-cbox.card-switch input:not(:checked) + .fig-cbox-i { border-color: var(--muted); background: var(--panel2); }
-/* An analysis switched off keeps its card, title, switch and instructions, so it is
-   still there to be found and read about; only its workspace is gone. Closed, the
-   card ends as far below the title's centre as it starts above it; instructions
-   opened meanwhile keep their usual 12 px under the title. */
-.card.is-off > .row { display: none; }
-.card.is-off > .txt-head { color: var(--muted); margin-bottom: var(--head-drop) !important; }
-.card.is-off > .instr-block { margin-top: calc(6px + 12px - var(--head-drop)); }
 .proj-icon .proj-svg { width: 19px; height: 19px; display: block; }
 /* Project-bar icon buttons (export/delete/new) and the per-table CSV export button
    (.table-csv-btn) are THE SAME BUTTON: one shared rule block, so their aesthetics
@@ -1475,6 +1458,83 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
 /* Results rows under a full-width plot: a pair of standard plots side by side, set off
    from what is above by the space a caption used to have. */
 .res-row { margin-top: 18px; align-items: flex-start; }
+/* A card's pair in the Tauc Results: set off by a rule, under the card's name. */
+.res-an { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
+.res-an-title { margin: 0; font-size: 13px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.res-an > .res-row { margin-top: 10px; }
+
+/* ===== Tauc analysis cards =====
+   Head: the grip, the title with the kind chosen in place and the info icon, then
+   close and fold at the right. The name field sits under it and stays when the card
+   is folded; the body (instructions and workspace) folds away. */
+.an-head { display: flex; align-items: center; gap: 8px; }
+.an-head > h3.an-title {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.4em; row-gap: 2px;
+}
+/* The kind and its info icon wrap as one, under "Analysis:" on a narrow card. */
+.an-kind { display: inline-flex; align-items: center; white-space: nowrap; }
+.an-title .instr-info { margin-left: 4px; }
+/* The kind reads as the title it is part of: its type, case and colour, with a small
+   chevron drawn in currentColor saying it can be changed. */
+.an-type-wrap { position: relative; display: inline-flex; align-items: center; }
+.an-type-wrap::after {
+  content: ''; position: absolute; right: 3px; top: 50%;
+  width: 5px; height: 5px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: translateY(-75%) rotate(45deg); pointer-events: none;
+}
+.an-type-wrap:hover { color: var(--accent); }
+select.an-type {
+  appearance: none; -webkit-appearance: none; field-sizing: content; width: auto;
+  background: transparent; border: none; border-radius: 6px; padding: 1px 17px 1px 0;
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
+}
+select.an-type:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+select.an-type option { color: var(--text); background: var(--panel); font-size: 13px; font-weight: 400; letter-spacing: normal; text-transform: none; }
+/* Bare icons, as a table row's: muted, lit on hover, close in the delete red. */
+.an-ic {
+  background: none; border: none; padding: 2px; border-radius: 6px;
+  color: var(--muted); cursor: pointer; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color 0.12s;
+}
+.an-ic svg { display: block; }
+.an-ic:hover { color: var(--accent); }
+.an-ic.an-close:hover { color: var(--bad); }
+/* The glyphs sit inset in their boxes: pulled out, the grip's lines start on the
+   card's content edge, as the name field under them does, and the open chevron ends
+   on the right one. */
+.an-grip { cursor: grab; touch-action: none; margin-left: -6px; }
+.an-fold { margin-right: -6px; }
+.an-acts { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 0 auto; }
+.an-fold svg { transition: transform 0.2s ease; }
+input[type="text"].an-name { display: block; max-width: 420px; margin-top: 10px; }
+/* The body's gap under the name is its own, so it folds away with it. */
+.an-body::before { content: ''; display: block; height: 12px; }
+.an-body > .an-instr { margin: 0 0 12px; }
+.an-card.is-folded .an-fold svg { transform: rotate(-90deg); }
+.an-card.is-folded .an-title .instr-info { display: none; }
+.an-card.is-folded:not(.an-anim) > .an-body { display: none; }
+.an-card.an-anim > .an-body { overflow: hidden; }
+/* The card being moved floats over the others. */
+.an-card.an-moving { position: relative; z-index: 5; border-color: var(--accent); box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+body.an-dragging, body.an-dragging * { cursor: grabbing !important; user-select: none; }
+/* "+ Analysis": a full-width dashed bar under the cards, lit while its menu is open. */
+.an-add-bar { margin: 0 0 16px; }
+button.btn.an-add { display: block; width: 100%; --btn-bg: transparent; --btn-bd: var(--line); border-style: dashed; border-radius: 12px; padding: 12px 16px; }
+button.btn.an-add.cp-anchored { --btn-fg: var(--accent); --btn-bd: var(--accent); }
+.an-menu {
+  position: fixed; z-index: 9999; min-width: 180px;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.65);
+}
+.an-menu[hidden] { display: none; }
+.an-menu button {
+  background: none; border: none; border-radius: 7px; padding: 8px 12px;
+  color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.an-menu button:hover { background: var(--panel2); color: var(--accent); }
 .bar-alert .alert { margin-bottom: 0; }
 .plot-btn-col {
   display: flex;
