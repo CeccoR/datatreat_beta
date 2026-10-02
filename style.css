@@ -1759,6 +1759,10 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   padding: 10px 12px;
 }
 .pg-result > .pg-stat { font-size: 13px; color: var(--text); }
+/* A debug block under a card's parameters, set off from them as the results box is. */
+.param-head.pg-debug-head { margin-top: 24px; }
+.param-grid > .pg-check { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.param-grid > .pg-check input { width: auto; margin: 0; }
 .pg-result > .pg-stat b { color: var(--accent); }
 /* Remove top margin on first label in parameter panels */
 .col > label:first-child,

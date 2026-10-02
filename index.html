@@ -315,6 +315,15 @@
                 <div class="pg-stat">E<sub>U</sub>: <b id="taucUEu">-</b></div>
               </div>
             </div>
+            <div class="txt-mini param-head pg-debug-head">Debug</div>
+            <div class="param-grid">
+              <label class="txt-label pg-check" title="Draw the Tauc baseline on this plot, and fit the tail with it subtracted"><input type="checkbox" id="taucUDbg"> Tauc baseline, and the fit without it</label>
+              <div class="pg-stat">NRMSE: <b id="taucUDbgRMSE">-</b></div>
+              <div class="pg-stat">R²: <b id="taucUDbgR2">-</b></div>
+              <div class="pg-result">
+                <div class="pg-stat">E<sub>U</sub> (baseline subtracted): <b id="taucUDbgEu">-</b></div>
+              </div>
+            </div>
             <div id="taucUAlert"></div>
           </div>
         </div>
@@ -790,7 +799,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v359</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v360</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
