@@ -244,7 +244,7 @@ import { Plot } from './plot.js';
     P.writeStoreToInputs = ()=>{
       const p = P.params(currIndex);
       for (const k of keys) $(FIELD[k]).value = p[k];
-      if ($('NExp')) $('NExp').textContent = p.a;
+      if ($('NExp')) $('NExp').textContent = spec.fmtA(p.a);
     };
     P.syncModeButton = ()=>{ const c = $('ModeAll'); if (c) c.textContent = P.mode==='shared' ? 'all' : 'one'; };
 
@@ -368,7 +368,7 @@ import { Plot } from './plot.js';
       const el = $(FIELD[k]);
       el.addEventListener('change', ()=>{
         readInputsToStore();  // route the edit to shared or this sample's slot
-        if (k === 'a' && $('NExp')) $('NExp').textContent = el.value;
+        if (k === 'a' && $('NExp')) $('NExp').textContent = spec.fmtA(parseFloat(el.value));
         if (spec.suggestOn && spec.suggestOn.includes(k) && files.length) resuggestEdited();
         if (plot) P.update(k !== 'a');
         if (spec.onParams) spec.onParams();
@@ -413,6 +413,16 @@ import { Plot } from './plot.js';
   }
 
   const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
+  /* The Tauc exponents, as [F(R)·hν]^a: the transition each stands for, and how it is
+     written wherever it shows (the select, the axes, the names); a fraction as such. */
+  const EXPONENTS = [
+    { a: 0.5, label: '0.5', gap: 'Indirect' },
+    { a: 2,   label: '2',   gap: 'Direct' },
+    { a: 2/3, label: '2/3', gap: 'Direct',   forbidden: true },
+    { a: 1/3, label: '1/3', gap: 'Indirect', forbidden: true },
+  ];
+  const expOf = a => EXPONENTS.find(e=> Math.abs(e.a - a) < 1e-9);
+  const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
   const URBACH_COLOR = '#ff7f0e';
   const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
 
@@ -466,7 +476,8 @@ import { Plot } from './plot.js';
       curve: (fr, hv, p)=> Math.pow(fr*hv, p.a),
       // The exponent changes the curve the edge is found on, so the lines follow it.
       suggestOn: ['a'],
-      yLabel: p => `[F(R)·hν]${sup(p.a)}`,
+      yLabel: p => `[F(R)·hν]${sup(fmtA(p.a))}`,
+      fmtA,
       zeroFloor: true,
       windows: [
         { lo:'v1', hi:'v2', M:'M',  color: TAUC_COLORS.regs,  name:'Tauc region', key:'regs',  stats:['RMSE1','R21'] },
@@ -545,7 +556,7 @@ import { Plot } from './plot.js';
   const GRIP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>';
   const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
   const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
-  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 0.5 for indirect semiconductors and 2 for direct semiconductors; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
+  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
   const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is centred on it again once the change is made (a Tauc line released, a value confirmed), and a new reference centres them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
 
   const navRow = (p, suggestTitle)=> `
@@ -580,8 +591,7 @@ import { Plot } from './plot.js';
             <div class="param-grid">
               <label class="txt-label" for="${p}A">Tauc exponent</label>
               <select id="${p}A" class="pg-field">
-                <option value="0.5" selected>0.5</option>
-                <option value="2">2</option>
+                ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label}</option>`).join('')}
               </select>
               <label class="txt-label" for="${p}N">[F(R)hν]<sup id="${p}NExp">0.5</sup> smoothing window</label>
               <input type="number" class="pg-field" id="${p}N" value="1" min="1">
@@ -888,7 +898,7 @@ import { Plot } from './plot.js';
       const P = panelOf(a);
       if (!P) return 'Tauc';
       const as = files.length ? files.map((f, i)=> P.params(i).a) : [P.params(0).a];
-      return as.every(v=> v === as[0]) ? `Tauc ${as[0]}` : 'Tauc';
+      return as.every(v=> v === as[0]) ? `Tauc ${fmtA(as[0])}` : 'Tauc';
     }
     const r = byId(a.ref);
     return r ? `Urbach · ${r.name}` : 'Urbach';
@@ -1391,7 +1401,7 @@ import { Plot } from './plot.js';
     // otherwise fall back to a generic "a" (samples may use different exponents).
     const aVals = files.map((f,k)=> P.params(k).a);
     const aUniform = aVals.every(v=>v===aVals[0]);
-    const aLabel = aUniform ? aVals[0] : 'a';
+    const aLabel = aUniform ? fmtA(aVals[0]) : 'a';
 
     const plot1 = resPlotOf(a, {xlabel:'Energy (eV)', xTickStep:0.5, noYTickLabels:true});
     plot1.clearData();
@@ -1426,9 +1436,10 @@ import { Plot } from './plot.js';
     });
 
     // The Eg bar chart. With mixed exponents (per-sample mode) there is no single
-    // Direct/Indirect qualifier, so drop it from the title and axis label.
-    const egLabel = aUniform ? (aVals[0]===2 ? 'Direct' : 'Indirect') : '';
-    $('BarTitle').textContent = (egLabel ? egLabel+' ' : '') + 'Energy Band Gap';
+    // Direct/Indirect qualifier, so drop it from the title and axis label. A forbidden
+    // transition says so in the title only: the axis has no room for it on a phone.
+    const ex = aUniform ? expOf(aVals[0]) : null, egLabel = ex ? ex.gap : '';
+    $('BarTitle').textContent = (egLabel ? egLabel + (ex.forbidden ? ' Forbidden' : '') + ' ' : '') + 'Energy Band Gap';
     const leg2 = $('RL2'); leg2.innerHTML='';
     renderEgSel(a);
     const vals = { x: fits.map(r=>r.Eg),    b: fits.map(r=>r.EgInt) };
@@ -1647,7 +1658,7 @@ import { Plot } from './plot.js';
           return [fmtNum(lo,6), fmtNum(hi,6)];
         };
         const [ts,te] = span(r.regs), [bs,be] = span(r.regs2);
-        t += csvLine([f.label, fp.a, fp.N, fp.M, ts, te,
+        t += csvLine([f.label, +fp.a.toFixed(6), fp.N, fp.M, ts, te,
           isFinite(r.regs.R2)?fmtNum(r.regs.R2,6):'', isFinite(r.regs.NRMSE)?fmtNum(r.regs.NRMSE,6):'',
           fp.M2, bs, be,
           isFinite(r.regs2.R2)?fmtNum(r.regs2.R2,6):'', isFinite(r.regs2.NRMSE)?fmtNum(r.regs2.NRMSE,6):'']);
