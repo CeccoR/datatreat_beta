@@ -293,8 +293,9 @@ function buildModel(plot, opts){
     font: { family: 'Inter', tick: 8, axis: 9, legend: 8, title: 9 },   // sizes in points
     xlabel: strip(plot.xlabel) || '',
     ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
-    // The page plot's log y-axis: its series reach the composer as the log10 of the
-    // data, and are ticked and ranged as such (yMajorTicks and the rest).
+    /* Log scales, one per axis, switched freely. A page plot drawn on a log y-axis
+       opens its figure on one; the series always carry the data themselves. */
+    xLog: false,
     yLog: !!(plot._opts && plot._opts.yLog),
     // Always the whole data set, whatever the page plot is zoomed to.
     xAuto: true, xmin: 0, xmax: 1,
@@ -361,8 +362,6 @@ function buildModel(plot, opts){
    field is showing, so nothing has to be zeroed to mean "pick one for me". */
 const stepX = ()=> F.xStepAuto ? 0 : F.xStep;
 const stepY = ()=> F.yStepAuto ? 0 : F.yStep;
-const minorsX = ()=> F.minorXAuto ? 4 : F.minorX;
-const minorsY = ()=> F.minorYAuto ? 4 : F.minorY;
 
 // Major ticks for a range: a fixed step when the user set one, else a nice default.
 function majorTicks(lo, hi, step){
@@ -377,61 +376,106 @@ function majorTicks(lo, hi, step){
   return out;
 }
 
-/* A log y-axis (F.yLog): the values are the log10 of the data, ticked at the whole
-   decades in view (every step-th one, when a step is set), labelled as powers of ten,
-   with each decade's 2…9 as minor ticks. Under two decades in view it falls back to
-   plain ticks of the exponent, labelled with the value. */
-function yMajorTicks(lo, hi){
-  if (!F.yLog) return majorTicks(lo, hi, stepY());
-  const k = Math.max(1, Math.round(stepY()) || 1), out = [];
-  for (let n = Math.ceil(lo - 1e-9); n <= hi + 1e-9; n++) if (n % k === 0) out.push(n);
-  return out.length >= 2 ? out : majorTicks(lo, hi, 0);
-}
-function yMinorTicks(majors, lo, hi){
-  if (!F.yLog || !majors.every(Number.isInteger)) return minorTicks(majors, lo, hi, minorsY());
+/* ---- Log scales -------------------------------------------------------------
+   On a log axis the figure works in the log10 of the data: ranges, ticks and the
+   placing of everything are linear there, and only the series are carried over
+   (TX/TY). A category axis has no scale to change, so a bar chart's X stays linear. */
+const xLog = ()=> !!F.xLog && !(F.cats && F.cats.length);
+const yLog = ()=> !!F.yLog;
+const isLog = ax => ax === 'x' ? xLog() : yLog();
+const lg = v => v > 0 ? Math.log10(v) : NaN;
+const TX = v => xLog() ? lg(v) : v;
+const TY = v => yLog() ? lg(v) : v;
+const pow10 = t => +Math.pow(10, t).toPrecision(12);
+
+/* The major ticks of an axis. On a log one they are the whole decades in view, every
+   step-th one when a step is set (in decades). Under two decades in view there are
+   too few of those, and the ticks fall on the 1, 2 and 5 of each decade instead, or
+   failing three of those on nice values of the data, as a linear axis would pick
+   them. `dec` marks the decade kind, whose labels are powers of ten, not numbers. */
+function axisTicks(ax, lo, hi){
+  const step = ax === 'x' ? stepX() : stepY();
+  if (!isLog(ax)) return majorTicks(lo, hi, step);
+  const k = Math.max(1, Math.round(step) || 1), dec = [];
+  for (let n = Math.ceil(lo - 1e-9); n <= hi + 1e-9; n++) if (n % k === 0) dec.push(n);
+  if (dec.length >= 2){ dec.dec = true; return dec; }
   const out = [];
-  if (minorsY() > 0) for (let n = Math.floor(lo); n <= Math.ceil(hi); n++)
-    for (let k = 2; k <= 9; k++){ const v = n + Math.log10(k); if (v >= lo && v <= hi) out.push(v); }
+  for (let n = Math.floor(lo); n <= Math.ceil(hi); n++)
+    for (const m of [1, 2, 5]){ const t = Math.log10(m) + n; if (t >= lo - 1e-9 && t <= hi + 1e-9) out.push(t); }
+  if (out.length >= 3) return out;
+  return niceTicks(Math.pow(10, lo), Math.pow(10, hi), 4).map(lg).filter(t=> t >= lo && t <= hi);
+}
+// How many minor ticks each major interval gets. Automatic on a log axis: a decade
+// apart, the 2…9 of the decade; several decades apart, the decades in between.
+function minorsOf(ax, majors){
+  const auto = ax === 'x' ? F.minorXAuto : F.minorYAuto;
+  if (!auto) return ax === 'x' ? F.minorX : F.minorY;
+  if (!isLog(ax) || !majors.dec) return 4;
+  const k = majors.length > 1 ? majors[1] - majors[0] : 1;
+  return k > 1 ? k - 1 : 8;
+}
+/* The minor ticks of an axis. On a log one, the n minors of an interval stand where
+   they would on a linear scale — at equal steps of the value from one major to the
+   next — and so crowd towards its top end: with n = 8 over a decade they are 2…9. */
+function axisMinors(ax, majors, lo, hi){
+  const n = Math.max(0, Math.round(minorsOf(ax, majors)));
+  if (!isLog(ax)) return minorTicks(majors, lo, hi, n);
+  if (majors.length < 2 || !n) return [];
+  // Automatic over several decades: the decades themselves.
+  const auto = ax === 'x' ? F.minorXAuto : F.minorYAuto;
+  const at = (a, b, j)=> majors.dec && auto && b - a > 1 ? a + j
+    : Math.log10(Math.pow(10, a) + j * (Math.pow(10, b) - Math.pow(10, a)) / (n + 1));
+  const ends = [majors[0] - (majors[1] - majors[0]), ...majors,
+                majors[majors.length-1] + (majors[majors.length-1] - majors[majors.length-2])];
+  const out = [];
+  for (let i = 0; i + 1 < ends.length; i++)
+    for (let j = 1; j <= n; j++){ const t = at(ends[i], ends[i+1], j); if (t >= lo && t <= hi) out.push(t); }
   return out;
 }
-// A y tick's label: its number, or on a log axis a 10 and its raised exponent.
+// A tick's label: its number, or on a log axis's decades a 10 and its raised exponent.
 const SUP_K = 0.72;
-function yTickParts(t){
-  if (!F.yLog) return { base: fmtTick(t) };
-  if (Number.isInteger(t)) return { base: '10', sup: t < 0 ? '\u2212' + (-t) : String(t) };
-  return { base: fmtTick(Math.pow(10, t)) };
+function tickParts(ax, t, majors){
+  if (!isLog(ax)) return { base: fmtTick(t) };
+  if (majors && majors.dec) return { base: '10', sup: t < 0 ? '\u2212' + (-t) : String(t) };
+  return { base: fmtTick(pow10(t)) };
 }
-const yTickW = (t, f)=>{ const p = yTickParts(t); return textW(p.base, f) + (p.sup ? textW(p.sup, f * SUP_K) : 0); };
-// The y bounds as the Range fields show and take them: on a log axis, the data's own
+const tickW = (ax, t, majors, f)=>{ const p = tickParts(ax, t, majors); return textW(p.base, f) + (p.sup ? textW(p.sup, f * SUP_K) : 0); };
+// The bounds as the Range fields show and take them: on a log axis, the data's own
 // values rather than their logarithms (a bound ≤ 0 has none).
-const yShown = v => F.yLog ? Math.pow(10, v) : v;
-const yTaken = v => F.yLog ? (v > 0 ? Math.log10(v) : null) : v;
+const shownOf = (ax, v)=> isLog(ax) ? Math.pow(10, v) : v;
+const takenOf = (ax, v)=> isLog(ax) ? (v > 0 ? Math.log10(v) : null) : v;
 
 /* ---- Geometry -------------------------------------------------------------- */
 
-// Data extent of the series drawn in `panelIdxs`, or null when there's no data.
+// Data extent of the series drawn in `panelIdxs`, or null when there's no data. On a
+// log axis it is the extent of the logarithms, which is what that axis is ranged in.
 function extentOf(panelIdxs){
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, any = false;
   for (const s of F.series){
     if (!s.show || !panelIdxs.includes(s.panel)) continue;
     for (let i = 0; i < s.xs.length; i++){
-      const x = s.xs[i], y = s.ys[i];
+      const x = TX(s.xs[i]), y = TY(s.ys[i]);
       if (!isFinite(x) || !isFinite(y)) continue;
-      // Error bars are part of the mark, so they must fit inside the range too.
+      // Error bars are part of the mark, so they must fit inside the range too — but a
+      // whisker running down to a value a log axis cannot show cannot stretch it.
       const e = (s.errs && isFinite(s.errs[i]) && s.errs[i] > 0) ? s.errs[i] : 0;
+      const lo = TY(s.ys[i] - e), hi = TY(s.ys[i] + e);
       any = true;
       if (x < x0) x0 = x; if (x > x1) x1 = x;
-      if (y - e < y0) y0 = y - e; if (y + e > y1) y1 = y + e;
+      if (isFinite(lo) && lo < y0) y0 = lo; if (y < y0) y0 = y;
+      if (isFinite(hi) && hi > y1) y1 = hi; if (y > y1) y1 = y;
     }
   }
   if (!any) return null;
   // Bars stand on a zero baseline and need half a category slot of air either side.
+  // A log axis has no zero: its bars rise from the foot of whatever range is shown.
   const bars = F.series.some(s=> s.show && s.kind === 'bar' && panelIdxs.includes(s.panel));
-  if (bars){ x0 -= 0.7; x1 += 0.7; y0 = Math.min(0, y0); }
+  if (bars){ x0 -= 0.7; x1 += 0.7; if (!yLog()) y0 = Math.min(0, y0); }
   if (x1 === x0){ x0 -= 0.5; x1 += 0.5; }
   if (y1 === y0){ y0 -= 0.5; y1 += 0.5; }
   const pad = (y1 - y0) * 0.05;
-  return { x0, x1, y0: bars ? y0 : y0 - pad, y1: y1 + pad };
+  // (So there the shortest bar keeps the padding under it, or it would have no height.)
+  return { x0, x1, y0: bars && !yLog() ? y0 : y0 - pad, y1: y1 + pad };
 }
 
 // True when nothing sits immediately beyond `side` of panel `i` — i.e. there is
@@ -589,7 +633,8 @@ function drawFigure(svg, ink, paper, extra){
   // below, and (for a global legend) a strip under that.
   let maxYNum = 0;
   F.panels.forEach((p, i)=>{
-    for (const t of yMajorTicks(yOf[i][0], yOf[i][1])) maxYNum = Math.max(maxYNum, yTickW(t, fTick));
+    const ts = axisTicks('y', yOf[i][0], yOf[i][1]);
+    for (const t of ts) maxYNum = Math.max(maxYNum, tickW('y', t, ts, fTick));
   });
   // The category names, measured once: whole, as the figure always draws them.
   const catWs = (F.cats || []).map(cat=> textW(catText(cat.x), fTick));
@@ -603,8 +648,9 @@ function drawFigure(svg, ink, paper, extra){
     const xRad = xRot * Math.PI / 180;
     // A category axis draws its names, never numbers: those take no room of their own.
     if (!catWs.length) F.panels.forEach((p, i)=>{
-      for (const t of majorTicks(xOf[i][0], xOf[i][1], stepX())){
-        const w = textW(fmtTick(t), fTick);
+      const ts = axisTicks('x', xOf[i][0], xOf[i][1]);
+      for (const t of ts){
+        const w = tickW('x', t, ts, fTick);
         halfX = Math.max(halfX, xRot ? w * Math.cos(xRad) : w / 2);
         if (xRot) catDrop = Math.max(catDrop, w * Math.sin(xRad) + fTick * Math.cos(xRad));
       }
@@ -692,8 +738,14 @@ function drawFigure(svg, ink, paper, extra){
     const pw = Math.max(4, p.cs * cw), ph = Math.max(4, p.rs * ch);
     const [x0, x1] = xOf[pi] || [0, 1];
     const [y0, y1] = yOf[pi] || [0, 1];
-    const X = v => px0 + (v - x0) / (x1 - x0 || 1) * pw;
-    const Y = v => py0 + ph - (v - y0) / (y1 - y0 || 1) * ph;
+    // XT/YT place a value of the axis itself — a tick, a bound — and X/Y a value of
+    // the data, which on a log axis is first taken to its logarithm.
+    const XT = v => px0 + (v - x0) / (x1 - x0 || 1) * pw;
+    const YT = v => py0 + ph - (v - y0) / (y1 - y0 || 1) * ph;
+    const X = v => XT(TX(v)), Y = v => YT(TY(v));
+    // A data value a log axis has no place for (≤ 0) is drawn past the panel's foot,
+    // where the clip cuts it: a whisker or a bar running down to it ends there.
+    const Yc = v =>{ const q = Y(v); return isFinite(q) ? q : py0 + ph + 2; };
 
     const clipId = 'fclip' + pi;
     const defs = add('defs', {});
@@ -703,18 +755,18 @@ function drawFigure(svg, ink, paper, extra){
 
     // Grid, under everything. Built from the same ticks the axes use, so it always
     // lines up with the numbers whatever the tick step is.
-    const gx = majorTicks(x0, x1, stepX()), gy = yMajorTicks(y0, y1);
+    const gx = axisTicks('x', x0, x1), gy = axisTicks('y', y0, y1);
     if (F.grid.x || F.grid.y){
       const gg = add('g', { 'clip-path': `url(#${clipId})` });
       const rule = (a, minor)=> add('line', { ...a, stroke:ink, 'stroke-width': minor ? 0.3 : 0.5,
                                               'stroke-dasharray':F.grid.dash, opacity: minor ? 0.28 : 0.45 }, gg);
       if (F.grid.x){
-        for (const t of gx) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph });
-        if (F.grid.minor) for (const t of minorTicks(gx, x0, x1, minorsX())) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph }, true);
+        for (const t of gx) rule({ x1:XT(t), x2:XT(t), y1:py0, y2:py0+ph });
+        if (F.grid.minor) for (const t of axisMinors('x', gx, x0, x1)) rule({ x1:XT(t), x2:XT(t), y1:py0, y2:py0+ph }, true);
       }
       if (F.grid.y){
-        for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) });
-        if (F.grid.minor) for (const t of yMinorTicks(gy, y0, y1)) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
+        for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:YT(t), y2:YT(t) });
+        if (F.grid.minor) for (const t of axisMinors('y', gy, y0, y1)) rule({ x1:px0, x2:px0+pw, y1:YT(t), y2:YT(t) }, true);
       }
     }
 
@@ -785,21 +837,23 @@ function drawFigure(svg, ink, paper, extra){
       if (!s.show || s.panel !== pi) continue;
       if (s.kind === 'bar'){
         const nb = barSeries.length, bi = barSeries.indexOf(s);
-        const slot = Math.abs(X(1) - X(0));           // one category, in px
+        const slot = Math.abs(XT(1) - XT(0));         // one category, in px
         const wPx = Math.max(1, slot * s.width / nb);
         const off = (bi - (nb - 1) / 2) * wPx;
-        const zero = Y(Math.max(y0, Math.min(y1, 0)));
+        // On a log axis there is no zero to stand on: bars rise from the panel's foot.
+        const zero = YT(yLog() ? y0 : Math.max(y0, Math.min(y1, 0)));
         s.xs.forEach((xv, j)=>{
           const yv = s.ys[j];
           if (!isFinite(xv) || !isFinite(yv)) return;
           const cx = X(xv) + off, yy = Y(yv);
+          if (!isFinite(yy)) return;
           add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
                         width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2),
                         fill:barFill(add, divColor(s, divOfBar(s, j)),
                                      divTexture(s, divOfBar(s, j)), divInv(s, divOfBar(s, j))) }, g);
           const err = s.errs && s.errs[j];
           if (isFinite(err) && err > 0){
-            const yA = Y(yv - err), yB = Y(yv + err), cap = Math.min(4, wPx / 3);
+            const yA = Yc(yv - err), yB = Yc(yv + err), cap = Math.min(4, wPx / 3);
             const st = { stroke:ink, 'stroke-width':0.8 };
             add('line', { x1:cx, x2:cx, y1:yA, y2:yB, ...st }, g);
             add('line', { x1:cx-cap, x2:cx+cap, y1:yA, y2:yA, ...st }, g);
@@ -812,7 +866,7 @@ function drawFigure(svg, ink, paper, extra){
             // past the top of the range is centred on the part that shows.
             const bTop = Math.min(Math.max(Math.min(yy, zero), py0), py0 + ph);
             const bBot = Math.min(Math.max(Math.max(yy, zero), py0), py0 + ph);
-            valueLabel(s, j, cx, yy, Math.min(Y(yv + e), zero), Math.max(Y(yv - e), zero),
+            valueLabel(s, j, cx, yy, Math.min(Yc(yv + e), zero), Math.max(Yc(yv - e), zero),
                        { color: divColor(s, divOfBar(s, j)), top: bTop, bottom: bBot });
           }
         });
@@ -821,25 +875,27 @@ function drawFigure(svg, ink, paper, extra){
       if (s.marker !== 'none'){
         const r = Math.max(0.9, s.width * 1.3);
         for (let i = 0; i < s.xs.length; i++){
-          if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
-          const [tag, at] = markerShape(s.marker, +X(s.xs[i]).toFixed(2), +Y(s.ys[i]).toFixed(2), r, s.color, s.width);
+          const qx = X(s.xs[i]), qy = Y(s.ys[i]);
+          if (!isFinite(qx) || !isFinite(qy)) continue;
+          const [tag, at] = markerShape(s.marker, +qx.toFixed(2), +qy.toFixed(2), r, s.color, s.width);
           add(tag, at, g);
         }
       }
       if (s.dash !== 'none'){
         let d = '';
         for (let i = 0; i < s.xs.length; i++){
-          if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
-          d += (d === '' ? 'M' : 'L') + X(s.xs[i]).toFixed(2) + ',' + Y(s.ys[i]).toFixed(2) + ' ';
+          const qx = X(s.xs[i]), qy = Y(s.ys[i]);
+          if (!isFinite(qx) || !isFinite(qy)) continue;
+          d += (d === '' ? 'M' : 'L') + qx.toFixed(2) + ',' + qy.toFixed(2) + ' ';
         }
         const path = add('path', { d, fill:'none', stroke:s.color, 'stroke-width':s.width }, g);
         if (s.dash) path.setAttribute('stroke-dasharray', s.dash);
       }
       if (wantsLabels()){
         for (let i = 0; i < s.xs.length; i++){
-          if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
-          const yy = Y(s.ys[i]);
-          valueLabel(s, i, X(s.xs[i]), yy, yy, yy);
+          const qx = X(s.xs[i]), yy = Y(s.ys[i]);
+          if (!isFinite(qx) || !isFinite(yy)) continue;
+          valueLabel(s, i, qx, yy, yy, yy);
         }
       }
     }
@@ -864,10 +920,11 @@ function drawFigure(svg, ink, paper, extra){
         const qw = Math.max(4, q.cs * cw), qh = Math.max(4, q.rs * ch);
         if (vert){
           const [a, z] = yOf[k] || [0, 1];
-          for (const t of yMajorTicks(a, z)) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
+          for (const t of axisTicks('y', a, z)) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
         } else {
           const [a, z] = xOf[k] || [0, 1];
-          for (const t of majorTicks(a, z, stepX())) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: textW(fmtTick(t), fTick) / 2 });
+          const ts = axisTicks('x', a, z);
+          for (const t of ts) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: tickW('x', t, ts, fTick) / 2 });
         }
       });
       return marks;
@@ -912,10 +969,10 @@ function drawFigure(svg, ink, paper, extra){
                           : { x1:pos, x2:pos, y1:g0.base+from, y2:g0.base+to };
         add('line', { ...e, stroke:ink, 'stroke-width':0.8 });
       };
-      const proj = g0.vert ? Y : X;
+      const proj = g0.vert ? YT : XT;
       const majors = g0.vert ? yMaj : xMaj;
       if (a.major) majors.forEach(t=> mark(proj(t), TICK_MAJ));
-      if (a.minor) (g0.vert ? yMinorTicks(majors, y0, y1) : minorTicks(majors, x0, x1, minorsX())).forEach(t=> mark(proj(t), TICK_MIN));
+      if (a.minor) (g0.vert ? axisMinors('y', majors, y0, y1) : axisMinors('x', majors, x0, x1)).forEach(t=> mark(proj(t), TICK_MIN));
 
       // Numbers and title only where there is room outside the panel; a side that
       // touches a neighbour can carry tick marks but nothing that would overlap it —
@@ -924,7 +981,7 @@ function drawFigure(svg, ink, paper, extra){
 
       if (a.labels && cats && !g0.vert){
         for (const c of cats){
-          const q = X(c.x), rot = xRot;
+          const q = XT(c.x), rot = xRot;
           const at = side === 'bottom' ? { x:q, y:g0.base + fTick*1.15 } : { x:q, y:g0.base - fTick*0.5 };
           const el = add('text', { ...at, 'font-size':fTick, fill:ink,
                                    'text-anchor': rot ? 'end' : 'middle' });
@@ -936,7 +993,7 @@ function drawFigure(svg, ink, paper, extra){
       }
       if (a.labels){
         for (const t of majors){
-          const parts = g0.vert ? yTickParts(t) : { base: fmtTick(t) };
+          const parts = tickParts(g0.vert ? 'y' : 'x', t, majors);
           const q = proj(t), txt = parts.base;
           let at;
           if (g0.vert){
@@ -948,7 +1005,7 @@ function drawFigure(svg, ink, paper, extra){
               ? { x:g0.base-5, y:q+fTick*0.36, 'text-anchor':'end' }
               : { x:g0.base+5, y:q+fTick*0.36, 'text-anchor':'start' };
           } else {
-            const hw = textW(txt, fTick) / 2;
+            const hw = tickW('x', t, majors, fTick) / 2;
             const clash = m => Math.abs(m.q - q) < m.w + hw + 2;
             if (q - hw < px0 + 1 && !free.left && neighbourMarks(side, 'left', false).some(clash)) continue;
             if (q + hw > px0 + pw - 1 && !free.right && neighbourMarks(side, 'right', false).some(clash)) continue;
@@ -1462,9 +1519,8 @@ const IDENTITY = ['kind', 'id', 'key', 'given', 'label', 'xs', 'ys', 'errs'];
 /* `name` is the file this figure is exported as. It belongs to this figure alone, like
    a series' data: a preset made on another plot carrying it over would export this
    one under the other's file name. The per-plot memory, which is about this figure,
-   does bring it back (recallSettings). `yLog` is the page plot's, as its data are:
-   neither a preset nor the memory changes what the values are. */
-const SCALAR_IDENTITY = ['name', 'yLog'];
+   does bring it back (recallSettings). */
+const SCALAR_IDENTITY = ['name'];
 function applySettings(snap){
   if (!snap) return;
   const scalars = JSON.parse(JSON.stringify(snap.scalars));
@@ -1622,12 +1678,21 @@ const autoNum = (label, key, autoKey, min, max, autoVal)=>
     ? `<input type="text" value="${autoVal}" disabled title="Chosen automatically">`
     : numField(`data-k="${key}"`, F[key], min, max)}</label>`;
 
+// How many minors each major interval automatically gets, for that field to show.
+function autoMinorsOf(axis){
+  const { xOf, yOf } = computeRanges();
+  const i = Math.min(Math.max(0, F.rangePanel | 0), F.panels.length - 1);
+  const [a, z] = ((axis === 'x' ? xOf : yOf)[i]) || [0, 1];
+  return minorsOf(axis, axisTicks(axis, a, z));
+}
 // The interval the automatic ticks are actually landing on, for that field to show.
 function autoStepOf(axis){
   const { xOf, yOf } = computeRanges();
   const i = Math.min(Math.max(0, F.rangePanel | 0), F.panels.length - 1);
   const [a, z] = ((axis === 'x' ? xOf : yOf)[i]) || [0, 1];
-  const t = axis === 'y' && F.yLog ? (F.yStepAuto ? yMajorTicks(a, z) : [0, 1]) : majorTicks(a, z, 0);
+  // A log axis steps a decade at a time.
+  if (isLog(axis)) return 1;
+  const t = majorTicks(a, z, 0);
   return t.length > 1 ? +(t[1] - t[0]).toPrecision(6) : '';
 }
 
@@ -1659,7 +1724,7 @@ function rangeColHtml(axis){
   const bound = end => shared
     ? (X ? (end ? F.xmax : F.xmin) : (end ? F.ymax : F.ymin))
     : (man ? man[end] : live[end]);
-  const shown = v => +(+(X ? v : yShown(v))).toPrecision(6);
+  const shown = v => +(+shownOf(axis, v)).toPrecision(6);
   const field = end => auto
     ? `<input type="text" value="${shown(live[end])}" disabled title="Chosen automatically">`
     : (shared
@@ -2035,7 +2100,7 @@ function manNum(label, bag, end){
   const r = computeRanges();
   const auto = bag === 'xMan' ? (r.xOf[i] || [0,1]) : (r.yOf[i] || [0,1]);
   const v = cur ? cur[end] : auto[end];
-  return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+(bag === 'yMan' ? yShown(v) : v)).toPrecision(6), -1e12, 1e12)}</label>`;
+  return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+shownOf(bag === 'yMan' ? 'y' : 'x', v)).toPrecision(6), -1e12, 1e12)}</label>`;
 }
 
 /* Axis-title editor: an ordinary text field over the ^{}/_{} notation, plus the two
@@ -2258,17 +2323,20 @@ function controlsHtml(){
     ${titleField('Y title', 'ylabel')}
     ${sel('X title placing','titleModeX',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeX)}
     ${sel('Y title placing','titleModeY',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeY)}
+    <div class="fig-subhead">Scale</div>
+    ${F.cats && F.cats.length ? '' : chk('X logarithmic','xLog')}
+    ${chk('Y logarithmic','yLog')}
     <div class="fig-subhead">Range</div>
     <div class="fig-rangecols">${rangeColHtml('x')}${rangeColHtml('y')}</div>
     <div class="fig-subhead">Ticks</div>
     ${chk('X major step chosen automatically','xStepAuto')}
-    ${autoNum('X major step','xStep','xStepAuto',0,1e9, autoStepOf('x'))}
+    ${autoNum(xLog() ? 'X decades per major' : 'X major step','xStep','xStepAuto',0,1e9, autoStepOf('x'))}
     ${chk('Y major step chosen automatically','yStepAuto')}
-    ${autoNum('Y major step','yStep','yStepAuto',0,1e9, autoStepOf('y'))}
+    ${autoNum(yLog() ? 'Y decades per major' : 'Y major step','yStep','yStepAuto',0,1e9, autoStepOf('y'))}
     ${chk('X minors per major chosen automatically','minorXAuto')}
-    ${autoNum('X minors per major','minorX','minorXAuto',0,20, 4)}
+    ${autoNum('X minors per major','minorX','minorXAuto',0,20, autoMinorsOf('x'))}
     ${chk('Y minors per major chosen automatically','minorYAuto')}
-    ${autoNum('Y minors per major','minorY','minorYAuto',0,20, 4)}
+    ${autoNum('Y minors per major','minorY','minorYAuto',0,20, autoMinorsOf('y'))}
     <div class="fig-subhead">Grid</div>
     ${chk('Vertical lines (X ticks)','x','g')}
     ${chk('Horizontal lines (Y ticks)','y','g')}
@@ -2852,7 +2920,23 @@ function wirePresetBar(){
 
 /* Settings that change the shape of the sidebar itself. */
 const SHOWS_MORE = new Set(['xAuto','yAuto','shareX','shareY','legendMode','legendFrame',
-  'xStepAuto','yStepAuto','minorXAuto','minorYAuto','catRotAuto']);
+  'xStepAuto','yStepAuto','minorXAuto','minorYAuto','catRotAuto','xLog','yLog']);
+
+/* A manual range is held in the axis's own terms — the logarithms, on a log axis — so
+   switching the scale carries it across: the same bounds, the other way of placing
+   them. One a log axis cannot take (≤ 0) gives way to the automatic range. */
+function relogRanges(ax, on){
+  const conv = v => on ? (v > 0 ? Math.log10(v) : NaN) : Math.pow(10, v);
+  const pair = r => r && r.map(conv).every(isFinite) ? r.map(conv) : null;
+  const g = pair([F[ax + 'min'], F[ax + 'max']]);
+  if (g) [F[ax + 'min'], F[ax + 'max']] = g; else F[ax + 'Auto'] = true;
+  const man = F[ax + 'Man'];
+  for (const k of Object.keys(man)){
+    const r = pair(man[k]);
+    if (r) man[k] = r;
+    else { delete man[k]; if (F.panels[k]) F.panels[k][ax + 'Auto'] = true; }
+  }
+}
 
 function wireControls(){
   const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','legendFrameAlpha','plotW','plotH','catRot']);
@@ -2878,6 +2962,10 @@ function wireControls(){
       if (k === 'plotAuto' && t.checked) rebuild = true;
       // Off, the tilt opens on the one the figure was drawn with.
       if (k === 'catRotAuto' && !t.checked) F.catRot = lastCatRot;
+      // ...and the minors on as many as are drawn, which on a log axis is not 4.
+      if ((k === 'minorXAuto' || k === 'minorYAuto') && !t.checked)
+        F[k === 'minorXAuto' ? 'minorX' : 'minorY'] = autoMinorsOf(k === 'minorXAuto' ? 'x' : 'y');
+      if (k === 'xLog' || k === 'yLog') relogRanges(k[0], t.checked);
       if ((k === 'xAuto' || k === 'yAuto') && !t.checked){
         const r = computeRanges(), i = (k === 'xAuto' ? F.xPanel : F.yPanel) | 0;
         if (k === 'xAuto'){ const [a, z] = r.xOf[i] || r.xOf[0] || [0, 1]; F.xmin = a; F.xmax = z; }
@@ -2885,9 +2973,9 @@ function wireControls(){
       }
       if (numKeys.has(k)){
         let v = readNum(t); if (v === null) return null;
-        if (k === 'ymin' || k === 'ymax'){
-          v = yTaken(v);
-          if (v === null){ flashFieldInvalid(t); t.value = +yShown(F[k]).toPrecision(6); return null; }
+        if (/^[xy]m(in|ax)$/.test(k)){
+          v = takenOf(k[0], v);
+          if (v === null){ flashFieldInvalid(t); t.value = +shownOf(k[0], F[k]).toPrecision(6); return null; }
         }
         F[k] = v;
       }
@@ -2933,10 +3021,8 @@ function wireControls(){
       const r = computeRanges();
       const cur = F[bag][i] || (bag === 'xMan' ? (r.xOf[i] || [0,1]).slice() : (r.yOf[i] || [0,1]).slice());
       let v = readNum(t); if (v === null) return null;
-      if (bag === 'yMan'){
-        v = yTaken(v);
-        if (v === null){ flashFieldInvalid(t); t.value = +yShown(cur[+t.dataset.end]).toPrecision(6); return null; }
-      }
+      v = takenOf(bag[0], v);
+      if (v === null){ flashFieldInvalid(t); t.value = +shownOf(bag[0], cur[+t.dataset.end]).toPrecision(6); return null; }
       cur[+t.dataset.end] = v;
       F[bag][i] = cur;
     } else if (t.dataset.all){

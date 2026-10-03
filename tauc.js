@@ -1408,7 +1408,9 @@ import { Plot } from './plot.js';
     p.setRange(hv0, hv1, lo - pad, hi + pad);
     p.drawAxes();
     files.forEach((f,k)=>{
-      p.line(f.hv, logs[k], f.color, 1.3, undefined, { label: f.label, key: f.name });
+      // The composer takes F(R) itself and draws it on a log axis of its own, which
+      // can then be switched off like any other.
+      p.line(f.hv, logs[k], f.color, 1.3, undefined, { label: f.label, key: f.name, raw: { xs: f.hv, ys: f.FR } });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg.appendChild(s);
     });
   }
