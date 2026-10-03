@@ -731,17 +731,20 @@ import { Plot } from './plot.js';
   /* Folding animates the body's height. The card is marked folded from the start, so
      its panel stops drawing at once; .an-anim keeps the body laid out (and clipped)
      until the animation ends. One taken over midway starts from where it got to. */
-  const FOLD_MS = 200;
+  // Long enough, at ~600 px of body, to read as a slide rather than a jump; the curve
+  // starts briskly and settles gently, and the content fades as it goes.
+  const FOLD_MS = 320, FOLD_EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
   function animateFold(card, fold){
     const body = card.querySelector(':scope > .an-body');
     if (!body._anim && card.classList.contains('is-folded') === fold) return;
-    const from = body.getBoundingClientRect().height;
+    const from = body.getBoundingClientRect().height, fromO = +getComputedStyle(body).opacity;
     if (body._anim){ body._anim.cancel(); body._anim = null; }
     card.classList.toggle('is-folded', fold);
     card.classList.add('an-anim');
     const to = fold ? 0 : body.getBoundingClientRect().height;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(to - from) < 1){ card.classList.remove('an-anim'); return; }
-    const an = body.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: FOLD_MS, easing: 'ease-in-out' });
+    const an = body.animate([{ height: from + 'px', opacity: fold ? fromO : Math.min(fromO, 0.2) }, { height: to + 'px', opacity: fold ? 0 : 1 }],
+      { duration: FOLD_MS, easing: FOLD_EASE });
     body._anim = an;
     an.onfinish = ()=>{ if (body._anim === an){ body._anim = null; card.classList.remove('an-anim'); } };
   }

@@ -1505,7 +1505,7 @@ button.an-type:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .an-grip { cursor: grab; touch-action: none; margin-left: -6px; }
 .an-fold { margin-right: -6px; }
 .an-acts { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 0 auto; }
-.an-fold svg { transition: transform 0.2s ease; }
+.an-fold svg { transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1); }   /* as the fold (tauc.js FOLD_MS) */
 /* The name behaves as the project name does, in the card's own type: plain text at
    rest, its field shown on hover and while editing, as wide as the name (tauc.js
    fitName). Pulled out by its inset (border 1 + padding 9), the name at rest starts
