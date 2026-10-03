@@ -185,13 +185,13 @@ class Plot{
       if (!xTicks.some(v=>Math.abs(v-this.xmax)<tol)) drawXTick(this.xmax, 'end');
     }
     if (!this.noYTickLabels || this._opts.yGrid){
-      for (const yv of niceTicks(this.ymin, this.ymax, 5)){
+      for (const yv of this.yTicksIn(this.ymin, this.ymax)){
         const py = this.py(yv);
         if (this._opts.yGrid)   // horizontal grid line (used by bar charts)
           this.gAxes.appendChild(svgEl('line',{x1:m.l,x2:w-m.r,y1:py,y2:py,stroke:'#262c35','class':'plot-grid'}));
         if (!this.noYTickLabels){
           const t = svgEl('text',{x:m.l-6,y:py+3,'font-size':10,fill:'#93a0b0','text-anchor':'end','class':'plot-tick'});
-          t.textContent = fmtTick(yv); this.gAxes.appendChild(t);
+          this.yTickText(t, yv); this.gAxes.appendChild(t);
         }
       }
     }
@@ -500,6 +500,22 @@ class Plot{
     fitCsvIcons(col);
     fitPlotIcons(col);
   }
+  /* A log y-axis (opts.yLog): the values drawn are the log10 of the data, ticked at
+     the whole decades in view and labelled as powers of ten. Less than two decades in
+     view, it falls back to nice steps of the exponent, labelled with the value. */
+  yTicksIn(lo, hi){
+    if (!this._opts.yLog) return niceTicks(lo, hi, 5);
+    const dec = [];
+    for (let n = Math.ceil(lo - 1e-9); n <= Math.floor(hi + 1e-9); n++) dec.push(n);
+    return dec.length >= 2 ? dec : niceTicks(lo, hi, 5);
+  }
+  yTickText(t, yv){
+    if (!this._opts.yLog) t.textContent = fmtTick(yv);
+    else if (Math.abs(yv - Math.round(yv)) < 1e-9){
+      const n = Math.round(yv);
+      t.innerHTML = `10<tspan baseline-shift="super" font-size="8">${n < 0 ? '−' + (-n) : n}</tspan>`;
+    } else t.textContent = fmtTick(Math.pow(10, yv));
+  }
   _clearCrosshair(){ if (this.gCross) this.gCross.innerHTML=''; }
   // Draw a thin crosshair + a coordinate readout at the pointer (data coordinates via invX/invY)
   _drawCrosshair(clientX, clientY){
@@ -523,7 +539,7 @@ class Plot{
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
     if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }
-    const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, yv, fmt);
+    const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, this._opts.yLog ? Math.pow(10, yv) : yv, fmt);
     t.appendChild(l2);
     this.gCross.appendChild(t);
   }
@@ -679,6 +695,8 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
     el.setAttribute('fill','#333333');
     el.setAttribute('font-family','Arial, sans-serif');
     el.setAttribute('font-size', Math.round(parseFloat(el.getAttribute('font-size')||10) * 1.6));
+    // a log axis's exponent grows with its 10
+    el.querySelectorAll('tspan[font-size]').forEach(t=> t.setAttribute('font-size', Math.round(parseFloat(t.getAttribute('font-size')) * 1.6)));
   });
   workSvg.querySelectorAll('.plot-label').forEach(el=>{
     el.setAttribute('fill','#333333');
@@ -724,14 +742,23 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
     }
 
     if (!plotObj.noYTickLabels){
-      const yTicks = niceTicks(ry1, ry2, 5);
+      const yTicks = plotObj.yTicksIn(ry1, ry2);
       for (const yv of yTicks){
         const py = toSvgY(yv);
         if (py < m.t-1 || py > h-m.b+1) continue;
         addLine(m.l-PO,   py, m.l+PI,   py, 1.2); // left
         addLine(w-m.r+PO, py, w-m.r-PI, py, 1.2); // right
       }
-      if (yTicks.length >= 2){
+      // On a log axis ticked by decades the minor ticks are the 2…9 of each.
+      const decades = plotObj._opts.yLog && yTicks.every(v=> Number.isInteger(v));
+      if (decades){
+        for (let n = Math.floor(ry1); n <= Math.ceil(ry2); n++) for (let k = 2; k <= 9; k++){
+          const py = toSvgY(n + Math.log10(k));
+          if (py < m.t-1 || py > h-m.b+1) continue;
+          addLine(m.l-SO,   py, m.l+SI,   py, 0.9);
+          addLine(w-m.r+SO, py, w-m.r-SI, py, 0.9);
+        }
+      } else if (yTicks.length >= 2){
         const step = yTicks[1]-yTicks[0];
         for (let yv = yTicks[0]-step/2; yv <= ry2+step/2; yv += step){
           const py = toSvgY(yv);

@@ -7,7 +7,7 @@ import { Plot } from './plot.js';
 (function(){
   let files = []; // {name,label,wl[],FR[],hv[]}  (each on its own native axis)
   let currIndex=0;                    // the sample every analysis card shows
-  let resPlot0=null;                  // the Kubelka-Munk summary plot (created once)
+  let resPlot0=null, resPlotLog=null; // the Kubelka-Munk summary plots (created once)
   // How Eg is read off the Tauc plot; each Tauc analysis picks which its bar chart shows.
   const EG_METHODS = [
     // Named E_g in plain text: a legend's sub run sits badly beside its swatch.
@@ -1385,7 +1385,32 @@ import { Plot } from './plot.js';
       plot0.line(f.wl, f.FR, f.color, 1.3, undefined, { label: f.label, key: f.name });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg0.appendChild(s);
     });
+    renderLogView();
     analyses.forEach(renderAnalysisRes);
+  }
+  // F(R) against hν on a log y-axis: the absorption edge and the tail below it, over
+  // the decades they span, on the energy axis the analyses work on. The plot draws
+  // log10 F(R); a point with F(R) ≤ 0 has none and is left out.
+  function renderLogView(){
+    if (!resPlotLog){
+      // A wider left margin than the default 55: powers of ten are wider tick labels
+      // than numbers, and in an export (type ×1.6) they reached the axis title.
+      resPlotLog = new Plot(document.getElementById('taucResSvgLog'), {xlabel:'Energy (eV)', ylabel:'F(R) (a. u.)', xTickStep:0.5, yLog:true, margin:{l:66,r:20,t:15,b:40}});
+      resPlotLog.attachTools(resPlotLog.svg.closest('.plot-wrap'));
+    }
+    const p = resPlotLog; p.clearData();
+    const leg = document.getElementById('taucResLegendLog'); leg.innerHTML='';
+    const logs = files.map(f=> f.FR.map(v=> v > 0 ? Math.log10(v) : NaN));
+    let lo = Infinity, hi = -Infinity;
+    logs.forEach(a=> a.forEach(v=>{ if (isFinite(v)){ lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
+    if (!isFinite(lo)){ lo = -1; hi = 0; }
+    const pad = 0.04 * Math.max(hi - lo, 0.1), [hv0, hv1] = unionHv();
+    p.setRange(hv0, hv1, lo - pad, hi + pad);
+    p.drawAxes();
+    files.forEach((f,k)=>{
+      p.line(f.hv, logs[k], f.color, 1.3, undefined, { label: f.label, key: f.name });
+      const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg.appendChild(s);
+    });
   }
   function renderAnalysisRes(a){
     if (!files.length || !live.has(a.id)) return;
@@ -1616,6 +1641,15 @@ import { Plot } from './plot.js';
         cols.push({h:f.label,                  v:f.FR.map(x=>fmtNum(x,6))});
       });
       entries.push({name:'reflectance_FR.csv', text:wideCsv(cols)});
+    }
+    // FR_vs_energy.csv — (energy, F(R)) per sample: the log-scale plot's data, as values
+    {
+      const cols=[];
+      files.forEach(f=>{
+        cols.push({h:'energy_eV_'+f.label, v:f.hv.map(x=>fmtNum(x,6))});
+        cols.push({h:f.label,              v:f.FR.map(x=>fmtNum(x,6))});
+      });
+      entries.push({name:'FR_vs_energy.csv', text:wideCsv(cols)});
     }
     analyses.forEach(a=>{
       const P = panelOf(a);

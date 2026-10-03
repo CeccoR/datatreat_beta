@@ -292,7 +292,9 @@ function buildModel(plot, opts){
     legendGap: 6,                       // distance from the panel corner / panels
     font: { family: 'Inter', tick: 8, axis: 9, legend: 8, title: 9 },   // sizes in points
     xlabel: strip(plot.xlabel) || '',
-    ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
+    // A log y-axis on the page draws log10 of the data, which is what reaches the
+    // composer, on its linear axis: its title says so.
+    ylabel: (plot._opts && plot._opts.yLog ? 'log_{10} ' : '') + (strip(plot.ylabel) || strip(plot.ylabelSvg) || ''),
     // Always the whole data set, whatever the page plot is zoomed to.
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
