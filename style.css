@@ -883,6 +883,14 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 /* GC's Analysis plots are there to place the interval on the run, not to read values
    off: half a standard plot's height, side by side or stacked alike. */
 svg.plot.plot-short { aspect-ratio: 3.236; }
+/* Their toolbar would stand taller than they are: its buttons run in a row above the
+   plot instead, at its right, the column's top button rightmost. The gas chips keep
+   their place over the data area, now below the row and with no column beside it. */
+.plot-wrap:has(> svg.plot-short) { flex-direction: column; align-items: stretch; gap: 4px; }
+.plot-wrap > svg.plot.plot-short { flex: none; width: 100%; }
+.plot-wrap:has(> svg.plot-short) > .plot-btn-col { order: -1; align-self: flex-end; }
+.plot-wrap:has(> svg.plot-short) .plot-tool-btns { flex-direction: row-reverse; }
+.plot-wrap:has(> svg.plot-short) > .gc-gas-sel { top: 51px; right: 22px; }
 .legend {
   font-size: 12px;
   margin-top: 6px;

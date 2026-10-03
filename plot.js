@@ -60,6 +60,33 @@ function lowerSubs(text, fs){
     t.classList.add('plot-sub');
   });
 }
+/* A y-axis title longer than its plot is tall goes onto two lines, split at the space
+   nearest its middle (one between words, not inside a sub/superscript); the second
+   line sits one line further in, toward the axis, the first where the single line
+   was. `src` is the title as given, SVG markup or plain text. */
+function wrapYLabel(text, src, isSvg, fs){
+  let depth = 0, plain = 0;
+  const cands = [];
+  for (let i = 0; i < src.length; i++){
+    const c = src[i];
+    if (isSvg && c === '<'){
+      const j = src.indexOf('>', i), tag = src.slice(i, j + 1);
+      if (tag.startsWith('</')) depth--; else if (!tag.endsWith('/>')) depth++;
+      i = j; continue;
+    }
+    if (c === ' ' && depth === 0) cands.push({ i, plain });
+    plain++;
+  }
+  if (!cands.length) return;
+  const best = cands.reduce((a, b)=> Math.abs(b.plain - plain/2) < Math.abs(a.plain - plain/2) ? b : a);
+  text.textContent = '';
+  [src.slice(0, best.i), src.slice(best.i + 1)].forEach((part, k)=>{
+    const t = svgEl('tspan', { x: text.getAttribute('x'), dy: k ? '1.15em' : '0' });
+    if (isSvg) t.innerHTML = part; else t.textContent = part;
+    text.appendChild(t);
+  });
+  if (isSvg) lowerSubs(text, fs);
+}
 function svgEl(tag, attrs){
   const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
   for (const k in attrs) e.setAttribute(k, attrs[k]);
@@ -172,6 +199,8 @@ class Plot{
     const yl = svgEl('text',{x:12,y:h/2,'font-size':11,fill:'#c4ccd6','text-anchor':'middle',transform:`rotate(-90 12 ${h/2})`,'class':'plot-label'});
     if(this.ylabelSvg){ yl.innerHTML=this.ylabelSvg; lowerSubs(yl, 11); } else yl.textContent=this.ylabel;
     this.gAxes.appendChild(xl); this.gAxes.appendChild(yl);
+    // Measured in place; a plot out of sight measures 0 and is redrawn when shown.
+    if (yl.getComputedTextLength() > h - 10) wrapYLabel(yl, this.ylabelSvg || this.ylabel, !!this.ylabelSvg, 11);
   }
   /* `meta` describes the trace for anything that reads a plot back rather than looks
      at it — today, the figure composer:
