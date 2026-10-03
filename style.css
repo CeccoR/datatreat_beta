@@ -881,10 +881,8 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 /* Same threshold: a 1 : 2φ strip gets unreadably short once the layout narrows. */
 :root.narrow-layout svg.plot.plot-wide { aspect-ratio: 1.618; }
 /* GC's Analysis plots are there to place the interval on the run, not to read values
-   off: half a standard plot's height. Stacked on a narrow screen they keep the
-   standard one, as the strips do: at half of it the axis title no longer fits. */
+   off: half a standard plot's height, side by side or stacked alike. */
 svg.plot.plot-short { aspect-ratio: 3.236; }
-:root.narrow-layout svg.plot.plot-short { aspect-ratio: 1.618; }
 .legend {
   font-size: 12px;
   margin-top: 6px;
