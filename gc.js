@@ -549,9 +549,31 @@ import { Plot, svgEl } from './plot.js';
     updateRegression();
   }
 
+  /* The y-range a time plot is fitted to: the values of `key` at each sample's points
+     inside its own integration interval, the stretch the results come from, so what
+     lies outside it (a spike before light-on, a drift after) does not flatten it. All
+     the points when none falls inside. Returns [lo, hi]. */
+  function yFit(tables, shown, key){
+    let lo = Infinity, hi = -Infinity, any = false;
+    const take = inside => tables.forEach((d, k)=>{
+      const a = Math.min(startOf(k), endOf(k)), b = Math.max(startOf(k), endOf(k));
+      shown.forEach(g=>{
+        const q = d.gas[g.key]; if (!q) return;
+        d.t.forEach((t, i)=>{
+          const v = q[key][i];
+          if (!isFinite(v) || (inside && !(t >= a && t <= b))) return;
+          lo = Math.min(lo, v); hi = Math.max(hi, v); any = true;
+        });
+      });
+    });
+    take(true);
+    if (!any) take(false);
+    return [lo, hi];
+  }
+
   // Draw the data lines with an x-range spanning both the data and every interval line
-  // (so bars are never clipped). Interval lines are drawn as an overlay, redrawn on
-  // pan/zoom via _onView.
+  // (so bars are never clipped), y fitted to the intervals' data (yFit). Interval lines
+  // are drawn as an overlay, redrawn on pan/zoom via _onView.
   function drawGcData(){
     if (!plot1 || !plot2 || !dataTables.length) return;
     // Restore the pre-redraw zoom captured in computeAndRenderGc (resize/tab-switch),
@@ -564,14 +586,13 @@ import { Plot, svgEl } from './plot.js';
     // Every shown gas shares the axis: they are the same quantity in the same units.
     const shown = shownGases('a');
     const span = key => dataTables.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
-    const rateArrs = span('Fm'), cumArrs = span('FmInt');
-    if (!rateArrs.length) return;
-    const ymax1 = Math.max(...rateArrs.map(maxArr)), ymin1 = Math.min(...rateArrs.map(minArr));
+    if (!span('Fm').length) return;
+    const [ymin1, ymax1] = yFit(dataTables, shown, 'Fm');
     plot1.setRange(tmin, tmax, ymin1, ymax1*1.05);
     if (prev1){ plot1.xmin=prev1.xmin; plot1.xmax=prev1.xmax; plot1.ymin=prev1.ymin; plot1.ymax=prev1.ymax; }
     plot1.drawAxes(); plot1.clearData();
     drawGasLines(plot1, dataTables, shown, 'Fm');
-    const ymax2 = Math.max(...cumArrs.map(maxArr));
+    const ymax2 = yFit(dataTables, shown, 'FmInt')[1];
     plot2.setRange(tmin, tmax, 0, ymax2*1.05);
     if (prev2){ plot2.xmin=prev2.xmin; plot2.xmax=prev2.xmax; plot2.ymin=prev2.ymin; plot2.ymax=prev2.ymax; }
     plot2.drawAxes(); plot2.clearData();
@@ -685,8 +706,9 @@ import { Plot, svgEl } from './plot.js';
     });
   }
 
-  // The two Results strip plots: same quantities as Analysis, cut at the interval end
-  // and without the interval overlay (Results shows the retained data only).
+  // The two Results plots: same quantities as Analysis, cut at the interval end and
+  // without the interval overlay (Results shows the retained data only), y fitted to
+  // the intervals' data as there.
   function drawResultPlots(){
     const cut = cutTables();
     if (!cut.length || !cut.some(d=>d.t.length)) return;
@@ -698,8 +720,8 @@ import { Plot, svgEl } from './plot.js';
       const p = new Plot(svg, {xlabel:'Time (h)', ylabelSvg});
       const arrs = cut.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
       if (!arrs.length) return p;
-      const ymax = Math.max(...arrs.map(maxArr));
-      const ymin = ymin0 !== null ? ymin0 : Math.min(...arrs.map(minArr));
+      const [lo, ymax] = yFit(cut, shown, key);
+      const ymin = ymin0 !== null ? ymin0 : lo;
       p.setRange(tmin, tmax, ymin, ymax*1.05);
       p.drawAxes(); p.clearData();
       drawGasLines(p, cut, shown, key);
