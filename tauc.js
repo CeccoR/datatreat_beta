@@ -1,4 +1,4 @@
-import { colorOf, fmtNum, csvLine, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax, X_SVG, guardNumberInputs, pinToPlotBottom } from './utils.js';
+import { colorOf, fmtNum, csvLine, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax, X_SVG, guardNumberInputs } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -569,7 +569,7 @@ import { Plot } from './plot.js';
               <span class="txt-caption" id="${p}CurrentLabel">—</span>
             </div>
           </div>`;
-  // At the foot of the parameter column, its bottom on the plot's (pinToPlotBottom).
+  // At the foot of the parameter column, after what it holds.
   const suggestBtn = (p, title)=> `
             <button class="btn plot-action-btn" id="${p}Suggest" title="${title}">&#10022; Suggest intervals</button>`;
   // The download names follow the analysis name (paintName); a CSV is offered only
@@ -680,7 +680,6 @@ import { Plot } from './plot.js';
     card.innerHTML = cardHtml(a);
     place(card);
     guardNumberInputs(card);
-    pinToPlotBottom(card.querySelector('.plot-action-btn'), card.querySelector('svg.plot'));
     const panel = makePanel(a.type === 'tauc' ? taucSpec(a) : urbachSpec(a));
     if (a.states[a.type]) panel.restore(a.states[a.type]);
     else panel.fit();

@@ -1783,12 +1783,12 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   min-width: 0;
 }
 /* A plot's action (Suggest intervals, Add peak) at the foot of the parameter column
-   beside it, as wide as the column, its bottom edge on the plot's (pinToPlotBottom
-   sets the margin; 12px is the least, when the column's content reaches lower). */
+   beside it, after what the column holds, as wide as it; a tenth taller than the
+   30px the corner button had. */
 .plot-action-btn {
   width: 100%;
   margin-top: 12px;
-  height: 30px;
+  height: 33px;
   display: flex;
   align-items: center;
   justify-content: center;

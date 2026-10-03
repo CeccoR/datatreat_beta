@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner, pinToPlotBottom } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -1556,9 +1556,6 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     }, true);
     return { isAdding:()=>addMode, setMode };
   }
-  // Each sits at the foot of its parameter column, its bottom on the plot's.
-  pinToPlotBottom(document.getElementById('xrdAddPeak'), document.getElementById('xrdSvg'));
-  pinToPlotBottom(document.getElementById('xrdStdAddPeak'), document.getElementById('xrdStdSvg'));
   const addPeakA = makeAddPeak('a', 'xrdSvg',    'xrdAddPeak',    ()=>anaPlot, ()=>curIdx);
   const addPeakS = makeAddPeak('s', 'xrdStdSvg', 'xrdStdAddPeak', ()=>stdPlot, ()=>standardIdx());
   const isAddingKey = (key)=> (key==='a' && addPeakA.isAdding()) || (key==='s' && addPeakS.isAdding());

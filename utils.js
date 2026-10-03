@@ -1837,26 +1837,6 @@ function barChipYmax(chips, svg, bars, g){
   return ymax;
 }
 
-/* A plot's action button at the foot of the parameter column beside it (Suggest
-   intervals, Add peak): pushed down until its bottom edge is on the plot's, and kept
-   there as either side changes size — the plot with the window, the column as alerts
-   come and go. The column's content reaching lower wins (the CSS margin is the
-   least), as does a stacked layout, where the column sits under the plot. A hidden
-   plot is left alone: it is measured again once it shows. */
-function pinToPlotBottom(btn, svg){
-  const least = parseFloat(getComputedStyle(btn).marginTop) || 0;
-  const sync = ()=>{
-    if (!svg.getClientRects().length || !btn.getClientRects().length) return;
-    const now = parseFloat(btn.style.marginTop) || least;
-    const d = svg.getBoundingClientRect().bottom - btn.getBoundingClientRect().bottom;
-    btn.style.marginTop = Math.max(least, now + d) + 'px';
-  };
-  const ro = new ResizeObserver(sync);
-  ro.observe(svg);
-  [...btn.parentElement.children].forEach(c=>{ if (c !== btn) ro.observe(c); });
-  return sync;
-}
-
 /* =========================================================
    COLLAPSIBLE INSTRUCTIONS
    Each .instr-block is toggled by a small info icon placed next to the card's
@@ -1901,5 +1881,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, pinToPlotBottom, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };
