@@ -1,5 +1,5 @@
 import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid } from './utils.js';
 import { activeTab, TABS } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
@@ -292,9 +292,10 @@ function buildModel(plot, opts){
     legendGap: 6,                       // distance from the panel corner / panels
     font: { family: 'Inter', tick: 8, axis: 9, legend: 8, title: 9 },   // sizes in points
     xlabel: strip(plot.xlabel) || '',
-    // A log y-axis on the page draws log10 of the data, which is what reaches the
-    // composer, on its linear axis: its title says so.
-    ylabel: (plot._opts && plot._opts.yLog ? 'log_{10} ' : '') + (strip(plot.ylabel) || strip(plot.ylabelSvg) || ''),
+    ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
+    // The page plot's log y-axis: its series reach the composer as the log10 of the
+    // data, and are ticked and ranged as such (yMajorTicks and the rest).
+    yLog: !!(plot._opts && plot._opts.yLog),
     // Always the whole data set, whatever the page plot is zoomed to.
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
@@ -375,6 +376,36 @@ function majorTicks(lo, hi, step){
   }
   return out;
 }
+
+/* A log y-axis (F.yLog): the values are the log10 of the data, ticked at the whole
+   decades in view (every step-th one, when a step is set), labelled as powers of ten,
+   with each decade's 2…9 as minor ticks. Under two decades in view it falls back to
+   plain ticks of the exponent, labelled with the value. */
+function yMajorTicks(lo, hi){
+  if (!F.yLog) return majorTicks(lo, hi, stepY());
+  const k = Math.max(1, Math.round(stepY()) || 1), out = [];
+  for (let n = Math.ceil(lo - 1e-9); n <= hi + 1e-9; n++) if (n % k === 0) out.push(n);
+  return out.length >= 2 ? out : majorTicks(lo, hi, 0);
+}
+function yMinorTicks(majors, lo, hi){
+  if (!F.yLog || !majors.every(Number.isInteger)) return minorTicks(majors, lo, hi, minorsY());
+  const out = [];
+  if (minorsY() > 0) for (let n = Math.floor(lo); n <= Math.ceil(hi); n++)
+    for (let k = 2; k <= 9; k++){ const v = n + Math.log10(k); if (v >= lo && v <= hi) out.push(v); }
+  return out;
+}
+// A y tick's label: its number, or on a log axis a 10 and its raised exponent.
+const SUP_K = 0.72;
+function yTickParts(t){
+  if (!F.yLog) return { base: fmtTick(t) };
+  if (Number.isInteger(t)) return { base: '10', sup: t < 0 ? '\u2212' + (-t) : String(t) };
+  return { base: fmtTick(Math.pow(10, t)) };
+}
+const yTickW = (t, f)=>{ const p = yTickParts(t); return textW(p.base, f) + (p.sup ? textW(p.sup, f * SUP_K) : 0); };
+// The y bounds as the Range fields show and take them: on a log axis, the data's own
+// values rather than their logarithms (a bound ≤ 0 has none).
+const yShown = v => F.yLog ? Math.pow(10, v) : v;
+const yTaken = v => F.yLog ? (v > 0 ? Math.log10(v) : null) : v;
 
 /* ---- Geometry -------------------------------------------------------------- */
 
@@ -558,7 +589,7 @@ function drawFigure(svg, ink, paper, extra){
   // below, and (for a global legend) a strip under that.
   let maxYNum = 0;
   F.panels.forEach((p, i)=>{
-    for (const t of majorTicks(yOf[i][0], yOf[i][1], stepY())) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
+    for (const t of yMajorTicks(yOf[i][0], yOf[i][1])) maxYNum = Math.max(maxYNum, yTickW(t, fTick));
   });
   // The category names, measured once: whole, as the figure always draws them.
   const catWs = (F.cats || []).map(cat=> textW(catText(cat.x), fTick));
@@ -672,7 +703,7 @@ function drawFigure(svg, ink, paper, extra){
 
     // Grid, under everything. Built from the same ticks the axes use, so it always
     // lines up with the numbers whatever the tick step is.
-    const gx = majorTicks(x0, x1, stepX()), gy = majorTicks(y0, y1, stepY());
+    const gx = majorTicks(x0, x1, stepX()), gy = yMajorTicks(y0, y1);
     if (F.grid.x || F.grid.y){
       const gg = add('g', { 'clip-path': `url(#${clipId})` });
       const rule = (a, minor)=> add('line', { ...a, stroke:ink, 'stroke-width': minor ? 0.3 : 0.5,
@@ -683,7 +714,7 @@ function drawFigure(svg, ink, paper, extra){
       }
       if (F.grid.y){
         for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) });
-        if (F.grid.minor) for (const t of minorTicks(gy, y0, y1, minorsY())) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
+        if (F.grid.minor) for (const t of yMinorTicks(gy, y0, y1)) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
       }
     }
 
@@ -833,7 +864,7 @@ function drawFigure(svg, ink, paper, extra){
         const qw = Math.max(4, q.cs * cw), qh = Math.max(4, q.rs * ch);
         if (vert){
           const [a, z] = yOf[k] || [0, 1];
-          for (const t of majorTicks(a, z, stepY())) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
+          for (const t of yMajorTicks(a, z)) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
         } else {
           const [a, z] = xOf[k] || [0, 1];
           for (const t of majorTicks(a, z, stepX())) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: textW(fmtTick(t), fTick) / 2 });
@@ -884,7 +915,7 @@ function drawFigure(svg, ink, paper, extra){
       const proj = g0.vert ? Y : X;
       const majors = g0.vert ? yMaj : xMaj;
       if (a.major) majors.forEach(t=> mark(proj(t), TICK_MAJ));
-      if (a.minor) minorTicks(majors, ...(g0.vert ? [y0, y1, minorsY()] : [x0, x1, minorsX()])).forEach(t=> mark(proj(t), TICK_MIN));
+      if (a.minor) (g0.vert ? yMinorTicks(majors, y0, y1) : minorTicks(majors, x0, x1, minorsX())).forEach(t=> mark(proj(t), TICK_MIN));
 
       // Numbers and title only where there is room outside the panel; a side that
       // touches a neighbour can carry tick marks but nothing that would overlap it —
@@ -905,7 +936,8 @@ function drawFigure(svg, ink, paper, extra){
       }
       if (a.labels){
         for (const t of majors){
-          const q = proj(t), txt = fmtTick(t);
+          const parts = g0.vert ? yTickParts(t) : { base: fmtTick(t) };
+          const q = proj(t), txt = parts.base;
           let at;
           if (g0.vert){
             const hh = fTick * 0.55;
@@ -931,6 +963,11 @@ function drawFigure(svg, ink, paper, extra){
             el.setAttribute('dy', TILT_DY);
           }
           el.textContent = txt;
+          if (parts.sup){
+            const sp = svgEl('tspan', { 'baseline-shift':'super', 'font-size': +(fTick * SUP_K).toFixed(2) });
+            sp.textContent = parts.sup;
+            el.appendChild(sp);
+          }
         }
       }
 
@@ -1425,8 +1462,9 @@ const IDENTITY = ['kind', 'id', 'key', 'given', 'label', 'xs', 'ys', 'errs'];
 /* `name` is the file this figure is exported as. It belongs to this figure alone, like
    a series' data: a preset made on another plot carrying it over would export this
    one under the other's file name. The per-plot memory, which is about this figure,
-   does bring it back (recallSettings). */
-const SCALAR_IDENTITY = ['name'];
+   does bring it back (recallSettings). `yLog` is the page plot's, as its data are:
+   neither a preset nor the memory changes what the values are. */
+const SCALAR_IDENTITY = ['name', 'yLog'];
 function applySettings(snap){
   if (!snap) return;
   const scalars = JSON.parse(JSON.stringify(snap.scalars));
@@ -1589,7 +1627,7 @@ function autoStepOf(axis){
   const { xOf, yOf } = computeRanges();
   const i = Math.min(Math.max(0, F.rangePanel | 0), F.panels.length - 1);
   const [a, z] = ((axis === 'x' ? xOf : yOf)[i]) || [0, 1];
-  const t = majorTicks(a, z, 0);
+  const t = axis === 'y' && F.yLog ? (F.yStepAuto ? yMajorTicks(a, z) : [0, 1]) : majorTicks(a, z, 0);
   return t.length > 1 ? +(t[1] - t[0]).toPrecision(6) : '';
 }
 
@@ -1621,11 +1659,12 @@ function rangeColHtml(axis){
   const bound = end => shared
     ? (X ? (end ? F.xmax : F.xmin) : (end ? F.ymax : F.ymin))
     : (man ? man[end] : live[end]);
+  const shown = v => +(+(X ? v : yShown(v))).toPrecision(6);
   const field = end => auto
-    ? `<input type="text" value="${+(+live[end]).toPrecision(6)}" disabled title="Chosen automatically">`
+    ? `<input type="text" value="${shown(live[end])}" disabled title="Chosen automatically">`
     : (shared
-        ? numField(`data-k="${X ? (end ? 'xmax' : 'xmin') : (end ? 'ymax' : 'ymin')}"`, +(+bound(end)).toPrecision(6), -1e12, 1e12)
-        : numField(`data-man="${X ? 'xMan' : 'yMan'}" data-end="${end}"`, +(+bound(end)).toPrecision(6), -1e12, 1e12));
+        ? numField(`data-k="${X ? (end ? 'xmax' : 'xmin') : (end ? 'ymax' : 'ymin')}"`, shown(bound(end)), -1e12, 1e12)
+        : numField(`data-man="${X ? 'xMan' : 'yMan'}" data-end="${end}"`, shown(bound(end)), -1e12, 1e12));
   return `<div class="fig-rangecol">
     <div class="fig-rangehead">${A} axes</div>
     <label class="fig-check"><input type="checkbox" data-k="${X ? 'shareX' : 'shareY'}"${shared ? ' checked' : ''}> Share across all panels</label>
@@ -1996,7 +2035,7 @@ function manNum(label, bag, end){
   const r = computeRanges();
   const auto = bag === 'xMan' ? (r.xOf[i] || [0,1]) : (r.yOf[i] || [0,1]);
   const v = cur ? cur[end] : auto[end];
-  return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+v).toPrecision(6), -1e12, 1e12)}</label>`;
+  return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+(bag === 'yMan' ? yShown(v) : v)).toPrecision(6), -1e12, 1e12)}</label>`;
 }
 
 /* Axis-title editor: an ordinary text field over the ^{}/_{} notation, plus the two
@@ -2844,7 +2883,14 @@ function wireControls(){
         if (k === 'xAuto'){ const [a, z] = r.xOf[i] || r.xOf[0] || [0, 1]; F.xmin = a; F.xmax = z; }
         else { const [a, z] = r.yOf[i] || r.yOf[0] || [0, 1]; F.ymin = a; F.ymax = z; }
       }
-      if (numKeys.has(k)){ const v = readNum(t); if (v === null) return null; F[k] = v; }
+      if (numKeys.has(k)){
+        let v = readNum(t); if (v === null) return null;
+        if (k === 'ymin' || k === 'ymax'){
+          v = yTaken(v);
+          if (v === null){ flashFieldInvalid(t); t.value = +yShown(F[k]).toPrecision(6); return null; }
+        }
+        F[k] = v;
+      }
       else F[k] = t.type === 'checkbox' ? t.checked : t.value;
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
       // Keys that decide which controls are on show have to redraw the sidebar, not
@@ -2886,7 +2932,11 @@ function wireControls(){
       const i = rangeRoot(selP, bag === 'xMan' ? 'shareXWith' : 'shareYWith');
       const r = computeRanges();
       const cur = F[bag][i] || (bag === 'xMan' ? (r.xOf[i] || [0,1]).slice() : (r.yOf[i] || [0,1]).slice());
-      const v = readNum(t); if (v === null) return null;
+      let v = readNum(t); if (v === null) return null;
+      if (bag === 'yMan'){
+        v = yTaken(v);
+        if (v === null){ flashFieldInvalid(t); t.value = +yShown(cur[+t.dataset.end]).toPrecision(6); return null; }
+      }
       cur[+t.dataset.end] = v;
       F[bag][i] = cur;
     } else if (t.dataset.all){
