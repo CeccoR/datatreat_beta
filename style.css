@@ -647,9 +647,10 @@ input[type="checkbox"] { accent-color: var(--accent); }
    set it belongs to. .plot-chips/.plot-chip are the same thing under a name that
    does not say GC. */
 .gc-gas-sel, .plot-chips {
-  /* Clear of the toolbar column and the plot's own right margin, so the chips
-     land inside the data area rather than on the frame or the buttons. */
-  position: absolute; top: 21px; right: 56px; z-index: 2;
+  /* Clear of the toolbar and the plot's own margins, so the chips land inside the
+     data area rather than on the frame or the buttons: below the toolbar row (26px
+     and its gap), inside the plot's right margin. */
+  position: absolute; top: calc(26px + var(--tb-gap) + 21px); right: 22px; z-index: 2;
   display: inline-flex; gap: 4px;
   opacity: 0.5; transition: opacity 0.18s;
 }
@@ -883,14 +884,6 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 /* GC's Analysis plots are there to place the interval on the run, not to read values
    off: half a standard plot's height, side by side or stacked alike. */
 svg.plot.plot-short { aspect-ratio: 3.236; }
-/* Their toolbar would stand taller than they are: its buttons run in a row above the
-   plot instead, at its right, the column's top button rightmost. The gas chips keep
-   their place over the data area, now below the row and with no column beside it. */
-.plot-wrap:has(> svg.plot-short) { flex-direction: column; align-items: stretch; gap: 4px; }
-.plot-wrap > svg.plot.plot-short { flex: none; width: 100%; }
-.plot-wrap:has(> svg.plot-short) > .plot-btn-col { order: -1; align-self: flex-end; }
-.plot-wrap:has(> svg.plot-short) .plot-tool-btns { flex-direction: row-reverse; }
-.plot-wrap:has(> svg.plot-short) > .gc-gas-sel { top: 51px; right: 22px; }
 .legend {
   font-size: 12px;
   margin-top: 6px;
@@ -1444,28 +1437,48 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
 .cp-recent { padding-top: 5px; }
 .cp-recent-empty { font-size: 11px; color: var(--muted); }
 
-/* ===== Plot wrapper with side download button ===== */
+/* ===== Plot wrapper: the plot under its toolbar =====
+   The toolbar is a row above the plot at its right (built by Plot.attachTools as a
+   column of buttons, turned sideways here, its first button rightmost), and the plot
+   takes the whole width. --tb-gap is the space between the row and the plot. */
 .plot-wrap {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--tb-gap);
+  --tb-gap: 4px;
   overflow-x: auto;   /* if the plot hits its min-width floor, scroll here — not the page */
   position: relative; /* anchors controls laid over the plot (the GC gas chips) */
 }
+/* Where a line stands above the plot — its caption, the sample nav — the toolbar
+   shares that line, at its right, and the plot keeps the place under it it had
+   without a toolbar: the wrap is pulled up by the row's height less the room it
+   finds there. A caption keeps its text clear of the buttons (wrapping before
+   them on a narrow plot). */
+/* Pulled up over that line, the wrap's own empty box must not take its clicks (the
+   sample arrows, the caption): only what it holds answers the pointer. */
+.plot-wrap { pointer-events: none; }
+.plot-wrap > * { pointer-events: auto; }
+/* Only a wrap with a toolbar (or the download button it is built from) is pulled up:
+   a plot without one keeps its place under the line. */
+.plot-wrap > .plot-dl-btn { order: -1; align-self: flex-end; }
+.txt-caption + .plot-wrap:has(> .plot-btn-col, > .plot-dl-btn) { margin-top: -28px; --tb-gap: 2px; }
+.txt-caption:has(+ .plot-wrap) { padding-right: 214px; }
+.plot-nav-row + .plot-wrap:has(> .plot-btn-col, > .plot-dl-btn),
+.plot-nav-row + * > .plot-wrap:first-child:has(> .plot-btn-col, > .plot-dl-btn) { margin-top: -34px; --tb-gap: 8px; }
+/* On a narrow screen the sample nav fills its line: the toolbar takes its own. */
+:root.narrow-layout .plot-nav-row + .plot-wrap:has(> .plot-btn-col, > .plot-dl-btn),
+:root.narrow-layout .plot-nav-row + * > .plot-wrap:first-child:has(> .plot-btn-col, > .plot-dl-btn) { margin-top: 0; --tb-gap: 4px; }
 /* While a pan/zoom tool is armed, block text selection across the whole plot */
 .plot-wrap.tool-armed, .plot-wrap.tool-armed * {
   user-select: none;
   -webkit-user-select: none;
 }
 .plot-wrap .plot {
-  flex: 1;
-  width: auto;
+  flex: none;
+  width: 100%;
   /* min-width (460px floor) comes from svg.plot so the plot never shrinks to tiny */
 }
-/* Under-plot alert (e.g. negative Eg): span the plot's own width, i.e. the plot-wrap
-   minus its toolbar column (26px button + 8px gap = 34px), so it sits under the chart
-   and not under the download button. */
-.bar-alert { margin-right: 34px; }
 /* Results rows under a full-width plot: a pair of standard plots side by side, set off
    from what is above by the space a caption used to have. */
 .res-row { margin-top: 18px; align-items: flex-start; }
@@ -1576,6 +1589,8 @@ button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
+  order: -1;                    /* above the plot, at its right */
+  align-self: flex-end;
   opacity: 0.5;                 /* dimmed by default, full on hovering the plot */
   transition: opacity 0.18s;
 }
@@ -1584,7 +1599,7 @@ button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 }
 .plot-tool-btns {
   display: flex;
-  flex-direction: column;
+  flex-direction: row-reverse;  /* the first built (the composer) rightmost */
   gap: 4px;
 }
 /* Plot toolbar buttons match the project-bar icon buttons exactly (same 26px box,
@@ -1750,15 +1765,15 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 }
 .std-select.ghost { color: var(--muted); }
 
-/* ===== Plot header row: sample nav on the left, a corner action button whose
-   right edge lines up with the plot's right edge (padding-right = toolbar col:
-   26px button + 8px gap). The button is 1/3 of the plot width. ===== */
+/* ===== Plot header row: the sample nav on the left; the plot's toolbar takes its
+   right (.plot-wrap). It keeps the 30px it had when it held the action button, so
+   the plot below stays where it was. ===== */
 .plot-nav-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  padding-right: 34px;
+  min-height: 30px;
 }
 .plot-nav-left {
   display: flex;
@@ -1767,11 +1782,14 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   flex: 1 1 auto;
   min-width: 0;
 }
-.plot-corner-btn {
-  flex: 0 0 33.333%;
-  min-width: 0;
-  height: 30px;                /* match the sample-nav arrows so the row aligns */
-  display: inline-flex;
+/* A plot's action (Suggest intervals, Add peak) at the foot of the parameter column
+   beside it, as wide as the column, its bottom edge on the plot's (pinToPlotBottom
+   sets the margin; 12px is the least, when the column's content reaches lower). */
+.plot-action-btn {
+  width: 100%;
+  margin-top: 12px;
+  height: 30px;
+  display: flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;

@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner, pinToPlotBottom } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -595,9 +595,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // plot, its parameters column and the peak table.
     const show = !(si<0 || !processed[si]);
     ['xrdStdBody','xrdStdParams','xrdStdPeakBox'].forEach(id=>{ const el=document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; });
-    // Add-peak keeps its slot reserved (visibility, not display) so the picker box
-    // beside it never resizes when a standard is chosen.
-    const addBtn = document.getElementById('xrdStdAddPeak'); if (addBtn) addBtn.style.visibility = show ? 'visible' : 'hidden';
+    // (Add peak sits at the foot of the parameters column, so it comes and goes with it.)
     if (!show) return;
     writeStdInputs();
     drawAnalysisInto(si, 'xrdStdSvg', 's', preserveView);
@@ -1558,6 +1556,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     }, true);
     return { isAdding:()=>addMode, setMode };
   }
+  // Each sits at the foot of its parameter column, its bottom on the plot's.
+  pinToPlotBottom(document.getElementById('xrdAddPeak'), document.getElementById('xrdSvg'));
+  pinToPlotBottom(document.getElementById('xrdStdAddPeak'), document.getElementById('xrdStdSvg'));
   const addPeakA = makeAddPeak('a', 'xrdSvg',    'xrdAddPeak',    ()=>anaPlot, ()=>curIdx);
   const addPeakS = makeAddPeak('s', 'xrdStdSvg', 'xrdStdAddPeak', ()=>stdPlot, ()=>standardIdx());
   const isAddingKey = (key)=> (key==='a' && addPeakA.isAdding()) || (key==='s' && addPeakS.isAdding());

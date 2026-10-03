@@ -256,7 +256,6 @@
           <div class="col mw520" style="flex:2">
             <div class="plot-nav-row">
               <div class="plot-nav-left"><select id="xrdStandard" class="std-select ghost"><option value="">Choose standard…</option></select></div>
-              <button class="btn plot-corner-btn" id="xrdStdAddPeak" style="visibility:hidden" title="Add a peak by clicking on the plot">+ Add peak</button>
             </div>
             <div id="xrdStdBody" style="display:none">
               <div class="plot-wrap">
@@ -289,6 +288,7 @@
               <label class="txt-label">Peak min. distance (&#176;2&#952;)</label>
               <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkDist" value="0.3">
             </div>
+            <button class="btn plot-action-btn" id="xrdStdAddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
           </div>
         </div>
         <div class="peak-box" id="xrdStdPeakBox" style="display:none">
@@ -315,7 +315,6 @@
                 <button class="btn nav-arrow" id="xrdNext" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
                 <span class="txt-caption" id="xrdCurrentLabel">—</span>
               </div>
-              <button class="btn plot-corner-btn" id="xrdAddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
             </div>
             <div class="plot-wrap">
               <svg class="plot" id="xrdSvg"></svg>
@@ -366,6 +365,7 @@
                 <input type="text" inputmode="decimal" class="lambda-val" id="xrdLambda" value="1.540598" readonly title="Wavelength (Å)">
               </div>
             </div>
+            <button class="btn plot-action-btn" id="xrdAddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
           </div>
         </div>
         <div class="peak-box" id="xrdPeakBox">
@@ -403,7 +403,7 @@
               <span><i style="background:#5fcf6a"></i>peaks</span>
             </div>
             <div id="xrdResidBlock">
-              <div class="plot-wrap" style="margin-top:6px;padding-right:40px">
+              <div class="plot-wrap" style="margin-top:6px">
                 <svg class="plot" id="xrdResidSvg" style="height:90px;aspect-ratio:auto;min-width:0"></svg>
               </div>
               <div class="legend"><span id="xrdResidCaption" style="color:var(--muted);font-size:11px">Fit residual (doublet fit − signal)</span></div>
@@ -667,7 +667,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v378</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v379</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
