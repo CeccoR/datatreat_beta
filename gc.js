@@ -549,30 +549,26 @@ import { Plot, svgEl } from './plot.js';
     updateRegression();
   }
 
-  /* The top of a time plot's y-range: the highest value of `key` at each sample's
-     points inside its own integration interval, the stretch the results come from, so
-     what lies outside it (a spike before light-on, a drift after) does not flatten it;
-     of all the points when none falls inside. The bottom is always 0. */
+  /* The top of a time plot's y-range: the highest value of `key` from light-on on
+     (t ≥ 0), so what comes before it (a spike, a purge) does not flatten the run; of
+     all the points when none is that late. The bottom is always 0. */
   function yTop(tables, shown, key){
     let hi = -Infinity, any = false;
-    const take = inside => tables.forEach((d, k)=>{
-      const a = Math.min(startOf(k), endOf(k)), b = Math.max(startOf(k), endOf(k));
-      shown.forEach(g=>{
-        const q = d.gas[g.key]; if (!q) return;
-        d.t.forEach((t, i)=>{
-          const v = q[key][i];
-          if (!isFinite(v) || (inside && !(t >= a && t <= b))) return;
-          hi = Math.max(hi, v); any = true;
-        });
+    const take = after => tables.forEach(d=> shown.forEach(g=>{
+      const q = d.gas[g.key]; if (!q) return;
+      d.t.forEach((t, i)=>{
+        const v = q[key][i];
+        if (!isFinite(v) || (after && t < 0)) return;
+        hi = Math.max(hi, v); any = true;
       });
-    });
+    }));
     take(true);
     if (!any) take(false);
     return hi;
   }
 
   // Draw the data lines with an x-range spanning both the data and every interval line
-  // (so bars are never clipped), y from 0 to the intervals' data (yTop). Interval lines
+  // (so bars are never clipped), y from 0 to the data from light-on on (yTop). Interval lines
   // are drawn as an overlay, redrawn on pan/zoom via _onView.
   function drawGcData(){
     if (!plot1 || !plot2 || !dataTables.length) return;
@@ -706,7 +702,7 @@ import { Plot, svgEl } from './plot.js';
 
   // The two Results plots: same quantities as Analysis, cut at the interval end and
   // without the interval overlay (Results shows the retained data only), y from 0 to
-  // the intervals' data as there.
+  // the data from light-on on, as there.
   function drawResultPlots(){
     const cut = cutTables();
     if (!cut.length || !cut.some(d=>d.t.length)) return;
