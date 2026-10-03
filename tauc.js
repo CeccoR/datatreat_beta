@@ -417,10 +417,10 @@ import { Plot } from './plot.js';
      card's automatic name), and how it is written where it shows (the select, the
      axes); a fraction as such. */
   const EXPONENTS = [
-    { a: 0.5, label: '0.5', gap: 'Indirect', name: 'Allowed indirect' },
-    { a: 2,   label: '2',   gap: 'Direct',   name: 'Allowed direct' },
-    { a: 2/3, label: '2/3', gap: 'Direct',   name: 'Forbidden direct',   forbidden: true },
-    { a: 1/3, label: '1/3', gap: 'Indirect', name: 'Forbidden indirect', forbidden: true },
+    { a: 0.5, label: '0.5', gap: 'Indirect', name: 'allowed indirect' },
+    { a: 2,   label: '2',   gap: 'Direct',   name: 'allowed direct' },
+    { a: 2/3, label: '2/3', gap: 'Direct',   name: 'forbidden direct',   forbidden: true },
+    { a: 1/3, label: '1/3', gap: 'Indirect', name: 'forbidden indirect', forbidden: true },
   ];
   const expOf = a => EXPONENTS.find(e=> Math.abs(e.a - a) < 1e-9);
   const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
@@ -592,7 +592,7 @@ import { Plot } from './plot.js';
             <div class="param-grid">
               <label class="txt-label" for="${p}A">Tauc exponent</label>
               <select id="${p}A" class="pg-field an-exp">
-                ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label} (${e.name.toLowerCase()})</option>`).join('')}
+                ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label} (${e.name})</option>`).join('')}
               </select>
               <label class="txt-label" for="${p}N">[F(R)hν]<sup id="${p}NExp">0.5</sup> smoothing window</label>
               <input type="number" class="pg-field" id="${p}N" value="1" min="1">
@@ -901,7 +901,7 @@ import { Plot } from './plot.js';
       const as = files.length ? files.map((f, i)=> P.params(i).a) : [P.params(0).a];
       // The transition the exponent stands for; mixed exponents (one mode) have none.
       const ex = as.every(v=> v === as[0]) && expOf(as[0]);
-      return ex ? ex.name : 'Tauc';
+      return ex ? `Tauc: ${ex.name}` : 'Tauc';
     }
     const r = byId(a.ref);
     return r ? `Urbach · ${r.name}` : 'Urbach';
@@ -925,8 +925,9 @@ import { Plot } from './plot.js';
     hist.commit();
   }
   // In file names: no path or reserved characters, and no comma (CSV names travel
-  // comma-separated on their buttons).
-  const fileSafe = n => n.replace(/[\\/:*?"<>|,]/g, '_');
+  // comma-separated on their buttons). A colon, as in "Tauc: allowed direct", is
+  // dropped rather than turned into "_", so the name still reads.
+  const fileSafe = n => n.replace(/:/g, '').replace(/[\\/*?"<>|,]/g, '_');
   function nameDownloads(wrap, svgName, csvName){
     if (!wrap) return;
     wrap.querySelectorAll('.plot-dl-btn').forEach(b=>{ b.dataset.dlName = svgName; if (csvName) b.dataset.csvNames = csvName; });
