@@ -413,13 +413,14 @@ import { Plot } from './plot.js';
   }
 
   const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
-  /* The Tauc exponents, as [F(R)·hν]^a: the transition each stands for, and how it is
-     written wherever it shows (the select, the axes, the names); a fraction as such. */
+  /* The Tauc exponents, as [F(R)·hν]^a: the transition each stands for (`name`, the
+     card's automatic name), and how it is written where it shows (the select, the
+     axes); a fraction as such. */
   const EXPONENTS = [
-    { a: 0.5, label: '0.5', gap: 'Indirect' },
-    { a: 2,   label: '2',   gap: 'Direct' },
-    { a: 2/3, label: '2/3', gap: 'Direct',   forbidden: true },
-    { a: 1/3, label: '1/3', gap: 'Indirect', forbidden: true },
+    { a: 0.5, label: '0.5', gap: 'Indirect', name: 'Allowed indirect' },
+    { a: 2,   label: '2',   gap: 'Direct',   name: 'Allowed direct' },
+    { a: 2/3, label: '2/3', gap: 'Direct',   name: 'Forbidden direct',   forbidden: true },
+    { a: 1/3, label: '1/3', gap: 'Indirect', name: 'Forbidden indirect', forbidden: true },
   ];
   const expOf = a => EXPONENTS.find(e=> Math.abs(e.a - a) < 1e-9);
   const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
@@ -590,8 +591,8 @@ import { Plot } from './plot.js';
             <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
             <div class="param-grid">
               <label class="txt-label" for="${p}A">Tauc exponent</label>
-              <select id="${p}A" class="pg-field">
-                ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label}</option>`).join('')}
+              <select id="${p}A" class="pg-field an-exp">
+                ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label} (${e.name.toLowerCase()})</option>`).join('')}
               </select>
               <label class="txt-label" for="${p}N">[F(R)hν]<sup id="${p}NExp">0.5</sup> smoothing window</label>
               <input type="number" class="pg-field" id="${p}N" value="1" min="1">
@@ -898,7 +899,9 @@ import { Plot } from './plot.js';
       const P = panelOf(a);
       if (!P) return 'Tauc';
       const as = files.length ? files.map((f, i)=> P.params(i).a) : [P.params(0).a];
-      return as.every(v=> v === as[0]) ? `Tauc ${fmtA(as[0])}` : 'Tauc';
+      // The transition the exponent stands for; mixed exponents (one mode) have none.
+      const ex = as.every(v=> v === as[0]) && expOf(as[0]);
+      return ex ? ex.name : 'Tauc';
     }
     const r = byId(a.ref);
     return r ? `Urbach · ${r.name}` : 'Urbach';
@@ -1439,7 +1442,7 @@ import { Plot } from './plot.js';
     // Direct/Indirect qualifier, so drop it from the title and axis label. A forbidden
     // transition says so in the title only: the axis has no room for it on a phone.
     const ex = aUniform ? expOf(aVals[0]) : null, egLabel = ex ? ex.gap : '';
-    $('BarTitle').textContent = (egLabel ? egLabel + (ex.forbidden ? ' Forbidden' : '') + ' ' : '') + 'Energy Band Gap';
+    $('BarTitle').textContent = (egLabel ? (ex.forbidden ? 'Forbidden ' : '') + egLabel + ' ' : '') + 'Energy Band Gap';
     const leg2 = $('RL2'); leg2.innerHTML='';
     renderEgSel(a);
     const vals = { x: fits.map(r=>r.Eg),    b: fits.map(r=>r.EgInt) };
