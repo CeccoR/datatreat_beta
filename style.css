@@ -1565,7 +1565,8 @@ body.an-dragging, body.an-dragging * { cursor: grabbing !important; user-select:
 button.an-add {
   display: block; width: 100%; height: 32px; padding: 0;
   border: 2px dashed var(--line); border-radius: 12px; background: var(--panel2);
-  color: var(--text); font-family: inherit; font-size: 14px; font-weight: 400; line-height: 1; cursor: pointer;
+  /* The grey of the plots' tick labels, theme by theme. */
+  color: var(--plot-tick); font-family: inherit; font-size: 14px; font-weight: 400; line-height: 1; cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 button.an-add:hover, button.an-add.cp-anchored { border-color: var(--accent); }
