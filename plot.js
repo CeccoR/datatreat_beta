@@ -310,8 +310,9 @@ class Plot{
   /* A box-and-whisker mark at data-x `xc` (+ pixel offset `dx`), `hw` px half-wide:
      the box from the first to the third quartile, the median across it, whiskers out
      to the furthest values within 1.5 IQR, each value beyond them a circle, and the
-     mean a cross. `st` = {q1, med, q3, lo, hi, mean, err, out[]}; `err`, the mean's,
-     is carried for whatever reads the plot back. `meta.label` names its series. */
+     mean a cross. `st` = {q1, med, q3, lo, hi, mean, err, out[]}; `err`, the ± written
+     beside the mean, is carried for whatever reads the plot back. `meta.label` names
+     its series. */
   box(xc, st, color, hw, dx, meta){
     const entry = {type:'box', xc, q1:st.q1, med:st.med, q3:st.q3, lo:st.lo, hi:st.hi, mean:st.mean, err:st.err,
                    out:(st.out||[]).slice(), color, hw:hw||14, dx:dx||0, label: meta && meta.label};

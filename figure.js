@@ -145,8 +145,8 @@ function seriesFromPlot(plot, legendEl){
 
   // Bars: one series per colour, in the order the colours first appear. Error bars
   // are matched back to their bar by centre and pixel offset. A box plot comes in as
-  // bars of a kind (`boxes`), its height the mean and its error the mean's: placed,
-  // coloured, textured and divided as bars are, and drawn as boxes.
+  // bars of a kind (`boxes`), its height the mean and its error the ± the plot gave it:
+  // placed, coloured, textured and divided as bars are, and drawn as boxes.
   const groups = new Map();
   for (const e of stored){
     if (e.type !== 'bar' && e.type !== 'barpx' && e.type !== 'box') continue;
@@ -846,7 +846,7 @@ function drawFigure(svg, ink, paper, extra){
     /* One box of a box plot, in its bar's slot and fill: the box from the first to the
        third quartile, the median across it, whiskers to the furthest values within
        1.5 IQR with caps, each value beyond a circle, the mean a cross. Its value label
-       is the mean ± its error, above whatever of it reaches highest. */
+       is the mean ± what the plot gave, above whatever of it reaches highest. */
     const drawBox = (s, j, b, cx, wPx)=>{
       const st = { stroke:ink, 'stroke-width':0.8 }, hw = wPx/2, cap = Math.min(4, hw/2);
       const yq1 = Yc(b.q1), yq3 = Yc(b.q3), ylo = Yc(b.lo), yhi = Yc(b.hi), ym = Yc(b.med);

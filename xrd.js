@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, tinv, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -918,8 +918,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     html+='</tbody></table>';
     if (!isStd){
       const st = sampleSizeStats(idx);
-      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanErr(st.rawMean, st.rawErr, st.rawN)} nm</b>`;
-      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanErr(st.corrMean, st.corrErr, st.corrN)} nm</b>`;
+      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
+      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
       html += '</div>';
       if (st.below) html += belowInstrHtml(st.below);
     }
@@ -992,8 +992,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // Mean crystallite size from the fitted peaks, same summary as the Analysis table.
     if (!isStd){
       const st = fitSizeStats(fitIdx);
-      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanErr(st.rawMean, st.rawErr, st.rawN)} nm</b>`;
-      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanErr(st.corrMean, st.corrErr, st.corrN)} nm</b>`;
+      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
+      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
       html += '</div>';
     }
     wrap.innerHTML=html;
@@ -1017,15 +1017,13 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const inside = v.filter(x=> x >= q1 - f && x <= q3 + f);
     return { q1, med, q3, lo: inside[0], hi: inside[inside.length-1], out: v.filter(x=> x < q1 - f || x > q3 + f) };
   }
-  /* A sample's sizes, one per peak, summarised: the mean and its error — the standard
-     error times Student's t at 99%, two-sided, n − 1 degrees of freedom, as every error
-     in the app is — and the box of their spread. The spread itself (the standard
-     deviation) is the box's to show, not the error of what is reported. */
+  /* A sample's sizes, one per peak, summarised: their mean and their spread — the
+     standard deviation, with n − 1 (the peaks are a sample of the crystallites) — and
+     the box of the same spread. */
   function sizeSummary(raw, corr, isStd, showCorr){
     const one = (v, k)=>{
       const n = v.length, m = n ? meanArr(v) : NaN;
-      const err = n > 1 ? stdArr(v)/Math.sqrt(n)*tinv(0.995, n-1) : NaN;
-      return { [k+'N']: n, [k+'Mean']: m, [k+'Err']: err, [k+'Box']: boxStats(v), [k+'Vals']: v };
+      return { [k+'N']: n, [k+'Mean']: m, [k+'Std']: n > 1 ? stdArr(v) : NaN, [k+'Box']: boxStats(v), [k+'Vals']: v };
     };
     return { isStd, showCorr, ...one(raw, 'raw'), ...one(corr, 'corr') };
   }
@@ -1056,16 +1054,16 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     }
     return { ...sizeSummary(raw, corr, isStd, showCorr), below };
   }
-  // "mean ± error" (or just "mean" for n=1, "—" for none)
-  function fmtMeanErr(mean, err, n){
+  // "mean ± std" (or just "mean" for n=1, "—" for none)
+  function fmtMeanStd(mean, std, n){
     if (!isFinite(mean)) return '—';
-    if (n >= 2 && isFinite(err)) return `${mean.toFixed(1)} ± ${err.toFixed(1)}`;
+    if (n >= 2 && isFinite(std)) return `${mean.toFixed(1)} ± ${std.toFixed(1)}`;
     return mean.toFixed(1);
   }
 
   /* Results card: per-sample crystallite size as a box plot of its peaks' sizes — one
      box per sample, two side by side when a standard is set (size, and corrected) —
-     with the mean ± its error written above. `statsFn` gives sizeSummary's fields. */
+     with the mean ± the standard deviation written above. `statsFn` gives sizeSummary's fields. */
   function drawSizeBarChart(svgId, legendId, statsFn){
     const svg = document.getElementById(svgId); if (!svg) return;
     const wrap = svg.closest('.plot-wrap'), legend = document.getElementById(legendId);
@@ -1093,7 +1091,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const bottom = Math.round(26 + maxLbl*fit.sin);
     const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
     let maxValW=0;
-    rows.forEach(r=> SER.forEach(m=>{ if (r[m.k+'Box']) maxValW = Math.max(maxValW, mctx.measureText(fmtLab(r[m.k+'Mean'], r[m.k+'Err'])).width); }));
+    rows.forEach(r=> SER.forEach(m=>{ if (r[m.k+'Box']) maxValW = Math.max(maxValW, mctx.measureText(fmtLab(r[m.k+'Mean'], r[m.k+'Std'])).width); }));
     const mTop=15, gap=6, plotH=svgH-mTop-bottom, reserve=gap+maxValW+6;
     const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
     const ymax = Math.max(Math.max(...tops)*1.15, Math.max(...tops)/frac);
@@ -1113,8 +1111,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         const b = r[m.k+'Box'];
         if (!b) return;
         const off = SER.length > 1 ? (mi ? dx : -dx) : 0;
-        plot.box(xc, { ...b, mean: r[m.k+'Mean'], err: r[m.k+'Err'] }, m.color, hw, off, { label: m.name });
-        plot.barLabel(xc, topOf(b), fmtLab(r[m.k+'Mean'], r[m.k+'Err']), {gap, dx:off});
+        plot.box(xc, { ...b, mean: r[m.k+'Mean'], err: r[m.k+'Std'] }, m.color, hw, off, { label: m.name });
+        plot.barLabel(xc, topOf(b), fmtLab(r[m.k+'Mean'], r[m.k+'Std']), {gap, dx:off});
       });
       plot.tickLabel(xc, labels[k], fit.rot, r.label, r.name);
     }
@@ -1686,12 +1684,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   }
 
   // One sample's size columns, as the chart and the table give them.
-  const SIZE_COLS = ['nm', 'err_nm', 'n', 'median_nm', 'Q1_nm', 'Q3_nm'];
+  const SIZE_COLS = ['nm', 'std_nm', 'n', 'median_nm', 'Q1_nm', 'Q3_nm'];
   const sizeCsvHead = anyStd => ['Sample', ...SIZE_COLS.map(c=> 'Crystallite_size_' + c),
     ...(anyStd ? SIZE_COLS.map(c=> 'Crystallite_size_corr_' + c) : [])];
   function sizeCsvCells(st, k){
     const n = st[k+'N'], b = st[k+'Box'], num = v => isFinite(v) ? fmtNum(v, 2) : '';
-    return [num(st[k+'Mean']), n > 1 ? num(st[k+'Err']) : '', String(n), b ? num(b.med) : '', b ? num(b.q1) : '', b ? num(b.q3) : ''];
+    return [num(st[k+'Mean']), n > 1 ? num(st[k+'Std']) : '', String(n), b ? num(b.med) : '', b ? num(b.q1) : '', b ? num(b.q3) : ''];
   }
   function exportXrdZip(){
     if (!files.length) return [];
@@ -1711,7 +1709,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const cols=[]; nonStd.forEach(k=>cols.push(...diffractoCols(k, refinedNorm)));
       if (cols.length) entries.push({name:'diffractograms.csv', text:wideCsv(cols)});
     }
-    // Crystallite size (classic) — per-sample summary: mean ± its error, n, and the box
+    // Crystallite size (classic) — per-sample summary: mean ± std, n, and the box
     // the chart draws.
     // Skipped entirely when there is no non-standard sample (nothing to size).
     if (nonStd.length){
