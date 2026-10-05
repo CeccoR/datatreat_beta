@@ -88,36 +88,6 @@ import { Plot } from './plot.js';
     if (!isFinite(m) || m === 0) return { v: NaN, err: NaN };
     return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, M-2) : NaN };
   }
-  /* E_g with the baseline subtracted (debug): the baseline line taken off the Tauc
-     curve point by point, a line fitted to the result on the very window the Tauc fit
-     settled on, and E_g where it meets zero. Fitted as the Tauc line is, it would be
-     that line less the baseline, and E_g the baseline crossing exactly; so it is
-     fitted with each point weighted by the variance it now has: the scatter of the
-     data about the Tauc fit, plus the baseline's own uncertainty at that hν carried
-     by the subtraction, var(b) + hν²·var(m) + 2hν·cov(m, b). The parameters' errors
-     are those of the weighted fit, which takes the points as independent (the
-     baseline's share is in fact common to all of them), and E_g's is carried through
-     as for the other two, times the t factor of the window. */
-  function baselineSubtracted(c, r1, r2, M){
-    if (![r2.slope, r2.intercept].every(isFinite)) return { ys: null, reg: null, Eg: NaN, EgErr: NaN };
-    const ys = c.Ys.map((y, k)=> y - (r2.slope*c.hv[k] + r2.intercept));
-    const idx = r1.bestIdx || [], n = idx.length;
-    if (n < 3 || ![r2.varM, r2.varB, r2.covMB].every(isFinite)) return { ys, reg: null, Eg: NaN, EgErr: NaN };
-    let s2 = 0;
-    for (const k of idx) s2 += (c.Ys[k] - (r1.slope*c.hv[k] + r1.intercept))**2;
-    s2 /= n - 2;
-    let S = 0, Sx = 0, Sy = 0, Sxx = 0, Sxy = 0;
-    for (const k of idx){
-      const x = c.hv[k], w = 1/(s2 + r2.varB + x*x*r2.varM + 2*x*r2.covMB);
-      if (!(w > 0 && isFinite(w))) return { ys, reg: null, Eg: NaN, EgErr: NaN };
-      S += w; Sx += w*x; Sy += w*ys[k]; Sxx += w*x*x; Sxy += w*x*ys[k];
-    }
-    const D = S*Sxx - Sx*Sx;
-    if (!(D > 0)) return { ys, reg: null, Eg: NaN, EgErr: NaN };
-    const reg = { slope: (S*Sxy - Sx*Sy)/D, intercept: (Sxx*Sy - Sx*Sxy)/D, varM: S/D, varB: Sxx/D, covMB: -Sx/D, bestIdx: idx };
-    const e = xCross(reg, M);
-    return { ys, reg, Eg: e.x, EgErr: e.err };
-  }
   // The Urbach energy is the inverse of the tail's slope in ln F(R) against hν.
   function urbachEu(regs, M){ const s = invSlope(regs, M); return { Eu: s.v, EuErr: s.err }; }
 
@@ -272,7 +242,7 @@ import { Plot } from './plot.js';
     P.analyze = k =>{
       const p = P.params(k), vl = P.vlinesFor(k), c = curves(k, p);
       const fits = windows.map(w=> scanRegr(c.hv, c.Ys, p[w.M], vl[w.lo], vl[w.hi]));
-      return { ...spec.results(fits, p, c), fits };
+      return { ...spec.results(fits, p), fits };
     };
 
     // ---- Auto-suggested interval-line positions ----
@@ -392,10 +362,7 @@ import { Plot } from './plot.js';
         }
       });
       $('Alert').innerHTML = tooSmall ? '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>' : '';
-      const res = P.analyze(currIndex);
-      spec.show($, res);
-      // Drawn from what the fits gave: whatever a spec reads off them beyond the fits.
-      if (spec.overlay) spec.overlay(plot, res, hv, nm);
+      spec.show($, P.analyze(currIndex));
 
       // While dragging a line: live-update only the interactive plot (below); the
       // summary plots refresh once, on release. onDrag sets dragging, onRelease clears it.
@@ -518,7 +485,7 @@ import { Plot } from './plot.js';
   const expOf = a => EXPONENTS.find(e=> Math.abs(e.a - a) < 1e-9);
   const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
   const URBACH_COLOR = '#ff7f0e';
-  const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff', sub: '#1fb8a6' };
+  const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
   // The defect band's steps, each in a colour of its own, and its fit.
   const DEFECT_COLORS = { fr: '#3aa0ff', ln: '#ff7f0e', d: '#5fcf6a', inv: '#b46cff', fit: '#ff5050' };
 
@@ -587,22 +554,8 @@ import { Plot } from './plot.js';
       // inside it (the window scan then finds each one's linear part); baseline computed
       // once from min(v1), below every edge.
       combine: ss =>{ const v1 = Math.min(...ss.map(s=>s.v1)), v2 = Math.max(...ss.map(s=>s.v2)); return { v1, v2, v3: v1-0.85, v4: v1-0.1 }; },
-      results: (f, p, c)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1], sub: baselineSubtracted(c, f[0], f[1], p.M) }),
-      show: ($, r)=>{
-        $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV');
-        $('EgSub').textContent = fmtE(r.sub.Eg, r.sub.EgErr, 'eV');
-      },
-      // The baseline-subtracted curve (debug) and its fit, on the Tauc curve's axis.
-      overlay: (plot, r, hv, nm)=>{
-        const sb = r.sub, C = TAUC_COLORS.sub;
-        if (!sb.ys) return;
-        plot.line(hv, sb.ys, C, 1.2, undefined, { label: `${nm} baseline-subtracted`, key: 'subtracted' });
-        if (!sb.reg) return;
-        const line = x => sb.reg.slope*x + sb.reg.intercept, xb = sb.reg.bestIdx.map(i=> hv[i]);
-        plot.line(xb, xb.map(line), C, 2.2, undefined, { label: `${nm} baseline-subtracted fit`, key: 'regs3' });
-        const xExt = linspace(minArr(hv), maxArr(hv), 100);
-        plot.line(xExt, xExt.map(line), C, 1, '5,4', { label: `${nm} baseline-subtracted fit, extended`, key: 'regs3 line' });
-      },
+      results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
+      show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
       hidden: ()=> isFolded(a),
       // The automatic name carries the exponent.
       onParams: ()=> refreshNames(),
@@ -719,7 +672,7 @@ import { Plot } from './plot.js';
   const GRIP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>';
   const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
   const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
-  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. <b>Baseline-subtracted (debug)</b>: the baseline line is taken off the curve point by point (the teal curve), a line is fitted to the result on the same window as the Tauc fit, and E<sub>g</sub> is where it meets zero. Each point is weighted by the variance it has after the subtraction: the data's scatter about the Tauc fit plus the baseline's uncertainty at that hν, var(b) + hν²·var(m) + 2hν·cov(m, b). Unweighted it would be E<sub>g</sub> (baseline) exactly; its error is the weighted fit's, which takes the points as independent although the baseline's share is common to them all, carried through and multiplied by the same t. It is shown on the card only, not in the Results or the CSV files. ${CARD_INFO}`;
+  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
   const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is centred on it again once the change is made (a Tauc line released, a value confirmed), and a new reference centres them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
 
   const DEFECT_INFO = `A debug analysis, for a band of defect states below the gap, whose absorption is taken to rise as <b>F(R) ∝ (hν − E<sub>dif</sub>)<sup>p</sup></b>. Then d ln[F(R)] / d(hν) = p / (hν − E<sub>dif</sub>), and its inverse, <b>(hν − E<sub>dif</sub>) / p</b>, is a straight line of slope 1/p that meets zero at E<sub>dif</sub>. The curve gets there a step at a time, each smoothed with a window of its own (a centred moving average that leaves out points with no value): F(R); F(R) less its minimum, of which the log is taken; the derivative of that against hν; and its inverse. Every step is on the plot, smoothed, each on a y-axis of its own (not drawn), ranged from the minimum to the maximum of that step taken with no smoothing at all, so that neither a smoothing window nor the lines ever move it; the y-axis drawn is the last one's, in eV. Zoom in to read the fit closely. Drag the red lines to set the region, or press <b>✦ Suggest intervals</b> to put them on the absorption edge, found as for Tauc. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>dif</sub></b> is where the line meets zero and <b>p</b> the inverse of its slope; each error is the regression's own carried through, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Nothing here reaches the Results or the CSV files. ${CARD_INFO}`;
@@ -751,7 +704,7 @@ import { Plot } from './plot.js';
           <div class="col mw520" style="flex:2">
             ${navRow(p)}
             ${plotWrap(p + 'Svg', p + 'Legend', true)}
-            ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff5050', 'Tauc linear region'], ['#d050ff', 'baseline'], [TAUC_COLORS.sub, 'baseline-subtracted (debug)']])}
+            ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff5050', 'Tauc linear region'], ['#d050ff', 'baseline']])}
           </div>
           <div class="col mw280" style="align-self:flex-start">
             <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
@@ -775,7 +728,6 @@ import { Plot } from './plot.js';
               <div class="pg-result">
                 <div class="pg-stat">E<sub>g</sub> (x-axis): <b id="${p}Eg">-</b></div>
                 <div class="pg-stat">E<sub>g</sub> (baseline): <b id="${p}EgInt">-</b></div>
-                <div class="pg-stat" title="Debug: on the card only, not in the Results or the CSV files">E<sub>g</sub> (baseline-subtracted, debug): <b id="${p}EgSub">-</b></div>
               </div>
             </div>
             <div id="${p}Alert"></div>${suggestBtn(p, 'Propose optimal Tauc-region and baseline intervals from the absorption edge')}
