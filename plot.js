@@ -184,6 +184,25 @@ class Plot{
       if (!xTicks.some(v=>Math.abs(v-this.xmin)<tol)) drawXTick(this.xmin, 'start');
       if (!xTicks.some(v=>Math.abs(v-this.xmax)<tol)) drawXTick(this.xmax, 'end');
     }
+    /* A second x-axis along the top, for a quantity that is a function of x
+       (opts.topAxis = {label, of: x → value, at: value → x}): ticked at nice values of
+       its own, wherever they fall — g against the field, say, is not linear in it. */
+    const ta = this._opts.topAxis;
+    if (ta){
+      const a = ta.of(this.xmin), b = ta.of(this.xmax);
+      if (isFinite(a) && isFinite(b) && a !== b){
+        for (const v of niceTicks(Math.min(a, b), Math.max(a, b), 5)){
+          const xv = ta.at(v);
+          if (!(xv >= Math.min(this.xmin, this.xmax) && xv <= Math.max(this.xmin, this.xmax))) continue;
+          const px = this.px(xv);
+          this.gAxes.appendChild(svgEl('line',{x1:px,x2:px,y1:m.t,y2:m.t-4,stroke:'#3a414c','class':'plot-border'}));
+          const t = svgEl('text',{x:px,y:m.t-7,'font-size':10,fill:'#93a0b0','text-anchor':'middle','class':'plot-tick'});
+          t.textContent = fmtTick(v); this.gAxes.appendChild(t);
+        }
+      }
+      const tl = svgEl('text',{x:w/2,y:m.t-26,'font-size':11,fill:'#c4ccd6','text-anchor':'middle','class':'plot-label'});
+      tl.textContent = ta.label || ''; this.gAxes.appendChild(tl);
+    }
     if (!this.noYTickLabels || this._opts.yGrid){
       for (const yv of this.yTicksIn(this.ymin, this.ymax)){
         const py = this.py(yv);
@@ -572,6 +591,8 @@ class Plot{
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
     if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }
+    const ta = this._opts.topAxis;
+    if (!isBar && ta){ const l3=svgEl('tspan',{x:tx,dy:16}); l3.textContent=`${ta.label||'x₂'} = ${(ta.fmt||fmt)(ta.of(xv))}`; t.appendChild(l3); }
     const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, this._opts.yLog ? Math.pow(10, yv) : yv, fmt);
     t.appendChild(l2);
     this.gCross.appendChild(t);
@@ -757,11 +778,13 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
       const xTicks = plotObj._opts.xTickStep
         ? fixedTicks(rx1, rx2, plotObj._opts.xTickStep)
         : niceTicks(rx1, rx2, 5);
+      // A plot with a second x-axis along the top keeps that side for its ticks.
+      const top = !plotObj._opts.topAxis;
       for (const xv of xTicks){
         const px = toSvgX(xv);
         if (px < m.l-1 || px > w-m.r+1) continue;
         addLine(px,h-m.b+PO, px,h-m.b-PI, 1.2); // bottom
-        addLine(px,m.t-PO,   px,m.t+PI,   1.2); // top
+        if (top) addLine(px,m.t-PO,   px,m.t+PI,   1.2); // top
       }
       if (xTicks.length >= 2){
         const step = xTicks[1]-xTicks[0];
@@ -769,7 +792,7 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
           const px = toSvgX(xv);
           if (px < m.l-1 || px > w-m.r+1) continue;
           addLine(px,h-m.b+SO, px,h-m.b-SI, 0.9);
-          addLine(px,m.t-SO,   px,m.t+SI,   0.9);
+          if (top) addLine(px,m.t-SO,   px,m.t+SI,   0.9);
         }
       }
     }

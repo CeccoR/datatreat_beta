@@ -423,10 +423,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const yraw       = files[i].y;
     const smoothed   = movingAverage(yraw, p.N);                       // display + detection
     const snip       = computeBaseline(smoothed, p.blWin);             // SNIP baseline (estimate/fallback/standard)
-    const detSub     = smoothed.map((v,j)=>Math.max(0, v-snip[j]));    // for the peak search
-    /* The widths are read on the data themselves, less the baseline: a moving average
-       is a box N points wide convolved into every peak, as wide as the peaks at the
-       default N, and sizes came out two to three times too small, shrinking with N. */
+    /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
+       profile — on the raw counts the noise stops it short — and the smoothing, a box
+       N points wide convolved into every peak, widens them in turn: the window is the
+       user's to keep small against the peak widths, the raw pattern drawn beside it. */
+    const detSub     = smoothed.map((v,j)=>Math.max(0, v-snip[j]));
     const rawSub     = yraw.map((v,j)=>v-snip[j]);
     // Peak detection on the smoothed, SNIP-subtracted profile (robust to noise)
     const peaks      = findPeaks(x, detSub, p.pkHeight, p.pkProm, p.pkDist);
@@ -447,7 +448,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // fit is applied on top, on demand, by runFit() when the Fit button is pressed.
     peaks.forEach(pk=>{
       if (pk.removed){ pk.fit=null; pk.fwhm=NaN; pk.fwhmClassic=NaN; pk.fwhmFit=undefined; pk.fitPos=undefined; return; }
-      pk.fit=null; pk.fwhmClassic=computeFWHM(x, rawSub, pk.idx); pk.fwhmFit=undefined; pk.fwhm=pk.fwhmClassic; pk.fitPos=undefined;
+      pk.fit=null; pk.fwhmClassic=computeFWHM(x, detSub, pk.idx); pk.fwhmFit=undefined; pk.fwhm=pk.fwhmClassic; pk.fitPos=undefined;
     });
     const subtracted = detSub;
     processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks};
@@ -567,9 +568,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       drawnPos.push(pk.pos);
       plot.vline(pk.pos, PEAK_BASE, false);
       peakMarks.push({pos:pk.pos});
-      // Horizontal FWHM marker at half-maximum height, on the profile it is measured on:
-      // the data less the baseline.
-      const gm = fwhmGeom(f.x, pr.rawSub, pk.idx);
+      // Horizontal FWHM marker at half-maximum height (on the smoothed, baseline-subtracted profile)
+      const gm = fwhmGeom(f.x, pr.subtracted, pk.idx);
       if (gm){
         const yDisp = (pr.baseline[gm.idx] + gm.half) / mx;
         fwhmMarks.push({pos:pk.pos, x0:gm.xl, x1:gm.xr, y:yDisp});
@@ -910,7 +910,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     pks.forEach((pk,i)=>{
       const fwhm = pk.fwhmClassic;
       const sizeRawCell = sizeCol ? `<td>${fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
-      const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
+      const below = showCorr && belowInstr(fwhm, pk.detPos);
+      const corrCell = showCorr ? (below ? `<td title="Narrower than the instrumental width at this angle">⚠</td>` : `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>`) : '';
       const sel = panels[key].sel!=null && Math.abs(pk.pos-panels[key].sel)<1e-9 ? ' selected' : '';
       html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
     });
@@ -920,6 +921,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanErr(st.rawMean, st.rawErr, st.rawN)} nm</b>`;
       if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanErr(st.corrMean, st.corrErr, st.corrN)} nm</b>`;
       html += '</div>';
+      if (st.below) html += belowInstrHtml(st.below);
     }
     wrap.innerHTML=html;
 
@@ -1027,21 +1029,32 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     };
     return { isStd, showCorr, ...one(raw, 'raw'), ...one(corr, 'corr') };
   }
+  /* A peak narrower than the instrument at its angle leaves no width for the crystallite
+     size: physically it cannot happen, so when it does the standard is at fault (its
+     peaks wider than they should be, or misread). Such a peak has no corrected size;
+     the peak table says so. */
+  function belowInstr(betaDeg, pos){
+    if (!standardName || !isFinite(betaDeg) || betaDeg <= 0) return false;
+    return betaDeg <= instrBeta(pos);
+  }
+  const belowInstrHtml = n => `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's are' : ' is'} narrower than the instrumental width at ${n > 1 ? 'their angles' : 'its angle'}, which is not physically possible: the standard is likely unsuitable. ${n > 1 ? 'They are' : 'It is'} left out of the corrected size.</div>`;
   // The classic crystallite sizes of a sample's kept peaks, summarised (sizeSummary).
   function sampleSizeStats(i){
     const pr = processed[i];
     const isStd = files[i] && files[i].name === standardName;
     const showCorr = !!standardName && !isStd;
     const raw = [], corr = [];
+    let below = 0;
     if (pr && !isStd){
       const fp = getFileParams(i);
       pr.peaks.filter(p=>!p.removed).forEach(pk=>{
         const s = sizeRaw(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda);
         if (isFinite(s)) raw.push(s);
         if (showCorr){ const sc = sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda); if (isFinite(sc)) corr.push(sc); }
+        if (showCorr && belowInstr(pk.fwhmClassic, pk.detPos)) below++;
       });
     }
-    return sizeSummary(raw, corr, isStd, showCorr);
+    return { ...sizeSummary(raw, corr, isStd, showCorr), below };
   }
   // "mean ± error" (or just "mean" for n=1, "—" for none)
   function fmtMeanErr(mean, err, n){

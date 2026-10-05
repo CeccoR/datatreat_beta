@@ -682,20 +682,17 @@ import { Plot, svgEl } from './plot.js';
       const t0 = Math.min(startOf(k), endOf(k));
       for (const key in d.gas){ const q = d.gas[key], c0 = cumAt(d.t, q.Fm, q.cum, t0); q.FmInt = q.cum.map(v=> v - c0); }
     });
+    /* Mean rate over the interval: the rate taken as the straight line between each
+       pair of injections, integrated exactly from the interval's start to its end — an
+       end between two injections integrates the line up to it — and divided by the
+       duration. Read only off injections inside the interval, the mean lost the stretch
+       between the last of them and the line. The interval is what the data cover of it. */
     costResults = dataTables.map((d,k)=>{
-      const xStart = Math.min(startOf(k), endOf(k)), xEnd = Math.max(startOf(k), endOf(k));
-      let startIdx = -1, endIdx = -1;
-      for (let i=0;i<d.t.length;i++){
-        if (d.t[i] >= xStart && startIdx < 0) startIdx = i;
-        if (d.t[i] <= xEnd) endIdx = i;
-      }
-      if (startIdx < 0 || endIdx < 0 || startIdx >= endIdx) return {name:d.name, label:d.label, rate:{}, dt:NaN};
-      const dt = d.t[endIdx] - d.t[startIdx];
-      if (dt === 0) return {name:d.name, label:d.label, rate:{}, dt:NaN};
-      // Mean rate over the interval: the cumulative rise divided by its duration.
+      const [a, b] = spanOf(d, k);
+      if (!(b > a)) return {name:d.name, label:d.label, rate:{}, dt:NaN};
       const rate = {};
-      for (const key in d.gas) rate[key] = (d.gas[key].FmInt[endIdx] - d.gas[key].FmInt[startIdx]) / dt;
-      return {name:d.name, label:d.label, rate, dt};
+      for (const key in d.gas){ const q = d.gas[key]; rate[key] = (cumAt(d.t, q.Fm, q.cum, b) - cumAt(d.t, q.Fm, q.cum, a)) / (b - a); }
+      return {name:d.name, label:d.label, rate, dt: b - a};
     });
     drawGcData();
     // Show the Results card before drawing into it: plots sized from a hidden element
@@ -706,22 +703,39 @@ import { Plot, svgEl } from './plot.js';
     drawBarChart();
   }
 
-  // Results series: the Analysis curves truncated just past each sample's interval end.
-  // If the last point already falls at or before the end, nothing is cut.
+  // The interval of sample k as far as its data reach: [start, end] within the first and
+  // last time it has.
+  function spanOf(d, k){
+    const n = d.t.length;
+    if (n < 2) return [NaN, NaN];
+    return [Math.max(Math.min(startOf(k), endOf(k)), d.t[0]), Math.min(Math.max(startOf(k), endOf(k)), d.t[n-1])];
+  }
+  // The straight line between the injections either side of `at`, read there.
+  function lineAt(t, v, at){
+    let a = 0; while (a + 2 < t.length && t[a+1] <= at) a++;
+    const w = t[a+1] - t[a];
+    return w ? v[a] + (v[a+1] - v[a])*(at - t[a])/w : v[a];
+  }
+  /* Results series: the Analysis curves between the interval's lines — the injections
+     inside it, and at each line the straight line between the injections around it,
+     read there — which is what the mean rate integrates. */
   function cutTables(){
     return dataTables.map((d,k)=>{
-      const end = endOf(k);
-      const i = d.t.findIndex(t => t > end);
-      const n = i < 0 ? d.t.length : i+1;
+      const [a, b] = spanOf(d, k);
+      if (!(b > a)) return {...d, t:[], gas: Object.fromEntries(Object.keys(d.gas).map(key=> [key, { ...d.gas[key], Fm:[], FmInt:[], pct:[], flow:[] }]))};
+      const inner = d.t.map((_, i)=> i).filter(i=> d.t[i] > a && d.t[i] < b);
+      const take = arr => [lineAt(d.t, arr, a), ...inner.map(i=> arr[i]), lineAt(d.t, arr, b)];
       const gas = {};
-      for (const key in d.gas)
-        gas[key] = { ...d.gas[key], Fm:d.gas[key].Fm.slice(0,n), FmInt:d.gas[key].FmInt.slice(0,n),
-                     pct:d.gas[key].pct.slice(0,n), flow:d.gas[key].flow.slice(0,n) };
-      return {...d, t:d.t.slice(0,n), gas};
+      for (const key in d.gas){
+        const q = d.gas[key], c0 = q.cum[0] - q.FmInt[0];   // FmInt = cum − c0
+        gas[key] = { ...q, Fm: take(q.Fm), pct: take(q.pct), flow: take(q.flow),
+                     FmInt: [a, ...inner.map(i=> d.t[i]), b].map(x=> cumAt(d.t, q.Fm, q.cum, x) - c0) };
+      }
+      return {...d, t:[a, ...inner.map(i=> d.t[i]), b], gas};
     });
   }
 
-  // The two Results plots: same quantities as Analysis, cut at the interval end and
+  // The two Results plots: same quantities as Analysis, between the interval's lines and
   // without the interval overlay (Results shows the retained data only), y from 0 to
   // the data from light-on on, as there.
   function drawResultPlots(){
@@ -819,7 +833,7 @@ import { Plot, svgEl } from './plot.js';
     const entries = [];
     // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
     // the full series with every intermediate quantity; gc_results.csv keeps only the
-    // three plotted columns, cut at the interval end.
+    // three plotted columns, between the interval's lines as plotted.
     // Only what the Results plots are showing: pick H2, O2 or both and it follows.
     const shown = shownGases('r');
     const buildSeriesCsv = (tables, full)=>{

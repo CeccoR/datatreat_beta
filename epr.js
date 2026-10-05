@@ -65,6 +65,8 @@ import { Plot } from './plot.js';
   /* The field axis in mT, rescaled to 9.5 GHz. XMIN/XWID are in the unit XUNI
      names, Gauss unless it says mT; with no MWFQ there is no frequency to rescale
      by, and the field is the one measured. */
+  // h·(9.5 GHz)/μ_B, in mT: the field of g = 1 at 9.5 GHz, so that g = G_AT_95 / B.
+  const G_AT_95 = 6.62607015e-34 * 9.5e9 / 9.2740100783e-24 * 1e3;
   function buildBAxis(p){
     const npts  = parseInt(p.XPTS);
     const toG   = dscWord(p.XUNI).toLowerCase() === 'mt' ? 10 : 1;
@@ -109,7 +111,8 @@ import { Plot } from './plot.js';
     const slope = (s[n-1] - s[0]) / (b[n-1] - b[0] || 1);
     const a = s.map((v, i) => v - (s[0] + slope * (b[i] - b[0])));
 
-    return { name: stem, label: stem, b, a,
+    // Whether the field was rescaled to 9.5 GHz: with no MWFQ it is the one measured.
+    return { name: stem, label: stem, b, a, rescaled: parseFloat(p.MWFQ) > 0,
              rawFiles: [ { name: dscFile.name, bytes: dscBytes },
                          { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
   }
@@ -190,7 +193,12 @@ import { Plot } from './plot.js';
     // current zoom on a resize / tab-switch redraw instead of snapping to full range.
     const old = document.getElementById('eprSvg')._plot;
     const prev = (preserveView && old && isFinite(old.xmin)) ? {xmin:old.xmin,xmax:old.xmax,ymin:old.ymin,ymax:old.ymax} : null;
-    const plot = new Plot(document.getElementById('eprSvg'), {xlabel:'Magnetic Field (mT)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
+    /* The field is each spectrum's rescaled to 9.5 GHz (buildBAxis), so the axis says so
+       and carries g along the top: g = hν/(μ_B·B) at that ν, 678.753 mT / B. A file
+       without its frequency is on its measured field, where g cannot be read. */
+    const at95 = files.every(f=> f.rescaled !== false);
+    const plot = new Plot(document.getElementById('eprSvg'), {xlabel: at95 ? 'Magnetic Field at 9.5 GHz (mT)' : 'Magnetic Field (mT)', ylabel:'Intensity (a. u.)', noYTickLabels:true,
+      ...(at95 ? { topAxis: { label:'g', of: B=> G_AT_95/B, at: g=> G_AT_95/g, fmt: v=> v.toFixed(4) }, margin:{l:55,r:20,t:48,b:40} } : {})});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById('eprLegend'); legend.innerHTML='';
     const n = Y.length;
@@ -246,7 +254,8 @@ import { Plot } from './plot.js';
     const cols = [];
     files.forEach((f,k)=>{
       const sm = sms[k], bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP;
-      cols.push({h:'Bfield_mT_'+f.label,             v:f.b.map(v=>fmtNum(v,6))});
+      // Rescaled to 9.5 GHz, which the header says: it is not the field measured.
+      cols.push({h:(f.rescaled !== false ? 'Bfield_mT_at_9.5GHz_' : 'Bfield_mT_')+f.label, v:f.b.map(v=>fmtNum(v,6))});
       // Intensities of any scale keep their digits (fmtData): a tiny one is not 0.
       cols.push({h:'Raw_'+f.label,                   v:f.a.map(v=>fmtData(v,6))});
       cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:sm.map(v=>fmtNum((v-bg)/div,6))});
