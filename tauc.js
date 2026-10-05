@@ -115,7 +115,7 @@ import { Plot } from './plot.js';
     const ln = smoothFinite(lnRaw, p.N2);
     const dRaw = gradientArr(ln, hv), d = smoothFinite(dRaw, p.N3);
     const invRaw = d.map(v=> v !== 0 && isFinite(v) ? 1/v : NaN), inv = smoothFinite(invRaw, p.N4);
-    return { hv, Yraw: invRaw, Ys: inv, steps: { raw, fr, lnRaw, ln, dRaw, d, invRaw, inv } };
+    return { hv, Yraw: invRaw, Ys: inv, steps: { fr, ln, d, inv } };
   }
   const fmtE = (v, e, unit, k = 3, scale = 1)=> !isFinite(v) ? '-'
     : isFinite(e) ? `${(v*scale).toFixed(k)} ± ${(e*scale).toFixed(k)} ${unit}` : `${(v*scale).toFixed(k)} ${unit}`;
@@ -310,7 +310,7 @@ import { Plot } from './plot.js';
       // set below stays as the "home" reset target)
       const prev = (preserveView && isFinite(plot.xmin)) ? {xmin:plot.xmin, xmax:plot.xmax, ymin:plot.ymin, ymax:plot.ymax} : null;
       let range;
-      if (spec.yRange) range = spec.yRange(c, vlines, p);
+      if (spec.yRange) range = spec.yRange(c);
       else {
         const rLo = spec.zeroFloor ? 0 : minArr(c.Yraw), rHi = maxArr(c.Yraw), pad = spec.zeroFloor ? 0 : 0.05*(rHi - rLo);
         range = [rLo - pad, spec.zeroFloor ? rHi*1.05 : rHi + pad];
@@ -471,7 +471,7 @@ import { Plot } from './plot.js';
   const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
   const URBACH_COLOR = '#ff7f0e';
   const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
-  // The defect band's steps, each in one colour (thin before its smoothing), and its fit.
+  // The defect band's steps, each in a colour of its own, and its fit.
   const DEFECT_COLORS = { fr: '#3aa0ff', ln: '#ff7f0e', d: '#5fcf6a', inv: '#b46cff', fit: '#ff5050' };
 
   /* =========================================================
@@ -616,29 +616,22 @@ import { Plot } from './plot.js';
         return e && { v1: e.v1, v2: e.v2 };
       },
       combine: ss => ({ v1: Math.min(...ss.map(s=> s.v1)), v2: Math.max(...ss.map(s=> s.v2)) }),
-      /* The range is what the fit is read on: its line across the region, the curve
-         in the window it settled on, and zero, where the line meets it at E_dif. The
-         inverse runs off to a pole wherever the derivative crosses zero, which the
-         region may well hold: ranged on the curve, the fit would be a flat line.
-         With no fit, the region's middle 90% of the curve. */
-      yRange: (c, vl, p)=>{
-        const lo = Math.min(vl.v1, vl.v2), hi = Math.max(vl.v1, vl.v2);
-        const r = scanRegr(c.hv, c.Ys, p.M, lo, hi);
-        let ys;
-        if (r.bestIdx.length) ys = [lo, hi].map(x=> r.slope*x + r.intercept).concat(r.bestIdx.map(k=> c.Ys[k]));
-        else {
-          const v = c.Ys.filter((y, k)=> isFinite(y) && c.hv[k] >= lo && c.hv[k] <= hi).sort((x, y)=> x - y);
-          if (!v.length) return [0, 1];
-          ys = [v[Math.round(0.05*(v.length - 1))], v[Math.round(0.95*(v.length - 1))]];
-        }
-        const y0 = Math.min(0, ...ys), y1 = Math.max(0, ...ys), d = (y1 - y0) || 1;
-        return [y0 - 0.08*d, y1 + 0.08*d];
+      /* The range is the sample's own, whatever the lines do: moving them must not
+         move the curves. It is the middle 90% of the last step over the whole span,
+         with zero in it (where the line meets it, at E_dif): the inverse runs off to
+         a pole wherever the derivative crosses zero, and its extremes would flatten
+         everything else. */
+      yRange: c =>{
+        const v = c.Ys.filter(isFinite).sort((x, y)=> x - y);
+        if (!v.length) return [0, 1];
+        const y0 = Math.min(0, v[Math.round(0.05*(v.length - 1))]), y1 = Math.max(0, v[Math.round(0.95*(v.length - 1))]);
+        const d = (y1 - y0) || 1;
+        return [y0 - 0.05*d, y1 + 0.05*d];
       },
-      /* Every step on the plot, each on a y-axis of its own that is not drawn: its
-         smoothed curve spans the plot's range (from its 1st to its 99th percentile,
-         so a stray spike does not squash it), and the curve before smoothing goes on
-         the same axis, thinner. The last step is on the axis itself. Anything far
-         beyond the range is held just past it, where the plot clips it. */
+      /* Every step on the plot, smoothed, each on a y-axis of its own that is not
+         drawn: it spans the plot's range from its 1st to its 99th percentile, so a
+         stray spike does not squash it. The last step is on the axis itself.
+         Anything far beyond the range is held just past it, where the plot clips it. */
       traces: (c, [y0, y1])=>{
         const s = c.steps, d = y1 - y0;
         const clip = v => isFinite(v) ? Math.max(y0 - 20*d, Math.min(y1 + 20*d, v)) : NaN;
@@ -647,17 +640,12 @@ import { Plot } from './plot.js';
           const lo = pct(ref, 0.01), hi = pct(ref, 0.99), k = hi > lo ? d/(hi - lo) : 0;
           return arr => arr.map(v=> clip(y0 + (v - lo)*k));
         };
-        const fr = onAxis(s.fr), ln = onAxis(s.ln), dd = onAxis(s.d), inv = arr => arr.map(clip);
         const C = DEFECT_COLORS;
         return [
-          { ys: fr(s.raw),     color: C.fr,  width: 0.6, name: 'F(R)',                key: 'F(R) raw' },
-          { ys: fr(s.fr),      color: C.fr,  width: 1.2, name: 'F(R) smoothed',       key: 'F(R)' },
-          { ys: ln(s.lnRaw),   color: C.ln,  width: 0.6, name: 'ln',                  key: 'ln raw' },
-          { ys: ln(s.ln),      color: C.ln,  width: 1.2, name: 'ln smoothed',         key: 'ln' },
-          { ys: dd(s.dRaw),    color: C.d,   width: 0.6, name: 'derivative',          key: 'derivative raw' },
-          { ys: dd(s.d),       color: C.d,   width: 1.2, name: 'derivative smoothed', key: 'derivative' },
-          { ys: inv(s.invRaw), color: C.inv, width: 0.6, name: 'inverse',             key: 'inverse raw' },
-          { ys: inv(s.inv),    color: C.inv, width: 1.6, name: 'inverse smoothed',    key: 'inverse' },
+          { ys: onAxis(s.fr)(s.fr), color: C.fr,  width: 1.2, name: 'F(R)',       key: 'F(R)' },
+          { ys: onAxis(s.ln)(s.ln), color: C.ln,  width: 1.2, name: 'ln',         key: 'ln' },
+          { ys: onAxis(s.d)(s.d),   color: C.d,   width: 1.2, name: 'derivative', key: 'derivative' },
+          { ys: s.inv.map(clip),    color: C.inv, width: 1.6, name: 'inverse',    key: 'inverse' },
         ];
       },
       results: (f, p)=>{
@@ -686,7 +674,7 @@ import { Plot } from './plot.js';
   const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
   const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is centred on it again once the change is made (a Tauc line released, a value confirmed), and a new reference centres them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
 
-  const DEFECT_INFO = `A debug analysis, for a band of defect states below the gap, whose absorption is taken to rise as <b>F(R) ∝ (hν − E<sub>dif</sub>)<sup>p</sup></b>. Then d ln[F(R)] / d(hν) = p / (hν − E<sub>dif</sub>), and its inverse, <b>(hν − E<sub>dif</sub>) / p</b>, is a straight line of slope 1/p that meets zero at E<sub>dif</sub>. The curve gets there a step at a time, each smoothed with a window of its own (a centred moving average that leaves out points with no value): F(R); F(R) less its minimum, of which the log is taken; the derivative of that against hν; and its inverse. Every step is on the plot, each on a y-axis of its own (not drawn: it fills the plot's height), the thin lines being each step before its smoothing; the y-axis drawn is the last one's, in eV. Drag the red lines to set the region, or press <b>✦ Suggest intervals</b> to put them on the absorption edge, found as for Tauc. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>dif</sub></b> is where the line meets zero and <b>p</b> the inverse of its slope; each error is the regression's own carried through, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Nothing here reaches the Results or the CSV files. ${CARD_INFO}`;
+  const DEFECT_INFO = `A debug analysis, for a band of defect states below the gap, whose absorption is taken to rise as <b>F(R) ∝ (hν − E<sub>dif</sub>)<sup>p</sup></b>. Then d ln[F(R)] / d(hν) = p / (hν − E<sub>dif</sub>), and its inverse, <b>(hν − E<sub>dif</sub>) / p</b>, is a straight line of slope 1/p that meets zero at E<sub>dif</sub>. The curve gets there a step at a time, each smoothed with a window of its own (a centred moving average that leaves out points with no value): F(R); F(R) less its minimum, of which the log is taken; the derivative of that against hν; and its inverse. Every step is on the plot, smoothed, each on a y-axis of its own (not drawn: it fills the plot's height); the y-axis drawn is the last one's, in eV. The range is each sample's own and does not move with the lines: it holds the middle 90% of the last step, and zero; zoom in to read the fit closely. Drag the red lines to set the region, or press <b>✦ Suggest intervals</b> to put them on the absorption edge, found as for Tauc. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>dif</sub></b> is where the line meets zero and <b>p</b> the inverse of its slope; each error is the regression's own carried through, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Nothing here reaches the Results or the CSV files. ${CARD_INFO}`;
 
   const navRow = p => `
           <div class="plot-nav-row">
