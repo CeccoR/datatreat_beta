@@ -123,7 +123,13 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       // accept filter) — report it instead of dropping it on the floor.
       if (!intensNode || !isFinite(start) || !isFinite(end)){ invalidFiles.push(f.name); continue; }
       existing.add(f.name);
-      const y = intensNode.textContent.trim().split(/\s+/).map(Number);
+      let y = intensNode.textContent.trim().split(/\s+/).map(Number);
+      // Points counted through the automatic attenuator carry the factor that brings
+      // them back to the unattenuated scale; left out, the strongest peaks come out
+      // flattened, and their heights and widths with them.
+      const attNode = intensNode.parentNode && intensNode.parentNode.getElementsByTagName('beamAttenuationFactors')[0];
+      const att = attNode ? attNode.textContent.trim().split(/\s+/).map(Number) : null;
+      if (att && att.length === y.length && att.every(isFinite)) y = y.map((v, i)=> v*att[i]);
       const x = linspace(start, end, y.length);
       // Keep the raw intensities untouched (no minimum subtraction): the constant
       // offset is absorbed by the SNIP background, so the whole pipeline — analysis
@@ -337,9 +343,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     for (const c of candidates){
       if (used[c.idx]) continue;
       out.push(c);
-      const lo = Math.max(0, Math.round(c.idx-minDistPts));
-      const hi = Math.min(y.length-1, Math.round(c.idx+minDistPts));
-      for (let j=lo; j<=hi; j++) used[j]=1;
+      // Closer than the minimum distance, not merely within its rounding: a peak
+      // 0.315° away stays with a 0.3° minimum.
+      const lo = Math.max(0, Math.ceil(c.idx-minDistPts));
+      const hi = Math.min(y.length-1, Math.floor(c.idx+minDistPts));
+      for (let j=lo; j<=hi; j++) if (Math.abs(j - c.idx) < minDistPts) used[j]=1;
     }
     out.sort((a,b)=>a.pos-b.pos);
     return out;
@@ -796,6 +804,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 
   // Stacked, baseline-subtracted overview. `curves[k]` holds each sample's raw
   // (un-offset) trace on its own x axis; null entries (e.g. no fit) are skipped.
+  // The largest of some maxima, for a global normalisation: 1 only when there is
+  // nothing above zero to normalise by (a floor of 1 left data below 1 unnormalised).
+  function topOf(maxima){ const m = Math.max(-Infinity, ...maxima); return m > 0 ? m : 1; }
   function drawStackedResults(svgId, legendId, curves){
     const norm = document.getElementById('xrdNorm').value;
     // The instrumental standard is excluded from the results entirely and from the
@@ -803,7 +814,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const shown = [];
     files.forEach((f,k)=>{ if (f.name!==standardName && curves[k]) shown.push(k); });
     const n = shown.length, baseOf = j => -j * 1.1;
-    const gmax = Math.max(1, ...shown.map(k=>maxArr(curves[k])));
+    const gmax = topOf(shown.map(k=>maxArr(curves[k])));
     const plot = new Plot(document.getElementById(svgId), {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById(legendId); legend.innerHTML='';
@@ -839,18 +850,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!hasNonStd){ renderPeakTable(); return; }
     // Analysis: smoothed − SNIP baseline
     resPlot = drawStackedResults('xrdResSvg', 'xrdResLegend', processed.map(pr=>pr.subtracted));
-    /* The fit is a debug view, to be restructured: nothing of it reaches the Results.
-       Its column keeps the space it had before any sample was fitted, so the Analysis
-       plots stay half-width — unless the layout has wrapped the columns onto
-       separate rows (narrow desktop / mobile), where reserving space would just
-       leave a meaningless empty block: then it is hidden. */
-    const fitCol = document.getElementById('xrdResFitCol');
-    if (fitCol){
-      fitCol.style.display = ''; fitCol.style.visibility = 'hidden';
-      const content = document.getElementById('xrdResultsContent');
-      const a = content.children[0].getBoundingClientRect(), f = fitCol.getBoundingClientRect();
-      if (Math.abs(f.top - a.top) > 2) fitCol.style.display = 'none';   // wrapped → don't reserve
-    }
+    // The fit is a debug view, to be restructured: nothing of it reaches the Results.
     renderPeakTable();
   }
 
@@ -1665,10 +1665,10 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const anyStd = !!standardName;
     const nonStd = files.map((f,k)=>k).filter(k=>files[k].name!==standardName);
     // Normalization factors (match the results plots): local = own max, global = shared max.
-    const gmaxSub = Math.max(1, ...nonStd.map(k=>maxArr(processed[k].subtracted)));
+    const gmaxSub = topOf(nonStd.map(k=>maxArr(processed[k].subtracted)));
     const refinedNorm = k => norm==='local' ? (maxArr(processed[k].subtracted)||1) : gmaxSub;
     const fitIdxs = nonStd.filter(k=>{ const sf=savedFits[k]; return sf && sf.fits && sf.fits.length; });
-    const gmaxFit = Math.max(1, ...fitIdxs.map(k=>maxArr(reconstructFit(files[k].x, savedFits[k].fits).full)));
+    const gmaxFit = topOf(fitIdxs.map(k=>maxArr(reconstructFit(files[k].x, savedFits[k].fits).full)));
     const fitNorm = k => norm==='local' ? (maxArr(reconstructFit(files[k].x, savedFits[k].fits).full)||1) : gmaxFit;
 
     const entries = [];              // {name, text} collected into a single zip

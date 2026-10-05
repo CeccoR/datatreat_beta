@@ -97,10 +97,12 @@ import { Plot } from './plot.js';
   function smoothFinite(y, N){
     N = Math.max(1, Math.round(N));
     const n = y.length, out = new Array(n);
+    // Centred as movingAverage is: an even N spans N + 1 points, the ends at half weight.
+    const h = Math.floor(N/2), even = N % 2 === 0;
     for (let i = 0; i < n; i++){
-      const lo = Math.max(0, i - Math.floor((N-1)/2)), hi = Math.min(n-1, i + Math.ceil((N-1)/2));
+      const lo = Math.max(0, i - h), hi = Math.min(n-1, i + h);
       let s = 0, c = 0;
-      for (let k = lo; k <= hi; k++) if (isFinite(y[k])){ s += y[k]; c++; }
+      for (let k = lo; k <= hi; k++) if (isFinite(y[k])){ const w = even && (k === i-h || k === i+h) ? 0.5 : 1; s += w*y[k]; c += w; }
       out[i] = c ? s/c : NaN;
     }
     return out;
@@ -672,7 +674,7 @@ import { Plot } from './plot.js';
   const GRIP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>';
   const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
   const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
-  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
+  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm), and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
   const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is centred on it again once the change is made (a Tauc line released, a value confirmed), and a new reference centres them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
 
   const DEFECT_INFO = `A debug analysis, for a band of defect states below the gap, whose absorption is taken to rise as <b>F(R) ∝ (hν − E<sub>dif</sub>)<sup>p</sup></b>. Then d ln[F(R)] / d(hν) = p / (hν − E<sub>dif</sub>), and its inverse, <b>(hν − E<sub>dif</sub>) / p</b>, is a straight line of slope 1/p that meets zero at E<sub>dif</sub>. The curve gets there a step at a time, each smoothed with a window of its own (a centred moving average that leaves out points with no value): F(R); F(R) less its minimum, of which the log is taken; the derivative of that against hν; and its inverse. Every step is on the plot, smoothed, each on a y-axis of its own (not drawn), ranged from the minimum to the maximum of that step taken with no smoothing at all, so that neither a smoothing window nor the lines ever move it; the y-axis drawn is the last one's, in eV. Zoom in to read the fit closely. Drag the red lines to set the region, or press <b>✦ Suggest intervals</b> to put them on the absorption edge, found as for Tauc. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>dif</sub></b> is where the line meets zero and <b>p</b> the inverse of its slope; each error is the regression's own carried through, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Nothing here reaches the Results or the CSV files. ${CARD_INFO}`;
@@ -1455,9 +1457,11 @@ import { Plot } from './plot.js';
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
 
-  // Energy axis is just 1240/λ — each file stays on its own native grid
+  // Energy axis is hc/λ — each file stays on its own native grid. hc in eV·nm to the
+  // digits a third decimal of E_g needs: 1240 put every energy 0.013% high.
+  const HC = 1239.842;
   function setupAnalysis(){
-    files.forEach(f=>{ f.hv = f.wl.map(wl=>1240/wl); });
+    files.forEach(f=>{ f.hv = f.wl.map(wl=>HC/wl); });
     if (currIndex >= files.length) currIndex = files.length-1;
     if (currIndex < 0) currIndex = 0;
     SHOWN.forEach(id=> document.getElementById(id).style.display='block');
@@ -1829,7 +1833,9 @@ import { Plot } from './plot.js';
       files.forEach((f,k)=>{
         const r = fits[k];
         cols.push({h:'energy_eV_'+f.label,       v:f.hv.map(x=>fmtNum(x,6))});
-        cols.push({h:f.label,                    v:f.hv.map((hv,i)=>fmtNum(Math.pow(f.FR[i]*hv, P.params(k).a),6))});
+        // The curve as plotted and fitted: smoothed with the card's window.
+        const fp = P.params(k), Ys = movingAverage(f.FR.map((v,i)=> Math.pow(v*f.hv[i], fp.a)), fp.N);
+        cols.push({h:f.label,                    v:Ys.map(v=> fmtNum(v,6))});
         cols.push({h:f.label+'_reg_linear',      v:f.hv.map(hv=> fmtNum(r.regs.slope*hv  + r.regs.intercept, 6))});
         cols.push({h:f.label+'_reg_baseline',    v:f.hv.map(hv=> fmtNum(r.regs2.slope*hv + r.regs2.intercept, 6))});
       });
@@ -1879,7 +1885,9 @@ import { Plot } from './plot.js';
       files.forEach((f,k)=>{
         const r = fits[k].regs;
         cols.push({h:'energy_eV_'+f.label,  v:f.hv.map(x=>fmtNum(x,6))});
-        cols.push({h:f.label,               v:f.FR.map(v=> v > 0 ? fmtNum(Math.log(v),6) : '')});
+        // As plotted and fitted: smoothed with the card's window.
+        const Ys = movingAverage(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), P.params(k).N);
+        cols.push({h:f.label,               v:Ys.map(v=> isFinite(v) ? fmtNum(v,6) : '')});
         cols.push({h:f.label+'_reg_urbach', v:f.hv.map(hv=> isFinite(r.slope) ? fmtNum(r.slope*hv + r.intercept, 6) : '')});
       });
       entries.push({name:`${n} - urbach_plot.csv`, text:wideCsv(cols)});

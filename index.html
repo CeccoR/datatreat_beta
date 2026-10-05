@@ -453,26 +453,16 @@
               <button class="btn plot-dl-btn" data-dl-svg="xrdResSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdResLegend" class="legend"></div>
-            <p class="txt-caption" style="margin:18px 0 6px">Crystallite size</p>
+          </div>
+          <!-- The crystallite size beside the intensities it is read from; the fit's
+               results will come under them once it is restructured. -->
+          <div class="col mw320" style="flex:1">
+            <p class="txt-caption">Crystallite size</p>
             <div class="plot-wrap">
               <svg class="plot" id="xrdSizeBarSvg"></svg>
               <button class="btn plot-dl-btn" data-dl-svg="xrdSizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="xrdSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
             </div>
             <div id="xrdSizeBarLegend" class="legend"></div>
-          </div>
-          <div class="col mw320" id="xrdResFitCol" style="flex:1">
-            <p class="txt-caption">Fit</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="xrdResFitSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="xrdResFitSvg" data-csv-mod="xrd" data-csv-names="fits.csv" data-dl-name="XRPD_results_fit.svg" data-dl-legend="xrdResFitLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="xrdResFitLegend" class="legend"></div>
-            <p class="txt-caption" style="margin:18px 0 6px">Crystallite size (fit)</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="xrdFitSizeBarSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="xrdFitSizeBarSvg" data-csv-mod="xrd" data-csv-names="fit_crystallite_size.csv" data-dl-name="XRPD_crystallite_size_fit.svg" data-dl-legend="xrdFitSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="xrdFitSizeBarLegend" class="legend"></div>
           </div>
         </div>
       </div>
@@ -673,7 +663,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v392</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v393</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

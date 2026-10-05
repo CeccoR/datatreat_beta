@@ -491,6 +491,15 @@ function fmtNum(v, decimals){
   if (!isFinite(v)) return '';
   return v.toFixed(decimals).replace('.', settings.decimal);
 }
+/* As fmtNum, for measured data of any scale: a value so small that `decimals`
+   decimals would keep fewer than three of its digits gets that many significant
+   digits instead — 4.7e-7 at six decimals would be written 0.000000. */
+function fmtData(v, decimals){
+  if (!isFinite(v)) return '';
+  const d = Math.max(0, Math.round(decimals) || 0);
+  const t = v !== 0 && Math.abs(v) < Math.pow(10, 2 - d) ? String(parseFloat(v.toPrecision(Math.max(3, d)))) : v.toFixed(d);
+  return t.replace('.', settings.decimal);
+}
 function csvJoin(vals){ return vals.join(settings.field); }
 function csvLine(vals){ return csvJoin(vals) + '\n'; }
 
@@ -844,13 +853,16 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
 }
 
 function linspace(a,b,n){
-  if (n<=1) return [a];
+  if (n<=0) return [];
+  if (n===1) return [a];
   const out = new Array(n);
   for (let i=0;i<n;i++) out[i] = a + (b-a)*i/(n-1);
   return out;
 }
 function interpLinear(xs, ys, xq){
   const n = xs.length;
+  // The search below needs xs rising: a scan recorded the other way is read reversed.
+  if (n > 1 && xs[0] > xs[n-1]) return interpLinear(xs.slice().reverse(), ys.slice().reverse(), xq);
   const out = new Array(xq.length).fill(NaN);
   for (let i=0;i<xq.length;i++){
     const x = xq[i];
@@ -865,17 +877,19 @@ function interpLinear(xs, ys, xq){
   }
   return out;
 }
+/* A centred moving average over N points. An even N has no middle point, so its
+   window is N + 1 points with the two ends at half weight: as wide, and centred on
+   the point it is for. Taken N points wide it sat half a sample to one side, and
+   moved every peak and edge with it. Near the ends the window is cut short. */
 function movingAverage(y, N){
   N = Math.max(1, Math.round(N));
   if (N<=1) return y.slice();
-  const n = y.length;
+  const n = y.length, h = Math.floor(N/2), even = N % 2 === 0;
   const out = new Array(n);
   for (let i=0;i<n;i++){
-    let lo = i - Math.floor((N-1)/2);
-    let hi = i + Math.ceil((N-1)/2);
-    lo = Math.max(0, lo); hi = Math.min(n-1, hi);
+    const lo = Math.max(0, i-h), hi = Math.min(n-1, i+h);
     let s=0,c=0;
-    for (let k=lo;k<=hi;k++){ s+=y[k]; c++; }
+    for (let k=lo;k<=hi;k++){ const w = even && (k === i-h || k === i+h) ? 0.5 : 1; s+=w*y[k]; c+=w; }
     out[i] = s/c;
   }
   return out;
@@ -909,26 +923,24 @@ function minArr(a){ return a.reduce((m,v)=> isFinite(v)&&v<m?v:m, Infinity); }
 function fitLinear(x,y){
   const n = x.length;
   if (n<2) return {slope:NaN,intercept:NaN,rmse:Infinity,R2:NaN,varM:NaN,varB:NaN,covMB:NaN};
-  let sx=0,sy=0,sxx=0,sxy=0;
-  for (let i=0;i<n;i++){ sx+=x[i]; sy+=y[i]; sxx+=x[i]*x[i]; sxy+=x[i]*y[i]; }
+  // Sums about the means: raw moments lose the digits of a narrow x range far from 0.
+  let sx=0,sy=0;
+  for (let i=0;i<n;i++){ sx+=x[i]; sy+=y[i]; }
   const meanX = sx/n, meanY = sy/n;
-  const Sxx = sxx - n*meanX*meanX;
-  const Sxy = sxy - n*meanX*meanY;
+  let Sxx=0,Sxy=0,sstot=0;
+  for (let i=0;i<n;i++){ const dx=x[i]-meanX, dy=y[i]-meanY; Sxx+=dx*dx; Sxy+=dx*dy; sstot+=dy*dy; }
   const slope = Sxy/Sxx;
   const intercept = meanY - slope*meanX;
   let ssres=0;
   for (let i=0;i<n;i++){ const r = y[i]-(slope*x[i]+intercept); ssres += r*r; }
   const rmse = Math.sqrt(ssres/n);
-  let sstot=0; for (let i=0;i<n;i++){ sstot += (y[i]-meanY)*(y[i]-meanY); }
   const R2 = sstot===0 ? 1 : 1 - ssres/sstot;
-  const dof = Math.max(1, n-2);
-  const sigma2 = ssres/dof;
-  const XtX00 = sxx, XtX01 = sx, XtX11 = n;
-  const det = XtX00*XtX11 - XtX01*XtX01;
+  // Two points fix the line exactly and leave nothing to estimate its scatter from:
+  // the variances are undefined there, not zero.
   let varM=NaN, varB=NaN, covMB=NaN;
-  if (Math.abs(det) > 1e-12){
-    const inv00 = XtX11/det, inv01 = -XtX01/det, inv11 = XtX00/det;
-    varM = sigma2*inv00; varB = sigma2*inv11; covMB = sigma2*inv01;
+  if (n > 2 && Sxx > 0){
+    const sigma2 = ssres/(n-2);
+    varM = sigma2/Sxx; varB = sigma2*(1/n + meanX*meanX/Sxx); covMB = -meanX*sigma2/Sxx;
   }
   return {slope, intercept, rmse, R2, varM, varB, covMB};
 }
@@ -971,9 +983,13 @@ function tcdf(t, df){
   const p = betainc(x, df/2, 0.5);
   return t>0 ? 1-0.5*p : 0.5*p;
 }
+// The p-quantile of Student's t. Below one degree of freedom there is none.
 function tinv(p, df){
-  let lo=0, hi=1000;
-  for (let i=0;i<100;i++){
+  if (!(df >= 1) || !(p > 0 && p < 1)) return NaN;
+  if (p < 0.5) return -tinv(1-p, df);
+  let lo=0, hi=1;
+  while (tcdf(hi, df) < p && hi < 1e15) hi *= 2;   // a bracket however heavy the tail
+  for (let i=0;i<200 && hi-lo > 1e-13*hi;i++){
     const mid=(lo+hi)/2;
     const cp = tcdf(mid, df);
     if (cp < p) lo=mid; else hi=mid;
@@ -1883,5 +1899,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

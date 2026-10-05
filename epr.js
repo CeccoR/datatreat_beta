@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
+import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
@@ -60,14 +60,21 @@ import { Plot } from './plot.js';
     return p;
   }
 
+  // A .DSC value without the quotes it may be written in ('G', 'mT').
+  const dscWord = v => String(v || '').replace(/['"]/g, '').trim();
+  /* The field axis in mT, rescaled to 9.5 GHz. XMIN/XWID are in the unit XUNI
+     names, Gauss unless it says mT; with no MWFQ there is no frequency to rescale
+     by, and the field is the one measured. */
   function buildBAxis(p){
     const npts  = parseInt(p.XPTS);
-    const xmin  = parseFloat(p.XMIN);  // Gauss
-    const xwid  = parseFloat(p.XWID);  // Gauss
-    const mwfq  = parseFloat(p.MWFQ);  // Hz
+    const toG   = dscWord(p.XUNI).toLowerCase() === 'mt' ? 10 : 1;
+    const xmin  = parseFloat(p.XMIN) * toG;  // Gauss
+    const xwid  = parseFloat(p.XWID) * toG;  // Gauss
+    const mwfq  = parseFloat(p.MWFQ);        // Hz
+    const k     = mwfq > 0 ? 9.5e8 / mwfq : 0.1;
     const b = [];
     for (let i = 0; i < npts; i++)
-      b.push((xmin + xwid * i / (npts - 1)) / mwfq * 9.5e8);
+      b.push((xmin + xwid * i / (npts - 1)) * k);
     return b;
   }
 
@@ -81,9 +88,19 @@ import { Plot } from './plot.js';
     const bigEndian = (p.BSEQ || 'BIG') !== 'LIT';
     const dtaBuf = await dtaFile.arrayBuffer();
     const view = new DataView(dtaBuf);
+    /* The values as IRFMT stores them (64-bit floats unless it says otherwise), and
+       for complex data (IKKF CPLX) the real part of each real/imaginary pair: read
+       as plain doubles, those came out as garbage or stretched over twice the axis. */
+    const fmt = dscWord(p.IRFMT).split(',')[0].toUpperCase() || 'D';
+    const READ = { D: [8, (o, le)=> view.getFloat64(o, le)], F: [4, (o, le)=> view.getFloat32(o, le)],
+                   I: [4, (o, le)=> view.getInt32(o, le)],   S: [2, (o, le)=> view.getInt16(o, le)], C: [1, o=> view.getInt8(o)] };
+    if (!READ[fmt]) return null;
+    const [size, read] = READ[fmt];
+    const stride = dscWord(p.IKKF).split(',')[0].toUpperCase() === 'CPLX' ? 2 : 1;
+    if (dtaBuf.byteLength < npts * stride * size) return null;
     const s = [];
     for (let i = 0; i < npts; i++)
-      s.push(view.getFloat64(i * 8, !bigEndian));
+      s.push(read(i * stride * size, !bigEndian));
 
     const b = buildBAxis(p);
 
@@ -230,7 +247,8 @@ import { Plot } from './plot.js';
     files.forEach((f,k)=>{
       const sm = sms[k], bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP;
       cols.push({h:'Bfield_mT_'+f.label,             v:f.b.map(v=>fmtNum(v,6))});
-      cols.push({h:'Raw_'+f.label,                   v:f.a.map(v=>fmtNum(v,6))});
+      // Intensities of any scale keep their digits (fmtData): a tiny one is not 0.
+      cols.push({h:'Raw_'+f.label,                   v:f.a.map(v=>fmtData(v,6))});
       cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:sm.map(v=>fmtNum((v-bg)/div,6))});
     });
     const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
