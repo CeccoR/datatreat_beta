@@ -144,15 +144,23 @@ function seriesFromPlot(plot, legendEl){
   });
 
   // Bars: one series per colour, in the order the colours first appear. Error bars
-  // are matched back to their bar by centre and pixel offset.
+  // are matched back to their bar by centre and pixel offset. A box plot comes in as
+  // bars of a kind (`boxes`), its height the mean and its error the mean's: placed,
+  // coloured, textured and divided as bars are, and drawn as boxes.
   const groups = new Map();
   for (const e of stored){
-    if (e.type !== 'bar' && e.type !== 'barpx') continue;
+    if (e.type !== 'bar' && e.type !== 'barpx' && e.type !== 'box') continue;
     const color = e.color || '#3aa0ff';
     // Grouped by the name the plot gave the bar when it has one, else by colour.
     const gk = e.label || color;
-    if (!groups.has(gk)) groups.set(gk, { color, name: e.label, xs: [], ys: [], errs: [], keys: [] });
+    if (!groups.has(gk)) groups.set(gk, { color, name: e.label, xs: [], ys: [], errs: [], keys: [], boxes: null });
     const g = groups.get(gk);
+    if (e.type === 'box'){
+      g.boxes = g.boxes || [];
+      g.boxes[g.xs.length] = { q1: e.q1, med: e.med, q3: e.q3, lo: e.lo, hi: e.hi, mean: e.mean, out: e.out.slice() };
+      g.xs.push(e.xc); g.ys.push(e.mean); g.errs.push(isFinite(e.err) ? e.err : 0); g.keys.push(null);
+      continue;
+    }
     g.xs.push(e.type === 'barpx' ? e.xc : (e.x0 + e.x1) / 2);
     g.ys.push(e.type === 'barpx' ? e.y1 : e.y1);
     g.errs.push(0);
@@ -179,6 +187,7 @@ function seriesFromPlot(plot, legendEl){
         texture: 'solid', texInv: false,
         show: true, inLegend: true,
         xs: g.xs, ys: g.ys, errs: g.errs,
+        ...(g.boxes ? { boxes: g.boxes } : {}),
       });
       gi++;
     }
@@ -459,7 +468,10 @@ function extentOf(panelIdxs){
       // Error bars are part of the mark, so they must fit inside the range too — but a
       // whisker running down to a value a log axis cannot show cannot stretch it.
       const e = (s.errs && isFinite(s.errs[i]) && s.errs[i] > 0) ? s.errs[i] : 0;
-      const lo = TY(s.ys[i] - e), hi = TY(s.ys[i] + e);
+      let lo = TY(s.ys[i] - e), hi = TY(s.ys[i] + e);
+      // A box reaches from its lowest to its highest value shown, outliers included.
+      const b = s.boxes && s.boxes[i];
+      if (b){ lo = TY(Math.min(b.lo, ...b.out)); hi = TY(Math.max(b.hi, ...b.out)); }
       any = true;
       if (x < x0) x0 = x; if (x > x1) x1 = x;
       if (isFinite(lo) && lo < y0) y0 = lo; if (y < y0) y0 = y;
@@ -831,6 +843,33 @@ function drawFigure(svg, ink, paper, extra){
       }
       add('text', at, g).textContent = txt;
     };
+    /* One box of a box plot, in its bar's slot and fill: the box from the first to the
+       third quartile, the median across it, whiskers to the furthest values within
+       1.5 IQR with caps, each value beyond a circle, the mean a cross. Its value label
+       is the mean ± its error, above whatever of it reaches highest. */
+    const drawBox = (s, j, b, cx, wPx)=>{
+      const st = { stroke:ink, 'stroke-width':0.8 }, hw = wPx/2, cap = Math.min(4, hw/2);
+      const yq1 = Yc(b.q1), yq3 = Yc(b.q3), ylo = Yc(b.lo), yhi = Yc(b.hi), ym = Yc(b.med);
+      add('line', { x1:cx, x2:cx, y1:ylo, y2:yq1, ...st }, g);
+      add('line', { x1:cx, x2:cx, y1:yq3, y2:yhi, ...st }, g);
+      add('line', { x1:cx-cap, x2:cx+cap, y1:ylo, y2:ylo, ...st }, g);
+      add('line', { x1:cx-cap, x2:cx+cap, y1:yhi, y2:yhi, ...st }, g);
+      const d = divOfBar(s, j), color = divColor(s, d);
+      add('rect', { x:(cx - hw).toFixed(2), y:Math.min(yq1, yq3).toFixed(2), width:wPx.toFixed(2), height:Math.abs(yq1 - yq3).toFixed(2),
+                    fill:barFill(add, color, divTexture(s, d), divInv(s, d)), ...st }, g);
+      add('line', { x1:cx-hw, x2:cx+hw, y1:ym, y2:ym, stroke:ink, 'stroke-width':1.4 }, g);
+      if (isFinite(b.mean)){
+        const r = Math.min(2.5, hw*0.4), yv = Yc(b.mean);
+        add('line', { x1:cx-r, x2:cx+r, y1:yv-r, y2:yv+r, ...st }, g);
+        add('line', { x1:cx-r, x2:cx+r, y1:yv+r, y2:yv-r, ...st }, g);
+      }
+      for (const v of b.out) add('circle', { cx, cy:Yc(v), r:Math.max(1, Math.min(2, hw/3)), fill:'none', ...st }, g);
+      if (wantsLabels()){
+        const top = Math.min(yhi, ...b.out.map(Yc)), bot = Math.max(ylo, ...b.out.map(Yc));
+        valueLabel(s, j, cx, Yc(b.mean), top, bot,
+                   { color, top: Math.min(Math.max(Math.min(yq1, yq3), py0), py0 + ph), bottom: Math.min(Math.max(Math.max(yq1, yq3), py0), py0 + ph) });
+      }
+    };
     // Bars of different series sharing a category sit side by side inside the slot.
     const barSeries = F.series.filter(s=> s.show && s.kind === 'bar' && s.panel === pi);
     for (const s of F.series){
@@ -847,6 +886,8 @@ function drawFigure(svg, ink, paper, extra){
           if (!isFinite(xv) || !isFinite(yv)) return;
           const cx = X(xv) + off, yy = Y(yv);
           if (!isFinite(yy)) return;
+          const bx = s.boxes && s.boxes[j];
+          if (bx){ drawBox(s, j, bx, cx, wPx); return; }
           add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
                         width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2),
                         fill:barFill(add, divColor(s, divOfBar(s, j)),
@@ -1410,7 +1451,7 @@ const readNum = t=>{
    shared by reference — they never change, and copying them per keystroke would
    cost far more than the whole rest of the model. */
 let undoStack = [], redoStack = [], undoTimer = null;
-const SHARED = ['xs', 'ys', 'errs'];
+const SHARED = ['xs', 'ys', 'errs', 'boxes'];
 function snapshot(){
   const clone = v => JSON.parse(JSON.stringify(v));
   return {
@@ -1515,7 +1556,7 @@ function pairUp(saved, now, gone){
    A name typed into the composer is the exception: it is a choice about this figure,
    not about the project, so it is kept in `rename` — which is not identity — and put
    back over the label when the settings are applied again. */
-const IDENTITY = ['kind', 'id', 'key', 'given', 'label', 'xs', 'ys', 'errs'];
+const IDENTITY = ['kind', 'id', 'key', 'given', 'label', 'xs', 'ys', 'errs', 'boxes'];
 /* `name` is the file this figure is exported as. It belongs to this figure alone, like
    a series' data: a preset made on another plot carrying it over would export this
    one under the other's file name. The per-plot memory, which is about this figure,

@@ -25,8 +25,12 @@ import { Plot } from './plot.js';
   // minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
   // by the y-range makes the criterion robust — it locks onto the steep linear edge
   // instead of a flat low-value stretch that merely has a small absolute RMSE.
-  // `Ys` is the curve as analysed: already smoothed.
-  function scanRegr(hv, Ys, M, x1, x2){
+  // `Ys` is the curve as analysed: already smoothed. The window is chosen on it, where
+  // noise does not pick it, and the line fitted to `Yraw`, the data themselves, inside
+  // it: fitted to smoothed values its residuals are averaged together, no longer
+  // independent, and every error came out too small (a "99%" interval held the truth
+  // 72% of the time at N = 5, 37% at N = 15). `n` is how many points it was fitted on.
+  function scanRegr(hv, Ys, M, x1, x2, Yraw){
     const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
     const idxSel = [];
     for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi) idxSel.push(i);
@@ -44,10 +48,15 @@ import { Plot } from './plot.js';
       const score = nrmse / r.R2;
       if (score < bestScore){
         bestScore = score;
-        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB};
+        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB, n:M};
       }
     }
-    return best;
+    if (!Yraw || Yraw === Ys || !best.bestIdx.length) return best;
+    const idx = best.bestIdx.filter(i=> isFinite(Yraw[i]));
+    if (idx.length < 3) return {...best, slope:NaN, intercept:NaN, R2:NaN, NRMSE:Infinity, varM:NaN, varB:NaN, covMB:NaN, n:idx.length};
+    const yr = idx.map(i=> Yraw[i]), r = fitLinear(idx.map(i=> hv[i]), yr), range = Math.max(...yr) - Math.min(...yr);
+    return {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE: range > 0 ? r.rmse/range : Infinity,
+            bestIdx:best.bestIdx, varM:r.varM, varB:r.varB, covMB:r.covMB, n:idx.length};
   }
 
   /* Eg from the two Tauc fits: where the Tauc line crosses the x-axis, and where it
@@ -63,7 +72,7 @@ import { Plot } from './plot.js';
       // from hν = 0, added to the variance instead of taking from it.
       const dxdm1 = -(regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
       const dxdm2 = -dxdm1;
-      const t1 = tinv(T_Q, M-2), t2 = tinv(T_Q, M2-2);
+      const t1 = tinv(T_Q, (regs.n || M)-2), t2 = tinv(T_Q, (regs2.n || M2)-2);
       const varX = dxdb1*dxdb1*regs.varB*t1*t1 + dxdb2*dxdb2*regs2.varB*t2*t2 +
                    dxdm1*dxdm1*regs.varM*t1*t1 + dxdm2*dxdm2*regs2.varM*t2*t2 +
                    2*dxdb1*dxdm1*regs.covMB*t1*t1 + 2*dxdb2*dxdm2*regs2.covMB*t2*t2;
@@ -80,13 +89,13 @@ import { Plot } from './plot.js';
     const x = -r.intercept/r.slope;
     if (![r.varM, r.varB, r.covMB].every(isFinite)) return { x, err: NaN };
     const v = (r.intercept**2/r.slope**4)*r.varM + (1/r.slope**2)*r.varB - 2*(r.intercept/r.slope**3)*r.covMB;
-    return { x, err: v >= 0 ? Math.sqrt(v)*tinv(T_Q, M-2) : NaN };
+    return { x, err: v >= 0 ? Math.sqrt(v)*tinv(T_Q, (r.n || M)-2) : NaN };
   }
   // The inverse of a fit's slope, and its error σ_m/m² times the fit's t factor.
   function invSlope(r, M){
     const m = r.slope;
     if (!isFinite(m) || m === 0) return { v: NaN, err: NaN };
-    return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, M-2) : NaN };
+    return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, (r.n || M)-2) : NaN };
   }
   // The Urbach energy is the inverse of the tail's slope in ln F(R) against hν.
   function urbachEu(regs, M){ const s = invSlope(regs, M); return { Eu: s.v, EuErr: s.err }; }
@@ -121,11 +130,12 @@ import { Plot } from './plot.js';
     const dRaw = gradientArr(ln, hv), d = smoothFinite(dRaw, p.N3);
     const invRaw = d.map(v=> v !== 0 && isFinite(v) ? 1/v : NaN), inv = smoothFinite(invRaw, p.N4);
     // The same steps with no smoothing at all: what each one's axis is ranged on, so
-    // that no window ever moves it.
+    // that no window ever moves it, and what the line is fitted to (scanRegr), the
+    // window being chosen on the smoothed inverse.
     const lo0 = minArr(raw), ln0 = raw.map(v=> v - lo0 > 0 ? Math.log(v - lo0) : NaN);
     const d0 = gradientArr(ln0, hv), inv0 = d0.map(v=> v !== 0 && isFinite(v) ? 1/v : NaN);
     const bounds = { fr: spanOf(raw), ln: spanOf(ln0), d: spanOf(d0), inv: spanOf(inv0) };
-    return { hv, Yraw: invRaw, Ys: inv, steps: { fr, ln, d, inv }, bounds };
+    return { hv, Yraw: inv0, Ys: inv, steps: { fr, ln, d, inv }, bounds };
   }
   // [min, max] of what has a value; a flat or empty one is given some height.
   function spanOf(a){
@@ -243,7 +253,7 @@ import { Plot } from './plot.js';
     // Every fit of sample k, and what the spec makes of them.
     P.analyze = k =>{
       const p = P.params(k), vl = P.vlinesFor(k), c = curves(k, p);
-      const fits = windows.map(w=> scanRegr(c.hv, c.Ys, p[w.M], vl[w.lo], vl[w.hi]));
+      const fits = windows.map(w=> scanRegr(c.hv, c.Ys, p[w.M], vl[w.lo], vl[w.hi], c.Yraw));
       return { ...spec.results(fits, p), fits };
     };
 
@@ -350,7 +360,7 @@ import { Plot } from './plot.js';
       windows.forEach((w, wi)=>{
         const lo = Math.min(vlines[w.lo], vlines[w.hi]), hi = Math.max(vlines[w.lo], vlines[w.hi]);
         const sel = hv.filter(v=> v>=lo && v<=hi).length;
-        const reg = sel >= p[w.M] ? scanRegr(hv, c.Ys, p[w.M], vlines[w.lo], vlines[w.hi]) : null;
+        const reg = sel >= p[w.M] ? scanRegr(hv, c.Ys, p[w.M], vlines[w.lo], vlines[w.hi], c.Yraw) : null;
         fits.push(reg);
         $(w.stats[0]).textContent = reg && isFinite(reg.NRMSE) ? reg.NRMSE.toFixed(4) : '-';
         $(w.stats[1]).textContent = reg && isFinite(reg.R2) ? reg.R2.toFixed(4) : '-';
@@ -583,17 +593,19 @@ import { Plot } from './plot.js';
         { lo:'v1', hi:'v2', M:'M', color: URBACH_COLOR, name:'Urbach region', key:'regs', stats:['RMSE1','R21'] },
       ],
       defaultLines: restLines,
-      /* The region is 1 eV astride the sample's Tauc linear region in the reference
+      /* The region is placed under the sample's Tauc linear region in the reference
          (the band on this plot): the window scan inside it then finds the tail's
          straightest stretch by itself. With no reference, or no region in it, the
          lines go back to rest. Each sample's tail sits where its own edge is, so its
          lines are its own in either mode, and all/one is about the parameters only. */
       ownLines: true,
+      // The tail is below the edge: from 1 eV under the middle of the reference's Tauc
+      // linear region up to where that region starts. Centred on it, half the region
+      // lay above E_g, and the scan could lock onto the edge itself.
       suggest: i =>{
         const w = taucWindow(refPanel(a), i);
         if (!w){ const hv = files[i].hv, lo = minArr(hv); return restLines(lo, maxArr(hv) - lo); }
-        const c = (w[0] + w[1]) / 2;
-        return { v1: c - 0.5, v2: c + 0.5 };
+        return { v1: (w[0] + w[1]) / 2 - 1, v2: w[0] };
       },
       results: (f, p)=> ({ ...urbachEu(f[0], p.M), regs: f[0] }),
       show: ($, r)=>{ $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000); },
@@ -674,10 +686,10 @@ import { Plot } from './plot.js';
   const GRIP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>';
   const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
   const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
-  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm), and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
-  const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is centred on it again once the change is made (a Tauc line released, a value confirmed), and a new reference centres them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
+  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
+  const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
 
-  const DEFECT_INFO = `A debug analysis, for a band of defect states below the gap, whose absorption is taken to rise as <b>F(R) ∝ (hν − E<sub>dif</sub>)<sup>p</sup></b>. Then d ln[F(R)] / d(hν) = p / (hν − E<sub>dif</sub>), and its inverse, <b>(hν − E<sub>dif</sub>) / p</b>, is a straight line of slope 1/p that meets zero at E<sub>dif</sub>. The curve gets there a step at a time, each smoothed with a window of its own (a centred moving average that leaves out points with no value): F(R); F(R) less its minimum, of which the log is taken; the derivative of that against hν; and its inverse. Every step is on the plot, smoothed, each on a y-axis of its own (not drawn), ranged from the minimum to the maximum of that step taken with no smoothing at all, so that neither a smoothing window nor the lines ever move it; the y-axis drawn is the last one's, in eV. Zoom in to read the fit closely. Drag the red lines to set the region, or press <b>✦ Suggest intervals</b> to put them on the absorption edge, found as for Tauc. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>dif</sub></b> is where the line meets zero and <b>p</b> the inverse of its slope; each error is the regression's own carried through, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Nothing here reaches the Results or the CSV files. ${CARD_INFO}`;
+  const DEFECT_INFO = `A debug analysis, for a band of defect states below the gap, whose absorption is taken to rise as <b>F(R) ∝ (hν − E<sub>dif</sub>)<sup>p</sup></b>. Then d ln[F(R)] / d(hν) = p / (hν − E<sub>dif</sub>), and its inverse, <b>(hν − E<sub>dif</sub>) / p</b>, is a straight line of slope 1/p that meets zero at E<sub>dif</sub>. The curve gets there a step at a time, each smoothed with a window of its own (a centred moving average that leaves out points with no value): F(R); F(R) less its minimum, of which the log is taken; the derivative of that against hν; and its inverse. Every step is on the plot, smoothed, each on a y-axis of its own (not drawn), ranged from the minimum to the maximum of that step taken with no smoothing at all, so that neither a smoothing window nor the lines ever move it; the y-axis drawn is the last one's, in eV. Zoom in to read the fit closely. Drag the red lines to set the region, or press <b>✦ Suggest intervals</b> to put them on the absorption edge, found as for Tauc. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> on the smoothed inverse, and the line fitted to the inverse taken with no smoothing at all, as for Tauc. <b>E<sub>dif</sub></b> is where the line meets zero and <b>p</b> the inverse of its slope; each error is the regression's own carried through, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Nothing here reaches the Results or the CSV files. ${CARD_INFO}`;
 
   const navRow = p => `
           <div class="plot-nav-row">
@@ -761,7 +773,7 @@ import { Plot } from './plot.js';
                 <div class="pg-stat">E<sub>U</sub>: <b id="${p}Eu">-</b></div>
               </div>
             </div>
-            <div id="${p}Alert"></div>${suggestBtn(p, "Place a 1 eV Urbach region centred on the reference's Tauc linear region (with no reference: at 25% and 75% of the span)")}
+            <div id="${p}Alert"></div>${suggestBtn(p, "Place the Urbach region from 1 eV below the middle of the reference's Tauc linear region to where that region starts (with no reference: at 25% and 75% of the span)")}
           </div>
         </div>`;
   }
@@ -1010,7 +1022,7 @@ import { Plot } from './plot.js';
     return changed;
   }
   /* The Urbach region follows its reference: a sample whose Tauc linear region moves
-     (a line released, parameters, Suggest, all/one) gets its Urbach lines centred on it
+     (a line released, parameters, Suggest, all/one) gets its Urbach lines placed on it
      again, and a new reference re-centres them all. Lines moved by hand stay until
      then. What each Tauc card's regions were is kept by file name, and taken afresh
      (`see`) whenever a state is loaded rather than edited, so loading moves nothing. */
@@ -1038,7 +1050,7 @@ import { Plot } from './plot.js';
     if (U.hasPlot() && !isFolded(u)) U.update(true);
     else renderAnalysisRes(u);
   }
-  // An Urbach card given a new reference: centred on it (None leaves the lines be).
+  // An Urbach card given a new reference: placed on it (None leaves the lines be).
   function syncRefView(u){
     if (!files.length) return;
     if (refPanel(u)) panelOf(u).autoSuggestAll();

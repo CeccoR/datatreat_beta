@@ -288,6 +288,38 @@ class Plot{
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1,y2:y1,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1:y2,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
   }
+  /* A box-and-whisker mark at data-x `xc` (+ pixel offset `dx`), `hw` px half-wide:
+     the box from the first to the third quartile, the median across it, whiskers out
+     to the furthest values within 1.5 IQR, each value beyond them a circle, and the
+     mean a cross. `st` = {q1, med, q3, lo, hi, mean, err, out[]}; `err`, the mean's,
+     is carried for whatever reads the plot back. `meta.label` names its series. */
+  box(xc, st, color, hw, dx, meta){
+    const entry = {type:'box', xc, q1:st.q1, med:st.med, q3:st.q3, lo:st.lo, hi:st.hi, mean:st.mean, err:st.err,
+                   out:(st.out||[]).slice(), color, hw:hw||14, dx:dx||0, label: meta && meta.label};
+    this._stored.push(entry);
+    return this._renderBox(entry);
+  }
+  _renderBox(e){
+    const x = this.px(e.xc) + e.dx, Y = v => this.py(v), hw = e.hw, cap = hw*0.5;
+    // The lines in the ink error bars are drawn in, which the theme and the export set.
+    const ink = { stroke:'#fff', 'stroke-width':1.2, 'class':'plot-errbar' };
+    const g = svgEl('g', {});
+    const add = (tag, at)=>{ g.appendChild(svgEl(tag, at)); };
+    add('line', {x1:x, x2:x, y1:Y(e.lo), y2:Y(e.q1), ...ink});
+    add('line', {x1:x, x2:x, y1:Y(e.q3), y2:Y(e.hi), ...ink});
+    add('line', {x1:x-cap, x2:x+cap, y1:Y(e.lo), y2:Y(e.lo), ...ink});
+    add('line', {x1:x-cap, x2:x+cap, y1:Y(e.hi), y2:Y(e.hi), ...ink});
+    add('rect', {x:x-hw, y:Math.min(Y(e.q1), Y(e.q3)), width:hw*2, height:Math.abs(Y(e.q1)-Y(e.q3)), fill:e.color});
+    add('line', {x1:x-hw, x2:x+hw, y1:Y(e.med), y2:Y(e.med), ...ink, 'stroke-width':2});
+    if (isFinite(e.mean)){
+      const r = Math.min(3.5, hw*0.4), ym = Y(e.mean);
+      add('line', {x1:x-r, x2:x+r, y1:ym-r, y2:ym+r, ...ink});
+      add('line', {x1:x-r, x2:x+r, y1:ym+r, y2:ym-r, ...ink});
+    }
+    for (const v of e.out) add('circle', {cx:x, cy:Y(v), r:2.5, fill:'none', ...ink});
+    this.gData.appendChild(g);
+    return g;
+  }
   /* `full` is the name before it was shortened to fit the axis. The plot draws the
      short one; anything reading the plot back — the figure composer — wants the name
      the sample actually has, and `key` for which sample it is (as line()'s meta.key). */
@@ -391,6 +423,7 @@ class Plot{
       else if (e.type==='bar') this._renderBar(e);
       else if (e.type==='barpx') this._renderBarPx(e);
       else if (e.type==='errbar') this._renderErrbar(e);
+      else if (e.type==='box') this._renderBox(e);
       else if (e.type==='ticklabel') this._renderTickLabel(e);
       else if (e.type==='barlabel') this._renderBarLabel(e);
       else if (e.type==='vline') this._renderVline(e);
@@ -535,7 +568,7 @@ class Plot{
     // out of the axis label's trailing parentheses). Bar plots have a categorical x
     // (no meaningful x coordinate under the pointer), so they show the y line only.
     const ylabTxt = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
-    const isBar = this._stored && this._stored.some(e=>e.type==='bar' || e.type==='barpx');
+    const isBar = this._stored && this._stored.some(e=>e.type==='bar' || e.type==='barpx' || e.type==='box');
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
     if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }

@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 
 /* =========================================================
@@ -423,6 +423,17 @@ import { Plot, svgEl } from './plot.js';
     return Number.isFinite(n) ? n : null;
   }
 
+  // The trapezoid integral `cum` of `f` over `t`, read at any time: the segment it
+  // falls in integrated up to it. Before the first point there is nothing yet.
+  function cumAt(t, f, cum, at){
+    if (!t.length || at <= t[0]) return 0;
+    const n = t.length;
+    if (at >= t[n-1]) return cum[n-1];
+    let a = 0; while (a + 1 < n && t[a+1] <= at) a++;
+    const fa = f[a], fat = fa + (f[a+1] - fa)*(at - t[a])/((t[a+1] - t[a]) || 1);
+    return cum[a] + (at - t[a])*(fa + fat)/2;
+  }
+
   function computeAndRenderGc(preserveView){
     if (!files.length) return;
     // Snapshot the current zoom before renderGcPlots() builds fresh Plot instances.
@@ -452,7 +463,9 @@ import { Plot, svgEl } from './plot.js';
         const pct = rows.map(r=> isFinite(r.v[k]) ? r.v[k] : 0);
         const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
         const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
-        gas[k] = { pct, flow, Fm: flowM, FmInt: cumtrapz(tHours, flowM) };
+        // From the first injection on; FmInt, from the interval's start (updateRegression).
+        const cum = cumtrapz(tHours, flowM);
+        gas[k] = { pct, flow, Fm: flowM, cum, FmInt: cum };
       }
       return {t:tHours, gas, name:f.name, label:f.label, color:f.color};
     });
@@ -661,6 +674,14 @@ import { Plot, svgEl } from './plot.js';
   }
 
   function updateRegression(){
+    /* The production is what was made between the interval's lines: none yet at its
+       start, wherever that is moved to. Integrated from the first injection it carried
+       everything that flowed out before (the dark readings, a purge) into every later
+       point. The mean rate below, a difference, is the same either way. */
+    dataTables.forEach((d,k)=>{
+      const t0 = Math.min(startOf(k), endOf(k));
+      for (const key in d.gas){ const q = d.gas[key], c0 = cumAt(d.t, q.Fm, q.cum, t0); q.FmInt = q.cum.map(v=> v - c0); }
+    });
     costResults = dataTables.map((d,k)=>{
       const xStart = Math.min(startOf(k), endOf(k)), xEnd = Math.max(startOf(k), endOf(k));
       let startIdx = -1, endIdx = -1;
@@ -837,7 +858,10 @@ import { Plot, svgEl } from './plot.js';
     const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
       return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
     let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
-    dataTables.forEach((d,k)=> t3 += csvLine([d.label, mOf(k), qOf(k), fmtDate(lightOnDates[k]), startOf(k), endOf(k), fmtNum(injDelay())]));
+    // The inputs as they were set, in the CSV's decimal separator and not rounded:
+    // fmtNum with no decimals wrote a 60.6 s delay as 61.
+    const asSet = v => String(v).replace('.', settings.decimal);
+    dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(mOf(k)), asSet(qOf(k)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
     entries.push({name:'gc_info.csv', text:t3});
     return entries;
   }

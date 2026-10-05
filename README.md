@@ -115,7 +115,7 @@ Assess H₂ production rates from gas chromatography data, including light-on ti
 
 1. Upload your CSV files. The app auto-detects injection date and H₂ columns (case-insensitive).
 2. Set parameters for each sample:
-   - **m (g)**: Catalyst mass in grams
+   - **m (mg)**: Catalyst mass in milligrams
    - **Q (mL/min)**: Carrier gas flow rate
    - **Light-on date/time**: When irradiation started (determines when H₂ production begins)
 
@@ -125,7 +125,7 @@ Assess H₂ production rates from gas chromatography data, including light-on ti
 
 4. Two interactive plots:
    - **H₂ Rate (mmol/h/g)**: Production rate over time
-   - **Cumulative H₂ (mmol/g)**: Total accumulated H₂
+   - **Cumulative H₂ (mmol/g)**: H₂ accumulated from the start of the interval
 
 5. View results in a **bar chart** (mean production rate per sample) and a **summary table**.
 6. Export all data as CSV.

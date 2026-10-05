@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, tinv, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -423,7 +423,11 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const yraw       = files[i].y;
     const smoothed   = movingAverage(yraw, p.N);                       // display + detection
     const snip       = computeBaseline(smoothed, p.blWin);             // SNIP baseline (estimate/fallback/standard)
-    const detSub     = smoothed.map((v,j)=>Math.max(0, v-snip[j]));    // for peak search + classic FWHM
+    const detSub     = smoothed.map((v,j)=>Math.max(0, v-snip[j]));    // for the peak search
+    /* The widths are read on the data themselves, less the baseline: a moving average
+       is a box N points wide convolved into every peak, as wide as the peaks at the
+       default N, and sizes came out two to three times too small, shrinking with N. */
+    const rawSub     = yraw.map((v,j)=>v-snip[j]);
     // Peak detection on the smoothed, SNIP-subtracted profile (robust to noise)
     const peaks      = findPeaks(x, detSub, p.pkHeight, p.pkProm, p.pkDist);
     // Re-inject manually added peaks (survive param changes, cleared on reset)
@@ -443,10 +447,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // fit is applied on top, on demand, by runFit() when the Fit button is pressed.
     peaks.forEach(pk=>{
       if (pk.removed){ pk.fit=null; pk.fwhm=NaN; pk.fwhmClassic=NaN; pk.fwhmFit=undefined; pk.fitPos=undefined; return; }
-      pk.fit=null; pk.fwhmClassic=computeFWHM(x, detSub, pk.idx); pk.fwhmFit=undefined; pk.fwhm=pk.fwhmClassic; pk.fitPos=undefined;
+      pk.fit=null; pk.fwhmClassic=computeFWHM(x, rawSub, pk.idx); pk.fwhmFit=undefined; pk.fwhm=pk.fwhmClassic; pk.fitPos=undefined;
     });
     const subtracted = detSub;
-    const rawSub     = yraw.map((v,j)=>v-snip[j]);
     processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks};
   }
 
@@ -564,8 +567,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       drawnPos.push(pk.pos);
       plot.vline(pk.pos, PEAK_BASE, false);
       peakMarks.push({pos:pk.pos});
-      // Horizontal FWHM marker at half-maximum height (on the smoothed, baseline-subtracted profile)
-      const gm = fwhmGeom(f.x, pr.subtracted, pk.idx);
+      // Horizontal FWHM marker at half-maximum height, on the profile it is measured on:
+      // the data less the baseline.
+      const gm = fwhmGeom(f.x, pr.rawSub, pk.idx);
       if (gm){
         const yDisp = (pr.baseline[gm.idx] + gm.half) / mx;
         fwhmMarks.push({pos:pk.pos, x0:gm.xl, x1:gm.xr, y:yDisp});
@@ -913,8 +917,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     html+='</tbody></table>';
     if (!isStd){
       const st = sampleSizeStats(idx);
-      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
-      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
+      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanErr(st.rawMean, st.rawErr, st.rawN)} nm</b>`;
+      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanErr(st.corrMean, st.corrErr, st.corrN)} nm</b>`;
       html += '</div>';
     }
     wrap.innerHTML=html;
@@ -986,8 +990,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     // Mean crystallite size from the fitted peaks, same summary as the Analysis table.
     if (!isStd){
       const st = fitSizeStats(fitIdx);
-      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
-      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
+      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanErr(st.rawMean, st.rawErr, st.rawN)} nm</b>`;
+      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanErr(st.corrMean, st.corrErr, st.corrN)} nm</b>`;
       html += '</div>';
     }
     wrap.innerHTML=html;
@@ -1001,8 +1005,29 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   }
   const fmtCell = v => isFinite(v) ? v.toFixed(1) : '—';
 
-  // Mean / sample-std of the classic crystallite sizes across a sample's kept peaks.
-  // Returns {rawN, rawMean, rawStd, corrN, corrMean, corrStd, isStd, showCorr}.
+  /* Tukey's box of some values: the quartiles (interpolated between order statistics),
+     whiskers out to the furthest values within 1.5 IQR of the box, the rest outliers. */
+  function boxStats(vals){
+    const v = vals.filter(isFinite).sort((a,b)=>a-b), n = v.length;
+    if (!n) return null;
+    const q = p =>{ const h = (n-1)*p, i = Math.floor(h); return i+1 < n ? v[i] + (h-i)*(v[i+1]-v[i]) : v[i]; };
+    const q1 = q(0.25), med = q(0.5), q3 = q(0.75), f = 1.5*(q3 - q1);
+    const inside = v.filter(x=> x >= q1 - f && x <= q3 + f);
+    return { q1, med, q3, lo: inside[0], hi: inside[inside.length-1], out: v.filter(x=> x < q1 - f || x > q3 + f) };
+  }
+  /* A sample's sizes, one per peak, summarised: the mean and its error — the standard
+     error times Student's t at 99%, two-sided, n − 1 degrees of freedom, as every error
+     in the app is — and the box of their spread. The spread itself (the standard
+     deviation) is the box's to show, not the error of what is reported. */
+  function sizeSummary(raw, corr, isStd, showCorr){
+    const one = (v, k)=>{
+      const n = v.length, m = n ? meanArr(v) : NaN;
+      const err = n > 1 ? stdArr(v)/Math.sqrt(n)*tinv(0.995, n-1) : NaN;
+      return { [k+'N']: n, [k+'Mean']: m, [k+'Err']: err, [k+'Box']: boxStats(v), [k+'Vals']: v };
+    };
+    return { isStd, showCorr, ...one(raw, 'raw'), ...one(corr, 'corr') };
+  }
+  // The classic crystallite sizes of a sample's kept peaks, summarised (sizeSummary).
   function sampleSizeStats(i){
     const pr = processed[i];
     const isStd = files[i] && files[i].name === standardName;
@@ -1016,32 +1041,29 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         if (showCorr){ const sc = sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda); if (isFinite(sc)) corr.push(sc); }
       });
     }
-    return {
-      isStd, showCorr,
-      rawN: raw.length,  rawMean: raw.length?meanArr(raw):NaN,  rawStd: raw.length>1?stdArr(raw):NaN,
-      corrN: corr.length, corrMean: corr.length?meanArr(corr):NaN, corrStd: corr.length>1?stdArr(corr):NaN,
-    };
+    return sizeSummary(raw, corr, isStd, showCorr);
   }
-  // "mean ± std" (or just "mean" for n=1, "—" for none)
-  function fmtMeanStd(mean, std, n){
+  // "mean ± error" (or just "mean" for n=1, "—" for none)
+  function fmtMeanErr(mean, err, n){
     if (!isFinite(mean)) return '—';
-    if (n >= 2 && isFinite(std)) return `${mean.toFixed(1)} ± ${std.toFixed(1)}`;
+    if (n >= 2 && isFinite(err)) return `${mean.toFixed(1)} ± ${err.toFixed(1)}`;
     return mean.toFixed(1);
   }
 
-  // Results card: per-sample crystallite size as a bar chart (mean bar + std error bar
-  // + value label above), one/two bars per sample (size, and corr. when a standard is
-  // set). `statsFn` returns {rawMean,rawStd,rawN,corrMean,corrStd,corrN}: classic vs fit.
+  /* Results card: per-sample crystallite size as a box plot of its peaks' sizes — one
+     box per sample, two side by side when a standard is set (size, and corrected) —
+     with the mean ± its error written above. `statsFn` gives sizeSummary's fields. */
   function drawSizeBarChart(svgId, legendId, statsFn){
     const svg = document.getElementById(svgId); if (!svg) return;
     const wrap = svg.closest('.plot-wrap'), legend = document.getElementById(legendId);
     const idxs = files.map((f,k)=>k).filter(k=>files[k].name!==standardName);
     const rows = idxs.map(k=>({name:files[k].name, label:files[k].label, ...statsFn(k)}));
-    const raws=rows.map(r=>r.rawMean), rawE=rows.map(r=>r.rawStd);
-    const corrs=rows.map(r=>r.corrMean), corrE=rows.map(r=>r.corrStd);
-    const anyCorr = rows.some(r=>isFinite(r.corrMean));
-    const posVals = raws.concat(anyCorr?corrs:[]).filter(v=>isFinite(v)&&v>0);
-    if (!files.length || !processed.length || !posVals.length){
+    const anyCorr = rows.some(r=> r.corrBox);
+    const SER = [{ k:'raw', name:'size', color:'#3aa0ff' }].concat(anyCorr ? [{ k:'corr', name:'size corr.', color:'#ff7a59' }] : []);
+    // Where each box ends on top: its whisker, or an outlier above it.
+    const topOf = b => Math.max(b.hi, ...b.out);
+    const tops = rows.flatMap(r=> SER.map(m=> r[m.k+'Box']).filter(Boolean).map(topOf)).filter(v=> isFinite(v) && v > 0);
+    if (!files.length || !processed.length || !tops.length){
       svg.style.display='none'; if(wrap)wrap.style.display='none'; if(legend)legend.innerHTML=''; return;
     }
     svg.style.display=''; if(wrap)wrap.style.display='';
@@ -1057,41 +1079,34 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     let maxLbl=0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
     const bottom = Math.round(26 + maxLbl*fit.sin);
     const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
-    const topOf = (v,e)=> v + (isFinite(e)?e:0);
-    let maxValW=0, maxTop=0;
-    for (let k=0;k<n;k++){
-      if (isFinite(raws[k])&&raws[k]>0){ maxValW=Math.max(maxValW, mctx.measureText(fmtLab(raws[k],rawE[k])).width); maxTop=Math.max(maxTop, topOf(raws[k],rawE[k])); }
-      if (anyCorr&&isFinite(corrs[k])&&corrs[k]>0){ maxValW=Math.max(maxValW, mctx.measureText(fmtLab(corrs[k],corrE[k])).width); maxTop=Math.max(maxTop, topOf(corrs[k],corrE[k])); }
-    }
+    let maxValW=0;
+    rows.forEach(r=> SER.forEach(m=>{ if (r[m.k+'Box']) maxValW = Math.max(maxValW, mctx.measureText(fmtLab(r[m.k+'Mean'], r[m.k+'Err'])).width); }));
     const mTop=15, gap=6, plotH=svgH-mTop-bottom, reserve=gap+maxValW+6;
     const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
-    const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
+    const ymax = Math.max(Math.max(...tops)*1.15, Math.max(...tops)/frac);
     const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     // Fixed at [0, n+1]: the names are made to fit it, not the other way round.
     plot.setRange(0, n+1, 0, ymax||1);
     plot.drawAxes();
-    // Bar geometry is capped at the previous fixed sizes but shrinks to fit the
-    // per-sample spacing so many samples don't overlap. Paired bars (size + corr.)
-    // keep their ±17px offset unless the slot is too narrow, then scale together.
-    // Computed once here (fixed px → constant on zoom).
+    // Box geometry as the bars had it: capped at their sizes, shrinking to fit the
+    // per-sample spacing so many samples don't overlap; a pair keeps its ±17 px offset
+    // unless the slot is too narrow, then the two scale together.
     const pxSlot = plot.px(1)-plot.px(0);
-    const s = Math.min(1, (pxSlot*0.8)/66);   // 66 = full paired span at hw16/dx17
-    const pHw = 16*s, pDx = 17*s;
-    const sHw = Math.min(16, pxSlot*0.3);      // single centred bar
+    const sc = Math.min(1, (pxSlot*0.8)/66);   // 66 = full paired span at hw16/dx17
+    const hw = anyCorr ? 16*sc : Math.min(16, pxSlot*0.3), dx = anyCorr ? 17*sc : 0;
     for (let k=0;k<n;k++){
-      const xc=k+1;
-      if (anyCorr){
-        if (isFinite(raws[k])&&raws[k]>0){ plot.barPx(xc,0,raws[k],'#3aa0ff',pHw,-pDx); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k],-pDx); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap,dx:-pDx}); }
-        if (isFinite(corrs[k])&&corrs[k]>0){ plot.barPx(xc,0,corrs[k],'#ff7a59',pHw,pDx); if(isFinite(corrE[k]))plot.errbar(xc,corrs[k],corrE[k],pDx); plot.barLabel(xc,topOf(corrs[k],corrE[k]),fmtLab(corrs[k],corrE[k]),{gap,dx:pDx}); }
-      } else if (isFinite(raws[k])&&raws[k]>0){
-        plot.barPx(xc,0,raws[k],'#3aa0ff',sHw,0); if(isFinite(rawE[k]))plot.errbar(xc,raws[k],rawE[k]); plot.barLabel(xc,topOf(raws[k],rawE[k]),fmtLab(raws[k],rawE[k]),{gap});
-      }
-      plot.tickLabel(xc, labels[k], fit.rot, rows[k].label, rows[k].name);
+      const xc=k+1, r = rows[k];
+      SER.forEach((m, mi)=>{
+        const b = r[m.k+'Box'];
+        if (!b) return;
+        const off = SER.length > 1 ? (mi ? dx : -dx) : 0;
+        plot.box(xc, { ...b, mean: r[m.k+'Mean'], err: r[m.k+'Err'] }, m.color, hw, off, { label: m.name });
+        plot.barLabel(xc, topOf(b), fmtLab(r[m.k+'Mean'], r[m.k+'Err']), {gap, dx:off});
+      });
+      plot.tickLabel(xc, labels[k], fit.rot, r.label, r.name);
     }
     plot.attachTools(wrap);
-    if (legend) legend.innerHTML = anyCorr
-      ? `<span><i class="mk-box" style="background:#3aa0ff"></i>size</span><span><i class="mk-box" style="background:#ff7a59"></i>size corr.</span>`
-      : `<span><i class="mk-box" style="background:#3aa0ff"></i>size</span>`;
+    if (legend) legend.innerHTML = SER.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
   }
   function renderXrdSizeChart(){ drawSizeBarChart('xrdSizeBarSvg', 'xrdSizeBarLegend', sampleSizeStats); }
 
@@ -1583,7 +1598,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
     return t;
   }
-  // Mean/std of the fit-derived crystallite sizes across a sample's fitted peaks.
+  // The fit-derived crystallite sizes of a sample's fitted peaks, summarised (sizeSummary).
   function fitSizeStats(k){
     const sf = savedFits[k], f = files[k], kp = getFileParams(k);
     const isStd = f.name === standardName, showCorr = !!standardName && !isStd;
@@ -1594,9 +1609,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         if (showCorr){ const sc = sizeCorr(fp.fwhm, fp.pos, kp.K, kp.lambda); if (isFinite(sc)) corr.push(sc); }
       });
     }
-    return { isStd, showCorr,
-      rawN:raw.length,  rawMean:raw.length?meanArr(raw):NaN,  rawStd:raw.length>1?stdArr(raw):NaN,
-      corrN:corr.length, corrMean:corr.length?meanArr(corr):NaN, corrStd:corr.length>1?stdArr(corr):NaN };
+    return sizeSummary(raw, corr, isStd, showCorr);
   }
 
   // ---- Reusable per-sample column builders (shared by the bulk CSVs and standard.csv) ----
@@ -1659,6 +1672,14 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     return cols;
   }
 
+  // One sample's size columns, as the chart and the table give them.
+  const SIZE_COLS = ['nm', 'err_nm', 'n', 'median_nm', 'Q1_nm', 'Q3_nm'];
+  const sizeCsvHead = anyStd => ['Sample', ...SIZE_COLS.map(c=> 'Crystallite_size_' + c),
+    ...(anyStd ? SIZE_COLS.map(c=> 'Crystallite_size_corr_' + c) : [])];
+  function sizeCsvCells(st, k){
+    const n = st[k+'N'], b = st[k+'Box'], num = v => isFinite(v) ? fmtNum(v, 2) : '';
+    return [num(st[k+'Mean']), n > 1 ? num(st[k+'Err']) : '', String(n), b ? num(b.med) : '', b ? num(b.q1) : '', b ? num(b.q3) : ''];
+  }
   function exportXrdZip(){
     if (!files.length) return [];
     const norm = document.getElementById('xrdNorm').value;
@@ -1677,15 +1698,16 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const cols=[]; nonStd.forEach(k=>cols.push(...diffractoCols(k, refinedNorm)));
       if (cols.length) entries.push({name:'diffractograms.csv', text:wideCsv(cols)});
     }
-    // Crystallite size (classic) — per-sample summary (mean ± std, matching the chart).
+    // Crystallite size (classic) — per-sample summary: mean ± its error, n, and the box
+    // the chart draws.
     // Skipped entirely when there is no non-standard sample (nothing to size).
     if (nonStd.length){
-      const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
+      const head = sizeCsvHead(anyStd);
       let ct = csvLine(head);
       nonStd.forEach(k=>{
         const f=files[k], st = sampleSizeStats(k);
-        const row = [f.label, isFinite(st.rawMean)?fmtNum(st.rawMean,2):'', (st.rawN>1&&isFinite(st.rawStd))?fmtNum(st.rawStd,2):''];
-        if (anyStd) row.push(isFinite(st.corrMean)?fmtNum(st.corrMean,2):'', (st.corrN>1&&isFinite(st.corrStd))?fmtNum(st.corrStd,2):'');
+        const row = [f.label, ...sizeCsvCells(st, 'raw')];
+        if (anyStd) row.push(...sizeCsvCells(st, 'corr'));
         ct += csvLine(row);
       });
       entries.push({name:'crystallite_size.csv', text:ct});
@@ -1694,12 +1716,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
        download it, the module's export leaves it out. */
     // Fit-derived crystallite size — same layout, only when at least one fit exists.
     if (fitIdxs.length){
-      const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
+      const head = sizeCsvHead(anyStd);
       let ct = csvLine(head);
       fitIdxs.forEach(k=>{
         const f=files[k], st = fitSizeStats(k);
-        const row = [f.label, isFinite(st.rawMean)?fmtNum(st.rawMean,2):'', (st.rawN>1&&isFinite(st.rawStd))?fmtNum(st.rawStd,2):''];
-        if (anyStd) row.push(isFinite(st.corrMean)?fmtNum(st.corrMean,2):'', (st.corrN>1&&isFinite(st.corrStd))?fmtNum(st.corrStd,2):'');
+        const row = [f.label, ...sizeCsvCells(st, 'raw')];
+        if (anyStd) row.push(...sizeCsvCells(st, 'corr'));
         ct += csvLine(row);
       });
       entries.push({name:'fit_crystallite_size.csv', text:ct, debug:true});
