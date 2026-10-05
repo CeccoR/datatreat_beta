@@ -839,32 +839,22 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!hasNonStd){ renderPeakTable(); return; }
     // Analysis: smoothed − SNIP baseline
     resPlot = drawStackedResults('xrdResSvg', 'xrdResLegend', processed.map(pr=>pr.subtracted));
-    // Fitting: reconstructed Kα doublet above the fit baseline (samples with a fit)
-    const fitCurves = files.map((f,k)=>{
-      const sf = savedFits[k];
-      if (!sf || !sf.fits || !sf.fits.length) return null;
-      return reconstructFit(f.x, sf.fits).full;
-    });
-    // The Fit column keeps its space (so the Analysis plots stay half-width) but
-    // its plots and titles only become visible once a sample has a fit — UNLESS the
-    // layout has wrapped the columns onto separate rows (narrow desktop / mobile),
-    // where reserving space would just leave a meaningless empty block: then hide it.
-    const anyFit = fitCurves.some(c=>c);
+    /* The fit is a debug view, to be restructured: nothing of it reaches the Results.
+       Its column keeps the space it had before any sample was fitted, so the Analysis
+       plots stay half-width — unless the layout has wrapped the columns onto
+       separate rows (narrow desktop / mobile), where reserving space would just
+       leave a meaningless empty block: then it is hidden. */
     const fitCol = document.getElementById('xrdResFitCol');
     if (fitCol){
-      if (anyFit){ fitCol.style.display = ''; fitCol.style.visibility = 'visible'; }
-      else {
-        fitCol.style.display = ''; fitCol.style.visibility = 'hidden';
-        const content = document.getElementById('xrdResultsContent');
-        const a = content.children[0].getBoundingClientRect(), f = fitCol.getBoundingClientRect();
-        if (Math.abs(f.top - a.top) > 2) fitCol.style.display = 'none';   // wrapped → don't reserve
-      }
+      fitCol.style.display = ''; fitCol.style.visibility = 'hidden';
+      const content = document.getElementById('xrdResultsContent');
+      const a = content.children[0].getBoundingClientRect(), f = fitCol.getBoundingClientRect();
+      if (Math.abs(f.top - a.top) > 2) fitCol.style.display = 'none';   // wrapped → don't reserve
     }
-    if (anyFit) drawStackedResults('xrdResFitSvg', 'xrdResFitLegend', fitCurves);
     renderPeakTable();
   }
 
-  function renderPeakTable(){ renderAnalysisTable(); renderStdTable(); renderFitTable(); renderXrdSizeChart(); renderXrdFitSizeChart(); fitCsvIcons(); }
+  function renderPeakTable(){ renderAnalysisTable(); renderStdTable(); renderFitTable(); renderXrdSizeChart(); fitCsvIcons(); }
 
   // Re-derive everything downstream of a peak edit (add/remove/reset) on file `idx`.
   // Covers the standard too: editing the standard's peaks changes β_instr and hence the
@@ -1104,7 +1094,6 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       : `<span><i class="mk-box" style="background:#3aa0ff"></i>size</span>`;
   }
   function renderXrdSizeChart(){ drawSizeBarChart('xrdSizeBarSvg', 'xrdSizeBarLegend', sampleSizeStats); }
-  function renderXrdFitSizeChart(){ drawSizeBarChart('xrdFitSizeBarSvg', 'xrdFitSizeBarLegend', fitSizeStats); }
 
   // Per-field shared/per-sample toggles (one segmented control per editable field)
   const TOGGLE_FIELD = { xrdModeN:'N', xrdModeBl:'blWin', xrdModeH:'pkHeight', xrdModeP:'pkProm', xrdModeD:'pkDist', xrdModeK:'K', xrdModeL:'lambda' };
@@ -1701,6 +1690,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       });
       entries.push({name:'crystallite_size.csv', text:ct});
     }
+    /* What the fit gives is a debug view's (`debug`): the Fitting card's own buttons
+       download it, the module's export leaves it out. */
     // Fit-derived crystallite size — same layout, only when at least one fit exists.
     if (fitIdxs.length){
       const head = ['Sample','Crystallite_size_nm','Crystallite_size_std_nm'].concat(anyStd ? ['Crystallite_size_corr_nm','Crystallite_size_corr_std_nm'] : []);
@@ -1711,35 +1702,34 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         if (anyStd) row.push(isFinite(st.corrMean)?fmtNum(st.corrMean,2):'', (st.corrN>1&&isFinite(st.corrStd))?fmtNum(st.corrStd,2):'');
         ct += csvLine(row);
       });
-      entries.push({name:'fit_crystallite_size.csv', text:ct});
+      entries.push({name:'fit_crystallite_size.csv', text:ct, debug:true});
     }
-    // standard.csv — everything about the standard in one file: diffractogram + peaks +
-    // fit curves + fitted peaks (normalised against its own max, as it stands alone).
-    if (anyStd){
-      const si = standardIdx();
-      if (si>=0 && processed[si]){
-        const own = () => (maxArr(processed[si].subtracted)||1);
-        const ownFit = () => { const sf=savedFits[si]; return sf&&sf.fits&&sf.fits.length ? (maxArr(reconstructFit(files[si].x, sf.fits).full)||1) : 1; };
-        const scol = [...diffractoCols(si, own), ...peakCols(si, false)];
-        const fc = fitCols(si, ownFit); if (fc) scol.push(...fc);
-        const fpc = fitPeakCols(si, false); if (fpc) scol.push(...fpc);
-        entries.push({name:'standard.csv', text:wideCsv(scol)});
-      }
+    // standard.csv — everything about the standard in one file: diffractogram + peaks
+    // (normalised against its own max, as it stands alone). Its fit goes with the
+    // other fits, below.
+    const si = anyStd ? standardIdx() : -1;
+    const stdOn = si >= 0 && !!processed[si];
+    const ownFit = () => { const sf=savedFits[si]; return sf&&sf.fits&&sf.fits.length ? (maxArr(reconstructFit(files[si].x, sf.fits).full)||1) : 1; };
+    if (stdOn){
+      const own = () => (maxArr(processed[si].subtracted)||1);
+      entries.push({name:'standard.csv', text:wideCsv([...diffractoCols(si, own), ...peakCols(si, false)])});
     }
     // peaks.csv — classic peaks of every non-standard sample (standard has its own file).
     {
       const cols=[]; nonStd.forEach(k=>{ if (processed[k].peaks.some(pk=>!pk.removed)) cols.push(...peakCols(k, anyStd)); });
       if (cols.length) entries.push({name:'peaks.csv', text:wideCsv(cols)});
     }
-    // fits.csv — every non-standard sample's fit curves (standard's fit lives in standard.csv).
+    // fits.csv — every sample's fit curves, the standard's last, against its own max.
     {
       const cols=[]; nonStd.forEach(k=>{ const c=fitCols(k, fitNorm); if (c) cols.push(...c); });
-      if (cols.length) entries.push({name:'fits.csv', text:wideCsv(cols)});
+      if (stdOn){ const c = fitCols(si, ownFit); if (c) cols.push(...c); }
+      if (cols.length) entries.push({name:'fits.csv', text:wideCsv(cols), debug:true});
     }
-    // fit_peaks.csv — fitted-peak parameters of every non-standard sample.
+    // fit_peaks.csv — fitted-peak parameters of every sample, the standard's last.
     {
       const cols=[]; nonStd.forEach(k=>{ const c=fitPeakCols(k, anyStd); if (c) cols.push(...c); });
-      if (cols.length) entries.push({name:'fit_peaks.csv', text:wideCsv(cols)});
+      if (stdOn){ const c = fitPeakCols(si, false); if (c) cols.push(...c); }
+      if (cols.length) entries.push({name:'fit_peaks.csv', text:wideCsv(cols), debug:true});
     }
     return entries;
   }
