@@ -18,7 +18,7 @@ import { Plot } from './plot.js';
   const clampN = v => Math.max(1, Math.round(v));
   const clampM = v => Math.max(2, Math.round(v));
   // Two-sided 99% confidence: the 99.5% quantile of Student's t, the factor every
-  // error reported here (Eg, E_U) is multiplied by.
+  // error reported here (Eg, E_U, E_dif, p) is multiplied by.
   const T_Q = 0.995;
 
   // Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
@@ -67,22 +67,55 @@ import { Plot } from './plot.js';
       EgInt = xInt;
       EgIntErr = varX>0 ? Math.sqrt(varX) : NaN;
     }
-    if (regs.slope !== 0 && isFinite(regs.slope)){
-      Eg = -regs.intercept/regs.slope;
-      if ([regs.varM,regs.varB,regs.covMB].every(isFinite)){
-        const varEg = (regs.intercept**2/regs.slope**4)*regs.varM + (1/regs.slope**2)*regs.varB - 2*(regs.intercept/regs.slope**3)*regs.covMB;
-        EgErr = varEg>=0 ? Math.sqrt(varEg)*tinv(T_Q, M-2) : NaN;
-      }
-    }
+    ({ x: Eg, err: EgErr } = xCross(regs, M));
     return {Eg,EgErr,EgInt,EgIntErr};
   }
-  /* The Urbach energy is the inverse of the tail's slope in ln F(R) against hν, so
-     its error is the slope's, σ_m/m², times the same t factor. */
-  function urbachEu(regs, M){
-    const m = regs.slope;
-    if (!isFinite(m) || m === 0) return { Eu: NaN, EuErr: NaN };
-    const err = isFinite(regs.varM) && regs.varM >= 0 ? Math.sqrt(regs.varM)/(m*m)*tinv(T_Q, M-2) : NaN;
-    return { Eu: 1/m, EuErr: err };
+  // Where a fitted line crosses y = 0, −b/m, and its error: the slope and intercept
+  // variances and their covariance carried through, times the fit's t factor.
+  function xCross(r, M){
+    if (!(r.slope !== 0 && isFinite(r.slope))) return { x: NaN, err: NaN };
+    const x = -r.intercept/r.slope;
+    if (![r.varM, r.varB, r.covMB].every(isFinite)) return { x, err: NaN };
+    const v = (r.intercept**2/r.slope**4)*r.varM + (1/r.slope**2)*r.varB - 2*(r.intercept/r.slope**3)*r.covMB;
+    return { x, err: v >= 0 ? Math.sqrt(v)*tinv(T_Q, M-2) : NaN };
+  }
+  // The inverse of a fit's slope, and its error σ_m/m² times the fit's t factor.
+  function invSlope(r, M){
+    const m = r.slope;
+    if (!isFinite(m) || m === 0) return { v: NaN, err: NaN };
+    return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, M-2) : NaN };
+  }
+  // The Urbach energy is the inverse of the tail's slope in ln F(R) against hν.
+  function urbachEu(regs, M){ const s = invSlope(regs, M); return { Eu: s.v, EuErr: s.err }; }
+
+  /* A centred moving average, as movingAverage, that leaves out the points with no
+     value: a log of zero, an inverse of zero. Taken in, they would wipe out every
+     window they fall in. A window with nothing in it has no value either. */
+  function smoothFinite(y, N){
+    N = Math.max(1, Math.round(N));
+    const n = y.length, out = new Array(n);
+    for (let i = 0; i < n; i++){
+      const lo = Math.max(0, i - Math.floor((N-1)/2)), hi = Math.min(n-1, i + Math.ceil((N-1)/2));
+      let s = 0, c = 0;
+      for (let k = lo; k <= hi; k++) if (isFinite(y[k])){ s += y[k]; c++; }
+      out[i] = c ? s/c : NaN;
+    }
+    return out;
+  }
+  /* The defect band (debug). A band of defect states below the gap adds absorption
+     rising as a power of the distance from its onset, F(R) ∝ (hν − E_dif)^p. Then
+     d ln F(R) / d(hν) = p / (hν − E_dif), and its inverse, (hν − E_dif) / p, is a
+     straight line of slope 1/p that meets zero at E_dif. The curve is taken there a
+     step at a time, each step smoothed with a window of its own: F(R), less its
+     minimum (so the log is of what rises above it), ln, d/d(hν), the inverse. */
+  function defectCurves(f, p){
+    const hv = f.hv, raw = f.FR;
+    const fr = smoothFinite(raw, p.N), lo = minArr(fr);
+    const lnRaw = fr.map(v=> v - lo > 0 ? Math.log(v - lo) : NaN);
+    const ln = smoothFinite(lnRaw, p.N2);
+    const dRaw = gradientArr(ln, hv), d = smoothFinite(dRaw, p.N3);
+    const invRaw = d.map(v=> v !== 0 && isFinite(v) ? 1/v : NaN), inv = smoothFinite(invRaw, p.N4);
+    return { hv, Yraw: invRaw, Ys: inv, steps: { raw, fr, lnRaw, ln, dRaw, d, invRaw, inv } };
   }
   const fmtE = (v, e, unit, k = 3, scale = 1)=> !isFinite(v) ? '-'
     : isFinite(e) ? `${(v*scale).toFixed(k)} ± ${(e*scale).toFixed(k)} ${unit}` : `${(v*scale).toFixed(k)} ${unit}`;
@@ -134,8 +167,8 @@ import { Plot } from './plot.js';
      folded out of sight (`hidden`) is not drawn: it is brought up to date when it
      is unfolded.
   ========================================================= */
-  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
-  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM };
+  const FIELD = { a:'A', N:'N', N2:'N2', N3:'N3', N4:'N4', M:'M', M2:'M2' };
+  const CLAMP = { a: v => v, N: clampN, N2: clampN, N3: clampN, N4: clampN, M: clampM, M2: clampM };
   function makePanel(spec){
     const { prefix, keys, windows } = spec;
     const $ = id => document.getElementById(prefix + id);
@@ -156,8 +189,10 @@ import { Plot } from './plot.js';
     let throttle = null;
     let shown = -1;           // the sample the plot last drew
 
-    // The curve and the derivatives the panel works from, for sample i.
+    // The curve and the derivatives the panel works from, for sample i. A spec with
+    // its own way there (`curves`) gives at least hv, Yraw and the Ys it is fitted on.
     function curves(i, p){
+      if (spec.curves) return spec.curves(files[i], p);
       const hv = files[i].hv;
       const Yraw = files[i].FR.map((v,k)=> spec.curve(v, hv[k], p));
       const Ys  = movingAverage(Yraw, p.N);
@@ -250,7 +285,7 @@ import { Plot } from './plot.js';
 
     P.initPlot = ()=>{
       if (spec.hidden && spec.hidden()){ plot = null; return; }
-      plot = new Plot($('Svg'), {xlabel:'hν (eV)', ylabelSvg: spec.yLabel(P.params(currIndex)), xTickStep:0.5, noYTickLabels:true});
+      plot = new Plot($('Svg'), {xlabel:'hν (eV)', ylabelSvg: spec.yLabel(P.params(currIndex)), xTickStep:0.5, noYTickLabels: !spec.yTicks});
       plot.attachTools(plot.svg.closest('.plot-wrap'));
       // A spec whose lines are each sample's own has no common set to start.
       if (!spec.ownLines && !isFinite(P.sharedVlines.v1)){
@@ -271,31 +306,27 @@ import { Plot } from './plot.js';
       $('CurrentLabel').textContent = files[currIndex].label;
       $('Idx').textContent = (currIndex+1)+'/'+files.length;
 
-      // The derivatives are drawn rescaled onto the curve's own span, from the floor
-      // the curve is drawn from: zero for Tauc, its own minimum for a log.
-      const yLo = spec.zeroFloor ? 0 : minArr(c.Ys), yHi = maxArr(c.Ys);
-      const onSpan = (arr, lo, hi)=> arr.map(v=> (hi-lo)>0 ? yLo + (v-lo)/(hi-lo)*(yHi-yLo) : v);
-      const dYs = onSpan(c.dYs, minArr(c.dYs), maxArr(c.dYs));
-
       // Capture current zoom so it can be kept across redraws (the full range
       // set below stays as the "home" reset target)
       const prev = (preserveView && isFinite(plot.xmin)) ? {xmin:plot.xmin, xmax:plot.xmax, ymin:plot.ymin, ymax:plot.ymax} : null;
-      const rLo = spec.zeroFloor ? 0 : minArr(c.Yraw), rHi = maxArr(c.Yraw), pad = spec.zeroFloor ? 0 : 0.05*(rHi - rLo);
-      plot.setRange(minArr(hv), maxArr(hv), rLo - pad, spec.zeroFloor ? rHi*1.05 : rHi + pad);
+      let range;
+      if (spec.yRange) range = spec.yRange(c, vlines, p);
+      else {
+        const rLo = spec.zeroFloor ? 0 : minArr(c.Yraw), rHi = maxArr(c.Yraw), pad = spec.zeroFloor ? 0 : 0.05*(rHi - rLo);
+        range = [rLo - pad, spec.zeroFloor ? rHi*1.05 : rHi + pad];
+      }
+      plot.setRange(minArr(hv), maxArr(hv), range[0], range[1]);
       if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
       plot.clearData();
-      plot.ylabelSvg = spec.yLabel(p) + ' (a. u.)';
+      plot.ylabelSvg = spec.yLabel(p) + ' ' + (spec.yUnit || '(a. u.)');
       plot.drawAxes();
       if (spec.bands) spec.bands(currIndex).forEach(b=> plot.vband(b.x0, b.x1, b.color, b.opacity));
       // Named for the figure composer: this plot has no legend, so without these the
       // traces would reach it as "Series 1..n". Keyed by role, not by sample: the plot
       // shows one sample at a time, and a trace keeps its looks from one to the next.
       const nm = files[currIndex].label;
-      // The grey XRPD draws its raw pattern in: white vanished on the light theme and on
-      // the white of every exported image.
-      plot.line(hv, c.Yraw, '#6a7585', 1,   undefined, { label: `${nm} raw`, key: 'raw' });
-      plot.line(hv, c.Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed`, key: 'smoothed' });
-      plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative`, key: 'derivative' });
+      (spec.traces ? spec.traces(c, range) : curveTraces(c)).forEach(t=>
+        plot.line(hv, t.ys, t.color, t.width, undefined, { label: `${nm} ${t.name}`, key: t.key }));
 
       const fits = [];
       let tooSmall = false;
@@ -329,6 +360,20 @@ import { Plot } from './plot.js';
 
       if (!dragging && spec.onSettled) spec.onSettled();   // skip the heavy summaries mid-drag
     };
+    // The curve as read, smoothed, and its derivative. The derivative is drawn rescaled
+    // onto the curve's own span, from the floor the curve is drawn from: zero for
+    // Tauc, its own minimum for a log.
+    function curveTraces(c){
+      const yLo = spec.zeroFloor ? 0 : minArr(c.Ys), yHi = maxArr(c.Ys);
+      const onSpan = (arr, lo, hi)=> arr.map(v=> (hi-lo)>0 ? yLo + (v-lo)/(hi-lo)*(yHi-yLo) : v);
+      // The grey XRPD draws its raw pattern in: white vanished on the light theme and on
+      // the white of every exported image.
+      return [
+        { ys: c.Yraw, color: '#6a7585', width: 1,   name: 'raw',        key: 'raw' },
+        { ys: c.Ys,   color: '#3aa0ff', width: 1.4, name: 'smoothed',   key: 'smoothed' },
+        { ys: onSpan(c.dYs, minArr(c.dYs), maxArr(c.dYs)), color: '#5fcf6a', width: 1, name: 'derivative', key: 'derivative' },
+      ];
+    }
     function throttledUpdate(){
       if (throttle) return;
       throttle = requestAnimationFrame(()=>{ throttle=null; P.update(true); });
@@ -426,6 +471,8 @@ import { Plot } from './plot.js';
   const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
   const URBACH_COLOR = '#ff7f0e';
   const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
+  // The defect band's steps, each in one colour (thin before its smoothing), and its fit.
+  const DEFECT_COLORS = { fr: '#3aa0ff', ln: '#ff7f0e', d: '#5fcf6a', inv: '#b46cff', fit: '#ff5050' };
 
   /* =========================================================
      ANALYSIS CARDS
@@ -438,7 +485,7 @@ import { Plot } from './plot.js';
      none.
   ========================================================= */
   // As the menus list them; the card titles set them in capitals.
-  const KINDS = { tauc: 'Tauc Plot', urbach: 'Urbach Energy' };
+  const KINDS = { tauc: 'Tauc Plot', urbach: 'Urbach Energy', defect: 'Defect Band (debug)' };
   let analyses = [];          // in card order
   const live = new Map();     // id → { card, panel, res, resPlot }
   // While set, a settling panel leaves the Results alone: whoever set it redraws
@@ -544,6 +591,85 @@ import { Plot } from './plot.js';
     };
   }
 
+  /* The defect band (debug): the inverse log-derivative of F(R), fitted where it is
+     straightest inside the region, as the Tauc region is. It reads E_dif and p off
+     the fit and shows them on the card; nothing of it reaches the Results or the
+     CSV files. */
+  function defectSpec(a){
+    return {
+      prefix: 'an' + a.id,
+      keys: ['N','N2','N3','N4','M'],
+      defaults: { N:1, N2:1, N3:20, N4:1, M:25 },
+      curves: defectCurves,
+      yLabel: ()=> `{d ln[F(R)] / d(hν)}${sup('\u22121')}`,
+      yUnit: '(eV)',
+      // The axis is the last step's, in eV: it is the one read.
+      yTicks: true,
+      windows: [
+        { lo:'v1', hi:'v2', M:'M', color: DEFECT_COLORS.fit, name:'linear region', key:'regs', stats:['RMSE1','R21'] },
+      ],
+      defaultLines: restLines,
+      // On the absorption edge, found as for Tauc (on F(R) itself): the window scan
+      // then finds the straightest stretch inside it.
+      suggest: (i, p)=>{
+        const f = files[i], e = curvatureEdge({ hv: f.hv, dYs: movingAverage(gradientArr(movingAverage(f.FR, p.N), f.hv), 20) }, { N2: 20 });
+        return e && { v1: e.v1, v2: e.v2 };
+      },
+      combine: ss => ({ v1: Math.min(...ss.map(s=> s.v1)), v2: Math.max(...ss.map(s=> s.v2)) }),
+      /* The range is what the fit is read on: its line across the region, the curve
+         in the window it settled on, and zero, where the line meets it at E_dif. The
+         inverse runs off to a pole wherever the derivative crosses zero, which the
+         region may well hold: ranged on the curve, the fit would be a flat line.
+         With no fit, the region's middle 90% of the curve. */
+      yRange: (c, vl, p)=>{
+        const lo = Math.min(vl.v1, vl.v2), hi = Math.max(vl.v1, vl.v2);
+        const r = scanRegr(c.hv, c.Ys, p.M, lo, hi);
+        let ys;
+        if (r.bestIdx.length) ys = [lo, hi].map(x=> r.slope*x + r.intercept).concat(r.bestIdx.map(k=> c.Ys[k]));
+        else {
+          const v = c.Ys.filter((y, k)=> isFinite(y) && c.hv[k] >= lo && c.hv[k] <= hi).sort((x, y)=> x - y);
+          if (!v.length) return [0, 1];
+          ys = [v[Math.round(0.05*(v.length - 1))], v[Math.round(0.95*(v.length - 1))]];
+        }
+        const y0 = Math.min(0, ...ys), y1 = Math.max(0, ...ys), d = (y1 - y0) || 1;
+        return [y0 - 0.08*d, y1 + 0.08*d];
+      },
+      /* Every step on the plot, each on a y-axis of its own that is not drawn: its
+         smoothed curve spans the plot's range (from its 1st to its 99th percentile,
+         so a stray spike does not squash it), and the curve before smoothing goes on
+         the same axis, thinner. The last step is on the axis itself. Anything far
+         beyond the range is held just past it, where the plot clips it. */
+      traces: (c, [y0, y1])=>{
+        const s = c.steps, d = y1 - y0;
+        const clip = v => isFinite(v) ? Math.max(y0 - 20*d, Math.min(y1 + 20*d, v)) : NaN;
+        const pct = (arr, q)=>{ const v = arr.filter(isFinite).sort((x, y)=> x - y); return v.length ? v[Math.round(q*(v.length - 1))] : NaN; };
+        const onAxis = ref =>{
+          const lo = pct(ref, 0.01), hi = pct(ref, 0.99), k = hi > lo ? d/(hi - lo) : 0;
+          return arr => arr.map(v=> clip(y0 + (v - lo)*k));
+        };
+        const fr = onAxis(s.fr), ln = onAxis(s.ln), dd = onAxis(s.d), inv = arr => arr.map(clip);
+        const C = DEFECT_COLORS;
+        return [
+          { ys: fr(s.raw),     color: C.fr,  width: 0.6, name: 'F(R)',                key: 'F(R) raw' },
+          { ys: fr(s.fr),      color: C.fr,  width: 1.2, name: 'F(R) smoothed',       key: 'F(R)' },
+          { ys: ln(s.lnRaw),   color: C.ln,  width: 0.6, name: 'ln',                  key: 'ln raw' },
+          { ys: ln(s.ln),      color: C.ln,  width: 1.2, name: 'ln smoothed',         key: 'ln' },
+          { ys: dd(s.dRaw),    color: C.d,   width: 0.6, name: 'derivative',          key: 'derivative raw' },
+          { ys: dd(s.d),       color: C.d,   width: 1.2, name: 'derivative smoothed', key: 'derivative' },
+          { ys: inv(s.invRaw), color: C.inv, width: 0.6, name: 'inverse',             key: 'inverse raw' },
+          { ys: inv(s.inv),    color: C.inv, width: 1.6, name: 'inverse smoothed',    key: 'inverse' },
+        ];
+      },
+      results: (f, p)=>{
+        const e = xCross(f[0], p.M), q = invSlope(f[0], p.M);
+        return { Edif: e.x, EdifErr: e.err, p: q.v, pErr: q.err, regs: f[0] };
+      },
+      show: ($, r)=>{ $('Edif').textContent = fmtE(r.Edif, r.EdifErr, 'eV'); $('Pexp').textContent = fmtE(r.p, r.pErr, '').trim(); },
+      hidden: ()=> isFolded(a),
+    };
+  }
+  const SPECS = { tauc: taucSpec, urbach: urbachSpec, defect: defectSpec };
+
   // Every card shows the same sample, so stepping in one steps them all. The Results
   // do not depend on which sample is on show.
   function showSample(k){
@@ -559,6 +685,8 @@ import { Plot } from './plot.js';
   const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
   const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = 1240/λ, and the curve is smoothed with a centred moving average before any fit. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
   const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, 1 eV wide and centred on it, where the edge rises; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is centred on it again once the change is made (a Tauc line released, a value confirmed), and a new reference centres them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. ${CARD_INFO}`;
+
+  const DEFECT_INFO = `A debug analysis, for a band of defect states below the gap, whose absorption is taken to rise as <b>F(R) ∝ (hν − E<sub>dif</sub>)<sup>p</sup></b>. Then d ln[F(R)] / d(hν) = p / (hν − E<sub>dif</sub>), and its inverse, <b>(hν − E<sub>dif</sub>) / p</b>, is a straight line of slope 1/p that meets zero at E<sub>dif</sub>. The curve gets there a step at a time, each smoothed with a window of its own (a centred moving average that leaves out points with no value): F(R); F(R) less its minimum, of which the log is taken; the derivative of that against hν; and its inverse. Every step is on the plot, each on a y-axis of its own (not drawn: it fills the plot's height), the thin lines being each step before its smoothing; the y-axis drawn is the last one's, in eV. Drag the red lines to set the region, or press <b>✦ Suggest intervals</b> to put them on the absorption edge, found as for Tauc. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b>, as for Tauc. <b>E<sub>dif</sub></b> is where the line meets zero and <b>p</b> the inverse of its slope; each error is the regression's own carried through, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Nothing here reaches the Results or the CSV files. ${CARD_INFO}`;
 
   const navRow = p => `
           <div class="plot-nav-row">
@@ -646,6 +774,39 @@ import { Plot } from './plot.js';
           </div>
         </div>`;
   }
+  function defectBody(p){
+    const C = DEFECT_COLORS;
+    return `
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            ${navRow(p)}
+            ${plotWrap(p + 'Svg', p + 'Legend', false)}
+            ${legend(p + 'Legend', [[C.fr, 'F(R)'], [C.ln, 'ln[F(R) − F(R)<sub>min</sub>]'], [C.d, 'd ln[F(R)] / d(hν)'], [C.inv, '{d ln[F(R)] / d(hν)}<sup>−1</sup>'], [C.fit, 'linear region']])}
+          </div>
+          <div class="col mw280" style="align-self:flex-start">
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
+            <div class="param-grid">
+              <label class="txt-label" for="${p}N">F(R) smoothing window</label>
+              <input type="number" class="pg-field" id="${p}N" value="1" min="1">
+              <label class="txt-label" for="${p}N2">ln[F(R)] smoothing window</label>
+              <input type="number" class="pg-field" id="${p}N2" value="1" min="1">
+              <label class="txt-label" for="${p}N3">Derivative smoothing window</label>
+              <input type="number" class="pg-field" id="${p}N3" value="20" min="1">
+              <label class="txt-label" for="${p}N4">Inverse smoothing window</label>
+              <input type="number" class="pg-field" id="${p}N4" value="1" min="1">
+              <label class="txt-label" for="${p}M">Linear region regression window</label>
+              <input type="number" class="pg-field" id="${p}M" value="25" min="2">
+              <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
+              <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
+              <div class="pg-result">
+                <div class="pg-stat">E<sub>dif</sub>: <b id="${p}Edif">-</b></div>
+                <div class="pg-stat">p: <b id="${p}Pexp">-</b></div>
+              </div>
+            </div>
+            <div id="${p}Alert"></div>${suggestBtn(p, 'Place the region on the absorption edge, found as for Tauc')}
+          </div>
+        </div>`;
+  }
   // The title is the kind, chosen in place; the name sits under it and stays in view
   // when the card is folded, the instructions open under the name.
   function cardHtml(a){
@@ -661,8 +822,8 @@ import { Plot } from './plot.js';
         </div>
         <input type="text" class="an-name" spellcheck="false" aria-label="Analysis name" title="The analysis name: its charts and files are named after it. Left empty, it goes back to the automatic one.">
         <div class="an-body">
-          <div class="instr-block an-instr" style="display:none">${a.type === 'tauc' ? TAUC_INFO : URBACH_INFO}</div>
-          ${a.type === 'tauc' ? taucBody(p) : urbachBody(p)}
+          <div class="instr-block an-instr" style="display:none">${{ tauc: TAUC_INFO, urbach: URBACH_INFO, defect: DEFECT_INFO }[a.type]}</div>
+          ${{ tauc: taucBody, urbach: urbachBody, defect: defectBody }[a.type](p)}
         </div>`;
   }
 
@@ -680,7 +841,7 @@ import { Plot } from './plot.js';
     card.innerHTML = cardHtml(a);
     place(card);
     guardNumberInputs(card);
-    const panel = makePanel(a.type === 'tauc' ? taucSpec(a) : urbachSpec(a));
+    const panel = makePanel(SPECS[a.type](a));
     if (a.states[a.type]) panel.restore(a.states[a.type]);
     else panel.fit();
     const prev = live.get(a.id);
@@ -850,6 +1011,7 @@ import { Plot } from './plot.js';
     const changed = [];
     analyses.forEach(a=>{
       if (a.type === 'tauc'){ above = a; return; }
+      if (a.type !== 'urbach') return;
       if (!a.refAuto && a.ref != null && !(byId(a.ref) && byId(a.ref).type === 'tauc')) a.refAuto = true;
       const ref = a.refAuto ? (above ? above.id : null) : a.ref;
       if (ref !== a.ref){ a.ref = ref; changed.push(a); }
@@ -908,6 +1070,7 @@ import { Plot } from './plot.js';
       const ex = as.every(v=> v === as[0]) && expOf(as[0]);
       return ex ? `Tauc: ${ex.name}` : 'Tauc';
     }
+    if (a.type === 'defect') return 'Defect band';
     const r = byId(a.ref);
     return r ? `Urbach · ${r.name}` : 'Urbach';
   }
@@ -916,7 +1079,7 @@ import { Plot } from './plot.js';
   function refreshNames(){
     const used = new Set();
     const uniq = n =>{ let s = n, k = 2; while (used.has(s)) s = `${n} (${k++})`; used.add(s); return s; };
-    ['tauc', 'urbach'].forEach(t=> analyses.filter(a=> a.type === t).forEach(a=>{
+    ['tauc', 'urbach', 'defect'].forEach(t=> analyses.filter(a=> a.type === t).forEach(a=>{
       a.name = uniq(a.nameAuto || !a.base ? autoName(a) : a.base);
     }));
     analyses.forEach(paintName);
@@ -1284,7 +1447,7 @@ import { Plot } from './plot.js';
     // Once, when the first data lands: propose optimal interval-line positions. The
     // Tauc cards go first: the Urbach ones are placed on their regions.
     if (!hadFiles && files.length){
-      quietly(()=> ['tauc', 'urbach'].forEach(t=> analyses.filter(a=> a.type === t).forEach(a=>{
+      quietly(()=> ['tauc', 'urbach', 'defect'].forEach(t=> analyses.filter(a=> a.type === t).forEach(a=>{
         const P = panelOf(a); P.autoSuggestAll(); P.writeStoreToInputs(); P.update();
       })));
       analyses.forEach(see);
@@ -1416,6 +1579,12 @@ import { Plot } from './plot.js';
   }
   function renderAnalysisRes(a){
     if (!files.length || !live.has(a.id)) return;
+    // A debug analysis has no section (yet): a card turned into one loses its own.
+    if (a.type === 'defect'){
+      const e = live.get(a.id);
+      if (e.res){ e.res.remove(); e.res = null; e.resPlot = null; }
+      return;
+    }
     ensureRes(a);
     if (a.type === 'tauc') drawTaucRes(a); else drawUrbachRes(a);
   }
@@ -1655,7 +1824,7 @@ import { Plot } from './plot.js';
     }
     analyses.forEach(a=>{
       const P = panelOf(a);
-      if (!P) return;
+      if (!P || a.type === 'defect') return;     // a debug analysis has no files (yet)
       const n = fileSafe(a.name), fits = files.map((f,k)=> P.analyze(k));
       if (a.type === 'tauc') entries.push(...taucCsvs(n, P, fits));
       else entries.push(...urbachCsvs(n, P, fits));
