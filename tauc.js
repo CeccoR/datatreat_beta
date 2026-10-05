@@ -58,7 +58,10 @@ import { Plot } from './plot.js';
     if ([regs.slope,regs.intercept,regs2.slope,regs2.intercept].every(isFinite)){
       const xInt = (regs2.intercept - regs.intercept)/(regs.slope - regs2.slope);
       const dxdb1 = -1/(regs.slope-regs2.slope), dxdb2 = 1/(regs.slope-regs2.slope);
-      const dxdm1 = (regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
+      // x = (b2 − b1)/(m1 − m2), so ∂x/∂m1 = −(b2 − b1)/(m1 − m2)² = −∂x/∂m2. With the
+      // sign the other way the slope–intercept covariances, strongly negative this far
+      // from hν = 0, added to the variance instead of taking from it.
+      const dxdm1 = -(regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
       const dxdm2 = -dxdm1;
       const t1 = tinv(T_Q, M-2), t2 = tinv(T_Q, M2-2);
       const varX = dxdb1*dxdb1*regs.varB*t1*t1 + dxdb2*dxdb2*regs2.varB*t2*t2 +
