@@ -947,6 +947,12 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     renderClassicTable(si, 's', 'xrdStdPeakTableWrap', 'xrdStdPkReset');
   }
 
+  // Peak-table headers: in full, and on a phone a short form (CSS picks one), whose
+  // longest word is short enough for the table to fit the screen. The full name stays
+  // in the tooltip.
+  const thAlt = (full, short)=> `<th title="${full}"><span class="th-full">${full}</span><span class="th-short">${short}</span></th>`;
+  const PEAK_TH = '<th>#</th><th>2θ (°)</th>' + thAlt('Rel. intensity', 'Rel. int.') + '<th>FWHM (°)</th>';
+  const SIZE_TH = thAlt('Crystallite size (nm)', 'Size (nm)'), CORR_TH = thAlt('Crystallite size corr. (nm)', 'Size corr. (nm)');
   // Classic (peak-search) table: 2θ, rel intensity, classic FWHM, size. Generic over the
   // file index, panel key ('a' or 's'), table wrap and reset-button ids.
   // With a standard selected, non-standard samples show size both without and with correction.
@@ -965,7 +971,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const maxH = Math.max(...pks.map(p=>p.height));
     const showCorr = !!standardName && !isStd;
     const sizeCol = !isStd;
-    let html='<table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th>'+(sizeCol?'<th>Crystallite size (nm)</th>':'')+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
+    let html='<table><thead><tr>'+PEAK_TH+(sizeCol?SIZE_TH:'')+(showCorr?CORR_TH:'')+'<th></th></tr></thead><tbody>';
     pks.forEach((pk,i)=>{
       const fwhm = pk.fwhmClassic;
       const sizeRawCell = sizeCol ? `<td>${fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
@@ -1042,7 +1048,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     let selIdx=-1, selBd=Infinity;
     if (panels.f.sel!=null) fits.forEach((pk,i)=>{ const d=Math.abs(pk.pos-panels.f.sel); if(d<selBd){selBd=d;selIdx=i;} });
     if (selBd>=0.6) selIdx=-1;
-    let html='<table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th><th>Crystallite size (nm)</th>'+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'</tr></thead><tbody>';
+    let html='<table><thead><tr>'+PEAK_TH+SIZE_TH+(showCorr?CORR_TH:'')+'</tr></thead><tbody>';
     fits.forEach((pk,i)=>{
       const sizeRawCell = isStd ? '—' : fmtCell(sizeRaw(pk.fwhm, pk.pos, fp.K, fp.lambda));
       const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(pk.fwhm, pk.pos, fp.K, fp.lambda))}</td>` : '';

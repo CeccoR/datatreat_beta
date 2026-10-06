@@ -1982,6 +1982,19 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   line-height: 1;
 }
 #xrdPeakTableWrap table, #xrdFitTableWrap table, #xrdStdPeakTableWrap table { width: 100%; }
+/* A phone: short headers (xrd.js thAlt), tighter cells, and should a table still not
+   fit (the narrowest screens), it scrolls inside its box instead of the page. */
+#xrdPeakTableWrap, #xrdFitTableWrap, #xrdStdPeakTableWrap { overflow-x: auto; }
+.th-short { display: none; }
+@media (max-width: 600px) {
+  .th-full { display: none; }
+  .th-short { display: inline; }
+  #xrdPeakTableWrap th, #xrdPeakTableWrap td,
+  #xrdFitTableWrap th, #xrdFitTableWrap td,
+  #xrdStdPeakTableWrap th, #xrdStdPeakTableWrap td { padding: 5px 4px; }
+  #xrdPeakTableWrap .peak-row .peak-del,
+  #xrdStdPeakTableWrap .peak-row .peak-del { padding: 2px 3px; }
+}
 #xrdPeakTableWrap .peak-row, #xrdFitTableWrap .peak-row, #xrdStdPeakTableWrap .peak-row { transition: background 0.1s; cursor: pointer; }
 #xrdPeakTableWrap .peak-row:hover, #xrdFitTableWrap .peak-row:hover, #xrdStdPeakTableWrap .peak-row:hover { background: var(--panel); }
 /* Manually added peaks: neutral grey tint (order matters: before hovering/selected) */
