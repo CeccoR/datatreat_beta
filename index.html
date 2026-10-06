@@ -257,7 +257,7 @@
       </div>
       <div class="card" id="xrdStdCard" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Instrumental standard</h3>
-        <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W, least squares on FWHM², at least 3 peaks) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. Under its peak table: U, V and W with their standard errors, R² and the residual standard error s on FWHM² (s² is the reduced χ² with unit weights: a true χ² would need each FWHM's own uncertainty, which the half-maximum width does not give), and the residuals on the FWHM itself, in degrees. With fewer than 3 peaks the instrumental width is interpolated linearly between them. A sample peak beyond the standard's first or last peak by more than that peak's FWHM gets an extrapolated instrumental width, and its table says so. Keep the smoothing window the same here and in the Analysis: the smoothing widens every peak, and the correction only takes it off when standard and sample are widened alike. No crystallite size is computed for the standard itself, so the size column is omitted from its peak table.</div>
+        <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W, least squares on FWHM², at least 3 peaks) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. Under its peak table: U, V and W with their standard errors, R² and the residual standard error s on FWHM² (s² is the reduced χ² with unit weights: a true χ² would need each FWHM's own uncertainty, which the half-maximum width does not give), and the residuals on the FWHM itself, in degrees. With fewer than 3 peaks the instrumental width is interpolated linearly between them. A sample peak beyond the standard's first or last peak by more than that peak's FWHM gets an extrapolated instrumental width, and its table says so. The standard starts unsmoothed (window 1), the samples at 10 points. The smoothing widens every peak, and the correction takes off only as much as it widened the standard's: a sample smoothed more keeps the difference in its width, and comes out smaller. No crystallite size is computed for the standard itself, so the size column is omitted from its peak table.</div>
         <div class="row" style="align-items:flex-start">
           <div class="col mw520" style="flex:2">
             <div class="plot-nav-row">
@@ -340,7 +340,7 @@
               <select id="xrdNorm" class="pg-field"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select>
 
               <div class="txt-label pg-title">Smoothing window (pts) <button type="button" class="mode-chip" id="xrdModeN" title="Switch all / one">all</button></div>
-              <input type="number" class="pg-field" id="xrdSmooth" value="1" min="1">
+              <input type="number" class="pg-field" id="xrdSmooth" value="10" min="1">
 
               <div class="txt-label pg-title">Baseline SNIP window (pts) <button type="button" class="mode-chip" id="xrdModeBl" title="Switch all / one">all</button></div>
               <input type="number" class="pg-field" id="xrdBlWin" value="150" min="1">
@@ -665,7 +665,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v402</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v403</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

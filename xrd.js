@@ -43,7 +43,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   const FIELD_MODE = { N:'N', blWin:'blWin', pkHeight:'pkHeight', pkProm:'pkProm', pkDist:'pkDist', K:'K', lambda:'lambda' };
 
   // Shared param values (defaults)
-  const shared = { N:1, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
+  const shared = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
 
   // Analysis parameters are no longer persisted across sessions — they always start
   // at their defaults (projects are the way to keep a specific configuration).
@@ -67,8 +67,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // reflection the samples share, over the samples ('peak').
   let sizeBy = 'sample';
   // Independent analysis parameters for the instrumental standard (defaults = Analysis
-  // defaults). The standard is analysed in its own dedicated card, never sharing the
-  // per-sample shared/per params. K/λ are unused (no crystallite size for the standard).
+  // defaults, but for the smoothing: it starts unsmoothed). The standard is analysed in
+  // its own dedicated card, never sharing the per-sample shared/per params. K/λ are
+  // unused (no crystallite size for the standard).
   let stdParams = { N:1, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
 
   function standardIdx(){ return files.findIndex(f=>f.name===standardName); }
@@ -291,7 +292,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // input id ↔ stored field key
   const FIELD_INPUT = { N:'xrdSmooth', blWin:'xrdBlWin', pkHeight:'xrdPkHeight', pkProm:'xrdPkProm', pkDist:'xrdPkDist', K:'xrdK', lambda:'xrdLambda' };
   const FIELD_MIN   = { N:1, blWin:1, pkHeight:0, pkProm:0, pkDist:0, K:1e-6, lambda:1e-6 };
-  const FIELD_DEF   = { N:1, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
+  const FIELD_DEF   = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
+  const STD_DEF     = { ...FIELD_DEF, N:1 };   // the standard's own defaults (stdParams)
 
   // Validation feedback (shake + auto-correct) for the decimal (type=text) fields —
   // the type=number fields are auto-guarded globally in utils.js. Wired early so
@@ -333,7 +335,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // Standard's own parameter inputs (no all/one toggle, no K/λ, no normalization choice)
   const STD_INPUT = { N:'xrdStdSmooth', blWin:'xrdStdBlWin', pkHeight:'xrdStdPkHeight', pkProm:'xrdStdPkProm', pkDist:'xrdStdPkDist' };
   function writeStdInputs(){ for (const k in STD_INPUT){ const el=document.getElementById(STD_INPUT[k]); if (el) el.value = stdParams[k]; } }
-  function readStdInputs(){ for (const k in STD_INPUT){ stdParams[k] = Math.max(FIELD_MIN[k], numField(STD_INPUT[k], FIELD_DEF[k])); } }
+  function readStdInputs(){ for (const k in STD_INPUT){ stdParams[k] = Math.max(FIELD_MIN[k], numField(STD_INPUT[k], STD_DEF[k])); } }
 
   // Restore persisted XRD analysis defaults (norm, smoothing, baseline, K, λ) at startup
   loadXrdParams();
