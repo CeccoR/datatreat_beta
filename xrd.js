@@ -43,7 +43,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   const FIELD_MODE = { N:'N', blWin:'blWin', pkHeight:'pkHeight', pkProm:'pkProm', pkDist:'pkDist', K:'K', lambda:'lambda' };
 
   // Shared param values (defaults)
-  const shared = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
+  const shared = { N:1, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
 
   // Analysis parameters are no longer persisted across sessions — they always start
   // at their defaults (projects are the way to keep a specific configuration).
@@ -69,7 +69,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // Independent analysis parameters for the instrumental standard (defaults = Analysis
   // defaults). The standard is analysed in its own dedicated card, never sharing the
   // per-sample shared/per params. K/λ are unused (no crystallite size for the standard).
-  let stdParams = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
+  let stdParams = { N:1, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
 
   function standardIdx(){ return files.findIndex(f=>f.name===standardName); }
   // Indices of the non-standard samples, in file order (the Analysis navigation set).
@@ -291,7 +291,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // input id ↔ stored field key
   const FIELD_INPUT = { N:'xrdSmooth', blWin:'xrdBlWin', pkHeight:'xrdPkHeight', pkProm:'xrdPkProm', pkDist:'xrdPkDist', K:'xrdK', lambda:'xrdLambda' };
   const FIELD_MIN   = { N:1, blWin:1, pkHeight:0, pkProm:0, pkDist:0, K:1e-6, lambda:1e-6 };
-  const FIELD_DEF   = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
+  const FIELD_DEF   = { N:1, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
 
   // Validation feedback (shake + auto-correct) for the decimal (type=text) fields —
   // the type=number fields are auto-guarded globally in utils.js. Wired early so
@@ -492,35 +492,54 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks};
   }
 
-  // Caglioti instrumental resolution: FWHM² = U·tan²θ + V·tanθ + W (θ = Bragg angle).
-  // Least-squares fit [U,V,W] to the standard's measured peaks (needs ≥3 peaks).
+  /* Caglioti instrumental resolution: FWHM² = U·tan²θ + V·tanθ + W (θ = Bragg angle).
+     Least-squares fit of [U,V,W] to the standard's measured peaks (needs ≥ 3 peaks),
+     unweighted on FWHM², with how well it fits: each parameter's standard error (from
+     the residual variance, s²·(XᵀX)⁻¹), R² on FWHM², the residual standard error s
+     (n − 3 degrees of freedom; the reduced χ² with unit weights is s²), and the
+     residuals on the FWHM itself, in degrees, the scale the peaks are read on. */
+  const cagAt = (uvw, th)=>{ const t = Math.tan(th); return uvw[0]*t*t + uvw[1]*t + uvw[2]; };
   function fitCaglioti(pts){
-    if (pts.length < 3) return null;
+    const n = pts.length;
+    if (n < 3) return null;
     const A=[[0,0,0],[0,0,0],[0,0,0]], b=[0,0,0];
     for (const p of pts){
       const t=Math.tan(p.th), x=[t*t, t, 1], y=p.b*p.b;
       for (let i=0;i<3;i++){ b[i]+=x[i]*y; for (let j=0;j<3;j++) A[i][j]+=x[i]*x[j]; }
     }
     const uvw = solveLinear(A, b);
-    return (uvw && uvw.every(isFinite)) ? uvw : null;
+    if (!(uvw && uvw.every(isFinite))) return null;
+    const ys = pts.map(p=> p.b*p.b), ym = ys.reduce((a, v)=> a + v, 0)/n;
+    const rss = pts.reduce((a, p, k)=> a + (ys[k] - cagAt(uvw, p.th))**2, 0);
+    const tss = ys.reduce((a, v)=> a + (v - ym)**2, 0);
+    const dof = n - 3, s2 = dof > 0 ? rss/dof : NaN;
+    // (XᵀX)⁻¹, a column at a time
+    const inv = [0, 1, 2].map(j=> solveLinear(A, [0, 1, 2].map(i=> i === j ? 1 : 0)));
+    const se = [0, 1, 2].map(i=> inv[i] && dof > 0 ? Math.sqrt(Math.max(0, s2*inv[i][i])) : NaN);
+    const res = pts.map(p=> p.b - Math.sqrt(Math.max(0, cagAt(uvw, p.th))));
+    return { uvw, se, n, dof, r2: tss > 0 ? 1 - rss/tss : NaN, s: Math.sqrt(s2),
+             rms: Math.sqrt(res.reduce((a, v)=> a + v*v, 0)/n), maxRes: Math.max(...res.map(Math.abs)) };
+  }
+  // The standard's peaks the instrumental width is taken from, in 2θ order, and the
+  // Caglioti fit to them (null with fewer than 3). Null with no standard in use.
+  function instrModel(){
+    if (!standardName) return null;
+    const si = standardIdx();
+    if (si < 0 || !processed[si]) return null;
+    const pts = processed[si].peaks
+      .filter(p=>!p.removed && isFinite(p.fwhm))
+      .map(p=>({x:p.pos, th:(p.pos/2)*Math.PI/180, b:p.fwhm}))
+      .sort((a,b)=>a.x-b.x);
+    return { pts, fit: fitCaglioti(pts) };
   }
   // Instrumental FWHM (deg) at any 2θ from the selected standard, via the Caglioti
   // fit (evaluable at arbitrary angles, incl. between/beyond the standard's peaks).
   // Falls back to piecewise-linear interpolation when fewer than 3 standard peaks.
   function instrBeta(twoTheta){
-    if (!standardName) return 0;
-    const si = files.findIndex(f=>f.name===standardName);
-    if (si < 0 || !processed[si]) return 0;
-    const pts = processed[si].peaks
-      .filter(p=>!p.removed && isFinite(p.fwhm))
-      .map(p=>({x:p.pos, th:(p.pos/2)*Math.PI/180, b:p.fwhm}))
-      .sort((a,b)=>a.x-b.x);
-    if (!pts.length) return 0;
-    const uvw = fitCaglioti(pts);
-    if (uvw){
-      const t = Math.tan((twoTheta/2)*Math.PI/180);
-      return Math.sqrt(Math.max(0, uvw[0]*t*t + uvw[1]*t + uvw[2]));
-    }
+    const m = instrModel();
+    if (!m || !m.pts.length) return 0;
+    const pts = m.pts;
+    if (m.fit) return Math.sqrt(Math.max(0, cagAt(m.fit.uvw, (twoTheta/2)*Math.PI/180)));
     // Fallback (<3 peaks): linear interpolation / clamp
     if (twoTheta <= pts[0].x) return pts[0].b;
     if (twoTheta >= pts[pts.length-1].x) return pts[pts.length-1].b;
@@ -960,7 +979,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
       html += '</div>';
       if (st.below) html += belowInstrHtml(st.below);
-    }
+      if (st.outside) html += outsideStdHtml(st.outside, st.span);
+    } else html += cagliotiHtml();
     wrap.innerHTML=html;
 
     wrap.querySelectorAll('.peak-row').forEach(row=>{
@@ -1073,6 +1093,17 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (!standardName || !isFinite(betaDeg) || betaDeg <= 0) return false;
     return betaDeg <= instrBeta(pos);
   }
+  /* The 2θ span of the standard's peaks, each end widened by that peak's FWHM: beyond
+     it the instrumental width is extrapolated (the Caglioti curve, or the end peaks'
+     widths held), not measured. Within a FWHM of an end peak a sample peak is that
+     same reflection, as the peaks are matched across samples, and needs no warning. */
+  function stdSpan(){
+    const m = instrModel();
+    if (!m || !m.pts.length) return null;
+    const a = m.pts[0], b = m.pts[m.pts.length-1];
+    return [a.x - a.b, b.x + b.b, a.x, b.x];
+  }
+  const outsideStdHtml = (n, span)=> `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's lie' : ' lies'} beyond the standard's peaks (${span[2].toFixed(2)}–${span[3].toFixed(2)}°) by more than ${n > 1 ? 'their' : 'its'} width: there the instrumental width is extrapolated, not measured.</div>`;
   const belowInstrHtml = n => `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's are' : ' is'} narrower than the instrumental width at ${n > 1 ? 'their angles' : 'its angle'}, which is not physically possible: the standard is likely unsuitable. ${n > 1 ? 'They are' : 'It is'} left out of the corrected size.</div>`;
   // The classic crystallite sizes of a sample's kept peaks, summarised (sizeSummary).
   function sampleSizeStats(i){
@@ -1080,7 +1111,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const isStd = files[i] && files[i].name === standardName;
     const showCorr = !!standardName && !isStd;
     const raw = [], corr = [];
-    let below = 0;
+    let below = 0, outside = 0;
+    const span = showCorr ? stdSpan() : null;
     if (pr && !isStd){
       const fp = getFileParams(i);
       pr.peaks.filter(p=>!p.removed).forEach(pk=>{
@@ -1088,15 +1120,48 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         if (isFinite(s)) raw.push(s);
         if (showCorr){ const sc = sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda); if (isFinite(sc)) corr.push(sc); }
         if (showCorr && belowInstr(pk.fwhmClassic, pk.detPos)) below++;
+        if (span && isFinite(pk.fwhmClassic) && (pk.detPos < span[0] || pk.detPos > span[1])) outside++;
       });
     }
-    return { ...sizeSummary(raw, corr, isStd, showCorr), below };
+    return { ...sizeSummary(raw, corr, isStd, showCorr), below, outside, span };
   }
   // "mean ± std" (or just "mean" for n=1, "—" for none)
   function fmtMeanStd(mean, std, n){
     if (!isFinite(mean)) return '—';
     if (n >= 2 && isFinite(std)) return `${mean.toFixed(1)} ± ${std.toFixed(1)}`;
     return mean.toFixed(1);
+  }
+  // A fitted value and its standard error, to the error's second significant digit
+  // (four significant digits when it has none).
+  function fmtPar(v, se){
+    if (!isFinite(v)) return '—';
+    if (!(isFinite(se) && se > 0)) return (+v.toPrecision(4)).toString();
+    const d = Math.min(10, Math.max(0, 1 - Math.floor(Math.log10(se))));
+    return `${v.toFixed(d)} ± ${se.toFixed(d)}`;
+  }
+  /* Under the standard's peak table: the Caglioti formula, U, V, W with their standard
+     errors, and how well it fits — R² and the residual standard error on FWHM² (what
+     is fitted), the residuals on the FWHM itself. A curve that drops to zero inside
+     the standard's own range is flagged: the width it gives there is not physical. */
+  function cagliotiHtml(){
+    const m = instrModel();
+    if (!m || !m.pts.length) return '';
+    const n = m.pts.length, lo = m.pts[0].x, hi = m.pts[n-1].x;
+    let html = `<div class="size-summary">Caglioti fit: FWHM² = U·tan²θ + V·tanθ + W`;
+    if (!m.fit){
+      return html + `<br><span class="ss-n">It needs 3 peaks or more. With ${n}, the instrumental width is ${n === 1
+        ? "this peak's FWHM at every angle" : 'interpolated linearly between the two peaks, and held at their widths beyond them'}.</span></div>`;
+    }
+    const f = m.fit;
+    html += '<br>' + ['U', 'V', 'W'].map((k, i)=> `${k} = <b>${fmtPar(f.uvw[i], f.se[i])}</b>`).join(' · ') + ' <span class="ss-n">(°²)</span>';
+    html += `<br>${n} peaks, 2θ ${lo.toFixed(2)}–${hi.toFixed(2)}° · ` + (f.dof > 0
+      ? `R² <b>${f.r2.toFixed(4)}</b> · residual SE <b>${f.s.toPrecision(2)}</b> <span class="ss-n">(°², ${f.dof} d.o.f.)</span>`
+      : 'exact: three peaks leave no degree of freedom');
+    html += `<br>FWHM residuals: RMS <b>${f.rms.toFixed(4)}°</b> · max <b>${f.maxRes.toFixed(4)}°</b></div>`;
+    let neg = false;
+    for (let k = 0; k <= 100 && !neg; k++) neg = cagAt(f.uvw, ((lo + (hi - lo)*k/100)/2)*Math.PI/180) <= 0;
+    if (neg) html += `<div class="alert warn">⚠ The fitted FWHM² drops to zero inside the standard's range: there the curve is not physical, and no correction is made.</div>`;
+    return html;
   }
 
   /* Results card: per-sample crystallite size as a box plot of its peaks' sizes — one
