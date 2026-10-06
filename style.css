@@ -2251,6 +2251,11 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
     currentColor 0 5px, transparent 5px 9px);
   background-color: transparent !important;
 }
+/* Long dashes and dots, for series drawn '10,4' and '2,3' (Urbach's subtracted curves
+   and fits). */
+.legend i.mk-ldash, .legend i.mk-dots { background-color: transparent !important; width: 20px; }
+.legend i.mk-ldash { background-image: repeating-linear-gradient(to right, currentColor 0 9px, transparent 9px 13px); }
+.legend i.mk-dots { background-image: repeating-linear-gradient(to right, currentColor 0 2px, transparent 2px 5px); }
 
 /* ===== Dropzone loading state ===== */
 .dropzone { position: relative; }
