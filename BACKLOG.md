@@ -26,6 +26,14 @@ was proposed; nothing here is in the code yet.
   standard shows at each angle) so the sample's Kα1 width is what is sized. Without
   a standard nothing says how the width varies: no Caglioti can be invented, and
   nothing is done.
+- **Peak assignment across samples (crystallite size by peak).** Peaks are matched
+  in one greedy sweep in order of 2θ: each joins the current reflection if its
+  sample is not in it yet and it lies within √(w² + w̄²) of the reflection's mean
+  position (w its FWHM, w̄ the reflection's mean FWHM), else it starts a new one. It
+  is order-dependent and compares against the mean only, so two reflections closer
+  than about one FWHM can swap peaks. To be solved: e.g. an optimal assignment
+  (each sample's peaks to the reflections at minimum total distance in sigmas)
+  rather than the sweep.
 - **Profile fit (debug).** The whole-pattern fit is a debug view, kept out of the
   Results and the module export. To be restructured; its results (intensities,
   crystallite size and the rest) are to go under the Analysis ones in the Results.
