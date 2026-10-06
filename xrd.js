@@ -943,6 +943,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const si = standardIdx();
     const wrap = document.getElementById('xrdStdPeakTableWrap');
     if (!wrap) return;
+    renderCaglioti();
     if (si<0 || !processed[si]){ wrap.innerHTML=''; return; }
     renderClassicTable(si, 's', 'xrdStdPeakTableWrap', 'xrdStdPkReset');
   }
@@ -967,7 +968,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const sizeCol = !isStd;
     // The table scrolls sideways in its own box when the screen is narrower than it;
     // the summary and warnings under it stay put.
-    let html='<div class="peak-scroll"><table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th>'+(sizeCol?'<th>Crystallite size (nm)</th>':'')+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
+    let html='<div class="peak-scroll"><table><thead><tr><th>#</th><th>2θ (°)</th><th>Relative Intensity</th><th>FWHM (°)</th>'+(sizeCol?'<th>Crystallite size (nm)</th>':'')+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
     pks.forEach((pk,i)=>{
       const fwhm = pk.fwhmClassic;
       const sizeRawCell = sizeCol ? `<td>${fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
@@ -984,7 +985,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       html += '</div>';
       if (st.below) html += belowInstrHtml(st.below);
       if (st.outside) html += outsideStdHtml(st.outside, st.span);
-    } else html += cagliotiHtml();
+    }
     wrap.innerHTML=html;
 
     wrap.querySelectorAll('.peak-row').forEach(row=>{
@@ -1044,7 +1045,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     let selIdx=-1, selBd=Infinity;
     if (panels.f.sel!=null) fits.forEach((pk,i)=>{ const d=Math.abs(pk.pos-panels.f.sel); if(d<selBd){selBd=d;selIdx=i;} });
     if (selBd>=0.6) selIdx=-1;
-    let html='<div class="peak-scroll"><table><thead><tr><th>#</th><th>2θ (°)</th><th>Rel. intensity</th><th>FWHM (°)</th><th>Crystallite size (nm)</th>'+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'</tr></thead><tbody>';
+    let html='<div class="peak-scroll"><table><thead><tr><th>#</th><th>2θ (°)</th><th>Relative Intensity</th><th>FWHM (°)</th><th>Crystallite size (nm)</th>'+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'</tr></thead><tbody>';
     fits.forEach((pk,i)=>{
       const sizeRawCell = isStd ? '—' : fmtCell(sizeRaw(pk.fwhm, pk.pos, fp.K, fp.lambda));
       const corrCell = showCorr ? `<td>${fmtCell(sizeCorr(pk.fwhm, pk.pos, fp.K, fp.lambda))}</td>` : '';
@@ -1143,29 +1144,39 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const d = Math.min(10, Math.max(0, 1 - Math.floor(Math.log10(se))));
     return `${v.toFixed(d)} ± ${se.toFixed(d)}`;
   }
-  /* Under the standard's peak table: the Caglioti formula, U, V, W with their standard
-     errors, and how well it fits — R² and the residual standard error on FWHM² (what
-     is fitted), the residuals on the FWHM itself. A curve that drops to zero inside
-     the standard's own range is flagged: the width it gives there is not physical. */
-  function cagliotiHtml(){
+  /* The standard's Caglioti fit, in the right-hand column of its card, as the Tauc
+     cards give E_g: the formula, then one value a line — U, V, W with their standard
+     errors; R² of the fit; the RMS of the FWHM residuals, in degrees like the widths
+     in the table; the peaks it rests on and their 2θ span. The residual standard
+     error on FWHM² and the largest residual are in the tooltips. A curve that drops
+     to zero inside the standard's own range is flagged under the box: the width it
+     gives there is not physical. */
+  function renderCaglioti(){
+    const box = document.getElementById('xrdStdCag'), alert = document.getElementById('xrdStdCagAlert');
+    if (!box || !alert) return;
+    alert.innerHTML = '';
     const m = instrModel();
-    if (!m || !m.pts.length) return '';
+    let html = `<div class="txt-mini">Caglioti fit</div><div class="pg-stat cag-formula">FWHM² = U·tan²θ + V·tanθ + W</div>`;
+    if (!m || !m.pts.length){ box.innerHTML = html + `<div class="pg-stat cag-note">No peaks: no instrumental correction.</div>`; return; }
     const n = m.pts.length, lo = m.pts[0].x, hi = m.pts[n-1].x;
-    let html = `<div class="size-summary">Caglioti fit: FWHM² = U·tan²θ + V·tanθ + W`;
+    const span = n > 1 ? `, 2θ ${lo.toFixed(2)}–${hi.toFixed(2)}°` : `, 2θ ${lo.toFixed(2)}°`;
     if (!m.fit){
-      return html + `<br><span class="ss-n">It needs 3 peaks or more. With ${n}, the instrumental width is ${n === 1
-        ? "this peak's FWHM at every angle" : 'interpolated linearly between the two peaks, and held at their widths beyond them'}.</span></div>`;
+      box.innerHTML = html + `<div class="pg-stat">Peaks: <b>${n}</b>${span}</div>`
+        + `<div class="pg-stat cag-note">Not fitted: it needs 3 peaks or more. The instrumental width is ${n === 1
+          ? "this peak's FWHM at every angle" : 'interpolated between the two peaks, and held at their widths beyond them'}.</div>`;
+      return;
     }
     const f = m.fit;
-    html += '<br>' + ['U', 'V', 'W'].map((k, i)=> `${k} = <b>${fmtPar(f.uvw[i], f.se[i])}</b>`).join(' · ') + ' <span class="ss-n">(°²)</span>';
-    html += `<br>${n} peaks, 2θ ${lo.toFixed(2)}–${hi.toFixed(2)}° · ` + (f.dof > 0
-      ? `R² <b>${f.r2.toFixed(4)}</b> · residual SE <b>${f.s.toPrecision(2)}</b> <span class="ss-n">(°², ${f.dof} d.o.f.)</span>`
-      : 'exact: three peaks leave no degree of freedom');
-    html += `<br>FWHM residuals: RMS <b>${f.rms.toFixed(4)}°</b> · max <b>${f.maxRes.toFixed(4)}°</b></div>`;
+    html += ['U', 'V', 'W'].map((k, i)=> `<div class="pg-stat">${k}: <b>${fmtPar(f.uvw[i], f.se[i])} °²</b></div>`).join('');
+    html += f.dof > 0
+      ? `<div class="pg-stat" title="Residual standard error on FWHM²: ${f.s.toPrecision(2)} °² (${f.dof} degrees of freedom); its square is the reduced χ² with unit weights">R²: <b>${f.r2.toFixed(3)}</b></div>`
+      : `<div class="pg-stat cag-note">Exact through its 3 peaks: no degree of freedom left to judge the fit by.</div>`;
+    if (f.dof > 0) html += `<div class="pg-stat" title="Largest residual: ${f.maxRes.toFixed(3)}°">FWHM residual (RMS): <b>${f.rms.toFixed(3)}°</b></div>`;
+    html += `<div class="pg-stat">Peaks: <b>${n}</b>${span}</div>`;
+    box.innerHTML = html;
     let neg = false;
     for (let k = 0; k <= 100 && !neg; k++) neg = cagAt(f.uvw, ((lo + (hi - lo)*k/100)/2)*Math.PI/180) <= 0;
-    if (neg) html += `<div class="alert warn">⚠ The fitted FWHM² drops to zero inside the standard's range: there the curve is not physical, and no correction is made.</div>`;
-    return html;
+    if (neg) alert.innerHTML = `<div class="alert warn">⚠ The fitted FWHM² drops to zero inside the standard's range: there the curve is not physical, and no correction is made.</div>`;
   }
 
   /* Results card: per-sample crystallite size as a box plot of its peaks' sizes — one
