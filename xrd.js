@@ -1127,30 +1127,33 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (legend) legend.innerHTML = SER.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
   }
   /* The reflections the samples share: their peaks matched across samples by
-     position, within half the peak min. distance — closer than the distance itself,
-     two peaks of one sample would have been one already. A reflection holds at most one
-     peak per sample; `common` are those every sample has, `extra` the rest. */
+     position, each position taken as a value whose uncertainty is the peak's FWHM. Two
+     are the same reflection when they lie within one sigma of each other, √(w₁² + w₂²)
+     — against a reflection already holding several, its mean position and mean FWHM.
+     A reflection holds at most one peak per sample; `common` are those every sample
+     has, `extra` the rest. */
   function sizeReflections(){
     const idxs = nonStdIdx().filter(k=> processed[k]);
     if (!idxs.length) return { idxs, common: [], extra: [] };
-    const tol = Math.min(...idxs.map(k=> getFileParams(k).pkDist)) / 2;
     const all = [];
     idxs.forEach(k=>{
       const fp = getFileParams(k);
       processed[k].peaks.filter(pk=> !pk.removed).forEach(pk=>{
         const raw = sizeRaw(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda);
         if (!isFinite(raw)) return;
-        all.push({ k, pos: pk.detPos, raw, corr: standardName ? sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda) : NaN });
+        all.push({ k, pos: pk.detPos, w: pk.fwhmClassic, raw, corr: standardName ? sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda) : NaN });
       });
     });
     all.sort((a,b)=> a.pos - b.pos);
     const groups = [];
     for (const p of all){
       const g = groups[groups.length-1];
-      if (g && Math.abs(p.pos - g.pos) <= tol && !g.by.has(p.k)){
+      if (g && !g.by.has(p.k) && Math.abs(p.pos - g.pos) < Math.hypot(p.w, g.w)){
         g.by.set(p.k, p);
-        g.pos = [...g.by.values()].reduce((s, q)=> s + q.pos, 0) / g.by.size;
-      } else groups.push({ pos: p.pos, by: new Map([[p.k, p]]) });
+        const ms = [...g.by.values()];
+        g.pos = ms.reduce((s, q)=> s + q.pos, 0) / ms.length;
+        g.w   = ms.reduce((s, q)=> s + q.w, 0) / ms.length;
+      } else groups.push({ pos: p.pos, w: p.w, by: new Map([[p.k, p]]) });
     }
     return { idxs, common: groups.filter(g=> g.by.size === idxs.length), extra: groups.filter(g=> g.by.size < idxs.length) };
   }
