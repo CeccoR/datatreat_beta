@@ -156,13 +156,22 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       // flattened, and their heights and widths with them.
       const attNode = intensNode.parentNode && intensNode.parentNode.getElementsByTagName('beamAttenuationFactors')[0];
       const att = attNode ? attNode.textContent.trim().split(/\s+/).map(Number) : null;
-      if (att && att.length === y.length && att.every(isFinite)) y = y.map((v, i)=> v*att[i]);
+      const useAtt = att && att.length === y.length && att.every(isFinite);
+      if (useAtt) y = y.map((v, i)=> v*att[i]);
+      /* Each point's variance, for the counting uncertainty of the FWHMs (fwhmSigma):
+         var(y) = y·m, m the attenuation factor that scaled the counts, over the
+         counting time when the file holds a rate. Kept only where m is not 1
+         throughout, as it almost always is. */
+      const rate = /cps|\/s|per/i.test(intensNode.getAttribute('unit') || '');
+      const ctNode = intensNode.parentNode && intensNode.parentNode.getElementsByTagName('commonCountingTime')[0];
+      const tc = ctNode ? parseFloat(ctNode.textContent) : NaN, perT = rate && tc > 0 ? 1/tc : 1;
+      const varMul = useAtt || perT !== 1 ? y.map((_, i)=> (useAtt ? att[i] : 1)*perT) : null;
       const x = linspace(start, end, y.length);
       // Keep the raw intensities untouched (no minimum subtraction): the constant
       // offset is absorbed by the SNIP background, so the whole pipeline — analysis
       // and fit alike — runs on the true raw data and stays consistent with the CSVs.
       // A new file comes in included, so it goes last among the included as well.
-      const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color:nextColor(allFiles), rawBytes};
+      const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color:nextColor(allFiles), rawBytes, ...(varMul ? { varMul } : {})};
       allFiles.push(file); files.push(file);
       perParams.push({...shared});
       manualPeaks.push([]);
@@ -412,6 +421,48 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     return Math.abs(xr - xl);
   }
 
+  /* The counting uncertainty of computeFWHM's width. Each crossing is interpolated
+     between two points of the smoothed, background-subtracted profile, and the half
+     level is half the apex: the counts' Poisson variance (raw y·m, m from varMul),
+     carried through the moving average that smoothed them (the covariances of
+     neighbouring smoothed points included) and through those three readings, gives
+     the width's to first order. The SNIP background, smooth over many points, counts
+     as exact. NaN where the width is, or a crossing is flat. */
+  function fwhmSigma(x, y, idx0, yraw, N, varMul){
+    const idx = refineIdx(y, idx0, 3), half = y[idx] / 2;
+    if (!(half > 0)) return NaN;
+    let l = idx; while (l > 0 && y[l] > half) l--;
+    let r = idx; while (r < y.length-1 && y[r] > half) r++;
+    if (y[l] > half || y[r] > half) return NaN;
+    const Dl = y[l+1]-y[l], Dr = y[r]-y[r-1];
+    if (!(Dl > 0 && Dr < 0)) return NaN;
+    const tl = (half-y[l])/Dl, tr = (half-y[r-1])/Dr, dl = x[l+1]-x[l], dr = x[r]-x[r-1];
+    // H = x_r − x_l, x_l = x[l] + dl·(h − y_l)/Dl (x_r alike), h = y_apex/2: ∂H/∂y.
+    const g = new Map(), add = (k, v)=> g.set(k, (g.get(k) || 0) + v);
+    add(l, dl*(1 - tl)/Dl); add(l+1, dl*tl/Dl);
+    add(r-1, dr*(tr - 1)/Dr); add(r, -dr*tr/Dr);
+    add(idx, 0.5*(dr/Dr - dl/Dl));
+    // The moving average's weights, as movingAverage takes them: N + 1 points with
+    // half-weight ends for an even N, cut short at the ends of the pattern.
+    N = Math.max(1, Math.round(N));
+    const n = yraw.length, h = Math.floor(N/2), even = N > 1 && N % 2 === 0;
+    const win = i =>{
+      const w = new Map(); let W = 0;
+      for (let k = Math.max(0, i-h); k <= Math.min(n-1, i+h); k++){ const v = even && (k === i-h || k === i+h) ? 0.5 : 1; w.set(k, v); W += v; }
+      return { w, W };
+    };
+    const vy = k => Math.max(yraw[k], 0)*(varMul ? varMul[k] : 1);
+    const ks = [...g.keys()], wins = new Map(ks.map(k=> [k, win(k)]));
+    let v = 0;
+    for (const i of ks) for (const j of ks){
+      const a = wins.get(i), b = wins.get(j);
+      let c = 0;
+      a.w.forEach((wi, k)=>{ const wj = b.w.get(k); if (wj) c += wi*wj*vy(k); });
+      v += g.get(i)*g.get(j)*c/(a.W*b.W);
+    }
+    return Math.sqrt(v);
+  }
+
   // Same half-maximum construction as computeFWHM, but returns the geometry needed
   // to draw the horizontal FWHM marker: left/right crossings, half-height and the
   // refined apex index. Returns null when no clean crossing exists on both sides.
@@ -489,37 +540,49 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     peaks.forEach(pk=>{
       if (pk.removed){ pk.fit=null; pk.fwhm=NaN; pk.fwhmClassic=NaN; pk.fwhmFit=undefined; pk.fitPos=undefined; return; }
       pk.fit=null; pk.fwhmClassic=computeFWHM(x, detSub, pk.idx); pk.fwhmFit=undefined; pk.fwhm=pk.fwhmClassic; pk.fitPos=undefined;
+      pk.fwhmSig = fwhmSigma(x, detSub, pk.idx, yraw, p.N, files[i].varMul);
     });
     const subtracted = detSub;
     processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks};
   }
 
   /* Caglioti instrumental resolution: FWHM² = U·tan²θ + V·tanθ + W (θ = Bragg angle).
-     Least-squares fit of [U,V,W] to the standard's measured peaks (needs ≥ 3 peaks),
-     unweighted on FWHM², with how well it fits: each parameter's standard error (from
-     the residual variance, s²·(XᵀX)⁻¹), R² on FWHM², the residual standard error s
-     (n − 3 degrees of freedom; the reduced χ² with unit weights is s²), and the
-     residuals on the FWHM itself, in degrees, the scale the peaks are read on. */
+     Least squares on FWHM² (linear in U, V, W; at least 3 peaks), each peak weighted
+     by 1/(2·FWHM·σ)², σ its width's counting uncertainty (fwhmSigma): to first order
+     the sum minimised is χ² = Σ((FWHM − fit)/σ)², so a weak peak, whose width is less
+     certain, counts for less, and χ²/(n − 3), the reduced χ², says whether the curve
+     follows the peaks within their counting errors (≈ 1) or not (well above 1). A
+     peak with no σ (a flat crossing) is given the largest of the others'. The
+     standard errors are (XᵀWX)⁻¹'s, scaled by √χ²_red where it is above 1, so that a
+     curve the peaks do not follow does not get errors as if they did. With no σ at
+     all the fit is unweighted, its errors from the residual variance. Also given: R²
+     (weighted) and the residuals on the FWHM itself, in degrees. */
   const cagAt = (uvw, th)=>{ const t = Math.tan(th); return uvw[0]*t*t + uvw[1]*t + uvw[2]; };
   function fitCaglioti(pts){
     const n = pts.length;
     if (n < 3) return null;
+    const sv = pts.map(p=> p.s).filter(v=> isFinite(v) && v > 0);
+    const weighted = sv.length > 0, sMax = weighted ? Math.max(...sv) : NaN;
+    const w = pts.map(p=> weighted ? 1/(2*p.b*(isFinite(p.s) && p.s > 0 ? p.s : sMax))**2 : 1);
     const A=[[0,0,0],[0,0,0],[0,0,0]], b=[0,0,0];
-    for (const p of pts){
+    pts.forEach((p, k)=>{
       const t=Math.tan(p.th), x=[t*t, t, 1], y=p.b*p.b;
-      for (let i=0;i<3;i++){ b[i]+=x[i]*y; for (let j=0;j<3;j++) A[i][j]+=x[i]*x[j]; }
-    }
+      for (let i=0;i<3;i++){ b[i]+=w[k]*x[i]*y; for (let j=0;j<3;j++) A[i][j]+=w[k]*x[i]*x[j]; }
+    });
     const uvw = solveLinear(A, b);
     if (!(uvw && uvw.every(isFinite))) return null;
-    const ys = pts.map(p=> p.b*p.b), ym = ys.reduce((a, v)=> a + v, 0)/n;
-    const rss = pts.reduce((a, p, k)=> a + (ys[k] - cagAt(uvw, p.th))**2, 0);
-    const tss = ys.reduce((a, v)=> a + (v - ym)**2, 0);
-    const dof = n - 3, s2 = dof > 0 ? rss/dof : NaN;
-    // (XᵀX)⁻¹, a column at a time
+    const ys = pts.map(p=> p.b*p.b), W = w.reduce((a, v)=> a + v, 0);
+    const ym = ys.reduce((a, v, k)=> a + w[k]*v, 0)/W;
+    const chi2 = pts.reduce((a, p, k)=> a + w[k]*(ys[k] - cagAt(uvw, p.th))**2, 0);
+    const tss = ys.reduce((a, v, k)=> a + w[k]*(v - ym)**2, 0);
+    const dof = n - 3, red = dof > 0 ? chi2/dof : NaN;
+    const scale = weighted ? Math.max(1, red) : red;
+    // (XᵀWX)⁻¹, a column at a time
     const inv = [0, 1, 2].map(j=> solveLinear(A, [0, 1, 2].map(i=> i === j ? 1 : 0)));
-    const se = [0, 1, 2].map(i=> inv[i] && dof > 0 ? Math.sqrt(Math.max(0, s2*inv[i][i])) : NaN);
+    const se = [0, 1, 2].map(i=> inv[i] && dof > 0 ? Math.sqrt(Math.max(0, scale*inv[i][i])) : NaN);
     const res = pts.map(p=> p.b - Math.sqrt(Math.max(0, cagAt(uvw, p.th))));
-    return { uvw, se, n, dof, r2: tss > 0 ? 1 - rss/tss : NaN, s: Math.sqrt(s2),
+    return { uvw, se, n, dof, weighted, chi2r: weighted ? red : NaN, r2: tss > 0 ? 1 - chi2/tss : NaN,
+             s: weighted ? NaN : Math.sqrt(red),
              rms: Math.sqrt(res.reduce((a, v)=> a + v*v, 0)/n), maxRes: Math.max(...res.map(Math.abs)) };
   }
   // The standard's peaks the instrumental width is taken from, in 2θ order, and the
@@ -530,7 +593,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (si < 0 || !processed[si]) return null;
     const pts = processed[si].peaks
       .filter(p=>!p.removed && isFinite(p.fwhm))
-      .map(p=>({x:p.pos, th:(p.pos/2)*Math.PI/180, b:p.fwhm}))
+      .map(p=>({x:p.pos, th:(p.pos/2)*Math.PI/180, b:p.fwhm, s:p.fwhmSig}))
       .sort((a,b)=>a.x-b.x);
     return { pts, fit: fitCaglioti(pts) };
   }
@@ -976,7 +1039,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       const below = showCorr && belowInstr(fwhm, pk.detPos);
       const corrCell = showCorr ? (below ? `<td title="Narrower than the instrumental width at this angle">⚠</td>` : `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>`) : '';
       const sel = panels[key].sel!=null && Math.abs(pk.pos-panels[key].sel)<1e-9 ? ' selected' : '';
-      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
+      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td${isStd && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
     });
     html+='</tbody></table></div>';
     if (!isStd){
@@ -1173,8 +1236,10 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     }
     const f = m.fit;
     html += ['U', 'V', 'W'].map((k, i)=> `<div class="pg-stat">${k}: <b>${fmtPar(f.uvw[i], f.se[i])} °²</b></div>`).join('');
+    const dofTxt = `${f.dof} degree${f.dof === 1 ? '' : 's'} of freedom`;
+    if (f.dof > 0 && f.weighted) html += `<div class="pg-stat" title="χ² = Σ((FWHM − fit)/σ)² over ${dofTxt}, σ each width's counting uncertainty. About 1: the curve follows the peaks within their counting errors. Well above 1: it does not (Kα₂ partly resolved, asymmetry, a peak that is not the standard's), and U, V, W carry errors scaled by its square root.">χ²<sub>red</sub>: <b>${f.chi2r.toPrecision(2)}</b></div>`;
     html += f.dof > 0
-      ? `<div class="pg-stat" title="Residual standard error on FWHM²: ${f.s.toPrecision(2)} °² (${f.dof} degree${f.dof === 1 ? '' : 's'} of freedom); its square is the reduced χ² with unit weights">R²: <b>${f.r2.toFixed(4)}</b></div>`
+      ? `<div class="pg-stat" title="${f.weighted ? 'Weighted as the fit is (1/σ² on each width)' : `Unweighted: no counting uncertainty for the widths. Residual standard error on FWHM²: ${f.s.toPrecision(2)} °² (${dofTxt})`}">R²: <b>${f.r2.toFixed(4)}</b></div>`
       : `<div class="pg-stat cag-note">Exact through its 3 peaks: no degree of freedom left to judge the fit by.</div>`;
     // To two significant digits: a good standard's residuals are tenths of a
     // thousandth of a degree, which three decimals would show as 0.000°.
@@ -1829,7 +1894,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     ];
   }
   // Classic peak-search block: 2θ, rel. intensity, FWHM, crystallite size [, corrected].
-  function peakCols(k, withCorr){
+  function peakCols(k, withCorr, withSig){
     const f=files[k], pr=processed[k], kp=getFileParams(k);
     const pks=pr.peaks.filter(pk=>!pk.removed);
     const maxH=Math.max(...pks.map(pk=>pk.height))||1;
@@ -1837,6 +1902,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       {h:'Peak_2Theta_'+f.label,       v:pks.map(pk=>fmtNum(pk.pos,6))},
       {h:'Peak_RelIntensity_'+f.label, v:pks.map(pk=>fmtNum(pk.height/maxH,6))},
       {h:'Peak_FWHM_deg_'+f.label,     v:pks.map(pk=>isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'')},
+      // The standard's: each width's counting uncertainty, the Caglioti fit's weights.
+      ...(withSig ? [{h:'Peak_FWHM_sigma_deg_'+f.label, v:pks.map(pk=>isFinite(pk.fwhmSig)?fmtNum(pk.fwhmSig,5):'')}] : []),
       {h:'Peak_Size_nm_'+f.label,      v:pks.map(pk=>{const d=sizeRaw(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})},
     ];
     if (withCorr) cols.push({h:'Peak_Size_corr_nm_'+f.label, v:pks.map(pk=>{const d=sizeCorr(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})});
@@ -1952,7 +2019,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const ownFit = () => { const sf=savedFits[si]; return sf&&sf.fits&&sf.fits.length ? (maxArr(reconstructFit(files[si].x, sf.fits).full)||1) : 1; };
     if (stdOn){
       const own = () => (maxArr(processed[si].subtracted)||1);
-      entries.push({name:'standard.csv', text:wideCsv([...diffractoCols(si, own), ...peakCols(si, false)])});
+      entries.push({name:'standard.csv', text:wideCsv([...diffractoCols(si, own), ...peakCols(si, false, true)])});
     }
     // peaks.csv — classic peaks of every non-standard sample (standard has its own file).
     {
