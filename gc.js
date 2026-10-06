@@ -1,11 +1,14 @@
-import { settings, fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 
 /* =========================================================
    GC MODULE
 ========================================================= */
 (function(){
-  let files=[]; // {name, label, injDates:[Date], h2:[number]}
+  // Every file loaded, in list order; the analysis sees the included ones, `files`,
+  // and the per-sample arrays below are aligned with those.
+  let allFiles=[]; // {name, label, injDates:[Date], h2:[number]}
+  let files=[];
   let ms=[], Qs=[], startArr=[], endArr=[], lightOnDates=[];
   let dataTables=[];
   let plot1, plot2;
@@ -89,24 +92,36 @@ import { Plot, svgEl } from './plot.js';
     return new Date(+yr, +mo-1, +da, hh, +mi, +se);
   }
 
+  // The per-sample arrays, for the file list to keep aligned with the included files.
+  // An excluded file holds its own values; one with none (never so far) gets the
+  // upload defaults.
+  const slots = ()=> [
+    { key:'m', arr:ms, make: v=> v ?? 15 },
+    { key:'Q', arr:Qs, make: v=> v ?? 2 },
+    { key:'start', arr:startArr, make: v=> v ?? 0 },
+    { key:'end', arr:endArr, make: v=> v ?? 24 },
+    { key:'lightOn', arr:lightOnDates, make: (v, f)=> v !== undefined ? v : f ? firstInjection(f) : null },
+  ];
   function fileCallbacks(){
     return {
       onRemove(i){
-        [files,ms,Qs,startArr,endArr,lightOnDates].forEach(a=>a.splice(i,1));
-        if (!files.length) loadAlerts = '';
+        removeFileAt(allFiles, i, slots());
+        if (!allFiles.length) loadAlerts = '';
         gcSel=gcHov=null;
         afterFilesChange();
       },
-      onReorder(from, to){ [files,ms,Qs,startArr,endArr,lightOnDates].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); gcSel=gcHov=null; afterFilesChange(); },
-      onLabelChange(i, v){ files[i].label=v; renderGcParamTable(); computeAndRenderGc(); hist.commit(); },
-      onColorChange(i, v){ files[i].color=v; computeAndRenderGc(); hist.commit(); },
-      onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ [files,ms,Qs,startArr,endArr,lightOnDates].forEach(a=>a.length=0); gcSel=gcHov=null; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); afterFilesChange(); },
+      onReorder(from, to){ moveFileTo(allFiles, from, to, slots()); gcSel=gcHov=null; afterFilesChange(); },
+      onInclude(i, on){ setIncluded(allFiles, i, on, slots()); gcSel=gcHov=null; afterFilesChange(); },
+      onIncludeAll(on){ allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); gcSel=gcHov=null; afterFilesChange(); },
+      onLabelChange(i, v){ allFiles[i].label=v; renderGcParamTable(); computeAndRenderGc(); hist.commit(); },
+      onColorChange(i, v){ allFiles[i].color=v; computeAndRenderGc(); hist.commit(); },
+      onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
+      onRemoveAll(){ [allFiles,ms,Qs,startArr,endArr,lightOnDates].forEach(a=>a.length=0); gcSel=gcHov=null; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); afterFilesChange(); },
     };
   }
 
   setupDropzone('gcDropzone', 'gcFiles', async (fileList)=>{
-    const existing = new Set(files.map(f=>f.name));
+    const existing = new Set(allFiles.map(f=>f.name));
     const invalidFiles=[];
     const alreadyLoaded=[];
     for (const f of fileList){
@@ -147,14 +162,11 @@ import { Plot, svgEl } from './plot.js';
         if (any){ injDates.push(d); for (const k in idxGas) gas[k].push(vals[k]); }
       }
       if (!injDates.length){ invalidFiles.push(f.name); continue; }
-      const sorted = injDates.slice().sort((a,b)=>a-b);
-      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, gas, color:nextColor(files), rawBytes});
+      const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, gas, color:nextColor(allFiles), rawBytes};
+      // A new file comes in included, so it goes last among the included as well.
+      allFiles.push(file); files.push(file);
       ms.push(15); Qs.push(2); startArr.push(0); endArr.push(24);
-      // The first injection, to the minute: the field shows and sets minutes only, so
-      // a default carrying the seconds would change the moment the field was merely
-      // tabbed through — results shifting, and an undo step, with nothing touched.
-      const lightOn = new Date(sorted[0]); lightOn.setSeconds(0, 0);
-      lightOnDates.push(lightOn);
+      lightOnDates.push(firstInjection(file));
     }
     loadAlerts = buildAlertsHtml(invalidFiles, [], undefined, 'gc-dismiss-invalid');
     gcUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'gc-dismiss-upload') : '';
@@ -162,9 +174,18 @@ import { Plot, svgEl } from './plot.js';
     afterFilesChange();
   });
 
+  // The first injection, to the minute: the field shows and sets minutes only, so a
+  // default carrying the seconds would change the moment the field was merely tabbed
+  // through — results shifting, and an undo step, with nothing touched.
+  function firstInjection(f){
+    const d = new Date(Math.min(...f.injDates.map(Number))); d.setSeconds(0, 0);
+    return d;
+  }
+
   function afterFilesChange(){
-    setTabLoaded('gc', files.length);
-    renderUnifiedFileList('gcFileTableWrap', files, fileCallbacks());
+    files = includedOf(allFiles);
+    setTabLoaded('gc', allFiles.length);
+    renderUnifiedFileList('gcFileTableWrap', allFiles, fileCallbacks());
     renderGcParamTable();
     if (files.length){
       document.getElementById('gcResults').style.display='block';
@@ -181,7 +202,7 @@ import { Plot, svgEl } from './plot.js';
      integration interval. Injection data arrays are shared by reference. ---- */
   function gcSnapshot(){
     return {
-      files: files.map(f=>({...f})),
+      files: allFiles.map(f=>({...f})),
       ms: ms.slice(), Qs: Qs.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
       lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
       mMode, qMode, startMode, endMode, mShared, qShared, startShared, endShared,
@@ -190,7 +211,8 @@ import { Plot, svgEl } from './plot.js';
     };
   }
   function gcRestore(s){
-    files = s.files.map(f=>({...f}));
+    allFiles = s.files.map(f=>({...f}));
+    files = includedOf(allFiles);
     // Projects saved before O2 existed, or under the older single-mode selector.
     const fromMode = m => (!m || m === 'both') ? GASES.map(g=>g.key) : [m];
     gasSel = s.gasSel ? { a:s.gasSel.a.slice(), r:s.gasSel.r.slice() }

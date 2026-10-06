@@ -1112,6 +1112,14 @@ footer a:hover {
 }
 .drag-handle:active { cursor: grabbing; }
 .grip-icon { width: 15px; height: 15px; display: block; }
+/* Include box (second column): a file unticked stays in the list, dimmed, and out of
+   the analysis. Only its name and label dim: the box, the grip and the actions keep
+   working as they look. */
+.incl-cell { text-align: center; padding-left: 0 !important; padding-right: 0 !important; }
+.incl-cell input[type="checkbox"] { width: auto; margin: 0; vertical-align: middle; cursor: pointer; }
+.file-row.is-excluded td.fname,
+.file-row.is-excluded .file-label { opacity: 0.4; }
+.file-none { margin: 8px 0 0; }
 .file-row.dragging { opacity: 0.45; }
 .file-row.drag-over td { box-shadow: inset 0 2px 0 var(--accent); } /* drop indicator */
 /* Bare remove / remove-all buttons: just the ✕ glyph, no border/background */

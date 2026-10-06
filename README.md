@@ -178,6 +178,8 @@ All modules support CSV export. The exported CSV format respects your **Settings
 
 Click **Export CSV** in any module to download processed results.
 
+A file unticked in the file list (the box beside its name) stays loaded, with its settings, but is left out of the analysis, the results, the charts and the export until it is ticked again. An XRPD standard left out counts as no standard.
+
 ---
 
 ## Technical Notes

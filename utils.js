@@ -706,10 +706,56 @@ function setupDropzone(dropzoneId, inputId, onFiles){
 }
 
 /* =========================================================
+   INCLUDED FILES
+   A file can be left out of the analysis without being removed. A module keeps every
+   file loaded in list order (`all`, what the file list shows) and analyses the ones
+   included, with its per-sample arrays (`slots`) aligned to those alone: the analysis
+   never meets an excluded file, and needs no test for one anywhere. An excluded file
+   takes its entries in those arrays with it (`held`), so including it again gives
+   back what it had; a slot it holds nothing for (one added since) starts afresh.
+   slots: [{ key, arr, make(held, file) }] — make gives the entry to put back, from the
+   one held or, given undefined, a new one.
+========================================================= */
+const isIncluded = f => f.included !== false;
+const includedOf = all => all.filter(isIncluded);
+// Where all[j] stands, or would stand, among the included files.
+function includedIndex(all, j){ let n = 0; for (let k = 0; k < j; k++) if (isIncluded(all[k])) n++; return n; }
+function setIncluded(all, j, on, slots){
+  const f = all[j];
+  if (!f || isIncluded(f) === on) return;
+  const i = includedIndex(all, j);
+  if (on){
+    const held = f.held || {};
+    // A slot shorter than the files ahead of this one is padded, not appended to,
+    // so the entry lands at this file's place.
+    slots.forEach(s=>{ while (s.arr.length < i) s.arr.push(s.make()); s.arr.splice(i, 0, s.make(held[s.key], f)); });
+    delete f.held; delete f.included;
+  } else {
+    const held = {};
+    slots.forEach(s=>{ if (i < s.arr.length) held[s.key] = s.arr.splice(i, 1)[0]; });
+    f.held = held; f.included = false;
+  }
+}
+function removeFileAt(all, j, slots){
+  if (isIncluded(all[j])){ const i = includedIndex(all, j); slots.forEach(s=>{ if (i < s.arr.length) s.arr.splice(i, 1); }); }
+  all.splice(j, 1);
+}
+// Reorder the list; an included file moves its entries to its new place among the included.
+function moveFileTo(all, from, to, slots){
+  const f = all[from], on = isIncluded(f), a = includedIndex(all, from);
+  all.splice(from, 1); all.splice(to, 0, f);
+  if (!on) return;
+  const b = includedIndex(all, to);
+  if (a !== b) slots.forEach(s=>{ if (a < s.arr.length){ const [x] = s.arr.splice(a, 1); s.arr.splice(b, 0, x); } });
+}
+
+/* =========================================================
    UNIFIED FILE LIST RENDERER
-   files: array of objects with at least {name, label}
+   files: array of objects with at least {name, label} — every file loaded, included
+   or not (see INCLUDED FILES)
    callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel),
-               onColorChange(i,color), onPaletteChange(colors)}
+               onColorChange(i,color), onPaletteChange(colors), onInclude(i,on),
+               onIncludeAll(on)}
    extraCols: optional array of {header, render(file,i)} for additional columns
 ========================================================= */
 // A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
@@ -724,14 +770,17 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   if (!files.length){ wrap.innerHTML=''; return; }
 
   const ec = extraCols || [];
-  // colgroup: drag 5%, FILE 44%, LABEL 43%, extraCols (auto), actions fixed 58px
-  // (a fixed width guarantees the download+remove icons fit even on narrow phones)
-  let colgroup = `<colgroup><col style="width:5%"><col style="width:44%"><col style="width:43%">`;
+  // colgroup: drag and include box fixed 26px each, side by side at the left edge;
+  // actions fixed 58px (a fixed width guarantees the download+remove icons fit even on
+  // narrow phones); FILE, LABEL and any extraCols share the rest equally. A drag column
+  // in % was too narrow for its grip on a phone, and the box sat on it.
+  let colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col><col>`;
   for (let i = 0; i < ec.length; i++) colgroup += `<col>`;
   colgroup += `<col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
+  const nIn = files.filter(isIncluded).length;
 
-  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th><th>SAMPLE LABEL</th>`;
+  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th><th>SAMPLE LABEL</th>`;
   ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
@@ -739,8 +788,10 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
 
   files.forEach((f, i)=>{
     const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
-    html += `<tr class="file-row" data-i="${i}">`;
+    const on = isIncluded(f);
+    html += `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
+    html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
     html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
@@ -748,7 +799,21 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
+  // With every file left out nothing is analysed, and no card follows the list: this
+  // says why.
+  if (!nIn) html += `<p class="txt-meta file-none">No file is included in the analysis.</p>`;
   wrap.innerHTML = html;
+
+  // The header box: ticked with every file in, empty with none, the dash with some.
+  // A press includes them all, or, when all are in already, leaves them all out.
+  const inclAll = wrap.querySelector('.incl-all');
+  inclAll.indeterminate = nIn > 0 && nIn < files.length;
+  inclAll.addEventListener('change', ()=>{
+    if (callbacks.onIncludeAll) callbacks.onIncludeAll(nIn < files.length);
+  });
+  wrap.querySelectorAll('.file-incl').forEach(cb=>{
+    cb.addEventListener('change', e=>{ if (callbacks.onInclude) callbacks.onInclude(+e.target.dataset.i, e.target.checked); });
+  });
 
   // Removing files (all or one) is treated as an ordinary edit to the project — it
   // updates the draft rather than discarding it — so this only confirms the action.
@@ -1899,5 +1964,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, barChipYmax, confirmBanner } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, barChipYmax, confirmBanner } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -6,7 +6,10 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
    XRD MODULE
 ========================================================= */
 (function(){
-  let files = []; // {name, label, x[], y[], color}
+  // Every file loaded, in list order; the analysis sees the included ones, `files`, and
+  // the per-file arrays below are aligned with those.
+  let allFiles = []; // {name, label, x[], y[], color}
+  let files = [];
   let curIdx = 0;  // Analysis navigator index (non-standard samples only)
   let fitIdx = 0;  // Fitting navigator index (all files, incl. the standard)
   let processed = []; // per file: {smoothed, baseline, subtracted, peaks}
@@ -56,7 +59,10 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
 
   // Crystallite-size / Scherrer constants and state
   const SCHERRER_K = 0.9;
-  let standardName = '';    // file.name selected as instrumental standard ('' = none)
+  let standardName = '';    // file.name of the instrumental standard in use ('' = none)
+  // The standard chosen. It is in use only while it is included (syncStandard), so
+  // leaving it out of the analysis is choosing none, and taking it back in restores it.
+  let standardPick = '';
   // What the crystallite-size box plot is by: each sample's peaks ('sample'), or each
   // reflection the samples share, over the samples ('peak').
   let sizeBy = 'sample';
@@ -86,19 +92,36 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     document.getElementById('xrdAlerts').innerHTML = xrdLoadAlerts + xrdUploadAlerts;
   }
 
+  // The per-file arrays the user sets, for the file list to keep aligned with the
+  // included files; `processed` is not one of them: it is all rebuilt (reprocessAll)
+  // on every change to the list.
+  const slots = ()=> [
+    { key:'params', arr:perParams, make: v=> v ? {...v} : {...shared} },
+    { key:'manual', arr:manualPeaks, make: v=> v ? v.slice() : [] },
+    { key:'removed', arr:removedPeaks, make: v=> v ? v.slice() : [] },
+    { key:'fit', arr:savedFits, make: v=> v ?? null },
+  ];
+  // The navigators stay on the samples they showed when another is left out or taken in.
+  function stayOn([a, f]){
+    const inc = includedOf(allFiles), ka = inc.indexOf(a), kf = inc.indexOf(f);
+    if (ka >= 0) curIdx = ka;
+    if (kf >= 0) fitIdx = kf;
+  }
   function fileCallbacks(){
     return {
-      onRemove(i){ files.splice(i,1); perParams.splice(i,1); processed.splice(i,1); manualPeaks.splice(i,1); removedPeaks.splice(i,1); savedFits.splice(i,1); afterFilesChange(); },
-      onReorder(from, to){ [files,perParams,processed,manualPeaks,removedPeaks,savedFits].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); afterFilesChange(); },
-      onLabelChange(i, v){ files[i].label=v; renderPeakTable(); updateXrdResults(); hist.commit(); },
-      onColorChange(i, v){ files[i].color=v; updateXrdResults(); hist.commit(); },
-      onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; savedFits=[]; panels.a.sel=panels.a.hov=panels.f.sel=panels.f.hov=null; xrdLoadAlerts=''; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
+      onRemove(i){ removeFileAt(allFiles, i, slots()); afterFilesChange(); },
+      onReorder(from, to){ moveFileTo(allFiles, from, to, slots()); afterFilesChange(); },
+      onInclude(i, on){ const was = [files[curIdx], files[fitIdx]]; setIncluded(allFiles, i, on, slots()); stayOn(was); afterFilesChange(); },
+      onIncludeAll(on){ const was = [files[curIdx], files[fitIdx]]; allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); stayOn(was); afterFilesChange(); },
+      onLabelChange(i, v){ allFiles[i].label=v; renderPeakTable(); updateXrdResults(); hist.commit(); },
+      onColorChange(i, v){ allFiles[i].color=v; updateXrdResults(); hist.commit(); },
+      onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
+      onRemoveAll(){ allFiles.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; savedFits=[]; panels.a.sel=panels.a.hov=panels.f.sel=panels.f.hov=null; xrdLoadAlerts=''; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
     };
   }
 
   setupDropzone('xrdDropzone', 'xrdFiles', async (fileList)=>{
-    const existing = new Set(files.map(f=>f.name));
+    const existing = new Set(allFiles.map(f=>f.name));
     const alreadyLoaded = [];
     const invalidFiles = [];
     for (const f of fileList){
@@ -137,7 +160,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       // Keep the raw intensities untouched (no minimum subtraction): the constant
       // offset is absorbed by the SNIP background, so the whole pipeline — analysis
       // and fit alike — runs on the true raw data and stays consistent with the CSVs.
-      files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color:nextColor(files), rawBytes});
+      // A new file comes in included, so it goes last among the included as well.
+      const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color:nextColor(allFiles), rawBytes};
+      allFiles.push(file); files.push(file);
       perParams.push({...shared});
       manualPeaks.push([]);
       removedPeaks.push([]);
@@ -159,7 +184,6 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   function populateStandardSelect(){
     const sel = document.getElementById('xrdStandard');
     if (!sel) return;
-    if (standardName && !files.some(f=>f.name===standardName)) standardName = '';
     // List = "None" + samples. When "None" is the selection the closed box shows a
     // grey ghost placeholder instead of the word "None" (a hidden first option that
     // we snap the selection back to — see the change handler).
@@ -170,9 +194,17 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     else { sel.selectedIndex = 0; sel.classList.add('ghost'); }   // ghost placeholder
   }
 
+  // Removed, the chosen standard is gone; left out, it is not in use while it is out.
+  function syncStandard(){
+    if (standardPick && !allFiles.some(f=>f.name===standardPick)) standardPick = '';
+    standardName = files.some(f=>f.name===standardPick) ? standardPick : '';
+  }
+
   function afterFilesChange(){
-    setTabLoaded('xrd', files.length);
-    renderUnifiedFileList('xrdFileTableWrap', files, fileCallbacks());
+    files = includedOf(allFiles);
+    syncStandard();
+    setTabLoaded('xrd', allFiles.length);
+    renderUnifiedFileList('xrdFileTableWrap', allFiles, fileCallbacks());
     if (files.length){
       document.getElementById('xrdFitCard').style.display='block';
       document.getElementById('xrdResults').style.display='block';
@@ -187,6 +219,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       updateXrdFitting();
       updateXrdResults();
     } else {
+      processed = [];
       ['xrdWorkspace','xrdStdCard','xrdFitCard','xrdResults'].forEach(id=>{ document.getElementById(id).style.display='none'; });
     }
     hist.commit(); // baseline + file add/remove/reorder/palette
@@ -197,7 +230,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
      standard and fits are captured so any change can be stepped back. ---- */
   function xrdSnapshot(){
     return {
-      files: files.map(f=>({...f})),
+      files: allFiles.map(f=>({...f})),
       perParams: perParams.map(p=>({...p})),
       manualPeaks: manualPeaks.map(a=>a.slice()),
       removedPeaks: removedPeaks.map(a=>a.slice()),
@@ -205,12 +238,13 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       shared: {...shared},
       paramMode: {...paramMode},
       stdParams: {...stdParams},
-      standardName, curIdx, fitIdx, sizeBy,
+      standardName: standardPick, curIdx, fitIdx, sizeBy,
       norm: document.getElementById('xrdNorm').value,
     };
   }
   function xrdRestore(s){
-    files = s.files.map(f=>({...f}));
+    allFiles = s.files.map(f=>({...f}));
+    files = includedOf(allFiles);
     perParams = s.perParams.map(p=>({...p}));
     manualPeaks = s.manualPeaks.map(a=>a.slice());
     removedPeaks = s.removedPeaks.map(a=>a.slice());
@@ -218,7 +252,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     Object.assign(shared, s.shared);
     Object.assign(paramMode, s.paramMode);
     if (s.stdParams) Object.assign(stdParams, s.stdParams);
-    standardName = s.standardName;
+    standardPick = s.standardName || '';
     sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
     curIdx = Math.min(s.curIdx, Math.max(0, files.length-1));
     fitIdx = Math.min(s.fitIdx||0, Math.max(0, files.length-1));
@@ -1428,7 +1462,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // from Analysis navigation, and refreshes every card (its peaks drive the correction).
   document.getElementById('xrdStandard').addEventListener('change', e=>{
     // "None" (__none__) clears the standard; snap the box back to the ghost placeholder.
-    standardName = (e.target.value === '__none__') ? '' : e.target.value;
+    standardPick = standardName = (e.target.value === '__none__') ? '' : e.target.value;
     if (!standardName) e.target.selectedIndex = 0;
     e.target.classList.toggle('ghost', !standardName);
     if (!files.length){ hist.commit(); return; }

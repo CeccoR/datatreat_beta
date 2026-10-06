@@ -1,11 +1,14 @@
-import { colorOf, fmtNum, csvLine, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax, X_SVG, guardNumberInputs } from './utils.js';
+import { colorOf, fmtNum, csvLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax, X_SVG, guardNumberInputs } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
    TAUC MODULE
 ========================================================= */
 (function(){
-  let files = []; // {name,label,wl[],FR[],hv[]}  (each on its own native axis)
+  // Every file loaded, in list order; the analysis sees the included ones, `files`,
+  // and every per-sample list the cards keep is aligned with those.
+  let allFiles = []; // {name,label,wl[],FR[],hv[]}  (each on its own native axis)
+  let files = [];
   let currIndex=0;                    // the sample every analysis card shows
   let resPlot0=null, resPlotLog=null; // the Kubelka-Munk summary plots (created once)
   // How Eg is read off the Tauc plot; each Tauc analysis picks which its bar chart shows.
@@ -406,9 +409,7 @@ import { Plot } from './plot.js';
       throttle = requestAnimationFrame(()=>{ throttle=null; P.update(true); });
     }
 
-    // Per-sample slots follow the file list.
-    P.removeAt = i => P.per.splice(i, 1);
-    P.move = (from, to)=>{ const [x] = P.per.splice(from, 1); P.per.splice(to, 0, x); };
+    // Per-sample slots follow the file list (removed, moved, left out: see slots()).
     P.add = ()=> P.per.push({});
     P.clear = ()=>{ P.per = []; P.sharedVlines = {}; };
     P.fit = ()=>{ if (P.per.length !== files.length) P.per = files.map((_,i)=> P.per[i] || {}); };
@@ -1264,7 +1265,7 @@ import { Plot } from './plot.js';
   });
 
   function rebuildTaucAlerts(){
-    const warnNames = taucWarnDismissed ? [] : files.filter(f=>f.warn).map(f=>f.name);
+    const warnNames = taucWarnDismissed ? [] : allFiles.filter(f=>f.warn).map(f=>f.name);
     document.getElementById('taucAlerts').innerHTML =
       buildAlertsHtml(invalidUploadNames, warnNames, undefined, 'tauc-dismiss-invalid', 'tauc-dismiss-warn') + taucUploadAlerts;
   }
@@ -1274,27 +1275,41 @@ import { Plot } from './plot.js';
   function eachKeptState(fn){
     analyses.forEach(a=> Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) fn(s); }));
   }
+  // The same lists, each named by its card and kind, for the file list to keep
+  // aligned with the included files. A file brought back in gets the parameters and
+  // lines it left with, in each card that was there then; in a card added since, it
+  // starts from the card's defaults, as a file uploaded into it does.
+  const copyPer = p => p ? {...p, vlines: p.vlines ? {...p.vlines} : undefined} : {};
+  function slots(){
+    const out = [];
+    analyses.forEach(a=>{
+      Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s && s.per) out.push({ key: a.id + ':' + k, arr: s.per, make: copyPer }); });
+      const P = panelOf(a);
+      if (P) out.push({ key: a.id + ':' + a.type, arr: P.per, make: copyPer });
+    });
+    return out;
+  }
+  // The cards stay on the sample they showed when another is left out or taken in.
+  function stayOn(f){ const k = includedOf(allFiles).indexOf(f); if (k >= 0) currIndex = k; }
   function fileCallbacks(){
     return {
       onRemove(i){
-        files.splice(i,1);
-        livePanels().forEach(p=> p.removeAt(i));   // keep per-sample params aligned with files
-        eachKeptState(s=>{ if (s.per) s.per.splice(i, 1); });
-        if (!files.length) invalidUploadNames = [];
+        removeFileAt(allFiles, i, slots());        // keep per-sample params aligned with files
+        if (!allFiles.length) invalidUploadNames = [];
         rebuildTaucAlerts();
         afterFilesChange();
       },
       onReorder(from, to){
-        const [x]=files.splice(from,1); files.splice(to,0,x);
-        livePanels().forEach(p=> p.move(from, to));
-        eachKeptState(s=>{ if (s.per && from < s.per.length){ const [y] = s.per.splice(from, 1); s.per.splice(to, 0, y); } });
+        moveFileTo(allFiles, from, to, slots());
         rebuildTaucAlerts(); afterFilesChange();
       },
-      onLabelChange(i, v){ files[i].label=v; renderResView(); hist.commit(); },
-      onColorChange(i, v){ files[i].color=v; renderResView(); hist.commit(); },
-      onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
+      onInclude(i, on){ const was = files[currIndex]; setIncluded(allFiles, i, on, slots()); stayOn(was); afterFilesChange(); },
+      onIncludeAll(on){ const was = files[currIndex]; allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); stayOn(was); afterFilesChange(); },
+      onLabelChange(i, v){ allFiles[i].label=v; renderResView(); hist.commit(); },
+      onColorChange(i, v){ allFiles[i].color=v; renderResView(); hist.commit(); },
+      onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
       onRemoveAll(){
-        files.length=0;
+        allFiles.length=0;
         livePanels().forEach(p=> p.clear());
         eachKeptState(s=>{ s.per = []; s.sharedVlines = {}; });
         invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; rebuildTaucAlerts(); afterFilesChange();
@@ -1309,7 +1324,7 @@ import { Plot } from './plot.js';
   const clone = o => JSON.parse(JSON.stringify(o));
   function taucSnapshot(){
     return {
-      files: files.map(f=>({...f})),
+      files: allFiles.map(f=>({...f})),
       analyses: analyses.map(a=>{
         const states = {};
         Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) states[k] = clone(s); });
@@ -1370,7 +1385,8 @@ import { Plot } from './plot.js';
     placeRes();
   }
   function taucRestore(s){
-    files = s.files.map(f=>({...f}));
+    allFiles = s.files.map(f=>({...f}));
+    files = includedOf(allFiles);
     loadAnalyses(Array.isArray(s.analyses) ? s.analyses : legacyAnalyses(s));
     afterFilesChange();
     // Rebuild alerts for THIS tab's files: transient upload feedback (invalid /
@@ -1392,8 +1408,8 @@ import { Plot } from './plot.js';
   });
 
   setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
-    const hadFiles = files.length > 0;   // auto-suggest only on the first upload
-    const existing = new Set(files.map(f=>f.name));
+    const hadFiles = allFiles.length > 0;   // auto-suggest only on the first upload
+    const existing = new Set(allFiles.map(f=>f.name));
     const newInvalid = [];
     const alreadyLoaded = [];
     for (const f of fileList){
@@ -1437,7 +1453,9 @@ import { Plot } from './plot.js';
         if (isFinite(a) && isFinite(b)){ wl.push(a); fr.push(b); }
       }
       if (wl.length){
-        files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes});
+        // A new file comes in included, so it goes last among the included as well.
+        const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(allFiles), rawBytes};
+        allFiles.push(file); files.push(file);
         livePanels().forEach(p=> p.add());
         eachKeptState(s=>{ if (s.per) s.per.push({}); });
       }
@@ -1462,8 +1480,9 @@ import { Plot } from './plot.js';
 
   const SHOWN = ['taucAnalyses','taucResults'];
   function afterFilesChange(){
-    setTabLoaded('tauc', files.length);
-    renderUnifiedFileList('taucFileTableWrap', files, fileCallbacks());
+    files = includedOf(allFiles);
+    setTabLoaded('tauc', allFiles.length);
+    renderUnifiedFileList('taucFileTableWrap', allFiles, fileCallbacks());
     if (files.length) setupAnalysis();
     else { SHOWN.forEach(id=> document.getElementById(id).style.display='none'); refreshNames(); }
     hist.commit(); // baseline + file add/remove/reorder/palette

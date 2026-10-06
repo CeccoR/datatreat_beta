@@ -1,11 +1,13 @@
-import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
+import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
 import { Plot } from './plot.js';
 
 /* =========================================================
    EPR MODULE
 ========================================================= */
 (function(){
-  let files = []; // {name, label, b[], a[]}
+  // Every file loaded, in list order; the analysis sees the included ones, `files`.
+  let allFiles = []; // {name, label, b[], a[]}
+  let files = [];
   let lastY = [];
   let loadAlerts = '';
   let uploadAlerts = '';
@@ -25,16 +27,18 @@ import { Plot } from './plot.js';
   function fileCallbacks(){
     return {
       onRemove(i){
-        files.splice(i,1);
-        if (!files.length) loadAlerts = '';
+        removeFileAt(allFiles, i, []);
+        if (!allFiles.length) loadAlerts = '';
         rebuildAlerts();
         afterFilesChange();
       },
-      onReorder(from, to){ const [x]=files.splice(from,1); files.splice(to,0,x); afterFilesChange(); },
-      onLabelChange(i, v){ files[i].label=v; updateEpr(); hist.commit(); },
-      onColorChange(i, v){ files[i].color=v; updateEpr(); hist.commit(); },
-      onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; loadAlerts=''; uploadAlerts=''; pendingAlerts=''; rebuildAlerts(); afterFilesChange(); },
+      onReorder(from, to){ moveFileTo(allFiles, from, to, []); afterFilesChange(); },
+      onInclude(i, on){ setIncluded(allFiles, i, on, []); afterFilesChange(); },
+      onIncludeAll(on){ allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, [])); afterFilesChange(); },
+      onLabelChange(i, v){ allFiles[i].label=v; updateEpr(); hist.commit(); },
+      onColorChange(i, v){ allFiles[i].color=v; updateEpr(); hist.commit(); },
+      onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
+      onRemoveAll(){ allFiles.length=0; loadAlerts=''; uploadAlerts=''; pendingAlerts=''; rebuildAlerts(); afterFilesChange(); },
     };
   }
 
@@ -118,7 +122,7 @@ import { Plot } from './plot.js';
   }
 
   setupDropzone('eprDropzone', 'eprFiles', async (fileList)=>{
-    const existingStems = new Set(files.map(f=>f.name));
+    const existingStems = new Set(allFiles.map(f=>f.name));
     const invalidFiles = [];
     const alreadyLoaded = [];
 
@@ -138,7 +142,7 @@ import { Plot } from './plot.js';
     for (const [stem, pair] of Object.entries(groups)){
       if (pair.dta && pair.dsc){
         const result = await processPair(stem, pair.dta, pair.dsc);
-        if (result){ result.color = nextColor(files); files.push(result); existingStems.add(stem); }
+        if (result){ result.color = nextColor(allFiles); allFiles.push(result); existingStems.add(stem); }
         else { invalidFiles.push(stem); }
       } else {
         unpaired.push((pair.dta || pair.dsc).name);
@@ -153,8 +157,9 @@ import { Plot } from './plot.js';
   });
 
   function afterFilesChange(){
-    setTabLoaded('epr', files.length);
-    renderUnifiedFileList('eprFileTableWrap', files, fileCallbacks());
+    files = includedOf(allFiles);
+    setTabLoaded('epr', allFiles.length);
+    renderUnifiedFileList('eprFileTableWrap', allFiles, fileCallbacks());
     if (files.length){
       document.getElementById('eprWorkspace').style.display='block';
       updateEpr();
@@ -168,13 +173,13 @@ import { Plot } from './plot.js';
   /* ---- Undo/redo: file order/labels/colours + normalization & smoothing ---- */
   function eprSnapshot(){
     return {
-      files: files.map(f=>({...f})),
+      files: allFiles.map(f=>({...f})),
       norm: document.getElementById('eprNorm').value,
       smooth: document.getElementById('eprSmooth').value,
     };
   }
   function eprRestore(s){
-    files = s.files.map(f=>({...f}));
+    allFiles = s.files.map(f=>({...f}));
     document.getElementById('eprNorm').value = s.norm;
     document.getElementById('eprSmooth').value = s.smooth;
     afterFilesChange();
