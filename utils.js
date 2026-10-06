@@ -880,15 +880,20 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     downloadZip('files.zip', entries);
   });
 
-  // Drag-to-reorder via pointer events (works with both mouse and touch): grab the
-  // handle and drag the row over another; the row under the pointer is the target.
+  /* Drag-to-reorder via pointer events (works with both mouse and touch): grab the
+     handle and drag. What lights is the gap the row would land in (dropGap) — a line
+     over the row it would go before, or under the last — and that is where it goes.
+     The two gaps beside the dragged row would leave it where it is: they never light,
+     and a drop there does nothing. (The line used to be the top of the row under the
+     pointer while the row went in that row's place: dragged down, it landed under
+     the row the line was over, the gap under the dragged row itself lit, and the one
+     under the last row could not be reached.) */
   const rows = [...wrap.querySelectorAll('.file-row')];
-  const rowAtY = (y)=>{
-    for (const r of rows){ const b=r.getBoundingClientRect(); if (y>=b.top && y<=b.bottom) return r; }
-    // beyond the last row → drop at the end
-    if (rows.length){ const last=rows[rows.length-1].getBoundingClientRect(); if (y>last.bottom) return rows[rows.length-1]; }
-    return null;
-  };
+  const gapAt = y =>{ const g = dropGap(rows, y); return g === drag.from || g === drag.from + 1 ? null : g; };
+  const mark = g => rows.forEach((r, k)=>{
+    r.classList.toggle('drop-before', g != null && k === g);
+    r.classList.toggle('drop-after', g === rows.length && k === rows.length - 1);
+  });
   let drag = null; // { from }
   rows.forEach(row=>{
     const handle = row.querySelector('.drag-handle');
@@ -900,21 +905,29 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     });
     handle.addEventListener('pointermove', e=>{
       if (!drag) return;
-      const target = rowAtY(e.clientY);
-      rows.forEach(r=> r.classList.toggle('drag-over', r===target && +r.dataset.i!==drag.from));
+      mark(gapAt(e.clientY));
     });
     const finish = (e)=>{
       if (!drag) return;
-      const target = rowAtY(e.clientY);
-      const to = target ? +target.dataset.i : null;
-      const from = drag.from;
-      rows.forEach(r=> r.classList.remove('drag-over', 'dragging'));
+      const g = gapAt(e.clientY), from = drag.from;
+      mark(null); rows.forEach(r=> r.classList.remove('dragging'));
       drag = null;
-      if (to!=null && to!==from && callbacks.onReorder) callbacks.onReorder(from, to);
+      // The gap before row g is, once the row is out of the list, index g − 1 if it
+      // came from above, g if from below.
+      if (g != null && callbacks.onReorder) callbacks.onReorder(from, g > from ? g - 1 : g);
     };
     handle.addEventListener('pointerup', finish);
-    handle.addEventListener('pointercancel', ()=>{ rows.forEach(r=> r.classList.remove('drag-over','dragging')); drag = null; });
+    handle.addEventListener('pointercancel', ()=>{ mark(null); rows.forEach(r=> r.classList.remove('dragging')); drag = null; });
   });
+}
+
+/* Where a row dragged in a list would land: the gap before rows[g], g = 0 … n (n:
+   after the last), taken by the side of each row's middle the pointer is on. The rows
+   are in their on-screen order, top to bottom. */
+function dropGap(rows, y){
+  let g = 0;
+  for (const r of rows){ const b = r.getBoundingClientRect(); if (y > (b.top + b.bottom)/2) g++; else break; }
+  return g;
 }
 
 function linspace(a,b,n){
@@ -1964,5 +1977,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

@@ -1,5 +1,5 @@
 import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap } from './utils.js';
 import { activeTab, TABS } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
@@ -2791,18 +2791,36 @@ function syncSwatches(){
   });
 }
 
-// Drag-to-reorder over the series rows, same grip-and-drop feel as the file list:
-// press the handle, move over the row you want the series to land on, release.
+/* Drag-to-reorder over the series rows, as in the file list: press the handle and move
+   to the gap the series should land in, in its own panel's group or another's. The gap
+   lit (dropGap, in the group under the pointer) is where it goes: before the row the
+   bar is over, or after the last row of the group; into an empty group, at its end.
+   The two gaps beside the dragged row, in its own group, would leave it where it is:
+   they never light, and a drop there does nothing. (The bar used to be under the row
+   the pointer was on, and the series took that row's place: dragged up it landed over
+   that row, the gap over the dragged row itself lit, and the top of a group could not
+   be reached.) */
 function wireSeriesDrag(){
-  const rows = [...controlsEl.querySelectorAll('.fig-serie')];
+  const rows = [...controlsEl.querySelectorAll('.fig-serie[data-s]')];
   const groups = [...controlsEl.querySelectorAll('.fig-group')];
-  const at = (sel, list) => (x, y)=> list.find(el=>{
+  const groupAt = (x, y)=> groups.find(el=>{
     const b = el.getBoundingClientRect();
     return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right;
   }) || null;
-  const rowAt = y => rows.find(r=>{ const b = r.getBoundingClientRect(); return y >= b.top && y <= b.bottom; }) || null;
-  const groupAt = at('.fig-group', groups);
   let from = null;
+  // The group and the gap in it the series would land in, null where it would not move.
+  const target = e =>{
+    const gp = groupAt(e.clientX, e.clientY);
+    if (!gp) return null;
+    const gRows = [...gp.querySelectorAll('.fig-serie[data-s]')];
+    const g = dropGap(gRows, e.clientY), self = gRows.findIndex(r=> +r.dataset.s === from);
+    if (self >= 0 && (g === self || g === self + 1)) return null;
+    return { gp, gRows, g, panel: +gp.dataset.pg };
+  };
+  const clear = ()=>{
+    rows.forEach(r=> r.classList.remove('drop-before', 'drop-after'));
+    groups.forEach(g=> g.classList.remove('drag-into'));
+  };
   rows.forEach(row=>{
     const handle = row.querySelector('.fig-grip');
     if (!handle) return;
@@ -2814,36 +2832,36 @@ function wireSeriesDrag(){
     });
     handle.addEventListener('pointermove', e=>{
       if (from == null) return;
-      const t = rowAt(e.clientY), gp = groupAt(e.clientX, e.clientY);
-      rows.forEach(r=> r.classList.toggle('drag-over', r === t && +r.dataset.s !== from));
-      groups.forEach(g=> g.classList.toggle('drag-into', g === gp));
+      clear();
+      const t = target(e);
+      if (!t) return;
+      // Another panel's group is lit as a whole too: the series changes panel.
+      if (F.series[from] && t.panel !== F.series[from].panel) t.gp.classList.add('drag-into');
+      if (t.g < t.gRows.length) t.gRows[t.g].classList.add('drop-before');
+      else if (t.gRows.length) t.gRows[t.gRows.length - 1].classList.add('drop-after');
     });
     const finish = e=>{
       if (from == null) return;
-      const t = rowAt(e.clientY), gp = groupAt(e.clientX, e.clientY);
-      const f = from; from = null;
-      rows.forEach(r=> r.classList.remove('drag-over', 'dragging'));
-      groups.forEach(g=> g.classList.remove('drag-into'));
+      const t = target(e), f = from;
+      from = null;
+      clear(); rows.forEach(r=> r.classList.remove('dragging'));
       const moved = F.series[f];
-      if (!moved) return;
-      // Dropped on a row: take its place. Dropped anywhere else in a group: join that
-      // panel at the end. Either way the panel is the group the pointer ended over.
-      const panel = gp ? +gp.dataset.pg : moved.panel;
-      const to = t ? +t.dataset.s : null;
-      if (panel === moved.panel && (to == null || to === f)) return;
-      moved.panel = panel;
-      if (to != null && to !== f){
-        F.series.splice(f, 1);
-        F.series.splice(to, 0, moved);
-      }
+      if (!moved || !t) return;
+      // Before the series of the row the gap is over; after the group's last one; or,
+      // in an empty group, at the end.
+      const before = t.g < t.gRows.length ? F.series[+t.gRows[t.g].dataset.s] : null;
+      const after = !before && t.gRows.length ? F.series[+t.gRows[t.gRows.length - 1].dataset.s] : null;
+      F.series.splice(f, 1);
+      const at = before ? F.series.indexOf(before) : after ? F.series.indexOf(after) + 1 : F.series.length;
+      F.series.splice(at, 0, moved);
+      moved.panel = t.panel;
       redealPalettes();
       pushUndo(); refresh(true);
     };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', ()=>{
       from = null;
-      rows.forEach(r=> r.classList.remove('drag-over','dragging'));
-      groups.forEach(g=> g.classList.remove('drag-into'));
+      clear(); rows.forEach(r=> r.classList.remove('dragging'));
     });
   });
   wireBarDrag();

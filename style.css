@@ -1121,7 +1121,9 @@ footer a:hover {
 .file-row.is-excluded .file-label { opacity: 0.4; }
 .file-none { margin: 8px 0 0; }
 .file-row.dragging { opacity: 0.45; }
-.file-row.drag-over td { box-shadow: inset 0 2px 0 var(--accent); } /* drop indicator */
+/* Drop indicator: the gap the dragged row would land in — over a row, or under the last. */
+.file-row.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
+.file-row.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
 /* Bare remove / remove-all buttons: just the ✕ glyph, no border/background */
 .del-bare {
   background: none;
@@ -2497,12 +2499,15 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 }
 .fig-grip-off { visibility: hidden; }
 /* Where the dragged series would land: a bar in the gap between two rows, midway
-   between them, rather than a line along the edge of one of them. */
+   between them, rather than a line along the edge of one of them — over the row it
+   would go before, or under the last of its group. */
 .fig-serie { position: relative; }
-.fig-serie.drag-over::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: -4px;
+.fig-serie.drop-before::before, .fig-serie.drop-after::after {
+  content: ''; position: absolute; left: 0; right: 0;
   height: 2px; border-radius: 1px; background: var(--accent);
 }
+.fig-serie.drop-before::before { top: -4px; }
+.fig-serie.drop-after::after { bottom: -4px; }
 /* The Range section: X and Y side by side, each column the same ladder of controls
    so the two can be read across as well as down. */
 .fig-rangecols { display: flex; gap: 10px; }
