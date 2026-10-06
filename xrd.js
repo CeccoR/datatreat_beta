@@ -547,7 +547,8 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     if (twoTheta >= pts[pts.length-1].x) return pts[pts.length-1].b;
     for (let k=0; k<pts.length-1; k++){
       if (twoTheta >= pts[k].x && twoTheta <= pts[k+1].x){
-        const t = (twoTheta-pts[k].x)/(pts[k+1].x-pts[k].x);
+        // Two peaks at one angle (a manual peak on a detected one) span nothing.
+        const d = pts[k+1].x - pts[k].x, t = d > 0 ? (twoTheta-pts[k].x)/d : 0;
         return pts[k].b + (pts[k+1].b-pts[k].b)*t;
       }
     }
@@ -1161,17 +1162,23 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     const n = m.pts.length, lo = m.pts[0].x, hi = m.pts[n-1].x;
     const span = n > 1 ? `, 2θ ${lo.toFixed(2)}–${hi.toFixed(2)}°` : `, 2θ ${lo.toFixed(2)}°`;
     if (!m.fit){
+      // What the fit lacks is 3 distinct angles: 3 peaks at 2 (a manual peak put on a
+      // detected one) do not make a curve either.
+      const nx = new Set(m.pts.map(q=> q.x)).size;
+      const lack = nx === n ? `it needs 3 peaks or more` : `it needs peaks at 3 angles or more, and these ${n} lie at ${nx}`;
       box.innerHTML = html + `<div class="pg-stat">Peaks: <b>${n}</b>${span}</div>`
-        + `<div class="pg-stat cag-note">Not fitted: it needs 3 peaks or more. The instrumental width is ${n === 1
-          ? "this peak's FWHM at every angle" : 'interpolated between the two peaks, and held at their widths beyond them'}.</div>`;
+        + `<div class="pg-stat cag-note">Not fitted: ${lack}. The instrumental width is ${nx === 1
+          ? "the peak's FWHM at every angle" : 'interpolated between the peaks, and held at the end ones beyond them'}.</div>`;
       return;
     }
     const f = m.fit;
     html += ['U', 'V', 'W'].map((k, i)=> `<div class="pg-stat">${k}: <b>${fmtPar(f.uvw[i], f.se[i])} °²</b></div>`).join('');
     html += f.dof > 0
-      ? `<div class="pg-stat" title="Residual standard error on FWHM²: ${f.s.toPrecision(2)} °² (${f.dof} degrees of freedom); its square is the reduced χ² with unit weights">R²: <b>${f.r2.toFixed(3)}</b></div>`
+      ? `<div class="pg-stat" title="Residual standard error on FWHM²: ${f.s.toPrecision(2)} °² (${f.dof} degree${f.dof === 1 ? '' : 's'} of freedom); its square is the reduced χ² with unit weights">R²: <b>${f.r2.toFixed(4)}</b></div>`
       : `<div class="pg-stat cag-note">Exact through its 3 peaks: no degree of freedom left to judge the fit by.</div>`;
-    if (f.dof > 0) html += `<div class="pg-stat" title="Largest residual: ${f.maxRes.toFixed(3)}°">FWHM residual (RMS): <b>${f.rms.toFixed(3)}°</b></div>`;
+    // To two significant digits: a good standard's residuals are tenths of a
+    // thousandth of a degree, which three decimals would show as 0.000°.
+    if (f.dof > 0) html += `<div class="pg-stat" title="Largest residual: ${f.maxRes.toPrecision(2)}°">FWHM residual (RMS): <b>${f.rms.toPrecision(2)}°</b></div>`;
     html += `<div class="pg-stat">Peaks: <b>${n}</b>${span}</div>`;
     box.innerHTML = html;
     let neg = false;
