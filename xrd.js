@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, confirmBanner } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, barChipYmax, confirmBanner } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from './xrd-fit-core.js';
 
@@ -57,6 +57,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   // Crystallite-size / Scherrer constants and state
   const SCHERRER_K = 0.9;
   let standardName = '';    // file.name selected as instrumental standard ('' = none)
+  // What the crystallite-size box plot is by: each sample's peaks ('sample'), or each
+  // reflection the samples share, over the samples ('peak').
+  let sizeBy = 'sample';
   // Independent analysis parameters for the instrumental standard (defaults = Analysis
   // defaults). The standard is analysed in its own dedicated card, never sharing the
   // per-sample shared/per params. K/λ are unused (no crystallite size for the standard).
@@ -202,7 +205,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
       shared: {...shared},
       paramMode: {...paramMode},
       stdParams: {...stdParams},
-      standardName, curIdx, fitIdx,
+      standardName, curIdx, fitIdx, sizeBy,
       norm: document.getElementById('xrdNorm').value,
     };
   }
@@ -216,6 +219,7 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     Object.assign(paramMode, s.paramMode);
     if (s.stdParams) Object.assign(stdParams, s.stdParams);
     standardName = s.standardName;
+    sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
     curIdx = Math.min(s.curIdx, Math.max(0, files.length-1));
     fitIdx = Math.min(s.fitIdx||0, Math.max(0, files.length-1));
     document.getElementById('xrdNorm').value = s.norm;
@@ -1064,11 +1068,9 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
   /* Results card: per-sample crystallite size as a box plot of its peaks' sizes — one
      box per sample, two side by side when a standard is set (size, and corrected) —
      with the mean ± the standard deviation written above. `statsFn` gives sizeSummary's fields. */
-  function drawSizeBarChart(svgId, legendId, statsFn){
+  function drawSizeBarChart(svgId, legendId, rows, chips){
     const svg = document.getElementById(svgId); if (!svg) return;
     const wrap = svg.closest('.plot-wrap'), legend = document.getElementById(legendId);
-    const idxs = files.map((f,k)=>k).filter(k=>files[k].name!==standardName);
-    const rows = idxs.map(k=>({name:files[k].name, label:files[k].label, ...statsFn(k)}));
     const anyCorr = rows.some(r=> r.corrBox);
     const SER = [{ k:'raw', name:'size', color:'#3aa0ff' }].concat(anyCorr ? [{ k:'corr', name:'size corr.', color:'#ff7a59' }] : []);
     // Where each box ends on top: its whisker, or an outlier above it.
@@ -1094,23 +1096,28 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     rows.forEach(r=> SER.forEach(m=>{ if (r[m.k+'Box']) maxValW = Math.max(maxValW, mctx.measureText(fmtLab(r[m.k+'Mean'], r[m.k+'Std'])).width); }));
     const mTop=15, gap=6, plotH=svgH-mTop-bottom, reserve=gap+maxValW+6;
     const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
-    const ymax = Math.max(Math.max(...tops)*1.15, Math.max(...tops)/frac);
+    // Box geometry as the bars had it: capped at their sizes, shrinking to fit the
+    // per-sample spacing so many samples don't overlap; a pair keeps its ±17 px offset
+    // unless the slot is too narrow, then the two scale together.
+    const pxSlot = (svgW - 75)/(n + 1);
+    const sc = Math.min(1, (pxSlot*0.8)/66);   // 66 = full paired span at hw16/dx17
+    const hw = anyCorr ? 16*sc : Math.min(16, pxSlot*0.3), dx = anyCorr ? 17*sc : 0;
+    const offOf = mi => SER.length > 1 ? (mi ? dx : -dx) : 0;
+    // The labels kept clear of the chips in the corner, as on the other bar charts.
+    const under = [];
+    rows.forEach((r, k)=> SER.forEach((m, mi)=>{ const b = r[m.k+'Box']; if (b) under.push({ x:k+1, dx:offOf(mi), top:topOf(b), w:mctx.measureText(fmtLab(r[m.k+'Mean'], r[m.k+'Std'])).width }); }));
+    const ymax = Math.max(Math.max(...tops)*1.15, Math.max(...tops)/frac,
+      barChipYmax(chips, svg, under, { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0:0, x1:n+1 }));
     const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
     // Fixed at [0, n+1]: the names are made to fit it, not the other way round.
     plot.setRange(0, n+1, 0, ymax||1);
     plot.drawAxes();
-    // Box geometry as the bars had it: capped at their sizes, shrinking to fit the
-    // per-sample spacing so many samples don't overlap; a pair keeps its ±17 px offset
-    // unless the slot is too narrow, then the two scale together.
-    const pxSlot = plot.px(1)-plot.px(0);
-    const sc = Math.min(1, (pxSlot*0.8)/66);   // 66 = full paired span at hw16/dx17
-    const hw = anyCorr ? 16*sc : Math.min(16, pxSlot*0.3), dx = anyCorr ? 17*sc : 0;
     for (let k=0;k<n;k++){
       const xc=k+1, r = rows[k];
       SER.forEach((m, mi)=>{
         const b = r[m.k+'Box'];
         if (!b) return;
-        const off = SER.length > 1 ? (mi ? dx : -dx) : 0;
+        const off = offOf(mi);
         plot.box(xc, { ...b, mean: r[m.k+'Mean'], err: r[m.k+'Std'] }, m.color, hw, off, { label: m.name });
         plot.barLabel(xc, topOf(b), fmtLab(r[m.k+'Mean'], r[m.k+'Std']), {gap, dx:off});
       });
@@ -1119,7 +1126,69 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
     plot.attachTools(wrap);
     if (legend) legend.innerHTML = SER.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
   }
-  function renderXrdSizeChart(){ drawSizeBarChart('xrdSizeBarSvg', 'xrdSizeBarLegend', sampleSizeStats); }
+  /* The reflections the samples share: their peaks matched across samples by
+     position, within half the peak min. distance — closer than the distance itself,
+     two peaks of one sample would have been one already. A reflection holds at most one
+     peak per sample; `common` are those every sample has, `extra` the rest. */
+  function sizeReflections(){
+    const idxs = nonStdIdx().filter(k=> processed[k]);
+    if (!idxs.length) return { idxs, common: [], extra: [] };
+    const tol = Math.min(...idxs.map(k=> getFileParams(k).pkDist)) / 2;
+    const all = [];
+    idxs.forEach(k=>{
+      const fp = getFileParams(k);
+      processed[k].peaks.filter(pk=> !pk.removed).forEach(pk=>{
+        const raw = sizeRaw(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda);
+        if (!isFinite(raw)) return;
+        all.push({ k, pos: pk.detPos, raw, corr: standardName ? sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda) : NaN });
+      });
+    });
+    all.sort((a,b)=> a.pos - b.pos);
+    const groups = [];
+    for (const p of all){
+      const g = groups[groups.length-1];
+      if (g && Math.abs(p.pos - g.pos) <= tol && !g.by.has(p.k)){
+        g.by.set(p.k, p);
+        g.pos = [...g.by.values()].reduce((s, q)=> s + q.pos, 0) / g.by.size;
+      } else groups.push({ pos: p.pos, by: new Map([[p.k, p]]) });
+    }
+    return { idxs, common: groups.filter(g=> g.by.size === idxs.length), extra: groups.filter(g=> g.by.size < idxs.length) };
+  }
+  // By peak there is something to show from two samples sharing a reflection on.
+  const byPeakOk = R => R.idxs.length >= 2 && R.common.length > 0;
+  // One box per reflection, its points the samples' sizes there.
+  const reflectionRows = R => R.common.map(g=>{
+    const ps = [...g.by.values()];
+    return { name: `2θ ${g.pos.toFixed(2)}°`, label: `${g.pos.toFixed(2)}°`, pos: g.pos, ps,
+             ...sizeSummary(ps.map(p=> p.raw), ps.map(p=> p.corr).filter(isFinite), false, !!standardName) };
+  });
+  function renderXrdSizeChart(){
+    const chips = document.getElementById('xrdSizeBy'), note = document.getElementById('xrdSizeByNote');
+    const R = sizeReflections(), ok = byPeakOk(R), by = ok ? sizeBy : 'sample';
+    // Two chips, one at a time; with a single sample there is nothing to compare by peak.
+    if (chips) chips.innerHTML = R.idxs.length < 2 ? '' : [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
+      `<button type="button" class="mode-chip plot-chip${by === k ? ' is-on' : ''}" data-size-by="${k}"`
+      + `${k === 'peak' && !ok ? ' disabled title="No reflection is found in every sample"' : ` title="Crystallite size ${t}"`}>${t}</button>`).join('');
+    const rows = by === 'peak' ? reflectionRows(R)
+      : nonStdIdx().map(k=>({name:files[k].name, label:files[k].label, ...sampleSizeStats(k)}));
+    drawSizeBarChart('xrdSizeBarSvg', 'xrdSizeBarLegend', rows, chips);
+    // What is left out by peak: the reflections not every sample has, and whose they are.
+    if (note) note.innerHTML = by === 'peak' && R.extra.length
+      ? `Not in every sample, left out: ${R.extra.map(g=> `${g.pos.toFixed(2)}° (${[...g.by.keys()].map(k=> files[k].label).join(', ')})`).join('; ')}.` : '';
+    // The chart's downloads follow what it shows.
+    const wrap = document.getElementById('xrdSizeBarSvg').closest('.plot-wrap');
+    wrap.querySelectorAll('.plot-dl-btn, .plot-csv-btn').forEach(b=>{
+      b.dataset.csvNames = by === 'peak' ? 'crystallite_size_by_peak.csv' : 'crystallite_size.csv';
+      if (b.classList.contains('plot-dl-btn')) b.dataset.dlName = by === 'peak' ? 'XRPD_crystallite_size_by_peak.svg' : 'XRPD_crystallite_size.svg';
+    });
+  }
+  document.getElementById('xrdResults').addEventListener('click', e=>{
+    const b = e.target.closest('[data-size-by]');
+    if (!b || b.disabled || b.dataset.sizeBy === sizeBy) return;
+    sizeBy = b.dataset.sizeBy;
+    renderXrdSizeChart();
+    hist.commit();
+  });
 
   // Per-field shared/per-sample toggles (one segmented control per editable field)
   const TOGGLE_FIELD = { xrdModeN:'N', xrdModeBl:'blWin', xrdModeH:'pkHeight', xrdModeP:'pkProm', xrdModeD:'pkDist', xrdModeK:'K', xrdModeL:'lambda' };
@@ -1722,6 +1791,20 @@ import { nearestIdx, refineIdx, fitDoublet, reconstructFit, solveLinear } from '
         ct += csvLine(row);
       });
       entries.push({name:'crystallite_size.csv', text:ct});
+    }
+    // crystallite_size_by_peak.csv — per reflection the samples share: its 2θ, the
+    // summary over the samples, then each sample's size there.
+    {
+      const R = sizeReflections();
+      if (byPeakOk(R)){
+        const rows = reflectionRows(R);
+        let ct = csvLine(['Reflection_2theta_deg', ...sizeCsvHead(anyStd).slice(1), ...R.idxs.map(k=> 'Crystallite_size_nm_' + files[k].label)]);
+        rows.forEach(r=>{
+          const own = R.idxs.map(k=>{ const p = r.ps.find(q=> q.k === k); return p ? fmtNum(p.raw, 2) : ''; });
+          ct += csvLine([fmtNum(r.pos, 3), ...sizeCsvCells(r, 'raw'), ...(anyStd ? sizeCsvCells(r, 'corr') : []), ...own]);
+        });
+        entries.push({name:'crystallite_size_by_peak.csv', text:ct});
+      }
     }
     /* What the fit gives is a debug view's (`debug`): the Fitting card's own buttons
        download it, the module's export leaves it out. */
