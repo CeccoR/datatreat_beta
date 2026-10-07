@@ -34,9 +34,6 @@ was proposed; nothing here is in the code yet.
   than about one FWHM can swap peaks. To be solved: e.g. an optimal assignment
   (each sample's peaks to the reflections at minimum total distance in sigmas)
   rather than the sweep.
-- **Profile fit (debug).** The whole-pattern fit is a debug view, kept out of the
-  Results and the module export. To be restructured; its results (intensities,
-  crystallite size and the rest) are to go under the Analysis ones in the Results.
 
 ## EPR
 

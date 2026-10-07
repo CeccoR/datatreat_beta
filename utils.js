@@ -1330,11 +1330,9 @@ function normalizeProjIcons(mod){
    pick a subset by name. */
 const _csvExport = {};
 function registerCsvExport(mod, buildFn){ _csvExport[mod] = buildFn; }
-// A debug view's files (`debug: true`) are its own buttons' to give, by name: they
-// stay out of the module's export.
 function runCsvExport(mod){
   const b = _csvExport[mod]; if (!b) return;
-  const e = (b() || []).filter(x=> !x.debug); if (e.length) downloadZip(mod+'_export.zip', e);
+  const e = b() || []; if (e.length) downloadZip(mod+'_export.zip', e);
 }
 // Download a subset of a module's CSVs by file name: a single file downloads as a
 // .csv, several bundle into a .zip.

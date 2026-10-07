@@ -311,7 +311,7 @@
 
       <div class="card" id="xrdWorkspace" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Analysis</h3>
-        <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (it contains the whole Kα₁+Kα₂ doublet). The smoothing widens the peaks in turn, so keep its window small against their widths: the raw pattern is drawn beside it to compare. K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². Each sample's size is the mean over its peaks ± their standard deviation (n − 1). The Results chart shows the spread of the peaks' sizes as a box plot — the box from the first to the third quartile, the line the median, the cross the mean, whiskers to the furthest sizes within 1.5 IQR and circles beyond — both without and (if a standard is set) with this correction, the mean ± the standard deviation above each box. <b>by peak</b> turns it around: the samples' peaks are matched by position, each taken as a value with its FWHM as uncertainty (the same reflection when two lie within one sigma, √(FWHM₁² + FWHM₂²)), and each reflection every sample has gets a box over the samples, one point per sample; the ones some sample lacks are listed under the chart. The Kα₂-deconvolved profile fit lives in the <b>Fitting</b> panel below.</div>
+        <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (it contains the whole Kα₁+Kα₂ doublet). The smoothing widens the peaks in turn, so keep its window small against their widths: the raw pattern is drawn beside it to compare. K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². Each sample's size is the mean over its peaks ± their standard deviation (n − 1). The Results chart shows the spread of the peaks' sizes as a box plot — the box from the first to the third quartile, the line the median, the cross the mean, whiskers to the furthest sizes within 1.5 IQR and circles beyond — both without and (if a standard is set) with this correction, the mean ± the standard deviation above each box. <b>by peak</b> turns it around: the samples' peaks are matched by position, each taken as a value with its FWHM as uncertainty (the same reflection when two lie within one sigma, √(FWHM₁² + FWHM₂²)), and each reflection every sample has gets a box over the samples, one point per sample; the ones some sample lacks are listed under the chart.</div>
         <div id="xrdAnalysisEmpty" style="display:none;color:var(--muted);font-size:14px;padding:18px 0 6px">All loaded files are set as the instrumental standard — load additional samples to analyse them here.</div>
         <div id="xrdAnalysisContent">
         <div class="row" style="align-items:flex-start">
@@ -387,65 +387,6 @@
         </div>
       </div>
 
-      <div class="card" id="xrdFitCard" style="display:none">
-        <h3 class="txt-head" style="margin:0 0 12px">Fitting (debug)</h3>
-        <div class="instr-block">A debug view, which may be restructured: what it gives stays on this card (its own CSV buttons) and reaches neither the Results nor the module's CSV export. Cu Kα₂-deconvolved whole-pattern fit. The raw pattern (open circles) and the peaks inherited from the Analysis peak search are shown; press <b>Fit sample</b>/<b>Fit all</b> to fit a sum of Kα₁/Kα₂ doublets (Kα₁ + ½·Kα₂ at +Δ2θ) plus a polynomial background, all refined together (Levenberg–Marquardt). Profile, asymmetry and other hyperparameters are in <i>Sample fit settings</i>. By default each fit restarts from the SNIP baseline and the current peak search (manual peaks kept); a setting lets it instead continue from the last fit. A chosen <b>standard</b> (LaB₆…) is fitted with the FCJ axial-divergence kernel via <b>Fit standard</b> to calibrate the instrument geometry. The fitted doublet, its Kα₁/Kα₂ components and the residual (with Rwp) appear once a fit exists.</div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-nav-row">
-              <div class="plot-nav-left">
-                <button class="btn nav-arrow" id="xrdFitPrev" aria-label="Previous sample">&#8249;</button>
-                <span id="xrdFitIdx" class="pill nav-count" style="margin:0">1/1</span>
-                <button class="btn nav-arrow" id="xrdFitNext" aria-label="Next sample">&#8250;</button>
-                <span class="txt-caption" id="xrdFitLabel">—</span>
-              </div>
-            </div>
-            <div class="plot-wrap">
-              <svg class="plot" id="xrdFitSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="xrdFitSvg" data-csv-mod="xrd" data-csv-names="fits.csv" data-dl-name="XRPD_fit.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div class="legend">
-              <span><i class="mk-dot mk-ring" style="border-color:#6a7585"></i>raw</span>
-              <span id="xrdLegBl"><i style="background:#ff9933"></i>baseline</span>
-              <span id="xrdLegFit"><i style="background:#ff5050"></i>doublet fit</span>
-              <span id="xrdLegKa1"><i style="background:#b07cff"></i>Kα₁ component</span>
-              <span id="xrdLegKa2"><i style="background:#5fb0d0"></i>Kα₂ component</span>
-              <span><i style="background:#5fcf6a"></i>peaks</span>
-            </div>
-            <div id="xrdResidBlock">
-              <div class="plot-wrap" style="margin-top:6px">
-                <svg class="plot" id="xrdResidSvg" style="height:90px;aspect-ratio:auto;min-width:0"></svg>
-              </div>
-              <div class="legend"><span id="xrdResidCaption" style="color:var(--muted);font-size:11px">Fit residual (doublet fit − signal)</span></div>
-            </div>
-          </div>
-          <div class="col mw260" style="align-self:flex-start">
-            <div class="plot-top-aligned" style="display:flex;gap:8px">
-              <button class="btn primary" id="xrdFitSampleBtn" style="flex:1">Fit sample</button>
-              <button class="btn primary" id="xrdFitAllBtn" style="flex:1">Fit all</button>
-            </div>
-            <button class="btn" id="xrdFitSettings" style="margin-top:8px;width:100%">Sample fit settings…</button>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <button class="btn is-danger" id="xrdDelFitBtn" style="flex:1">Delete fit</button>
-              <button class="btn is-danger" id="xrdDelAllFitsBtn" style="flex:1">Delete all fits</button>
-            </div>
-            <div id="xrdFitProgWrap" style="display:none;margin-top:6px"><div id="xrdFitProgBar"></div></div>
-            <button class="btn" id="xrdFitCancelBtn" style="display:none;margin-top:8px;width:100%">Cancel</button>
-            <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px"></div>
-            <button class="btn primary" id="xrdFitStdBtn" style="width:100%">Fit standard (calibrate S/L, H/L)</button>
-            <button class="btn" id="xrdStdSettings" style="margin-top:8px;width:100%">Standard fit settings…</button>
-            <small id="xrdStdHint" style="color:var(--muted);display:block;margin-top:6px">Enabled only when the current sample is the chosen instrumental standard.</small>
-          </div>
-        </div>
-        <div class="peak-box" id="xrdFitPeakBox">
-          <div class="peak-box-head">
-            <span class="txt-mini">Fitted peaks</span>
-            <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="fit_peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
-          </div>
-          <div id="xrdFitTableWrap"></div>
-        </div>
-      </div>
-
       <div class="card" id="xrdResults" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
         <div id="xrdResultsEmpty" style="display:none;color:var(--muted);font-size:14px;padding:6px 0">All loaded files are set as the instrumental standard — load additional samples to see results here.</div>
@@ -458,8 +399,7 @@
             </div>
             <div id="xrdResLegend" class="legend"></div>
           </div>
-          <!-- The crystallite size beside the intensities it is read from; the fit's
-               results will come under them once it is restructured. -->
+          <!-- The crystallite size beside the intensities it is read from. -->
           <div class="col mw320" style="flex:1">
             <p class="txt-caption">Crystallite size</p>
             <div class="plot-wrap">
@@ -469,82 +409,6 @@
             </div>
             <div id="xrdSizeBarLegend" class="legend"></div>
             <div id="xrdSizeByNote" class="txt-meta"></div>
-          </div>
-        </div>
-      </div>
-      <div id="xrdFitModal" class="modal-backdrop" style="display:none">
-        <div class="modal-box">
-          <h3 class="txt-head" style="margin:0 0 4px">Sample fit — hyperparameters</h3>
-          <p style="color:var(--muted);font-size:12px;margin:0 0 10px">Whole-pattern least-squares: Σ Kα₁/Kα₂ doublets + polynomial background, Levenberg–Marquardt. Multi-start over profile shape (5) × initial width 1–5× FWHM (5) = 25 starts, then a final refinement pass on <b>all</b> points. Used by <b>Fit sample</b> and <b>Fit all</b>.</p>
-          <label class="txt-label">Peak profile</label>
-          <select id="xrdHpProfile">
-            <option value="voigt">True Voigt (σ, γ)</option>
-            <option value="pv" selected>Pseudo-Voigt (FWHM, η)</option>
-          </select>
-          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
-            <input type="checkbox" id="xrdHpAsym" style="width:auto;margin:0"> Enable peak asymmetry
-          </label>
-          <div id="xrdHpAsymOpts">
-            <label class="txt-label">Asymmetry model</label>
-            <select id="xrdHpAsymMode">
-              <option value="split" selected>Split (per-peak, fitted)</option>
-              <option value="fcj">Axial divergence (FCJ)</option>
-            </select>
-            <div id="xrdHpFcj" style="display:none">
-              <label class="txt-label">S/L (sample / radius)</label>
-              <input type="text" id="xrdHpSL" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
-              <label class="txt-label">H/L (slit / radius)</label>
-              <input type="text" id="xrdHpHL" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
-              <small style="color:var(--muted);display:block;margin-top:4px">Fixed instrumental geometry applied to samples. Refine these by running <b>Fit standard</b> on your LaB₆ (or other) standard — the calibrated value is written back here automatically.</small>
-            </div>
-          </div>
-          <label class="txt-label">Background polynomial degree</label>
-          <input type="number" id="xrdHpDeg" value="4" min="0" max="12">
-          <label class="txt-label">Max iterations</label>
-          <input type="number" id="xrdHpIter" value="80" min="5" max="2000">
-          <label class="txt-label">Convergence tolerance (relative)</label>
-          <input type="text" inputmode="decimal" id="xrdHpTol" value="1e-12">
-          <label class="txt-label">Initial LM damping λ₀</label>
-          <input type="text" inputmode="decimal" id="xrdHpLambda" value="1e-3">
-          <label class="txt-label">Background→SNIP anchor (0 = off)</label>
-          <input type="text" inputmode="decimal" id="xrdHpBgAnchor" value="0.3">
-          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
-            <input type="checkbox" id="xrdHpFromCurrent" style="width:auto;margin:0"> Restart fit from current fit (instead of SNIP + peak search)
-          </label>
-          <div style="display:flex;gap:8px;margin-top:16px">
-            <button class="btn primary" id="xrdHpApply" style="flex:1">Apply</button>
-            <button class="btn" id="xrdHpClose" style="flex:1">Close</button>
-          </div>
-        </div>
-      </div>
-      <div id="xrdStdModal" class="modal-backdrop" style="display:none">
-        <div class="modal-box">
-          <h3 class="txt-head" style="margin:0 0 4px">Standard fit — instrument calibration</h3>
-          <p style="color:var(--muted);font-size:12px;margin:0 0 10px">Fits the file chosen as <b>Instrumental standard</b> with axial-divergence (FCJ) asymmetry, refining a single geometry parameter <b>G = S/L = H/L</b>. Multi-start over shape × initial width (25 starts, each refining G) + a final all-points pass; expect ~1 min. The result is written back to the sample fit settings and reused on all samples.</p>
-          <label class="txt-label">Peak profile</label>
-          <select id="xrdStdProfile">
-            <option value="voigt" selected>True Voigt (σ, γ)</option>
-            <option value="pv">Pseudo-Voigt (FWHM, η)</option>
-          </select>
-          <label class="txt-label">Calibrated geometry G = S/L = H/L</label>
-          <input type="text" id="xrdStdG" value="0.0200" readonly style="opacity:.7;cursor:not-allowed">
-          <small style="color:var(--muted);display:block;margin:4px 0">Updated automatically after each standard fit (refined within [0.001, 0.1]).</small>
-          <label class="txt-label">Background polynomial degree</label>
-          <input type="number" id="xrdStdDeg" value="4" min="0" max="12">
-          <label class="txt-label">Max iterations</label>
-          <input type="number" id="xrdStdIter" value="60" min="5" max="2000">
-          <label class="txt-label">Convergence tolerance (relative)</label>
-          <input type="text" inputmode="decimal" id="xrdStdTol" value="1e-12">
-          <label class="txt-label">Initial LM damping λ₀</label>
-          <input type="text" inputmode="decimal" id="xrdStdLambda" value="1e-3">
-          <label class="txt-label">Background→SNIP anchor (0 = off)</label>
-          <input type="text" inputmode="decimal" id="xrdStdBgAnchor" value="0.3">
-          <label class="txt-label" style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
-            <input type="checkbox" id="xrdStdFromCurrent" style="width:auto;margin:0"> Restart fit from current fit (instead of SNIP + peak search)
-          </label>
-          <div style="display:flex;gap:8px;margin-top:16px">
-            <button class="btn primary" id="xrdStdApply" style="flex:1">Apply</button>
-            <button class="btn" id="xrdStdClose" style="flex:1">Close</button>
           </div>
         </div>
       </div>
@@ -669,7 +533,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v413</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v414</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
