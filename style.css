@@ -887,12 +887,15 @@ svg.plot.plot-wide { aspect-ratio: 3.236; }
 svg.plot.plot-strip { aspect-ratio: 6.472; }
 :root.narrow-layout svg.plot.plot-strip { aspect-ratio: 3.236; }
 /* An Urbach card's two Results plots, plain over subtracted, share the room of one
-   standard plot (φ : 1) of their column: each half of it, less the 22px line the second
-   one's caption and toolbar take between them, so the pair ends level with the E_U
-   chart beside it. Stacked on a narrow screen, each is a standard plot: half of one
-   would leave no room for the data. */
-.plot-pair-col { container-type: inline-size; }
-svg.plot.plot-pair { aspect-ratio: auto; height: calc((100cqw / 1.618 - 22px) / 2); }
+   standard plot (φ : 1) of their column, so the upper one starts level with the E_U
+   chart beside them and the lower one ends level with it; the two are alike, each
+   half that room less what lies between them. That is the second one's caption line,
+   22px, and --pair-sep above it, so its toolbar, pulled up onto the caption, keeps
+   clear of the plot above (26px buttons + 2px gap, 12px clear). Stacked on a narrow
+   screen, each is a standard plot: half of one would leave no room for the data. */
+.plot-pair-col { container-type: inline-size; --pair-sep: 18px; }
+.plot-pair-col > .plot-wrap + .txt-caption { margin-top: var(--pair-sep); }
+svg.plot.plot-pair { aspect-ratio: auto; height: calc((100cqw / 1.618 - 22px - var(--pair-sep)) / 2); }
 :root.narrow-layout svg.plot.plot-pair { aspect-ratio: 1.618; height: auto; }
 .legend {
   font-size: 12px;
