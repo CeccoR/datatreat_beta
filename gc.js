@@ -11,7 +11,7 @@ import { Plot, svgEl } from './plot.js';
   let files=[];
   let ms=[], Qs=[], startArr=[], endArr=[], lightOnDates=[];
   let dataTables=[];
-  let plot1, plot2;
+  let plot1;
   let plotResRate, plotResCum;
 
   // Axis titles. The SVG form carries the H₂ subscript and the g⁻¹/h⁻¹ superscripts;
@@ -62,7 +62,7 @@ import { Plot, svgEl } from './plot.js';
   let gcUploadAlerts='';
   // Outgoing plot view captured before a resize/tab-switch redraw recreates the plots,
   // so drawGcData can restore the current zoom instead of snapping to the full range.
-  let _gcPrev1=null, _gcPrev2=null;
+  let _gcPrev1=null;
 
   // Effective per-sample values (respect each parameter's all/one mode).
   const mOf     = k => mMode==='all'     ? mShared     : ms[k];
@@ -459,9 +459,8 @@ import { Plot, svgEl } from './plot.js';
   function computeAndRenderGc(preserveView){
     if (!files.length) return;
     // Snapshot the current zoom before renderGcPlots() builds fresh Plot instances.
-    const o1 = document.getElementById('gcSvg1')._plot, o2 = document.getElementById('gcSvg2')._plot;
+    const o1 = document.getElementById('gcSvg1')._plot;
     _gcPrev1 = (preserveView && o1 && isFinite(o1.xmin)) ? {xmin:o1.xmin,xmax:o1.xmax,ymin:o1.ymin,ymax:o1.ymax} : null;
-    _gcPrev2 = (preserveView && o2 && isFinite(o2.xmin)) ? {xmin:o2.xmin,xmax:o2.xmax,ymin:o2.ymin,ymax:o2.ymax} : null;
     dataTables = files.map((f,h)=>{
       const lightOn = lightOnDates[h];
       // Rows on one shared time axis, with the light-on instant inserted as an extra
@@ -575,12 +574,10 @@ import { Plot, svgEl } from './plot.js';
   function renderGcPlots(){
     const legend = document.getElementById('gcLegend'); legend.innerHTML='';
     plot1 = new Plot(document.getElementById('gcSvg1'), {xlabel:'Time (h)', ylabelSvg:LBL_RATE_SVG});
-    plot2 = new Plot(document.getElementById('gcSvg2'), {xlabel:'Time (h)', ylabelSvg:LBL_CUM_SVG});
     const resLegend = document.getElementById('gcResLegend'); resLegend.innerHTML='';
     legend.innerHTML   = dataTables.map(d=> gasLegendHtml(d, shownGases('a'))).join('');
     resLegend.innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
     plot1.attachTools(plot1.svg.closest('.plot-wrap'));
-    plot2.attachTools(plot2.svg.closest('.plot-wrap'));
     updateRegression();
   }
 
@@ -606,10 +603,10 @@ import { Plot, svgEl } from './plot.js';
   // (so bars are never clipped), y from 0 to the data from light-on on (yTop). Interval lines
   // are drawn as an overlay, redrawn on pan/zoom via _onView.
   function drawGcData(){
-    if (!plot1 || !plot2 || !dataTables.length) return;
+    if (!plot1 || !dataTables.length) return;
     // Restore the pre-redraw zoom captured in computeAndRenderGc (resize/tab-switch),
     // then clear it so a subsequent data-driven redraw snaps back to the full range.
-    const prev1 = _gcPrev1, prev2 = _gcPrev2; _gcPrev1 = _gcPrev2 = null;
+    const prev1 = _gcPrev1; _gcPrev1 = null;
     const allT = dataTables.flatMap(d=>d.t);
     const intPts = dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
     const tmin = Math.min(0, minArr(allT), ...intPts);
@@ -622,13 +619,8 @@ import { Plot, svgEl } from './plot.js';
     if (prev1){ plot1.xmin=prev1.xmin; plot1.xmax=prev1.xmax; plot1.ymin=prev1.ymin; plot1.ymax=prev1.ymax; }
     plot1.drawAxes(); plot1.clearData();
     drawGasLines(plot1, dataTables, shown, 'Fm');
-    plot2.setRange(tmin, tmax, 0, yTop(dataTables, shown, 'FmInt')*1.05);
-    if (prev2){ plot2.xmin=prev2.xmin; plot2.xmax=prev2.xmax; plot2.ymin=prev2.ymin; plot2.ymax=prev2.ymax; }
-    plot2.drawAxes(); plot2.clearData();
-    drawGasLines(plot2, dataTables, shown, 'FmInt');
     plot1._onView = ()=> drawGcIntervals(plot1);
-    plot2._onView = ()=> drawGcIntervals(plot2);
-    drawGcIntervals(plot1); drawGcIntervals(plot2);
+    drawGcIntervals(plot1);
   }
 
   // Integration-interval vertical lines. 'all': one shared pair in the theme-aware
@@ -665,7 +657,7 @@ import { Plot, svgEl } from './plot.js';
     }
   }
 
-  // ---- Row ↔ plot1 ↔ plot2 interaction (all three respond in unison) ----
+  // ---- Row ↔ plot interaction (both respond in unison) ----
   let gcHoverRAF = null;
   function scheduleClearGcHover(){
     if (gcHoverRAF) cancelAnimationFrame(gcHoverRAF);
@@ -676,7 +668,7 @@ import { Plot, svgEl } from './plot.js';
     if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
     if (gcHov === k) return;
     gcHov = k;
-    drawGcIntervals(plot1); drawGcIntervals(plot2); refreshGcRows();
+    drawGcIntervals(plot1); refreshGcRows();
   }
   function selectGc(k){
     if (!intPerSample()) return;
@@ -685,7 +677,7 @@ import { Plot, svgEl } from './plot.js';
     if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
     gcHov = null;
     gcSel = (gcSel===k) ? null : k;
-    drawGcIntervals(plot1); drawGcIntervals(plot2); refreshGcRows();
+    drawGcIntervals(plot1); refreshGcRows();
   }
   function refreshGcRows(){
     document.querySelectorAll('#gcParamTableWrap .gc-row').forEach(r=>{
