@@ -1831,6 +1831,10 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
    (the plot sits below the sample-nav row: 35px nav + 6px gap). */
 .param-head.aligned { margin-top: 41px; }
 :root.narrow-layout .param-head.aligned { margin-top: 0; }
+/* A side column that opens with buttons (XRPD's Fitting): their top edge on the
+   plot's, under the sample-nav row (30px and its 6px gap); stacked, nothing to meet. */
+.plot-top-aligned { margin-top: 36px; }
+:root.narrow-layout .plot-top-aligned { margin-top: 0; }
 .param-grid {
   display: grid;
   grid-template-columns: 3fr 2fr;
