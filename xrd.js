@@ -1,5 +1,6 @@
 import { fmtNum, csvLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
+import { createRietveld } from './xrd-rv.js';
 
 // Index of the grid point nearest to a 2θ on a uniform axis.
 function nearestIdx(x, pos){
@@ -37,6 +38,7 @@ function solveLinear(A, b){
   let allFiles = []; // {name, label, x[], y[], color}
   let files = [];
   let curIdx = 0;  // Analysis navigator index (non-standard samples only)
+  let rv = null;   // the Rietveld card (xrd-rv.js), made once the history exists
   let processed = []; // per file: {smoothed, baseline, subtracted, peaks}
   let manualPeaks = []; // per file: array of manually added 2θ positions
   let removedPeaks = []; // per file: array of removed peaks' detected 2θ positions
@@ -127,7 +129,7 @@ function solveLinear(A, b){
       onReorder(from, to){ moveFileTo(allFiles, from, to, slots()); afterFilesChange(); },
       onInclude(i, on){ const was = files[curIdx]; setIncluded(allFiles, i, on, slots()); stayOn(was); afterFilesChange(); },
       onIncludeAll(on){ const was = files[curIdx]; allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); stayOn(was); afterFilesChange(); },
-      onLabelChange(i, v){ allFiles[i].label=v; renderPeakTable(); updateXrdResults(); hist.commit(); },
+      onLabelChange(i, v){ allFiles[i].label=v; renderPeakTable(); updateXrdResults(); if (rv) rv.redraw(); hist.commit(); },
       onColorChange(i, v){ allFiles[i].color=v; updateXrdResults(); hist.commit(); },
       onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
       onRemoveAll(){ allFiles.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; panels.a.sel=panels.a.hov=null; xrdLoadAlerts=''; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
@@ -242,6 +244,7 @@ function solveLinear(A, b){
       processed = [];
       ['xrdWorkspace','xrdStdCard','xrdResults'].forEach(id=>{ document.getElementById(id).style.display='none'; });
     }
+    if (rv) rv.refresh();
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
 
@@ -258,6 +261,7 @@ function solveLinear(A, b){
       paramMode: {...paramMode},
       stdParams: {...stdParams},
       standardName: standardPick, curIdx, sizeBy,
+      rv: rv ? rv.snapshot() : null,
       norm: document.getElementById('xrdNorm').value,
     };
   }
@@ -273,6 +277,7 @@ function solveLinear(A, b){
     standardPick = s.standardName || '';
     sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
     curIdx = Math.min(s.curIdx, Math.max(0, files.length-1));
+    if (rv) rv.restore(s.rv);
     document.getElementById('xrdNorm').value = s.norm;
     syncModeButtons();
     afterFilesChange();
@@ -286,6 +291,9 @@ function solveLinear(A, b){
     });
   }
   const hist = registerHistory('xrd', xrdSnapshot, xrdRestore);
+  // The Rietveld card (xrd-rv.js): it reads the files, the standard and the history
+  // through these, and keeps its own phases and results in this module's state.
+  rv = createRietveld({ files: ()=> files, allFiles: ()=> allFiles, standardName: ()=> standardName, commit: ()=> hist.commit() });
 
   // Get params for a specific file index (respects per-field shared/per mode)
   function getFileParams(i){
@@ -1287,6 +1295,7 @@ function solveLinear(A, b){
     updateXrdAnalysis();
     updateXrdStandard();
     updateXrdResults();
+    rv.refresh(true);           // the standard's pattern takes the built-in LaB6 phase
     hist.commit();
   });
   // Standard's own parameter inputs (no all/one, no K/λ) — reprocess just the standard
@@ -1349,7 +1358,7 @@ function solveLinear(A, b){
   // layout, compensate the scroll so the viewed content stays put.
   function withScrollAnchor(fn){
     const vh = window.innerHeight, cy = vh/2;
-    const cards = ['xrdWorkspace','xrdStdCard','xrdResults'].map(id=>document.getElementById(id)).filter(el=>el && el.offsetParent!==null);
+    const cards = ['xrdWorkspace','xrdStdCard','xrdRvCard','xrdResults'].map(id=>document.getElementById(id)).filter(el=>el && el.offsetParent!==null);
     let anchor = cards.find(c=>{ const r=c.getBoundingClientRect(); return r.top<=cy && r.bottom>=cy; })
               || cards.find(c=>{ const r=c.getBoundingClientRect(); return r.bottom>0 && r.top<vh; });
     const before = anchor ? anchor.getBoundingClientRect().top : null;
@@ -1505,7 +1514,7 @@ function solveLinear(A, b){
   attachTableDeselect('a');
   attachTableDeselect('s');
 
-  registerTabRedraw('xrd', ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdStandard(true); updateXrdResults(); renderPeakTable(); } });
+  registerTabRedraw('xrd', ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdStandard(true); updateXrdResults(); renderPeakTable(); rv.redraw(); } });
 
   // Assemble a "wide" CSV from {h,v} columns, padded to the longest column.
   function wideCsv(cols){
@@ -1607,6 +1616,8 @@ function solveLinear(A, b){
       const cols=[]; nonStd.forEach(k=>{ if (processed[k].peaks.some(pk=>!pk.removed)) cols.push(...peakCols(k, anyStd)); });
       if (cols.length) entries.push({name:'peaks.csv', text:wideCsv(cols)});
     }
+    // The Rietveld card's: every refined pattern's curves, and its results.
+    entries.push(...rv.csvEntries());
     return entries;
   }
   registerCsvExport('xrd', exportXrdZip);

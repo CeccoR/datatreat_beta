@@ -267,6 +267,27 @@ class Plot{
     this.gData.appendChild(p);
     return p;
   }
+  /* Separate straight segments in data units, pairs of points (xs[2i], ys[2i]) to
+     (xs[2i+1], ys[2i+1]), drawn as one path: the tick rows that mark a phase's
+     reflections under a refined pattern. A line would join them. */
+  segments(xs, ys, color, width, meta){
+    const entry = {type:'segments', xs, ys, color, width, label: meta && meta.label, key: meta && meta.key};
+    this._stored.push(entry);
+    return this._renderSegments(entry);
+  }
+  _renderSegments(entry, proj){
+    const {px,py} = proj || this._projector();
+    let d='';
+    for (let i=0;i+1<entry.xs.length;i+=2){
+      const x0=entry.xs[i], y0=entry.ys[i], x1=entry.xs[i+1], y1=entry.ys[i+1];
+      if (![x0,y0,x1,y1].every(isFinite)) continue;
+      if (Math.max(x0,x1)<this.xmin || Math.min(x0,x1)>this.xmax) continue; // off-view
+      d += 'M'+px(x0).toFixed(2)+','+py(y0).toFixed(2)+' L'+px(x1).toFixed(2)+','+py(y1).toFixed(2)+' ';
+    }
+    const p = svgEl('path',{d, fill:'none', stroke:entry.color, 'stroke-width':entry.width||1});
+    this.gData.appendChild(p);
+    return p;
+  }
   bar(x0, x1, y0, y1, color){
     const entry = {type:'bar', x0, x1, y0, y1, color};
     this._stored.push(entry);
@@ -439,6 +460,7 @@ class Plot{
     const proj = this._projector();
     for (const e of this._stored){
       if (e.type==='line') this._renderLine(e, proj);
+      else if (e.type==='segments') this._renderSegments(e, proj);
       else if (e.type==='points') this._renderPoints(e, proj);
       else if (e.type==='bar') this._renderBar(e);
       else if (e.type==='barpx') this._renderBarPx(e);

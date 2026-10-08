@@ -395,6 +395,48 @@
         </div>
       </div>
 
+      <div class="card" id="xrdRvCard" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Rietveld</h3>
+        <div class="instr-block" id="xrdRvInfo">Whole-pattern Rietveld refinement. Each phase comes from a CIF (<b>+ CIF</b>): its cell, its atoms and the symmetry the structure has. A file in P1, as Materials Project gives them, has its symmetry found from the atoms, so that a cubic cell is refined by <i>a</i> alone (a primitive cell of a centred lattice through its conventional cell, whose <i>a</i> and <i>V</i> are the ones reported); a file with its own operations is checked against its formula and Z (an origin-choice mix-up shows there). The instrumental standard is refined against the built-in LaB₆ (NIST SRM 660c, <i>a</i> = 4.156826 Å, held fixed): its zero and its peak shape — the Thompson–Cox–Hastings pseudo-Voigt, Gaussian width² = U·tan²θ + V·tanθ + W and Lorentzian width = X·tanθ + Y/cosθ — become the instrument's, and each sample refines only its own broadening on top of them: Y, whose Lorentzian width gives the crystallite size (D = Kλ/(Y·cosθ), K = 0.9 as in the Analysis), and X, the microstrain. The pattern is computed from Kα₁ and Kα₂ at the file's wavelengths and ratio, the Bragg–Brentano Lorentz–polarisation factor (with a monochromator only when the file has one), |F|² from the atoms (Waasmaier–Kirfel form factors with Chantler's anomalous terms), a Chebyshev background and a specimen displacement per sample; each point weighs by its counts (1/σ², σ² the counts times the attenuation). <b>Refine</b> starts from the CIF's cell, finds where the pattern's peaks are by scaling that cell, then frees the parameters stage by stage; <b>Refine all</b> does the standard first. With several phases each gets its weight fraction (Hill–Howard, of the crystalline part). A phase is reported <i>not detected</i>, and left out of the refinement, when its scale is not above 3 esd, or when it is significant only through intensity under another phase's peaks with no part of the pattern its own (a candidate impurity whose lines fall on the main phase's would otherwise take up whatever misfit those peaks leave). The same CIF added twice gives two size populations of one phase. Under the pattern: the difference, and a row of ticks per phase at its reflections. R<sub>wp</sub>, R<sub>exp</sub> and χ² judge the fit; the values in brackets are the standard errors in the last digits, which the serially correlated residuals of a powder pattern make smaller than the real uncertainty.</div>
+        <div class="peak-box" id="xrdRvPhaseBox" style="margin-top:0;margin-bottom:14px">
+          <div class="peak-box-head">
+            <span class="txt-mini">Phases</span>
+            <button class="btn" id="xrdRvAddCif" title="Add a phase from a CIF file">+ CIF</button>
+            <input type="file" id="xrdRvCifInput" accept=".cif,.CIF" multiple style="display:none">
+          </div>
+          <div id="xrdRvPhaseList"></div>
+        </div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left">
+                <button class="btn nav-arrow" id="xrdRvPrev" aria-label="Previous pattern">&#8249;</button>
+                <span id="xrdRvIdx" class="pill nav-count" style="margin:0">1/1</span>
+                <button class="btn nav-arrow" id="xrdRvNext" aria-label="Next pattern">&#8250;</button>
+                <span class="txt-caption" id="xrdRvLabel">—</span>
+              </div>
+            </div>
+            <div class="plot-wrap">
+              <svg class="plot" id="xrdRvSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="xrdRvSvg" data-csv-mod="xrd" data-csv-names="rietveld_pattern.csv" data-dl-name="XRPD_rietveld.svg" data-dl-legend="xrdRvLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="xrdRvLegend" class="legend"></div>
+            <p class="txt-meta" id="xrdRvInstr"></p>
+          </div>
+          <div class="col mw280" id="xrdRvSide" style="align-self:flex-start">
+            <div class="txt-mini param-head aligned">Refinement</div>
+            <div id="xrdRvStatus" class="txt-meta"></div>
+            <div id="xrdRvResults"></div>
+            <div id="xrdRvProgWrap" class="rv-prog" style="display:none"><div id="xrdRvProgBar"></div></div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn primary" id="xrdRvRefine" style="flex:1">Refine</button>
+              <button class="btn primary" id="xrdRvRefineAll" style="flex:1">Refine all</button>
+            </div>
+            <button class="btn" id="xrdRvClear" style="margin-top:8px;width:100%">Clear refinement</button>
+          </div>
+        </div>
+      </div>
+
       <div class="card" id="xrdResults" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
         <div id="xrdResultsEmpty" style="display:none;color:var(--muted);font-size:14px;padding:6px 0">All loaded files are set as the instrumental standard — load additional samples to see results here.</div>
@@ -533,7 +575,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v417</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v418</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

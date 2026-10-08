@@ -1910,6 +1910,27 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .pg-result > .cag-formula { color: var(--muted); }
 .pg-result > .cag-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
 #xrdStdCagAlert:not(:empty) { margin-top: 12px; }
+/* ===== XRPD Rietveld card ===== */
+/* The phases from CIFs, one row each: a colour key, the name and what was read from
+   the file, its remove ×. */
+.rv-phase { display: flex; align-items: flex-start; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); }
+.rv-phase:first-child { border-top: none; }
+.rv-phase .rv-key { flex: none; width: 12px; height: 12px; border-radius: 3px; margin-top: 3px; }
+.rv-phase .rv-main { flex: 1; min-width: 0; font-size: 13px; line-height: 1.5; }
+.rv-phase .rv-main b { color: var(--text); }
+.rv-phase .rv-sub { color: var(--muted); font-size: 12px; }
+.rv-phase .rv-del { flex: none; }
+.rv-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
+/* What a refinement gives, in a box like the Caglioti fit's: one value a line. */
+.rv-result { margin-top: 10px; display: grid; row-gap: 7px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.rv-result > .pg-stat { font-size: 13px; color: var(--text); }
+.rv-result > .pg-stat b { color: var(--accent); }
+.rv-result > .txt-mini { margin-top: 4px; }
+/* Phase names are formulae more often than not: upper case would turn Co into CO. */
+.rv-result > .txt-mini.rv-phase-name { text-transform: none; letter-spacing: .02em; }
+.rv-result > .rv-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.rv-prog { height: 6px; margin-top: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.rv-prog > div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
 /* Remove top margin on first label in parameter panels */
 .col > label:first-child,
 .col > label:first-of-type {
