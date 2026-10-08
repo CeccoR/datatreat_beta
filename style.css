@@ -1920,6 +1920,19 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-phase .rv-main b { color: var(--text); }
 .rv-phase .rv-sub { color: var(--muted); font-size: 12px; }
 .rv-phase .rv-del { flex: none; }
+.rv-phase .rv-shape { flex: none; white-space: nowrap; }
+/* The peak widths under the pattern: the table (as the Analysis card's), the
+   Williamson–Hall plot and the tests' box. */
+.rv-widths { margin-top: 16px; }
+.rv-pk .rv-key-sm { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+/* hkl on one line: a coincident pair (300/221) wrapped under its key. */
+.rv-pk td:nth-child(2) { white-space: nowrap; }
+/* A peak the tests leave out (overlapped, weak, at an end, not broadened): dimmed, its
+   number struck. */
+.peak-row.rv-pk-out { opacity: .5; }
+.peak-row.rv-pk-out td:first-child { text-decoration: line-through; }
+#xrdRvTests .rv-result { margin-top: 10px; }
+.rv-result .pg-stat .txt-meta { font-size: 12px; margin-left: 4px; }
 .rv-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
 /* What a refinement gives, in a box like the Caglioti fit's: one value a line. */
 .rv-result { margin-top: 10px; display: grid; row-gap: 7px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }

@@ -5,7 +5,8 @@
    values a line, in standard notation (the esd in brackets in the last digits), and
    the rows of the results CSV.
 ========================================================= */
-import { buildModel, autoRefine, displacementMm } from './xrd-rietveld.js';
+import { buildModel, autoRefine, displacementMm, shapeOf } from './xrd-rietveld.js';
+import { measureWidths } from './xrd-widths.js';
 import { metric, cellFrom } from './xrd-cryst.js';
 
 // 3.9151(8): the value to the esd's first significant digit (two when that digit is
@@ -97,7 +98,44 @@ function summarise(model, res, phases, opts){
                                  : cellFrom(C, q.latNames.map(l=> p[q.pfx + l]), ph.cell)).V;
     const V = vol(P), VE = propagate(res, q.latNames.map(l=> q.pfx + l), vol);
     lines.push({ label: conv ? 'V (conventional cell)' : 'V', value: fmtEsd(V, VE, ' Å³') }); row(nm, conv ? 'V_conventional_A3' : 'V_A3', V, VE);
-    if (ss){
+    const sh = ss && ss.shape ? shapeOf(model, P, k, res) : null, info = (res.shapes || {})[q.id];
+    if (sh){
+      // An axis's direction is shown only where its size is told from the other two;
+      // axes whose sizes are not (a group) are reported once, as the group's mean.
+      const off = a => `${a.angle < 0.05 ? '0' : a.angle.toFixed(1)}° off`;
+      const by = sh.kind === 'plate' ? sh.axes[0] : sh.kind === 'needle' ? sh.axes[2] : null;
+      const kindTxt = by && by.resolved ? `${sh.kind === 'plate' ? 'plate ⟂' : 'needle ∥'} ${by.label} (${off(by)})`
+        : sh.kind === 'anisotropic' ? 'anisotropic, neither plate nor needle' : sh.kind;
+      lines.push({ label: 'shape', value: kindTxt, title: 'The free shape: the ellipsoid of apparent size the data choose. Plate: one size under half the other two; needle: one over twice the other two; triaxial: each under half the next; isometric: within 20 %, or not told apart. Sizes whose widths differ by less than 2 esd count as one' });
+      const shown = new Set(), long = ' The longest size is the least bounded: noise spreads the axes apart, and it comes out long.';
+      sh.axes.forEach((a, i)=>{
+        if (a.group >= 0){
+          const g = sh.groups[a.group];
+          if (!shown.has(a.group)){
+            shown.add(a.group);
+            const where = g.axes.length === 3 ? 'size, all axes' : sh.kind === 'plate' && g.axes[0] > 0 ? 'size in the plate' : sh.kind === 'needle' && g.axes[1] < 2 ? 'size across the needle' : `size, axes ${g.axes.map(j=> j + 1).join(' and ')}`;
+            lines.push({ label: where, value: fmtEsd(g.D, g.Desd, ' nm'), title: `The mean of ${g.axes.length} principal axes whose sizes (${g.axes.map(j=> sh.axes[j].D.toFixed(1)).join(', ')} nm) are not told apart within 2 esd: any axes in their plane fit as well, so they have no directions of their own and their mean is the measurement` });
+            row(nm, `shape_size_${g.axes.map(j=> j + 1).join('_')}_mean_nm`, g.D, g.Desd);
+          }
+          row(nm, `shape_size_${i + 1}_nm`, a.D, NaN);
+          return;
+        }
+        // Each axis by its own direction, in one frame with the others: two axes of one
+        // family (a plate's [110] normal and its [1-10] width) would read alike as ⟨110⟩.
+        const uvw = '[' + a.dir.map(t=> t < 0 ? '-' + (-t) : String(t)).join('') + ']';
+        lines.push({ label: `size ∥ ${uvw}`, value: `${fmtEsd(a.D, a.Desd, ' nm')} · ${off(a)}`, title: `Apparent size along this principal axis, Kλ/(Ys·cosθ), K = 0.9 (as the isotropic size); the axis is ${a.angle.toFixed(1)}° from ${uvw}${a.label !== uvw ? ` (of ${a.label})` : ''}, the simplest lattice direction within 10°; the axes' directions are given in one frame.${i === 2 ? long : ''}` });
+        row(nm, `shape_size_${i + 1}_nm`, a.D, a.Desd);
+        row(nm, `shape_axis_${i + 1}_${a.dir.join('_')}_deg_off`, a.angle, NaN);
+      });
+      if (info){
+        const dChi = info.chi2 - info.chi2Iso, dBIC = dChi/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
+        lines.push({ label: 'vs isotropic', value: `ΔBIC ${dBIC.toFixed(0)} ${dBIC < -10 ? '(shape supported)' : dBIC > 10 ? '(isotropic preferred)' : '(no clear preference)'}`,
+          title: `χ² ${info.chi2Iso.toFixed(0)} → ${info.chi2.toFixed(0)} with ${info.P - info.Piso} more parameters; BIC with χ² divided by the isotropic fit's χ²_ν (${info.chi2redIso.toFixed(2)}), so that a misfit of the model is not counted as evidence. ${info.agree} of the ${info.full} starts refined to the end reached the same minimum (${info.starts} starting shapes tried): a check on the search, not a proof that no better minimum exists` });
+        row(nm, 'shape_dBIC', dBIC, NaN); row(nm, 'shape_starts_agreeing', info.agree, NaN);
+      }
+      lines.push({ label: 'microstrain', value: fmtEsd(ss.strain, ss.strainEsd), title: 'ε from the Lorentzian X·tanθ = 4ε·tanθ' });
+      row(nm, 'microstrain', ss.strain, ss.strainEsd);
+    } else if (ss){
       lines.push(isFinite(ss.D)
         ? { label: 'crystallite size', value: fmtEsd(ss.D, ss.Desd, ' nm'), title: `D = Kλ/(Y·cosθ·π/180), K = 0.9, from the Lorentzian width Y = ${fmtEsd(ss.Ys, ss.YsEsd, '°')}${ss.instrumentSubtracted ? ' above the instrument’s' : ' (the instrument’s included)'}` }
         : { label: 'crystallite size', value: 'no measurable broadening' });
@@ -111,6 +149,23 @@ function summarise(model, res, phases, opts){
   return { groups, table, warnings };
 }
 
+/* The widths for the card: per phase its rows (what the table shows), the WH fit and
+   the order pairs, and how well each model predicts the measured widths: χ²_ν of
+   (measured − model)/esd over the rows the tests use. Their rows go into the results
+   CSV too. */
+function summariseWidths(w, phases, table){
+  const name = id => (phases.find(p=> p.id === id) || {}).name || '';
+  return { corrected: w.corrected, phases: w.phases.map(ph=>{
+    const use = ph.rows.filter(r=> !r.overlapped && !r.edge && !r.weak && !r.flat && r.Wesd > 0);
+    const score = key => { const v = use.filter(r=> isFinite(r.model[key])); return v.length ? v.reduce((t, r)=> t + ((r.W - r.model[key])/r.Wesd)**2, 0)/v.length : NaN; };
+    const nm = name(ph.id) || ph.name, wh = ph.wh;
+    if (isFinite(wh.chi2nu)){ table.push({ phase: nm, name: 'WH_chi2nu', value: wh.chi2nu, esd: NaN }, { phase: nm, name: 'WH_size_nm', value: wh.D, esd: wh.Desd }, { phase: nm, name: 'WH_strain', value: wh.b, esd: wh.bEsd }); }
+    ph.orders.forEach(o=> table.push({ phase: nm, name: `order_ratio_${o.aPlain.replace(/ /g, '')}_${o.bPlain.replace(/ /g, '')}`, value: o.R, esd: o.Resd }));
+    const scores = { iso: score('iso'), shape: ph.shaped ? score('shape') : NaN };
+    return { id: ph.id, name: nm, shaped: ph.shaped, rows: ph.rows, wh, orders: ph.orders, scores };
+  }) };
+}
+
 self.addEventListener('message', e=>{
   const { id, x, y, varMul, instr, phases, opts } = e.data || {};
   try {
@@ -118,8 +173,15 @@ self.addEventListener('message', e=>{
     const res = autoRefine(model, { standard: !!opts.standard, irf: opts.irf || null, refineB: !!opts.refineB,
       onProgress: (frac, stage)=> self.postMessage({ id, type: 'progress', frac, stage }) });
     const { groups, table, warnings } = summarise(model, res, phases, opts);
+    // The peaks' own widths and the tests on them (xrd-widths), for a sample.
+    let widths = null;
+    if (!opts.standard){
+      const onProgress = (i, n)=> self.postMessage({ id, type: 'progress', frac: 1, stage: `peak widths, ${i} of ${n}` });
+      try { widths = summariseWidths(measureWidths(model, res, { irf: opts.irf || null, isoParams: res.isoParams || null, shapeIds: Object.keys(res.shapes || {}), onProgress }), phases, table); }
+      catch(e){ warnings.push('The peak widths could not be measured: ' + String(e && e.message || e)); }
+    }
     self.postMessage({ id, type: 'result', res: { params: res.params, esd: res.esd, stats: res.stats, stages: res.stages,
-      atBound: res.atBound, converged: res.converged, ms: res.ms, warnings, phaseResults: groups, table } });
+      atBound: res.atBound, converged: res.converged, ms: res.ms, warnings, phaseResults: groups, table, widths } });
   } catch(err){
     self.postMessage({ id, type: 'error', message: String((err && err.message) || err) });
   }
