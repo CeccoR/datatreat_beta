@@ -37,8 +37,22 @@ function propagate(res, names, f){
 }
 
 function summarise(model, res, phases, opts){
-  const P = res.params, E = res.esd || {}, groups = [], table = [];
+  const P = res.params, E = res.esd || {}, groups = [], table = [], warnings = [...(res.warnings || [])], extra = [];
   const row = (phase, name, value, esd)=> table.push({ phase, name, value, esd });
+  // ΔB, when refined (opts.refineB): one shift added to every atom's B of the phase. A
+  // B made negative is no displacement at all: what it takes up is something else
+  // (absorption or roughness lowering the low angles, the background).
+  const deltaB = (q, ph, nm, lines)=>{
+    const key = q.pfx + 'B';
+    if (!(res.free || []).includes(key)) return;
+    const line = { label: 'ΔB (all atoms)', value: fmtEsd(P[key], E[key], ' Å²'), title: 'Added to every atom’s B from the CIF (0.5 Å² where the CIF gives none)' };
+    if (lines) lines.push(line); else extra.push({ name: ph.name || q.name, phase: true, lines: [line] });
+    row(nm, 'delta_B_A2', P[key], E[key]);
+    const bMin = Math.min(...(ph.atoms || []).map(a=> Number.isFinite(a.Biso) ? a.Biso : 0));
+    // Only a ΔB that lowers B below 0: a negative B of the CIF's own is the phase list's
+    // warning, and a positive ΔB takes up nothing of the kind.
+    if (Number.isFinite(bMin) && P[key] < 0 && bMin + P[key] < 0) warnings.push(`${ph.name || q.name}: with ΔB = ${fmtEsd(P[key], E[key], ' Å²')} some atom's B is negative (${(bMin + P[key]).toFixed(2)} Å²), which no displacement gives: it more likely takes up absorption, surface roughness or the background.`);
+  };
   if (opts.standard){
     const s = displacementMm(model, P.disp), sE = Math.abs(displacementMm(model, 1))*E.disp;
     groups.push({ name: 'Instrument', lines: [
@@ -46,10 +60,14 @@ function summarise(model, res, phases, opts){
       { label: 'displacement', value: fmtEsd(s, sE, ' mm'), title: `Δ2θ = −(2s/R)·cosθ, R = ${model.radius} mm: ${fmtEsd(P.disp, E.disp, '°')} at cosθ = 1` },
       ...['U', 'V', 'W'].map(k=> ({ label: k, value: fmtEsd(P[k], E[k], ' °²') })),
       ...['X', 'Y'].map(k=> ({ label: k, value: fmtEsd(P[k], E[k], '°') })),
+      { label: 'asymmetry (S+H)/L', value: fmtEsd(P.asym, E.asym), title: 'Axial divergence, Finger–Cox–Jephcoat with sample and receiving-slit heights equal: the tail of the low-angle peaks towards lower angles (of the high-angle ones towards higher)' },
     ] });
     row('', 'zero_deg', P.zero, E.zero); row('', 'displacement_mm', s, sE);
     ['U', 'V', 'W', 'X', 'Y'].forEach(k=> row('', k, P[k], E[k]));
-    return { groups, table };
+    row('', 'asymmetry_SH_L', P.asym, E.asym);
+    deltaB(model.phases[0], phases[0], '');
+    groups.push(...extra);
+    return { groups, table, warnings };
   }
   const s = displacementMm(model, P.disp), sE = Math.abs(displacementMm(model, 1))*E.disp;
   groups.push({ name: 'Specimen', lines: [{ label: 'displacement', value: fmtEsd(s, sE, ' mm'), title: `Δ2θ = −(2s/R)·cosθ, R = ${model.radius} mm` }] });
@@ -86,21 +104,22 @@ function summarise(model, res, phases, opts){
       lines.push({ label: 'microstrain', value: fmtEsd(ss.strain, ss.strainEsd), title: 'ε from the Lorentzian X·tanθ = 4ε·tanθ' });
       row(nm, 'crystallite_size_nm', ss.D, ss.Desd); row(nm, 'microstrain', ss.strain, ss.strainEsd);
     }
+    deltaB(q, ph, nm, lines);
     if ((res.detected || []).length > 1 && wf){ lines.push({ label: 'weight fraction', value: fmtEsd(wf.W*100, wf.esd*100, ' %'), title: 'Hill–Howard: W = S·ZMV/Σ S·ZMV, of the crystalline phases' }); row(nm, 'weight_fraction_pct', wf.W*100, wf.esd*100); }
     groups.push({ name: nm, phase: true, lines });
   });
-  return { groups, table };
+  return { groups, table, warnings };
 }
 
 self.addEventListener('message', e=>{
   const { id, x, y, varMul, instr, phases, opts } = e.data || {};
   try {
     const model = buildModel({ x, y, varMul, instr, phases });
-    const res = autoRefine(model, { standard: !!opts.standard, irf: opts.irf || null,
+    const res = autoRefine(model, { standard: !!opts.standard, irf: opts.irf || null, refineB: !!opts.refineB,
       onProgress: (frac, stage)=> self.postMessage({ id, type: 'progress', frac, stage }) });
-    const { groups, table } = summarise(model, res, phases, opts);
+    const { groups, table, warnings } = summarise(model, res, phases, opts);
     self.postMessage({ id, type: 'result', res: { params: res.params, esd: res.esd, stats: res.stats, stages: res.stages,
-      atBound: res.atBound, converged: res.converged, ms: res.ms, warnings: res.warnings || [], phaseResults: groups, table } });
+      atBound: res.atBound, converged: res.converged, ms: res.ms, warnings, phaseResults: groups, table } });
   } catch(err){
     self.postMessage({ id, type: 'error', message: String((err && err.message) || err) });
   }

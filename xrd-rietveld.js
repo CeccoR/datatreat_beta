@@ -5,14 +5,15 @@
    page, a module Worker and Node.
    The model, for every point 2θ_i:
      y_c = bg(2θ_i) + Σ_phases S Σ_hkl Σ_{α1,α2} w_j·m·LP·F²·exp(−2ΔB s²)·Φ(2θ_i − 2θ_kj)
-   with Φ the Thompson–Cox–Hastings pseudo-Voigt (no asymmetry yet: the low-angle peaks
-   of a sharp standard carry the misfit), the instrument's U, V, W, X, Y shared by the
-   phases and each phase's own Lorentzian Xs, Ys on top, the background a Chebyshev
+   with Φ the Thompson–Cox–Hastings pseudo-Voigt made asymmetric by the axial divergence
+   (Finger–Cox–Jephcoat, one parameter (S + H)/L: fcjNodes), the instrument's U, V, W,
+   X, Y and asymmetry shared by the phases and each phase's own Lorentzian Xs, Ys on
+   top, the background a Chebyshev
    series plus a 1/2θ term, and the weights 1/σ², σ² = max(y,1)·varMul. Weighting by the
    observed counts (as GSAS and FullProf do) pulls the fitted background about one count
    per point below the truth (a point that fluctuates low gets more weight); harmless at
    these count levels, and the scales are unbiased.
-   Parameters are named ('zero', 'disp', 'U', 'bg0', 'bgInv', 'p1.scale', 'p1.a',
+   Parameters are named ('zero', 'disp', 'U', 'asym', 'bg0', 'bgInv', 'p1.scale', 'p1.a',
    'p1.B', 'p1.Ys', …: 'p' + the phase's id) and kept in one vector with a registry
    beside it, so a result travels as a plain {name: value} object, and calc() redraws
    it on a model built again from the same inputs.
@@ -47,6 +48,9 @@ const MIN_POINTS = 10;         // fewer weighted points than this: no refinement
 // down to 0.9 of the last d in the pattern, so it holds every reflection a cell up to
 // 1/0.9 = 1.11× as large brings into the range.
 const LAT_RANGE = 0.1;
+// (S + H)/L to start the asymmetry's refinement from: a Bragg–Brentano goniometer with
+// Soller slits of a few hundredths of a radian.
+const ASYM_START = 0.02;
 // Rwp values this close (relative) are a tie on a scan: a flat curve, no minimum there.
 const TIE = 1e-9;
 
@@ -148,6 +152,151 @@ function addPeak(out, x, c, H, eta, I, win = WIN_FWHM){
   }
 }
 
+/* addPeak for a peak spread by the axial divergence over the shifts of `nodes`: the sum
+   Σ w_k·Φ(x − c − d_k) where it differs from one peak at the mean shift d̄, and that one
+   peak beyond. A node per point over the whole window cost the full ±max(40 H, 1.5°)
+   per node (a large sharp cell refined 4.5× slower); out there the shifted Lorentzians
+   differ from the mean one by ½·var(d)·L″, under 2 % of a wing that is itself under
+   0.2 % of the peak, so beyond R = 1.5·spread + 6 H (the Gaussian long gone; the
+   profile then within 0.005 % of the peak of the full node sum) the one peak stands
+   for them, blended in over 2 H so the profile stays continuous in the parameters. One
+   window, about c + d̄ and widened by the spread, for both. */
+function addPeakFCJ(out, x, c, H, eta, I, nodes, win = WIN_FWHM){
+  // The nodes as sorted arrays: the Gaussian part of a point needs only the nodes within
+  // its reach (|Δ| < √(40/gk) ≈ 3.8 H, as addPeak's cut), found by two moving pointers.
+  const m = nodes.length, ord = nodes.slice().sort((p, q)=> p.d - q.d);
+  const dk = new Float64Array(m), wk = new Float64Array(m);
+  let db = 0, sp = 0;
+  for (let k = 0; k < m; k++){ dk[k] = ord[k].d; wk[k] = ord[k].w; db += wk[k]*dk[k]; }
+  for (let k = 0; k < m; k++){ const a = Math.abs(dk[k] - db); if (a > sp) sp = a; }
+  const cm = c + db, half = Math.max(win*H, WIN_MIN) + sp, R = 1.5*sp + 6*H, tau = 2*H;
+  const i0 = lowerBound(x, cm - half), n = x.length, xe = cm + half;
+  const gk = 4*LN2/(H*H), gh = 2*Math.sqrt(LN2/Math.PI)/H, gReach = Math.sqrt(40/gk);
+  const lk = 2/(Math.PI*H), l4 = 4/(H*H);
+  const lEdge = lk/(1 + l4*half*half);
+  const cl = I*eta, cg = I*(1 - eta)*gh;
+  let lo = 0, hi = 0;
+  for (let i = i0; i < n; i++){
+    const xi = x[i]; if (xi > xe) break;
+    const r = Math.abs(xi - cm);
+    let wing = 0;
+    if (r > R){
+      const d = xi - cm, d2 = d*d, ga = gk*d2;
+      wing = cl*(lk/(1 + l4*d2) - lEdge);
+      if (ga < 40) wing += cg*Math.exp(-ga);
+      if (r >= R + tau){ out[i] += wing; continue; }
+    }
+    // The core: every node's Lorentzian, the Gaussians of the nodes in reach.
+    const u = xi - c;
+    let sl = 0, sg = 0;
+    for (let k = 0; k < m; k++){ const d = u - dk[k]; sl += wk[k]/(1 + l4*d*d); }
+    while (lo < m && dk[lo] < u - gReach) lo++;
+    if (hi < lo) hi = lo;
+    while (hi < m && dk[hi] <= u + gReach) hi++;
+    for (let k = lo; k < hi; k++){ const d = u - dk[k]; sg += wk[k]*Math.exp(-gk*d*d); }
+    const core = cl*(lk*sl - lEdge) + cg*sg;
+    if (r <= R){ out[i] += core; continue; }
+    const T = (R + tau - r)/tau;
+    out[i] += T*core + (1 - T)*wing;
+  }
+}
+
+/* Axial divergence: Finger, Cox & Jephcoat, J. Appl. Cryst. 27 (1994) 892, with the
+   sample's and the receiving slit's half-heights equal (S = H), so one parameter
+   A = (S + H)/L, L the goniometer radius, as GSAS-II's SH/L. A ray that leaves the
+   diffraction plane by h·L over L meets the Debye cone of a reflection at 2θ where
+   cos 2φ = cos 2θ·√(1 + h²): below 2θ = 90° the peak gains a tail towards low angles,
+   above it towards high angles, none at 90°. h runs over [0, A]; FCJ's weight
+   W(2φ) = (A − h)/(h·|cos 2φ|) — the overlap of sample and slit heights over the cone's
+   spread — is, per unit h, (A − h)/((1 + h²)·sin 2φ): finite at h = 0, where in 2φ it
+   has an integrable singularity at the peak, so Gauss–Legendre in h converges fast. The
+   shift goes as h², up to ≈ −A²/2·cot 2θ (the centroid −A²/12·cot 2θ, radians).
+   → nodes [{ d (deg, 2φ − 2θ), w }] with Σw = 1, enough of them that neighbouring shifts
+   lie well within the peak's width H; one node at the mean shift when the whole tail is
+   a small part of H (a broad peak, or near 90°). */
+const GL_CACHE = new Map();
+function gaussLegendre(n){
+  let g = GL_CACHE.get(n);
+  if (g) return g;
+  const t = new Float64Array(n), w = new Float64Array(n);
+  for (let i = 0; i < n; i++){
+    let z = Math.cos(Math.PI*(i + 0.75)/(n + 0.5)), dp = 1;
+    for (let it = 0; it < 100; it++){
+      let p0 = 1, p1 = 0;
+      for (let j = 1; j <= n; j++){ const p2 = p1; p1 = p0; p0 = ((2*j - 1)*z*p1 - (j - 1)*p2)/j; }
+      dp = n*(z*p0 - p1)/(z*z - 1);
+      const dz = p0/dp; z -= dz;
+      if (Math.abs(dz) < 1e-15) break;
+    }
+    t[i] = z; w[i] = 2/((1 - z*z)*dp*dp);
+  }
+  g = { t, w }; GL_CACHE.set(n, g);
+  return g;
+}
+/* Nodes: enough that neighbouring shifts lie within about H/4 of each other (the profile
+   then within 0.04 % of the exact one); 300 at most, which only a very sharp peak below
+   about 12° (or above 168°) needs. Below 2θ = atan A the cone's tail ends at
+   hMax = |tan 2θ| < A, where the weight has a 1/√(hMax − h) singularity: there
+   h = hMax·(1 − u²) takes it out. `nForce` holds the count (and the one-node collapse,
+   n = 1) fixed: the Jacobian's two displaced points must not differ by a change of
+   quadrature (a node more at one of them moved a derivative by 10 %). The count used is
+   left on the array as .n. */
+const FCJ_MAX_NODES = 300;
+function fcjNodes(th, A, H, nForce){
+  const tt = 2*th, c2 = Math.cos(tt);
+  if (!(A > 0) || Math.abs(c2) < 1e-12) return null;
+  const hTan = Math.abs(Math.tan(tt)), cut = hTan < A;
+  const hMax = cut ? hTan*(1 - 1e-12) : A;
+  const phiOf = h => Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + h*h))));
+  const dMax = (phiOf(hMax) - tt)*R2D;
+  const collapse = nForce ? nForce === 1 : Math.abs(dMax) < 0.05*H;
+  const n = collapse ? 4 : nForce || Math.min(FCJ_MAX_NODES, Math.max(4, Math.ceil(4*Math.abs(dMax)/Math.max(H, 1e-4)) + 2));
+  const { t, w } = gaussLegendre(n), out = [];
+  let sw = 0, sd = 0;
+  for (let i = 0; i < n; i++){
+    // h over [0, hMax]: linearly, or through u ∈ [0, 1] with dh = 2·hMax·u·du at the cut.
+    const u = 0.5*(t[i] + 1), h = cut ? hMax*(1 - u*u) : hMax*u, jac = cut ? 2*hMax*u : hMax;
+    const f = phiOf(h), sf = Math.sin(f);
+    if (!(sf > 0)) continue;
+    const wi = 0.5*w[i]*jac*(A - h)/((1 + h*h)*sf), d = (f - tt)*R2D;
+    out.push({ d, w: wi }); sw += wi; sd += wi*d;
+  }
+  if (!(sw > 0)) return null;
+  if (collapse){ const one = [{ d: sd/sw, w: 1 }]; one.n = 1; return one; }
+  for (const o of out) o.w /= sw;
+  out.n = n;
+  return out;
+}
+
+/* The FCJ nodes of one line of one reflection. Under model.fcjFreeze (for the whole of a
+   refine(), and for each Jacobian column outside one) the count is fixed at the line's
+   first use, so that χ² is a smooth function of the parameters throughout the
+   refinement: a count that changed with U..Y or the asymmetry moved χ² in steps and a
+   derivative by up to 10×. refine() checks the counts at its end (model.fcjAudit) and
+   runs again when the widths or the asymmetry have outgrown them. */
+function lineNodes(model, key, th, A, H){
+  // A search for where the peaks are needs only where each one's weight lies: its
+  // centroid (cellSearch; the asymmetry costs it nothing then).
+  if (model.fcjCentroid) return fcjNodes(th, A, H, 1);
+  const fz = model.fcjFreeze;
+  if (!fz){
+    const nd = fcjNodes(th, A, H), au = model.fcjAudit;
+    // refine()'s check after a refinement: has a line outgrown its held count?
+    // (A count a quarter short still leaves the profile within about 0.1 % of the peak:
+    // the cell moving a line by a node or two is no reason to start again.)
+    if (au && nd){ const f = au.get(key); if (f === undefined || f === 0 || (f === 1 ? nd.n > 1 : nd.n > 1.25*f)) model.fcjBehind = true; }
+    return nd;
+  }
+  let n = fz.get(key);
+  if (n === undefined){
+    const nd = fcjNodes(th, A, H);
+    n = nd ? nd.n : 0;
+    fz.set(key, n);
+    return nd;
+  }
+  return fcjNodes(th, A, H, n || undefined);
+}
+
 /* ---------- the model ---------- */
 // The ticks' hkl. For a cell refined through its conventional cell (constraint.basis = M,
 // xrd-cryst classify) the conventional indices h·M, so they match the a, c reported:
@@ -242,7 +391,7 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   // linear: its Jacobian column is exact (scales, background).
   const par = [];
   const add = (name, value, lo, hi, step, extra) => par.push({ name, value, lo, hi, step, refine: false, linear: false, group: 'global', phase: -1, ...extra });
-  const P = Object.assign({ zero: 0, disp: 0, U: 0, V: 0, W: 0.002, X: 0, Y: 0.03, Xs: 0, Ys: 0 }, prof);
+  const P = Object.assign({ zero: 0, disp: 0, U: 0, V: 0, W: 0.002, X: 0, Y: 0.03, asym: 0, Xs: 0, Ys: 0 }, prof);
   add('zero', P.zero, -2, 2, 1e-5);
   add('disp', P.disp, -3, 3, 1e-5);
   add('U', P.U, 0, 20, 1e-6, { group: 'profile' });
@@ -250,6 +399,9 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   add('W', P.W, 0, 20, 1e-6, { group: 'profile' });
   add('X', P.X, 0, 10, 1e-6, { group: 'profile' });
   add('Y', P.Y, 0, 10, 1e-6, { group: 'profile' });
+  // (S + H)/L of the axial divergence (fcjNodes). Its effect goes as its square, so at 0
+  // its derivative vanishes: a refinement of it starts from a typical value (autoRefine).
+  add('asym', P.asym, 0, 0.2, 1e-4, { group: 'profile' });
   // A starting level for the background: the low tail of the counts.
   const sorted = Array.from(Yo).filter((v, i)=> w[i] > 0).sort((a, b)=> a - b);
   const level = sorted.length ? sorted[Math.floor(0.1*sorted.length)] : 0;
@@ -296,7 +448,7 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   return {
     x: X, y: Yo, w, n, x0, x1, rev, lines, lineName, cos2M, radius, bgDegree: N, basis,
     phases: ph, par, index, v: Float64Array.from(par, p=> p.value),
-    iZero: index.zero, iDisp: index.disp, iProf: ['U','V','W','X','Y'].map(k=> index[k]),
+    iZero: index.zero, iDisp: index.disp, iProf: ['U','V','W','X','Y'].map(k=> index[k]), iAsym: index.asym,
     iBg: par.map((p, i)=> p.group === 'bg' ? i : -1).filter(i=> i >= 0),
     // The 1/2θ term is used where air scatter rises: patterns that start below 20° (and
     // above 0, where it is defined).
@@ -418,7 +570,7 @@ function phasePattern(model, v, k, out, ticks){
   const q = model.phases[k];
   const cell = cellOf(model, v, k), { Gs } = metric(cell);
   const f2 = phaseF2(model, q, cell, Gs), d = q.d;
-  const zero = v[model.iZero], disp = v[model.iDisp], dB = v[q.iB];
+  const zero = v[model.iZero], disp = v[model.iDisp], dB = v[q.iB], A = v[model.iAsym];
   const { U, V, W, X, Y } = profileOf(model, v, k);
   const x = model.x, xa = model.x0, xb = model.x1, S = v[q.iScale];
   for (let r = 0; r < q.nRefl; r++){
@@ -430,10 +582,17 @@ function phasePattern(model, v, k, out, ticks){
       const th = Math.asin(st);
       const tt = 2*th*R2D + zero + disp*Math.cos(th);
       const pr = profileAtTheta(th, U, V, W, X, Y);
+      // The axial divergence spreads the peak over shifts of one sign, up to dMax
+      // (fcjNodes): a line out of range by more than that is skipped before its nodes.
+      const c2 = Math.cos(2*th);
+      const dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
       const half = Math.max(model.win*pr.H, WIN_MIN);
-      if (tt + half < xa || tt - half > xb) continue;
+      if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
+      const nodes = A > 0 ? lineNodes(model, (k*65536 + r)*4 + j, th, A, pr.H) : null;
       const I = base*L.w*lpFactor(model, th);
-      addPeak(out, x, tt, pr.H, pr.eta, I, model.win);
+      if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, I, model.win);
+      else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, I, model.win);
+      else addPeakFCJ(out, x, tt, pr.H, pr.eta, I, nodes, model.win);
       if (ticks && j === 0 && tt >= xa && tt <= xb)
         ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
                      tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: pr.H, eta: pr.eta, j: 0 });
@@ -572,8 +731,13 @@ function jacobian(model, v, st, free, cols){
     const ks = p.group === 'phase' ? [p.phase] : [...Array(np).keys()];
     for (const k of ks){
       const S = v[model.phases[k].iScale]; if (!S) continue;
-      phasePattern(model, vu, k, tmpA);
-      if (dn === v[j]) tmpB.set(st.pats[k]); else phasePattern(model, vd, k, tmpB);
+      // Both displaced points with the same FCJ node counts (lineNodes): refine()'s, or,
+      // outside one, those of this column's first point.
+      const own = !model.fcjFreeze;
+      if (own) model.fcjFreeze = new Map();
+      if (dn === v[j]){ phasePattern(model, v, k, tmpB); phasePattern(model, vu, k, tmpA); }
+      else { phasePattern(model, vu, k, tmpA); phasePattern(model, vd, k, tmpB); }
+      if (own) model.fcjFreeze = null;
       const f = S/(up - dn);
       for (let i = 0; i < n; i++) col[i] += f*(tmpA[i] - tmpB[i]);
     }
@@ -652,6 +816,24 @@ function hgFloored(model, v){
    pattern (a zero column, e.g. the widths of a phase at scale 0) or numerically a
    combination of others has esd NaN, and is listed in `undetermined`. */
 function refine(model, opts = {}){
+  // The FCJ node counts held for the whole refinement (lineNodes). When the refinement
+  // has carried a line past its held count (the asymmetry, freed from 0.02, went to 0.058
+  // on the user's standard: tails 8× longer than the count was made for, and χ² 8 % off
+  // at the end), it runs again from there with counts made at the new values.
+  if (model.fcjFreeze) return refineHeld(model, opts);
+  let res;
+  for (let pass = 0; pass < 4; pass++){
+    const fz = model.fcjFreeze = new Map();
+    try { res = refineHeld(model, opts); }
+    finally { model.fcjFreeze = null; }
+    model.fcjAudit = fz; model.fcjBehind = false;
+    try { for (let k = 0; k < model.phases.length; k++) if (model.v[model.phases[k].iScale]) phasePattern(model, model.v, k, new Float64Array(model.n)); }
+    finally { model.fcjAudit = null; }
+    if (!model.fcjBehind) break;
+  }
+  return res;
+}
+function refineHeld(model, opts){
   const t0 = Date.now();
   const names = opts.free || model.par.filter(p=> p.refine).map(p=> p.name);
   const free = [...new Set(names.map(nm=> model.index[nm]).filter(i=> i != null))];
@@ -827,6 +1009,12 @@ function parabolicMin(curve, k){
    the range is not placed (autoRefine searches a single phase once more, wider). The
    model keeps f, with the scales and background solved there. */
 function cellSearch(model, opts = {}){
+  // Peaks at their FCJ centroids for the search (lineNodes): a quarter of its cost on a
+  // large sharp cell, and the minimum where the full profile puts it.
+  const prev = model.fcjCentroid; model.fcjCentroid = true;
+  try { return cellSearchAt(model, opts); } finally { model.fcjCentroid = prev; }
+}
+function cellSearchAt(model, opts){
   const range = opts.range != null ? opts.range : 0.03;
   let ks;
   if (opts.index != null) ks = [opts.index];
@@ -958,13 +1146,13 @@ function ownEvidence(model, v, chi2){
    2. scales + background;
    3. + lattice + displacement (sample) | + zero + displacement (standard);
    4. + W, Y (with opts.irf: each phase's Ys instead);
-   5. + X, and U, V when the instrumental profile is free (the standard, or
-      opts.instrumentalProfileFree) and ≥ 8 reflections lie in the range (with irf: each
-      phase's Xs instead);
+   5. + X, and U, V and the asymmetry (S + H)/L when the instrumental profile is free
+      (the standard, or opts.instrumentalProfileFree) and ≥ 8 reflections lie in the
+      range (with irf: each phase's Xs instead);
    6. + ΔB per phase (opts.refineB).
-   With opts.irf = { U, V, W, X, Y, zero? } (the standard's refined profile), the
-   instrument's U..Y are held at those values and each phase's broadening goes to its
-   Xs, Ys, which add to X and Y (Lorentzian widths add under convolution): size and
+   With opts.irf = { U, V, W, X, Y, asym?, zero? } (the standard's refined profile), the
+   instrument's U..Y and asymmetry are held at those values and each phase's broadening
+   goes to its Xs, Ys, which add to X and Y (Lorentzian widths add under convolution): size and
    strain then come from the sample alone. The zero, when given, is the instrument's and
    is held too. Without irf the phases share one total profile (their Xs, Ys stay 0).
    A phase not detected — its scale not above 3 esd, or significant only under another
@@ -997,6 +1185,14 @@ function autoRefine(model, opts = {}){
 
   // Starting profile.
   const est = widthEstimate(model), thE = est.tt/2*D2R;
+  // The asymmetry: the standard's with irf (0 in an irf from before it was modelled);
+  // refined where the instrument's profile is (the standard), from a typical (S + H)/L,
+  // since at 0 it has no derivative; else none. Whether stage 4 frees it, with U and V,
+  // is decided after stage 3 from the reflections then in range; the count at the
+  // file's cell here only chooses the starting value.
+  const instrFree = (std || opts.instrumentalProfileFree) && !irf;
+  const asym0 = Number.isFinite(opts.asym0) ? opts.asym0 : ASYM_START;
+  v[model.iAsym] = irf ? (Number.isFinite(irf.asym) ? irf.asym : 0) : instrFree && reflectionsInRange(model) >= 8 ? asym0 : 0;
   if (irf){
     ['U','V','W','X','Y'].forEach(k=> { if (Number.isFinite(irf[k])) v[model.index[k]] = irf[k]; });
     if (Number.isFinite(irf.zero)) v[model.iZero] = irf.zero;
@@ -1055,7 +1251,10 @@ function autoRefine(model, opts = {}){
     // The same rule as the cell search: a minimum on the edge of ±0.3° (or none) leaves
     // the zero where it was.
     const z0 = model.v[model.iZero];
-    const sc = scan(model, (vv, z)=> { vv[model.iZero] = z; }, zs);
+    // Peaks at their FCJ centroids, as in the cell search.
+    const prevC = model.fcjCentroid; model.fcjCentroid = true;
+    let sc;
+    try { sc = scan(model, (vv, z)=> { vv[model.iZero] = z; }, zs); } finally { model.fcjCentroid = prevC; }
     const kmin = bestIndex(sc.curve, z0), found = kmin >= 0 && !edgeOrFlat(sc.curve, kmin);
     const z = found ? parabolicMin(sc.curve, kmin) : z0, vv = model.v.slice(); vv[model.iZero] = z;
     if (!found) warnings.push('The zero-shift scan found no minimum within ±0.3°: the zero is left at its start.');
@@ -1112,8 +1311,10 @@ function autoRefine(model, opts = {}){
     free = free.concat(irf ? keep(model.phases.map(q=> q.pfx + 'Ys')) : ['W', 'Y']);
     res = run(3, 'widths', free);
     nIn = reflectionsInRange(model);
-    const uvFree = (std || opts.instrumentalProfileFree) && !irf && nIn >= 8;
-    free = free.concat(irf ? keep(model.phases.map(q=> q.pfx + 'Xs')) : uvFree ? ['X', 'U', 'V'] : ['X']);
+    const uvFree = instrFree && nIn >= 8;
+    // Freed from a typical value (at 0 it has no derivative); held, none.
+    if (instrFree && (uvFree ? !(model.v[model.iAsym] > 0) : model.v[model.iAsym] !== 0)){ const vv = model.v.slice(); vv[model.iAsym] = uvFree ? asym0 : 0; setParams(model, vv); }
+    free = free.concat(irf ? keep(model.phases.map(q=> q.pfx + 'Xs')) : uvFree ? ['X', 'U', 'V', 'asym'] : ['X']);
     res = run(4, irf ? 'size and strain' : uvFree ? 'full profile' : 'profile shape', free);
     if (opts.refineB){
       free = free.concat(keep(model.phases.map(q=> q.pfx + 'B')));

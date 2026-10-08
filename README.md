@@ -103,8 +103,8 @@ Compare, smooth, and normalize X-ray powder diffractograms.
 **Rietveld refinement** (the *Rietveld* card):
 
 1. Add each phase from a CIF (**+ CIF**). Files in P1, such as Materials Project's, have their symmetry found from the atoms, so a cubic cell is refined by *a* alone.
-2. Choose the instrumental standard (LaB₆, NIST SRM 660c, is built in): its refinement gives the instrument's zero and peak shape.
-3. **Refine all** refines the standard first, then every sample: cell, specimen displacement, crystallite size and microstrain (above the instrument's broadening), weight fractions with several phases, with R<sub>wp</sub>, R<sub>exp</sub>, χ² and the standard errors. A phase with no significant intensity of its own is reported *not detected* and left out; the same CIF added twice gives two size populations of one phase.
+2. Choose the instrumental standard (LaB₆, NIST SRM 660c, is built in): its refinement gives the instrument's zero and peak shape, axial-divergence asymmetry included.
+3. **Refine all** refines the standard first, then every sample: cell, specimen displacement, crystallite size and microstrain (above the instrument's broadening), weight fractions with several phases, with R<sub>wp</sub>, R<sub>exp</sub>, χ² and the standard errors. A phase with no significant intensity of its own is reported *not detected* and left out; the same CIF added twice gives two size populations of one phase. **ΔB per phase** optionally refines an overall shift of the displacement parameters.
 
 ---
 

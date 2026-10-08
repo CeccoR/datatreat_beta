@@ -82,6 +82,7 @@ export function createRietveld(host){
   let idx = 0;               // the pattern on show, among the included files
   let results = {};          // file name → { params, esd, stats, stages, at }
   let busy = false, cancelled = false;
+  let refineB = false;       // also refine one ΔB per phase (an option, off by default)
   let plot = null;
   // Its own colour, apart from the CIF phases' (which start from the first of theirs).
   const lab6 = { id: 0, cif: LAB6_CIF, file: '', color: '#4cc9a0', prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)') };
@@ -129,13 +130,16 @@ export function createRietveld(host){
   // instrumental profile and zero once it is refined.
   function irf(){
     const std = host.files().find(isStd), r = std && results[std.name];
-    return r && r.params ? { U: r.params.U, V: r.params.V, W: r.params.W, X: r.params.X, Y: r.params.Y, zero: r.params.zero } : null;
+    // asym: absent from a standard refined before the asymmetry was modelled (none then).
+    return r && r.params ? { U: r.params.U, V: r.params.V, W: r.params.W, X: r.params.X, Y: r.params.Y, asym: r.params.asym || 0, zero: r.params.zero } : null;
   }
   const phaseData = list => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color }));
-  function payloadFor(f){
+  // optB: the ΔB option as it was when the run started, the same for all its files (an
+  // undo during a run would otherwise change it between them).
+  function payloadFor(f, optB = refineB){
     const std = isStd(f);
     return { x: Array.from(f.x), y: Array.from(f.y), varMul: f.varMul ? Array.from(f.varMul) : null, instr: instrOf(f),
-      phases: phaseData(phasesFor(f)), opts: { standard: std, irf: std ? null : irf() } };
+      phases: phaseData(phasesFor(f)), opts: { standard: std, irf: std ? null : irf(), refineB: optB } };
   }
 
   async function refine(list){
@@ -143,11 +147,12 @@ export function createRietveld(host){
     const todo = list.filter(f=> phasesFor(f).length);
     if (!todo.length){ setStatus('Add a phase from a CIF to refine.'); return; }
     busy = true; cancelled = false; syncButtons();
+    const optB = refineB;
     try {
       for (let k = 0; k < todo.length && !cancelled; k++){
         const f = todo[k];
         setStatus(`Refining ${f.label}…`);
-        const res = await runInWorker(payloadFor(f), (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`); });
+        const res = await runInWorker(payloadFor(f, optB), (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`); });
         if (!res) break;
         results[f.name] = { ...res, phases: phasesFor(f).map(p=> p.id), irf: isStd(f) ? null : irf(), at: Date.now() };
         if (f === host.files()[idx]) draw();
@@ -312,6 +317,8 @@ export function createRietveld(host){
     $('xrdRvRefine').textContent = busy ? 'Cancel' : 'Refine';
     $('xrdRvRefineAll').disabled = busy;
     $('xrdRvClear').disabled = busy;
+    const b = $('xrdRvOptB');
+    b.classList.toggle('is-on', refineB); b.setAttribute('aria-pressed', String(refineB)); b.disabled = busy;
   }
 
   $('xrdRvAddCif').onclick = ()=> $('xrdRvCifInput').click();
@@ -329,6 +336,8 @@ export function createRietveld(host){
     const f = host.files()[idx]; if (f) refine([f]);
   };
   $('xrdRvRefineAll').onclick = ()=> refineAll();
+  // An option for the next refinements; the results already there keep what they had.
+  $('xrdRvOptB').onclick = ()=>{ if (busy) return; refineB = !refineB; syncButtons(); host.commit(); };
   $('xrdRvClear').onclick = ()=>{ const f = host.files()[idx]; if (!f || busy || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); };
   $('xrdRvPrev').onclick = ()=>{ const n = host.files().length; if (n){ idx = (idx - 1 + n) % n; draw(); } };
   $('xrdRvNext').onclick = ()=>{ const n = host.files().length; if (n){ idx = (idx + 1) % n; draw(); } };
@@ -346,13 +355,14 @@ export function createRietveld(host){
       draw(preserve);
     },
     redraw(){ if (host.files().length) draw(true); },
-    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color })), nextId, idx, results: JSON.parse(JSON.stringify(results)) }; },
+    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color })), nextId, idx, refineB, results: JSON.parse(JSON.stringify(results)) }; },
     restore(s){
       s = s || {};
       phases = (s.phases || []).flatMap(p=>{ try { return [{ ...p, prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
       nextId = s.nextId || phases.reduce((m, p)=> Math.max(m, p.id + 1), 1);
       idx = s.idx || 0;
       results = s.results ? JSON.parse(JSON.stringify(s.results)) : {};
+      refineB = !!s.refineB; syncButtons();
     },
     // The CSVs: every refined pattern's curves, and one row per pattern and phase.
     csvEntries(){ return csvEntries(); },
@@ -377,7 +387,10 @@ export function createRietveld(host){
     let s = csvLine(['Pattern', 'Phase', 'Quantity', 'Value', 'Esd', 'Rwp', 'Rexp', 'chi2']);
     fs.forEach(f=>{
       const r = results[f.name], st = r.stats || {};
-      (r.table || []).forEach(q=> s += csvLine([f.label, q.phase || '', q.name, fmtNum(q.value, 8), isFinite(q.esd) ? fmtNum(q.esd, 8) : '', fmtNum(st.Rwp*100, 3), fmtNum(st.Rexp*100, 3), fmtNum(st.chi2, 3)]));
+      // Number.isFinite: a NaN that went through JSON (undo, a saved project) comes back as
+      // null, which the global isFinite takes for 0 and fmtNum cannot format.
+      const num = (v, d)=> Number.isFinite(v) ? fmtNum(v, d) : '';
+      (r.table || []).forEach(q=> s += csvLine([f.label, q.phase || '', q.name, num(q.value, 8), num(q.esd, 8), num(st.Rwp*100, 3), num(st.Rexp*100, 3), num(st.chi2, 3)]));
     });
     out.push({ name: 'rietveld_results.csv', text: s });
     return out;
