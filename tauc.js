@@ -1496,8 +1496,8 @@ import { Plot } from './plot.js';
   function unionWl(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.wl)); hi=Math.max(hi,maxArr(f.wl)); }); return [lo,hi]; }
   function unionHv(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); }); return [lo,hi]; }
 
-  /* ---- Results: the Kubelka-Munk plot, then each card's pair of charts under its
-     name, in card order ---- */
+  /* ---- Results: the Kubelka-Munk pair (F(R) against λ, and against hν on a log
+     axis), then each card's pair of charts under its name, in card order ---- */
   const resList = document.getElementById('taucResList');
   function resHtml(a){
     const p = 'an' + a.id, t = a.type === 'tauc';

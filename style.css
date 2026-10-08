@@ -589,6 +589,14 @@ main {
 :root.narrow-layout .mw260,
 :root.narrow-layout .mw220,
 :root.narrow-layout .mw200 { min-width: 100%; }
+/* Two plots side by side, each a caption, its plot and its legend, whose captions may
+   wrap to different heights (a long one beside a short one, on a narrower window):
+   the captions share one grid row, so the plots under them start level. Stacked, the
+   columns are the usual ones. */
+.row.cap-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; align-items: start; }
+.row.cap-row > .col { display: grid; grid-row: span 3; grid-template-rows: subgrid; min-width: 0; }
+:root.narrow-layout .row.cap-row { display: flex; }
+:root.narrow-layout .row.cap-row > .col { display: block; min-width: 100%; }
 /* ===== Text style tokens — the single source of text styling. Every text element
    carries one of these classes explicitly (no bare-tag aliases); see also
    .txt-mini / .txt-caption / .txt-meta below. ===== */
@@ -872,9 +880,9 @@ svg.plot {
   border: 1px solid var(--line);
   touch-action: none;
 }
-/* Exception (GC's mean-rate chart, and Tauc's Kubelka-Munk plot heading its Results):
-   full-width strip plots, where a single golden-ratio box would be far too tall. Twice the golden ratio
-   (1 : 2φ) keeps one roughly as tall as a standard plot in a half-width column. */
+/* Exception (GC's mean-rate chart): a full-width strip plot, where a single
+   golden-ratio box would be far too tall. Twice the golden ratio (1 : 2φ) keeps it
+   roughly as tall as a standard plot in a half-width column. */
 svg.plot.plot-wide { aspect-ratio: 3.236; }
 /* Once the columns stack to full width the floor is pointless — and keeping it would
    make every plot overflow and scroll horizontally on the narrowest screens. */

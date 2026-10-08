@@ -224,18 +224,26 @@
 
       <div class="card" id="taucResults" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
-        <p class="txt-caption">Kubelka-Munk Function</p>
-        <div class="plot-wrap">
-          <svg class="plot plot-wide" id="taucResSvg0"></svg>
-          <button class="btn plot-dl-btn" data-dl-svg="taucResSvg0" data-csv-mod="tauc" data-csv-names="reflectance_FR.csv" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+        <!-- F(R) against the wavelength and, on a log axis, against the energy, side by
+             side as each card's pair is. -->
+        <div class="row cap-row">
+          <div class="col">
+            <p class="txt-caption">Kubelka-Munk Function</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvg0"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvg0" data-csv-mod="tauc" data-csv-names="reflectance_FR.csv" data-dl-name="FR_vs_lambda.svg" data-dl-legend="taucResLegend0"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="taucResLegend0" class="legend"></div>
+          </div>
+          <div class="col">
+            <p class="txt-caption">Kubelka-Munk Function vs Energy, log scale</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="taucResSvgLog"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="taucResSvgLog" data-csv-mod="tauc" data-csv-names="FR_vs_energy.csv" data-dl-name="FR_vs_energy_log.svg" data-dl-legend="taucResLegendLog"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
+            </div>
+            <div id="taucResLegendLog" class="legend"></div>
+          </div>
         </div>
-        <div id="taucResLegend0" class="legend"></div>
-        <p class="txt-caption" style="margin-top:14px">Kubelka-Munk Function vs Energy, log scale</p>
-        <div class="plot-wrap">
-          <svg class="plot plot-wide" id="taucResSvgLog"></svg>
-          <button class="btn plot-dl-btn" data-dl-svg="taucResSvgLog" data-csv-mod="tauc" data-csv-names="FR_vs_energy.csv" data-dl-name="FR_vs_energy_log.svg" data-dl-legend="taucResLegendLog"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-        </div>
-        <div id="taucResLegendLog" class="legend"></div>
         <!-- Each analysis card's pair of charts, in card order (tauc.js). -->
         <div id="taucResList"></div>
       </div>
@@ -525,7 +533,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v416</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v417</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
