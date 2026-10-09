@@ -285,6 +285,19 @@ const formulaText = f => Object.keys(f).map(el => el + (Math.abs(f[el] - 1) < 1e
 // The crystal system a space group names: from its IT number, else from an H-M symbol with
 // its parts spaced as CIFs write them ('P 42/m n m', 'F m -3 m', 'P 1 21/c 1', 'R -3 m :H').
 // null where the symbol does not say for sure: a compact 'P4332' is cubic, 'P4322' tetragonal.
+/* Is the named group centrosymmetric? From the IT number; else from the symbol: a '/' (an
+   axis with a mirror normal to it), −1 or −3 (m-3, Fd-3m, R-3c…), or an orthorhombic
+   symbol of mirrors and glides alone (Pnma). Anything else (Fm3m, an old notation) →
+   null: not known, not checked. */
+const CENTRO_IT = [[2, 2], [10, 15], [47, 74], [83, 88], [123, 142], [147, 148], [162, 167], [175, 176], [191, 194], [200, 206], [221, 230]];
+function centroOf(hm, n){
+  if (n >= 1 && n <= 230) return CENTRO_IT.some(([a, b]) => n >= a && n <= b);
+  if (!hm) return null;
+  const body = hm.trim().replace(/\s*:.*$/, '').slice(1).replace(/\s+/g, '');
+  if (/\/|-1|-3/.test(body)) return true;
+  if (symbolSystem(hm, null) === 'orthorhombic' && !/\d/.test(body)) return true;
+  return null;
+}
 function symbolSystem(hm, itNumber){
   const n = itNumber;
   if (n >= 1 && n <= 230) return n <= 2 ? 'triclinic' : n <= 15 ? 'monoclinic' : n <= 74 ? 'orthorhombic' : n <= 142 ? 'tetragonal' : n <= 167 ? 'trigonal' : n <= 194 ? 'hexagonal' : 'cubic';
@@ -362,9 +375,7 @@ function parseCif(text){
   ops = uniqueOps(ops);
   const isP1 = s => /^p\s*1$/i.test(s.trim());
   const named = (hm && !isP1(hm)) || itNumber > 1 || (hall && !isP1(hall));
-  if (!ops.length){
-    if (named) warnings.push(`The CIF lists no symmetry operations${hm ? ` for ${hm.trim()}` : ''}: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.`);
-  } else {
+  if (ops.length){
     const idIdx = ops.findIndex(o => o.R.every((v, i) => v === IDENT[i]) && o.t.every(v => !v));
     if (idIdx < 0){ warnings.push('The symmetry operations do not include the identity: it is added.'); ops.unshift({ R: IDENT.slice(), t: [0,0,0] }); }
     else if (idIdx > 0) ops.unshift(ops.splice(idIdx, 1)[0]);
@@ -416,7 +427,11 @@ function parseCif(text){
     if (!Number.isFinite(B) && aniso.has(label)) B = aniso.get(label);
     if (!Number.isFinite(B)){ B = B_DEFAULT; defaultB.push(label); }
     const m = mult ? num(mult[i]) : NaN;
-    sites.push({ label, type, key: sp.key, element: sp.element, x, y, z, occ: o, Biso: B, mult: m > 0 ? Math.round(m) : null });
+    // D scatters as H (speciesKey) but weighs its own: a deuterated cell would otherwise
+    // weigh light in the weight fractions.
+    // (Only a species read as hydrogen: 'DY3+' is dysprosium.)
+    const deut = sp.element === 'H' && /^d/i.test(String(typ && !isNull(typ[i]) ? typ[i] : label).trim());
+    sites.push({ label, type, key: sp.key, element: sp.element, x, y, z, occ: o, Biso: B, mult: m > 0 ? Math.round(m) : null, ...(deut ? { massEl: 'D' } : {}) });
   }
   if (!sites.length) throw new Error('None of the atom sites in the CIF could be read.');
   if (fallback.length) warnings.push(`No tabulated form factor for the ion${fallback.length > 1 ? 's' : ''} ${fallback.join(', ')}: the neutral atom is used.`);
@@ -432,27 +447,36 @@ function parseCif(text){
      the asymmetric unit, and the operations are not generated from the symbol here. Read
      as P1 they would fill the cell in part and give a wrong pattern with no error (rutile:
      2 atoms instead of 6, orthorhombic, (211) the strongest line). So the file is refused
-     unless the listed atoms are evidently the whole cell: they match the formula × Z, or,
-     with nothing to compare with, they show by themselves the crystal system and the
-     lattice centring the symbol names. (A lone special position can still pass that test:
-     a site alone in its cell shows the lattice's full symmetry.) */
-  if (!ops.length && named){
+     unless the listed atoms are evidently the whole cell: they match the formula × Z given,
+     or they show by themselves the crystal system and the lattice centring the symbol
+     names. (A lone special position can still pass that test: a site alone in its cell
+     shows the lattice's full symmetry.) The formula × Z is evidence only with Z given:
+     without it, Z is inferred from the atoms, and an asymmetric unit that holds whole
+     formula units passes by construction (NaCl named Fm-3m, given as Na and Cl, read as
+     one formula unit in P1). A list holding the identity alone, x, y, z, is the same
+     case as none. A centrosymmetric symbol also wants the centre of symmetry: an
+     asymmetric unit of P-1 in general positions shows every triclinic P lattice. */
+  const onlyIdentity = ops.length === 1 && ops[0].R.every((v, i) => v === IDENT[i]) && ops[0].t.every(v => !v);
+  if ((!ops.length || onlyIdentity) && named){
     const atoms = expandAtoms([], sites), comp = checkComposition(atoms, formula, Z);
     let whole = comp.checked && comp.ok;
     const why = [];
     if (comp.checked && !comp.ok) why.push(`the atoms fill the cell with ${Object.keys(comp.found).map(el => `${el} ${fmtCount(comp.found[el])}`).join(', ')}, not the formula × Z`);
-    else if (!comp.checked){
+    else if (!comp.checked || !(Z > 0)){
       const want = symbolSystem(hm, itNumber), letter = hm && /^[pabcifr]/i.test(hm.trim()) ? hm.trim()[0].toUpperCase() : null;
       const sym = findSymmetry(cell, atoms);
       const sysOk = !want || sym.system === want || (want === 'trigonal' && sym.system === 'hexagonal');
       const hexAxes = Math.abs(cell.gamma - 120) < 0.01 && same(cell.a, cell.b);
       const wantC = letter === 'R' ? (hexAxes ? 'R' : 'P') : letter;
       const cenOk = !wantC || sym.centring === wantC;
-      whole = sysOk && cenOk;
+      const invOk = !centroOf(hm, itNumber) || sym.ops.some(o => o.R.every((v, i) => v === -IDENT[i]));
+      whole = sysOk && cenOk && invOk;
       if (!sysOk) why.push(`the atoms show ${sym.system} symmetry, the symbol ${want}`);
       if (!cenOk) why.push(`the atoms lack the ${wantC} centring`);
+      if (!invOk) why.push('the atoms lack the centre of symmetry the symbol has');
     }
-    if (!whole) throw new Error(`The CIF names the space group ${hm ? hm.trim() : hall ? hall.trim() : 'No. ' + itNumber} but lists no symmetry operations, and they are not generated from the symbol: the ${sites.length} site${sites.length > 1 ? 's' : ''} given cannot be the whole cell (${why.join('; ')}). A CIF with its operations (_space_group_symop_operation_xyz) is needed: COD, ICSD and the Materials Project (symmetrized CIF) give them.`);
+    if (!whole) throw new Error(`The CIF names the space group ${hm ? hm.trim() : hall ? hall.trim() : 'No. ' + itNumber} but lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operations' : 'no symmetry operations'}, and they are not generated from the symbol: the ${sites.length} site${sites.length > 1 ? 's' : ''} given cannot be the whole cell (${why.join('; ')}). A CIF with its operations (_space_group_symop_operation_xyz) is needed: COD, ICSD and the Materials Project (symmetrized CIF) give them.`);
+    warnings.push(`The CIF lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operation' : 'no symmetry operations'}${hm ? ` for ${hm.trim()}` : ''}: the atoms are taken as they are (P1), so the cell is filled only if they are all listed.`);
   }
   const name = item(b, '_chemical_name_mineral') || item(b, '_chemical_formula_structural')
     || (formula ? formulaText(formula) : null) || item(b, '_chemical_name_common') || b.name;
@@ -485,7 +509,7 @@ function expandAtoms(ops, sites, tol = 1e-3){
       if (!pos.some(o => near(o, p))) pos.push(p);
     }
     for (const p of pos) out.push({ site: si, label: s.label, key, element, x: p[0], y: p[1], z: p[2],
-      occ: s.occ ?? 1, Biso: s.Biso ?? B_DEFAULT, cifMult: s.mult ?? null });
+      occ: s.occ ?? 1, Biso: s.Biso ?? B_DEFAULT, cifMult: s.mult ?? null, ...(s.massEl ? { massEl: s.massEl } : {}) });
   });
   return out;
 }
@@ -499,7 +523,7 @@ function cellContents(atoms){
 // Mass of the cell contents (g/mol per cell, i.e. Z·M), for Hill–Howard weight fractions.
 function cellMass(atoms){
   let m = 0;
-  for (const a of atoms) m += (a.occ ?? 1)*atomicMass(a.element);
+  for (const a of atoms) m += (a.occ ?? 1)*atomicMass(a.massEl || a.element);
   return m;
 }
 
@@ -796,6 +820,99 @@ function findSymmetry(cell, atoms, tol = 0.01){
   return { ops, order: ops.length, pointOrder: Rs.length, centring: centringOf(trans), ...classify(Rs, cell) };
 }
 
+/* ---------- displacement parameters by site ---------- */
+/* atomOrbits(cell, atoms, ops, tol) → { orbit (per atom), R (per atom: the rotation that
+   takes its orbit's first atom to it), ref (per orbit: that first atom's index) }: the
+   atoms of the filled cell grouped into crystallographic sites under the operations found
+   (findSymmetry), within tol Å — the sets that share one displacement parameter (an
+   anisotropic one turned by R from atom to atom). A P1 file lists every atom as its own
+   site: its orbits come from the symmetry found, not from the file's labels. */
+function atomOrbits(cell, atoms, ops, tol = 0.01){
+  const { G } = metric(cell), n = atoms.length, tol2 = tol*tol;
+  const list = ops && ops.length ? ops : [{ R: IDENT, t: [0,0,0] }];
+  const orbit = new Int32Array(n).fill(-1), Rof = new Array(n), ref = [];
+  const kind = a => (a.key || a.element || a.label) + '|' + (+(a.occ ?? 1)).toFixed(3);
+  const dist2 = (p, q) => {
+    let d0 = p[0]-q[0], d1 = p[1]-q[1], d2 = p[2]-q[2];
+    d0 -= Math.round(d0); d1 -= Math.round(d1); d2 -= Math.round(d2);
+    return G[0]*d0*d0 + G[4]*d1*d1 + G[8]*d2*d2 + 2*(G[1]*d0*d1 + G[2]*d0*d2 + G[5]*d1*d2);
+  };
+  for (let j = 0; j < n; j++){
+    if (orbit[j] >= 0) continue;
+    const o = ref.length, kj = kind(atoms[j]), xj = [atoms[j].x, atoms[j].y, atoms[j].z];
+    ref.push(j); orbit[j] = o; Rof[j] = IDENT.slice();
+    for (const { R, t } of list){
+      const y = apply3(R, xj); y[0] += t[0]; y[1] += t[1]; y[2] += t[2];
+      for (let k = 0; k < n; k++){
+        if (orbit[k] >= 0 || kind(atoms[k]) !== kj) continue;
+        if (dist2(y, [atoms[k].x, atoms[k].y, atoms[k].z]) < tol2){ orbit[k] = o; Rof[k] = R.slice(); break; }
+      }
+    }
+  }
+  return { orbit, R: Rof, ref };
+}
+/* siteAdpBasis(cell, ops, x, tol) → { names, vecs }: the anisotropic displacement
+   parameters a site at x may have, U^ij in the CIF's convention (Å², on the reciprocal
+   axes: β_ij = 2π² a*_i a*_j U^ij, the Debye–Waller factor exp(−hᵀβh)). The site's own
+   operations (those that keep x within tol Å) must leave U unchanged: with
+   N = diag(a*, b*, c*) and β turning as RβRᵀ, U turns as T U Tᵀ, T = N⁻¹RN. The
+   constraints, as rows on (U11, U22, U33, U12, U13, U23), reduced to echelon form with
+   the columns taken from the last, so the free parameters are the first ones (U11 rather
+   than U33 on a cubic site, U11 and U33 on a tetragonal axis). vecs: each free
+   parameter's U as a 6-vector. */
+const U_NAMES = ['U11', 'U22', 'U33', 'U12', 'U13', 'U23'];
+const U_IJ = [[0,0],[1,1],[2,2],[0,1],[0,2],[1,2]];
+function siteAdpBasis(cell, ops, x, tol = 0.01){
+  const { G, Gs } = metric(cell), N = [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])], tol2 = tol*tol;
+  const dist2 = d => { d = d.map(v => v - Math.round(v)); return G[0]*d[0]*d[0] + G[4]*d[1]*d[1] + G[8]*d[2]*d[2] + 2*(G[1]*d[0]*d[1] + G[2]*d[0]*d[2] + G[5]*d[1]*d[2]); };
+  const rows = [];
+  for (const { R, t } of (ops && ops.length ? ops : [])){
+    const y = apply3(R, x);
+    if (dist2([y[0] + t[0] - x[0], y[1] + t[1] - x[1], y[2] + t[2] - x[2]]) > tol2) continue;
+    const T = (i, j) => R[3*i + j]*N[j]/N[i];
+    U_IJ.forEach(([a, b], r)=>{
+      const row = U_IJ.map(([c, d]) => c === d ? T(a, c)*T(b, d) : T(a, c)*T(b, d) + T(a, d)*T(b, c));
+      row[r] -= 1;
+      rows.push(row);
+    });
+  }
+  // Echelon form on the columns from the last (U23 … U11).
+  const order = [5, 4, 3, 2, 1, 0], A = rows.map(r => order.map(c => r[c])), piv = [];
+  let rr = 0;
+  for (let c = 0; c < 6 && rr < A.length; c++){
+    let p = rr; for (let i = rr + 1; i < A.length; i++) if (Math.abs(A[i][c]) > Math.abs(A[p][c])) p = i;
+    if (Math.abs(A[p][c]) < 1e-8) continue;
+    [A[rr], A[p]] = [A[p], A[rr]];
+    const d = A[rr][c]; for (let k = 0; k < 6; k++) A[rr][k] /= d;
+    for (let i = 0; i < A.length; i++){ if (i === rr) continue; const f = A[i][c]; if (f) for (let k = 0; k < 6; k++) A[i][k] -= f*A[rr][k]; }
+    piv.push(c); rr++;
+  }
+  const free = [0, 1, 2, 3, 4, 5].filter(c => !piv.includes(c));
+  const names = [], vecs = [];
+  for (const f of free){
+    const v = new Array(6).fill(0);
+    v[order[f]] = 1;
+    piv.forEach((c, i) => { const val = -A[i][f]; if (Math.abs(val) > 1e-12) v[order[c]] = val; });
+    names.push(U_NAMES[order[f]]); vecs.push(v);
+  }
+  // Free parameters in U11 … U23 order.
+  const idx = names.map((_, i) => i).sort((i, j) => U_NAMES.indexOf(names[i]) - U_NAMES.indexOf(names[j]));
+  return { names: idx.map(i => names[i]), vecs: idx.map(i => vecs[i]) };
+}
+// U^ij (6-vector, U11 … U23) → β (row-major 3×3, fractional) for the cell's reciprocal lengths.
+function betaOf(Uv, Ns){
+  const U = [[Uv[0], Uv[3], Uv[4]], [Uv[3], Uv[1], Uv[5]], [Uv[4], Uv[5], Uv[2]]], k = 2*Math.PI*Math.PI;
+  return [0, 1, 2].flatMap(i => [0, 1, 2].map(j => k*Ns[i]*Ns[j]*U[i][j]));
+}
+// U_eq = ⅓ Σ U^ij a*_i a*_j (a_i·a_j) (Fischer & Tillmanns), Å².
+function uEquiv(Uv, cell){
+  const { G, Gs } = metric(cell), N = [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])];
+  const U = [[Uv[0], Uv[3], Uv[4]], [Uv[3], Uv[1], Uv[5]], [Uv[4], Uv[5], Uv[2]]];
+  let s = 0;
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) s += U[i][j]*N[i]*N[j]*G[3*i + j];
+  return s/3;
+}
+
 /* ---------- reflections ---------- */
 // Powder reflections with d ≥ dmin, sorted by decreasing d: each orbit of h under the Laue
 // group (the point group of the operations plus −1, i.e. Friedel pairs merged) once, with
@@ -942,4 +1059,5 @@ function cellFrom(constraint, values, template){
 }
 
 export { parseCif, parseSymop, symopString, parseFormula, metric, dSpacing, expandAtoms, cellContents, cellMass,
-         checkComposition, findSymmetry, holohedry, reflections, structureFactor, F2, latticeNames, latticeParams, cellFrom };
+         checkComposition, findSymmetry, holohedry, reflections, structureFactor, F2, latticeNames, latticeParams, cellFrom,
+         atomOrbits, siteAdpBasis, betaOf, uEquiv, U_NAMES };

@@ -6,13 +6,15 @@ The *Rietveld* card of the XRPD module refines powder patterns against crystal s
 - the least-squares solver;
 - the staged strategy that takes a pattern from a CIF cell to a converged fit;
 - the instrumental standard;
+- the size, strain and fault broadening, by Lorentzian widths or by Whole Powder Pattern Modelling;
+- the displacement parameters;
 - preferred orientation and the crystallite-shape model;
 - the single-peak width tests;
 - what is reported, and with which uncertainties.
 
-Each choice comes with its reason, and with the evidence it rests on where there is some. Most of that evidence is in the code's own comments and in the commit messages from v418 to v422.
+Each choice comes with its reason, and with the evidence it rests on where there is some. Most of that evidence is in the code's own comments and in the commit messages from v418 to v424.
 
-The document follows the code as of v422. Functions are named with their file, e.g. `autoRefine` (`xrd-rietveld.js`), so that the references survive edits better than line numbers.
+The document follows the code as of v424. Functions are named with their file, e.g. `autoRefine` (`xrd-rietveld.js`), so that the references survive edits better than line numbers.
 
 ## Contents
 
@@ -23,7 +25,7 @@ The document follows the code as of v422. Functions are named with their file, e
 5. [Least squares](#5-least-squares)
 6. [The refinement strategy](#6-the-refinement-strategy)
 7. [Instrument, size and strain](#7-instrument-size-and-strain)
-8. [Displacement parameters (ΔB)](#8-displacement-parameters-δb)
+8. [Displacement parameters](#8-displacement-parameters)
 9. [Preferred orientation](#9-preferred-orientation)
 10. [The free crystallite shape](#10-the-free-crystallite-shape)
 11. [Weight fractions, cell volume, displacement](#11-weight-fractions-cell-volume-displacement)
@@ -44,9 +46,11 @@ The document follows the code as of v422. Functions are named with their file, e
 2. Add each phase from a CIF (**+ CIF**). The standard's LaB₆ is built in.
 3. Optionally, set per phase:
    - a preferred orientation (none, *best axis*, or a plane);
-   - a crystallite shape (isotropic, or one of five solids).
-
-   Set per card: **ΔB per phase**.
+   - a crystallite shape (isotropic, or one of five solids);
+   - the size profile (Lorentzian; WPPM, one size; WPPM, a log-normal distribution of sizes);
+   - the microstrain (isotropic, or anisotropic after Stephens);
+   - planar faults (none, or one of six kinds);
+   - the displacement parameters (the CIF's; one ΔB; B per site; Uⁱʲ per site).
 4. **Refine all** refines the standard first, then every sample with the standard's instrumental profile.
 5. Read the results:
    - the result lines (with esds in brackets) and the warnings;
@@ -61,15 +65,16 @@ The document follows the code as of v422. Functions are named with their file, e
 | File | Lines | Role |
 |---|---|---|
 | `xrd-data.js` | 450 | Reference tables: X-ray form factors (Waasmaier–Kirfel), anomalous dispersion (Chantler), atomic masses. |
-| `xrd-cryst.js` | 945 | CIF reading, symmetry from the atoms, conventional cells, reflection lists with multiplicities and absences, structure factors. |
+| `xrd-cryst.js` | 1063 | CIF reading, symmetry from the atoms, conventional cells, reflection lists with multiplicities and absences, structure factors, the sites and the displacement parameters their symmetry allows. |
 | `xrd-instr.js` | 328 | The instrument as the `.xrdml` header describes it. |
-| `xrd-rietveld.js` | 2496 | The engine: the model, the profile, least squares, the staged strategy, preferred orientation, the free shape, sizes and weight fractions. |
-| `xrd-rietveld.worker.js` | 270 | Runs a refinement off the main thread; formats the result lines and the CSV rows. |
+| `xrd-rietveld.js` | 2819 | The engine: the model, the profile, least squares, the staged strategy, preferred orientation, the free shape, sizes and weight fractions. |
+| `xrd-broad.js` | 430 | Whole Powder Pattern Modelling (a line synthesised from its Fourier coefficients by FFT; the solids' common-volume functions; the log-normal average), Stephens' quartic invariants, the planar-fault table. |
+| `xrd-rietveld.worker.js` | 400 | Runs a refinement off the main thread; formats the result lines and the CSV rows. |
 | `xrd-widths.js` | 333 | Single-peak widths after the refinement; Williamson–Hall, order and prediction tests. |
-| `xrd-rv.js` | 608 | The card: phases, options, runs, plots, results, state, exports. |
+| `xrd-rv.js` | 652 | The card: phases, options, runs, plots, results, state, exports. |
 | `xrd-shape3d.js` | 1359 | The rotatable 3D view of a crystallite solid (2D canvas, no WebGL). |
 
-The engine modules (`xrd-data`, `xrd-cryst`, `xrd-instr`, `xrd-rietveld`, `xrd-widths`) are pure functions, with no DOM. The page, the worker and Node all import them, so they can be tested under Node (§14).
+The engine modules (`xrd-data`, `xrd-cryst`, `xrd-instr`, `xrd-broad`, `xrd-rietveld`, `xrd-widths`) are pure functions, with no DOM. The page, the worker and Node all import them, so they can be tested under Node (§14).
 
 ### 1.3 What happens on Refine
 
@@ -79,7 +84,7 @@ flowchart TD
   C["CIF"] --> D["xrd-cryst: parse, expand,<br/>find symmetry, check composition"]
   B --> E["buildModel<br/>weights, reflections, parameters"]
   D --> E
-  E --> F["autoRefine<br/>cell search or zero scan,<br/>staged least squares,<br/>phase detection, ΔB, texture"]
+  E --> F["autoRefine<br/>cell search or zero scan,<br/>staged least squares,<br/>phase detection, strain, faults,<br/>size distribution, displacements, texture"]
   F --> G{"shape requested<br/>and standard refined?"}
   G -- yes --> H["freeShape<br/>multistart search, exact faces,<br/>held on the lattice, ΔBIC"]
   G -- no --> I
@@ -207,9 +212,10 @@ The XRPD module reads each `.xrdml` file into 2θ (an evenly spaced grid from th
 
 *Refusals.*
 - **A named group whose operations are missing is refused.** Its sites are almost always the asymmetric unit only. Read as P1, they would fill the cell in part and give a wrong pattern with no error: rutile gives 2 atoms instead of 6, the cell found orthorhombic, and (211) the strongest line.
-  - The test compares the atoms with the formula × Z.
-  - Without Z, Z is inferred from the atoms when the ratio is near an integer. So an asymmetric unit that holds whole formula units passes: NaCl named Fm-3m, given as Na and Cl with no Z, is read as P1.
-  - Only when nothing can be compared (no formula, no Z given or inferable, no site multiplicities) does it check instead that the atoms show the crystal system and centring the symbol names.
+  - An operation list that holds the identity alone, x, y, z, counts as none.
+  - With Z given, the test compares the atoms with the formula × Z.
+  - Without Z, the formula is no evidence: Z would be inferred from the atoms, and an asymmetric unit that holds whole formula units would pass by construction. The atoms must then show by themselves the crystal system and the centring the symbol names, and, for a centrosymmetric group, a centre of symmetry (from the IT number, or from the symbol: a '/', −1 or −3, or an orthorhombic symbol of mirrors and glides). So NaCl named Fm-3m, given as Na and Cl, is refused (no F centring), and so is an asymmetric unit of P-1 in general positions (no inversion).
+  - A lone special position can still pass, since a site alone in its cell shows the lattice's full symmetry: Mg named P6₃/mmc, given as one Mg, is read with one atom instead of two. A file that passes is read as P1 with a warning that the cell is filled only if all its atoms are listed.
 
 **Filling the cell.** `expandAtoms` applies the operations to every site. Images closer than 10⁻³ on every axis are one position: "a special position written with three decimals, 0.333/0.667, yields images exactly 0.001 apart that are still one position". Duplicates are removed per site only, so two species sharing a site (a mixed occupancy) both stay.
 
@@ -301,11 +307,11 @@ y_c(2\theta_i) = b(2\theta_i) + \sum_{p} S_p \sum_{\mathbf h} \sum_{j\in\{\alpha
 | m_**h** | the multiplicity |
 | w_j | 1 for Kα1, the Kα2/Kα1 ratio for Kα2 |
 | LP | the Lorentz–polarisation factor (§3.4) |
-| \|F_**h**\|² | the structure factor's squared modulus (§3.3) |
-| ΔB_p | the phase's optional overall shift of the atoms' B (§8) |
+| \|F_**h**\|² | the structure factor's squared modulus (§3.3), the atoms' displacements in it (§8) |
+| ΔB_p | the phase's overall shift of the atoms' B, when its displacements are *one ΔB* (§8); 0 otherwise |
 | s = 1/(2d) | as in §1.4 |
 | T_**h** | the preferred-orientation factor (§9); 1 without one |
-| Φ | the area-normalised peak profile (§3.6–3.7), centred at the line's position (§3.5) |
+| Φ | the area-normalised peak profile, centred at the line's position (§3.5): the pseudo-Voigt of §3.6–3.7, or by WPPM the Fourier transform of the line's coefficients (§7.3) |
 
 With a crystallite shape (§10), Φ becomes a sum over the members of each reflection's family. Each member carries its own width and its own texture weight:
 
@@ -314,6 +320,8 @@ T_{\mathbf h}\,\Phi \;\to\; \sum_{i=1}^{m'} \frac{t_i}{m'}\, \Phi_i
 ```
 
 Here m′ counts the members with ±**h** taken as one, and t_i is member i's texture weight.
+
+With an anisotropic strain (§7.5) or planar faults (§7.6), each reflection has its own strain and fault broadening, the same for all members of its family.
 
 Each phase's pattern is computed at scale 1 (`phasePattern`), and then:
 
@@ -342,6 +350,8 @@ The list is made once, in `buildModel`, with `reflections` in `xrd-cryst.js`.
   - Allowed phases are integers; forbidden ones are at least 1/6 away.
   - Because the operations are the ones found, centring, screw axes and glides are all covered.
   - Accidental and site-specific absences stay in the list with F² ≈ 0. For example, Si (222) is listed with multiplicity 8.
+- **Lines beyond the pattern.** A line outside the range is computed when its window reaches into it (§3.6). Towards 2θ = 180°, though, its widths and the Lorentz factor grow as 1/cosθ. Such a line lays a broad level over the whole pattern, and that level vanished at once when the cell carried the line past 180° (λ/2d ≥ 1). On a synthetic ZnO pattern measured to 130°, the refinement stopped on that step: the cell 20 esd from the truth, χ² 1.16 where the truth gives 1.02.
+  - So lines beyond the pattern fade out between 2θ = 170° and 175° (`backFade`), smoothly, and the pattern stays continuous in the cell. When the pattern itself reaches past 169°, the fade starts 1° beyond its end.
 
 ### 3.3 Structure factors
 
@@ -359,12 +369,12 @@ F(\mathbf h) = \sum_{j} o_j\, e^{-B_j s^2}\,\bigl(f_{0,j}(s) + f'_j + i f''_j\bi
   - The engine takes the line nearest λ1 within 0.002 Å.
   - It uses that line's values for Kα2 too.
   - Any other wavelength gets f′ = f″ = 0 rather than values for the wrong absorption edge.
-- **Debye–Waller.** It acts on the amplitude, so F² carries e^{−2Bs²}.
+- **Debye–Waller.** It acts on the amplitude, so F² carries e^{−2Bs²}. B_j is the CIF's (0.5 Å² where it gives none), or the refined B of the atom's site. With anisotropic displacements, the factor is e^{−**h**ᵀβ_j**h**} instead (§8.3).
 
 **Speed** (`phaseGeometry`, `phaseF2`).
-- The positions never move. So for each scattering type (one species, occupancy and B) and each reflection, the geometric sum Σ e^{2πi h·x} is made once.
+- The positions never move. So for each scattering type (one species, occupancy and B; with refined displacements, also one site and one orientation of it) and each reflection, the geometric sum Σ e^{2πi h·x} is made once.
 - A new cell then costs only the form factors at the new s: no trigonometry. On a 48-atom monoclinic cell, the trigonometry had been most of the time of a cell-search step.
-- F² is cached for the last cell.
+- F² is cached for the last cell and displacement parameters.
 
 ### 3.4 Lorentz–polarisation
 
@@ -538,8 +548,13 @@ Which ones are free at each stage is decided by the strategy (§6).
 |---|---|---|---|---|
 | `scale` | S | 10⁻³ | [0, ∞) | yes |
 | `a`, `b`, `c`, `alpha`, `beta`, `gamma` (as the constraint names them) | the conventional cell | the file's (conventional) values | lengths ±10 %; angles ±15° (within 1–179°) | no |
-| `B` | ΔB, Å² | 0 | [−2, 10] | no |
-| `Xs`, `Ys` | the phase's Lorentzian broadening, ° | 0 and the excess width (§6.1) | [0, 10] | no |
+| `B` | ΔB, Å² (displacements *one ΔB*) | 0 | [−2, 10] | no |
+| `B_<site>` | the B of one site, Å² (*B per site*, §8.2) | the mean of the CIF's B over the site (0.5 without) | [−2, 20] | no |
+| `U11_<site>` … `U23_<site>` | the Uⁱʲ the site's symmetry leaves free, Å² (*Uⁱʲ per site*, §8.3) | isotropic, from the CIF's B | ±0.5 | no |
+| `Xs`, `Ys` | the phase's Lorentzian broadening, ° (with WPPM, Y_s is the sphere's size, §7.3) | 0 and the excess width (§6.1) | [0, 10] | no |
+| `S1`…`Sn` | Stephens' anisotropic parts of ε², 10⁻⁶ (§7.5) | 0 | ±10⁴ | no |
+| `FA` | the planar faults' probability per plane (§7.6) | 0 | [0, 0.45] | no |
+| `LS` | σ of ln D, the log-normal width (§7.4) | 0.3 and 0.6 (two starts) | [0, 1.5] | no |
 | `PO` | March–Dollase r (only with a texture) | 1 | [0.2, 5] | no |
 | shape widths `Ea Eb Ec`, `Wa Wc`, `Wd Wh`, `Wa Wb Wh`, `Wa Wb Wc` | the solid's dimensions as widths, ° (§10) | 0 | [0, 10] | no |
 | `R1 R2 [R3]` | rotation vector of the solid, rad | 0 | ±4; largest step 0.4 per iteration | no |
@@ -687,6 +702,7 @@ C = (J^\top W J)^{-1}\,\chi^2_\nu,\qquad \sigma_j = \sqrt{C_{jj}},\qquad \rho_{j
 **With the standard's irf:**
 - U, V, W, X, Y, the asymmetry and the zero are the standard's.
 - Each phase starts with Y_s = max(0, H_est − H_inst(θ_E))·cosθ_E and X_s = 0: the sample's width above the instrument's, all of it Lorentzian to start with.
+- By WPPM, Y_s starts 1.23× lower: a sphere's own profile is 1.23× as wide as the Lorentzian of the same Y_s (§7.3).
 
 **Asymmetry.** On the standard, A starts at 0.02 when the pattern holds at least 8 reflections in range; otherwise it is held at 0. On a sample it is the irf's (0 without one).
 
@@ -780,10 +796,16 @@ Two tests decide, and a phase that fails is **left out**: scale 0, its cell back
 
 ### 6.5 Optional stages
 
-After the four stages, three optional stages follow:
-- **ΔB per phase** (card option): each phase's B is freed with everything else (§8).
-- **Preferred orientation** (per-phase option): §9.
-- **Free crystallite shape** (per-phase option, with a refined standard): §10.
+After the four stages, the phases' options add stages, in this order. Each frees its parameters on top of everything already free:
+1. **Anisotropic strain** (§7.5): Stephens' S_j. ε² = ε₀² + Σ S_j q_j has no derivative at ε₀ = 0 where it is clipped, so X_s is first raised to at least 0.02°.
+2. **Planar faults** (§7.6): the fault probability, from 0.
+3. **Size distribution** (§7.4): σ enters the profile to second order (a distribution and its mirror in ln D differ only beyond), so from σ = 0 it has no derivative. It is refined from 0.3 and from 0.6, and the lower χ² is kept.
+4. **Displacement parameters** (§8): ΔB, the B per site or the Uⁱʲ per site.
+5. **Preferred orientation** (§9).
+
+Then, separately, the **free crystallite shape** (§10).
+
+**The standard's profile is required** by WPPM, the anisotropic strain and the faults. Without it, the instrument's broadening and the sample's are one and the same. A phase that asks for them without it is refined without them, with a warning; the result's `models` says what each phase was refined with.
 
 ### 6.6 What a refinement returns
 
@@ -797,6 +819,7 @@ After the four stages, three optional stages follow:
 - the warnings;
 - the shapes kept, with their search record;
 - the textures;
+- the models each phase was refined with (`models`: size profile, strain, faults, displacements), from which the card draws the result again;
 - the isotropic fit's parameters (when a shape was kept);
 - the number of reflections in range.
 
@@ -830,31 +853,210 @@ D = \frac{K\lambda_1}{Y_s\,\pi/180},\quad K = 0.9;\qquad
 - **No broadening.** Y_s = 0 gives "no measurable broadening" (D = ∞).
 - **Without an irf,** the whole Lorentzian width Y is used, the instrument's included, and the card says so. All phases then share one profile.
 
-**The calibration K = 0.9 applied to the Lorentzian FWHM** matches the Scherrer sizes of the XRPD Analysis card, so the two can be compared. It is a convention, not the Stokes–Wilson size of a sphere:
+**The calibration K = 0.9 applied to the Lorentzian FWHM** (on Scherrer's constant, Langford & Wilson 1978) matches the Scherrer sizes of the XRPD Analysis card, so the two can be compared. It is a convention, not the Stokes–Wilson size of a sphere:
 - A sphere's volume-weighted column length is ⟨L⟩_V = 3D/4.
 - For a Lorentzian, the integral breadth is β = (π/2)·FWHM.
 - So that relation gives D = 8/(3π)·λ/(FWHM·cosθ) = 0.849·λ/(FWHM·cosθ).
 
-The reported D is therefore about 6 % above that. With the true profile of a sphere (FWHM·D·cosθ = 1.107 λ, §15.1), it is about 19 % below the diameter: the true diameter is 1.107/0.9 = 1.23× the reported D. All sizes in the card (isotropic, shape dimensions, single-peak widths) use the same K, so their ratios are free of this choice.
+The reported D is therefore about 6 % above that. With the true profile of a sphere (FWHM·D·cosθ = 1.107 λ, §7.3), it is about 19 % below the diameter: the true diameter is 1.107/0.9 = 1.23× the reported D. All sizes in the card (isotropic, shape dimensions, single-peak widths) use the same K, so their ratios are free of this choice.
 
 **No Gaussian sample broadening is modelled.** A sample can never come out narrower than the standard (Y_s, X_s ≥ 0).
 
-## 8. Displacement parameters (ΔB)
+**Other profiles.** The size can instead be modelled by WPPM (§7.3), with one size or a log-normal distribution (§7.4); the strain can depend on the direction (§7.5); planar faults add their own broadening (§7.6).
 
-### 8.1 How B enters
+### 7.3 Whole Powder Pattern Modelling (`wppmLine`, `xrd-broad.js`)
 
-- **Each atom's B** comes from the CIF (§2.3), or is 0.5 Å² when the CIF gives none. The Materials Project's CIFs give none, so all their atoms start at 0.5.
-- **The atoms' own B values are never refined.**
-- **The ΔB option** (*ΔB per phase*, off by default) adds one shift to every atom's B of the phase:
-  - it is applied as e^{−2ΔB s²} on F²;
-  - bounds −2 … 10 Å²;
-  - it is freed in its own stage, after size and strain, with everything else free.
-- **Warning.** It warns when the shift makes some atom's B negative, which no displacement gives: it more likely takes up absorption, surface roughness or the background. A negative B of the CIF's own is the phase list's warning.
-- **When it is read.** The option is read when a run starts, so an undo during a run cannot change it between patterns.
+**Why.** A Lorentzian of the right breadth is the profile of a broad, exponential distribution of column lengths (§7.2). A single solid's profile has another shape:
 
-### 8.2 How well it is determined
+| Profile | FWHM/β | ⟨L⟩_A/⟨L⟩_V |
+|---|---|---|
+| Lorentzian | 0.637 | 0.5 |
+| sphere | 0.830 | 0.89 |
+| slab, all columns equal (profile T·sinc²) | 0.886 | 1 |
 
-ΔB is off by default because it is strongly correlated with the scale (and so with the weight fractions) and with the background. On the user's nanocrystalline SrTiO₃ (Cu, 2θ 10–80°, isotropic size), freeing it gives:
+At equal breadth β, the slab's tails are half the Lorentzian's: they go as 1/(2π²s²⟨L⟩_A). With the Lorentzian model, that difference goes into Y_s, the background and the sizes. Whole Powder Pattern Modelling (Scardi & Leoni 2002) takes each cause of broadening by its Fourier coefficients instead. The profile is the transform of their product.
+
+**The coefficients.** A line is synthesised in δ = d\* − d\*₀ (Å⁻¹), where a size profile is symmetric whatever the angle:
+
+```math
+A(L) = \Bigl[\eta\, e^{-\pi H L} + (1-\eta)\, e^{-(\pi H L)^2/(4\ln 2)}\Bigr]\; e^{-\pi W_L L}\; A_S(L)\; \sum_k w_k\, e^{-2\pi i L \delta_k}
+```
+
+| Factor | What it is |
+|---|---|
+| H, η | the instrument's pseudo-Voigt at the line, from the standard's U … Y (TCH, §3.6), H converted to d\* (×cosθ·(π/180)/λ) |
+| W_L | the Lorentzian terms' FWHM in d\*: 2εd\* for the strain (4ε·tanθ in 2θ) and κ/π for the faults (§7.6) |
+| A_S(L) | the crystallites' common-volume function: the fraction of a crystallite's volume that its copy shifted by L along the diffraction vector still overlaps |
+| δ_k, w_k | the axial divergence's nodes (§3.7), as shifts in d\* |
+
+**The size factor** (`covBase`, `addMemberCoef`). For the base bodies, with ℓ the shift in their units:
+- ball (diameter 1): 1 − 3ℓ/2 + ℓ³/2;
+- cube (edge 1): (1 − ℓa)(1 − ℓb)(1 − ℓc), with a, b, c the direction's absolute components;
+- cylinder (diameter 1, height 1): (1 − ℓc)·(2/π)(acos ℓs − ℓs·√(1 − ℓ²s²)), with s the component across the axis and c along it.
+
+Without a shape, the body is a sphere of diameter D. With a free shape (§10), each member of the family has its own: the base body along that member's direction, at ℓ = L·|**t**|·(π/180)/(Kλ₁), **t** = **W** ∘ (Rotᵀ**u**) as in §10.3. An ellipsoid, a spheroid and an elliptic cylinder are affine images of the ball and the cylinder, so their factors are exact too. The members are averaged with their texture weights.
+
+**The parameter.** Y_s stays the parameter, read as D = Kλ₁/(Y_s·π/180): the same conversion as the Lorentzian model's, but here D is the sphere's diameter itself, not a Scherrer size. At equal Y_s, a sphere's own profile is 1.23× as wide as the Lorentzian (FWHM·D·cosθ = 1.107λ), so a WPPM refinement starts Y_s 1.23× lower (§6.1). A solid's widths likewise read as its true dimensions, with no calibration (§10.3).
+
+**The synthesis.** The coefficients are laid on a grid and transformed by a radix-2 FFT:
+- **The window** is ±max(40·H_est, 1.5°) about the line, plus the divergence's spread, as for the pseudo-Voigt (§3.6). One period of the transform is the window.
+- **The grid step** Δδ is an eighth of the narrowest component's FWHM. With a size distribution, that is the largest crystallites' (e^{3σ − σ²/2} times the mean). N is a power of 2, between 64 and 16 384.
+- **The coefficients** are computed out to where the instrument's and the Lorentzian terms' product falls under 10⁻⁸.
+- **The edge.** Periodicity folds the tails beyond the window back in. So the profile is lowered by its value at the window's edge, the same point on both sides: it goes to zero there continuously, and what it leaves out goes to the background. This is the pseudo-Voigt's treatment (§3.6).
+- **Reading it.** At each point of the pattern, δ(2θ) = 2(sinθ − sinθ₀)/λ. The profile is read by cubic (Catmull–Rom) interpolation and multiplied by the Jacobian cosθ·(π/180)/λ, so its area in 2θ is the line's intensity.
+
+**Checks.**
+- Against a direct quadrature of the same transform, the synthesised profile agrees to 0.03 % of the peak.
+- On Lorentzian-like profiles, a WPPM line's area in the window is about 0.3 % below the pseudo-Voigt's at the same intensity. The periodic folding makes the pedestal taken off at the edge a little larger. Weight fractions between a WPPM phase and a Lorentzian one carry that bias.
+
+**Cost.** On a synthetic SrTiO₃ pattern (2θ 15–120°, 5251 points), a sphere refines in about 3 s, a log-normal distribution in 8–16 s, and a free cylinder in 35–50 s. A free solid with log-normal sizes takes minutes: about 5 on the user's 33A. A broad distribution holds large crystallites whose narrow profiles set the grid, and every trial shape of the search pays for it. The log-normal average of a cylinder or a box is tabulated in ln ℓ₀ every σ/10 for each member and read by cubic interpolation (to 4·10⁻⁶); computed point by point, that case took 17–23 minutes.
+
+**Needs the standard's profile** (§6.5). Without it, H and η would hold the sample's broadening too.
+
+### 7.4 A log-normal distribution of sizes
+
+**The model** (Scardi & Leoni 2001; Langford, Louër & Scardi 2000). Spheres (or the free solid scaled as a whole) with a log-normal distribution of sizes, of width σ in ln D (`LS`). A crystallite of relative size s diffracts as s³, so over the volume ln s is normal with mean 3σ² and variance σ² (relative to the median). The size factor is the average of the body's over that distribution (`lnAverage`):
+
+```math
+A_S(L) = \int a\!\left(\frac{L}{s D_m}\right)\, \phi_V(\ln s)\, d\ln s
+```
+
+**The quadrature.** In u = ln ℓ, the integrand is smooth on the body's support. Gauss–Legendre with 24 nodes over [μ − 7σ, min(ln T, μ + 7σ)] converges fast. The mass below μ − 7σ (about 10⁻¹²) is taken as a = 1. The average depends on L·scale alone. The sphere's is tabulated once per σ, on 2048 points even in ln ℓ, and interpolated. A cylinder's or a box's depends on the member's direction too: for a long line it is tabulated per member every σ/10 in ln ℓ over the line's reach, and read by cubic interpolation (to 4·10⁻⁶ of the value computed point by point).
+
+**What the dimensions mean.** The parameter Y_s (or a solid's widths) gives the *volume-weighted mean* crystallite, ⟨D⁴⟩/⟨D³⟩ for spheres, which is e^{3.5σ²} times the median. The integral breadth, which ⟨L⟩_V sets, then stays with the size while σ changes the profile's shape. With the median as the parameter instead, σ and the size traded one for the other along the breadth.
+
+**What is reported.**
+- The volume-weighted mean diameter: what the breadth measures, and about what the Lorentzian model's size reads.
+- The median, e^{−3.5σ²} times it.
+- The number-weighted mean, e^{−3σ²} times it: what a count of crystallites (TEM) gives.
+- σ itself.
+
+**The profile's shape.** σ = 0 is one size: the tails fall fast. About σ = 0.76, the profile is as Lorentzian as the Scherrer model's. A larger σ is sharper at the top, with longer tails. σ rests on the profile's shape, so on how well the instrument's profile is known.
+
+**A warning above σ = 0.8.** Most crystallites are then far smaller than the mean: at σ near 1, the median is below a nanometre. The far tails set σ, and a background, a broad second phase or a strain with long tails can shape them as well. The volume-weighted mean stands; the median and the number mean rest on that tail. On the user's 33A (SrTiO₃, to 80°), with the anisotropic strain, {100} faults and B per site also free, σ came out 0.94(3), the median 0.35 nm: under one cell.
+
+**Refined** in its own stage from σ = 0.3 and 0.6 (§6.5). Bounds 0 … 1.5.
+
+### 7.5 Anisotropic microstrain (Stephens 1999)
+
+**The model.** The microstrain of a reflection depends on the direction **u** of its diffraction vector:
+
+```math
+\varepsilon(\mathbf u)^2 = \varepsilon_0^2 + 10^{-6}\sum_j S_j\, q_j(\mathbf u)
+```
+
+- ε₀ = X_s·(π/180)/4 is the isotropic part.
+- The q_j are the quartic forms of **u** that the Laue group leaves unchanged, less their mean over the sphere and scaled to unit rms. So ε₀ is the strain's rms over directions, and each S_j an anisotropic part of ε², in 10⁻⁶.
+- The number of S_j is Stephens' count less the isotropic term: 1 for a cubic phase, 2 hexagonal, 3 for 4/mmm, −3m, 4 for 4/m, −3, 5 orthorhombic, 8 monoclinic, 14 triclinic.
+
+**The forms** (`quarticInvariants`) are built numerically for any group, rather than from a table:
+1. The Laue operations, as they act on Cartesian diffraction vectors: C = B·Rᵀ·B⁻¹.
+2. Each of the 15 quartic monomials x^a y^b z^c, averaged over the group.
+3. Their span reduced by Gram–Schmidt in the sphere's inner product (on 600 points), against the constant (x² + y² + z²)² and against each other. A monomial whose group average vanishes leaves only rounding, judged against the monomial's own size.
+
+Each reflection's forms are evaluated once, at its direction in the starting cell, as the free shape's member directions are.
+
+**In the profile.**
+- By the Lorentzian model, the reflection's own ε replaces the phase's: its H_L carries 4ε·tanθ.
+- By WPPM, 2εd\* enters W_L (§7.3).
+- Where the S_j take ε² to 0 or below, it is held at 0: no strain broadening there.
+
+**Reported:** ε₀ (as "rms over directions"), and ε along the normals of the low-index planes (100), (010), (001), (110), (101), (011), (111), each family once, with esds by propagation. Where ε² ≤ 0, the line says so instead of giving 0 with an esd. The CSV gives the S_j too.
+
+**What it can and cannot do.** It is Laue-symmetric: all members of a family are broadened alike, so it cannot draw a plate, but it can mimic a dependence on hkl. It is Lorentzian only.
+
+**Refined** in its own stage, from S_j = 0, with X_s first raised to at least 0.02° (§6.5). Bounds ±10⁴.
+
+### 7.6 Planar faults (after Warren)
+
+**The model** (`faultTable`, `faultKappa`). Faults lie on the planes of a family {hkl}. Each displaces the crystal beyond it by a vector of a family f·⟨uvw⟩:
+- The displacements are those of the family that lie in the plane (shears: a stacking fault, an antiphase boundary), or all of the family if none does.
+- ±**R** count alike, so the faults broaden but do not shift.
+
+Across a fault, reflection **h**'s phase jumps by 2π**h**·**R**. A column of length L along **h**'s direction **u** crosses L·|**u**·**n**_p|/d planes of orientation p, d their spacing. Each is a fault with probability α. So:
+
+```math
+A_F(L) = \prod_p \bigl(1 - \alpha\,(1 - c_p)\bigr)^{L\,|\mathbf u\cdot\mathbf n_p|/d} = e^{-\kappa L},\qquad
+\kappa = -\frac{1}{d}\sum_p |\mathbf u\cdot\mathbf n_p|\,\ln\bigl(1 - \alpha(1 - c_p)\bigr)
+```
+
+with c_p the mean of cos 2π**h**·**R** over p's displacements.
+
+- e^{−κL} is a Lorentzian of FWHM κ/π in d\*. By the Lorentzian model, the reflection's Y gains λκ/π·(180/π) (in °; divided by cosθ in H_L, like a size). By WPPM, κ/π enters W_L (§7.3).
+- A reflection whose **h**·**R** is an integer for every displacement is not broadened. The broadening depends on the indices' parity, not on the order.
+- **The spacing** d is the smallest non-zero projection of a lattice translation (the cell's and the centring's) on the planes' normal.
+- **Refined:** α (`FA`), the probability per lattice plane of the family, from 0, in its own stage (§6.5). Bounds 0 … 0.45.
+- **Per plane, not per layer.** Where a structure stacks several layers per lattice plane, α is that many times a probability per layer. Hexagonal close packings and wurtzite stack two close-packed layers per c, while the (001) planes are c apart: there Warren's α per layer is about α/2. For fcc {111} the lattice planes are the close-packed layers.
+
+**The kinds offered** (`'hkl:f/g<uvw>'`):
+
+| Faults | Typical of |
+|---|---|
+| {111}, ⅙⟨112⟩ | stacking faults of fcc metals (Shockley partials) |
+| {001}, ⅓⟨1-10⟩ | basal stacking faults of hexagonal close packings (⅓⟨1-100⟩) |
+| {100}, ½⟨111⟩ | Ruddlesden–Popper faults of perovskites |
+| {100}, ½⟨110⟩ | antiphase boundaries on {100} |
+| {111}, ½⟨110⟩ | antiphase boundaries on {111} |
+| {110}, ½⟨110⟩ | antiphase boundaries on {110} |
+
+**Faults on every orientation at once.** Each crystallite is taken to hold faults on all the orientations of the family, independently, with probability α each. A line is then one Lorentzian, the same for all members of its family. Warren's treatment refers each member of a family to one faulted orientation. That splits a family into broadened and unbroadened members, whose mean broadening, at first order in α, equals this one's when Warren's α is N times this α (N the number of orientations: 4 for {111} of a cubic phase, 1 for a hexagonal basal plane, where the factor per layer above applies instead). The result line's tooltip says both.
+
+**What is not modelled.** The peak shifts of fcc deformation faults and the asymmetry of twin faults (Warren; Velterop et al. 2000): with ±**R** alike, a shift goes into the cell.
+
+**Validation.** Synthetic patterns with known faults (§14): fcc Pt with {111}, ⅙⟨112⟩ faults at α = 0.03, and ZnO with basal faults at α = 0.05, come back within their esds.
+
+## 8. Displacement parameters
+
+### 8.1 The choices
+
+Each phase has a displacement option (`adp`):
+
+| Choice | What is refined | How it enters |
+|---|---|---|
+| *from the CIF* (default) | nothing: each atom's B is the CIF's, or 0.5 Å² when it gives none | e^{−B s²} on each atom's amplitude (§3.3) |
+| *one ΔB* | one shift `B` added to every atom's B (bounds −2 … 10 Å²) | e^{−2ΔB s²} on F² |
+| *B per site* | one isotropic B per crystallographic site (§8.2) | e^{−B s²} on the amplitudes of the site's atoms |
+| *Uⁱʲ per site* | the Uⁱʲ each site's symmetry leaves free (§8.3) | e^{−**h**ᵀβ**h**} on the amplitudes of the site's atoms |
+
+- The Materials Project's CIFs give no B, so all their atoms start at 0.5 Å².
+- The displacements are freed in their own stage, after the size, the strain, the faults and the size distribution, with everything else free (§6.5).
+- The option is read when a run starts, so an undo during a run cannot change it between patterns.
+- The built-in standard has no options: it is refined with its own B. A project saved with the v419–v423 card-wide *ΔB per phase* button opens with *one ΔB* on every phase.
+
+### 8.2 Sites
+
+**The sites** (`atomOrbits`, `xrd-cryst.js`). The atoms of the filled cell are grouped into orbits by the operations found from the atoms (§2.4): two atoms are one site when an operation takes one onto the other within 0.01 Å, with the same species and occupancy. Each orbit is one site, named after its first atom's CIF label (letters and digits only; a repeated label gets `_2`, `_3`…).
+
+**B per site** starts at the mean of the CIF's B over the site's atoms (0.5 Å² without one). Bounds −2 … 20 Å².
+
+**Warnings.** A negative B is no vibration: it more likely takes up absorption, surface roughness, the background or a wrong occupancy.
+
+### 8.3 Anisotropic displacements
+
+**The convention** is the CIF's (Trueblood et al. 1996): Uⁱʲ in Å², on the reciprocal axes. With N = diag(a\*, b\*, c\*):
+
+```math
+\beta = 2\pi^2\, N U N,\qquad T(\mathbf h) = e^{-\mathbf h^\top \beta\, \mathbf h}
+```
+
+**The site's constraints** (`siteAdpBasis`; Grosse-Kunstleve & Adams 2002 treat them the same way). The site's own operations, those that keep its position within 0.01 Å, must leave U unchanged. β turns as RβRᵀ, so U turns as T U Tᵀ with T = N⁻¹RN. The constraints are rows on (U11, U22, U33, U12, U13, U23). They are reduced to echelon form with the columns taken from the last, so the free parameters are the first ones:
+- a cubic site keeps U11 alone;
+- a site on a tetragonal axis keeps U11 and U33;
+- rutile's Ti and O (site symmetry mmm and m2m) keep U11, U33 and U12, with U22 = U11 and U13 = U23 = 0.
+
+Each free parameter is a 6-vector of U. The parameters are named `U11_<site>` and so on.
+
+**The site's other atoms.** Each atom of the orbit takes the site's β turned by the operation R that put it there: β_k = RβRᵀ. Atoms with the same species, site and R form one scattering type (§3.3).
+
+**Start and bounds.** The isotropic U of the CIF's B, Uⁱʲ = U·(**a**\*_i·**a**\*_j)/(a\*_i a\*_j), projected onto the site's free parameters (it lies in their span exactly). Bounds ±0.5 Å².
+
+**Reported.** Per site: the free Uⁱʲ, and B_eq = 8π²U_eq with U_eq = ⅓ Σ Uⁱʲ a\*_i a\*_j (**a**_i·**a**_j) (Fischer & Tillmanns 1988). The esd of B_eq comes by propagation through the covariance. A U that is not positive definite (some direction with ⟨u²⟩ ≤ 0) gets the same warning as a negative B.
+
+**The axes** are the file's: for a primitive file of a centred lattice, the Uⁱʲ refer to its axes, not to the conventional cell's.
+
+### 8.4 How well they are determined
+
+**ΔB.** It is strongly correlated with the scale (and so with the weight fractions) and with the background. On the user's nanocrystalline SrTiO₃ (Cu, 2θ 10–80°, isotropic size), freeing it gives:
 
 | Sample | ΔB (Å²) | ρ with the scale | ρ with X_s (strain) | ρ with Y_s (size) | ρ with background terms |
 |---|---|---|---|---|---|
@@ -873,7 +1075,9 @@ The value is statistically determined (±0.1–0.17 Å²) but not robust. Three 
    - texture;
    - the tails left to the background.
 
-What would determine it better: data to 2θ = 120–140° (s² up to 0.32–0.37 Å⁻², twice the lever arm), counted longer at high angle. Site-by-site B or a roughness correction would be more physical but, on data like these, even more correlated (B and roughness are notoriously so).
+**B per site and Uⁱʲ.** Each site's B differs from the others' only through how the sites weigh in each reflection's F, on top of the same slope in s². On data like these, that is worse conditioned still. On 33A (to 80°, with the log-normal sizes, the anisotropic strain and {100} faults also free), B per site gave B(Sr) 1.32(18), B(Ti) −0.44(20) and B(O) −2.00(12) Å², the last on its bound: values no vibration gives, each flagged by a warning. On synthetic rutile measured to 145° with good counting statistics, B per site and Uⁱʲ come back within their esds (§14).
+
+**What would determine them better:** data to 2θ = 120–140° (s² up to 0.32–0.37 Å⁻², twice the lever arm), counted longer at high angle. A roughness correction would be more physical, but on such data B and roughness are notoriously correlated (§15.3).
 
 ## 9. Preferred orientation
 
@@ -1029,6 +1233,7 @@ w(\mathbf u) = 0.75\,\frac{|\mathbf t|}{\langle L\rangle_{V,\text{base}}(\hat{\m
 - **W** holds the solid's parameters: the widths (°) of spheres of its diameters, edges or axes.
 - **Dimensions.** These come out as true dimensions, D = Kλ/(W·π/180): an ellipsoid's full axes, a cylinder's diameter and height, a box's edges.
 - **In the profile.** The member's width enters the Lorentzian as (Y + w)/cosθ, Y being the instrument's. The phase's isotropic Y_s is held at 0 during the shape fit.
+- **By WPPM** (§7.3), each member's line is instead the transform of the base body's common-volume function along it, at ℓ = L·|**t**|·(π/180)/(Kλ₁). The widths W then read as the solid's dimensions with no calibration: the sphere's 0.75 above does not enter.
 
 | Solid | Base | Width parameters | Turns | Notes |
 |---|---|---|---|---|
@@ -1338,12 +1543,13 @@ The score is the mean of ((W_measured − W_model)/σ)² over the rows used: abo
 The card runs each refinement in a module worker. It sends:
 - the pattern;
 - the instrument;
-- the phases (cell, constraint, operations, atoms, mass, shape, texture);
-- the options (standard or not, the irf, ΔB).
+- the phases (cell, constraint, operations, atoms, mass, and their options: shape, texture, size profile, strain, faults, displacements);
+- the options (standard or not, the irf).
 
 The worker posts progress and then the result:
 - the parameters, esds, statistics and stages;
-- the textures;
+- `atBound`, `undetermined` and whether the last refinement converged;
+- the textures and the models each phase was refined with;
 - the formatted result lines and warnings;
 - the CSV rows;
 - the peak widths and tests;
@@ -1357,21 +1563,21 @@ An exception gives an error message. A failure of the peak widths only adds a wa
 
 **Refine all** refines the standard first: the samples take their instrumental profile from it. An error stops the remaining patterns. A pattern's result is kept by file name, so moving, leaving out or reloading files never puts it on another pattern.
 
-**Options.** The options (ΔB, texture, shape) apply to the next refinements; results already there keep theirs.
+**Options.** Each phase's options sit on its row as pickers, marked when not at their default: crystallite shape, texture, size profile, microstrain, planar faults, displacement parameters. They are read when a run starts (every pattern of a *Refine all* gets the phases as they were when it started) and apply to the next refinements; results already there keep theirs.
 
 **The plot.**
-- **Curves.** It shows observed, calculated, background, difference, and a row of ticks per phase. The curves are recomputed from the refined parameters (milliseconds) rather than stored.
+- **Curves.** It shows observed, calculated, background, difference, and a row of ticks per phase. The curves are recomputed from the refined parameters (milliseconds) rather than stored: with the phases the result was refined with (a phase added since is not drawn in it; removing one of its phases removes the result), and with the models it used, whatever the pickers say now.
 - **Ticks.** Before a refinement they come from the CIF's cell; after it, from the refined cell, zero and displacement.
 
 **Results.**
 - R_wp, R_exp and χ²;
 - one group per phase (or *Instrument* for the standard);
-- the warnings;
+- the warnings, among them what the numbers rest on: a refinement stopped at its iteration limit, the parameters on a bound (to be read as limits), the parameters the data do not determine (no esd);
 - a note when the widths are not corrected for the instrument (no standard refined), or, on the standard, that the samples take its profile.
 
 A phase not detected shows only "not detected". Quoting held values would read as a result.
 
-**State.** The phases (with their CIF text and options) and the results are saved in the undo history and in project files. A project saved with the v420 free-shape button opens with the ellipsoid.
+**State.** The phases (with their CIF text and options) and the results are saved in the undo history and in project files. A project saved with the v420 free-shape button opens with the ellipsoid; one saved with the v419–v423 *ΔB per phase* button, with *one ΔB* on every phase.
 
 ### 13.3 Exports
 
@@ -1384,6 +1590,10 @@ A phase not detected shows only "not detected". Quoting held values would read a
 The fixed names in `rietveld_results.csv` include:
 - `a`, `V_A3`, `V_conventional_A3`;
 - `crystallite_size_nm`, `microstrain`, `weight_fraction_pct`, `delta_B_A2`, `texture_r_1_0_0`;
+- by WPPM, `sphere_diameter_nm`; with a log-normal distribution, `size_volume_mean_nm`, `size_median_nm`, `size_number_mean_nm`, `size_lognormal_sigma`;
+- with the anisotropic strain, `microstrain_1_0_0` (one per low-index plane) and `stephens_S1_1e-6`…;
+- with faults, `fault_probability_1_1_1` (the planes' indices);
+- per site, `B_A2_<site>`, or the free `U11_A2_<site>`… and `Beq_A2_<site>`;
 - `shape_…_nm`, `shape_…_deg_off`, `shape_dBIC`, `shape_held_on_lattice`;
 - `WH_chi2nu`, `WH_size_nm`, `WH_strain`, `order_ratio_110_220` (the indices run together, e.g. `order_ratio_1-10_2-20`).
 
@@ -1395,6 +1605,9 @@ Without a standard, `rietveld_peaks.csv` notes on every row that the corrected c
 |---|---|
 | An isotropic SrTiO₃ pattern | about 1 s |
 | With a free solid | 14–45 s per solid, plus 1–7 s for its angular esds |
+| WPPM (synthetic SrTiO₃, 5251 points): one sphere / a log-normal distribution / a free cylinder | about 3 s / 8–16 s / 35–50 s |
+| WPPM, a free cylinder with log-normal sizes (the user's 33A) | about 5 min |
+| The user's 33A with the log-normal sizes, the anisotropic strain, {100} faults and B per site | 26 s |
 | A large sharp monoclinic cell | 34 s with the asymmetry, 12.5 s without |
 
 ## 14. Validation
@@ -1436,27 +1649,38 @@ All five agree on a plate 2.4–3.1 nm thick with a ⟨110⟩ normal, without te
 
 **The user's 37D_STOYbN_WCL:** §9.3.
 
+**Broadening and displacements (v424): synthetic recovery.** Patterns computed from known parameters, with Poisson noise, the user's instrument (Cu Kα₁/Kα₂, the standard's profile and asymmetry) and a background, were refined by `autoRefine` from the file's cell. z = (fit − truth)/esd:
+
+| Case | Pattern | Truth | z values | rms z | max \|z\| |
+|---|---|---|---|---|---|
+| WPPM sphere, SrTiO₃ | 15–120°, peak 4000 counts | D = 8 nm, X_s = 0.12°, a | 18 | 0.61 | 1.6 |
+| log-normal, SrTiO₃ | 15–120°, 8000 | D_V = 10 nm, σ = 0.45 | 24 | 0.70 | 1.7 |
+| log-normal, rutile | 15–120°, 8000 | D_V = 15 nm, σ = 0.35 | 9 | 0.70 | 1.4 |
+| WPPM cylinder, SrTiO₃ | 15–120°, 8000 | diameter 20 nm, height 4 nm, tilted 45° | 16 | 1.21 | 2.6 |
+| the same with log-normal sizes | 15–120°, 8000 | as above, σ = 0.3 | 9 | 1.09 | 2.1 |
+| Stephens, SrTiO₃ (cubic) | 15–130°, 6000 | X_s = 0.4°, S₁ = −3 | 12 | 1.01 | 2.3 |
+| Stephens, rutile (tetragonal) | 15–130°, 6000 | X_s = 0.4°, S₁…S₃ = −2, 1.5, 1 | 32 | 0.84 | 1.8 |
+| faults, Pt (fcc), {111} ⅙⟨112⟩ | 30–130°, 6000 | α = 0.03 | 18 | 0.75 | 1.7 |
+| faults, ZnO, {001} ⅓⟨1-10⟩ | 25–130°, 6000 | α = 0.05 | 9 | 1.21 | 2.2 |
+| B per site, rutile | 20–145°, 20 000 | B(Ti) 0.45, B(O) 0.75 Å² | 12 | 0.71 | 1.7 |
+| Uⁱʲ per site, rutile | 20–145°, 40 000 | six Uⁱʲ | 48 | 1.08 | 2.6 |
+
+Over all 207 values, rms z = 0.93, and 3.9 % lie beyond ±2 (4.6 % for a normal distribution). The ZnO case first stopped at χ² 1.16 on a step left by a line near 180°; §3.2 tells how that was fixed.
+
+**Other checks.**
+- The FFT synthesis agrees with a direct quadrature to 0.03 % of the peak (§7.3). The covariograms, and the log-normal average against the distribution's moments, were checked independently.
+- The numbers of Stephens forms match his table (from 1 anisotropic term for a cubic class to 14 for the triclinic one, over the eleven Laue classes), and each form is invariant under its group.
+- The site constraints on Uⁱʲ were checked against the site symmetries of many structures (cubic, tetragonal, hexagonal and lower).
+
 ## 15. Limits, and what could come next
 
-### 15.1 The size profile's shape
+### 15.1 The size profile
 
-**What the model assumes.** The size broadening is Lorentzian, with the right integral breadth for each member. A Lorentzian corresponds to a column-length function A(L) = e^{−2L/⟨L⟩_V}: an exponential distribution of columns, the profile of a broad size distribution. A single solid's profile is the Fourier transform of its own A(L), the normalised covariogram the engine already integrates, and its shape differs:
+**Lorentzian by default.** The default size profile is a Lorentzian of the right breadth (§7.2), the profile of an exponential distribution of column lengths. WPPM (§7.3) gives a solid's own profile, and a log-normal distribution of sizes (§7.4), at a cost of seconds per pattern for a sphere, a minute for a free solid and several minutes for a free solid with distributed sizes.
 
-| Profile | FWHM/β | ⟨L⟩_A/⟨L⟩_V |
-|---|---|---|
-| Lorentzian (the model) | 0.637 | 0.5 |
-| sphere | 0.830 | 0.89 |
-| slab, all columns equal (profile T·sinc²) | 0.886 | 1 |
+**Below 2–3 nm.** For the smallest crystallites the Bragg approximation itself fails: the Debye scattering equation, summed over the atoms of a model crystallite, is then the rigorous method. It costs far more: a 2 × 17 × 17 nm plate holds about 48 000 atoms.
 
-At equal β, the slab's tails are half the Lorentzian's: they go as 1/(2π²s²⟨L⟩_A). For plates 2 nm thick, 7–8 (110) planes, the difference is large. Today it goes into Y_s, the background and the sizes.
-
-**What would do better: Whole Powder Pattern Modelling** (Scardi & Leoni). The profile is the Fourier transform of the product of the coefficients of each broadening:
-- the instrument's;
-- the size's (the solid's A(L) along each member, tabulated in reduced units: one function for the ball, one angle for the cylinder, two for the cube);
-- the strain's;
-- the faults'.
-
-The solids would then also differ by their profiles' shapes, and K would no longer be a convention. For crystallites under 2–3 nm, the Debye scattering equation (no Bragg approximation) is the rigorous method, but it costs far more: a 2 × 17 × 17 nm plate holds about 48 000 atoms.
+**Other distributions.** Only the log-normal is offered; a gamma distribution or a histogram of sizes would need only another average in `addMemberCoef`.
 
 ### 15.2 Esds and residual correlation
 
@@ -1464,20 +1688,20 @@ The esds treat the residuals as independent (§5.7). With a systematic misfit, n
 
 ### 15.3 Structure
 
-**What is refined:** only one ΔB per phase. Positions, occupancies and per-site B are not refined.
+**What is refined:** the displacement parameters (§8). Positions and occupancies are not refined.
 
 **What is not corrected:**
 - absorption;
-- surface roughness (Suortti, Pitschke);
+- surface roughness;
 - transparency;
 - microabsorption;
 - an automatic slit's sinθ.
 
-**What constraints and site parameters would allow:**
-- occupancies linked by constraints (Sr/Yb on one site, summing to 1);
-- per-site B.
+**Surface roughness.** On a rough or porous flat sample, the low-angle beams graze the surface: part of what they would reach lies in the shadow of the bumps in front of it, and the irradiated volume holds less material. The intensity is lowered at low angles, less and less towards high angles. The usual corrections are Suortti's (1972), an exponential in 1/sinθ, and Pitschke, Hermann & Mattern's (1993), a polynomial in 1/sinθ; each has one or two parameters.
+- **Why it matters.** The loss falls with angle, as a displacement factor's rises: a rough sample looks like one with a smaller B. A refinement that ignores it gives too low a B, even a negative one (§8).
+- **Why it is not here.** On data like these, roughness and B are notoriously correlated: both act as smooth functions of angle on the same intensities. Refined together on data to 80°, neither would mean much. With B held at a physical value, or data to high angle, a roughness term would be worth adding.
 
-On data to 80° these are poorly conditioned (§8.2), and they compete with the texture for the same information.
+**What constraints would allow:** occupancies linked by constraints (Sr/Yb on one site, summing to 1). On data to 80° these are poorly conditioned (§8.4), and they compete with the texture for the same information.
 
 ### 15.4 Texture
 
@@ -1485,14 +1709,9 @@ March–Dollase works on one axis, chosen among seven low-index planes. A spheri
 
 ### 15.5 Broadening
 
-- **Strain is isotropic.** An anisotropic microstrain (Stephens 1999: β² ∝ d⁴·Σ S_HKL hᵃkᵇlᶜ, two parameters for a cubic phase) would describe hkl-dependent strain. It is Laue-symmetric, so it cannot draw a plate, but it can mimic a dependence on hkl.
-- **Planar faults.** Faults (Warren) broaden only the members whose phase shift h·R across the fault is not an integer. The order test detects them (R < 1); nothing models them.
-- **No size distribution.** For log-normal spheres (median m, σ of ln D):
-  - ⟨L⟩_V = ¾·m·e^{3.5σ²} and ⟨L⟩_A = ⅔·m·e^{2.5σ²};
-  - so the volume-weighted Rietveld size exceeds a TEM median by e^{3.5σ²} (1.75× at σ = 0.4);
-  - the Lorentzian of the model corresponds to σ ≈ 0.76.
-
-  The profile's shape (§15.1) would give m and σ separately.
+- **Strain.** Stephens' model (§7.5) is Lorentzian and Laue-symmetric. Dislocations broaden by contrast factors (Wilkens 1970; Ungár & Borbély 1996), which depend on the slip systems and on the elastic constants: a WPPM term, not yet one here. No Gaussian strain is modelled.
+- **Faults** (§7.6) are one Lorentzian per family, from faults on all orientations at once. The peak shifts of fcc deformation faults and the asymmetry of twin faults are not modelled.
+- **Anisotropic size** is the free solid's (§10); a size distribution scales the whole solid.
 
 ### 15.6 Instrument and inputs
 
@@ -1502,58 +1721,57 @@ March–Dollase works on one axis, chosen among seven low-index planes. A spheri
 - **Spectrum.** Kβ is not modelled; f′, f″ are taken at Kα1 only.
 - **Pattern.** No excluded regions; no amorphous term in the background.
 - **Weight fractions.** No internal-standard route to an amorphous fraction.
-- **Display.** The card does not show the correlation matrix, the parameters on a bound or a non-converged refinement (§16).
+- **Display.** The card does not show the correlation matrix.
 
 ## 16. Known issues
 
-These are differences between the code and its intent, found while writing this document. Each was checked against the code. They are listed here until they are fixed. Only two can change a refined result:
-- issue 5: *best axis* can leave a low-index plane untried;
-- issue 10: a refinement can run on an incomplete cell.
+**Fixed in v424.** The ten differences between the code and its intent that v423 listed here:
+1. The weight fractions' esds with a texture came from the last texture trial: the covariance is now set back to the kept result's whatever the options.
+2. Two tooltips gave a wrong formula: the crystallite size's (D = Kλ/Y_s), and the ΔBIC tooltip's 4/3 the wrong way round.
+3. The ΔBIC line could read only "shape supported": it now says so with its threshold (under −10), the only case in which a shape is reported.
+4. A shaped phase's ticks left out the texture and gave the first member's width: they carry the texture's weights and the members' mean width.
+5. *Best axis* on a non-conventional file cell could leave a low-index plane untried: the candidates are now de-duplicated with the operations in the conventional basis.
+6. A phase added after a refinement was drawn in that result's curve: a result is drawn with its own phases and models (§13.2).
+7. Silent defaults: an unreadable `.xrdml` header, a wavelength outside the tabulated lines and the isotropic-scale fallback of the cell constraint now each say so.
+8. The fit-quality flags reach the results: a refinement stopped at its iteration limit, the parameters on a bound, the undetermined ones.
+9. A deuterated site weighs as D in the cell's mass (a species read as hydrogen whose symbol starts with D: DY3+ stays dysprosium).
+10. A CIF that names its group but lists only `x, y, z`, or whose asymmetric unit holds whole formula units without a Z, is now refused as the other named groups without their operations are; so is the asymmetric unit of a centrosymmetric group that lacks its inversion (§2.3).
 
-1. **Weight-fraction esds with a texture.**
-   - Each preferred-orientation trial overwrites the covariance the model holds.
-   - It is set back to the kept result's only after a shape search.
-   - So in a multi-phase refinement with a texture and no shape, the weight fractions' esds come from the last trial, not from the kept one.
-2. **Two tooltips have their formula wrong.**
-   - The crystallite size's tooltip (and the info text) give D = Kλ/(Y·cosθ). The code computes D = Kλ/Y_s (Y_s being the coefficient of 1/cosθ), which is right.
-   - The ΔBIC tooltip says that a disc's thickness reads 4/3 of a spheroid's polar axis. It is the other way round (§10.8).
-3. **The ΔBIC line can only read "shape supported".** A shape is reported only when kept, i.e. at ΔBIC < −10. Its "isotropic preferred" and "no clear preference" labels never appear.
-4. **A shaped phase's ticks leave out the texture,** and they give the first member's width.
-5. **Texture candidates on a non-conventional file cell.** The best-axis candidates are de-duplicated with the file cell's operations but read as conventional indices. On a primitive fcc file, (100) and (111) in primitive indices are one family, so *best axis* tries only (100) and (110), and never (111).
-6. **A phase added after a refinement** is drawn in that result's calculated curve, at the default scale, until the pattern is refined again.
-7. **Silent defaults.** Nothing tells the user about:
-   - an unreadable `.xrdml` header (Cu, R = 240 mm assumed);
-   - a wavelength outside the seven tabulated lines (f′ = f″ = 0);
-   - the isotropic-scale fallback of the cell constraint.
-8. **Fit-quality flags are not shown.**
-    - `atBound` and a non-converged refinement reach the card but are not shown; `undetermined` is not even passed on by the worker.
-    - A parameter on a box bound is shown with its curvature esd, as if the bound were not there, and nothing marks it as a limit.
-    - U, V and W with H_G² on its floor are shown as bare values, without an esd.
-9. **Deuterium's mass.** A deuterated site weighs as H in the cell's mass, contrary to `atomicMass`'s comment.
-10. **Some named groups without their operations are not refused.** Such a file is read as P1 instead of being refused in two cases:
-    - it lists only `x, y, z` as its operations;
-    - its asymmetric unit holds whole formula units and the CIF gives no Z (NaCl named Fm-3m, given as Na and Cl).
+Found while testing v424 and fixed: a line near 2θ = 180°, beyond the pattern, could stop a refinement on a step (§3.2).
 
-    The composition check then has nothing to object to.
+**Open.**
+- A WPPM line's area in the window is about 0.3 % below the pseudo-Voigt's at the same intensity (§7.3): weight fractions between a WPPM phase and a Lorentzian one carry that bias.
 
 ## 17. References
 
 - Bérar, J.-F. & Lelann, P. (1991). *J. Appl. Cryst.* 24, 1–5.
+- Brindley, G. W. (1945). *Phil. Mag.* 36, 347–369.
+- Caglioti, G., Paoletti, A. & Ricci, F. P. (1958). *Nucl. Instrum.* 3, 223–228.
 - Chantler, C. T. (2000). *J. Phys. Chem. Ref. Data* 29, 597–1048 (NIST FFAST).
+- Durbin, J. & Watson, G. S. (1950, 1951). *Biometrika* 37, 409–428; 38, 159–178.
 - Eliseev, A. A. et al. (1986). *Acta Cryst.* C42, 1263 (LaB₆).
 - Finger, L. W., Cox, D. E. & Jephcoat, A. P. (1994). *J. Appl. Cryst.* 27, 892–900.
 - Fischer, R. X. & Tillmanns, E. (1988). *Acta Cryst.* C44, 775–776.
+- Grosse-Kunstleve, R. W. & Adams, P. D. (2002). *J. Appl. Cryst.* 35, 477–480.
 - Hill, R. J. & Howard, C. J. (1987). *J. Appl. Cryst.* 20, 467–474.
 - Langford, J. I. & Louër, D. (1996). *Rep. Prog. Phys.* 59, 131–234.
+- Langford, J. I., Louër, D. & Scardi, P. (2000). *J. Appl. Cryst.* 33, 964–974.
 - Langford, J. I. & Wilson, A. J. C. (1978). *J. Appl. Cryst.* 11, 102–113.
 - March, A. (1932). *Z. Kristallogr.* 81, 285–297; Dollase, W. A. (1986). *J. Appl. Cryst.* 19, 267–272.
 - NIST SRM 660c, Line position and line shape standard for powder diffraction (LaB₆), certificate.
+- Pitschke, W., Hermann, H. & Mattern, N. (1993). *Powder Diffr.* 8, 74–83.
 - Rietveld, H. M. (1969). *J. Appl. Cryst.* 2, 65–71.
+- Scardi, P. & Leoni, M. (2001). *Acta Cryst.* A57, 604–613.
 - Scardi, P. & Leoni, M. (2002). *Acta Cryst.* A58, 190–200.
 - Stephens, P. W. (1999). *J. Appl. Cryst.* 32, 281–289.
 - Stokes, A. R. & Wilson, A. J. C. (1942). *Proc. Camb. Phil. Soc.* 38, 313–322.
+- Suortti, P. (1972). *J. Appl. Cryst.* 5, 325–331.
 - Thompson, P., Cox, D. E. & Hastings, J. B. (1987). *J. Appl. Cryst.* 20, 79–83.
+- Trueblood, K. N., Bürgi, H.-B., Burzlaff, H., Dunitz, J. D., Gramaccioli, C. M., Schulz, H. H., Shmueli, U. & Abrahams, S. C. (1996). *Acta Cryst.* A52, 770–781.
+- Ungár, T. & Borbély, A. (1996). *Appl. Phys. Lett.* 69, 3173–3175.
+- Velterop, L., Delhez, R., de Keijser, Th. H., Mittemeijer, E. J. & Reefman, D. (2000). *J. Appl. Cryst.* 33, 296–306.
 - Waasmaier, D. & Kirfel, A. (1995). *Acta Cryst.* A51, 416–431.
 - Warren, B. E. (1969). *X-ray Diffraction*. Addison-Wesley.
+- Wilkens, M. (1970). In *Fundamental Aspects of Dislocation Theory*, NBS Spec. Publ. 317, vol. II, 1195–1221.
 - Williamson, G. K. & Hall, W. H. (1953). *Acta Metall.* 1, 22–31.
 - XrayDB 4.5.8, https://github.com/xraypy/XrayDB (the tables of `xrd-data.js`).

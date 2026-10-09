@@ -1963,7 +1963,6 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-result { margin-top: 10px; display: grid; row-gap: 7px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 .rv-result > .pg-stat { font-size: 13px; color: var(--text); }
 .rv-result > .pg-stat b { color: var(--accent); }
-.rv-opts { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .rv-result > .txt-mini { margin-top: 4px; }
 /* Phase names are formulae more often than not: upper case would turn Co into CO. */
 .rv-result > .txt-mini.rv-phase-name { text-transform: none; letter-spacing: .02em; }

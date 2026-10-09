@@ -18,8 +18,9 @@
    beside it, so a result travels as a plain {name: value} object, and calc() redraws
    it on a model built again from the same inputs.
 ========================================================= */
-import { metric, reflections, latticeNames, latticeParams, cellFrom, cellMass } from './xrd-cryst.js';
+import { metric, reflections, latticeNames, latticeParams, cellFrom, cellMass, atomOrbits, siteAdpBasis, betaOf } from './xrd-cryst.js';
 import { lineForWavelength, f0, fprime } from './xrd-data.js';
+import { wppmLine, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
 
 const D2R = Math.PI/180, R2D = 180/Math.PI;
 const LN2 = Math.LN2;
@@ -495,16 +496,29 @@ function textureAxis(q){
   q.poAxisVec = x.map(t=> t/n); q.poAxisFor = q.poHkl;
   return q.poAxisVec;
 }
-// The axes 'auto' tries: the low-index planes, one of each Laue family.
-function textureCandidates(q){
+// The axes 'auto' tries: the low-index planes, one of each Laue family. The planes are
+// the conventional cell's (as the texture axis reads them), so their families are
+// found with the Laue group in that cell, M⁻¹·R·M: with the file's own operations on a
+// primitive cell's indices (a primitive fcc file), (100) and (111) had been one family
+// and (111) was never tried.
+function lowIndexPlanes(q){
   const cand = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1],[1,1,1]], seen = new Set(), out = [];
-  for (const h of cand){
-    if (seen.has(h.join())) continue;
-    out.push(h);
-    for (const M of q.laue || []) seen.add([0, 1, 2].map(j=> h[0]*M[j] + h[1]*M[3 + j] + h[2]*M[6 + j]).join());
+  const M = q.constraint && q.constraint.basis;
+  const ops = (q.laue || []).map(R=>{
+    if (!M) return R;
+    const [a, b, c, d, e, f, g, h, i] = M, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
+    const Mi = [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det];
+    const mul = (P, Q) => [0, 1, 2].flatMap(r=> [0, 1, 2].map(cc=> P[3*r]*Q[cc] + P[3*r + 1]*Q[3 + cc] + P[3*r + 2]*Q[6 + cc]));
+    return mul(mul(Mi, R), M).map(x=> Math.round(x));
+  });
+  for (const hh of cand){
+    if (seen.has(hh.join())) continue;
+    out.push(hh);
+    for (const R of ops) seen.add([0, 1, 2].map(j=> hh[0]*R[j] + hh[1]*R[3 + j] + hh[2]*R[6 + j]).join());
   }
   return out;
 }
+const textureCandidates = lowIndexPlanes;
 /* The March–Dollase weight of every member of every reflection at r (mean 1 over the
    sphere): (r²·cos²α + sin²α/r)^(−3/2), α between the member and the texture axis — r
    under 1 for plates lying on the axis's planes, over 1 for needles. null at r = 1. */
@@ -536,6 +550,23 @@ function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> 
    26 × 2.34 nm disc's by 13 % at 2°), so the result is refined, and every number
    reported, with the exact solid. */
 const SHAPE_SOFT = Math.sin(2*D2R);
+/* Every member's t = W∘(Rotᵀu) (°: the dimensions as sphere widths along the member's
+   direction in the body's axes, the faces rounded off for the search): the size is the
+   body's along it, its extent along u being Kλ/(|t|·π/180) times the base body's. */
+function shapeTs(model, q, v){
+  const B = BODIES[q.shapeType], R = bodyFrame(q, v), [Wx, Wy, Wz] = B.axes(q.iW.map(i=> v[i]));
+  // (only the phase searched: another's kept shape is drawn exact meanwhile)
+  const sf = B.base === 'ball' || !model.shapeSoft || model.shapeSoft.q !== q ? 0 : model.shapeSoft.soft, e2 = sf*sf, soft = x => e2 ? Math.sqrt(x*x + e2) : x;
+  return q.mv.map(mv=>{
+    const out = new Float64Array(mv.length);
+    for (let i = 0; i < mv.length/3; i++){
+      const u1 = mv[3*i], u2 = mv[3*i + 1], u3 = mv[3*i + 2];
+      // Rotᵀu: the member's direction in the body's axes, its faces rounded off.
+      out[3*i] = Wx*soft(R[0]*u1 + R[3]*u2 + R[6]*u3); out[3*i + 1] = Wy*soft(R[1]*u1 + R[4]*u2 + R[7]*u3); out[3*i + 2] = Wz*soft(R[2]*u1 + R[5]*u2 + R[8]*u3);
+    }
+    return out;
+  });
+}
 function shapeWidths(model, q, v){
   if (q.iL){
     const [l11, l21, l22, l31, l32, l33] = q.iL.map(i=> v[i]);
@@ -548,17 +579,12 @@ function shapeWidths(model, q, v){
       return out;
     });
   }
-  const B = BODIES[q.shapeType], R = bodyFrame(q, v), [Wx, Wy, Wz] = B.axes(q.iW.map(i=> v[i]));
-  // (only the phase searched: another's kept shape is drawn exact meanwhile)
-  const sf = B.base === 'ball' || !model.shapeSoft || model.shapeSoft.q !== q ? 0 : model.shapeSoft.soft, e2 = sf*sf, soft = x => e2 ? Math.sqrt(x*x + e2) : x;
-  return q.mv.map(mv=>{
-    const out = new Float64Array(mv.length/3);
+  const base = BODIES[q.shapeType].base;
+  return shapeTs(model, q, v).map(t=>{
+    const out = new Float64Array(t.length/3);
     for (let i = 0; i < out.length; i++){
-      const u1 = mv[3*i], u2 = mv[3*i + 1], u3 = mv[3*i + 2];
-      // Rotᵀu: the member's direction in the body's axes, its faces rounded off.
-      const t = [Wx*soft(R[0]*u1 + R[3]*u2 + R[6]*u3), Wy*soft(R[1]*u1 + R[4]*u2 + R[7]*u3), Wz*soft(R[2]*u1 + R[5]*u2 + R[8]*u3)];
-      const n = Math.hypot(t[0], t[1], t[2]);
-      out[i] = n > 0 ? 0.75*n/columnLengthV(B.base, t) : 0;
+      const tt = [t[3*i], t[3*i + 1], t[3*i + 2]], n = Math.hypot(tt[0], tt[1], tt[2]);
+      out[i] = n > 0 ? 0.75*n/columnLengthV(base, tt) : 0;
     }
     return out;
   });
@@ -1026,6 +1052,112 @@ function tickLabels(list, ops, M){
   });
   return out;
 }
+/* ---------- the phase's broadening and displacement options ----------
+   p.profile: 'lorentz' (the size a Lorentzian of the right breadth, Scherrer's K = 0.9:
+   the default), 'wppm' (Whole Powder Pattern Modelling: the solid's own profile, one
+   size) or 'lognormal' (WPPM over a log-normal distribution of sizes, its width σ the
+   parameter LS). p.strain: 'iso' or 'aniso' (Stephens: S1… the anisotropic parts of ε²,
+   in 10⁻⁶). p.faults: '111:1/6<112>' — the fault planes' family and the displacement
+   (FA the fault probability per plane). p.adp: 'cif' (the CIF's B, held), 'overall'
+   (one ΔB, p.B), 'site' (B per crystallographic site, B_<label>) or 'aniso' (U^ij per
+   site within its symmetry, U11_<label> …). */
+const PROFILES = ['lorentz', 'wppm', 'lognormal'];
+function faultOf(spec){
+  const m = typeof spec === 'string' && spec.trim().match(/^(-?\d)\s*(-?\d)\s*(-?\d)\s*:\s*(\d+)\s*\/\s*(\d+)\s*<\s*(-?\d)\s*(-?\d)\s*(-?\d)\s*>$/);
+  if (!m) return null;
+  const plane = [+m[1], +m[2], +m[3]], f = +m[4]/+m[5], uvw = [+m[6], +m[7], +m[8]];
+  if (!plane.some(x=> x) || !uvw.some(x=> x) || !(f > 0)) return null;
+  return { plane, disp: { f, uvw }, text: spec.trim() };
+}
+// A Laue operation (file basis, on reflections as rows) as it acts on Cartesian
+// diffraction vectors x = B·h: C = B·Rᵀ·B⁻¹.
+function cartOp(B, R){
+  const [b11, b12, b13, , b22, b23, , , b33] = B;
+  const Bi = [1/b11, -b12/(b11*b22), (b12*b23 - b13*b22)/(b11*b22*b33), 0, 1/b22, -b23/(b22*b33), 0, 0, 1/b33];
+  const Rt = [R[0], R[3], R[6], R[1], R[4], R[7], R[2], R[5], R[8]];
+  const mul = (P, Q) => [0, 1, 2].flatMap(i=> [0, 1, 2].map(j=> P[3*i]*Q[j] + P[3*i + 1]*Q[3 + j] + P[3*i + 2]*Q[6 + j]));
+  return mul(mul(B, Rt), Bi);
+}
+function broadeningSetup(q, p, cell, list, add, nextIndex){
+  const prof = PROFILES.includes(p.profile) ? p.profile : 'lorentz';
+  q.wppm = prof !== 'lorentz';
+  if (prof === 'lognormal'){ q.iLS = nextIndex(); add('LS', 0, 0, 1.5, 1e-4, { kind: 'dist' }); }
+  if (p.strain === 'aniso'){
+    memberVectors(q, p, cell, list);
+    q.strainForms = quarticInvariants(q.laue.map(R=> cartOp(q.Bm, R)));
+    q.iS = q.strainForms.map((_, j)=> { const i = nextIndex(); add('S' + (j + 1), 0, -1e4, 1e4, 1e-3, { kind: 'strain' }); return i; });
+    // each reflection's forms, at its direction (fixed with the starting cell, as the members')
+    const B = q.Bm;
+    q.strainQ = list.map(r=> { const x = [B[0]*r.h + B[1]*r.k + B[2]*r.l, B[4]*r.k + B[5]*r.l, B[8]*r.l], n = Math.hypot(...x); return q.strainForms.map(c=> evalQuartic(c, x.map(t=> t/n))); });
+  }
+  const fs = faultOf(p.faults);
+  if (fs){
+    memberVectors(q, p, cell, list);
+    const trans = (p.ops || []).filter(o=> o.R.every((x, i)=> x === [1,0,0, 0,1,0, 0,0,1][i]) && o.t.some(x=> x)).map(o=> o.t);
+    q.faultSpec = fs;
+    q.faultTab = faultTable({ Bm: q.Bm, M: p.constraint && p.constraint.basis, laue: q.laue, trans }, fs.plane, fs.disp, list.map(r=> [r.h, r.k, r.l]));
+    q.iFA = nextIndex(); add('FA', 0, 0, 0.45, 1e-5, { kind: 'faults' });
+  }
+}
+// Parameter labels from the atoms' (letters and digits only, each its own).
+function siteLabels(atoms, refs){
+  const used = new Set();
+  return refs.map(j=>{
+    const base = String(atoms[j].label || atoms[j].element || 'X').replace(/[^A-Za-z0-9]/g, '') || 'X';
+    let lab = base, n = 2;
+    while (used.has(lab)) lab = base + '_' + n++;
+    used.add(lab);
+    return lab;
+  });
+}
+function adpSetup(q, p, cell, add, nextIndex){
+  q.adp = ['overall', 'site', 'aniso'].includes(p.adp) ? p.adp : 'cif';
+  if (q.adp !== 'site' && q.adp !== 'aniso') return;
+  const atoms = q.atoms, orb = atomOrbits(cell, atoms, p.ops);
+  q.orbit = orb.orbit; q.orbR = orb.R;
+  const labels = siteLabels(atoms, orb.ref), { Gs } = metric(cell), Ns = [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])];
+  q.sites = orb.ref.map((j, o)=>{
+    const members = atoms.map((_, i)=> i).filter(i=> orb.orbit[i] === o);
+    const Bs = members.map(i=> atoms[i].Biso).filter(Number.isFinite), B0 = Bs.length ? Bs.reduce((a, b)=> a + b, 0)/Bs.length : 0.5;
+    const site = { label: labels[o], ref: j, members, element: atoms[j].element };
+    if (q.adp === 'site'){ site.iB = nextIndex(); add('B_' + labels[o], B0, -2, 20, 1e-4, { kind: 'adp', site: o }); return site; }
+    const a = atoms[j], basis = siteAdpBasis(cell, p.ops, [a.x, a.y, a.z]);
+    // The isotropic start, U^ij = U·(a*_i·a*_j)/(a*_i a*_j), within the site's constraints
+    // (least squares on its basis; it lies in it exactly).
+    const Ui = B0/(8*Math.PI*Math.PI), U0 = [0, 1, 2, [0, 1], [0, 2], [1, 2]].map(c=> Array.isArray(c) ? Ui*Gs[3*c[0] + c[1]]/(Ns[c[0]]*Ns[c[1]]) : Ui);
+    const m = basis.vecs.length, G = basis.vecs.map(u=> basis.vecs.map(w=> u.reduce((t, x, i)=> t + x*w[i], 0))), rhs = basis.vecs.map(u=> u.reduce((t, x, i)=> t + x*U0[i], 0));
+    const c0 = solveSmall(G, rhs, m);
+    site.vecs = basis.vecs; site.names = basis.names;
+    site.iU = basis.names.map((nm, i)=> { const ix = nextIndex(); add(nm + '_' + labels[o], c0[i], -0.5, 0.5, 1e-6, { kind: 'adp', site: o }); return ix; });
+    return site;
+  });
+}
+function solveSmall(A, b, n){
+  const M = A.map((row, i)=> [...row, b[i]]);
+  for (let c = 0; c < n; c++){
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    [M[c], M[p]] = [M[p], M[c]];
+    for (let r = 0; r < n; r++){ if (r === c) continue; const f = M[r][c]/M[c][c]; for (let k = c; k <= n; k++) M[r][k] -= f*M[c][k]; }
+  }
+  return M.map((row, i)=> row[n]/row[i]);
+}
+// A site's U (6-vector, U11 … U23) at v.
+function siteU(site, v){
+  const U = [0, 0, 0, 0, 0, 0];
+  site.iU.forEach((ix, m)=> { const c = v[ix]; site.vecs[m].forEach((x, i)=> { U[i] += c*x; }); });
+  return U;
+}
+// The strain of reflection r at v: ε₀ = Xs·(π/180)/4 (the isotropic Lorentzian's,
+// H_L = 4ε·tanθ) with, for Stephens, the anisotropic part: ε² = ε₀² + 10⁻⁶ Σ S_j q_j(u).
+function strainOf(q, v, r){
+  const e0 = v[q.iXs]*D2R/4;
+  if (!q.iS) return e0;
+  let e2 = e0*e0;
+  const qs = q.strainQ[r];
+  for (let j = 0; j < q.iS.length; j++) e2 += 1e-6*v[q.iS[j]]*qs[j];
+  return Math.sqrt(Math.max(0, e2));
+}
+
 /* buildModel({ x, y, varMul, instr, phases, prof, bgDegree, bgInv })
    - x, y: the pattern (2θ in degrees, monotonic, every value a number: the windows are
      found by bisection; counts); varMul: per-point variance multiplier (attenuator
@@ -1154,13 +1286,15 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
       q.poSpec = po; q.poHkl = po === 'auto' ? null : po;
       q.iPO = par.length; add(pfx + 'PO', 1, 0.2, 5, 1e-4, { group: 'phase', phase: k, kind: 'texture' });
     }
+    broadeningSetup(q, p, cell, list, (nm, value, lo, hi, step, extra)=> add(pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
+    adpSetup(q, p, cell, (nm, value, lo, hi, step, extra)=> add(pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
     return q;
   });
 
   const index = {};
   par.forEach((p, i)=> { index[p.name] = i; });
   return {
-    x: X, y: Yo, w, n, x0, x1, rev, lines, lineName, cos2M, radius, bgDegree: N, basis,
+    x: X, y: Yo, w, n, x0, x1, rev, lines, lineName, cos2M, radius, bgDegree: N, basis, instrMissing: !instr,
     phases: ph, par, index, v: Float64Array.from(par, p=> p.value),
     iZero: index.zero, iDisp: index.disp, iProf: ['U','V','W','X','Y'].map(k=> index[k]), iAsym: index.asym,
     iBg: par.map((p, i)=> p.group === 'bg' ? i : -1).filter(i=> i >= 0),
@@ -1220,15 +1354,21 @@ function profileOf(model, v, k){
    costs the form factors at the new s alone: no trigonometry, which on a 48-atom
    monoclinic cell was most of the time of a cell-search step. */
 function phaseGeometry(model, q){
-  const types = [], byKey = new Map(), keys = [];
-  const tIdx = q.atoms.map(a=>{
+  const types = [], byKey = new Map(), keys = [], tid = new Map();
+  // With B per site the type is the site (its B a parameter); anisotropic, the site and
+  // the rotation that takes its first atom there (β turns with it): atoms related by a
+  // centring translation share one.
+  const tIdx = q.atoms.map((a, j)=>{
     const key = a.key || a.element || a.label, el = a.element || key, occ = a.occ ?? 1, B = a.Biso ?? 0;
-    const id = key + '|' + el + '|' + occ + '|' + B;
-    let t = types.findIndex(u=> u.id === id);
-    if (t < 0){
+    const o = q.orbit ? q.orbit[j] : -1;
+    const grp = q.adp === 'site' ? 'o' + o : q.adp === 'aniso' ? 'o' + o + '|' + q.orbR[j].join() : 'B' + B;
+    const id = key + '|' + el + '|' + occ + '|' + grp;
+    let t = tid.get(id);
+    if (t === undefined){
       if (!byKey.has(key)){ byKey.set(key, keys.length); keys.push(key); }
       const fp = model.lineName ? fprime(el, model.lineName) : [0, 0];
-      t = types.push({ id, key: byKey.get(key), occ, B, fpr: fp[0], fpi: fp[1] }) - 1;
+      t = types.push({ id, key: byKey.get(key), occ, B, fpr: fp[0], fpi: fp[1], site: o, R: q.adp === 'aniso' ? q.orbR[j] : null }) - 1;
+      tid.set(id, t);
     }
     return t;
   });
@@ -1243,13 +1383,27 @@ function phaseGeometry(model, q){
   q.geo = { types, keys, gr, gi };
 }
 // F² of every listed reflection for this cell (f0 and the Debye–Waller factor follow s,
-// so they move with the cell); recomputed only when the cell changes.
-function phaseF2(model, q, cell, Gs){
-  const key = cell.a + ',' + cell.b + ',' + cell.c + ',' + cell.alpha + ',' + cell.beta + ',' + cell.gamma;
+// so they move with the cell) and these displacement parameters; recomputed only when
+// either changes.
+function phaseF2(model, q, cell, Gs, v){
+  const adpKey = q.adp === 'site' ? q.sites.map(st=> v[st.iB]).join() : q.adp === 'aniso' ? q.sites.map(st=> st.iU.map(i=> v[i]).join(':')).join() : '';
+  const key = cell.a + ',' + cell.b + ',' + cell.c + ',' + cell.alpha + ',' + cell.beta + ',' + cell.gamma + '|' + adpKey;
   if (q.f2key === key) return q.f2;
   if (q.atoms.length && !q.geo) phaseGeometry(model, q);
   const f2 = new Float64Array(q.nRefl), d = new Float64Array(q.nRefl);
   const geo = q.geo, nt = geo ? geo.types.length : 0, f0s = geo ? new Float64Array(geo.keys.length) : null;
+  // Per type: B (isotropic), or β (anisotropic: the site's, turned by the type's R).
+  let Bt = null, betas = null;
+  if (geo && q.adp === 'site') Bt = geo.types.map(T=> v[q.sites[T.site].iB]);
+  if (geo && q.adp === 'aniso'){
+    const Ns = [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])];
+    const bs = q.sites.map(st=> betaOf(siteU(st, v), Ns));
+    betas = geo.types.map(T=>{
+      const b = bs[T.site], R = T.R;
+      // R β Rᵀ
+      return [0, 1, 2].flatMap(i=> [0, 1, 2].map(j=>{ let t = 0; for (let a = 0; a < 3; a++) for (let c = 0; c < 3; c++) t += R[3*i + a]*b[3*a + c]*R[3*j + c]; return t; }));
+    });
+  }
   for (let r = 0; r < q.nRefl; r++){
     const h = q.h[r], k = q.k[r], l = q.l[r];
     const Q = h*h*Gs[0] + k*k*Gs[4] + l*l*Gs[8] + 2*(h*k*Gs[1] + h*l*Gs[2] + k*l*Gs[5]);
@@ -1259,7 +1413,11 @@ function phaseF2(model, q, cell, Gs){
     for (let u = 0; u < f0s.length; u++) f0s[u] = f0(geo.keys[u], s);
     let r1 = 0, i1 = 0, r2 = 0, i2 = 0;
     for (let t = 0; t < nt; t++){
-      const T = geo.types[t], w = T.occ*Math.exp(-T.B*s2), ar = w*(f0s[T.key] + T.fpr), ai = w*T.fpi;
+      const T = geo.types[t];
+      let dw;
+      if (betas){ const b = betas[t]; dw = Math.exp(-(h*h*b[0] + k*k*b[4] + l*l*b[8] + 2*(h*k*b[1] + h*l*b[2] + k*l*b[5]))); }
+      else dw = Math.exp(-(Bt ? Bt[t] : T.B)*s2);
+      const w = T.occ*dw, ar = w*(f0s[T.key] + T.fpr), ai = w*T.fpi;
       const g = geo.gr[r*nt + t], gs = geo.gi[r*nt + t];
       r1 += ar*g - ai*gs; i1 += ar*gs + ai*g;           // F(h)
       r2 += ar*g + ai*gs; i2 += ai*g - ar*gs;           // F(−h): G conjugated
@@ -1276,30 +1434,110 @@ function lpFactor(model, th){
   const c2 = Math.cos(2*th), s = Math.sin(th);
   return (1 + model.cos2M*c2*c2)/((1 + model.cos2M)*s*s*Math.cos(th));
 }
+/* A line beyond the pattern, toward 2θ = 180°: its widths and the Lorentz factor go as
+   1/cosθ, so near 180° it is a level over the whole pattern, and that level went at once
+   as the cell carried the line past 180° (λ/2d ≥ 1). On a synthetic ZnO pattern (to
+   130°) the refinement stopped on that step, the cell 20 esd from the truth and χ² 1.16
+   where the truth gives 1.02. Such lines fade out between 170° and 175° (or just beyond
+   the pattern, when it reaches further), smoothly in 2θ, so the pattern stays continuous
+   in the cell. */
+function backFade(model, tt){
+  const a = Math.max(170, model.x1 + 1), b = Math.min(179.9, a + 5);
+  if (tt <= a) return 1;
+  if (tt >= b) return 0;
+  const s = (tt - a)/(b - a);
+  return 1 - s*s*(3 - 2*s);
+}
 
 // One line of one reflection with the free shape: a peak per member of the family, its
-// Lorentzian width Y (the instrument's and the phase's isotropic Ys) + the shape's own
-// (shapeWidths: wv, one per member), each a 1/m share of the intensity. The FCJ counts
-// are held per member (their keys negative, apart from the isotropic lines').
+// Lorentzian width Y (the instrument's and the phase's isotropic Ys, and the faults') +
+// the shape's own (shapeWidths: wv, one per member), each a 1/m share of the intensity
+// (times its texture weight). The FCJ counts are held per member (their keys negative,
+// apart from the isotropic lines').
 function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw){
   const q = model.phases[k], m = wv.length, x = model.x, xa = model.x0, xb = model.x1;
   const { U, V, W, X, Y, A } = prof;
   const c2 = Math.cos(2*th), dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
-  let first = null;
+  let sw = 0, sH = 0, sE = 0, tSum = 0;
   for (let i = 0; i < m; i++){
-    const pr = profileAtTheta(th, U, V, W, X, Y + wv[i]);
-    if (!first) first = pr;
+    const pr = profileAtTheta(th, U, V, W, X, Y + wv[i]), ti = tw ? tw[i] : 1;
+    sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
     const half = Math.max(model.win*pr.H, WIN_MIN);
     if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
     const nodes = A > 0 ? lineNodes(model, -1 - ((k*65536 + r)*64 + i)*4 - j, th, A, pr.H) : null;
-    const Im = tw ? I/m*tw[i] : I/m;
+    const Im = I/m*ti;
     if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, Im, model.win);
     else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, Im, model.win);
     else addPeakFCJ(out, x, tt, pr.H, pr.eta, Im, nodes, model.win);
   }
-  if (ticks && first && tt >= xa && tt <= xb)
+  // The tick: the line's intensity with its texture, its width the members' mean
+  // (weighed as their intensities).
+  if (ticks && sw > 0 && tt >= xa && tt <= xb)
     ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
-                 tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: first.H, eta: first.eta, j: 0, pk: k, r });
+                 tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I*tSum/m, H: sH/sw, eta: sE/sw, j: 0, pk: k, r });
+}
+
+/* One line of one reflection by WPPM (xrd-broad.js wppmLine): the instrument's pseudo-
+   Voigt (U..Y alone) in Fourier space, times the strain's and the faults' Lorentzians
+   (FWHM in d*: 2ε·d* and κ/π) and the size's coefficients — the isotropic sphere's
+   (diameter Kλ/(Ys·π/180), the same reading as the Lorentzian model's) or each member's
+   solid along its direction (shapeTs), over the log-normal distribution when there is
+   one — and the axial divergence's nodes. The grid follows two widths, estimated as
+   Lorentzians of the same breadth: the line's whole (the window) and its narrowest part
+   (the step: the instrument's and the largest crystallites' sharpest member). */
+function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, ts, tw){
+  const q = model.phases[k], L = model.lines[j], lam1 = model.lines[0].lam, c = Math.cos(th);
+  const { U, V, W, X, Y, A } = inst, pr = profileAtTheta(th, U, V, W, X, Y);
+  // The solid's base body for its members; the isotropic size (no shape, or the shape's
+  // widths still 0 before its search) is a sphere whatever solid the phase asks for.
+  const sigma = q.iLS != null ? ext.sigma : 0, base = ts && q.iW ? BODIES[q.shapeType].base : 'ball';
+  const kScale = D2R/(K_SCHERRER*lam1);          // Å⁻¹ per degree of a dimension's width
+  const dstar = 1/d[r], eps = ext.eps, kap = ext.kappa;
+  const WL = 2*eps*dstar + kap/Math.PI;          // Å⁻¹
+  // Lorentzian-equivalent widths (°): strain, faults, the size's mean and narrowest.
+  const strDeg = 4*eps*Math.tan(th)*R2D, fltDeg = L.lam*kap/Math.PI/c*R2D;
+  /* Over a distribution the dimensions read are the volume-weighted mean crystallite's,
+     the median's times e^{3.5σ²} (a sphere's ⟨D⁴⟩/⟨D³⟩): the integral breadth, which
+     ⟨L⟩_V sets, then stays with them while σ changes the profile's shape — with the
+     median instead, σ and the size traded one for the other along the breadth. The
+     largest crystallites (+3σ over the volume) are e^{3σ − σ²/2} times as large. */
+  const toMedian = Math.exp(3.5*sigma*sigma), grow = Math.exp(-3*sigma + 0.5*sigma*sigma);
+  let sizeMean = 0, sizeMin = Infinity, members = null;
+  if (ts){
+    const m = ts.length/3; members = [];
+    let wsum = 0;
+    for (let i = 0; i < m; i++){
+      const t = [ts[3*i], ts[3*i + 1], ts[3*i + 2]], n = Math.hypot(t[0], t[1], t[2]), wi = tw ? tw[i]/m : 1/m;
+      const w = n > 0 ? 0.75*n/columnLengthV(base, t) : 0;
+      sizeMean += wi*w; wsum += wi; sizeMin = Math.min(sizeMin, w);
+      const a = Math.abs(t[0])/(n || 1), b = Math.abs(t[1])/(n || 1), cc = Math.abs(t[2])/(n || 1);
+      members.push(base === 'cylinder' ? [Math.hypot(a, b), 0, cc, n*kScale*toMedian, wi] : [a, b, cc, n*kScale*toMedian, wi]);
+    }
+    sizeMean /= wsum || 1;
+  } else {
+    const ys = ext.Ys;
+    sizeMean = sizeMin = ys > 0 ? 1.23*ys : 0;   // a sphere's FWHM is 1.23× the Lorentzian reading
+    members = ys > 0 ? [[0, 0, 0, ys*kScale*toMedian, 1]] : null;
+  }
+  const lorTot = pr.HL + sizeMean/c + strDeg + fltDeg;
+  const Hest = tch(pr.HG, lorTot).H, Hmin = tch(pr.HG, pr.HL + sizeMin*grow/c + strDeg + fltDeg).H;
+  const half = Math.max(model.win*Hest, WIN_MIN);
+  const c2 = Math.cos(2*th), dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
+  const xa = model.x0, xb = model.x1;
+  if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) return;
+  // The divergence's node count from the narrowest component the line can hold (a thin
+  // plate's sharp in-plane members inside a broad line): counted from the whole line's
+  // width, 3 nodes 0.1° apart drew separate bumps, 8 % of the peak.
+  const nodes = A > 0 ? lineNodes(model, (k*65536 + r)*4 + j, th, A, Hmin) : null;
+  const size = members ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi] of members) addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } : null;
+  // (The texture's weights are in the members' weights; without a shape, in I already.)
+  wppmLine({ x: model.x, out, tt, lam: L.lam, I, Hi: pr.H, etai: pr.eta, WL, Hest, Hmin, size, nodes, win: model.win, winMin: WIN_MIN });
+  if (ticks && tt >= xa && tt <= xb){
+    const tq = tch(pr.HG, lorTot);
+    const tSum = ts && tw ? tw.reduce((a, b)=> a + b, 0)/tw.length : 1;
+    ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
+                 tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I*tSum, H: tq.H, eta: tq.eta, j: 0, pk: k, r });
+  }
 }
 
 /* One phase's pattern at scale 1 into `out` (zeroed here). With `ticks`, the α1 line of
@@ -1308,13 +1546,17 @@ function phasePattern(model, v, k, out, ticks){
   out.fill(0);
   const q = model.phases[k];
   const cell = cellOf(model, v, k), { Gs } = metric(cell);
-  const f2 = phaseF2(model, q, cell, Gs), d = q.d;
+  const f2 = phaseF2(model, q, cell, Gs, v), d = q.d;
   const zero = v[model.iZero], disp = v[model.iDisp], dB = v[q.iB], A = v[model.iAsym];
+  const [Ui, Vi, Wi, Xi, Yi] = model.iProf.map(i=> v[i]);
   const { U, V, W, X, Y } = profileOf(model, v, k);
   const x = model.x, xa = model.x0, xb = model.x1, S = v[q.iScale];
   // The free shape: each member of a family with its own size width (shapeSetup).
-  const shp = shapeActive(q, v) ? shapeWidths(model, q, v) : null;
+  const act = shapeActive(q, v);
+  const wppm = q.wppm && !q.iL;
+  const shp = act && !wppm ? shapeWidths(model, q, v) : null, ts = act && wppm ? shapeTs(model, q, v) : null;
   const tw = textureWeights(q, v);
+  const fa = q.iFA != null ? v[q.iFA] : 0, sigma = q.iLS != null ? v[q.iLS] : 0;
   const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
   if (sk && sk.only && sk.k !== k) return out;
   for (let r = 0; r < q.nRefl; r++){
@@ -1322,14 +1564,27 @@ function phasePattern(model, v, k, out, ticks){
     const s2 = 0.25/(d[r]*d[r]);
     let base = q.mult[r]*f2[r]*Math.exp(-2*dB*s2);
     // the texture: each member weighed (a shaped phase's, one by one in shapeLine)
-    if (tw && !shp){ const o = tw[r]; let t = 0; for (let i = 0; i < o.length; i++) t += o[i]; base *= t/o.length; }
+    if (tw && !shp && !ts){ const o = tw[r]; let t = 0; for (let i = 0; i < o.length; i++) t += o[i]; base *= t/o.length; }
+    // Stephens' strain and the faults: this reflection's own (none: the phase's Xs, 0).
+    const eps = q.iS ? strainOf(q, v, r) : v[q.iXs]*D2R/4;
+    const kappa = fa > 0 ? faultKappa(q.faultTab, r, fa) : 0;
+    const Xr = q.iS ? Xi + 4*eps*R2D : X;
     for (let j = 0; j < model.lines.length; j++){
       const L = model.lines[j], st = L.lam/(2*d[r]);
       if (st >= 1) continue;
       const th = Math.asin(st);
       const tt = 2*th*R2D + zero + disp*Math.cos(th);
-      if (shp){ shapeLine(model, k, r, j, th, tt, base*L.w*lpFactor(model, th), shp[r], { U, V, W, X, Y, A }, out, ticks && j === 0 ? ticks : null, S, f2, d, tw ? tw[r] : null); continue; }
-      const pr = profileAtTheta(th, U, V, W, X, Y);
+      const fade = backFade(model, tt);
+      if (!fade) continue;
+      const I = base*L.w*lpFactor(model, th)*fade;
+      if (wppm){
+        wppmLineOf(model, k, r, j, th, tt, I, { U: Ui, V: Vi, W: Wi, X: Xi, Y: Yi, A }, { eps, kappa, sigma, Ys: v[q.iYs] }, out, ticks && j === 0 ? ticks : null, S, f2, d, ts ? ts[r] : null, ts && tw ? tw[r] : null);
+        continue;
+      }
+      // The faults' Lorentzian, as a width ∝ 1/cosθ: FWHM κ/π in d* is λκ/π/cosθ in 2θ.
+      const Yr = kappa > 0 ? Y + L.lam*kappa/Math.PI*R2D : Y;
+      if (shp){ shapeLine(model, k, r, j, th, tt, I, shp[r], { U, V, W, X: Xr, Y: Yr, A }, out, ticks && j === 0 ? ticks : null, S, f2, d, tw ? tw[r] : null); continue; }
+      const pr = profileAtTheta(th, U, V, W, Xr, Yr);
       // The axial divergence spreads the peak over shifts of one sign, up to dMax
       // (fcjNodes): a line out of range by more than that is skipped before its nodes.
       const c2 = Math.cos(2*th);
@@ -1337,7 +1592,6 @@ function phasePattern(model, v, k, out, ticks){
       const half = Math.max(model.win*pr.H, WIN_MIN);
       if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
       const nodes = A > 0 ? lineNodes(model, (k*65536 + r)*4 + j, th, A, pr.H) : null;
-      const I = base*L.w*lpFactor(model, th);
       if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, I, model.win);
       else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, I, model.win);
       else addPeakFCJ(out, x, tt, pr.H, pr.eta, I, nodes, model.win);
@@ -1948,7 +2202,10 @@ function ownEvidence(model, v, chi2){
    5. + X, and U, V and the asymmetry (S + H)/L when the instrumental profile is free
       (the standard, or opts.instrumentalProfileFree) and ≥ 8 reflections lie in the
       range (with irf: each phase's Xs instead);
-   6. + ΔB per phase (opts.refineB).
+   6. the phases' optional stages, each on top of what is free: the anisotropic strain
+      (Stephens' S_j), the planar faults (FA), the size distribution (σ, LS), the
+      displacement parameters (ΔB, B per site or Uⁱʲ per site: the phase's adp, or
+      'overall' for all with opts.refineB, the v419–v423 card option), the texture.
    With opts.irf = { U, V, W, X, Y, asym?, zero? } (the standard's refined profile), the
    instrument's U..Y and asymmetry are held at those values and each phase's broadening
    goes to its Xs, Ys, which add to X and Y (Lorentzian widths add under convolution): size and
@@ -1967,7 +2224,9 @@ function ownEvidence(model, v, chi2){
    Rwp, Rexp, chi2, Rp, cRwp, free, iterations, converged, ms}], cellSearch:{f, Rwp,
    curve, fine, steps, phases:[{id, f, found, Rwp, curve, fine, steps}]} (f, curve: the
    first phase's), sizeStrain, weightFractions (each with `detected`), detected: [ids],
-   warnings: [string], reflectionsInRange, converged, ms }. */
+   warnings: [string], textures, models: {id: {profile, strain, faults, adp}} (what each
+   phase was refined with: without the standard's profile, WPPM, the anisotropic strain
+   and the faults are not), reflectionsInRange, converged, ms }. */
 function autoRefine(model, opts = {}){
   const t0 = Date.now(), stages = [], warnings = [];
   const irf = opts.irf || null, std = !!opts.standard;
@@ -1976,7 +2235,26 @@ function autoRefine(model, opts = {}){
   const progRaw = opts.onProgress || (()=>{});
   const share = irf && model.phases.some(q=> q.shapeType) ? 0.5 : 1;
   const prog = (f, stage) => progRaw(f*share, stage);
-  const nStages = (opts.refineB ? 6 : 5);
+  // Options that need the standard's instrumental profile: without it the instrument's
+  // broadening and the sample's are one and the same.
+  const needIrf = [];
+  if (!irf) model.phases.forEach(q=>{
+    const what = [q.wppm && 'WPPM', q.iS && 'anisotropic strain', q.faultTab && 'planar faults'].filter(Boolean);
+    if (what.length) needIrf.push(`${q.name || 'Phase ' + q.id}: ${what.join(', ')}`);
+    q.wppm = false; q.noIrf = true;
+  });
+  // What the model had to assume about the instrument, said once with the results.
+  if (model.instrMissing) warnings.push('No instrument description could be read from the file: Cu Kα₁/Kα₂ (ratio 0.5), a 240 mm goniometer and no monochromator are assumed.');
+  if (!model.lineName) warnings.push(`λ = ${model.lines[0].lam.toFixed(5)} Å is not one of the lines the anomalous scattering factors are tabulated at (Cu, Co, Mo, Cr, Fe, Ag Kα₁): f′ and f″ are taken as 0.`);
+  if (needIrf.length) warnings.push(`${needIrf.join('; ')}: need the standard's instrumental profile (refine the standard first), else the instrument's broadening and the sample's are one and the same; refined without.`);
+  const adpOf = q => q.adp !== 'cif' ? q.adp : opts.refineB ? 'overall' : 'cif';
+  const optStages = [
+    model.phases.some(q=> q.iS && !q.noIrf) && 'anisotropic strain',
+    model.phases.some(q=> q.iFA != null && !q.noIrf) && 'planar faults',
+    model.phases.some(q=> q.iLS != null && q.wppm) && 'size distribution',
+    model.phases.some(q=> adpOf(q) !== 'cif') && 'displacement parameters',
+  ].filter(Boolean);
+  const nStages = 5 + optStages.length;
   const lin = ['bg' + 0];
   for (let k = 1; k <= model.bgDegree; k++) lin.push('bg' + k);
   if (opts.bgInv != null) model.useInv = !!opts.bgInv && model.x0 > 0;
@@ -2001,7 +2279,8 @@ function autoRefine(model, opts = {}){
     if (Number.isFinite(irf.zero)) v[model.iZero] = irf.zero;
     // The sample's width above the instrument's, all of it Lorentzian to start with.
     const Hi = profileAtTheta(thE, irf.U || 0, irf.V || 0, irf.W || 0, irf.X || 0, irf.Y || 0).H;
-    model.phases.forEach(q=> { v[q.iYs] = Math.max(0, est.H - Hi)*Math.cos(thE); v[q.iXs] = 0; });
+    // (By WPPM the sphere's own profile is 1.23× as wide as the Lorentzian reading of Ys.)
+    model.phases.forEach(q=> { v[q.iYs] = Math.max(0, est.H - Hi)*Math.cos(thE)/(q.wppm ? 1.23 : 1); v[q.iXs] = 0; });
   } else {
     const h = est.H/1.635;      // H_G = H_L = h gives H = 1.635 h under TCH
     v[model.index.U] = 0; v[model.index.V] = 0; v[model.index.X] = 0;
@@ -2119,9 +2398,47 @@ function autoRefine(model, opts = {}){
     if (instrFree && (uvFree ? !(model.v[model.iAsym] > 0) : model.v[model.iAsym] !== 0)){ const vv = model.v.slice(); vv[model.iAsym] = uvFree ? asym0 : 0; setParams(model, vv); }
     free = free.concat(irf ? keep(model.phases.map(q=> q.pfx + 'Xs')) : uvFree ? ['X', 'U', 'V', 'asym'] : ['X']);
     res = run(4, irf ? 'size and strain' : uvFree ? 'full profile' : 'profile shape', free);
-    if (opts.refineB){
-      free = free.concat(keep(model.phases.map(q=> q.pfx + 'B')));
-      res = run(5, 'displacement parameters', free);
+    // The optional stages, each on top of what is free already.
+    let kSt = 5;
+    const live0 = k => !out.has(k);
+    if (optStages.includes('anisotropic strain')){
+      // Stephens: ε² = ε₀² + Σ S q; from ε₀ = 0 the square root has no derivative.
+      const vv = model.v.slice();
+      model.phases.forEach((q, k)=> { if (q.iS && !q.noIrf && live0(k) && vv[q.iXs] < 0.02) vv[q.iXs] = 0.02; });
+      setParams(model, vv);
+      free = free.concat(model.phases.flatMap((q, k)=> q.iS && !q.noIrf && live0(k) ? q.iS.map(i=> model.par[i].name) : []));
+      res = run(kSt++, 'anisotropic strain', free);
+    }
+    if (optStages.includes('planar faults')){
+      free = free.concat(model.phases.flatMap((q, k)=> q.iFA != null && !q.noIrf && live0(k) ? [q.pfx + 'FA'] : []));
+      res = run(kSt++, 'planar faults', free);
+    }
+    if (optStages.includes('size distribution')){
+      /* The log-normal width: σ enters to second order (a distribution and its mirror in
+         ln size differ only beyond), so from σ = 0 it has no derivative; refined from 0.3
+         and from 0.6, the lower χ² kept. */
+      tS = Date.now();
+      prog(kSt/nStages, 'size distribution');
+      for (const k of model.phases.map((_, k)=> k).filter(k=> model.phases[k].iLS != null && model.phases[k].wppm && live0(k))){
+        const q = model.phases[k], v0 = model.v.slice();
+        let best = null;
+        for (const s0 of [0.3, 0.6]){
+          const vv = v0.slice(); vv[q.iLS] = s0; setParams(model, vv);
+          let r; try { r = refine(model, { free: [...free, q.pfx + 'LS'], maxIter: opts.maxIter || 40 }); } catch(e){ continue; }
+          if (!best || r.stats.chi2 < best.r.stats.chi2) best = { r, v: model.v.slice() };
+        }
+        if (best){ setParams(model, best.v); res = best.r; free = free.concat(q.pfx + 'LS'); }
+        else setParams(model, v0);
+      }
+      stageStats('size distribution', res);
+      kSt++;
+    }
+    if (optStages.includes('displacement parameters')){
+      free = free.concat(keep(model.phases.flatMap(q=>{
+        const a = adpOf(q);
+        return a === 'overall' ? [q.pfx + 'B'] : a === 'site' ? q.sites.map(st=> model.par[st.iB].name) : a === 'aniso' ? q.sites.flatMap(st=> st.iU.map(i=> model.par[i].name)) : [];
+      })));
+      res = run(kSt++, 'displacement parameters', free);
     }
     /* A preferred orientation (March–Dollase), for the phases that ask for one. For a
        cubic phase its r has no first-order effect at 1 (the members of a family weigh
@@ -2131,7 +2448,7 @@ function autoRefine(model, opts = {}){
     const poKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].iPO != null && !out.has(k));
     if (poKs.length){
       tS = Date.now();
-      prog(Math.min(nStages - 0.5, 5)/nStages, 'preferred orientation');
+      prog(Math.min(nStages - 0.5, kSt)/nStages, 'preferred orientation');
       for (const k of poKs){
         const q = model.phases[k], v0 = model.v.slice(), cands = q.poSpec === 'auto' ? textureCandidates(q) : [q.poSpec];
         let best = null;
@@ -2195,8 +2512,11 @@ function autoRefine(model, opts = {}){
     // model holds is the last trial's: it is set back to the kept result's (the weight
     // fractions' esds read it).
     if (!Object.keys(shapes).length) isoParams = null;
-    model.cov = { names: res.free, cov: res.cov }; model.esd = res.esd;
   }
+  // The covariance the model holds is the last trial's (a texture's or a size
+  // distribution's starts, the shape's trials): set back to the kept result's, which the
+  // weight fractions' esds read.
+  model.cov = { names: res.free, cov: res.cov }; model.esd = res.esd;
   progRaw(1, 'done');
   const detected = model.phases.map((_, k)=> !out.has(k));
   const phasesNow = model.phases.map((q, k)=> ({ id: q.id, name: q.name, cell: cellOf(model, model.v, k), mass: q.mass }));
@@ -2216,6 +2536,9 @@ function autoRefine(model, opts = {}){
     shapes, isoParams,
     // the preferred orientations: each phase's axis (the conventional cell's hkl) and r
     textures: Object.fromEntries(model.phases.filter(q=> q.iPO != null && q.poHkl).map(q=> [q.id, { hkl: q.poHkl, r: res.params[q.pfx + 'PO'], esd: (res.esd || {})[q.pfx + 'PO'] }])),
+    // the models each phase was refined with (calc() needs them to draw the result again)
+    models: Object.fromEntries(model.phases.map(q=> [q.id, { profile: q.wppm ? (q.iLS != null ? 'lognormal' : 'wppm') : 'lorentz',
+      strain: q.iS && !q.noIrf ? 'aniso' : 'iso', faults: q.faultSpec && !q.noIrf ? q.faultSpec.text : null, adp: adpOf(q) }])),
     reflectionsInRange: nIn, converged: res.converged, ms: Date.now() - t0,
   };
 }
@@ -2493,4 +2816,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 
 export { buildModel, calc, refine, cellSearch, autoRefine, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
-         fcjNodes, addPeak, addPeakFCJ, shapeActive, HG2_FLOOR, K_SCHERRER };
+         fcjNodes, addPeak, addPeakFCJ, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, PROFILES, faultOf };

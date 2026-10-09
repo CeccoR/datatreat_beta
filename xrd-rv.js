@@ -68,6 +68,9 @@ function prepPhase(text, fileName){
   const notes = [], warnings = [...(cif.warnings || [])];
   if (!own) notes.push(`symmetry found from the atoms: ${sym.order} operations`);
   else if (sym.order !== cif.ops.length) notes.push(`${cif.ops.length} operations in the file; the structure has ${sym.order}`);
+  // A cell refined by one common scale (no conventional setting found): its axial ratios
+  // and angles stay the file's, which the user should know.
+  if (sym.constraint && sym.constraint.kind === 'isotropic' && sym.constraint.note) notes.push(sym.constraint.note);
   if (comp && !comp.ok && comp.message) warnings.push(comp.message);
   return {
     name: cif.name || (fileName || '').replace(/\.cif$/i, ''), file: fileName || '', formula: cif.formulaSum || '',
@@ -83,7 +86,6 @@ export function createRietveld(host){
   let idx = 0;               // the pattern on show, among the included files
   let results = {};          // file name → { params, esd, stats, stages, at }
   let busy = false, cancelled = false;
-  let refineB = false;       // also refine one ΔB per phase (an option, off by default)
   let plot = null;
   // Its own colour, apart from the CIF phases' (which start from the first of theirs).
   const lab6 = { id: 0, cif: LAB6_CIF, file: '', color: '#4cc9a0', prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)') };
@@ -134,7 +136,8 @@ export function createRietveld(host){
     // asym: absent from a standard refined before the asymmetry was modelled (none then).
     return r && r.params ? { U: r.params.U, V: r.params.V, W: r.params.W, X: r.params.X, Y: r.params.Y, asym: r.params.asym || 0, zero: r.params.zero } : null;
   }
-  const phaseData = list => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color, shape: p.shape || false, po: textureOpt(p.po) || null }));
+  const phaseData = list => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color,
+    shape: p.shape || false, po: textureOpt(p.po) || null, profile: profileOpt(p.profile), strain: strainOpt(p.strain), faults: faultOpt(p.faults) || null, adp: adpOpt(p.adp) }));
   // The crystallite shapes a phase can refine (xrd-rietveld SHAPE_TYPES): none (the
   // isotropic size) or a free solid. A project saved with the one free shape there was
   // (true) has the ellipsoid.
@@ -144,6 +147,22 @@ export function createRietveld(host){
   // best of the low-index ones.
   const TEXTURES = [['', 'no preferred orientation'], ['auto', 'preferred orientation: best axis'], ['100', 'preferred orientation (100)'], ['010', 'preferred orientation (010)'], ['001', 'preferred orientation (001)'], ['110', 'preferred orientation (110)'], ['111', 'preferred orientation (111)']];
   const textureOpt = v => TEXTURES.some(([k])=> k && k === v) ? v : '';
+  // The size's profile: a Lorentzian of the right breadth (Scherrer, K = 0.9), or by
+  // Whole Powder Pattern Modelling the crystallites' own, of one size or over a
+  // log-normal distribution of sizes (xrd-broad.js).
+  const PROFILES = [['lorentz', 'size profile: Lorentzian (Scherrer)'], ['wppm', 'size profile: WPPM, one size'], ['lognormal', 'size profile: WPPM, log-normal sizes']];
+  const profileOpt = v => PROFILES.some(([k])=> k === v) ? v : 'lorentz';
+  const STRAINS = [['iso', 'microstrain: isotropic'], ['aniso', 'microstrain: anisotropic (Stephens)']];
+  const strainOpt = v => v === 'aniso' ? 'aniso' : 'iso';
+  // Planar faults: the planes' family and the displacement (conventional indices), the
+  // common kinds named.
+  const FAULTS = [['', 'no planar faults'], ['111:1/6<112>', 'faults {111}, ⅙⟨112⟩ (fcc stacking)'], ['001:1/3<1-10>', 'faults (001), ⅓⟨1-10⟩ (hexagonal stacking)'],
+    ['100:1/2<111>', 'faults {100}, ½⟨111⟩ (Ruddlesden–Popper)'], ['100:1/2<110>', 'faults {100}, ½⟨110⟩ (antiphase)'], ['111:1/2<110>', 'faults {111}, ½⟨110⟩ (antiphase)'], ['110:1/2<110>', 'faults {110}, ½⟨110⟩']];
+  const faultOpt = v => FAULTS.some(([k])=> k && k === v) ? v : '';
+  // The displacement parameters: the CIF's held, one ΔB for all atoms, B per site, or
+  // the anisotropic U per site within its symmetry.
+  const ADPS = [['cif', 'B from the CIF'], ['overall', 'B: one ΔB for all atoms'], ['site', 'B per site'], ['aniso', 'U per site, anisotropic']];
+  const adpOpt = v => ADPS.some(([k])=> k === v) ? v : 'cif';
   // The solid a result was refined with, from its parameters' names (each solid has its
   // own), and only when they are in use (any width ≠ 0).
   function shapeOfParams(P, id){
@@ -153,12 +172,12 @@ export function createRietveld(host){
     const type = has('Ea') ? 'ellipsoid' : has('Wd') ? 'cylinder' : has('Wh') ? 'ellcyl' : has('Wb') ? 'box' : has('Wc') ? 'spheroid' : null;
     return type && ['Ea', 'Eb', 'Ec', 'Wa', 'Wb', 'Wc', 'Wd', 'Wh'].some(n=> g(n)) ? type : false;
   }
-  // optB: the ΔB option as it was when the run started, the same for all its files (an
-  // undo during a run would otherwise change it between them).
-  function payloadFor(f, optB = refineB){
+  // ph: the phases as they were when the run started, the same for all its files (an
+  // undo during a run would otherwise change their options between them).
+  function payloadFor(f, ph){
     const std = isStd(f);
     return { x: Array.from(f.x), y: Array.from(f.y), varMul: f.varMul ? Array.from(f.varMul) : null, instr: instrOf(f),
-      phases: phaseData(phasesFor(f)), opts: { standard: std, irf: std ? null : irf(), refineB: optB } };
+      phases: phaseData(std ? [lab6] : ph), opts: { standard: std, irf: std ? null : irf() } };
   }
 
   async function refine(list){
@@ -166,14 +185,15 @@ export function createRietveld(host){
     const todo = list.filter(f=> phasesFor(f).length);
     if (!todo.length){ setStatus('Add a phase from a CIF to refine.'); return; }
     busy = true; cancelled = false; syncButtons();
-    const optB = refineB;
+    const ph = phases.map(p=> ({ ...p }));
     try {
       for (let k = 0; k < todo.length && !cancelled; k++){
         const f = todo[k];
         setStatus(`Refining ${f.label}…`);
-        const res = await runInWorker(payloadFor(f, optB), (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`); });
+        const res = await runInWorker(payloadFor(f, ph), (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`); });
         if (!res) break;
-        results[f.name] = { ...res, phases: phasesFor(f).map(p=> p.id), irf: isStd(f) ? null : irf(), at: Date.now() };
+        // (the phases it was refined with: a CIF added meanwhile is not among them)
+        results[f.name] = { ...res, phases: (isStd(f) ? [lab6] : ph).map(p=> p.id), irf: isStd(f) ? null : irf(), at: Date.now() };
         if (f === host.files()[idx]) draw();
       }
       setStatus('');
@@ -192,9 +212,17 @@ export function createRietveld(host){
   // ---- the plot: observed, calculated, the background, the difference under them,
   // and a row of ticks per phase between the two ----
   function curvesOf(f, r){
-    // The phases as the result was refined: with the free shape when its parameters are
-    // there, whatever the toggle says now.
-    const ph = phaseData(phasesFor(f)).map(p=> ({ ...p, shape: shapeOfParams(r.params, p.id), po: r.textures && r.textures[p.id] ? r.textures[p.id].hkl : null }));
+    /* The phases as the result was refined: those it was refined with (a phase added
+       since, or the file's role changed, would draw its default scale in the curve),
+       with the free shape when its parameters are there and the models it used,
+       whatever the pickers say now. */
+    const ids = r.phases || null, list = phasesFor(f).filter(p=> !ids || ids.includes(p.id));
+    if (ids && list.length !== ids.length) throw new Error('The phases changed since this refinement.');
+    const ph = phaseData(list).map(p=>{
+      const md = (r.models || {})[p.id] || {};
+      return { ...p, shape: shapeOfParams(r.params, p.id), po: r.textures && r.textures[p.id] ? r.textures[p.id].hkl : null,
+        profile: profileOpt(md.profile), strain: strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp) };
+    });
     const model = buildModel({ x: f.x, y: f.y, varMul: f.varMul || null, instr: instrOf(f), phases: ph });
     return calc(model, r.params);
   }
@@ -458,6 +486,9 @@ export function createRietveld(host){
   }
 
   // ---- phases ----
+  // One of a phase's model pickers (marked when not at its default).
+  const pick = (key, p, list, val, def, label, title) =>
+    `<select class="rv-shape rv-opt${val !== def ? ' is-on' : ''}" data-opt="${key}" data-ph="${p.id}" aria-label="${esc(label)}"${busy ? ' disabled' : ''} title="${esc(title)}">${list.map(([k, t])=> `<option value="${k}"${val === k ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
   function renderPhases(){
     const el = $('xrdRvPhaseList'), rows = [];
     const row = (p, builtIn)=>{
@@ -473,8 +504,13 @@ export function createRietveld(host){
         + `<div class="rv-sub">${SYSTEM_NAMES[q.system] || esc(q.system)}, ${q.order} symmetry operations · ${cellTxt} · ${q.atoms.length} atoms in the cell${builtIn ? ' · built in, for the standard (cell held at the certified value)' : p.file ? ' · ' + esc(p.file) : ''}</div>`
         + (q.notes.length ? `<div class="rv-sub">${esc(q.notes.join('; '))}</div>` : '')
         + q.warnings.map(w=> `<div class="rv-sub" style="color:var(--warn)">⚠ ${esc(w)}</div>`).join('')
-        + `</div>${builtIn ? '' : `<div class="rv-picks"><select class="rv-shape${p.shape ? ' is-on' : ''}" data-shape="${p.id}" aria-label="Crystallite shape of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Crystallite shape: the isotropic size, or a free solid of any proportions and orientation (each reflection of a family with its own width). Needs the standard's profile; it tries several starting shapes, so it takes tens of seconds a sample, minutes for a phase with many reflections. Kept only when the data support it against an isotropic size">${SHAPES.map(([k, t])=> `<option value="${k}"${(shapeOpt(p.shape) || '') === k ? ' selected' : ''}>${k ? 'free shape: ' + t : t}</option>`).join('')}</select>`
-          + `<select class="rv-shape rv-po${textureOpt(p.po) ? ' is-on' : ''}" data-po="${p.id}" aria-label="Preferred orientation of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Preferred orientation (March–Dollase): the crystallites' planes (hkl) lie preferentially parallel to the sample's surface (r under 1, plates) or across it (r over 1, needles), which changes the reflections' intensities, not their widths. Best axis: the lowest χ² of the low-index planes">${TEXTURES.map(([k, t])=> `<option value="${k}"${textureOpt(p.po) === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`
+        + `</div>${builtIn ? '' : `<div class="rv-picks"><select class="rv-shape${p.shape ? ' is-on' : ''}" data-shape="${p.id}" aria-label="Crystallite shape of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Crystallite shape: the isotropic size, or a free solid of any proportions and orientation (each reflection of a family with its own width). Needs the standard's profile; it tries several starting shapes, so it takes tens of seconds a sample, minutes for a phase with many reflections or with WPPM's log-normal sizes. Kept only when the data support it against an isotropic size">${SHAPES.map(([k, t])=> `<option value="${k}"${(shapeOpt(p.shape) || '') === k ? ' selected' : ''}>${k ? 'free shape: ' + t : t}</option>`).join('')}</select>`
+          + `<select class="rv-shape rv-po${textureOpt(p.po) ? ' is-on' : ''}" data-po="${p.id}" aria-label="Preferred orientation of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Preferred orientation (March–Dollase): the crystallites' planes (hkl) lie preferentially parallel to the sample's surface (r under 1, plates) or across it (r over 1, needles), which changes the reflections' intensities, not their widths. Best axis: the lowest χ² of the low-index planes">${TEXTURES.map(([k, t])=> `<option value="${k}"${textureOpt(p.po) === k ? ' selected' : ''}>${t}</option>`).join('')}</select>`
+          + pick('profile', p, PROFILES, profileOpt(p.profile), 'lorentz', `Size profile of ${q.name}`, "The size broadening's profile. Lorentzian: a Lorentzian of the right breadth, the size read with Scherrer's K = 0.9 (as the Analysis card). WPPM (Whole Powder Pattern Modelling): each line the Fourier transform of the crystallites' own common-volume function — a sphere's, or the free solid's along each member — with the instrument's, the strain's and the faults' coefficients: the true dimensions, and the profile's shape too (one size has short tails; a log-normal distribution of sizes, its width σ refined, longer ones). Needs the standard's profile")
+          + pick('strain', p, STRAINS, strainOpt(p.strain), 'iso', `Microstrain of ${q.name}`, "Isotropic: one microstrain, the Lorentzian 4ε·tanθ. Anisotropic (Stephens): ε² a quartic form of the reflection's direction that the Laue group leaves unchanged (1 more term for a cubic phase, 2 hexagonal, 3 for 4/mmm and −3m, 4 for 4/m and −3, 5 orthorhombic, 8 monoclinic, 14 triclinic): a strain that depends on hkl, the same for all members of a family. Needs the standard's profile")
+          + pick('faults', p, FAULTS, faultOpt(p.faults), '', `Planar faults of ${q.name}`, "Planar faults (after Warren) on the planes of a family, each displacing the crystal beyond it by a vector of the family (those in the plane: a stacking fault, an antiphase boundary): a reflection whose h·R is not an integer loses coherence across each, a Lorentzian broadening by the indices' parity, not the order. Refined: the probability per plane. Needs the standard's profile")
+          + pick('adp', p, ADPS, adpOpt(p.adp), 'cif', `Displacement parameters of ${q.name}`, "Displacement parameters. From the CIF: held (0.5 Å² where it gives none). One ΔB: added to every atom's B. Per site: one B per crystallographic site (the sites found from the symmetry). Anisotropic: Uⁱʲ per site, only those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle")
+          + `</div>`
           + `<button class="peak-del is-danger idle-dim rv-del" data-del="${p.id}" title="Remove phase">${X_SVG(13)}</button>`}</div>`;
     };
     phases.forEach(p=> rows.push(row(p, false)));
@@ -482,6 +518,7 @@ export function createRietveld(host){
     el.innerHTML = rows.length ? rows.join('') : `<div class="rv-empty">No phase yet: <b>+ CIF</b> adds one from a crystallographic file (COD, ICSD, Materials Project…).</div>`;
   }
   async function addCifs(fileList){
+    if (busy) return;
     const errs = [];
     for (const file of fileList){
       try {
@@ -502,19 +539,24 @@ export function createRietveld(host){
     $('xrdRvRefine').textContent = busy ? 'Cancel' : 'Refine';
     $('xrdRvRefineAll').disabled = busy;
     $('xrdRvClear').disabled = busy;
-    const b = $('xrdRvOptB');
-    b.classList.toggle('is-on', refineB); b.setAttribute('aria-pressed', String(refineB)); b.disabled = busy;
-    $('xrdRvPhaseList').querySelectorAll('.rv-shape, .rv-po').forEach(sel=> { sel.disabled = busy; });
+    // (the phases are read when a run starts: one added meanwhile would not be in it)
+    $('xrdRvAddCif').disabled = busy;
+    $('xrdRvPhaseList').querySelectorAll('.rv-shape, .rv-po, .rv-opt').forEach(sel=> { sel.disabled = busy; });
   }
 
   $('xrdRvAddCif').onclick = ()=> $('xrdRvCifInput').click();
   $('xrdRvCifInput').addEventListener('change', e=>{ const fl = [...e.target.files]; e.target.value = ''; if (fl.length) addCifs(fl); });
   // The shape picked: for the next refinements (the results there keep theirs).
   $('xrdRvPhaseList').addEventListener('change', e=>{
-    const t = e.target.closest('[data-shape]'), u = e.target.closest('[data-po]');
-    if (!t && !u) return;
-    const p = phases.find(q=> q.id === +(t ? t.dataset.shape : u.dataset.po));
-    if (p && !busy){ if (t) p.shape = shapeOpt(t.value); else p.po = textureOpt(u.value); host.commit(); }
+    const t = e.target.closest('[data-shape]'), u = e.target.closest('[data-po]'), o = e.target.closest('[data-opt]');
+    if (!t && !u && !o) return;
+    const p = phases.find(q=> q.id === +(t ? t.dataset.shape : u ? u.dataset.po : o.dataset.ph));
+    if (p && !busy){
+      if (t) p.shape = shapeOpt(t.value);
+      else if (u) p.po = textureOpt(u.value);
+      else { const k = o.dataset.opt; p[k] = { profile: profileOpt, strain: strainOpt, faults: faultOpt, adp: adpOpt }[k](o.value); }
+      host.commit();
+    }
     renderPhases();
   });
   $('xrdRvPhaseList').addEventListener('click', e=>{
@@ -530,8 +572,6 @@ export function createRietveld(host){
     const f = host.files()[idx]; if (f) refine([f]);
   };
   $('xrdRvRefineAll').onclick = ()=> refineAll();
-  // An option for the next refinements; the results already there keep what they had.
-  $('xrdRvOptB').onclick = ()=>{ if (busy) return; refineB = !refineB; syncButtons(); host.commit(); };
   $('xrdRvClear').onclick = ()=>{ const f = host.files()[idx]; if (!f || busy || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); };
   $('xrdRvPrev').onclick = ()=>{ const n = host.files().length; if (n){ idx = (idx - 1 + n) % n; draw(); } };
   $('xrdRvNext').onclick = ()=>{ const n = host.files().length; if (n){ idx = (idx + 1) % n; draw(); } };
@@ -549,14 +589,18 @@ export function createRietveld(host){
       draw(preserve);
     },
     redraw(){ if (host.files().length) draw(true); },
-    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color, shape: shapeOpt(p.shape), po: textureOpt(p.po) })), nextId, idx, refineB, results: JSON.parse(JSON.stringify(results)) }; },
+    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color, shape: shapeOpt(p.shape), po: textureOpt(p.po),
+      profile: profileOpt(p.profile), strain: strainOpt(p.strain), faults: faultOpt(p.faults), adp: adpOpt(p.adp) })), nextId, idx, results: JSON.parse(JSON.stringify(results)) }; },
     restore(s){
       s = s || {};
-      phases = (s.phases || []).flatMap(p=>{ try { return [{ ...p, shape: shapeOpt(p.shape), po: textureOpt(p.po), prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
+      // (A project from before the per-phase displacement option had one card-wide ΔB
+      // toggle: on, its phases refine one ΔB each.)
+      phases = (s.phases || []).flatMap(p=>{ try { return [{ ...p, shape: shapeOpt(p.shape), po: textureOpt(p.po), profile: profileOpt(p.profile), strain: strainOpt(p.strain),
+        faults: faultOpt(p.faults), adp: p.adp ? adpOpt(p.adp) : s.refineB ? 'overall' : 'cif', prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
       nextId = s.nextId || phases.reduce((m, p)=> Math.max(m, p.id + 1), 1);
       idx = s.idx || 0;
       results = s.results ? JSON.parse(JSON.stringify(s.results)) : {};
-      refineB = !!s.refineB; syncButtons();
+      syncButtons();
     },
     // The CSVs: every refined pattern's curves, and one row per pattern and phase.
     csvEntries(){ return csvEntries(); },
