@@ -1923,6 +1923,9 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 /* The shape picker: as small as the row's buttons; in the accent once a free solid is
    picked. */
 .rv-phase .rv-shape { flex: none; width: auto; max-width: 46%; padding: 4px 6px; font-size: 12px; }
+/* the shape and the texture pickers, one over the other */
+.rv-phase .rv-picks { flex: none; display: flex; flex-direction: column; gap: 4px; max-width: 46%; min-width: 0; }
+.rv-phase .rv-picks .rv-shape { max-width: 100%; }
 .rv-phase .rv-shape.is-on { border-color: var(--accent); color: var(--accent); }
 /* The peak widths under the pattern: the table (as the Analysis card's), the
    Williamson–Hall plot and the tests' box. */

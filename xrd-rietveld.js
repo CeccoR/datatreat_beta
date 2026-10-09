@@ -444,6 +444,12 @@ function shapeSetup(q, p, cell, list, add, nextIndex){
     // The reference orientation: never refined (it only charts where r = 0 is).
     q.iQ = QREF_NAMES.map((nm, j)=> { const i = nextIndex(); add(nm, j ? 0 : 1, -1, 1); return i; });
   }
+  memberVectors(q, p, cell, list);
+}
+// Each reflection's members (its Laue-equivalent hkl, one of each ± pair) as Cartesian
+// unit vectors: the free shape draws each with its own width, the texture weighs each.
+function memberVectors(q, p, cell, list){
+  if (q.mv) return;
   const { Gs } = metric(cell);
   // B, upper-triangular, with Gs = BᵀB: the Cartesian diffraction vector is B·h.
   const b11 = Math.sqrt(Gs[0]), b12 = Gs[1]/b11, b13 = Gs[2]/b11;
@@ -464,6 +470,53 @@ function shapeSetup(q, p, cell, list, add, nextIndex){
       out.push(x1/nn, x2/nn, x3/nn);
     }
     return Float64Array.from(out);
+  });
+}
+/* The preferred orientation's axis from a phase's option: [h, k, l] (the conventional
+   cell's indices, as the ticks), '110', '1 -1 0', 'auto', or none (null). */
+function textureOf(po){
+  if (po == null || po === false || po === '') return null;
+  if (po === 'auto') return 'auto';
+  const t = Array.isArray(po) ? po.map(Number) : String(po).trim().match(/-?\d/g) ? (String(po).includes(' ') || String(po).includes(',') ? String(po).split(/[\s,]+/).map(Number) : String(po).match(/-?\d/g).map(Number)) : null;
+  return t && t.length === 3 && t.every(Number.isInteger) && t.some(x=> x) ? t : null;
+}
+// The texture axis as a Cartesian unit vector (the frame of q.mv): the plane normal
+// (hkl) of the conventional cell, B·h in the file's basis (h = h_conv·M⁻¹).
+function textureAxis(q){
+  if (q.poAxisVec && q.poAxisFor === q.poHkl) return q.poAxisVec;
+  const hc = q.poHkl, M = q.constraint && q.constraint.basis;
+  let h = hc;
+  if (M){
+    const [a, b, c, d, e, f, g, hh, i] = M, A = e*i - f*hh, Bc = -(d*i - f*g), C = d*hh - e*g, det = a*A + b*Bc + c*C;
+    const Mi = [A/det, -(b*i - c*hh)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*hh - b*g)/det, (a*e - b*d)/det];
+    h = [0, 1, 2].map(j=> hc[0]*Mi[j] + hc[1]*Mi[3 + j] + hc[2]*Mi[6 + j]);
+  }
+  const B = q.Bm, x = [B[0]*h[0] + B[1]*h[1] + B[2]*h[2], B[4]*h[1] + B[5]*h[2], B[8]*h[2]], n = Math.hypot(...x);
+  q.poAxisVec = x.map(t=> t/n); q.poAxisFor = q.poHkl;
+  return q.poAxisVec;
+}
+// The axes 'auto' tries: the low-index planes, one of each Laue family.
+function textureCandidates(q){
+  const cand = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1],[1,1,1]], seen = new Set(), out = [];
+  for (const h of cand){
+    if (seen.has(h.join())) continue;
+    out.push(h);
+    for (const M of q.laue || []) seen.add([0, 1, 2].map(j=> h[0]*M[j] + h[1]*M[3 + j] + h[2]*M[6 + j]).join());
+  }
+  return out;
+}
+/* The March–Dollase weight of every member of every reflection at r (mean 1 over the
+   sphere): (r²·cos²α + sin²α/r)^(−3/2), α between the member and the texture axis — r
+   under 1 for plates lying on the axis's planes, over 1 for needles. null at r = 1. */
+function textureWeights(q, v){
+  if (q.iPO == null || !q.poHkl) return null;
+  const r = v[q.iPO];
+  if (Math.abs(r - 1) < 1e-12) return null;
+  const a = textureAxis(q), r2 = r*r;
+  return q.mv.map(mv=>{
+    const m = mv.length/3, o = new Float64Array(m);
+    for (let i = 0; i < m; i++){ const c = mv[3*i]*a[0] + mv[3*i + 1]*a[1] + mv[3*i + 2]*a[2], c2 = c*c; o[i] = Math.pow(r2*c2 + (1 - c2)/r, -1.5); }
+    return o;
   });
 }
 // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
@@ -716,7 +769,7 @@ function shapeOf(model, params, k, res){
                resolved: !grouped, group: grouped ? groups.findIndex(g=> g.axes.includes(i)) : -1 };
     }),
     // For drawing: the full axes along a right-handed frame of the principal axes.
-    solid: { type: 'ellipsoid', dims: axes.map(x=> x.D), frame: [e0, e1, [e0[1]*e1[2] - e0[2]*e1[1], e0[2]*e1[0] - e0[0]*e1[2], e0[0]*e1[1] - e0[1]*e1[0]]] } };
+    solid: { type: 'ellipsoid', dims: axes.map(x=> x.D), frame: [e0, e1, [e0[1]*e1[2] - e0[2]*e1[1], e0[2]*e1[0] - e0[0]*e1[2], e0[0]*e1[1] - e0[1]*e1[0]]], cell: cellAxes(q, dirs[ref].R) } };
 }
 // The lattice directions of a solid's axes in one frame: the Laue operation that makes
 // the reference axis's direction its family's first member, applied to the others too
@@ -730,7 +783,7 @@ function framedAxes(dirs, ref){
 }
 /* A body's shape (spheroid, cylinder, elliptic cylinder, box): { type, kind, dims:
    [{ name, D, Desd }], axes: [{ role, D?, e, dir, label, uvw, angle, vec, esdAngle,
-   resolved }], solid: { type, dims, frame } }. Its dimensions D = Kλ/(W·π/180) with
+   resolved }], solid: { type, dims, frame, cell (the cell's a, b, c: cellAxes) } }. Its dimensions D = Kλ/(W·π/180) with
    esds from W's; the axes whose directions it has (a body of revolution only its own
    axis), each with its angular esd (turnEsds). */
 function bodyShapeOf(model, v, k, res){
@@ -757,9 +810,10 @@ function bodyShapeOf(model, v, k, res){
   // (a body of revolution: not about its own).
   const mulM = (P, Q) => [0,1,2].flatMap(i=> [0,1,2].map(j=> P[3*i]*Q[j] + P[3*i + 1]*Q[3 + j] + P[3*i + 2]*Q[6 + j]));
   const about = q.iR.length === 2 ? [0, 1] : [0, 1, 2];
-  // Refined again at each turn: the sizes, the strain, the scales and the background.
+  // Refined again at each turn: the sizes, the strain, the scales, the background and
+  // a preferred orientation.
   // The turns about the other axes too, from the turned frame (r = 0 there).
-  const reopt = res && res.free ? res.free.filter(nm=> { const p = model.par[model.index[nm]]; return p && (p.linear || q.iW.includes(model.index[nm]) || nm === q.pfx + 'Xs'); }) : [];
+  const reopt = res && res.free ? res.free.filter(nm=> { const p = model.par[model.index[nm]]; return p && (p.linear || p.kind === 'texture' || q.iW.includes(model.index[nm]) || nm === q.pfx + 'Xs'); }) : [];
   const sigP = turnEsds(model, v, res, about, (b, phi)=>{
     const vv = v.slice(), e = [0, 0, 0]; e[b] = 1;
     q.iR.forEach(i=> { vv[i] = 0; });
@@ -785,7 +839,13 @@ function bodyShapeOf(model, v, k, res){
   // Apart: the difference of two widths over its esd, their covariance included (a
   // body of revolution's two axes across share one width).
   const wIx = B.rot === 2 ? [0, 0, 1] : [0, 1, 2];
-  const zr = (i, j) => { const a = wIx[i], b = wIx[j], s = Math.sqrt(cov(a, a) + cov(b, b) - 2*cov(a, b));
+  const zr = (i, j) => { const a = wIx[i], b = wIx[j];
+    // A width on its bound 0 (no broadening along it) has no curvature there, and its
+    // linear esd means nothing (±14606° for a spheroid's unbounded equator in a test fit
+    // of the user's 37D SrTiO3, which made a plate 2.5 nm thick a near-sphere): the
+    // other's own esd says whether they differ.
+    if ((W[a] > 0) !== (W[b] > 0)){ const o = W[a] > 0 ? a : b, so = Math.sqrt(cov(o, o)); return Number.isFinite(so) && so > 0 ? W[o]/so : Infinity; }
+    const s = Math.sqrt(cov(a, a) + cov(b, b) - 2*cov(a, b));
     return Number.isFinite(s) && s > 0 ? Math.abs(widthW(i) - widthW(j))/s : Infinity; };
   const apart = (i, j) => zr(i, j) > 2;
   const round = B.rot === 2 && !apart(0, 2);
@@ -829,8 +889,8 @@ function bodyShapeOf(model, v, k, res){
   // its (a box's) shortest.
   const shortest = [0, 1, 2].sort((a, b)=> dimAlong[a] - dimAlong[b])[0];
   const refAxis = type === 'box' ? shortest : type === 'ellipsoid' ? ([0, 1, 2].filter(own).length === 1 ? [0, 1, 2].find(own) : shortest) : 2;
-  const order = roles.map(([, i])=> i), dirs = order.map(i=> lattDirection(q, col(i)));
-  const framed = framedAxes(dirs, Math.max(0, order.indexOf(refAxis)));
+  const order = roles.map(([, i])=> i), dirs = order.map(i=> lattDirection(q, col(i), held));
+  const refIx = Math.max(0, order.indexOf(refAxis)), framed = framedAxes(dirs, refIx);
   const axes = roles.map(([role, i], n)=> { const esdAngle = tiltEsd(i);
     return { role, axis: i, ...framed[n], D: dimAlong[i], Desd: groupOf(i) >= 0 ? NaN : dimEsdAlong[i], Dmin: dimMinAlong[i], e: col(i), esdAngle, group: groupOf(i), own: own(i),
       resolved: own(i) && Number.isFinite(esdAngle) && esdAngle <= 30 }; });
@@ -852,7 +912,7 @@ function bodyShapeOf(model, v, k, res){
   const lone = type === 'ellipsoid' && [0, 1, 2].filter(own).length === 1 ? [0, 1, 2].find(own) : -1;
   const across = B.rot === 2 && axes[0].resolved ? latticeAcross(q, dirs[0].vec, dirs[0].R).map(d=> ({ ...d, esdAngle: tiltEsd(2) }))
     : lone >= 0 && axes[order.indexOf(lone)].resolved ? latticeAcross(q, dirs[order.indexOf(lone)].vec, dirs[order.indexOf(lone)].R).map(d=> ({ ...d, esdAngle: tiltEsd(lone) })) : [];
-  return { type, kind, dims, groups, axes, across, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)] } };
+  return { type, kind, dims, groups, axes, across, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)], cell: cellAxes(q, dirs[refIx].R) } };
 }
 const idxText = t => t.map(x=> x < 0 ? '-' + (-x) : String(x)).join('');
 /* lattDirection(q, e) → { dir, label, angle, tc, R, family, vec }: the lattice direction
@@ -862,9 +922,11 @@ const idxText = t => t.map(x=> x < 0 ? '-' + (-x) : String(x)).join('');
    ⟨433⟩, ⟨332⟩ or ⟨443⟩ by the nearest alone — noise read as a precise high-index
    direction; the angle says how far off it is. dir is the first member of its family
    under the Laue group (fewest negative indices, then the largest), R the operation
-   that takes tc (the direction found) to it; vec the direction found, Cartesian. */
+   that takes tc (the direction found) to it; vec the direction found, Cartesian.
+   exact: an axis held on a lattice direction is named by that direction (a cylinder
+   held on [301] had read "held 8.1° off [201]", the simpler one within 10°). */
 const SNAP_DEG = 10;
-function lattDirection(q, e){
+function lattDirection(q, e, exact = false){
   const B = q.Bm;
   // Cartesian of a direction t (file basis): A·t with A = (B⁻¹)ᵀ; the angle is taken there.
   const inv = m => { const [a, b, c, d, e2, f, g, h, i] = m, A = e2*i - f*h, Bc = -(d*i - f*g), C = d*h - e2*g, det = a*A + b*Bc + c*C;
@@ -881,7 +943,7 @@ function lattDirection(q, e){
     if (!near || angle < near.angle - 1e-6 || (Math.abs(angle - near.angle) <= 1e-6 && cx < near.cx)) near = { tc, angle, cx };
     if (angle <= SNAP_DEG && (!low || cx < low.cx || (cx === low.cx && angle < low.angle))) low = { tc, angle, cx };
   }
-  const best = low || near;
+  const best = exact && near.angle < 0.01 ? near : low || near;
   // The direction found, as a Cartesian unit vector on e's side (for drawing it).
   const bt = M ? [M[0]*best.tc[0] + M[1]*best.tc[1] + M[2]*best.tc[2], M[3]*best.tc[0] + M[4]*best.tc[1] + M[5]*best.tc[2], M[6]*best.tc[0] + M[7]*best.tc[1] + M[8]*best.tc[2]] : best.tc;
   const bc = cart(bt), bn = Math.hypot(...bc), sg = bc[0]*e[0] + bc[1]*e[1] + bc[2]*e[2] < 0 ? -1 : 1, vec = bc.map(x=> sg*x/bn);
@@ -899,6 +961,25 @@ function lattDirection(q, e){
   const nice = [...orbit.values()].sort(({ r: a }, { r: b })=> (a.filter(x=> x < 0).length - b.filter(x=> x < 0).length) || (b[0] - a[0]) || (b[1] - a[1]) || (b[2] - a[2]))[0];
   const family = orbit.size > 2;
   return { dir: nice.r, label: family ? '⟨' + idxText(nice.r) + '⟩' : '[' + idxText(nice.r) + ']', angle: best.angle, tc: t0, R: nice.R, family, vec };
+}
+
+// The cell's a, b, c (the conventional cell's, when there is one) as Cartesian unit
+// vectors, in the frame of the shape's axes and directions: the 3D view's reference.
+// R0: the Laue operation the axes' labels were given in (framedAxes): a direction
+// labelled [001] is R0 of the one found, so the c drawn is R0⁻¹ of the cell's own — else
+// the triad's c pointed against the solid's "[001]".
+function cellAxes(q, R0){
+  const B = q.Bm, M = q.constraint && q.constraint.basis;
+  const inv = m => { const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
+    return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det]; };
+  const Bi = inv(B), cart = t => [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
+  const Ri = R0 ? inv(R0) : null;
+  return [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(e0=>{
+    const tc = Ri ? [0, 1, 2].map(r=> Ri[3*r]*e0[0] + Ri[3*r + 1]*e0[1] + Ri[3*r + 2]*e0[2]) : e0;
+    const t = M ? [M[0]*tc[0] + M[1]*tc[1] + M[2]*tc[2], M[3]*tc[0] + M[4]*tc[1] + M[5]*tc[2], M[6]*tc[0] + M[7]*tc[1] + M[8]*tc[2]] : tc;
+    const c = cart(t), n = Math.hypot(...c);
+    return c.map(x=> x/n);
+  });
 }
 
 // Cartesian unit vectors of the low-index lattice directions [100], [110], [111] and
@@ -1065,6 +1146,14 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     q.iXs = par.length; add(pfx + 'Xs', P.Xs, 0, 10, 1e-6, { group: 'phase', phase: k, kind: 'size' });
     q.iYs = par.length; add(pfx + 'Ys', P.Ys, 0, 10, 1e-6, { group: 'phase', phase: k, kind: 'size' });
     if (shapeTypeOf(p.shape)) shapeSetup(q, p, cell, list, (nm, value, lo, hi, extra)=> add(pfx + nm, value, lo, hi, 1e-6, { group: 'phase', phase: k, kind: 'shape', ...extra }), ()=> par.length);
+    // A preferred orientation (March–Dollase): its axis (hkl, or 'auto': autoRefine picks
+    // it), its r refined from the texture stage on (1, none, until then).
+    const po = textureOf(p.po);
+    if (po){
+      memberVectors(q, p, cell, list);
+      q.poSpec = po; q.poHkl = po === 'auto' ? null : po;
+      q.iPO = par.length; add(pfx + 'PO', 1, 0.2, 5, 1e-4, { group: 'phase', phase: k, kind: 'texture' });
+    }
     return q;
   });
 
@@ -1192,7 +1281,7 @@ function lpFactor(model, th){
 // Lorentzian width Y (the instrument's and the phase's isotropic Ys) + the shape's own
 // (shapeWidths: wv, one per member), each a 1/m share of the intensity. The FCJ counts
 // are held per member (their keys negative, apart from the isotropic lines').
-function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d){
+function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw){
   const q = model.phases[k], m = wv.length, x = model.x, xa = model.x0, xb = model.x1;
   const { U, V, W, X, Y, A } = prof;
   const c2 = Math.cos(2*th), dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
@@ -1203,9 +1292,10 @@ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d){
     const half = Math.max(model.win*pr.H, WIN_MIN);
     if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
     const nodes = A > 0 ? lineNodes(model, -1 - ((k*65536 + r)*64 + i)*4 - j, th, A, pr.H) : null;
-    if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, I/m, model.win);
-    else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, I/m, model.win);
-    else addPeakFCJ(out, x, tt, pr.H, pr.eta, I/m, nodes, model.win);
+    const Im = tw ? I/m*tw[i] : I/m;
+    if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, Im, model.win);
+    else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, Im, model.win);
+    else addPeakFCJ(out, x, tt, pr.H, pr.eta, Im, nodes, model.win);
   }
   if (ticks && first && tt >= xa && tt <= xb)
     ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
@@ -1224,18 +1314,21 @@ function phasePattern(model, v, k, out, ticks){
   const x = model.x, xa = model.x0, xb = model.x1, S = v[q.iScale];
   // The free shape: each member of a family with its own size width (shapeSetup).
   const shp = shapeActive(q, v) ? shapeWidths(model, q, v) : null;
+  const tw = textureWeights(q, v);
   const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
   if (sk && sk.only && sk.k !== k) return out;
   for (let r = 0; r < q.nRefl; r++){
     if (skip && (sk.only ? !skip.has(r) : skip.has(r))) continue;
     const s2 = 0.25/(d[r]*d[r]);
-    const base = q.mult[r]*f2[r]*Math.exp(-2*dB*s2);
+    let base = q.mult[r]*f2[r]*Math.exp(-2*dB*s2);
+    // the texture: each member weighed (a shaped phase's, one by one in shapeLine)
+    if (tw && !shp){ const o = tw[r]; let t = 0; for (let i = 0; i < o.length; i++) t += o[i]; base *= t/o.length; }
     for (let j = 0; j < model.lines.length; j++){
       const L = model.lines[j], st = L.lam/(2*d[r]);
       if (st >= 1) continue;
       const th = Math.asin(st);
       const tt = 2*th*R2D + zero + disp*Math.cos(th);
-      if (shp){ shapeLine(model, k, r, j, th, tt, base*L.w*lpFactor(model, th), shp[r], { U, V, W, X, Y, A }, out, ticks && j === 0 ? ticks : null, S, f2, d); continue; }
+      if (shp){ shapeLine(model, k, r, j, th, tt, base*L.w*lpFactor(model, th), shp[r], { U, V, W, X, Y, A }, out, ticks && j === 0 ? ticks : null, S, f2, d, tw ? tw[r] : null); continue; }
       const pr = profileAtTheta(th, U, V, W, X, Y);
       // The axial divergence spreads the peak over shifts of one sign, up to dMax
       // (fcjNodes): a line out of range by more than that is skipped before its nodes.
@@ -2030,6 +2123,29 @@ function autoRefine(model, opts = {}){
       free = free.concat(keep(model.phases.map(q=> q.pfx + 'B')));
       res = run(5, 'displacement parameters', free);
     }
+    /* A preferred orientation (March–Dollase), for the phases that ask for one. For a
+       cubic phase its r has no first-order effect at 1 (the members of a family weigh
+       out evenly to first order), so it is refined from 0.8 and from 1.25 (plates and
+       needles) and the lower χ² kept; for 'auto', on each low-index axis
+       (textureCandidates) in turn. */
+    const poKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].iPO != null && !out.has(k));
+    if (poKs.length){
+      tS = Date.now();
+      prog(Math.min(nStages - 0.5, 5)/nStages, 'preferred orientation');
+      for (const k of poKs){
+        const q = model.phases[k], v0 = model.v.slice(), cands = q.poSpec === 'auto' ? textureCandidates(q) : [q.poSpec];
+        let best = null;
+        for (const hkl of cands) for (const r0 of [0.8, 1.25]){
+          q.poHkl = hkl;
+          const vv = v0.slice(); vv[q.iPO] = r0; setParams(model, vv);
+          let r; try { r = refine(model, { free: [...free, q.pfx + 'PO'], maxIter: opts.maxIter || 40 }); } catch(e){ continue; }
+          if (!best || r.stats.chi2 < best.r.stats.chi2) best = { r, v: model.v.slice(), hkl };
+        }
+        if (best){ q.poHkl = best.hkl; setParams(model, best.v); res = best.r; free = free.concat(q.pfx + 'PO'); }
+        else { q.poHkl = q.poSpec === 'auto' ? null : q.poSpec; setParams(model, v0); }
+      }
+      stageStats('preferred orientation', res);
+    }
     lastFree = free;
     const sig = significant(res), live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
     const lost = live.filter(k=> !sig[k]);
@@ -2098,6 +2214,8 @@ function autoRefine(model, opts = {}){
     stats: res.stats, stages, cellSearch: cs,
     sizeStrain: ss, weightFractions: wf, detected: model.phases.filter((_, k)=> detected[k]).map(q=> q.id), warnings,
     shapes, isoParams,
+    // the preferred orientations: each phase's axis (the conventional cell's hkl) and r
+    textures: Object.fromEntries(model.phases.filter(q=> q.iPO != null && q.poHkl).map(q=> [q.id, { hkl: q.poHkl, r: res.params[q.pfx + 'PO'], esd: (res.esd || {})[q.pfx + 'PO'] }])),
     reflectionsInRange: nIn, converged: res.converged, ms: Date.now() - t0,
   };
 }

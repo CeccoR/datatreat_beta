@@ -2,7 +2,8 @@
    XRPD — the crystallites' shape in 3D.
    A small view of the solid a free-shape refinement gives (ellipsoid, spheroid,
    cylinder, elliptic cylinder or box, in nm) with up to three crystal directions
-   drawn through it, each with its 1σ angular uncertainty as a translucent cone.
+   drawn through it, each with its 1σ angular uncertainty as a translucent cone, and
+   the cell's a, b, c as a small triad in a corner, turned with it.
    Software 3D on a 2D canvas: no WebGL, no library. The solid is drawn axis-aligned
    in its own body frame and the directions are brought into that frame, so only the
    camera moves: a drag (mouse, pen or touch) or the arrow keys rotate it, a double
@@ -312,6 +313,10 @@ function buildModel(solid){
   });
   m.Rb = Math.max(m.Rs, ...m.dirs.map(d => d.L));
   m.home = homeFor(m.dirs);
+  // The cell's a, b, c (solid.cell, in the directions' frame) brought into the body frame:
+  // a small triad in a corner, turned with the solid, for reference.
+  const cell = Array.isArray(solid.cell) ? solid.cell.map(v => { const w = vec3(v); return w && w.every(Number.isFinite) ? unit([dot(w, E[0]), dot(w, E[1]), dot(w, E[2])]) : null; }) : [];
+  m.cell = cell.length === 3 && cell.every(Boolean) ? cell : null;
 
   // The cones' surface, cut into patches (slant rings x sectors), each classed on its
   // own: a wide cone round an in-plane direction of a thin disc rises out of the disc's
@@ -611,6 +616,15 @@ export function shapeView(container, opts = {}){
   // the home view always looks the same), kept in getView.
   const labelsWere = new Map();
   const themeOf = () => theme || (theme = readTheme(container, opts.color));
+  // The PNG's: on a transparent background, in the light theme's colours whatever the
+  // page's (as the app's other figures are exported: for a white page or slide), and
+  // with no halo round the labels (it would show as a coloured outline on whatever the
+  // picture is laid on).
+  const pngTheme = () => {
+    const t = themeOf(), text = [26, 35, 39, 1], edge = mix(t.solid, text, 0.45);
+    return { ...t, light: true, text: css(text), muted: '#56676f', halo: 'rgba(0,0,0,0)', bg: 'rgba(0,0,0,0)',
+      edge: css(edge), edgeRgb: edge, dirs: dirColours(t.solid, true) };
+  };
   const layers = [];                    // offscreen canvases: the solid, the hidden cones, the visible cones
   let mask = null;                      // the open ends' fade mask (small)
   // Exactly the mask's size: scaled up, a larger canvas's stale pixels past its edge
@@ -657,7 +671,7 @@ export function shapeView(container, opts = {}){
      shows least while the solid moves: the open ends' fade mask and the cones' fine cut
      at the solid's surface. The frame after it is let go is a full one. */
   function paint(g, Sz, r, fast, forPng = false){
-    const m = model, T = themeOf();
+    const m = model, T = forPng ? pngTheme() : themeOf();
     const pad = 0.1 * Sz + 6;           // room for the labels past the tips
     const k = (Sz / 2 - pad) / m.Rb, cx = Sz / 2, cy = Sz / 2;
     const [r00, r01, r02, r10, r11, r12, r20, r21, r22] = R;
@@ -1035,6 +1049,9 @@ export function shapeView(container, opts = {}){
       return { nm, px: nm * k, x: 10, y: Sz - 10 };
     })() : null;
     const fixed = bar ? [{ x: 4, y: Sz - 28, w: bar.px + 14, hgt: 26 }] : [];
+    // The cell's triad, top right: its corner is taken too.
+    const triad = m.cell ? { x: Sz - 30, y: 30, L: 18 } : null;
+    if (triad) fixed.push({ x: Sz - 60, y: 0, w: 60, hgt: 60 });
     if (items.length){
       placeLabels(items, obstacles, fixed, Sz, labelsWere);
       // where they sat, for the next frame (a PNG takes the screen's places, as they are)
@@ -1074,6 +1091,34 @@ export function shapeView(container, opts = {}){
         g.strokeText(b.sub, xs, y + f2 * 1.25);
         g.fillText(b.sub, xs, y + f2 * 1.25);
       }
+    }
+
+    /* The cell's a, b, c: from the corner's centre, the far ones first and dimmed. */
+    if (triad){
+      const ax = m.cell.map((u, i) => ({ i, sx: r00*u[0] + r01*u[1] + r02*u[2], sy: -(r10*u[0] + r11*u[1] + r12*u[2]), z: r20*u[0] + r21*u[1] + r22*u[2] }))
+        .sort((a, b) => a.z - b.z);
+      g.lineCap = 'round';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.font = `italic 600 ${f1}px ${T.font}`;
+      for (const a of ax){
+        g.globalAlpha = a.z < -0.05 ? 0.5 : 1;
+        const ex = triad.x + triad.L*a.sx, ey = triad.y + triad.L*a.sy, n = Math.hypot(a.sx, a.sy);
+        g.strokeStyle = T.muted; g.fillStyle = T.muted; g.lineWidth = 1.6;
+        g.beginPath(); g.moveTo(triad.x, triad.y); g.lineTo(ex, ey); g.stroke();
+        // a small head where the axis is seen side-on enough to show one
+        if (n > 0.3){ const ux = a.sx/n, uy = a.sy/n;
+          g.beginPath(); g.moveTo(ex + 2*ux, ey + 2*uy); g.lineTo(ex - 4*ux - 2.6*uy, ey - 4*uy + 2.6*ux); g.lineTo(ex - 4*ux + 2.6*uy, ey - 4*uy - 2.6*ux); g.fill(); }
+        // the label past the tip, along the axis as seen (an axis end-on: just off it)
+        const ux = n > 1e-3 ? a.sx/n : 0.7, uy = n > 1e-3 ? a.sy/n : -0.7, t = 'abc'[a.i];
+        const lx = ex + 8*ux, ly = ey + 8*uy;
+        g.lineWidth = 3; g.strokeStyle = T.halo; g.strokeText(t, lx, ly);
+        g.fillText(t, lx, ly);
+      }
+      g.globalAlpha = 1;
+      g.textAlign = 'start';
+      g.textBaseline = 'alphabetic';
+      g.lineCap = 'butt';
     }
 
     /* The scale bar: a round number of nm. */
@@ -1246,7 +1291,7 @@ export function shapeView(container, opts = {}){
       theme = null;                     // the container may have moved since
       // The same solid again (a re-render) keeps the user's view; another one starts
       // from its home view (unless a view was put in for it before it came).
-      const s = JSON.stringify([model.type, model.raw, solid.frame]);
+      const s = JSON.stringify([model.type, model.raw, solid.frame, solid.cell || null]);
       if (s !== sig){ sig = s; if (!keepView){ R = model.home.slice(); labelsWere.clear(); } }
       keepView = false;
       caption = solid.caption ? String(solid.caption) : '';
@@ -1293,14 +1338,13 @@ export function shapeView(container, opts = {}){
     png(){
       if (dead || !model) return null;
       const Sz = S || measure() || SIZE_MAX, r = Math.max(2, window.devicePixelRatio || 1);
-      const T = themeOf();
+      const T = pngTheme();
       const capH = caption ? 24 : 0;
       const c = document.createElement('canvas');
       c.width = Math.round(Sz * r); c.height = Math.round((Sz + capH) * r);
       const g = c.getContext('2d');
       g.setTransform(r, 0, 0, r, 0, 0);
-      g.fillStyle = T.bg;
-      g.fillRect(0, 0, Sz, Sz + capH);
+      // (no background: transparent)
       paint(g, Sz, r, false, true);
       if (caption){
         g.font = `400 12px ${T.font}`;

@@ -134,12 +134,16 @@ export function createRietveld(host){
     // asym: absent from a standard refined before the asymmetry was modelled (none then).
     return r && r.params ? { U: r.params.U, V: r.params.V, W: r.params.W, X: r.params.X, Y: r.params.Y, asym: r.params.asym || 0, zero: r.params.zero } : null;
   }
-  const phaseData = list => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color, shape: p.shape || false }));
+  const phaseData = list => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color, shape: p.shape || false, po: textureOpt(p.po) || null }));
   // The crystallite shapes a phase can refine (xrd-rietveld SHAPE_TYPES): none (the
   // isotropic size) or a free solid. A project saved with the one free shape there was
   // (true) has the ellipsoid.
   const SHAPES = [['', 'isotropic size'], ['ellipsoid', 'ellipsoid'], ['spheroid', 'spheroid (two axes equal)'], ['cylinder', 'cylinder'], ['ellcyl', 'elliptic cylinder'], ['box', 'box']];
   const shapeOpt = v => v === true ? 'ellipsoid' : SHAPES.some(([k])=> k && k === v) ? v : false;
+  // A preferred orientation (March–Dollase) per phase: its axis, a plane's hkl, or the
+  // best of the low-index ones.
+  const TEXTURES = [['', 'no preferred orientation'], ['auto', 'preferred orientation: best axis'], ['100', 'preferred orientation (100)'], ['010', 'preferred orientation (010)'], ['001', 'preferred orientation (001)'], ['110', 'preferred orientation (110)'], ['111', 'preferred orientation (111)']];
+  const textureOpt = v => TEXTURES.some(([k])=> k && k === v) ? v : '';
   // The solid a result was refined with, from its parameters' names (each solid has its
   // own), and only when they are in use (any width ≠ 0).
   function shapeOfParams(P, id){
@@ -190,7 +194,7 @@ export function createRietveld(host){
   function curvesOf(f, r){
     // The phases as the result was refined: with the free shape when its parameters are
     // there, whatever the toggle says now.
-    const ph = phaseData(phasesFor(f)).map(p=> ({ ...p, shape: shapeOfParams(r.params, p.id) }));
+    const ph = phaseData(phasesFor(f)).map(p=> ({ ...p, shape: shapeOfParams(r.params, p.id), po: r.textures && r.textures[p.id] ? r.textures[p.id].hkl : null }));
     const model = buildModel({ x: f.x, y: f.y, varMul: f.varMul || null, instr: instrOf(f), phases: ph });
     return calc(model, r.params);
   }
@@ -284,7 +288,7 @@ export function createRietveld(host){
       wrap.innerHTML = `<div class="peak-box-head"><span class="txt-mini">Crystallite shape${list.length > 1 ? ' · ' + esc(s.name) : ''}</span><button class="btn table-csv-btn" title="Download PNG">${DL_SVG}</button></div><div class="rv-solid-view"></div>`;
       box.appendChild(wrap);
       const view = shapeView(wrap.querySelector('.rv-solid-view'), { color });
-      view.set({ type: s.type, dims: s.dims, frame: s.frame, dirs: s.dirs, caption: solidCaption(s) });
+      view.set({ type: s.type, dims: s.dims, frame: s.frame, dirs: s.dirs, cell: s.cell, caption: solidCaption(s) });
       const turnKey = f.name + '|' + s.id + '|' + JSON.stringify([s.type, s.dims, s.frame]);
       if (view.setView && solidTurns.has(turnKey)) view.setView(solidTurns.get(turnKey));
       wrap.querySelector('button').onclick = ()=>{
@@ -469,7 +473,8 @@ export function createRietveld(host){
         + `<div class="rv-sub">${SYSTEM_NAMES[q.system] || esc(q.system)}, ${q.order} symmetry operations · ${cellTxt} · ${q.atoms.length} atoms in the cell${builtIn ? ' · built in, for the standard (cell held at the certified value)' : p.file ? ' · ' + esc(p.file) : ''}</div>`
         + (q.notes.length ? `<div class="rv-sub">${esc(q.notes.join('; '))}</div>` : '')
         + q.warnings.map(w=> `<div class="rv-sub" style="color:var(--warn)">⚠ ${esc(w)}</div>`).join('')
-        + `</div>${builtIn ? '' : `<select class="rv-shape${p.shape ? ' is-on' : ''}" data-shape="${p.id}" aria-label="Crystallite shape of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Crystallite shape: the isotropic size, or a free solid of any proportions and orientation (each reflection of a family with its own width). Needs the standard's profile; it tries several starting shapes, so it takes tens of seconds a sample, minutes for a phase with many reflections. Kept only when the data support it against an isotropic size">${SHAPES.map(([k, t])=> `<option value="${k}"${(shapeOpt(p.shape) || '') === k ? ' selected' : ''}>${k ? 'free shape: ' + t : t}</option>`).join('')}</select>`
+        + `</div>${builtIn ? '' : `<div class="rv-picks"><select class="rv-shape${p.shape ? ' is-on' : ''}" data-shape="${p.id}" aria-label="Crystallite shape of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Crystallite shape: the isotropic size, or a free solid of any proportions and orientation (each reflection of a family with its own width). Needs the standard's profile; it tries several starting shapes, so it takes tens of seconds a sample, minutes for a phase with many reflections. Kept only when the data support it against an isotropic size">${SHAPES.map(([k, t])=> `<option value="${k}"${(shapeOpt(p.shape) || '') === k ? ' selected' : ''}>${k ? 'free shape: ' + t : t}</option>`).join('')}</select>`
+          + `<select class="rv-shape rv-po${textureOpt(p.po) ? ' is-on' : ''}" data-po="${p.id}" aria-label="Preferred orientation of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Preferred orientation (March–Dollase): the crystallites' planes (hkl) lie preferentially parallel to the sample's surface (r under 1, plates) or across it (r over 1, needles), which changes the reflections' intensities, not their widths. Best axis: the lowest χ² of the low-index planes">${TEXTURES.map(([k, t])=> `<option value="${k}"${textureOpt(p.po) === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`
           + `<button class="peak-del is-danger idle-dim rv-del" data-del="${p.id}" title="Remove phase">${X_SVG(13)}</button>`}</div>`;
     };
     phases.forEach(p=> rows.push(row(p, false)));
@@ -499,17 +504,17 @@ export function createRietveld(host){
     $('xrdRvClear').disabled = busy;
     const b = $('xrdRvOptB');
     b.classList.toggle('is-on', refineB); b.setAttribute('aria-pressed', String(refineB)); b.disabled = busy;
-    $('xrdRvPhaseList').querySelectorAll('.rv-shape').forEach(sel=> { sel.disabled = busy; });
+    $('xrdRvPhaseList').querySelectorAll('.rv-shape, .rv-po').forEach(sel=> { sel.disabled = busy; });
   }
 
   $('xrdRvAddCif').onclick = ()=> $('xrdRvCifInput').click();
   $('xrdRvCifInput').addEventListener('change', e=>{ const fl = [...e.target.files]; e.target.value = ''; if (fl.length) addCifs(fl); });
   // The shape picked: for the next refinements (the results there keep theirs).
   $('xrdRvPhaseList').addEventListener('change', e=>{
-    const t = e.target.closest('[data-shape]');
-    if (!t) return;
-    const p = phases.find(q=> q.id === +t.dataset.shape);
-    if (p && !busy){ p.shape = shapeOpt(t.value); host.commit(); }
+    const t = e.target.closest('[data-shape]'), u = e.target.closest('[data-po]');
+    if (!t && !u) return;
+    const p = phases.find(q=> q.id === +(t ? t.dataset.shape : u.dataset.po));
+    if (p && !busy){ if (t) p.shape = shapeOpt(t.value); else p.po = textureOpt(u.value); host.commit(); }
     renderPhases();
   });
   $('xrdRvPhaseList').addEventListener('click', e=>{
@@ -544,10 +549,10 @@ export function createRietveld(host){
       draw(preserve);
     },
     redraw(){ if (host.files().length) draw(true); },
-    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color, shape: shapeOpt(p.shape) })), nextId, idx, refineB, results: JSON.parse(JSON.stringify(results)) }; },
+    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color, shape: shapeOpt(p.shape), po: textureOpt(p.po) })), nextId, idx, refineB, results: JSON.parse(JSON.stringify(results)) }; },
     restore(s){
       s = s || {};
-      phases = (s.phases || []).flatMap(p=>{ try { return [{ ...p, shape: shapeOpt(p.shape), prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
+      phases = (s.phases || []).flatMap(p=>{ try { return [{ ...p, shape: shapeOpt(p.shape), po: textureOpt(p.po), prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
       nextId = s.nextId || phases.reduce((m, p)=> Math.max(m, p.id + 1), 1);
       idx = s.idx || 0;
       results = s.results ? JSON.parse(JSON.stringify(s.results)) : {};

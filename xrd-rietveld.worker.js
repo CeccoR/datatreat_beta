@@ -98,6 +98,13 @@ function summarise(model, res, phases, opts){
                                  : cellFrom(C, q.latNames.map(l=> p[q.pfx + l]), ph.cell)).V;
     const V = vol(P), VE = propagate(res, q.latNames.map(l=> q.pfx + l), vol);
     lines.push({ label: conv ? 'V (conventional cell)' : 'V', value: fmtEsd(V, VE, ' Å³') }); row(nm, conv ? 'V_conventional_A3' : 'V_A3', V, VE);
+    // The preferred orientation (March–Dollase), its axis and r.
+    const tx = (res.textures || {})[q.id];
+    if (tx && tx.hkl){
+      const hkl = tx.hkl.map(x=> x < 0 ? '−' + (-x) : x).join(''), sig = Number.isFinite(tx.esd) && tx.esd > 0 ? Math.abs(tx.r - 1)/tx.esd : NaN;
+      lines.push({ label: `preferred orientation (${hkl})`, value: `r = ${fmtEsd(tx.r, tx.esd)}`, title: `March–Dollase: each reflection's members weighed by (r²·cos²α + sin²α/r)^(−3/2), α their angle to the (${hkl}) planes' normal. r under 1: more crystallites with (${hkl}) parallel to the sample's surface (plates lying flat); over 1, fewer (needles); 1, none.${Number.isFinite(sig) ? ` Here ${sig.toFixed(0)} esd from 1${sig < 2 ? ': not told from no texture' : ''}.` : ''} It changes the intensities, not the widths: an intensity misfit it does not take up, a free shape would (on the user's 37D SrTiO3, with none, the plates came out ⟂ ⟨310⟩ by widening the (111) and narrowing the (200))` });
+      row(nm, `texture_r_${tx.hkl.join('_')}`, tx.r, tx.esd);
+    }
     const sh = ss && ss.shape ? shapeOf(model, P, k, res) : null, info = (res.shapes || {})[q.id];
     if (sh){
       const off = a => `${a.angle < 0.05 ? '0' : a.angle.toFixed(1)}° off`;
@@ -199,7 +206,7 @@ function summarise(model, res, phases, opts){
           else if (k >= 0){ const F = []; F[k] = z; F[(k + 1) % 3] = x; F[(k + 2) % 3] = [z[1]*x[2] - z[2]*x[1], z[2]*x[0] - z[0]*x[2], z[0]*x[1] - z[1]*x[0]].map(t=> t); frame = F; }
         }
       }
-      solids.push({ id: q.id, name: nm, type: sh.type === 'ellipsoidL' ? 'ellipsoid' : sh.type, kind: sh.kind, dims: sh.solid.dims, frame, dirs: dirs.slice(0, 3) });
+      solids.push({ id: q.id, name: nm, type: sh.type === 'ellipsoidL' ? 'ellipsoid' : sh.type, kind: sh.kind, dims: sh.solid.dims, frame, dirs: dirs.slice(0, 3), cell: sh.solid.cell });
       if (info){
         const dChi = info.chi2 - info.chi2Iso, dBIC = dChi/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
         lines.push({ label: 'vs isotropic', value: `ΔBIC ${dBIC.toFixed(0)} ${dBIC < -10 ? '(shape supported)' : dBIC > 10 ? '(isotropic preferred)' : '(no clear preference)'}`,
@@ -255,7 +262,7 @@ self.addEventListener('message', e=>{
       try { widths = summariseWidths(measureWidths(model, res, { irf: opts.irf || null, isoParams: res.isoParams || null, shapeIds: Object.keys(res.shapes || {}), onProgress }), phases, table); }
       catch(e){ warnings.push('The peak widths could not be measured: ' + String(e && e.message || e)); }
     }
-    self.postMessage({ id, type: 'result', res: { params: res.params, esd: res.esd, stats: res.stats, stages: res.stages,
+    self.postMessage({ id, type: 'result', res: { params: res.params, esd: res.esd, stats: res.stats, stages: res.stages, textures: res.textures,
       atBound: res.atBound, converged: res.converged, ms: res.ms, warnings, phaseResults: groups, table, widths, solids } });
   } catch(err){
     self.postMessage({ id, type: 'error', message: String((err && err.message) || err) });
