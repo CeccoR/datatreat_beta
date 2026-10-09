@@ -109,6 +109,8 @@ Compare, smooth, and normalize X-ray powder diffractograms.
 5. **Crystallite shape** (per phase): the isotropic size, or a free solid — ellipsoid, spheroid, cylinder, elliptic cylinder or box — in any orientation, each reflection of a family with its own width (the solid's column length along it), from several starting shapes. It is kept only when the data support it against an isotropic size (ΔBIC under −10), and reports the solid's dimensions with their esds and its axes' lattice directions with their angular esds (those of the χ² valley the fit ends in), drawn as a rotatable 3D solid with the crystal's directions, their uncertainty cones and the cell's a, b, c.
 6. **Peak widths**: each reflection fitted alone and corrected for the instrument, in a table like the Analysis card's, with a Williamson–Hall plot and the tests that tell an anisotropic broadening (shape), a strain and faults apart (Williamson–Hall χ², ratios of successive orders, the models' predicted widths).
 
+How it all works, in detail (the model, the solver, the strategy, the texture and shape models, the tests, the evidence behind each choice and the limits): [RIETVELD.md](RIETVELD.md).
+
 ---
 
 ### 3. GC (Gas Chromatography)
