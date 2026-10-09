@@ -321,21 +321,129 @@ function lineNodes(model, key, th, A, H){
 }
 
 /* ---------- the free crystallite shape ----------
-   An ellipsoid of apparent size with no shape assumed: the Lorentzian size width of a
-   reflection whose diffraction vector has the unit direction u (Cartesian) is
-   Ys(u) = Ys + |Lᵀu|, S = L·Lᵀ a general 3×3 tensor (L lower-triangular: six free
-   numbers, S positive semidefinite by construction), so 1/D(u)² ∝ uᵀSu: a sphere, a
-   plate, a needle or a triaxial body as the data choose, in any orientation. The shape
-   is the crystallite's, not the crystal's: a plate normal to one ⟨110⟩ of a cubic
-   phase breaks the cubic symmetry, and the members of a family — (110), (1-10),
-   (101)… — then have different column lengths. So each member is drawn with its own
-   width and the peak is their sum (a sharp part and a broad part): a width per
-   family, as Laue-symmetric models give, cannot describe such a shape at all. Friedel
-   mates (u, −u) are one member. The members' directions are fixed with the cell's
-   metric at the start: the cell moves by tenths of a per cent in a refinement. */
+   The crystallites' shape with none assumed: the Lorentzian size width of a reflection
+   whose diffraction vector has the unit direction u (Cartesian) follows the solid's
+   volume-weighted mean column length along u, <L>_V(u) (Stokes & Wilson: the integral
+   breadth of the size profile is λ/(<L>_V·cosθ)). The shape is the crystallite's, not
+   the crystal's: a plate normal to one ⟨110⟩ of a cubic phase breaks the cubic
+   symmetry, and the members of a family — (110), (1-10), (101)… — then have different
+   column lengths. So each member is drawn with its own width and the peak is their sum
+   (a sharp part and a broad part): a width per family, as Laue-symmetric models give,
+   cannot describe such a shape at all. Friedel mates (u, −u) are one member. The
+   members' directions are fixed with the cell's metric at the start: the cell moves by
+   tenths of a per cent in a refinement.
+   The solids (p.shape, true meaning 'ellipsoid'):
+   - ellipsoid, spheroid (two axes equal), cylinder, elliptic cylinder (an ellipse
+     translated along the axis), box (a rectangular parallelepiped): the affine image
+     of a unit ball, cylinder (diameter and height 1, axis z) or cube,
+     body = Rot·diag(D)·base. (v420's ellipsoid, Ys(u) = Ys + |Lᵀu| with S = L·Lᵀ six
+     free numbers, stays as 'ellipsoidL' for the results refined with it: its axes' esds
+     came from a covariance of L near-singular wherever the axes lie on symmetric
+     directions — the user's plate normal ±109° —, and it could not be held on the
+     lattice as the other solids are.)
+     For such a body <L>_V(u) = <L>_V,base(ŵ)/|w| with w = diag(1/D)·Rotᵀu (the
+     covariogram of an affine image is the image's), so one function per base body,
+     columnLengthV, serves every proportion. Rot = R(q₀)·exp([r]×): q₀ a reference
+     orientation held in each refinement (the start's), r a rotation vector refined
+     from 0 — no gimbal lock, and its esds are small turns about the body's own axes;
+     a body of revolution refines two components (a turn about its own axis does
+     nothing).
+   Sizes are read with one calibration throughout: the width a sphere of diameter D
+   gets from the isotropic size, D = Kλ/(Ys·cosθ), K = 0.9 as in the Analysis card, so
+   a solid's width along u is that of the sphere with the same <L>_V (3D/4): its
+   parameters W (°) are the widths of spheres of the solid's diameters, edges or axes,
+   which come out as true dimensions (an ellipsoid's principal sizes are its full axes,
+   a cylinder's its diameter and height). */
 const SHAPE_NAMES = ['L11', 'L21', 'L22', 'L31', 'L32', 'L33'];
+const SHAPE_TYPES = ['ellipsoid', 'spheroid', 'cylinder', 'ellcyl', 'box', 'ellipsoidL'];
+// The bodies: base solid, width parameters (° — a sphere's width for that dimension;
+// each solid's own names, so that a result's parameters say which solid it was) and
+// how they map onto the body axes x, y, z, and the rotation components refined.
+const BODIES = {
+  ellipsoid: { base: 'ball', W: ['Ea', 'Eb', 'Ec'], axes: W=> W, rot: 3 },
+  spheroid: { base: 'ball', W: ['Wa', 'Wc'], axes: W=> [W[0], W[0], W[1]], rot: 2 },
+  cylinder: { base: 'cylinder', W: ['Wd', 'Wh'], axes: W=> [W[0], W[0], W[1]], rot: 2 },
+  ellcyl: { base: 'cylinder', W: ['Wa', 'Wb', 'Wh'], axes: W=> W, rot: 3 },
+  box: { base: 'cube', W: ['Wa', 'Wb', 'Wc'], axes: W=> W, rot: 3 },
+};
+const ROT_NAMES = ['R1', 'R2', 'R3'], QREF_NAMES = ['Q0', 'Q1', 'Q2', 'Q3'];
+const shapeTypeOf = p => p === true ? 'ellipsoid' : SHAPE_TYPES.includes(p) ? p : null;
+
+/* columnLengthV(base, w) → <L>_V of the unit base body along the direction of w (any
+   length): 'ball' (diameter 1), 'cylinder' (diameter 1, height 1, axis z), 'cube'
+   (edge 1). From the covariogram, <L>_V = (2/V)∫₀^T g(t·ŵ) dt, T where the translate
+   leaves the body:
+   - cube: g = (1 − t|w₁|)(1 − t|w₂|)(1 − t|w₃|), a polynomial; [100] gives 1, [110]
+     1/1.0607, [111] 1/1.1547 (Langford & Louër's K_β);
+   - cylinder: g = (1 − ct)·A(st), c = |ŵ_z|, s = the rest, A(d) = ½(acos d − d√(1 − d²))
+     the overlap of two unit-diameter discs d apart; integrated in closed form (∫acos,
+     ∫x·acos, ∫x√(1−x²), ∫x²√(1−x²)); along the axis 1, across it 8/(3π); near the axis
+     (s/c < 10⁻³, where the closed form cancels) its series.
+   Checked against ray casting of the solids to 10⁻⁷. Smooth where the factor that ends
+   the integral changes (it is 0 there), but it kinks — linear in the tilt — wherever ŵ
+   lies in a face's plane (some wᵢ = 0) and along the cylinder's axis: shapeWidths
+   rounds those off. */
+function columnLengthV(base, w){
+  const n = Math.hypot(w[0], w[1], w[2]);
+  if (base === 'ball' || !(n > 0)) return 0.75;
+  const a = Math.abs(w[0])/n, b = Math.abs(w[1])/n, c = Math.abs(w[2])/n;
+  if (base === 'cube'){
+    const T = 1/Math.max(a, b, c);
+    const I = T - (a + b + c)*T*T/2 + (a*b + a*c + b*c)*T*T*T/3 - a*b*c*T*T*T*T/4;
+    return 2*I;
+  }
+  const s = Math.hypot(a, b);
+  if (s < 1e-3*c){ const p = s/c; return (1 - 4*p/(3*Math.PI) + p*p*p/(15*Math.PI))/c; }
+  const D = Math.min(1, s/Math.max(c, 1e-300)), r = Math.sqrt(Math.max(0, 1 - D*D)), ac = Math.acos(D), as = Math.asin(D);
+  // F0 = ∫₀^D A, F1 = ∫₀^D d·A (A as above, in d = s·t).
+  const F0 = 0.5*(D*ac - r + 1 - (1 - r*r*r)/3);
+  const F1 = 0.5*(D*D/2*ac + (as - D*r)/4 - (as - D*r*(1 - 2*D*D))/8);
+  return 8/Math.PI/s*(F0 - c/s*F1);
+}
+
+// Quaternions [w, x, y, z]: the reference orientation q₀ (a body axis i is column i of
+// the matrix), products, and the rotation of a rotation vector.
+function quatMat(q){
+  const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1, [w, x, y, z] = q.map(t=> t/n);
+  return [1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w),  2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w),  2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)];
+}
+function quatMul(p, q){
+  return [p[0]*q[0] - p[1]*q[1] - p[2]*q[2] - p[3]*q[3], p[0]*q[1] + p[1]*q[0] + p[2]*q[3] - p[3]*q[2],
+          p[0]*q[2] - p[1]*q[3] + p[2]*q[0] + p[3]*q[1], p[0]*q[3] + p[1]*q[2] - p[2]*q[1] + p[3]*q[0]];
+}
+function quatOfRot(r){
+  const th = Math.hypot(r[0], r[1], r[2]);
+  if (th < 1e-12) return [1, r[0]/2, r[1]/2, r[2]/2];
+  const k = Math.sin(th/2)/th;
+  return [Math.cos(th/2), r[0]*k, r[1]*k, r[2]*k];
+}
+// The quaternion of a rotation matrix (row-major, proper).
+function quatOfMat(R){
+  const t = R[0] + R[4] + R[8];
+  let q;
+  if (t > 0){ const S = Math.sqrt(t + 1)*2; q = [S/4, (R[7] - R[5])/S, (R[2] - R[6])/S, (R[3] - R[1])/S]; }
+  else if (R[0] > R[4] && R[0] > R[8]){ const S = Math.sqrt(1 + R[0] - R[4] - R[8])*2; q = [(R[7] - R[5])/S, S/4, (R[1] + R[3])/S, (R[2] + R[6])/S]; }
+  else if (R[4] > R[8]){ const S = Math.sqrt(1 + R[4] - R[0] - R[8])*2; q = [(R[2] - R[6])/S, (R[1] + R[3])/S, S/4, (R[5] + R[7])/S]; }
+  else { const S = Math.sqrt(1 + R[8] - R[0] - R[4])*2; q = [(R[3] - R[1])/S, (R[2] + R[6])/S, (R[5] + R[7])/S, S/4]; }
+  const n = Math.hypot(...q);
+  return q.map(x=> x/n);
+}
+// A body's orientation at v: R(q₀)·exp([r]×), the body axes its columns.
+function bodyFrame(q, v){
+  const r = [0, 1, 2].map(i=> i < q.iR.length ? v[q.iR[i]] : 0);
+  return quatMat(quatMul(q.iQ.map(i=> v[i]), quatOfRot(r)));
+}
+
 function shapeSetup(q, p, cell, list, add, nextIndex){
-  q.iL = SHAPE_NAMES.map(nm=> { const i = nextIndex(); add(nm, 0); return i; });
+  const type = q.shapeType = shapeTypeOf(p.shape);
+  if (type === 'ellipsoidL') q.iL = SHAPE_NAMES.map(nm=> { const i = nextIndex(); add(nm, 0, -10, 10); return i; });
+  else {
+    const B = BODIES[type];
+    q.iW = B.W.map(nm=> { const i = nextIndex(); add(nm, 0, 0, 10); return i; });
+    q.iR = ROT_NAMES.slice(0, B.rot).map(nm=> { const i = nextIndex(); add(nm, 0, -4, 4, { maxStep: 0.4 }); return i; });
+    // The reference orientation: never refined (it only charts where r = 0 is).
+    q.iQ = QREF_NAMES.map((nm, j)=> { const i = nextIndex(); add(nm, j ? 0 : 1, -1, 1); return i; });
+  }
   const { Gs } = metric(cell);
   // B, upper-triangular, with Gs = BᵀB: the Cartesian diffraction vector is B·h.
   const b11 = Math.sqrt(Gs[0]), b12 = Gs[1]/b11, b13 = Gs[2]/b11;
@@ -358,9 +466,50 @@ function shapeSetup(q, p, cell, list, add, nextIndex){
     return Float64Array.from(out);
   });
 }
-// Is the free shape in use at v (any L ≠ 0)? Until the shape stage it is not, and the
-// phase is drawn as an isotropic one.
-function shapeActive(q, v){ return !!q.iL && q.iL.some(i=> v[i] !== 0); }
+// Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
+// the phase is drawn as an isotropic one.
+function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> v[i] !== 0); }
+/* The shape's own Lorentzian width (°, before the 1/cosθ) of every member of every
+   reflection at v: |Lᵀu| for the ellipsoid; for a body, ¾·|t|/<L>_V,base(t) with
+   t = W∘(Rotᵀu) — the sphere-calibrated width of its column length.
+   A flat face makes the column length kink (linear in the tilt) where the direction
+   lies in that face, and along a cylinder's axis; every member of a family lying in a
+   face is then a V-shaped valley of χ² in the orientation, which least squares cannot
+   settle into (a disc on the user's SrTiO3 stopped at χ² from 6364 to 6427 depending on
+   where it started). For the search alone (freeShape sets model.shapeSoft, for the
+   phase searched) the faces are rounded off over that much of direction — each
+   component of Rotᵀu read as √(x² + soft²), before the dimensions scale it. It is not
+   the solid's: a thin body's columns in its plane are cut short by any tilt (a
+   26 × 2.34 nm disc's by 13 % at 2°), so the result is refined, and every number
+   reported, with the exact solid. */
+const SHAPE_SOFT = Math.sin(2*D2R);
+function shapeWidths(model, q, v){
+  if (q.iL){
+    const [l11, l21, l22, l31, l32, l33] = q.iL.map(i=> v[i]);
+    return q.mv.map(mv=>{
+      const out = new Float64Array(mv.length/3);
+      for (let i = 0; i < out.length; i++){
+        const u1 = mv[3*i], u2 = mv[3*i + 1], u3 = mv[3*i + 2];
+        out[i] = Math.hypot(l11*u1 + l21*u2 + l31*u3, l22*u2 + l32*u3, l33*u3);
+      }
+      return out;
+    });
+  }
+  const B = BODIES[q.shapeType], R = bodyFrame(q, v), [Wx, Wy, Wz] = B.axes(q.iW.map(i=> v[i]));
+  // (only the phase searched: another's kept shape is drawn exact meanwhile)
+  const sf = B.base === 'ball' || !model.shapeSoft || model.shapeSoft.q !== q ? 0 : model.shapeSoft.soft, e2 = sf*sf, soft = x => e2 ? Math.sqrt(x*x + e2) : x;
+  return q.mv.map(mv=>{
+    const out = new Float64Array(mv.length/3);
+    for (let i = 0; i < out.length; i++){
+      const u1 = mv[3*i], u2 = mv[3*i + 1], u3 = mv[3*i + 2];
+      // Rotᵀu: the member's direction in the body's axes, its faces rounded off.
+      const t = [Wx*soft(R[0]*u1 + R[3]*u2 + R[6]*u3), Wy*soft(R[1]*u1 + R[4]*u2 + R[7]*u3), Wz*soft(R[2]*u1 + R[5]*u2 + R[8]*u3)];
+      const n = Math.hypot(t[0], t[1], t[2]);
+      out[i] = n > 0 ? 0.75*n/columnLengthV(B.base, t) : 0;
+    }
+    return out;
+  });
+}
 function shapeMatrix(L){
   const [l11, l21, l22, l31, l32, l33] = L;
   return [l11*l11, l11*l21, l11*l31,  l11*l21, l21*l21 + l22*l22, l21*l31 + l22*l32,  l11*l31, l21*l31 + l22*l32, l31*l31 + l32*l32 + l33*l33];
@@ -382,12 +531,92 @@ function eigSym3(S){
   }
   return [0, 1, 2].map(i=> ({ val: a[i][i], vec: [V[0][i], V[1][i], V[2][i]] })).sort((x, y)=> y.val - x.val);
 }
+/* The simplest lattice directions (indices up to 3, conventional cell) within tolDeg of
+   the plane normal to the unit vector n: { uvw, vec } in the frame op R0 (lattDirection's
+   R). count 2: two about perpendicular to each other — the crystal's directions across
+   a body of revolution's axis (or a plate's normal), which the drawing shows; more: the
+   candidates for a held body's second axis (freeShape). */
+function latticeAcross(q, n, R0, tolDeg = 5, count = 2){
+  const B = q.Bm, M = q.constraint && q.constraint.basis;
+  const inv = m => { const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
+    return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det]; };
+  const Bi = inv(B), gcd = (a, b) => b ? gcd(b, a % b) : Math.abs(a), lim = Math.sin(tolDeg*D2R);
+  const cand = [];
+  for (let u = -3; u <= 3; u++) for (let v = -3; v <= 3; v++) for (let w = -3; w <= 3; w++){
+    if ((!u && !v && !w) || gcd(gcd(u, v), w) !== 1) continue;
+    const t = M ? [M[0]*u + M[1]*v + M[2]*w, M[3]*u + M[4]*v + M[5]*w, M[6]*u + M[7]*v + M[8]*w] : [u, v, w];
+    const c = [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]], cn = Math.hypot(...c);
+    const vec = c.map(x=> x/cn);
+    if (Math.abs(vec[0]*n[0] + vec[1]*n[1] + vec[2]*n[2]) < lim) cand.push({ tc: [u, v, w], vec, cx: u*u + v*v + w*w });
+  }
+  cand.sort((a, b)=> a.cx - b.cx);
+  const out = [];
+  for (const c of cand){
+    if (out.length === count) break;
+    if (out.length && count === 2 && Math.abs(c.vec[0]*out[0].vec[0] + c.vec[1]*out[0].vec[1] + c.vec[2]*out[0].vec[2]) > lim) continue;
+    if (out.some(o=> Math.abs(o.vec[0]*c.vec[0] + o.vec[1]*c.vec[1] + o.vec[2]*c.vec[2]) > 0.999)) continue;
+    out.push(c);
+  }
+  const canon = t => t.find(x=> x !== 0) < 0 ? t.map(x=> -x) : t;
+  return out.map(({ tc, vec })=> ({ uvw: '[' + idxText(canon(R0 ? [0, 1, 2].map(r=> R0[3*r]*tc[0] + R0[3*r + 1]*tc[1] + R0[3*r + 2]*tc[2]) : tc)) + ']', vec }));
+}
+// A turn by phi about the unit axis n (row-major).
+function turnAbout(n, phi){
+  const c = Math.cos(phi), s = Math.sin(phi), C = 1 - c, [x, y, z] = n;
+  return [c + x*x*C, x*y*C - z*s, x*z*C + y*s,  y*x*C + z*s, c + y*y*C, y*z*C - x*s,  z*x*C - y*s, z*y*C + x*s, c + z*z*C];
+}
+/* turnEsds(model, v, res, about, turn, names) → for each axis b in `about`, the turn
+   (rad) of the solid about it that raises χ² by χ²_ν (both senses, averaged; NaN beyond
+   60°), with the refined parameters names(b) — the solid's sizes, the scale, the
+   background, the strain — refined again at each turn: a profile of χ² in the turn.
+   Linear esds do not serve here: where the axes lie on symmetric directions a turn has
+   no first-order effect (the members' changes cancel over a family) and the flat faces
+   make χ² kink, so (JᵀWJ)⁻¹ gave 30° to 10⁹° for axes the data fix within a few
+   degrees; and a turn with the sizes held was too dear — the sizes take up part of it
+   (on a synthetic disc ±0.26° held against about 2°, the truth 15 of those σ away).
+   Turns of 1, 2, 4… up to 60°: σ where χ² first rises by χ²_ν, interpolated between the
+   last two (from the first trial over it alone, by θ·√(χ²_ν/Δ), a broad valley read as
+   the narrow notch of χ² at a lattice orientation: esds 1.7× too small). names(b) may
+   also free the turns about the other axes: the valley of χ² runs obliquely between
+   them, and with those held a solid's axes were found 1.6× further from the truth than
+   their esds said (1.15× with them free, over 28 axes of synthetic solids; the rest is
+   a second valley nearly as deep, which a profile does not see). An axis i's esd is
+   then √((σ_j² + σ_k²)/2) over the turns that tilt it. The model is left as it was. */
+function turnEsds(model, v, res, about, turn, names){
+  if (!res || !res.stats) return about.map(()=> NaN);
+  const keep = { v: model.v.slice(), esd: model.esd, cov: model.cov };
+  const chiAt = (vv, free) => {
+    setParams(model, vv);
+    try { refine(model, { free, maxIter: 4, audit: false }); } catch(e){ return Infinity; }
+    return evaluate(model, model.v).chi2;
+  };
+  try {
+    const target = Math.max(1, res.stats.chi2);
+    const side = (b, sg, c0) => {
+      let t0 = 0, d0 = 0;
+      for (const deg of [1, 2, 4, 8, 16, 32, 60]){
+        const th = deg*D2R, d = chiAt(turn(b, sg*th), names(b)) - c0;
+        // Past χ²_ν already at the first turn: as a parabola from 0 (on the safe side
+        // if χ² rises as |θ|); later, between the last two turns.
+        if (d >= target) return t0 ? t0 + (th - t0)*(target - d0)/Math.max(1e-12, d - d0) : th*Math.sqrt(target/d);
+        t0 = th; d0 = Math.max(0, d);
+      }
+      return NaN;
+    };
+    return about.map(b=> { const c0 = chiAt(turn(b, 0), names(b)); return (side(b, 1, c0) + side(b, -1, c0))/2; });
+  } finally {
+    setParams(model, keep.v); model.esd = keep.esd; model.cov = keep.cov;
+  }
+}
 /* shapeOf(model, params, k, res?) → the phase's free shape, or null when not in use:
-   { axes: [{ D, Desd (nm), dir: [u,v,w], label: '⟨110⟩' | '[001]', angle (° from that
-   direction), resolved, group }] from the shortest to the longest, groups: [{ axes:
-   [i, j(, k)], D, Desd }], kind: 'plate' | 'needle' | 'triaxial' | 'isometric' |
-   'anisotropic' }. D = Kλ/(Ys_i·π/180), K = 0.9 (as the isotropic size and the Analysis
-   card), along the principal axes of S.
+   for a body (spheroid, cylinder, elliptic cylinder, box) bodyShapeOf's; for the
+   ellipsoid { type, kind: 'plate' | 'needle' | 'triaxial' | 'isometric' |
+   'anisotropic', axes: [{ D, Desd (nm), dir: [u,v,w], label: '⟨110⟩' | '[001]', uvw,
+   angle (° from that direction), vec, e, esdAngle (°), resolved, group }] from the
+   shortest to the longest, groups: [{ axes: [i, j(, k)], D, Desd }], across, solid }.
+   D = Kλ/(Ys_i·π/180), K = 0.9, along the principal axes of S: the ellipsoid's full
+   axes, in the isotropic size's calibration (a sphere's diameter). Angular esds by
+   profile (turnEsds).
    esds: the width along a fixed axis e is √(eᵀSe), its variance gᵀ·cov(L)·g with
    g = ∂(eᵀSe)/∂L; blind to a turn of the axes (eᵀ(ΩS − SΩ)e = 0, Ω antisymmetric),
    where a sorted eigenvalue's gradient is not. Where two axes' widths do not differ by
@@ -410,6 +639,7 @@ function eigSym3(S){
 function shapeOf(model, params, k, res){
   const q = model.phases[k], v = vectorOf(model, params);
   if (!shapeActive(q, v)) return null;
+  if (!q.iL) return bodyShapeOf(model, v, k, res);
   const lam = model.lines[0].lam;
   const L0 = q.iL.map(i=> v[i]), ys = v[q.iYs];
   const [l11, l21, l22, l31, l32, l33] = L0;
@@ -454,26 +684,185 @@ function shapeOf(model, params, k, res){
     : a/b < 0.5 && b/c < 0.5 ? 'triaxial'
     : a/b < 0.5 ? 'plate'
     : b/c < 0.5 ? 'needle' : 'anisotropic';
+  // The axes' angular esds, linear (the ellipsoid is smooth, with no faces to kink χ²):
+  // a principal axis turns towards another by eⱼᵀδS eᵢ/(λᵢ − λⱼ), with ∂(eⱼᵀSeᵢ)/∂L
+  // from tⱼ·tᵢ, the variances from the covariance of L — the turn with every other
+  // parameter free. As √((σ_j² + σ_k²)/2) over its two tilts; none for an axis in a group
+  // (its direction is free).
+  const lamOf = x => { const t = LtOf(x.e); return t[0]*t[0] + t[1]*t[1] + t[2]*t[2]; };
+  const turnEsd = i => {
+    if (!C || inGroup(i)) return NaN;
+    const ei = axes[i].e, ti = LtOf(ei), s2 = [];
+    for (let j = 0; j < 3; j++){
+      if (j === i) continue;
+      const ej = axes[j].e, tj = LtOf(ej);
+      const g = [[0, 0], [1, 0], [1, 1], [2, 0], [2, 1], [2, 2]].map(([a, b])=> ej[a]*ti[b] + ei[a]*tj[b]);
+      s2.push(sdOf(g)**2/(lamOf(axes[i]) - lamOf(axes[j]))**2);
+    }
+    return Math.sqrt((s2[0] + s2[1])/2)*R2D;
+  };
   const dirs = axes.map(x=> lattDirection(q, x.e));
-  const ref = kind === 'needle' ? 2 : 0, R0 = dirs[ref].R;
-  const canon = t => t.find(x=> x !== 0) < 0 ? t.map(x=> -x) : t;
-  return { kind, groups: groups.map(g=> ({ axes: g.axes, D: g.D, Desd: g.Desd })), axes: axes.map((x, i)=>{
-    const d = dirs[i], t = d.tc;
-    const dir = i === ref ? d.dir : canon([0, 1, 2].map(r=> R0[3*r]*t[0] + R0[3*r + 1]*t[1] + R0[3*r + 2]*t[2]));
-    const grouped = inGroup(i);
-    return { D: x.D, Desd: grouped ? NaN : x.Desd, dir, label: d.family ? d.label : '[' + idxText(dir) + ']', angle: d.angle,
-             resolved: !grouped, group: grouped ? groups.findIndex(g=> g.axes.includes(i)) : -1 };
-  }) };
+  const e0 = axes[0].e, e1 = axes[1].e;
+  // Two axes not told apart: the solid is one of revolution about the third, and the
+  // crystal's directions across that axis are drawn for orientation — all in that
+  // axis's lattice frame (else a needle's or a plate's, by its telling axis).
+  const pair = groups.find(g=> g.axes.length === 2), lone = pair ? [0, 1, 2].find(i=> !pair.axes.includes(i)) : -1;
+  const ref = lone >= 0 ? lone : kind === 'needle' ? 2 : 0;
+  return { type: 'ellipsoidL', kind, groups: groups.map(g=> ({ axes: g.axes, D: g.D, Desd: g.Desd })),
+    across: lone >= 0 ? latticeAcross(q, dirs[lone].vec, dirs[lone].R).map(d=> ({ ...d, esdAngle: turnEsd(lone) })) : [],
+    axes: framedAxes(dirs, ref).map((d, i)=>{
+      const grouped = inGroup(i);
+      return { ...d, D: axes[i].D, Desd: grouped ? NaN : axes[i].Desd, e: axes[i].e, esdAngle: turnEsd(i),
+               resolved: !grouped, group: grouped ? groups.findIndex(g=> g.axes.includes(i)) : -1 };
+    }),
+    // For drawing: the full axes along a right-handed frame of the principal axes.
+    solid: { type: 'ellipsoid', dims: axes.map(x=> x.D), frame: [e0, e1, [e0[1]*e1[2] - e0[2]*e1[1], e0[2]*e1[0] - e0[0]*e1[2], e0[0]*e1[1] - e0[1]*e1[0]]] } };
+}
+// The lattice directions of a solid's axes in one frame: the Laue operation that makes
+// the reference axis's direction its family's first member, applied to the others too
+// (two of one family, a plate's [110] normal and its [1-10] width, then read apart).
+function framedAxes(dirs, ref){
+  const R0 = dirs[ref].R, canon = t => t.find(x=> x !== 0) < 0 ? t.map(x=> -x) : t;
+  return dirs.map((d, i)=>{
+    const t = d.tc, dir = i === ref ? d.dir : canon([0, 1, 2].map(r=> R0[3*r]*t[0] + R0[3*r + 1]*t[1] + R0[3*r + 2]*t[2]));
+    return { dir, label: d.family ? d.label : '[' + idxText(dir) + ']', uvw: '[' + idxText(dir) + ']', angle: d.angle, vec: d.vec };
+  });
+}
+/* A body's shape (spheroid, cylinder, elliptic cylinder, box): { type, kind, dims:
+   [{ name, D, Desd }], axes: [{ role, D?, e, dir, label, uvw, angle, vec, esdAngle,
+   resolved }], solid: { type, dims, frame } }. Its dimensions D = Kλ/(W·π/180) with
+   esds from W's; the axes whose directions it has (a body of revolution only its own
+   axis), each with its angular esd (turnEsds). */
+function bodyShapeOf(model, v, k, res){
+  const q = model.phases[k], type = q.shapeType, B = BODIES[type], lam = model.lines[0].lam;
+  const Dof = W => W > 0 ? K_SCHERRER*lam/(W*D2R)/10 : Infinity;
+  const names = [...q.iW, ...q.iR].map(i=> model.par[i].name);
+  const ix = res && res.free ? names.map(nm=> res.free.indexOf(nm)) : null;
+  const cov = (a, b) => ix && res.cov && ix[a] >= 0 && ix[b] >= 0 ? res.cov[ix[a]][ix[b]] : NaN;
+  const W = q.iW.map(i=> v[i]), nW = W.length;
+  // A width on its bound 0 is a dimension with no broadening along it: unbounded, but
+  // at least Dmin (from W + 2σ).
+  // Held on the lattice (freeShape's info): the free fit's sizes and axes are as
+  // likely, so the difference from them is added to the esds — the held refinement's
+  // own covariance lacks the orientation (sizes 5–11σ off where the frame was wrong).
+  const info = res && res.shapes ? res.shapes[q.id] : null, held = !!(info && info.held);
+  const dimsOf = W.map((w, i)=> { const D = Dof(w), s = Math.sqrt(cov(i, i));
+    const Dmin = Number.isFinite(D) || !(s > 0) ? NaN : Dof(w + 2*s);
+    let Desd = w > 0 ? D*s/w : NaN;
+    if (held && info.freeW && Number.isFinite(D)) Desd = Math.hypot(Desd, D - Dof(info.freeW[i]));
+    // An unbounded dimension's lower limit, when it says anything (≥ 1 nm).
+    return { D, Desd, Dmin: Dmin >= 1 ? Dmin : NaN }; });
+  const R = bodyFrame(q, v), col = i => [R[i], R[3 + i], R[6 + i]];
+  // The axes' angular esds, by profile (turnEsds): the body turned about its own axes
+  // (a body of revolution: not about its own).
+  const mulM = (P, Q) => [0,1,2].flatMap(i=> [0,1,2].map(j=> P[3*i]*Q[j] + P[3*i + 1]*Q[3 + j] + P[3*i + 2]*Q[6 + j]));
+  const about = q.iR.length === 2 ? [0, 1] : [0, 1, 2];
+  // Refined again at each turn: the sizes, the strain, the scales and the background.
+  // The turns about the other axes too, from the turned frame (r = 0 there).
+  const reopt = res && res.free ? res.free.filter(nm=> { const p = model.par[model.index[nm]]; return p && (p.linear || q.iW.includes(model.index[nm]) || nm === q.pfx + 'Xs'); }) : [];
+  const sigP = turnEsds(model, v, res, about, (b, phi)=>{
+    const vv = v.slice(), e = [0, 0, 0]; e[b] = 1;
+    q.iR.forEach(i=> { vv[i] = 0; });
+    quatOfMat(mulM(R, turnAbout(e, phi))).forEach((t, i)=> { vv[q.iQ[i]] = t; });
+    return vv;
+  }, b=> reopt.concat(q.iR.filter((_, j)=> j !== b).map(i=> model.par[i].name)));
+  const sig = [0, 1, 2].map(b=> about.includes(b) ? sigP[about.indexOf(b)] : NaN);
+  const tiltEsd = i => { const [j, l] = [0, 1, 2].filter(t=> t !== i), e = Math.sqrt((sig[j]**2 + sig[l]**2)/2)*R2D;
+    return held && info.freeOff && Number.isFinite(e) ? Math.max(e, info.freeOff[i]) : e; };
+  // The body's dimensions along x, y, z, and which axes have directions of their own.
+  const [Dx, Dy, Dz] = B.axes(dimsOf.map(d=> d.D));
+  const roles = type === 'spheroid' ? [['axis', 2]] : type === 'cylinder' ? [['axis', 2]] : type === 'ellcyl' ? [['axis', 2], ['a', 0], ['b', 1]] : [['a', 0], ['b', 1], ['c', 2]];
+  const dimNames = { ellipsoid: ['a', 'b', 'c'], spheroid: ['equatorial', 'polar'], cylinder: ['diameter', 'height'], ellcyl: ['a', 'b', 'height'], box: ['a', 'b', 'c'] }[type];
+  const dims = dimsOf.map((d, i)=> ({ name: dimNames[i], ...d }));
+  const dimAlong = [Dx, Dy, Dz], dimEsdAlong = B.axes(dimsOf.map(d=> d.Desd)), dimMinAlong = B.axes(dimsOf.map(d=> d.Dmin));
+  const widthW = i => B.axes(W)[i];
+  // Two dimensions not told apart (widths within 2σ) make a solid of revolution about
+  // the third axis: the turn about it is free, and the pair have no directions — an
+  // elliptic cylinder's circular cross-section, an ellipsoid's pair, a spheroid or a
+  // cylinder as wide as it is long (no axis at all). A box's edges always have theirs
+  // (a square turned is another solid): whether the data fix them is its angular
+  // esd's to say. An axis is shown with a direction only under 30° of esd.
+  // Apart: the difference of two widths over its esd, their covariance included (a
+  // body of revolution's two axes across share one width).
+  const wIx = B.rot === 2 ? [0, 0, 1] : [0, 1, 2];
+  const zr = (i, j) => { const a = wIx[i], b = wIx[j], s = Math.sqrt(cov(a, a) + cov(b, b) - 2*cov(a, b));
+    return Number.isFinite(s) && s > 0 ? Math.abs(widthW(i) - widthW(j))/s : Infinity; };
+  const apart = (i, j) => zr(i, j) > 2;
+  const round = B.rot === 2 && !apart(0, 2);
+  // Dimensions not told apart, of a kind the solid can swap (an ellipsoid's axes, a
+  // box's edges, an elliptic cylinder's cross-section): their mean is measured, and
+  // each alone is not. Swapping them has no first-order effect, so their widths are
+  // anticorrelated (−1.0000): a 12 × 12 nm box section on a fourfold axis read 13(107)
+  // and 13(106) nm, its mean 12.80(42). The group's mean width and its esd come from
+  // the full covariance, as the v420 ellipsoid's groups; the members' own esds are
+  // dropped. The closest pair first, then the third against the pair's mean (against
+  // each alone, the pair's huge esds had grouped a 4 nm edge with them). (Here a body's
+  // axes are its widths', B.axes the identity.)
+  const groups = [];
+  if (type === 'ellipsoid' || type === 'box' || type === 'ellcyl'){
+    const swap = type === 'ellcyl' ? [[0, 1]] : [[0, 1], [0, 2], [1, 2]];
+    const near = swap.filter(([i, j])=> W[i] > 0 && W[j] > 0 && !apart(i, j)).sort((x, y)=> zr(...x) - zr(...y));
+    if (near.length){
+      let g = near[0];
+      const k = [0, 1, 2].find(i=> !g.includes(i));
+      if (type !== 'ellcyl' && W[k] > 0){
+        // the third's width less the pair's mean, and its variance
+        const d = W[k] - (W[g[0]] + W[g[1]])/2;
+        const v = cov(k, k) + (cov(g[0], g[0]) + cov(g[1], g[1]) + 2*cov(g[0], g[1]))/4 - cov(k, g[0]) - cov(k, g[1]);
+        if (!(Math.abs(d) > 2*Math.sqrt(v))) g = [0, 1, 2];
+      }
+      const n = g.length, w = g.reduce((t, i)=> t + W[i], 0)/n;
+      let c = 0; for (const i of g) for (const j of g) c += cov(i, j);
+      const D = Dof(w), sd = Math.sqrt(Math.max(0, c))/n;
+      let Desd = D*sd/w;
+      if (held && info.freeW) Desd = Math.hypot(Desd, D - Dof(g.reduce((t, i)=> t + info.freeW[i], 0)/n));
+      for (const i of g){ dims[i].Desd = NaN; dims[i].group = 0; }
+      groups.push({ axes: g, D, Desd });
+    }
+  }
+  const groupOf = i => groups.findIndex(g=> g.axes.includes(i));
+  // An axis has a direction of its own unless the turn about another is free: a box's
+  // edges always have theirs (a square turned is another solid; whether the data fix
+  // them is its angular esd's to say).
+  const own = i => type === 'ellipsoid' || (type === 'ellcyl' && i < 2) ? groupOf(i) < 0 : type === 'box' || !round;
+  // The reference for the lattice frame: the body's axis, an ellipsoid's lone axis, or
+  // its (a box's) shortest.
+  const shortest = [0, 1, 2].sort((a, b)=> dimAlong[a] - dimAlong[b])[0];
+  const refAxis = type === 'box' ? shortest : type === 'ellipsoid' ? ([0, 1, 2].filter(own).length === 1 ? [0, 1, 2].find(own) : shortest) : 2;
+  const order = roles.map(([, i])=> i), dirs = order.map(i=> lattDirection(q, col(i)));
+  const framed = framedAxes(dirs, Math.max(0, order.indexOf(refAxis)));
+  const axes = roles.map(([role, i], n)=> { const esdAngle = tiltEsd(i);
+    return { role, axis: i, ...framed[n], D: dimAlong[i], Desd: groupOf(i) >= 0 ? NaN : dimEsdAlong[i], Dmin: dimMinAlong[i], e: col(i), esdAngle, group: groupOf(i), own: own(i),
+      resolved: own(i) && Number.isFinite(esdAngle) && esdAngle <= 30 }; });
+  // The kind: a body of revolution flat or long; a box like the ellipsoid.
+  // A box or an elliptic cylinder by its three dimensions, as the ellipsoid (a thin
+  // elliptic cylinder is a plate whichever of its dimensions is the thin one).
+  let kind;
+  if (type === 'box' || type === 'ellcyl' || type === 'ellipsoid'){
+    const [a, b, c] = dimAlong.slice().sort((x, y)=> x - y);
+    const same = type === 'ellipsoid' && groups.some(g=> g.axes.length === 3);
+    kind = same || a/c > 0.8 ? (type === 'ellipsoid' ? 'isometric' : 'equant') : a/b < 0.5 && b/c < 0.5 ? 'triaxial' : a/b < 0.5 ? 'plate' : b/c < 0.5 ? 'needle' : 'anisotropic';
+  } else {
+    const same = zr(0, 2) < 2;
+    kind = same || Math.min(Dz, Dx)/Math.max(Dz, Dx) > 0.8 ? (type === 'spheroid' ? 'near-sphere' : 'equant') : Dz < Dx ? (type === 'spheroid' ? 'oblate' : 'disc') : (type === 'spheroid' ? 'prolate' : 'rod');
+  }
+  // Across the axis: the crystal's directions normal to the axis's lattice direction
+  // (normal to the axis itself, [1-10] of a disc 7° off [110] fell outside the 5°).
+  // (an ellipsoid's lone axis likewise, when its pair is not told apart).
+  const lone = type === 'ellipsoid' && [0, 1, 2].filter(own).length === 1 ? [0, 1, 2].find(own) : -1;
+  const across = B.rot === 2 && axes[0].resolved ? latticeAcross(q, dirs[0].vec, dirs[0].R).map(d=> ({ ...d, esdAngle: tiltEsd(2) }))
+    : lone >= 0 && axes[order.indexOf(lone)].resolved ? latticeAcross(q, dirs[order.indexOf(lone)].vec, dirs[order.indexOf(lone)].R).map(d=> ({ ...d, esdAngle: tiltEsd(lone) })) : [];
+  return { type, kind, dims, groups, axes, across, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)] } };
 }
 const idxText = t => t.map(x=> x < 0 ? '-' + (-x) : String(x)).join('');
-/* lattDirection(q, e) → { dir, label, angle, tc, R, family }: the lattice direction
+/* lattDirection(q, e) → { dir, label, angle, tc, R, family, vec }: the lattice direction
    [uvw] of a Cartesian unit vector e, u ∝ Bᵀe, in the conventional cell when there is
    one. The simplest small-integer direction (least u² + v² + w², indices up to 4)
    within SNAP_DEG of e, else the nearest: an axis found 2–9° from [111] was named
    ⟨433⟩, ⟨332⟩ or ⟨443⟩ by the nearest alone — noise read as a precise high-index
    direction; the angle says how far off it is. dir is the first member of its family
    under the Laue group (fewest negative indices, then the largest), R the operation
-   that takes tc (the direction found) to it. */
+   that takes tc (the direction found) to it; vec the direction found, Cartesian. */
 const SNAP_DEG = 10;
 function lattDirection(q, e){
   const B = q.Bm;
@@ -493,6 +882,9 @@ function lattDirection(q, e){
     if (angle <= SNAP_DEG && (!low || cx < low.cx || (cx === low.cx && angle < low.angle))) low = { tc, angle, cx };
   }
   const best = low || near;
+  // The direction found, as a Cartesian unit vector on e's side (for drawing it).
+  const bt = M ? [M[0]*best.tc[0] + M[1]*best.tc[1] + M[2]*best.tc[2], M[3]*best.tc[0] + M[4]*best.tc[1] + M[5]*best.tc[2], M[6]*best.tc[0] + M[7]*best.tc[1] + M[8]*best.tc[2]] : best.tc;
+  const bc = cart(bt), bn = Math.hypot(...bc), sg = bc[0]*e[0] + bc[1]*e[1] + bc[2]*e[2] < 0 ? -1 : 1, vec = bc.map(x=> sg*x/bn);
   const g = (a, b) => b ? g(b, a % b) : Math.abs(a);
   const d0 = best.tc.reduce((a, b)=> g(a, b)), t0 = best.tc.map(x=> x/d0);
   // The first member of its orbit under the Laue group (ops act on directions as R·t; in
@@ -506,7 +898,7 @@ function lattDirection(q, e){
   }
   const nice = [...orbit.values()].sort(({ r: a }, { r: b })=> (a.filter(x=> x < 0).length - b.filter(x=> x < 0).length) || (b[0] - a[0]) || (b[1] - a[1]) || (b[2] - a[2]))[0];
   const family = orbit.size > 2;
-  return { dir: nice.r, label: family ? '⟨' + idxText(nice.r) + '⟩' : '[' + idxText(nice.r) + ']', angle: best.angle, tc: t0, R: nice.R, family };
+  return { dir: nice.r, label: family ? '⟨' + idxText(nice.r) + '⟩' : '[' + idxText(nice.r) + ']', angle: best.angle, tc: t0, R: nice.R, family, vec };
 }
 
 // Cartesian unit vectors of the low-index lattice directions [100], [110], [111] and
@@ -672,7 +1064,7 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     q.iB = par.length; add(pfx + 'B', 0, -2, 10, 1e-4, { group: 'phase', phase: k, kind: 'B' });
     q.iXs = par.length; add(pfx + 'Xs', P.Xs, 0, 10, 1e-6, { group: 'phase', phase: k, kind: 'size' });
     q.iYs = par.length; add(pfx + 'Ys', P.Ys, 0, 10, 1e-6, { group: 'phase', phase: k, kind: 'size' });
-    if (p.shape) shapeSetup(q, p, cell, list, (nm, value)=> add(pfx + nm, value, -10, 10, 1e-6, { group: 'phase', phase: k, kind: 'shape' }), ()=> par.length);
+    if (shapeTypeOf(p.shape)) shapeSetup(q, p, cell, list, (nm, value, lo, hi, extra)=> add(pfx + nm, value, lo, hi, 1e-6, { group: 'phase', phase: k, kind: 'shape', ...extra }), ()=> par.length);
     return q;
   });
 
@@ -797,18 +1189,16 @@ function lpFactor(model, th){
 }
 
 // One line of one reflection with the free shape: a peak per member of the family, its
-// Lorentzian width Y (the instrument's and the phase's isotropic Ys) + |Lᵀu|, each a
-// 1/m share of the intensity. The FCJ counts are held per member (their keys negative,
-// apart from the isotropic lines').
-function shapeLine(model, k, r, j, th, tt, I, Lv, prof, out, ticks, S, f2, d){
-  const q = model.phases[k], mv = q.mv[r], m = mv.length/3, x = model.x, xa = model.x0, xb = model.x1;
-  const [l11, l21, l22, l31, l32, l33] = Lv, { U, V, W, X, Y, A } = prof;
+// Lorentzian width Y (the instrument's and the phase's isotropic Ys) + the shape's own
+// (shapeWidths: wv, one per member), each a 1/m share of the intensity. The FCJ counts
+// are held per member (their keys negative, apart from the isotropic lines').
+function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d){
+  const q = model.phases[k], m = wv.length, x = model.x, xa = model.x0, xb = model.x1;
+  const { U, V, W, X, Y, A } = prof;
   const c2 = Math.cos(2*th), dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
   let first = null;
   for (let i = 0; i < m; i++){
-    const u1 = mv[3*i], u2 = mv[3*i + 1], u3 = mv[3*i + 2];
-    const a1 = l11*u1 + l21*u2 + l31*u3, a2 = l22*u2 + l32*u3, a3 = l33*u3;
-    const pr = profileAtTheta(th, U, V, W, X, Y + Math.sqrt(a1*a1 + a2*a2 + a3*a3));
+    const pr = profileAtTheta(th, U, V, W, X, Y + wv[i]);
     if (!first) first = pr;
     const half = Math.max(model.win*pr.H, WIN_MIN);
     if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
@@ -833,7 +1223,7 @@ function phasePattern(model, v, k, out, ticks){
   const { U, V, W, X, Y } = profileOf(model, v, k);
   const x = model.x, xa = model.x0, xb = model.x1, S = v[q.iScale];
   // The free shape: each member of a family with its own size width (shapeSetup).
-  const shp = shapeActive(q, v) ? q.iL.map(i=> v[i]) : null;
+  const shp = shapeActive(q, v) ? shapeWidths(model, q, v) : null;
   const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
   if (sk && sk.only && sk.k !== k) return out;
   for (let r = 0; r < q.nRefl; r++){
@@ -845,7 +1235,7 @@ function phasePattern(model, v, k, out, ticks){
       if (st >= 1) continue;
       const th = Math.asin(st);
       const tt = 2*th*R2D + zero + disp*Math.cos(th);
-      if (shp){ shapeLine(model, k, r, j, th, tt, base*L.w*lpFactor(model, th), shp, { U, V, W, X, Y, A }, out, ticks && j === 0 ? ticks : null, S, f2, d); continue; }
+      if (shp){ shapeLine(model, k, r, j, th, tt, base*L.w*lpFactor(model, th), shp[r], { U, V, W, X, Y, A }, out, ticks && j === 0 ? ticks : null, S, f2, d); continue; }
       const pr = profileAtTheta(th, U, V, W, X, Y);
       // The axial divergence spreads the peak over shifts of one sign, up to dMax
       // (fcjNodes): a line out of range by more than that is skipped before its nodes.
@@ -1120,7 +1510,7 @@ function refineHeld(model, opts){
   let st = evaluate(model, v);
   let lam = opts.lambda || 1e-3, it = 0, converged = false, why = '';
   const cols = free.map(()=> new Float64Array(n));
-  let trial = null;
+  let trial = null, trialZ = null;
   const onBound = (j, g) => { const p = model.par[j]; return (v[j] <= loOf(j, v) && g < 0) || (v[j] >= p.hi && g > 0); };
   const chiRed = c => c/Math.max(1, rStats(model, st.yc, st.bg).N - m);
   /* The free linear parameters (scales, background) solved exactly, the rest held, when
@@ -1155,21 +1545,44 @@ function refineHeld(model, opts){
       const M = As.slice();
       for (let a = 0; a < k; a++) M[a*k + a] += lam;
       const ch = cholesky(M, k), ds = cholSolve(ch, gs, k);
-      const vn = v.slice();
+      let vn = v.slice(), maxRatioZ = 0;
+      const clamped = [];
       maxRatio = 0;
+      // A parameter with a largest step (a body's turn, maxStep: where a turn has no
+      // first-order effect — an axis on a symmetric direction — the Gauss–Newton step is
+      // unbounded, and a first step of 4 rad threw the axis anywhere) is held to it, on
+      // its own: shortening the whole step instead froze every other parameter with a
+      // turn whose column was numerical noise (a sphere's sizes stopped 30 % off).
       for (let a = 0; a < k; a++){
         const j = free[act[a]], p = model.par[j];
-        let nv = v[j] + ds[a]/D[a];
+        let d = ds[a]/D[a];
+        if (p.maxStep && Math.abs(d) > p.maxStep){ d = Math.sign(d)*p.maxStep; clamped.push(j); }
+        let nv = v[j] + d;
         if (nv < p.lo) nv = p.lo; else if (nv > p.hi) nv = p.hi;
-        const sig = Math.sqrt(Math.max(0, chInv[a*k + a])*cr)/D[a];
-        if (sig > 0) maxRatio = Math.max(maxRatio, Math.abs(nv - v[j])/sig);
+        const sig = Math.sqrt(Math.max(0, chInv[a*k + a])*cr)/D[a], r = sig > 0 ? Math.abs(nv - v[j])/sig : 0;
+        maxRatio = Math.max(maxRatio, r);
+        if (clamped[clamped.length - 1] !== j) maxRatioZ = Math.max(maxRatioZ, r);
         vn[j] = nv;
       }
       project(vn);
       trial = evaluate(model, vn, trial);
-      if (trial.chi2 < st.chi2){
-        const rel = (st.chi2 - trial.chi2)/trial.chi2;
-        v = vn; const t = st; st = trial; trial = t;
+      // Rejected with a clamped turn: the same step without it. At a kink of χ² (a
+      // faceted body exactly on a symmetric orientation) a turn's column is noise, its
+      // step stays far over maxStep however large λ, and every trial carried it: the
+      // refinement stopped there with every other parameter frozen (a cylinder's sizes
+      // 30 % off, and the angular profiles of held solids 3–5× too narrow).
+      let next = trial.chi2 < st.chi2 ? trial : null;
+      if (!next && clamped.length){
+        const vz = vn.slice();
+        for (const j of clamped) vz[j] = v[j];
+        project(vz);
+        trialZ = evaluate(model, vz, trialZ);
+        if (trialZ.chi2 < st.chi2){ next = trialZ; vn = vz; maxRatio = maxRatioZ; }
+      }
+      if (next){
+        const rel = (st.chi2 - next.chi2)/next.chi2;
+        v = vn; const t = st; st = next;
+        if (next === trial) trial = t; else trialZ = t;
         lam = Math.max(lam/10, 1e-9);
         accepted = true;
         if (maxRatio < 0.01 || rel < 1e-9){ converged = true; why = 'shifts below 1 % of the esds'; }
@@ -1468,7 +1881,7 @@ function autoRefine(model, opts = {}){
   // With a free shape to refine, its trial refinements take most of the time: the
   // stages before it fill the first half of the progress.
   const progRaw = opts.onProgress || (()=>{});
-  const share = irf && model.phases.some(q=> q.iL) ? 0.5 : 1;
+  const share = irf && model.phases.some(q=> q.shapeType) ? 0.5 : 1;
   const prog = (f, stage) => progRaw(f*share, stage);
   const nStages = (opts.refineB ? 6 : 5);
   const lin = ['bg' + 0];
@@ -1650,7 +2063,7 @@ function autoRefine(model, opts = {}){
   // The free shape of the phases that ask for it (p.shape), on top of everything else.
   const shapes = {};
   let isoParams = null;
-  const shapeKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].iL && !out.has(k));
+  const shapeKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].shapeType && !out.has(k));
   if (shapeKs.length && !irf) warnings.push(`Free shape: needs the standard's instrumental profile (refine the standard first), else the shape's widths and the instrument's are one and the same; ${shapeKs.map(nm).join(', ')} refined with an isotropic size.`);
   else if (shapeKs.length){
     isoParams = res.params;
@@ -1659,8 +2072,8 @@ function autoRefine(model, opts = {}){
       progRaw(share + j*part, `free shape of ${nm(k)}`);
       const r = freeShape(model, k, res, lastFree, { ...opts, onShape: f=> progRaw(share + (j + f)*part, `free shape of ${nm(k)}`) });
       if (r && r.res){ res = r.res; shapes[model.phases[k].id] = r.info; lastFree = r.res.free; }
-      else if (r && r.rejected) warnings.push(`${nm(k)}: the free shape is not supported by the data (ΔBIC ${r.early ? 'about ' : ''}${r.dBIC >= 0 ? '+' : ''}${r.dBIC.toFixed(0)}${r.early ? ' from the trial shapes' : ''}, needs under −10): the isotropic size is kept.`);
-      else warnings.push(`${nm(k)}: the free shape could not be refined; the isotropic size is kept.`);
+      else if (r && r.rejected) warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) is not supported by the data (ΔBIC ${r.early ? 'about ' : ''}${r.dBIC >= 0 ? '+' : ''}${r.dBIC.toFixed(0)}${r.early ? ' from the trial shapes' : ''}, needs under −10): the isotropic size is kept.`);
+      else warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) could not be refined; the isotropic size is kept.`);
     }
     // No shape kept: nothing to compare the isotropic model with. And the covariance the
     // model holds is the last trial's: it is set back to the kept result's (the weight
@@ -1696,49 +2109,134 @@ function autoRefine(model, opts = {}){
    the sphere goes nowhere: it starts instead from plates and needles on the low-index
    directions and from shapes drawn at random (seeded: the same data give the same
    result), each refined briefly, and the best few to convergence, then polished. The
-   sphere itself is one of the starts, so the shape never ends above the isotropic fit.
-   It is kept if it beats the isotropic fit by ΔBIC < −10 ({ rejected, dBIC, early }
-   otherwise; early: decided on the brief refinements). info: { starts, full, agree
-   (of the fully refined starts, how many reached the best χ² within 2 χ²_ν), chi2Iso,
-   chi2, Piso, P, N, chi2redIso }. */
+   sphere-like solid is one of the starts (for the ellipsoid and the spheroid the sphere
+   itself, so their fit never ends above the isotropic one). Each full refinement of a
+   body starts with its orientation as the reference, r = 0. It is kept if it beats the
+   isotropic fit by ΔBIC < −10 ({ rejected, dBIC, early } otherwise; early: decided on
+   the brief refinements). A body is refined again with exact faces, and with its axes
+   held on the lattice (kept when better: see the final stage). info: { type, starts,
+   full, chi2Iso, chi2, Piso, P, N, chi2redIso, held, dBICfree, dBICheld, freeOff (the
+   free axes' angles from the held ones, °), freeW (the free fit's widths) }. */
 const SHAPE_STARTS = 10, SHAPE_FULL = 3;
 function freeShape(model, k, res, free, opts){
+  // The search with a body's faces rounded off (shapeWidths); never beyond it.
+  model.shapeSoft = model.phases[k].iW ? { q: model.phases[k], soft: SHAPE_SOFT } : null;
+  try { return freeShapeRun(model, k, res, free, opts); }
+  finally { model.shapeSoft = null; }
+}
+function freeShapeRun(model, k, res, free, opts){
   const q = model.phases[k], pf = q.pfx, vIso = model.v.slice();
   const N = res.stats.N, chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
   const y0 = Math.max(vIso[q.iYs], 1e-3);
-  const names = free.filter(nm=> nm !== pf + 'Ys').concat(SHAPE_NAMES.map(n=> pf + n));
   // A seeded generator (mulberry32) and Gaussian deviates.
-  let seed = (0x9e3779b9 ^ (q.id*2654435761)) >>> 0;
+  // (The same sequence for every phase: a result must not change with the phases'
+  // ids, which follow the order they were added in.)
+  let seed = 0x9e3779b9 >>> 0;
   const rnd = ()=> { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0)/4294967296; };
   const gauss = ()=> Math.sqrt(-2*Math.log(rnd() || 1e-12))*Math.cos(2*Math.PI*rnd());
-  const cholL = S => { const l11 = Math.sqrt(S[0]), l21 = S[3]/l11, l31 = S[6]/l11, l22 = Math.sqrt(Math.max(1e-30, S[4] - l21*l21)), l32 = (S[7] - l31*l21)/l22, l33 = Math.sqrt(Math.max(1e-30, S[8] - l31*l31 - l32*l32)); return [l11, l21, l22, l31, l32, l33]; };
-  // S turned by R (row-major): R·S·Rᵀ; R a turn by phi about the unit axis n.
-  const turnS = (S, R) => [0,1,2].flatMap(i=> [0,1,2].map(j=> { let t = 0; for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) t += R[3*i + a]*S[3*a + b]*R[3*j + b]; return t; }));
+  const unit = t => { const n = Math.hypot(...t); return t.map(x=> x/n); };
+  const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
+  // A turn by phi about the unit axis n (row-major), a product, a random turn.
   const rotation = (n, phi) => { const c = Math.cos(phi), s = Math.sin(phi), C = 1 - c, [x, y, z] = n;
     return [c + x*x*C, x*y*C - z*s, x*z*C + y*s,  y*x*C + z*s, c + y*y*C, y*z*C - x*s,  z*x*C - y*s, z*y*C + x*s, c + z*z*C]; };
-  const startL = ()=>{
-    const qv = [gauss(), gauss(), gauss(), gauss()], n = Math.hypot(...qv), [w, x, y, z] = qv.map(t=> t/n);
-    const R = [1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w), 2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w), 2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)];
-    const lam = [0, 1, 2].map(()=> y0*y0*Math.exp(0.8*gauss()));
-    return cholL(turnS([lam[0], 0, 0, 0, lam[1], 0, 0, 0, lam[2]], R));
-  };
-  // Starts: the sphere; a plate normal to, and a needle along, each low-index lattice
-  // direction (the conventional cell's [100], [110], [111] and their kin, one of each
-  // Laue family), tilted a few degrees so that no symmetry holds the axes where they
-  // start; then random shapes up to SHAPE_STARTS. They only seed the fit: each one is
-  // free to go anywhere, and the best fit wins.
-  const axisS = (e, along, across) => [0,1,2].flatMap(i=> [0,1,2].map(j=> (i === j ? across*across : 0) + (along*along - across*across)*e[i]*e[j]));
-  const tilt = e => { const t = [e[0] + 0.08*gauss(), e[1] + 0.08*gauss(), e[2] + 0.08*gauss()], n = Math.hypot(...t); return t.map(x=> x/n); };
-  const seeds = [[y0, 0, y0, 0, 0, y0]];
-  for (const e of lowIndexAxes(q)){ seeds.push(cholL(axisS(tilt(e), 2.5*y0, 0.6*y0))); seeds.push(cholL(axisS(tilt(e), 0.4*y0, 1.4*y0))); }
-  while (seeds.length < SHAPE_STARTS + 1) seeds.push(startL());
-  const steps = seeds.length + SHAPE_FULL + 2;
+  const mul = (P, Q) => [0,1,2].flatMap(i=> [0,1,2].map(j=> P[3*i]*Q[j] + P[3*i + 1]*Q[3 + j] + P[3*i + 2]*Q[6 + j]));
+  const randomTurn = ()=> quatMat(unit([gauss(), gauss(), gauss(), gauss()]));
+  // Tilted a few degrees, so that no symmetry holds the axes where they start.
+  const tilt = e => unit([e[0] + 0.08*gauss(), e[1] + 0.08*gauss(), e[2] + 0.08*gauss()]);
+  const axesLow = lowIndexAxes(q);
+  // Each solid's own parameters, its starts (functions that write one into v), how a
+  // start is charted afresh before its full refinement, and a small turn of the best.
+  let names, starts = [], rebase = v => v, turned, snaps = null;
+  if (q.iL){
+    const cholL = S => { const l11 = Math.sqrt(S[0]), l21 = S[3]/l11, l31 = S[6]/l11, l22 = Math.sqrt(Math.max(1e-30, S[4] - l21*l21)), l32 = (S[7] - l31*l21)/l22, l33 = Math.sqrt(Math.max(1e-30, S[8] - l31*l31 - l32*l32)); return [l11, l21, l22, l31, l32, l33]; };
+    // S turned by R: R·S·Rᵀ.
+    const turnS = (S, R) => [0,1,2].flatMap(i=> [0,1,2].map(j=> { let t = 0; for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) t += R[3*i + a]*S[3*a + b]*R[3*j + b]; return t; }));
+    const axisS = (e, along, across) => [0,1,2].flatMap(i=> [0,1,2].map(j=> (i === j ? across*across : 0) + (along*along - across*across)*e[i]*e[j]));
+    const put = L => v => { L.forEach((t, i)=> { v[q.iL[i]] = t; }); };
+    names = SHAPE_NAMES.map(n=> pf + n);
+    starts.push(put([y0, 0, y0, 0, 0, y0]));
+    for (const e of axesLow){ starts.push(put(cholL(axisS(tilt(e), 2.5*y0, 0.6*y0)))); starts.push(put(cholL(axisS(tilt(e), 0.4*y0, 1.4*y0)))); }
+    while (starts.length < SHAPE_STARTS + 1){
+      const lam = [0, 1, 2].map(()=> y0*y0*Math.exp(0.8*gauss()));
+      starts.push(put(cholL(turnS([lam[0], 0, 0, 0, lam[1], 0, 0, 0, lam[2]], randomTurn()))));
+    }
+    turned = v => { const vv = v.slice(), ax = unit([gauss(), gauss(), gauss()]);
+      put(cholL(turnS(shapeMatrix(q.iL.map(i=> v[i])), rotation(ax, 0.02))))(vv); return vv; };
+  } else {
+    const B = BODIES[q.shapeType];
+    names = [...q.iW, ...q.iR].map(i=> model.par[i].name);
+    // The body's widths along x, y, z as its own W parameters.
+    const Wof = (wx, wy, wz) => B.W.length === 2 ? [(wx + wy)/2, wz] : [wx, wy, wz];
+    // Its mean width with every W = 1 (over the sphere of directions): the sphere-like
+    // start has the isotropic fit's width y0 on average.
+    let kappa = 0;
+    for (let i = 0, M = 400; i < M; i++){
+      const z = 1 - (2*i + 1)/M, rr = Math.sqrt(1 - z*z), ph = i*2.399963229728653, t = [rr*Math.cos(ph), rr*Math.sin(ph), z];
+      kappa += (B.base === 'ball' ? 1 : 0.75/columnLengthV(B.base, t))/M;
+    }
+    const w0 = y0/kappa;
+    const put = (W, R) => v => {
+      W.forEach((t, i)=> { v[q.iW[i]] = t; });
+      q.iR.forEach(i=> { v[i] = 0; });
+      quatOfMat(R).forEach((t, i)=> { v[q.iQ[i]] = t; });
+    };
+    // The frame with z along e and x along a low-index direction across it (else any).
+    const frameAlong = e => {
+      const z = tilt(e), x0 = axesLow.find(a=> Math.abs(a[0]*e[0] + a[1]*e[1] + a[2]*e[2]) < 0.1) || cross(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
+      const xd = x0.map((t, i)=> t - (x0[0]*z[0] + x0[1]*z[1] + x0[2]*z[2])*z[i]), x = tilt(unit(xd)), xo = unit(x.map((t, i)=> t - (x[0]*z[0] + x[1]*z[1] + x[2]*z[2])*z[i])), y = cross(z, xo);
+      return [xo[0], y[0], z[0],  xo[1], y[1], z[1],  xo[2], y[2], z[2]];
+    };
+    starts.push(put(Wof(w0, w0, w0), frameAlong(axesLow[0] || [0, 0, 1])));
+    for (const e of axesLow){
+      starts.push(put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(e)));
+      starts.push(put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(e)));
+    }
+    while (starts.length < SHAPE_STARTS + 1) starts.push(put(Wof(...[0, 1, 2].map(()=> w0*Math.exp(0.8*gauss()))), randomTurn()));
+    // The orientation reached becomes the reference, r = 0: the chart is fresh at the
+    // start of each full refinement, far from |r| = π.
+    rebase = v => { const vv = v.slice(), R = bodyFrame(q, v); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
+    turned = v => { const vv = rebase(v), R = mul(bodyFrame(q, v), rotation(unit([gauss(), gauss(), gauss()]), 0.02)); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
+    // The body set on the lattice: its best-placed axis exactly on its lattice
+    // direction; a body with three axes, its next one on each of the simplest lattice
+    // directions exactly normal to the first (a projection of its own nearest direction
+    // had left a held axis 7° off its label, and the free fit's in-plane frame had held
+    // a plate on [1-13]); a body of revolution, its axis alone. [] when no axis is within
+    // SNAP_DEG of a lattice direction.
+    snaps = v => {
+      const R = bodyFrame(q, v), col = i => [R[i], R[3 + i], R[6 + i]], dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+      // The first axis held: the most telling (its width the farthest from the other
+      // two: a plate's normal), not merely the nearest to a lattice direction — an
+      // in-plane axis 0.5° from [1-13] had held a plate's whole frame there.
+      const Wx = B.axes(q.iW.map(i=> v[i])), gap = i => Math.min(...[0, 1, 2].filter(j=> j !== i).map(j=> Math.abs(Wx[i] - Wx[j])));
+      const cand = (B.rot === 2 ? [2] : [0, 1, 2]).map(i=> ({ i, ...lattDirection(q, col(i)) })).filter(c=> c.angle <= SNAP_DEG).sort((a, b)=> gap(b.i) - gap(a.i));
+      if (!cand.length) return [];
+      const p = cand[0].i, cp = cand[0].vec.map(t=> t*Math.sign(dot(cand[0].vec, col(p)) || 1));
+      const frameOf = (s, ds) => {
+        let cs = unit(ds.map((t, j)=> t - dot(ds, cp)*cp[j]));
+        if (dot(cs, col(s)) < 0) cs = cs.map(t=> -t);
+        const t = 3 - p - s, cyc = (s - p + 3) % 3 === 1, ct = cyc ? cross(cp, cs) : cross(cs, cp);
+        const C = []; C[p] = cp; C[s] = cs; C[t] = ct;
+        const vv = v.slice();
+        q.iR.forEach(i=> { vv[i] = 0; });
+        quatOfMat([C[0][0], C[1][0], C[2][0], C[0][1], C[1][1], C[2][1], C[0][2], C[1][2], C[2][2]]).forEach((x, i)=> { vv[q.iQ[i]] = x; });
+        return vv;
+      };
+      if (B.rot === 2) return [frameOf(p === 2 ? 0 : 2, col(p === 2 ? 0 : 2))];
+      // Each candidate goes to whichever of the other two axes it is nearer.
+      return latticeAcross(q, cp, null, 0.01, 3).map(({ vec })=>{
+        const others = [0, 1, 2].filter(i=> i !== p), s = Math.abs(dot(vec, col(others[0]))) >= Math.abs(dot(vec, col(others[1]))) ? others[0] : others[1];
+        return frameOf(s, vec);
+      });
+    };
+  }
+  names = free.filter(nm=> nm !== pf + 'Ys').concat(names);
+  const steps = starts.length + SHAPE_FULL + 2;
   let done = 0;
   const tick = ()=> { done++; if (opts.onShape) opts.onShape(Math.min(1, done/steps)); };
   const brief = [];
-  for (const L of seeds){
+  for (const put of starts){
     const vv = vIso.slice(); vv[q.iYs] = 0;
-    L.forEach((t, i)=> { vv[q.iL[i]] = t; });
+    put(vv);
     setParams(model, vv);
     try { const r = refine(model, { free: names, maxIter: 8, audit: false }); brief.push({ v: model.v.slice(), chi: chiTot(r) }); } catch(e){}
     tick();
@@ -1754,7 +2252,7 @@ function freeShape(model, k, res, free, opts){
   const finals = [];
   // A full refinement from v; kept as the best when it is.
   const full = v => {
-    setParams(model, v);
+    setParams(model, rebase(v));
     let r; try { r = refine(model, { free: names, maxIter: opts.maxIter || 60 }); } catch(e){ return null; }
     if (!best || chiTot(r) < chiTot(best.res)) best = { res: r, v: model.v.slice() };
     tick();
@@ -1766,26 +2264,55 @@ function freeShape(model, k, res, free, opts){
     // order effects of a turn cancel over a family, the esds blow up and the shift test
     // passes at once). Again from the best turned a little, until χ² stops falling.
     for (let p = 0; p < 2; p++){
-      const before = chiTot(best.res), Lb = q.iL.map(i=> best.v[i]), vv = best.v.slice();
-      const ax = [gauss(), gauss(), gauss()], nn = Math.hypot(...ax);
-      cholL(turnS(shapeMatrix(Lb), rotation(ax.map(t=> t/nn), 0.02))).forEach((t, i)=> { vv[q.iL[i]] = t; });
-      full(vv);
+      const before = chiTot(best.res);
+      full(turned(best.v));
       if (before - chiTot(best.res) < 0.5*Math.max(1, res.stats.chi2)) break;
     }
   }
   if (!best){ setParams(model, vIso); return null; }
-  // Kept only when the data support it: ΔBIC under −10, with χ² divided by the isotropic
-  // fit's χ²_ν (so that the model's own misfit is not taken for evidence) — five more
-  // parameters always lower χ² a little, and on an isotropic sample the shape was kept
-  // in 7 of 12 noise draws with ΔBIC near +40.
-  const cb = chiTot(best.res), dBIC = (cb - chiTot(res))/Math.max(1, res.stats.chi2) + (best.res.stats.P - res.stats.P)*Math.log(N);
+  // ΔBIC against the isotropic fit, with χ² divided by its χ²_ν (so that the model's own
+  // misfit is not taken for evidence).
+  const bic = r => (chiTot(r) - chiTot(res))/Math.max(1, res.stats.chi2) + (r.stats.P - res.stats.P)*Math.log(N);
+  let held = false, dBICfree = NaN, dBICheld = NaN, freeOff = null, freeW = null;
+  if (q.iW){
+    // A body: refined again with its exact faces (the rounded ones only steered the
+    // search), its axes free; then set on the lattice, its orientation held — a
+    // crystallite's faces are lattice planes more often than not, and a held axis is
+    // two or three parameters fewer. The lower ΔBIC is kept.
+    model.shapeSoft = null;
+    const refineFrom = (v, nm) => { setParams(model, rebase(v)); try { const r = refine(model, { free: nm, maxIter: opts.maxIter || 60 }); return { res: r, v: model.v.slice() }; } catch(e){ return null; } };
+    const ex = refineFrom(best.v, names);
+    if (ex) best = ex;
+    dBICfree = bic(best.res);
+    // The held candidates: the best of the lattice frames near the free fit.
+    let sn = null;
+    for (const vs of (snaps ? snaps(best.v) : [])){
+      const r = refineFrom(vs, names.filter(nm=> !q.iR.some(i=> model.par[i].name === nm)));
+      if (r && (!sn || chiTot(r.res) < chiTot(sn.res))) sn = r;
+    }
+    if (sn){
+      dBICheld = bic(sn.res);
+      // Held only where the data allow it as well: the free orientation no better than
+      // the held one by more than a 95 % χ² for its 2 or 3 turns. The BIC alone gave
+      // three turns' discount (25) to boxes whose true faces were 8° off ⟨111⟩.
+      const gain = (chiTot(sn.res) - chiTot(best.res))/Math.max(1, res.stats.chi2);
+      if (dBICheld < dBICfree && gain <= (q.iR.length === 2 ? 5.99 : 7.81)){
+        // How far the free orientation's axes were from the held ones (°).
+        const Rf = bodyFrame(q, best.v), Rh = bodyFrame(q, sn.v);
+        freeOff = [0, 1, 2].map(i=> Math.acos(Math.min(1, Math.abs(Rf[i]*Rh[i] + Rf[3 + i]*Rh[3 + i] + Rf[6 + i]*Rh[6 + i])))*R2D);
+        freeW = q.iW.map(i=> best.v[i]);
+        best = sn; held = true;
+      }
+    }
+  }
+  // Kept only when the data support it: ΔBIC under −10 — five more parameters always
+  // lower χ² a little, and on an isotropic sample the shape was kept in 7 of 12 noise
+  // draws with ΔBIC near +40.
+  const cb = chiTot(best.res), dBIC = bic(best.res);
   if (!(dBIC < -10)){ setParams(model, vIso); return { rejected: true, dBIC }; }
   setParams(model, best.v);
-  // Agreement: the fully refined starts within 2 χ²_ν of the best (two standard
-  // deviations of a χ² difference, with the misfit's own scale).
-  const tol = 2*Math.max(1, res.stats.chi2);
-  return { res: best.res, info: { starts: seeds.length, full: finals.length, agree: finals.filter(c=> c - cb < tol).length,
-    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2 } };
+  return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
+    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW } };
 }
 
 /* ---------- derived quantities ---------- */
@@ -1846,6 +2373,6 @@ function weightFractions(phases, scales, cov){
 // Sample displacement in mm from the refined `disp` (deg): Δ2θ = −(2s/R)·cosθ.
 function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 
-export { buildModel, calc, refine, cellSearch, autoRefine, sizeStrain, weightFractions, shapeOf,
+export { buildModel, calc, refine, cellSearch, autoRefine, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
          fcjNodes, addPeak, addPeakFCJ, shapeActive, HG2_FLOOR, K_SCHERRER };

@@ -1920,7 +1920,10 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-phase .rv-main b { color: var(--text); }
 .rv-phase .rv-sub { color: var(--muted); font-size: 12px; }
 .rv-phase .rv-del { flex: none; }
-.rv-phase .rv-shape { flex: none; white-space: nowrap; }
+/* The shape picker: as small as the row's buttons; in the accent once a free solid is
+   picked. */
+.rv-phase .rv-shape { flex: none; width: auto; max-width: 46%; padding: 4px 6px; font-size: 12px; }
+.rv-phase .rv-shape.is-on { border-color: var(--accent); color: var(--accent); }
 /* The peak widths under the pattern: the table (as the Analysis card's), the
    Williamson–Hall plot and the tests' box. */
 .rv-widths { margin-top: 16px; }
@@ -1932,6 +1935,25 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .peak-row.rv-pk-out { opacity: .5; }
 .peak-row.rv-pk-out td:first-child { text-decoration: line-through; }
 #xrdRvTests .rv-result { margin-top: 10px; }
+/* The refined solid under the results: a box like the peak table's. */
+.rv-solid { margin-top: 12px; padding: 10px 12px 12px; }
+/* XRPD — the crystallites' shape in 3D (xrd-shape3d.js). The view sizes its canvas
+   itself (square, 200–320 px, the container's width); these rules only centre it,
+   own the drag (no page scroll or zoom under a finger) and style the caption. */
+.shape3d { margin: 0 auto; }
+.shape3d-canvas {
+  display: block; margin: 0 auto;
+  touch-action: none; cursor: grab;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+.shape3d-canvas.is-grabbing { cursor: grabbing; }
+.shape3d-canvas:focus { outline: none; }
+.shape3d-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shape3d-cap {
+  margin: 4px auto 0; text-align: center;
+  font-size: 12px; line-height: 1.35; color: var(--muted);
+}
 .rv-result .pg-stat .txt-meta { font-size: 12px; margin-left: 4px; }
 .rv-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
 /* What a refinement gives, in a box like the Caglioti fit's: one value a line. */

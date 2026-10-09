@@ -11,6 +11,7 @@ import { Plot } from './plot.js';
 import { parseCif, expandAtoms, findSymmetry, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
 import { buildModel, calc } from './xrd-rietveld.js';
+import { shapeView } from './xrd-shape3d.js';
 
 // Names, formulae and notes come from CIF files, which may be anyone's: they go into the
 // page as text, never as markup.
@@ -133,7 +134,21 @@ export function createRietveld(host){
     // asym: absent from a standard refined before the asymmetry was modelled (none then).
     return r && r.params ? { U: r.params.U, V: r.params.V, W: r.params.W, X: r.params.X, Y: r.params.Y, asym: r.params.asym || 0, zero: r.params.zero } : null;
   }
-  const phaseData = list => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color, shape: !!p.shape }));
+  const phaseData = list => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color, shape: p.shape || false }));
+  // The crystallite shapes a phase can refine (xrd-rietveld SHAPE_TYPES): none (the
+  // isotropic size) or a free solid. A project saved with the one free shape there was
+  // (true) has the ellipsoid.
+  const SHAPES = [['', 'isotropic size'], ['ellipsoid', 'ellipsoid'], ['spheroid', 'spheroid (two axes equal)'], ['cylinder', 'cylinder'], ['ellcyl', 'elliptic cylinder'], ['box', 'box']];
+  const shapeOpt = v => v === true ? 'ellipsoid' : SHAPES.some(([k])=> k && k === v) ? v : false;
+  // The solid a result was refined with, from its parameters' names (each solid has its
+  // own), and only when they are in use (any width ≠ 0).
+  function shapeOfParams(P, id){
+    const g = n => P['p' + id + '.' + n], has = n => ('p' + id + '.' + n) in P;
+    // v420's ellipsoid (S = L·Lᵀ) is 'ellipsoidL'; the bodies by their widths' names.
+    if (['L11', 'L22', 'L33'].some(n=> g(n))) return 'ellipsoidL';
+    const type = has('Ea') ? 'ellipsoid' : has('Wd') ? 'cylinder' : has('Wh') ? 'ellcyl' : has('Wb') ? 'box' : has('Wc') ? 'spheroid' : null;
+    return type && ['Ea', 'Eb', 'Ec', 'Wa', 'Wb', 'Wc', 'Wd', 'Wh'].some(n=> g(n)) ? type : false;
+  }
   // optB: the ΔB option as it was when the run started, the same for all its files (an
   // undo during a run would otherwise change it between them).
   function payloadFor(f, optB = refineB){
@@ -175,7 +190,7 @@ export function createRietveld(host){
   function curvesOf(f, r){
     // The phases as the result was refined: with the free shape when its parameters are
     // there, whatever the toggle says now.
-    const ph = phaseData(phasesFor(f)).map(p=> ({ ...p, shape: ['L11','L22','L33'].some(n=> r.params['p' + p.id + '.' + n]) }));
+    const ph = phaseData(phasesFor(f)).map(p=> ({ ...p, shape: shapeOfParams(r.params, p.id) }));
     const model = buildModel({ x: f.x, y: f.y, varMul: f.varMul || null, instr: instrOf(f), phases: ph });
     return calc(model, r.params);
   }
@@ -231,7 +246,54 @@ export function createRietveld(host){
       + groups.map(g=> `<span><i style="background:${g.color}"></i>${esc(g.name)}</span>`).join('');
     $('xrdRvInstr').textContent = instrLine(instrOf(f));
     renderResults(f, r);
+    renderSolids(f, r);
     renderWidths(f, r);
+  }
+
+  // ---- the crystallites' shape: each phase's refined solid in 3D (xrd-shape3d), the
+  // crystal's directions on it with their uncertainty cones; drag to turn it ----
+  let solidViews = [], solidsKey = '';
+  // How each solid was last turned (xrd-shape3d getView), by sample and solid: coming
+  // back to a sample shows it as it was left.
+  const solidTurns = new Map();
+  const DL_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>';
+  function solidCaption(s){
+    const n = v => Number.isFinite(v) ? (v < 10 ? v.toFixed(1) : v.toFixed(0)) : '∞';
+    const [x, y, z] = s.dims;
+    return s.type === 'spheroid' ? `spheroid, ${s.kind}: ${n(x)} nm across, ${n(z)} nm along its axis`
+      : s.type === 'cylinder' ? `cylinder, ${s.kind}: diameter ${n(x)} nm, height ${n(z)} nm`
+      : s.type === 'ellcyl' ? `elliptic cylinder, ${s.kind}: ${n(x)} × ${n(y)} nm across, height ${n(z)} nm`
+      : s.type === 'box' ? `box, ${s.kind}: ${n(x)} × ${n(y)} × ${n(z)} nm`
+      : `ellipsoid, ${s.kind}: axes ${n(x)} × ${n(y)} × ${n(z)} nm`;
+  }
+  function renderSolids(f, r){
+    const box = $('xrdRvSolids'), list = (r && r.solids) || [];
+    // The same solids: the views stay as they were turned.
+    const key = f.name + JSON.stringify(list);
+    if (key === solidsKey) return;
+    solidsKey = key;
+    solidViews.forEach(({ view, turnKey })=>{ if (view.getView) solidTurns.set(turnKey, view.getView()); view.destroy(); });
+    solidViews = [];
+    if (solidTurns.size > 50) solidTurns.delete(solidTurns.keys().next().value);
+    box.innerHTML = '';
+    box.style.display = list.length ? '' : 'none';
+    list.forEach(s=>{
+      const color = (phasesFor(f).find(p=> p.id === s.id) || {}).color;
+      const wrap = document.createElement('div');
+      wrap.className = 'peak-box rv-solid';
+      wrap.innerHTML = `<div class="peak-box-head"><span class="txt-mini">Crystallite shape${list.length > 1 ? ' · ' + esc(s.name) : ''}</span><button class="btn table-csv-btn" title="Download PNG">${DL_SVG}</button></div><div class="rv-solid-view"></div>`;
+      box.appendChild(wrap);
+      const view = shapeView(wrap.querySelector('.rv-solid-view'), { color });
+      view.set({ type: s.type, dims: s.dims, frame: s.frame, dirs: s.dirs, caption: solidCaption(s) });
+      const turnKey = f.name + '|' + s.id + '|' + JSON.stringify([s.type, s.dims, s.frame]);
+      if (view.setView && solidTurns.has(turnKey)) view.setView(solidTurns.get(turnKey));
+      wrap.querySelector('button').onclick = ()=>{
+        const a = document.createElement('a');
+        a.href = view.png(); a.download = `XRPD_shape_${f.label}_${s.name}.png`.replace(/[^\w.-]+/g, '_');
+        document.body.appendChild(a); a.click(); a.remove();
+      };
+      solidViews.push({ view, turnKey });
+    });
   }
 
   // ---- the peaks' own widths (xrd-widths, run by the worker): the table, the
@@ -407,7 +469,7 @@ export function createRietveld(host){
         + `<div class="rv-sub">${SYSTEM_NAMES[q.system] || esc(q.system)}, ${q.order} symmetry operations · ${cellTxt} · ${q.atoms.length} atoms in the cell${builtIn ? ' · built in, for the standard (cell held at the certified value)' : p.file ? ' · ' + esc(p.file) : ''}</div>`
         + (q.notes.length ? `<div class="rv-sub">${esc(q.notes.join('; '))}</div>` : '')
         + q.warnings.map(w=> `<div class="rv-sub" style="color:var(--warn)">⚠ ${esc(w)}</div>`).join('')
-        + `</div>${builtIn ? '' : `<button class="btn btn-sm rv-shape${p.shape ? ' is-on' : ''}" data-shape="${p.id}" aria-pressed="${!!p.shape}" title="Free shape: refine the crystallites' shape as an ellipsoid of apparent size of any proportions and orientation, each reflection of a family with its own width. Needs the standard's profile; it tries several starting shapes, so it takes tens of seconds a sample, minutes for a phase with many reflections. Kept only when the data support it against an isotropic size">free shape</button>`
+        + `</div>${builtIn ? '' : `<select class="rv-shape${p.shape ? ' is-on' : ''}" data-shape="${p.id}" aria-label="Crystallite shape of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Crystallite shape: the isotropic size, or a free solid of any proportions and orientation (each reflection of a family with its own width). Needs the standard's profile; it tries several starting shapes, so it takes tens of seconds a sample, minutes for a phase with many reflections. Kept only when the data support it against an isotropic size">${SHAPES.map(([k, t])=> `<option value="${k}"${(shapeOpt(p.shape) || '') === k ? ' selected' : ''}>${k ? 'free shape: ' + t : t}</option>`).join('')}</select>`
           + `<button class="peak-del is-danger idle-dim rv-del" data-del="${p.id}" title="Remove phase">${X_SVG(13)}</button>`}</div>`;
     };
     phases.forEach(p=> rows.push(row(p, false)));
@@ -437,14 +499,20 @@ export function createRietveld(host){
     $('xrdRvClear').disabled = busy;
     const b = $('xrdRvOptB');
     b.classList.toggle('is-on', refineB); b.setAttribute('aria-pressed', String(refineB)); b.disabled = busy;
+    $('xrdRvPhaseList').querySelectorAll('.rv-shape').forEach(sel=> { sel.disabled = busy; });
   }
 
   $('xrdRvAddCif').onclick = ()=> $('xrdRvCifInput').click();
   $('xrdRvCifInput').addEventListener('change', e=>{ const fl = [...e.target.files]; e.target.value = ''; if (fl.length) addCifs(fl); });
-  $('xrdRvPhaseList').addEventListener('click', e=>{
-    // The free-shape option: for the next refinements (the results there keep theirs).
+  // The shape picked: for the next refinements (the results there keep theirs).
+  $('xrdRvPhaseList').addEventListener('change', e=>{
     const t = e.target.closest('[data-shape]');
-    if (t){ if (busy) return; const p = phases.find(q=> q.id === +t.dataset.shape); if (p){ p.shape = !p.shape; renderPhases(); host.commit(); } return; }
+    if (!t) return;
+    const p = phases.find(q=> q.id === +t.dataset.shape);
+    if (p && !busy){ p.shape = shapeOpt(t.value); host.commit(); }
+    renderPhases();
+  });
+  $('xrdRvPhaseList').addEventListener('click', e=>{
     const b = e.target.closest('[data-del]'); if (!b || busy) return;
     const id = +b.dataset.del;
     phases = phases.filter(p=> p.id !== id);
@@ -476,10 +544,10 @@ export function createRietveld(host){
       draw(preserve);
     },
     redraw(){ if (host.files().length) draw(true); },
-    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color, shape: !!p.shape })), nextId, idx, refineB, results: JSON.parse(JSON.stringify(results)) }; },
+    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color, shape: shapeOpt(p.shape) })), nextId, idx, refineB, results: JSON.parse(JSON.stringify(results)) }; },
     restore(s){
       s = s || {};
-      phases = (s.phases || []).flatMap(p=>{ try { return [{ ...p, prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
+      phases = (s.phases || []).flatMap(p=>{ try { return [{ ...p, shape: shapeOpt(p.shape), prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
       nextId = s.nextId || phases.reduce((m, p)=> Math.max(m, p.id + 1), 1);
       idx = s.idx || 0;
       results = s.results ? JSON.parse(JSON.stringify(s.results)) : {};
