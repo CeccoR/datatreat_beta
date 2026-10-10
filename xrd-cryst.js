@@ -289,6 +289,9 @@ const formulaText = f => Object.keys(f).map(el => el + (Math.abs(f[el] - 1) < 1e
    axis with a mirror normal to it), −1 or −3 (m-3, Fd-3m, R-3c…), or an orthorhombic
    symbol of mirrors and glides alone (Pnma). Anything else (Fm3m, an old notation) →
    null: not known, not checked. */
+const CENTRED_IT = new Set([5, 8, 9, 12, 15, 20, 21, 22, 23, 24, ...Array.from({ length: 12 }, (_, i) => 35 + i), ...Array.from({ length: 12 }, (_, i) => 63 + i),
+  79, 80, 82, 87, 88, 97, 98, 107, 108, 109, 110, 119, 120, 121, 122, 139, 140, 141, 142, 146, 148, 155, 160, 161, 166, 167,
+  196, 197, 199, 202, 203, 204, 206, 209, 210, 211, 214, 216, 217, 219, 220, 225, 226, 227, 228, 229, 230]);
 const CENTRO_IT = [[2, 2], [10, 15], [47, 74], [83, 88], [123, 142], [147, 148], [162, 167], [175, 176], [191, 194], [200, 206], [221, 230]];
 function centroOf(hm, n){
   if (n >= 1 && n <= 230) return CENTRO_IT.some(([a, b]) => n >= a && n <= b);
@@ -463,16 +466,21 @@ function parseCif(text){
     const why = [];
     if (comp.checked && !comp.ok) why.push(`the atoms fill the cell with ${Object.keys(comp.found).map(el => `${el} ${fmtCount(comp.found[el])}`).join(', ')}, not the formula × Z`);
     else if (!comp.checked || !(Z > 0)){
-      const want = symbolSystem(hm, itNumber), letter = hm && /^[pabcifr]/i.test(hm.trim()) ? hm.trim()[0].toUpperCase() : null;
+      // The lattice letter from the H-M symbol, else from the Hall symbol ('-F 4 2 3'); with
+      // only the IT number, whether the lattice is centred at all.
+      const hallM = hall ? /^\s*(-?)\s*([pabcifr])/i.exec(hall) : null;
+      const want = symbolSystem(hm, itNumber), letter = hm && /^[pabcifr]/i.test(hm.trim()) ? hm.trim()[0].toUpperCase() : hallM ? hallM[2].toUpperCase() : null;
       const sym = findSymmetry(cell, atoms);
       const sysOk = !want || sym.system === want || (want === 'trigonal' && sym.system === 'hexagonal');
       const hexAxes = Math.abs(cell.gamma - 120) < 0.01 && same(cell.a, cell.b);
       const wantC = letter === 'R' ? (hexAxes ? 'R' : 'P') : letter;
-      const cenOk = !wantC || sym.centring === wantC;
-      const invOk = !centroOf(hm, itNumber) || sym.ops.some(o => o.R.every((v, i) => v === -IDENT[i]));
+      const centredIT = itNumber && CENTRED_IT.has(itNumber) && !(itNumber >= 143 && itNumber <= 167 && !hexAxes);
+      const cenOk = wantC ? sym.centring === wantC : !centredIT || sym.centring !== 'P';
+      const centro = centroOf(hm, itNumber) || (hallM && hallM[1] === '-');
+      const invOk = !centro || sym.ops.some(o => o.R.every((v, i) => v === -IDENT[i]));
       whole = sysOk && cenOk && invOk;
       if (!sysOk) why.push(`the atoms show ${sym.system} symmetry, the symbol ${want}`);
-      if (!cenOk) why.push(`the atoms lack the ${wantC} centring`);
+      if (!cenOk) why.push(`the atoms lack the ${wantC || 'lattice'} centring`);
       if (!invOk) why.push('the atoms lack the centre of symmetry the symbol has');
     }
     if (!whole) throw new Error(`The CIF names the space group ${hm ? hm.trim() : hall ? hall.trim() : 'No. ' + itNumber} but lists ${onlyIdentity ? 'only the identity (x, y, z) as its symmetry operations' : 'no symmetry operations'}, and they are not generated from the symbol: the ${sites.length} site${sites.length > 1 ? 's' : ''} given cannot be the whole cell (${why.join('; ')}). A CIF with its operations (_space_group_symop_operation_xyz) is needed: COD, ICSD and the Materials Project (symmetrized CIF) give them.`);
@@ -735,7 +743,7 @@ function classify(Rs, cell){
     const right = [alpha, beta, gamma].every(x => Math.abs(x - 90) < 0.01);
     constraint = right && same(a, b) && same(b, c) ? { kind:'cubic', params:['a'] } : conv('cubic symmetry in a non-standard cell');
   } else if (system === 'hexagonal' || system === 'trigonal'){
-    const R3 = Rs[ord.indexOf(3)];
+    const R3 = Rs[ord.indexOf(3)] || Rs[ord.indexOf(6)];   // a 6-fold without its 3-fold only in a set that is not a group
     if (aboutAxis(R3, 2)) constraint = { kind:'hexagonal', params:['a','c'] };
     else if (same(a, b) && same(b, c) && same(alpha, beta) && same(beta, gamma)) constraint = { kind:'rhombohedral', params:['a','alpha'] };
     else constraint = conv(`${system} symmetry in a non-standard cell`);
@@ -803,14 +811,19 @@ function findSymmetry(cell, atoms, tol = 0.01){
   for (const R of holohedry(G)){
     const Rx0 = apply3(R, x0), tried = [];
     for (const xj of ref){
-      const t = [snapT(xj[0] - Rx0[0]), snapT(xj[1] - Rx0[1]), snapT(xj[2] - Rx0[2])];
-      if (tried.some(u => dist2(u, t) < tol2)) continue;
-      tried.push(t);
-      const maps = sets.every(set => set.every(x => {
+      const raw = [mod1(xj[0] - Rx0[0]), mod1(xj[1] - Rx0[1]), mod1(xj[2] - Rx0[2])];
+      const snapped = raw.map(snapT);
+      if (tried.some(u => dist2(u, raw) < tol2)) continue;
+      tried.push(raw);
+      const mapsBy = t => sets.every(set => set.every(x => {
         const y = apply3(R, x); y[0] += t[0]; y[1] += t[1]; y[2] += t[2];
         return set.some(z => dist2(y, z) < tol2);
       }));
-      if (maps) ops.push({ R: R.slice(), t });
+      // The snapped translation (exact absences) when it maps the structure; else the one
+      // the atoms give: snapping moves t by up to 1.5e-3 of a cell edge, more than tol on
+      // a long axis when the origin is not on a symmetry element.
+      const t = mapsBy(snapped) ? snapped : mapsBy(raw) ? raw : null;
+      if (t && !ops.some(o => o.R.every((v, i) => v === R[i]) && dist2(o.t, t) < tol2)) ops.push({ R: R.slice(), t });
     }
   }
   if (!ops.length) ops.push(ident);   // only with inconsistent input (atoms on top of each other)

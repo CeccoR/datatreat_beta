@@ -165,18 +165,19 @@ function solveLinear(A, b){
       // accept filter) — report it instead of dropping it on the floor.
       if (!intensNode || !isFinite(start) || !isFinite(end)){ invalidFiles.push(f.name); continue; }
       existing.add(f.name);
-      let y = intensNode.textContent.trim().split(/\s+/).map(Number);
-      // Points counted through the automatic attenuator carry the factor that brings
-      // them back to the unattenuated scale; left out, the strongest peaks come out
-      // flattened, and their heights and widths with them.
+      const y = intensNode.textContent.trim().split(/\s+/).map(Number);
+      /* <intensities> are already on the unattenuated scale: the points counted through the
+         automatic attenuator were multiplied by its factor when the file was written
+         (<beamAttenuationFactors> says by how much; only the raw <counts> of XRDML 2.x
+         would need it, and those are not read here). Multiplied again, as up to v424,
+         an attenuated peak top came out its factor (10–200×) too high. Each point's
+         variance, for the counting uncertainty of the FWHMs (fwhmSigma) and the Rietveld
+         weights: var(y) = y·m, m the attenuation factor that scaled the counts, over the
+         counting time when the file holds a rate. Kept only where m is not 1 throughout,
+         as it almost always is. */
       const attNode = intensNode.parentNode && intensNode.parentNode.getElementsByTagName('beamAttenuationFactors')[0];
       const att = attNode ? attNode.textContent.trim().split(/\s+/).map(Number) : null;
       const useAtt = att && att.length === y.length && att.every(isFinite);
-      if (useAtt) y = y.map((v, i)=> v*att[i]);
-      /* Each point's variance, for the counting uncertainty of the FWHMs (fwhmSigma):
-         var(y) = y·m, m the attenuation factor that scaled the counts, over the
-         counting time when the file holds a rate. Kept only where m is not 1
-         throughout, as it almost always is. */
       const rate = /cps|\/s|per/i.test(intensNode.getAttribute('unit') || '');
       const ctNode = intensNode.parentNode && intensNode.parentNode.getElementsByTagName('commonCountingTime')[0];
       const tc = ctNode ? parseFloat(ctNode.textContent) : NaN, perT = rate && tc > 0 ? 1/tc : 1;

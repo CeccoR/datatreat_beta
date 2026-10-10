@@ -96,7 +96,9 @@ export function createRietveld(host){
   function instrOf(f){
     if (f.instr) return f.instr;
     try {
-      const text = f.rawBytes ? new TextDecoder().decode(f.rawBytes) : '';
+      // (the bytes come back from a saved state, or a tab switch, as a plain array)
+      const b = f.rawBytes, u8 = b == null ? null : b instanceof Uint8Array ? b : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : Array.isArray(b) ? Uint8Array.from(b) : null;
+      const text = u8 ? new TextDecoder().decode(u8) : '';
       f.instr = text ? readXrdmlInstrumentText(text) : null;
     } catch(e){ f.instr = null; }
     return f.instr;
@@ -131,8 +133,11 @@ export function createRietveld(host){
 
   // What a pattern's refinement starts from: the standard gives the samples its
   // instrumental profile and zero once it is refined.
+  // The role a result was refined in: as the standard (the built-in LaB6 alone) or as a
+  // sample; null for a result too old to say.
+  const roleOf = r => r.standard != null ? !!r.standard : Array.isArray(r.phases) ? r.phases.length === 1 && r.phases[0] === lab6.id : null;
   function irf(){
-    const std = host.files().find(isStd), r = std && results[std.name];
+    const std = host.files().find(isStd), r = std && results[std.name] && roleOf(results[std.name]) !== false ? results[std.name] : null;
     // asym: absent from a standard refined before the asymmetry was modelled (none then).
     return r && r.params ? { U: r.params.U, V: r.params.V, W: r.params.W, X: r.params.X, Y: r.params.Y, asym: r.params.asym || 0, zero: r.params.zero } : null;
   }
@@ -193,7 +198,7 @@ export function createRietveld(host){
         const res = await runInWorker(payloadFor(f, ph), (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`); });
         if (!res) break;
         // (the phases it was refined with: a CIF added meanwhile is not among them)
-        results[f.name] = { ...res, phases: (isStd(f) ? [lab6] : ph).map(p=> p.id), irf: isStd(f) ? null : irf(), at: Date.now() };
+        results[f.name] = { ...res, standard: isStd(f), phases: (isStd(f) ? [lab6] : ph).map(p=> p.id), irf: isStd(f) ? null : irf(), at: Date.now() };
         if (f === host.files()[idx]) draw();
       }
       setStatus('');
@@ -585,6 +590,10 @@ export function createRietveld(host){
       if (!fs.length) return;
       const names = new Set(host.allFiles().map(f=> f.name));
       Object.keys(results).forEach(k=>{ if (!names.has(k)) delete results[k]; });
+      // A result refined in the other role (the standard chosen, or changed, since) is not
+      // this file's any more: a sample fit of the standard's file had given the samples
+      // its profile and zero as the instrument's.
+      host.allFiles().forEach(f=>{ const r = results[f.name]; if (r && roleOf(r) != null && roleOf(r) !== isStd(f)) delete results[f.name]; });
       renderPhases();
       draw(preserve);
     },

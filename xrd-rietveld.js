@@ -637,7 +637,10 @@ function latticeAcross(q, n, R0, tolDeg = 5, count = 2){
     out.push(c);
   }
   const canon = t => t.find(x=> x !== 0) < 0 ? t.map(x=> -x) : t;
-  return out.map(({ tc, vec })=> ({ uvw: '[' + idxText(canon(R0 ? [0, 1, 2].map(r=> R0[3*r]*tc[0] + R0[3*r + 1]*tc[1] + R0[3*r + 2]*tc[2]) : tc)) + ']', vec }));
+  return out.map(({ tc, vec })=>{
+    const dir = canon(R0 ? [0, 1, 2].map(r=> R0[3*r]*tc[0] + R0[3*r + 1]*tc[1] + R0[3*r + 2]*tc[2]) : tc);
+    return { uvw: '[' + idxText(dir) + ']', vec: alongLabel(q, R0, dir, vec) };
+  });
 }
 // A turn by phi about the unit axis n (row-major).
 function turnAbout(n, phi){
@@ -789,7 +792,7 @@ function shapeOf(model, params, k, res){
   const ref = lone >= 0 ? lone : kind === 'needle' ? 2 : 0;
   return { type: 'ellipsoidL', kind, groups: groups.map(g=> ({ axes: g.axes, D: g.D, Desd: g.Desd })),
     across: lone >= 0 ? latticeAcross(q, dirs[lone].vec, dirs[lone].R).map(d=> ({ ...d, esdAngle: turnEsd(lone) })) : [],
-    axes: framedAxes(dirs, ref).map((d, i)=>{
+    axes: framedAxes(q, dirs, ref).map((d, i)=>{
       const grouped = inGroup(i);
       return { ...d, D: axes[i].D, Desd: grouped ? NaN : axes[i].Desd, e: axes[i].e, esdAngle: turnEsd(i),
                resolved: !grouped, group: grouped ? groups.findIndex(g=> g.axes.includes(i)) : -1 };
@@ -800,12 +803,35 @@ function shapeOf(model, params, k, res){
 // The lattice directions of a solid's axes in one frame: the Laue operation that makes
 // the reference axis's direction its family's first member, applied to the others too
 // (two of one family, a plate's [110] normal and its [1-10] width, then read apart).
-function framedAxes(dirs, ref){
+// Each axis's vector is turned to point along the direction its label names in that
+// frame, as the cell's a, b, c drawn in it (cellAxes) do: on the side of the axis found,
+// half of the arrows had pointed against the triad's own [001].
+function framedAxes(q, dirs, ref){
   const R0 = dirs[ref].R, canon = t => t.find(x=> x !== 0) < 0 ? t.map(x=> -x) : t;
   return dirs.map((d, i)=>{
     const t = d.tc, dir = i === ref ? d.dir : canon([0, 1, 2].map(r=> R0[3*r]*t[0] + R0[3*r + 1]*t[1] + R0[3*r + 2]*t[2]));
-    return { dir, label: d.family ? d.label : '[' + idxText(dir) + ']', uvw: '[' + idxText(dir) + ']', angle: d.angle, vec: d.vec };
+    return { dir, label: d.family ? d.label : '[' + idxText(dir) + ']', uvw: '[' + idxText(dir) + ']', angle: d.angle, vec: alongLabel(q, R0, dir, d.vec) };
   });
+}
+// A Laue operation made proper: −1 is in every Laue group, and an improper frame drew the
+// cell's a, b, c left-handed (half the time, as the first operation of an orbit came).
+function inv3(m){
+  const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
+  return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det];
+}
+function properOp(R){
+  const det = R[0]*(R[4]*R[8] - R[5]*R[7]) - R[1]*(R[3]*R[8] - R[5]*R[6]) + R[2]*(R[3]*R[7] - R[4]*R[6]);
+  return det < 0 ? R.map(x=> -x) : R;
+}
+// vec (a Cartesian unit vector along ± the crystal direction labelled dir in the frame
+// R0, conventional indices) turned onto dir's own sense: the crystal direction R0⁻¹·dir.
+function alongLabel(q, R0, dir, vec){
+  if (!R0 || !vec) return vec;
+  const B = q.Bm, M = q.constraint && q.constraint.basis, Ri = inv3(R0), Bi = inv3(B);
+  const tc = [0, 1, 2].map(r=> Ri[3*r]*dir[0] + Ri[3*r + 1]*dir[1] + Ri[3*r + 2]*dir[2]);
+  const t = M ? [M[0]*tc[0] + M[1]*tc[1] + M[2]*tc[2], M[3]*tc[0] + M[4]*tc[1] + M[5]*tc[2], M[6]*tc[0] + M[7]*tc[1] + M[8]*tc[2]] : tc;
+  const c = [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
+  return c[0]*vec[0] + c[1]*vec[1] + c[2]*vec[2] < 0 ? vec.map(x=> -x) : vec;
 }
 /* A body's shape (spheroid, cylinder, elliptic cylinder, box): { type, kind, dims:
    [{ name, D, Desd }], axes: [{ role, D?, e, dir, label, uvw, angle, vec, esdAngle,
@@ -916,7 +942,7 @@ function bodyShapeOf(model, v, k, res){
   const shortest = [0, 1, 2].sort((a, b)=> dimAlong[a] - dimAlong[b])[0];
   const refAxis = type === 'box' ? shortest : type === 'ellipsoid' ? ([0, 1, 2].filter(own).length === 1 ? [0, 1, 2].find(own) : shortest) : 2;
   const order = roles.map(([, i])=> i), dirs = order.map(i=> lattDirection(q, col(i), held));
-  const refIx = Math.max(0, order.indexOf(refAxis)), framed = framedAxes(dirs, refIx);
+  const refIx = Math.max(0, order.indexOf(refAxis)), framed = framedAxes(q, dirs, refIx);
   const axes = roles.map(([role, i], n)=> { const esdAngle = tiltEsd(i);
     return { role, axis: i, ...framed[n], D: dimAlong[i], Desd: groupOf(i) >= 0 ? NaN : dimEsdAlong[i], Dmin: dimMinAlong[i], e: col(i), esdAngle, group: groupOf(i), own: own(i),
       resolved: own(i) && Number.isFinite(esdAngle) && esdAngle <= 30 }; });
@@ -986,7 +1012,7 @@ function lattDirection(q, e, exact = false){
   }
   const nice = [...orbit.values()].sort(({ r: a }, { r: b })=> (a.filter(x=> x < 0).length - b.filter(x=> x < 0).length) || (b[0] - a[0]) || (b[1] - a[1]) || (b[2] - a[2]))[0];
   const family = orbit.size > 2;
-  return { dir: nice.r, label: family ? '⟨' + idxText(nice.r) + '⟩' : '[' + idxText(nice.r) + ']', angle: best.angle, tc: t0, R: nice.R, family, vec };
+  return { dir: nice.r, label: family ? '⟨' + idxText(nice.r) + '⟩' : '[' + idxText(nice.r) + ']', angle: best.angle, tc: t0, R: properOp(nice.R), family, vec };
 }
 
 // The cell's a, b, c (the conventional cell's, when there is one) as Cartesian unit
@@ -1694,14 +1720,20 @@ function solveLinear(model, v, st, which){
     if (t === undefined){ t = dot(colOf(i), colOf(j)); cache.set(key, t); }
     return t;
   };
+  // The linear parameters held (not solved for) stay in y_c (assemble): their part comes
+  // off the data first, else the solve was the optimum with them at 0, not at their values.
+  const allLin = [...model.phases.map(q=> q.iScale), ...model.iBg];
   for (let pass = 0; pass < 4; pass++){
     const m = idx.length, cols = idx.map(colOf);
     const A = new Float64Array(m*m), g = new Float64Array(m);
+    const held = allLin.filter(i=> !idx.includes(i) && v[i]);
+    let yr = y;
+    if (held.length){ yr = Float64Array.from(y); for (const k of held){ const c = colOf(k), vk = v[k]; for (let i = 0; i < n; i++) yr[i] -= vk*c[i]; } }
     for (let a = 0; a < m; a++){
       const ca = cols[a];
-      const gk = 'y,' + idx[a];
-      let s = isBg(idx[a]) ? cache.get(gk) : undefined;
-      if (s === undefined){ s = 0; for (let i = 0; i < n; i++) s += w[i]*ca[i]*y[i]; if (isBg(idx[a])) cache.set(gk, s); }
+      const gk = 'y,' + idx[a], useCache = isBg(idx[a]) && !held.length;
+      let s = useCache ? cache.get(gk) : undefined;
+      if (s === undefined){ s = 0; for (let i = 0; i < n; i++) s += w[i]*ca[i]*yr[i]; if (useCache) cache.set(gk, s); }
       g[a] = s;
       for (let b = a; b < m; b++) A[a*m + b] = A[b*m + a] = isBg(idx[a]) && isBg(idx[b]) ? bgDot(idx[a], idx[b]) : dot(ca, cols[b]);
     }
@@ -2146,46 +2178,78 @@ function reflectionsInRange(model){
 
 /* ownEvidence(model, v, chi2) → per phase { under, alone, alpha, esd, own }: what of a
    phase the pattern shows apart from the others. under: the share of its calculated
-   intensity that lies under the other phases' (Σ min(y_p, y_others)/Σ y_p); alone: the
-   share where it is ≥ 2/3 of the Bragg intensity (and above 2 % of its own maximum);
-   alpha ± esd: its scale over those points alone, by a weighted fit of
-   y − y_c + y_p = α·y_p + c₀ + c₁(2θ − 2θ̄) — the line takes up what the background could
-   — the esd scaled by √χ². own: alone ≥ 5 % and α above 3 esd. A phase present gives
-   α ≈ 1 there; one that is not has no such region, or α ≈ 0 in it. The 2/3: on the
-   SrTiO3 pattern an absent NaCl has 4 % of its intensity there (at 1/2, 26 %, enough
-   for the tails a single size leaves to pass for it), a synthetic 5 wt % rutile 42 %
-   at α = 1.05(9); 2 wt % rutile comes out at 0.9(4), not told from 0.
+   intensity that lies under the other phases' (Σ min(y_p, y_others)/Σ y_p). alone: the
+   share of its intensity in lines that stand clear of the other phases' — no line of
+   theirs at least a tenth as high within 1.5 FWHM of either (Kα₂ included) — over its
+   lines above 2 % of its strongest. alpha ± esd: its scale over the points of those
+   lines alone (±1.5 FWHM), by a weighted fit of y − y_c + y_p = α·y_p + c₀ + c₁(2θ − 2θ̄)
+   with a line of its own for each stretch: the line takes up what the background and the
+   others' tails could. The esd is scaled by √χ². own: alone ≥ 5 % and α above 3 esd. A
+   phase present gives α ≈ 1 there; one that is not has no such line, or α ≈ 0 at them.
+   Clear of the others' lines, not ≥ 2/3 of the intensity (v419–v424): beside a broad
+   phase's Lorentzian tails a minority phase rarely holds 2/3 even at its own peaks, and a
+   5 wt % rutile at 36 esd (10 nm, beside 7 nm SrTiO3) was left out; an absent broad NaCl
+   whose lines sit within 0.6° of SrTiO3's has none clear and still goes.
    The same structure twice (twins: two size populations of one phase, as a broad
    sample may need) is one phase here: neither is weighed against the other. */
 const twins = (a, b) => a.constraint.kind === b.constraint.kind && a.atoms.length === b.atoms.length
   && Math.abs(a.mass - b.mass) <= 1e-3*a.mass && ['a','b','c'].every(l=> Math.abs(a.cell[l] - b.cell[l]) <= 0.02*a.cell[l]);
+const CLEAR_FWHM = 1.5, CLEAR_HEIGHT = 0.1;
 function ownEvidence(model, v, chi2){
   const st = evaluate(model, v), n = model.n, y = model.y, w = model.w, x = model.x;
   const yp = model.phases.map((q, k)=> st.pats[k].map(t=> t*v[q.iScale]));
+  // Each phase's lines in range (the α₁ ticks, scaled): centre, FWHM, height, and the
+  // reach of the line with its Kα₂.
+  const lam1 = model.lines[0].lam, lam2 = model.lines.length > 1 ? model.lines[1].lam : null;
+  const lines = model.phases.map((q, k)=>{
+    const tk = [];
+    phasePattern(model, v, k, new Float64Array(n), tk);
+    return tk.map(t=>{
+      const s2 = lam2 ? lam2/(2*t.d) : 2, d2 = s2 < 1 ? 2*(Math.asin(s2) - Math.asin(lam1/(2*t.d)))*R2D : 0;
+      return { I: t.I, h: t.I/Math.max(t.H, 1e-6), lo: t.tt - CLEAR_FWHM*t.H, hi: t.tt + d2 + CLEAR_FWHM*t.H };
+    });
+  });
   return model.phases.map((q, k)=>{
-    const P = yp[k], O = new Float64Array(n);
-    yp.forEach((Q, j)=> { if (j !== k && !twins(q, model.phases[j])) for (let i = 0; i < n; i++) O[i] += Q[i]; });
-    let sp = 0, sm = 0, mx = 0;
-    for (let i = 0; i < n; i++){ sp += P[i]; sm += Math.min(P[i], O[i]); if (P[i] > mx) mx = P[i]; }
-    const idx = [];
-    let su = 0, xm = 0;
-    for (let i = 0; i < n; i++) if (w[i] > 0 && P[i] > 0.02*mx && 3*P[i] >= 2*(P[i] + O[i])){ idx.push(i); su += P[i]; xm += x[i]; }
-    const under = sp > 0 ? sm/sp : 1, alone = sp > 0 ? su/sp : 0;
+    const P = yp[k], O = new Float64Array(n), rivals = [];
+    yp.forEach((Q, j)=> { if (j !== k && !twins(q, model.phases[j])){ for (let i = 0; i < n; i++) O[i] += Q[i]; rivals.push(...lines[j]); } });
+    let sp = 0, sm = 0;
+    for (let i = 0; i < n; i++){ sp += P[i]; sm += Math.min(P[i], O[i]); }
+    const under = sp > 0 ? sm/sp : 1;
+    const mine = lines[k], Imax = Math.max(0, ...mine.map(L=> L.I)), mark = new Uint8Array(n);
+    let sI = 0, sClear = 0;
+    for (const L of mine){
+      if (!(L.I > 0.02*Imax)) continue;
+      sI += L.I;
+      if (rivals.some(M=> M.h >= CLEAR_HEIGHT*L.h && M.hi > L.lo && M.lo < L.hi)) continue;
+      sClear += L.I;
+      for (let i = lowerBound(x, L.lo); i < n && x[i] <= L.hi; i++) mark[i] = 1;
+    }
+    const alone = sI > 0 ? sClear/sI : 0;
+    // the stretches of marked points, each with its own line
+    const runs = [];
+    for (let i = 0; i < n; i++){
+      if (!mark[i] || !(w[i] > 0)) continue;
+      if (runs.length && runs[runs.length - 1].end === i - 1) runs[runs.length - 1].end = i, runs[runs.length - 1].idx.push(i);
+      else runs.push({ end: i, idx: [i] });
+    }
+    const pts = runs.reduce((a, r)=> a + r.idx.length, 0);
     let alpha = NaN, esd = NaN;
-    if (idx.length > 10){
-      xm /= idx.length;
-      const A = new Float64Array(9), b = new Float64Array(3);
-      for (const i of idx){
-        const f = [P[i], 1, x[i] - xm], r = y[i] - st.yc[i] + P[i];
-        for (let a = 0; a < 3; a++){ b[a] += w[i]*f[a]*r; for (let c = 0; c < 3; c++) A[3*a + c] += w[i]*f[a]*f[c]; }
-      }
+    if (pts > 10){
+      const m = 1 + 2*runs.length, A = new Float64Array(m*m), b = new Float64Array(m);
+      runs.forEach((r, ir)=>{
+        const xm = r.idx.reduce((a, i)=> a + x[i], 0)/r.idx.length, c0 = 1 + 2*ir, c1 = c0 + 1;
+        for (const i of r.idx){
+          const f = [[0, P[i]], [c0, 1], [c1, x[i] - xm]], res = y[i] - st.yc[i] + P[i];
+          for (const [a, fa] of f){ b[a] += w[i]*fa*res; for (const [c, fc] of f) A[a*m + c] += w[i]*fa*fc; }
+        }
+      });
       // correlation-scaled, as everywhere here
-      const sc = [0, 1, 2].map(a=> A[4*a] > 0 ? 1/Math.sqrt(A[4*a]) : 0);
-      const As = A.map((t, ij)=> t*sc[Math.floor(ij/3)]*sc[ij%3]), bs = b.map((t, a)=> t*sc[a]);
-      const ch = cholesky(As, 3);
+      const sc = Array.from({ length: m }, (_, a)=> A[a*m + a] > 0 ? 1/Math.sqrt(A[a*m + a]) : 0);
+      const As = A.map((t, ij)=> t*sc[Math.floor(ij/m)]*sc[ij%m]), bs = b.map((t, a)=> t*sc[a]);
+      const ch = cholesky(As, m);
       if (!ch.bad.includes(0)){
-        alpha = cholSolve(ch, bs, 3)[0]*sc[0];
-        esd = Math.sqrt(cholInverse(ch, 3)[0]*Math.max(chi2, 1e-12))*sc[0];
+        alpha = cholSolve(ch, bs, m)[0]*sc[0];
+        esd = Math.sqrt(cholInverse(ch, m)[0]*Math.max(chi2, 1e-12))*sc[0];
       }
     }
     return { under, alone, alpha, esd, own: alone >= 0.05 && alpha > 3*esd };
@@ -2379,6 +2443,16 @@ function autoRefine(model, opts = {}){
     out.add(k); outWarn.push(`${nm(k)}: not detected — ${why}.`);
     vv[model.phases[k].iScale] = 0; model.phases[k].iLat.forEach((i, m)=> { vv[i] = len0[k][m]; });
   };
+  // What makes a significant phase implausible as a crystalline phase (null: nothing).
+  const implausible = k => {
+    const q = model.phases[k], v = model.v, at = (i, side) => side > 0 ? v[i] >= model.par[i].hi*(1 - 1e-9) : v[i] <= model.par[i].lo*(1 + 1e-9);
+    if (q.iLat.some(i=> /\.(a|b|c)$/.test(model.par[i].name) && (at(i, 1) || at(i, -1)))) return `its cell runs to the ±${LAT_RANGE*100} % bound`;
+    if (!irf) return null;
+    if (at(q.iYs, 1) || at(q.iXs, 1)) return `its ${at(q.iYs, 1) ? 'size' : 'strain'} broadening runs to its bound: it takes up a broad hump or the background`;
+    const ys = v[q.iYs], c = cellOf(model, v, k), edge = Math.max(c.a, c.b, c.c);
+    const D = ys > 0 ? K_SCHERRER*model.lines[0].lam/(ys*D2R) : Infinity;
+    return D < Math.max(10, 2*edge) ? `its crystallites come out ${(D/10).toFixed(1)} nm across, under two cells: it takes up a broad hump or the background` : null;
+  };
   let res, nIn, lastFree = [];
   for (;;){
     let free = [...scales.filter((_, k)=> !out.has(k)), ...lin];
@@ -2466,22 +2540,28 @@ function autoRefine(model, opts = {}){
     lastFree = free;
     const sig = significant(res), live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
     const lost = live.filter(k=> !sig[k]);
+    // Beside other phases, one that only takes up a broad hump or the background, however
+    // significant: its size or strain width run to their bounds, its crystallites under two
+    // cells across, or its cell to the ±10 % bound (an absent NaCl or quartz beside a
+    // SrTiO3 with an amorphous hump came out at 46–48(6) wt %, 0.8 nm, Ys on its bound).
+    const odd = live.length > 1 ? live.filter(k=> !lost.includes(k) && implausible(k)) : [];
     let drop = null;
-    if (!lost.length && live.length > 1){
+    if (!lost.length && !odd.length && live.length > 1){
       const ev = ownEvidence(model, model.v, res.stats.chi2);
       const weak = live.filter(k=> !ev[k].own).sort((a, b)=> ev[a].alone - ev[b].alone || ev[b].under - ev[a].under);
       if (weak.length && weak.length < live.length){
         const k = weak[0], e = ev[k], others = live.filter(j=> j !== k && !twins(model.phases[k], model.phases[j])).map(nm).join(', ');
         drop = { k, why: `${Math.round(e.under*100)} % of its calculated intensity lies under ${others}'s peaks, and ${e.alone < 0.05 || !Number.isFinite(e.alpha)
-          ? 'no part of the pattern is its own'
-          : `where it is alone (${Math.round(e.alone*100)} % of it) the pattern shows ${Math.round(e.alpha*100)} ± ${Math.round(e.esd*100)} % of the intensity calculated: not told from none`}` };
+          ? 'none of its lines stands clear of theirs'
+          : `at its lines clear of theirs (${Math.round(e.alone*100)} % of it) the pattern shows ${Math.round(e.alpha*100)} ± ${Math.round(e.esd*100)} % of the intensity calculated: not told from none`}` };
       }
     }
-    if (!lost.length && !drop) break;
+    if (!lost.length && !odd.length && !drop) break;
     // Again from the search's state, without them.
     const v2 = vSearch.slice();
     out.forEach(k=> { v2[model.phases[k].iScale] = 0; model.phases[k].iLat.forEach((i, m)=> { v2[i] = len0[k][m]; }); });
     lost.forEach(k=> leaveOut(k, 'its scale is not above 3 esd once the cells and widths are refined', v2));
+    odd.forEach(k=> leaveOut(k, implausible(k), v2));
     if (drop) leaveOut(drop.k, drop.why, v2);
     setParams(model, v2);
     stages.length = nSearch;
@@ -2490,7 +2570,7 @@ function autoRefine(model, opts = {}){
   const live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
   if (live.length > 1){
     const ev = ownEvidence(model, model.v, res.stats.chi2);
-    if (live.every(k=> !ev[k].own)) warnings.push(`${live.map(nm).join(', ')}: their peaks overlap throughout, with no part of the pattern any one's own: their fractions are not told apart.`);
+    if (live.every(k=> !ev[k].own)) warnings.push(`${live.map(nm).join(', ')}: their peaks overlap throughout, with no line of any one clear of the others': the pattern tells neither whether each is there nor their fractions (a candidate can take up the others' tails or the background: refine without it to compare).`);
     else live.forEach(k=> { if (ev[k].own && ev[k].alpha < 0.5) warnings.push(`${nm(k)}: where it is alone it shows ${Math.round(ev[k].alpha*100)} % of the intensity the fit gives it — its fraction rests mostly on peaks it shares.`); });
   }
   // The free shape of the phases that ask for it (p.shape), on top of everything else.

@@ -12,9 +12,9 @@ The *Rietveld* card of the XRPD module refines powder patterns against crystal s
 - the single-peak width tests;
 - what is reported, and with which uncertainties.
 
-Each choice comes with its reason, and with the evidence it rests on where there is some. Most of that evidence is in the code's own comments and in the commit messages from v418 to v424.
+Each choice comes with its reason, and with the evidence it rests on where there is some. Most of that evidence is in the code's own comments and in the commit messages from v418 to v425.
 
-The document follows the code as of v424. Functions are named with their file, e.g. `autoRefine` (`xrd-rietveld.js`), so that the references survive edits better than line numbers.
+The document follows the code as of v425. Functions are named with their file, e.g. `autoRefine` (`xrd-rietveld.js`), so that the references survive edits better than line numbers.
 
 ## Contents
 
@@ -118,7 +118,7 @@ The standard's refinement produces the instrumental resolution function (*irf*):
 
 The XRPD module reads each `.xrdml` file into 2θ (an evenly spaced grid from the file's start and end positions) and intensities (`xrd.js`).
 
-**Attenuator.** Points counted through the automatic attenuator are multiplied by their `beamAttenuationFactors`. Without that, the strongest peaks come out flattened, and their heights and widths with them.
+**Attenuator.** The `<intensities>` of an `.xrdml` are already on the unattenuated scale: the instrument multiplied the points counted through the automatic attenuator by its factor when it wrote the file (GSAS-II, xrayutilities and GenX read them so). The `beamAttenuationFactors` serve only for the variance below. Up to v424 they were applied a second time, which put an attenuated peak top 10–200× too high (the user's files have no attenuator, so their results were not affected). The raw `<counts>` of XRDML 2.x, which would need the factors, are not read.
 
 **Variance multiplier.** Each point carries `varMul`, so that var(y) = y·varMul:
 - the attenuation factor;
@@ -193,7 +193,7 @@ The XRPD module reads each `.xrdml` file into 2θ (an evenly spaced grid from th
   - Angles that form no cell are refused (V must exceed 10⁻⁶·abc): 120/120/120° gives V = 0, and 60/60/130° a negative metric determinant.
 - **Symmetry operations** come from `_space_group_symop_operation_xyz` or `_symmetry_equiv_pos_as_xyz`.
   - Each is parsed strictly. A misread operation would silently produce a wrong structure, so an operation with a non-integer rotation or |det R| ≠ 1 is dropped, with a warning. The file is read with the rest, and the group check then usually reports the list as incomplete.
-  - Translations are snapped to multiples of 1/24 within 1.5·10⁻³, so that the absence test h·t ∈ ℤ stays exact.
+  - Translations are snapped to multiples of 1/24 within 1.5·10⁻³, so that the absence test h·t ∈ ℤ stays exact, when the snapped one still maps the structure; else the translation the atoms give is kept. Up to v424 only the snapped one was tried: with the origin off a symmetry element, the snap could move the images by more than the tolerance on a long axis (0.018 Å for a = 12 Å), and operations were lost (a YAG P1 file at a random origin lost some in 67 shifts of 200).
   - A missing identity is added.
   - A list that is not a group is reported ("the list looks incomplete").
   - So is a centred symbol whose centring translations are missing.
@@ -214,7 +214,7 @@ The XRPD module reads each `.xrdml` file into 2θ (an evenly spaced grid from th
 - **A named group whose operations are missing is refused.** Its sites are almost always the asymmetric unit only. Read as P1, they would fill the cell in part and give a wrong pattern with no error: rutile gives 2 atoms instead of 6, the cell found orthorhombic, and (211) the strongest line.
   - An operation list that holds the identity alone, x, y, z, counts as none.
   - With Z given, the test compares the atoms with the formula × Z.
-  - Without Z, the formula is no evidence: Z would be inferred from the atoms, and an asymmetric unit that holds whole formula units would pass by construction. The atoms must then show by themselves the crystal system and the centring the symbol names, and, for a centrosymmetric group, a centre of symmetry (from the IT number, or from the symbol: a '/', −1 or −3, or an orthorhombic symbol of mirrors and glides). So NaCl named Fm-3m, given as Na and Cl, is refused (no F centring), and so is an asymmetric unit of P-1 in general positions (no inversion).
+  - Without Z, the formula is no evidence: Z would be inferred from the atoms, and an asymmetric unit that holds whole formula units would pass by construction. The atoms must then show by themselves the crystal system and the centring the symbol names, and, for a centrosymmetric group, a centre of symmetry (from the IT number, or from the symbol: a '/', −1 or −3, or an orthorhombic symbol of mirrors and glides; from a Hall symbol, its leading '−'). The lattice letter comes from the H-M symbol, else from the Hall symbol; with only an IT number, a centred group's number wants some centring (up to v424, a group named by its IT number or Hall symbol alone passed every test). So NaCl named Fm-3m, given as Na and Cl, is refused (no F centring), and so is an asymmetric unit of P-1 in general positions (no inversion).
   - A lone special position can still pass, since a site alone in its cell shows the lattice's full symmetry: Mg named P6₃/mmc, given as one Mg, is read with one atom instead of two. A file that passes is read as P1 with a warning that the cell is filled only if all its atoms are listed.
 
 **Filling the cell.** `expandAtoms` applies the operations to every site. Images closer than 10⁻³ on every axis are one position: "a special position written with three decimals, 0.333/0.667, yields images exactly 0.001 apart that are still one position". Duplicates are removed per site only, so two species sharing a site (a mixed occupancy) both stay.
@@ -772,18 +772,20 @@ A candidate phase that is not in the sample still takes what misfit its peaks ca
 - an absent LaB₆, held at its cell with the starting widths, came out at 2.9 esd yet 35(8) wt %;
 - a broad absent NaCl, its strong lines within 0.6° of SrTiO₃'s, took 40 wt % of a SrTiO₃ pattern by fitting the tails a single crystallite size leaves.
 
-Two tests decide, and a phase that fails is **left out**: scale 0, its cell back to the file's (for its ticks), and nothing of it refined further.
+Three tests decide, and a phase that fails is **left out**: scale 0, its cell back to the file's (for its ticks), and nothing of it refined further.
 
 1. **Its scale must stand above 3 esd.** This is tested after the first stage, and again after the last.
-2. **It must have intensity of its own** (`ownEvidence`, when several phases are present).
-   - **Its own region.** These are the points where the phase holds at least 2/3 of the calculated Bragg intensity (and more than 2 % of its own maximum).
-   - **The fit there:** y − y_c + P = α·P + c₀ + c₁(2θ − 2θ̄), with P the phase's calculated pattern. The straight line takes up what the background could.
-   - **Reading α.** A phase present gives α ≈ 1; one that is not has no such region, or α ≈ 0 in it.
-   - **The test.** The phase must have at least 5 % of its intensity in such regions, and α > 3 esd.
-   - **Why the 2/3 threshold:**
-     - an absent NaCl has 4 % of its intensity there (26 % at a ½ threshold, enough for the tails a single size leaves to pass for it);
-     - a synthetic 5 wt % rutile has 42 %, at α = 1.05(9). It is found every time beside nanocrystalline SrTiO₃;
-     - 2 wt % rutile comes out at 0.9(4), not told from 0.
+2. **It must be plausible as a crystalline phase** (when several phases are present). Beside other phases, a candidate that only takes up a broad hump or the background is not, however significant:
+   - its cell runs to the ±10 % bound;
+   - with the standard's profile, its size or strain broadening runs to its upper bound, or its crystallites come out smaller than twice its longest cell edge, or than 1 nm, whichever is larger.
+
+   An absent NaCl or quartz beside a SrTiO₃ with an unmodelled amorphous hump had come out at 46–48(6) wt %, 0.8 nm, its Ys on its bound, through both other tests.
+3. **It must have intensity of its own** (`ownEvidence`, when several phases are present).
+   - **Its clear lines.** Its lines above 2 % of its strongest that no line of another phase at least a tenth as high comes within 1.5 FWHM of (Kα₂ included).
+   - **The fit there:** over the points within 1.5 FWHM of those lines, y − y_c + P = α·P + c₀ + c₁(2θ − 2θ̄), with P the phase's calculated pattern and a straight line for each stretch: the lines take up what the background and the other phases' tails could.
+   - **Reading α.** A phase present gives α ≈ 1; one that is not has no clear line, or α ≈ 0 at them.
+   - **The test.** At least 5 % of its intensity in clear lines, and α > 3 esd.
+   - **Why clear lines, not a share of the intensity.** Up to v424 the region was the points where the phase holds at least 2/3 of the calculated Bragg intensity. Beside a broad phase's Lorentzian tails a minority phase rarely does, even at its own peaks: rutile at 2–5 wt % and 10–30 nm beside 7 nm SrTiO₃ was left out at 15–36 esd, and SrTiO₃ reported at 100 wt %. With clear lines (`t-detect`, 8 seeds each): rutile at 1 wt % found 6 times in 8 (0 before), at 2 wt % 8 in 8 (1 before), at 5 and 20 wt % 8 in 8, its fraction within 0.1–0.2 wt %. An absent broad NaCl, its lines within 0.6° of SrTiO₃'s, has none clear and still goes.
 
 **Restart.** A phase that fails a test at the end of a pass is left out, and the stages are run again from the cell search's result without it.
 - Every phase whose scale is not above 3 esd goes at once.
@@ -792,7 +794,7 @@ Two tests decide, and a phase that fails is **left out**: scale 0, its cell back
 
 **Two copies of the same CIF** (the same lattice type and number of atoms in the cell, the cell mass within 0.1 %, and a, b, c each within 2 %) count as one phase in this test. That allows two size populations of one phase.
 
-**Warnings** say why a phase was left out, e.g. "…85 % of its calculated intensity lies under SrTiO₃'s peaks, and no part of the pattern is its own". When the phases overlap throughout, the warning says that their fractions are not told apart.
+**Warnings** say why a phase was left out, e.g. "…93 % of its calculated intensity lies under SrTiO₃'s peaks, and none of its lines stands clear of theirs". When no phase has a clear line, none goes, and the warning says that the pattern tells neither whether each is there nor their fractions: on the user's 37D a NaCl candidate, its 3 nm lines covering SrTiO₃'s, stays at 62 wt % with that warning.
 
 ### 6.5 Optional stages
 
@@ -1622,8 +1624,8 @@ The engine suites (`t-unit`, `t-lab6`, `t-sto`, `t-sharp`, `t-synth`, `t-synth2`
 - `addPeakFCJ` matches the direct node sum to 0.0004–0.006 % of the peak.
 
 **Phases**
-- 5 wt % rutile beside nanocrystalline SrTiO₃ is found every time.
-- Absent LaB₆, NaCl, rutile, anatase and ZnO are left out instead of taking 5–74 wt %.
+- Rutile beside 7 nm SrTiO₃ (`t-detect`, 8 seeds each): found 6 times in 8 at 1 wt %, every time from 2 wt % up, its fraction within 0.2 wt %. Synthetic rutile at 2–5 wt % and 10–60 nm, which up to v424 was left out at 15–36 esd, is found with W 1.8–5.1 % (§6.4).
+- Absent LaB₆, NaCl, rutile, anatase and ZnO are left out instead of taking 5–74 wt %; so are NaCl and quartz beside a SrTiO₃ with an unmodelled amorphous hump, which up to v424 took 46–48 wt % (§6.4).
 
 **Shapes**
 - The column lengths agree with an independent derivation to 6·10⁻¹⁵, and with ray casting to 10⁻⁷.
@@ -1738,6 +1740,19 @@ March–Dollase works on one axis, chosen among seven low-index planes. A spheri
 10. A CIF that names its group but lists only `x, y, z`, or whose asymmetric unit holds whole formula units without a Z, is now refused as the other named groups without their operations are; so is the asymmetric unit of a centrosymmetric group that lacks its inversion (§2.3).
 
 Found while testing v424 and fixed: a line near 2θ = 180°, beyond the pattern, could stop a refinement on a step (§3.2).
+
+**Fixed in v425**, after a critical review of every module by eleven independent reviewers, each finding checked by another (RIETVELD-REVIEW.md lists them all, with the imprecisions left as they are and the catalogue of the calibrations):
+1. The 3D view's cell triad was left-handed, and the labelled arrows pointed against it, about half the time: the Laue frames are now proper and each arrow points along its label's sense.
+2. `solveLinear` on a subset solved as if the held linear terms were 0.
+3. Phase detection kept an absent candidate that only took up a broad hump (46–48 wt %): the plausibility test (§6.4).
+4. Phase detection dropped a present minority phase at 15–36 esd: the own-evidence test now reads the lines that stand clear of the others' (§6.4).
+5. `findSymmetry` lost operations when the origin was off a symmetry element (§2.4).
+6. `classify` crashed on a 6-fold without its 3-fold.
+7. A named group without its operations was not refused when named by its IT number or Hall symbol alone (§2.3).
+8. The attenuation factors were applied a second time to `.xrdml` intensities (§2.1).
+9. The Williamson–Hall esds were not scaled by √χ²_ν.
+10. The card lost the instrument read from the file after a saved state or a tab switch, and refined with the Cu defaults.
+11. A result refined in one role (standard or sample) was used in the other after the standard changed: a sample fit of the standard's file had become the samples' instrument.
 
 **Open.**
 - A WPPM line's area in the window is about 0.3 % below the pseudo-Voigt's at the same intensity (§7.3): weight fractions between a WPPM phase and a Lorentzian one carry that bias.

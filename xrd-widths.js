@@ -275,10 +275,12 @@ function williamsonHall(rows, lam){
   const det = S*Sxx - Sx*Sx;
   if (!(det > 0)) return out;
   const a = (Sxx*Sy - Sx*Sxy)/det, b = (S*Sxy - Sx*Sy)/det;
-  const aEsd = Math.sqrt(Sxx/det), bEsd = Math.sqrt(S/det);
   let chi2 = 0;
   for (const p of pts) chi2 += ((p.y - a - b*p.x)/p.yEsd)**2;
   const nu = pts.length - 2;
+  // The esds scaled by √χ²_ν (not below 1), as every other fit here: points scattered
+  // beyond their own esds (33A: χ²_ν 57) left D's at 0.35 nm where the scatter gives 2.6.
+  const sc = Math.sqrt(Math.max(1, chi2/nu)), aEsd = Math.sqrt(Sxx/det)*sc, bEsd = Math.sqrt(S/det)*sc;
   return { ...out, a, aEsd, b, bEsd, D: a > 0 ? K_SCHERRER*lam/a/10 : NaN, Desd: a > 0 ? K_SCHERRER*lam/a/10*aEsd/a : NaN,
            chi2, nu, chi2nu: chi2/nu, p: chi2Survival(chi2, nu) };
 }
