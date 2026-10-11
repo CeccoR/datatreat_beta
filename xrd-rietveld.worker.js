@@ -26,11 +26,12 @@ function friendly(model, name){
 // 1), the esd in brackets in units of the last digit shown. The esd is rounded first:
 // one rounded up to the next leading digit keeps one digit (0.0096 gives 1.50(1), not
 // 1.500(10)); a last digit left of the units rounds the value there (100(300), not
-// 125(314)).
+// 125(314)). An esd under 10⁻¹⁵ of the value is below what a double holds (and past
+// 100 decimals toFixed throws): the value alone, as without an esd.
 function fmtEsd(v, e, unit = ''){
   if (!isFinite(v)) return '—';
-  if (!(isFinite(e) && e > 0)) return (+v.toPrecision(6)).toString() + unit;
   const p = Math.floor(Math.log10(e)), n = e/Math.pow(10, p) < 2 ? 2 : 1;
+  if (!(isFinite(e) && e > 1e-15*Math.abs(v)) || n - 1 - p > 100) return (+v.toPrecision(6)).toString() + unit;
   let d = n - 1 - p, k = Math.round(e*Math.pow(10, d));
   if (k >= (n === 2 ? 20 : 10)){ k = Math.round(k/10); d--; }
   if (d >= 0) return v.toFixed(d) + '(' + k + ')' + unit;
@@ -82,7 +83,7 @@ function summarise(model, res, phases, opts){
   const siteB = (q, ph, nm, lines)=>{
     const free = res.free || [];
     if (!q.sites || !q.sites.some(st=> (st.iB != null ? [st.iB] : st.iU).some(i=> free.includes(model.par[i].name)))) return;
-    const cellAt = p => cellFrom(q.constraint, q.latNames.map(l=> p[q.pfx + l]), ph.cell);
+    const cellAt = p => cellFrom(q.constraint, q.latNames.map(l=> p[q.pfx + l]), q.cell);
     for (const st of q.sites){
       if (st.iB != null){
         const k = model.par[st.iB].name;
@@ -129,8 +130,8 @@ function summarise(model, res, phases, opts){
     row('', 'zero_deg', P.zero, E.zero); row('', 'displacement_mm', s, sE);
     ['U', 'V', 'W', 'X', 'Y'].forEach(k=> row('', k, P[k], E[k]));
     row('', 'asymmetry_SH_L', P.asym, E.asym);
-    // The standard's displacement parameters, should it refine any (the built-in LaB6
-    // holds the CIF's): a group of their own, as a phase's.
+    // The standard's displacement parameters (the built-in LaB6's one ΔB, xrd-rv.js): a
+    // group of their own, as a phase's.
     const nm = phases[0].name || model.phases[0].name, lines = [];
     deltaB(model.phases[0], phases[0], nm, lines);
     if (lines.length) groups.push({ name: nm, phase: true, lines });
@@ -159,11 +160,16 @@ function summarise(model, res, phases, opts){
     }
     lines.push({ label: 'σ of ln D', value: fmtEsd(sg, sgE), title: `The log-normal width of the sizes${shaped ? ' (all the solid’s dimensions scaled together)' : ''}. It shapes the profile at a given breadth: 0 is one size (the tails fall fast); at about 0.76 the tails are as heavy as the Lorentzian model’s (⟨L⟩_A/⟨L⟩_V = 0.5), the top as sharp already at 0.66 (FWHM/β = 2/π); more is sharper still at the top with longer tails. It rests on the profiles’ shape, so on how well the instrument’s is known` });
     row(nm, 'size_lognormal_sigma', sg, sgE);
-    /* A width past the Lorentzian's by the tails (⟨L⟩_A/⟨L⟩_V under its 0.5 beyond 0.76):
-       most of the volume in crystallites far smaller than the mean, the median below a
-       nanometre at σ near 1. Then the far tails set σ, and a background, a broad second
-       phase or strain with long tails take the same shape. */
-    if (sg >= 0.8){
+    /* A width past the Lorentzian's by the tails: ⟨L⟩_A/⟨L⟩_V = (8/9)·e^{−σ²} for log-normal
+       spheres, under the Lorentzian's 0.5 from σ = √ln(16/9) = 0.7585 (0.8 to v426, which
+       let 0.76–0.8 pass unwarned): most of the volume in crystallites far smaller than the
+       mean, the median below a nanometre at σ near 1. Then the far tails set σ, and a
+       background, a broad second phase or strain with long tails take the same shape: an
+       unmodelled amorphous hump (FWHM 12°, 40 % of the background) moved the median of
+       synthetic SrTiO₃ by −3 % at σ 0.5, −8 % at 0.8 and −18 % at 1.1 (2.0, 3.1, 3.8 esd;
+       d ln median/dσ = −7σ), the volume-weighted mean within 0.6 %; without it all came
+       within 1.1 esd. */
+    if (sg >= Math.sqrt(Math.log(16/9))){
       const med = !shaped && P[ys] > 0 ? Dof(P[ys])*Math.exp(-3.5*sg*sg) : NaN;
       warnings.push(`${nm}: σ of ln D = ${fmtEsd(sg, sgE)} is a distribution wider than the Lorentzian profile's (its tails heavier)${Number.isFinite(med) ? `, its median at ${med.toPrecision(2)} nm` : ''}: the profiles' far tails set it, which a background, a broad second phase or a strain with long tails can shape as well. The volume-weighted mean stands; the median and the number mean rest on that tail.`);
     }
@@ -250,7 +256,7 @@ function summarise(model, res, phases, opts){
     // one tables quote.
     const C = q.constraint || {}, conv = C.conv && C.basis;
     const vol = p => metric(conv ? cellFrom({ kind: C.kind, unique: C.unique, params: C.params }, q.latNames.map(l=> p[q.pfx + l]), C.conv)
-                                 : cellFrom(C, q.latNames.map(l=> p[q.pfx + l]), ph.cell)).V;
+                                 : cellFrom(C, q.latNames.map(l=> p[q.pfx + l]), q.cell)).V;
     const V = vol(P), VE = propagate(res, q.latNames.map(l=> q.pfx + l), vol);
     lines.push({ label: conv ? 'V (conventional cell)' : 'V', value: fmtEsd(V, VE, ' Å³') }); row(nm, conv ? 'V_conventional_A3' : 'V_A3', V, VE);
     // The preferred orientation (March–Dollase), its axis and r.
@@ -421,7 +427,7 @@ function summariseWidths(w, phases, table, model, res){
       const own = williamsonHall(ph.rows.filter(r=> isFinite(r.model.iso)).map(r=> ({ ...r, W: r.model.iso })), w.lam);
       if (isFinite(own.D)){ reading = { D: ss.D, Dmodel: own.D, lognormal: md.profile === 'lognormal' }; table.push({ phase: nm, name: 'WH_size_model_nm', value: own.D, esd: NaN }); }
     }
-    return { id: ph.id, name: nm, shaped: ph.shaped, rows: ph.rows, wh, orders: ph.orders, scores, reading };
+    return { id: ph.id, name: nm, shaped: ph.shaped, rows: ph.rows, overlapShare: ph.overlapShare, wh, orders: ph.orders, scores, reading };
   }) };
 }
 

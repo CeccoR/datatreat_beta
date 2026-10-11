@@ -33,7 +33,13 @@ const GRAPHITE_D = 3.3539;     // Å, graphite (002): the usual monochromator cr
    pattern when V is refined, and reports U, V, W as on a bound when the floor is reached. */
 const HG2_FLOOR = 1e-8;        // deg²
 const K_SCHERRER = 0.9;        // as the Analysis card's Scherrer sizes
-/* The profile is evaluated within ±max(WIN_FWHM·H, WIN_MIN) of each peak. A Lorentzian
+/* The upper bound of a phase's Y_s and of a solid's widths: the width of crystallites
+   D_MIN across, K·λ₁/D_MIN (9.9° at Cu Kα₁, 4.6° at Mo, 14.8° at Cr). The fixed 10° of
+   v426 meant 0.79 nm at Cu, 0.37 nm at Mo and 1.2 nm at Cr: now one size for every
+   anode, under §6.4's plausible limit (max(1 nm, two cells)). */
+const D_MIN = 8;               // Å
+/* The profile is evaluated within ±max(WIN_FWHM·H, WIN_MIN) of each peak, and further for a
+   line whose tail stands above the noise there (lineHalf). A Lorentzian
    still holds 2/π·atan(1/(2·40)) ≈ 0.8 % of its area beyond 40 FWHM, and cutting it there
    would leave a step at both ends of the window. So the Lorentzian part is lowered by its
    own value at the window's edge, which takes it continuously to zero there. It is not
@@ -42,19 +48,31 @@ const K_SCHERRER = 0.9;        // as the Analysis card's Scherrer sizes
    under the window, slow and almost flat) goes to the background, which follows it as it
    follows the data's own tails. Renormalising inside the window instead made the fitted
    intensities 1.6·η % low, by an η that differs between phases. The Gaussian part is zero
-   long before the edge. */
+   long before the edge.
+   WIN_MIN: synchrotron-sharp lines (H 0.002°, λ 0.4 Å, 10⁵ counts) drawn over 40·H alone
+   came out 0.8 % broad (3.8 esd) with the strain 44 % low; over 1.5° within 0.15 esd. It
+   costs WPPM's sharpest lines their grid: under H ≈ 0.0006° the window needs more than
+   N_MAX points, and the line is 0.15 % of its peak off. */
 const WIN_FWHM = 40;
 const WIN_MIN = 1.5;           // deg
 const COARSE_WIN = 10;         // FWHM: the cell search's coarse pass (cellSearch)
 const MIN_POINTS = 10;         // fewer weighted points than this: no refinement is possible
 // Lattice lengths may move within ±LAT_RANGE of the file's, angles within ±LAT_ANGLE
 // (inside 1–179°): latBounds. The reflection list reaches every d that a cell within
-// these bounds brings into the range (latticeStretch).
+// these bounds brings into the range (latticeStretch). ±10 % holds what the cell search
+// reaches (±6 %), with room beyond for the refinement (at ±5 %, a cell the search found
+// 5.5 % off ended on the bound); ±15° moves a d about as far (d₁₀₁ = a·cos(β/2) for
+// a = c: +12/−14 %).
 const LAT_RANGE = 0.1;
 const LAT_ANGLE = 15;          // deg
-// (S + H)/L to start the asymmetry's refinement from: a Bragg–Brentano goniometer with
-// Soller slits of a few hundredths of a radian.
-const ASYM_START = 0.02;
+/* (S + H)/L to start the asymmetry's refinement from (at 0 it has no derivative). Its effect
+   grows as A², so a Gauss–Newton step from A₀ aims at about (A₀² + A²)/(2A₀): from above it
+   comes down to A, from far below it overshoots. A quarter of its bound (0.2) keeps every
+   value the box allows at most 4× above the start. On synthetic LaB6, Si and corundum
+   standards (A 0.005–0.2, two profiles, from 10° and 20°) 0.05 and 0.08 ended at the same
+   A and χ² in all 38 cases; 0.02, the earlier start, let A fall to 0 on Si at A = 0.2 (the
+   zero and the displacement took up the shift, χ²_ν 96–104), and 0.005 also at 0.15. */
+const ASYM_START = 0.05;
 // Rwp values this close (relative) are a tie on a scan: a flat curve, no minimum there.
 const TIE = 1e-9;
 
@@ -80,7 +98,8 @@ function lowerBound(x, v){
    direction the data do not see (√tol is the column's residual off that span, so a
    smaller c_k cannot be told from it). The inverse gives such a k the variance it has
    with j held: conditional, not its own. A zero column ties to nothing. */
-function cholesky(A, m, tol = 1e-10){
+const CHOL_TOL = 1e-10;
+function cholesky(A, m, tol = CHOL_TOL){
   const L = new Float64Array(m*m), bad = [];
   for (let j = 0; j < m; j++){
     let d = A[j*m + j];
@@ -150,9 +169,29 @@ function profileAtTheta(th, U, V, W, X, Y){
   const HL = Math.max(0, X*t + Y/c);
   return tch(HG, HL);
 }
+/* The half-width (°) a line of FWHM H, mixing eta and area A (in the units of y times
+   degrees, the scale included) is drawn over: ±max(WIN_FWHM·H, WIN_MIN), and as far as its
+   Lorentzian part, ηA·H/(2π x²) beyond a few H, stays above TAIL_NOISE of the pattern's
+   typical noise (model.noise0). What the window leaves out, the step its lowered edge
+   leaves inside and the tail beyond, is then under a tenth of the noise wherever it is
+   too narrow for the background to take up. Measured on synthetic patterns drawn with
+   their lines' whole tails (four two-phase and one-phase cases, 2·10⁴–2·10⁵ counts, lab
+   and synchrotron widths): with 40 FWHM alone a sharp pattern of 2·10⁵ counts came out
+   with sizes 1.5 % (5.6 esd) and a strain 7 % (3.3 esd) off and χ²_ν 1.18; drawn to a
+   tenth of the noise every size, strain, B and weight fraction is within 0.3 esd and χ²_ν
+   1.01 (a third: within 0.45 esd; a thirtieth: 0.2). Weak lines keep 40 FWHM. At most the
+   pattern's span: a window that covers the whole pattern is lowered by a constant there,
+   which the background takes (a 10⁷-count line on 1 count of background had asked for
+   2230°). (Not in the cell search's coarse pass, which narrows the window on purpose.) */
+const TAIL_NOISE = 0.1;
+function lineHalf(model, H, eta, A){
+  const half = Math.max(model.win*H, WIN_MIN);
+  if (model.win < WIN_FWHM || !(A > 0) || !(eta > 0) || !(model.noise0 > 0)) return half;
+  return Math.max(half, Math.min(model.x1 - model.x0, Math.sqrt(eta*A*H/(2*Math.PI*TAIL_NOISE*model.noise0))));
+}
 // Area-normalised pseudo-Voigt of FWHM H and mixing eta, centred at c, times I, added to
 // out over the window (see WIN_FWHM for the Lorentzian's treatment at the edges); `win`
-// the window in FWHM (the cell search's coarse pass narrows it).
+// the window in FWHM (lineHalf's over H; the cell search's coarse pass narrows it).
 function addPeak(out, x, c, H, eta, I, win = WIN_FWHM){
   const half = Math.max(win*H, WIN_MIN);
   const i0 = lowerBound(x, c - half), n = x.length;
@@ -222,8 +261,11 @@ function addPeakFCJ(out, x, c, H, eta, I, nodes, win = WIN_FWHM){
 
 /* Axial divergence: Finger, Cox & Jephcoat, J. Appl. Cryst. 27 (1994) 892, with the
    sample's and the receiving slit's half-heights equal (S = H), so one parameter
-   A = (S + H)/L, L the goniometer radius, as GSAS-II's SH/L. A ray that leaves the
-   diffraction plane by h·L over L meets the Debye cone of a reflection at 2θ where
+   A = (S + H)/L, L the goniometer radius, as GSAS-II's SH/L. (Where they differ the
+   standard fits worse and the samples inherit it: at S/H = 0.5, χ²_ν 33 on a synthetic
+   LaB6 of 5·10⁴ counts and a monoclinic cell 28 esd off; at 0.82, 1.26 and 3 esd.)
+   A ray that leaves the diffraction plane by h·L over L meets the Debye cone of a
+   reflection at 2θ where
    cos 2φ = cos 2θ·√(1 + h²): below 2θ = 90° the peak gains a tail towards low angles,
    above it towards high angles, none at 90°. h runs over [0, A]; FCJ's weight
    W(2φ) = (A − h)/(h·|cos 2φ|) — the overlap of sample and slit heights over the cone's
@@ -295,7 +337,9 @@ function fcjNodes(th, A, H, nForce){
   const hMax = cut ? hTan*(1 - 1e-12) : A;
   const phiOf = h => Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + h*h))));
   const dMax = (phiOf(hMax) - tt)*R2D;
-  // A tail under 5 % of the width: one node at the mean shift (within 0.04 % of the peak).
+  // A tail under 5 % of the width: one node at the mean shift. Its error goes as
+  // 15.6·(|dMax|/H)² % of the peak (0.039 % at 5 %, 0.056 % at 6 %): 5 % is the largest that
+  // keeps the full count's 0.04 %.
   const collapse = nForce ? nForce === 1 : Math.abs(dMax) < 0.05*H;
   // A tail shorter than the width: three nodes, the Gauss quadrature of the shift's own
   // distribution (exact for its first six moments), instead of one every quarter width or so.
@@ -365,8 +409,9 @@ function lineNodes(model, key, th, A, H){
    column lengths. So each member is drawn with its own width and the peak is their sum
    (a sharp part and a broad part): a width per family, as Laue-symmetric models give,
    cannot describe such a shape at all. Friedel mates (u, −u) are one member. The
-   members' directions are fixed with the cell's metric at the start: the cell moves by
-   tenths of a per cent in a refinement.
+   members' directions are fixed with the cell's metric at the start (idealCell): a
+   change of scale leaves them, one of c/a by 1 % moved a cylinder's height by 0.36 %
+   (1.9 esd at 3·10⁴ counts).
    The solids (p.shape, true meaning 'ellipsoid'):
    - ellipsoid, spheroid (two axes equal), cylinder, elliptic cylinder (an ellipse
      translated along the axis), box (a rectangular parallelepiped): the affine image
@@ -472,12 +517,12 @@ function bodyFrame(q, v){
   return quatMat(quatMul(q.iQ.map(i=> v[i]), quatOfRot(r)));
 }
 
-function shapeSetup(q, p, cell, list, add, nextIndex){
+function shapeSetup(q, p, cell, list, add, nextIndex, wMax){
   const type = q.shapeType = shapeTypeOf(p.shape);
   if (type === 'ellipsoidL') q.iL = SHAPE_NAMES.map(nm=> { const i = nextIndex(); add(nm, 0, -10, 10); return i; });
   else {
     const B = BODIES[type];
-    q.iW = B.W.map(nm=> { const i = nextIndex(); add(nm, 0, 0, 10); return i; });
+    q.iW = B.W.map(nm=> { const i = nextIndex(); add(nm, 0, 0, wMax); return i; });
     q.iR = ROT_NAMES.slice(0, B.rot).map(nm=> { const i = nextIndex(); add(nm, 0, -4, 4, { maxStep: 0.4 }); return i; });
     // The reference orientation: never refined (it only charts where r = 0 is).
     q.iQ = QREF_NAMES.map((nm, j)=> { const i = nextIndex(); add(nm, j ? 0 : 1, -1, 1); return i; });
@@ -540,29 +585,55 @@ function textureAxis(q){
   q.poAxisVec = x.map(t=> t/n); q.poAxisFor = q.poHkl;
   return q.poAxisVec;
 }
-// The axes 'auto' tries: the low-index planes, one of each Laue family. The planes are
-// the conventional cell's (as the texture axis reads them), so their families are
-// found with the Laue group in that cell, M⁻¹·R·M: with the file's own operations on a
-// primitive cell's indices (a primitive fcc file), (100) and (111) had been one family
-// and (111) was never tried.
-function lowIndexPlanes(q){
-  const cand = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1],[1,1,1]], seen = new Set(), out = [];
+// The Laue group's operations on the conventional cell's indices, M⁻¹·R·M: the planes the
+// texture axis and the strain's directions are named by are that cell's. With the file's
+// own operations on a primitive cell's indices (a primitive fcc file), (100) and (111)
+// had been one family and (111) was never tried.
+function conventionalLaue(q){
   const M = q.constraint && q.constraint.basis;
-  const ops = (q.laue || []).map(R=>{
+  return (q.laue || []).map(R=>{
     if (!M) return R;
     const [a, b, c, d, e, f, g, h, i] = M, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
     const Mi = [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det];
     const mul = (P, Q) => [0, 1, 2].flatMap(r=> [0, 1, 2].map(cc=> P[3*r]*Q[cc] + P[3*r + 1]*Q[3 + cc] + P[3*r + 2]*Q[6 + cc]));
     return mul(mul(Mi, R), M).map(x=> Math.round(x));
   });
-  for (const hh of cand){
-    if (seen.has(hh.join())) continue;
-    out.push(hh);
-    for (const R of ops) seen.add([0, 1, 2].map(j=> hh[0]*R[j] + hh[1]*R[3 + j] + hh[2]*R[6 + j]).join());
+}
+// Adds a plane to a list unless its Laue family is there already (`seen`: every image).
+function addFamily(out, seen, ops, hh){
+  if (seen.has(hh.join())) return false;
+  out.push(hh);
+  for (const R of ops) seen.add([0, 1, 2].map(j=> hh[0]*R[j] + hh[1]*R[3 + j] + hh[2]*R[6 + j]).join());
+  return true;
+}
+// The low-index planes, one of each Laue family.
+function lowIndexPlanes(q){
+  const ops = conventionalLaue(q), seen = new Set(), out = [];
+  for (const hh of [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1],[1,1,1]]) addFamily(out, seen, ops, hh);
+  return out;
+}
+/* The axes 'auto' tries: the low-index planes, then the planes of the phase's largest
+   spacings in the pattern (lines with intensity, indices made coprime), up to
+   TEXTURE_BFDH more families. By Bravais–Friedel–Donnay–Harker the faces a crystal shows
+   most, on which its plates lie, are those of the largest spacing the extinctions leave:
+   corundum's (012) and (104), calcite's (104), none of them low-index. Textured along
+   (104), a corundum tried on the low-index planes alone took (101) or (111), χ²_ν 2.2–3.8
+   against the truth's 1.04; a quartz along (102), a monoclinic cell along (10-2) and a
+   triclinic one along (1-10) took others at χ²_ν 1.07–15.9. */
+const TEXTURE_BFDH = 3;
+function textureCandidates(model, k){
+  const q = model.phases[k], ops = conventionalLaue(q), seen = new Set(), out = [];
+  lowIndexPlanes(q).forEach(hh=> addFamily(out, seen, ops, hh));
+  const ticks = calc(model).ticks.filter(t=> t.phase === q.id), Imax = Math.max(0, ...ticks.map(t=> t.I));
+  const gcd = (a, b) => b ? gcd(b, a % b) : a;
+  let added = 0;
+  for (const t of ticks.filter(t=> t.I > 1e-3*Imax).sort((a, b)=> b.d - a.d)){
+    if (added >= TEXTURE_BFDH) break;
+    const g = gcd(Math.abs(t.h), gcd(Math.abs(t.k), Math.abs(t.l))) || 1;
+    if (addFamily(out, seen, ops, [t.h/g, t.k/g, t.l/g])) added++;
   }
   return out;
 }
-const textureCandidates = lowIndexPlanes;
 /* The March–Dollase weight of every member of every reflection at r (mean 1 over the
    sphere): (r²·cos²α + sin²α/r)^(−3/2), α between the member and the texture axis — r
    under 1 for plates lying on the axis's planes, over 1 for needles. null at r = 1. */
@@ -951,7 +1022,6 @@ function bodyShapeOf(model, v, k, res){
   const dimNames = { ellipsoid: ['a', 'b', 'c'], spheroid: ['equatorial', 'polar'], cylinder: ['diameter', 'height'], ellcyl: ['a', 'b', 'height'], box: ['a', 'b', 'c'] }[type];
   const dims = dimsOf.map((d, i)=> ({ name: dimNames[i], ...d }));
   const dimAlong = [Dx, Dy, Dz], dimEsdAlong = B.axes(dimsOf.map(d=> d.Desd)), dimMinAlong = B.axes(dimsOf.map(d=> d.Dmin));
-  const widthW = i => B.axes(W)[i];
   // Two dimensions not told apart (widths within 2σ) make a solid of revolution about
   // the third axis: the turn about it is free, and the pair have no directions — an
   // elliptic cylinder's circular cross-section, an ellipsoid's pair, a spheroid or a
@@ -960,15 +1030,98 @@ function bodyShapeOf(model, v, k, res){
   // esd's to say. An axis is shown with a direction only under 30° of esd.
   // Apart: the difference of two widths over its esd, their covariance included (a
   // body of revolution's two axes across share one width).
+  // A ball's axes (an ellipsoid's, a spheroid's) and an elliptic cylinder's cross-section
+  // set a member's width as √(W_a²u_a² + W_b²u_b² …): two equal leave the turn between
+  // them without effect, and their difference over its linear esd misreads the pattern,
+  // by an amount that goes with the crystal: on synthetic plates and needles with two
+  // equal axes it told them apart in 13 of 62 draws on rutile and ZnO (8 of 28 rutile
+  // ellipsoids, mean z² 3.0), in none of 40 on SrTiO3 (mean z² 0.5). Where the smaller
+  // width's linear esd exceeds the width, its ±σ reaches the bound 0, where such a width
+  // has no curvature, and the esd means nothing at all (20–840° on synthetic ellipsoids
+  // and elliptic cylinders; ±14606° for a spheroid's equator in a test fit of the user's
+  // 37D SrTiO3, which had made a plate 2.5 nm thick a near-sphere; ±0.9° for a 150 nm
+  // ellipsoid axis at 0.0005°, 2.2σ from a 4 nm thickness). For these pairs the pattern
+  // decides, as a profile: the two set to one common width w, every other parameter free
+  // in the fit refined again there (4 iterations, as the angular esds' profile; 20 moved
+  // z by 0.02 at most), Δχ² from the fit to the profile's least χ² (6 of the 62 apart).
+  // The group's width and esd are the linear ones where those hold (over the 28 rutile
+  // ellipsoids mean (error/esd)² 0.95, 1.7 from the profile's curvature), else the
+  // profile's least χ² and curvature (with the rest held instead of refined again, the
+  // common width of equal 150 nm axes had come out up to 14 esd off; refined, 0.97 rms
+  // over 16 synthetic plates). A face's width (a box's, a cylinder's, an elliptic
+  // cylinder's height) acts to first order, through the kink of the column length, and its
+  // esd holds on 0 (a box's, 0.03–0.05° beside 0.02° for the others): the full covariance
+  // decides there (on synthetic boxes the profile had told equal edges apart at 3.2 where
+  // the covariance gives 2.0, and put a pair's mean 3.3 esd off).
+  // Either way z is set against the 2σ (95.45 %) quantile of χ² with as many degrees of
+  // freedom as equal widths take away: the difference, and the turns it leaves without
+  // effect where the fit has them free (held on the lattice, none) — an ellipsoid's or an
+  // elliptic section's about the third axis, both of a spheroid's (a sphere then), a box's
+  // about its third edge, which equal edges leave only the square's fourfold to act
+  // through (the linear z of equal box edges, mean z² 1.9 over 62 draws on rutile, ZnO,
+  // corundum and an orthorhombic phase, as two degrees of freedom give, had told 9 apart;
+  // now 3). z = 2 there.
+  // Up to v426 the linear z decided every pair at 2, and where one width was on 0 the
+  // other's own esd alone: on synthetic 150 × 150 × 4 nm boxes, ellipsoids and elliptic
+  // cylinders the two equal in-plane widths were told apart in all 9 draws of 32 where one
+  // fell on 0.
+  const Q2S = [4, 6.18, 8.02];
+  const turnsFree = !!(res && res.free) && q.iR.some(i=> res.free.includes(model.par[i].name));
+  const freedOf = (a, b) => !turnsFree ? 0 : type === 'spheroid' ? 2 : type === 'ellipsoid' || type === 'box' || (type === 'ellcyl' && a + b === 1) ? 1 : 0;
   const wIx = B.rot === 2 ? [0, 0, 1] : [0, 1, 2];
-  const zr = (i, j) => { const a = wIx[i], b = wIx[j];
-    // A width on its bound 0 (no broadening along it) has no curvature there, and its
-    // linear esd means nothing (±14606° for a spheroid's unbounded equator in a test fit
-    // of the user's 37D SrTiO3, which made a plate 2.5 nm thick a near-sphere): the
-    // other's own esd says whether they differ.
-    if ((W[a] > 0) !== (W[b] > 0)){ const o = W[a] > 0 ? a : b, so = Math.sqrt(cov(o, o)); return Number.isFinite(so) && so > 0 ? W[o]/so : Infinity; }
+  const nu = res && res.stats ? res.stats.chi2 : NaN, pairs = new Map();
+  let chiFit = NaN;
+  const pairOf = (a, b) => {
+    const key = Math.min(a, b) + ',' + Math.max(a, b);
+    if (pairs.has(key)) return pairs.get(key);
+    const sm = W[a] <= W[b] ? a : b, wl = Math.max(W[a], W[b]), ss = Math.sqrt(cov(sm, sm));
+    const second = B.base === 'ball' || (type === 'ellcyl' && sm < 2), linear = ss <= W[sm], q2 = Q2S[freedOf(a, b)];
     const s = Math.sqrt(cov(a, a) + cov(b, b) - 2*cov(a, b));
-    return Number.isFinite(s) && s > 0 ? Math.abs(widthW(i) - widthW(j))/s : Infinity; };
+    let out = { z: Number.isFinite(s) && s > 0 ? 2*Math.abs(W[a] - W[b])/(s*Math.sqrt(q2)) : Infinity, w: (W[a] + W[b])/2, sd: Math.sqrt(Math.max(0, cov(a, a) + cov(b, b) + 2*cov(a, b)))/2 };
+    if (second && Number.isFinite(nu) && wl > 0 && res.free){
+      const at = w => { const vv = Float64Array.from(v); vv[q.iW[a]] = w; vv[q.iW[b]] = w; return vv; };
+      const f = w => evaluate(model, at(w)).chi2;
+      if (!Number.isFinite(chiFit)) chiFit = evaluate(model, v).chi2;
+      // Where to start: the best common width with the rest held (golden section over
+      // [0, 1.5·the larger]).
+      const g = (Math.sqrt(5) - 1)/2;
+      let lo = 0, hi = 1.5*wl, x1 = hi - g*(hi - lo), x2 = lo + g*(hi - lo), f1 = f(x1), f2 = f(x2);
+      for (let it = 0; it < 24; it++){
+        if (f1 < f2){ hi = x2; x2 = x1; f2 = f1; x1 = hi - g*(hi - lo); f1 = f(x1); }
+        else { lo = x1; x1 = x2; f1 = f2; x2 = lo + g*(hi - lo); f2 = f(x2); }
+      }
+      // The profile: three points h apart, a parabola through them, again around its
+      // vertex while that lies outside them (at most 4 times).
+      const rest = res.free.filter(nm=> nm !== model.par[q.iW[a]].name && nm !== model.par[q.iW[b]].name);
+      const keep = { v: model.v.slice(), esd: model.esd, cov: model.cov }, prof = new Map();
+      const P = w => { if (prof.has(w)) return prof.get(w);
+        let c = f(w);
+        try { setParams(model, at(w)); refine(model, { free: rest, maxIter: 4, audit: false }); c = Math.min(c, evaluate(model, model.v).chi2); } catch(e){}
+        prof.set(w, c); return c; };
+      let w = (lo + hi)/2, sd = NaN;
+      try {
+        const h = Math.max(0.1*w, 0.02*wl);
+        // Already 10σ apart there (a plate's thickness against its breadth): told apart,
+        // and no group to measure.
+        for (let it = P(w) - chiFit > 100*nu ? 4 : 0; it < 4; it++){
+          const x1 = Math.max(0, w - h), x2 = x1 + h, x3 = x2 + h, p1 = P(x1), p2 = P(x2), p3 = P(x3);
+          const d1 = (p2 - p1)/h, c = ((p3 - p2)/h - d1)/h;
+          if (!(c > 0)){ w = p3 < p1 ? x3 + h : Math.max(0, x1 - h); continue; }
+          sd = Math.sqrt(2*nu/c);
+          const xv = Math.max(0, (x1 + x2)/2 - d1/c);
+          if (xv >= x1 && xv <= x3){ P(xv); break; }
+          w = Math.max(x1 - 2*h, Math.min(xv, x3 + 2*h));
+        }
+      } finally { setParams(model, keep.v); model.esd = keep.esd; model.cov = keep.cov; }
+      let pm = Infinity;
+      for (const [x, p] of prof) if (p < pm){ pm = p; w = x; }
+      const z = 2*Math.sqrt(Math.max(0, pm - chiFit)/(nu*q2));
+      out = linear ? { ...out, z } : { z, w, sd, scan: true };
+    }
+    pairs.set(key, out);
+    return out;
+  };
+  const zr = (i, j) => wIx[i] === wIx[j] ? 0 : pairOf(wIx[i], wIx[j]).z;
   const apart = (i, j) => zr(i, j) > 2;
   const round = B.rot === 2 && !apart(0, 2);
   // Dimensions not told apart, of a kind the solid can swap (an ellipsoid's axes, a
@@ -979,23 +1132,25 @@ function bodyShapeOf(model, v, k, res){
   // the full covariance, as the v420 ellipsoid's groups; the members' own esds are
   // dropped. The closest pair first, then the third against the pair's mean (against
   // each alone, the pair's huge esds had grouped a 4 nm edge with them). (Here a body's
-  // axes are its widths', B.axes the identity.)
+  // axes are its widths', B.axes the identity.) A pair with a width on 0 is one too when
+  // not told apart; where its esds cannot say (above), its common width is the profile's.
   const groups = [];
   if (type === 'ellipsoid' || type === 'box' || type === 'ellcyl'){
     const swap = type === 'ellcyl' ? [[0, 1]] : [[0, 1], [0, 2], [1, 2]];
-    const near = swap.filter(([i, j])=> W[i] > 0 && W[j] > 0 && !apart(i, j)).sort((x, y)=> zr(...x) - zr(...y));
+    const near = swap.filter(([i, j])=> (W[i] > 0 || W[j] > 0) && pairOf(i, j).w > 0 && !apart(i, j)).sort((x, y)=> zr(...x) - zr(...y));
     if (near.length){
       let g = near[0];
-      const k = [0, 1, 2].find(i=> !g.includes(i));
+      const k = [0, 1, 2].find(i=> !g.includes(i)), P = pairOf(g[0], g[1]);
       if (type !== 'ellcyl' && W[k] > 0){
-        // the third's width less the pair's mean, and its variance
-        const d = W[k] - (W[g[0]] + W[g[1]])/2;
-        const v = cov(k, k) + (cov(g[0], g[0]) + cov(g[1], g[1]) + 2*cov(g[0], g[1]))/4 - cov(k, g[0]) - cov(k, g[1]);
-        if (!(Math.abs(d) > 2*Math.sqrt(v))) g = [0, 1, 2];
+        // the third's width less the pair's mean, and its variance (with the pair's own
+        // covariance with it where the linear esds hold)
+        const d = W[k] - P.w, cx = P.scan ? 0 : cov(k, g[0]) + cov(k, g[1]);
+        const vd = cov(k, k) + P.sd*P.sd - (Number.isFinite(cx) ? cx : 0);
+        if (!(Math.abs(d) > 2*Math.sqrt(vd))) g = [0, 1, 2];
       }
-      const n = g.length, w = g.reduce((t, i)=> t + W[i], 0)/n;
+      const n = g.length, w = n === 2 ? P.w : g.reduce((t, i)=> t + W[i], 0)/n;
       let c = 0; for (const i of g) for (const j of g) c += cov(i, j);
-      const D = Dof(w), sd = Math.sqrt(Math.max(0, c))/n;
+      const D = Dof(w), sd = n === 2 ? P.sd : Math.sqrt(Math.max(0, c))/n;
       let Desd = D*sd/w;
       if (held && info.freeW) Desd = Math.hypot(Desd, D - Dof(g.reduce((t, i)=> t + info.freeW[i], 0)/n));
       for (const i of g){ dims[i].Desd = NaN; dims[i].group = 0; }
@@ -1019,10 +1174,13 @@ function bodyShapeOf(model, v, k, res){
   // The kind: a body of revolution flat or long; a box like the ellipsoid.
   // A box or an elliptic cylinder by its three dimensions, as the ellipsoid (a thin
   // elliptic cylinder is a plate whichever of its dimensions is the thin one).
+  // Dimensions not told apart count as their group's mean, as the v420 ellipsoid's do (a
+  // synthetic 150 × 150 × 4 nm box whose edges read 99 and 488 nm, not told apart, had been
+  // called triaxial).
   let kind;
   if (type === 'box' || type === 'ellcyl' || type === 'ellipsoid'){
-    const [a, b, c] = dimAlong.slice().sort((x, y)=> x - y);
-    const same = type === 'ellipsoid' && groups.some(g=> g.axes.length === 3);
+    const [a, b, c] = dimAlong.map((d, i)=> groupOf(i) >= 0 ? groups[groupOf(i)].D : d).sort((x, y)=> x - y);
+    const same = groups.some(g=> g.axes.length === 3);
     kind = same || a/c > 0.8 ? (type === 'ellipsoid' ? 'isometric' : 'equant') : a/b < 0.5 && b/c < 0.5 ? 'triaxial' : a/b < 0.5 ? 'plate' : b/c < 0.5 ? 'needle' : 'anisotropic';
   } else {
     const same = zr(0, 2) < 2;
@@ -1287,6 +1445,22 @@ function strainStep(model, p, v){
   const m = s/q.strainQ.length;
   return m > 0 && qMax > 0 ? 1e-4*m*1e6/qMax : p.step;
 }
+/* The central-difference step of U, V or W (k = 2, 1, 0: the power of t = tanθ it
+   multiplies in H_G²): 10⁻⁶ deg², or less where H_G² is small, so that it moves H_G² by
+   at most 10⁻³ of itself anywhere in the pattern. On a high-resolution beamline (H about
+   0.001°, W = 3·10⁻⁷ deg²) the fixed 10⁻⁶ was three times W: W's column was 46 % off and
+   V's 4 %; now within 10⁻⁵. Laboratory profiles (H_G² ≥ 10⁻³) keep 10⁻⁶. Where H_G² is
+   on its floor the derivative is 0 whatever the step: those points do not count, and
+   with every point there (U = V = W = 0) the step stays 10⁻⁶, which steps off the floor
+   (a step of 10⁻¹¹ gave W a zero column there: dropped from the covariance, as v426 did
+   not, and unable to leave 0). */
+function uvwStep(model, p, v, k){
+  const [U, V, W] = model.iProf.slice(0, 3).map(i=> v[i]);
+  const t0 = Math.tan(Math.max(model.x0, 1e-3)/2*D2R), t1 = Math.tan(Math.min(179.9, model.x1)/2*D2R);
+  let g = Infinity;
+  for (let i = 0; i <= 32; i++){ const t = t0*Math.pow(t1/t0, i/32), h2 = U*t*t + V*t + W; if (h2 > HG2_FLOOR) g = Math.min(g, h2/Math.pow(t, k)); }
+  return Math.min(p.step, 1e-3*g);
+}
 function broadeningSetup(q, p, cell, list, add, nextIndex){
   const prof = PROFILES.includes(p.profile) ? p.profile : 'lorentz';
   q.wppm = prof !== 'lorentz';
@@ -1378,6 +1552,22 @@ function strainOf(q, v, r){
   return Math.sqrt(Math.max(0, e2));
 }
 
+/* The file's cell as its symmetry has it: the lengths the constraint ties equal, the angles
+   it fixes exactly 90° or 120° (60° for a hexagonal cell given with b′ = a + b, which
+   classify keeps as it is; a conventional basis's cell is classify's, already so).
+   A CIF's digits may break them by their rounding (b 3.24981 beside a 3.2498, γ
+   119.99998), which findSymmetry accepts; the Cartesian Laue operations built on such a
+   cell then miss orthogonality by as much, and from 10⁻⁷ on Stephens' forms gained a
+   spurious one (a cubic phase 2 for 1, ZnO 3 for 2). It is also the template the refined
+   cell keeps its fixed angles from (cellOf). */
+function idealCell(constraint, cell){
+  const c = typeof constraint === 'string' ? { kind: constraint } : (constraint || {}), T = { ...cell };
+  if (!(c.basis && c.conv)){
+    if (['cubic', 'tetragonal', 'orthorhombic', 'hexagonal'].includes(c.kind)){ T.alpha = T.beta = 90; T.gamma = c.kind === 'hexagonal' ? (T.gamma < 90 ? 60 : 120) : 90; }
+    else if (c.kind === 'monoclinic'){ const u = latticeNames(c)[3]; for (const k of ['alpha', 'beta', 'gamma']) if (k !== u) T[k] = 90; }
+  }
+  return cellFrom(constraint, latticeParams(constraint, cell), T);
+}
 // A lattice value's bounds: lengths ±LAT_RANGE, angles ±LAT_ANGLE within 1–179°.
 const isAngleName = nm => nm === 'alpha' || nm === 'beta' || nm === 'gamma';
 const latBounds = (nm, v0) => isAngleName(nm) ? [Math.max(1, v0 - LAT_ANGLE), Math.min(179, v0 + LAT_ANGLE)] : [(1 - LAT_RANGE)*v0, (1 + LAT_RANGE)*v0];
@@ -1467,6 +1657,9 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   }
   const nw = okPts.length;
   if (nw < MIN_POINTS) throw new Error(`The pattern has too few points (${nw}) for a refinement.`);
+  // The typical point's noise (the median σ, in the units of y): how far a line's tail is
+  // drawn (lineHalf).
+  const sig = okPts.map(i=> 1/Math.sqrt(w[i])).sort((a, b)=> a - b), noise0 = sig[sig.length >> 1];
   const x0 = X[0], x1 = X[n-1];
 
   // Wavelengths: the file's, else Cu. A Kα1-only file (ratio 0) has one line.
@@ -1491,6 +1684,8 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     cos2M = ins.monoK > 0 && ins.monoK <= 1 ? ins.monoK : Math.cos(tm)**2;
   }
   const radius = ins.radius > 0 ? ins.radius : 240;
+  // The widest a size may make a line: crystallites of D_MIN, whatever the wavelength.
+  const ysMax = K_SCHERRER*lam1/D_MIN*R2D;
 
   // Background basis: Chebyshev in u ∈ [−1, 1] over the pattern, and 1/2θ (air scatter).
   const N = Math.max(0, Math.round(bgDegree));
@@ -1541,7 +1736,7 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     // be reached by name, and getParams would give it the other's values.
     if (pfxSeen.has(pfx)) throw new Error(`Two phases share the id ${id}.`);
     pfxSeen.add(pfx);
-    const cell = { ...p.cell }, names = latticeNames(p.constraint), lat0 = latticeParams(p.constraint, cell);
+    const cell = idealCell(p.constraint, p.cell), names = latticeNames(p.constraint), lat0 = latticeParams(p.constraint, cell);
     const dmin = Math.min(dFull, dLim/latticeStretch(p.constraint, cell, names, lat0)), list = reflections(cell, p.ops, dmin);
     const nFull = list.filter(r=> r.d >= dFull).length;     // (sorted by d, largest first)
     const atoms = p.atoms || [];
@@ -1562,8 +1757,8 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     });
     q.iB = par.length; add(pfx + 'B', 0, -2, 10, 1e-4, { group: 'phase', phase: k, kind: 'B' });
     q.iXs = par.length; add(pfx + 'Xs', P.Xs, 0, 10, 1e-6, { group: 'phase', phase: k, kind: 'size' });
-    q.iYs = par.length; add(pfx + 'Ys', P.Ys, 0, 10, 1e-6, { group: 'phase', phase: k, kind: 'size' });
-    if (shapeTypeOf(p.shape)) shapeSetup(q, p, cell, list, (nm, value, lo, hi, extra)=> add(pfx + nm, value, lo, hi, 1e-6, { group: 'phase', phase: k, kind: 'shape', ...extra }), ()=> par.length);
+    q.iYs = par.length; add(pfx + 'Ys', P.Ys, 0, ysMax, 1e-6, { group: 'phase', phase: k, kind: 'size' });
+    if (shapeTypeOf(p.shape)) shapeSetup(q, p, cell, list, (nm, value, lo, hi, extra)=> add(pfx + nm, value, lo, hi, 1e-6, { group: 'phase', phase: k, kind: 'shape', ...extra }), ()=> par.length, ysMax);
     // A preferred orientation (March–Dollase): its axis (hkl, or 'auto': autoRefine picks
     // it), its r refined from the texture stage on (1, none, until then).
     const po = textureOf(p.po);
@@ -1589,7 +1784,11 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     // The 1/2θ term is used where air scatter rises: patterns that start below 20° (and
     // above 0, where it is defined).
     useInv: x0 > 0 && (bgInv != null ? !!bgInv : x0 < 20),
-    win: WIN_FWHM,
+    win: WIN_FWHM, noise0,
+    // The FCJ counts' keys (lineNodes): (k·rStride + r)·4 + j, a member's ·64 (at most 24 a
+    // family, Friedel mates merged). A fixed 65536 shared keys between two phases once one
+    // listed more reflections (a triclinic cell over about 1.6·10⁴ Å³ to 150° in Cu Kα).
+    rStride: Math.max(1, ...ph.map(q=> q.nRefl)),
     esd: {}, cov: null,
   };
 }
@@ -1773,13 +1972,12 @@ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw
   for (let i = 0; i < m; i++){
     const pr = profileAtTheta(th, U, V, W, X, Y + ws*wv[i]), ti = tw ? tw[i] : 1;
     sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
-    const half = Math.max(model.win*pr.H, WIN_MIN);
+    const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
     if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
-    const nodes = A > 0 ? lineNodes(model, -1 - ((k*65536 + r)*64 + i)*4 - j, th, A, pr.H) : null;
-    const Im = I/m*ti;
-    if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, Im, model.win);
-    else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, Im, model.win);
-    else addPeakFCJ(out, x, tt, pr.H, pr.eta, Im, nodes, model.win);
+    const nodes = A > 0 ? lineNodes(model, -1 - ((k*model.rStride + r)*64 + i)*4 - j, th, A, pr.H) : null;
+    if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, Im, win);
+    else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, Im, win);
+    else addPeakFCJ(out, x, tt, pr.H, pr.eta, Im, nodes, win);
   }
   // The tick: the line's intensity with its texture, its width the members' mean
   // (weighed as their intensities).
@@ -1834,26 +2032,32 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, 
   // A line's widths from its size's mean (the window) and narrowest (the step)
   const widths = (wMean, wMin)=> [tch(pr.HG, pr.HL + wMean/c + strDeg + fltDeg).H, tch(pr.HG, pr.HL + wMin*grow/c + strDeg + fltDeg).H];
   const [Hest, Hmin] = widths(sizeMean, sizeMin);
-  const half = Math.max(model.win*Hest, WIN_MIN);
+  // (the window's least half-width: lineHalf's, from the line as a pseudo-Voigt)
+  const tq = tch(pr.HG, lorTot), halfT = lineHalf(model, Hest, tq.eta, S*I);
   const c2 = Math.cos(2*th), dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
   const xa = model.x0, xb = model.x1;
-  if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) return;
+  if (tt + Math.max(0, dMax) + halfT < xa || tt + Math.min(0, dMax) - halfT > xb) return;
   // The divergence's node count from the narrowest component the line can hold (a thin
   // plate's sharp in-plane members inside a broad line): counted from the whole line's
   // width, 3 nodes 0.1° apart drew separate bumps, 8 % of the peak.
-  const nodes = A > 0 ? lineNodes(model, (k*65536 + r)*4 + j, th, A, Hmin) : null;
+  const nodes = A > 0 ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin) : null;
+  const spread = nodes ? nodes.reduce((s, nd)=> Math.max(s, Math.abs(nd.d)), 0) : 0;
+  /* The tail rule draws no further than the grid holds at its step (an eighth of Hmin):
+     a step grown for the tail costs the line's top more than the tail gains. On Si spheres
+     at 10⁷ counts it had grown 4–5×, and with the divergence's nodes the line went
+     negative by 2·10⁻⁴ of its peak. */
+  const half = Math.max(Math.max(model.win*Hest, WIN_MIN), Math.min(halfT, WPPM_N_MAX*Math.max(Hmin, 1e-5)/16 - spread));
   const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi] of list) addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } : null;
   // (The texture's weights are in the members' weights; without a shape, in I already.)
   const tick = ticks && tt >= xa && tt <= xb, fw = tick ? {} : null;
-  const line = { x: model.x, out, tt, lam: L.lam, I, Hi: pr.H, etai: pr.eta, WL, nodes, win: model.win, winMin: WIN_MIN };
+  const line = { x: model.x, out, tt, lam: L.lam, I, Hi: pr.H, etai: pr.eta, WL, nodes, win: model.win, winMin: half };
   /* A solid whose members differ in width by more than one grid can hold (a thin plate's
      sharp in-plane members in a broad line: the window follows the mean, the step the
      sharpest): its members in groups of like width, from the sharpest, each group on its
      own grid. The profile is linear in the members, so the groups add up to the line.
      (On one grid past the cap the step grew: 1 nm sheets 500 nm across were drawn 1–9 %
      of the peak off.) */
-  const spread = nodes ? nodes.reduce((s, nd)=> Math.max(s, Math.abs(nd.d)), 0) : 0;
-  const fits = ([He, Hm])=> wppmPoints(He, Hm, spread, model.win, WIN_MIN) <= WPPM_N_MAX;
+  const fits = ([He, Hm])=> wppmPoints(He, Hm, spread, model.win, half) <= WPPM_N_MAX;
   if (ts && members.length > 1 && !fits([Hest, Hmin])){
     let g = null;
     const draw = ()=> { if (g.sw > 0){ const [He, Hm] = widths(g.swx/g.sw, g.list[0][5]); wppmLine({ ...line, Hest: He, Hmin: Hm, size: sizeOf(g.list), fwhm: fw }); } };
@@ -1872,7 +2076,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, 
        line), measured on the line as drawn. 1.23·Ys, the single sphere's, had been 1.6
        times a log-normal line's at σ = 0.94 and 2.2 at 1.2: its breadth stays with the
        volume-weighted mean while its top sharpens. (The estimate, should it fail.) */
-    const tq = tch(pr.HG, lorTot), Hm = lineFwhm(fw);
+    const Hm = lineFwhm(fw);
     const tSum = ts && tw ? tw.reduce((a, b)=> a + b, 0)/tw.length : 1;
     ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
                  tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I*tSum, H: Hm > 0 ? Hm : tq.H, eta: tq.eta, j: 0, pk: k, r });
@@ -1896,6 +2100,16 @@ function phasePattern(model, v, k, out, ticks){
   const shp = act && !wppm ? shapeWidths(model, q, v) : null, ts = act && wppm ? shapeTs(model, q, v) : null;
   const tw = textureWeights(q, v);
   const fa = q.iFA != null ? v[q.iFA] : 0, sigma = q.iLS != null ? v[q.iLS] : 0;
+  /* The faults' layer spacing at this cell: the table's is the starting cell's, and κ goes
+     as 1/d. Held there, α came out a_start/a_true times the truth (2.2 esd for a cell 0.5 %
+     off, 8 esd for 2 %, on synthetic fcc patterns of 3·10⁴ counts); now within 0.1 esd.
+     (|B·h| = √(hᵀG*h).) */
+  let fScale = 1;
+  if (fa > 0 && q.faultTab.gB > 0){
+    const h = q.faultTab.hp;
+    let s = 0; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) s += h[i]*Gs[3*i + j]*h[j];
+    fScale = Math.sqrt(s)/q.faultTab.gB;
+  }
   const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
   if (sk && sk.only && sk.k !== k) return out;
   for (let r = 0; r < q.nRefl; r++){
@@ -1910,7 +2124,7 @@ function phasePattern(model, v, k, out, ticks){
     if (tw && !shp && !ts){ const o = tw[r]; let t = 0; for (let i = 0; i < o.length; i++) t += o[i]; base *= t/o.length; base2 *= t/o.length; }
     // Stephens' strain and the faults: this reflection's own (none: the phase's Xs, 0).
     const eps = q.iS ? strainOf(q, v, r) : v[q.iXs]*D2R/4;
-    const kappa = fa > 0 ? faultKappa(q.faultTab, r, fa) : 0;
+    const kappa = fa > 0 ? fScale*faultKappa(q.faultTab, r, fa) : 0;
     const Xr = q.iS ? Xi + 4*eps*R2D : X;
     for (let j = 0; j < model.lines.length; j++){
       const L = model.lines[j], st = L.lam/(2*d[r]);
@@ -1937,12 +2151,12 @@ function phasePattern(model, v, k, out, ticks){
       // (fcjNodes): a line out of range by more than that is skipped before its nodes.
       const c2 = Math.cos(2*th);
       const dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
-      const half = Math.max(model.win*pr.H, WIN_MIN);
+      const half = lineHalf(model, pr.H, pr.eta, S*I), win = half/pr.H;
       if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
-      const nodes = A > 0 ? lineNodes(model, (k*65536 + r)*4 + j, th, A, pr.H) : null;
-      if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, I, model.win);
-      else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, I, model.win);
-      else addPeakFCJ(out, x, tt, pr.H, pr.eta, I, nodes, model.win);
+      const nodes = A > 0 ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, pr.H) : null;
+      if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, I, win);
+      else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, I, win);
+      else addPeakFCJ(out, x, tt, pr.H, pr.eta, I, nodes, win);
       if (ticks && j === 0 && tt >= xa && tt <= xb)
         ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
                      tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: pr.H, eta: pr.eta, j: 0, pk: k, r });
@@ -2109,6 +2323,13 @@ function solveLinear(model, v, st, which){
   return assemble(model, v, st);
 }
 
+// The difference step of parameter j at v: its own (Stephens' from the phase's strain, U, V
+// and W's from H_G²), at least 10⁻⁷ of its value. (jacobian, and hgFloored, which must see the same points.)
+function diffStep(model, j, v){
+  const p = model.par[j], uvw = model.iProf.indexOf(j);
+  const h = p.kind === 'strain' ? strainStep(model, p, v) : uvw >= 0 && uvw < 3 ? uvwStep(model, p, v, 2 - uvw) : p.step;
+  return Math.abs(v[j])*1e-7 > h ? Math.abs(v[j])*1e-7 : h;
+}
 /* The Jacobian columns of the free parameters at v (st the state there): exact for the
    linear ones (∂y/∂S = the phase at scale 1, ∂y/∂c = its basis function), central
    differences for the rest, recomputing only the phases a parameter touches (one-sided
@@ -2120,8 +2341,7 @@ function jacobian(model, v, st, free, cols){
     const p = model.par[j], col = cols[a];
     if (p.linear){ col.set(p.group === 'bg' ? model.basis[p.basis] : st.pats[p.phase]); return; }
     col.fill(0);
-    let h = p.kind === 'strain' ? strainStep(model, p, v) : p.step;
-    if (Math.abs(v[j])*1e-7 > h) h = Math.abs(v[j])*1e-7;
+    const h = diffStep(model, j, v);
     let up = v[j] + h, dn = v[j] - h;
     if (up > p.hi) up = v[j];
     if (dn < p.lo) dn = v[j];
@@ -2185,10 +2405,19 @@ function vFloor(model, U, W){
   if (U > 0 && W > 0){ const ts = Math.sqrt(W/U); if (ts > t0 && ts < t1) m = 2*Math.sqrt(U*W); }
   return -m;
 }
-// Is H_G² (nearly) on its floor at a reflection inside the pattern, for a phase that is
-// there (scale > 0)? There ∂y/∂(U, V, W) vanish or follow the difference step.
-function hgFloored(model, v){
-  const [U, V, W] = model.iProf.slice(0, 3).map(i=> v[i]), zero = v[model.iZero], disp = v[model.iDisp];
+/* Is H_G² on its floor at a reflection inside the pattern, for a phase that is there
+   (scale > 0), or does the lower difference point of a free U, V or W take it there
+   (jacobian's step, diffStep, one-sided at a bound)? Then ∂y/∂(U, V, W) follow the floor,
+   not the data. A fixed margin (100× the floor, H_G ≤ 10⁻³°, up to v426) reported
+   resolved synchrotron widths (H_G 0.0006–0.0009° at a 0.0002° step, refined within 2 %)
+   as on a bound with esd NaN, though no difference point reached the floor. */
+function hgFloored(model, v, free){
+  const iP = model.iProf.slice(0, 3), [U, V, W] = iP.map(i=> v[i]), zero = v[model.iZero], disp = v[model.iDisp];
+  const [hU, hV, hW] = iP.map(j=>{
+    if (!free.includes(j)) return 0;
+    const h = diffStep(model, j, v);
+    return v[j] - h < model.par[j].lo ? 0 : h;
+  });
   for (const q of model.phases){
     if (!(v[q.iScale] > 0) || !q.d) continue;
     for (let r = 0; r < q.nRefl; r++) for (const L of model.lines){
@@ -2196,7 +2425,7 @@ function hgFloored(model, v){
       const th = Math.asin(st), tt = 2*th*R2D + zero + disp*Math.cos(th);
       if (tt < model.x0 || tt > model.x1) continue;
       const t = Math.tan(th);
-      if (U*t*t + V*t + W <= 100*HG2_FLOOR) return true;
+      if (U*t*t + V*t + W - Math.max(hU*t*t, hV*t, hW) <= HG2_FLOOR) return true;
     }
   }
   return false;
@@ -2217,7 +2446,14 @@ function hgFloored(model, v){
    others of that combination (X with a phase's Xs: the profile has X + Xs), whose
    inverse holds the variance each would have with it held. `tied` lists each such set
    (names), `esdHeld` those conditional esds. iterations and ms: over all the passes
-   (passes: how many), why: the last pass's. */
+   (passes: how many), why: the last pass's; fcjBehind: the last pass still left a line
+   behind its held FCJ count. */
+/* refine()'s passes with fresh FCJ counts run until no line has outgrown its count. On
+   synthetic standards (LaB6, Si; (S + H)/L 0.01–0.2 started from 0.005, 0.02, 0.05 and
+   0.08, two profiles) at most 6 were needed, 4 from ASYM_START. The cap of 4 that the
+   user's LaB6 had suggested stopped one pass short from 0.005 at A = 0.15: the asymmetry
+   3 esd off and χ²_ν 0.3 % high (8.6 esd and 0.3 % on Si). FCJ_PASSES only stops a cycle. */
+const FCJ_PASSES = 10;
 function refine(model, opts = {}){
   // The FCJ node counts held for the whole refinement (lineNodes). When the refinement
   // has carried a line past its held count (the asymmetry, freed from 0.02, went to 0.058
@@ -2227,8 +2463,9 @@ function refine(model, opts = {}){
   const t0 = Date.now();
   let res, iterations = 0, passes = 0;
   // opts.audit === false: one pass (the free shape's brief trial refinements, which only
-  // rank the starting shapes).
-  for (let pass = 0; pass < (opts.audit === false ? 1 : 4); pass++){
+  // rank the starting shapes). Otherwise passes until no line has outgrown its count
+  // (FCJ_PASSES only stops a cycle; a last pass still behind is returned as fcjBehind).
+  for (let pass = 0; pass < (opts.audit === false ? 1 : FCJ_PASSES); pass++){
     const fz = model.fcjFreeze = new Map();
     try { res = refineHeld(model, opts); }
     finally { model.fcjFreeze = null; }
@@ -2238,8 +2475,15 @@ function refine(model, opts = {}){
     finally { model.fcjAudit = null; }
     if (!model.fcjBehind || opts.audit === false) break;
   }
-  return { ...res, iterations, passes, ms: Date.now() - t0 };
+  return { ...res, iterations, passes, fcjBehind: opts.audit !== false && !!model.fcjBehind, ms: Date.now() - t0 };
 }
+/* The least damping: a tenth of the Cholesky pivot tolerance, so that a direction the
+   factorisation keeps (pivot ≥ 10⁻¹⁰) takes at least 9/10 of its Gauss–Newton step. At
+   10⁻⁹ a direction with a pivot of 10⁻¹¹–10⁻⁹ took 1–50 % of it per iteration: the 1/2θ
+   term beside T₀…T₁₆ (bgDegree 16) crawled to the 80-iteration cap unconverged (χ²_ν
+   1.039 in the last iterations, 1.036696 after the final linear re-solve) where 10⁻¹¹
+   converges in 12 (1.036659); well-conditioned refinements are unchanged. */
+const LAM_MIN = CHOL_TOL/10;
 function refineHeld(model, opts){
   const t0 = Date.now();
   const names = opts.free || model.par.filter(p=> p.refine).map(p=> p.name);
@@ -2289,7 +2533,11 @@ function refineHeld(model, opts){
     // esds at this point, for the shift/esd test
     const chInv = cholInverse(cholesky(As, k), k), cr = chiRed(st.chi2);
     let accepted = false, maxRatio = 0;
-    for (let tries = 0; tries < 12; tries++){
+    /* 12 tries, and on until λ reaches 10k: a correlation-scaled matrix of k parameters
+       has no eigenvalue above k, so from there the step is a short one down the gradient,
+       which lowers χ² unless the gradient is rounding. (From LAM_MIN, 12 tries alone
+       reach only λ = 10; from v426's floor of 10⁻⁹ they reached 10³.) */
+    for (let tries = 0; tries < 12 || (lam < 10*k && tries < 30); tries++){
       const M = As.slice();
       for (let a = 0; a < k; a++) M[a*k + a] += lam;
       const ch = cholesky(M, k), ds = cholSolve(ch, gs, k);
@@ -2331,7 +2579,7 @@ function refineHeld(model, opts){
         const rel = (st.chi2 - next.chi2)/next.chi2;
         v = vn; const t = st; st = next;
         if (next === trial) trial = t; else trialZ = t;
-        lam = Math.max(lam/10, 1e-9);
+        lam = Math.max(lam/10, LAM_MIN);
         accepted = true;
         if (maxRatio < 0.01 || rel < 1e-9){ converged = true; why = 'shifts below 1 % of the esds'; }
         break;
@@ -2390,11 +2638,20 @@ function refineHeld(model, opts){
         for (let c = 0; c < m; c++){ cov[a][c] = cov[c][a] = NaN; if (c !== a) corr[a][c] = corr[c][a] = NaN; }
       }
     });
-    if ([iU, iV, iW].some(j=> free.includes(j)) && hgFloored(model, v))
+    if ([iU, iV, iW].some(j=> free.includes(j)) && hgFloored(model, v, free))
       for (const j of [iU, iV, iW]) if (free.includes(j)){ const nm = model.par[j].name; esd[nm] = NaN; if (!atBound.includes(nm)) atBound.push(nm); }
   }
   model.v = v; model.par.forEach((p, i)=> { p.value = v[i]; });
   const stats = rStats(model, st.yc, st.bg, m);
+  /* No more weighted points than free parameters: the fit can pass through every point,
+     and χ² (then 0) says nothing of the scatter. With N = m the esds came out 10⁻¹⁴–10⁻¹⁶
+     of the values (11 points, a cell 'known' to 7·10⁻¹⁶ Å), with N < m NaN: none is given.
+     (buildModel's MIN_POINTS only refuses a pattern no model can use.) */
+  if (m && stats.N <= m){
+    for (const j of free) esd[model.par[j].name] = NaN;
+    for (const nm in esdHeld) esdHeld[nm] = NaN;   // the detection test reads these too
+    if (cov) cov.forEach((r, a)=> { r.fill(NaN); corr[a].fill(NaN); corr[a][a] = 1; });
+  }
   model.esd = esd;
   model.cov = { names: free.map(j=> model.par[j].name), cov };
   const freeNames = free.map(j=> model.par[j].name);
@@ -2484,6 +2741,14 @@ function parabolicMin(curve, k){
    up to 74 wt % that way). The price: a phase that is there with its file cell beyond
    the range is not placed (autoRefine searches a single phase once more, wider). The
    model keeps f, with the scales and background solved there. */
+/* The default range, ±CELL_RANGE: a file's cell against the sample's (a doped or solid-
+   solution phase, a DFT cell: PBE's are 1–3 % long, a temperature). Over ±3 % (up to v426)
+   a corundum 4 % off beside ZnO was not placed and was left out (2 runs of 2), as were a
+   rutile, an anatase (60 wt %) and a quartz 4–4.5 % off (6 of 6); over ±5 % they are, the
+   other 17 of 18 multi-phase searches, the 18 absent-candidate samples and 7 absent copies
+   4–4.5 % off a present phase give the same verdicts, and the search takes the same time
+   (median ratio 0.96). */
+const CELL_RANGE = 0.05;
 function cellSearch(model, opts = {}){
   // Peaks at their FCJ centroids for the search (lineNodes): a quarter of its cost on a
   // large sharp cell, and the minimum where the full profile puts it.
@@ -2491,7 +2756,7 @@ function cellSearch(model, opts = {}){
   try { return cellSearchAt(model, opts); } finally { model.fcjCentroid = prev; }
 }
 function cellSearchAt(model, opts){
-  const range = opts.range != null ? opts.range : 0.03;
+  const range = opts.range != null ? opts.range : CELL_RANGE;
   let ks;
   if (opts.index != null) ks = [opts.index];
   else if (opts.phase != null){
@@ -2642,11 +2907,33 @@ function doubletFwhm(H, D, r){
 
 // Reflections (α1) inside the pattern at the model's current values, of the phases there
 // (scale > 0: a phase left out has its ticks too, but no lines in the fit) and with an
-// intensity (F² of a special-position extinction is rounding, 10⁻¹⁰ of the strongest).
+// intensity (F² of a special-position extinction is rounding, 10⁻¹⁰ of the strongest):
+// n, and the distinct places their lines stand at (`positions`: reflections closer than
+// the FWHM there make one line, as the cubic (300) and (221)), the widths' sampling.
 function reflectionsInRange(model){
   const ticks = calc(model).ticks, Imax = Math.max(0, ...ticks.map(t=> t.I));
-  return ticks.filter(t=> t.I > 1e-10*Imax).length;
+  const ts = ticks.filter(t=> t.I > 1e-10*Imax);
+  let positions = 0;
+  ts.forEach((t, i)=> { if (!i || t.tt - ts[i - 1].tt > t.H) positions++; });
+  return { n: ts.length, positions };
 }
+/* U, V and the asymmetry are freed with X from this many line positions: the Gaussian
+   width H_G² = U tan²θ + V tanθ + W is a quadratic in tanθ, which three angles determine.
+   Held at 0 instead, the other terms and the zero take up what they model: on LaB6, Si
+   and corundum standards cut to 3–7 positions, under four instrumental profiles, the
+   instrument's FWHM came out 17–23 % off in range (30 % over 10–140°) and the zero
+   0.02–0.45° off, χ²_ν 2–3; freed, 0.7–1 % in range (3–5 % over 10–140°) and the zero
+   within 0.003°, χ²_ν 1.03. Below three both fail. (Up to v426: 8 reflections.) */
+const UV_POSITIONS = 3;
+/* The standard's zero scan runs over ±ZERO_RANGE degrees. It sees the zero and the
+   standard's displacement together (2s·cosθ/R: 0.48° at low angles for a standard 1 mm off
+   the focusing circle of a 240 mm goniometer, 0.57° at 200 mm), so it covers a zero of
+   ±0.3° with that. Over ±0.3° (up to v426), LaB6, Si and corundum standards whose lines
+   stood 0.37–0.68° off were not found, or found at a false minimum near the edge, in 20 of
+   45 tests, the sharp ones all (χ²_ν 19–153 after); over ±1° all 90 were found, those
+   within ±0.3° unchanged. The same on YAG, quartz, NaCl, LaB6 under Mo and a synchrotron-
+   sharp Si (40 tests, zeros to ±0.8°). The standard's refinement takes 1.05–1.5× as long. */
+const ZERO_RANGE = 1;
 
 /* ownEvidence(model, v, chi2) → per phase { under, alone, pts, alpha, esd, own }: what of
    a phase the pattern shows apart from the others. under: the share of its calculated
@@ -2668,6 +2955,9 @@ function reflectionsInRange(model){
 const twins = (a, b) => a.constraint.kind === b.constraint.kind && a.atoms.length === b.atoms.length
   && Math.abs(a.mass - b.mass) <= 1e-3*a.mass && ['a','b','c'].every(l=> Math.abs(a.cell[l] - b.cell[l]) <= 0.02*a.cell[l]);
 const CLEAR_FWHM = 1.5, CLEAR_HEIGHT = 0.1;
+// A phase ownEvidence left out goes back when χ² without it is over OWN_KEEP times χ² with
+// it and the rise over OWN_SHARE of its Σ w·y_p² (autoRefine, where the numbers are).
+const OWN_KEEP = 2, OWN_SHARE = 0.25;
 function ownEvidence(model, v, chi2){
   const st = evaluate(model, v), n = model.n, y = model.y, w = model.w, x = model.x;
   const yp = model.phases.map((q, k)=> st.pats[k].map(t=> t*v[q.iScale]));
@@ -2740,9 +3030,8 @@ function ownEvidence(model, v, chi2){
    2. scales + background;
    3. + lattice + displacement (sample) | + zero + displacement (standard);
    4. + W, Y (with opts.irf: each phase's Ys instead);
-   5. + X, and U, V and the asymmetry (S + H)/L when the instrumental profile is free
-      (the standard, or opts.instrumentalProfileFree) and ≥ 8 reflections lie in the
-      range (with irf: each phase's Xs instead);
+   5. + X, and U, V and the asymmetry (S + H)/L when the reflections in range stand at
+      ≥ UV_POSITIONS places (with irf: each phase's Xs instead);
    6. the phases' optional stages, each on top of what is free: the anisotropic strain
       (Stephens' S_j), the planar faults (FA), the size distribution (σ, LS), the
       displacement parameters (ΔB, B per site or Uⁱʲ per site: the phase's adp, or
@@ -2763,7 +3052,7 @@ function ownEvidence(model, v, chi2){
    the cell it started that search from throughout: the file's, or for a phase found in
    the first round but not in the second, the first round's.
    Other options: bgInv (default true when the pattern starts below 20°), range (cell
-   search, default 0.03), maxIter, onProgress(frac, stageName).
+   search, default CELL_RANGE), maxIter, onProgress(frac, stageName).
    Returns { params, esd, corr, cov, free, atBound, undetermined, tied, esdHeld (refine's),
    stats, stages:[{name,
    Rwp, Rexp, chi2, Rp, cRwp, free, iterations (over its FCJ passes), passes, converged,
@@ -2772,7 +3061,8 @@ function ownEvidence(model, v, chi2){
    first phase's), sizeStrain, weightFractions (each with `detected`), detected: [ids],
    warnings: [string], textures, models: {id: {profile, strain, faults, adp}} (what each
    phase was refined with: without the standard's profile, WPPM, the anisotropic strain
-   and the faults are not), irf (the one used, or null), reflectionsInRange, converged, ms }. */
+   and the faults are not), irf (the one used, or null), reflectionsInRange, linePositions
+   (reflectionsInRange's n and positions after the widths stage), converged, ms }. */
 function autoRefine(model, opts = {}){
   const t0 = Date.now(), stages = [], warnings = [];
   let irf = opts.irf || null;
@@ -2826,13 +3116,12 @@ function autoRefine(model, opts = {}){
   // Starting profile.
   const est = widthEstimate(model), thE = est.tt/2*D2R;
   // The asymmetry: the standard's with irf (0 in an irf from before it was modelled);
-  // refined where the instrument's profile is (the standard), from a typical (S + H)/L,
-  // since at 0 it has no derivative; else none. Whether stage 4 frees it, with U and V,
-  // is decided after stage 3 from the reflections then in range; the count at the
-  // file's cell here only chooses the starting value.
-  const instrFree = (std || opts.instrumentalProfileFree) && !irf;
+  // without one, refined (the standard's, or a sample's own), from ASYM_START,
+  // since at 0 it has no derivative. Whether stage 4 frees it, with U and V, is decided
+  // after stage 3 from the line positions then in range; the count at the file's cell
+  // here only chooses the starting value.
   const asym0 = Number.isFinite(opts.asym0) ? opts.asym0 : ASYM_START;
-  v[model.iAsym] = irf ? (Number.isFinite(irf.asym) ? irf.asym : 0) : instrFree && reflectionsInRange(model) >= 8 ? asym0 : 0;
+  v[model.iAsym] = irf ? (Number.isFinite(irf.asym) ? irf.asym : 0) : reflectionsInRange(model).positions >= UV_POSITIONS ? asym0 : 0;
   if (irf){
     ['U','V','W','X','Y'].forEach(k=> { if (Number.isFinite(irf[k])) v[model.index[k]] = irf[k]; });
     if (Number.isFinite(irf.zero)) v[model.iZero] = irf.zero;
@@ -2872,7 +3161,7 @@ function autoRefine(model, opts = {}){
     // to that one's peaks.
     // The second round only for the phases the first found: one not found is not
     // searched again (twice round, an edge minimum compounded to 0.97² = 0.94).
-    const range = opts.range != null ? opts.range : 0.03, per = [];
+    const range = opts.range != null ? opts.range : CELL_RANGE, per = [];
     const rounds = model.phases.length > 1 ? 2 : 1;
     for (let r = 0; r < rounds; r++) model.phases.forEach((q, k)=> {
       if (r && !(per[k] && per[k].found)) return;
@@ -2905,10 +3194,10 @@ function autoRefine(model, opts = {}){
     cs = first ? { f: first.f, Rwp, curve: first.curve, fine: first.fine, steps: first.steps, phases: per.filter(p=> p) } : null;
     stageStats('cell search', null, { f: cs ? cs.f : 1 });
   } else if (std){
-    // ±0.3° in steps of at most H/4, both ends on the grid (stepping from −0.3 by H/4 had
-    // stopped at +0.2° for H = 0.5°), and a step beyond each (beyond).
-    const H = Math.max(est.H, 0.02), zs = beyond(grid(-0.3, 0.3, 2*Math.ceil(0.3/(H/4)) + 1));
-    // The same rule as the cell search: a minimum on the edge of ±0.3° (or none) leaves
+    // ±ZERO_RANGE in steps of at most H/4, both ends on the grid (stepping from −0.3 by H/4
+    // had stopped at +0.2° for H = 0.5°), and a step beyond each (beyond).
+    const H = Math.max(est.H, 0.02), zs = beyond(grid(-ZERO_RANGE, ZERO_RANGE, 2*Math.ceil(ZERO_RANGE/(H/4)) + 1));
+    // The same rule as the cell search: a minimum on the edge of the range (or none) leaves
     // the zero where it was.
     const z0 = model.v[model.iZero];
     // Peaks at their FCJ centroids, as in the cell search.
@@ -2917,9 +3206,9 @@ function autoRefine(model, opts = {}){
     try { sc = scan(model, (vv, z)=> { vv[model.iZero] = z; }, zs); } finally { model.fcjCentroid = prevC; }
     const kmin = bestIndex(sc.curve, z0);
     let found = kmin >= 0 && !edgeOrFlat(sc.curve, kmin), z = found ? parabolicMin(sc.curve, kmin) : z0;
-    if (found && Math.abs(z) > 0.3*(1 + 1e-9)){ found = false; z = z0; }
+    if (found && Math.abs(z) > ZERO_RANGE*(1 + 1e-9)){ found = false; z = z0; }
     const vv = model.v.slice(); vv[model.iZero] = z;
-    if (!found) warnings.push('The zero-shift scan found no minimum within ±0.3°: the zero is left at its start.');
+    if (!found) warnings.push(`The zero-shift scan found no minimum within ±${ZERO_RANGE}°: the zero is left at its start.`);
     solveLinear(model, vv, evaluate(model, vv), linIdx);
     setParams(model, vv);
     stageStats('zero search', null, { zero: z, found });
@@ -2989,8 +3278,8 @@ function autoRefine(model, opts = {}){
   const chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
   // (2.99 esd reads 2.9, not 3.0: "not above 3")
   const weakWhy = (z, after) => `its scale is not above 3 esd${after ? ' once the cells and widths are refined' : ''}${z > 0 ? ` (${(Math.floor(z*10)/10).toFixed(1)} esd)` : ''}`;
-  let res, nIn, lastFree = [], weakOut = null;
-  const keptBIC = new Map();
+  let res, nIn, lastFree = [], weakOut = null, ownOut = null;
+  const keptBIC = new Map(), keptOwn = new Map();
   // Optional stages whose every trial refinement threw (said in the warnings, and the
   // models report what was used instead).
   const lsFailed = new Set(), poFailed = new Set();
@@ -3007,9 +3296,17 @@ function autoRefine(model, opts = {}){
     free = free.concat(irf ? keep(model.phases.map(q=> q.pfx + 'Ys')) : ['W', 'Y']);
     res = run(3, 'widths', free);
     nIn = reflectionsInRange(model);
-    const uvFree = instrFree && nIn >= 8;
+    /* Without the standard's profile the whole profile is refined, on a sample as on the
+       standard (a sample's is then the instrument's and its own in one; up to v426 its U,
+       V and asymmetry were held at 0 unless opts.instrumentalProfileFree). Held, the
+       asymmetry went into the cell and the displacement, U and V into the rest of the
+       profile: on SrTiO3, corundum, ZnO and a monoclinic cell of 8–200 nm under three
+       instrumental profiles (A = 0.02–0.08) the cell came out 0.2–10·10⁻⁴ off at 2–45
+       esd, χ²_ν up to 2.0 (the truth's 1.04); refined, 0.01–0.9·10⁻⁴, within 2.2 esd,
+       χ²_ν 1.04, for an esd 0.8–2.3× as large and about twice the time. */
+    const uvFree = !irf && nIn.positions >= UV_POSITIONS;
     // Freed from a typical value (at 0 it has no derivative); held, none.
-    if (instrFree && (uvFree ? !(model.v[model.iAsym] > 0) : model.v[model.iAsym] !== 0)){ const vv = model.v.slice(); vv[model.iAsym] = uvFree ? asym0 : 0; setParams(model, vv); }
+    if (!irf && (uvFree ? !(model.v[model.iAsym] > 0) : model.v[model.iAsym] !== 0)){ const vv = model.v.slice(); vv[model.iAsym] = uvFree ? asym0 : 0; setParams(model, vv); }
     free = free.concat(irf ? keep(model.phases.map(q=> q.pfx + 'Xs')) : uvFree ? ['X', 'U', 'V', 'asym'] : ['X']);
     res = run(4, irf ? 'size and strain' : uvFree ? 'full profile' : 'profile shape', free);
     // The optional stages, each on top of what is free already.
@@ -3057,14 +3354,14 @@ function autoRefine(model, opts = {}){
     /* A preferred orientation (March–Dollase), for the phases that ask for one. For a
        cubic phase its r has no first-order effect at 1 (the members of a family weigh
        out evenly to first order), so it is refined from 0.8 and from 1.25 (plates and
-       needles) and the lower χ² kept; for 'auto', on each low-index axis
-       (textureCandidates) in turn. */
+       needles) and the lower χ² kept; for 'auto', on each axis textureCandidates gives
+       (the low-index planes and those of the largest spacings) in turn. */
     const poKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].iPO != null && !out.has(k));
     if (poKs.length){
       tS = Date.now();
       prog(Math.min(nStages - 0.5, kSt)/nStages, 'preferred orientation');
       for (const k of poKs){
-        const q = model.phases[k], v0 = model.v.slice(), cands = q.poSpec === 'auto' ? textureCandidates(q) : [q.poSpec];
+        const q = model.phases[k], v0 = model.v.slice(), cands = q.poSpec === 'auto' ? textureCandidates(model, k) : [q.poSpec];
         let best = null;
         for (const hkl of cands) for (const r0 of [0.8, 1.25]){
           q.poHkl = hkl;
@@ -3097,6 +3394,36 @@ function autoRefine(model, opts = {}){
       if (out.size === w.out && dP > 0)
         outWarn[w.idx] = `${nm(w.k)}: not detected — ${weakWhy(w.z, true)}. Leaving it out raises χ² by ${Math.max(0, dchi).toFixed(0)} for its ${dP} parameters (fitting noise gives about ${dP}; a BIC would keep it above ${(need + 10).toFixed(0)}): ${dchi > dP + 3*Math.sqrt(2*dP) ? 'more than noise gives, too little to tell' : 'within what noise gives'}.`;
     }
+    /* What the phase the own-intensity test left out in the last pass was worth: χ²
+       without it, nothing else left out since, against χ² with it. A candidate that is not
+       there takes up only what the others' model leaves, and when it goes they take most
+       of it back: on synthetic samples χ² rose by 0.4–10 % (absent NaCl, LaB6, quartz,
+       corundum, Mg beside hosts with a size distribution, anisotropic strain or two
+       populations), or, where it had held a whole second population of an isostructural
+       host (Mg and ZnO), ×3.1–3.9 with 87 % of its Σ w·y_p² taken up again. A phase that
+       is there carries intensity no other can take: in crowded patterns of broad lines
+       (two or three phases of 6–15 nm, 5–50 wt %), where none of its lines stands clear,
+       leaving it out multiplied χ² by 2.8–300, the others taking up 24–53 % of it. It is
+       put back, its own-intensity test waived (keptOwn), when χ² more than doubles and
+       the rise is over a quarter of its Σ w·y_p² (what leaving it out would cost if they
+       took none of it): a quarter is the geometric middle of the 13 % left by the absent
+       and the 47 % by the present. Up to v426 it stayed out: a present phase of 30–50 wt %
+       was lost in all 7 runs of four such samples (χ²_ν 37–313). The doubling is a ratio
+       of χ² totals: where noise is most of χ² (600 counts at the top) a present phase must
+       add more than that noise, and 2 of 11 such phases stayed out (χ² ×1.3, ×1.7); at ten
+       times the counts the absent candidates' ratios stayed at 1.006–1.16. */
+    if (ownOut){
+      const w = ownOut; ownOut = null;
+      const rise = chiTot(res) - w.chi;
+      if (out.size === w.out && chiTot(res) > OWN_KEEP*w.chi && rise > OWN_SHARE*w.sig){
+        out.delete(w.k); outWarn.splice(w.idx, 1); keptOwn.set(w.k, { chi2: w.chi2, without: res.stats.chi2, why: w.why });
+        const v2 = vSearch.slice();
+        out.forEach(k=> { v2[model.phases[k].iScale] = 0; model.phases[k].iLat.forEach((i, m)=> { v2[i] = len0[k][m]; }); });
+        setParams(model, v2);
+        stages.length = nSearch;
+        continue;
+      }
+    }
     const zs = zScale(res), live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
     // Of the phases not above 3 esd, the least significant goes, one per pass (backward
     // elimination): phases whose lines overlap have correlated scales, and leaving one out
@@ -3112,7 +3439,7 @@ function autoRefine(model, opts = {}){
     let drop = null;
     if (!failing.length && !odd.length && live.length > 1){
       const ev = ownEvidence(model, model.v, res.stats.chi2);
-      const weak = live.filter(k=> !ev[k].own).sort((a, b)=> ev[a].alone - ev[b].alone || ev[b].under - ev[a].under);
+      const weak = live.filter(k=> !ev[k].own && !keptOwn.has(k)).sort((a, b)=> ev[a].alone - ev[b].alone || ev[b].under - ev[a].under);
       if (weak.length && weak.length < live.length){
         const k = weak[0], e = ev[k], others = live.filter(j=> j !== k && !twins(model.phases[k], model.phases[j])).map(nm).join(', ');
         drop = { k, why: `${Math.round(e.under*100)} % of its calculated intensity lies under ${others}'s peaks, and ${!(e.alone > 0)
@@ -3129,6 +3456,13 @@ function autoRefine(model, opts = {}){
     // (The rise is read from the next pass, which runs anyway; a scale at 0 costs nothing.)
     if (lost.length === 1 && !odd.length && zs[lost[0]] > 0)
       weakOut = { k: lost[0], z: zs[lost[0]], idx: outWarn.length, chi: chiTot(res), chi2: res.stats.chi2, P: res.stats.P, out: out.size + 1 };
+    if (drop){
+      // its calculated intensity in χ²'s terms, Σ w·y_p²: what leaving it out would cost if
+      // no other phase took any of it up (at the optimum its residual is orthogonal to y_p)
+      const st = evaluate(model, model.v), q = model.phases[drop.k], P = st.pats[drop.k], s = model.v[q.iScale];
+      let sig = 0; for (let i = 0; i < model.n; i++) sig += model.w[i]*(s*P[i])**2;
+      ownOut = { k: drop.k, idx: outWarn.length, chi: chiTot(res), chi2: res.stats.chi2, sig, why: drop.why, out: out.size + 1 };
+    }
     lost.forEach(k=> leaveOut(k, weakWhy(zs[k], true), v2));
     odd.forEach(k=> leaveOut(k, implausible(k), v2));
     if (drop) leaveOut(drop.k, drop.why, v2);
@@ -3136,9 +3470,10 @@ function autoRefine(model, opts = {}){
     stages.length = nSearch;
   }
   warnings.push(...outWarn);
+  keptOwn.forEach((b, k)=> { if (!out.has(k)) warnings.push(`${nm(k)}: ${b.why}; but leaving it out raises χ²_ν from ${b.chi2.toFixed(2)} to ${b.without.toFixed(2)}, more than twice: the other phases cannot take up its intensity, and it is kept.`); });
   keptBIC.forEach((b, k)=> { if (!out.has(k)) warnings.push(`${nm(k)}: its scale stands at only ${(Math.floor(b.z*10)/10).toFixed(1)} esd (it correlates with its widths or another phase's), but leaving it out raises χ² by ${b.dchi.toFixed(0)} for its ${b.dP} parameters, above the ${(b.need + 10).toFixed(0)} at which a BIC keeps it: kept, with a large esd on its fraction.`); });
   lsFailed.forEach(k=> { if (!out.has(k)) warnings.push(`${nm(k)}: the size distribution could not be refined (the refinements from σ = 0.3 and 0.6 both failed): a single size is reported (σ = 0).`); });
-  poFailed.forEach(k=> { if (!out.has(k)){ const s = model.phases[k].poSpec; warnings.push(`${nm(k)}: the preferred orientation ${s === 'auto' ? 'on its low-index axes' : '(' + idxText(s) + ')'} could not be refined (every trial failed): none is applied.`); } });
+  poFailed.forEach(k=> { if (!out.has(k)){ const s = model.phases[k].poSpec; warnings.push(`${nm(k)}: the preferred orientation ${s === 'auto' ? 'on its trial axes' : '(' + idxText(s) + ')'} could not be refined (every trial failed): none is applied.`); } });
   const live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
   if (live.length > 1){
     const ev = ownEvidence(model, model.v, res.stats.chi2);
@@ -3194,6 +3529,9 @@ function autoRefine(model, opts = {}){
     const e = j < 0 ? null : e0 + (e1 - e0)*(s - r0)/(r1 - r0 || 1);
     warnings.push(`Axial divergence: the tails of the sharpest lines (at the lowest or highest angles) would need ${s.toFixed(1)} times the ${FCJ_MAX_NODES} quadrature nodes used, so they ripple, by up to ${e == null ? 'over 3' : 'about ' + e.toPrecision(1)} % of the peak.`);
   }
+  if (res.stats.N <= res.free.length)
+    warnings.push(`The pattern has ${res.stats.N} points for ${res.free.length} refined parameters: with no more points than parameters nothing is determined (no esd). A refinement needs many more points than parameters.`);
+  if (res.fcjBehind) warnings.push(`Axial divergence: after ${FCJ_PASSES} passes the last refinement still moved some lines' tails past the quadrature nodes counted for them; the result may be slightly off (refine again from it).`);
   return {
     params: res.params, esd: res.esd, corr: res.corr, cov: res.cov, free: res.free, atBound: res.atBound, undetermined: res.undetermined, tied: res.tied, esdHeld: res.esdHeld,
     stats: res.stats, stages, cellSearch: cs,
@@ -3207,7 +3545,7 @@ function autoRefine(model, opts = {}){
       strain: q.iS && !q.noIrf ? 'aniso' : 'iso', faults: q.faultSpec && !q.noIrf ? q.faultSpec.text : null, adp: adpOf(q) }])),
     // the standard's profile as used (null: none given, or not applicable)
     irf,
-    reflectionsInRange: nIn, converged: res.converged, ms: Date.now() - t0,
+    reflectionsInRange: nIn && nIn.n, linePositions: nIn && nIn.positions, converged: res.converged, ms: Date.now() - t0,
   };
 }
 
@@ -3311,10 +3649,10 @@ function freeShapeRun(model, k, res, free, opts){
     turned = v => { const vv = rebase(v), R = mul(bodyFrame(q, v), rotation(unit([gauss(), gauss(), gauss()]), 0.02)); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
     // The body set on the lattice: its best-placed axis exactly on its lattice
     // direction; a body with three axes, its next one on each of the simplest lattice
-    // directions exactly normal to the first (a projection of its own nearest direction
-    // had left a held axis 7° off its label, and the free fit's in-plane frame had held
-    // a plate on [1-13]); a body of revolution, its axis alone. [] when no axis is within
-    // SNAP_DEG of a lattice direction.
+    // directions exactly normal to the first, and on those nearest its own (a projection
+    // of its own nearest direction had left a held axis 7° off its label, and the free
+    // fit's in-plane frame had held a plate on [1-13]); a body of revolution, its axis
+    // alone. [] when no axis is within SNAP_DEG of a lattice direction.
     snaps = v => {
       const R = bodyFrame(q, v), col = i => [R[i], R[3 + i], R[6 + i]], dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
       // The first axis held: the most telling (its width the farthest from the other
@@ -3335,9 +3673,17 @@ function freeShapeRun(model, k, res, free, opts){
         return vv;
       };
       if (B.rot === 2) return [frameOf(p === 2 ? 0 : 2, col(p === 2 ? 0 : 2))];
-      // Each candidate goes to whichever of the other two axes it is nearer.
-      return latticeAcross(q, cp, null, 0.01, 3).map(({ vec })=>{
-        const others = [0, 1, 2].filter(i=> i !== p), s = Math.abs(dot(vec, col(others[0]))) >= Math.abs(dot(vec, col(others[1]))) ? others[0] : others[1];
+      // The 3 simplest, and the simplest within SNAP_DEG of each of the other two axes,
+      // as the first axis is chosen (a box whose edges lay on [120] and [-210] about
+      // [001] had been tried on [100], [010] and [110] alone, and stayed free). Each
+      // candidate goes to whichever of the other two axes it is nearer.
+      const others = [0, 1, 2].filter(i=> i !== p), all = latticeAcross(q, cp, null, 0.01, 64), pick = all.slice(0, 3);
+      for (const s of others){
+        const c = all.find(c=> Math.abs(dot(c.vec, col(s))) >= Math.cos(SNAP_DEG*D2R));
+        if (c && !pick.includes(c)) pick.push(c);
+      }
+      return pick.map(({ vec })=>{
+        const s = Math.abs(dot(vec, col(others[0]))) >= Math.abs(dot(vec, col(others[1]))) ? others[0] : others[1];
         return frameOf(s, vec);
       });
     };
@@ -3423,8 +3769,12 @@ function freeShapeRun(model, k, res, free, opts){
       dBICheld = bic(sn.res);
       // Held only where the data allow it as well: the free orientation no better than
       // the held one by more than a 95 % χ² for its 2 or 3 turns. The BIC alone gave
-      // three turns' discount (25) to boxes whose true faces were 8° off ⟨111⟩.
-      const gain = (chiTot(sn.res) - chiTot(best.res))/Math.max(1, res.stats.chi2);
+      // three turns' discount (25) to boxes whose true faces were 8° off ⟨111⟩. Δχ² in the
+      // free fit's own noise, χ²_ν floored at 1: the isotropic fit's, which the misfit the
+      // shape removes inflates (3.2 for a synthetic 16 × 12 × 2.4 nm box, 9–16 for thinner
+      // bodies), had held that box with its faces 4° off the frame in 3 draws of 3 (Δχ²
+      // 10–23 over its three turns), and every on-lattice case is held either way.
+      const gain = (chiTot(sn.res) - chiTot(best.res))/Math.max(1, best.res.stats.chi2);
       if (dBICheld < dBICfree && gain <= (q.iR.length === 2 ? 5.99 : 7.81)){
         // How far the free orientation's axes were from the held ones (°).
         const Rf = bodyFrame(q, best.v), Rh = bodyFrame(q, sn.v);

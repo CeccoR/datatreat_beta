@@ -6,7 +6,7 @@
    on another pattern. The curves are not kept: they are recomputed from the refined
    parameters, which takes milliseconds.
 ========================================================= */
-import { fmtNum, csvLine, X_SVG } from './utils.js';
+import { fmtData, csvLine, X_SVG } from './utils.js';
 import { Plot } from './plot.js';
 import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
@@ -19,8 +19,10 @@ const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g,
 
 // The instrumental standard: NIST SRM 660c LaB6, Pm-3m, a = 4.156826 Å at 22.5 °C
 // (certificate). B on 6f (x, ½, ½), x = 0.1992 (Eliseev et al., Acta Cryst. C42 (1986)
-// 1263); the displacement parameters are typical values: the standard's refinement
-// gives the instrument's profile and zero, not its intensities.
+// 1263). The displacement parameters are typical values, the start of one ΔB refined with
+// the profile (lab6.adp): held, a B 0.1 Å² off had moved X by 10 esd and the FWHM at 80°
+// by 0.7 % (0.2 Å²: 21 esd, 1.4 %), the profile taking up the intensities' fall with
+// angle; refined, the profile comes out within 1 esd whatever the B, its esds 10 % wider.
 const LAB6_CIF = `data_LaB6_SRM660c
 _cell_length_a 4.156826
 _cell_length_b 4.156826
@@ -78,13 +80,14 @@ function prepPhase(text, fileName){
   // A cell refined by one common scale (no conventional setting found): its axial ratios
   // and angles stay the file's, which the user should know.
   if (sym.constraint && sym.constraint.kind === 'isotropic' && sym.constraint.note) notes.push(sym.constraint.note);
+  if (sym.bSpread > 0.01) notes.push(`the B of atoms the symmetry makes equivalent differed (by up to ${+sym.bSpread.toFixed(2)} Å² from their mean): each takes its site's mean`);
   if (sym.group === false) warnings.push('The symmetry found from the atoms does not close into a group at any tolerance tried (atoms of one kind within 0.01 Å of each other?): the operations used may be incomplete.');
   if (comp && !comp.ok && comp.message) warnings.push(comp.message);
   else if (comp && comp.note) notes.push(comp.note);
   return {
     name: cif.name || (fileName || '').replace(/\.cif$/i, ''), file: fileName || '', formula: cif.formulaSum || '',
     cell: sc.cell, ops: sym.ops, atoms: sc.atoms, system: sym.system, constraint: sym.constraint, order: sym.order,
-    mass: cellMass(sc.atoms), notes, warnings, ownCell: !!sc.basis,
+    mass: cellMass(sc.atoms), notes, warnings, ownCell: !!sc.basis, noB: !!(cif.defaultB && cif.defaultB.length),
   };
 }
 // The cell a phase is refined in, as a key: a result refined in another (the file's, before
@@ -100,7 +103,7 @@ export function createRietveld(host){
   let busy = false, cancelled = false;
   let plot = null;
   // Its own colour, apart from the CIF phases' (which start from the first of theirs).
-  const lab6 = { id: 0, cif: LAB6_CIF, file: '', color: '#4cc9a0', prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)') };
+  const lab6 = { id: 0, cif: LAB6_CIF, file: '', color: '#4cc9a0', adp: 'overall', prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)') };
   lab6.prep.name = 'LaB₆ (NIST SRM 660c)';
   lab6.prep.notes = [];      // written in P1 here only to be short: nothing to report
 
@@ -174,7 +177,7 @@ export function createRietveld(host){
   const SHAPES = [['', 'isotropic size'], ['ellipsoid', 'ellipsoid'], ['spheroid', 'spheroid (two axes equal)'], ['cylinder', 'cylinder'], ['ellcyl', 'elliptic cylinder'], ['box', 'box']];
   const shapeOpt = v => v === true ? 'ellipsoid' : SHAPES.some(([k])=> k && k === v) ? v : false;
   // A preferred orientation (March–Dollase) per phase: its axis, a plane's hkl, or the
-  // best of the low-index ones.
+  // best of the low-index ones and those of the largest spacings.
   const TEXTURES = [['', 'no preferred orientation'], ['auto', 'preferred orientation: best axis'], ['100', 'preferred orientation (100)'], ['010', 'preferred orientation (010)'], ['001', 'preferred orientation (001)'], ['110', 'preferred orientation (110)'], ['111', 'preferred orientation (111)']];
   const textureOpt = v => TEXTURES.some(([k])=> k && k === v) ? v : '';
   // The size's profile: a Lorentzian of the right breadth (Scherrer, K = 0.9), or by
@@ -373,15 +376,20 @@ export function createRietveld(host){
   // As the worker's fmtEsd: the esd rounded first, the value to its last digit.
   const fmtE = (v, e) => {
     if (!Number.isFinite(v)) return '—';
-    if (!(Number.isFinite(e) && e > 0)) return (+v.toPrecision(4)).toString();
     const p = Math.floor(Math.log10(e)), n = e/Math.pow(10, p) < 2 ? 2 : 1;
+    if (!(Number.isFinite(e) && e > 1e-15*Math.abs(v)) || n - 1 - p > 100) return (+v.toPrecision(4)).toString();
     let d = n - 1 - p, k = Math.round(e*Math.pow(10, d));
     if (k >= (n === 2 ? 20 : 10)){ k = Math.round(k/10); d--; }
     if (d >= 0) return v.toFixed(d) + '(' + k + ')';
     const s = Math.pow(10, -d);
     return String(Math.round(v/s)*s) + '(' + k*s + ')';
   };
-  const f3 = v => Number.isFinite(v) ? v.toFixed(3) : '—';
+  // A model's width: three decimals, or three significant digits under 0.1° (a sharp
+  // peak's 0.0004° read 0.000).
+  const f3 = v => !Number.isFinite(v) ? '—' : Math.abs(v) < 0.1 && v !== 0 ? String(+v.toPrecision(3)) : v.toFixed(3);
+  // A probability: two significant digits, one below 10⁻³ (where the verdict turns, 2·10⁻⁴
+  // read 0.000), and under the smallest a double holds as that bound.
+  const fmtP = p => p < 1e-300 ? '< 1e-300' : p < 1e-3 ? p.toExponential(0) : String(+p.toPrecision(2));
   function renderWidths(f, r){
     const box = $('xrdRvWidths'), wd = r && r.widths;
     const phs = wd ? wd.phases.filter(ph=> ph.rows.length) : [];
@@ -396,7 +404,13 @@ export function createRietveld(host){
       + `<th title="The isotropic model's width for this peak, read off its own curve the same way">Model, isotropic (°)</th>${shapeOn ? '<th title="The free shape\'s width for this peak, read off its own curve the same way">Model, free shape (°)</th>' : ''}</tr></thead><tbody>`;
     let n = 0;
     phs.forEach(ph=> ph.rows.forEach(w=>{
-      const skip = w.overlapped || w.edge || w.weak || w.flat || w.unread, why = [w.unread && 'not read: ' + w.unread, w.overlapped && 'overlapped by another reflection', w.edge && 'at the end of the pattern', w.weak && 'too weak to measure (amplitude under 3 esd)', w.flat && 'no broadening above the instrument\'s (under 2 esd): the corrected FWHM is an upper limit (2 esd)'].filter(Boolean).join('; ');
+      // The others' share against the limit that applied (measureWidths: 30 %, and 5 % for
+      // the reflections of a phase whose isotropic model, which takes them off, does not
+      // predict its widths read).
+      const ovl = !Number.isFinite(w.share) ? ''
+        : w.shareOff > 0.05 ? ` (reflections of a phase whose isotropic model, which takes them off, does not predict its widths read hold ${Math.round(w.shareOff*100)} % of its intensity across its top; 5 % allowed)`
+        : ` (the others hold ${Math.round(w.share*100)} % of its intensity across its top; 30 % allowed)`;
+      const skip = w.overlapped || w.edge || w.weak || w.flat || w.unread, why = [w.unread && 'not read: ' + w.unread, w.overlapped && 'overlapped by another reflection' + ovl, w.edge && 'at the end of the pattern', w.weak && 'too weak to measure (amplitude under 3 esd)', w.flat && 'no broadening above the instrument\'s (under 2 esd): the corrected FWHM is an upper limit (2 esd)'].filter(Boolean).join('; ');
       // No broadening measured: the corrected FWHM as its upper limit.
       const corr = w.flat && Number.isFinite(w.HsMax) ? `&lt; ${+w.HsMax.toPrecision(2)}` : fmtE(w.Hs, w.HsEsd);
       html += `<tr class="peak-row rv-pk${skip ? ' rv-pk-out' : ''}" data-tt="${w.tt}" data-ph="${ph.id}" data-lab="${esc(w.label)}"${why ? ` title="Not used by the tests: ${esc(why)}"` : ''}>`
@@ -478,13 +492,15 @@ export function createRietveld(host){
       if (phs.length > 1) html += `<div class="txt-mini rv-phase-name">${esc(ph.name)}</div>`;
       if (Number.isFinite(wh.chi2nu)){
         const aniso = wh.p < 1e-3;
-        html += `<div class="pg-stat" title="χ² of the measured FWHM·cosθ (the corrected FWHM, not the integral breadth: D is read with K = 0.9 for the FWHM) about the weighted line, per degree of freedom (${wh.nu}), and the probability of so large a value were the broadening isotropic (size and strain alike in every direction)">Williamson–Hall: χ²<sub>ν</sub> <b>${wh.chi2nu.toFixed(1)}</b>, p <b>${wh.p < 1e-4 ? wh.p.toExponential(0) : wh.p.toFixed(3)}</b></div>`
+        html += `<div class="pg-stat" title="χ² of the measured FWHM·cosθ (the corrected FWHM, not the integral breadth: D is read with K = 0.9 for the FWHM) about the weighted line, per degree of freedom (${wh.nu}), and the probability of so large a value were the broadening isotropic (size and strain alike in every direction)">Williamson–Hall: χ²<sub>ν</sub> <b>${wh.chi2nu.toFixed(1)}</b>, p <b>${fmtP(wh.p)}</b></div>`
           + `<div class="rv-note">${aniso ? 'The widths depend on hkl beyond their esds: the broadening is anisotropic (the crystallites\' shape, or faults).' : 'The widths lie on one line within their esds: consistent with an isotropic size and strain.'}</div>`
           + `<div class="pg-stat" title="The weighted line's intercept Kλ/D (K = 0.9) and slope ε; with an anisotropic broadening it is an average, not a size">line: D <b>${fmtE(wh.D, wh.Desd)} nm</b>, ε <b>${fmtE(wh.b, wh.bEsd)}</b>${aniso ? ' (an average only)' : ''}</div>`;
       } else {
         const nr = ph.rows.filter(w=> w.unread).length;
         html += `<div class="rv-note">Williamson–Hall: fewer than three peaks to read (${wh.n})${nr ? `; ${nr} not read at all (the table says why)` : ''}.</div>`;
       }
+      // The stricter overlap limit (measureWidths): why fewer peaks are used.
+      if (ph.overlapShare < 0.3) html += `<div class="rv-note">The isotropic model does not predict the widths read: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where they hold under ${Math.round(ph.overlapShare*100)} % of its top (the others up to 30 %).</div>`;
       if (ph.orders.length){
         html += `<div class="pg-stat" style="margin-top:4px">Orders, Δd*(n)/Δd*(1): size 1, strain n</div>`;
         ph.orders.forEach(o=>{ html += `<div class="pg-stat">${esc(o.a)} → ${esc(o.b)}: <b>${fmtE(o.R, o.Resd)}</b> <span class="txt-meta">${o.verdict === 'order-dependent' ? 'below 1: the higher order sharper (planar faults)' : o.verdict}</span></div>`; });
@@ -559,7 +575,7 @@ export function createRietveld(host){
         + (K.conv && K.basis ? ` (conventional cell, ${K.volumeRatio}× the file's)` : '');
       return `<div class="rv-phase" data-ph="${p.id}"><span class="rv-key" style="background:${p.color}"></span>`
         + `<div class="rv-main"><b>${esc(q.name)}</b>${q.formula ? ` · ${esc(q.formula)}` : ''}`
-        + `<div class="rv-sub">${SYSTEM_NAMES[q.system] || esc(q.system)}, ${q.order} symmetry operations · ${cellTxt} · ${q.atoms.length} atoms in the cell${builtIn ? ' · built in, for the standard (cell held at the certified value)' : p.file ? ' · ' + esc(p.file) : ''}</div>`
+        + `<div class="rv-sub">${SYSTEM_NAMES[q.system] || esc(q.system)}, ${q.order} symmetry operations · ${cellTxt} · ${q.atoms.length} atoms in the cell${builtIn ? ' · built in, for the standard (cell held at the certified value, one ΔB refined)' : p.file ? ' · ' + esc(p.file) : ''}</div>`
         + (q.notes.length ? `<div class="rv-sub">${esc(q.notes.join('; '))}</div>` : '')
         + q.warnings.map(w=> `<div class="rv-sub" style="color:var(--warn)">⚠ ${esc(w)}</div>`).join('')
         + `</div>${builtIn ? '' : `<div class="rv-picks"><select class="rv-shape${p.shape ? ' is-on' : ''}" data-shape="${p.id}" aria-label="Crystallite shape of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Crystallite shape: the isotropic size, or a free solid of any proportions and orientation (each reflection of a family with its own width). Needs the standard's profile; it tries several starting shapes, so it takes tens of seconds a sample, minutes for a phase with many reflections or with WPPM's log-normal sizes. Kept only when the data support it against an isotropic size">${SHAPES.map(([k, t])=> `<option value="${k}"${(shapeOpt(p.shape) || '') === k ? ' selected' : ''}>${k ? 'free shape: ' + t : t}</option>`).join('')}</select>`
@@ -567,7 +583,7 @@ export function createRietveld(host){
           + pick('profile', p, PROFILES, profileOpt(p.profile), 'lorentz', `Size profile of ${q.name}`, "The size broadening's profile. Lorentzian: a Lorentzian fitted to the lines, the size read with Scherrer's K = 0.9 (as the Analysis card): an apparent size, not a diameter (spheres of one size read 1.0–1.7 times theirs). WPPM (Whole Powder Pattern Modelling): each line the Fourier transform of the crystallites' own common-volume function — a sphere's, or the free solid's along each member — with the instrument's, the strain's and the faults' coefficients: the true dimensions, and the profile's shape too (one size has short tails; a log-normal distribution of sizes, its width σ refined, longer ones). Needs the standard's profile")
           + pick('strain', p, STRAINS, strainOpt(p.strain), 'iso', `Microstrain of ${q.name}`, "Isotropic: one microstrain, the Lorentzian 4ε·tanθ. Anisotropic (Stephens): ε² a quartic form of the reflection's direction that the Laue group leaves unchanged (1 more term for a cubic phase, 2 hexagonal, 3 for 4/mmm and −3m, 4 for 4/m and −3, 5 orthorhombic, 8 monoclinic, 14 triclinic): a strain that depends on hkl, the same for all members of a family. Needs the standard's profile")
           + pick('faults', p, FAULTS, faultOpt(p.faults), '', `Planar faults of ${q.name}`, "Planar faults (after Warren) on the planes of a family, each displacing the crystal beyond it by a vector of the family (those in the plane: a stacking fault, an antiphase boundary): a reflection whose h·R is not an integer loses coherence across each, a Lorentzian broadening by h·R modulo 1 (the indices' parity for ½-type shifts, the indices modulo 3 for ⅓ and ⅙), so a higher order can be sharp. Refined: the probability per plane. Needs the standard's profile")
-          + pick('adp', p, ADPS, adpOpt(p.adp), 'cif', `Displacement parameters of ${q.name}`, "Displacement parameters. From the CIF: held (0.5 Å² where it gives none). One ΔB: added to every atom's B. Per site: one B per crystallographic site (the sites found from the symmetry). Anisotropic: Uⁱʲ per site, only those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle")
+          + pick('adp', p, ADPS, adpOpt(p.adp), 'cif', `Displacement parameters of ${q.name}`, "Displacement parameters. From the CIF: held. A CIF that gives no B (the Materials Project's) starts on One ΔB, from 0.5 Å²: a B held 0.5 Å² off goes into the strain and the size (10–20 % in the size). One ΔB: added to every atom's B. Per site: one B per crystallographic site (the sites found from the symmetry). Anisotropic: Uⁱʲ per site, only those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle")
           + `</div>`
           + `<button class="peak-del is-danger idle-dim rv-del" data-del="${p.id}" title="Remove phase">${X_SVG(13)}</button>`}</div>`;
     };
@@ -582,7 +598,10 @@ export function createRietveld(host){
       try {
         const text = await file.text();
         const prep = prepPhase(text, file.name);
-        phases.push({ id: nextId++, cif: text, file: file.name, color: PHASE_COLORS[phases.length % PHASE_COLORS.length], prep });
+        // A CIF without displacement parameters (Materials Project's) starts with one ΔB
+        // refined: held at B_DEFAULT, a B 0.3–1 Å² off went into the strain and the size
+        // (D −13 to +89 % on synthetic patterns, 5–27 esd) and moved weight fractions by 2 % (RIETVELD.md §8.1).
+        phases.push({ id: nextId++, cif: text, file: file.name, color: PHASE_COLORS[phases.length % PHASE_COLORS.length], prep, ...(prep.noB ? { adp: 'overall' } : {}) });
       } catch(e){ errs.push(`${file.name}: ${e.message}`); }
     }
     renderPhases(); draw(true); host.commit();
@@ -674,11 +693,11 @@ export function createRietveld(host){
     const cols = [];
     fs.forEach(f=>{
       let c; try { c = curvesOf(f, results[f.name]); } catch(e){ return; }
-      cols.push({ h: '2Theta_' + f.label, v: Array.from(f.x, v=> fmtNum(v, 5)) },
-        { h: 'Observed_' + f.label, v: Array.from(f.y, v=> fmtNum(v, 3)) },
-        { h: 'Calculated_' + f.label, v: Array.from(c.yc, v=> fmtNum(v, 3)) },
-        { h: 'Background_' + f.label, v: Array.from(c.bg, v=> fmtNum(v, 3)) },
-        { h: 'Difference_' + f.label, v: Array.from(f.y, (v, i)=> fmtNum(v - c.yc[i], 3)) });
+      cols.push({ h: '2Theta_' + f.label, v: Array.from(f.x, v=> fmtData(v, 5)) },
+        { h: 'Observed_' + f.label, v: Array.from(f.y, v=> fmtData(v, 3)) },
+        { h: 'Calculated_' + f.label, v: Array.from(c.yc, v=> fmtData(v, 3)) },
+        { h: 'Background_' + f.label, v: Array.from(c.bg, v=> fmtData(v, 3)) },
+        { h: 'Difference_' + f.label, v: Array.from(f.y, (v, i)=> fmtData(v - c.yc[i], 3)) });
     });
     const n = Math.max(0, ...cols.map(c=> c.v.length));
     let t = csvLine(cols.map(c=> c.h));
@@ -688,15 +707,17 @@ export function createRietveld(host){
     fs.forEach(f=>{
       const r = results[f.name], st = r.stats || {};
       // Number.isFinite: a NaN that went through JSON (undo, a saved project) comes back as
-      // null, which the global isFinite takes for 0 and fmtNum cannot format.
-      const num = (v, d)=> Number.isFinite(v) ? fmtNum(v, d) : '';
+      // null, which the global isFinite takes for 0 and fmtData cannot format. fmtData: a
+      // value too small for its fixed decimals keeps three significant digits or more (an
+      // esd of 3·10⁻⁷ at eight decimals read 0.00000030, a Δd* esd of 10⁻⁶ at six 0.000001).
+      const num = (v, d)=> Number.isFinite(v) ? fmtData(v, d) : '';
       (r.table || []).forEach(q=> s += csvLine([f.label, q.phase || '', q.name, num(q.value, 8), num(q.esd, 8), num(st.Rwp*100, 3), num(st.Rexp*100, 3), num(st.chi2, 3)]));
       // A sample refined with an earlier refinement of the standard (the card's warning).
       if (staleOf(f, r)) s += csvLine([f.label, '', 'standard_changed_since', '1', '', num(st.Rwp*100, 3), num(st.Rexp*100, 3), num(st.chi2, 3)]);
     });
     out.push({ name: 'rietveld_results.csv', text: s });
     // The peak widths of every refined sample.
-    const num = (v, d)=> Number.isFinite(v) ? fmtNum(v, d) : '';
+    const num = (v, d)=> Number.isFinite(v) ? fmtData(v, d) : '';
     let pk = csvLine(['Pattern', 'Phase', 'hkl', '2Theta_deg', 'Relative_intensity', 'FWHM_deg', 'FWHM_esd_deg', 'eta', 'FWHM_corr_deg', 'FWHM_corr_esd_deg', 'Size_corr_nm', 'Size_corr_esd_nm', 'Delta_dstar_invA', 'Delta_dstar_esd_invA', 'Model_isotropic_FWHM_corr_deg', 'Model_free_shape_FWHM_corr_deg', 'Used_by_tests', 'Note']);
     let anyPk = false;
     fs.forEach(f=>{

@@ -392,9 +392,20 @@ function leadingSymbol(str){
 // The f0 table key for a CIF `_atom_site_type_symbol` (or, lacking one, the site label).
 // Charges are read in both orders ('Ti4+', 'Ti+4', 'O2-', 'O-2', 'O-', 'Fe++'); without a
 // sign the trailing characters are a label suffix and dropped ('Sr0', 'O2', 'Ti1a' → neutral).
-// An ion WK did not fit (or a fractional valence such as 'Fe2.5+') falls back to the neutral
-// atom with fallback:true, so the page can say so instead of failing the whole phase.
-// Returns { key, element, ion, fallback, charge } or null when no scattering factor exists.
+// A charge WK did not fit but that lies between two the element has (its neutral atom
+// included) is that mixture with the same mean charge: 'Mn3.5+' half Mn3+ and half Mn4+,
+// exactly what a mixed-valence site is; 'V4+' half V3+ and half V5+, the right electron
+// count (key 'Mn3.5+', mix [[key, weight], …], which f0 reads). A tabulated ion left out is
+// so reproduced within 0.45 e at every s (38 ions). Read as the neutral atom, as up to v426,
+// Mn3.5+ put a synthetic LiMn2O4's B(O) 1.5 Å² low and its weight fraction beside corundum
+// (50 wt %) 2 wt % low (11 esd); as the mixture, both within 1 esd. Beyond that range the
+// nearest tabulated charge is used, with fallback:true so the page can say so: 'Fe4+' as
+// Fe3+, 'Cr6+' as Cr3+; 'S6+' (S has no ion) and 'I5+' (only I-) as the neutral atom. Rutile
+// drawn with Ti4+ and fitted as Ti3+ had B(O) 0.33 Å² and its 50 wt % 1.6 wt % low, as the
+// neutral atom 0.51 Å² and 2.7 wt %; hematite (Fe3+) as Fe2+ or as Fe, both about 0.3 Å² and
+// 1.3 wt %. Not extrapolated: a charge beyond the table is a covalent compound's formal one,
+// whose atom holds more electrons than it says.
+// Returns { key, element, ion, fallback, charge, mix? } or null when no scattering factor exists.
 function speciesKey(label){
   if (typeof label !== 'string') return null;
   const str = label.trim().replace(/[\u2212\u2013]/g, '-');   // typographic minus from pasted text
@@ -425,7 +436,22 @@ function speciesFrom(el, rest){
   if (!q) return { key:el, element:el, ion:false, fallback:false, charge:0 };
   const key = el + Math.abs(q) + (q < 0 ? '-' : '+');
   if (Number.isInteger(q) && has(F0, key)) return { key, element:el, ion:true, fallback:false, charge:q };
-  return { key:el, element:el, ion:false, fallback:true, charge:q };
+  const qs = CHARGES[el] || [0], kOf = c => c ? el + Math.abs(c) + (c < 0 ? '-' : '+') : el;
+  const lo = Math.max(...qs.filter(c=> c < q)), hi = Math.min(...qs.filter(c=> c > q));
+  if (lo > -Infinity && hi < Infinity){
+    const w = (q - lo)/(hi - lo);
+    return { key, element:el, ion:true, fallback:false, charge:q, mix:[[kOf(lo), 1 - w], [kOf(hi), w]] };
+  }
+  // Beyond the tabulated charges: the nearest (the neutral atom for a sign the element has no
+  // ion of), so the electron count moves towards the written one and never jumps back.
+  const c = lo > -Infinity ? lo : hi;
+  return { key:kOf(c), element:el, ion:c !== 0, fallback:true, charge:q };
+}
+// The charges each element's ions are tabulated at, its neutral atom (0) among them.
+const CHARGES = {};
+for (const k in F0){
+  const m = /^([A-Z][a-z]?)(\d+)([+-])$/.exec(k);
+  if (m) (CHARGES[m[1]] || (CHARGES[m[1]] = [0])).push((m[3] === '-' ? -1 : 1)*+m[2]);
 }
 
 /* A site label read for its species, when the CIF gives no type symbol. A label starts with
@@ -453,9 +479,16 @@ function labelSpecies(label, elements){
 // Non-dispersive form factor (electrons) at s = sinθ/λ (Å⁻¹). `key` is an F0 key; anything
 // else is resolved through speciesKey (slower, so callers in loops should pass the key).
 // NaN for an unknown species, so a bad site shows up instead of silently scattering nothing.
+const MIXES = new Map();   // a mixture's key → its parts (speciesKey, once per key)
 function f0(key, s){
   let p = has(F0, key) ? F0[key] : null;
-  if (!p){ const sp = speciesKey(key); if (!sp) return NaN; p = F0[sp.key]; }
+  if (!p){
+    let mix = MIXES.get(key);
+    if (mix === undefined){ const sp = speciesKey(key); mix = sp ? sp.mix || sp.key : null; MIXES.set(key, mix); }
+    if (!mix) return NaN;
+    if (typeof mix !== 'string') return mix.reduce((t, [k, w])=> t + w*f0(k, s), 0);
+    p = F0[mix];
+  }
   const s2 = s*s;
   return p[0]*Math.exp(-p[1]*s2) + p[2]*Math.exp(-p[3]*s2) + p[4]*Math.exp(-p[5]*s2)
        + p[6]*Math.exp(-p[7]*s2) + p[8]*Math.exp(-p[9]*s2) + p[10];

@@ -457,7 +457,8 @@ function faultTable(geom, plane, disp, refl){
     }
     return [...by].map(([c, g])=> [g, c]);
   });
-  return { dLayer, terms, planes: per.length };
+  // (hp, gB: the plane in the file's basis and |B·h| at this cell, for the spacing at another)
+  return { dLayer, terms, planes: per.length, hp, gB };
 }
 // κ(α) of one reflection (Å⁻¹): the exponent of its fault coefficient e^{−κL}.
 function faultKappa(table, r, alpha){

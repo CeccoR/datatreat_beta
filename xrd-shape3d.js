@@ -24,8 +24,10 @@ const SOLID_ALPHA = 0.66;    // the solid over what it hides: the lines through 
 const CONE_ALPHA = 0.16;     // the uncertainty cones: there, but not in the way
 const ESD_MAX = 60;          // a wider 1σ than this (or none) means the direction is not determined
 const OFF_MIN = 0.05;        // an angle off the axis under this is none (the card says 'held' then)
-const OPEN_RATIO = 20;       // an extent over 20x the smallest other one counts as endless (a rod, a sheet)
-const OPEN_CAP = 4;          // an endless or unknown extent is drawn 4x the largest closed one, fading out
+// An extent over 20x the smallest other one counts as endless (a rod, a sheet): it is drawn
+// 20x that one, fading out, as long as the longest drawn to scale. (Drawn 4x the largest
+// closed extent up to v426, a 21:1 disc had shown as 4:1 beside a 19:1 one drawn 19:1.)
+const OPEN_RATIO = 20;
 const SIZE_MIN = 200, SIZE_MAX = 320;
 // The offscreen layers at 2 pixels per CSS pixel at most (the solid), or 1.5 on screen
 // (the cones, faint and soft): they are fills under crisp edges and lines drawn at full
@@ -279,16 +281,13 @@ function buildModel(solid){
      extents endless, where matching each against the other wide one kept both closed
      and drew a disc 2e5 nm across. The smallest extent is never endless, so there is
      always a closed one to size the endless ones by. */
-  const open = [0, 1, 2].map(i => {
-    if (!known) return false;
-    if (!good[i]) return true;
-    let small = Infinity;
-    for (let j = 0; j < 3; j++) if (j !== i && good[j]) small = Math.min(small, raw[j]);
-    return raw[i] > OPEN_RATIO * small;
+  const small = [0, 1, 2].map(i => {
+    let m = Infinity;
+    for (let j = 0; j < 3; j++) if (j !== i && good[j]) m = Math.min(m, raw[j]);
+    return m;
   });
-  let big = 0;
-  for (let i = 0; i < 3; i++) if (known && !open[i]) big = Math.max(big, raw[i]);
-  const D = raw.map((v, i) => !known ? 1 : open[i] ? OPEN_CAP * big : v);
+  const open = [0, 1, 2].map(i => known && (!good[i] || raw[i] > OPEN_RATIO * small[i]));
+  const D = raw.map((v, i) => !known ? 1 : open[i] ? OPEN_RATIO * small[i] : v);
   // A sliver thinner than 1 % of the largest extent draws as that, not as nothing.
   const Dmax = Math.max(...D);
   const A = D.map(v => Math.max(v, 0.01 * Dmax) / 2);

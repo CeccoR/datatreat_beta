@@ -288,8 +288,17 @@ function readInstrument(A, doc){
 
   // ---- wavelengths: λ, the Kα2/Kα1 ratio, and the anode they come from ----
   const wl = kid(A, meas, 'usedWavelength');
-  const lam = name =>{ const e = kid(A, wl, name), v = toAngstrom(numOf(A, e), unitOf(A, e)); return v > 0 && v < 10 ? v : NaN; };
+  // A value outside (0, 10) Å is no X-ray wavelength (a unit slip: 154.06 with no unit);
+  // the warning names it, rather than saying the file has none.
+  const bad = [];
+  const lam = name =>{
+    const e = kid(A, wl, name), v = toAngstrom(numOf(A, e), unitOf(A, e));
+    if (v > 0 && v < 10) return v;
+    if (e && name !== 'kBeta' && A.text(e).trim()) bad.push(`${name} ${A.text(e).trim()}${unitOf(A, e) ? ' ' + unitOf(A, e) : ''}`);
+    return NaN;
+  };
   let lam1 = lam('kAlpha1'), lam2 = lam('kAlpha2'), kBeta = lam('kBeta');
+  const noLam = what => bad.length ? `${bad.join(', ')} in the file, not a wavelength between 0 and 10 Å` : `No ${what} in the file`;
   let ratio = numOf(A, kid(A, wl, 'ratioKAlpha2KAlpha1'));
   const tube = find(A, inc, 'xRayTube');
   // The tube's name carries the anode too ("PW3373/10 Cu LFF"), for a file without <anodeMaterial>.
@@ -298,13 +307,13 @@ function readInstrument(A, doc){
   if (!(lam1 > 0)){
     const known = ANODE_LINES[anode] ? anode : 'Cu', L = ANODE_LINES[known];
     [lam1, lam2, kBeta] = L; ratio = 0.5;
-    warnings.push(`No wavelength in the file: ${known} Kα assumed (Kα₁ ${L[0]} Å, Kα₂ ${L[1]} Å, Kα₂/Kα₁ 0.5)`
+    warnings.push(`${noLam('wavelength')}: ${known} Kα assumed (Kα₁ ${L[0]} Å, Kα₂ ${L[1]} Å, Kα₂/Kα₁ 0.5)`
       + (anode && !ANODE_LINES[anode] ? ` (no line table for a ${anode} anode)` : ''));
   } else if (!(lam2 > 0)){
     // Kα1 alone: a monochromatic beam. λ2 = λ1 with a zero ratio adds nothing to the
     // pattern and leaves no consumer with an undefined second position.
     lam2 = lam1; ratio = 0;
-    warnings.push('No Kα₂ in the file: a single wavelength is modelled');
+    warnings.push(`${noLam('Kα₂')}: a single wavelength is modelled`);
   } else if (!(ratio >= 0 && ratio <= 1)){
     warnings.push(`${Number.isFinite(ratio) ? `Kα₂/Kα₁ ratio ${ratio} out of range` : 'No Kα₂/Kα₁ ratio in the file'}: 0.5 assumed`);
     ratio = 0.5;
@@ -409,6 +418,12 @@ function readInstrument(A, doc){
    → { x, y, varMul (null when m is 1 throughout), unit, rate, mode, notes } or { error }.
 ========================================================= */
 const listOf = (A, n)=> n ? A.text(n).trim().split(/\s+/).map(Number) : [];
+// Intensities per second: cps, counts/s(ec), per second, s-1, s⁻¹, Hz. Up to v426 any '/s' or
+// 'per' ('counts/step', 'percent'): counts read as a rate take one count as 1/t, which
+// nothing catches for t > 1 s; on a 2-count background counted 10 s that put the background
+// 1.7 counts low and B 2–4.6 esd off (corundum, ZnO). A rate the pattern misses errs as
+// much, except beyond t = 2 s, where buildModel's noise check corrects it.
+const RATE_UNIT = /cps|hz|(\/\s*|\bper\s*)s(ec(ond)?s?)?\b|\bs\s*\^?[-⁻][1¹]/i;
 // The count scale m (one count in the units of y; 1/t for a rate) from the noise. For Poisson
 // counts the second difference d = y₋ − 2y + y₊ has variance m·(μ₋ + 4μ + μ₊) ≈ 6m·ȳ, so
 // d²/(6ȳ) is m times a χ²₁ variable, whose median is 0.4549. The median over the points
@@ -460,7 +475,7 @@ function readScan(A, doc){
       else if (!(t > 0)) t = v[0];
     }
   }
-  const mode = attrOf(A, scan, 'mode'), unit = A.attr(yEl, 'unit') || '', rate = /cps|\/s|per/i.test(unit);
+  const mode = attrOf(A, scan, 'mode'), unit = A.attr(yEl, 'unit') || '', rate = RATE_UNIT.test(unit);
   const preset = /pre-?set\s*counts/i.test(mode || '');
   if (preset && !ts && !rate)
     return { error: 'a pre-set-counts scan without its per-point counting times (its counts are about the preset everywhere)' };

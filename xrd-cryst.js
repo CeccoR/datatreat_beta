@@ -10,7 +10,10 @@
 import { speciesKey, labelSpecies, f0, fprime, atomicMass } from './xrd-data.js';
 
 const IDENT = [1,0,0, 0,1,0, 0,0,1];
-const B_DEFAULT = 0.5;          // Å², the usual guess for an inorganic solid at room temperature
+// Å², B of a site the CIF gives none: a middle value of inorganic solids at room temperature
+// (0.2–1.5 Å²), only the start, since the card refines one ΔB for such a phase. Held instead, a B
+// 0.3–1 Å² off went into the strain and the size (D −13 to +89 % on synthetic patterns, RIETVELD.md §8.1).
+const B_DEFAULT = 0.5;
 const EIGHT_PI2 = 8*Math.PI*Math.PI;
 
 /* ---------- small linear algebra ---------- */
@@ -45,7 +48,8 @@ function cosd(deg){
 // one position, not two.
 function mod1(v){ let w = v - Math.floor(v); if (w > 1 - 1e-9) w = 0; return w; }
 // A translation to the nearest multiple of 1/24 (which holds 1/2, 1/3, 1/4, 1/6, 1/8, 1/12)
-// when it is within 1.5e-3: '0.3333' is 1/3, and the absence test h·t ∈ ℤ stays exact.
+// when it is within 1.5e-3, so the absence test h·t ∈ ℤ stays exact. For values computed
+// (findSymmetry) or written exactly; a decimal of a CIF snaps within its digits (snapOp).
 function snapT(v){
   const w = mod1(v), k = Math.round(w*24);
   return Math.abs(w - k/24) < 1.5e-3 ? (k % 24)/24 : w;
@@ -58,6 +62,43 @@ function metric(cell){
   const ca = cosd(cell.alpha ?? 90), cb = cosd(cell.beta ?? 90), cg = cosd(cell.gamma ?? 90);
   const G = [a*a, a*b*cg, a*c*cb,  a*b*cg, b*b, b*c*ca,  a*c*cb, b*c*ca, c*c];
   return { G, Gs: inv3(G), V: Math.sqrt(det3(G)) };
+}
+/* The rounding of a cell's metric: what the written digits of its lengths and angles may hide,
+   as one term per rounded value p_k, the derivative D_k = ∂G/∂p_k (9 entries) and the rounding
+   e_k (parseCif sets cell.dG; cellInBasis carries each D_k to another basis exactly, MᵀD_kM).
+   null for an exact cell. A quantity linear in G, Q(G), is then known to Σ_k e_k |Q(D_k)|: the
+   first-order worst case, each written value counted once. A metric symmetry is accepted
+   within it where it exceeds the 1e-4 relative floor (the floor stays the least tolerance,
+   for computed cells; the two are not added): written with the usual four decimals and
+   angles to 0.01°, the 530 settings in random bases kept their point group in 96 of 265 cases
+   under the floor alone, in all with it. Added to the floor, the rounding had also let a cell
+   in its standard basis whose β the file writes 90.01° (no 90° within its digits) pass for
+   tetragonal, 11 of 14; with the larger of the two, none, and the random bases still 265 of
+   265. A bound on the entries instead, |M|ᵀ|δG||M|, counted one angle several times in an
+   oblique or centred basis: an I-centred tetragonal structure with β = 90.2° written to 0.1°
+   passed for tetragonal. */
+const dGof = cell => (cell && cell.dG) || null;
+const dGin = (dG, M) => dG ? dG.map(({ D, e }) => ({ D: mul3(mul3(tr3(M), D), M), e })) : null;
+// The rounding of uᵀGv − G_ij (ij = [i, j]; without it, of uᵀGv).
+const dGuv = (dG, u, v, ij) => !dG ? 0 : dG.reduce((m, { D, e }) => m + e*Math.abs(qf(D, u, v) - (ij ? D[3*ij[0] + ij[1]] : 0)), 0);
+const qf = (D, u, v) => u[0]*(D[0]*v[0] + D[1]*v[1] + D[2]*v[2]) + u[1]*(D[3]*v[0] + D[4]*v[1] + D[5]*v[2]) + u[2]*(D[6]*v[0] + D[7]*v[1] + D[8]*v[2]);
+// From the written lengths' and angles' rounding (Å, °): ∂G_ii/∂a_i = 2a_i, ∂G_ij/∂a_i = a_j cos θ_ij,
+// ∂G_jk/∂θ_jk = −a_j a_k sin θ_jk.
+function metricRounding(cell, eLen, eAng){
+  const L = [cell.a, cell.b, cell.c], A = [cell.alpha, cell.beta, cell.gamma], out = [];
+  const ang = (i, j) => A[3 - i - j];
+  for (let i = 0; i < 3; i++) if (eLen[i] > 0){
+    const D = new Array(9).fill(0);
+    D[4*i] = 2*L[i];
+    for (let j = 0; j < 3; j++) if (j !== i) D[3*i + j] = D[3*j + i] = L[j]*cosd(ang(i, j));
+    out.push({ D, e: eLen[i] });
+  }
+  for (const [j, k, i] of [[1, 2, 0], [0, 2, 1], [0, 1, 2]]) if (eAng[i] > 0){
+    const D = new Array(9).fill(0);
+    D[3*j + k] = D[3*k + j] = -L[j]*L[k]*Math.sin(A[i]*Math.PI/180);
+    out.push({ D, e: eAng[i]*Math.PI/180 });
+  }
+  return out.length ? out : null;
 }
 function dSpacing(Gs, h, k, l){
   return 1/Math.sqrt(h*h*Gs[0] + k*k*Gs[4] + l*l*Gs[8] + 2*(h*k*Gs[1] + h*l*Gs[2] + k*l*Gs[5]));
@@ -141,14 +182,25 @@ function boxRadius(G, e){
 // not move the atoms). Throws on anything it cannot read or that is not a lattice
 // operation (non-integer or non-invertible R): a misread operation would silently
 // produce a wrong structure.
-function parseSymop(str){
+// A translation written as a decimal is the multiple of 1/24 its digits may stand for: one it
+// rounds or cuts ('0.33', '0.333', '0.6666' are ⅓ and ⅔; '0.30' is no 7/24). Up to v426 all
+// snapped within 1.5e-3, which missed two decimals (P3₁ written '0.33' lost its screw, R3 its
+// centring) and moved a translation of a shifted origin by up to 1.5e-3 onto the grid. One
+// that is no such multiple keeps its value and its rounding, w (per axis: one unit of the last
+// decimal), which closure and expansion allow. Exact values (fractions, integers, one decimal)
+// snap within 1.5e-3, as before. parseCif decides for the whole list (symopsOf).
+function parseSymop(str){ return snapOp(readSymop(str)); }
+// The operation as written: t unsnapped, with the range [lo, hi] (per axis) in which the value
+// it stands for lies, from the digits of its decimal terms: a term written v with d ≥ 2 decimals
+// (unit u) stands for v − u/2 … v + u in magnitude (rounded, or cut). Zero for exact terms.
+function readSymop(str){
   if (typeof str !== 'string') throw new Error('Symmetry operation: not a string.');
   const s = str.replace(/[−–]/g, '-').replace(/['"\s]/g, '').toLowerCase().replace(/^\((.*)\)$/, '$1');
   const parts = s.split(',');
   if (parts.length === 4 && /^[+-]?1$/.test(parts[3])) parts.length = 3;
   const bad = why => new Error(`Symmetry operation '${str}': ${why}.`);
   if (parts.length !== 3) throw bad('expected three comma-separated components');
-  const R = new Array(9).fill(0), t = [0,0,0];
+  const R = new Array(9).fill(0), t = [0,0,0], lo = [0,0,0], hi = [0,0,0];
   parts.forEach((p, i)=>{
     if (!p) throw bad(`component ${i+1} is empty`);
     let used = 0;
@@ -158,13 +210,51 @@ function parseSymop(str){
       const tm = /^(\d+\.?\d*|\.\d+)?(?:\/(\d+\.?\d*))?\*?([xyz])?$/.exec(m[2]);
       if (!tm || (!tm[1] && (tm[2] || !tm[3]))) throw bad(`cannot read '${m[2]}'`);
       const v = (m[1] === '-' ? -1 : 1)*(tm[1] ? parseFloat(tm[1]) : 1)/(tm[2] ? parseFloat(tm[2]) : 1);
-      if (tm[3]) R[3*i + 'xyz'.indexOf(tm[3])] += v; else t[i] += v;
+      if (tm[3]) R[3*i + 'xyz'.indexOf(tm[3])] += v;
+      else {
+        t[i] += v;
+        const d = tm[2] ? 0 : decimalsOf(tm[1]), u = d >= 2 ? Math.pow(10, -d) : 0;
+        if (m[1] === '-'){ lo[i] -= u; hi[i] += u/2; } else { lo[i] -= u/2; hi[i] += u; }
+      }
     }
     if (used !== p.length) throw bad(`cannot read '${p}'`);
   });
   if (R.some(v => v !== Math.round(v))) throw bad('the coefficients of x, y, z must be integers');
   if (Math.abs(det3(R)) !== 1) throw bad('not a symmetry operation (determinant ≠ ±1)');
-  return { R, t: t.map(snapT) };
+  return { R, t, lo, hi };
+}
+// The multiple of 1/24 within [v + lo, v + hi] nearest v, or null.
+function gridIn(v, lo, hi){
+  let best = null;
+  for (let k = Math.floor((v + lo)*24); k <= Math.ceil((v + hi)*24); k++){
+    const d = k/24 - v;
+    if (d >= lo - 1e-12 && d <= hi + 1e-12 && (best === null || Math.abs(d) < Math.abs(best/24 - v))) best = k;
+  }
+  return best === null ? null : (((best % 24) + 24) % 24)/24;
+}
+// Snapped where the digits allow (w: the rounding of the components left off the grid); with
+// keep, every decimal kept as written, with its rounding.
+function snapOp({ R, t, lo, hi }, keep = false){
+  const w = [0, 0, 0];
+  const ts = t.map((v, i)=>{
+    if (!(hi[i] > 0)) return snapT(v);
+    const g = keep ? null : gridIn(v, lo[i], hi[i]);
+    if (g !== null) return g;
+    w[i] = Math.max(-lo[i], hi[i]);
+    return mod1(v);
+  });
+  return w.some(v => v) ? { R, t: ts, w } : { R, t: ts };
+}
+/* A file's operations: snapped onto the 1/24 grid only when every decimal translation in it
+   lies within its digits of the grid (a standard origin), else all kept as written. A shifted
+   origin puts some translations off the grid, and the ones that fall within their digits of it
+   by chance would be moved by up to one unit of the last decimal: over the 530 settings at
+   random origins written with two decimals, snapping each where it could moved 3743 of 22164
+   translations beyond their writing and filled 379 cells with a wrong number of atoms (53 kept
+   as written); with three decimals, 544 and 14 (1). lists: [[read op, …], …], decided together. */
+function symopsOf(lists){
+  const snapped = lists.map(l => l.map(o => snapOp(o)));
+  return snapped.some(l => l.some(o => o.w)) ? lists.map(l => l.map(o => snapOp(o, true))) : snapped;
 }
 
 // {R, t} → 'x-y,x,z+1/6', for display and for comparing with printed tables.
@@ -181,30 +271,39 @@ function symopString(op){
       const mag = Math.abs(c) === 1 ? '' : Math.abs(c);
       s += (c < 0 ? '-' : (s ? '+' : '')) + mag + 'xyz'[j];
     }
-    const tv = mod1(t[i]);
-    if (tv) s += (s ? '+' : '') + fracStr(tv);
+    const tv = mod1(t[i]), ft = tv ? fracStr(tv) : '0';
+    if (ft !== '0' && ft !== '1') s += (s ? '+' : '') + ft;   // (a translation within 5e-7 of a lattice vector reads as none)
     return s || '0';
   }).join(',');
 }
 
-// A key that identifies an operation modulo lattice translations (1e-3 in t).
-function opKey(R, t){ return R.join(',') + '|' + t.map(v => Math.round(mod1(v)*1000) % 1000).join(','); }
-
+/* Two operations with one R are one (modulo lattice translations) when their translations agree
+   within the rounding of their written digits (w, parseSymop; 1e-6 for exact ones). Up to v426
+   keys rounded to 1e-3 were compared, which split a translation and its rounded copy whenever
+   the two fell on either side of a rounding step: 137 of the 530 groups at shifted origins,
+   written with four decimals, were called "not a group" (52 with six). */
+const sameT = (ta, tb, wa, wb) => [0, 1, 2].every(i => { const d = ta[i] - tb[i]; return Math.abs(d - Math.round(d)) <= (wa ? wa[i] : 0) + (wb ? wb[i] : 0) + 1e-6; });
 // Duplicates removed (mod 1); identity kept first.
 function uniqueOps(ops){
-  const seen = new Set(), out = [];
-  for (const op of ops){ const k = opKey(op.R, op.t); if (!seen.has(k)){ seen.add(k); out.push(op); } }
+  const byR = new Map(), out = [];
+  for (const op of ops){
+    const k = op.R.join(), l = byR.get(k) || [];
+    if (!l.some(o => sameT(o.t, op.t, o.w, op.w))){ l.push(op); byR.set(k, l); out.push(op); }
+  }
   return out;
 }
 
 // Products of operations that are not in the list: an empty array for a group. A list that
-// is not closed is usually missing its centring translations (or a line of the loop).
+// is not closed is usually missing its centring translations (or a line of the loop). A
+// product carries the rounding of its factors, wa + |Ra|·wb.
 function closureMisses(ops, max = 3){
-  const keys = new Set(ops.map(o => opKey(o.R, o.t))), out = [];
+  const byR = new Map(), out = [], Z = [0, 0, 0];
+  for (const o of ops){ const k = o.R.join(); if (!byR.has(k)) byR.set(k, []); byR.get(k).push(o); }
   for (const a of ops) for (const b of ops){
     const R = mul3(a.R, b.R), Rt = apply3(a.R, b.t);
     const t = [Rt[0]+a.t[0], Rt[1]+a.t[1], Rt[2]+a.t[2]];
-    if (!keys.has(opKey(R, t))){ out.push({ R, t }); if (out.length >= max) return out; }
+    const w = a.w || b.w ? allowance(a.R, b.w || Z, a.w || Z) : null;
+    if (!(byR.get(R.join()) || []).some(c => sameT(c.t, t, c.w, w))){ out.push({ R, t }); if (out.length >= max) return out; }
   }
   return out;
 }
@@ -394,7 +493,14 @@ function symbolSystem(hm, itNumber){
   if (parts.length === 3) return parts.filter(p => p !== '1').length === 1 ? 'monoclinic' : 'orthorhombic';
   return null;
 }
-function fmtCount(n){ return Math.abs(n - Math.round(n)) < 1e-6 ? String(Math.round(n)) : String(+n.toFixed(3)); }
+// A count: whole within 1e-6, else to three decimals, or more where three would read as a whole
+// number (95.9996 is not 96 in a message that says the two differ; a dopant's 0.0004 is not 0).
+function fmtCount(n){
+  if (Math.abs(n - Math.round(n)) < 1e-6) return String(Math.round(n));
+  let d = 3;
+  while (d < 6 && Math.abs(+n.toFixed(d) - Math.round(n)) < 1e-12) d++;
+  return String(+n.toFixed(d));
+}
 
 // Equivalent isotropic B from an anisotropic U or B tensor (Fischer & Tillmanns 1988):
 // Ueq = ⅓ Σ_ij U^ij a*_i a*_j (a_i·a_j), which is the mean of U11, U22, U33 only for
@@ -408,10 +514,12 @@ function equivIso(Uij, G, Gs){
   return s/3;
 }
 
-// CIF text → { name, block, cell, hm, itNumber, hall, ops, sites, formulaSum, formula, Z,
-// warnings }. Reads the first data block that has fractional atom sites. Throws (with a
-// message for the user) when the file has no data block, no such atom sites, or no cell:
-// whatever it returns is usable. Everything else it can work around is in `warnings`.
+// CIF text → { name, block, cell (with dG, its rounding, when its digits hide some), hm,
+// itNumber, hall, ops, sites, formulaSum, formula, Z, defaultB (the labels of the sites given
+// no displacement parameter), warnings }. Reads the first data block that has fractional atom
+// sites. Throws (with a message for the user) when the file has no data block, no such atom
+// sites, or no cell: whatever it returns is usable. Everything else it can work around is in
+// `warnings`.
 function parseCif(text){
   const { blocks, warnings: lexWarnings } = cifBlocks(String(text ?? ''));
   if (!blocks.length) throw new Error('Not a CIF: no data_ block found.');
@@ -431,13 +539,7 @@ function parseCif(text){
     alpha: num(item(b, '_cell_angle_alpha')), beta: num(item(b, '_cell_angle_beta')), gamma: num(item(b, '_cell_angle_gamma')),
   };
   if (!(cell.a > 0 && cell.b > 0 && cell.c > 0)) throw new Error('The CIF has no complete unit cell (_cell_length_a, _b, _c).');
-  for (const k of ['alpha','beta','gamma']){
-    if (!(cell[k] > 0 && cell[k] < 180)){ warnings.push(`No valid _cell_angle_${k}: 90° assumed.`); cell[k] = 90; }
-  }
-  // Each angle may lie in (0, 180°) and the three still close no cell (120/120/120°
-  // gives V = 0, 60/60/130° a negative G determinant): every d would be NaN.
-  const { G, Gs, V } = metric(cell);
-  if (!(V > 1e-6*cell.a*cell.b*cell.c)) throw new Error(`The cell angles α, β, γ = ${cell.alpha}°, ${cell.beta}°, ${cell.gamma}° do not form a unit cell.`);
+  const noAngle = ['alpha','beta','gamma'].filter(k => !(cell[k] > 0 && cell[k] < 180));
 
   // Symmetry
   const hm = item(b, '_space_group_name_h-m_alt', '_symmetry_space_group_name_h-m', '_space_group_name_h-m');
@@ -445,8 +547,8 @@ function parseCif(text){
   const itn = num(item(b, '_space_group_it_number', '_symmetry_int_tables_number'));
   const itNumber = itn >= 1 && itn <= 230 ? Math.round(itn) : null;
   const opsCol = column(b, XYZ_TAGS[0]) || column(b, XYZ_TAGS[1]);
-  const read = col => { const out = []; for (const s of col || []){ if (isNull(s)) continue; try { out.push(parseSymop(s)); } catch(e){ warnings.push(e.message + ' It is ignored.'); } } return out; };
-  let ops = read(opsCol);
+  const read = col => { const out = []; for (const s of col || []){ if (isNull(s)) continue; try { out.push(readSymop(s)); } catch(e){ warnings.push(e.message + ' It is ignored.'); } } return out; };
+  let [ops] = symopsOf([read(opsCol)]);
   /* A magnetic CIF (MAGNDATA, ISODISTORT) gives its group as operations and centrings with
      time reversal: the space-group operations are every centring times every operation,
      time reversal dropped (it does not move the atoms, and the moments scatter X-rays
@@ -458,14 +560,51 @@ function parseCif(text){
   if (column(b, '_space_group_symop_magn_ssg_operation_algebraic') || column(b, '_space_group_symop_magn_ssg_centering_algebraic'))
     throw new Error('A magnetic CIF of a modulated (superspace) structure: its operations are not read here. A CIF of its average structure, or of a commensurate approximant, is needed.');
   if (!ops.length && magOps){
-    const g = read(magOps), cen = read(column(b, MAGN_TAGS[1]));
+    const [g, cen] = symopsOf([read(magOps), read(column(b, MAGN_TAGS[1]))]);
     for (const c of cen.length ? cen : [{ R: IDENT, t: [0, 0, 0] }]) for (const o of g){
-      const Rt = apply3(c.R, o.t);
-      ops.push({ R: mul3(c.R, o.R), t: [0, 1, 2].map(i => snapT(Rt[i] + c.t[i])) });
+      const Rt = apply3(c.R, o.t), w = c.w || o.w ? allowance(c.R, o.w || [0, 0, 0], c.w || [0, 0, 0]) : null;
+      ops.push({ R: mul3(c.R, o.R), t: [0, 1, 2].map(i => w ? mod1(Rt[i] + c.t[i]) : snapT(Rt[i] + c.t[i])), ...(w ? { w } : {}) });
     }
     if (ops.length) warnings.push(`A magnetic CIF${magName ? ` (${String(magName).trim()})` : ''}: its ${uniqueOps(ops).length} space-group operations are taken, without time reversal; the magnetic moments are not used (they scatter X-rays negligibly).`);
   }
   ops = uniqueOps(ops);
+  // The rounding the written cell may hide: half a unit of the last decimal. Exact: a length
+  // with one decimal or none (as roundingOf), an angle of 60, 90 or 120°, or a whole one. An
+  // angle to 0.1° (older structures: β = 104.5(2)°) is a measurement: counted exact, the 530
+  // settings in a random basis, lengths to three decimals, kept their point group in 134 of 265.
+  const half = (v, dmin) => { const d = decimalsOf(v); return d >= dmin && d !== Infinity ? 0.5*Math.pow(10, -d) : 0; };
+  const eLen = ['a', 'b', 'c'].map(k => half(item(b, '_cell_length_' + k), 2)), eAngOf = new Map();
+  for (const k of ['alpha', 'beta', 'gamma']) if (!noAngle.includes(k)) eAngOf.set(cell[k], [60, 90, 120].includes(cell[k]) ? 0 : half(item(b, '_cell_angle_' + k), 1));
+  const eAng = c => ['alpha', 'beta', 'gamma'].map(k => eAngOf.get(c[k]) || 0);
+  /* A missing or invalid angle: the one the operations require, when they leave a single
+     choice among 90°, 120°, 60° and the angles given (every R keeps the metric, RᵀGR = G,
+     within the holohedry's tolerance: 1e-4, or the rounding of the written cell where larger);
+     else 90°.
+     A hexagonal file without γ read 90° up to v426, and its 3- and 6-fold operations then
+     merged reflections of different d. Monoclinic β, or any angle a triclinic file omits, the
+     operations do not fix: 90°, warned as before. */
+  if (noAngle.length){
+    const cands = [...new Set([90, 120, 60, ...eAngOf.keys()])];
+    const combos = noAngle.reduce((acc, k)=> acc.flatMap(c => cands.map(v => ({ ...c, [k]: v }))), [{}]);
+    const fits = ops.some(o => !isIdent(o.R)) ? combos.filter(c =>{
+      const tc = { ...cell, ...c }, { G, V } = metric(tc);
+      if (!(V > 1e-6*tc.a*tc.b*tc.c)) return false;
+      const dG = metricRounding(tc, eLen, eAng(tc)), col = (R, i) => [R[i], R[3 + i], R[6 + i]];
+      // (RᵀGR)_ij = r_iᵀ G r_j, r_i the columns of R
+      return ops.every(({ R }) => [0, 1, 2].every(i => [0, 1, 2].every(j =>
+        Math.abs(qf(G, col(R, i), col(R, j)) - G[3*i + j]) <= Math.max(1e-4*Math.sqrt(G[4*i]*G[4*j]), dGuv(dG, col(R, i), col(R, j), [i, j])))));
+    }) : [];
+    const pick = fits.length === 1 ? fits[0] : null;
+    for (const k of noAngle){
+      cell[k] = pick ? pick[k] : 90;
+      warnings.push(pick ? `No valid _cell_angle_${k}: ${cell[k]}°, the angle the symmetry operations require.` : `No valid _cell_angle_${k}: 90° assumed.`);
+    }
+  }
+  // Each angle may lie in (0, 180°) and the three still close no cell (120/120/120°
+  // gives V = 0, 60/60/130° a negative G determinant): every d would be NaN.
+  const { G, Gs, V } = metric(cell);
+  if (!(V > 1e-6*cell.a*cell.b*cell.c)) throw new Error(`The cell angles α, β, γ = ${cell.alpha}°, ${cell.beta}°, ${cell.gamma}° do not form a unit cell.`);
+  { const dG = metricRounding(cell, eLen, eAng(cell)); if (dG) cell.dG = dG; }
   const isP1 = s => /^p\s*1$/i.test(s.trim());
   // (a magnetic group by its BNS or OG name or number, P1 being '1.1'; or its parent space group)
   const named = (hm && !isP1(hm)) || itNumber > 1 || (hall && !isP1(hall)) || (magName && !isP1(String(magName)) && String(magName).trim() !== '1.1')
@@ -478,7 +617,9 @@ function parseCif(text){
     if (miss.length) warnings.push(`The ${ops.length} symmetry operations do not form a group (e.g. ${symopString(miss[0])} is missing): the list looks incomplete, check the CIF.`);
     // A centred symbol needs its centring translations in the list.
     const L = hm ? hm.trim()[0].toUpperCase() : '';
-    const want = { I:1, A:1, B:1, C:1, F:3 }[L] ?? (L === 'R' && Math.abs(cell.gamma - 120) < 0.01 ? 2 : 0);
+    // (an R group in hexagonal axes: γ = 120° within 0.01° and its written digits)
+    const hexAx = Math.abs(cell.gamma - 120) < 0.01 + cellSlack(cell).ang[2];
+    const want = { I:1, A:1, B:1, C:1, F:3 }[L] ?? (L === 'R' && hexAx ? 2 : 0);
     const have = ops.filter(o => o.R.every((v, i) => v === IDENT[i]) && o.t.some(v => v)).length;
     if (want && have < want) warnings.push(`${hm.trim()} is centred but the operations hold ${have} of its ${want} centring translation${want > 1 ? 's' : ''}: the cell will be filled incompletely.`);
   }
@@ -507,7 +648,7 @@ function parseCif(text){
   // Without a type symbol (or with one that names no species) the label is read, the
   // formula's elements choosing between its readings ('HO1': Ho, or an H on O1).
   const fEls = (f => f && new Set(Object.keys(f)))(parseFormula(item(b, '_chemical_formula_sum')));
-  const sites = [], written = [], defaultB = [], fallback = [], doubt = [];
+  const sites = [], written = [], defaultB = [], fallback = [], mixed = [], doubt = [];
   for (let i = 0; i < n; i++){
     const label = lab && !isNull(lab[i]) ? lab[i] : `${typ && !isNull(typ[i]) ? typ[i] : 'X'}${i+1}`;
     if (flag && /^dum/i.test(flag[i] || '')) continue;   // dummy atoms (ring centroids, …)
@@ -520,11 +661,16 @@ function parseCif(text){
       else if (sp && sp.inFormula === false) doubt.push(`${label} as ${sp.element}, which the formula lacks`);
     }
     if (!sp){ warnings.push(`Site ${label}: no X-ray scattering factor for '${type}', the site is left out.`); continue; }
-    if (sp.fallback) fallback.push(`${type} (${label})`);
+    if (sp.fallback) fallback.push(`${type} (${label}), taken as ${sp.key === sp.element ? 'the neutral atom' : sp.key} (${Number.isFinite(sp.charge) ? 'the nearest tabulated charge' : 'its charge not read'})`);
+    else if (sp.mix) mixed.push(`${type} (${label}) as ${sp.mix.map(([k, w])=> `${+w.toFixed(3)} ${k}`).join(' + ')}`);
     const x = num(fx[i]), y = num(fy ? fy[i] : null), z = num(fz ? fz[i] : null);
     if (![x, y, z].every(Number.isFinite)){ warnings.push(`Site ${label}: incomplete coordinates, the site is left out.`); continue; }
+    // Missing, '?' or '.': 1 (the dictionary's default). A negative one, a refined occupancy
+    // of an all but empty site (−0.02(3)), is 0 (v426 made it 1: the site full). Above 1 by
+    // more than a rounding at three decimals, warned and kept.
     let o = occ ? num(occ[i]) : 1;
-    if (!(o >= 0)) o = 1;
+    if (Number.isNaN(o)) o = 1;
+    if (o < 0){ warnings.push(`Site ${label}: occupancy ${o} < 0, taken as 0 (the site is empty).`); o = 0; }
     if (o > 1.0005) warnings.push(`Site ${label}: occupancy ${o} > 1.`);
     let B = bIso ? num(bIso[i]) : NaN;
     if (!Number.isFinite(B) && uIso){ const u = num(uIso[i]); if (Number.isFinite(u)) B = EIGHT_PI2*u; }
@@ -546,7 +692,8 @@ function parseCif(text){
   const epsXYZ = roundingOf(written.map(w => w.slice(0, 3))), epsOcc = roundingOf(partial.map(w => [w[3]]));
   let ip = 0;
   sites.forEach((s, i)=> { s.eps = epsXYZ[i]; s.occEps = written[i][3] != null ? epsOcc[ip++][0] : 0; });
-  if (fallback.length) warnings.push(`No tabulated form factor for the ion${fallback.length > 1 ? 's' : ''} ${fallback.join(', ')}: the neutral atom is used.`);
+  if (fallback.length) warnings.push(`No tabulated form factor for ${fallback.join('; ')}.`);
+  if (mixed.length) warnings.push(`No tabulated form factor of its own, taken as the tabulated charges around it with the same mean charge: ${mixed.join('; ')}.`);
   if (defaultB.length) warnings.push(`No displacement parameter for ${defaultB.join(', ')}: B = ${B_DEFAULT} Å² assumed.`);
   if (sites.some(s => s.Biso < 0)) warnings.push('Negative displacement parameters in the CIF.');
 
@@ -581,7 +728,7 @@ function parseCif(text){
       const want = symbolSystem(hm, itNumber), letter = hm && /^[pabcifr]/i.test(hm.trim()) ? hm.trim()[0].toUpperCase() : hallM ? hallM[2].toUpperCase() : null;
       const sym = findSymmetry(cell, atoms);
       const sysOk = !want || sym.system === want || (want === 'trigonal' && sym.system === 'hexagonal');
-      const hexAxes = Math.abs(cell.gamma - 120) < 0.01 && same(cell.a, cell.b);
+      const sl = cellSlack(cell), hexAxes = Math.abs(cell.gamma - 120) < 0.01 + sl.ang[2] && same(cell.a, cell.b, sl.len[0] + sl.len[1]);
       const wantC = letter === 'R' ? (hexAxes ? 'R' : 'P') : letter;
       const centredIT = itNumber && CENTRED_IT.has(itNumber) && !(itNumber >= 143 && itNumber <= 167 && !hexAxes);
       const cenOk = wantC ? sym.centring === wantC : !centredIT || sym.centring !== 'P';
@@ -600,7 +747,7 @@ function parseCif(text){
   const name = item(b, '_chemical_name_mineral') || item(b, '_chemical_formula_structural')
     || (formula ? formulaText(formula) : null) || item(b, '_chemical_name_common') || b.name;
   return { name: String(name).trim(), block: b.name, cell, hm: hm ? hm.trim() : null, itNumber, hall: hall ? hall.trim() : null,
-           ops, sites, formulaSum: formulaSum ? formulaSum.trim() : null, formula, Z, warnings };
+           ops, sites, formulaSum: formulaSum ? formulaSum.trim() : null, formula, Z, defaultB, warnings };
 }
 
 /* ---------- cell contents ---------- */
@@ -626,11 +773,12 @@ function expandAtoms(ops, sites, tol = 1e-3){
     const sp = s.key && s.element ? null : speciesKey(s.type || s.label || '');
     const key = s.key || (sp ? sp.key : undefined), element = s.element || (sp ? sp.element : undefined);
     const x = [s.x, s.y, s.z], e = eps[si];
-    // The candidates, nearest first: d = R·x + t − x within the rounding.
+    // The candidates, nearest first: d = R·x + t − x within the rounding (the site's, and the
+    // operation's own when its translation was written with decimals that are no 1/24).
     const S = [];
-    for (const { R, t } of list){
+    for (const { R, t, w } of list){
       const y = apply3(R, x), d = [0, 1, 2].map(i => { const v = y[i] + t[i] - x[i]; return v - Math.round(v); });
-      if (one(d, allowance(R, e, e))) S.push({ R, t, d, far: Math.max(...d.map(Math.abs)) });
+      if (one(d, allowance(R, e, w ? e.map((v, i)=> v + w[i]) : e))) S.push({ R, t, w, d, far: Math.max(...d.map(Math.abs)) });
     }
     S.sort((p, q)=> p.far - q.far);
     // They are the site's own operations when some point they all fix rounds to x as written
@@ -645,18 +793,18 @@ function expandAtoms(ops, sites, tol = 1e-3){
       const xs = x.map((v, i)=> v + dx[i]);
       const within = (v, i) => Math.abs(v) < e[i] - 1e-9 || (Math.abs(v) <= e[i] + 1e-9 && Math.abs(xs[i]*24 - Math.round(xs[i]*24)) < 1e-6);
       const inBox = dx.every(within) || S.every(o => o.far <= lim);
-      const fixes = S.every(({ R, t }) => { const q = apply3(R, xs); return [0, 1, 2].every(i => { const v = q[i] + t[i] - xs[i]; return Math.abs(v - Math.round(v)) < 1e-7; }); });
+      const fixes = S.every(({ R, t, w }) => { const q = apply3(R, xs); return [0, 1, 2].every(i => { const v = q[i] + t[i] - xs[i]; return Math.abs(v - Math.round(v)) < 1e-7 + (w ? 2*w[i] : 0); }); });
       // (an exact special position is left bit for bit as written)
       if (inBox && fixes){ if (dx.some(v => Math.abs(v) > 1e-12)) xm = xs; break; }
     }
-    const pos = [];
-    for (const { R, t } of list){
+    const pos = [], Z = [0, 0, 0];
+    for (const { R, t, w } of list){
       const q = apply3(R, xm);
       const p = [mod1(q[0] + t[0]), mod1(q[1] + t[1]), mod1(q[2] + t[2])];
-      if (!pos.some(o => one([p[0] - o[0], p[1] - o[1], p[2] - o[2]], [0, 0, 0]))) pos.push(p);
+      if (!pos.some(o => one([p[0] - o[0], p[1] - o[1], p[2] - o[2]], w || o.w ? allowance(IDENT, w || Z, o.w || Z) : Z))){ if (w) p.w = w; pos.push(p); }
     }
     for (const p of pos) out.push({ site: si, label: s.label, key, element, x: p[0], y: p[1], z: p[2],
-      occ: s.occ ?? 1, Biso: s.Biso ?? B_DEFAULT, cifMult: s.mult ?? null, eps: list.length > 1 ? [0, 0, 0] : e,
+      occ: s.occ ?? 1, Biso: s.Biso ?? B_DEFAULT, cifMult: s.mult ?? null, eps: list.length > 1 ? p.w || [0, 0, 0] : e,
       ...(s.occEps ? { occEps: s.occEps } : {}), ...(s.massEl ? { massEl: s.massEl } : {}) });
   });
   return out;
@@ -757,9 +905,18 @@ function checkComposition(atoms, formulaSum, Z){
       const off = allEls.filter(el => { const e = expected[el] || 0, s = z*(fe[el] || 0); return e + s < lo(el) || e - s > hi(el); });
       if (off.length){
         ok = false;
-        const ratios = allEls.map(el => (found[el] || 0)/(expected[el] || NaN));
-        // (one factor for every element, and not 1: a whole cell read twice, or half of one)
-        const r0 = ratios[0], uniform = Math.abs(r0 - 1) > 0.02 && ratios.every(r => Number.isFinite(r) && Math.abs(r - r0) < 0.02*r0);
+        // One factor k for every element, and not 1 (a whole cell read twice, or half of one):
+        // some k puts k × the formula × Z within every element's bounds. v426 asked every
+        // ratio within 2 % of the first, which a large cell passes with a site missing
+        // (Y24Al40O95 read as 2 × Y3Al5O12 × 4) and a vacancy of a doubled cell may not.
+        let klo = 0, khi = Infinity;
+        for (const el of allEls){
+          const e = expected[el] || 0, sl = z*(fe[el] || 0);
+          if (!(e > 0)){ klo = Infinity; break; }
+          klo = Math.max(klo, lo(el)/(e + sl)); khi = Math.min(khi, e > sl ? hi(el)/(e - sl) : Infinity);
+        }
+        const uniform = klo <= khi && !(klo <= 1 && 1 <= khi);
+        const r0 = Math.min(Math.max(allEls.reduce((m, el)=> m + (found[el] || 0)*(expected[el] || 0), 0)/allEls.reduce((m, el)=> m + (expected[el] || 0)**2, 0), klo), khi);
         msgs.push(`The symmetry operations fill the cell with ${fmt(found)}, but ${formulaText(formula)} × Z = ${fmtCount(z)} is ${fmt(expected)}`
           + (uniform ? ` (every element ${fmtCount(+r0.toFixed(3))}× the formula: Z is wrong, or the coordinates belong to another origin choice or setting than the operations).`
                      : '. The coordinates and the symmetry operations may belong to different origin choices or settings, or sites are missing.'));
@@ -829,23 +986,25 @@ function latticeBasis(vecs){
    column by column from the lattice vectors as long as each axis: such a vector's indices
    are bounded, |n_j| = |a*_j·v| ≤ |a*_j||a_i|, so none is missed in any cell (in a reduced
    one the bound is 1 or 2). */
-function holohedryOf(G, rtol = 1e-4){
+function holohedryOf(G, rtol = 1e-4, dG = null){
   const Gs = inv3(G);
   const dot = (u, v) => u[0]*(G[0]*v[0]+G[1]*v[1]+G[2]*v[2]) + u[1]*(G[3]*v[0]+G[4]*v[1]+G[5]*v[2]) + u[2]*(G[6]*v[0]+G[7]*v[1]+G[8]*v[2]);
+  // (within rtol, or the rounding of the difference uᵀGv − G_ij where that is larger)
+  const E = [[1,0,0], [0,1,0], [0,0,1]];
   const cols = [0, 1, 2].map(i =>{
-    const b = [0, 1, 2].map(j => Math.max(1, Math.floor(Math.sqrt(G[4*i]*Gs[4*j])*(1 + rtol) + 1e-9))), out = [];
+    const b = [0, 1, 2].map(j => Math.max(1, Math.floor(Math.sqrt(G[4*i]*Gs[4*j])*(1 + rtol + dGuv(dG, E[i], E[i])/G[4*i]) + 1e-9))), out = [];
     for (let p = -b[0]; p <= b[0]; p++) for (let q = -b[1]; q <= b[1]; q++) for (let r = -b[2]; r <= b[2]; r++){
       const v = [p, q, r];
-      if ((p || q || r) && Math.abs(dot(v, v) - G[4*i]) <= rtol*G[4*i]) out.push(v);
+      if ((p || q || r) && Math.abs(dot(v, v) - G[4*i]) <= Math.max(rtol*G[4*i], dGuv(dG, v, v, [i, i]))) out.push(v);
     }
     return out;
   });
-  const tolIJ = (i, j) => rtol*Math.sqrt(G[4*i]*G[4*j]);
+  const tolIJ = (i, j, u, v) => Math.max(rtol*Math.sqrt(G[4*i]*G[4*j]), dGuv(dG, u, v, [i, j]));
   const out = [];
   for (const c0 of cols[0]) for (const c1 of cols[1]){
-    if (Math.abs(dot(c0, c1) - G[1]) > tolIJ(0, 1)) continue;
+    if (Math.abs(dot(c0, c1) - G[1]) > tolIJ(0, 1, c0, c1)) continue;
     for (const c2 of cols[2]){
-      if (Math.abs(dot(c0, c2) - G[2]) > tolIJ(0, 2) || Math.abs(dot(c1, c2) - G[5]) > tolIJ(1, 2)) continue;
+      if (Math.abs(dot(c0, c2) - G[2]) > tolIJ(0, 2, c0, c2) || Math.abs(dot(c1, c2) - G[5]) > tolIJ(1, 2, c1, c2)) continue;
       const R = [c0[0], c1[0], c2[0],  c0[1], c1[1], c2[1],  c0[2], c1[2], c2[2]];
       if (Math.abs(det3(R)) === 1) out.push(R);
     }
@@ -859,11 +1018,11 @@ function holohedryOf(G, rtol = 1e-4){
    of it and turned back. → { Rs: those integer in the cell (its operations), lost: how many
    are not (the cell, a supercell of that lattice, cannot hold them), basis: the reduced
    basis }. */
-function latticeSymmetry(G, B = IDENT){
+function latticeSymmetry(G, B = IDENT, dG = null){
   const P = reduceBasis(mul3(mul3(tr3(B), G), B)), Br = mul3(B, P), Bi = inv3(Br);
   const Rs = [];
   let lost = 0;
-  for (const h of holohedryOf(mul3(mul3(tr3(Br), G), Br))){
+  for (const h of holohedryOf(mul3(mul3(tr3(Br), G), Br), 1e-4, dGin(dG, Br))){
     const R = mul3(mul3(Br, h), Bi), Ri = R.map(v => Math.round(v) || 0);
     if (R.every((v, i) => Math.abs(v - Ri[i]) < 1e-6)) Rs.push(Ri); else lost++;
   }
@@ -872,9 +1031,9 @@ function latticeSymmetry(G, B = IDENT){
 // The lattice holohedry of a cell: every integer matrix that keeps its metric, identity first,
 // then in the order of their columns (first column first, each by its entries): the order of
 // v425's search, so the operations come out in the same order wherever it found them all.
-function holohedry(G, rtol = 1e-4){
+function holohedry(G, rtol = 1e-4, dG = null){
   const P = reduceBasis(G), Pi = inv3(P).map(v => Math.round(v) || 0);
-  const out = isIdent(P) ? holohedryOf(G, rtol) : holohedryOf(mul3(mul3(tr3(P), G), P), rtol).map(h => mul3(mul3(P, h), Pi));
+  const out = isIdent(P) ? holohedryOf(G, rtol, dG) : holohedryOf(mul3(mul3(tr3(P), G), P), rtol, dGin(dG, P)).map(h => mul3(mul3(P, h), Pi));
   const key = R => [R[0], R[3], R[6], R[1], R[4], R[7], R[2], R[5], R[8]];
   return out.sort((p, q)=>{ if (isIdent(p) !== isIdent(q)) return isIdent(p) ? -1 : 1; const a = key(p), b = key(q); for (let i = 0; i < 9; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; });
 }
@@ -892,7 +1051,20 @@ function aboutAxis(R, i){
   for (let j=0;j<3;j++){ const e = j === i ? 1 : 0; if (P[3*j+i] !== e || P[3*i+j] !== e) return false; }
   return true;
 }
-const same = (x, y) => Math.abs(x - y) <= 1e-4*Math.max(Math.abs(x), Math.abs(y));
+// Equal within 1e-4 (the holohedry's floor), and the rounding e of the two values.
+const same = (x, y, e = 0) => Math.abs(x - y) <= 1e-4*Math.max(Math.abs(x), Math.abs(y)) + e;
+// The rounding of a cell's lengths (Å) and angles (°) from its metric's (dGof): ∂a_i = D_ii/(2a_i),
+// ∂θ_jk = −(D_jk/(a_j a_k) − cos θ (D_jj/G_jj + D_kk/G_kk)/2)/sin θ, each term times its e_k;
+// zeros for an exact cell.
+function cellSlack(cell){
+  const dG = dGof(cell), L = [cell.a, cell.b, cell.c], A = [cell.alpha, cell.beta, cell.gamma];
+  if (!dG) return { len: [0, 0, 0], ang: [0, 0, 0] };
+  return { len: L.map((v, i)=> dG.reduce((m, { D, e })=> m + e*Math.abs(D[4*i])/(2*v), 0)),
+           ang: [[1, 2, 0], [0, 2, 1], [0, 1, 2]].map(([j, k, i]) =>{
+             const c = cosd(A[i]), s = Math.max(Math.sqrt(1 - c*c), 1e-3);
+             return dG.reduce((m, { D, e })=> m + e*Math.abs(D[3*j + k]/(L[j]*L[k]) - c*(D[4*j]/(L[j]*L[j]) + D[4*k]/(L[k]*L[k]))/2)/s, 0)*180/Math.PI;
+           }) };
+}
 
 // The cell spanned by the columns of M (integer combinations of `cell`'s axes, or the
 // inverse relation): metric MᵀGM. Angles within 1e-9° of 60, 90 or 120° are made exact,
@@ -903,7 +1075,7 @@ function cellInBasis(cell, M){
   const g = mul3(mul3(Mt, G), M);
   const len = i => Math.sqrt(g[4*i]);
   const ang = (i, j) => snapAngle(Math.acos(Math.max(-1, Math.min(1, g[3*i+j]/(len(i)*len(j)))))*180/Math.PI);
-  return { a: len(0), b: len(1), c: len(2), alpha: ang(1, 2), beta: ang(0, 2), gamma: ang(0, 1) };
+  return { a: len(0), b: len(1), c: len(2), alpha: ang(1, 2), beta: ang(0, 2), gamma: ang(0, 1), ...(cell.dG ? { dG: dGin(cell.dG, M) } : {}) };
 }
 
 /* A cell whose symmetry axes are lattice vectors other than its own axes — most often the
@@ -984,8 +1156,10 @@ function conventionalIn(system, Rs, cell){
   if (kind === 'cubic') conv.a = conv.b = conv.c = Math.cbrt(cv.a*cv.b*cv.c);
   if (kind === 'tetragonal' || kind === 'hexagonal'){ conv.a = conv.b = Math.sqrt(cv.a*cv.b); if (kind === 'hexagonal') conv.gamma = 120; }
   if (kind === 'monoclinic') conv.beta = cv.beta;
-  const sameAngle = k => Math.abs(cv[k] - conv[k]) < 0.01;
-  if (!same(cv.a, conv.a) || !same(cv.b, conv.b) || !same(cv.c, conv.c) || !['alpha','beta','gamma'].every(sameAngle)) return null;
+  // (a length made the mean of others may differ from it by its own rounding and theirs)
+  const sl = cellSlack(cv), sameAngle = (k, i) => Math.abs(cv[k] - conv[k]) < 0.01 + sl.ang[i];
+  const eMean = Math.max(...sl.len.slice(0, kind === 'cubic' ? 3 : kind === 'tetragonal' || kind === 'hexagonal' ? 2 : 0), 0);
+  if (!['a', 'b', 'c'].every((k, i)=> same(cv[k], conv[k], sl.len[i] + eMean)) || !['alpha','beta','gamma'].every(sameAngle)) return null;
   return { kind, params, ...(unique ? { unique } : {}), basis: M, conv, volumeRatio: Math.abs(det3(M)) };
 }
 
@@ -1005,22 +1179,22 @@ function classify(Rs, cell){
     const cb = conventionalBasis(system, Rs, cell);
     return cb ? { ...cb, note: `${why}: refined as the conventional cell (${cb.params.join(', ')}), ${cb.volumeRatio}× the volume of the cell given` } : iso(why);
   };
-  const { a, b, c, alpha, beta, gamma } = cell;
+  const { a, b, c, alpha, beta, gamma } = cell, sl = cellSlack(cell), [ea, eb, ec] = sl.len, [eal, ebe, ega] = sl.ang;
   let constraint;
   if (system === 'cubic'){
     // One length either way, but in a primitive cell of an F or I lattice (as the Materials
     // Project serves them) that length is not the cube edge the tables quote: such a cell
     // is refined through its conventional one, so a and V come out as the cube's.
-    const right = [alpha, beta, gamma].every(x => Math.abs(x - 90) < 0.01);
-    constraint = right && same(a, b) && same(b, c) ? { kind:'cubic', params:['a'] } : conv('cubic symmetry in a non-standard cell');
+    const right = [alpha, beta, gamma].every((x, i) => Math.abs(x - 90) < 0.01 + sl.ang[i]);
+    constraint = right && same(a, b, ea + eb) && same(b, c, eb + ec) ? { kind:'cubic', params:['a'] } : conv('cubic symmetry in a non-standard cell');
   } else if (system === 'hexagonal' || system === 'trigonal'){
     const R3 = Rs[ord.indexOf(3)] || Rs[ord.indexOf(6)];   // a 6-fold without its 3-fold only in a set that is not a group
     // (and a = b: an axis along c in a cell that is not reduced, b = a + a′, is no standard setting)
-    if (aboutAxis(R3, 2) && same(a, b)) constraint = { kind:'hexagonal', params:['a','c'] };
-    else if (same(a, b) && same(b, c) && same(alpha, beta) && same(beta, gamma)) constraint = { kind:'rhombohedral', params:['a','alpha'] };
+    if (aboutAxis(R3, 2) && same(a, b, ea + eb)) constraint = { kind:'hexagonal', params:['a','c'] };
+    else if (same(a, b, ea + eb) && same(b, c, eb + ec) && same(alpha, beta, eal + ebe) && same(beta, gamma, ebe + ega)) constraint = { kind:'rhombohedral', params:['a','alpha'] };
     else constraint = conv(`${system} symmetry in a non-standard cell`);
   } else if (system === 'tetragonal'){
-    constraint = aboutAxis(Rs[ord.indexOf(4)], 2) && same(a, b) ? { kind:'tetragonal', params:['a','c'] } : conv('tetragonal axis not along c, or a ≠ b');
+    constraint = aboutAxis(Rs[ord.indexOf(4)], 2) && same(a, b, ea + eb) ? { kind:'tetragonal', params:['a','c'] } : conv('tetragonal axis not along c, or a ≠ b');
   } else if (system === 'orthorhombic'){
     constraint = Rs.every(R => [1,2,3,5,6,7].every(k => R[k] === 0)) ? { kind:'orthorhombic', params:['a','b','c'] }
                : conv('orthorhombic symmetry in a non-standard cell');
@@ -1074,7 +1248,8 @@ function centringOf(trans){
       rounding of the atom passed through cancels), and is then added. Where that fails the tolerance is ambiguous for this structure, and the
       search is made again with it (and the rounding allowed) halved, at most three times.
    5. The atoms placed at the mean of their images under the group (`atoms`): exactly
-      symmetric, moved at most by the tolerance (an exact file is left as it is).
+      symmetric, moved at most by the tolerance (an exact file is left as it is); their B the
+      mean over their orbit (bSpread: the largest change).
    Atoms are looked up in a grid of their positions, products are checked through the
    matchings found, and the mean of step 5 is taken over T, then over the R's, so the cost
    grows as N·(|T| + |R|), not N²·|group| (v425: a YAG P1 supercell of 1280 atoms took
@@ -1114,7 +1289,7 @@ function findSymmetry(cell, atoms, tol = 0.01){
   const x0 = [X[3*i0], X[3*i0+1], X[3*i0+2]];
   const refPos = new Int32Array(n).fill(-1);
   ref.forEach((j, i)=> { refPos[j] = i; });
-  const rank = new Map(holohedry(G).map((R, i)=> [R.join(), i])), rankOf = R => rank.get(R.join()) ?? 1e6;
+  const dG = dGof(cell), rank = new Map(holohedry(G, 1e-4, dG).map((R, i)=> [R.join(), i])), rankOf = R => rank.get(R.join()) ?? 1e6;
 
   // A grid of each group's positions, about one atom to a cell, no cell narrower than a
   // match (as a fraction of each axis), so a lookup reads two cells per axis.
@@ -1300,7 +1475,7 @@ function findSymmetry(cell, atoms, tol = 0.01){
     }
     // 2–3. The lattice's holohedry in the cell, and one translation for each matrix. A
     //    candidate that fails rules out its images under T too.
-    const lat = latticeSymmetry(G, latt || IDENT);
+    const lat = latticeSymmetry(G, latt || IDENT, dG);
     const reps = new Map([[IDENT.join(), { R: IDENT.slice(), t: [0, 0, 0], perm: T[0].perm }]]);
     const tried = new Uint8Array(n);
     for (const R of lat.Rs.slice().sort((p, q)=> rankOf(p) - rankOf(q))){
@@ -1362,13 +1537,28 @@ function findSymmetry(cell, atoms, tol = 0.01){
       return { Y, cnt };
     };
     const s1 = mean(T.map(o => ({ R: IDENT, t: o.t, perm: o.perm })), X), s2 = mean(Rs, s1.Y);
+    // B too: the key has no B, so atoms the group maps onto each other may differ in it (sites
+    // of a lower group, a P1 file with a B per atom), and the reflections it merges would then
+    // be wrong (a B spread of ±0.1 Å² put lines 4 % off, median over 176 groups; ±0.5 Å², 21 %).
+    // Each atom takes the mean over its orbit, over T then over one operation per R.
+    const meanB = (list, Bv) =>{
+      const acc = new Float64Array(n), cnt = new Int32Array(n);
+      for (const { perm } of list) for (let m = 0; m < nu; m++){ const j = used[m], k = perm[j]; if (k >= 0){ acc[k] += Bv[j]; cnt[k]++; } }
+      return Bv.map((v, k)=> cnt[k] === list.length ? acc[k]/list.length : v);
+    };
+    const B0 = Float64Array.from(atoms, a => Number.isFinite(a.Biso) ? a.Biso : NaN);
+    const Bm = B0.some(Number.isNaN) ? B0 : meanB(Rs, meanB(T, B0));
+    let bSpread = 0;
     const sym = atoms.map((a, k)=>{
       const d0 = s2.Y[3*k] - X[3*k], d1 = s2.Y[3*k+1] - X[3*k+1], d2 = s2.Y[3*k+2] - X[3*k+2];
-      if (s1.cnt[k] < 0 || s2.cnt[k] < 0 || (Math.abs(d0) <= 1e-9 && Math.abs(d1) <= 1e-9 && Math.abs(d2) <= 1e-9)) return a;
-      return { ...a, x: mod1(s2.Y[3*k]), y: mod1(s2.Y[3*k+1]), z: mod1(s2.Y[3*k+2]) };
+      const dB = Math.abs(Bm[k] - B0[k]) > 1e-12 ? Bm[k] : null;
+      if (dB != null) bSpread = Math.max(bSpread, Math.abs(Bm[k] - B0[k]));
+      const moved = !(s1.cnt[k] < 0 || s2.cnt[k] < 0 || (Math.abs(d0) <= 1e-9 && Math.abs(d1) <= 1e-9 && Math.abs(d2) <= 1e-9));
+      if (!moved && dB == null) return a;
+      return { ...a, ...(moved ? { x: mod1(s2.Y[3*k]), y: mod1(s2.Y[3*k+1]), z: mod1(s2.Y[3*k+2]) } : {}), ...(dB != null ? { Biso: dB } : {}) };
     });
     const trans = T.filter(o => o.t.some(v => v)).map(o => o.t);
-    return { ops, order: ops.length, pointOrder: Rs.length, centring: centringOf(trans), ...classify(Rs.map(C => C.R), cell), atoms: sym, lost: lat.lost,
+    return { ops, order: ops.length, pointOrder: Rs.length, centring: centringOf(trans), ...classify(Rs.map(C => C.R), cell), atoms: sym, lost: lat.lost, bSpread,
              ...(latt ? { lattice: latt, primitive: lat.basis } : {}), ...(closed ? {} : { group: false }) };
   };
   let r = null;
@@ -1609,9 +1799,18 @@ function reflections(cell, ops, dmin){
     for (const { R, t } of list){
       if (h*R[0] + k*R[3] + l*R[6] !== h || h*R[1] + k*R[4] + l*R[7] !== k || h*R[2] + k*R[5] + l*R[8] !== l) continue;
       const ph = h*t[0] + k*t[1] + l*t[2];
-      // Allowed phases are integers; forbidden ones sit ≥ 1/6 away, so 0.02 absorbs any
-      // rounding left in t without ever passing a true extinction.
-      if (Math.abs(ph - Math.round(ph)) > 0.02){ absent = true; break; }
+      /* Allowed phases are integers. An operation of order n repeats as a pure translation of
+         the group, so for h·R = h on a line the centring allows its phase is a multiple of 1/n
+         (n = 2, 3, 4, 6; on a line a centring forbids, kept by a list that lacks it, of 1/(n·m),
+         m = 2 or 3 the centring's order: 1/4 for a d-glide, 1/6 for a 2-fold of an R lattice):
+         a forbidden one lies ≥ 1/(3n) from an integer, and 1/(4n) = 0.04–0.125 is the bound
+         (over the 530 settings, |h| ≤ 8: 1/n and 1/(n·m) exactly). A pure translation (exact, on
+         the 1/24 grid or k/|T|): 1/48. Up to v426 0.02 for all, which a translation fitted to
+         noisy atoms can exceed at short d: findSymmetry accepts 0.01 Å, so h·t may be off by
+         up to 0.01 Å/d (0.036 at d = 0.28 Å, Ag Kα at 180°; measured on P1 files with 3 mÅ of
+         noise, up to 0.016 at d ≥ 0.25 Å, 80 % of the old bound). */
+      const n = R.every((v, i) => v === IDENT[i]) ? 12 : rotOrder(R) || 12;
+      if (Math.abs(ph - Math.round(ph)) > 0.25/n){ absent = true; break; }
     }
     if (!absent) out.push({ h: rep[0], k: rep[1], l: rep[2], d: 1/Math.sqrt(q), mult });
   }
@@ -1688,21 +1887,24 @@ function latticeParams(constraint, cell){
   return latticeNames(c).map(n => cc[n]);
 }
 // The cell from the free values; whatever the constraint fixes comes from `template` (the
-// starting cell), so a cubic cell keeps its 90°, a hexagonal one its 120°. With a
-// conventional basis the values build the conventional cell (its own template), and the
-// cell returned is the one given, in its own basis.
+// starting cell), except the angles the symmetry fixes, which are set exactly (90°, and 120°
+// or 60° for γ of a hexagonal cell): a file's 89.99° or 119.99°, accepted within the rounding of its
+// digits, would otherwise stay in the refined metric. With a conventional basis the values
+// build the conventional cell (its own template), and the cell returned is the one given, in
+// its own basis.
 function cellFrom(constraint, values, template){
   const c0 = kindOf(constraint);
   if (c0.basis && c0.conv) return cellInBasis(cellFrom({ kind: c0.kind, unique: c0.unique, params: c0.params }, values, c0.conv), inv3(c0.basis));
   const c = c0, v = values, T = template;
   const cell = { a: T.a, b: T.b, c: T.c, alpha: T.alpha, beta: T.beta, gamma: T.gamma };
+  const right = (...ks) => ks.forEach(k => { cell[k] = 90; });
   switch (c.kind){
-    case 'cubic': cell.a = cell.b = cell.c = v[0]; break;
+    case 'cubic': cell.a = cell.b = cell.c = v[0]; right('alpha', 'beta', 'gamma'); break;
     case 'isotropic': { const f = v[0]/T.a; cell.a = v[0]; cell.b = T.b*f; cell.c = T.c*f; break; }
-    case 'tetragonal': case 'hexagonal': cell.a = cell.b = v[0]; cell.c = v[1]; break;
+    case 'tetragonal': case 'hexagonal': cell.a = cell.b = v[0]; cell.c = v[1]; right('alpha', 'beta'); cell.gamma = c.kind === 'hexagonal' ? (T.gamma > 90 ? 120 : 60) : 90; break;
     case 'rhombohedral': cell.a = cell.b = cell.c = v[0]; cell.alpha = cell.beta = cell.gamma = v[1]; break;
-    case 'orthorhombic': cell.a = v[0]; cell.b = v[1]; cell.c = v[2]; break;
-    case 'monoclinic': { cell.a = v[0]; cell.b = v[1]; cell.c = v[2]; cell[latticeNames(c)[3]] = v[3]; break; }
+    case 'orthorhombic': cell.a = v[0]; cell.b = v[1]; cell.c = v[2]; right('alpha', 'beta', 'gamma'); break;
+    case 'monoclinic': { const u = latticeNames(c)[3]; cell.a = v[0]; cell.b = v[1]; cell.c = v[2]; right(...['alpha', 'beta', 'gamma'].filter(k => k !== u)); cell[u] = v[3]; break; }
     default: [cell.a, cell.b, cell.c, cell.alpha, cell.beta, cell.gamma] = v;
   }
   return cell;
