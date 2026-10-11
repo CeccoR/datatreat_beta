@@ -121,26 +121,35 @@ function lnAverage(base, l0, a, b, c, sigma, lnT){
   }
   return s*h/(sigma*Math.sqrt(2*Math.PI)) + PHI_M7;
 }
-/* The sphere's log-normal average depends on L·scale alone: tabulated once per σ, on
-   2048 points evenly spaced in ln ℓ₀ from 10⁻⁴ to where it is under 10⁻⁹ (ℓ₀ = e^{3σ² +
-   6σ}), and read by linear interpolation in ln ℓ₀ (below 10⁻⁴, linearly from 1 at 0). */
-const LN_TABLES = new Map();
+/* The sphere's log-normal average depends on L·scale alone: tabulated once per σ, every
+   BALL_DU in ln ℓ₀ from 10⁻⁴ to where it is under 10⁻⁹ (ℓ₀ = e^{3σ² + 6σ}), one node more
+   on each side, and read by cubic (Catmull–Rom) interpolation in ln ℓ₀ (below 10⁻⁴,
+   linearly from 1 at 0). The nodes stay where they are when σ changes, so the
+   interpolation's error changes smoothly with σ: 2048 nodes spread over the range moved
+   with it, and with a linear readout the σ derivative (a central difference of 10⁻⁴)
+   came out 11 % off at σ = 0.05, 1 % at 0.3. Against the closed form, the step 0.01
+   (900–2500 nodes) holds the values within 3·10⁻⁷ and dA/dσ within 0.005 % of its
+   largest from σ = 0.05 (10⁻⁶ and 0.08 % at σ = 0.02); a step of 0.02 left 2.6·10⁻⁶ and
+   0.04 % at σ = 0.05. */
+const LN_TABLES = new Map(), BALL_DU = 0.01;
 function ballTable(sigma){
   const key = sigma.toPrecision(12);
   let tb = LN_TABLES.get(key);
   if (tb) return tb;
-  const n = 2048, u0 = Math.log(1e-4), u1 = 3*sigma*sigma + 6*sigma, du = (u1 - u0)/(n - 1), A = new Float64Array(n);
-  for (let i = 0; i < n; i++) A[i] = lnAverage('ball', Math.exp(u0 + i*du), 0, 0, 0, sigma, 0);
-  tb = { u0, du, n, A, l1: Math.exp(u0) };
+  const u0 = Math.log(1e-4), u1 = 3*sigma*sigma + 6*sigma, n = Math.ceil((u1 - u0)/BALL_DU) + 1, A = new Float64Array(n + 2);
+  for (let i = 0; i < n + 2; i++) A[i] = lnAverage('ball', Math.exp(u0 + (i - 1)*BALL_DU), 0, 0, 0, sigma, 0);
+  tb = { u0, n, A, l1: Math.exp(u0) };
   if (LN_TABLES.size > 16) LN_TABLES.delete(LN_TABLES.keys().next().value);
   LN_TABLES.set(key, tb);
   return tb;
 }
 function ballAt(tb, l0){
-  if (l0 <= tb.l1) return 1 - (1 - tb.A[0])*l0/tb.l1;
-  const f = (Math.log(l0) - tb.u0)/tb.du, i = Math.floor(f);
+  const A = tb.A;
+  if (l0 <= tb.l1) return 1 - (1 - A[1])*l0/tb.l1;
+  const f = (Math.log(l0) - tb.u0)/BALL_DU, i = Math.floor(f);
   if (i >= tb.n - 1) return 0;
-  return tb.A[i] + (f - i)*(tb.A[i + 1] - tb.A[i]);
+  const u = f - i, p0 = A[i], p1 = A[i + 1], p2 = A[i + 2], p3 = A[i + 3];
+  return p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0)));
 }
 function addMemberCoef(out, n, dL, base, a, b, c, scale, sigma, weight){
   if (!(scale > 0)){ for (let i = 0; i < n; i++) out[i] += weight; return; }
@@ -205,6 +214,9 @@ function addMemberCoef(out, n, dL, base, a, b, c, scale, sigma, weight){
    there continuously, and what it leaves out goes to the background. Read between grid
    points by cubic (Catmull–Rom) interpolation. */
 const N_MIN = 64, N_MAX = 16384;
+// The points a line's grid needs, uncapped (widths and spread in °): over N_MAX, its step
+// grows.
+const wppmPoints = (Hest, Hmin, spread, win, winMin) => 16*(Math.max(win*Hest, winMin) + spread)/Math.max(Hmin, 1e-5);
 function wppmLine(o){
   const { x, out, tt, lam, I } = o;
   const th0 = tt*D2R/2, s0 = Math.sin(th0), c1 = Math.cos(th0)*D2R/lam;   // Å⁻¹ per degree of 2θ near the line
@@ -214,6 +226,9 @@ function wppmLine(o){
   const halfDeg = Math.max(o.win*o.Hest, o.winMin) + Math.max(-lo, hi);
   let dd = Math.max(o.Hmin, 1e-5)*c1/8;
   let N = Math.pow(2, Math.ceil(Math.log2(Math.max(1, 2*halfDeg*c1/dd))));
+  // Past the cap the step grows: a sphere's largest crystallites hold little of its line
+  // (0.06 % of the peak at σ = 1.5). A solid whose members' widths differ by more than one
+  // grid holds is drawn in groups of like members instead (xrd-rietveld wppmLineOf).
   N = Math.min(N_MAX, Math.max(N_MIN, N));
   dd = 2*halfDeg*c1/N;                    // one period = the window exactly
   const dL = 1/(N*dd), p = plan(N), re = p.re, im = p.im;
@@ -268,6 +283,32 @@ function wppmLine(o){
     const v = p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0)));
     out[i] += I*(v - edge)*Math.cos(th)*D2R/lam;
   }
+  // o.fwhm, when given, collects the profile as drawn (less its edge value) without the
+  // divergence's shifts, on its grid from δ = 0: lineFwhm reads the tick's width off it.
+  if (o.fwhm){
+    if (nodes && nodes.length){
+      re.fill(0); im.fill(0);
+      for (let k = 0; k <= nL; k++){ const a = com[k]*size[k]*dL; if (k === 0 || k === N >> 1) re[k] += a; else { re[k] = a; re[N - k] = a; } }
+      fftPlus(p);
+    }
+    const e0 = re[N >> 1];
+    (o.fwhm.parts = o.fwhm.parts || []).push({ dd, v: Float64Array.from(re.subarray(0, (N >> 1) + 1), t=> t - e0) });
+    Object.assign(o.fwhm, { s0, lam, c1 });
+  }
+}
+/* lineFwhm(f) → the FWHM in 2θ (°) of the profile wppmLine collected in f: the sum of its
+   parts (a solid drawn in groups of members, each on its own grid, read linearly), its
+   half maximum found between the finest grid's points. NaN if none. */
+function lineFwhm(f){
+  const ps = f.parts || [];
+  if (!ps.length) return NaN;
+  const at = d => ps.reduce((s, p)=> { const u = d/p.dd, m = Math.floor(u); return m + 1 < p.v.length ? s + p.v[m] + (u - m)*(p.v[m + 1] - p.v[m]) : s; }, 0);
+  const step = Math.min(...ps.map(p=> p.dd)), end = Math.max(...ps.map(p=> p.dd*(p.v.length - 1))), half = at(0)/2;
+  let i = 0, d = 0, a = 2*half, b = a;
+  while (b > half && d < end){ d = ++i*step; a = b; b = at(d); }
+  if (!(b <= half && a > b)) return NaN;
+  const dh = d - step*(half - b)/(a - b), a1 = f.s0 + dh*f.lam/2, a0 = f.s0 - dh*f.lam/2;
+  return a1 < 1 && a0 > -1 ? 2*(Math.asin(a1) - Math.asin(a0))/D2R : 2*dh/f.c1;
 }
 function lowerBound(x, v){
   let lo = 0, hi = x.length;
@@ -278,16 +319,29 @@ function lowerBound(x, v){
 /* ---------- Stephens' anisotropic microstrain ----------
    The strain of a reflection whose diffraction vector has the Cartesian unit direction
    u: ε(u)² = ε₀² + Σ_j S_j q_j(u), q_j the quartic forms of u invariant under the Laue
-   group, less their mean over the sphere and scaled to unit rms (so ε₀ is the strain's
-   rms over directions, and S_j each an anisotropic part of ε², in 10⁻⁶ in the engine):
+   group, less their mean over the sphere, scaled to unit rms and orthogonal (so the
+   quartic terms average to 0 over directions: ε₀ is the strain's rms there while no
+   direction's ε² is held at 0; S_j each an anisotropic part of ε², in 10⁻⁶ in the
+   engine, and √ΣS_j² their rms over directions):
    1 for a cubic phase, 2 hexagonal, 3 for 4/mmm and −3m, 4 for 4/m and −3, 5
    orthorhombic, 8 monoclinic, 14 triclinic (Stephens' counts less the isotropic term). Built
    numerically for any group: each quartic monomial averaged over the group's Cartesian
-   operations, their span reduced by Gram–Schmidt in the sphere's inner product (on
-   600 points) against the constant and each other. Coefficients over the 15 monomials
-   x^a y^b z^c, a + b + c = 4 (MONO). */
+   operations, their span reduced by Gram–Schmidt in the sphere's inner product against
+   the constant and each other — exactly, from the sphere's moments (on 600 points the
+   means had been up to 5·10⁻⁴, the cross terms 1.5·10⁻³). Coefficients over the 15
+   monomials x^a y^b z^c, a + b + c = 4 (MONO). */
 const MONO = [];
 for (let a = 4; a >= 0; a--) for (let b = 4 - a; b >= 0; b--) MONO.push([a, b, 4 - a - b]);
+// The mean of x^a y^b z^c over the unit sphere: (a−1)!!(b−1)!!(c−1)!!/(a+b+c+1)!! when
+// a, b and c are even, else 0; and of two quartics' product, through the monomials'.
+const dfact = n => n <= 1 ? 1 : n*dfact(n - 2);
+const sphereMean = (a, b, c) => a % 2 || b % 2 || c % 2 ? 0 : dfact(a - 1)*dfact(b - 1)*dfact(c - 1)/dfact(a + b + c + 1);
+const GRAM = MONO.map(p=> MONO.map(m=> sphereMean(p[0] + m[0], p[1] + m[1], p[2] + m[2])));
+function sphereDot(f, g){
+  let s = 0;
+  for (let i = 0; i < 15; i++){ if (!f[i]) continue; let t = 0; for (let j = 0; j < 15; j++) t += GRAM[i][j]*g[j]; s += f[i]*t; }
+  return s;
+}
 function monoVals(u, out){
   const [x, y, z] = u, px = [1, x, x*x, x*x*x, x*x*x*x], py = [1, y, y*y, y*y*y, y*y*y*y], pz = [1, z, z*z, z*z*z, z*z*z*z];
   for (let i = 0; i < 15; i++){ const m = MONO[i]; out[i] = px[m[0]]*py[m[1]]*pz[m[2]]; }
@@ -297,14 +351,6 @@ function evalQuartic(coef, u){
   const mv = monoVals(u, new Float64Array(15));
   let s = 0; for (let i = 0; i < 15; i++) s += coef[i]*mv[i];
   return s;
-}
-function spherePoints(n){
-  const pts = [];
-  for (let i = 0; i < n; i++){
-    const z = 1 - (2*i + 1)/n, r = Math.sqrt(1 - z*z), ph = i*2.399963229728653;
-    pts.push([r*Math.cos(ph), r*Math.sin(ph), z]);
-  }
-  return pts;
 }
 function solveDense(A, b, n){
   const M = A.map((row, i)=> [...row, b[i]]);
@@ -319,38 +365,27 @@ function solveDense(A, b, n){
 /* quarticInvariants(ops): ops the Laue group's Cartesian operations (row-major 3×3,
    acting on Cartesian diffraction vectors). → [coef (15)] of the anisotropic forms. */
 function quarticInvariants(ops){
-  const pts = spherePoints(600), mv = new Float64Array(15);
-  // A monomial averaged over the group, as values on the sphere's points.
-  const symVals = j => pts.map(u=>{
-    let s = 0;
-    for (const C of ops){ const v = [C[0]*u[0] + C[1]*u[1] + C[2]*u[2], C[3]*u[0] + C[4]*u[1] + C[5]*u[2], C[6]*u[0] + C[7]*u[1] + C[8]*u[2]]; s += monoVals(v, mv)[j]; }
-    return s/ops.length;
-  });
-  // Its monomial coefficients: the values at 15 generic points, through the
-  // monomials' matrix there.
+  const mv = new Float64Array(15);
+  // A monomial averaged over the group, by its monomial coefficients: its values at 15
+  // generic points, through the monomials' matrix there.
   const gp = [[0.21,0.67,-0.71],[0.83,-0.12,0.54],[-0.44,0.38,0.81],[0.11,-0.93,0.35],[0.62,0.61,0.49],[-0.71,-0.29,0.64],[0.37,0.12,-0.92],[-0.18,0.84,0.51],[0.95,0.22,-0.2],[-0.55,-0.77,-0.31],[0.29,-0.41,-0.87],[0.73,-0.66,0.18],[-0.09,0.27,-0.96],[0.48,0.83,-0.28],[-0.86,0.47,0.19]].map(u=>{ const n = Math.hypot(...u); return u.map(t=> t/n); });
   const V = gp.map(u=> Array.from(monoVals(u, new Float64Array(15))));
   const symAt = (j, u) => { let s = 0; for (const C of ops){ const v = [C[0]*u[0] + C[1]*u[1] + C[2]*u[2], C[3]*u[0] + C[4]*u[1] + C[5]*u[2], C[6]*u[0] + C[7]*u[1] + C[8]*u[2]]; s += monoVals(v, mv)[j]; } return s/ops.length; };
   const coefOf = j => solveDense(V, gp.map(u=> symAt(j, u)), 15);
-  const M = pts.length, dot = (f, g) => { let s = 0; for (let i = 0; i < M; i++) s += f[i]*g[i]; return s/M; };
-  // Gram–Schmidt against the constant (the isotropic part: (x²+y²+z²)² is 1 on the sphere).
-  const basis = [{ vals: pts.map(()=> 1), coef: null }], out = [];
+  // Gram–Schmidt against the constant (the isotropic part: (x²+y²+z²)², 1 on the sphere),
+  // twice over (the second pass takes off what rounding left of the first).
+  const one = MONO.map(m=> (m[0] === 4 || m[1] === 4 || m[2] === 4) ? 1 : (m.filter(e=> e === 2).length === 2 ? 2 : 0));
+  const basis = [one.map(t=> t/Math.sqrt(sphereDot(one, one)))], out = [];
   for (let j = 0; j < 15; j++){
-    let vals = symVals(j), coef = coefOf(j);
+    let coef = coefOf(j);
     // (against the monomial's own size: one that averages to nothing over the group, x³y
     // in a cubic one, leaves rounding alone, not a form)
-    const raw = pts.map(u=> monoVals(u, mv)[j]), n0 = Math.sqrt(dot(raw, raw));
-    for (const b of basis){
-      const f = dot(vals, b.vals)/dot(b.vals, b.vals);
-      vals = vals.map((t, i)=> t - f*b.vals[i]);
-      // the constant's coefficients: (x²+y²+z²)² on the sphere
-      const bc = b.coef || MONO.map(m=> (m[0] === 4 || m[1] === 4 || m[2] === 4) ? 1 : (m.filter(e=> e === 2).length === 2 ? 2 : 0));
-      coef = coef.map((t, i)=> t - f*bc[i]);
-    }
-    const n = Math.sqrt(dot(vals, vals));
+    const n0 = Math.sqrt(GRAM[j][j]);
+    for (let pass = 0; pass < 2; pass++) for (const b of basis){ const f = sphereDot(coef, b); coef = coef.map((t, i)=> t - f*b[i]); }
+    const n = Math.sqrt(sphereDot(coef, coef));
     if (!(n > 1e-7*n0)) continue;
-    basis.push({ vals, coef });
-    out.push(coef.map(t=> t/n));
+    const c = coef.map(t=> t/n);
+    basis.push(c); out.push(c);
   }
   return out;
 }
@@ -395,15 +430,20 @@ function faultTable(geom, plane, disp, refl){
     const inPlane = ts.filter(t=> Math.abs(hp[0]*t[0] + hp[1]*t[1] + hp[2]*t[2]) < 1e-6);
     return { n: cart(hp), R: inPlane.length ? inPlane : ts };
   });
-  // The planes' spacing: the smallest non-zero projection of a lattice translation (the
-  // cell's, and the centring's) on their normal.
-  const Bi = inv3(B), dirCart = t => [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
-  const n0 = per[0].n, trans = [[0, 0, 0], ...(geom.trans || [])];
-  let dLayer = Infinity;
-  for (const c of trans) for (let u = -2; u <= 2; u++) for (let v = -2; v <= 2; v++) for (let w = -2; w <= 2; w++){
-    const t = dirCart([u + c[0], v + c[1], w + c[2]]), p = Math.abs(t[0]*n0[0] + t[1]*n0[1] + t[2]*n0[2]);
-    if (p > 1e-6 && p < dLayer) dLayer = p;
-  }
+  // The planes' spacing: the smallest non-zero projection of a lattice translation t (the
+  // cell's, and the centring's) on their normal, (h·t)/|B·h|. The values h·t are the
+  // integer combinations of h's components and of h·c for each centring c, rationals
+  // of small denominator: their smallest positive one is their greatest common divisor.
+  // (A search over |u|, |v|, |w| ≤ 2 had missed it for (270), (380), (570)…: d doubled.)
+  const hp = planes[0], gB = Math.hypot(B[0]*hp[0] + B[1]*hp[1] + B[2]*hp[2], B[4]*hp[1] + B[5]*hp[2], B[8]*hp[2]);
+  const vals = [...hp, ...(geom.trans || []).map(c=> hp[0]*c[0] + hp[1]*c[1] + hp[2]*c[2])];
+  const near = v => Math.abs(v - Math.round(v)) < 1e-6*Math.max(1, Math.abs(v));
+  let Q = 1;
+  while (Q < 5040 && !vals.every(v=> near(v*Q))) Q++;
+  // (on integers over the common denominator Q; failing one, Euclid's on the values)
+  const exact = Q < 5040, gcd = (a, b) => b > (exact ? 0 : 1e-9) ? gcd(b, a % b) : a;
+  const g = vals.reduce((a, v)=> gcd(a, exact ? Math.abs(Math.round(v*Q)) : Math.abs(v)), 0)/(exact ? Q : 1);
+  const dLayer = g > 0 ? g/gB : Infinity;
   const terms = refl.map(h=>{
     const u = cart(h), by = new Map();
     for (const { n, R } of per){
@@ -427,4 +467,4 @@ function faultKappa(table, r, alpha){
   return s/table.dLayer;
 }
 
-export { wppmLine, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
+export { wppmLine, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };

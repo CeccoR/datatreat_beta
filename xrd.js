@@ -1,6 +1,10 @@
 import { fmtNum, csvLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { createRietveld } from './xrd-rv.js';
+import { readXrdmlScan, decodeXml } from './xrd-instr.js';
+
+// File names and what a file says about itself go into the alerts as text, never as markup.
+const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 // Index of the grid point nearest to a 2θ on a uniform axis.
 function nearestIdx(x, pos){
@@ -42,6 +46,11 @@ function solveLinear(A, b){
   let processed = []; // per file: {smoothed, baseline, subtracted, peaks}
   let manualPeaks = []; // per file: array of manually added 2θ positions
   let removedPeaks = []; // per file: array of removed peaks' detected 2θ positions
+  // A scan run downwards (start above end) turned round: the plots, the peak search and
+  // the Rietveld card take 2θ ascending (rawBytes keep the file as it was). On loading,
+  // and on restoring a project saved by an earlier version that kept the file's order.
+  const ascending = f => f.x.length > 1 && f.x[0] > f.x[f.x.length-1]
+    ? { ...f, x: f.x.slice().reverse(), y: f.y.slice().reverse(), ...(f.varMul ? { varMul: f.varMul.slice().reverse() } : {}) } : f;
   // Peak marker colours
   const PEAK_BASE = '#3f9d54';   // darker green, base
   const PEAK_HOVER = '#5fcf6a';  // brighter green, transient hover
@@ -57,6 +66,7 @@ function solveLinear(A, b){
   };
   let resPlot;
   let xrdLoadAlerts = '';
+  let xrdNoteAlerts = '';
   let xrdUploadAlerts = '';
 
   // Per-field mode: 'shared' | 'per'. Defaults: peak-search fields per-sample, rest shared.
@@ -104,10 +114,11 @@ function solveLinear(A, b){
     if (!btn || !document.getElementById('tab-xrd').contains(btn)) return;
     if (btn.dataset.action === 'xrd-dismiss-upload'){ xrdUploadAlerts=''; rebuildXrdAlerts(); }
     if (btn.dataset.action === 'xrd-dismiss-invalid'){ xrdLoadAlerts=''; rebuildXrdAlerts(); }
+    if (btn.dataset.action === 'xrd-dismiss-notes'){ xrdNoteAlerts=''; rebuildXrdAlerts(); }
   });
 
   function rebuildXrdAlerts(){
-    document.getElementById('xrdAlerts').innerHTML = xrdLoadAlerts + xrdUploadAlerts;
+    document.getElementById('xrdAlerts').innerHTML = xrdLoadAlerts + xrdNoteAlerts + xrdUploadAlerts;
   }
 
   // The per-file arrays the user sets, for the file list to keep aligned with the
@@ -132,68 +143,43 @@ function solveLinear(A, b){
       onLabelChange(i, v){ allFiles[i].label=v; renderPeakTable(); updateXrdResults(); if (rv) rv.redraw(); hist.commit(); },
       onColorChange(i, v){ allFiles[i].color=v; updateXrdResults(); hist.commit(); },
       onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ allFiles.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; panels.a.sel=panels.a.hov=null; xrdLoadAlerts=''; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
+      onRemoveAll(){ allFiles.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; panels.a.sel=panels.a.hov=null; xrdLoadAlerts=''; xrdNoteAlerts=''; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
     };
   }
 
   setupDropzone('xrdDropzone', 'xrdFiles', async (fileList)=>{
     const existing = new Set(allFiles.map(f=>f.name));
     const alreadyLoaded = [];
-    const invalidFiles = [];
+    const invalidFiles = [], loadNotes = [];
     for (const f of fileList){
-      if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
-      // f.text() auto-detects encoding (incl. UTF-16 via BOM); rawBytes keeps the
-      // original bytes for byte-exact re-download.
+      if (existing.has(f.name)){ alreadyLoaded.push(esc(f.name)); continue; }
+      // rawBytes keeps the original bytes for byte-exact re-download; the text is decoded
+      // from them in the file's own encoding (decodeXml: UTF-16 too, which f.text() is not).
       const rawBytes = new Uint8Array(await f.arrayBuffer());
-      const text = await f.text();
-      const parser = new DOMParser();
-      const xml = parser.parseFromString(text, 'text/xml');
-      const positions = xml.getElementsByTagName('positions');
-      let start=null, end=null;
-      for (const pos of positions){
-        if (pos.getAttribute('axis')==='2Theta'){
-          // A malformed <positions> block (missing start/end) counts as invalid, not fatal.
-          try {
-            start = parseFloat(pos.getElementsByTagName('startPosition')[0].textContent);
-            end   = parseFloat(pos.getElementsByTagName('endPosition')[0].textContent);
-          } catch(e){ start = end = null; }
-          break;
-        }
-      }
-      const intensNode = xml.getElementsByTagName('intensities')[0];
-      // Not an .xrdml we can read (wrong format, or dropped past the file picker's
-      // accept filter) — report it instead of dropping it on the floor.
-      if (!intensNode || !isFinite(start) || !isFinite(end)){ invalidFiles.push(f.name); continue; }
+      const xml = new DOMParser().parseFromString(decodeXml(rawBytes), 'text/xml');
+      /* readXrdmlScan (xrd-instr.js): 2θ, the intensities on the unattenuated scale
+         (<intensities> as written, the raw <counts> of XRDML 2.x times the attenuation
+         factors) and each point's variance, var(y) = y·varMul, for the counting
+         uncertainty of the FWHMs (fwhmSigma) and the Rietveld weights. A file it cannot
+         read (wrong format, not well-formed, not a 2θ scan, dropped past the file picker's
+         accept filter) is reported with the reason instead of dropped on the floor. */
+      const sc = xml.getElementsByTagName('parsererror').length ? { error: 'not well-formed XML' } : readXrdmlScan(xml);
+      if (sc.error){ invalidFiles.push(esc(`${f.name} (${sc.error})`)); continue; }
       existing.add(f.name);
-      const y = intensNode.textContent.trim().split(/\s+/).map(Number);
-      /* <intensities> are already on the unattenuated scale: the points counted through the
-         automatic attenuator were multiplied by its factor when the file was written
-         (<beamAttenuationFactors> says by how much; only the raw <counts> of XRDML 2.x
-         would need it, and those are not read here). Multiplied again, as up to v424,
-         an attenuated peak top came out its factor (10–200×) too high. Each point's
-         variance, for the counting uncertainty of the FWHMs (fwhmSigma) and the Rietveld
-         weights: var(y) = y·m, m the attenuation factor that scaled the counts, over the
-         counting time when the file holds a rate. Kept only where m is not 1 throughout,
-         as it almost always is. */
-      const attNode = intensNode.parentNode && intensNode.parentNode.getElementsByTagName('beamAttenuationFactors')[0];
-      const att = attNode ? attNode.textContent.trim().split(/\s+/).map(Number) : null;
-      const useAtt = att && att.length === y.length && att.every(isFinite);
-      const rate = /cps|\/s|per/i.test(intensNode.getAttribute('unit') || '');
-      const ctNode = intensNode.parentNode && intensNode.parentNode.getElementsByTagName('commonCountingTime')[0];
-      const tc = ctNode ? parseFloat(ctNode.textContent) : NaN, perT = rate && tc > 0 ? 1/tc : 1;
-      const varMul = useAtt || perT !== 1 ? y.map((_, i)=> (useAtt ? att[i] : 1)*perT) : null;
-      const x = linspace(start, end, y.length);
+      for (const t of sc.notes) loadNotes.push(esc(`${f.name}: ${t}`));
+      const { x, y, varMul } = sc;
       // Keep the raw intensities untouched (no minimum subtraction): the constant
       // offset is absorbed by the SNIP background, so the whole pipeline — analysis
       // and fit alike — runs on the true raw data and stays consistent with the CSVs.
       // A new file comes in included, so it goes last among the included as well.
-      const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color:nextColor(allFiles), rawBytes, ...(varMul ? { varMul } : {})};
+      const file = ascending({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color:nextColor(allFiles), rawBytes, ...(varMul ? { varMul } : {})});
       allFiles.push(file); files.push(file);
       perParams.push({...shared});
       manualPeaks.push([]);
       removedPeaks.push([]);
     }
     xrdLoadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'xrd-dismiss-invalid') : '';
+    xrdNoteAlerts = loadNotes.length ? buildAlertsHtml([], loadNotes, 'Loaded, with a caveat:', '', 'xrd-dismiss-notes') : '';
     xrdUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'xrd-dismiss-upload') : '';
     rebuildXrdAlerts();
     afterFilesChange();
@@ -267,7 +253,7 @@ function solveLinear(A, b){
     };
   }
   function xrdRestore(s){
-    allFiles = s.files.map(f=>({...f}));
+    allFiles = s.files.map(f=> ascending({...f}));
     files = includedOf(allFiles);
     perParams = s.perParams.map(p=>({...p}));
     manualPeaks = s.manualPeaks.map(a=>a.slice());
@@ -283,7 +269,7 @@ function solveLinear(A, b){
     syncModeButtons();
     afterFilesChange();
     // Clear the previous tab's transient upload alert and rebuild for this tab.
-    xrdLoadAlerts = ''; xrdUploadAlerts = ''; rebuildXrdAlerts();
+    xrdLoadAlerts = ''; xrdNoteAlerts = ''; xrdUploadAlerts = ''; rebuildXrdAlerts();
   }
   function syncModeButtons(){
     Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{

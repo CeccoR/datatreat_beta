@@ -34,6 +34,27 @@ was proposed; nothing here is in the code yet.
   than about one FWHM can swap peaks. To be solved: e.g. an optimal assignment
   (each sample's peaks to the reflections at minimum total distance in sigmas)
   rather than the sweep.
+- **Rietveld calibrations on synthetic data (started in v426, on hold).**
+  RIETVELD-REVIEW.md §3 lists 254 numbers and rules that were chosen rather than
+  derived; 22 had been checked on synthetic patterns. The others are to be tested
+  the same way, over several structures, instruments, steps, counts and sizes, and
+  each kept, changed, derived or made adaptive, as general as possible. v426 changed
+  only those its fixes touched (RIETVELD-REVIEW.md §3, the v426 table).
+- **Rietveld against MAUD (started in v426, on hold).** How far our engine and MAUD
+  recover a known truth from synthetic patterns at equal model depth, with a third,
+  neutral generator (the Debye scattering equation of atomistic crystallites), to
+  guide the calibrations. Done so far, outside the repository: MAUD 3.06 built from
+  source and run headless; a model-by-model map with the conversions (MAUD draws a
+  Lorentzian sample breadth with √π where π is due, so its Delft sizes and fault
+  probabilities need a factor; its log-normal "Distributions" counts the size twice;
+  its Warren faults shift no line; it has no free shape, so solids are compared by
+  their column lengths along a few directions); runners for both programs, ours also
+  with forward differences as MAUD's, and 32 cases; the Debye generator, its checks
+  unfinished. Two engine problems it found, to be looked at: a fault probability
+  carries the starting cell's error (α·a_start/a_true, the fault spacing being taken
+  from the starting cell); autoRefine's anisotropic-strain stage ends in a wrong
+  minimum on a ZnO case (D 34 nm for 50, a strain clipped to 0) that refine() from
+  the same start recovers.
 
 ## EPR
 

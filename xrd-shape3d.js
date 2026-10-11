@@ -46,10 +46,11 @@ const unit = a => { const n = Math.hypot(a[0], a[1], a[2]); return n > 1e-12 ? [
 const vec3 = v => (v && typeof v.length === 'number' && v.length >= 3) ? [Number(v[0]), Number(v[1]), Number(v[2])] : null;
 const num = v => (v == null || v === '') ? NaN : Number(v);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-// Degrees as the card gives them: whole ones from 10°, one decimal under; under 0.05° one
-// significant figure, so that a tight angle never reads as a flat ±0.0°.
-const fmtDeg = x => !(x > 0) ? '0' : x >= 9.95 ? String(Math.round(x)) : x >= 0.05 ? x.toFixed(1)
-  : x >= 0.0005 ? String(+x.toPrecision(1)) : '0.000';
+// An esd in degrees as the card gives it (the worker's deg): one significant figure under
+// 0.095° (a tight angle never reads as a flat ±0.0°), one decimal to 9.95°, whole degrees
+// past it; an angle off the axis with one decimal.
+const fmtDeg = x => !(x > 0) ? '0' : x < 0.095 ? String(+x.toPrecision(1)) : x < 9.95 ? x.toFixed(1) : String(Math.round(x));
+const fmtOff = x => x < 0.05 ? '0' : x.toFixed(1);
 const fmtNm = x => x >= 100 ? String(Math.round(x)) : x >= 10 ? String(+x.toFixed(1)) : String(+x.toPrecision(2));
 // The angle off the nearest body axis, worth a mention only for a determined direction and
 // when it is there at all (a direction held on the axis has 0).
@@ -309,7 +310,11 @@ function buildModel(solid){
     // Out past the surface by a margin, and never so short that a thin dimension
     // (a disc's axis) leaves only a stub.
     const L = Math.max(t + 0.28 * m.Rs, 0.62 * m.Rs);
-    m.dirs.push({ slot, u, L, t, det, esd: det ? esd : NaN, off: Number.isFinite(off) ? off : NaN, label: String(d.label == null ? '' : d.label) });
+    // The cone's axis: the solid's own axis the esd measures (d.axis), on the arrow's
+    // side, off° from the arrow; the arrow's itself when none is given.
+    const a = vec3(d.axis), w = a && a.every(Number.isFinite) ? unit([dot(a, E[0]), dot(a, E[1]), dot(a, E[2])]) : null;
+    const ax = w ? (dot(w, u) < 0 ? w.map(x => -x) : w) : u;
+    m.dirs.push({ slot, u, ax, L, t, det, about: !!d.about, esd: det ? esd : NaN, off: Number.isFinite(off) ? off : NaN, label: String(d.label == null ? '' : d.label) });
   });
   m.Rb = Math.max(m.Rs, ...m.dirs.map(d => d.L));
   m.home = homeFor(m.dirs);
@@ -327,7 +332,7 @@ function buildModel(solid){
     if (!d.det || !(d.esd > 0)) continue;
     const th = d.esd * DEG, ca = Math.cos(th) * d.L, ra = Math.sin(th) * d.L;
     for (const sg of [1, -1]){
-      const w = d.u.map(x => x * sg), [p1, p2] = perpBasis(w);
+      const w = d.ax.map(x => x * sg), [p1, p2] = perpBasis(w);
       // f runs along the slant (0 at the apex, 1 at the rim), ph round the axis
       const at = (f, ph) => { const cs = Math.cos(ph), sn = Math.sin(ph);
         return [f*ca*w[0] + f*ra*(cs*p1[0] + sn*p2[0]), f*ca*w[1] + f*ra*(cs*p1[1] + sn*p2[1]), f*ca*w[2] + f*ra*(cs*p1[2] + sn*p2[2])]; };
@@ -1013,10 +1018,11 @@ export function shapeView(container, opts = {}){
     const f1 = Sz >= 280 ? 12 : 11, f2 = f1 - 1.5;
     const items = heads.map(h => {
       const d = h.d, runsL = millerRuns(d.label);
-      const tail = d.det ? ` ±${fmtDeg(d.esd)}°` : ' not determined';
-      // The angle off the nearest body axis, under a determined direction that has one
-      // (an undetermined one has no meaningful angle to give).
-      const sub = offShown(d) ? `${fmtDeg(d.off)}° off axis` : '';
+      // A direction on its axis: its esd beside it; off it: the axis's angle from it and
+      // its esd under it (the cone is the axis's); across a body of revolution: none, the
+      // turn about the axis being free.
+      const tail = d.about ? '' : !d.det ? ' not determined' : offShown(d) ? '' : ` ±${fmtDeg(d.esd)}°`;
+      const sub = d.about ? 'free about the axis' : offShown(d) ? `axis ${fmtOff(d.off)}° off, ±${fmtDeg(d.esd)}°` : '';
       g.font = `600 ${f1}px ${T.font}`;
       runsL.forEach(rn => { rn.w = g.measureText(rn.s).width; });
       g.font = `400 ${f1}px ${T.font}`;
@@ -1271,7 +1277,7 @@ export function shapeView(container, opts = {}){
   function describe(m){
     const what = caption || `${TYPE_NAMES[m.type]} ${m.raw.map(v => Number.isFinite(v) && v > 0 ? fmtNm(v) : '∞').join(' × ')} nm`;
     const ds = m.dirs.map(d => d.label + ' '
-      + (d.det ? `±${fmtDeg(d.esd)}°` + (offShown(d) ? `, ${fmtDeg(d.off)}° off axis` : '') : 'not determined')).join('; ');
+      + (d.about ? 'free about the axis' : !d.det ? 'not determined' : offShown(d) ? `the axis ${fmtOff(d.off)}° off it, ±${fmtDeg(d.esd)}°` : `±${fmtDeg(d.esd)}°`)).join('; ');
     return `Crystallite shape in 3D: ${what}${ds ? '. Directions: ' + ds : ''}. Drag or use the arrow keys to rotate, Home to reset.`;
   }
 

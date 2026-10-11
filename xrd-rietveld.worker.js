@@ -5,8 +5,8 @@
    values a line, in standard notation (the esd in brackets in the last digits), and
    the rows of the results CSV.
 ========================================================= */
-import { buildModel, autoRefine, displacementMm, shapeOf, siteU, lowIndexPlanes, K_SCHERRER } from './xrd-rietveld.js';
-import { measureWidths } from './xrd-widths.js';
+import { buildModel, autoRefine, displacementMm, shapeOf, siteU, lowIndexPlanes, strainFormsAt, K_SCHERRER } from './xrd-rietveld.js';
+import { measureWidths, williamsonHall } from './xrd-widths.js';
 import { metric, cellFrom, uEquiv, betaOf } from './xrd-cryst.js';
 import { evalQuartic } from './xrd-broad.js';
 
@@ -23,12 +23,19 @@ function friendly(model, name){
 }
 
 // 3.9151(8): the value to the esd's first significant digit (two when that digit is
-// 1), the esd in brackets in units of the last digit shown.
+// 1), the esd in brackets in units of the last digit shown. The esd is rounded first:
+// one rounded up to the next leading digit keeps one digit (0.0096 gives 1.50(1), not
+// 1.500(10)); a last digit left of the units rounds the value there (100(300), not
+// 125(314)).
 function fmtEsd(v, e, unit = ''){
   if (!isFinite(v)) return '—';
   if (!(isFinite(e) && e > 0)) return (+v.toPrecision(6)).toString() + unit;
-  const p = Math.floor(Math.log10(e)), lead = e/Math.pow(10, p) < 2 ? 1 : 0, d = Math.max(0, lead - p);
-  return v.toFixed(d) + '(' + Math.round(e*Math.pow(10, d)) + ')' + unit;
+  const p = Math.floor(Math.log10(e)), n = e/Math.pow(10, p) < 2 ? 2 : 1;
+  let d = n - 1 - p, k = Math.round(e*Math.pow(10, d));
+  if (k >= (n === 2 ? 20 : 10)){ k = Math.round(k/10); d--; }
+  if (d >= 0) return v.toFixed(d) + '(' + k + ')' + unit;
+  const s = Math.pow(10, -d);
+  return String(Math.round(v/s)*s) + '(' + k*s + ')' + unit;
 }
 const LAT_UNIT = { a: ' Å', b: ' Å', c: ' Å', alpha: '°', beta: '°', gamma: '°' };
 const LAT_LABEL = { a: 'a', b: 'b', c: 'c', alpha: 'α', beta: 'β', gamma: 'γ' };
@@ -51,7 +58,7 @@ function propagate(res, names, f){
 }
 
 function summarise(model, res, phases, opts){
-  const P = res.params, E = res.esd || {}, groups = [], table = [], warnings = [...(res.warnings || [])], extra = [], solids = [];
+  const P = res.params, E = res.esd || {}, groups = [], table = [], warnings = [...(res.warnings || [])], solids = [];
   const row = (phase, name, value, esd)=> table.push({ phase, name, value, esd });
   // ΔB, when refined (the phase's displacement option 'overall'): one shift added to every
   // atom's B of the phase. A B made negative is no displacement at all: what it takes up
@@ -61,7 +68,7 @@ function summarise(model, res, phases, opts){
     if (q.adp === 'site' || q.adp === 'aniso') return siteB(q, ph, nm, lines);
     if (!(res.free || []).includes(key)) return;
     const line = { label: 'ΔB (all atoms)', value: fmtEsd(P[key], E[key], ' Å²'), title: 'Added to every atom’s B from the CIF (0.5 Å² where the CIF gives none)' };
-    if (lines) lines.push(line); else extra.push({ name: ph.name || q.name, phase: true, lines: [line] });
+    lines.push(line);
     row(nm, 'delta_B_A2', P[key], E[key]);
     const bMin = Math.min(...(ph.atoms || []).map(a=> Number.isFinite(a.Biso) ? a.Biso : 0));
     // Only a ΔB that lowers B below 0: a negative B of the CIF's own is the phase list's
@@ -86,13 +93,14 @@ function summarise(model, res, phases, opts){
       }
       const names = st.iU.map(i=> model.par[i].name);
       const vAt = p => Float64Array.from(model.par, (pp, i)=> p[pp.name]);
-      const Ueq = p => uEquiv(siteU(st, vAt(p)), cellAt(p)), Beq = p => 8*Math.PI*Math.PI*Ueq(p);
+      const Nof = cell => { const { Gs } = metric(cell); return [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])]; };
+      const Ueq = p => { const cell = cellAt(p); return uEquiv(siteU(st, vAt(p), Nof(cell)), cell); }, Beq = p => 8*Math.PI*Math.PI*Ueq(p);
       const b = Beq(P), bE = propagate(res, names, Beq);
       const comps = names.map((k, m)=> `${st.names[m]} ${fmtEsd(P[k], E[k])}`).join(', ');
       lines.push({ label: `U(${st.label})`, value: `B_eq ${fmtEsd(b, bE, ' Å²')} · ${comps} Å²`, title: `The anisotropic displacement parameters of site ${st.label} (${st.members.length} atom${st.members.length > 1 ? 's' : ''} of ${st.element}), Uⁱʲ as in a CIF (Å², on the reciprocal axes), only those the site's symmetry leaves free (${st.names.join(', ')}; the others follow from them). B_eq = 8π²U_eq, U_eq = ⅓Σ Uⁱʲ a*ᵢ a*ⱼ (aᵢ·aⱼ)` });
       names.forEach((k, m)=> row(nm, `${st.names[m]}_A2_${st.label}`, P[k], E[k]));
       row(nm, `Beq_A2_${st.label}`, b, bE);
-      const cell = cellAt(P), { Gs } = metric(cell), Bt = betaOf(siteU(st, vAt(P)), [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])]);
+      const Ns = Nof(cellAt(P)), Bt = betaOf(siteU(st, vAt(P), Ns), Ns);
       const m2 = Bt[0]*Bt[4] - Bt[1]*Bt[3], det = Bt[0]*(Bt[4]*Bt[8] - Bt[5]*Bt[7]) - Bt[1]*(Bt[3]*Bt[8] - Bt[5]*Bt[6]) + Bt[2]*(Bt[3]*Bt[7] - Bt[4]*Bt[6]);
       if (!(Bt[0] > 0 && m2 > 0 && det > 0)) warnings.push(`${nm}: the displacements of site ${st.label} are not positive definite (some direction has ⟨u²⟩ ≤ 0), which no vibration gives: they more likely take up absorption, roughness, the background or a wrong occupancy.`);
     }
@@ -105,7 +113,9 @@ function summarise(model, res, phases, opts){
     const atB = (res.atBound || []).filter(n=> !/^bg/.test(n));
     if (atB.length) warnings.push(`On a bound, so to be read as limits: ${atB.map(n=> friendly(model, n)).join(', ')}.`);
     const und = (res.undetermined || []).filter(n=> !/^bg/.test(n));
-    if (und.length) warnings.push(`Not determined by the data (no esd): ${und.map(n=> friendly(model, n)).join(', ')}.`);
+    // Those the pattern sees only in a combination (X with a phase's Xs: the profile has X + Xs).
+    const ties = (res.tied || []).map(t=> t.filter(n=> !/^bg/.test(n))).filter(t=> t.length > 1);
+    if (und.length) warnings.push(`Not determined by the data (no esd): ${und.map(n=> friendly(model, n)).join(', ')}${ties.length ? ` — the pattern sees only a combination of ${ties.map(t=> t.map(n=> friendly(model, n)).join(' and ')).join('; of ')}` : ''}.`);
   };
   if (opts.standard){
     const s = displacementMm(model, P.disp), sE = Math.abs(displacementMm(model, 1))*E.disp;
@@ -119,8 +129,11 @@ function summarise(model, res, phases, opts){
     row('', 'zero_deg', P.zero, E.zero); row('', 'displacement_mm', s, sE);
     ['U', 'V', 'W', 'X', 'Y'].forEach(k=> row('', k, P[k], E[k]));
     row('', 'asymmetry_SH_L', P.asym, E.asym);
-    deltaB(model.phases[0], phases[0], '');
-    groups.push(...extra);
+    // The standard's displacement parameters, should it refine any (the built-in LaB6
+    // holds the CIF's): a group of their own, as a phase's.
+    const nm = phases[0].name || model.phases[0].name, lines = [];
+    deltaB(model.phases[0], phases[0], nm, lines);
+    if (lines.length) groups.push({ name: nm, phase: true, lines });
     fitNotes();
     return { groups, table, warnings, solids };
   }
@@ -137,44 +150,64 @@ function summarise(model, res, phases, opts){
     const ys = q.pfx + 'Ys', ls = q.pfx + 'LS', sg = P[ls], sgE = E[ls];
     if (!shaped && P[ys] > 0){
       const at = f => p => Dof(p[ys])*Math.exp(-f*p[ls]*p[ls]);
-      for (const [lab, f, key, t] of [['volume-weighted mean diameter', 0, 'size_volume_mean_nm', '⟨D⁴⟩/⟨D³⟩ of the spheres: what the lines’ breadth measures (the Lorentzian model’s size reads about the same)'],
+      for (const [lab, f, key, t] of [['volume-weighted mean diameter', 0, 'size_volume_mean_nm', '⟨D⁴⟩/⟨D³⟩ of the spheres: what the lines’ breadth measures (the Lorentzian model’s size reads 0.94–1.13 times it at σ 0.5–0.8, more for a narrower distribution, less for a wider one)'],
         ['median diameter', 3.5, 'size_median_nm', 'the log-normal’s median, e^{−3.5σ²} times the volume-weighted mean'], ['number-weighted mean diameter', 3, 'size_number_mean_nm', 'the mean over the crystallites counted one by one (as a TEM count gives), e^{−3σ²} times the volume-weighted mean']]){
         const v = at(f)(P), e = propagate(res, [ys, ls], at(f));
         lines.push({ label: lab, value: fmtEsd(v, e, ' nm'), title: `WPPM, spheres with a log-normal distribution of diameters: ${t}` });
         row(nm, key, v, e);
       }
     }
-    lines.push({ label: 'σ of ln D', value: fmtEsd(sg, sgE), title: `The log-normal width of the sizes${shaped ? ' (all the solid’s dimensions scaled together)' : ''}. It shapes the profile at a given breadth: 0 is one size (the tails fall fast), about 0.76 is as Lorentzian as the Scherrer model, more is sharper still at the top with longer tails. It rests on the profiles’ shape, so on how well the instrument’s is known` });
+    lines.push({ label: 'σ of ln D', value: fmtEsd(sg, sgE), title: `The log-normal width of the sizes${shaped ? ' (all the solid’s dimensions scaled together)' : ''}. It shapes the profile at a given breadth: 0 is one size (the tails fall fast); at about 0.76 the tails are as heavy as the Lorentzian model’s (⟨L⟩_A/⟨L⟩_V = 0.5), the top as sharp already at 0.66 (FWHM/β = 2/π); more is sharper still at the top with longer tails. It rests on the profiles’ shape, so on how well the instrument’s is known` });
     row(nm, 'size_lognormal_sigma', sg, sgE);
-    /* A width past the Lorentzian's (0.76): most of the volume in crystallites far
-       smaller than the mean, the median below a nanometre at σ near 1. Then the far tails
-       set σ, and a background, a broad second phase or strain with long tails take the
-       same shape. */
+    /* A width past the Lorentzian's by the tails (⟨L⟩_A/⟨L⟩_V under its 0.5 beyond 0.76):
+       most of the volume in crystallites far smaller than the mean, the median below a
+       nanometre at σ near 1. Then the far tails set σ, and a background, a broad second
+       phase or strain with long tails take the same shape. */
     if (sg >= 0.8){
       const med = !shaped && P[ys] > 0 ? Dof(P[ys])*Math.exp(-3.5*sg*sg) : NaN;
-      warnings.push(`${nm}: σ of ln D = ${fmtEsd(sg, sgE)} is a distribution wider than the Lorentzian profile's${Number.isFinite(med) ? `, its median at ${med.toPrecision(2)} nm` : ''}: the profiles' far tails set it, which a background, a broad second phase or a strain with long tails can shape as well. The volume-weighted mean stands; the median and the number mean rest on that tail.`);
+      warnings.push(`${nm}: σ of ln D = ${fmtEsd(sg, sgE)} is a distribution wider than the Lorentzian profile's (its tails heavier)${Number.isFinite(med) ? `, its median at ${med.toPrecision(2)} nm` : ''}: the profiles' far tails set it, which a background, a broad second phase or a strain with long tails can shape as well. The volume-weighted mean stands; the median and the number mean rest on that tail.`);
     }
   };
   /* The microstrain: isotropic, or Stephens' (anisotropic: ε² = ε₀² + 10⁻⁶ Σ S_j q_j(u),
-     q_j the Laue-invariant quartic forms of the diffraction vector's direction) given as
-     its rms over directions ε₀ and along the normals of the low-index planes. */
+     q_j the Laue-invariant quartic forms of the diffraction vector's direction, orthonormal
+     over the directions) given as its rms over directions, ε₀ when no direction's ε² is
+     held at 0; the anisotropic part's rms, √ΣS_j²; and ε along the normals of the
+     low-index planes. The rms and the anisotropy do not depend on how the file sets the
+     cell; the S_j (CSV) are the conventional cell's (strainFrame). */
   const strainLines = (q, nm, lines, ss)=>{
     const md = (res.models || {})[q.id] || {};
     if (!(md.strain === 'aniso' && q.iS)){
-      lines.push({ label: 'microstrain', value: fmtEsd(ss.strain, ss.strainEsd), title: 'ε from the Lorentzian X_s·tanθ = 4ε·tanθ' });
+      lines.push({ label: 'microstrain', value: fmtEsd(ss.strain, ss.strainEsd), title: 'ε from the Lorentzian FWHM X_s·tanθ = 4ε·tanθ: a strain defined on the FWHM, as the sizes’ K = 0.9 is. Stokes and Wilson’s e = β/(4 tanθ), on the integral breadth, is π/2 = 1.57 times it (their apparent strain η = 4e); GSAS-II’s isotropic microstrain (in 10⁻⁶) is 4ε·10⁶' });
       row(nm, 'microstrain', ss.strain, ss.strainEsd);
       return;
     }
-    const names = [q.pfx + 'Xs', ...q.iS.map(i=> model.par[i].name)], M = q.constraint && q.constraint.basis, B = q.Bm;
-    lines.push({ label: 'microstrain, rms over directions', value: fmtEsd(ss.strain, ss.strainEsd), title: 'Stephens’ anisotropic microstrain: ε² = ε₀² + Σ S_j q_j(u), q_j the quartic forms of the diffraction vector’s direction u that the Laue group leaves unchanged, taken with zero mean over the directions; ε₀ is its rms over them' });
-    row(nm, 'microstrain', ss.strain, ss.strainEsd);
+    const names = [q.pfx + 'Xs', ...q.iS.map(i=> model.par[i].name)], M = q.constraint && q.constraint.basis;
+    const e2At = (p, qv) => { let e2 = (p[q.pfx + 'Xs']*D2R/4)**2; q.iS.forEach((ix, j)=> { e2 += 1e-6*p[model.par[ix].name]*qv[j]; }); return e2; };
+    /* Over the directions (a Fibonacci sphere of 4000: the rms within 10⁻⁵ of a 400 000-
+       point one's): where the S_j take ε² below 0 it is held at 0, and the mean of ε² is
+       then above ε₀² — by 5.6 % in ε at X_s 0.4°, S1 = −3 on a cubic phase, a fifth of
+       the directions held. (ε² = 0 everywhere, no strain at all, holds none.) */
+    const NS = 4000, sph = Array.from({ length: NS }, (_, i)=> { const z = 1 - (2*i + 1)/NS, r = Math.sqrt(1 - z*z), ph = i*2.399963229728653; return q.strainForms.map(c=> evalQuartic(c, [r*Math.cos(ph), r*Math.sin(ph), z])); });
+    const held = sph.filter(qv=> e2At(P, qv) < 0).length/NS;
+    const rms = p => Math.sqrt(sph.reduce((s, qv)=> s + Math.max(0, e2At(p, qv)), 0)/NS);
+    const e0 = ss.strain, e0E = ss.strainEsd, er = held ? rms(P) : e0, erE = held ? propagate(res, names, rms) : e0E;
+    const pct = `${held < 0.01 ? (100*held).toPrecision(1) : (100*held).toFixed(0)} %`;
+    const tip = 'Stephens’ anisotropic microstrain: ε² = ε₀² + 10⁻⁶ Σ S_j q_j(u), q_j the quartic forms of the diffraction vector’s direction u that the Laue group leaves unchanged, orthonormal over the directions (zero mean, unit rms), so the quartic terms average to 0 over them';
+    lines.push({ label: 'microstrain, rms over directions', value: fmtEsd(er, erE), title: held ? `${tip}. Along ${pct} of the directions they take ε² below 0, where it is held at 0: the rms over directions is then above ε₀ = ${fmtEsd(e0, e0E)}` : `${tip}: the rms over directions is ε₀` });
+    row(nm, 'microstrain', er, erE);
+    if (held) lines.push({ label: 'microstrain ε₀ (isotropic part)', value: fmtEsd(e0, e0E), title: `ε₀ = X_s·(π/180)/4: what the rms over directions would be if no direction’s ε² were held at 0 (here ${pct} are)` });
+    row(nm, 'microstrain_eps0', e0, e0E);
+    // The anisotropic part's rms over directions, √ΣS_j² (the forms orthonormal): unlike
+    // the S_j, the same whatever basis of forms the cell's setting gives.
+    const sNames = names.slice(1), anis = p => Math.hypot(...sNames.map(k=> p[k])), an = anis(P), anE = propagate(res, sNames, anis);
+    lines.push({ label: 'anisotropy, rms of ε² − ε₀² over directions', value: `${fmtEsd(an, anE)}·10⁻⁶`, title: `√Σ S_j² ·10⁻⁶, beside ε₀² = ${(1e6*e0*e0).toPrecision(3)}·10⁻⁶: how far ε² departs from its mean over the directions. It does not depend on how the cell is set. The S_j (in the CSV) are built on the conventional cell’s axes, reduced where the symmetry leaves them open (an orthorhombic cell’s in order of length, a monoclinic cell’s a–c pair, a triclinic cell’s Buerger cell); a turn of a and b that only the atoms tell apart ((b, a, −c) for 4/m and −3, (−a, −b, c) for −3 and −3m on a primitive lattice) still changes the sign of one or two` });
+    row(nm, 'stephens_anisotropy_rms_1e-6', an, anE);
     const inv = m => { const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C; return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det]; };
     const Mi = M ? inv(M) : null;
     for (const hc of lowIndexPlanes(q)){
       const h = Mi ? [0, 1, 2].map(j=> hc[0]*Mi[j] + hc[1]*Mi[3 + j] + hc[2]*Mi[6 + j]) : hc;
-      const x = [B[0]*h[0] + B[1]*h[1] + B[2]*h[2], B[4]*h[1] + B[5]*h[2], B[8]*h[2]], n = Math.hypot(...x), u = x.map(t=> t/n);
-      const qv = q.strainForms.map(c=> evalQuartic(c, u));
-      const e2Of = p => { let e2 = (p[q.pfx + 'Xs']*D2R/4)**2; q.iS.forEach((ix, j)=> { e2 += 1e-6*p[model.par[ix].name]*qv[j]; }); return e2; };
+      const qv = strainFormsAt(q, h);
+      const e2Of = p => e2At(p, qv);
       const eps = p => Math.sqrt(Math.max(0, e2Of(p)));
       // ε² below 0 along a direction (the S terms past ε₀²): the refinement's lines there
       // carry no strain, read as 0.
@@ -191,7 +224,7 @@ function summarise(model, res, phases, opts){
     const k = q.pfx + 'FA', a = P[k], e = E[k], fs = q.faultSpec, fr = fs.disp.f;
     const frac = Math.abs(fr - 1/6) < 1e-9 ? '⅙' : Math.abs(fr - 0.5) < 1e-9 ? '½' : Math.abs(fr - 1/3) < 1e-9 ? '⅓' : Math.abs(fr - 0.25) < 1e-9 ? '¼' : fr.toFixed(3);
     lines.push({ label: `planar faults {${hklText(fs.plane)}}, ${frac}⟨${hklText(fs.disp.uvw)}⟩`, value: `${fmtEsd(a, e)} per plane${a > 0 ? ` (one in ${(1/a).toPrecision(2)})` : ''}`,
-      title: `Faults on the {${hklText(fs.plane)}} planes (${q.faultTab.planes} orientations, ${q.faultTab.dLayer.toFixed(3)} Å apart), each shifting the crystal beyond it by ${frac}⟨${hklText(fs.disp.uvw)}⟩ (those in the plane, ± alike): a reflection whose h·R is not an integer loses coherence across each one — a Lorentzian broadening that depends on the indices’ parity, not on the order. The probability is per lattice plane of the family (where the structure stacks several layers per plane, as hcp and wurtzite stack two close-packed layers per c, it is that many times a probability per layer), with faults on all ${q.faultTab.planes} orientations at once in each crystallite${q.faultTab.planes > 1 ? ` (Warren’s α, for faults on one orientation alone, gives the same mean broadening at about ${q.faultTab.planes}× this)` : ''}` });
+      title: `Faults on the {${hklText(fs.plane)}} planes (${q.faultTab.planes} orientations, ${q.faultTab.dLayer.toFixed(3)} Å apart), each shifting the crystal beyond it by ${frac}⟨${hklText(fs.disp.uvw)}⟩ (those in the plane, ± alike): a reflection whose h·R is not an integer loses coherence across each one — a Lorentzian broadening that depends on h·R modulo 1 (for ½-type shifts the indices’ parity, for ⅓ and ⅙ the indices modulo 3), so a higher order can be sharp where the first is not. The probability is per lattice plane of the family (where the structure stacks several layers per plane, as hcp and wurtzite stack two close-packed layers per c, it is that many times a probability per layer), with faults on all ${q.faultTab.planes} orientations at once in each crystallite${q.faultTab.planes > 1 ? ` (Warren’s α, for faults on one orientation alone, gives the same mean broadening at about ${q.faultTab.planes}× this)` : ''}` });
     row(nm, `fault_probability_${fs.plane.join('_')}`, a, e);
   };
   model.phases.forEach((q, k)=>{
@@ -230,14 +263,16 @@ function summarise(model, res, phases, opts){
     const sh = ss && ss.shape ? shapeOf(model, P, k, res) : null, info = (res.shapes || {})[q.id];
     if (sh){
       const off = a => `${a.angle < 0.05 ? '0' : a.angle.toFixed(1)}° off`;
-      // The angular esd, by profile (xrd-rietveld turnEsds): none beyond 60°.
-      // (one significant digit at least: a rod's 0.04° is not ±0.0°)
-      const pm = a => Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? ` ±${a.esdAngle < 0.095 ? (+a.esdAngle.toPrecision(1)).toString() : a.esdAngle < 10 ? a.esdAngle.toFixed(1) : a.esdAngle.toFixed(0)}°` : '';
+      // The angular esd, by profile (xrd-rietveld turnEsds): none beyond 60°. One
+      // significant digit at least (a rod's 0.04° is not ±0.0°), one decimal to 9.95°, whole
+      // degrees past it: as the 3D view's labels give it (xrd-shape3d fmtDeg).
+      const deg = x => x < 0.095 ? (+x.toPrecision(1)).toString() : x < 9.95 ? x.toFixed(1) : x.toFixed(0);
+      const pm = a => Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? ` ±${deg(a.esdAngle)}°` : '';
       // (the v420 ellipsoid's esds are linear: from the covariance of its L)
       // A profile sees only the valley of χ² the fit ends in: 2 of 7 free fits of
       // synthetic boxes ended 3–4 esd off, in another valley nearly as deep.
-      const how = sh.type === 'ellipsoidL' ? '1σ, from the covariance of the refined parameters' : '1σ: the turn of the solid that raises χ² by χ²_ν, its sizes and its turns about the other axes refined again. It measures the valley of χ² the fit ends in, not a second orientation nearly as good, which noise can make the best';
-      const angTitle = a => `the axis is ${a.angle.toFixed(1)}° from ${a.uvw}${a.label !== a.uvw ? ` (of ${a.label})` : ''}, the simplest lattice direction within 10°${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `; it is fixed to ±${a.esdAngle.toFixed(1)}° (${how})` : '; its direction is not fixed by the data within 60°'}; the axes' directions are given in one frame`;
+      const how = sh.type === 'ellipsoidL' ? '1σ, from the covariance of the refined parameters' : '1σ: the turn of the solid that raises χ² by χ²_ν (the linear esds\' convention too: their covariance is scaled by χ²_ν), with every other parameter, its turns about the other axes too, refined again. It measures the valley of χ² the fit ends in, not a second orientation nearly as good, which noise can make the best';
+      const angTitle = a => `the axis is ${a.angle.toFixed(1)}° from ${a.uvw}${a.label !== a.uvw ? ` (of ${a.label})` : ''}, the simplest lattice direction within 10°${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `; it is fixed to ±${deg(a.esdAngle)}° (${how})` : '; its direction is not fixed by the data within 60°'}; the axes' directions are given in one frame`;
       const long = ' The longest size is the least bounded: noise spreads the axes apart, and it comes out long.';
       if (sh.type === 'ellipsoidL'){
         // An axis's direction is shown only where its size is told from the other two;
@@ -261,7 +296,7 @@ function summarise(model, res, phases, opts){
           }
           // Each axis by its own direction, in one frame with the others: two axes of one
           // family (a plate's [110] normal and its [1-10] width) would read alike as ⟨110⟩.
-          lines.push({ label: `size ∥ ${a.uvw}`, value: `${fmtEsd(a.D, a.Desd, ' nm')} · ${off(a)}${pm(a)}`, title: `Full axis of the ellipsoid along this principal axis (sizes calibrated as the isotropic one: a sphere's diameter); ${angTitle(a)}.${i === 2 ? long : ''}` });
+          lines.push({ label: `size ∥ ${a.uvw}`, value: `${fmtEsd(a.D, a.Desd, ' nm')} · ${off(a)}${pm(a)}`, title: `Full axis of the ellipsoid along this principal axis (read as the isotropic size is, Scherrer with K = 0.9: an apparent size, not a true dimension; a sphere of one size reads 1.0–1.7 times its diameter); ${angTitle(a)}.${i === 2 ? long : ''}` });
           row(nm, `shape_size_${i + 1}_nm`, a.D, a.Desd);
           row(nm, `shape_axis_${i + 1}_${a.dir.join('_')}_deg_off`, a.angle, a.esdAngle);
         });
@@ -276,10 +311,10 @@ function summarise(model, res, phases, opts){
         // A dimension with no broadening along it (its width on 0): a lower limit.
         const dimTxt = a => Number.isFinite(a.D) ? fmtEsd(a.D, a.Desd, ' nm') : Number.isFinite(a.Dmin) ? `over ${a.Dmin.toFixed(0)} nm` : 'unbounded';
         lines.push({ label: 'shape', value: `${NAME}: ${sh.kind}${ax ? `, axis ∥ ${ax.uvw} (${at(ax)})` : held ? ', held on the lattice' : ''}`,
-          title: `The free shape as ${/^[aeiou]/.test(NAME) ? 'an' : 'a'} ${NAME} of any proportions and orientation. ${wppm ? `Its dimensions are the solid's own (WPPM: each member of a reflection's family drawn from the solid's common-volume function along it${ln ? ', over the log-normal distribution of sizes: the dimensions of the volume-weighted mean crystallite' : ''})` : 'Its dimensions are true ones, calibrated as the isotropic size (a sphere\'s diameter); each reflection\'s width follows the solid\'s volume-weighted column length along it'}, the faces ideally flat (a 2° spread of their orientation would shorten a thin solid's sizes across them by 10–30 %).${held ? ' Its axes are held on their lattice directions: lower ΔBIC than with the orientation free, which the χ² allows too. The free fit is about as likely ("free": its axis\'s angle from the held one), so its difference is in the esds — the angle\'s at least that far' : ''}` });
+          title: `The free shape as ${/^[aeiou]/.test(NAME) ? 'an' : 'a'} ${NAME} of any proportions and orientation. ${wppm ? `Its dimensions are the solid's own (WPPM: each member of a reflection's family drawn from the solid's common-volume function along it${ln ? ', over the log-normal distribution of sizes: the dimensions of the volume-weighted mean crystallite' : ''})` : 'Its dimensions are read as the isotropic size is (Scherrer, K = 0.9: a sphere of one size reads 1.0–1.7 times its diameter), not true ones, which WPPM gives; each reflection\'s width follows the solid\'s volume-weighted column length along it'}, the faces ideally flat (a 2° spread of their orientation would shorten a thin solid's sizes across them by 10–30 %).${held ? ' Its axes are held on their lattice directions: lower ΔBIC than with the orientation free, which the χ² allows too. The free fit is about as likely ("free": its axis\'s angle from the held one), so its difference is in the esds — the angle\'s at least that far' : ''}` });
         const along = { ellipsoid: { a: 'axis', b: 'axis', c: 'axis' }, spheroid: { axis: 'polar axis' }, cylinder: { axis: 'height' }, ellcyl: { axis: 'height', a: 'cross-section', b: 'cross-section' }, box: { a: 'edge', b: 'edge', c: 'edge' } }[sh.type];
         // Dimensions not told apart (xrd-rietveld bodyShapeOf groups): their mean, with
-        // its esd, once; each member's own value has none (13(107) nm for a measured
+        // its esd, once; each member's own value has none (13 ± 107 nm for a measured
         // 12.80(42)), and is shown alone only where it has a direction.
         const shown = new Set(), groupLine = (a, lab) => {
           const g = sh.groups[a.group], who = g.axes.map(i=> sh.axes.find(b=> b.axis === i).role);
@@ -296,7 +331,7 @@ function summarise(model, res, phases, opts){
             : 'Within 2 esd its dimensions are equal: a sphere has no axis';
           const val = grouped ? (Number.isFinite(a.D) ? `${a.D.toPrecision(3)} nm` : dimTxt(a)) : dimTxt(a);
           const heldOn = `held ${a.angle >= 0.05 ? `${a.angle.toFixed(1)}° off ` : 'on '}${a.uvw}`;
-          if (a.resolved) lines.push({ label: `${lab} ∥ ${a.uvw}`, value: `${val} · ${at(a)}`, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}${grouped ? ' (its own value: only the mean above is measured)' : ''}; ${held ? `${heldOn}${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `, which a turn of ±${a.esdAngle.toFixed(1)}° (1σ, the sizes, the other turns, scale and background refined again) would cost χ²_ν` : ''}` : angTitle(a)}` });
+          if (a.resolved) lines.push({ label: `${lab} ∥ ${a.uvw}`, value: `${val} · ${at(a)}`, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}${grouped ? ' (its own value: only the mean above is measured)' : ''}; ${held ? `${heldOn}${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `, which a turn of ±${deg(a.esdAngle)}° (1σ, every other parameter refined again) would cost χ²_ν` : ''}` : angTitle(a)}` });
           else if (!grouped) lines.push({ label: lab, value: val, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}. ${why}: no direction of its own` });
           row(nm, `shape_${lab.replace(/[ -]/g, '_')}_${a.role}_nm`, a.D, a.Desd);
           // An unbounded dimension's lower limit (the card's "over N nm").
@@ -310,8 +345,13 @@ function summarise(model, res, phases, opts){
         if (info && Number.isFinite(info.dBICheld)) row(nm, 'shape_held_on_lattice', held ? 1 : 0, NaN);
       }
       // For the drawing (xrd-shape3d): the solid, and the crystal's directions on it.
-      const dirs = sh.axes.filter(a=> a.resolved).map(a=> ({ label: a.uvw, vec: a.vec, esd: a.esdAngle, off: a.angle }))
-        .concat((sh.across || []).map(a=> ({ label: a.uvw, vec: a.vec, esd: a.esdAngle, off: NaN })));
+      // Each axis's cone about the axis itself (e, on the side of its lattice direction),
+      // which its esd measures, its lattice direction [uvw] the arrow, off° from it; the
+      // directions across a body of revolution (free to turn about its axis) have none.
+      const dirs = sh.axes.filter(a=> a.resolved).map(a=>{
+        const s = a.e[0]*a.vec[0] + a.e[1]*a.vec[1] + a.e[2]*a.vec[2] < 0 ? -1 : 1;
+        return { label: a.uvw, vec: a.vec, axis: a.e.map(t=> s*t), esd: a.esdAngle, off: a.angle };
+      }).concat((sh.across || []).map(a=> ({ label: a.uvw, vec: a.vec, esd: NaN, off: NaN, about: true })));
       // A solid free to turn about one axis (a body of revolution, or two dimensions not
       // told apart) is drawn with its body x on the first crystal direction across that
       // axis, so that the view's home azimuth keeps them apart (an arbitrary x had laid
@@ -341,7 +381,7 @@ function summarise(model, res, phases, opts){
       strainLines(q, nm, lines, ss);
     } else if (ss){
       if (!wppm) lines.push(isFinite(ss.D)
-        ? { label: 'crystallite size', value: fmtEsd(ss.D, ss.Desd, ' nm'), title: `D = Kλ/(Y_s·π/180), K = 0.9, λ the Kα₁: the Scherrer size of the phase's Lorentzian width H_L = Y_s/cosθ, Y_s = ${fmtEsd(ss.Ys, ss.YsEsd, '°')}${ss.instrumentSubtracted ? ' above the instrument’s' : ' (the instrument’s included)'}` }
+        ? { label: 'crystallite size', value: fmtEsd(ss.D, ss.Desd, ' nm'), title: `D = Kλ/(Y_s·π/180), K = 0.9, λ the Kα₁: the Scherrer size of the phase's Lorentzian width H_L = Y_s/cosθ, Y_s = ${fmtEsd(ss.Ys, ss.YsEsd, '°')}${ss.instrumentSubtracted ? ' above the instrument’s' : ' (the instrument’s included)'}. An apparent size, comparable with the Analysis card's, not a diameter: the Lorentzian fitted to a crystallite's line follows its tails too, and spheres of one size read 1.0–1.7 times their diameter (more the larger they are). WPPM gives the diameter` }
         : { label: 'crystallite size', value: 'no measurable broadening' });
       else if (!ln) lines.push(isFinite(ss.D)
         ? { label: 'crystallite size (sphere)', value: fmtEsd(ss.D, ss.Desd, ' nm'), title: 'WPPM: the crystallites as spheres of one diameter, each line the Fourier transform of the sphere’s common-volume function with the instrument’s and the strain’s coefficients — the diameter itself, with no Scherrer constant' }
@@ -362,8 +402,11 @@ function summarise(model, res, phases, opts){
 /* The widths for the card: per phase its rows (what the table shows), the WH fit and
    the order pairs, and how well each model predicts the measured widths: χ²_ν of
    (measured − model)/esd over the rows the tests use. Their rows go into the results
-   CSV too. */
-function summariseWidths(w, phases, table){
+   CSV too. For an isotropic WPPM phase, the reading: its sizes are true diameters, the
+   table's and the Williamson–Hall line's Scherrer readings (K = 0.9 on the FWHM), which
+   come out lower for a sphere of one size (0.85–0.88 of it) and otherwise as σ has it;
+   the line through the model's own widths, read the same way, says by how much. */
+function summariseWidths(w, phases, table, model, res){
   const name = id => (phases.find(p=> p.id === id) || {}).name || '';
   return { corrected: w.corrected, phases: w.phases.map(ph=>{
     const use = ph.rows.filter(r=> !r.overlapped && !r.edge && !r.weak && !r.flat && r.Wesd > 0);
@@ -372,7 +415,13 @@ function summariseWidths(w, phases, table){
     if (isFinite(wh.chi2nu)){ table.push({ phase: nm, name: 'WH_chi2nu', value: wh.chi2nu, esd: NaN }, { phase: nm, name: 'WH_size_nm', value: wh.D, esd: wh.Desd }, { phase: nm, name: 'WH_strain', value: wh.b, esd: wh.bEsd }); }
     ph.orders.forEach(o=> table.push({ phase: nm, name: `order_ratio_${o.aPlain.replace(/ /g, '')}_${o.bPlain.replace(/ /g, '')}`, value: o.R, esd: o.Resd }));
     const scores = { iso: score('iso'), shape: ph.shaped ? score('shape') : NaN };
-    return { id: ph.id, name: nm, shaped: ph.shaped, rows: ph.rows, wh, orders: ph.orders, scores };
+    const k = model.phases.findIndex(q=> String(q.id) === String(ph.id)), md = (res.models || {})[ph.id] || {}, ss = (res.sizeStrain || [])[k];
+    let reading = null;
+    if (md.profile && md.profile !== 'lorentz' && !ph.shaped && ss && isFinite(ss.D)){
+      const own = williamsonHall(ph.rows.filter(r=> isFinite(r.model.iso)).map(r=> ({ ...r, W: r.model.iso })), w.lam);
+      if (isFinite(own.D)){ reading = { D: ss.D, Dmodel: own.D, lognormal: md.profile === 'lognormal' }; table.push({ phase: nm, name: 'WH_size_model_nm', value: own.D, esd: NaN }); }
+    }
+    return { id: ph.id, name: nm, shaped: ph.shaped, rows: ph.rows, wh, orders: ph.orders, scores, reading };
   }) };
 }
 
@@ -389,11 +438,13 @@ self.addEventListener('message', e=>{
     let widths = null;
     if (!opts.standard){
       const onProgress = (i, n)=> self.postMessage({ id, type: 'progress', frac: 1, stage: `peak widths, ${i} of ${n}` });
-      try { widths = summariseWidths(measureWidths(model, res, { irf: opts.irf || null, isoParams: res.isoParams || null, shapeIds: Object.keys(res.shapes || {}), onProgress }), phases, table); }
+      try { widths = summariseWidths(measureWidths(model, res, { irf: res.irf || null, isoParams: res.isoParams || null, shapeIds: Object.keys(res.shapes || {}), onProgress }), phases, table, model, res); }
       catch(e){ warnings.push('The peak widths could not be measured: ' + String(e && e.message || e)); }
     }
     self.postMessage({ id, type: 'result', res: { params: res.params, esd: res.esd, stats: res.stats, stages: res.stages, textures: res.textures, models: res.models,
-      atBound: res.atBound, undetermined: res.undetermined, converged: res.converged, ms: res.ms, warnings, phaseResults: groups, table, widths, solids } });
+      atBound: res.atBound, undetermined: res.undetermined, converged: res.converged, ms: res.ms, warnings, phaseResults: groups, table, widths, solids,
+      // the standard's profile as used: none when it did not apply (another λ1)
+      irf: res.irf || null, irfRefused: !!opts.irf && !res.irf } });
   } catch(err){
     self.postMessage({ id, type: 'error', message: String((err && err.message) || err) });
   }
