@@ -34,6 +34,18 @@ was proposed; nothing here is in the code yet.
   than about one FWHM can swap peaks. To be solved: e.g. an optimal assignment
   (each sample's peaks to the reflections at minimum total distance in sigmas)
   rather than the sweep.
+- **Free shape: the axes held on the lattice (found in v429, awaiting a go-ahead).**
+  Two defects of the shape search, measured on 36D and 37D without texture and on
+  synthetic discs. (1) A body held on the lattice goes to the simplest direction within
+  10° of the free fit's axis, not the nearest: discs whose free normal lies within 0–2°
+  of [310] are reported as "⟨210⟩ (8°)", and the held box and ellipsoid of 36D stay on
+  [210], 2–10 in χ² above the same solids held on [310]. Taking the nearest direction
+  needs a preference for the simpler one when χ² is practically equal (a synthetic
+  [210] disc as a box would otherwise be held on [320], 0.6 lower). (2) The held
+  candidates are built only near the best free fit: frames on the low-index directions
+  (⟨100⟩, ⟨110⟩, ⟨111⟩) are never tried; adding them changes only the fits with one ΔB
+  free on these samples. Neither change reaches the shallow minima 8° from [110] that
+  the box finds on 36D (ΔBIC −10). Scripts: scratchpad/v429/L/.
 - **Rietveld against MAUD (started in v426, on hold).** How far our engine and MAUD
   recover a known truth from synthetic patterns at equal model depth, with a third,
   neutral generator (the Debye scattering equation of atomistic crystallites), to

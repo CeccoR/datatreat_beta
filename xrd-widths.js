@@ -26,10 +26,12 @@
 import { calc, fcjNodes, addPeak, addPeakFCJ, tch, lpFactor, HG2_FLOOR, K_SCHERRER } from './xrd-rietveld.js';
 
 const D2R = Math.PI/180;
-// The others' share of a peak's intensity across its top above which it is overlapped:
-// where the isotropic model's widths predict the clear rows', and where they do not
-// (measureWidths).
-const OVL_RIGHT = 0.3, OVL_CLEAN = 0.05;
+// Overlapped (measureWidths): the others' share of a peak's intensity across its top past
+// OVL_RIGHT; or a bias past OVL_WIDEN of the width's esd that the reflections of a phase
+// whose isotropic model does not predict its widths can put on it. Past OVL_BIAS the esd is
+// widened by that bias, in quadrature. OVL_OFF: the value of such a phase's overlapShare (to
+// v428 the limit on those reflections' share), which now only marks it.
+const OVL_RIGHT = 0.3, OVL_BIAS = 0.5, OVL_WIDEN = 2, OVL_OFF = 0.05;
 // A peak found far broader or narrower than the model's is this reflection's only with its
 // intensity within this factor of the model's (measureWidths): read right, the area comes
 // out 0.73–1.37 times it (an unmodelled texture, r 0.5–0.7, spreads it to 0.2–34, but put
@@ -196,9 +198,21 @@ function fitPeak(xs, ys, ws, c0, H0, lines, Aasym, instAt, opts = {}){
     // Whether the peak is broadened is the whole width's to say, against Hinst, the
     // instrument's alone: where both the sample's widths are about 0 Hs goes as ±√|u|,
     // its linear esd half its spread.
-    const tot = total(c, hl, u), Hesd = sdOf(secant(HtOf)), insC = instAt(c/2*D2R);
-    return { c, hl, u, gauss, chi: S[0].f, Hs: sampleFwhm(hl, u), HsEsd: sdOf(secant(HsOf)), H: tot.H, Hesd, Hinst: tch(insC.HG, insC.HL).H, ins: insC, eta: tot.eta,
-             A: Amp, Aesd: inv ? Math.sqrt(Math.max(0, inv[kk.length][kk.length]*chi2nu)) : NaN, b0, b1, chi2nu };
+    const tot = total(c, hl, u), Hesd = sdOf(secant(HtOf)), insC = instAt(c/2*D2R), gHs = secant(HsOf);
+    // What a change dy of the data on the window does to Hs, to first order: the
+    // Gauss–Newton step from this optimum, (JᵀWJ)⁻¹JᵀW·dy, its hl and u through Hs's
+    // gradient (measureWidths: what the neighbours' model error can do to the width).
+    // Against fitting again with dy added (paired noisy draws): exact to 1 % where one fit
+    // carries the weight; with the Akaike weights shared (0.35) 15–60 % over, as their own
+    // change is left out; not linear past about one esd.
+    const resp = inv && gHs ? dy => {
+      const b = cols.map(col=> { let t = 0; for (let i = 0; i < n; i++) t += ws[i]*col[i]*dy[i]; return t; });
+      let dh = 0, du = 0;
+      for (let j = 0; j < m; j++){ dh += inv[1][j]*b[j]; if (gauss) du += inv[2][j]*b[j]; }
+      return gHs[0]*dh + gHs[1]*du;
+    } : null;
+    return { c, hl, u, gauss, chi: S[0].f, Hs: sampleFwhm(hl, u), HsEsd: sdOf(gHs), H: tot.H, Hesd, Hinst: tch(insC.HG, insC.HL).H, ins: insC, eta: tot.eta,
+             A: Amp, Aesd: inv ? Math.sqrt(Math.max(0, inv[kk.length][kk.length]*chi2nu)) : NaN, b0, b1, chi2nu, resp };
   };
   /* A peak not broadened gets its corrected FWHM as an upper limit, HsMax: the widest
      sample whose whole peak is no wider than 2 esd over the width found (over the
@@ -215,7 +229,8 @@ function fitPeak(xs, ys, ws, c0, H0, lines, Aasym, instAt, opts = {}){
   // The two by their Akaike weights (u one parameter more), χ² read in units of χ²_ν.
   const w = Number.isFinite(wG) ? wG : 1/(1 + Math.exp(-((L.chi - G.chi)/G.chi2nu - 2)/2));
   const Hs = (1 - w)*L.Hs + w*G.Hs, best = w > 0.5 ? G : L;
-  return limit({ ...best, wG: w, Hs, HsEsd: Math.sqrt((1 - w)*(L.HsEsd**2 + (L.Hs - Hs)**2) + w*(G.HsEsd**2 + (G.Hs - Hs)**2)) }, G);
+  const resp = L.resp && G.resp ? dy => (1 - w)*L.resp(dy) + w*G.resp(dy) : null;
+  return limit({ ...best, wG: w, Hs, HsEsd: Math.sqrt((1 - w)*(L.HsEsd**2 + (L.Hs - Hs)**2) + w*(G.HsEsd**2 + (G.Hs - Hs)**2)), resp }, G);
 }
 /* The widest sample a whole width Hup allows on the instrument's ins (HG, HL): along
    H(hl, u) = Hup, from all of it Gaussian to all of it Lorentzian, the largest
@@ -270,8 +285,68 @@ function invert(M){
   return M.map((_, i)=> out.map(col=> col[i]));
 }
 
+/* What an error of the other reflections' widths can do to one row's width: each other
+   reflection whose curve reaches the window (its Kα1 and Kα2), widened by a relative 1 at
+   its area — ∂/∂lnH of its pseudo-Voigt, times its sample's share of the width, (H −
+   H_inst)/H, the instrument's being the standard's — and taken through the row's fit
+   (fitPeak's resp, the fit's straight line included): the change of the row's Hs per unit
+   relative error of that reflection's width, with its sign (a far tail's smooth curvature
+   moves it little, a neighbour under its top much). ticks: the isotropic model's (calc);
+   k, g: the row's phase index and group; top: its own curve's height. → [{ k, r, b }] (the
+   reflection's phase index and index, b), or null where the fit gave no response. */
+function neighbourErrors(model, ticks, k, g, xs, top, fit, instAt, lam){
+  if (!fit.resp || !(top > 0)) return null;
+  const out = [], n = xs.length, x0 = xs[0], x1 = xs[n-1], dy = new Float64Array(n);
+  const gc = 2*Math.sqrt(Math.LN2/Math.PI);
+  for (const t of ticks){
+    if (t.pk === k && g.rs.has(t.r) || !(t.I > 0) || !(t.H > 0)) continue;
+    const th1 = t.tt/2*D2R, ins = instAt(th1), fac = 1 - tch(ins.HG, ins.HL).H/t.H;
+    if (!(fac > 0)) continue;
+    const H = t.H, eta = t.eta, gk = 4*Math.LN2/(H*H), lk = 2/(Math.PI*H);
+    let reach = false;
+    dy.fill(0);
+    for (const L of model.lines){
+      const st = L.lam/lam*Math.sin(th1);
+      if (st >= 1) continue;
+      const th = Math.asin(st), c = t.tt + 2*(th - th1)/D2R, I = t.I*L.w*lpFactor(model, th)/lpFactor(model, th1);
+      // Out of reach: its curve at the window's nearest point under 10⁻³ of the row's top.
+      const dm = c < x0 ? x0 - c : c > x1 ? c - x1 : 0;
+      if (I*(eta*lk/(1 + 4*dm*dm/(H*H)) + (1 - eta)*gc/H*Math.exp(-Math.min(700, gk*dm*dm))) < 1e-3*top) continue;
+      reach = true;
+      for (let i = 0; i < n; i++){
+        const d = xs[i] - c, d2 = d*d, q = H*H + 4*d2;
+        dy[i] += fac*I*(eta*2/Math.PI*H*(4*d2 - H*H)/(q*q) + (1 - eta)*gc/H*Math.exp(-gk*d2)*(2*gk*d2 - 1));
+      }
+    }
+    if (reach) out.push({ k: t.pk, r: t.r, b: fit.resp(dy) });
+  }
+  return out;
+}
+/* A model's relative misfit beyond the esds, from rows [{ e, s }] (e = (W − W_model)/W_model,
+   s its esd), skip left out: the τ of Paule and Mandel, Σ e²/(s² + τ²) = n (n, not n − 1:
+   the model's widths are the expectation, no mean is fitted), 0 where the esds account for
+   all of it (Σ e²/s² ≤ n, never where measureWidths' model test failed: its capped χ²
+   exceeds n). Each row weighs as its own esd and τ allow; the plain rms of e² − s² (v429 at
+   first) is the weakest rows' noise, and read 0 for 4 of 78 synthetic phases judged off
+   (5000 counts, log-normal sizes) where τ reads 3–11 %, and 0 on the user's 33A without its
+   (111) (τ 7 %). */
+function scatter(rows, skip){
+  let n = 0, top = 0;
+  for (const o of rows) if (o !== skip){ n++; top += o.e*o.e; }
+  if (!n) return NaN;
+  const F = t2 => { let t = -n; for (const o of rows) if (o !== skip) t += o.e*o.e/(o.s*o.s + t2); return t; };
+  if (!(F(0) > 0)) return 0;
+  // F falls with τ², and F(Σe²/n) ≤ 0.
+  let a = 0, b = top/n;
+  for (let i = 0; i < 60; i++){ const m = (a + b)/2; if (F(m) > 0) a = m; else b = m; }
+  return Math.sqrt((a + b)/2);
+}
+
 /* measureWidths(model, res, opts) → { lam, corrected, phases: [{ id, name, shaped,
-   rows, overlapShare, wh, orders }] }, for the phases detected in res (opts.irf: the standard's
+   rows, overlapShare (OVL_OFF where the phase's isotropic model does not predict its
+   widths read, else OVL_RIGHT), misfit (then their relative misfit beyond their esds,
+   scatter's τ, else 0), wh,
+   orders }] }, for the phases detected in res (opts.irf: the standard's
    profile, for the correction; opts.isoParams: the isotropic refinement's parameters
    when a free shape was refined after it; opts.shapeIds: the ids of the phases whose
    free shape was kept — shaped; opts.onProgress(done, total): after each peak). A row:
@@ -279,7 +354,8 @@ function invert(M){
    upper limit of it), wG (the sample's Gaussian fit's weight), D, Desd (nm,
    Kλ/(Hs·cosθ), K = 0.9 as the Analysis card), dd, ddEsd (Δd*, Å⁻¹), area, rel, share
    (the others' share of its top), shareOff (that of the phases whose isotropic model does
-   not predict their widths: overlapShare 0.05), overlapped, edge, weak, flat, unread (why a peak was not read: its row has no widths),
+   not predict their widths), biasOff (°: what their reflections, off as measured, can do to
+   its width), HsEsdFit (the fit's own esd, where the esds were widened by biasOff), overlapped, edge, weak, flat, unread (why a peak was not read: its row has no widths),
    model: { iso, shape } (the isotropic model's and, for a shaped phase, the free shape's
    corrected FWHM, measured the same way) }. */
 function measureWidths(model, res, opts = {}){
@@ -324,7 +400,10 @@ function measureWidths(model, res, opts = {}){
   });
   const total = todo.reduce((t, p)=> t + p.groups.length, 0);
   let done = 0;
-  const phases = [], phaseK = [], shares = new Map();   // shares: a row → its share of the given phases' reflections
+  // shares: a row → its share of the given phases' reflections; errsOf: a row → what a
+  // relative error of each other reflection's width can do to its width (neighbourErrors);
+  // reflOf: a row → [its phase index, its reflections]
+  const phases = [], phaseK = [], shares = new Map(), errsOf = new Map(), reflOf = new Map();
   for (const { q, k, groups } of todo){
     // A free shape's own widths only for a phase whose shape was kept: another phase of
     // the sample is isotropic in both refinements.
@@ -396,8 +475,8 @@ function measureWidths(model, res, opts = {}){
          its top (± H/2), where its width is read (overlapped: below), less the straight line
          through them over the window, which the fit's own background takes up: a strong
          neighbour's far Lorentzian tail, smooth there, cannot bend the peak, and on broad
-         peaks it alone held 5 % of a weak one's top. Kept by phase (dev), as the limit
-         depends on whose model takes them off. */
+         peaks it alone held 5 % of a weak one's top. Kept by phase (dev): that of the
+         phases whose model misfits is reported (shareOff). */
       const top = [];
       let s0 = 0, s1 = 0, s2 = 0;
       xs.forEach((xv, j)=> { const d = xv - g.tt; s0 += ws[j]; s1 += ws[j]*d; s2 += ws[j]*d*d; if (Math.abs(d) <= Hw/2) top.push(j); });
@@ -411,6 +490,7 @@ function measureWidths(model, res, opts = {}){
       });
       const shareOf = ks => mine > 0 ? top.reduce((t, _, m)=> t + Math.abs(ks.reduce((u, kk)=> u + dev[kk][m], 0)), 0)/mine : Infinity;
       const share = shareOf(dev.map((_, kk)=> kk));
+      const errs = neighbourErrors(model, ref.ticks, k, g, xs, Math.max(...top.map(j=> own[j]), 0), fit, instAt, lam);
       const th = fit.c/2*D2R, cosT = Math.cos(th);
       // No measurable broadening: the whole width less the instrument's under two of its
       // esds (it is then no size to quote, the tests leave it out, and its corrected
@@ -427,39 +507,98 @@ function measureWidths(model, res, opts = {}){
         area: fit.A, share, shareOff: 0, overlapped: share > OVL_RIGHT, edge, weak: !(fit.A > 3*fit.Aesd), flat, wG: fit.wG,
         model: { iso: predict(own), shape: shaped ? predict((o=> idx.map(i=> o[i]))(ownAll(params))) : NaN },
       };
-      rows.push(row); shares.set(row, shareOf);
+      rows.push(row); shares.set(row, shareOf); errsOf.set(row, errs); reflOf.set(row, [k, g.rs]);
     }
     rows.sort((a, b)=> a.tt - b.tt);
     phases.push({ id: q.id, name: q.name, shaped, rows }); phaseK.push(k);
   }
-  /* Overlapped: the others hold more of a row's intensity across its top than the model
-     that takes them off can be trusted with. Where a phase's isotropic model is right (its
-     widths predict the widths read, of its rows up to OVL_RIGHT, within their esds: p ≥
-     10⁻³) a row reads as well under its reflections holding twice its own intensity (z rms
-     0.7–1.15, six structures, 20 000 counts, sharp and broad lines), and up to OVL_RIGHT
-     is used. Where it is not (an anisotropic broadening, or a kept shape: the neighbours
-     are taken off by the isotropic model), its error comes in: under a Stephens strain the
-     isotropic model missed by about ±20 %, rows holding 5–30 % of others read z rms
-     1.6–1.9, those under 5 % 1.0; then that phase's reflections only up to OVL_CLEAN, under
-     any phase's peaks (an isotropic phase beside a Stephens-strained one, judged by its own
-     model alone, read z rms 1.3–1.6 under 5–30 % of the other's reflections and its
-     Williamson–Hall p fell to 2·10⁻⁴; 0.85–1.0 and p ≥ 0.2 beside an isotropic one). (Judged on
-     the clear rows alone, broad peaks left fewer than three and the model passed by
-     default.) Each row counts at most 3 esd, so that one misread row does not decide
-     alone: a weak broad peak read on a noise spike (z −6.5) had judged an isotropic
-     pattern of 36 rows anisotropic. Capped, χ²'s mean falls by 0.5 % where the model is
-     right; 80 isotropic patterns gave p ≥ 0.014, 30 Stephens-strained ones p ≤ 10⁻⁶. */
-  const off = [];
+  /* Overlapped: what the others put under a row's top can move its width by more than the
+     model that takes them off can be trusted with. Past OVL_RIGHT of others, whatever the
+     model. Below, each phase's isotropic model is judged on its widths: their χ² against
+     those read, on its rows up to OVL_RIGHT (judged on the clear rows alone, broad peaks
+     left fewer than three and the model passed by default), each row counting at most 3
+     esd so that one misread row does not decide alone (a weak broad peak read on a noise
+     spike, z −6.5, had judged an isotropic pattern of 36 rows anisotropic; capped, χ²'s mean
+     falls by 0.5 % where the model is right), right at p ≥ 10⁻³: 80 isotropic patterns gave
+     p ≥ 0.014, 30 Stephens-strained ones p ≤ 10⁻⁶. Where it is right a row reads as well
+     under others holding twice its own intensity (z rms 0.7–1.15, six structures, 20 000
+     counts, sharp and broad lines). Where it is not (an anisotropic broadening, or a kept
+     shape: the isotropic model takes the neighbours off), their error comes in, and what
+     it can do to the width is measured (biasOff): each reflection of that phase off by its
+     own misfit where read, else by the others' spread τ (misfitBut), through the row's own fit
+     (neighbourErrors) — under any phase's peak (an isotropic phase beside a Stephens-strained
+     one, judged by its own model alone, read z rms 1.3–1.6 under 5–30 % of the other's
+     reflections). Up to OVL_BIAS of its esd the row is used as it is, to OVL_WIDEN with its
+     esds widened by the bias in quadrature, past it left out. Up to v428 those reflections
+     were held to 5 % of the row's top instead (rows under 5 % read z rms 1.0, 5–30 % 1.6–1.9,
+     Stephens strain, 20 000 counts): a share counts a far tail, which the fit's line nearly
+     takes up, as a neighbour under the top, and does not scale with the counts. 36D's
+     (111) (SrTiO₃, lines 1.3° wide) holds 7.2 % of (110) and (200), 7.5° and 6.4° away,
+     and was left out, Williamson–Hall then reading p 0.014 (v426 5·10⁻³⁸); what they can
+     do to it is 0.26 esd. The bias is a calibrated error: rows binned by it read, against
+     their esds widened by it, z rms 0.96, 0.93, 1.15, 0.98, 0.93 and 0.69 under 0.25, 0.5,
+     1, 2, 4 esd and beyond (against the fit's own 0.97, 0.99, 1.43, 1.73, 2.87, 4.71: 896
+     rows of 46 Stephens-strained patterns, five structures, 5000, 20 000 and 200 000 counts,
+     lines of 8 and 30 nm), 0.70–1.00 on 1055 rows of two-phase, log-normal, high-resolution,
+     Mo and no-standard sets. On the 46 the rows used went from 409 (z rms 1.08, 8 past 3 esd;
+     1.36 at 200 000 counts) to 726 (1.00, 4), Williamson–Hall from 36 patterns to 45, all
+     anisotropic. Every row past OVL_BIAS dropped (v429 at first): 513 rows (0.97, 2), WH on
+     43, and on a disc or spheroid 2 × 10 nm at 5000 counts 3 and 1 rows a pattern, too few
+     for Williamson–Hall, which the 5 % share had called anisotropic in 8 of 8 (now 8 of 8).
+     Past OVL_WIDEN the first order is no longer reliable (fitPeak's resp); widened up to 4
+     esd or without a limit read z rms 0.99 and 0.96 with 17 % and 29 % more rows. What it
+     does not see is the neighbours' line shape: the isotropic pseudo-Voigts of a disc or
+     spheroid 2 × 10 nm fall 40–47 % short of the tails its members spread, and rows read
+     0.6–3 esd narrow at 600–5000 counts whatever their share (RIETVELD.md §12.3). */
+  const off = [], meas = new Map(), fits = new Map();
   phases.forEach((ph, i)=>{
-    const read = ph.rows.filter(r=> !r.unread && !r.edge && !r.weak && !r.flat && r.share <= OVL_RIGHT && Number.isFinite(r.model.iso) && r.Wesd > 0);
+    const k = phaseK[i], read = ph.rows.filter(r=> !r.unread && !r.edge && !r.weak && !r.flat && r.share <= OVL_RIGHT && Number.isFinite(r.model.iso) && r.Wesd > 0);
     const isoRight = read.length < 3 || chi2Survival(read.reduce((t, r)=> t + Math.min(9, ((r.W - r.model.iso)/r.Wesd)**2), 0), read.length) >= 1e-3;
-    ph.overlapShare = isoRight ? OVL_RIGHT : OVL_CLEAN;
-    if (!isoRight) off.push(phaseK[i]);
+    ph.overlapShare = isoRight ? OVL_RIGHT : OVL_OFF;
+    ph.misfit = 0;
+    if (isoRight) return;
+    off.push(k);
+    // How far the model's widths are off: the relative misfit of each row read here, with
+    // its esd (meas, by reflection); their spread beyond the esds (ph.misfit, scatter).
+    const rel = read.filter(r=> r.model.iso > 0).map(r=> ({ r, e: (r.W - r.model.iso)/r.model.iso, s: r.Wesd/r.model.iso }));
+    ph.misfit = scatter(rel, null);
+    fits.set(k, { rel, own: new Map(rel.map(o=> [o.r, o])), but: new Map() });
+    for (const o of rel) for (const rr of reflOf.get(o.r)[1]) meas.set(k + ':' + rr, o);
   });
+  // Phase kk's misfit for a reflection not read, judged without row r's own: a row's own
+  // misfit says nothing of its neighbours' (36D's (111), 45 % narrower than the isotropic
+  // model, puts its phase's τ at 21 %, 8 % without it).
+  const misfitBut = (kk, r) => {
+    const F = fits.get(kk);
+    if (!F.but.has(r)) F.but.set(r, scatter(F.rel, F.own.get(r) || null));
+    return F.but.get(r);
+  };
   for (const ph of phases){
     const { rows } = ph;
-    // The share of the reflections whose phase's model is not right, at its own limit.
-    rows.forEach(r=> { if (r.unread) return; r.shareOff = off.length ? shares.get(r)(off) : 0; r.overlapped = !(r.share <= OVL_RIGHT) || r.shareOff > OVL_CLEAN; });
+    // The share of the reflections whose phase's model is not right, and the bias they can
+    // put on the width (biasOff): those read, off by their own misfit with its sign (summed),
+    // its esd in quadrature; the others by misfitBut's τ, their signs unknown (in quadrature).
+    // NaN, so overlapped, where the fit gave no response. Between OVL_BIAS and OVL_WIDEN of
+    // its esd the row is used with its esds widened by the bias in quadrature (HsEsdFit: the
+    // fit's own): dropped there, broad lines and discs at 5000 counts had kept too few rows
+    // for Williamson–Hall (measureWidths' comment above).
+    rows.forEach(r=> {
+      if (r.unread) return;
+      const er = errsOf.get(r);
+      let sum = 0, q = 0;
+      if (off.length && er) for (const o of er){
+        if (!fits.has(o.k)) continue;
+        const m = meas.get(o.k + ':' + o.r);
+        if (m){ sum += m.e*o.b; q += (m.s*o.b)**2; } else q += (misfitBut(o.k, r)*o.b)**2;
+      }
+      r.shareOff = off.length ? shares.get(r)(off) : 0;
+      r.biasOff = !off.length ? 0 : !er ? NaN : Math.abs(sum) + Math.sqrt(q);
+      r.overlapped = !(r.share <= OVL_RIGHT) || Number.isNaN(r.biasOff) || r.biasOff > 0 && !(r.biasOff <= OVL_WIDEN*r.Wesd);
+      if (!r.overlapped && r.biasOff > OVL_BIAS*r.Wesd){
+        const k = Math.hypot(r.Wesd, r.biasOff)/r.Wesd;
+        r.HsEsdFit = r.HsEsd; r.HsEsd *= k; r.Wesd *= k; r.ddEsd *= k; r.Desd *= k;
+      }
+    });
     // Relative to the strongest peak read; none for a peak cut by the pattern's end, or a
     // weak one whose area came out above it (a 212 cut at 80° read 115 %).
     const amax = Math.max(...rows.filter(r=> !r.weak && !r.edge && !r.unread).map(r=> r.area), 0);

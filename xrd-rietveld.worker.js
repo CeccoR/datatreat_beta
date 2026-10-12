@@ -5,7 +5,7 @@
    values a line, in standard notation (the esd in brackets in the last digits), and
    the rows of the results CSV.
 ========================================================= */
-import { buildModel, autoRefine, displacementMm, shapeOf, siteU, lowIndexPlanes, strainFormsAt, K_SCHERRER } from './xrd-rietveld.js';
+import { buildModel, autoRefine, fitSettings, displacementMm, shapeOf, siteU, lowIndexPlanes, strainFormsAt, K_SCHERRER } from './xrd-rietveld.js';
 import { measureWidths, williamsonHall } from './xrd-widths.js';
 import { metric, cellFrom, uEquiv, betaOf } from './xrd-cryst.js';
 import { evalQuartic } from './xrd-broad.js';
@@ -61,13 +61,15 @@ function propagate(res, names, f){
 function summarise(model, res, phases, opts){
   const P = res.params, E = res.esd || {}, groups = [], table = [], warnings = [...(res.warnings || [])], solids = [];
   const row = (phase, name, value, esd)=> table.push({ phase, name, value, esd });
+  // Refined here, or held at the last result (a start from it): a value of the result.
+  const inResult = name => (res.free || []).includes(name) || (res.held || []).includes(name);
   // ΔB, when refined (the phase's displacement option 'overall'): one shift added to every
   // atom's B of the phase. A B made negative is no displacement at all: what it takes up
   // is something else (absorption or roughness lowering the low angles, the background).
   const deltaB = (q, ph, nm, lines)=>{
     const key = q.pfx + 'B';
     if (q.adp === 'site' || q.adp === 'aniso') return siteB(q, ph, nm, lines);
-    if (!(res.free || []).includes(key)) return;
+    if (!inResult(key)) return;
     const line = { label: 'ΔB (all atoms)', value: fmtEsd(P[key], E[key], ' Å²'), title: 'Added to every atom’s B from the CIF (0.5 Å² where the CIF gives none)' };
     lines.push(line);
     row(nm, 'delta_B_A2', P[key], E[key]);
@@ -81,8 +83,7 @@ function summarise(model, res, phases, opts){
      positive definite, is no vibration: it takes up something else (absorption,
      roughness, the background, a wrong occupancy). */
   const siteB = (q, ph, nm, lines)=>{
-    const free = res.free || [];
-    if (!q.sites || !q.sites.some(st=> (st.iB != null ? [st.iB] : st.iU).some(i=> free.includes(model.par[i].name)))) return;
+    if (!q.sites || !q.sites.some(st=> (st.iB != null ? [st.iB] : st.iU).some(i=> inResult(model.par[i].name)))) return;
     const cellAt = p => cellFrom(q.constraint, q.latNames.map(l=> p[q.pfx + l]), q.cell);
     for (const st of q.sites){
       if (st.iB != null){
@@ -105,6 +106,15 @@ function summarise(model, res, phases, opts){
       const m2 = Bt[0]*Bt[4] - Bt[1]*Bt[3], det = Bt[0]*(Bt[4]*Bt[8] - Bt[5]*Bt[7]) - Bt[1]*(Bt[3]*Bt[8] - Bt[5]*Bt[6]) + Bt[2]*(Bt[3]*Bt[7] - Bt[4]*Bt[6]);
       if (!(Bt[0] > 0 && m2 > 0 && det > 0)) warnings.push(`${nm}: the displacements of site ${st.label} are not positive definite (some direction has ⟨u²⟩ ≤ 0), which no vibration gives: they more likely take up absorption, roughness, the background or a wrong occupancy.`);
     }
+  };
+  // The preferred orientation (March–Dollase), its axis and r: a sample's phase, or the
+  // standard's LaB6 when its settings ask for one (v429).
+  const textureLine = (q, nm, lines)=>{
+    const tx = (res.textures || {})[q.id];
+    if (!(tx && tx.hkl)) return;
+    const hkl = tx.hkl.map(x=> x < 0 ? '−' + (-x) : x).join(''), sig = Number.isFinite(tx.esd) && tx.esd > 0 ? Math.abs(tx.r - 1)/tx.esd : NaN;
+    lines.push({ label: `preferred orientation (${hkl})`, value: `r = ${fmtEsd(tx.r, tx.esd)}`, title: `March–Dollase: each reflection's members weighed by (r²·cos²α + sin²α/r)^(−3/2), α their angle to the (${hkl}) planes' normal. r under 1: more crystallites with (${hkl}) parallel to the sample's surface (plates lying flat); over 1, fewer (needles); 1, none.${Number.isFinite(sig) ? ` Here ${sig.toFixed(0)} esd from 1${sig < 2 ? ': not told from no texture' : ''}.` : ''} It changes the intensities, not the widths: an intensity misfit it does not take up, a free shape would (on a SrTiO₃ sample, with none, the plates came out ⟂ ⟨310⟩ by widening the (111) and narrowing the (200))` });
+    row(nm, `texture_r_${tx.hkl.join('_')}`, tx.r, tx.esd);
   };
   // What the numbers rest on: a refinement stopped short, parameters on a bound (read
   // as limits), parameters the data do not determine — the standard's too, whose
@@ -130,10 +140,12 @@ function summarise(model, res, phases, opts){
     row('', 'zero_deg', P.zero, E.zero); row('', 'displacement_mm', s, sE);
     ['U', 'V', 'W', 'X', 'Y'].forEach(k=> row('', k, P[k], E[k]));
     row('', 'asymmetry_SH_L', P.asym, E.asym);
-    // The standard's displacement parameters (the built-in LaB6's one ΔB, xrd-rv.js): a
-    // group of their own, as a phase's.
+    // The standard's displacement parameters and texture (the built-in LaB6's settings,
+    // xrd-rv.js: one ΔB by default): a group of their own, as a phase's. (Before v429 it had
+    // no texture; with one asked for in the settings, r was refined and not shown.)
     const nm = phases[0].name || model.phases[0].name, lines = [];
     deltaB(model.phases[0], phases[0], nm, lines);
+    textureLine(model.phases[0], nm, lines);
     if (lines.length) groups.push({ name: nm, phase: true, lines });
     fitNotes();
     return { groups, table, warnings, solids };
@@ -182,6 +194,7 @@ function summarise(model, res, phases, opts){
      cell; the S_j (CSV) are the conventional cell's (strainFrame). */
   const strainLines = (q, nm, lines, ss)=>{
     const md = (res.models || {})[q.id] || {};
+    if (md.strain === 'off'){ if (md.size !== false) lines.push(offLine(md)); return; }
     if (!(md.strain === 'aniso' && q.iS)){
       lines.push({ label: 'microstrain', value: fmtEsd(ss.strain, ss.strainEsd), title: 'ε from the Lorentzian FWHM X_s·tanθ = 4ε·tanθ: a strain defined on the FWHM, as the sizes’ K = 0.9 is. Stokes and Wilson’s e = β/(4 tanθ), on the integral breadth, is π/2 = 1.57 times it (their apparent strain η = 4e); GSAS-II’s isotropic microstrain (in 10⁻⁶) is 4ε·10⁶' });
       row(nm, 'microstrain', ss.strain, ss.strainEsd);
@@ -223,6 +236,11 @@ function summarise(model, res, phases, opts){
     }
     q.iS.forEach((ix, j)=> row(nm, `stephens_S${j + 1}_1e-6`, P[model.par[ix].name], E[model.par[ix].name]));
   };
+  // A size or a strain switched off in the settings: one line in their place.
+  const offLine = md => {
+    const what = [md.size === false && 'crystallite size', md.strain === 'off' && 'microstrain'].filter(Boolean).join(' and ');
+    return { label: 'not refined', value: what, title: `Switched off in the settings: the ${what} ${md.size === false && md.strain === 'off' ? 'are' : 'is'} not modelled (${[md.size === false && 'Y_s', md.strain === 'off' && 'X_s'].filter(Boolean).join(', ')} held at 0)${res.irf ? '' : '. Without the standard\u2019s profile the whole width is refined in the instrument\u2019s terms anyway'}` };
+  };
   // Planar faults: their probability per plane, and what it means in planes between faults.
   const faultLines = (q, nm, lines)=>{
     const md = (res.models || {})[q.id] || {};
@@ -259,13 +277,7 @@ function summarise(model, res, phases, opts){
                                  : cellFrom(C, q.latNames.map(l=> p[q.pfx + l]), q.cell)).V;
     const V = vol(P), VE = propagate(res, q.latNames.map(l=> q.pfx + l), vol);
     lines.push({ label: conv ? 'V (conventional cell)' : 'V', value: fmtEsd(V, VE, ' Å³') }); row(nm, conv ? 'V_conventional_A3' : 'V_A3', V, VE);
-    // The preferred orientation (March–Dollase), its axis and r.
-    const tx = (res.textures || {})[q.id];
-    if (tx && tx.hkl){
-      const hkl = tx.hkl.map(x=> x < 0 ? '−' + (-x) : x).join(''), sig = Number.isFinite(tx.esd) && tx.esd > 0 ? Math.abs(tx.r - 1)/tx.esd : NaN;
-      lines.push({ label: `preferred orientation (${hkl})`, value: `r = ${fmtEsd(tx.r, tx.esd)}`, title: `March–Dollase: each reflection's members weighed by (r²·cos²α + sin²α/r)^(−3/2), α their angle to the (${hkl}) planes' normal. r under 1: more crystallites with (${hkl}) parallel to the sample's surface (plates lying flat); over 1, fewer (needles); 1, none.${Number.isFinite(sig) ? ` Here ${sig.toFixed(0)} esd from 1${sig < 2 ? ': not told from no texture' : ''}.` : ''} It changes the intensities, not the widths: an intensity misfit it does not take up, a free shape would (on a SrTiO₃ sample, with none, the plates came out ⟂ ⟨310⟩ by widening the (111) and narrowing the (200))` });
-      row(nm, `texture_r_${tx.hkl.join('_')}`, tx.r, tx.esd);
-    }
+    textureLine(q, nm, lines);
     const sh = ss && ss.shape ? shapeOf(model, P, k, res) : null, info = (res.shapes || {})[q.id];
     if (sh){
       const off = a => `${a.angle < 0.05 ? '0' : a.angle.toFixed(1)}° off`;
@@ -375,16 +387,20 @@ function summarise(model, res, phases, opts){
         }
       }
       solids.push({ id: q.id, name: nm, type: sh.type === 'ellipsoidL' ? 'ellipsoid' : sh.type, kind: sh.kind, dims: sh.solid.dims, frame, dirs: dirs.slice(0, 3), cell: sh.solid.cell });
-      if (info){
+      if (info && Number.isFinite(info.chi2)){
         const dChi = info.chi2 - info.chi2Iso, dBIC = dChi/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
         // (A shape is reported only when kept, i.e. at ΔBIC under −10; one rejected is in
         // the warnings with its ΔBIC.)
         lines.push({ label: 'vs isotropic', value: `ΔBIC ${dBIC.toFixed(0)} (shape supported: under −10)`,
-          title: `χ² ${info.chi2Iso.toFixed(0)} → ${info.chi2.toFixed(0)} with ${info.P - info.Piso} more parameters; BIC with χ² divided by the isotropic fit's χ²_ν (${info.chi2redIso.toFixed(2)}), so that a misfit of the model is not counted as evidence.${Number.isFinite(info.dBICheld) ? ` Orientation free: ΔBIC ${info.dBICfree.toFixed(0)}; held on the lattice: ${info.dBICheld.toFixed(0)}.` : ''} Between solids: under 10 no preference; 10–30 weak, within what the search itself varies on real data; over 30 telling, more so between solids with as many parameters. The sizes depend on the solid (a spheroid's polar axis reads 4/3 as much as a disc's thickness: the column length along the axis is ¾ of the one, all of the other)` });
+          title: `${info.carried ? 'The last result\u2019s search (this refinement started from it, the shape not searched again): ' : ''}χ² ${info.chi2Iso.toFixed(0)} → ${info.chi2.toFixed(0)} with ${info.P - info.Piso} more parameters; BIC with χ² divided by the isotropic fit's χ²_ν (${info.chi2redIso.toFixed(2)}), so that a misfit of the model is not counted as evidence.${Number.isFinite(info.dBICheld) ? ` Orientation free: ΔBIC ${info.dBICfree.toFixed(0)}; held on the lattice: ${info.dBICheld.toFixed(0)}.` : ''} Between solids: under 10 no preference; 10–30 weak, within what the search itself varies on real data; over 30 telling, more so between solids with as many parameters. The sizes depend on the solid (a spheroid's polar axis reads 4/3 as much as a disc's thickness: the column length along the axis is ¾ of the one, all of the other)` });
         row(nm, 'shape_dBIC', dBIC, NaN);
       }
       if (ln) sizeDist(q, nm, lines, true);
       strainLines(q, nm, lines, ss);
+    } else if (ss && md0.size === false){
+      // Switched off: no size line, and no strain line either when that is off too.
+      lines.push(offLine(md0));
+      if (md0.strain !== 'off') strainLines(q, nm, lines, ss);
     } else if (ss){
       if (!wppm) lines.push(isFinite(ss.D)
         ? { label: 'crystallite size', value: fmtEsd(ss.D, ss.Desd, ' nm'), title: `D = Kλ/(Y_s·π/180), K = 0.9, λ the Kα₁: the Scherrer size of the phase's Lorentzian width H_L = Y_s/cosθ, Y_s = ${fmtEsd(ss.Ys, ss.YsEsd, '°')}${ss.instrumentSubtracted ? ' above the instrument’s' : ' (the instrument’s included)'}. An apparent size, comparable with the Analysis card's, not a diameter: the Lorentzian fitted to a crystallite's line follows its tails too, and spheres of one size read 1.0–1.7 times their diameter (more the larger they are). WPPM gives the diameter` }
@@ -399,6 +415,15 @@ function summarise(model, res, phases, opts){
     faultLines(q, nm, lines);
     deltaB(q, ph, nm, lines);
     if ((res.detected || []).length > 1 && wf){ lines.push({ label: 'weight fraction', value: fmtEsd(wf.W*100, wf.esd*100, ' %'), title: 'Hill–Howard: W = S·ZMV/Σ S·ZMV, of the crystalline phases' }); row(nm, 'weight_fraction_pct', wf.W*100, wf.esd*100); }
+    // Held at the last result (a start from it): which of the values above are that
+    // refinement's, shown without an esd here.
+    const heldHere = new Set((res.held || []).filter(n=> n.startsWith(q.pfx)).map(n=> {
+      const i = model.index[n], p = model.par[i];
+      return p.kind === 'scale' ? 'scale' : p.kind === 'lattice' ? 'cell' : i === q.iXs || p.kind === 'strain' ? 'strain' : p.kind === 'size' || p.kind === 'dist' ? 'size'
+        : p.kind === 'shape' ? 'shape' : p.kind === 'faults' ? 'faults' : p.kind === 'B' || p.kind === 'adp' ? 'displacements' : p.kind === 'texture' ? 'texture' : null;
+    }).filter(Boolean));
+    if (heldHere.size) lines.push({ label: 'held at the last result', value: ['scale', 'cell', 'size', 'strain', 'shape', 'faults', 'displacements', 'texture'].filter(g=> heldHere.has(g)).join(' · '),
+      title: 'These values are the last refinement’s, held in this one: they have no esd here (that refinement gave theirs), and what was refined here is conditional on them. A last refinement with nothing held gives values and esds free of that' });
     groups.push({ name: nm, phase: true, lines });
   });
   fitNotes();
@@ -427,15 +452,19 @@ function summariseWidths(w, phases, table, model, res){
       const own = williamsonHall(ph.rows.filter(r=> isFinite(r.model.iso)).map(r=> ({ ...r, W: r.model.iso })), w.lam);
       if (isFinite(own.D)){ reading = { D: ss.D, Dmodel: own.D, lognormal: md.profile === 'lognormal' }; table.push({ phase: nm, name: 'WH_size_model_nm', value: own.D, esd: NaN }); }
     }
-    return { id: ph.id, name: nm, shaped: ph.shaped, rows: ph.rows, overlapShare: ph.overlapShare, wh, orders: ph.orders, scores, reading };
+    return { id: ph.id, name: nm, shaped: ph.shaped, rows: ph.rows, overlapShare: ph.overlapShare, misfit: ph.misfit, wh, orders: ph.orders, scores, reading };
   }) };
 }
 
 self.addEventListener('message', e=>{
   const { id, x, y, varMul, instr, phases, opts } = e.data || {};
   try {
-    const model = buildModel({ x, y, varMul, instr, phases });
-    const res = autoRefine(model, { standard: !!opts.standard, irf: opts.irf || null, refineB: !!opts.refineB,
+    // The fit's settings (the card's Refinement settings): the background's terms and the
+    // lattice bounds are the model's, the rest autoRefine's.
+    const fit = fitSettings(opts.fit);
+    const model = buildModel({ x, y, varMul, instr, phases, bgDegree: fit.bgDegree, bgInv: fit.bgInv, cellRange: fit.cellRange });
+    // opts.start, opts.hold: from the last result, groups held there (autoRefine).
+    const res = autoRefine(model, { standard: !!opts.standard, irf: opts.irf || null, refineB: !!opts.refineB, fit, start: opts.start || null, hold: opts.hold || [],
       onProgress: (frac, stage)=> self.postMessage({ id, type: 'progress', frac, stage }) });
     // The shape's angular esds (a profile of χ², xrd-rietveld turnEsds) take seconds.
     if (Object.keys(res.shapes || {}).length) self.postMessage({ id, type: 'progress', frac: 1, stage: 'the shape\'s angular esds' });
@@ -449,6 +478,12 @@ self.addEventListener('message', e=>{
     }
     self.postMessage({ id, type: 'result', res: { params: res.params, esd: res.esd, stats: res.stats, stages: res.stages, textures: res.textures, models: res.models,
       atBound: res.atBound, undetermined: res.undetermined, converged: res.converged, ms: res.ms, warnings, phaseResults: groups, table, widths, solids,
+      // what the next start from this result needs (opts.start): what was refined, and
+      // held at the one before; the phases detected; the shapes kept and their isotropic fit
+      free: res.free, held: res.held || [], detected: res.detected, shapes: res.shapes || {}, isoParams: res.isoParams || null,
+      // the settings used, defaults filled in: the page draws the result on a model built
+      // with them (its background terms), not with the settings as they are now
+      fit: res.fit,
       // the standard's profile as used: none when it did not apply (another λ1)
       irf: res.irf || null, irfRefused: !!opts.irf && !res.irf } });
   } catch(err){

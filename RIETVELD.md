@@ -44,13 +44,15 @@ The document follows the code as of v425. Functions are named with their file, e
 
 1. Load the patterns in the XRPD module (`.xrdml`), and mark the measurement of the instrumental standard (NIST SRM 660c LaB₆) as the standard.
 2. Add each phase from a CIF (**+ CIF**). The standard's LaB₆ is built in.
-3. Optionally, set per phase:
-   - a preferred orientation (none, *best axis*, or a plane);
-   - a crystallite shape (isotropic, or one of five solids);
-   - the size profile (Lorentzian; WPPM, one size; WPPM, a log-normal distribution of sizes);
+3. Optionally, in **Settings…** (beside Refine; §13.5), switch on or off, per phase, each fitting mode, and choose its depth:
+   - the crystallite size (isotropic, or one of five solids);
+   - WPPM, the size's profile (one size; a log-normal distribution of sizes; off: the Lorentzian);
    - the microstrain (isotropic, or anisotropic after Stephens);
-   - planar faults (none, or one of six kinds);
-   - the displacement parameters (the CIF's; one ΔB; B per site; Uⁱʲ per site).
+   - planar faults (one of six kinds);
+   - the displacement parameters (one ΔB; B per site; Uⁱʲ per site; off: the CIF's);
+   - a preferred orientation (*best axis*, or a plane).
+
+   The standard's LaB₆ has its B and texture there too. The same modal sets where **Refine** starts: from the CIF, or from each pattern's last result with chosen groups of parameters held there (§6.8).
 4. **Refine all** refines the standard first, then every sample with the standard's instrumental profile.
 5. Read the results:
    - the result lines (with esds in brackets) and the warnings;
@@ -406,7 +408,7 @@ The list is made once, in `buildModel`, with `reflections` in `xrd-cryst.js`.
   d_min = min(0.9, 1/s_max) · λ_max / (2 sin θ_lim),    θ_lim = min(89.9°, (2θ_end + 2°)/2)
   ```
 
-  A cell that grows brings lines from beyond the end into the range (one that shrinks only takes lines out), so the list must reach every d that a cell within the bounds can stretch to the end's. The lattice lengths are bounded to ±10 % of the file's (`LAT_RANGE`), the angles to ±15° (`LAT_ANGLE`, inside 1–179°). s_max is the most any d can grow over those bounds (`latticeStretch`):
+  A cell that grows brings lines from beyond the end into the range (one that shrinks only takes lines out), so the list must reach every d that a cell within the bounds can stretch to the end's. The lattice lengths are bounded to ±10 % of the file's (`LAT_RANGE`; ±2·range for a cell search range set over 5 %, §6.3), the angles to ±15° (`LAT_ANGLE`, inside 1–179°). s_max is the most any d can grow over those bounds (`latticeStretch`):
   - max over **h** of d/d₀ is max over real vectors **t** of |**t**|/|**t**|₀ in the direct metrics, √ of the largest eigenvalue of G relative to G₀ (L⁻¹GL⁻ᵀ, G₀ = LLᵀ);
   - **t**ᵀG**t** is a quadratic with a positive leading term in each length and linear in each angle's cosine, so over the bounds' box its largest value lies at a vertex, whatever **t**: the 2ⁿ vertices of the refined lattice parameters suffice.
 
@@ -597,12 +599,12 @@ Kα2 is weighted by the file's ratio, and its F² has its own f′ and f″ (§3
 b(2\theta) = \sum_{k=0}^{6} c_k\, T_k(u) \;+\; \frac{c_{\text{inv}}}{2\theta},\qquad u = 2\,\frac{2\theta - 2\theta_0}{2\theta_1 - 2\theta_0} - 1
 ```
 
-- **Chebyshev terms.** T₀ … T₆ over the whole pattern mapped to [−1, 1].
-- **The 1/2θ term** (2θ in degrees; it takes up air scatter) is used by default when the pattern starts below 20°.
+- **Chebyshev terms.** T₀ … T₆ over the whole pattern mapped to [−1, 1]. The degree is a Refinement setting (`bgDegree`, 0–20, default 6: T₀ … Tₙ, §6.6).
+- **The 1/2θ term** (2θ in degrees; it takes up air scatter) is used by default when the pattern starts below 20°. A setting (`bgInv`) turns it on or off; "automatic" is that rule.
 - **Linear.** All terms are linear parameters. c₀ starts at the 10th percentile of the counts.
 - **Collinearity.** The 1/2θ term and the Chebyshev terms are nearly collinear. §5.3 says how the solver deals with that.
 
-There is no separate amorphous term, and the degree is fixed. An amorphous hump is therefore left partly to the phases, and the difference curve shows it: on synthetic patterns (Cu, 15–120°, a hump of FWHM 12° at 26°), sizes came out 1.6–10 % off (up to 23 esd at 30000 counts), cells up to 6 esd off, at χ²_ν 1.45–2.5, and a rutile at 5 wt % beside SrTiO₃ read 44 % too small. A degree chosen from the data (by BIC) takes such a hump, but was tried in v427 and not adopted: it also takes the lines' own tails wherever their shape is not fully modelled (a size distribution, two populations refined as one size), which every real nanocrystalline pattern has, and moved sizes by 5–11 % from 3000 counts at the peak, by a choice that at 3000 counts depended on the noise draw (RIETVELD-REVIEW.md §3.2.6). Six terms take up a smooth background and leave the lines' tails to the lines (the true background is then met within 1–1.4 % of the peak on those patterns).
+There is no separate amorphous term, and the degree is not chosen from the data (6 unless the setting changes it). An amorphous hump is therefore left partly to the phases, and the difference curve shows it: on synthetic patterns (Cu, 15–120°, a hump of FWHM 12° at 26°), sizes came out 1.6–10 % off (up to 23 esd at 30000 counts), cells up to 6 esd off, at χ²_ν 1.45–2.5, and a rutile at 5 wt % beside SrTiO₃ read 44 % too small. A degree chosen from the data (by BIC) takes such a hump, but was tried in v427 and not adopted: it also takes the lines' own tails wherever their shape is not fully modelled (a size distribution, two populations refined as one size), which every real nanocrystalline pattern has, and moved sizes by 5–11 % from 3000 counts at the peak, by a choice that at 3000 counts depended on the noise draw (RIETVELD-REVIEW.md §3.2.6). Six terms take up a smooth background and leave the lines' tails to the lines (the true background is then met within 1–1.4 % of the peak on those patterns).
 
 ### 3.10 Agreement indices (`rStats`)
 
@@ -633,12 +635,12 @@ Which ones are free at each stage is decided by the strategy (§6).
 
 | Name | Meaning | Start | Bounds | Linear |
 |---|---|---|---|---|
-| `zero` | goniometer zero, ° | 0 (the irf's for a sample) | ±2 | no |
+| `zero` | goniometer zero, ° | 0 (the irf's for a sample) | ±2 (wider with a zero range over 1°: ±(range + 1), and to hold the irf's) | no |
 | `disp` | displacement term, Δ2θ = disp·cosθ, ° | 0 | ±3 | no |
 | `U`, `V`, `W` | Caglioti H_G² = U tan²θ + V tanθ + W, °² | 0, 0, (H_est/1.635)²; on a sample with an irf, the irf's (held) | U, W ∈ [0, 20]; V ∈ [−20, 20], and V's floor (§5.4) | no |
 | `X`, `Y` | Lorentzian H_L = X tanθ + Y/cosθ, ° | 0, h·cosθ_E; on a sample with an irf, the irf's (held) | [0, 10] | no |
 | `asym` | axial divergence A = (S+H)/L | 0.05 without an irf (the standard, or a sample refined without one) when its reflections stand at ≥ 3 places in range (else 0, held); with one, the irf's | [0, 0.2] | no |
-| `bg0`…`bg6` | Chebyshev coefficients | 10th percentile; 0 | free | yes |
+| `bg0`…`bg6` | Chebyshev coefficients (`bgDegree` + 1 of them: 7 by default) | 10th percentile; 0 | free | yes |
 | `bgInv` | coefficient of 1/2θ | 0 | free | yes |
 
 **Per phase** (prefix `p<id>.`)
@@ -646,7 +648,7 @@ Which ones are free at each stage is decided by the strategy (§6).
 | Name | Meaning | Start | Bounds | Linear |
 |---|---|---|---|---|
 | `scale` | S | 10⁻³ | [0, ∞) | yes |
-| `a`, `b`, `c`, `alpha`, `beta`, `gamma` (as the constraint names them) | the conventional cell | the file's (conventional) values | lengths ±10 %; angles ±15° (within 1–179°) | no |
+| `a`, `b`, `c`, `alpha`, `beta`, `gamma` (as the constraint names them) | the conventional cell | the file's (conventional) values | lengths ±10 % (± twice the cell search's range when that is over 5 %); angles ±15° (within 1–179°) | no |
 | `B` | ΔB, Å² (displacements *one ΔB*) | 0 | [−2, 10] | no |
 | `B_<site>` | the B of one site, Å² (*B per site*, §8.2) | the mean of the CIF's B over the site (0.5 without) | [−2, 20] | no |
 | `U11_<site>` … `U23_<site>` | the Uⁱʲ the site's symmetry leaves free, Å² (*Uⁱʲ per site*, §8.3) | isotropic, from the CIF's B | ±0.5 | no |
@@ -696,7 +698,9 @@ Every pivot is then relative to its own column's size, and parameters in Å, deg
 (A_s + \lambda I)\,\delta_s = g_s,\qquad \delta = D^{-1}\delta_s
 ```
 
-This is Marquardt's diagonal damping. λ starts at 10⁻³.
+This is Marquardt's diagonal damping. λ starts at 10⁻³ (the Refinement setting `lambda`, 10⁻⁸–10³).
+
+A start above 10⁻³ must not end a refinement by itself. A step damped by λ is about 1/(1 + λ) of the Gauss–Newton step on the correlation-scaled matrix, so from 10³ the first step was a short one down the gradient and passed the shift test at once: 30 esd short of the minimum on a synthetic SrTiO₃ (χ²_ν 1.24 against 1.01). The shifts of a step taken at λ are therefore tested at (1 + min(λ, λ₀))/(1 + 10⁻³) times their size, when that is over 1: the damping the start added beyond the default's, not the damping that rejections add, which is tested as before. Any start up to 10⁻³ is the earlier test exactly. From 10⁻⁸ to 10³ the refinements then reach the same minimum (within 0.001 esd on that SrTiO₃ and on the user's LaB₆), in 13–42 and 33–59 iterations against 22 and 36 from 10⁻³.
 
 - **Accepted step** (any decrease of χ²): λ → max(λ/10, 10⁻¹¹).
 - **Rejected step:** λ → 10λ.
@@ -705,11 +709,11 @@ This is Marquardt's diagonal damping. λ starts at 10⁻³.
 - **The floor of λ is a tenth of that tolerance,** so a direction the factorisation keeps takes at least 9/10 of its Gauss–Newton step. With a floor of 10⁻⁹ (to v426), a direction with a pivot between 10⁻¹¹ and 10⁻⁹ took 1–50 % of it per iteration: the 1/2θ term beside T₀…T₁₆ (a `bgDegree` of 16; pivot 2·10⁻¹¹ over 15–120°) crawled to the cap of 80 iterations unconverged (χ²_ν 1.039 in its last iterations, 1.036696 after the final linear re-solve), where 10⁻¹¹ converges in 12 (1.036659). Refinements without such a direction are unchanged.
 
 **Convergence.** The refinement stops when any of these holds:
-- every applied shift is under 1 % of its esd;
+- every applied shift is under 1 % of its esd (the setting `shiftTol`, 10⁻⁴–1, default 0.01);
 - χ² falls by less than 10⁻⁹ (relative);
 - no step lowers χ²;
 - nothing can move;
-- `maxIter` is reached (40 per stage; 60 for the shape's full refinements; 8 for its brief trials; 4 inside the angular profiles).
+- `maxIter` is reached (40 per stage, in each of its axial-divergence passes, §5.6; 60 for the shape's full refinements; 8 for its brief trials; 4 inside the angular profiles). The 40 is the Refinement setting `maxIter` (1–1000): it goes to every refinement of `autoRefine`, the σ and texture trials included; the shape's full refinements take 1.5 times it, its brief trials 8 or it when fewer. The angular profiles (§10.11), part of the results, keep their 4. A refinement stopped by it is reported (§13.2).
 
 ### 5.2 Bounds
 
@@ -722,7 +726,7 @@ This is Marquardt's diagonal damping. λ starts at 10⁻³.
 
 **Inside Levenberg–Marquardt,** the scales and background terms are ordinary free parameters, with exact columns.
 
-**When the iterations stop,** the free linear parameters are also solved exactly with the others held (`linSolve`, up to 3 times). If that lowers χ² by more than 1 % of χ²_ν, the iterations resume, with λ back at its start (10⁻³). After "no step lowers χ²", twelve rejections had left λ at 10³ or more: the next step was a thousandth of a Gauss–Newton step, passed the shift test at once, and the refinement stopped 5–10 esd short of the minimum (forced failures on synthetic SrTiO₃, rutile and ZnO).
+**When the iterations stop,** the free linear parameters are also solved exactly with the others held (`linSolve`, up to 3 times). If that lowers χ² by more than 1 % of χ²_ν, the iterations resume, with λ back at its start (`lambda`, 10⁻³ by default). After "no step lowers χ²", twelve rejections had left λ at 10³ or more: the next step was a thousandth of a Gauss–Newton step, passed the shift test at once, and the refinement stopped 5–10 esd short of the minimum (forced failures on synthetic SrTiO₃, rutile and ZnO).
 
 Why: the 1/2θ term and the Chebyshev terms are nearly collinear. Along that direction a damped step is cut to almost nothing, while its shift is still far under 1 % of its (large) esd. The refinement then stopped with χ² up to 17 above its minimum on synthetic plates, all of it in the background. That gap had made the shape's starts seem to reach different minima.
 
@@ -823,9 +827,11 @@ On synthetic lines (six structures, steps 0.0084–0.05°, peaks of 50–20000 c
 **The zero scan.**
 1. The zero is scanned over ±1°, both ends on the grid, in steps of at most max(H_est, 0.02°)/4, and one step beyond each end (as the cell search, §6.3). Stepping from −0.3° by H/4, up to v425, had stopped short of +0.3°: at +0.2° for H = 0.5°. At each point the scales and background are solved exactly, with the FCJ collapsed to its centroid.
 
+   The range is a Refinement setting (`zeroRange`, 0.05–5°, default 1°: `ZERO_RANGE`). The zero's bounds, ±2°, widen to ±(range + 1°) beyond a range of 1°, and on a sample to hold the standard's zero it takes; the grid's points grow with the range (about 8·range/H).
+
    **Why ±1°.** The scan holds the displacement at 0, so it sees the zero and the standard's displacement together: 2s·cosθ/R is 0.48° at low angles for a standard 1 mm off the focusing circle of a 240 mm goniometer, 0.57° at 200 mm. ±1° covers a zero of ±0.3° with that. Over ±0.3° (up to v426), LaB₆, Si and corundum standards (sharp, laboratory and broad profiles) whose lines stood 0.37–0.68° off were not found, or found at a false minimum near the edge, in 20 of 45 tests, the sharp ones all, and the refinement ended at χ²_ν 19–153; over ±1° all 90 tests were found, none of the 45 within ±0.3° changed. On YAG (a = 12 Å, lines 0.2–1° apart at high angles), quartz, NaCl, LaB₆ under Mo and a Si on a synchrotron-like profile (FWHM 0.01–0.03°), zeros of 0 to ±0.8°: over ±0.3° 12 of the 16 beyond it failed, 4 of them at a false minimum inside the range; over ±1° all 40 were found within 0.0013°. The scan has 3.3× the points; the standard's refinement takes 1.05–1.5× as long.
 2. A minimum inside the range is placed by a parabola through its three points (on χ², §6.3), so the value found does not carry the grid's step.
-3. A minimum on the edge of the grid, one placed outside ±1°, or a flat curve, leaves the zero where it was, with a warning.
+3. A minimum on the edge of the grid, one placed outside ±1° (the range), or a flat curve, leaves the zero where it was, with a warning.
 
 **Then,** the cell is held at the certified value, and the stages free:
 1. the scales and background;
@@ -841,7 +847,7 @@ On synthetic lines (six structures, steps 0.0084–0.05°, peaks of 50–20000 c
 
 A sample's cell may be a few per cent off the file's: a doped phase, a DFT cell, a different temperature. Its peaks must be found before least squares can refine anything: a peak that does not overlap its own model gives no gradient towards it.
 
-**The scan** (`cellSearch`). All the phase's cell lengths are scaled by a common factor f (angles and axial ratios kept). R_wp is scanned over f ∈ [1 − 0.05, 1 + 0.05]. At each point:
+**The scan** (`cellSearch`). All the phase's cell lengths are scaled by a common factor f (angles and axial ratios kept). R_wp is scanned over f ∈ [1 − 0.05, 1 + 0.05] (`CELL_RANGE`; the Refinement setting `cellRange`, 0.5–20 %). At each point:
 - the other phases are held;
 - the scales and background are solved exactly;
 - the FCJ is collapsed to its centroid.
@@ -877,7 +883,9 @@ This keeps the shift of the last peak in the range below a third of its width, s
 
 **Several phases** are searched in two rounds, each phase with the others held. A phase scanned while another still sits at its CIF cell can be drawn to that one's peaks. Only the phases found in the first round are searched again: twice round, an edge minimum compounded to 0.97² = 0.94.
 
-**A lone phase not found** is searched once more over ±10 %. With no other phase to be confused with, the search may go wider at no risk.
+**A lone phase not found** is searched once more over ±10 % (twice the range). With no other phase to be confused with, the search may go wider at no risk.
+
+**A wider range** (the setting over 5 %) is held within the lattice bounds: the model is built for it (`buildModel`'s `cellRange`), its lengths' bounds ±2·range instead of ±10 % and its reflection list reaching the cells they allow (§3.2). So the lone phase's second search stays within them, and the result is drawn on a model built with the same setting (the worker returns the settings used, `fit`). A model built for a narrower range holds the search to its bounds, with a warning. The wider the range, the further an absent candidate can walk: the verdicts below are for ±5 %.
 
 **Why ±5 %.** The range is what a file's cell may be off the sample's: a doped phase or a solid solution, a DFT cell (PBE's are 1–3 % long), another temperature. Over ±3 % (up to v426) a corundum 4 % off beside ZnO was not placed, its lattice held, and it was left out (2 runs of 2, sharp and broad lines). Over ±5 % it is placed; on the other 17 multi-phase searches (two and three phases, sharp and broad, cells 0–4 % off, absent candidates among them) and on 18 samples with an absent candidate beside a host the plain model cannot fit (a size distribution, anisotropic strain, two populations, a hump, texture) the verdicts are the same, and the search takes the same time (median ratio 0.96; the grid has 10–50 % more points, its coarse pass the same 81). Present phases 4–4.5 % off their files' cells (rutile at 20 wt % beside SrTiO₃, anatase at 60 wt % beside ZnO, quartz at 5 wt % beside Si) were lost in all 6 runs over ±3 %, the anatase's 60 % given to ZnO; over ±5 % they are found, within 0.12 wt %.
 
@@ -918,7 +926,7 @@ Three tests decide, and a phase that fails is **left out**: scale 0, its cell ba
    - **Below,** it stays out, and the warning gives the rise, dP, and whether the rise is within what fitting noise gives (χ² with dP degrees of freedom, up to dP + 3√(2dP)) or above it. 2 nm rutile at 8 wt % beside 80 nm SrTiO₃ (lines 9 counts high and 4° wide on 150) stood at 1.9–2.9 esd while leaving it out raised χ² by 24–48 for its 5 parameters: more than noise gives, short of 53. It reads "Leaving it out raises χ² by 25 for its 5 parameters (fitting noise gives about 5; a BIC would keep it above 53): more than noise gives, too little to tell".
    - **Why not a bar at what noise gives.** χ²(dP) is the gain of dP parameters at fixed places. A candidate's cell and width are searched to where they gain most, so an absent phase gains more: over 84 synthetic runs with an absent candidate (seven structures, SrTiO₃ at 7 and 80 nm, with and without an unmodelled hump), 15 stood at 2–3 esd at a test, against about 2 that a normal scale would give, and an absent NaCl beside a hump raised χ² by 14 for its 4 parameters (the noise bar 12.5). None of the 84 was kept.
 2. **It must be plausible as a crystalline phase** (when several phases are present). Beside other phases, a candidate that only takes up a broad hump or the background is not, however significant:
-   - its cell runs to the ±10 % bound;
+   - its cell runs to a length's bound (±10 %, or ±2·range for a cell search range set over 5 %, §6.3);
    - with the standard's profile, its size or strain broadening runs to its upper bound, or its crystallites come out smaller than twice its longest cell edge, or than 1 nm, whichever is larger.
 
    An absent NaCl or quartz beside a SrTiO₃ with an unmodelled amorphous hump had come out at 46–48(6) wt %, 0.8 nm, its Ys on its bound, through both other tests.
@@ -973,7 +981,103 @@ Then, separately, the **free crystallite shape** (§10).
 - the textures;
 - the models each phase was refined with (`models`: size profile, strain, faults, displacements), from which the card draws the result again;
 - the isotropic fit's parameters (when a shape was kept);
-- the number of reflections in range (of the phases detected).
+- the number of reflections in range (of the phases detected);
+- the fit settings it used (`fit`, defaults filled in; `bgDegree` the model's).
+
+**The fit settings** (`opts.fit`, the card's Refinement settings; `fitSettings` fills in the defaults and clamps each value into its range; a number or a numeric string is read, anything else, a blank or a boolean among them, is the default): `maxIter` (40, §5.1), `shiftTol` (0.01, §5.1), `lambda` (10⁻³, §5.1), `bgDegree` (6, §3.9), `bgInv` ('auto', §3.9), `cellRange` (0.05, §6.3), `zeroRange` (1°, §6.2), `shapeStarts` (10) and `shapeFull` (3) (§10.5). The engine's constants are the defaults: with none given, or each at its default, a refinement is the same as before they were settings. `maxIter`, `shiftTol` and `lambda` go to every refinement `autoRefine` makes, the σ and texture trials and the free shape's included. `bgDegree`, `bgInv` and `cellRange` shape the model (`buildModel`: its background terms, its lattice bounds and reflection list); the worker builds it with them.
+
+### 6.7 Size or strain switched off
+
+Each phase's crystallite size and microstrain can be switched off (`size: false`, `strain: 'off'` in the phase's data; the default is `size` true, `strain` 'iso'). Then its Y_s, or its X_s, is held at 0 in every stage: the phase's lines carry no broadening of that kind above the instrument's.
+
+- **Its models.** The free shape and WPPM (one size or log-normal sizes) are models of the size. With the size off they are not set up, and a warning says that they were asked for and are ignored. Stephens' strain is a depth of the strain (`strain` is one of 'off', 'iso', 'aniso'), so it cannot be asked for with the strain off. Planar faults are a broadening of their own, and stay.
+- **Without the standard's profile** (the standard itself, or a sample refined with none) Y_s and X_s are 0 anyway: the whole profile is refined, the sample's broadening with the instrument's (§6.1). A size or strain switched off then changes nothing in the refinement, only the report.
+- **The report.** `models[id]` carries `size` (true or false) and `strain` 'off'. The worker writes no size line (no strain line) for such a phase, and no CSV row of it, but one line in their place: *not refined: crystallite size* (or *microstrain*, or *crystallite size and microstrain*). The peak-width table and its Williamson–Hall line are measured from the peaks, whatever the model, and stay.
+- **Measured** (synthetic SrTiO₃, 15–130°, peak 20 000 counts, the standard's profile): a pattern with strain only (X_s 0.30°), refined with the size off, gives Y_s = 0, X_s 0.3005, χ²_ν 1.019; one with size only (20 nm), the strain off, gives 19.99(3) nm, X_s = 0, χ²_ν 1.018; both off, χ²_ν 1.019 on a pattern with neither.
+- **The default** runs the code of v428 unchanged. On ten synthetic cases (an isotropic size; no standard's profile; the standard's path; log-normal sizes with Stephens' strain and ΔB; a texture on its best axis with B per site; planar faults; a free cylinder; a box asked for and rejected; a shape and WPPM asked for with no standard's profile; two phases) `autoRefine` of v429 returns what v428 returns bit for bit, its new keys aside (`held`, `models[id].size`, `models[id].shape`, `textures[id].spec`), and the engine suites (t-unit … t-twin) print the same.
+
+### 6.8 From the last result
+
+`autoRefine(model, { …, start, hold })` starts from a previous result of the same pattern instead of from the CIF. `start` is that result, as the worker returns it (`params`, `free`, `held`, `models`, `textures`, `shapes`, `isoParams`, `detected`, `irf`); `hold` lists the groups held at it. The point is to refine in steps: the shape first, say, then the B per site with the shape held, in seconds rather than the minute a free shape's search takes.
+
+**The groups.**
+
+| Group | Parameters |
+|---|---|
+| `linear` | the scales and the background |
+| `cell` | the lattice and the displacement; on the standard, the zero and the displacement |
+| `instrument` | U, V, W, X, Y and the asymmetry, where they are refined: the standard, or a sample without the standard's profile (with one, they are always its values) |
+| `sizestrain` | per phase, Y_s, X_s, Stephens' S_j and the log-normal σ |
+| `shape` | per phase, the free solid's widths and turns |
+| `faults` | per phase, the fault probability |
+| `adp` | per phase, ΔB, the B per site or the Uⁱʲ per site |
+| `texture` | per phase, the March–Dollase r and its axis |
+
+**The rule.** A group of a phase is *unchanged* when the phase is refined with the option the last result had: the same size toggle, strain and size profile (`sizestrain`, from `start.models`); the same solid, in use there (`shape`, read from the names of the parameters: each solid has its own), or asked for there and rejected by its ΔBIC (`start.models[id].shape`, the solid asked for and searched, kept or not); the same faults and displacements (`start.models`); the same axis, or 'auto' again (`texture`, from `start.textures`, whose `spec` says which was asked). A parameter is held when its group is in `hold` and unchanged, and the last result refined it (`start.free`) or held it at the one before (`start.held`). One the last result does not have (a background term added since) is new, and never held. Everything else that a full refinement with these options would end with free is refined:
+- from the last values, when its group is unchanged;
+- from its usual start (§6.1, §6.5) when it is new or changed, but Y_s and X_s carry over. Y_s goes ÷1.23 from the Lorentzian to WPPM and ×1.23 back (§6.1); it comes from the last isotropic fit (`isoParams`) when the solid is dropped or changed, since a solid's Y_s is 0. X_s is raised to 0.02° for a new Stephens strain (§6.5).
+
+So a group ticked in `hold` is still refined when its option changed: the B per site are refined when the displacements go from *the CIF's* to *per site*, whatever the tick.
+
+**The order.**
+1. The free scales and background, solved linearly (a stage *linear start*).
+2. One refinement of everything free (*from the last result*).
+3. For what is new only, the trials of the full path: the log-normal σ from 0.3 and from 0.6; the texture on its axes from r = 0.8 and from 1.25; the free-shape search, from the free list of step 2, so that what is held stays held (but Y_s, which a solid replaces).
+
+There is no cell search, no zero scan and no detection pass. A phase left out of the last result stays out (scale 0, its cell the file's); for a result without `detected`, a scale of 0 means out.
+
+**A shape carried over** (in use there, asked for again) is not searched again. Its record (`shapes[id]`, marked `carried`) and its isotropic fit (`isoParams`, which the peak widths are read with, §12.1) are the last result's. A note says that its ΔBIC is that search's.
+- It needs that record and that fit. A result without them, one of v428 or older that a project kept, has its solid searched again: carried, the widths' isotropic model had been the shaped fit itself.
+- It needs the same size profile. A body searched under the Lorentzian is searched again under WPPM, and the other way round, however `shape` is ticked (its Y_s start from the last isotropic fit, ÷1.23 or ×1.23). Carried instead, its widths rescaled as Y_s and refined, a synthetic WPPM disc (30 × 8 nm) whose Lorentzian search had ended on the wrong solid (χ²_ν 4.05: the Lorentzian does not draw an 8 nm WPPM line) stayed on it, χ²_ν 2.61; searched again, χ²_ν 0.997, the disc within 1 esd of the truth (0.2143(12)°, 0.8069(12)° for 0.2153°, 0.8073°), in 26 s (from the CIF: the same, 41 s). (The v420 ellipsoid is drawn Lorentzian under WPPM too, and stays carried.)
+
+**A shape rejected there** (asked for, not supported by the data: the isotropic size kept) and asked for again is not searched again while `shape` is ticked: the isotropic size stays, with a note. Unticked, or with another solid asked for, the search runs.
+
+**Refused or changed.**
+- A result refined with other phases (a scale or a lattice parameter of the model missing from it, or a phase of it missing from the model): the refinement starts from the CIF, with a warning.
+- A result refined with the standard's profile, now without it, or the other way round (`start.irf`): Y_s, X_s and the profile take their usual start; the instrument is refined.
+- The standard refined again since, its profile changed (`start.irf` differs from the profile now in U … asymmetry): the size, strain, shape and faults were fitted above the former profile, and are refined from their values rather than held, with a note.
+- A sample's zero not the one the last result was refined at (the standard refined again, or its profile added or removed): the cell and displacement were fitted at that zero, and are refined rather than held, with a note. The broadening stays held when the profile is the same.
+- The background's terms (`bgDegree`, the 1/2θ term: §6.6) are compared with the last result's, read from its parameters: its highest Chebyshev term, and whether its 1/2θ term was refined (without `start.free`, whether it is not 0). When they differ, the scales and background are refined even with `linear` in `hold`: held, the terms kept would stay at values fitted beside the dropped ones (33A, degree 12 → 6: χ²_ν 135, the background up to 424 counts off; refined, 1.6985 against 1.6980 from the CIF; 6 → 12, 1.5291 against 1.5286). The card also leaves `linear` out of `hold` then, and says so (§13.5).
+
+**Returned.** The full path's keys. `stages` has the rows *linear start* and *from the last result* (then *size distribution* and *preferred orientation* where they are new). `held` lists the names held (empty from the CIF). `models[id].shape` is the solid asked for and searched (false: none, or no standard's profile). A warning lists what was held, what was refined from its values, and what was new. A held value has no esd: it is the last refinement's.
+
+**The worker** forwards `opts.start` and `opts.hold`. Its result also carries `free`, `held`, `detected`, `shapes` and `isoParams`: what the next start needs. A held value is shown bare (a held shape without its esds), and each phase with any gets a line *held at the last result* naming which (scale, cell, size, strain, shape, faults, displacements, texture). A ΔB or a B per site held at the last result is still shown. `start.held` matters when a start is made from a result that was itself started from another: without it, the groups held there are not "refined there" and are refined this time.
+
+**Measured.**
+- *Nothing changed, nothing held* (synthetic SrTiO₃; an isotropic size, and log-normal sizes with Stephens' strain, ΔB and a (111) texture): χ² equal to the start's within 7·10⁻⁷ relative, every parameter within 0.001 esd of it, the same free list. 0.4 s and 1.5 s, against 1.5 s and 30 s from the CIF.
+- *Held*: every held parameter is bit-identical to the last result's, and so is every parameter not refined. Started again from that result with the same hold, the same ones are held, still at the first values.
+- *The user's flow* on synthetic plates (a cylinder 30 nm across and 8 nm thick, ⟂ [001]; the true B per site lower than the CIF's: SrTiO₃ 0.35, 0.25, 0.55 Å² for the CIF's 0.6, 0.4, 0.8; ZnO 0.3, 0.8 for 0.5, 0.5):
+
+  | Step | SrTiO₃: time, χ²_ν | B per site (z) | ZnO: time, χ²_ν | B per site (z) |
+  |---|---|---|---|---|
+  | 1. From the CIF, the shape, B the CIF's | 49 s, 1.267 | — | 47 s, 1.240 | — |
+  | 2. From 1: size, strain, shape, texture held; B per site | 1.7 s, 1.042 | 0.400(6), 0.271(9), 0.624(17) (8.0, 2.3, 4.4) | 1.1 s, 1.063 | 0.348(5), 0.83(3) (8.9, 1.3) |
+  | 3. From 2, nothing held | 3.8 s, 1.013 | 0.347(7), 0.253(9), 0.571(17) (−0.4, 0.3, 1.2) | 5.7 s, 1.011 | 0.294(6), 0.81(3) (−1.0, 0.2) |
+  | From the CIF, the shape and B per site at once | 81 s, 1.013 | as step 3 | 58 s, 1.011 | 0.292(6), 0.81(3) (−1.2, 0.3) |
+  | From the CIF, an isotropic size and B per site | 2.0 s, 2.615 | 0.391(12), 0.222(14), 0.66(3) (3.4, −1.9, 3.9) | 1.6 s, 16.84 | 0.19(3), 1.18(12) (−4.1, 3.2) |
+
+  Step 2 gives the B per site in two seconds, with the shape untouched (its parameters bit-identical), but biased by up to 9 esd: the shape and the strain held there were fitted with the CIF's B, and took up part of its error (the plate's diameter 27.6 nm, for 29.5 nm once refined with the B). Step 3 removes it. Steps 1–3 take 54–55 s and end where the refinement from the CIF does (SrTiO₃: the same values; ZnO: χ²_ν 1.0113 for 1.0109, the B within 0.3 esd), which takes 58–81 s. With an isotropic size on these plates the B per site are biased as much (3–4 esd), the size's misfit going into them. Holding is for getting there in steps and for comparing; the values to report come from a last step with nothing held, and the warning of each held step says so.
+- *Each new option*, in a start from a result refined without it, with the default hold (every group but `linear`), against the refinement from the CIF with it (synthetic, drawn with the option):
+
+  | New | From the last result | From the CIF |
+  |---|---|---|
+  | texture, best axis (truth (111), r 0.8) | 2.6 s: (111), r 0.799(2), χ²_ν 0.9960 | 4.9 s: (111), 0.799(2), 0.9963 |
+  | free cylinder (30 × 8 nm; widths 0.2648°, 0.993°), the search run | 35 s: 0.2649(12)°, 0.995(4)°, χ²_ν 0.9956 | 42 s: 0.2649(19)°, 0.995(4)°, 0.9961 |
+  | log-normal σ, from one WPPM size (σ 0.45) | 5.7 s: σ 0.450(3), χ²_ν 0.9938 | 14.9 s: 0.450(3), 0.9942 |
+  | WPPM, from the Lorentzian (Y_s ÷1.23) | 1.3 s: Y_s 0.9948(16)°, χ²_ν 0.9955 | 6.4 s: 0.9948(16)°, 0.9941 |
+  | Stephens' strain (S₁ −3) | 0.5 s: S₁ −3.13(11), χ²_ν 0.9985 | 1.3 s: −3.13(11), 0.9982 |
+  | planar faults (Pt, α 0.03 on {111}) | 0.1 s: α 0.0055(2), χ²_ν 5.10; 0.3 s with the size and strain not held: 0.0297(2), 0.9958 | 0.4 s: 0.0297(2), 0.9932 |
+
+  Each ends where the refinement from the CIF does, but the faults with the size and strain held: in the last result the size had taken their broadening (D 8 nm for 40), and held there it leaves them only what it did not take. A warning says so when it happens.
+- *The standard* (the card's LaB₆ on the user's LaB6_real): from its full refinement with one ΔB (5.2 s, χ²_ν 4.371), a start with the instrument and the cell held and B per site gives B(La) 0.135(4), B(B) 0.09(3) Å² in 0.7 s, the profile, zero and displacement bit-identical; from the CIF with B per site, 3.1 s and the same B.
+- *Cases the review of this section added* (synthetic SrTiO₃, 15–130°, the standard's profile):
+  - a box asked for on an isotropic sample, rejected (ΔBIC about +16, 42 s); from that result with the default hold, 0.1 s and the isotropic size held, where the search had run again and been rejected again (30 s); `shape` unticked, the search runs (30 s), and so it does for a cylinder asked for instead;
+  - a WPPM disc: see *a shape carried over*;
+  - a result of v428 (no `free`, `held`, `detected`, `shapes`, `isoParams`; `models` without `size`) with a kept cylinder: its solid searched again (44 s, χ²_ν 0.9953 for the CIF's 0.9960), where it had been carried with the shaped fit for its isotropic model and no ΔBIC;
+  - the standard's zero moved by 0.01°, its profile not: the cell and displacement refined, the size and strain held, χ²_ν 1.031 as the start's; it had been the other way round, χ²_ν 1.27. Its Y moved by 10 %: the size and strain refined, the cell held;
+  - a result refined with SrTiO₃ and rutile, refined now with SrTiO₃ alone: from the CIF, with the warning (it had been continued, rutile's intensity left to the rest);
+  - the background raised from degree 6 to 8, from a v428 result with everything held: bg7 and bg8 refined (they had been held at 0).
+- *The user's 33A* (the standard's profile from LaB6_real; the Materials Project CIF, B 0.5 Å² on every atom). With an isotropic size, B per site comes out at B(Sr) 2.85(16), B(Ti) −1.37(18), B(O) −2.00(14) Å² from the CIF, the last on its bound, and the same from the last result: 2.78(15), −1.33(15), −2.00(12) with the size, strain and cell held, 2.85(16), −1.37(18), −2.00(14) with nothing held. With a free box (ΔBIC −457), 2.73(15), −1.62(16), −2.00(13), from the CIF (73 s) as from the last result (69 s in three steps). The path does not change them: on these data B per site is not determined (§8.4), whatever the size model.
 
 ## 7. Instrument, size and strain
 
@@ -1214,7 +1318,7 @@ Each phase has a displacement option (`adp`):
 - The Materials Project's CIFs give no B, so all their atoms start at 0.5 Å² (`B_DEFAULT`). They are held there by default, as for any CIF; *one ΔB* refines them, since a B held wrong goes into the strain and the size. On synthetic patterns of SrTiO₃, rutile, ZnO and corundum (D 30 nm with a strain, 15–120°, Cu, the standard's profile), a true B of 0.3, 0.6, 1.0 or 1.5 Å² read with every atom held at 0.3–1.2 Å² gave D off by −13 to +89 % (5–27 esd) and X_s off by up to 4.6×: the strain takes up the slope in s². With ΔB refined, D comes within 0.1 % and B within 0.01 Å² of the truth on noise-free data, and the esd of D is unchanged (0.4–0.6 %). On broad lines (7 nm) measured to 80°, held at 0.5 Å² for a true 1.0: D +13 % (7 esd for SrTiO₃, 5 for rutile), X_s 5×; for a true 0.3, X_s went to 0; with ΔB, D within 0.4 % (SrTiO₃, esd 1.9 %) and 2.3 % (rutile, esd 2.9 %), B 1.01(6) and 0.96(10). In 50:50 mixtures whose phases' B differ by 0.7 Å², the weight fractions were 2 % off (12 esd) held, 0.1 % (1 esd) refined; the ΔB of a 5 wt % phase is poorly determined (±0.7 Å²), but its weight fraction stays unbiased. No fixed value can be right: B at room temperature ranges from about 0.2 Å² (W, Mo, diamond) to 1.5 Å² and more (alkali halides, nanocrystals). v427 made *one ΔB* the default for such a CIF. On the user's nanocrystalline SrTiO₃, though, it came out at −0.6 to −0.7 Å², which no displacement gives, and moved the microstrain and the shape readings with it. v428 therefore holds B by default again, and leaves *one ΔB* as a choice.
 - The displacements are freed in their own stage, after the size, the strain, the faults and the size distribution, with everything else free (§6.5).
 - The option is read when a run starts, so an undo during a run cannot change it between patterns.
-- The built-in standard has no options: it is refined with its own B. A project saved with the v419–v423 card-wide *ΔB per phase* button opens with *one ΔB* on every phase.
+- The built-in standard's displacement option is in the settings too (§13.5): one ΔB by default, as it was refined before v429. A project saved with the v419–v423 card-wide *ΔB per phase* button opens with *one ΔB* on every phase.
 
 ### 8.2 Sites
 
@@ -1269,6 +1373,27 @@ The value is statistically determined (±0.1–0.17 Å²) but not robust. Three 
    - the tails left to the background.
 
 **B per site and Uⁱʲ.** Each site's B differs from the others' only through how the sites weigh in each reflection's F, on top of the same slope in s². On data like these, that is worse conditioned still. On 33A (to 80°, with the log-normal sizes, the anisotropic strain and {100} faults also free), B per site gave B(Sr) 1.32(18), B(Ti) −0.44(20) and B(O) −2.00(12) Å², the last on its bound: values no vibration gives, each flagged by a warning. On synthetic rutile measured to 145° with good counting statistics, B per site and Uⁱʲ come back within their esds (§14).
+
+**What B per site take up on the user's samples (measured in v429).** With the isotropic size, B per site come out B(Sr) 2.85(16), B(Ti) −1.37(18) and B(O) −2.00(14) Å² (on its bound) on 33A; 37D and 36D give the same pattern, B(Sr) 3.6–4.1 with Ti and O at −2.0. One free intensity factor per reflection, with B held at the CIF's, shows what they take up: (200) comes out 1.30(2), 1.49(2) and 1.44(2) times the model's on 33A, 37D and 36D, and (100) 0.06(10) on 33A, below 0 on the other two. No parameter of a site moves one reflection without its partner:
+- (200) and (220) share F = Sr + Ti + 3O;
+- (100) and (210) share F = Sr − Ti − O: one electron more on Ti or O multiplies |F(100)|² by 0.75 and |F(210)|² by 0.77.
+
+Yet (220) and (210) read 1.0 within their esds. The per-site B reach (200) and (100) only through the different s of the partners (0.13 against 0.29 Å⁻¹ for (100) and (210)), and on 33A they cost (210) all of its intensity (predicted 0.01 of the observed). Two causes, each checked independently:
+- **(200)** is explained by a preferred orientation of {100} planes (r ≈ 0.75, §9), which leaves (220) on (110)'s factor. It is real: the factor stays at 1.3–1.6 for Chebyshev degrees 4–24, with or without the 1/2θ term, and with free humps at 22–30°.
+- **(100)** is not determined. At 22.7° the degree-6 background runs about 19 counts above a degree-16 one, pulled up by an unmodelled excess on the low-angle side of (110) (residuals of +15 to +21 counts at 28–31°). With degree 10–24, or a broad hump at 22°, (100) reads 0.4–1.2 times the model. With degree 16, B per site on 33A become 1.41(19), 0.28(18) and −2.00 Å². B(O) stays negative under every background tried.
+
+With (100) and (200) freed, or with the texture and a higher background degree, one ΔB gives B 0.5–0.9 Å², which is physical. A refined Sr occupancy instead would need 0.63–0.69, and would predict (210) at zero. To 2θ = 80°, with nine reflections of which three are weak, B per site are not determined: one ΔB, or B held, are the choices. The texture and the background degree (a setting since v429, §6.6) move B more than its esd says.
+
+**Thermal diffuse scattering** is not modelled. Its first-order part, from the acoustic phonons, peaks under every line: a cusp ∝ k_BT·G²/(C·q²), as wide as the Brillouin zone. Part of it is read as Bragg intensity, which lowers B. It is computed for SrTiO₃ at room temperature (C₁₁, C₁₂, C₄₄ = 317, 103, 124 GPa, Bell & Rupprecht 1963; elastic Θ_D 690 K):
+- the acoustic phonons give B 0.11 Å² of about 0.5;
+- the TDS is 0.4 % of the Bragg intensity at (100) and 3.6 % at (310);
+- about 28 % of it falls within ±1 FWHM of 1.3° lines, and 2–3 % for LaB₆'s 0.04° lines.
+
+Added to noise-free copies of the fitted patterns, which are then refitted without it, it lowers ΔB by 0.022–0.026 Å² on the three samples (their esd is 0.11–0.17) and by 0.006 Å² on LaB₆. Even five times as strong, it lowers ΔB by only 0.13 Å². (v428's estimate of −0.35 Å² placed the damping of all phonons, the optical ones too, under the lines, within about 1.5 times the line width.) To first order the TDS has B's own s² dependence, so it cannot be refined beside B. It would be an option computed from the elastic constants and the temperature. It matters for:
+- data to high angle;
+- soft or light materials;
+- high temperatures;
+- B studied against T.
 
 **What would determine them better:** data to 2θ = 120–140° (s² up to 0.32–0.37 Å⁻², twice the lever arm), counted longer at high angle. A roughness correction would be more physical, but on such data B and roughness are notoriously correlated (§15.3).
 
@@ -1463,22 +1588,22 @@ This chart has no gimbal lock. Its esds are small turns about the body's own axe
 
 **Why it needs many starts.** A refinement started from a sphere goes nowhere. By the cubic symmetry, deforming a sphere has no first-order effect on the pattern: summed over a family, uᵀδS u is the trace alone. In a lower symmetry only the part of a deformation that the Laue group averages to has one: a tetragonal or hexagonal phase's c against its a, not its a against its b. Doubling a deformation of c against a doubles the change in the pattern of rutile and of ZnO (first order), and quadruples it for SrTiO₃ (second); one of a against b quadruples it for all three, and doubles it for a monoclinic phase. So the search runs from several starting shapes (`freeShape`).
 
-**The starts:** 11 in total (`SHAPE_STARTS` = 10, plus one).
+**The starts:** 11 in total (`SHAPE_STARTS` = 10, plus one). `SHAPE_STARTS` is the Refinement setting `shapeStarts` (1–100), the starts besides the sphere-like one: the random shapes fill up to it, and a value below the number of plates and needles leaves none of them (the plates and needles are always run).
 1. **The sphere-like start.** Every width is w₀ = Y_s,iso/κ, κ being the solid's mean width factor over 400 directions (1 for a ball, 0.896 for a cylinder, 0.837 for a cube). That start has the isotropic fit's width on average. For the ellipsoid and the spheroid it *is* the sphere, so their fit never ends above the isotropic one.
 2. **Plates and needles.** For each low-index direction family (up to 5 of ⟨100⟩, ⟨110⟩, ⟨111⟩, …):
    - a plate (thin along it);
    - a needle (long along it).
 
    Each is tilted a few degrees (0.08 rad Gaussian noise on the axis), so that no symmetry holds the axes where they start.
-3. **Random shapes and orientations** (widths w₀·e^{0.8g}, g a standard normal deviate; uniform random rotations) fill the rest. A cubic phase gets 4 (its 10 directions make 3 families), a hexagonal or trigonal one 2 (4 families), a tetragonal or lower one none (5 families or more, of which 5 are taken). The v420 ellipsoid draws its S's eigenvalues, squared widths, as y₀²·e^{1.6g}: the same spread of widths (up to v425 y₀²·e^{0.8g}, widths spread half as much).
+3. **Random shapes and orientations** (widths w₀·e^{0.8g}, g a standard normal deviate; uniform random rotations) fill the rest. At the default, a cubic phase gets 4 (its 10 directions make 3 families), a hexagonal or trigonal one 2 (4 families), a tetragonal or lower one none (5 families or more, of which 5 are taken). The v420 ellipsoid draws its S's eigenvalues, squared widths, as y₀²·e^{1.6g}: the same spread of widths (up to v425 y₀²·e^{0.8g}, widths spread half as much).
    - The random generator has a fixed seed. The same data give the same result, whatever the phase's place in the list.
 
 **The refinements.**
-1. **Brief:** each start is refined briefly (8 iterations, one FCJ pass), with the shape and everything that was free in the isotropic fit, except the phase's Y_s (held at 0).
+1. **Brief:** each start is refined briefly (8 iterations, or `maxIter` when that is fewer; one FCJ pass), with the shape and everything that was free in the isotropic fit, except the phase's Y_s (held at 0).
 2. **Early rejection.** If the best brief result gains less than half of what ΔBIC < −10 needs by the cheaper route, the full refinements are not run. The cheaper route is a body held on the lattice (§10.7): its 2 or 3 turns fewer, it needs a gain over 10 + (dP − n_R)·ln N, against 10 + dP·ln N with the orientation free. The brief results already reach the converged gain within 0.2 χ²_ν on synthetic plates, needles and spheres. On isotropic samples the full refinements had been most of the time, for a shape then rejected: YAG went from 152 s to 99 s, SrTiO₃ with rutile from 35 s to 19 s.
    - Up to v425 the test took the free orientation's need. A body adds as many widths as turns and drops Y_s (dP = 2n_R − 1), so half of that need is the held need less 5 − 0.5·ln N: only 0.7 below it at N = 5251, and above it beyond N = e¹⁰ ≈ 22 000 (fine steps, synchrotron data), where a shape that the held route would keep could be rejected early. A 12 × 9 nm cylinder (N = 5251) had been rejected with "ΔBIC about +8", while its held fit gives −9.0.
    - The ΔBIC the warning gives is the held route's, (dP − n_R)·ln N − gain: the lowest the trial shapes allow.
-3. **Full:** the best 3 (`SHAPE_FULL`) are refined to convergence (60 iterations).
+3. **Full:** the best 3 (`SHAPE_FULL`, the setting `shapeFull`, 1–20) are refined to convergence (60 iterations: 1.5 × `maxIter`, as are the polish and the refinements of §10.6–10.7).
 4. **Polish:** up to 2 more refinements from the best, turned by 0.02 rad about a random axis. The refinement can stop where the axes sit on a symmetric orientation: there the first-order effects of a turn cancel over a family, the esds blow up, and the shift test passes at once.
 
 ### 10.6 Flat faces: rounded for the search, exact for the result
@@ -1728,14 +1853,47 @@ Rows are flagged, listed, and not used by the tests when the peak is:
 | Flag | Rule |
 |---|---|
 | not read | fewer than 15 points in its window (masked, or past the pattern's end), no fit within its expected position and width, or a peak found more than half its FWHM from the model's position, or outside 0.25–4 times its width with an intensity more than 3 times off the model's: the row is kept, with the reason and no widths |
-| overlapped | the other reflections together (of every phase, as the isotropic model draws them) hold more than 30 % of its own calculated intensity across its top (±H/2), less the straight line through them over the window, which the fit's own line takes up; or those of the phases whose isotropic model does not predict their widths read (below) more than 5 % |
+| overlapped | the other reflections together (of every phase, as the isotropic model draws them) hold more than 30 % of its own calculated intensity across its top (±H/2), less the straight line through them over the window, which the fit's own line takes up; or the reflections of a phase whose isotropic model does not predict its widths read (below), off as their widths were measured, could move its width by more than 2 of its esds (from half an esd to 2 the row is used, its esds widened by that much in quadrature) |
 | at an edge | its top, between its half-maximum points (±H/2), is not all inside the pattern |
 | weak | its amplitude is under 3 esd |
 | not broadened | the whole width less the instrument's is under 2 of its esds; the corrected FWHM is then given as an upper limit ("< 0.012"): the widest sample, Lorentzian, Gaussian or any mix, whose whole peak is at most 2 esd wider than found (2 esd above the instrument's when it came out below), the whole width and its esd taken from the fit with the Gaussian part |
 
 **Not broadened, by the whole width.** Where both of the sample's widths are about 0 the corrected FWHM goes as ±√|u|, and its linear esd is half its spread (with the Gaussian part free, a peak no broader than the instrument's read more than 3 esd from 0 in 15 % of draws): the whole width, smooth there, says whether the peak is broadened, and the upper limit says by how much at most. The data tell such a broadening's shape no better than its size, and a Gaussian adds to the instrument's in quadrature, so the limit is the Gaussian sample's, about four times the Lorentzian one's (at 40°, a whole width 5 % over the instrument's is a Gaussian sample 0.0096° wide, or a Lorentzian 0.0024°). Over 200 draws each of samples 0–0.02° wide (Lorentzian or Gaussian, 500–5000 counts, 40–130°), the limit lies under the truth in 0–6 draws, as a 2-esd bound should. Read along the covariance of h_L and u, it had lain under a Gaussian sample 0.01° wide in 59 of 200 draws, and under one 0.02° wide on a weak peak in 69.
 
-**Overlapped, by what the model is worth.** A row's neighbours are taken off by the isotropic model, so their error is the model's. Where it is right, a row reads as well under others holding twice its own intensity: on isotropic synthetic patterns (five structures, 20 000 counts; three more with broad lines) the rows' z rms is 0.7–1.15 at every share. Where it is not (a Stephens strain the isotropic model misses by about ±20 %; five structures, 20 000 counts), rows holding under 5 % of others read z rms 1.0, those holding 5–30 % 1.6–1.9, and more 1.8–2.7. So the 30 % holds where the isotropic model's widths predict the widths read, on the rows it would use (up to 30 %): their χ² against the model's widths, each row counting at most 3 esd so that one misread row does not decide, at p ≥ 10⁻³. Elsewhere, as on an anisotropic sample or one whose shape was kept, 5 % holds. The test is made phase by phase, and the limit follows the reflections: those of a phase whose model is not right are held to 5 % under every peak, of any phase, the others to 30 %. Beside a Stephens-strained phase, an isotropic one judged on its own reflections alone (as first in v427) read z rms 1.3–1.6 under 5–30 % of the other's reflections, against 0.85–1.0 beside an isotropic one, and its Williamson–Hall p fell to 2·10⁻⁴–2·10⁻² in 5 of 12 patterns (four pairs of structures, 20 000 counts; 0.2–0.98 beside an isotropic one); with the other's reflections held to 5 % it keeps half its rows, at p ≥ 1.9·10⁻³. On 80 isotropic patterns (six structures on a laboratory and a high-resolution profile, on Mo Kα, WPPM spheres and log-normal sizes, monoclinic and Pnma cells; 5000 and 100 000 counts) none is judged otherwise (p ≥ 0.014); without the cap one was, a YAG pattern through one weak row read on a noise spike 6.5 esd off. Every Stephens-strained one is (30 patterns: 20 000 counts, broad lines of 8 nm, 5000 counts), at p ≤ 8·10⁻⁷. Those then use their clear rows: z rms 0.7–1.5, 5–18 rows a pattern. On broad lines rutile and ZnO keep 2, too few for Williamson–Hall, where at 30 % their 13–14 rows had read z rms 1.6–3.0; judged on the clear rows alone, they had passed by default with fewer than three. The test is of the widths, not of the anisotropy alone: a line shape the model does not have fails it too once the counts tell it. Log-normal sizes (σ 0.6) refined with the default Lorentzian failed it in 11 of 12 isotropic patterns (six structures, 5000 and 100 000 counts), and there too the neighbours' error shows: rows holding 5–30 % of others read z rms 1.15–1.5, those under 5 % 1.07. On real data, whose line shape no model has exactly, 5 % is then the usual limit at high counts. An instrument 30 % broader in its Gaussian part than the standard says failed it in 1 of 12. The phase's `overlapShare` says which limit its reflections are held to, a row's `shareOff` what those held to 5 % hold of its top, and the card notes the stricter limit.
+**Overlapped, by what the model is worth.** A row's neighbours are taken off by the isotropic model, so their error is the model's. Where it is right, a row reads as well under others holding twice its own intensity: on isotropic synthetic patterns (five structures, 20 000 counts; three more with broad lines) the rows' z rms is 0.7–1.15 at every share. Past 30 % a row is left out whatever the model. Below, each phase's model is judged on its widths: their χ² against the widths read, on the rows it would use (up to 30 %), each row counting at most 3 esd so that one misread row does not decide, at p ≥ 10⁻³. On 80 isotropic patterns (six structures on a laboratory and a high-resolution profile, on Mo Kα, WPPM spheres and log-normal sizes, monoclinic and Pnma cells; 5000 and 100 000 counts) none is judged otherwise (p ≥ 0.014); without the cap one was, a YAG pattern through one weak row read on a noise spike 6.5 esd off. Every Stephens-strained one is (30 patterns: 20 000 counts, broad lines of 8 nm, 5000 counts), at p ≤ 8·10⁻⁷. Judged on the clear rows alone, broad lines had passed by default with fewer than three. The test is of the widths, not of the anisotropy alone: a line shape the model does not have fails it too once the counts tell it (log-normal sizes, σ 0.6, refined with the default Lorentzian: 11 of 12 isotropic patterns; an instrument 30 % broader in its Gaussian part than the standard says: 1 of 12). On real data, whose line shape no model has exactly, it is then the usual case at high counts.
+
+Where the model is not right (an anisotropic broadening; or a kept shape, since the isotropic model still takes the neighbours off) the neighbours' error comes in, and what it can do to the row's width is measured (`biasOff`, v429):
+- **How far off.** Each reflection of that phase is taken as off by its own misfit, e = (W − W_iso)/W_iso, where its row is read, with its sign and its esd s; else by the phase's misfit τ, its sign unknown: the spread of its rows' misfits beyond their esds, Σ e²/(s² + τ²) = n over the rows read (Paule and Mandel's estimate; n, not n − 1, as the model's widths are the expectation). Each row weighs there as its esd allows. The plain rms of e² − s² (v429 at first) is the weakest rows' noise: it read 0 for 4 of the 78 synthetic phases judged off (5000 counts, log-normal sizes), where τ reads 3–11 %, and 0 on the user's 33A without its (111) (τ 7 %). τ is positive wherever the model test failed, its capped χ² being above n. The row's own misfit is left out of τ: it says nothing of its neighbours' (the (111) of the user's 36D, 45 % narrower than the isotropic model, puts its phase's τ at 21 %, 8 % without it).
+- **What that does.** The reflection's pseudo-Voigt (Kα1 and Kα2), widened by that much at its area, the sample's share of its width only (the instrument's is the standard's), is taken through the row's own fit to first order: the fit's Gauss–Newton step from its optimum, the fit's straight line included (`fitPeak`'s `resp`). A smooth far tail, which the line takes up, moves the width little; a neighbour under the top, much. Against the change found by fitting again with the error added (30 paired noisy draws, four widths and placements of the neighbours), the first order is exact to 1 % where one of the two fits (Lorentzian, or with the Gaussian part) carries the weight; where the Akaike weights share it (0.35) it overstates the change by 15–60 %, the weights' own change being left out: on the safe side. Past about one esd the change is no longer linear, which the limit stays below.
+- **The limit.** The changes are summed, those of the rows read with their signs, the rest and the esds in quadrature (`biasOff`): under any phase's peaks (an isotropic phase beside a Stephens-strained one, judged on its own reflections alone, read z rms 1.3–1.6 under 5–30 % of the other's). Up to half an esd the row is used as it is; from half an esd to 2 it is used with its esds (width, size, Δd*) widened by the sum in quadrature, √(esd² + biasOff²) (`HsEsdFit` keeps the fit's own); past 2 esd it is left out. The phase's `misfit` is τ, `overlapShare` is 0.05 where it applies (0.3 elsewhere), a row's `shareOff` what those reflections hold of its top, and the card notes the rule with τ; a widened row says so on hover.
+- **Why widened, not dropped.** The sum is a calibrated error: rows binned by it read, against the esd widened by it, z rms 0.96 under 0.25 esd, 0.93 at 0.25–0.5, 1.15 at 0.5–1, 0.98 at 1–2, 0.93 at 2–4 and 0.69 beyond (896 rows of the Stephens sets below; against the fit's own esd 0.97, 0.99, 1.43, 1.73, 2.87, 4.71), and on the other sets below (two-phase, log-normal, high-resolution, Mo, no standard; 1055 rows) 0.99, 0.98, 1.00, 0.93, 0.79 and 0.70 (against the fit's own esd 0.99, 1.05, 1.24, 1.66, 2.27, 3.54). Dropped past half an esd (v429 at first), rows went exactly where the anisotropy is largest: on a disc or spheroid 2 × 10 nm at 5000 counts (below) 3 and 1 rows a pattern were left, and Williamson–Hall, anisotropic in 8 of 8 with the 5 % share, read p 1.6·10⁻³–0.31 on the discs and could not be made on the spheroids. Widened, it is anisotropic in 8 of 8 again. Past 2 esd the first order is no longer reliable (above), and a row's width is more its neighbours' than its own; widening up to 4 esd or without limit read the same z rms (0.99, 0.96 on the Stephens sets) with 17 % and 29 % more rows.
+
+**Why not a share.** Up to v428 those reflections were held to 5 % of the row's top (Stephens strain, 20 000 counts: rows under 5 % read z rms 1.0, 5–30 % 1.6–1.9). A share counts a far tail that the fit's line nearly takes up as it counts a neighbour under the top, and does not scale with the counts. On the user's 36D and 37D (SrTiO₃, lines 1.3° wide, the texture refined) the (111) holds 7.2–7.3 % of (110) and (200), 7.5° and 6.4° away: it was left out, and Williamson–Hall read p 0.014 and 0.024 (v426: 5·10⁻³⁸, 6·10⁻³¹), without the very reflection that carries the shape. What its neighbours can do to it is 0.26 and 0.18 esd: it is used again, p 5.8·10⁻³⁸ and 6.2·10⁻³¹, with the texture or without, isotropic or with a free cylinder. 33A, whose (111) holds 2.2 %, is unchanged (p 6.2·10⁻⁴³).
+
+**Measured** (synthetic patterns, z against the truth's own-curve widths; the v427 sets and more):
+
+| Patterns | v428: rows used, z rms, past 3 esd, Williamson–Hall | v429 |
+|---|---|---|
+| Stephens strain, five structures, 20 000 counts (15) | 159, 1.00, 4; 15 anisotropic | 306, 1.01, 3; 15 |
+| the same, broad lines of 8 nm, three structures (9) | 36, 1.02, 0; 3 (6 with 2 rows) | 94, 0.96, 0; 9 |
+| 5000 counts (6) | 85, 0.84, 0; 6 | 121, 0.92, 1; 6 |
+| 200 000 counts (10) | 105, 1.36, 4; 10 | 166, 1.05, 0; 10 |
+| 200 000 counts, broad lines (6) | 24, 1.10, 0; 2 | 39, 1.06, 0; 5 |
+| high-resolution profile, Kα1 alone, three structures, 20 000 counts (6) | 75, 1.05, 1; 6 | 134, 0.95, 0; 6 |
+| the same, 200 000 counts (6) | 75, 1.52, 5; 6 | 123, 0.94, 1; 6 |
+| Mo Kα, three structures (6) | 61, 0.84, 0; 6 | 139, 0.91, 0; 6 |
+| no standard (whole widths), three structures (6) | 70, 1.00, 1; 6 | 124, 1.05, 1; 6 |
+| no standard, broad lines (6) | 24, 1.08, 0; 2 | 61, 0.99, 0; 6 |
+| monoclinic and Pnma cells, 20 000 counts (4) | 34, 3.11, 3; 3 of 4 | 45, 2.70, 2; 4 (z rms from one Pnma pattern the model test passes: below) |
+| an isotropic phase beside a Stephens-strained one, four pairs (12) | 145, 1.10, 2; p ≥ 1.9·10⁻³ | 242, 0.96, 0; p ≥ 0.18 |
+| log-normal sizes refined Lorentzian, six structures (12) | 192, 1.06, 0; p ≥ 0.044 | 304, 1.04, 0; p ≥ 9.5·10⁻³ |
+| isotropic controls (24, 8 two-phase, the 80 above) | unchanged: no phase judged off | |
+
+The model test itself is unchanged, and can pass a strained phase of many overlapping reflections: a Pnma pattern of the low-symmetry row, each row capped at 3 esd, passed at p ≥ 10⁻³, and two of its rows, under 23 % and 9 % of others, read 8 and 15 esd wide of the truth under the 30 % limit (v428 the same).
+
+Over the 46 Stephens-strained patterns of the first five rows the rows used go from 409 (z rms 1.08, 8 past 3 esd) to 726 (1.00, 4), and Williamson–Hall from 36 patterns to 45, all anisotropic. Dropping every row past half an esd (v429 at first) used 513 (0.97, 2), Williamson–Hall on 43. With that rule, each reflection's error counted at its worst sign kept 7 % fewer rows at the same z rms; all in quadrature, 4 % more, letting misread ones in (z rms 1.03 at 200 000 counts, against 0.99). A cubic perovskite of broad lines with the (111) between strong neighbours (SrTiO₃, 6 nm, a Stephens strain, a (100) texture r 0.7, refined as the card does; 4 seeds): the (111), under 5.0–5.9 % of others, is used in 4 of 4 at 600 and at 5000 counts (v428: 3 and 0), within 0.4 esd of its width read with the truth's neighbours.
+
+**What it does not see: the neighbours' line shape.** The bias is that of the neighbours' widths. A solid whose members' widths spread far gives lines whose tails the isotropic pseudo-Voigts do not have: for a disc or an oblate spheroid 2 × 10 nm (SrTiO₃, axis ∥ [110], the (100) texture), their tails under the (111) fall 40–47 % short where their FWHMs are within 2–13 %. That error, a curvature over the window, raises the fit's line under the peak's wings, and every row reads narrow: the other rows used (under 4 % of others for the disc, 7 % for the spheroid) by 0.65 and 1.0 esd on average at 600 counts, 2.3 and 2.8 at 5000; the (111), under 5.5–12 % of others, by 1.8 and 3.7 esd at 600 counts (used: 0.2–0.4 esd predicted), 7.8 and 15 at 5000 (0.8–1.8 predicted: used with its esds widened, by 6 and 8 of those). The 5 % share left that (111) out at both counts, the other rows in. Williamson–Hall calls all 16 patterns anisotropic, rightly, under both rules. Read with the truth's neighbours instead, the same rows come within 1.4 esd of the truth (disc, 600 counts, 3 seeds): it is the isolation by the isotropic model (§12.1), not the overlap rule. On the user's platelets the (111) may then read narrower than it is: 36D's 0.88(5)°, where the kept cylinder predicts 1.06°. Read with the kept cylinder's neighbours instead (texture auto), it is 0.97(5)°, and (110), (200), (211) and (310) rise by 1.1–2.5 esd too: the (111) stays 40 % under the isotropic model's 1.62°, and Williamson–Hall reads p 8·10⁻³⁵ against 6·10⁻³⁸.
 
 **At an edge, by the half-maximum points.** A peak cut by the pattern's end is still read within its esds as long as its centre is 0.3 FWHM inside (both ends, the background refined: z mean −0.46 to +0.33, the esd 2–3 times wider); the rule asks for both half-maximum points inside. With the centre on the end, 6–9 fits of 12 converged, z up to +0.9. Up to v426 the rule was ±1.2 FWHM.
 
@@ -1788,9 +1946,9 @@ The card runs each refinement in a module worker. It sends:
 - the pattern;
 - the instrument;
 - the phases (cell, constraint, operations, atoms, mass, and their options: shape, texture, size profile, strain, faults, displacements);
-- the options (standard or not, the irf).
+- the options (standard or not, the irf, the fit settings `fit`, §6.6).
 
-The worker posts progress and then the result:
+The worker builds the model with the fit settings' background terms and cell range, and posts progress and then the result:
 - the parameters, esds, statistics and stages;
 - `atBound`, `undetermined` and whether the last refinement converged;
 - the textures and the models each phase was refined with;
@@ -1798,7 +1956,8 @@ The worker posts progress and then the result:
 - the CSV rows;
 - the peak widths and tests;
 - the solids for the 3D view;
-- the standard's profile as it was used (none when it did not apply, §7.1).
+- the standard's profile as it was used (none when it did not apply, §7.1);
+- the fit settings it used (`fit`), so that the result is drawn on a model built as it was (its background terms), not with the settings as they are now.
 
 An exception gives an error message. A failure of the peak widths only adds a warning.
 
@@ -1808,16 +1967,17 @@ An exception gives an error message. A failure of the peak widths only adds a wa
 
 **Refine all** refines the standard first: the samples take their instrumental profile from it. An error stops the remaining patterns. A pattern's result is kept by file name, so moving, leaving out or reloading files never puts it on another pattern.
 
-**Options.** Each phase's options sit on its row as pickers, marked when not at their default: crystallite shape, texture, size profile, microstrain, planar faults, displacement parameters. They are read when a run starts (every pattern of a *Refine all* gets the phases as they were when it started) and apply to the next refinements; results already there keep theirs.
+**Settings.** Each phase's fitting modes, the standard's, where Refine starts and the Refinement settings (the fit's hyperparameters, §6.6) are set in a modal, **Settings…** (§13.5); each phase's row says its settings in a line. They are read when a run starts (every pattern of a *Refine all* gets the phases, the standard's settings, the start, the hold and the Refinement settings as they were when it started) and apply to the next refinements; results already there keep theirs.
 
 **The plot.**
-- **Curves.** It shows observed, calculated, background, difference, and a row of ticks per phase. The curves are recomputed from the refined parameters (milliseconds) rather than stored: with the phases the result was refined with (a phase added since is not drawn in it; removing one of its phases removes the result), and with the models it used, whatever the pickers say now.
+- **Curves.** It shows observed, calculated, background, difference, and a row of ticks per phase. The curves are recomputed from the refined parameters (milliseconds) rather than stored: with the phases the result was refined with (a phase added since is not drawn in it; removing one of its phases removes the result), with the models it used (a size or strain switched off among them), and on a model built with the fit settings it was refined with (`fit`: its background terms and its reflection list; the defaults for a result of v428 or older), whatever the settings say now.
 - **Ticks.** Before a refinement they come from the CIF's cell; after it, from the refined cell, zero and displacement.
 - **A scan recorded downwards** (start above end) is turned round when the file is loaded, and when a project saved by an earlier version is restored, so the plots, ranges and ticks take 2θ ascending (§2.1).
 - **The instrument line** gives the file's Kα₁, and its Kα₂ with the ratio only when there is one (a Kα₁-only beam reads λ₂ = λ₁, ratio 0).
 
 **Results.**
 - R_wp, R_exp and χ²;
+- under them, the Refinement settings it was refined with that are not the defaults, in a line ("settings: max 80 iterations, background degree 12"; §13.5);
 - one group per phase (or *Instrument* for the standard);
 - the warnings, among them what the numbers rest on: a refinement stopped at its iteration limit, the parameters on a bound (to be read as limits), the parameters the data do not determine (no esd);
 - a note when the widths are not corrected for the instrument (no standard refined, or refined after this pattern), or, on the standard, that the samples take its profile;
@@ -1825,7 +1985,7 @@ An exception gives an error message. A failure of the peak widths only adds a wa
 
 A phase not detected shows only "not detected". Quoting held values would read as a result.
 
-**Peak widths** (§12). A row per peak, each value with its esd; the models' widths with three decimals, or three significant digits under 0.1° (a sharp peak's 0.0004° had read 0.000). A row the tests leave out says why on hover; for an overlapped one, the others' share of its top and the limit that applied (30 %, or 5 % for the reflections of a phase whose isotropic model does not predict its widths read, which a note under that phase's tests then says).
+**Peak widths** (§12). A row per peak, each value with its esd; the models' widths with three decimals, or three significant digits under 0.1° (a sharp peak's 0.0004° had read 0.000). A row the tests leave out says why on hover; for an overlapped one, the others' share of its top past 30 %, or the esds by which the reflections of a phase whose isotropic model does not predict its widths read could move its width (2 allowed), which a note under that phase's tests then says, with that model's misfit beyond the esds (τ, §12.3; a result of v427–v428 gives the 5 % limit it had). A row used with its esds widened by that (from half an esd to 2) says so on hover, with the fit's own esd.
 
 **State.** The phases (with their CIF text and options) and the results are saved in the undo history and in project files. A project saved with the v420 free-shape button opens with the ellipsoid; one saved with the v419–v423 *ΔB per phase* button, with *one ΔB* on every phase. Each result records the cell each phase was refined in; a result whose phase is now refined in another cell (a supercell or an orthohexagonal cell, refined as given up to v425, §2.4) keeps its numbers but is not drawn.
 
@@ -1848,7 +2008,8 @@ The fixed names in `rietveld_results.csv` include:
 - per site, `B_A2_<site>`, or the free `U11_A2_<site>`… and `Beq_A2_<site>`;
 - `shape_…_nm`, `shape_…_deg_off`, `shape_dBIC`, `shape_held_on_lattice`;
 - `WH_chi2nu`, `WH_size_nm`, `WH_strain`, `order_ratio_110_220` (the indices run together, e.g. `order_ratio_1-10_2-20`); for an isotropic WPPM phase, `WH_size_model_nm`, the line through the model's own widths read as `WH_size_nm` is (§12.4).
-- `standard_changed_since` = 1 for a sample refined with an earlier refinement of the standard (§7.1).
+- `standard_changed_since` = 1 for a sample refined with an earlier refinement of the standard (§7.1);
+- `fit_maxIter`, `fit_bgDegree`… for each Refinement setting the result was refined with that is not the default (§13.5), in the engine's units (`fit_cellRange` a fraction, `fit_zeroRange` in degrees, `fit_bgInv` 1 or 0).
 
 Without a standard, `rietveld_peaks.csv` notes on every row that the corrected columns are not corrected.
 
@@ -1863,6 +2024,70 @@ Without a standard, `rietveld_peaks.csv` notes on every row that the corrected c
 | The user's 33A with the log-normal sizes, the anisotropic strain, {100} faults and B per site | 26 s |
 | A large sharp monoclinic cell | 34 s with the asymmetry, 12.5 s without |
 | The peak widths after a sample's refinement (§12: two fits a peak) | about 4 s for SrTiO₃'s 19 peaks, 25 s for a monoclinic cell's 235 (v425, one fit: 3 s and 20 s) |
+
+### 13.5 The settings
+
+The user asked (v429) for every fitting mode to be switched on or off and, when on, given its depth; for all of them to sit in one settings modal beside Refine, Refine all and Clear; for the standard to have them too ("the modal decides what Refine does"); for a Clear all; and for a way to refine in steps, holding what an earlier refinement fitted: the shape fitted, then held while B per site is refined.
+
+**The buttons.** Under the results: *Refine*, *Refine all* (as before), then *Settings…*, *Clear* (this pattern's result) and *Clear all* (every pattern's, those of the files left out too), three of one width. While a run goes, all are disabled but *Refine*, which reads *Cancel*. *Clear* is disabled when the pattern has no result, *Clear all* when none has. Each clear is one step of the undo history.
+
+**The modal.** One section per phase, colour key and name, the standard's LaB₆ last and only when a standard is chosen; then *Start*; then *Refinement*; then *Done*. Escape, a click outside the box and *Done* close it; *Settings…* stays lit while it is open. A change applies at once: it is a step of the undo history, and the phase's row follows (an undo with the modal open sets it back in place). Each row is a checkbox, a label and the depth:
+
+| Row | Off | Depths (the first is the default) | Sent to the engine |
+|---|---|---|---|
+| Crystallite size | no size broadening (Y_s held at 0, §6.7) | isotropic; free shape: ellipsoid, spheroid, cylinder, elliptic cylinder, box | `size`, `shape` |
+| WPPM (size profile) | the Lorentzian (Scherrer) | one size; log-normal sizes | `profile` |
+| Microstrain | no strain broadening (X_s held at 0) | isotropic; anisotropic (Stephens) | `strain`: 'off', 'iso', 'aniso' |
+| Planar faults | none | the six kinds of §7.6 | `faults` |
+| Displacement parameters | the CIF's B, held | one ΔB; B per site; Uⁱʲ per site | `adp`: 'cif', 'overall', 'site', 'aniso' |
+| Preferred orientation | none | best axis; (100), (010), (001), (110), (111) | `po` |
+
+- **Defaults** of a phase added: the size and the strain on, isotropic; the rest off. This sends the engine what v428 sent, so the default refinement is v428's.
+- **Disabled, not hidden.** A mode switched off keeps its depth, disabled, and finds it again when switched back on. A mode that does not apply has its checkbox and depth disabled, and says why on hover: WPPM with the size off (it is a profile of the size); on the standard, the size, WPPM, the strain and the faults, since its widths are the instrumental profile (U, V, W, X, Y and the asymmetry: autoRefine refines the standard without an irf, so a model of its own would be refused anyway). The standard sends the engine what it always did for those (`size` true, `strain` 'iso', the Lorentzian, no shape or faults), and its B and texture from its settings: one ΔB and no texture by default, as before v429 (held, a B 0.1 Å² off had moved the profile's X by 10 esd: the row's hover says so). A texture asked for on the standard is reported with its results as a phase's is, r with its axis, and in `rietveld_results.csv` (`texture_r_h_k_l`): the worker's standard group had only the instrument and ΔB, so r was refined and not shown (LaB6_real with a (111) texture: r = 1.118(6), 4.9 s).
+- **Without the standard's profile** (a sample refined with no standard) the engine refines WPPM, Stephens' strain, the faults and the free shape only with it, and says in a warning that they were dropped; a size or strain switched off changes only the report there, the whole profile being refined (§6.3, §6.7).
+
+**Start.** Two chips, *From the CIF* (the default: the full staged refinement, §6) and *From the last result*, and the eight groups of §6.8 to hold, two to a row, disabled (not hidden) while the start is the CIF: scales and background, cell and displacement, instrument profile, size and strain, free shape, planar faults, displacement (B), texture. All but the scales and background are ticked by default. A note gives the rule in a line, and in full on hover: *each pattern starts from its own last refinement; a group ticked is held at its values there, but only the parameters that refinement refined with the same model: whatever is new or changed since (an option switched on, a depth changed, a shape type changed) is refined, from its usual start; everything not held is refined from the last values; a pattern with no last result, or one refined with other phases or another cell, is refined from the CIF.*
+
+**What Refine sends** (`payloadFor`). Each phase's options as the table's last column says (`size` false and `strain` 'off' for a size or strain switched off). From the last result, for each pattern whose result is usable — refined in the same role (standard or sample), with the same phases, each in the same cell (a result of v425 or older, which kept no cells, counts as refined in the file's cell, as the curves read it: usable unless a phase is now refined in a cell of its own) — `opts.start` is that result's `params`, `free`, `held`, `models`, `textures`, `shapes`, `isoParams`, `detected` and `irf` (the standard's profile it was refined with, or none), and `opts.hold` the groups ticked, less *Scales, background* when the background's terms changed since that result (its degree, or whether it has the 1/2θ term on this pattern; a result of v428 or older had the defaults): the scales and background are then a changed group, refined, and the status says so when the run ends ("Scales and background refined, not held: the background's terms changed since the last result (33A_STO_WCL)"). The engine decides the rest (§6.8). A pattern without a usable result is refined from the CIF, and the status says which and why when the run ends ("From the CIF, no last result to start from: 33A_STO_WCL (not refined yet)"; "… (refined with other phases)"). A result keeps the worker's `free`, `held`, `detected`, `shapes` and `isoParams` for the next start.
+
+**Refinement.** The user asked (v429) for the fit's hyperparameters in the settings too: "nelle settings metti anche iperparametri di fit (max iter, tol, etc)". The last section sets, card-wide, the settings of §6.6, a row each in the phases' columns (the label under theirs, the field under their depths, its range beside it), each saying on hover what it does, its default and its range:
+
+| Row | Default | Range | Sent (`opts.fit`) |
+|---|---|---|---|
+| Max iterations | 40 | 1–1000, whole | `maxIter` |
+| Shift tolerance (esd) | 0.01 | 0.0001–1 | `shiftTol` |
+| Starting damping λ | 0.001 | 1e-8–1000 | `lambda` |
+| Background degree | 6 | 0–20, whole | `bgDegree` |
+| 1/2θ background term | automatic | on, off | `bgInv` |
+| Cell search range (%) | 5 | 0.5–20 | `cellRange` (a fraction: 0.05) |
+| Zero scan range (°) | 1 | 0.05–5 | `zeroRange` |
+| Shape trial starts | 10 | 1–100, whole | `shapeStarts` |
+| Shape full refinements | 3 | 1–20, whole | `shapeFull` |
+
+- **The defaults and ranges are `fitSettings`' own,** read from it (it clamps ±∞ to the ends of each range), so the page refuses what the engine would clamp, and the two cannot drift apart.
+- **A field** (`type="text"`, a decimal keypad on a phone) is read on Enter or on leaving it, not while typed in, and then shows the value taken ("1e2" becomes 100); a comma reads as the point. An entry that is not a decimal number ("0x10", "Infinity", "1e-3x"), is out of range, or is not whole where the engine rounds, is not taken, nor a whole number written with a separator ("1.000" and "1,000" may mean a thousand, and would read as 1; the note says so): the field shakes and goes back to its value, and the section's note says what is allowed, in the warning colour ("Max iterations: a whole number from 1 to 1000 — "0" not taken; kept 80."). A value typed and not yet confirmed is taken when the modal closes (Escape, *Done*, a click outside), as on leaving the field.
+- **The 1/2θ term** is "automatic" explicitly: its value is a checkbox under the phases' checkboxes and *automatic* one under their depths, ticked by default. While it is, the value is locked and shows what automatic gives for the pattern on show (on when the scan starts below 20°, and above 0°: on for LaB6_real, from 5°, and 33A_STO_WCL, from 10°), and its hover says why. Unticked, the value is free, starting from what automatic gave.
+- **Defaults**, in the section's head (disabled when every setting is at its default), sets them all back. Each change, and Defaults, is one step of the undo history.
+- **Kept:** only the keys changed (`fit`; a value typed back to its default is dropped), saved with the project; a project of v428 or older has none, so the defaults. Read back, a key unknown, out of range, not whole, not a number, or at its default is dropped.
+- **Sent** as `opts.fit` with every pattern (the keys changed only; the worker fills in the defaults with `fitSettings`), as the settings were when the run started.
+- **A result is drawn with its own** (§13.2): the worker returns the settings it used (`fit`), and the page builds the model it draws with their background terms, 1/2θ term and cell range, whatever the settings are now. Under its statistics it says those that were not the defaults and acted on it — the cell range on a sample, the zero range on the standard, the shape's two with a free shape asked for, the others always —, and `rietveld_results.csv` has a row for each (`fit_<key>`, §13.3). A result of v428 or older has no `fit`: drawn with the defaults, nothing said.
+
+**State.** Saved in the undo history and in project files: each phase's flags and depths (`on`, `dep`), and beside them its options as v428 named them (`shape`, `po`, `profile`, `strain`, `faults`, `adp`), which an older version opening the project reads; the standard's flags and depths (`std`); `start`; `hold`; `fit`. A project of v428 or older has only the options: its pickers' first choices (no faults, the CIF's B, no texture, the Lorentzian) give a mode off, any other choice the mode on at that depth; the standard gets one ΔB, the start the CIF, the hold its default. Settings read back are checked: a depth not offered takes the default, and the standard's size, WPPM, strain and faults stay off whatever a file says. An undo that takes every file away hides the card and closes the modal with it.
+
+**Measured** (Chromium; the modal 460 px wide, 94 % of the screen below 480 px):
+- every row 23 px high; the checkbox, the label (164 px; 158 px on a phone) and the depth (221 px; 150 px at 390 px) at the same x and width in every section, the hold boxes in the same two columns;
+- at 390 px, no sideways scroll on the page or in the box, no label cut; the side column's three buttons 101 px each, on one line;
+- light and dark themes from the same tokens (the chips as the plot chips, the checkboxes in the accent);
+- three sections (two phases and the standard): all 18 rows at one x and width per column.
+- the Refinement section: its nine rows 23 px high, each label at the modes' labels' x and width (164 px; 158 px at 390 px), each field (72 px, 23 px high) and the 1/2θ term's *automatic* at the depths' x, its value's box at their checkboxes'; the ranges beside the fields not cut at 390 px; its head, with *Defaults*, 23 px;
+- a result of 33A refined at background degree 12 (and 80 iterations), the setting then back at 6: its background as `rietveld_pattern.csv` writes it within 0.017 count of the sum of its 13 terms (2θ written to 5 decimals), where 6 terms would be 297 counts off; the same after a reload; under its statistics "settings: max 80 iterations, background degree 12", and in `rietveld_results.csv` `fit_maxIter` 80 and `fit_bgDegree` 12 (the standard's result `fit_maxIter` alone);
+- at 2 iterations, the refinement stops at its limit: the warning says so, and "settings: max 2 iterations".
+- from the last result with *Scales, background* ticked, a result of degree 12 refined at 6: as v429's first card sent it (`linear` in `hold`), T₀…T₆ were held at the degree-12 values and the rest of the background dropped, χ²_ν 135.2 and R_wp 81 %, the background up to 424 counts off one refined from the CIF at 6 (33A's strongest line: 1124 counts); with `linear` left out, χ²_ν 1.6985 against 1.6980 from the CIF, the background within 1.2 counts (the engine in Node, the standard's profile from LaB6_real). In Chromium, the status says it; refined again at 6, the scales and background are held, nothing said.
+
+**End to end** (the page with the engine of §6.8, Chromium, 4 CPUs shared; LaB6_real the standard, 33A_STO_WCL with the Materials Project's SrTiO₃):
+- *The user's flow.* *Refine all* from the CIF with a free ellipsoid on SrTiO₃: 69 s, the ellipsoid kept, χ²_ν 1.518. Then *From the last result*, the default hold (the size and strain, the shape among it) and B per site on: 19 s, the ellipsoid's ten parameters (widths, turns and reference orientation) bit-identical to the last result's, those it refined held, X_s too; B per site refined with esds, χ²_ν 1.325; the phase's *held at the last result* line and the warning naming what was held. *Clear all* leaves no result; one undo brings both back as they were.
+- *The B per site there* are B(Sr0) 2.51(13), B(Ti1) −1.60(13), B(O2) −2.00(11) Å² (on its bound), each negative one warned; with the isotropic size and no standard, 2.79(15), −1.33(15), −2.00(12). The path, the size model and the instrument's profile do not make them physical: on this pattern B per site is not determined (§6.8, §8.4).
+- *No standard*, SrTiO₃ with a NaCl that is not there: from the CIF 7.6 s, NaCl *not detected*; from that result with B per site, 2.8 s: no irf sent (`start.irf` null), NaCl kept out (scale 0) with its note, the cell and the instrumental profile held (the default hold). The same result stripped to v428's keys (no `free`, `held`, `detected`, `shapes`, `isoParams`; models without `size`): continued, 2.2 s, NaCl out by its scale 0.
 
 ## 14. Validation
 
@@ -2036,12 +2261,22 @@ Found while testing v424 and fixed: a line near 2θ = 180°, beyond the pattern,
 9. The single-peak widths fit merged reflections at their own positions, set the overlap limit by how well the isotropic model reads the phase, and re-fit a width found far from the model's (§12).
 10. A rate unit is a unit per second; with no more points than parameters there is no esd; a CIF's tolerances follow its written digits; the built-in LaB₆ refines one ΔB (§2). (v427 also made one ΔB the default for a CIF without B; v428 holds B again by default, §8.1.)
 
+**Changed in v429**:
+1. Each fitting mode of a phase can be switched on or off, and has a depth when on. The modes are the crystallite size (isotropic or a free solid), WPPM (one size or log-normal), the microstrain (isotropic or Stephens), the planar faults, the displacement parameters and the preferred orientation. They are set in a settings modal, which also holds the standard's own: its B and its texture. A size or strain switched off is held at 0 (§6.7).
+2. A refinement can start from the pattern's last result instead of the CIF, with chosen groups of parameters held there. Whatever is new or changed since is refined (§6.8). On the default path, from the CIF, every result is identical to v428's.
+3. The fit settings are a card-wide setting (§6.6, §13.5): iterations, shift tolerance, starting λ, background degree and its 1/2θ term, cell and zero ranges, the shape's starts. A result is drawn and reported with its own settings. A starting λ above 10⁻³ no longer ends a refinement at its first, damped step (§5.1).
+4. The single-peak widths' overlap rule weighs the bias that the neighbours' model error can put on a width, not their share of the top (§12.3). The (111) of nanocrystalline SrTiO₃, which v427 had dropped for the far tails of (110) and (200), is used again, and Williamson–Hall reads the user's three samples as in v426 (p 6·10⁻⁴³ to 6·10⁻³¹).
+5. The standard's texture, now a setting, is reported with its results.
+
 **Open.**
+- The free shape's axes held on the lattice go to the simplest direction within 10° of the free fit's, not the nearest one. On 36D the free disc normals lie within 0–2° of [310] but are reported as "⟨210⟩ (8°)", and the held box and ellipsoid stay on [210], 2–10 in χ² above the same solids held on [310]. Taking the nearest direction needs a preference for the simpler one when χ² is practically the same: on a synthetic [210] disc, the box would otherwise be held on [320], only 0.6 lower. Lattice-held candidates on the low-index directions (⟨100⟩, ⟨110⟩, ⟨111⟩), which the search builds only near its best free fit, change the result only with one ΔB free. Neither change reaches the shallow minima found 8° from [110] on 36D.
+- B per site on data to 80° (§8.4): what they take up is reported, not prevented.
 - Three imprecisions are mitigated rather than fixed (RIETVELD-REVIEW.md §2): a single peak's scale is still +0.3 to +0.8 % high at 2–10 counts per point (model weights would remove it but let a missing peak pull 2–5× harder); a minority phase whose scale is under 3 esd and whose χ² rise is under the BIC bar stays out, with the rise stated; two settings of a 4/m, −3 or −3m phase that only the atoms tell apart can give S_j of opposite sign (the setting-free √ΣS_j² is reported beside).
 - A WPPM line's area in the window is about 0.3 % below the pseudo-Voigt's at the same intensity (§7.3): weight fractions between a WPPM phase and a Lorentzian one carry that bias.
 
 ## 17. References
 
+- Bell, R. O. & Rupprecht, G. (1963). *Phys. Rev.* 129, 90–94 (the elastic constants of SrTiO₃).
 - Bérar, J.-F. & Lelann, P. (1991). *J. Appl. Cryst.* 24, 1–5.
 - Brindley, G. W. (1945). *Phil. Mag.* 36, 347–369.
 - Caglioti, G., Paoletti, A. & Ricci, F. P. (1958). *Nucl. Instrum.* 3, 223–228.

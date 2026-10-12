@@ -6,11 +6,11 @@
    on another pattern. The curves are not kept: they are recomputed from the refined
    parameters, which takes milliseconds.
 ========================================================= */
-import { fmtData, csvLine, X_SVG } from './utils.js';
+import { fmtData, csvLine, X_SVG, flashFieldInvalid, settings } from './utils.js';
 import { Plot } from './plot.js';
 import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
-import { buildModel, calc } from './xrd-rietveld.js';
+import { buildModel, calc, fitSettings } from './xrd-rietveld.js';
 import { shapeView } from './xrd-shape3d.js';
 
 // Names, formulae and notes come from CIF files, which may be anyone's: they go into the
@@ -20,7 +20,7 @@ const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g,
 // The instrumental standard: NIST SRM 660c LaB6, Pm-3m, a = 4.156826 Å at 22.5 °C
 // (certificate). B on 6f (x, ½, ½), x = 0.1992 (Eliseev et al., Acta Cryst. C42 (1986)
 // 1263). The displacement parameters are typical values, the start of one ΔB refined with
-// the profile (lab6.adp): held, a B 0.1 Å² off had moved X by 10 esd and the FWHM at 80°
+// the profile (the standard's settings' default, stdSettings): held, a B 0.1 Å² off had moved X by 10 esd and the FWHM at 80°
 // by 0.7 % (0.2 Å²: 21 esd, 1.4 %), the profile taking up the intensities' fall with
 // angle; refined, the profile comes out within 1 esd whatever the B, its esds 10 % wider.
 const LAB6_CIF = `data_LaB6_SRM660c
@@ -94,16 +94,176 @@ function prepPhase(text, fileName){
 // v426 re-expressed supercells and orthohexagonal cells) does not belong to the phase now.
 const cellKey = c => [c.a, c.b, c.c, c.alpha, c.beta, c.gamma].map(v=> +(+v).toFixed(6)).join();
 
+// The engine's options as the v428 pickers named them; read from projects of v428 or older
+// (migrateSettings) and from results (curvesOf). The crystallite shapes (xrd-rietveld
+// SHAPE_TYPES): none (the isotropic size) or a free solid; a project saved with the one free
+// shape there was (true) has the ellipsoid.
+const SHAPES = [['', 'isotropic size'], ['ellipsoid', 'ellipsoid'], ['spheroid', 'spheroid (two axes equal)'], ['cylinder', 'cylinder'], ['ellcyl', 'elliptic cylinder'], ['box', 'box']];
+const shapeOpt = v => v === true ? 'ellipsoid' : SHAPES.some(([k])=> k && k === v) ? v : false;
+const TEXTURE_AXES = ['100', '010', '001', '110', '111'];
+const textureOpt = v => v === 'auto' || TEXTURE_AXES.includes(v) ? v : '';
+const profileOpt = v => v === 'wppm' || v === 'lognormal' ? v : 'lorentz';
+const strainOpt = v => v === 'aniso' ? 'aniso' : 'iso';
+// Planar faults: the planes' family and the displacement (conventional indices), the
+// common kinds named.
+const FAULTS = [['111:1/6<112>', '{111} ⅙⟨112⟩, fcc stacking'], ['001:1/3<1-10>', '(001) ⅓⟨1-10⟩, hexagonal stacking'], ['100:1/2<111>', '{100} ½⟨111⟩, Ruddlesden–Popper'],
+  ['100:1/2<110>', '{100} ½⟨110⟩, antiphase'], ['111:1/2<110>', '{111} ½⟨110⟩, antiphase'], ['110:1/2<110>', '{110} ½⟨110⟩']];
+const faultOpt = v => FAULTS.some(([k])=> k === v) ? v : '';
+const adpOpt = v => v === 'overall' || v === 'site' || v === 'aniso' ? v : 'cif';
+
+/* The fitting modes of a phase (the settings modal, a row each): each switched on or off
+   and, when on, refined at a depth. The engine's options follow from them (engineOf): a
+   mode off is the engine's "none" — no size or strain broadening (size false, strain
+   'off'), the Lorentzian profile, no faults, the CIF's B, no texture. The defaults are
+   v428's: an isotropic size and strain, the rest off. */
+const MODES = [
+  { k: 'size', label: 'Crystallite size', on: true, list: [['iso', 'isotropic'], ...SHAPES.filter(([k])=> k).map(([k, t])=> [k, 'free shape: ' + t.replace(' (two axes equal)', '')])],
+    title: "The crystallites' size broadening, Y_s/cosθ above the instrument's. Off: none (Y_s held at 0). Isotropic: one size. Free shape: a solid of any proportions and orientation, each reflection of a family with its own width; it tries several starting shapes (tens of seconds a sample, minutes with many reflections or log-normal sizes) and is kept only when the data support it against the isotropic size. Size models need the standard's profile" },
+  { k: 'wppm', label: 'WPPM (size profile)', on: false, list: [['wppm', 'one size'], ['lognormal', 'log-normal sizes']],
+    title: "The size broadening's profile. Off: a Lorentzian, the size read with Scherrer's K = 0.9 (an apparent size: spheres of one size read 1.0–1.7 times theirs). On: Whole Powder Pattern Modelling, each line the Fourier transform of the crystallites' own common-volume function with the instrument's, the strain's and the faults' coefficients: the true dimensions, of one size or over a log-normal distribution of sizes (σ refined). Needs the crystallite size and the standard's profile" },
+  { k: 'strain', label: 'Microstrain', on: true, list: [['iso', 'isotropic'], ['aniso', 'anisotropic (Stephens)']],
+    title: "Off: none (X_s held at 0). Isotropic: one microstrain, the Lorentzian 4ε·tanθ. Anisotropic (Stephens): ε² a quartic form of the reflection's direction that the Laue group leaves unchanged (1 more term for a cubic phase, up to 14 for a triclinic one): a strain that depends on hkl. Anisotropic needs the standard's profile" },
+  { k: 'faults', label: 'Planar faults', on: false, list: FAULTS,
+    title: "Planar faults (after Warren) on the planes of a family, each displacing the crystal beyond it by a vector of the family: a reflection whose h·R is not an integer broadens (by parity, not by order). Refined: the probability per plane. Needs the standard's profile" },
+  { k: 'adp', label: 'Displacement parameters', on: false, list: [['overall', 'one ΔB'], ['site', 'B per site'], ['aniso', 'U per site, anisotropic']],
+    title: "Off: the CIF's B, held (0.5 Å² for every atom where the CIF gives none; a B 0.5 Å² off goes into the strain and the size, 10–20 % in the size). On: one ΔB added to every atom's B; one B per crystallographic site; or Uⁱʲ per site, those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle. On nanocrystalline patterns they can come out unphysical (negative, or on their bound), whatever the size model, taking up what the model lacks rather than vibrations" },
+  { k: 'po', label: 'Preferred orientation', on: false, list: [['auto', 'best axis'], ...TEXTURE_AXES.map(a=> [a, `(${a})`])],
+    title: "March–Dollase: the crystallites' planes (hkl) lie preferentially parallel to the surface (r under 1, plates) or across it (r over 1, needles), which changes the intensities, not the widths. Best axis: the lowest χ² of the low-index planes" },
+];
+const MODE = Object.fromEntries(MODES.map(m=> [m.k, m]));
+// The rows that do not apply to the standard: its widths are the instrumental profile,
+// refined as U, V, W, X, Y (autoRefine refines it without an irf, so a size, strain or
+// fault model of its own would be refused anyway).
+const STD_NA = ['size', 'wppm', 'strain', 'faults'];
+const defSettings = () => ({ on: Object.fromEntries(MODES.map(m=> [m.k, m.on])), dep: Object.fromEntries(MODES.map(m=> [m.k, m.list[0][0]])) });
+// The standard's: one ΔB, as the built-in LaB6 had before v429 (lab6.adp); no texture.
+const stdSettings = () => { const s = defSettings(); STD_NA.forEach(k=> { s.on[k] = false; }); s.on.adp = true; return s; };
+// Settings as saved, made valid: a flag not a boolean, or a depth not offered, takes the default.
+const cleanSettings = (s, def) => ({
+  on: Object.fromEntries(MODES.map(m=> [m.k, s && s.on && typeof s.on[m.k] === 'boolean' ? s.on[m.k] : def.on[m.k]])),
+  dep: Object.fromEntries(MODES.map(m=> [m.k, s && s.dep && m.list.some(([v])=> v === s.dep[m.k]) ? s.dep[m.k] : def.dep[m.k]])) });
+// A phase of a project of v428 or older: each option a picker whose first choice was its
+// "none" (the isotropic size, the Lorentzian, no faults, the CIF's B, no texture).
+function migrateSettings(p, refineB){
+  const s = defSettings(), shape = shapeOpt(p.shape), prof = profileOpt(p.profile), fl = faultOpt(p.faults), po = textureOpt(p.po);
+  // (before the per-phase displacement option, one card-wide ΔB toggle: on, one ΔB each)
+  const adp = p.adp ? adpOpt(p.adp) : refineB ? 'overall' : 'cif';
+  if (shape) s.dep.size = shape;
+  if (prof !== 'lorentz'){ s.on.wppm = true; s.dep.wppm = prof; }
+  s.dep.strain = strainOpt(p.strain);
+  if (fl){ s.on.faults = true; s.dep.faults = fl; }
+  if (adp !== 'cif'){ s.on.adp = true; s.dep.adp = adp; }
+  if (po){ s.on.po = true; s.dep.po = po; }
+  return s;
+}
+// The engine's options of a phase (phaseData) from its settings.
+function engineOf(p, std){
+  const on = p.on, d = p.dep, adp = on.adp ? d.adp : 'cif', po = on.po ? d.po : null;
+  // The standard: no broadening model of its own (STD_NA); the fields as before v429.
+  if (std) return { size: true, shape: false, profile: 'lorentz', strain: 'iso', faults: null, adp, po };
+  return { size: on.size, shape: on.size && d.size !== 'iso' ? d.size : false, profile: on.size && on.wppm ? d.wppm : 'lorentz',
+    strain: on.strain ? d.strain : 'off', faults: on.faults ? d.faults : null, adp, po };
+}
+// The settings in a line, for the phase's row.
+function summaryOf(p, std){
+  const on = p.on, d = p.dep, txt = (k, v) => (MODE[k].list.find(([x])=> x === v) || [v, v])[1];
+  const po = on.po ? 'preferred orientation ' + txt('po', d.po) : null;
+  const adp = on.adp ? txt('adp', d.adp) : 'B from the CIF';
+  if (std) return ["the instrument's profile", adp, po].filter(Boolean).join(' · ');
+  return [on.size ? (d.size === 'iso' ? 'isotropic size' : txt('size', d.size)) : 'no size broadening',
+    on.size && (on.wppm ? 'WPPM, ' + txt('wppm', d.wppm) : 'Lorentzian'),
+    on.strain ? 'microstrain ' + txt('strain', d.strain) : 'no microstrain',
+    on.faults && 'planar faults ' + txt('faults', d.faults).replace(/,.*/, ''), adp, po].filter(Boolean).join(' · ');
+}
+/* Where a refinement starts (the settings' Start section): from the CIF (the full staged
+   refinement) or from the pattern's last result, with these groups of parameters held at
+   it (xrd-rietveld autoRefine's opts.hold; the engine's rule decides what is held). */
+const HOLDS = [
+  ['linear', 'Scales, background', 'The phases\' scales and the background (refined, not held, when the background\'s degree or its 1/2θ term changed since: Refinement)'],
+  ['cell', 'Cell, displacement', 'The lattice parameters and the specimen displacement; on the standard, the zero and the displacement'],
+  ['instrument', 'Instrument profile', 'U, V, W, X, Y and the asymmetry, where they are refined: on the standard, or on a sample refined without the standard\'s profile (with it they are always the standard\'s)'],
+  ['sizestrain', 'Size and strain', 'Y_s, X_s, Stephens\' S_j and the log-normal σ'],
+  ['shape', 'Free shape', 'The free solid\'s widths and orientation (a solid kept is then not searched again)'],
+  ['faults', 'Planar faults', 'The fault probability'],
+  ['adp', 'Displacement (B)', 'ΔB, the B per site or the Uⁱʲ per site'],
+  ['texture', 'Texture', 'The preferred orientation\'s r and its axis'],
+];
+const HOLD_KEYS = HOLDS.map(([k])=> k), HOLD_DEFAULT = HOLD_KEYS.filter(k=> k !== 'linear');
+const START_RULE = 'Each pattern starts from its own last refinement. A group ticked is held at its values there — but only the parameters that refinement refined with the same model: whatever is new or changed since (an option switched on, a depth changed, a shape type changed) is refined, from its usual start. Everything not held is refined from the last values. A pattern with no last result, or one refined with other phases or another cell, is refined from the CIF.';
+/* The Refinement settings (card-wide, the settings' last section): the least squares' and
+   the searches' hyperparameters, sent as opts.fit (xrd-rietveld fitSettings). Only the
+   keys changed are kept, absent is the engine's default. The defaults and ranges are
+   fitSettings' own (it clamps ±∞ to the ends), so the page refuses what the engine would
+   clamp. pct: shown in per cent, kept as a fraction; role: the only role it acts in;
+   shape: used by the free shape's search alone. */
+const FIT_DEF = fitSettings({});
+const FITS = [
+  { k: 'maxIter', label: 'Max iterations', int: true, said: v => `max ${v} iterations`,
+    title: "Levenberg–Marquardt iterations allowed in each refinement: each stage, each trial (the size distribution's, the texture's), the free shape's (its full refinements 1.5 times as many, its brief trials 8, or this when fewer). A refinement stopped by it is said under the results." },
+  { k: 'shiftTol', label: 'Shift tolerance (esd)', said: v => `shift tolerance ${v} esd`,
+    title: 'A refinement has converged when no parameter moves by more than this fraction of its esd in an iteration (or χ² stops falling). Smaller: more iterations, the values settled further.' },
+  { k: 'lambda', label: 'Starting damping λ', said: v => `starting λ ${v}`,
+    title: "Marquardt's damping at the start of each refinement: larger, shorter first steps down the gradient. The convergence test allows for it, so from 1e-8 to 1000 the refinements reach the same minimum, in more or fewer iterations." },
+  { k: 'bgDegree', label: 'Background degree', int: true, said: v => `background degree ${v}`,
+    title: "The background's Chebyshev terms T₀…Tₙ over the pattern. More take a broader hump (an amorphous part), but also the lines' tails where their shape is not fully modelled, which moves the sizes. A result is drawn with its own." },
+  { k: 'bgInv', label: '1/2θ background term', bool: true, said: v => `1/2θ term ${v ? 'on' : 'off'}`,
+    title: 'A term c/2θ in the background, for the air scatter that rises at low angles. Automatic: on when the scan starts below 20° (never when it reaches 0°).' },
+  { k: 'cellRange', label: 'Cell search range (%)', pct: true, role: 'sample', said: v => `cell search ±${fitTxt(v*100)} %`,
+    title: "How far the cell search scales the CIF's cell lengths, ± this: a sample's cell may be a few per cent off the file's (doping, a DFT cell, temperature). A lone phase not found is searched again over twice it. Wider: slower, and more room for a false minimum. Samples only." },
+  { k: 'zeroRange', label: 'Zero scan range (°)', role: 'std', said: v => `zero scan ±${v}°`,
+    title: "The standard's zero is scanned over ± this before its refinement (the zero and the specimen's displacement together). Beyond 1° its bounds widen with it. The standard only." },
+  { k: 'shapeStarts', label: 'Shape trial starts', int: true, shape: true, said: v => `${v} shape starts`,
+    title: "The free shape's search: the starting shapes beside the sphere-like one. The plates and needles along the low-index directions are always run, random shapes fill up to this. More: slower, less likely to miss the best solid." },
+  { k: 'shapeFull', label: 'Shape full refinements', int: true, shape: true, said: v => `${v} shape starts refined fully`,
+    title: "The free shape's best trial starts refined to convergence." },
+];
+const FIT = Object.fromEntries(FITS.map(m=> [m.k, m]));
+// A setting as shown (twelve significant digits: 7.3 % is 0.073, not 0.07300000000000001).
+const fitTxt = v => String(+(+v).toPrecision(12));
+FITS.forEach(m=>{ if (m.bool) return;
+  m.lo = fitSettings({ [m.k]: -Infinity })[m.k]; m.hi = fitSettings({ [m.k]: Infinity })[m.k];
+  const s = v => fitTxt(m.pct ? v*100 : v), u = m.pct ? ' %' : m.k === 'zeroRange' ? '°' : '';
+  m.range = `${s(m.lo)}–${s(m.hi)}`;
+  m.rule = `${m.int ? 'a whole number' : 'a number'} from ${s(m.lo)} to ${s(m.hi)}${u}`;
+  m.full = `${m.title} Default ${s(FIT_DEF[m.k])}${u}; ${m.rule}.`;
+});
+// A setting as the engine takes it, from the field's text, or null when not allowed. A
+// comma reads as the point (as figure.js readNum), but the whole entry must be a decimal
+// number (an exponent allowed: 1e-6); not hex or binary (+'0x10' is 16), nor Infinity.
+const DEC = /^[+-]?(\d+[.,]?\d*|[.,]\d+)(e[+-]?\d+)?$/i;
+function readFit(m, raw){
+  const t = String(raw).trim();
+  // A whole number written with a separator is refused: "1.000" or "1,000" may mean a
+  // thousand (an Italian or an English grouping) and would read as 1.
+  if (m.int && /[.,]/.test(t)) return null;
+  // (+ 0: −0 is 0)
+  let v = DEC.test(t) ? +t.replace(',', '.') + 0 : NaN;
+  if (!Number.isFinite(v) || (m.int && !Number.isInteger(v))) return null;
+  if (m.pct) v = +(v/100).toPrecision(12);
+  return v >= m.lo && v <= m.hi ? v : null;
+}
+// Settings as saved, made valid: a key unknown, out of range or at its default is dropped.
+function cleanFit(s){
+  const out = {};
+  if (s && typeof s === 'object') FITS.forEach(m=>{
+    const v = s[m.k];
+    if (m.bool ? v === true || v === false : typeof v === 'number' && readFit({ ...m, pct: false }, v) === v && v !== FIT_DEF[m.k]) out[m.k] = v;
+  });
+  return out;
+}
+
 export function createRietveld(host){
   const $ = id => document.getElementById(id);
-  let phases = [];           // [{ id, cif (text), file, color, prep }]
+  let phases = [];           // [{ id, cif (text), file, color, prep, on, dep (the settings: MODES) }]
   let nextId = 1;
   let idx = 0;               // the pattern on show, among the included files
-  let results = {};          // file name → { params, esd, stats, stages, at }
+  let results = {};          // file name → { params, esd, stats, stages, free, held, detected, shapes, isoParams, at, … }
+  let startFrom = 'cif', hold = HOLD_DEFAULT.slice();   // where Refine starts (HOLDS)
+  let fit = {};              // the Refinement settings changed from their defaults (FITS)
   let busy = false, cancelled = false;
   let plot = null;
   // Its own colour, apart from the CIF phases' (which start from the first of theirs).
-  const lab6 = { id: 0, cif: LAB6_CIF, file: '', color: '#4cc9a0', adp: 'overall', prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)') };
+  const lab6 = { id: 0, cif: LAB6_CIF, file: '', color: '#4cc9a0', ...stdSettings(), prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)') };
   lab6.prep.name = 'LaB₆ (NIST SRM 660c)';
   lab6.prep.notes = [];      // written in P1 here only to be short: nothing to report
 
@@ -169,33 +329,10 @@ export function createRietveld(host){
   const IRF_KEYS = ['U', 'V', 'W', 'X', 'Y', 'asym', 'zero'];
   const sameIrf = (a, b) => !!a && !!b && IRF_KEYS.every(k=> (a[k] || 0) === (b[k] || 0));
   const staleOf = (f, r) => !isStd(f) && !!r.irf && !sameIrf(r.irf, irf());
-  const phaseData = list => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color,
-    shape: p.shape || false, po: textureOpt(p.po) || null, profile: profileOpt(p.profile), strain: strainOpt(p.strain), faults: faultOpt(p.faults) || null, adp: adpOpt(p.adp) }));
-  // The crystallite shapes a phase can refine (xrd-rietveld SHAPE_TYPES): none (the
-  // isotropic size) or a free solid. A project saved with the one free shape there was
-  // (true) has the ellipsoid.
-  const SHAPES = [['', 'isotropic size'], ['ellipsoid', 'ellipsoid'], ['spheroid', 'spheroid (two axes equal)'], ['cylinder', 'cylinder'], ['ellcyl', 'elliptic cylinder'], ['box', 'box']];
-  const shapeOpt = v => v === true ? 'ellipsoid' : SHAPES.some(([k])=> k && k === v) ? v : false;
-  // A preferred orientation (March–Dollase) per phase: its axis, a plane's hkl, or the
-  // best of the low-index ones and those of the largest spacings.
-  const TEXTURES = [['', 'no preferred orientation'], ['auto', 'preferred orientation: best axis'], ['100', 'preferred orientation (100)'], ['010', 'preferred orientation (010)'], ['001', 'preferred orientation (001)'], ['110', 'preferred orientation (110)'], ['111', 'preferred orientation (111)']];
-  const textureOpt = v => TEXTURES.some(([k])=> k && k === v) ? v : '';
-  // The size's profile: a Lorentzian of the right breadth (Scherrer, K = 0.9), or by
-  // Whole Powder Pattern Modelling the crystallites' own, of one size or over a
-  // log-normal distribution of sizes (xrd-broad.js).
-  const PROFILES = [['lorentz', 'size profile: Lorentzian (Scherrer)'], ['wppm', 'size profile: WPPM, one size'], ['lognormal', 'size profile: WPPM, log-normal sizes']];
-  const profileOpt = v => PROFILES.some(([k])=> k === v) ? v : 'lorentz';
-  const STRAINS = [['iso', 'microstrain: isotropic'], ['aniso', 'microstrain: anisotropic (Stephens)']];
-  const strainOpt = v => v === 'aniso' ? 'aniso' : 'iso';
-  // Planar faults: the planes' family and the displacement (conventional indices), the
-  // common kinds named.
-  const FAULTS = [['', 'no planar faults'], ['111:1/6<112>', 'faults {111}, ⅙⟨112⟩ (fcc stacking)'], ['001:1/3<1-10>', 'faults (001), ⅓⟨1-10⟩ (hexagonal stacking)'],
-    ['100:1/2<111>', 'faults {100}, ½⟨111⟩ (Ruddlesden–Popper)'], ['100:1/2<110>', 'faults {100}, ½⟨110⟩ (antiphase)'], ['111:1/2<110>', 'faults {111}, ½⟨110⟩ (antiphase)'], ['110:1/2<110>', 'faults {110}, ½⟨110⟩']];
-  const faultOpt = v => FAULTS.some(([k])=> k && k === v) ? v : '';
-  // The displacement parameters: the CIF's held, one ΔB for all atoms, B per site, or
-  // the anisotropic U per site within its symmetry.
-  const ADPS = [['cif', 'B from the CIF'], ['overall', 'B: one ΔB for all atoms'], ['site', 'B per site'], ['aniso', 'U per site, anisotropic']];
-  const adpOpt = v => ADPS.some(([k])=> k === v) ? v : 'cif';
+  // The phases as the engine takes them: their structure, and the options their settings
+  // give (engineOf; the standard's LaB6 its own).
+  const phaseData = (list, std) => list.map(p=> ({ id: p.id, name: p.prep.name, cell: p.prep.cell, constraint: p.prep.constraint, ops: p.prep.ops, atoms: p.prep.atoms, mass: p.prep.mass, color: p.color,
+    ...engineOf(p, std) }));
   // The solid a result was refined with, from its parameters' names (each solid has its
   // own), and only when they are in use (any width ≠ 0).
   function shapeOfParams(P, id){
@@ -205,33 +342,69 @@ export function createRietveld(host){
     const type = has('Ea') ? 'ellipsoid' : has('Wd') ? 'cylinder' : has('Wh') ? 'ellcyl' : has('Wb') ? 'box' : has('Wc') ? 'spheroid' : null;
     return type && ['Ea', 'Eb', 'Ec', 'Wa', 'Wb', 'Wc', 'Wd', 'Wh'].some(n=> g(n)) ? type : false;
   }
-  // ph: the phases as they were when the run started, the same for all its files (an
-  // undo during a run would otherwise change their options between them).
-  function payloadFor(f, ph){
-    const std = isStd(f);
+  /* Why a pattern's last result cannot be started from — it must be of this pattern in
+     this role, with these phases in these cells (autoRefine checks the parameters too) —
+     or '' when it can. */
+  function lastUnusable(f, r, list){
+    if (!r || !r.params) return 'not refined yet';
+    const ids = r.phases || [];
+    if (ids.length !== list.length || list.some(p=> !ids.includes(p.id))) return 'refined with other phases';
+    if (roleOf(r) !== isStd(f)) return 'refined in the other role';
+    // (a result of v425 or older kept no cells: the file's cell then, so only a phase that
+    // v426 re-expresses in a cell of its own has changed — as curvesOf reads it)
+    if (r.cells ? list.some(p=> r.cells[p.id] !== cellKey(p.prep.cell)) : list.some(p=> p.prep.ownCell)) return 'a phase refined in another cell since';
+    return '';
+  }
+  // A pattern's background terms under fit settings: the Chebyshev degree and whether the
+  // 1/2θ term is used (buildModel's rule: 'auto' is on from below 20°, never from 0°).
+  const bgTerms = (fs, f) => { const x0 = scanRange(f)[0]; return fs.bgDegree + (x0 > 0 && (fs.bgInv === 'auto' ? x0 < 20 : fs.bgInv) ? '+inv' : ''); };
+  // run: the phases, the standard's settings and the start as they were when the run
+  // started, the same for all its files (an undo during a run would otherwise change
+  // them between files); run.fell collects the patterns refined from the CIF instead,
+  // run.bgFreed those whose scales and background are refined rather than held.
+  function payloadFor(f, run){
+    const std = isStd(f), list = std ? [run.std] : run.ph, opts = { standard: std, irf: std ? null : irf(), fit: { ...run.fit } };
+    if (run.start === 'last'){
+      const r = results[f.name], why = lastUnusable(f, r, list);
+      if (why) run.fell.push(`${f.label} (${why})`);
+      // What autoRefine's start takes: the values, what was refined and held, the models,
+      // the phases detected, the shapes kept with their isotropic fit, the profile used.
+      else { opts.start = { params: r.params, free: r.free, held: r.held || [], models: r.models, textures: r.textures, shapes: r.shapes || {}, isoParams: r.isoParams || null, detected: r.detected, irf: r.irf || null };
+        /* The background's terms changed since (its degree, or the 1/2θ term; a result of
+           v428 or older had the defaults): the scales and background are a changed group,
+           refined. Held, the terms kept would keep values fitted beside those dropped. */
+        const bgMoved = bgTerms(fitSettings(r.fit), f) !== bgTerms(fitSettings(run.fit), f);
+        if (bgMoved && run.hold.includes('linear')) run.bgFreed.push(f.label);
+        opts.hold = run.hold.filter(k=> k !== 'linear' || !bgMoved); }
+    }
     return { x: Array.from(f.x), y: Array.from(f.y), varMul: f.varMul ? Array.from(f.varMul) : null, instr: instrOf(f),
-      phases: phaseData(std ? [lab6] : ph), opts: { standard: std, irf: std ? null : irf() } };
+      phases: phaseData(list, std), opts };
   }
 
   async function refine(list){
     if (busy) return;
     const todo = list.filter(f=> phasesFor(f).length);
     if (!todo.length){ setStatus('Add a phase from a CIF to refine.'); return; }
-    busy = true; cancelled = false; syncButtons();
-    const ph = phases.map(p=> ({ ...p }));
+    busy = true; cancelled = false; closeSettings(); syncButtons();
+    const copy = p => ({ ...p, on: { ...p.on }, dep: { ...p.dep } });
+    const run = { ph: phases.map(copy), std: copy(lab6), start: startFrom, hold: hold.slice(), fit: { ...fit }, fell: [], bgFreed: [] };
     try {
       for (let k = 0; k < todo.length && !cancelled; k++){
-        const f = todo[k];
-        setStatus(`Refining ${f.label}…`);
-        const res = await runInWorker(payloadFor(f, ph), (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`); });
+        const f = todo[k], pay = payloadFor(f, run), from = pay.opts.start ? ' from its last result' : '';
+        setStatus(`Refining ${f.label}${from}…`);
+        // (the stages say the rest: a start from the last result has its own)
+        const res = await runInWorker(pay, (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`); });
         if (!res) break;
         // (the phases it was refined with: a CIF added meanwhile is not among them; the
-        // standard's profile as the worker used it, kept to tell when the standard changes)
-        results[f.name] = { ...res, standard: isStd(f), phases: (isStd(f) ? [lab6] : ph).map(p=> p.id), irf: isStd(f) ? null : res.irf || null, at: Date.now(),
-          cells: Object.fromEntries((isStd(f) ? [lab6] : ph).map(p=> [p.id, cellKey(p.prep.cell)])) };
+        // standard's profile as the worker used it, kept to tell when the standard changes;
+        // free, held, detected, shapes, isoParams: what the next start from it needs)
+        const ph = isStd(f) ? [run.std] : run.ph;
+        results[f.name] = { ...res, standard: isStd(f), phases: ph.map(p=> p.id), irf: isStd(f) ? null : res.irf || null, at: Date.now(),
+          cells: Object.fromEntries(ph.map(p=> [p.id, cellKey(p.prep.cell)])) };
         if (f === host.files()[idx]) draw();
       }
-      setStatus('');
+      setStatus([run.fell.length && `From the CIF, no last result to start from: ${run.fell.join('; ')}.`,
+        run.bgFreed.length && `Scales and background refined, not held: the background's terms changed since the last result (${run.bgFreed.join(', ')}).`].filter(Boolean).join(' '));
     } catch(e){
       setStatus('⚠ ' + e.message);
     } finally {
@@ -249,18 +422,22 @@ export function createRietveld(host){
   function curvesOf(f, r){
     /* The phases as the result was refined: those it was refined with (a phase added
        since, or the file's role changed, would draw its default scale in the curve),
-       with the free shape when its parameters are there and the models it used,
-       whatever the pickers say now. */
+       with the free shape when its parameters are there and the models it used (a size
+       or strain switched off among them), whatever the settings say now. */
     const ids = r.phases || null, list = phasesFor(f).filter(p=> !ids || ids.includes(p.id));
     if (ids && list.length !== ids.length) throw new Error('The phases changed since this refinement.');
     if (r.cells ? list.some(p=> r.cells[p.id] != null && r.cells[p.id] !== cellKey(p.prep.cell)) : list.some(p=> p.prep.ownCell))
       throw new Error('A phase is refined in another cell since this refinement.');
-    const ph = phaseData(list).map(p=>{
+    const ph = phaseData(list, isStd(f)).map(p=>{
       const md = (r.models || {})[p.id] || {};
-      return { ...p, shape: shapeOfParams(r.params, p.id), po: r.textures && r.textures[p.id] ? r.textures[p.id].hkl : null,
-        profile: profileOpt(md.profile), strain: strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp) };
+      return { ...p, shape: shapeOfParams(r.params, p.id), po: r.textures && r.textures[p.id] ? r.textures[p.id].hkl : null, size: md.size !== false,
+        profile: profileOpt(md.profile), strain: md.strain === 'off' ? 'off' : strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp) };
     });
-    const model = buildModel({ x: f.x, y: f.y, varMul: f.varMul || null, instr: instrOf(f), phases: ph });
+    // Built as the result's model was: its background terms and reflection list are those
+    // of the fit settings it was refined with (r.fit; the defaults for a result of v428 or
+    // older), not the settings now — a background of degree 12 drawn with 6 terms is wrong.
+    const fs = fitSettings(r.fit);
+    const model = buildModel({ x: f.x, y: f.y, varMul: f.varMul || null, instr: instrOf(f), phases: ph, bgDegree: fs.bgDegree, bgInv: fs.bgInv, cellRange: fs.cellRange });
     return calc(model, r.params);
   }
   // The scan's 2θ range, low end first (the host turns a scan run downwards round, and
@@ -319,6 +496,7 @@ export function createRietveld(host){
       + (c ? `<span><i style="background:#ff5050"></i>calculated</span><span><i style="background:#ff9933"></i>background</span><span><i style="background:#3aa0ff"></i>difference</span>` : '')
       + groups.map(g=> `<span><i style="background:${g.color}"></i>${esc(g.name)}</span>`).join('');
     $('xrdRvInstr').textContent = instrLine(instrOf(f));
+    syncButtons();
     renderResults(f, r);
     renderSolids(f, r);
     renderWidths(f, r);
@@ -404,16 +582,23 @@ export function createRietveld(host){
       + `<th title="The isotropic model's width for this peak, read off its own curve the same way">Model, isotropic (°)</th>${shapeOn ? '<th title="The free shape\'s width for this peak, read off its own curve the same way">Model, free shape (°)</th>' : ''}</tr></thead><tbody>`;
     let n = 0;
     phs.forEach(ph=> ph.rows.forEach(w=>{
-      // The others' share against the limit that applied (measureWidths: 30 %, and 5 % for
-      // the reflections of a phase whose isotropic model, which takes them off, does not
-      // predict its widths read).
+      // Why it is overlapped (measureWidths): the others' share past 30 %, or what the
+      // reflections of a phase whose isotropic model, which takes them off, does not predict
+      // its widths read can do to this width at the misfit measured (biasOff, v429, in the
+      // fit's own esds, HsEsdFit where the esd was widened; a result of v427–v428 has the 5 %
+      // limit on their share instead).
+      const bz = Number.isFinite(w.biasOff) ? w.biasOff/(w.HsEsdFit || w.Wesd) : NaN;   // (NaN is null in a saved session)
+      const offTxt = 'reflections of a phase whose isotropic model, which takes them off, does not predict its widths read';
       const ovl = !Number.isFinite(w.share) ? ''
-        : w.shareOff > 0.05 ? ` (reflections of a phase whose isotropic model, which takes them off, does not predict its widths read hold ${Math.round(w.shareOff*100)} % of its intensity across its top; 5 % allowed)`
-        : ` (the others hold ${Math.round(w.share*100)} % of its intensity across its top; 30 % allowed)`;
+        : !(w.share <= 0.3) ? ` (the others hold ${Math.round(w.share*100)} % of its intensity across its top; 30 % allowed)`
+        : 'biasOff' in w ? ` (${offTxt}: ${Number.isFinite(bz) ? `off as their widths were measured, they could move this width by ${bz.toFixed(1)} esd` : 'what they could do to this width was not computed'}; 2 esd allowed, the esd widened by as much past half of one)`
+        : ` (${offTxt} hold ${Math.round(w.shareOff*100)} % of its intensity across its top; 5 % allowed)`;
       const skip = w.overlapped || w.edge || w.weak || w.flat || w.unread, why = [w.unread && 'not read: ' + w.unread, w.overlapped && 'overlapped by another reflection' + ovl, w.edge && 'at the end of the pattern', w.weak && 'too weak to measure (amplitude under 3 esd)', w.flat && 'no broadening above the instrument\'s (under 2 esd): the corrected FWHM is an upper limit (2 esd)'].filter(Boolean).join('; ');
+      // Used with its esd widened (measureWidths: what those reflections could do to it).
+      const wide = !skip && w.HsEsdFit > 0 ? `Its esds widened from the fit's ${+w.HsEsdFit.toPrecision(2)}° to ${+w.HsEsd.toPrecision(2)}°: ${offTxt}, off as their widths were measured, could move this width by ${bz.toFixed(1)} of the fit's esds` : '';
       // No broadening measured: the corrected FWHM as its upper limit.
       const corr = w.flat && Number.isFinite(w.HsMax) ? `&lt; ${+w.HsMax.toPrecision(2)}` : fmtE(w.Hs, w.HsEsd);
-      html += `<tr class="peak-row rv-pk${skip ? ' rv-pk-out' : ''}" data-tt="${w.tt}" data-ph="${ph.id}" data-lab="${esc(w.label)}"${why ? ` title="Not used by the tests: ${esc(why)}"` : ''}>`
+      html += `<tr class="peak-row rv-pk${skip ? ' rv-pk-out' : ''}" data-tt="${w.tt}" data-ph="${ph.id}" data-lab="${esc(w.label)}"${why ? ` title="Not used by the tests: ${esc(why)}"` : wide ? ` title="${esc(wide)}"` : ''}>`
         + `<td>${++n}</td><td><span class="rv-key-sm" style="background:${colorOf(ph.id)}"></span>${esc(w.label)}</td><td>${w.tt.toFixed(3)}</td><td>${Number.isFinite(w.rel) ? (w.rel*100).toFixed(1) + '%' : '—'}</td>`
         + `<td>${fmtE(w.H, w.Hesd)}</td><td>${corr}</td><td>${w.flat ? '—' : fmtE(w.D, w.Desd)}</td><td>${f3(w.model.iso)}</td>${shapeOn ? `<td>${ph.shaped ? f3(w.model.shape) : '—'}</td>` : ''}</tr>`;
     }));
@@ -499,8 +684,11 @@ export function createRietveld(host){
         const nr = ph.rows.filter(w=> w.unread).length;
         html += `<div class="rv-note">Williamson–Hall: fewer than three peaks to read (${wh.n})${nr ? `; ${nr} not read at all (the table says why)` : ''}.</div>`;
       }
-      // The stricter overlap limit (measureWidths): why fewer peaks are used.
-      if (ph.overlapShare < 0.3) html += `<div class="rv-note">The isotropic model does not predict the widths read: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where they hold under ${Math.round(ph.overlapShare*100)} % of its top (the others up to 30 %).</div>`;
+      // The stricter overlap rule (measureWidths): why fewer peaks are used. (ph.misfit: v429,
+      // null in a saved result where it was NaN; a result of v427–v428 had the 5 % limit.)
+      if (ph.overlapShare < 0.3) html += 'misfit' in ph
+        ? `<div class="rv-note" title="Each of this phase's reflections is taken as off by its own misfit where its peak is read, else by the spread of the others' beyond their esds; what that does to a peak's width is read through the peak's own fit">The isotropic model does not predict the widths read${Number.isFinite(ph.misfit) ? ` (beyond their esds they differ from its own by ${Math.round(ph.misfit*100)} %, rms)` : ''}: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where, off by as much, they could move its width by under 2 esd, its esd widened by as much past half of one (and the others hold up to 30 % of its top).</div>`
+        : `<div class="rv-note">The isotropic model does not predict the widths read: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where they hold under ${Math.round(ph.overlapShare*100)} % of its top (the others up to 30 %).</div>`;
       if (ph.orders.length){
         html += `<div class="pg-stat" style="margin-top:4px">Orders, Δd*(n)/Δd*(1): size 1, strain n</div>`;
         ph.orders.forEach(o=>{ html += `<div class="pg-stat">${esc(o.a)} → ${esc(o.b)}: <b>${fmtE(o.R, o.Resd)}</b> <span class="txt-meta">${o.verdict === 'order-dependent' ? 'below 1: the higher order sharper (planar faults)' : o.verdict}</span></div>`; });
@@ -521,6 +709,15 @@ export function createRietveld(host){
   // ---- the side column: the statistics, then what the worker made of the result —
   // the standard's instrument, or each phase's cell, size, strain (and weight fraction
   // with several phases), a value a line ----
+  // The Refinement settings a result was refined with that are not the defaults (r.fit,
+  // the worker's; none in a result of v428 or older), those that acted on it: the cell
+  // search's range on a sample, the zero scan's on the standard, the shape's with a shape.
+  function fitUsed(f, r){
+    if (!r || !r.fit) return [];
+    const fs = fitSettings(r.fit), std = roleOf(r) ?? isStd(f), shaped = Object.values(r.models || {}).some(m=> m && m.shape);
+    return FITS.filter(m=> fs[m.k] !== FIT_DEF[m.k] && (m.role !== 'std' || std) && (m.role !== 'sample' || !std) && (!m.shape || shaped))
+      .map(m=> ({ k: m.k, v: fs[m.k], said: m.said(fs[m.k]) }));
+  }
   function renderResults(f, r){
     const box = $('xrdRvResults');
     if (!r || !r.params){
@@ -532,6 +729,8 @@ export function createRietveld(host){
     const s = r.stats || {};
     let html = `<div class="rv-result"><div class="pg-stat" title="R_wp: the weighted residual; R_exp: what the counting statistics alone would give">R<sub>wp</sub>: <b>${(s.Rwp*100).toFixed(2)}%</b>  R<sub>exp</sub>: <b>${(s.Rexp*100).toFixed(2)}%</b></div>`
       + `<div class="pg-stat" title="χ² = Σw(y − y_c)²/(N − P), the reduced χ²: (R_wp/R_exp)²">χ²: <b>${(s.chi2).toFixed(2)}</b></div>`;
+    const used = fitUsed(f, r);
+    if (used.length) html += `<div class="rv-note" title="The Refinement settings (Settings…) this result was refined with that are not the defaults">settings: ${esc(used.map(u=> u.said).join(', '))}</div>`;
     (r.phaseResults || []).forEach(q=>{
       html += `<div class="txt-mini${q.phase ? ' rv-phase-name' : ''}">${esc(q.name)}</div>` + q.lines.map(l=> `<div class="pg-stat"${l.title ? ` title="${esc(l.title)}"` : ''}>${esc(l.label)}: <b>${esc(l.value)}</b></div>`).join('');
     });
@@ -559,10 +758,7 @@ export function createRietveld(host){
     return parts.join(' · ') + ((ins.warnings || []).length ? ' — ⚠ ' + ins.warnings.join('; ') : '');
   }
 
-  // ---- phases ----
-  // One of a phase's model pickers (marked when not at its default).
-  const pick = (key, p, list, val, def, label, title) =>
-    `<select class="rv-shape rv-opt${val !== def ? ' is-on' : ''}" data-opt="${key}" data-ph="${p.id}" aria-label="${esc(label)}"${busy ? ' disabled' : ''} title="${esc(title)}">${list.map(([k, t])=> `<option value="${k}"${val === k ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+  // ---- phases: a row each, what was read from its CIF and its settings in a line ----
   function renderPhases(){
     const el = $('xrdRvPhaseList'), rows = [];
     const row = (p, builtIn)=>{
@@ -575,17 +771,11 @@ export function createRietveld(host){
         + (K.conv && K.basis ? ` (conventional cell, ${K.volumeRatio}× the file's)` : '');
       return `<div class="rv-phase" data-ph="${p.id}"><span class="rv-key" style="background:${p.color}"></span>`
         + `<div class="rv-main"><b>${esc(q.name)}</b>${q.formula ? ` · ${esc(q.formula)}` : ''}`
-        + `<div class="rv-sub">${SYSTEM_NAMES[q.system] || esc(q.system)}, ${q.order} symmetry operations · ${cellTxt} · ${q.atoms.length} atoms in the cell${builtIn ? ' · built in, for the standard (cell held at the certified value, one ΔB refined)' : p.file ? ' · ' + esc(p.file) : ''}</div>`
+        + `<div class="rv-sub">${SYSTEM_NAMES[q.system] || esc(q.system)}, ${q.order} symmetry operations · ${cellTxt} · ${q.atoms.length} atoms in the cell${builtIn ? ' · built in, for the standard (cell held at the certified value)' : p.file ? ' · ' + esc(p.file) : ''}</div>`
+        + `<div class="rv-sub rv-set" title="What Refine refines for this phase: Settings… (beside Refine) changes it">${esc(summaryOf(p, builtIn))}</div>`
         + (q.notes.length ? `<div class="rv-sub">${esc(q.notes.join('; '))}</div>` : '')
         + q.warnings.map(w=> `<div class="rv-sub" style="color:var(--warn)">⚠ ${esc(w)}</div>`).join('')
-        + `</div>${builtIn ? '' : `<div class="rv-picks"><select class="rv-shape${p.shape ? ' is-on' : ''}" data-shape="${p.id}" aria-label="Crystallite shape of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Crystallite shape: the isotropic size, or a free solid of any proportions and orientation (each reflection of a family with its own width). Needs the standard's profile; it tries several starting shapes, so it takes tens of seconds a sample, minutes for a phase with many reflections or with WPPM's log-normal sizes. Kept only when the data support it against an isotropic size">${SHAPES.map(([k, t])=> `<option value="${k}"${(shapeOpt(p.shape) || '') === k ? ' selected' : ''}>${k ? 'free shape: ' + t : t}</option>`).join('')}</select>`
-          + `<select class="rv-shape rv-po${textureOpt(p.po) ? ' is-on' : ''}" data-po="${p.id}" aria-label="Preferred orientation of ${esc(q.name)}"${busy ? ' disabled' : ''} title="Preferred orientation (March–Dollase): the crystallites' planes (hkl) lie preferentially parallel to the sample's surface (r under 1, plates) or across it (r over 1, needles), which changes the reflections' intensities, not their widths. Best axis: the lowest χ² of the low-index planes">${TEXTURES.map(([k, t])=> `<option value="${k}"${textureOpt(p.po) === k ? ' selected' : ''}>${t}</option>`).join('')}</select>`
-          + pick('profile', p, PROFILES, profileOpt(p.profile), 'lorentz', `Size profile of ${q.name}`, "The size broadening's profile. Lorentzian: a Lorentzian fitted to the lines, the size read with Scherrer's K = 0.9 (as the Analysis card): an apparent size, not a diameter (spheres of one size read 1.0–1.7 times theirs). WPPM (Whole Powder Pattern Modelling): each line the Fourier transform of the crystallites' own common-volume function — a sphere's, or the free solid's along each member — with the instrument's, the strain's and the faults' coefficients: the true dimensions, and the profile's shape too (one size has short tails; a log-normal distribution of sizes, its width σ refined, longer ones). Needs the standard's profile")
-          + pick('strain', p, STRAINS, strainOpt(p.strain), 'iso', `Microstrain of ${q.name}`, "Isotropic: one microstrain, the Lorentzian 4ε·tanθ. Anisotropic (Stephens): ε² a quartic form of the reflection's direction that the Laue group leaves unchanged (1 more term for a cubic phase, 2 hexagonal, 3 for 4/mmm and −3m, 4 for 4/m and −3, 5 orthorhombic, 8 monoclinic, 14 triclinic): a strain that depends on hkl, the same for all members of a family. Needs the standard's profile")
-          + pick('faults', p, FAULTS, faultOpt(p.faults), '', `Planar faults of ${q.name}`, "Planar faults (after Warren) on the planes of a family, each displacing the crystal beyond it by a vector of the family (those in the plane: a stacking fault, an antiphase boundary): a reflection whose h·R is not an integer loses coherence across each, a Lorentzian broadening by h·R modulo 1 (the indices' parity for ½-type shifts, the indices modulo 3 for ⅓ and ⅙), so a higher order can be sharp. Refined: the probability per plane. Needs the standard's profile")
-          + pick('adp', p, ADPS, adpOpt(p.adp), 'cif', `Displacement parameters of ${q.name}`, "Displacement parameters. From the CIF: held; a CIF that gives no B (the Materials Project's) has 0.5 Å² for every atom. A B 0.5 Å² off goes into the strain and the size (10–20 % in the size), which One ΔB avoids; on nanocrystalline samples, though, ΔB can come out negative, taking up what the model lacks. One ΔB: added to every atom's B. Per site: one B per crystallographic site (the sites found from the symmetry). Anisotropic: Uⁱʲ per site, only those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle")
-          + `</div>`
-          + `<button class="peak-del is-danger idle-dim rv-del" data-del="${p.id}" title="Remove phase">${X_SVG(13)}</button>`}</div>`;
+        + `</div>${builtIn ? '' : `<button class="peak-del is-danger idle-dim rv-del" data-del="${p.id}" title="Remove phase">${X_SVG(13)}</button>`}</div>`;
     };
     phases.forEach(p=> rows.push(row(p, false)));
     if (host.files().some(isStd)) rows.push(row(lab6, true));
@@ -598,10 +788,10 @@ export function createRietveld(host){
       try {
         const text = await file.text();
         const prep = prepPhase(text, file.name);
-        // A CIF without displacement parameters (Materials Project's) starts with one ΔB
-        // refined: held at B_DEFAULT, a B 0.3–1 Å² off went into the strain and the size
-        // (D −13 to +89 % on synthetic patterns, 5–27 esd) and moved weight fractions by 2 % (RIETVELD.md §8.1).
-        phases.push({ id: nextId++, cif: text, file: file.name, color: PHASE_COLORS[phases.length % PHASE_COLORS.length], prep });
+        // The default settings: an isotropic size and strain, the rest off — the CIF's B
+        // held, also for a CIF that gives none (v428: one ΔB on nanocrystalline samples
+        // came out negative, taking up what the model lacks; RIETVELD.md §8.1).
+        phases.push({ id: nextId++, cif: text, file: file.name, color: PHASE_COLORS[phases.length % PHASE_COLORS.length], prep, ...defSettings() });
       } catch(e){ errs.push(`${file.name}: ${e.message}`); }
     }
     renderPhases(); draw(true); host.commit();
@@ -613,29 +803,197 @@ export function createRietveld(host){
   function showProg(frac){ $('xrdRvProgWrap').style.display = ''; $('xrdRvProgBar').style.width = Math.max(0, Math.min(1, frac))*100 + '%'; }
   function hideProg(){ $('xrdRvProgWrap').style.display = 'none'; $('xrdRvProgBar').style.width = '0%'; }
   function syncButtons(){
+    const f = host.files()[idx];
     $('xrdRvRefine').textContent = busy ? 'Cancel' : 'Refine';
     $('xrdRvRefineAll').disabled = busy;
-    $('xrdRvClear').disabled = busy;
+    $('xrdRvSettings').disabled = busy;
+    $('xrdRvClear').disabled = busy || !(f && results[f.name]);
+    $('xrdRvClearAll').disabled = busy || !Object.keys(results).length;
     // (the phases are read when a run starts: one added meanwhile would not be in it)
     $('xrdRvAddCif').disabled = busy;
-    $('xrdRvPhaseList').querySelectorAll('.rv-shape, .rv-po, .rv-opt').forEach(sel=> { sel.disabled = busy; });
+    syncSettings();
   }
+
+  /* ---- the settings (a modal from Settings…, beside Refine): each phase's fitting modes
+     and the standard's, a row each (MODES), and where Refine starts (HOLDS). A change
+     applies at once, to the next refinements (the results there keep theirs), and is a
+     step of the undo history. ---- */
+  const setModal = $('xrdRvSetModal'), setBody = $('xrdRvSetBody');
+  let setKey = '', rebuilding = false;
+  let fitNote = null;        // the Refinement section's note, when an entry was not taken
+  const setOpen = () => setModal.style.display === 'flex';
+  const phaseOf = id => id === lab6.id ? lab6 : phases.find(p=> p.id === id);
+  // Why a mode does not apply to a phase (its checkbox and depth disabled), or ''.
+  const naOf = (p, k) => p === lab6 && STD_NA.includes(k) ? "The standard's widths are the instrument's profile (U, V, W, X, Y and the asymmetry, refined on it): no size, strain or faults of its own"
+    : k === 'wppm' && !p.on.size ? 'WPPM is a profile of the crystallite size: switch the size on first' : '';
+  function openSettings(){
+    if (busy || setOpen()) return;
+    setModal.style.display = 'flex'; $('xrdRvSettings').classList.add('is-on');
+    setKey = ''; fitNote = null; renderSettings();
+    document.addEventListener('keydown', onSetKey);
+    setModal.querySelector('.modal-box').focus();
+  }
+  function closeSettings(){
+    if (!setOpen()) return;
+    // (the focus back on the button, when it was in the box: a keyboard user goes on from there)
+    const inBox = setModal.contains(document.activeElement);
+    setModal.style.display = 'none'; $('xrdRvSettings').classList.remove('is-on');
+    document.removeEventListener('keydown', onSetKey);
+    if (inBox && !$('xrdRvSettings').disabled) $('xrdRvSettings').focus();
+  }
+  function onSetKey(e){ if (e.key === 'Escape') closeSettings(); }
+  // Built again only when the phases on show change (one added or removed by an undo, the
+  // standard chosen); otherwise the inputs are set in place, keeping the focus.
+  function renderSettings(){
+    if (!setOpen()) return;
+    const list = [...phases, ...(host.files().some(isStd) ? [lab6] : [])];
+    const key = list.map(p=> [p.id, p.color, p.prep.name].join()).join('|');
+    if (key !== setKey){
+      setKey = key;
+      const sec = p => `<div class="rvs-sec" data-sec="${p.id}"><div class="rvs-head"><span class="rv-key" style="background:${p.color}"></span><b>${esc(p.prep.name)}</b>${p === lab6 ? '<span class="txt-meta">standard</span>' : ''}</div>`
+        + MODES.map(m=>{ const id = `xrdRvSet${p.id}_${m.k}`;
+          return `<div class="rvs-row" data-row="${m.k}"><input type="checkbox" id="${id}" data-on="${m.k}" data-ph="${p.id}"><label for="${id}">${m.label}</label>`
+            + `<select data-depth="${m.k}" data-ph="${p.id}" aria-label="${esc(m.label)} of ${esc(p.prep.name)}: depth">${m.list.map(([v, t])=> `<option value="${v}">${esc(t)}</option>`).join('')}</select></div>`; }).join('') + '</div>';
+      // The hold boxes two to a row, in the phases' columns: the first under their
+      // checkboxes, the second under their depths.
+      const hb = ([k, t, title]) => `<input type="checkbox" id="xrdRvHold_${k}" data-hold="${k}" title="${esc(title)}"><label for="xrdRvHold_${k}" title="${esc(title)}">${t}</label>`;
+      const pairs = []; for (let i = 0; i < HOLDS.length; i += 2) pairs.push(HOLDS.slice(i, i + 2));
+      const html = (list.length ? list.map(sec).join('') : `<div class="rv-empty">No phase yet: <b>+ CIF</b> adds one.</div>`)
+        + `<div class="rvs-sec rvs-start"><div class="rvs-head"><b>Start</b></div>`
+        + `<div class="rvs-chips"><button type="button" class="mode-chip rvs-chip" data-start="cif" title="The full staged refinement from the CIF's cell: the cell search, then each group of parameters in turn">From the CIF</button>`
+        + `<button type="button" class="mode-chip rvs-chip" data-start="last" title="From each pattern's last result, the groups ticked below held there">From the last result</button></div>`
+        + pairs.map(([a, b])=> `<div class="rvs-row rvs-hold">${hb(a)}${b ? `<span class="rvs-hold2">${hb(b)}</span>` : ''}</div>`).join('')
+        + `<div class="rvs-note" title="${esc(START_RULE)}">Held: a group ticked, at the last result's values, unless its option changed since (then refined from its usual start); the rest refined from there. No last result, or other phases or cells: from the CIF.</div></div>`
+        + `<div class="rvs-sec rvs-fit"><div class="rvs-head"><b>Refinement</b><button type="button" class="btn rvs-def" data-fit-def title="Every Refinement setting back to the engine's default">Defaults</button></div>`
+        + FITS.map(fitRow).join('') + `<div class="rvs-note" data-fit-note></div></div>`;
+      // (a field focused while the body is rebuilt fires a last change on its way out: ignored)
+      rebuilding = true; setBody.innerHTML = html; rebuilding = false;
+    }
+    syncSettings();
+  }
+  /* A Refinement setting's row, in the phases' columns: a field under their depths (its
+     range beside it), or, for the 1/2θ term, its value as a checkbox under theirs and
+     "automatic" under the depths (the value locked, showing what automatic gives). */
+  function fitRow(m){
+    const id = 'xrdRvFit_' + m.k;
+    return m.bool
+      ? `<div class="rvs-row" data-fit-row="${m.k}"><input type="checkbox" id="${id}" data-fit="${m.k}"><label for="${id}">${m.label}</label>`
+        + `<span class="rvs-cell"><input type="checkbox" id="${id}Auto" data-fit-auto="${m.k}"><label for="${id}Auto">automatic</label></span></div>`
+      : `<div class="rvs-row" data-fit-row="${m.k}"><span></span><label for="${id}">${m.label}</label>`
+        + `<span class="rvs-cell"><input type="text" inputmode="decimal" autocomplete="off" id="${id}" data-fit="${m.k}" aria-label="${esc(m.label)}, ${m.rule}"><span class="rvs-range">${m.range}</span></span></div>`;
+  }
+  function syncSettings(){
+    if (!setOpen()) return;
+    setBody.querySelectorAll('[data-sec]').forEach(sec=>{
+      const p = phaseOf(+sec.dataset.sec); if (!p) return;
+      MODES.forEach(m=>{
+        const row = sec.querySelector(`[data-row="${m.k}"]`), cb = row.querySelector('input'), sel = row.querySelector('select'), na = naOf(p, m.k);
+        cb.checked = !!p.on[m.k]; sel.value = p.dep[m.k];
+        cb.disabled = busy || !!na; sel.disabled = busy || !!na || !p.on[m.k];
+        row.classList.toggle('is-na', !!na);
+        // (the standard's B: why one ΔB is its default — LAB6_CIF's numbers)
+        row.title = cb.title = sel.title = na || (p === lab6 && m.k === 'adp' ? m.title + ". On the standard, one ΔB is the default: held, a B 0.1 Å² off moved the profile's X by 10 esd, the profile taking up the intensities' fall with angle" : m.title);
+      });
+    });
+    setBody.querySelectorAll('[data-start]').forEach(b=>{ const on = b.dataset.start === startFrom; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on); b.disabled = busy; });
+    setBody.querySelectorAll('[data-hold]').forEach(cb=>{ cb.checked = hold.includes(cb.dataset.hold); cb.disabled = busy || startFrom !== 'last'; });
+    setBody.querySelectorAll('.rvs-hold').forEach(r=> r.classList.toggle('is-off', startFrom !== 'last'));
+    syncFit();
+  }
+  // What the automatic 1/2θ term gives for the pattern on show (buildModel's rule).
+  function autoInv(){
+    const f = host.files()[idx];
+    if (!f) return { on: false, why: '' };
+    const x0 = scanRange(f)[0], on = x0 > 0 && x0 < 20;
+    return { on, why: ` Here automatic gives ${on ? 'on' : 'off'}: ${f.label} starts at ${fitTxt(+x0.toFixed(2))}°.` };
+  }
+  // The Refinement section as the settings are: each field its value (the default when
+  // not set), a field being typed in left as it is.
+  function syncFit(){
+    const fs = fitSettings(fit), ai = autoInv();
+    FITS.forEach(m=>{
+      const row = setBody.querySelector(`[data-fit-row="${m.k}"]`); if (!row) return;
+      const el = row.querySelector('[data-fit]');
+      if (m.bool){
+        const auto = !(m.k in fit), a = row.querySelector('[data-fit-auto]');
+        a.checked = auto; a.disabled = busy;
+        el.checked = auto ? ai.on : fit[m.k]; el.disabled = busy || auto;
+        row.title = el.title = a.title = m.title + ai.why;
+        row.querySelector('label').title = row.title;
+        return;
+      }
+      const txt = fitTxt(m.pct ? fs[m.k]*100 : fs[m.k]);
+      if (el !== document.activeElement || el.value === el.dataset.shown) el.value = txt;
+      el.dataset.shown = txt; el.disabled = busy;
+      row.title = m.full;
+    });
+    const def = setBody.querySelector('[data-fit-def]');
+    if (def) def.disabled = busy || !Object.keys(fit).length;
+    const note = setBody.querySelector('[data-fit-note]');
+    if (note){
+      note.classList.toggle('is-warn', !!fitNote);
+      note.textContent = fitNote || 'For every pattern, from the next refinement. A result refined with other than the defaults says which, under its statistics.';
+    }
+  }
+  // A Refinement setting changed (on change or Enter): kept when allowed — a value back at
+  // its default dropped — else the field shakes, goes back to the value it had, and the
+  // note says what is allowed.
+  function commitFit(t){
+    if (busy || rebuilding || !t.isConnected) return;
+    const k = t.dataset.fit || t.dataset.fitAuto, m = FIT[k]; if (!m) return;
+    if (t.dataset.fitAuto){ if (t.checked) delete fit[k]; else fit[k] = autoInv().on; }
+    else if (m.bool) fit[k] = t.checked;
+    else {
+      const was = fitSettings(fit)[k], v = readFit(m, t.value);
+      if (v === null){
+        const raw = String(t.value).trim();
+        fitNote = `${m.label}: ${m.rule}${m.int && /[.,]/.test(raw) ? ', without a point or comma' : ''}${raw ? ` — “${raw.length > 12 ? raw.slice(0, 12) + '…' : raw}” not taken` : ''}; kept ${t.dataset.shown}.`;
+        t.value = t.dataset.shown; flashFieldInvalid(t); syncFit();
+        return;
+      }
+      // (Enter, then the change on leaving: one step)
+      if (v === was){ t.value = t.dataset.shown; if (fitNote){ fitNote = null; syncFit(); } return; }
+      if (v === FIT_DEF[k]) delete fit[k]; else fit[k] = v;
+    }
+    // (in FITS' order, as restore gives it: the undo history compares states as text)
+    fit = cleanFit(fit);
+    fitNote = null;
+    host.commit(); syncFit();
+    // The field as taken, though still focused after Enter ("0,5" is 0.5; "1e2", 100).
+    if (!m.bool) t.value = t.dataset.shown;
+  }
+  setBody.addEventListener('change', e=>{
+    const t = e.target, d = t.dataset;
+    if (d.fit || d.fitAuto){ commitFit(t); return; }
+    if (busy || !(d.on || d.depth || d.hold)) return;
+    if (d.hold) hold = HOLD_KEYS.filter(k=> k === d.hold ? t.checked : hold.includes(k));
+    else {
+      const p = phaseOf(+d.ph); if (!p) return;
+      if (d.on) p.on[d.on] = t.checked;
+      else if (MODE[d.depth].list.some(([v])=> v === t.value)) p.dep[d.depth] = t.value;
+    }
+    host.commit(); renderPhases(); syncSettings();
+  });
+  setBody.addEventListener('keydown', e=>{
+    if (e.key === 'Enter' && e.target.dataset.fit && e.target.type === 'text'){ e.preventDefault(); commitFit(e.target); }
+  });
+  setBody.addEventListener('click', e=>{
+    if (e.target.closest('[data-fit-def]')){
+      if (busy || !Object.keys(fit).length) return;
+      fit = {}; fitNote = null; host.commit(); syncFit();
+      return;
+    }
+    const b = e.target.closest('[data-start]');
+    if (!b || busy || b.dataset.start === startFrom) return;
+    startFrom = b.dataset.start === 'last' ? 'last' : 'cif';
+    host.commit(); syncSettings();
+  });
+  setModal.addEventListener('click', e=>{ if (e.target === setModal) closeSettings(); });
+  $('xrdRvSetDone').onclick = closeSettings;
+  $('xrdRvSettings').onclick = ()=> setOpen() ? closeSettings() : openSettings();
 
   $('xrdRvAddCif').onclick = ()=> $('xrdRvCifInput').click();
   $('xrdRvCifInput').addEventListener('change', e=>{ const fl = [...e.target.files]; e.target.value = ''; if (fl.length) addCifs(fl); });
-  // The shape picked: for the next refinements (the results there keep theirs).
-  $('xrdRvPhaseList').addEventListener('change', e=>{
-    const t = e.target.closest('[data-shape]'), u = e.target.closest('[data-po]'), o = e.target.closest('[data-opt]');
-    if (!t && !u && !o) return;
-    const p = phases.find(q=> q.id === +(t ? t.dataset.shape : u ? u.dataset.po : o.dataset.ph));
-    if (p && !busy){
-      if (t) p.shape = shapeOpt(t.value);
-      else if (u) p.po = textureOpt(u.value);
-      else { const k = o.dataset.opt; p[k] = { profile: profileOpt, strain: strainOpt, faults: faultOpt, adp: adpOpt }[k](o.value); }
-      host.commit();
-    }
-    renderPhases();
-  });
   $('xrdRvPhaseList').addEventListener('click', e=>{
     const b = e.target.closest('[data-del]'); if (!b || busy) return;
     const id = +b.dataset.del;
@@ -650,6 +1008,8 @@ export function createRietveld(host){
   };
   $('xrdRvRefineAll').onclick = ()=> refineAll();
   $('xrdRvClear').onclick = ()=>{ const f = host.files()[idx]; if (!f || busy || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); };
+  // Every pattern's result, those of the files left out too (an undo brings them back).
+  $('xrdRvClearAll').onclick = ()=>{ if (busy || !Object.keys(results).length) return; results = {}; draw(true); host.commit(); };
   $('xrdRvPrev').onclick = ()=>{ const n = host.files().length; if (n){ idx = (idx - 1 + n) % n; draw(); } };
   $('xrdRvNext').onclick = ()=>{ const n = host.files().length; if (n){ idx = (idx + 1) % n; draw(); } };
 
@@ -659,7 +1019,8 @@ export function createRietveld(host){
     refresh(preserve){
       const fs = host.files();
       $('xrdRvCard').style.display = fs.length ? 'block' : 'none';
-      if (!fs.length) return;
+      // (an undo with the settings open can take every file away: the card goes, and they go with it)
+      if (!fs.length){ closeSettings(); return; }
       const names = new Set(host.allFiles().map(f=> f.name));
       Object.keys(results).forEach(k=>{ if (!names.has(k)) delete results[k]; });
       // A result refined in the other role (the standard chosen, or changed, since) is not
@@ -668,16 +1029,29 @@ export function createRietveld(host){
       host.allFiles().forEach(f=>{ const r = results[f.name]; if (r && roleOf(r) != null && roleOf(r) !== isStd(f)) delete results[f.name]; });
       renderPhases();
       draw(preserve);
+      renderSettings();
     },
     redraw(){ if (host.files().length) draw(true); },
-    snapshot(){ return { phases: phases.map(p=> ({ id: p.id, cif: p.cif, file: p.file, color: p.color, shape: shapeOpt(p.shape), po: textureOpt(p.po),
-      profile: profileOpt(p.profile), strain: strainOpt(p.strain), faults: faultOpt(p.faults), adp: adpOpt(p.adp) })), nextId, idx, results: JSON.parse(JSON.stringify(results)) }; },
+    // Each phase's settings (on, dep), and beside them the options as v428 named them
+    // (engineOf), which an older version opening the project reads.
+    snapshot(){ return { phases: phases.map(p=>{ const e = engineOf(p, false);
+        return { id: p.id, cif: p.cif, file: p.file, color: p.color, on: { ...p.on }, dep: { ...p.dep },
+          shape: e.shape, po: e.po || '', profile: e.profile, strain: e.strain, faults: e.faults || '', adp: e.adp }; }),
+      std: { on: { ...lab6.on }, dep: { ...lab6.dep } }, start: startFrom, hold: hold.slice(), fit: { ...fit },
+      nextId, idx, results: JSON.parse(JSON.stringify(results)) }; },
     restore(s){
       s = s || {};
-      // (A project from before the per-phase displacement option had one card-wide ΔB
-      // toggle: on, its phases refine one ΔB each.)
-      phases = (s.phases || []).flatMap(p=>{ try { return [{ ...p, shape: shapeOpt(p.shape), po: textureOpt(p.po), profile: profileOpt(p.profile), strain: strainOpt(p.strain),
-        faults: faultOpt(p.faults), adp: p.adp ? adpOpt(p.adp) : s.refineB ? 'overall' : 'cif', prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
+      // A project of v428 or older has the options without the flags (migrateSettings).
+      phases = (s.phases || []).flatMap(p=>{ try { return [{ id: p.id, cif: p.cif, file: p.file, color: p.color,
+        ...(p.on ? cleanSettings(p, defSettings()) : migrateSettings(p, s.refineB)), prep: prepPhase(p.cif, p.file) }]; } catch(e){ return []; } });
+      // (the rows that do not apply to the standard stay off, whatever a file says)
+      Object.assign(lab6, s.std ? cleanSettings(s.std, stdSettings()) : stdSettings());
+      STD_NA.forEach(k=> { lab6.on[k] = false; });
+      startFrom = s.start === 'last' ? 'last' : 'cif';
+      hold = Array.isArray(s.hold) ? HOLD_KEYS.filter(k=> s.hold.includes(k)) : HOLD_DEFAULT.slice();
+      // (a project of v428 or older has none: the defaults; a note on an entry not taken
+      // is about the settings before)
+      fit = cleanFit(s.fit); fitNote = null;
       nextId = s.nextId || phases.reduce((m, p)=> Math.max(m, p.id + 1), 1);
       idx = s.idx || 0;
       results = s.results ? JSON.parse(JSON.stringify(s.results)) : {};
@@ -714,6 +1088,10 @@ export function createRietveld(host){
       (r.table || []).forEach(q=> s += csvLine([f.label, q.phase || '', q.name, num(q.value, 8), num(q.esd, 8), num(st.Rwp*100, 3), num(st.Rexp*100, 3), num(st.chi2, 3)]));
       // A sample refined with an earlier refinement of the standard (the card's warning).
       if (staleOf(f, r)) s += csvLine([f.label, '', 'standard_changed_since', '1', '', num(st.Rwp*100, 3), num(st.Rexp*100, 3), num(st.chi2, 3)]);
+      // The Refinement settings it was refined with, those not the defaults (as the card
+      // says them): the engine's values and units (cellRange a fraction, bgInv 1 or 0), in
+      // full, with the export's decimal mark.
+      fitUsed(f, r).forEach(u=> s += csvLine([f.label, '', 'fit_' + u.k, typeof u.v === 'boolean' ? (u.v ? '1' : '0') : fitTxt(u.v).replace('.', settings.decimal), '', num(st.Rwp*100, 3), num(st.Rexp*100, 3), num(st.chi2, 3)]));
     });
     out.push({ name: 'rietveld_results.csv', text: s });
     // The peak widths of every refined sample.
@@ -728,7 +1106,8 @@ export function createRietveld(host){
         const skip = [w.unread && 'not read: ' + w.unread, w.overlapped && 'overlapped', w.edge && 'edge', w.weak && 'weak', w.flat && 'no broadening above the instrument (the corrected FWHM an upper limit, 2 esd)'].filter(Boolean).join(' ');
         // Without a standard (or with one of another wavelength) the corr columns hold the
         // whole widths, the instrument's in.
-        const note = [skip, !wd.corrected && (refused ? 'not corrected: the standard is of another wavelength' : 'not corrected: no instrumental standard')].filter(Boolean).join('; ');
+        const note = [skip, !wd.corrected && (refused ? 'not corrected: the standard is of another wavelength' : 'not corrected: no instrumental standard'),
+          !skip && w.HsEsdFit > 0 && `esds widened from the fit's ${num(w.HsEsdFit, 5)} deg by what a misfitting phase's reflections could do to it`].filter(Boolean).join('; ');
         const lim = w.flat && Number.isFinite(w.HsMax);
         pk += csvLine([f.label, ph.name, w.plain, num(w.tt, 5), num(w.rel, 4), num(w.H, 5), num(w.Hesd, 5), num(w.eta, 3), lim ? num(w.HsMax, 5) : num(w.Hs, 5), lim ? '' : num(w.HsEsd, 5), num(w.D, 4), num(w.Desd, 4), w.flat ? '' : num(w.dd, 6), w.flat ? '' : num(w.ddEsd, 6), num(w.model.iso, 5), ph.shaped ? num(w.model.shape, 5) : '', skip ? 'no' : 'yes', note]);
       }));
