@@ -34,18 +34,32 @@ was proposed; nothing here is in the code yet.
   than about one FWHM can swap peaks. To be solved: e.g. an optimal assignment
   (each sample's peaks to the reflections at minimum total distance in sigmas)
   rather than the sweep.
-- **Free shape: the axes held on the lattice (found in v429, awaiting a go-ahead).**
+- **Free shape: the axes held on the lattice (found in v429; its case gone in v430).**
   Two defects of the shape search, measured on 36D and 37D without texture and on
-  synthetic discs. (1) A body held on the lattice goes to the simplest direction within
-  10° of the free fit's axis, not the nearest: discs whose free normal lies within 0–2°
-  of [310] are reported as "⟨210⟩ (8°)", and the held box and ellipsoid of 36D stay on
-  [210], 2–10 in χ² above the same solids held on [310]. Taking the nearest direction
-  needs a preference for the simpler one when χ² is practically equal (a synthetic
-  [210] disc as a box would otherwise be held on [320], 0.6 lower). (2) The held
-  candidates are built only near the best free fit: frames on the low-index directions
-  (⟨100⟩, ⟨110⟩, ⟨111⟩) are never tried; adding them changes only the fits with one ΔB
-  free on these samples. Neither change reaches the shallow minima 8° from [110] that
-  the box finds on 36D (ΔBIC −10). Scripts: scratchpad/v429/L/.
+  synthetic discs, with the Sr site held full. (1) A body held on the lattice goes to the
+  simplest direction within 10° of the free fit's axis, not the nearest: discs whose free
+  normal lies within 0–2° of [310] are reported as "⟨210⟩ (8°)", and the held box and
+  ellipsoid of 36D stay on [210], 2–10 in χ² above the same solids held on [310]. Taking
+  the nearest direction needs a preference for the simpler one when χ² is practically
+  equal (a synthetic [210] disc as a box would otherwise be held on [320], 0.6 lower).
+  (2) The held candidates are built only near the best free fit: frames on the low-index
+  directions (⟨100⟩, ⟨110⟩, ⟨111⟩) are never tried. v430 found what had sent those discs
+  to [310]: the Sr site of these samples scatters 0.63–0.74 of a full one, and with the
+  occupancy refined the disc's normal is ⟨110⟩ on all twelve samples, 0–3° off — the
+  lamellae the samples are made of. The two defects remain as rules, with no real case
+  that needs them now; worth doing only if another sample shows them.
+- **A broad component under the SrTiO₃ patterns (found in v430).** On the user's twelve
+  samples a hump at 29–31° (FWHM 5–7°, 14–37 % of the (110)'s area) lies under the
+  pattern, larger the lower the refined Sr occupancy (r −0.89): a disordered, Sr-poor
+  part, perhaps the lamellae's surface. The Chebyshev background takes it up only in
+  part, and pulled up at 22.7° it takes the weak (100) with it. Proposed: an amorphous
+  term in the background (a pseudo-Voigt hump, position and width refined), offered as a
+  setting; with it a free-area fit moved (100) from 0–0.2 to 0.2–0.7 of the model.
+- **The Ni filter's continuum (found in v430).** Between the Ni K edge (1.488 Å) and Cu
+  Kα₁ the filter passes the tube's continuum: on LaB6_real a step under every line, 0.7
+  per Å of the line's intensity (2–3 % of its area), on its low-angle side. The engine
+  draws Kα₁ and Kα₂ only. Proposed: the band as a few weighted wavelengths in the
+  model's lines, its density measured on the standard.
 - **Rietveld against MAUD (started in v426, on hold).** How far our engine and MAUD
   recover a known truth from synthetic patterns at equal model depth, with a third,
   neutral generator (the Debye scattering equation of atomistic crystallites), to

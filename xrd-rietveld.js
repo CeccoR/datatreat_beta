@@ -20,7 +20,7 @@
    it on a model built again from the same inputs.
 ========================================================= */
 import { metric, reflections, latticeNames, latticeParams, cellFrom, cellMass, atomOrbits, siteAdpBasis, adpU, betaOf } from './xrd-cryst.js';
-import { lineForWavelength, f0, fprime } from './xrd-data.js';
+import { lineForWavelength, f0, fprime, atomicMass } from './xrd-data.js';
 import { noiseCountScale } from './xrd-instr.js';
 import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
 
@@ -66,6 +66,7 @@ const MIN_POINTS = 10;         // fewer weighted points than this: no refinement
 // lengths' bounds to twice it (buildModel's latRange).
 const LAT_RANGE = 0.1;
 const LAT_ANGLE = 15;          // deg
+const OCC_MAX = 2;             // a refined occupancy's upper bound (occSetup)
 const BG_DEGREE = 6;           // the Chebyshev background's degree (a fit setting, bgDegree)
 /* (S + H)/L to start the asymmetry's refinement from (at 0 it has no derivative). Its effect
    grows as A², so a Gauss–Newton step from A₀ aims at about (A₀² + A²)/(2A₀): from above it
@@ -1317,8 +1318,11 @@ function tickLabels(list, ops, M){
    in 10⁻⁶). p.faults: '111:1/6<112>' — the fault planes' family and the displacement
    (FA the fault probability per plane). p.adp: 'cif' (the CIF's B, held), 'overall'
    (one ΔB, p.B), 'site' (B per crystallographic site, B_<label>) or 'aniso' (U^ij per
-   site within its symmetry, U11_<label> …). */
+   site within its symmetry, U11_<label> …). p.occ: a site's label (phaseSites), or a
+   list of them, whose occupancy is refined (occ_<label>; occSetup). */
 const PROFILES = ['lorentz', 'wppm', 'lognormal'];
+// The refined sites as one key (a result's models.occ against the options now).
+const occText = a => (Array.isArray(a) ? a : a ? [a] : []).map(String).sort().join(',');
 function faultOf(spec){
   const m = typeof spec === 'string' && spec.trim().match(/^(-?\d)\s*(-?\d)\s*(-?\d)\s*:\s*(\d+)\s*\/\s*(\d+)\s*<\s*(-?\d)\s*(-?\d)\s*(-?\d)\s*>$/);
   if (!m) return null;
@@ -1502,14 +1506,23 @@ function siteLabels(atoms, refs){
     return lab;
   });
 }
+/* The crystallographic sites of a phase, as every per-site option names them (B per site,
+   Uⁱʲ, the occupancy): the orbits of the cell's atoms under its operations (atomOrbits:
+   one species and occupancy each), labelled after their first atom's CIF label. The card
+   lists a phase's sites with it, so the names it offers are the parameters' own. */
+function phaseSites(cell, atoms, ops){
+  const orb = atomOrbits(cell, atoms, ops), labels = siteLabels(atoms, orb.ref);
+  return { orbit: orb.orbit, R: orb.R, labels, sites: orb.ref.map((j, o)=> ({ label: labels[o], ref: j, element: atoms[j].element, occ: atoms[j].occ ?? 1,
+    members: atoms.map((_, i)=> i).filter(i=> orb.orbit[i] === o) })) };
+}
 function adpSetup(q, p, cell, add, nextIndex){
   q.adp = ['overall', 'site', 'aniso'].includes(p.adp) ? p.adp : 'cif';
   if (q.adp !== 'site' && q.adp !== 'aniso') return;
-  const atoms = q.atoms, orb = atomOrbits(cell, atoms, p.ops);
+  const atoms = q.atoms, orb = phaseSites(cell, atoms, p.ops);
   q.orbit = orb.orbit; q.orbR = orb.R;
-  const labels = siteLabels(atoms, orb.ref), { Gs } = metric(cell), Ns = [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])];
-  q.sites = orb.ref.map((j, o)=>{
-    const members = atoms.map((_, i)=> i).filter(i=> orb.orbit[i] === o);
+  const labels = orb.labels, { Gs } = metric(cell), Ns = [Math.sqrt(Gs[0]), Math.sqrt(Gs[4]), Math.sqrt(Gs[8])];
+  q.sites = orb.sites.map(({ ref: j }, o)=>{
+    const members = orb.sites[o].members;
     const Bs = members.map(i=> atoms[i].Biso).filter(Number.isFinite), B0 = Bs.length ? Bs.reduce((a, b)=> a + b, 0)/Bs.length : 0.5;
     const site = { label: labels[o], ref: j, members, element: atoms[j].element };
     if (q.adp === 'site'){ site.iB = nextIndex(); add('B_' + labels[o], B0, -2, 20, 1e-4, { kind: 'adp', site: o }); return site; }
@@ -1523,6 +1536,36 @@ function adpSetup(q, p, cell, add, nextIndex){
     site.iU = basis.names.map((nm, i)=> { const ix = nextIndex(); add(nm + '_' + labels[o], c0[i], -0.5, 0.5, 1e-6, { kind: 'adp', site: o }); return ix; });
     return site;
   });
+}
+/* Site occupancies refined (p.occ: a site's label, or a list of them): each its own
+   parameter occ_<label>, the occupancy of every atom of the site, starting from the CIF's.
+   It scales the site's scattering at every angle alike, where a B lowers it more the
+   higher the angle: on a nanocrystalline SrTiO3 the Sr site scattering 0.7 of a full one
+   (a Sr-poor surface) had been read as a negative B, a texture and B per site of +4 and
+   −2 Å². Every site free is the scale again — one common factor, which the pattern cannot
+   tell from it — and is refused. Bounds 0 … OCC_MAX: over 1 the site holds more electrons
+   than the CIF's species (a heavier one beside it), which the results say. */
+function occSetup(q, p, cell, add, nextIndex){
+  const want = [...new Set((Array.isArray(p.occ) ? p.occ : p.occ ? [p.occ] : []).map(String))];
+  q.occSites = [];
+  if (!want.length || !q.atoms.length) return;
+  const ps = phaseSites(cell, q.atoms, p.ops), names = ps.sites.map(s=> s.label);
+  const unknown = want.filter(l=> !names.includes(l));
+  if (unknown.length) q.specWarn.push(`no site ${unknown.join(', ')} among its sites (${names.join(', ')}): ${unknown.length > 1 ? 'their occupancies are' : 'its occupancy is'} not refined`);
+  const chosen = ps.sites.filter(s=> want.includes(s.label));
+  if (chosen.length && chosen.length === ps.sites.length){
+    q.specWarn.push(`the occupancy of every site at once is the scale again (one common factor the pattern cannot tell from it): ${ps.sites.length > 1 ? 'leave one site out' : 'a phase of one site has no occupancy to refine'}; not refined`);
+    return;
+  }
+  q.occOrbit = ps.orbit;
+  q.occSites = chosen.map(s=> { const o = ps.sites.indexOf(s), iOcc = nextIndex(); add('occ_' + s.label, s.occ, 0, OCC_MAX, 1e-4, { kind: 'occ', site: o }); return { ...s, o, iOcc }; });
+}
+// The cell's mass with the refined occupancies (the Hill–Howard weight fractions'): the
+// CIF's, and each refined site's atoms at their occupancy now instead of the file's.
+function phaseMass(q, v){
+  let m = q.mass;
+  for (const s of q.occSites || []){ const a = q.atoms[s.ref]; m += (v[s.iOcc] - s.occ)*s.members.length*atomicMass(a.massEl || a.element); }
+  return m;
 }
 function solveSmall(A, b, n){
   const M = A.map((row, i)=> [...row, b[i]]);
@@ -1787,6 +1830,7 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     }
     broadeningSetup(q, p, cell, list, (nm, value, lo, hi, step, extra)=> add(pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
     adpSetup(q, p, cell, (nm, value, lo, hi, step, extra)=> add(pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
+    occSetup(q, p, cell, (nm, value, lo, hi, step, extra)=> add(pfx + nm, value, lo, hi, step, { group: 'phase', phase: k, ...extra }), ()=> par.length);
     return q;
   });
 
@@ -1866,13 +1910,15 @@ function phaseGeometry(model, q){
     const key = a.key || a.element || a.label, el = a.element || key, occ = a.occ ?? 1, B = a.Biso ?? 0;
     const o = q.orbit ? q.orbit[j] : -1;
     const grp = q.adp === 'site' ? 'o' + o : q.adp === 'aniso' ? 'o' + o + '|' + q.orbR[j].join() : 'B' + B;
-    const id = key + '|' + el + '|' + occ + '|' + grp;
+    // A site whose occupancy is refined: its atoms a type of their own, the occupancy theirs.
+    const so = q.occOrbit ? q.occSites.find(s=> s.o === q.occOrbit[j]) : null;
+    const id = key + '|' + el + '|' + occ + '|' + grp + (so ? '|q' + so.o : '');
     let t = tid.get(id);
     if (t === undefined){
       if (!byKey.has(key)){ byKey.set(key, keys.length); keys.push(key); }
       // f′, f″ at each line (fp2: the Kα2 line's, Kα1's when there is none)
       const fp = model.lines.map(L=> L.fp ? fprime(el, L.fp) : [0, 0]), fp2 = fp[fp.length - 1];
-      t = types.push({ id, key: byKey.get(key), occ, B, fpr: fp[0][0], fpi: fp[0][1], fpr2: fp2[0], fpi2: fp2[1], site: o, R: q.adp === 'aniso' ? q.orbR[j] : null }) - 1;
+      t = types.push({ id, key: byKey.get(key), occ, B, fpr: fp[0][0], fpi: fp[0][1], fpr2: fp2[0], fpi2: fp2[1], site: o, R: q.adp === 'aniso' ? q.orbR[j] : null, iOcc: so ? so.iOcc : -1 }) - 1;
       tid.set(id, t);
     }
     return t;
@@ -1895,7 +1941,8 @@ function phaseGeometry(model, q){
 // Kα1's).
 function phaseF2(model, q, cell, Gs, v){
   const adpKey = q.adp === 'site' ? q.sites.map(st=> v[st.iB]).join() : q.adp === 'aniso' ? q.sites.map(st=> st.iU.map(i=> v[i]).join(':')).join() : '';
-  const key = cell.a + ',' + cell.b + ',' + cell.c + ',' + cell.alpha + ',' + cell.beta + ',' + cell.gamma + '|' + adpKey;
+  const occKey = q.occSites && q.occSites.length ? q.occSites.map(s=> v[s.iOcc]).join() : '';
+  const key = cell.a + ',' + cell.b + ',' + cell.c + ',' + cell.alpha + ',' + cell.beta + ',' + cell.gamma + '|' + adpKey + '|' + occKey;
   if (q.f2key === key) return q.f2;
   if (q.atoms.length && !q.geo) phaseGeometry(model, q);
   const f2 = new Float64Array(q.nRefl), d = new Float64Array(q.nRefl);
@@ -1926,7 +1973,7 @@ function phaseF2(model, q, cell, Gs, v){
       let dw;
       if (betas){ const b = betas[t]; dw = Math.exp(-(h*h*b[0] + k*k*b[4] + l*l*b[8] + 2*(h*k*b[1] + h*l*b[2] + k*l*b[5]))); }
       else dw = Math.exp(-(Bt ? Bt[t] : T.B)*s2);
-      const w = T.occ*dw, ar = w*(f0s[T.key] + T.fpr), ai = w*T.fpi;
+      const w = (T.iOcc >= 0 ? v[T.iOcc] : T.occ)*dw, ar = w*(f0s[T.key] + T.fpr), ai = w*T.fpi;
       const g = geo.gr[r*nt + t], gs = geo.gi[r*nt + t];
       r1 += ar*g - ai*gs; i1 += ar*gs + ai*g;           // F(h)
       r2 += ar*g + ai*gs; i2 += ai*g - ar*gs;           // F(−h): G conjugated
@@ -3087,7 +3134,8 @@ function ownEvidence(model, v, chi2){
    6. the phases' optional stages, each on top of what is free: the anisotropic strain
       (Stephens' S_j), the planar faults (FA), the size distribution (σ, LS), the
       displacement parameters (ΔB, B per site or Uⁱʲ per site: the phase's adp, or
-      'overall' for all with opts.refineB, the v419–v423 card option), the texture.
+      'overall' for all with opts.refineB, the v419–v423 card option), the site
+      occupancies (the phase's occ), the texture.
    With opts.irf = { U, V, W, X, Y, asym?, zero?, lam1?, radius? } (the standard's refined
    profile, and its λ1 and radius), the instrument's U..Y and asymmetry are held at those
    values and each phase's broadening goes to its Xs, Ys, which add to X and Y (Lorentzian
@@ -3118,7 +3166,8 @@ function ownEvidence(model, v, chi2){
    curve, fine, steps, phases:[{id, f, found, Rwp, curve, fine, steps}]} (f, curve: the
    first phase's), sizeStrain, weightFractions (each with `detected`), detected: [ids],
    warnings: [string], textures (each {hkl, r, esd, spec}), models: {id: {profile, strain
-   ('off', 'iso', 'aniso'), faults, adp, size, shape (the solid asked for and searched)}}
+   ('off', 'iso', 'aniso'), faults, adp, occ (the sites whose occupancy is refined, or null),
+   size, shape (the solid asked for and searched)}}
    (what each phase was refined with: without the standard's profile, WPPM, the
    anisotropic strain, the faults and the shape are not), irf (the one used, or null), reflectionsInRange, linePositions
    (reflectionsInRange's n and positions after the widths stage), converged, fit (the
@@ -3165,6 +3214,7 @@ function autoRefine(model, opts = {}){
     model.phases.some(q=> q.iFA != null && !q.noIrf) && 'planar faults',
     model.phases.some(q=> q.iLS != null && q.wppm) && 'size distribution',
     model.phases.some(q=> adpOf(q) !== 'cif') && 'displacement parameters',
+    model.phases.some(q=> q.occSites && q.occSites.length) && 'site occupancy',
   ].filter(Boolean);
   const nStages = 5 + optStages.length;
   const lin = ['bg' + 0];
@@ -3276,7 +3326,7 @@ function autoRefine(model, opts = {}){
   // the data rejected from one not asked for, which the parameters (all 0) do not.
   const modelOf = (q, k) => ({ profile: q.wppm ? (q.iLS != null && !lsFailed.has(k) ? 'lognormal' : 'wppm') : 'lorentz',
     strain: q.strainOff ? 'off' : q.iS && !q.noIrf ? 'aniso' : 'iso', faults: q.faultSpec && !q.noIrf ? q.faultSpec.text : null, adp: adpOf(q), size: !q.sizeOff,
-    shape: irf && q.shapeType || false });
+    occ: q.occSites && q.occSites.length ? q.occSites.map(s=> s.label) : null, shape: irf && q.shapeType || false });
   /* What both starts end with, the full refinement and the one from the last result: the
      warnings on what could not be refined and on overlapping phases, the free shape
      (searched for the phases that ask for one, but for those in `carried`, kept from
@@ -3335,7 +3385,7 @@ function autoRefine(model, opts = {}){
     model.cov = { names: res.free, cov: res.cov }; model.esd = res.esd;
     progRaw(1, 'done');
     const detected = model.phases.map((_, k)=> !out.has(k));
-    const phasesNow = model.phases.map((q, k)=> ({ id: q.id, name: q.name, cell: cellOf(model, model.v, k), mass: q.mass }));
+    const phasesNow = model.phases.map((q, k)=> ({ id: q.id, name: q.name, cell: cellOf(model, model.v, k), mass: phaseMass(q, model.v) }));
     const scl = model.phases.map(q=> model.v[q.iScale]);
     const cov = model.cov && model.cov.cov ? scales.map(a=> scales.map(b=> {
       const ia = model.cov.names.indexOf(a), ib = model.cov.names.indexOf(b);
@@ -3392,7 +3442,8 @@ function autoRefine(model, opts = {}){
      opts.hold may hold: 'linear' (scales, background), 'cell' (lattice and displacement;
      the standard's zero and displacement), 'instrument' (U … Y and the asymmetry, where
      they are refined: no standard's profile), and per phase 'sizestrain' (Ys, Xs, S_j,
-     σ), 'shape', 'faults', 'adp' (ΔB, B or Uⁱʲ per site), 'texture' (r and its axis).
+     σ), 'shape', 'faults', 'adp' (ΔB, B or Uⁱʲ per site), 'occ' (the refined site
+     occupancies), 'texture' (r and its axis).
      A phase's group is unchanged when its option is the one the last result was refined
      with (start.models, start.textures, the solid its parameters name, or the one asked
      for there and rejected: start.models' shape). Values: the last result's, but for a
@@ -3453,12 +3504,13 @@ function autoRefine(model, opts = {}){
       return { m0, m1, sh0, sh1, rej0, w0, w1,
         sizestrain: !m0 || !irfSame || (m0.size !== false) !== m1.size || (m0.strain || 'iso') !== m1.strain || (m0.profile || 'lorentz') !== m1.profile,
         shape: rej0 ? false : sh0 !== sh1 || (!!sh1 && !(rec && sameRead)), faults: !m0 || (m0.faults || null) !== m1.faults, adp: !m0 || (m0.adp || 'cif') !== m1.adp,
+        occ: !m0 || occText(m0.occ) !== occText(m1.occ),
         texture: q.iPO == null ? !!t0 : !texSame };
     });
     const groupOf = i => { const p = model.par[i];
       return p.linear ? 'linear' : p.kind === 'lattice' || p.name === 'zero' || p.name === 'disp' ? 'cell' : p.group === 'profile' ? 'instrument'
         : p.kind === 'size' || p.kind === 'strain' || p.kind === 'dist' ? 'sizestrain' : p.kind === 'shape' ? 'shape' : p.kind === 'faults' ? 'faults'
-        : p.kind === 'B' || p.kind === 'adp' ? 'adp' : p.kind === 'texture' ? 'texture' : null; };
+        : p.kind === 'B' || p.kind === 'adp' ? 'adp' : p.kind === 'occ' ? 'occ' : p.kind === 'texture' ? 'texture' : null; };
     /* The background's terms there and here (the degree and the 1/2θ term, fit settings):
        held across a change, the terms left had been fitted beside the others (degree 12
        → 6 on 33A, 'linear' held: χ²_ν 135, the background up to 424 counts off), so the
@@ -3495,7 +3547,7 @@ function autoRefine(model, opts = {}){
       }
       // The other groups: the last values when unchanged (a solid's reference orientation
       // with them), else their usual start.
-      model.par.forEach((p, i)=> { const g = groupOf(i); if (p.phase === k && (g === 'shape' || g === 'faults' || g === 'adp' || g === 'texture') && !c[g]) take(p.name); });
+      model.par.forEach((p, i)=> { const g = groupOf(i); if (p.phase === k && (g === 'shape' || g === 'faults' || g === 'adp' || g === 'occ' || g === 'texture') && !c[g]) take(p.name); });
       if (q.iPO != null && !c.texture) q.poHkl = T0[q.id].hkl.map(Number);
     });
     setParams(model, vv);
@@ -3519,6 +3571,7 @@ function autoRefine(model, opts = {}){
     liveK.forEach(k=> { const q = model.phases[k]; if (q.iLS != null && q.wppm) F.push(q.pfx + 'LS'); });
     liveK.forEach(k=> { const q = model.phases[k], a = adpOf(q);
       F.push(...(a === 'overall' ? [q.pfx + 'B'] : a === 'site' ? q.sites.map(st=> model.par[st.iB].name) : a === 'aniso' ? q.sites.flatMap(st=> st.iU.map(i=> model.par[i].name)) : [])); });
+    liveK.forEach(k=> { F.push(...(model.phases[k].occSites || []).map(s=> model.par[s.iOcc].name)); });
     liveK.forEach(k=> { const q = model.phases[k]; if (q.iPO != null) F.push(q.pfx + 'PO'); });
     // A carried solid: its widths and the turns its search refined (none for a body held
     // on the lattice; never the reference orientation).
@@ -3563,8 +3616,15 @@ function autoRefine(model, opts = {}){
     liveK.forEach(k=> { const q = model.phases[k];
       if (q.iFA != null && !q.noIrf && chg[k].faults && held.some(n=> n.startsWith(q.pfx) && ['sizestrain', 'shape'].includes(groupOf(model.index[n]))))
         warnings.push(`${nm(k)}: the planar faults are new, and refined with the size and strain${held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'shape') ? ' and the shape' : ''} held: they take only the broadening those left, which took the faults' share before. Refined together (not held), the faults get their own.`); });
+    /* The occupancies changed (switched on, off or to another site) beside displacements
+       held: those were fitted beside the other occupancies, and both scale the sites'
+       scattering. On 33A (SrTiO3, the Sr site at 0.69) a ΔB held at its 0.63 Å² and the
+       occupancy switched off left χ²_ν at 1.73, where refined together they give 1.70. */
+    liveK.forEach(k=> { const q = model.phases[k];
+      if (chg[k].occ && chg[k].m0 && held.some(n=> n.startsWith(q.pfx) && groupOf(model.index[n]) === 'adp'))
+        warnings.push(`${nm(k)}: the site occupancies changed since, and the displacement parameters are held at values fitted beside the former ones: both scale the sites' scattering. Refined together (not held), each takes its own share.`); });
     const LABEL = { linear: 'scales and background', cell: std ? 'zero and displacement' : 'cell and displacement', instrument: 'instrumental profile', size: 'size', strain: 'strain',
-      shape: 'free shape', faults: 'planar faults', adp: 'displacement parameters', texture: 'preferred orientation' };
+      shape: 'free shape', faults: 'planar faults', adp: 'displacement parameters', occ: 'site occupancy', texture: 'preferred orientation' };
     // (the size and the strain apart: a new solid frees Y_s and leaves X_s held)
     const labelOf = i => { const g = groupOf(i), p = model.par[i]; return g !== 'sizestrain' ? g : p.kind === 'strain' || i === model.phases[p.phase].iXs ? 'strain' : 'size'; };
     const lists = { held: new Map(), kept: new Map(), fresh: new Map() };
@@ -3760,6 +3820,12 @@ function autoRefine(model, opts = {}){
         return a === 'overall' ? [q.pfx + 'B'] : a === 'site' ? q.sites.map(st=> model.par[st.iB].name) : a === 'aniso' ? q.sites.flatMap(st=> st.iU.map(i=> model.par[i].name)) : [];
       })));
       res = run(kSt++, 'displacement parameters', free);
+    }
+    // The occupancies after the displacements, beside them: both scale a site's
+    // scattering, the one alike at every angle, the other more at high angle.
+    if (optStages.includes('site occupancy')){
+      free = free.concat(keep(model.phases.flatMap(q=> (q.occSites || []).map(s=> model.par[s.iOcc].name))));
+      res = run(kSt++, 'site occupancy', free);
     }
     // A preferred orientation (March–Dollase), for the phases that ask for one.
     const poKs = model.phases.map((_, k)=> k).filter(k=> model.phases[k].iPO != null && !out.has(k));
@@ -4182,4 +4248,5 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 
 export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
-         fcjNodes, addPeak, addPeakFCJ, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor };
+         fcjNodes, addPeak, addPeakFCJ, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
+         phaseSites, phaseMass, OCC_MAX };

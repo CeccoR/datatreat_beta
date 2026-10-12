@@ -7,7 +7,7 @@ The *Rietveld* card of the XRPD module refines powder patterns against crystal s
 - the staged strategy that takes a pattern from a CIF cell to a converged fit;
 - the instrumental standard;
 - the size, strain and fault broadening, by Lorentzian widths or by Whole Powder Pattern Modelling;
-- the displacement parameters;
+- the displacement parameters and the site occupancies;
 - preferred orientation and the crystallite-shape model;
 - the single-peak width tests;
 - what is reported, and with which uncertainties.
@@ -25,7 +25,7 @@ The document follows the code as of v425. Functions are named with their file, e
 5. [Least squares](#5-least-squares)
 6. [The refinement strategy](#6-the-refinement-strategy)
 7. [Instrument, size and strain](#7-instrument-size-and-strain)
-8. [Displacement parameters](#8-displacement-parameters)
+8. [Displacement parameters and site occupancies](#8-displacement-parameters-and-site-occupancies)
 9. [Preferred orientation](#9-preferred-orientation)
 10. [The free crystallite shape](#10-the-free-crystallite-shape)
 11. [Weight fractions, cell volume, displacement](#11-weight-fractions-cell-volume-displacement)
@@ -50,6 +50,7 @@ The document follows the code as of v425. Functions are named with their file, e
    - the microstrain (isotropic, or anisotropic after Stephens);
    - planar faults (one of six kinds);
    - the displacement parameters (one ΔB; B per site; Uⁱʲ per site; off: the CIF's);
+   - the occupancy of one of the phase's sites (off: the CIF's);
    - a preferred orientation (*best axis*, or a plane).
 
    The standard's LaB₆ has its B and texture there too. The same modal sets where **Refine** starts: from the CIF, or from each pattern's last result with chosen groups of parameters held there (§6.8).
@@ -434,7 +435,7 @@ F(\mathbf h) = \sum_{j} o_j\, e^{-B_j s^2}\,\bigl(f_{0,j}(s) + f'_j + i f''_j\bi
 \qquad |F_{\mathbf h}|^2 = \tfrac12\bigl(|F(\mathbf h)|^2 + |F(-\mathbf h)|^2\bigr)
 ```
 
-- **The sum** runs over every atom of the filled cell (o_j is the occupancy).
+- **The sum** runs over every atom of the filled cell (o_j is the occupancy: the CIF's, or the refined occupancy of the atom's site, §8.5).
 - **Bijvoet average.** A powder line holds both h and −h, which f″ makes unequal in a non-centrosymmetric structure.
 - **f₀** is Waasmaier & Kirfel's five Gaussians plus a constant, valid for s ≤ 6 Å⁻¹.
   - It covers the neutral atoms H–Cf and 111 common ions; a charge between two of an element's is their mixture, one beyond them the nearest (§2.3).
@@ -446,9 +447,9 @@ F(\mathbf h) = \sum_{j} o_j\, e^{-B_j s^2}\,\bigl(f_{0,j}(s) + f'_j + i f''_j\bi
 - **Debye–Waller.** It acts on the amplitude, so F² carries e^{−2Bs²}. B_j is the CIF's (0.5 Å² where it gives none), or the refined B of the atom's site. With anisotropic displacements, the factor is e^{−**h**ᵀβ_j**h**} instead (§8.3).
 
 **Speed** (`phaseGeometry`, `phaseF2`).
-- The positions never move. So for each scattering type (one species, occupancy and B; with refined displacements, also one site and one orientation of it) and each reflection, the geometric sum Σ e^{2πi h·x} is made once.
+- The positions never move. So for each scattering type (one species, occupancy and B; with refined displacements, also one site and one orientation of it; with a refined occupancy, its site) and each reflection, the geometric sum Σ e^{2πi h·x} is made once.
 - A new cell then costs only the form factors at the new s: no trigonometry. On a 48-atom monoclinic cell, the trigonometry had been most of the time of a cell-search step.
-- F² is cached for the last cell and displacement parameters.
+- F² is cached for the last cell, displacement parameters and refined occupancies.
 
 ### 3.4 Lorentz–polarisation
 
@@ -652,6 +653,7 @@ Which ones are free at each stage is decided by the strategy (§6).
 | `B` | ΔB, Å² (displacements *one ΔB*) | 0 | [−2, 10] | no |
 | `B_<site>` | the B of one site, Å² (*B per site*, §8.2) | the mean of the CIF's B over the site (0.5 without) | [−2, 20] | no |
 | `U11_<site>` … `U23_<site>` | the Uⁱʲ the site's symmetry leaves free, Å² (*Uⁱʲ per site*, §8.3) | isotropic, from the CIF's B | ±0.5 | no |
+| `occ_<site>` | the occupancy of every atom of one site (*Site occupancy*, §8.5) | the CIF's | [0, 2] | no |
 | `Xs`, `Ys` | the phase's Lorentzian broadening, ° (with WPPM, Y_s is the sphere's size, §7.3) | 0 and the excess width (§6.1) | X_s [0, 10] (ε up to 4.4 %, whatever λ); Y_s [0, K·λ₁/0.8 nm]: 9.9° at Cu Kα₁, 4.6° at Mo, 14.8° at Cr | no |
 | `S1`…`Sn` | Stephens' anisotropic parts of ε², 10⁻⁶ (§7.5) | 0 | ±10⁴ | no |
 | `FA` | the planar faults' probability per plane (§7.6) | 0 | [0, 0.45] | no |
@@ -959,7 +961,8 @@ After the four stages, the phases' options add stages, in this order. Each frees
 2. **Planar faults** (§7.6): the fault probability, from 0.
 3. **Size distribution** (§7.4): σ enters the profile to second order (a distribution and its mirror in ln D differ only beyond), so from σ = 0 it has no derivative. It is refined from 0.3 and from 0.6, and the lower χ² is kept.
 4. **Displacement parameters** (§8): ΔB, the B per site or the Uⁱʲ per site.
-5. **Preferred orientation** (§9).
+5. **Site occupancy** (§8.5): the occupancy of the sites asked for, beside the displacements (both scale a site's scattering, the one alike at every angle, the other more at high angle).
+6. **Preferred orientation** (§9).
 
 Then, separately, the **free crystallite shape** (§10).
 
@@ -1011,9 +1014,10 @@ Each phase's crystallite size and microstrain can be switched off (`size: false`
 | `shape` | per phase, the free solid's widths and turns |
 | `faults` | per phase, the fault probability |
 | `adp` | per phase, ΔB, the B per site or the Uⁱʲ per site |
+| `occ` | per phase, the refined site occupancies |
 | `texture` | per phase, the March–Dollase r and its axis |
 
-**The rule.** A group of a phase is *unchanged* when the phase is refined with the option the last result had: the same size toggle, strain and size profile (`sizestrain`, from `start.models`); the same solid, in use there (`shape`, read from the names of the parameters: each solid has its own), or asked for there and rejected by its ΔBIC (`start.models[id].shape`, the solid asked for and searched, kept or not); the same faults and displacements (`start.models`); the same axis, or 'auto' again (`texture`, from `start.textures`, whose `spec` says which was asked). A parameter is held when its group is in `hold` and unchanged, and the last result refined it (`start.free`) or held it at the one before (`start.held`). One the last result does not have (a background term added since) is new, and never held. Everything else that a full refinement with these options would end with free is refined:
+**The rule.** A group of a phase is *unchanged* when the phase is refined with the option the last result had: the same size toggle, strain and size profile (`sizestrain`, from `start.models`); the same solid, in use there (`shape`, read from the names of the parameters: each solid has its own), or asked for there and rejected by its ΔBIC (`start.models[id].shape`, the solid asked for and searched, kept or not); the same faults and displacements, and the same sites' occupancies (`start.models`, its `occ`); the same axis, or 'auto' again (`texture`, from `start.textures`, whose `spec` says which was asked). A parameter is held when its group is in `hold` and unchanged, and the last result refined it (`start.free`) or held it at the one before (`start.held`). One the last result does not have (a background term added since) is new, and never held. Everything else that a full refinement with these options would end with free is refined:
 - from the last values, when its group is unchanged;
 - from its usual start (§6.1, §6.5) when it is new or changed, but Y_s and X_s carry over. Y_s goes ÷1.23 from the Lorentzian to WPPM and ×1.23 back (§6.1); it comes from the last isotropic fit (`isoParams`) when the solid is dropped or changed, since a solid's Y_s is 0. X_s is raised to 0.02° for a new Stephens strain (§6.5).
 
@@ -1302,7 +1306,7 @@ with c_p the mean of cos 2π**h**·**R** over p's displacements.
 
 **Validation.** Synthetic patterns with known faults (§14): fcc Pt with {111}, ⅙⟨112⟩ faults at α = 0.03, and ZnO with basal faults at α = 0.05, come back within their esds.
 
-## 8. Displacement parameters
+## 8. Displacement parameters and site occupancies
 
 ### 8.1 The choices
 
@@ -1378,11 +1382,20 @@ The value is statistically determined (±0.1–0.17 Å²) but not robust. Three 
 - (200) and (220) share F = Sr + Ti + 3O;
 - (100) and (210) share F = Sr − Ti − O: one electron more on Ti or O multiplies |F(100)|² by 0.75 and |F(210)|² by 0.77.
 
-Yet (220) and (210) read 1.0 within their esds. The per-site B reach (200) and (100) only through the different s of the partners (0.13 against 0.29 Å⁻¹ for (100) and (210)), and on 33A they cost (210) all of its intensity (predicted 0.01 of the observed). Two causes, each checked independently:
-- **(200)** is explained by a preferred orientation of {100} planes (r ≈ 0.75, §9), which leaves (220) on (110)'s factor. It is real: the factor stays at 1.3–1.6 for Chebyshev degrees 4–24, with or without the 1/2θ term, and with free humps at 22–30°.
-- **(100)** is not determined. At 22.7° the degree-6 background runs about 19 counts above a degree-16 one, pulled up by an unmodelled excess on the low-angle side of (110) (residuals of +15 to +21 counts at 28–31°). With degree 10–24, or a broad hump at 22°, (100) reads 0.4–1.2 times the model. With degree 16, B per site on 33A become 1.41(19), 0.28(18) and −2.00 Å². B(O) stays negative under every background tried.
+In v429 (220) and (210) read 1.0 within their esds, and the per-site B reach (200) and (100) only through the different s of the partners (0.13 against 0.29 Å⁻¹ for (100) and (210)); on 33A they cost (210) all of its intensity (predicted 0.01 of the observed). v429 read two causes from this: a preferred orientation of {100} planes for (200), and a background too poorly fixed to read (100).
 
-With (100) and (200) freed, or with the texture and a higher background degree, one ΔB gives B 0.5–0.9 Å², which is physical. A refined Sr occupancy instead would need 0.63–0.69, and would predict (210) at zero. To 2θ = 80°, with nine reflections of which three are weak, B per site are not determined: one ΔB, or B held, are the choices. The texture and the background degree (a setting since v429, §6.6) move B more than its esd says.
+**Revised in v430.** Those per-reflection factors were read with one width law for every reflection (the isotropic size), and on these samples the widths do not follow one: the crystals are lamellae with {110} faces, aggregated in micro-flowers (as the user knows them), and in β·cosθ the (111) is 0.51–0.68 times as broad as the (110), the (200) 0.83–0.96 (a {110} lamella 3–8 times as wide as thick predicts 0.53–0.89 and 0.64–1.01). With each strong reflection's width its own (the weak ones' from a Williamson–Hall line through them) and the same background, on the twelve samples measured (an independent profile fit of free areas, outside the repository; the engine agrees where it can be compared):
+
+| Family | F | read against the full-Sr CIF, ÷ (110) | {100} texture, r 0.77 | Sr site at 0.70 |
+|---|---|---|---|---|
+| (110), (211), (310) | Sr + Ti − O | 1, 0.87–1.03, not read (at the scan's end) | 1, 1.01, 1.14 | 1, 1, 1 |
+| (200), (220) | Sr + Ti + 3O | 1.11–1.46, 1.06–1.27 | 1.24, **1.00** | 1.20, 1.18 |
+| (111) | Sr − Ti + 3O | 0.60–0.91 | 0.96 | 0.82 |
+| (100), (210), (300)+(221) | Sr − Ti − O | −0.3–0.7, −0.3–1.2, 0.1–1.3 | **1.24, 1.08, 1.03** | 0.20, 0.01, 0.05 |
+
+A texture moves every member of a direction alike, so (220) keeps (110)'s factor, and a texture that raises (200) raises (100) with it; neither is what the samples show. One parameter moves all four families the way they are read: less scattering on the Sr site, the classes falling with the sign Sr takes in each F. It is now refined (§8.5): the Sr site scatters 0.63–0.74 of a full one on the twelve samples, and with it one ΔB gives B 0.9–1.1 Å², the free shape finds the {110} lamellae the samples are made of, and a {100} texture is no longer needed (§9.3 compares the two). The weak (100), (210) and (300) remain the least determined: 2–3 % of (110) by the CIF, tens of counts on a background of 200, they read 0.4–1.2 times the model by the background's degree alone, as v429 found.
+
+To 2θ = 80°, with nine reflections of which three are weak, B per site are still not determined: one ΔB, or B held, beside the occupancy, are the choices. The background degree (a setting since v429, §6.6) moves B more than its esd says.
 
 **Thermal diffuse scattering** is not modelled. Its first-order part, from the acoustic phonons, peaks under every line: a cusp ∝ k_BT·G²/(C·q²), as wide as the Brillouin zone. Part of it is read as Bragg intensity, which lowers B. It is computed for SrTiO₃ at room temperature (C₁₁, C₁₂, C₄₄ = 317, 103, 124 GPa, Bell & Rupprecht 1963; elastic Θ_D 690 K):
 - the acoustic phonons give B 0.11 Å² of about 0.5;
@@ -1396,6 +1409,39 @@ Added to noise-free copies of the fitted patterns, which are then refitted witho
 - B studied against T.
 
 **What would determine them better:** data to 2θ = 120–140° (s² up to 0.32–0.37 Å⁻², twice the lever arm), counted longer at high angle. A roughness correction would be more physical, but on such data B and roughness are notoriously correlated (§15.3).
+
+### 8.5 Site occupancies (v430)
+
+**The option** (`occSetup`, `xrd-rietveld.js`). A phase's `occ` names a site (`phaseSites`: the orbits of §8.2 with their labels, the same names B per site uses), or a list of them through the API. Each gets one parameter, `occ_<site>`, the occupancy of every atom of the site, starting from the CIF's, bounds [0, 2]. In the structure factor (§3.3) it replaces the atoms' o_j: the site's atoms are a scattering type of their own, and F² is cached on the occupancies too. It is refined in its own stage after the displacement parameters (§6.5), its group `occ` in a start from the last result (§6.8), and the cell's mass for the weight fractions follows it (§11).
+- **Every site at once** is the scale again, one common factor the pattern cannot tell from it, and is refused with a warning; so is a phase of one site (the card disables the row there). A name that is not one of the phase's sites is warned and ignored.
+- **What it measures.** How strongly the site scatters against its species at full occupancy, alike at every angle. Under 1: atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. The pattern cannot tell those apart, nor a depletion spread through the crystal from one confined to its surface: an integrated intensity sums |F|² over the cells, so a crystal whose outer planes lack the species reads as its average.
+- **Correlations.** On the user's SrTiO₃, ρ(occupancy, scale) −0.73 to −0.83, ρ(occupancy, ΔB) −0.17 to −0.23, |ρ| ≤ 0.4 with the background terms, ≈ 0 with the size and strain: unlike a B, which falls with angle, it sets the families apart by the sign the site takes in each F, and is well determined beside one ΔB.
+- **Reported:** `occupancy (<site>)` with its esd; in `rietveld_results.csv`, `occupancy_<site>`. Warned when on a bound, or over 1 by more than 3 esd. A start from the last result that changes the sites while holding the displacements warns that those were fitted beside the former occupancies (§6.8; on 33A, ΔB held at 0.63 Å² with the occupancy switched off: χ²_ν 1.73, refined together 1.70).
+
+**Why it was added.** The user's SrTiO₃ samples (twelve: undoped, La-, Pr-, Ce-, Er-, Yb-doped, with and without N; micro-flowers of {110} lamellae) read, against the full-Sr CIF, with every refinement of v429 compensating: one ΔB at −0.3 to −0.8 Å² with a free disc, B per site of +2.5 to +4.1 (Sr) and −1.4 to −2.0 Å² (Ti, O), a {100} texture of r 0.71–0.77 (1.5 on 34A and 37D: needles), free solids normal to ⟨210⟩ or ⟨310⟩ on 36D and 37D. The relative intensities follow the four structure-factor classes of §8.4 as a Sr site at 0.7 makes them.
+
+The instrument was ruled out first, on LaB6_real (the standard of these samples, measured to 145°): its lines' integrated intensities, read directly (sharp lines, a straight background beside each), follow the computed LP·|F|² within ±3 % from 30° to 142°, ln(obs/calc) against s² of slope 0.015 (ΔB −0.007 Å²); the Kβ line passed by the Ni filter is 0.07 % of Kα's, the filter's continuum between its K edge and Kα₁ 0.7 per Å of the line's (2–3 % of each line's area, on its low-angle side). Waasmaier–Kirfel's f₀ and Chantler's f′, f″ for Sr, Ti and O are the tables' (Sr −0.39, 1.80 at Cu Kα₁).
+
+**On the twelve samples** (the engine, isotropic size and strain, one ΔB; `occ` Sr1):
+
+| | Sr held at 1 | Sr refined |
+|---|---|---|
+| Sr occupancy | — | 0.632(9)–0.741(11) |
+| ΔB | −0.24 … +0.03 | 0.40–0.63 Å² (B 0.9–1.1) |
+| χ² | — | 590–1100 lower |
+
+With a free disc (cylinder) and one ΔB, the Sr site at each sample's occupancy: the disc's axis on ⟨110⟩ on all twelve (with Sr at 1: ⟨110⟩ 4–9° off on ten, ⟨210⟩ and ⟨310⟩ on 36D and 37D), its thickness 1.6–2.6 nm (a Lorentzian reading, §10), its diameter 12–23 nm, ΔB 0.02–0.38 Å², χ² 480–1020 lower. The Sr deficit goes with the inverse of the thickness (r 0.74 over the twelve; through the origin, 0.32 nm of Sr-free site per face, about one SrTiO plane of the (110) stacking, d₁₁₀ = 0.277 nm), as a Sr-poor {110} surface would make it; and a broad component under the pattern at 29–31° (FWHM 5–7°, 14–37 % of (110)'s area, not modelled: no amorphous term, §15.6) grows as the occupancy falls (r −0.89).
+
+**Validation.** Synthetic SrTiO₃ drawn by the engine on 33A's grid and instrument (LaB6_real's profile, D ≈ 7 nm, the user's counts), Poisson noise, refined from the full-Sr CIF with `occ` Sr1 and one ΔB, six draws each:
+
+| Truth (occupancy, B) | mean z | rms z | B read |
+|---|---|---|---|
+| 0.70, 0.8 Å² | −0.05 | 0.79 | 0.41–1.04 |
+| 0.85, 0.5 Å² | −0.70 | 0.92 | 0.27–0.65 |
+| 1.00, 0.5 Å² | −0.52 | 0.64 | 0.36–0.66 |
+| 0.70, 0.3 Å² | −0.24 | 0.89 | 0.06–0.52 |
+
+esd 0.010–0.017. Without the option every result is v429's: on 33A, 36D and 37D, with the defaults, one ΔB, B per site, one ΔB with *best axis*, Stephens' strain and {100} ½⟨111⟩ faults, every parameter identical (relative difference 0).
 
 ## 9. Preferred orientation
 
@@ -1490,6 +1536,16 @@ More scattering on the Ti site lowers the (111) against the (200); more on the S
 | the texture alone | 1.368 |
 
 Occupancies and texture compete for the same information (the relative intensities). On these data the texture is the best one-parameter description, and it is present in the pure 33A too.
+
+**Revised in v430.** The occupancy tried above was a fixed 20 % of vacancies; refined (§8.5), the Sr site reads 0.63–0.74, and the families the texture cannot move — (220) above (110), (100), (210) and (300) near zero (§8.4) — are what it predicts. With a free disc and one ΔB, the same number of parameters but for the disc held on the lattice:
+
+| Sample | Occupancy alone | Texture alone | Both |
+|---|---|---|---|
+| 33A | χ² 5436, Sr 0.697, ΔB 0.25 | 5705, (100) r 0.74, ΔB 0.00 | 5296, Sr 0.88, (100) r 1.28 |
+| 36D | 5461, Sr 0.656, ΔB 0.15 | 5578, (100) r 0.68, ΔB 0.05 | 5352, Sr 0.82, (100) r 0.73 |
+| 37D | 5541, Sr 0.632, ΔB 0.39 | 5420, (100) r 1.51, ΔB −0.64 | 5291, Sr 0.83, (310) r 0.62 |
+
+The disc lies on ⟨110⟩ in all nine (0–10°). Alone, the occupancy fits better on two of the three, and on the third the texture does so only with a ΔB no displacement gives. Together, the occupancy never returns to 1 (0.82–0.88), while the texture changes its axis and its sense from one sample to the next — plates on (100), needles along it, (310) — and with the size model (r 0.73–0.81 with the isotropic size, on the same data): no orientation the same lamellae in the same holder would keep. In a fit with each reflection's width its own (§8.4), the texture beside the occupancy goes to r 1.00–1.09. The samples are micro-flowers of lamellae, which pack with little orientation. Read on these data: the Sr site at 0.63–0.74 with no texture, or up to 0.88 if part of the intensities is a texture after all; data to higher angle, or the same powder packed again (side-loaded), would tell the two apart.
 
 ## 10. The free crystallite shape
 
@@ -1790,7 +1846,7 @@ The solid is drawn under the results by a small software renderer on a 2D canvas
 W_p = \frac{S_p\,(ZMV)_p}{\sum_q S_q\,(ZMV)_q}
 ```
 
-- **ZM** is the cell's mass: the occupancy-weighted sum of the atomic masses of the filled cell, in g/mol.
+- **ZM** is the cell's mass: the occupancy-weighted sum of the atomic masses of the filled cell, in g/mol, with each refined site at its refined occupancy (`phaseMass`, §8.5): SrTiO₃ with its Sr site at 0.689 weighs 156.2 g/mol a cell, not 183.5.
 - **V** is the refined cell's volume in the file's own basis, the cell whose atoms give ZM and F².
 - **Esds.** They come from the scales' covariance, through ∂W_i/∂S_j = (δ_ij k_i − W_i k_j)/T, with k = ZMV and T = Σ S k. They do not include the cells' uncertainties.
 - **When shown.** Only when more than one phase is detected. They are fractions of the crystalline phases: no amorphous content, no microabsorption correction (Brindley).
@@ -2006,6 +2062,7 @@ The fixed names in `rietveld_results.csv` include:
 - with the anisotropic strain, `microstrain` is the rms over directions, with `microstrain_eps0`, `stephens_anisotropy_rms_1e-6`, `microstrain_1_0_0` (one per low-index plane) and `stephens_S1_1e-6`… (the conventional cell's, §7.5);
 - with faults, `fault_probability_1_1_1` (the planes' indices);
 - per site, `B_A2_<site>`, or the free `U11_A2_<site>`… and `Beq_A2_<site>`;
+- per refined site, `occupancy_<site>` (§8.5);
 - `shape_…_nm`, `shape_…_deg_off`, `shape_dBIC`, `shape_held_on_lattice`;
 - `WH_chi2nu`, `WH_size_nm`, `WH_strain`, `order_ratio_110_220` (the indices run together, e.g. `order_ratio_1-10_2-20`); for an isotropic WPPM phase, `WH_size_model_nm`, the line through the model's own widths read as `WH_size_nm` is (§12.4).
 - `standard_changed_since` = 1 for a sample refined with an earlier refinement of the standard (§7.1);
@@ -2040,13 +2097,14 @@ The user asked (v429) for every fitting mode to be switched on or off and, when 
 | Microstrain | no strain broadening (X_s held at 0) | isotropic; anisotropic (Stephens) | `strain`: 'off', 'iso', 'aniso' |
 | Planar faults | none | the six kinds of §7.6 | `faults` |
 | Displacement parameters | the CIF's B, held | one ΔB; B per site; Uⁱʲ per site | `adp`: 'cif', 'overall', 'site', 'aniso' |
+| Site occupancy (v430) | the CIF's occupancies, held | one of the phase's own sites, as the engine names them (`phaseSites`: Sr1 (Sr), Ti1 (Ti), O1 (O, ×3) for SrTiO₃) | `occ`: [the site] or null |
 | Preferred orientation | none | best axis; (100), (010), (001), (110), (111) | `po` |
 
 - **Defaults** of a phase added: the size and the strain on, isotropic; the rest off. This sends the engine what v428 sent, so the default refinement is v428's.
-- **Disabled, not hidden.** A mode switched off keeps its depth, disabled, and finds it again when switched back on. A mode that does not apply has its checkbox and depth disabled, and says why on hover: WPPM with the size off (it is a profile of the size); on the standard, the size, WPPM, the strain and the faults, since its widths are the instrumental profile (U, V, W, X, Y and the asymmetry: autoRefine refines the standard without an irf, so a model of its own would be refused anyway). The standard sends the engine what it always did for those (`size` true, `strain` 'iso', the Lorentzian, no shape or faults), and its B and texture from its settings: one ΔB and no texture by default, as before v429 (held, a B 0.1 Å² off had moved the profile's X by 10 esd: the row's hover says so). A texture asked for on the standard is reported with its results as a phase's is, r with its axis, and in `rietveld_results.csv` (`texture_r_h_k_l`): the worker's standard group had only the instrument and ΔB, so r was refined and not shown (LaB6_real with a (111) texture: r = 1.118(6), 4.9 s).
+- **Disabled, not hidden.** A mode switched off keeps its depth, disabled, and finds it again when switched back on. A mode that does not apply has its checkbox and depth disabled, and says why on hover: WPPM with the size off (it is a profile of the size); on the standard, the size, WPPM, the strain and the faults, since its widths are the instrumental profile (U, V, W, X, Y and the asymmetry: autoRefine refines the standard without an irf, so a model of its own would be refused anyway); on the standard too, the site occupancy, since its structure is certified; and the site occupancy of a phase of one site, whose occupancy is the scale. The standard sends the engine what it always did for those (`size` true, `strain` 'iso', the Lorentzian, no shape or faults), and its B and texture from its settings: one ΔB and no texture by default, as before v429 (held, a B 0.1 Å² off had moved the profile's X by 10 esd: the row's hover says so). A texture asked for on the standard is reported with its results as a phase's is, r with its axis, and in `rietveld_results.csv` (`texture_r_h_k_l`): the worker's standard group had only the instrument and ΔB, so r was refined and not shown (LaB6_real with a (111) texture: r = 1.118(6), 4.9 s).
 - **Without the standard's profile** (a sample refined with no standard) the engine refines WPPM, Stephens' strain, the faults and the free shape only with it, and says in a warning that they were dropped; a size or strain switched off changes only the report there, the whole profile being refined (§6.3, §6.7).
 
-**Start.** Two chips, *From the CIF* (the default: the full staged refinement, §6) and *From the last result*, and the eight groups of §6.8 to hold, two to a row, disabled (not hidden) while the start is the CIF: scales and background, cell and displacement, instrument profile, size and strain, free shape, planar faults, displacement (B), texture. All but the scales and background are ticked by default. A note gives the rule in a line, and in full on hover: *each pattern starts from its own last refinement; a group ticked is held at its values there, but only the parameters that refinement refined with the same model: whatever is new or changed since (an option switched on, a depth changed, a shape type changed) is refined, from its usual start; everything not held is refined from the last values; a pattern with no last result, or one refined with other phases or another cell, is refined from the CIF.*
+**Start.** Two chips, *From the CIF* (the default: the full staged refinement, §6) and *From the last result*, and the nine groups of §6.8 to hold, two to a row, disabled (not hidden) while the start is the CIF: scales and background, cell and displacement, instrument profile, size and strain, free shape, planar faults, displacement (B), occupancy (v430), texture. All but the scales and background are ticked by default. A note gives the rule in a line, and in full on hover: *each pattern starts from its own last refinement; a group ticked is held at its values there, but only the parameters that refinement refined with the same model: whatever is new or changed since (an option switched on, a depth changed, a shape type changed) is refined, from its usual start; everything not held is refined from the last values; a pattern with no last result, or one refined with other phases or another cell, is refined from the CIF.*
 
 **What Refine sends** (`payloadFor`). Each phase's options as the table's last column says (`size` false and `strain` 'off' for a size or strain switched off). From the last result, for each pattern whose result is usable — refined in the same role (standard or sample), with the same phases, each in the same cell (a result of v425 or older, which kept no cells, counts as refined in the file's cell, as the curves read it: usable unless a phase is now refined in a cell of its own) — `opts.start` is that result's `params`, `free`, `held`, `models`, `textures`, `shapes`, `isoParams`, `detected` and `irf` (the standard's profile it was refined with, or none), and `opts.hold` the groups ticked, less *Scales, background* when the background's terms changed since that result (its degree, or whether it has the 1/2θ term on this pattern; a result of v428 or older had the defaults): the scales and background are then a changed group, refined, and the status says so when the run ends ("Scales and background refined, not held: the background's terms changed since the last result (33A_STO_WCL)"). The engine decides the rest (§6.8). A pattern without a usable result is refined from the CIF, and the status says which and why when the run ends ("From the CIF, no last result to start from: 33A_STO_WCL (not refined yet)"; "… (refined with other phases)"). A result keeps the worker's `free`, `held`, `detected`, `shapes` and `isoParams` for the next start.
 
@@ -2168,7 +2226,7 @@ The esds treat the residuals as independent (§5.7). With a systematic misfit, n
 
 ### 15.3 Structure
 
-**What is refined:** the displacement parameters (§8). Positions and occupancies are not refined.
+**What is refined:** the displacement parameters (§8) and, since v430, the occupancy of chosen sites (§8.5). Positions are not refined.
 
 **What is not corrected:**
 - absorption;
@@ -2181,7 +2239,7 @@ The esds treat the residuals as independent (§5.7). With a systematic misfit, n
 - **Why it matters.** The loss falls with angle, as a displacement factor's rises: a rough sample looks like one with a smaller B. A refinement that ignores it gives too low a B, even a negative one (§8).
 - **Why it is not here.** On data like these, roughness and B are notoriously correlated: both act as smooth functions of angle on the same intensities. Refined together on data to 80°, neither would mean much. With B held at a physical value, or data to high angle, a roughness term would be worth adding.
 
-**What constraints would allow:** occupancies linked by constraints (Sr/Yb on one site, summing to 1). On data to 80° these are poorly conditioned (§8.4), and they compete with the texture for the same information.
+**What constraints would allow:** occupancies linked by constraints (Sr/Yb on one site, summing to 1; a vacancy on one site tied to another's for charge balance). Each refined site is free on its own (§8.5). On data to 80° such links would be poorly conditioned, and they compete with the texture for the same information (§9.3).
 
 ### 15.4 Texture
 
@@ -2268,8 +2326,10 @@ Found while testing v424 and fixed: a line near 2θ = 180°, beyond the pattern,
 4. The single-peak widths' overlap rule weighs the bias that the neighbours' model error can put on a width, not their share of the top (§12.3). The (111) of nanocrystalline SrTiO₃, which v427 had dropped for the far tails of (110) and (200), is used again, and Williamson–Hall reads the user's three samples as in v426 (p 6·10⁻⁴³ to 6·10⁻³¹).
 5. The standard's texture, now a setting, is reported with its results.
 
+**Changed in v430**: the occupancy of a site can be refined (§8.5), a mode of the settings (*Site occupancy*, one of the phase's sites; off by default, so every result without it is v429's, checked to the last digit on three samples and six option sets). It was added for the user's twelve SrTiO₃ samples, whose Sr site scatters 0.63–0.74 of a full one: the intensities that v429 read as a {100} texture, a negative ΔB and B per site of +4 and −2 Å² (§8.4, revised), and as free solids normal to ⟨210⟩ or ⟨310⟩ (§9.3), are mostly that, and with it the solids lie on ⟨110⟩ on all twelve, the lamellae the samples are made of. A texture refined beside it still lowers χ², but with an axis and a sense that change from sample to sample (§9.3).
+
 **Open.**
-- The free shape's axes held on the lattice go to the simplest direction within 10° of the free fit's, not the nearest one. On 36D the free disc normals lie within 0–2° of [310] but are reported as "⟨210⟩ (8°)", and the held box and ellipsoid stay on [210], 2–10 in χ² above the same solids held on [310]. Taking the nearest direction needs a preference for the simpler one when χ² is practically the same: on a synthetic [210] disc, the box would otherwise be held on [320], only 0.6 lower. Lattice-held candidates on the low-index directions (⟨100⟩, ⟨110⟩, ⟨111⟩), which the search builds only near its best free fit, change the result only with one ΔB free. Neither change reaches the shallow minima found 8° from [110] on 36D.
+- The free shape's axes held on the lattice go to the simplest direction within 10° of the free fit's, not the nearest one. On 36D, with its Sr site held full, the free disc normals lay within 0–2° of [310] but were reported as "⟨210⟩ (8°)", and the held box and ellipsoid stayed on [210], 2–10 in χ² above the same solids held on [310]. Taking the nearest direction needs a preference for the simpler one when χ² is practically the same: on a synthetic [210] disc, the box would otherwise be held on [320], only 0.6 lower. Lattice-held candidates on the low-index directions (⟨100⟩, ⟨110⟩, ⟨111⟩), which the search builds only near its best free fit, change the result only with one ΔB free. With the Sr occupancy refined (v430), the case that showed it is gone: the disc's normal is ⟨110⟩ on all twelve samples, 0–3° off; the rule itself is unchanged.
 - B per site on data to 80° (§8.4): what they take up is reported, not prevented.
 - Three imprecisions are mitigated rather than fixed (RIETVELD-REVIEW.md §2): a single peak's scale is still +0.3 to +0.8 % high at 2–10 counts per point (model weights would remove it but let a missing peak pull 2–5× harder); a minority phase whose scale is under 3 esd and whose χ² rise is under the BIC bar stays out, with the rise stated; two settings of a 4/m, −3 or −3m phase that only the atoms tell apart can give S_j of opposite sign (the setting-free √ΣS_j² is reported beside).
 - A WPPM line's area in the window is about 0.3 % below the pseudo-Voigt's at the same intensity (§7.3): weight fractions between a WPPM phase and a Lorentzian one carry that bias.

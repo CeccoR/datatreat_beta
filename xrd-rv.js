@@ -10,7 +10,7 @@ import { fmtData, csvLine, X_SVG, flashFieldInvalid, settings } from './utils.js
 import { Plot } from './plot.js';
 import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
-import { buildModel, calc, fitSettings } from './xrd-rietveld.js';
+import { buildModel, calc, fitSettings, phaseSites } from './xrd-rietveld.js';
 import { shapeView } from './xrd-shape3d.js';
 
 // Names, formulae and notes come from CIF files, which may be anyone's: they go into the
@@ -84,8 +84,10 @@ function prepPhase(text, fileName){
   if (sym.group === false) warnings.push('The symmetry found from the atoms does not close into a group at any tolerance tried (atoms of one kind within 0.01 Å of each other?): the operations used may be incomplete.');
   if (comp && !comp.ok && comp.message) warnings.push(comp.message);
   else if (comp && comp.note) notes.push(comp.note);
+  // The sites, named as the engine names them (phaseSites): what Site occupancy offers.
+  const sites = phaseSites(sc.cell, sc.atoms, sym.ops).sites.map(st=> ({ label: st.label, element: st.element, n: st.members.length }));
   return {
-    name: cif.name || (fileName || '').replace(/\.cif$/i, ''), file: fileName || '', formula: cif.formulaSum || '',
+    name: cif.name || (fileName || '').replace(/\.cif$/i, ''), file: fileName || '', formula: cif.formulaSum || '', sites,
     cell: sc.cell, ops: sym.ops, atoms: sc.atoms, system: sym.system, constraint: sym.constraint, order: sym.order,
     mass: cellMass(sc.atoms), notes, warnings, ownCell: !!sc.basis,
   };
@@ -127,21 +129,31 @@ const MODES = [
     title: "Planar faults (after Warren) on the planes of a family, each displacing the crystal beyond it by a vector of the family: a reflection whose h·R is not an integer broadens (by parity, not by order). Refined: the probability per plane. Needs the standard's profile" },
   { k: 'adp', label: 'Displacement parameters', on: false, list: [['overall', 'one ΔB'], ['site', 'B per site'], ['aniso', 'U per site, anisotropic']],
     title: "Off: the CIF's B, held (0.5 Å² for every atom where the CIF gives none; a B 0.5 Å² off goes into the strain and the size, 10–20 % in the size). On: one ΔB added to every atom's B; one B per crystallographic site; or Uⁱʲ per site, those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle. On nanocrystalline patterns they can come out unphysical (negative, or on their bound), whatever the size model, taking up what the model lacks rather than vibrations" },
+  // Its depth is a site of the phase's own (siteList): the list is the phase's.
+  { k: 'occ', label: 'Site occupancy', on: false, list: [], sites: true,
+    title: "Off: the CIF's occupancies, held. On: the occupancy of the site chosen refined — the share of it its species fills, read from how strongly it scatters at every angle alike (a B lowers it more the higher the angle). Under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. On a nanocrystalline SrTiO₃ whose Sr site scatters 0.7 of a full one, the CIF's full site had been read as a negative B, a texture and B per site of +4 and −2 Å². Correlated with the scale and the displacement parameters: on data to 80° hold B or refine one ΔB beside it" },
   { k: 'po', label: 'Preferred orientation', on: false, list: [['auto', 'best axis'], ...TEXTURE_AXES.map(a=> [a, `(${a})`])],
     title: "March–Dollase: the crystallites' planes (hkl) lie preferentially parallel to the surface (r under 1, plates) or across it (r over 1, needles), which changes the intensities, not the widths. Best axis: the lowest χ² of the low-index planes" },
 ];
 const MODE = Object.fromEntries(MODES.map(m=> [m.k, m]));
 // The rows that do not apply to the standard: its widths are the instrumental profile,
 // refined as U, V, W, X, Y (autoRefine refines it without an irf, so a size, strain or
-// fault model of its own would be refused anyway).
-const STD_NA = ['size', 'wppm', 'strain', 'faults'];
-const defSettings = () => ({ on: Object.fromEntries(MODES.map(m=> [m.k, m.on])), dep: Object.fromEntries(MODES.map(m=> [m.k, m.list[0][0]])) });
+// fault model of its own would be refused anyway), and its structure is certified.
+const STD_NA = ['size', 'wppm', 'strain', 'faults', 'occ'];
+// A mode's depths for a phase: its own sites for the occupancy, else the mode's list.
+const siteList = p => ((p && p.prep && p.prep.sites) || []).map(st=> [st.label, `${st.label} (${st.element}${st.n > 1 ? ', ×' + st.n : ''})`]);
+const listOf = (p, m) => m.sites ? siteList(p) : m.list;
+// The depth in force: for the occupancy a site of the phase's (the first when the one
+// saved is not, or none was chosen yet).
+const depOf = (p, k) => { const v = p.dep[k], l = listOf(p, MODE[k]); return l.some(([x])=> x === v) ? v : (l[0] || [''])[0]; };
+const defSettings = () => ({ on: Object.fromEntries(MODES.map(m=> [m.k, m.on])), dep: Object.fromEntries(MODES.map(m=> [m.k, m.sites ? '' : m.list[0][0]])) });
 // The standard's: one ΔB, as the built-in LaB6 had before v429 (lab6.adp); no texture.
 const stdSettings = () => { const s = defSettings(); STD_NA.forEach(k=> { s.on[k] = false; }); s.on.adp = true; return s; };
 // Settings as saved, made valid: a flag not a boolean, or a depth not offered, takes the default.
 const cleanSettings = (s, def) => ({
   on: Object.fromEntries(MODES.map(m=> [m.k, s && s.on && typeof s.on[m.k] === 'boolean' ? s.on[m.k] : def.on[m.k]])),
-  dep: Object.fromEntries(MODES.map(m=> [m.k, s && s.dep && m.list.some(([v])=> v === s.dep[m.k]) ? s.dep[m.k] : def.dep[m.k]])) });
+  // (a site is the phase's to check: depOf)
+  dep: Object.fromEntries(MODES.map(m=> [m.k, s && s.dep && (m.sites ? typeof s.dep[m.k] === 'string' : m.list.some(([v])=> v === s.dep[m.k])) ? s.dep[m.k] : def.dep[m.k]])) });
 // A phase of a project of v428 or older: each option a picker whose first choice was its
 // "none" (the isotropic size, the Lorentzian, no faults, the CIF's B, no texture).
 function migrateSettings(p, refineB){
@@ -160,9 +172,10 @@ function migrateSettings(p, refineB){
 function engineOf(p, std){
   const on = p.on, d = p.dep, adp = on.adp ? d.adp : 'cif', po = on.po ? d.po : null;
   // The standard: no broadening model of its own (STD_NA); the fields as before v429.
-  if (std) return { size: true, shape: false, profile: 'lorentz', strain: 'iso', faults: null, adp, po };
+  if (std) return { size: true, shape: false, profile: 'lorentz', strain: 'iso', faults: null, adp, po, occ: null };
+  const occ = on.occ && siteList(p).length > 1 && depOf(p, 'occ') ? [depOf(p, 'occ')] : null;
   return { size: on.size, shape: on.size && d.size !== 'iso' ? d.size : false, profile: on.size && on.wppm ? d.wppm : 'lorentz',
-    strain: on.strain ? d.strain : 'off', faults: on.faults ? d.faults : null, adp, po };
+    strain: on.strain ? d.strain : 'off', faults: on.faults ? d.faults : null, adp, po, occ };
 }
 // The settings in a line, for the phase's row.
 function summaryOf(p, std){
@@ -173,7 +186,8 @@ function summaryOf(p, std){
   return [on.size ? (d.size === 'iso' ? 'isotropic size' : txt('size', d.size)) : 'no size broadening',
     on.size && (on.wppm ? 'WPPM, ' + txt('wppm', d.wppm) : 'Lorentzian'),
     on.strain ? 'microstrain ' + txt('strain', d.strain) : 'no microstrain',
-    on.faults && 'planar faults ' + txt('faults', d.faults).replace(/,.*/, ''), adp, po].filter(Boolean).join(' · ');
+    on.faults && 'planar faults ' + txt('faults', d.faults).replace(/,.*/, ''), adp,
+    on.occ && siteList(p).length > 1 && 'occupancy of ' + depOf(p, 'occ'), po].filter(Boolean).join(' · ');
 }
 /* Where a refinement starts (the settings' Start section): from the CIF (the full staged
    refinement) or from the pattern's last result, with these groups of parameters held at
@@ -186,6 +200,7 @@ const HOLDS = [
   ['shape', 'Free shape', 'The free solid\'s widths and orientation (a solid kept is then not searched again)'],
   ['faults', 'Planar faults', 'The fault probability'],
   ['adp', 'Displacement (B)', 'ΔB, the B per site or the Uⁱʲ per site'],
+  ['occ', 'Occupancy', 'The refined site occupancy'],
   ['texture', 'Texture', 'The preferred orientation\'s r and its axis'],
 ];
 const HOLD_KEYS = HOLDS.map(([k])=> k), HOLD_DEFAULT = HOLD_KEYS.filter(k=> k !== 'linear');
@@ -431,7 +446,8 @@ export function createRietveld(host){
     const ph = phaseData(list, isStd(f)).map(p=>{
       const md = (r.models || {})[p.id] || {};
       return { ...p, shape: shapeOfParams(r.params, p.id), po: r.textures && r.textures[p.id] ? r.textures[p.id].hkl : null, size: md.size !== false,
-        profile: profileOpt(md.profile), strain: md.strain === 'off' ? 'off' : strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp) };
+        profile: profileOpt(md.profile), strain: md.strain === 'off' ? 'off' : strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp),
+        occ: Array.isArray(md.occ) ? md.occ : null };
     });
     // Built as the result's model was: its background terms and reflection list are those
     // of the fit settings it was refined with (r.fit; the defaults for a result of v428 or
@@ -824,8 +840,10 @@ export function createRietveld(host){
   const setOpen = () => setModal.style.display === 'flex';
   const phaseOf = id => id === lab6.id ? lab6 : phases.find(p=> p.id === id);
   // Why a mode does not apply to a phase (its checkbox and depth disabled), or ''.
-  const naOf = (p, k) => p === lab6 && STD_NA.includes(k) ? "The standard's widths are the instrument's profile (U, V, W, X, Y and the asymmetry, refined on it): no size, strain or faults of its own"
-    : k === 'wppm' && !p.on.size ? 'WPPM is a profile of the crystallite size: switch the size on first' : '';
+  const naOf = (p, k) => p === lab6 && k === 'occ' ? "The standard's structure is certified: its occupancies are the CIF's"
+    : p === lab6 && STD_NA.includes(k) ? "The standard's widths are the instrument's profile (U, V, W, X, Y and the asymmetry, refined on it): no size, strain or faults of its own"
+    : k === 'wppm' && !p.on.size ? 'WPPM is a profile of the crystallite size: switch the size on first'
+    : k === 'occ' && siteList(p).length < 2 ? "A phase of one site: its occupancy is the scale, which the pattern cannot tell from it" : '';
   function openSettings(){
     if (busy || setOpen()) return;
     setModal.style.display = 'flex'; $('xrdRvSettings').classList.add('is-on');
@@ -853,7 +871,7 @@ export function createRietveld(host){
       const sec = p => `<div class="rvs-sec" data-sec="${p.id}"><div class="rvs-head"><span class="rv-key" style="background:${p.color}"></span><b>${esc(p.prep.name)}</b>${p === lab6 ? '<span class="txt-meta">standard</span>' : ''}</div>`
         + MODES.map(m=>{ const id = `xrdRvSet${p.id}_${m.k}`;
           return `<div class="rvs-row" data-row="${m.k}"><input type="checkbox" id="${id}" data-on="${m.k}" data-ph="${p.id}"><label for="${id}">${m.label}</label>`
-            + `<select data-depth="${m.k}" data-ph="${p.id}" aria-label="${esc(m.label)} of ${esc(p.prep.name)}: depth">${m.list.map(([v, t])=> `<option value="${v}">${esc(t)}</option>`).join('')}</select></div>`; }).join('') + '</div>';
+            + `<select data-depth="${m.k}" data-ph="${p.id}" aria-label="${esc(m.label)} of ${esc(p.prep.name)}: depth">${listOf(p, m).map(([v, t])=> `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></div>`; }).join('') + '</div>';
       // The hold boxes two to a row, in the phases' columns: the first under their
       // checkboxes, the second under their depths.
       const hb = ([k, t, title]) => `<input type="checkbox" id="xrdRvHold_${k}" data-hold="${k}" title="${esc(title)}"><label for="xrdRvHold_${k}" title="${esc(title)}">${t}</label>`;
@@ -888,7 +906,7 @@ export function createRietveld(host){
       const p = phaseOf(+sec.dataset.sec); if (!p) return;
       MODES.forEach(m=>{
         const row = sec.querySelector(`[data-row="${m.k}"]`), cb = row.querySelector('input'), sel = row.querySelector('select'), na = naOf(p, m.k);
-        cb.checked = !!p.on[m.k]; sel.value = p.dep[m.k];
+        cb.checked = !!p.on[m.k]; sel.value = depOf(p, m.k);
         cb.disabled = busy || !!na; sel.disabled = busy || !!na || !p.on[m.k];
         row.classList.toggle('is-na', !!na);
         // (the standard's B: why one ΔB is its default — LAB6_CIF's numbers)
@@ -970,7 +988,7 @@ export function createRietveld(host){
     else {
       const p = phaseOf(+d.ph); if (!p) return;
       if (d.on) p.on[d.on] = t.checked;
-      else if (MODE[d.depth].list.some(([v])=> v === t.value)) p.dep[d.depth] = t.value;
+      else if (listOf(p, MODE[d.depth]).some(([v])=> v === t.value)) p.dep[d.depth] = t.value;
     }
     host.commit(); renderPhases(); syncSettings();
   });
@@ -1036,7 +1054,7 @@ export function createRietveld(host){
     // (engineOf), which an older version opening the project reads.
     snapshot(){ return { phases: phases.map(p=>{ const e = engineOf(p, false);
         return { id: p.id, cif: p.cif, file: p.file, color: p.color, on: { ...p.on }, dep: { ...p.dep },
-          shape: e.shape, po: e.po || '', profile: e.profile, strain: e.strain, faults: e.faults || '', adp: e.adp }; }),
+          shape: e.shape, po: e.po || '', profile: e.profile, strain: e.strain, faults: e.faults || '', adp: e.adp, occ: e.occ || null }; }),
       std: { on: { ...lab6.on }, dep: { ...lab6.dep } }, start: startFrom, hold: hold.slice(), fit: { ...fit },
       nextId, idx, results: JSON.parse(JSON.stringify(results)) }; },
     restore(s){

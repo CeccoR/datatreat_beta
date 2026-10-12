@@ -5,7 +5,7 @@
    values a line, in standard notation (the esd in brackets in the last digits), and
    the rows of the results CSV.
 ========================================================= */
-import { buildModel, autoRefine, fitSettings, displacementMm, shapeOf, siteU, lowIndexPlanes, strainFormsAt, K_SCHERRER } from './xrd-rietveld.js';
+import { buildModel, autoRefine, fitSettings, displacementMm, shapeOf, siteU, lowIndexPlanes, strainFormsAt, K_SCHERRER, OCC_MAX } from './xrd-rietveld.js';
 import { measureWidths, williamsonHall } from './xrd-widths.js';
 import { metric, cellFrom, uEquiv, betaOf } from './xrd-cryst.js';
 import { evalQuartic } from './xrd-broad.js';
@@ -76,7 +76,7 @@ function summarise(model, res, phases, opts){
     const bMin = Math.min(...(ph.atoms || []).map(a=> Number.isFinite(a.Biso) ? a.Biso : 0));
     // Only a ΔB that lowers B below 0: a negative B of the CIF's own is the phase list's
     // warning, and a positive ΔB takes up nothing of the kind.
-    if (Number.isFinite(bMin) && P[key] < 0 && bMin + P[key] < 0) warnings.push(`${ph.name || q.name}: with ΔB = ${fmtEsd(P[key], E[key], ' Å²')} some atom's B is negative (${(bMin + P[key]).toFixed(2)} Å²), which no displacement gives: it more likely takes up absorption, surface roughness or the background.`);
+    if (Number.isFinite(bMin) && P[key] < 0 && bMin + P[key] < 0) warnings.push(`${ph.name || q.name}: with ΔB = ${fmtEsd(P[key], E[key], ' Å²')} some atom's B is negative (${(bMin + P[key]).toFixed(2)} Å²), which no displacement gives: it more likely takes up absorption, surface roughness, the background or a site's occupancy (Site occupancy, in the settings).`);
   };
   /* B per site (isotropic), or U^ij per site within its symmetry with B_eq = 8π²U_eq
      (Fischer & Tillmanns), esd by propagation. A negative B, or a U that is not
@@ -90,7 +90,7 @@ function summarise(model, res, phases, opts){
         const k = model.par[st.iB].name;
         lines.push({ label: `B(${st.label})`, value: fmtEsd(P[k], E[k], ' Å²'), title: `The isotropic displacement parameter of site ${st.label} (${st.members.length} atom${st.members.length > 1 ? 's' : ''} of ${st.element} in the cell), B = 8π²⟨u²⟩` });
         row(nm, `B_A2_${st.label}`, P[k], E[k]);
-        if (P[k] < 0) warnings.push(`${nm}: B(${st.label}) = ${fmtEsd(P[k], E[k], ' Å²')} is negative, which no vibration gives: it more likely takes up absorption, surface roughness, the background or a wrong occupancy.`);
+        if (P[k] < 0) warnings.push(`${nm}: B(${st.label}) = ${fmtEsd(P[k], E[k], ' Å²')} is negative, which no vibration gives: it more likely takes up absorption, surface roughness, the background or a site's occupancy (Site occupancy, in the settings).`);
         continue;
       }
       const names = st.iU.map(i=> model.par[i].name);
@@ -107,13 +107,29 @@ function summarise(model, res, phases, opts){
       if (!(Bt[0] > 0 && m2 > 0 && det > 0)) warnings.push(`${nm}: the displacements of site ${st.label} are not positive definite (some direction has ⟨u²⟩ ≤ 0), which no vibration gives: they more likely take up absorption, roughness, the background or a wrong occupancy.`);
     }
   };
+  /* The refined site occupancies: each the share of its site the CIF's species fills, as
+     the pattern reads it — scattering alike at every angle, so a site that has lost atoms
+     (vacancies, a depleted surface) or holds a lighter species beside them reads under 1,
+     a heavier one over 1. */
+  const occLines = (q, nm, lines)=>{
+    for (const st of q.occSites || []){
+      const k = model.par[st.iOcc].name;
+      if (!inResult(k)) continue;
+      const v = P[k], e = E[k], n = st.members.length;
+      lines.push({ label: `occupancy (${st.label})`, value: fmtEsd(v, e), title: `The occupancy of site ${st.label} (${n} atom${n > 1 ? 's' : ''} of ${st.element} in the cell; ${st.occ} in the CIF), refined: the share of the site its species fills, read from how strongly it scatters at every angle alike. Under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. It is correlated with the scale and the displacement parameters: on data to 80° hold B or refine one ΔB beside it` });
+      row(nm, `occupancy_${st.label}`, v, e);
+      const z = Number.isFinite(e) && e > 0 ? (v - 1)/e : NaN;
+      if (v >= OCC_MAX - 1e-6 || v <= 1e-6) warnings.push(`${nm}: the occupancy of site ${st.label} is on its bound (${v <= 1e-6 ? 0 : OCC_MAX}): it takes up something the model lacks rather than a share of the site.`);
+      else if (z > 3) warnings.push(`${nm}: the occupancy of site ${st.label} is ${fmtEsd(v, e)}, ${z.toFixed(0)} esd over 1: the site scatters more than ${st.element} alone can — a heavier species on it, or the occupancy taking up something else (absorption, the background, a texture).`);
+    }
+  };
   // The preferred orientation (March–Dollase), its axis and r: a sample's phase, or the
   // standard's LaB6 when its settings ask for one (v429).
   const textureLine = (q, nm, lines)=>{
     const tx = (res.textures || {})[q.id];
     if (!(tx && tx.hkl)) return;
     const hkl = tx.hkl.map(x=> x < 0 ? '−' + (-x) : x).join(''), sig = Number.isFinite(tx.esd) && tx.esd > 0 ? Math.abs(tx.r - 1)/tx.esd : NaN;
-    lines.push({ label: `preferred orientation (${hkl})`, value: `r = ${fmtEsd(tx.r, tx.esd)}`, title: `March–Dollase: each reflection's members weighed by (r²·cos²α + sin²α/r)^(−3/2), α their angle to the (${hkl}) planes' normal. r under 1: more crystallites with (${hkl}) parallel to the sample's surface (plates lying flat); over 1, fewer (needles); 1, none.${Number.isFinite(sig) ? ` Here ${sig.toFixed(0)} esd from 1${sig < 2 ? ': not told from no texture' : ''}.` : ''} It changes the intensities, not the widths: an intensity misfit it does not take up, a free shape would (on a SrTiO₃ sample, with none, the plates came out ⟂ ⟨310⟩ by widening the (111) and narrowing the (200))` });
+    lines.push({ label: `preferred orientation (${hkl})`, value: `r = ${fmtEsd(tx.r, tx.esd)}`, title: `March–Dollase: each reflection's members weighed by (r²·cos²α + sin²α/r)^(−3/2), α their angle to the (${hkl}) planes' normal. r under 1: more crystallites with (${hkl}) parallel to the sample's surface (plates lying flat); over 1, fewer (needles); 1, none.${Number.isFinite(sig) ? ` Here ${sig.toFixed(0)} esd from 1${sig < 2 ? ': not told from no texture' : ''}.` : ''} It changes the intensities, not the widths: an intensity misfit it does not take up, a free shape would (on a SrTiO₃ sample whose Sr site scatters 0.7 of a full one, with that occupancy held at 1 and no texture, the plates came out ⟂ ⟨310⟩ by widening the (111) and narrowing the (200); with it refined, ⟂ ⟨110⟩, as the crystals are)` });
     row(nm, `texture_r_${tx.hkl.join('_')}`, tx.r, tx.esd);
   };
   // What the numbers rest on: a refinement stopped short, parameters on a bound (read
@@ -414,15 +430,16 @@ function summarise(model, res, phases, opts){
     }
     faultLines(q, nm, lines);
     deltaB(q, ph, nm, lines);
+    occLines(q, nm, lines);
     if ((res.detected || []).length > 1 && wf){ lines.push({ label: 'weight fraction', value: fmtEsd(wf.W*100, wf.esd*100, ' %'), title: 'Hill–Howard: W = S·ZMV/Σ S·ZMV, of the crystalline phases' }); row(nm, 'weight_fraction_pct', wf.W*100, wf.esd*100); }
     // Held at the last result (a start from it): which of the values above are that
     // refinement's, shown without an esd here.
     const heldHere = new Set((res.held || []).filter(n=> n.startsWith(q.pfx)).map(n=> {
       const i = model.index[n], p = model.par[i];
       return p.kind === 'scale' ? 'scale' : p.kind === 'lattice' ? 'cell' : i === q.iXs || p.kind === 'strain' ? 'strain' : p.kind === 'size' || p.kind === 'dist' ? 'size'
-        : p.kind === 'shape' ? 'shape' : p.kind === 'faults' ? 'faults' : p.kind === 'B' || p.kind === 'adp' ? 'displacements' : p.kind === 'texture' ? 'texture' : null;
+        : p.kind === 'shape' ? 'shape' : p.kind === 'faults' ? 'faults' : p.kind === 'B' || p.kind === 'adp' ? 'displacements' : p.kind === 'occ' ? 'occupancy' : p.kind === 'texture' ? 'texture' : null;
     }).filter(Boolean));
-    if (heldHere.size) lines.push({ label: 'held at the last result', value: ['scale', 'cell', 'size', 'strain', 'shape', 'faults', 'displacements', 'texture'].filter(g=> heldHere.has(g)).join(' · '),
+    if (heldHere.size) lines.push({ label: 'held at the last result', value: ['scale', 'cell', 'size', 'strain', 'shape', 'faults', 'displacements', 'occupancy', 'texture'].filter(g=> heldHere.has(g)).join(' · '),
       title: 'These values are the last refinement’s, held in this one: they have no esd here (that refinement gave theirs), and what was refined here is conditional on them. A last refinement with nothing held gives values and esds free of that' });
     groups.push({ name: nm, phase: true, lines });
   });
