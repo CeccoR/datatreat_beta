@@ -87,7 +87,7 @@ function prepPhase(text, fileName){
   return {
     name: cif.name || (fileName || '').replace(/\.cif$/i, ''), file: fileName || '', formula: cif.formulaSum || '',
     cell: sc.cell, ops: sym.ops, atoms: sc.atoms, system: sym.system, constraint: sym.constraint, order: sym.order,
-    mass: cellMass(sc.atoms), notes, warnings, ownCell: !!sc.basis, noB: !!(cif.defaultB && cif.defaultB.length),
+    mass: cellMass(sc.atoms), notes, warnings, ownCell: !!sc.basis,
   };
 }
 // The cell a phase is refined in, as a key: a result refined in another (the file's, before
@@ -583,7 +583,7 @@ export function createRietveld(host){
           + pick('profile', p, PROFILES, profileOpt(p.profile), 'lorentz', `Size profile of ${q.name}`, "The size broadening's profile. Lorentzian: a Lorentzian fitted to the lines, the size read with Scherrer's K = 0.9 (as the Analysis card): an apparent size, not a diameter (spheres of one size read 1.0–1.7 times theirs). WPPM (Whole Powder Pattern Modelling): each line the Fourier transform of the crystallites' own common-volume function — a sphere's, or the free solid's along each member — with the instrument's, the strain's and the faults' coefficients: the true dimensions, and the profile's shape too (one size has short tails; a log-normal distribution of sizes, its width σ refined, longer ones). Needs the standard's profile")
           + pick('strain', p, STRAINS, strainOpt(p.strain), 'iso', `Microstrain of ${q.name}`, "Isotropic: one microstrain, the Lorentzian 4ε·tanθ. Anisotropic (Stephens): ε² a quartic form of the reflection's direction that the Laue group leaves unchanged (1 more term for a cubic phase, 2 hexagonal, 3 for 4/mmm and −3m, 4 for 4/m and −3, 5 orthorhombic, 8 monoclinic, 14 triclinic): a strain that depends on hkl, the same for all members of a family. Needs the standard's profile")
           + pick('faults', p, FAULTS, faultOpt(p.faults), '', `Planar faults of ${q.name}`, "Planar faults (after Warren) on the planes of a family, each displacing the crystal beyond it by a vector of the family (those in the plane: a stacking fault, an antiphase boundary): a reflection whose h·R is not an integer loses coherence across each, a Lorentzian broadening by h·R modulo 1 (the indices' parity for ½-type shifts, the indices modulo 3 for ⅓ and ⅙), so a higher order can be sharp. Refined: the probability per plane. Needs the standard's profile")
-          + pick('adp', p, ADPS, adpOpt(p.adp), 'cif', `Displacement parameters of ${q.name}`, "Displacement parameters. From the CIF: held. A CIF that gives no B (the Materials Project's) starts on One ΔB, from 0.5 Å²: a B held 0.5 Å² off goes into the strain and the size (10–20 % in the size). One ΔB: added to every atom's B. Per site: one B per crystallographic site (the sites found from the symmetry). Anisotropic: Uⁱʲ per site, only those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle")
+          + pick('adp', p, ADPS, adpOpt(p.adp), 'cif', `Displacement parameters of ${q.name}`, "Displacement parameters. From the CIF: held; a CIF that gives no B (the Materials Project's) has 0.5 Å² for every atom. A B 0.5 Å² off goes into the strain and the size (10–20 % in the size), which One ΔB avoids; on nanocrystalline samples, though, ΔB can come out negative, taking up what the model lacks. One ΔB: added to every atom's B. Per site: one B per crystallographic site (the sites found from the symmetry). Anisotropic: Uⁱʲ per site, only those its symmetry leaves free. Each is strongly correlated with the scale, the background and, on broad peaks, the widths: they want data to high angle")
           + `</div>`
           + `<button class="peak-del is-danger idle-dim rv-del" data-del="${p.id}" title="Remove phase">${X_SVG(13)}</button>`}</div>`;
     };
@@ -601,7 +601,7 @@ export function createRietveld(host){
         // A CIF without displacement parameters (Materials Project's) starts with one ΔB
         // refined: held at B_DEFAULT, a B 0.3–1 Å² off went into the strain and the size
         // (D −13 to +89 % on synthetic patterns, 5–27 esd) and moved weight fractions by 2 % (RIETVELD.md §8.1).
-        phases.push({ id: nextId++, cif: text, file: file.name, color: PHASE_COLORS[phases.length % PHASE_COLORS.length], prep, ...(prep.noB ? { adp: 'overall' } : {}) });
+        phases.push({ id: nextId++, cif: text, file: file.name, color: PHASE_COLORS[phases.length % PHASE_COLORS.length], prep });
       } catch(e){ errs.push(`${file.name}: ${e.message}`); }
     }
     renderPhases(); draw(true); host.commit();
