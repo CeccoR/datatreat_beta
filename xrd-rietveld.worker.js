@@ -382,9 +382,14 @@ function summarise(model, res, phases, opts){
       // Each axis's cone about the axis itself (e, on the side of its lattice direction),
       // which its esd measures, its lattice direction [uvw] the arrow, off° from it; the
       // directions across a body of revolution (free to turn about its axis) have none.
-      const dirs = sh.axes.filter(a=> a.resolved).map(a=>{
+      // Every axis with a direction of its own is drawn: one the data do not fix (over 30°
+      // of esd, or none: bodyShapeOf's resolved false) with no esd, which the view draws
+      // dashed, "not determined", with no cone. Left out (up to v430), a solid came with
+      // fewer arrows than axes (an elliptic cylinder held on the lattice 43° from the free
+      // fit's axes kept one of three), or none, with nothing on the view to say why.
+      const dirs = sh.axes.filter(a=> a.resolved || a.own).map(a=>{
         const s = a.e[0]*a.vec[0] + a.e[1]*a.vec[1] + a.e[2]*a.vec[2] < 0 ? -1 : 1;
-        return { label: a.uvw, vec: a.vec, axis: a.e.map(t=> s*t), esd: a.esdAngle, off: a.angle };
+        return { label: a.uvw, vec: a.vec, axis: a.e.map(t=> s*t), esd: a.resolved ? a.esdAngle : NaN, off: a.angle };
       }).concat((sh.across || []).map(a=> ({ label: a.uvw, vec: a.vec, esd: NaN, off: NaN, about: true })));
       // A solid free to turn about one axis (a body of revolution, or two dimensions not
       // told apart) is drawn with its body x on the first crystal direction across that

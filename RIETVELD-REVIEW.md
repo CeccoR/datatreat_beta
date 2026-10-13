@@ -1271,7 +1271,7 @@ The first rule left a row out past half an esd, with the misfit of unread reflec
 | Constant | Value | Where (file:line, v425) | Role | Origin | Note |
 |---|---|---|---|---|---|
 | Opacities | SOLID_ALPHA 0.66; CONE_ALPHA 0.16, rim stroke 0.5 | xrd-shape3d.js:23, 24 | how much shows through the solid; cones | arbitrary | "The lines through it stay readable"; cones "there, but not in the way". |
-| ESD_MAX | 60° | xrd-shape3d.js:25 | beyond it a direction is dashed, without a cone | arbitrary | Matches turnEsds' last trial; the worker already drops axes over 30°. |
+| ESD_MAX | 60° | xrd-shape3d.js:25 | beyond it a direction is dashed, without a cone | arbitrary | Matches turnEsds' last trial. The worker sends a body's axes over 30° with no esd, so they are dashed as well (v431; up to v430 it dropped them, and the view showed fewer arrows than axes). |
 | OFF_MIN | 0.05° | xrd-shape3d.js:26 | below it no "x° off axis" line | arbitrary | Same as the worker's "0". |
 | Extents drawn | OPEN_RATIO 20 (endless above 20× the smallest other extent); OPEN_CAP 4× the largest closed extent; no extent under 1 % of the largest | xrd-shape3d.js:27, 28, 293 | which dimensions are drawn endless, and how long | arbitrary | Between ~10× and 20× the picture is to scale, above 20× it is not (the caption gives the true sizes). |
 | View size | 200–320 CSS px; layers ≤ 2 (solid) / 1.5 (cones) px per CSS px | xrd-shape3d.js:29 | canvas | arbitrary | Performance against sharpness. |
