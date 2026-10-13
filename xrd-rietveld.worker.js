@@ -18,7 +18,7 @@ function friendly(model, name){
   const key = q ? name.slice(q.pfx.length) : name;
   const what = { scale: 'scale', Ys: 'crystallite size', Xs: 'microstrain', B: 'ΔB', PO: 'texture r', LS: 'size distribution σ', FA: 'fault probability',
     U: 'U', V: 'V', W: 'W', X: 'X', Y: 'Y', asym: 'asymmetry', axL: 'axial length', zero: 'zero', disp: 'displacement', transp: 'sin 2θ shift' }[key]
-    || (/^S\d+$/.test(key) ? `anisotropic strain ${key}` : /^B_/.test(key) ? `B(${key.slice(2)})` : /^U\d\d_/.test(key) ? `${key.slice(0, 3)}(${key.slice(4)})` : /^(E[abc]|W[abcdh]|R\d)$/.test(key) ? `shape ${key}` : key);
+    || (/^S\d+$/.test(key) ? `anisotropic strain ${key}` : /^B_/.test(key) ? `B(${key.slice(2)})` : /^U\d\d_/.test(key) ? `${key.slice(0, 3)}(${key.slice(4)})` : /^(E[abc]|W[abcdhs]|R\d)$/.test(key) ? `shape ${key}` : key);
   return q ? `${nm} ${what}` : what;
 }
 
@@ -340,7 +340,7 @@ function summarise(model, res, phases, opts){
         });
       } else {
         // A body: its kind and axis, its dimensions, each along its lattice direction.
-        const NAME = { ellipsoid: 'ellipsoid', spheroid: 'spheroid', cylinder: 'cylinder', ellcyl: 'elliptic cylinder', box: 'box' }[sh.type];
+        const NAME = { ellipsoid: 'ellipsoid', spheroid: 'spheroid', cylinder: 'cylinder', ellcyl: 'elliptic cylinder', box: 'box', sqbox: 'square-based box' }[sh.type];
         const ax = sh.axes.find(a=> a.role === 'axis' && a.resolved);
         // Held on the lattice (freeShape): its axes exactly on their lattice directions.
         // Held: also how far the free fit's axis was from it.
@@ -350,7 +350,7 @@ function summarise(model, res, phases, opts){
         const dimTxt = a => Number.isFinite(a.D) ? fmtEsd(a.D, a.Desd, ' nm') : Number.isFinite(a.Dmin) ? `over ${a.Dmin.toFixed(0)} nm` : 'unbounded';
         lines.push({ label: 'shape', value: `${NAME}: ${sh.kind}${ax ? `, axis ∥ ${ax.uvw} (${at(ax)})` : held ? ', held on the lattice' : ''}`,
           title: `The free shape as ${/^[aeiou]/.test(NAME) ? 'an' : 'a'} ${NAME} of any proportions and orientation. ${wppm ? `Its dimensions are the solid's own (WPPM: each member of a reflection's family drawn from the solid's common-volume function along it${ln ? ', over the log-normal distribution of sizes: the dimensions of the volume-weighted mean crystallite' : ''})` : 'Its dimensions are read as the isotropic size is (Scherrer, K = 0.9: a sphere of one size reads 1.0–1.7 times its diameter), not true ones, which WPPM gives; each reflection\'s width follows the solid\'s volume-weighted column length along it'}, the faces ideally flat (a 2° spread of their orientation would shorten a thin solid's sizes across them by 10–30 %).${held ? ' Its axes are held on their lattice directions: lower ΔBIC than with the orientation free, which the χ² allows too. The free fit is about as likely ("free": its axis\'s angle from the held one), so its difference is in the esds — the angle\'s at least that far' : ''}` });
-        const along = { ellipsoid: { a: 'axis', b: 'axis', c: 'axis' }, spheroid: { axis: 'polar axis' }, cylinder: { axis: 'height' }, ellcyl: { axis: 'height', a: 'cross-section', b: 'cross-section' }, box: { a: 'edge', b: 'edge', c: 'edge' } }[sh.type];
+        const along = { ellipsoid: { a: 'axis', b: 'axis', c: 'axis' }, spheroid: { axis: 'polar axis' }, cylinder: { axis: 'height' }, ellcyl: { axis: 'height', a: 'cross-section', b: 'cross-section' }, box: { a: 'edge', b: 'edge', c: 'edge' }, sqbox: { axis: 'height', a: 'side', b: 'side' } }[sh.type];
         // Dimensions not told apart (xrd-rietveld bodyShapeOf groups): their mean, with
         // its esd, once; each member's own value has none (13 ± 107 nm for a measured
         // 12.80(42)), and is shown alone only where it has a direction.

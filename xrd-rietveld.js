@@ -717,7 +717,8 @@ function axialOf(model, v){
    (1.9 esd at 3·10⁴ counts).
    The solids (p.shape, true meaning 'ellipsoid'):
    - ellipsoid, spheroid (two axes equal), cylinder, elliptic cylinder (an ellipse
-     translated along the axis), box (a rectangular parallelepiped): the affine image
+     translated along the axis), box (a rectangular parallelepiped), square box (a box
+     with two edges equal, its square turned with it): the affine image
      of a unit ball, cylinder (diameter and height 1, axis z) or cube,
      body = Rot·diag(D)·base. (v420's ellipsoid, Ys(u) = Ys + |Lᵀu| with S = L·Lᵀ six
      free numbers, stays as 'ellipsoidL' for the results refined with it: its axes' esds
@@ -741,7 +742,7 @@ function axialOf(model, v){
    and all, and spheres of one size read 1.0–1.7 times their diameter (RIETVELD.md
    §7.2). WPPM reads them as the true ones. */
 const SHAPE_NAMES = ['L11', 'L21', 'L22', 'L31', 'L32', 'L33'];
-const SHAPE_TYPES = ['ellipsoid', 'spheroid', 'cylinder', 'ellcyl', 'box', 'ellipsoidL'];
+const SHAPE_TYPES = ['ellipsoid', 'spheroid', 'cylinder', 'ellcyl', 'box', 'sqbox', 'ellipsoidL'];
 // The bodies: base solid, width parameters (° — a sphere's width for that dimension;
 // each solid's own names, so that a result's parameters say which solid it was) and
 // how they map onto the body axes x, y, z, and the rotation components refined.
@@ -751,6 +752,9 @@ const BODIES = {
   cylinder: { base: 'cylinder', W: ['Wd', 'Wh'], axes: W=> [W[0], W[0], W[1]], rot: 2 },
   ellcyl: { base: 'cylinder', W: ['Wa', 'Wb', 'Wh'], axes: W=> W, rot: 3 },
   box: { base: 'cube', W: ['Wa', 'Wb', 'Wc'], axes: W=> W, rot: 3 },
+  // A box with a square base (side s, height h along z): two widths, but three turns —
+  // a square turned about its normal is another solid.
+  sqbox: { base: 'cube', W: ['Ws', 'Wh'], axes: W=> [W[0], W[0], W[1]], rot: 3 },
 };
 const ROT_NAMES = ['R1', 'R2', 'R3'], QREF_NAMES = ['Q0', 'Q1', 'Q2', 'Q3'];
 const shapeTypeOf = p => p === true ? 'ellipsoid' : SHAPE_TYPES.includes(p) ? p : null;
@@ -1129,7 +1133,7 @@ function turnEsds(model, v, res, about, turn, names){
   }
 }
 /* shapeOf(model, params, k, res?) → the phase's free shape, or null when not in use:
-   for a body (spheroid, cylinder, elliptic cylinder, box) bodyShapeOf's; for the
+   for a body (spheroid, cylinder, elliptic cylinder, box, square box) bodyShapeOf's; for the
    ellipsoid { type, kind: 'plate' | 'needle' | 'triaxial' | 'isometric' |
    'anisotropic', axes: [{ D, Desd (nm), dir: [u,v,w], label: '⟨110⟩' | '[001]', uvw,
    angle (° from that direction), vec, e, esdAngle (°), resolved, group }] from the
@@ -1274,7 +1278,7 @@ function alongLabel(q, R0, dir, vec){
   const c = [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
   return c[0]*vec[0] + c[1]*vec[1] + c[2]*vec[2] < 0 ? vec.map(x=> -x) : vec;
 }
-/* A body's shape (spheroid, cylinder, elliptic cylinder, box): { type, kind, dims:
+/* A body's shape (spheroid, cylinder, elliptic cylinder, box, square box): { type, kind, dims:
    [{ name, D, Desd }], axes: [{ role, D?, e, dir, label, uvw, angle, vec, esdAngle,
    resolved }], solid: { type, dims, frame, cell (the cell's a, b, c: cellAxes) } }. Its dimensions D = Kλ/(W·π/180) with
    esds from W's; the axes whose directions it has (a body of revolution only its own
@@ -1321,8 +1325,8 @@ function bodyShapeOf(model, v, k, res){
     return held && info.freeOff && Number.isFinite(e) ? Math.max(e, info.freeOff[i]) : e; };
   // The body's dimensions along x, y, z, and which axes have directions of their own.
   const [Dx, Dy, Dz] = B.axes(dimsOf.map(d=> d.D));
-  const roles = type === 'spheroid' ? [['axis', 2]] : type === 'cylinder' ? [['axis', 2]] : type === 'ellcyl' ? [['axis', 2], ['a', 0], ['b', 1]] : [['a', 0], ['b', 1], ['c', 2]];
-  const dimNames = { ellipsoid: ['a', 'b', 'c'], spheroid: ['equatorial', 'polar'], cylinder: ['diameter', 'height'], ellcyl: ['a', 'b', 'height'], box: ['a', 'b', 'c'] }[type];
+  const roles = type === 'spheroid' ? [['axis', 2]] : type === 'cylinder' ? [['axis', 2]] : type === 'ellcyl' || type === 'sqbox' ? [['axis', 2], ['a', 0], ['b', 1]] : [['a', 0], ['b', 1], ['c', 2]];
+  const dimNames = { ellipsoid: ['a', 'b', 'c'], spheroid: ['equatorial', 'polar'], cylinder: ['diameter', 'height'], ellcyl: ['a', 'b', 'height'], box: ['a', 'b', 'c'], sqbox: ['side', 'height'] }[type];
   const dims = dimsOf.map((d, i)=> ({ name: dimNames[i], ...d }));
   const dimAlong = [Dx, Dy, Dz], dimEsdAlong = B.axes(dimsOf.map(d=> d.Desd)), dimMinAlong = B.axes(dimsOf.map(d=> d.Dmin));
   // Two dimensions not told apart (widths within 2σ) make a solid of revolution about
@@ -1363,7 +1367,8 @@ function bodyShapeOf(model, v, k, res){
   // about its third edge, which equal edges leave only the square's fourfold to act
   // through (the linear z of equal box edges, mean z² 1.9 over 62 draws on rutile, ZnO,
   // corundum and an orthorhombic phase, as two degrees of freedom give, had told 9 apart;
-  // now 3). z = 2 there.
+  // now 3). z = 2 there. A square box as high as it is wide is a cube, whose turns all
+  // still act, as a cylinder's as high as it is wide: none taken away.
   // Up to v426 the linear z decided every pair at 2, and where one width was on 0 the
   // other's own esd alone: on synthetic 150 × 150 × 4 nm boxes, ellipsoids and elliptic
   // cylinders the two equal in-plane widths were told apart in all 9 draws of 32 where one
@@ -1371,7 +1376,9 @@ function bodyShapeOf(model, v, k, res){
   const Q2S = [4, 6.18, 8.02];
   const turnsFree = !!(res && res.free) && q.iR.some(i=> res.free.includes(model.par[i].name));
   const freedOf = (a, b) => !turnsFree ? 0 : type === 'spheroid' ? 2 : type === 'ellipsoid' || type === 'box' || (type === 'ellcyl' && a + b === 1) ? 1 : 0;
-  const wIx = B.rot === 2 ? [0, 0, 1] : [0, 1, 2];
+  // Each body axis's width: two widths (a body of revolution, a square box) put the first
+  // on x and y.
+  const wIx = nW === 2 ? [0, 0, 1] : [0, 1, 2];
   const nu = res && res.stats ? res.stats.chi2 : NaN, pairs = new Map();
   let chiFit = NaN;
   const pairOf = (a, b) => {
@@ -1464,7 +1471,7 @@ function bodyShapeOf(model, v, k, res){
   // An axis has a direction of its own unless the turn about another is free: a box's
   // edges always have theirs (a square turned is another solid; whether the data fix
   // them is its angular esd's to say).
-  const own = i => type === 'ellipsoid' || (type === 'ellcyl' && i < 2) ? groupOf(i) < 0 : type === 'box' || !round;
+  const own = i => type === 'ellipsoid' || (type === 'ellcyl' && i < 2) ? groupOf(i) < 0 : type === 'box' || type === 'sqbox' || !round;
   // The reference for the lattice frame: the body's axis, an ellipsoid's lone axis, or
   // its (a box's) shortest.
   const shortest = [0, 1, 2].sort((a, b)=> dimAlong[a] - dimAlong[b])[0];
@@ -1481,9 +1488,10 @@ function bodyShapeOf(model, v, k, res){
   // synthetic 150 × 150 × 4 nm box whose edges read 99 and 488 nm, not told apart, had been
   // called triaxial).
   let kind;
-  if (type === 'box' || type === 'ellcyl' || type === 'ellipsoid'){
+  if (type === 'box' || type === 'sqbox' || type === 'ellcyl' || type === 'ellipsoid'){
     const [a, b, c] = dimAlong.map((d, i)=> groupOf(i) >= 0 ? groups[groupOf(i)].D : d).sort((x, y)=> x - y);
-    const same = groups.some(g=> g.axes.length === 3);
+    // (a square box: its side and height not told apart, a cube)
+    const same = groups.some(g=> g.axes.length === 3) || (type === 'sqbox' && !apart(0, 2));
     kind = same || a/c > 0.8 ? (type === 'ellipsoid' ? 'isometric' : 'equant') : a/b < 0.5 && b/c < 0.5 ? 'triaxial' : a/b < 0.5 ? 'plate' : b/c < 0.5 ? 'needle' : 'anisotropic';
   } else {
     const same = zr(0, 2) < 2;

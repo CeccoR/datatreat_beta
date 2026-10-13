@@ -100,7 +100,7 @@ const cellKey = c => [c.a, c.b, c.c, c.alpha, c.beta, c.gamma].map(v=> +(+v).toF
 // (migrateSettings) and from results (curvesOf). The crystallite shapes (xrd-rietveld
 // SHAPE_TYPES): none (the isotropic size) or a free solid; a project saved with the one free
 // shape there was (true) has the ellipsoid.
-const SHAPES = [['', 'isotropic size'], ['ellipsoid', 'ellipsoid'], ['spheroid', 'spheroid (two axes equal)'], ['cylinder', 'cylinder'], ['ellcyl', 'elliptic cylinder'], ['box', 'box']];
+const SHAPES = [['', 'isotropic size'], ['ellipsoid', 'ellipsoid'], ['spheroid', 'spheroid (two axes equal)'], ['cylinder', 'cylinder'], ['ellcyl', 'elliptic cylinder'], ['box', 'box'], ['sqbox', 'square-based box']];
 const shapeOpt = v => v === true ? 'ellipsoid' : SHAPES.some(([k])=> k && k === v) ? v : false;
 const TEXTURE_AXES = ['100', '010', '001', '110', '111'];
 const textureOpt = v => v === 'auto' || TEXTURE_AXES.includes(v) ? v : '';
@@ -358,8 +358,8 @@ export function createRietveld(host){
     const g = n => P['p' + id + '.' + n], has = n => ('p' + id + '.' + n) in P;
     // v420's ellipsoid (S = L·Lᵀ) is 'ellipsoidL'; the bodies by their widths' names.
     if (['L11', 'L22', 'L33'].some(n=> g(n))) return 'ellipsoidL';
-    const type = has('Ea') ? 'ellipsoid' : has('Wd') ? 'cylinder' : has('Wh') ? 'ellcyl' : has('Wb') ? 'box' : has('Wc') ? 'spheroid' : null;
-    return type && ['Ea', 'Eb', 'Ec', 'Wa', 'Wb', 'Wc', 'Wd', 'Wh'].some(n=> g(n)) ? type : false;
+    const type = has('Ea') ? 'ellipsoid' : has('Ws') ? 'sqbox' : has('Wd') ? 'cylinder' : has('Wh') ? 'ellcyl' : has('Wb') ? 'box' : has('Wc') ? 'spheroid' : null;
+    return type && ['Ea', 'Eb', 'Ec', 'Wa', 'Wb', 'Wc', 'Wd', 'Wh', 'Ws'].some(n=> g(n)) ? type : false;
   }
   /* Why a pattern's last result cannot be started from — it must be of this pattern in
      this role, with these phases in these cells (autoRefine checks the parameters too) —
@@ -536,6 +536,7 @@ export function createRietveld(host){
       : s.type === 'cylinder' ? `cylinder, ${s.kind}: diameter ${n(x)} nm, height ${n(z)} nm`
       : s.type === 'ellcyl' ? `elliptic cylinder, ${s.kind}: ${n(x)} × ${n(y)} nm across, height ${n(z)} nm`
       : s.type === 'box' ? `box, ${s.kind}: ${n(x)} × ${n(y)} × ${n(z)} nm`
+      : s.type === 'sqbox' ? `square-based box, ${s.kind}: base ${n(x)} × ${n(x)} nm, height ${n(z)} nm`
       : `ellipsoid, ${s.kind}: axes ${n(x)} × ${n(y)} × ${n(z)} nm`;
   }
   function renderSolids(f, r){

@@ -1,7 +1,7 @@
 /* =========================================================
    XRPD — the crystallites' shape in 3D.
    A small view of the solid a free-shape refinement gives (ellipsoid, spheroid,
-   cylinder, elliptic cylinder or box, in nm) with up to three crystal directions
+   cylinder, elliptic cylinder, box or square-based box, in nm) with up to three crystal directions
    drawn through it, each with its 1σ angular uncertainty as a translucent cone, and
    the cell's a, b, c as a small triad in a corner, turned with it.
    Software 3D on a 2D canvas: no WebGL, no library. The solid is drawn axis-aligned
@@ -34,7 +34,7 @@ const SIZE_MIN = 200, SIZE_MAX = 320;
 // resolution, and on a 3x screen the full ratio would more than double their cost for
 // nothing one can see. A PNG takes the cones at 2 as well.
 const LAYER_MAX = 2, CONE_LAYER_MAX = 1.5;
-const TYPE_NAMES = { ellipsoid: 'ellipsoid', spheroid: 'spheroid', cylinder: 'cylinder', ellcyl: 'elliptic cylinder', box: 'box' };
+const TYPE_NAMES = { ellipsoid: 'ellipsoid', spheroid: 'spheroid', cylinder: 'cylinder', ellcyl: 'elliptic cylinder', box: 'box', sqbox: 'square-based box' };
 // The home view: the camera 38° round from body x towards y and 24° above the xy
 // plane, body z up. No body axis is end-on or edge-on, and a disc shows its face.
 const HOME_AZ = 38 * DEG, HOME_EL = 24 * DEG;
@@ -270,7 +270,7 @@ function perpBasis(w){
    frame with their lines and cones laid out (in body coordinates, projected per draw). */
 function buildModel(solid){
   const type = TYPE_NAMES[solid.type] ? solid.type : 'ellipsoid';
-  const kind = type === 'box' ? 'box' : (type === 'cylinder' || type === 'ellcyl') ? 'cyl' : 'ell';
+  const kind = type === 'box' || type === 'sqbox' ? 'box' : (type === 'cylinder' || type === 'ellcyl') ? 'cyl' : 'ell';
   const raw = vec3(solid.dims) || [NaN, NaN, NaN];
   // A spheroid's and a round cylinder's cross-section is a circle: a missing Dy is Dx.
   if ((type === 'spheroid' || type === 'cylinder') && !(raw[1] > 0)) raw[1] = raw[0];
