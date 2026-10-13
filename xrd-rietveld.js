@@ -3891,6 +3891,13 @@ function autoRefine(model, opts = {}){
     // A sample's zero not the one its cell and displacement were fitted at (the standard
     // refined again, or its profile added or removed since): those are refined, not held.
     const zeroMoved = !std && has('zero') && P0.zero !== model.v[model.iZero];
+    /* The last result drawn with another model of the axial divergence (FCJ's A there, the
+       Soller model's L here, or the reverse), or a standard's without the sin 2θ shift
+       (both v432's): its profile, zero, displacement and cell were fitted to lines drawn
+       otherwise, and are refined from its values rather than held. Held, the user's LaB6
+       refined from its v431 result kept χ²_ν 3.79 where from the CIF it reaches 2.17 (the
+       shift took −0.003° instead of −0.017°, the zero and displacement held at FCJ's). */
+    const axChanged = has('axL') !== (AS === 'axL') || (std && !has('transp'));
 
     // Free: a full refinement's final list, in its order. The free shapes: carried from
     // the last result, kept isotropic (rejected there, the shape ticked), or searched.
@@ -3918,7 +3925,7 @@ function autoRefine(model, opts = {}){
       // added; Ys where the solid changed or is searched: a solid's 0 there is no isotropic
       // size to hold, and a search replaces it — freeShape sets it to 0)
       return hold.has(g) && !changed(i) && was(n) && has(n) && !(p.phase >= 0 && i === model.phases[p.phase].iYs && (chg[p.phase].shape || search.includes(p.phase)))
-        && !(irfMoved && BROAD.includes(g)) && !(zeroMoved && g === 'cell'); });
+        && !(irfMoved && BROAD.includes(g)) && !(zeroMoved && g === 'cell') && !(axChanged && (g === 'instrument' || g === 'cell')); });
     // What is new: σ and the texture by their trials, after the refinement.
     const lsNew = liveK.filter(k=> { const q = model.phases[k], m0 = chg[k].m0; return q.iLS != null && q.wppm && !(m0 && m0.profile === 'lognormal' && irfSame); });
     const poNew = liveK.filter(k=> model.phases[k].iPO != null && chg[k].texture);
@@ -3968,12 +3975,13 @@ function autoRefine(model, opts = {}){
     held.forEach(n=> { const i = model.index[n]; note('held', labelOf(i), model.par[i].phase); });
     res.free.forEach(n=> { const i = model.index[n]; note(changed(i) || trial.has(n) || !was(n) || !has(n) ? 'fresh' : 'kept', labelOf(i), model.par[i].phase); });
     search.forEach(k=> note('fresh', 'shape', k));
+    const axNote = axChanged && (hold.has('instrument') || hold.has('cell')) && `The last result was refined with ${has('axL') ? 'the Soller model of the axial divergence' : 'FCJ\u2019s axial divergence'}${std && !has('transp') ? ' and without the sin 2θ shift' : ''} (before v432, or another standard), this one with ${AS === 'axL' ? 'the Soller model' : 'FCJ\u2019s'}: the profile, zero, displacement and cell, fitted to lines drawn otherwise, are refined from its values rather than held.`;
     const zeroNote = zeroMoved && hold.has('cell') && `The zero is not the one the last result was refined at (the standard refined again, or its profile added or removed: ${P0.zero.toFixed(4)}° then, ${model.v[model.iZero].toFixed(4)}° now): the cell and displacement, fitted at that zero, are refined rather than held.`;
     const say = m => {
       const same = m.has('size') && m.has('strain') && [...m.get('size')].join() === [...m.get('strain')].join();
       return Object.keys(LABEL).filter(g=> m.has(g) && !(same && g === 'strain')).map(g=> (same && g === 'size' ? 'size and strain' : LABEL[g]) + (m.get(g).size ? ' of ' + [...m.get(g)].join(' and ') : '')).join('; ');
     };
-    warnings.push(['Refined from the last result.', irfMoved && BROAD.some(g=> hold.has(g)) && 'The standard has been refined again since: the size, strain, shape and faults, fitted above its former profile, are refined rather than held.', zeroNote, lists.held.size && `Held at its values: ${say(lists.held)} (with no esds here: they are that refinement's; what is refined here is conditional on them, and a last refinement with nothing held gives values and esds free of that).`,
+    warnings.push(['Refined from the last result.', irfMoved && BROAD.some(g=> hold.has(g)) && 'The standard has been refined again since: the size, strain, shape and faults, fitted above its former profile, are refined rather than held.', axNote, zeroNote, lists.held.size && `Held at its values: ${say(lists.held)} (with no esds here: they are that refinement's; what is refined here is conditional on them, and a last refinement with nothing held gives values and esds free of that).`,
       lists.kept.size && `Refined from its values: ${say(lists.kept)}.`, lists.fresh.size && `New or changed since, refined from their usual start: ${say(lists.fresh)}.`].filter(Boolean).join(' '));
     return finish({ res, out, lastFree: free, nIn, cs: null, carried, held, iso0: carried.length ? S0.isoParams : null, keptIso });
   }
