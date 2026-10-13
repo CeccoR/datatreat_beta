@@ -96,7 +96,7 @@ flowchart TD
   J --> K["card: plot, results,<br/>widths table, 3D view, CSV"]
 ```
 
-The standard's refinement produces the instrumental resolution function (*irf*): Caglioti U, V, W; Lorentzian X, Y; the axial-divergence asymmetry; the zero. Every sample refined afterwards takes it as its instrument.
+The standard's refinement produces the instrumental resolution function (*irf*): Caglioti U, V, W; Lorentzian X, Y; the axial divergence (through the Soller slits, the sample's and receiver's axial length L; without Sollers in the file, FCJ's asymmetry A); the zero and the sin 2θ shift. Every sample refined afterwards takes it as its instrument.
 
 ### 1.4 Conventions
 
@@ -177,8 +177,10 @@ The XRPD module (`xrd.js`) reads each `.xrdml` file through `readXrdmlScan` (`xr
 | Anode | `anodeMaterial`, else the tube name (`… Cu LFF`) | defaults only |
 | Goniometer radius | incident (else diffracted) beam path | the displacement in mm |
 | Divergence slit | `xsi:type`, name, angle, or height at a distance | warnings, display |
-| Incident Soller slit, filter | elements and names | display only |
-| Anti-scatter slits, mask, diffracted Soller slit | elements and names | read, not used |
+| Soller slits, incident and diffracted | `sollerSlit` opening (else its name: `Soller 0.04 rad.`) | the axial divergence: both given, the Soller model (§3.7.1), else FCJ; display |
+| Tube focus | `xRayTube/focus/length` (a line focus) | the source's axial length in the Soller model (12 mm when none, §3.7.1) |
+| Filter | element and name | display only |
+| Anti-scatter slits, mask | elements and names | read, not used |
 | Monochromator | any element named `*monochromator*` on each side: its crystal, reflection and number of reflections, from `<crystal>`, `<hkl>`, `<numberOfReflections>`, else from its name (`Hybrid 2xGe(220)`, `4xGe220`, `Ge(220) four-bounce`, `Bartels`, `Graphite (002)`) | polarisation K (LP, §3.4); Kα2 dropped behind a perfect crystal on the incident side |
 | Sample mode, scan axis | `xrdMeasurement`, `scan` | warnings |
 | Detector | `detector` | display (its name) |
@@ -466,16 +468,20 @@ This is the Bragg–Brentano factor, divided by a constant (1 + K) that the scal
 
 v425 used graphite (002) for every monochromator. With a hybrid 2×Ge(220) that put the 20°/80° intensity ratio 5 % off, which B absorbs (about 0.15 Å² over 10–80°). A real crystal can lie between the perfect and the mosaic value (strain, mosaic spread): for Ge (220), 0.703 against 0.495, 12 % in the same ratio; the card's instrument line shows the K used.
 
-No absorption, surface-roughness, sample-transparency or variable-slit correction is applied.
+No absorption, surface-roughness or variable-slit correction is applied. A shift of the transparency's form is part of the peak positions (§3.5), refined on the standard; the transparency's broadening is not modelled.
 
 ### 3.5 Peak positions
 
 ```text
-2θ = 2·asin(λ_j / 2d) + zero + disp · cos θ
+2θ = 2·asin(λ_j / 2d) + zero + disp · cos θ + transp · sin 2θ
 ```
 
 - `zero` (bounds ±2°) is the goniometer zero. It is refined on the standard only (§6).
 - `disp` (bounds ±3°) is the specimen displacement term: Δ2θ = −(2s/R)·cosθ for a displacement s and a goniometer radius R. It is reported in mm as s = −disp·(π/180)·R/2.
+- `transp` (bounds ±1°, v432) is a shift of the form of the sample's transparency, Δ2θ = −sin 2θ/(2μR) for a linear absorption μ (−90/(π·μ·R) in degrees). It is refined on the standard with the zero and the displacement, and held at the standard's on a sample, as the zero is. The card reports it as "shift ∝ sin 2θ".
+  - **Why.** On the user's LaB₆, with the Soller model (§3.7.1), each line's position against the model's (one shift per line, fitted to its residual with its scale) ran +4.5 m° at 21°, −2 to −3 m° at 50–90° and +11 m° at 142°. The zero and displacement left 3.0 m° rms; with a sin 2θ term, 0.5 m°. sin θ, or a linear and a quadratic term in 2θ, fit about as well (0.49, 0.47 m°); tan θ, a cell or a wavelength off, does not (1.9 m°). Of these forms sin 2θ is the conventional one (FullProf's SySin, GSAS-II's transparency), and the data do not tell them apart.
+  - **What it is.** It refines to −0.0171(2)° on that LaB₆, where LaB₆'s own absorption (μ about 600–1100 cm⁻¹ as packed, Cu Kα) gives −0.001 to −0.002°: the rest is the instrument's, of the same form, and the samples share it. A sample of very different absorption would have its own transparency on top, which is not refined.
+  - **Measured.** With FCJ alone it took the LaB₆'s χ²_ν from 4.37 to 3.43 (the (100)'s window from 185 to 76, the last line's from 24.5 to 10.9); with the Soller model, to 2.17. Synthetic standards drawn at −0.005 to −0.02° gave it back within 1.6 esd (12 fits, §3.7.1).
 - Each line has its own θ, so Kα2 sits where its own wavelength puts it.
 
 ### 3.6 The peak profile
@@ -525,11 +531,84 @@ H = \left(H_G^5 + 2.69269 H_G^4 H_L + 2.42843 H_G^3 H_L^2 + 4.47163 H_G^2 H_L^3 
   - Renormalising inside the window instead had made the fitted intensities 1.6·η % low. Since η differs between phases, that biased their ratio.
 - **The Gaussian part** is evaluated only where the exponent is under 40 (about ±3.8 H). It is zero long before the edge.
 
-### 3.7 Axial divergence (Finger, Cox & Jephcoat 1994)
+### 3.7 Axial divergence
 
 **Why.** A Bragg–Brentano peak is not symmetric. Rays that leave the diffraction plane along the goniometer axis meet each Debye cone at a slightly lower 2θ below 90° (and higher above), so low-angle peaks carry a tail towards low angles. On the user's LaB₆ a symmetric profile gave:
 - R_wp 11.97 % and χ² 11.4;
 - worse, a misfit that the zero, the displacement and the widths absorbed, and that the samples then inherit. Refined as a sample, LaB₆ came out at a = 4.156409 Å against its certified 4.156826 Å.
+
+**Two models (v432).** Where the file gives Soller slits on both sides (the `.xrdml` openings: 0.04 rad on the user's instrument), the full axial model through them (Cheary & Coelho 1998, §3.7.1); otherwise Finger, Cox & Jephcoat's (§3.7.2), as up to v431. A sample takes its standard's: from a standard refined with FCJ (its file without Sollers, or a result from before v432) a sample is drawn with that A, whatever its own file says.
+
+#### 3.7.1 Through Soller slits (Cheary & Coelho 1998; v432)
+
+**Why not FCJ.** FCJ's geometry has no Soller slits: the sample's and the slit's heights alone limit the rays, and its one parameter sets the tail's reach and its shape together. On the user's LaB₆ (Sollers of 0.04 rad on both sides, a 12 mm line focus, an X'Celerator) it left:
+- χ²_ν 4.37 overall, and 185 and 114 in the windows of the (100) at 21.4° and the (110) at 30.4°, its strongest lines (5·10⁴ counts): the model's low-angle tail too strong near the peak (−4.6 % of the (100)'s area on its low side) and too weak far out;
+- the last line, (510)/(431) at 141.8°, 15 % short at its top (χ²_ν 24.5 in its window). Refined from 90° on alone, that window came to 4.3: the zero, the displacement and the widths, which the whole pattern shares, are set by the strong low-angle lines, and the last line paid for their misfit.
+
+**The geometry** (`sollerNodes`). A ray from the source at z_s (along the goniometer axis) to the sample at z_m leaves the diffraction plane by β1 = (z_m − z_s)/R; diffracted towards the receiver at z_r, by β2 = (z_r − z_m)/R. It meets the Debye cone of 2θ at
+
+```text
+cos 2φ = (cos 2θ − sin β1 sin β2)/(cos β1 cos β2)
+```
+
+To second order 2φ − 2θ = −(β1² + β2²)/2·cot 2θ + β1β2/sin 2θ: the first term is FCJ's tail (towards low angles below 90°, high above), the second a broadening on both sides that FCJ lacks, and all there is at 90°. The exact form is used: with Sollers of 0.04 rad the second order misplaces the widest rays by 0.9° of their 3.0° at 5°, 0.007° at 20°. The weight of (β1, β2):
+- the Sollers' transmissions, triangular: 1 − |β|/ψ, ψ1 and ψ2 the file's openings;
+- times the length of z_m that the sample, the source seen at β1 and the receiver seen at β2 have in common.
+
+**One parameter, L.** The source's axial length Lx is the tube's focus (`xRayTube/focus/length` of a line focus: 12 mm on a long fine focus; 12 mm when the file gives none). The sample's and the receiver's axial lengths are taken equal, L, and refined (`axL`, mm), as FCJ takes S = H. On the user's LaB₆ (with the sin 2θ shift, §3.5; a brute-force quadrature):
+
+| Variant | χ²_ν |
+|---|---|
+| L (sample = receiver) refined, Sollers the file's 0.04 rad | 2.19 |
+| sample 15, 20, 25 mm, the receiver refined | 2.31, 2.23, 2.20 |
+| sample 10 mm (the mask's), the receiver refined | 2.77 (the receiver on its bound) |
+| source 8 mm instead of 12 | 2.185 against 2.189 |
+| Sollers 0.05 rad, L refined | 2.06 |
+| Sollers 0.03 rad, L refined | 5.3 |
+
+The sample's and the receiver's lengths trade off; the source's does not matter. The Sollers' acceptance is the file's, not refined: 0.05 rad would gain 6 % of χ², with a second parameter that trades off with L.
+
+**L is determined while the Sollers do not cut the rays.** Beyond about 2Rψ (19 mm here) the Sollers stop the rays the lengths would pass, and L matters less. Synthetic LaB₆ (the real file's grid and instrument, Poisson noise) drawn at L = 8, 12, 20 and 30 mm came back within 2 esd (12 fits, mean z² 0.92: 7.98(3), 11.9–12.1(7), 19.6–20.3(2) and 30.3–30.6(7) mm), the sin 2θ shift, the zero, the displacement, X and Y within 1.8 esd. Drawn at 40 mm, L ran to its 80 mm bound (no esd) at χ²_ν 1.02, the other parameters within 0.3 esd: the profile is then the same whatever L. The user's LaB₆ gives 30.7(1.0) mm (correlations −0.63 with the zero, 0.61 with the displacement).
+
+**On a sample** L is the standard's (with its irf). A sample refined without a standard holds it at 15 mm (`AX_START`): its broad lines do not determine it (freed with U, V and X, the user's 33A took it to its 0.5 mm bound, χ²_ν unchanged).
+
+**The nodes** (`sollerGrid`, `sollerCells`, `sollerNodes`).
+- The grid: 64 × 64 cells over β1/ψ1, β2/ψ2 ∈ [−1, 1], each weighed by 4 × 4 points.
+- A cell's shift from its corners, exactly: their mean with the centre's curvature from the second order (exact for a quadratic: within 5·10⁻⁵° of the exact centre from 10°), and their variance (linear across the cell).
+- A line's cells depend on θ and the geometry alone: they are gathered into 400 sub-bins and kept for the last 512 lines, so a refinement computes them again only where θ or L moved.
+- A line's nodes, by the spread S of its shifts (σ their standard deviation) against its width H, and the error allowed (`sollerTol`): a tenth of the pattern's noise at the line's top, the window's rule for the tails (§3.6), and never under 0.04 % of the peak. Measured against the dense profile, one node errs by 3.5–3.9·(σ/H)² of the peak and two by 32–62·(σ/H)⁴, taken as 4 and 70:
+  - S under 5 % of H, or 4·(σ/H)² within the tolerance: one node at the mean;
+  - up to 24 nodes: the distribution's own Gauss quadrature (`gaussN`: Lanczos' recurrence, then the Jacobi matrix's eigenvalues, Golub–Welsch): 2 nodes while 70·(σ/H)⁴ is within the tolerance, 3 up to S = H, 3 more for each H beyond; the rule depends on n alone, and is kept with the cells;
+  - beyond: bins H/6 wide, each giving two nodes that keep its weight, mean and variance. (Shared as point weights, the bins had added their own spread, h²/6, to every line: 3 % on its width at h = H/4.)
+
+**Accuracy**, against 300 × 300 points with the exact shift (Sollers of 0.04 rad, L 10 and 30 mm, Lx 12 mm, R 240 mm; H 0.01–1.5°, η 0.5–0.97):
+
+| Regime | Largest error, of the peak |
+|---|---|
+| Gauss's rule (21–142°, spreads 0.2–5 H) | 0.03 % |
+| Bins, from 10° | 0.08 % |
+| Bins at 5° (a line 0.03° wide spread over 3°) | 0.66 % |
+
+48 cells and bins of H/4 had left 0.11–0.17 %; 96 and H/8, 0.025 % for twice the time. Gauss's rule beyond 24 nodes loses the recurrence's orthogonality (0.1–0.25 % at 38–150 nodes). One node with the distribution's variance in the Gaussian width, tried for broad lines, came out 10–30× worse than three Gauss nodes: the distribution's tails are heavy.
+
+**Cost.** The user's LaB₆ refines in 6–8 s (FCJ: 1–2 s); a sample in about 1 s (the same); the widths of §12 in 0.4 s (the same: their nodes are drawn at the fit's starting centre, which at each trial centre had cost 8×). With a free ellipsoid, the occupancy and ΔB, 33A's search takes 32 s and its angular esds 13 s (FCJ: 38 and 12 s), 37D's 20 and 16 s (26 s); the card's *Refine all* of the standard and both, 104 s (86 s). With the tolerance at 0.04 % for every line the search had taken 58–73 s and the esds 24–26 s: the Sollers' spread on both sides needs two or three nodes on every line, where FCJ's one-sided tail collapsed to one on a sample's broad lines (one pattern 8.1 ms against FCJ's 5.3; with the tolerance, 3.7). A sample's sizes moved by 0.01–0.02 nm (under 0.1 esd) with it.
+
+**Held during a refinement** as FCJ's counts are (§5.6): a line's count (one, n, or the bins) is fixed at its first use in a pass, and the audit compares it with the count needed at the end.
+
+**On the user's patterns,** with the sin 2θ shift (§3.5):
+
+| | v431 (FCJ) | v432 |
+|---|---|---|
+| LaB₆: χ²_ν, R_wp | 4.37, 7.41 % | 2.17, 5.22 % |
+| (100), (110), last line: χ²_ν in its window | 185, 114, 24.5 | 37, 24, 6.2 |
+| the last line's top | 15 % short | 10 % short |
+| 33A, 36D, 37D (the card's defaults): D | 7.74, 5.55, 5.86 nm | 7.72, 5.52, 5.83 nm (0.1–0.2 esd) |
+| their a | 3.9166, 3.9219, 3.9216 Å | 3.9162, 3.9215, 3.9212 Å (0.6 esd) |
+| their χ²_ν | 1.50, 1.41, 1.42 | the same |
+
+*Refine all* (the three and the standard) took 12 s instead of 6. The samples' lines are 10–30× wider than the standard's: the instrument's shape hardly reaches their sizes, and their cells move with the zero and the shift. What the LaB₆ still leaves (the (100)'s window at 37, the last line's top 10 % short), and five other corrections tried and not kept: BACKLOG.md.
+
+#### 3.7.2 Without Sollers (Finger, Cox & Jephcoat 1994)
 
 **The model** (`fcjNodes`).
 - The sample's and the receiving slit's half-heights are taken equal. That leaves one parameter, A = (S + H)/L, as GSAS-II's SH/L. A two-parameter version (S ≠ H) refined its second parameter to zero on the standard.
@@ -587,7 +666,7 @@ H = \left(H_G^5 + 2.69269 H_G^4 H_L + 2.42843 H_G^3 H_L^2 + 4.47163 H_G^2 H_L^3 
 Kα1 and Kα2 are computed independently, each with its own:
 - position;
 - width (at its own θ);
-- FCJ nodes;
+- axial-divergence nodes;
 - LP.
 
 **The sample's widths.** A size broadens both lines alike in d\*. So Y_s (read as D = Kλ₁/Y_s), a free shape's widths and the faults' term are given to Kα2 times λ2/λ1, before its own 1/cosθ, as WPPM's synthesis in d\* gives them. The strain term 4ε·tanθ is the same for both lines at their own θ. The instrument's U … Y are the standard's, applied as refined, alike to both lines; so without an irf, where Y carries the whole size (§7.2), Kα2 keeps Kα1's reading, which the instrument's share in that size outweighs anyway. (Kα1's size width for both lines, as GSAS and FullProf have it, leaves Kα2's narrow in d\* by 1 − λ1/λ2: 0.25 % for Cu, 0.6 % for Mo, 0.8 % for Ag; Y_s about 0.09 % off for Cu.)
@@ -638,9 +717,11 @@ Which ones are free at each stage is decided by the strategy (§6).
 |---|---|---|---|---|
 | `zero` | goniometer zero, ° | 0 (the irf's for a sample) | ±2 (wider with a zero range over 1°: ±(range + 1), and to hold the irf's) | no |
 | `disp` | displacement term, Δ2θ = disp·cosθ, ° | 0 | ±3 | no |
+| `transp` | shift Δ2θ = transp·sin 2θ, ° (v432) | 0 on the standard; on a sample the irf's (held), else 0 | ±1 | no |
 | `U`, `V`, `W` | Caglioti H_G² = U tan²θ + V tanθ + W, °² | 0, 0, (H_est/1.635)²; on a sample with an irf, the irf's (held) | U, W ∈ [0, 20]; V ∈ [−20, 20], and V's floor (§5.4) | no |
 | `X`, `Y` | Lorentzian H_L = X tanθ + Y/cosθ, ° | 0, h·cosθ_E; on a sample with an irf, the irf's (held) | [0, 10] | no |
-| `asym` | axial divergence A = (S+H)/L | 0.05 without an irf (the standard, or a sample refined without one) when its reflections stand at ≥ 3 places in range (else 0, held); with one, the irf's | [0, 0.2] | no |
+| `asym` | axial divergence A = (S+H)/L (FCJ: a file without Sollers on both sides, or a sample whose standard used it) | 0.05 without an irf (the standard, or a sample refined without one) when its reflections stand at ≥ 3 places in range (else 0, held); with one, the irf's | [0, 0.2] | no |
+| `axL` | the Soller model's axial length of the sample and receiver, mm (v432; only where the file gives both Sollers) | 15 on the standard; on a sample the irf's (held), or 15 (held) without one | [0.5, 80] | no |
 | `bg0`…`bg6` | Chebyshev coefficients (`bgDegree` + 1 of them: 7 by default) | 10th percentile; 0 | free | yes |
 | `bgInv` | coefficient of 1/2θ | 0 | free | yes |
 
@@ -759,7 +840,7 @@ The crystallite solid's orientation is a rotation vector (§10.4).
 
 ### 5.6 Holding the FCJ node counts
 
-**Held during a pass.** `refine` holds every line's FCJ node count fixed for the whole of a pass (§3.7), so χ² is smooth in the parameters.
+**Held during a pass.** `refine` holds every line's FCJ node count fixed for the whole of a pass (§3.7), so χ² is smooth in the parameters. The Soller model's (§3.7.1) is held the same way: one node, n Gauss nodes, or the bins.
 
 **The audit.** At the end of a pass, it checks whether any line has outgrown its count:
 - a count of 1–3 nodes now needing more;
@@ -818,16 +899,16 @@ On synthetic lines (six structures, steps 0.0084–0.05°, peaks of 50–20000 c
 - U = V = X = 0.
 
 **With the standard's irf:**
-- U, V, W, X, Y, the asymmetry and the zero are the standard's.
+- U, V, W, X, Y, the axial divergence (L, or FCJ's A), the zero and the sin 2θ shift are the standard's.
 - Each phase starts with X_s = 0 and the Y_s that gives the profile (the instrument's with Y + Y_s, TCH) the width H_est at θ_E: the sample's width above the instrument's, all of it Lorentzian to start with. (Up to v425 Y_s = max(0, H_est − H_inst(θ_E))·cosθ_E, which starts the width up to 7 % narrow, since widths do not add linearly.) With several phases, each phase the cell search places then gets its own start (§6.3).
 - By WPPM, Y_s starts 1.23× lower: a sphere's own profile is 1.23× as wide as the Lorentzian of the same Y_s (§7.3).
 
-**Asymmetry.** With the standard's irf, a sample takes the irf's A. Without one (the standard itself, or a sample refined before any standard), A starts at 0.02 when the reflections in range stand at three or more places (§6.2); otherwise it is held at 0.
+**Asymmetry.** With the standard's irf, a sample takes the irf's A or L. Without one (the standard itself, or a sample refined before any standard), A starts at 0.05 (`ASYM_START`, §3.7.2) when the reflections in range stand at three or more places (§6.2); otherwise it is held at 0. The Soller model's L starts at 15 mm, refined on the standard and held on a sample without one (§3.7.1).
 
 ### 6.2 The standard: a zero scan
 
 **The zero scan.**
-1. The zero is scanned over ±1°, both ends on the grid, in steps of at most max(H_est, 0.02°)/4, and one step beyond each end (as the cell search, §6.3). Stepping from −0.3° by H/4, up to v425, had stopped short of +0.3°: at +0.2° for H = 0.5°. At each point the scales and background are solved exactly, with the FCJ collapsed to its centroid.
+1. The zero is scanned over ±1°, both ends on the grid, in steps of at most max(H_est, 0.02°)/4, and one step beyond each end (as the cell search, §6.3). Stepping from −0.3° by H/4, up to v425, had stopped short of +0.3°: at +0.2° for H = 0.5°. At each point the scales and background are solved exactly, with the axial divergence collapsed to its centroid.
 
    The range is a Refinement setting (`zeroRange`, 0.05–5°, default 1°: `ZERO_RANGE`). The zero's bounds, ±2°, widen to ±(range + 1°) beyond a range of 1°, and on a sample to hold the standard's zero it takes; the grid's points grow with the range (about 8·range/H).
 
@@ -837,9 +918,9 @@ On synthetic lines (six structures, steps 0.0084–0.05°, peaks of 50–20000 c
 
 **Then,** the cell is held at the certified value, and the stages free:
 1. the scales and background;
-2. the zero and displacement;
+2. the zero, the displacement and the sin 2θ shift (§3.5);
 3. W and Y;
-4. X, U, V and the asymmetry (the full profile) when the reflections in range stand at three or more places; otherwise X alone. Reflections closer than the FWHM there are one place (the cubic (300) and (221) are one line). The count is taken after stage 3, over the phases detected (a candidate left out, scale 0, has its ticks but no lines: up to v425 an absent SrTiO₃ candidate had doubled a 20–60° LaB₆ pattern's 6 to 12 and freed U, V and the asymmetry on those 6 lines), without reflections whose F² is a rounding error (under 10⁻¹⁰ of the strongest).
+4. X, U, V and the asymmetry, A or L (the full profile) when the reflections in range stand at three or more places; otherwise X alone. Reflections closer than the FWHM there are one place (the cubic (300) and (221) are one line). The count is taken after stage 3, over the phases detected (a candidate left out, scale 0, has its ticks but no lines: up to v425 an absent SrTiO₃ candidate had doubled a 20–60° LaB₆ pattern's 6 to 12 and freed U, V and the asymmetry on those 6 lines), without reflections whose F² is a rounding error (under 10⁻¹⁰ of the strongest).
 
    **Why three.** The Gaussian width H_G² = U tan²θ + V tanθ + W is a quadratic in tanθ, which three angles determine; X and Y need two, the asymmetry one. Held at 0 instead, the other terms and the zero take up what U, V and A model. On LaB₆, Si and corundum standards cut to hold 3–7 places, under four instrumental profiles (Gaussian, Lorentzian, a laboratory one, a broad one; A = 0.02–0.08), the full profile gave the instrument's FWHM within 0.7–1 % in range (3–5 % over 10–140°) and the zero within 0.003°, χ²_ν 1.03; held, 17–23 % off in range (30 % over 10–140°), the zero 0.02–0.45° off along its valley with the displacement, χ²_ν 2–3.8. At every count from 3 to 56 places the held profile was the worse. Below three both fail (the full profile up to 7× off outside the range). Up to v426 the rule was 8 reflections.
 
@@ -1008,8 +1089,8 @@ Each phase's crystallite size and microstrain can be switched off (`size: false`
 | Group | Parameters |
 |---|---|
 | `linear` | the scales and the background |
-| `cell` | the lattice and the displacement; on the standard, the zero and the displacement |
-| `instrument` | U, V, W, X, Y and the asymmetry, where they are refined: the standard, or a sample without the standard's profile (with one, they are always its values) |
+| `cell` | the lattice and the displacement; on the standard, the zero, the displacement and the sin 2θ shift |
+| `instrument` | U, V, W, X, Y and the axial divergence (A or L), where they are refined: the standard, or a sample without the standard's profile (with one, they are always its values) |
 | `sizestrain` | per phase, Y_s, X_s, Stephens' S_j and the log-normal σ |
 | `shape` | per phase, the free solid's widths and turns |
 | `faults` | per phase, the fault probability |
@@ -1087,7 +1168,7 @@ There is no cell search, no zero scan and no detection pass. A phase left out of
 
 ### 7.1 From the standard to the samples
 
-**The irf.** The standard's refined U, V, W, X, Y, asymmetry and zero are passed to every sample, with the standard's λ1 and goniometer radius from its file. That sample's U … asymmetry and zero are then held at the standard's values. The irf in use is stored with each sample's result.
+**The irf.** The standard's refined U, V, W, X, Y, axial divergence (A, or L with the Sollers' openings), zero and sin 2θ shift are passed to every sample, with the standard's λ1 and goniometer radius from its file. That sample's U … axial divergence, zero and shift are then held at the standard's values. A sample whose file gives other Sollers than the standard's is drawn with its own and the standard's L, with a warning; one whose file gives none, from a standard refined with them, with no axial divergence, with a warning. The irf in use is stored with each sample's result.
 
 **What it includes.** The standard's own broadening (LaB₆ SRM 660c is large-grained and nearly strain-free) is part of the irf. Its uncertainty is not propagated into the samples' sizes.
 
@@ -1878,7 +1959,7 @@ Two choices behind this:
 
 ### 12.2 Fitting it (`fitPeak`)
 
-**The model.** One pseudo-Voigt per line (Kα1, and Kα2 at the file's ratio), with the instrument's asymmetry, on a straight background.
+**The model.** One pseudo-Voigt per line (Kα1, and Kα2 at the file's ratio), with the instrument's axial divergence, on a straight background. The Soller model's nodes are drawn at the fit's starting centre: their shape moves with θ by far less than the profile does over a fit's range of centres.
 
 **The free parameters** are the sample's own Lorentzian width h_L and Gaussian width h_G:
 - the instrument's are added as the refinement adds them: H_L = h_L + H_L,inst, H_G = √(h_G² + H_G,inst²);
@@ -2157,6 +2238,7 @@ The engine suites (`t-unit`, `t-lab6`, `t-sto`, `t-sharp`, `t-synth`, `t-synth2`
   - A ray-tracing Monte Carlo of the geometry confirms the FCJ weight, centroid and shape on both sides of 90°.
   - On synthetic standards, the refined asymmetry is unbiased, with the right esd.
 - `addPeakFCJ` matches the direct node sum to 0.0004–0.006 % of the peak.
+- LaB₆ SRM 660c with the Soller model and the sin 2θ shift (v432): R_wp 5.22 %, χ²_ν 2.17, L = 30.7(1.0) mm, shift −0.0171(2)°. The nodes within 0.03–0.08 % of the peak of a dense quadrature from 10°; synthetic standards give L and the shift back within 2 esd (§3.7.1).
 
 **Phases**
 - Rutile beside 7 nm SrTiO₃ (`t-detect`, 8 seeds each): found 6 times in 8 at 1 wt %, every time from 2 wt % up, its fraction within 0.2 wt %. Synthetic rutile at 2–5 wt % and 10–60 nm, which up to v424 was left out at 15–36 esd, is found with W 1.8–5.1 % (§6.4).
@@ -2231,7 +2313,7 @@ The esds treat the residuals as independent (§5.7). With a systematic misfit, n
 **What is not corrected:**
 - absorption;
 - surface roughness;
-- transparency;
+- transparency's broadening (a shift of its form is refined on the standard, §3.5);
 - microabsorption;
 - an automatic slit's sinθ.
 
@@ -2258,7 +2340,8 @@ March–Dollase works on one axis, chosen among seven low-index planes and up to
 - **Standard.** Only LaB₆ as the standard.
 - **Monochromator.** The polarisation always assumes graphite (002).
 - **Spectrum.** Kβ is not modelled; f′, f″ are taken at Kα1 only.
-- **Axial divergence.** One parameter, (S + H)/L, with the sample's and the slit's half-heights equal (§3.7). An instrument whose S/H is outside about 0.8–1.25 needs FCJ's second parameter, |H − S|/L (FullProf's and GSAS's two): its weight has a kink at h = |H − S|/L, which one Gauss–Legendre rule draws only to 0.24 % of the peak, so the quadrature would have to be split there, smoothly in the parameter.
+- **Axial divergence.** Through Soller slits (§3.7.1), one parameter, the sample's and receiver's axial length taken equal, the Sollers' openings the file's, not refined (0.05 rad would have fitted the user's LaB₆ 6 % better). Without Sollers (§3.7.2), one parameter, (S + H)/L, with the sample's and the slit's half-heights equal. An instrument whose S/H is outside about 0.8–1.25 needs FCJ's second parameter, |H − S|/L (FullProf's and GSAS's two): its weight has a kink at h = |H − S|/L, which one Gauss–Legendre rule draws only to 0.24 % of the peak, so the quadrature would have to be split there, smoothly in the parameter.
+- **The standard's low-angle lines.** With the Soller model the (100) of the user's LaB₆ keeps χ²_ν 37 in its window and the last line's top 10 % short; corrections tried and not kept are in BACKLOG.md.
 - **Pattern.** No excluded regions; no amorphous term in the background.
 - **Weight fractions.** No internal-standard route to an amorphous fraction.
 - **Display.** The card does not show the correlation matrix.
@@ -2327,6 +2410,8 @@ Found while testing v424 and fixed: a line near 2θ = 180°, beyond the pattern,
 5. The standard's texture, now a setting, is reported with its results.
 
 **Changed in v430**: the occupancy of a site can be refined (§8.5), a mode of the settings (*Site occupancy*, one of the phase's sites; off by default, so every result without it is v429's, checked to the last digit on three samples and six option sets). It was added for the user's twelve SrTiO₃ samples, whose Sr site scatters 0.63–0.74 of a full one: the intensities that v429 read as a {100} texture, a negative ΔB and B per site of +4 and −2 Å² (§8.4, revised), and as free solids normal to ⟨210⟩ or ⟨310⟩ (§9.3), are mostly that, and with it the solids lie on ⟨110⟩ on all twelve, the lamellae the samples are made of. A texture refined beside it still lowers χ², but with an axis and a sense that change from sample to sample (§9.3).
+
+**Changed in v432**: the instrument's axial divergence and peak positions, for the user's LaB₆, which fitted at χ²_ν 4.37 with its first lines (χ²_ν 185 and 114 in their windows) and its last (15 % short at its top) worst. Where the file gives Soller slits on both sides, the axial divergence is Cheary & Coelho's full axial model through them, one parameter L (§3.7.1); a shift of 2θ as sin 2θ is refined on the standard beside the zero and the displacement, and passed to the samples (§3.5). The LaB₆ fits at χ²_ν 2.17 (R_wp 5.22 % from 7.41 %), its (100) at 37, its last line at 6.2. The samples' χ²_ν are unchanged to the last digit shown and their sizes move by 0.02–0.03 nm (0.1–0.2 esd); their cells by −0.0004 Å (0.6 esd), with the zero and the shift. A file without both Sollers is refined with FCJ, as before, with the shift. Results refined before v432 keep their values; a standard refined again makes the samples' results stale (the card says so).
 
 **Open.**
 - The free shape's axes held on the lattice go to the simplest direction within 10° of the free fit's, not the nearest one. On 36D, with its Sr site held full, the free disc normals lay within 0–2° of [310] but were reported as "⟨210⟩ (8°)", and the held box and ellipsoid stayed on [210], 2–10 in χ² above the same solids held on [310]. Taking the nearest direction needs a preference for the simpler one when χ² is practically the same: on a synthetic [210] disc, the box would otherwise be held on [320], only 0.6 lower. Lattice-held candidates on the low-index directions (⟨100⟩, ⟨110⟩, ⟨111⟩), which the search builds only near its best free fit, change the result only with one ΔB free. With the Sr occupancy refined (v430), the case that showed it is gone: the disc's normal is ⟨110⟩ on all twelve samples, 0–3° off; the rule itself is unchanged.

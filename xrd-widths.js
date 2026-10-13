@@ -23,7 +23,7 @@
    Pure functions on the engine's model (xrd-rietveld.js): the worker runs them after
    a refinement.
 ========================================================= */
-import { calc, fcjNodes, addPeak, addPeakFCJ, tch, lpFactor, HG2_FLOOR, K_SCHERRER } from './xrd-rietveld.js';
+import { calc, axialNodes, axialOf, axialOn, addPeak, addPeakFCJ, tch, lpFactor, HG2_FLOOR, K_SCHERRER } from './xrd-rietveld.js';
 
 const D2R = Math.PI/180;
 // Overlapped (measureWidths): the others' share of a peak's intensity across its top past
@@ -82,17 +82,22 @@ function peakProfile(u, hl, ins){
    reflections 0.15–0.2 FWHM apart 3–7 % wide (noise-free, eight structures). → { f,
    counts }, or null where the widths give no profile (peakProfile). */
 const ONE = [{ d: 0, w: 1 }];
-function peakShape(xs, c, hl, u, lines, A, instAt, held, members = ONE){
+// (cAx: where the Soller model's nodes are drawn, the fit's starting centre: their shape
+// moves with θ by far less than the profile does over a fit's range of c, and drawn at each
+// trial c they were drawn anew at every step of the search, which took 8× as long.)
+function peakShape(xs, c, hl, u, lines, A, instAt, held, members = ONE, cAx = c){
   const out = new Float64Array(xs.length), counts = [];
+  const sol = !!A && typeof A === 'object';
   for (const M of members){
-    const th1 = (c + M.d)/2*D2R;
+    const th1 = (c + M.d)/2*D2R, thA = sol ? (cAx + M.d)/2*D2R : th1;
     for (let j = 0; j < lines.length; j++){
       const L = lines[j], st = L.lam/lines[0].lam*Math.sin(th1);
       if (st >= 1) continue;
       const th = Math.asin(st), tt = 2*th/D2R, ins = instAt(th), r = j ? Math.tan(th)/Math.tan(th1) : 1;
       const pr = peakProfile(u*r*r, hl*r, ins);
       if (!pr) return null;
-      const nodes = A > 0 ? fcjNodes(th, A, pr.H, held ? held[counts.length] : undefined) : null;
+      const sA = sol ? L.lam/lines[0].lam*Math.sin(thA) : st, thN = sol ? (sA < 1 ? Math.asin(sA) : th) : th;
+      const nodes = axialOn(A) ? axialNodes(thN, A, pr.H, held ? held[counts.length] : undefined) : null;
       counts.push(nodes ? nodes.n : 0);
       if (!nodes) addPeak(out, xs, tt, pr.H, pr.eta, L.w*M.w, 40);
       else if (nodes.length === 1) addPeak(out, xs, tt + nodes[0].d, pr.H, pr.eta, L.w*M.w, 40);
@@ -147,7 +152,7 @@ function fitPeak(xs, ys, ws, c0, H0, lines, Aasym, instAt, opts = {}){
     if (Math.abs(c - c0) > H0) return Infinity;
     const pr = total(c, hl, u);
     if (!pr || pr.H < 0.25*H0 || pr.H > 4*H0) return Infinity;
-    const sh = peakShape(xs, c, hl, u, lines, Aasym, instAt, null, mem), r = sh && linear(sh.f);
+    const sh = peakShape(xs, c, hl, u, lines, Aasym, instAt, null, mem, c0), r = sh && linear(sh.f);
     return r && r.sol[0] > 0 ? r.chi : Infinity;
   };
   const ex = Math.max(H0 - Hi, 0.1*H0);
@@ -158,10 +163,10 @@ function fitPeak(xs, ys, ws, c0, H0, lines, Aasym, instAt, opts = {}){
     const p0 = gauss ? S[0].v : [...S[0].v, 0], [c, hl, u] = p0, kk = gauss ? [0, 1, 2] : [0, 1];
     // Covariance: Jacobian of the full model (c, hl, u when fitted, amplitude, b0, b1),
     // nodes held; a one-sided difference where a step leaves the widths that give a profile.
-    const base = peakShape(xs, c, hl, u, lines, Aasym, instAt, null, mem), lin = base && linear(base.f);
+    const base = peakShape(xs, c, hl, u, lines, Aasym, instAt, null, mem, c0), lin = base && linear(base.f);
     if (!lin) return null;
     const [Amp, b0, b1] = lin.sol, held = base.counts;
-    const model = (cc, h2, u2) => { const sh = peakShape(xs, cc, h2, u2, lines, Aasym, instAt, held, mem); return sh && sh.f; };
+    const model = (cc, h2, u2) => { const sh = peakShape(xs, cc, h2, u2, lines, Aasym, instAt, held, mem, c0); return sh && sh.f; };
     // Steps of 10⁻⁴ of the expected width (squared for u): relative, at any width (a floor
     // of 10⁻⁸ °² had been a step of 1 % of u at H 0.001°). ×0.1 or ×10 move no width, and
     // leave the esds' coverage as it is (z rms 0.90–0.94 over 502 rows).
@@ -360,7 +365,11 @@ function scatter(rows, skip){
    corrected FWHM, measured the same way) }. */
 function measureWidths(model, res, opts = {}){
   const params = res.params, irf = opts.irf || null, lam = model.lines[0].lam;
-  const A = Number.isFinite(params.asym) ? params.asym : 0;
+  // The axial divergence as the refinement drew it: FCJ's A, or the Soller model's
+  // geometry with its length (axialOf, on the parameters by index).
+  const av = []; av[model.iAsym] = Number.isFinite(params.asym) ? params.asym : 0;
+  if (model.iAx != null) av[model.iAx] = params.axL;
+  const A = axialOf(model, av);
   const x = model.x, y = model.y, w = model.w, step = Math.abs(model.x1 - model.x0)/Math.max(1, model.n - 1);
   // The data's peaks are isolated with the isotropic refinement's neighbours and
   // background even when a free shape was refined after it: a test of the shape must

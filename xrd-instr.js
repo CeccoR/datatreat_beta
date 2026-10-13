@@ -331,6 +331,11 @@ function readInstrument(A, doc){
   const divergence = readSlit(A, divEl) || { type: null, deg: undefined, mm: undefined, name: null, xsiType: null, irradiatedLength: undefined };
   const antiScatter = { incident: readSlit(A, find(A, inc, 'antiScatterSlit')), diffracted: readSlit(A, find(A, dif, 'antiScatterSlit')) };
   const soller = { incident: readSoller(A, find(A, inc, 'sollerSlit')), diffracted: readSoller(A, find(A, dif, 'sollerSlit')) };
+  // The tube's focus along the goniometer axis (a line focus: its length, 12 mm on a long
+  // fine focus), the source's length in the axial divergence (xrd-rietveld sollerNodes).
+  // (A point focus is the tube turned by 90°: its length is not along the axis.)
+  const focEl = kid(A, tube, 'focus'), focL = kid(A, focEl, 'length');
+  const focusLength = focL && !/point/i.test(String(attrOf(A, focEl, 'type') || '')) ? toMm(numOf(A, focL), unitOf(A, focL)) : NaN;
   const maskEl = find(A, inc, 'mask'), maskW = kid(A, maskEl, 'width');
   let mask = maskW ? toMm(numOf(A, maskW), unitOf(A, maskW)) : NaN;
   if (maskEl && !Number.isFinite(mask)) mask = mmFromName(A.attr(maskEl, 'name'));
@@ -394,7 +399,7 @@ function readInstrument(A, doc){
   return {
     lam1, lam2, kBeta: fin(kBeta), ratio, anode, intended: attrOf(A, wl, 'intended'),
     radius, radiusDiffracted: fin(radiusD),
-    divergence, antiScatter, soller, mask: fin(mask), filter,
+    divergence, antiScatter, soller, focusLength: fin(focusLength), mask: fin(mask), filter,
     monochromator: !!monoEl, monoSide: monoD ? 'diffracted' : monoI ? 'incident' : null, monoName: attrOf(A, monoEl, 'name'),
     // K = I_π/I_σ of the monochromators together (the product of both sides'); each one's reading
     monoK: monos.length ? monos.reduce((k, M)=> k*M.K, 1) : undefined, monochromators: monos,

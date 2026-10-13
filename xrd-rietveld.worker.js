@@ -17,7 +17,7 @@ function friendly(model, name){
   const q = model.phases.find(p=> name.startsWith(p.pfx)), nm = q ? (q.name || 'phase ' + q.id) : 'instrument';
   const key = q ? name.slice(q.pfx.length) : name;
   const what = { scale: 'scale', Ys: 'crystallite size', Xs: 'microstrain', B: 'ΔB', PO: 'texture r', LS: 'size distribution σ', FA: 'fault probability',
-    U: 'U', V: 'V', W: 'W', X: 'X', Y: 'Y', asym: 'asymmetry', zero: 'zero', disp: 'displacement' }[key]
+    U: 'U', V: 'V', W: 'W', X: 'X', Y: 'Y', asym: 'asymmetry', axL: 'axial length', zero: 'zero', disp: 'displacement', transp: 'sin 2θ shift' }[key]
     || (/^S\d+$/.test(key) ? `anisotropic strain ${key}` : /^B_/.test(key) ? `B(${key.slice(2)})` : /^U\d\d_/.test(key) ? `${key.slice(0, 3)}(${key.slice(4)})` : /^(E[abc]|W[abcdh]|R\d)$/.test(key) ? `shape ${key}` : key);
   return q ? `${nm} ${what}` : what;
 }
@@ -146,16 +146,20 @@ function summarise(model, res, phases, opts){
   };
   if (opts.standard){
     const s = displacementMm(model, P.disp), sE = Math.abs(displacementMm(model, 1))*E.disp;
+    const ax = model.axial, sol = !!ax && model.iAx != null && !model.axialOff;
     groups.push({ name: 'Instrument', lines: [
       { label: 'zero', value: fmtEsd(P.zero, E.zero, '°') },
       { label: 'displacement', value: fmtEsd(s, sE, ' mm'), title: `Δ2θ = −(2s/R)·cosθ, R = ${model.radius} mm: ${fmtEsd(P.disp, E.disp, '°')} at cosθ = 1` },
       ...['U', 'V', 'W'].map(k=> ({ label: k, value: fmtEsd(P[k], E[k], ' °²') })),
       ...['X', 'Y'].map(k=> ({ label: k, value: fmtEsd(P[k], E[k], '°') })),
-      { label: 'asymmetry (S+H)/L', value: fmtEsd(P.asym, E.asym), title: 'Axial divergence, Finger–Cox–Jephcoat with sample and receiving-slit heights equal: the tail of the low-angle peaks towards lower angles (of the high-angle ones towards higher)' },
+      // Through the Sollers (the file gives both) or FCJ's (S + H)/L.
+      sol ? { label: 'axial length L', value: fmtEsd(P.axL, E.axL, ' mm'), title: `Axial divergence through the Soller slits (${ax.p1} and ${ax.p2} rad, from the file), Cheary & Coelho's full axial model: the sample's and the receiver's lengths along the goniometer axis, taken equal and refined; the source's ${ax.Lx} mm (${ax.LxAssumed ? 'assumed: a long fine focus' : 'the tube\u2019s focus'}). It gives the low-angle peaks their tail towards lower angles (the high-angle ones towards higher)` }
+        : { label: 'asymmetry (S+H)/L', value: fmtEsd(P.asym, E.asym), title: 'Axial divergence, Finger–Cox–Jephcoat with sample and receiving-slit heights equal (the file gives no Soller slits on both sides): the tail of the low-angle peaks towards lower angles (of the high-angle ones towards higher)' },
+      { label: 'shift ∝ sin 2θ', value: fmtEsd(P.transp, E.transp, '°'), title: `Δ2θ = T·sin 2θ, the form of a sample's transparency (T = −90/(π·μ·R)°, μ its linear absorption): refined on the standard with its zero and displacement, and passed to the samples with them. LaB₆ absorbs strongly (μ about 600–1100 cm⁻¹ as packed: T about −0.001 to −0.002°); a larger T is the instrument's own shift in that form` },
     ] });
-    row('', 'zero_deg', P.zero, E.zero); row('', 'displacement_mm', s, sE);
+    row('', 'zero_deg', P.zero, E.zero); row('', 'displacement_mm', s, sE); row('', 'shift_sin2theta_deg', P.transp, E.transp);
     ['U', 'V', 'W', 'X', 'Y'].forEach(k=> row('', k, P[k], E[k]));
-    row('', 'asymmetry_SH_L', P.asym, E.asym);
+    if (sol) row('', 'axial_length_mm', P.axL, E.axL); else row('', 'asymmetry_SH_L', P.asym, E.asym);
     // The standard's displacement parameters and texture (the built-in LaB6's settings,
     // xrd-rv.js: one ΔB by default): a group of their own, as a phase's. (Before v429 it had
     // no texture; with one asked for in the settings, r was refined and not shown.)

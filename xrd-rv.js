@@ -333,15 +333,19 @@ export function createRietveld(host){
     const std = host.files().find(isStd), r = std && results[std.name] && roleOf(results[std.name]) !== false ? results[std.name] : null;
     if (!r || !r.params) return null;
     // asym: absent from a standard refined before the asymmetry was modelled (none then).
+    // axL and transp (v432): the Soller model's length, where the standard's file gives its
+    // Sollers (with their acceptances), and the sin 2θ shift; absent before.
     // λ1 and the radius: the profile is in degrees on that tube and goniometer (autoRefine
     // does not apply it to a pattern of another λ1).
-    const ins = instrOf(std) || {};
-    return { U: r.params.U, V: r.params.V, W: r.params.W, X: r.params.X, Y: r.params.Y, asym: r.params.asym || 0, zero: r.params.zero,
+    const ins = instrOf(std) || {}, sol = ins.soller || {}, P = r.params;
+    return { U: P.U, V: P.V, W: P.W, X: P.X, Y: P.Y, asym: P.asym || 0, zero: P.zero,
+      ...(Number.isFinite(P.transp) ? { transp: P.transp } : {}),
+      ...(Number.isFinite(P.axL) ? { axL: P.axL, axP1: sol.incident, axP2: sol.diffracted } : {}),
       ...(Number.isFinite(ins.lam1) ? { lam1: ins.lam1 } : {}), ...(Number.isFinite(ins.radius) ? { radius: ins.radius } : {}) };
   }
   // A result's profile against the standard's now: the same refinement of it, or not (the
   // standard refined again since, or cleared). Old results' irf has no λ1: U … zero decide.
-  const IRF_KEYS = ['U', 'V', 'W', 'X', 'Y', 'asym', 'zero'];
+  const IRF_KEYS = ['U', 'V', 'W', 'X', 'Y', 'asym', 'zero', 'axL', 'transp'];
   const sameIrf = (a, b) => !!a && !!b && IRF_KEYS.every(k=> (a[k] || 0) === (b[k] || 0));
   const staleOf = (f, r) => !isStd(f) && !!r.irf && !sameIrf(r.irf, irf());
   // The phases as the engine takes them: their structure, and the options their settings
@@ -753,7 +757,7 @@ export function createRietveld(host){
     // What the refinement could not do (a cell search without a minimum, a phase not
     // detected) is said beside the numbers it qualifies.
     html += (r.warnings || []).map(w=> `<div class="rv-note" style="color:var(--warn)">⚠ ${esc(w)}</div>`).join('');
-    if (isStd(f)) html += `<div class="rv-note">The samples take this profile and zero as their instrument's.</div>`;
+    if (isStd(f)) html += `<div class="rv-note">The samples take this profile, its axial divergence, zero and sin 2θ shift as their instrument's.</div>`;
     else if (r.irf && staleOf(f, r)) html += `<div class="rv-note" style="color:var(--warn)">⚠ ${irf() ? 'The standard has been refined again since this result' : 'The standard\'s refinement this result used is gone (cleared, or another standard chosen)'}: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.</div>`;
     else if (!r.irf && !r.irfRefused) html += irf() ? `<div class="rv-note">No instrumental profile: this pattern was refined before the standard was. Refine it again to correct its widths, and the sizes from them, for the instrument's.</div>`
       : `<div class="rv-note">No instrumental profile (refine the standard first): the widths, and the sizes from them, include the instrument's.</div>`;

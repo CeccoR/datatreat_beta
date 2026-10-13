@@ -55,11 +55,35 @@ was proposed; nothing here is in the code yet.
   part, and pulled up at 22.7° it takes the weak (100) with it. Proposed: an amorphous
   term in the background (a pseudo-Voigt hump, position and width refined), offered as a
   setting; with it a free-area fit moved (100) from 0–0.2 to 0.2–0.7 of the model.
-- **The Ni filter's continuum (found in v430).** Between the Ni K edge (1.488 Å) and Cu
-  Kα₁ the filter passes the tube's continuum: on LaB6_real a step under every line, 0.7
-  per Å of the line's intensity (2–3 % of its area), on its low-angle side. The engine
-  draws Kα₁ and Kα₂ only. Proposed: the band as a few weighted wavelengths in the
-  model's lines, its density measured on the standard.
+- **The Ni filter's continuum (found in v430; tried in v432, not kept).** Between the Ni K
+  edge (1.488 Å) and Cu Kα₁ the filter passes the tube's continuum: on LaB6_real a step
+  under every line, 0.7 per Å of the line's intensity (2–3 % of its area), on its
+  low-angle side. The engine draws Kα₁ and Kα₂ only. Tried as a band of wavelengths every
+  0.0004 Å from the edge to Kα₁ (and to 1.60 Å), its density fixed at 0.4, 0.8 and 1.2 per
+  Å: χ²_ν 4.37 → 4.17 at best (worse above), the first and last lines unchanged, and the
+  2–4 % excess on the low side of the lines at 40–90° still there. Not the standard's
+  misfit; worth trying again with its density refined and the band's shape (the tube's
+  spectrum through the filter) once the rest fits.
+- **The standard's profile: what else was tried (v432).** The user's LaB6 fitted at χ²_ν
+  4.37 (FCJ), its (100) and (110) at 185 and 114 in their windows and its last line 15 %
+  short at its top. v432 took it to 2.17 with the Soller model and a sin 2θ shift
+  (RIETVELD.md §3.5, §3.7.1). Tried on the way, in a copy of the engine, and not kept
+  (χ²_ν of the whole LaB6, with FCJ unless said; last line's window from 24.5):
+  - Kα2 with its own Lorentzian width (×1.1–1.35 of Kα1's X; the doublets fitted one by
+    one above 100° want 1.09–1.18, as the lines' natural widths differ): 4.35–4.47, last
+    line 23.8–22.7.
+  - The whole Cu Kα spectrum (Berger's five Lorentzians, TOPAS's CuKa5, each its width):
+    4.34–4.55, last line 21–22.
+  - The flat sample's aberration (the fixed ½° slit; 1/√ over −α²cotθ/2): 4.86 and 5.45
+    (½° and 0.7°): worse.
+  - U and W free to go negative: 4.72, worse (W went negative and the Gaussian to its
+    floor).
+  - A Gaussian term in cot²θ (the X'Celerator's strips off the focusing circle, its 2.122°
+    active length): beside the Soller model 2.23 → 2.21, the term refined to 1.1·10⁻⁵ °²
+    against the geometry's 1.3·10⁻⁵; real but too small to keep.
+  What is left: the (100)'s window at χ²_ν 37, the last line's top 10 % short. Next to try:
+  the Sollers' opening refined (0.05 rad gave 2.06), the Ni continuum refined (above),
+  the shape of the Cu Kα lines on top of the Soller model.
 - **Rietveld against MAUD (started in v426, on hold).** How far our engine and MAUD
   recover a known truth from synthetic patterns at equal model depth, with a third,
   neutral generator (the Debye scattering equation of atomistic crystallites), to

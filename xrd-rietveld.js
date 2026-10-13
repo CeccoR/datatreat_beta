@@ -6,9 +6,11 @@
    The model, for every point 2θ_i:
      y_c = bg(2θ_i) + Σ_phases S Σ_hkl Σ_{α1,α2} w_j·m·LP·F²·exp(−2ΔB s²)·Φ(2θ_i − 2θ_kj)
    with Φ the Thompson–Cox–Hastings pseudo-Voigt made asymmetric by the axial divergence
-   (Finger–Cox–Jephcoat, one parameter (S + H)/L: fcjNodes), the instrument's U, V, W,
-   X, Y and asymmetry shared by the phases and each phase's own Lorentzian Xs, Ys on
-   top, the background a Chebyshev
+   (through the Soller slits the file gives, Cheary–Coelho's full axial model with one
+   length L: sollerNodes; else Finger–Cox–Jephcoat, one parameter (S + H)/L: fcjNodes),
+   the lines at 2θ_kj with the zero, the displacement (cos θ) and a sin 2θ shift, the
+   instrument's U, V, W, X, Y and axial divergence shared by the phases and each phase's
+   own Lorentzian Xs, Ys on top, the background a Chebyshev
    series plus a 1/2θ term, and Mighell's χ²_γ: the target y + min(y, m), the weights
    1/σ², σ² = (y + m)·m, m = varMul (one count in the units of y). Weighting by the observed
    counts as plain 1/max(y, 1) (GSAS, FullProf) pulls the background about a count per
@@ -76,6 +78,11 @@ const BG_DEGREE = 6;           // the Chebyshev background's degree (a fit setti
    A and χ² in all 38 cases; 0.02, the earlier start, let A fall to 0 on Si at A = 0.2 (the
    zero and the displacement took up the shift, χ²_ν 96–104), and 0.005 also at 0.15. */
 const ASYM_START = 0.05;
+// The axial length (mm) of the sample and the receiver, equal, that the Soller model's
+// refinement starts from (sollerNodes); its bounds.
+const AX_START = 15, AX_MIN = 0.5, AX_MAX = 80;
+// The source's axial length (mm) when the file gives none: a long-fine-focus tube's 12 mm.
+const AX_SOURCE = 12;
 // Rwp values this close (relative) are a tie on a scan: a flat curve, no minimum there.
 const TIE = 1e-9;
 
@@ -333,6 +340,59 @@ function gaussOf(pts, sw, mu){
   const E = eigSym3([a0, Math.sqrt(b1), 0, Math.sqrt(b1), a1, Math.sqrt(b2), 0, Math.sqrt(b2), a2]);
   return E.map(e=> ({ d: mu + sg*e.val, w: e.vec[0]*e.vec[0] })).sort((p, q)=> p.d - q.d);
 }
+/* The n-point Gauss quadrature of a discrete distribution (points x, weights w, Σw = 1):
+   Lanczos' recurrence for its orthonormal polynomials, in x centred and scaled by its
+   spread, then the Jacobi matrix's eigenvalues and the squares of their eigenvectors'
+   first components (Golub–Welsch; implicit QL, as Numerical Recipes' tqli, rotating the
+   first row alone). Exact for polynomials in x up to degree 2n − 1. → [{ d, w }] sorted,
+   or null where the distribution has fewer than n points or no spread. */
+function gaussN(x, w, n){
+  const m = x.length;
+  let mu = 0, v2 = 0;
+  for (let i = 0; i < m; i++) mu += w[i]*x[i];
+  for (let i = 0; i < m; i++) v2 += w[i]*(x[i] - mu)*(x[i] - mu);
+  const sg = Math.sqrt(v2);
+  if (!(sg > 0) || m < n) return null;
+  const z = new Float64Array(m); for (let i = 0; i < m; i++) z[i] = (x[i] - mu)/sg;
+  let q0 = new Float64Array(m), q1 = new Float64Array(m).fill(1), r = new Float64Array(m);
+  const a = new Float64Array(n), e = new Float64Array(n);
+  let bPrev = 0;
+  for (let k = 0; k < n; k++){
+    let ak = 0; for (let i = 0; i < m; i++) ak += w[i]*z[i]*q1[i]*q1[i];
+    a[k] = ak;
+    if (k === n - 1) break;
+    let nb = 0; for (let i = 0; i < m; i++){ r[i] = (z[i] - ak)*q1[i] - bPrev*q0[i]; nb += w[i]*r[i]*r[i]; }
+    const b = Math.sqrt(nb);
+    if (!(b > 1e-12)) return null;
+    e[k] = b; bPrev = b;
+    for (let i = 0; i < m; i++) r[i] /= b;
+    const t = q0; q0 = q1; q1 = r; r = t;
+  }
+  // implicit QL on the tridiagonal (a, e), z0 the eigenvectors' first components
+  const d = a, z0 = new Float64Array(n); z0[0] = 1;
+  for (let l = 0; l < n; l++){
+    for (let it = 0; it < 60; it++){
+      let mm = l;
+      for (; mm < n - 1; mm++){ const dd = Math.abs(d[mm]) + Math.abs(d[mm + 1]); if (Math.abs(e[mm]) <= 1e-15*dd) break; }
+      if (mm === l) break;
+      let g = (d[l + 1] - d[l])/(2*e[l]), rr = Math.hypot(g, 1);
+      g = d[mm] - d[l] + e[l]/(g + (g >= 0 ? rr : -rr));
+      let sn = 1, cs = 1, p = 0, i = mm - 1;
+      for (; i >= l; i--){
+        let f = sn*e[i]; const bb = cs*e[i];
+        rr = Math.hypot(f, g); e[i + 1] = rr;
+        if (rr === 0){ d[i + 1] -= p; e[mm] = 0; break; }
+        sn = f/rr; cs = g/rr; g = d[i + 1] - p; rr = (d[i] - g)*sn + 2*cs*bb; p = sn*rr; d[i + 1] = g + p; g = cs*rr - bb;
+        f = z0[i + 1]; z0[i + 1] = sn*z0[i] + cs*f; z0[i] = cs*z0[i] - sn*f;
+      }
+      if (rr === 0 && i >= l) continue;
+      d[l] -= p; e[l] = g; e[mm] = 0;
+    }
+  }
+  const out = [];
+  for (let j = 0; j < n; j++) out.push({ d: mu + sg*d[j], w: z0[j]*z0[j] });
+  return out.sort((p, q)=> p.d - q.d);
+}
 function fcjNodes(th, A, H, nForce){
   const tt = 2*th, c2 = Math.cos(tt);
   if (!(A > 0) || Math.abs(c2) < 1e-12) return null;
@@ -375,13 +435,29 @@ function fcjNodes(th, A, H, nForce){
    derivative by up to 10×. refine() checks the counts at its end (model.fcjAudit) and
    runs again when the widths or the asymmetry have outgrown them. The largest shortfall
    of a tail longer than FCJ_MAX_NODES allow is kept in model.fcjShort. */
-function lineNodes(model, key, th, A, H){
+function lineNodes(model, key, th, A, H, tol){
   // A search for where the peaks are needs only where each one's weight lies: its
   // centroid (cellSearch; the asymmetry costs it nothing then).
-  if (model.fcjCentroid) return fcjNodes(th, A, H, 1);
+  if (model.fcjCentroid) return typeof A === 'object' ? sollerCentroid(th, A) : axialNodes(th, A, H, 1);
+  // The Soller model's nodes cost a few thousand angles a line: a line whose θ, width and
+  // geometry are those of its last call (most of a Jacobian's columns: the scales, the
+  // background, B, the zero) takes them again.
+  if (typeof A === 'object'){
+    const cache = model.axCache || (model.axCache = new Map()), n0 = model.fcjFreeze ? model.fcjFreeze.get(key) : undefined;
+    // (A line first met under a hold goes through lineNodesOf, which records its count:
+    // taken from here, the audit after the refinement found none recorded and ran again.)
+    const c = cache.get(key);
+    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
+    const nodes = lineNodesOf(model, key, th, A, H, tol);
+    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, nodes });
+    return nodes;
+  }
+  return lineNodesOf(model, key, th, A, H);
+}
+function lineNodesOf(model, key, th, A, H, tol){
   const fz = model.fcjFreeze;
   if (!fz){
-    const nd = fcjNodes(th, A, H), au = model.fcjAudit;
+    const nd = axialNodes(th, A, H, undefined, tol), au = model.fcjAudit;
     if (nd && nd.short > (model.fcjShort || 1)) model.fcjShort = nd.short;
     // refine()'s check after a refinement: has a line outgrown its held count?
     // (A count down to 1/1.13 of the one needed leaves the profile within 0.1 % of the
@@ -393,13 +469,237 @@ function lineNodes(model, key, th, A, H){
   }
   let n = fz.get(key);
   if (n === undefined){
-    const nd = fcjNodes(th, A, H);
+    const nd = axialNodes(th, A, H, undefined, tol);
     n = nd ? nd.n : 0;
     fz.set(key, n);
     if (nd && nd.short > (model.fcjShort || 1)) model.fcjShort = nd.short;
     return nd;
   }
-  return fcjNodes(th, A, H, n || undefined);
+  return axialNodes(th, A, H, n || undefined, tol);
+}
+
+/* Axial divergence through Soller slits: the full axial model of Cheary & Coelho, J. Appl.
+   Cryst. 31 (1998) 851, 862. FCJ's geometry has no Soller slits: the sample and the slit
+   limit the rays alone. An instrument with Sollers on both sides (their acceptance ψ1, ψ2
+   in the file: 0.04 rad on the user's) passes rays up to about ψ out of the plane, each
+   with the Soller's triangular transmission 1 − |β|/ψ, and FCJ's one parameter could draw
+   neither the tail's reach nor its shape: on the user's LaB6 the strong low-angle lines
+   kept χ²_ν 185 and 114 in their windows, and their zero, displacement and widths, which
+   the whole pattern shares, left the last line 15 % short at its top. A ray from the
+   source at z_s (along the axis) to the sample at z_m, out of the plane by
+   β1 = (z_m − z_s)/R, is diffracted towards the receiver at z_r, β2 = (z_r − z_m)/R, where
+     cos 2φ = (cos 2θ − sin β1 sin β2)/(cos β1 cos β2)
+   (to second order 2φ − 2θ = −(β1² + β2²)/2·cot 2θ + β1β2/sin 2θ; the exact form is used:
+   with Sollers of 0.04 rad the second order misplaces the widest rays by 0.9° of their 3.0°
+   at 5°, 0.007° at 20°). The weight of (β1, β2) is the Sollers'
+   transmissions times the length of z_m that the sample, the source seen at β1 and the
+   receiver seen at β2 have in common. The source's length Lx is the tube's focus (12 mm
+   on a long fine focus); the sample's and the receiver's axial lengths are taken equal, L,
+   the one parameter refined, as FCJ takes S = H: on the user's LaB6 the two traded off
+   (each with the other refined, χ²_ν 2.20–2.31 for the sample 15–25 mm) and Lx made no
+   difference (8 or 12 mm: 2.185, 2.189). The Sollers' acceptances are the file's, not
+   refined (0.05 rad would have given 2.06, 0.03 rad 5.3). With the sin 2θ shift beside it
+   (autoRefine), the user's LaB6 went from χ²_ν 4.37 to 2.17, its (100) from 185 to 37 and
+   its last line from 24.5 to 6.2.
+   The grid: SOLLER_N × SOLLER_N cells over β1/ψ1, β2/ψ2 ∈ [−1, 1], each weighed by 4 × 4
+   points; a cell's shifts, from its corners, as their mean (with the centre's curvature:
+   exact for a quadratic) and their variance (linear across the cell). A line's cells,
+   which depend on θ and the geometry alone, are gathered into SOLLER_SUB sub-bins and kept
+   (sollerCells); its nodes then, by the spread of its shifts against its width H:
+   - under 5 % of H, or where one node's error (4·(σ/H)² of the peak, σ the shifts' spread)
+     is within the line's tolerance (sollerTol: a tenth of the noise at its top, at least
+     0.04 %), one node at the mean;
+   - up to SOLLER_GAUSS_MAX nodes, the distribution's own Gauss quadrature (gaussN): two
+     where their error (70·(σ/H)⁴) is within it, three to a spread of one H, three more for
+     each H beyond (the rule depends on n alone, and is kept with the cells);
+   - beyond, bins H/6 wide: each sub-bin's weight shared between the two bins about its
+     mean by its distance from each, and every bin giving two nodes that keep its weight,
+     mean and variance, so that the profile has the distribution's first two moments
+     exactly (shared as point weights by the same rule, a bin's own spread, h²/6, had been
+     added to every line: 3 % on its width at h = H/4).
+   Against 300 × 300 points with the exact shift (two Sollers of 0.04 rad, L 10 and 30 mm,
+   Lx 12 mm, R 240 mm; H 0.01–1.5°, η 0.5–0.97): within 0.03 % of the peak where Gauss's
+   rule is used (from 2θ = 21° to 142°), within 0.07 % binned from 10° (0.66 % at 5°, where
+   a line 0.03° wide spreads over 3°). The cells and bins were chosen on these: 48 cells and
+   bins of H/4 left 0.11–0.17 %; 96 and H/8, 0.025 % for twice the time; Gauss's rule
+   beyond 24 nodes loses the recurrence's orthogonality (0.1–0.25 % at 38–150). The cost, on
+   the user's 33A with a free ellipsoid, occupancy and ΔB: the search 32 s and the angular
+   esds 13 s (FCJ: 38 and 12 s); 37D 20 and 16 s (26 s); with the tolerance at 0.04 % for
+   every line, 58–73 and 24–26 s, the Sollers' spread on both sides needing two or three
+   nodes on every line where FCJ's one-sided tail had collapsed to one.
+   → nodes [{ d (deg), w }], Σw = 1, with .n the count (SOLLER_BINNED for the bins), which
+   lineNodes holds during a refinement. */
+const SOLLER_N = 64, SOLLER_BIN = 6, SOLLER_SUB = 400;     // cells per axis; bins per FWHM; a line's sub-bins
+const SOLLER_GAUSS = 3, SOLLER_GAUSS_MAX = 24;            // Gauss nodes per FWHM of spread beyond one, at most
+const SOLLER_BINNED = 10000;                             // the binned regime's count, for lineNodes' hold
+const SOLLER_CACHE = new Map();
+function sollerGrid(g){
+  const key = g.key;
+  let G = SOLLER_CACHE.get(key);
+  if (G) return G;
+  const N = SOLLER_N, S = 4, { L, Lx, p1, p2, R } = g;
+  const tri = t => 1 - Math.abs(t);
+  const cells = [];
+  let sw = 0, ms = 0, mp = 0;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++){
+    let w = 0, s = 0, p = 0;
+    for (let a = 0; a < S; a++) for (let b = 0; b < S; b++){
+      const t1 = -1 + (2*i + (2*a + 1)/S)/N, t2 = -1 + (2*j + (2*b + 1)/S)/N, b1 = p1*t1, b2 = p2*t2;
+      const lo = Math.max(-L/2, R*b1 - Lx/2, -R*b2 - L/2), hi = Math.min(L/2, R*b1 + Lx/2, -R*b2 + L/2);
+      if (!(hi > lo)) continue;
+      const wq = tri(t1)*tri(t2)*(hi - lo);
+      w += wq; s += wq*(b1*b1 + b2*b2)/2; p += wq*b1*b2;
+    }
+    if (w > 0){ cells.push(i, j, w); sw += w; ms += s; mp += p; }
+  }
+  const nc = cells.length/3, ci = new Int32Array(nc), cj = new Int32Array(nc), cw = new Float64Array(nc);
+  for (let c = 0; c < nc; c++){ ci[c] = cells[3*c]; cj[c] = cells[3*c + 1]; cw[c] = cells[3*c + 2]/sw; }
+  // the corners' and the centres' sines and cosines, along each axis
+  const trig = (p, half) => { const n = half ? N : N + 1, sn = new Float64Array(n), cs = new Float64Array(n);
+    for (let i = 0; i < n; i++){ const b = p*(-1 + (2*i + (half ? 1 : 0))/N); sn[i] = Math.sin(b); cs[i] = Math.cos(b); } return { sn, cs }; };
+  // (the axial angles themselves at the corners and the centres, for the second order)
+  const ang = (p, half) => Float64Array.from({ length: half ? N : N + 1 }, (_, i)=> p*(-1 + (2*i + (half ? 1 : 0))/N));
+  G = { ci, cj, cw, ms: ms/sw, mp: mp/sw, c1: trig(p1, false), c2: trig(p2, false), t1c: ang(p1, false), t2c: ang(p2, false), t1m: ang(p1, true), t2m: ang(p2, true), empty: !(sw > 0) };
+  if (SOLLER_CACHE.size > 64) SOLLER_CACHE.clear();
+  SOLLER_CACHE.set(key, G);
+  return G;
+}
+/* A line's cells: their shifts' means and variances, which depend on θ and the geometry
+   alone (the width only bins them): kept for the last SOLLER_LINES_MAX lines, so that a
+   refinement recomputes them only where θ or L moved (on the user's samples, refined in
+   4–5 s with them computed at every call, against under 1 s with FCJ). */
+const SOLLER_LINES = new Map(), SOLLER_LINES_MAX = 512;
+function sollerCells(th, g){
+  const key = g.key + '|' + th;
+  let C = SOLLER_LINES.get(key);
+  if (C) return C;
+  const G = sollerGrid(g);
+  const tt = 2*th, c2 = Math.cos(tt), s2 = Math.sin(tt);
+  if (G.empty || Math.abs(s2) < 1e-9) return null;
+  const N = SOLLER_N, ci = G.ci, cj = G.cj, cw = G.cw, nc = cw.length;
+  // 2φ − 2θ (deg) at a corner or a centre of the grid. Below 2θ = β1 + β2 (4.6° for two
+  // Sollers of 0.04 rad) a ray can miss the cone: it is put at its edge.
+  const at = (A, B, i, j) => { const v = (c2 - A.sn[i]*B.sn[j])/(A.cs[i]*B.cs[j]); return (Math.acos(v > 1 ? 1 : v < -1 ? -1 : v) - tt)*R2D; };
+  const corner = new Float64Array((N + 1)*(N + 1)).fill(NaN), cAt = (i, j) => { const k = i*(N + 1) + j; let e = corner[k]; if (e !== e){ e = at(G.c1, G.c2, i, j); corner[k] = e; } return e; };
+  // A centre's shift: the corners' mean, less the curvature the second order gives the cell
+  // (two Sollers of 0.04 rad: within 5·10⁻⁵° of the exact centre from 10°, 3·10⁻³° at 5°;
+  // an arccosine a cell fewer).
+  const a2 = -c2/s2*R2D/2, b2 = R2D/s2, sec = (x, y) => a2*(x*x + y*y) + b2*x*y;
+  const t1c = G.t1c, t2c = G.t2c, t1m = G.t1m, t2m = G.t2m;
+  const mu = new Float64Array(nc), va = new Float64Array(nc);
+  let lo = Infinity, hi = -Infinity, mean = 0;
+  for (let c = 0; c < nc; c++){
+    const i = ci[c], j = cj[c], e00 = cAt(i, j), e10 = cAt(i + 1, j), e01 = cAt(i, j + 1), e11 = cAt(i + 1, j + 1);
+    const em = (e00 + e10 + e01 + e11)/4 + sec(t1m[i], t2m[j]) - (sec(t1c[i], t2c[j]) + sec(t1c[i + 1], t2c[j]) + sec(t1c[i], t2c[j + 1]) + sec(t1c[i + 1], t2c[j + 1]))/4;
+    const m = (2*em + (e00 + e10 + e01 + e11)/4)/3, a = (e10 - e00 + e11 - e01)/2, b = (e01 - e00 + e11 - e10)/2;
+    mu[c] = m; va[c] = (a*a + b*b)/12; mean += cw[c]*m;
+    const cl = Math.min(e00, e10, e01, e11), ch = Math.max(e00, e10, e01, e11);
+    if (cl < lo) lo = cl; if (ch > hi) hi = ch;
+  }
+  // Gathered into SOLLER_SUB bins across [lo, hi] as the bins below gather them (weight,
+  // mean, variance, the cells' own variance in it): binned again at each width, a line
+  // costs SOLLER_SUB steps instead of a step a cell (on the user's 33A, a free ellipsoid's
+  // members took the search from 44 s with FCJ to 79 s, binned cell by cell).
+  const M = SOLLER_SUB, hs = Math.max(hi - lo, 1e-12)/(M - 2), q0 = new Float64Array(M + 1), q1 = new Float64Array(M + 1), q2 = new Float64Array(M + 1);
+  for (let c = 0; c < nc; c++){
+    const x = (mu[c] - lo)/hs + 0.5, k = Math.floor(x), f = x - k, w = cw[c], m = mu[c], q = m*m + va[c];
+    q0[k] += w*(1 - f); q1[k] += w*(1 - f)*m; q2[k] += w*(1 - f)*q;
+    q0[k + 1] += w*f; q1[k + 1] += w*f*m; q2[k + 1] += w*f*q;
+  }
+  const keep = []; for (let k = 0; k <= M; k++) if (q0[k] > 1e-15) keep.push(k);
+  const muS = new Float64Array(keep.length), vaS = new Float64Array(keep.length), cwS = new Float64Array(keep.length);
+  keep.forEach((k, n)=> { const m = q1[k]/q0[k]; muS[n] = m; vaS[n] = Math.max(0, q2[k]/q0[k] - m*m); cwS[n] = q0[k]; });
+  let m2 = 0; for (let c = 0; c < nc; c++) m2 += cw[c]*(mu[c]*mu[c] + va[c]);
+  C = { mu: muS, va: vaS, cw: cwS, lo, hi, mean, sd: Math.sqrt(Math.max(0, m2 - mean*mean)) };
+  if (SOLLER_LINES.size >= SOLLER_LINES_MAX) SOLLER_LINES.delete(SOLLER_LINES.keys().next().value);
+  SOLLER_LINES.set(key, C);
+  return C;
+}
+function sollerNodes(th, g, H, nForce, tol = SOLLER_TOL){
+  const C = sollerCells(th, g);
+  if (!C) return null;
+  const { mu, va, cw, lo, hi, mean, sd } = C, nc = cw.length, span = hi - lo, r = sd/H;
+  const collapse = nForce ? nForce === 1 : span < 0.05*H || 4*r*r <= tol;
+  if (collapse){ const one = [{ d: mean, w: 1 }]; one.n = 1; return one; }
+  // Up to SOLLER_GAUSS_MAX nodes: the distribution's own Gauss quadrature, n from its spread:
+  // two while 70·(σ/H)⁴ is within tol, three to a spread of one width, three more a width
+  // beyond (within 0.03 % of the peak with three at spreads of 0.2–1.0 H, 0.019 % at 1.3 H
+  // with four, 0.015 % at 1.7 H with six).
+  const nG = 70*r*r*r*r <= tol ? 2 : span <= H ? 3 : 3 + Math.ceil(SOLLER_GAUSS*(span/H - 1));
+  const useG = nForce ? nForce >= 2 && nForce <= SOLLER_GAUSS_MAX : nG <= SOLLER_GAUSS_MAX;
+  // (the rule depends on n alone, not on the width: kept with the line's cells)
+  if (useG){
+    const n = nForce || nG, gc = C.gauss || (C.gauss = new Map());
+    let g = gc.get(n);
+    if (g === undefined){ g = gaussN(mu, cw, n); if (g) g.n = n; gc.set(n, g); }
+    if (g) return g;
+  }
+  // Bins of width h about k·h: each cell's weight shared between the two bins about its
+  // mean, with its mean and variance; then two nodes a bin.
+  const need = Math.ceil(span/(H/SOLLER_BIN)) + 2, cap = FCJ_MAX_NODES >> 1;
+  const h = need > cap ? span/(cap - 2) : H/SOLLER_BIN, k0 = Math.floor(lo/h) - 1, nb = Math.ceil(hi/h) - k0 + 2;
+  const bw = new Float64Array(nb), b1 = new Float64Array(nb), b2 = new Float64Array(nb);
+  for (let c = 0; c < nc; c++){
+    const x = mu[c]/h - k0, k = Math.floor(x), f = x - k, w = cw[c], m = mu[c], q = m*m + va[c];
+    bw[k] += w*(1 - f); b1[k] += w*(1 - f)*m; b2[k] += w*(1 - f)*q;
+    bw[k + 1] += w*f; b1[k + 1] += w*f*m; b2[k + 1] += w*f*q;
+  }
+  const out = [];
+  for (let k = 0; k < nb; k++){
+    const w = bw[k]; if (!(w > 1e-12)) continue;
+    const m = b1[k]/w, sd = Math.sqrt(Math.max(0, b2[k]/w - m*m));
+    if (sd > 0){ out.push({ d: m - sd, w: w/2 }, { d: m + sd, w: w/2 }); } else out.push({ d: m, w });
+  }
+  out.n = SOLLER_BINNED;
+  if (need > cap) out.short = need/cap;
+  return out;
+}
+// The cell search's one node: the mean shift, to second order.
+function sollerCentroid(th, g){
+  const G = sollerGrid(g), s2 = Math.sin(2*th);
+  if (G.empty || Math.abs(s2) < 1e-9) return null;
+  const one = [{ d: (-G.ms*Math.cos(2*th) + G.mp)/s2*R2D, w: 1 }]; one.n = 1; return one;
+}
+/* The axial divergence of a model: FCJ's A, a number (none at 0), or the Soller model's
+   geometry, an object (axialOf); its nodes, and the reach of its shifts (deg). tol: the
+   Soller nodes' error allowed, of the peak (sollerTol). */
+function axialNodes(th, A, H, nForce, tol){
+  if (A && typeof A === 'object') return sollerNodes(th, A, H, nForce, tol);
+  return A > 0 ? fcjNodes(th, A, H, nForce) : null;
+}
+/* The Soller nodes' error allowed for a line of area Sarea (the scale in it), FWHM H and
+   mixing η: a tenth of the pattern's noise at its top (TAIL_NOISE, the window's rule for
+   the tails), and never less than SOLLER_TOL of it. The node rules' errors were measured
+   against the dense profile: one node 3.5–3.9·(σ/H)² of the peak (σ the shifts' spread),
+   two 32–62·(σ/H)⁴; taken as 4 and 70. A sample's broad lines, a few thousand counts high
+   and 2–3 % noisy at their top, are then drawn with one or two nodes, the standard's sharp
+   ones as finely as before: on the user's 33A with a free ellipsoid, a pattern in 3.5 ms
+   instead of 8 (FCJ's 5.3), since the Sollers' spread on both sides had needed two or three
+   nodes on every line where FCJ's tail alone collapsed to one. */
+const SOLLER_TOL = 4e-4;
+function sollerTol(model, Sarea, H, eta){
+  const top = Sarea*(eta*2/(Math.PI*H) + (1 - eta)*2*Math.sqrt(LN2/Math.PI)/H);
+  return model.noise0 > 0 && top > 0 ? Math.max(SOLLER_TOL, TAIL_NOISE*model.noise0/top) : SOLLER_TOL;
+}
+const axialOn = A => !!A && (typeof A === 'object' ? !(A.L <= 0) : A > 0);
+function axialReach(th, A){
+  if (!axialOn(A)) return [0, 0];
+  const tt = 2*th;
+  if (typeof A === 'object'){
+    // the second order's bound, and a tenth more for the exact form
+    const B = 1.1*(Math.abs(Math.cos(tt)/Math.sin(tt))*(A.p1*A.p1 + A.p2*A.p2)/2 + A.p1*A.p2/Math.abs(Math.sin(tt)))*R2D;
+    return [-B, B];
+  }
+  const d = (Math.acos(Math.max(-1, Math.min(1, Math.cos(tt)*Math.sqrt(1 + A*A)))) - tt)*R2D;
+  return [Math.min(0, d), Math.max(0, d)];
+}
+// The model's axial divergence at the parameters v: the Soller model where the file gives
+// both Sollers (buildModel's model.axial) and it is in use, else FCJ's A.
+function axialOf(model, v){
+  const ax = model.axial;
+  if (!ax || model.axialOff || model.iAx == null) return v[model.iAsym];
+  const L = v[model.iAx];
+  return { L, Lx: ax.Lx, p1: ax.p1, p2: ax.p2, R: model.radius, key: `${L}|${ax.Lx}|${ax.p1}|${ax.p2}|${model.radius}` };
 }
 
 /* ---------- the free crystallite shape ----------
@@ -1757,6 +2057,17 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   const P = Object.assign({ zero: 0, disp: 0, U: 0, V: 0, W: 0.002, X: 0, Y: 0.03, asym: 0, Xs: 0, Ys: 0 }, prof);
   add('zero', P.zero, -2, 2, 1e-5);
   add('disp', P.disp, -3, 3, 1e-5);
+  /* A shift of 2θ as sin 2θ (°), the form of the sample's transparency (−90/(π·μ·R)°):
+     refined on the standard with its zero and displacement, held at the standard's on a
+     sample, as its zero (autoRefine). On the user's LaB6, with the Soller model, each
+     line's position against the model's (one shift a line, fitted to its residual) ran
+     +4.5 m° at 21°, −3 m° at 60–90° and +11 m° at 142°: the zero and displacement left
+     3.0 m° rms, with a sin 2θ term 0.5 m° (sin θ, or 2θ and 2θ², about as well; tan θ, a
+     cell or λ off, 1.9). It refines to −0.017°, where LaB₆'s own absorption (μ about
+     600–1100 cm⁻¹ as packed) gives −0.001 to −0.002°: the rest is the instrument's, of
+     that form, and the samples share it. Alone, with FCJ, it took the standard's χ²_ν from
+     4.37 to 3.43. */
+  add('transp', P.transp || 0, -1, 1, 1e-5);
   add('U', P.U, 0, 20, 1e-6, { group: 'profile' });
   add('V', P.V, -20, 20, 1e-6, { group: 'profile' });
   add('W', P.W, 0, 20, 1e-6, { group: 'profile' });
@@ -1765,6 +2076,11 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   // (S + H)/L of the axial divergence (fcjNodes). Its effect goes as its square, so at 0
   // its derivative vanishes: a refinement of it starts from a typical value (autoRefine).
   add('asym', P.asym, 0, 0.2, 1e-4, { group: 'profile' });
+  // The Soller model of the axial divergence where the file gives both Sollers (sollerNodes):
+  // their acceptances, the source's length, and the sample's and receiver's, refined.
+  const sol = ins.soller || {}, p1 = +sol.incident, p2 = +sol.diffracted, Lx = ins.focusLength > 0 ? ins.focusLength : AX_SOURCE;
+  const axial = p1 > 0 && p2 > 0 && p1 < 0.5 && p2 < 0.5 ? { p1, p2, Lx, LxAssumed: !(ins.focusLength > 0) } : null;
+  if (axial) add('axL', P.axL > 0 ? P.axL : AX_START, AX_MIN, AX_MAX, 1e-3, { group: 'profile' });
   // A starting level for the background: the low tail of the counts.
   const sorted = Array.from(Yo).filter((v, i)=> w[i] > 0).sort((a, b)=> a - b);
   const level = sorted.length ? sorted[Math.floor(0.1*sorted.length)] : 0;
@@ -1840,7 +2156,8 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     x: X, y: Yo, w, n, x0, x1, rev, lines, lineName, cos2M, radius, bgDegree: N, basis, instrMissing: !instr,
     countScale: countScale < 1 ? countScale : null,
     phases: ph, par, index, v: Float64Array.from(par, p=> p.value),
-    iZero: index.zero, iDisp: index.disp, iProf: ['U','V','W','X','Y'].map(k=> index[k]), iAsym: index.asym,
+    iZero: index.zero, iDisp: index.disp, iTr: index.transp, iProf: ['U','V','W','X','Y'].map(k=> index[k]), iAsym: index.asym,
+    axial, iAx: index.axL,
     iBg: par.map((p, i)=> p.group === 'bg' ? i : -1).filter(i=> i >= 0),
     // The 1/2θ term is used where air scatter rises: patterns that start below 20° (and
     // above 0, where it is defined).
@@ -2031,14 +2348,14 @@ function growFade(d, dFull){
 function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw){
   const q = model.phases[k], m = wv.length, x = model.x, xa = model.x0, xb = model.x1;
   const { U, V, W, X, Y, A, ws = 1 } = prof;
-  const c2 = Math.cos(2*th), dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
+  const [dLo, dHi] = axialReach(th, A);
   let sw = 0, sH = 0, sE = 0, tSum = 0;
   for (let i = 0; i < m; i++){
     const pr = profileAtTheta(th, U, V, W, X, Y + ws*wv[i]), ti = tw ? tw[i] : 1;
     sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
     const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
-    if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
-    const nodes = A > 0 ? lineNodes(model, -1 - ((k*model.rStride + r)*64 + i)*4 - j, th, A, pr.H) : null;
+    if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
+    const nodes = axialOn(A) ? lineNodes(model, -1 - ((k*model.rStride + r)*64 + i)*4 - j, th, A, pr.H, sollerTol(model, S*Im, pr.H, pr.eta)) : null;
     if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, Im, win);
     else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, Im, win);
     else addPeakFCJ(out, x, tt, pr.H, pr.eta, Im, nodes, win);
@@ -2098,13 +2415,14 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, 
   const [Hest, Hmin] = widths(sizeMean, sizeMin);
   // (the window's least half-width: lineHalf's, from the line as a pseudo-Voigt)
   const tq = tch(pr.HG, lorTot), halfT = lineHalf(model, Hest, tq.eta, S*I);
-  const c2 = Math.cos(2*th), dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
+  const [dLo, dHi] = axialReach(th, A);
   const xa = model.x0, xb = model.x1;
-  if (tt + Math.max(0, dMax) + halfT < xa || tt + Math.min(0, dMax) - halfT > xb) return;
+  if (tt + dHi + halfT < xa || tt + dLo - halfT > xb) return;
   // The divergence's node count from the narrowest component the line can hold (a thin
   // plate's sharp in-plane members inside a broad line): counted from the whole line's
   // width, 3 nodes 0.1° apart drew separate bumps, 8 % of the peak.
-  const nodes = A > 0 ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin) : null;
+  // (the error allowed at the top of its narrowest component)
+  const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin, sollerTol(model, S*I, Hmin, tq.eta)) : null;
   const spread = nodes ? nodes.reduce((s, nd)=> Math.max(s, Math.abs(nd.d)), 0) : 0;
   /* The tail rule draws no further than the grid holds at its step (an eighth of Hmin):
      a step grown for the tail costs the line's top more than the tail gains. On Si spheres
@@ -2154,7 +2472,7 @@ function phasePattern(model, v, k, out, ticks){
   const q = model.phases[k];
   const cell = cellOf(model, v, k), { Gs } = metric(cell);
   const f2 = phaseF2(model, q, cell, Gs, v), f2b = q.f2b, d = q.d;
-  const zero = v[model.iZero], disp = v[model.iDisp], dB = v[q.iB], A = v[model.iAsym];
+  const zero = v[model.iZero], disp = v[model.iDisp], tr = v[model.iTr], dB = v[q.iB], A = axialOf(model, v);
   const [Ui, Vi, Wi, Xi, Yi] = model.iProf.map(i=> v[i]);
   const { U, V, W, X } = profileOf(model, v, k), Ys = v[q.iYs], lam1 = model.lines[0].lam;
   const x = model.x, xa = model.x0, xb = model.x1, S = v[q.iScale];
@@ -2194,7 +2512,7 @@ function phasePattern(model, v, k, out, ticks){
       const L = model.lines[j], st = L.lam/(2*d[r]);
       if (st >= 1) continue;
       const th = Math.asin(st);
-      const tt = 2*th*R2D + zero + disp*Math.cos(th);
+      const tt = 2*th*R2D + zero + disp*Math.cos(th) + tr*Math.sin(2*th);
       const fade = backFade(model, tt);
       if (!fade) continue;
       const I = (j ? base2 : base)*L.w*lpFactor(model, th)*fade;
@@ -2211,13 +2529,12 @@ function phasePattern(model, v, k, out, ticks){
       const lr = L.lam/lam1, Yr = Yi + lr*(shp && q.iW ? 0 : Ys) + (kappa > 0 ? L.lam*kappa/Math.PI*R2D : 0);
       if (shp){ shapeLine(model, k, r, j, th, tt, I, shp[r], { U, V, W, X: Xr, Y: Yr, A, ws: lr }, out, ticks && j === 0 ? ticks : null, S, f2, d, tw ? tw[r] : null); continue; }
       const pr = profileAtTheta(th, U, V, W, Xr, Yr);
-      // The axial divergence spreads the peak over shifts of one sign, up to dMax
-      // (fcjNodes): a line out of range by more than that is skipped before its nodes.
-      const c2 = Math.cos(2*th);
-      const dMax = A > 0 ? (Math.acos(Math.max(-1, Math.min(1, c2*Math.sqrt(1 + A*A)))) - 2*th)*R2D : 0;
+      // The axial divergence spreads the peak over shifts within [dLo, dHi] (axialReach): a
+      // line out of range by more than that is skipped before its nodes.
+      const [dLo, dHi] = axialReach(th, A);
       const half = lineHalf(model, pr.H, pr.eta, S*I), win = half/pr.H;
-      if (tt + Math.max(0, dMax) + half < xa || tt + Math.min(0, dMax) - half > xb) continue;
-      const nodes = A > 0 ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, pr.H) : null;
+      if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
+      const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, pr.H, sollerTol(model, S*I, pr.H, pr.eta)) : null;
       if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, I, win);
       else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, I, win);
       else addPeakFCJ(out, x, tt, pr.H, pr.eta, I, nodes, win);
@@ -2476,7 +2793,7 @@ function vFloor(model, U, W){
    resolved synchrotron widths (H_G 0.0006–0.0009° at a 0.0002° step, refined within 2 %)
    as on a bound with esd NaN, though no difference point reached the floor. */
 function hgFloored(model, v, free){
-  const iP = model.iProf.slice(0, 3), [U, V, W] = iP.map(i=> v[i]), zero = v[model.iZero], disp = v[model.iDisp];
+  const iP = model.iProf.slice(0, 3), [U, V, W] = iP.map(i=> v[i]), zero = v[model.iZero], disp = v[model.iDisp], tr = v[model.iTr];
   const [hU, hV, hW] = iP.map(j=>{
     if (!free.includes(j)) return 0;
     const h = diffStep(model, j, v);
@@ -2486,7 +2803,7 @@ function hgFloored(model, v, free){
     if (!(v[q.iScale] > 0) || !q.d) continue;
     for (let r = 0; r < q.nRefl; r++) for (const L of model.lines){
       const st = L.lam/(2*q.d[r]); if (st >= 1) continue;
-      const th = Math.asin(st), tt = 2*th*R2D + zero + disp*Math.cos(th);
+      const th = Math.asin(st), tt = 2*th*R2D + zero + disp*Math.cos(th) + tr*Math.sin(2*th);
       if (tt < model.x0 || tt > model.x1) continue;
       const t = Math.tan(th);
       if (U*t*t + V*t + W - Math.max(hU*t*t, hV*t, hW) <= HG2_FLOOR) return true;
@@ -3238,7 +3555,25 @@ function autoRefine(model, opts = {}){
   // after stage 3 from the line positions then in range; the count at the file's cell
   // here only chooses the starting value.
   const asym0 = Number.isFinite(opts.asym0) ? opts.asym0 : ASYM_START;
-  v[model.iAsym] = irf ? (Number.isFinite(irf.asym) ? irf.asym : 0) : reflectionsInRange(model).positions >= UV_POSITIONS ? asym0 : 0;
+  /* The Soller model (sollerNodes) where the file gives both Sollers: its L, refined on the
+     standard, held at the standard's on a sample, and at AX_START on a sample refined
+     without one (the Sollers alone set most of the tail; freed with the profile there, on
+     the user's 33A its broad lines took L to its 0.5 mm bound, χ²_ν unchanged). A sample
+     whose standard was refined with FCJ (its file without Sollers, or a result from before
+     v432) is drawn with that standard's A. */
+  model.axialOff = !!(model.axial && irf && !Number.isFinite(irf.axL));
+  const AS = model.axial && !model.axialOff ? 'axL' : 'asym';
+  // (what the profile's refinement without a standard frees: A, or nothing of the Soller's)
+  const asFree = AS === 'asym' || std ? [AS] : [];
+  if (!model.axial && irf && Number.isFinite(irf.axL))
+    warnings.push(`The standard's axial divergence was modelled through its Soller slits, which this pattern's file does not give: it is refined with no axial divergence.`);
+  if (AS === 'axL' && irf && (Math.abs(irf.axP1/model.axial.p1 - 1) > 1e-3 || Math.abs(irf.axP2/model.axial.p2 - 1) > 1e-3))
+    warnings.push(`The standard was measured with Soller slits of ${irf.axP1} and ${irf.axP2} rad, this pattern with ${model.axial.p1} and ${model.axial.p2} rad: the axial divergence is drawn with this pattern's, and the standard's sample and receiver lengths.`);
+  v[model.iAsym] = AS !== 'asym' ? 0 : irf ? (Number.isFinite(irf.asym) ? irf.asym : 0) : reflectionsInRange(model).positions >= UV_POSITIONS ? asym0 : 0;
+  if (AS === 'axL') v[model.iAx] = irf ? irf.axL : AX_START;
+  // The sin 2θ shift: the standard's on a sample, as its zero (none from a standard refined
+  // before v432); refined on the standard from 0.
+  v[model.iTr] = irf && Number.isFinite(irf.transp) ? irf.transp : 0;
   if (irf){
     ['U','V','W','X','Y'].forEach(k=> { if (Number.isFinite(irf[k])) v[model.index[k]] = irf[k]; });
     if (Number.isFinite(irf.zero)) v[model.iZero] = irf.zero;
@@ -3471,7 +3806,7 @@ function autoRefine(model, opts = {}){
     // Another refinement of the standard since, its profile changed: the sample's
     // broadening was fitted above another instrumental profile, and is refined from its
     // values rather than held. (Its zero moved: the cell, below.)
-    const irfMoved = irfSame && !!irf && !!S0.irf && ['U', 'V', 'W', 'X', 'Y', 'asym'].some(k=> (+irf[k] || 0) !== (+S0.irf[k] || 0));
+    const irfMoved = irfSame && !!irf && !!S0.irf && ['U', 'V', 'W', 'X', 'Y', 'asym', 'axL', 'transp'].some(k=> (+irf[k] || 0) !== (+S0.irf[k] || 0));
     const BROAD = ['sizestrain', 'shape', 'faults'];
     // The solid of the last result: the one whose widths its parameters name (each solid
     // has its own), when in use (a width not 0).
@@ -3508,7 +3843,7 @@ function autoRefine(model, opts = {}){
         texture: q.iPO == null ? !!t0 : !texSame };
     });
     const groupOf = i => { const p = model.par[i];
-      return p.linear ? 'linear' : p.kind === 'lattice' || p.name === 'zero' || p.name === 'disp' ? 'cell' : p.group === 'profile' ? 'instrument'
+      return p.linear ? 'linear' : p.kind === 'lattice' || p.name === 'zero' || p.name === 'disp' || p.name === 'transp' ? 'cell' : p.group === 'profile' ? 'instrument'
         : p.kind === 'size' || p.kind === 'strain' || p.kind === 'dist' ? 'sizestrain' : p.kind === 'shape' ? 'shape' : p.kind === 'faults' ? 'faults'
         : p.kind === 'B' || p.kind === 'adp' ? 'adp' : p.kind === 'occ' ? 'occ' : p.kind === 'texture' ? 'texture' : null; };
     /* The background's terms there and here (the degree and the 1/2θ term, fit settings):
@@ -3527,7 +3862,8 @@ function autoRefine(model, opts = {}){
     // A sample's zero is the standard's (set above), or the file's: held, as the last
     // result's when that was too (no standard's profile then and now).
     if (std || (!irf && irfSame)) take('zero');
-    if (!irf && irfSame) ['U', 'V', 'W', 'X', 'Y', 'asym'].forEach(take);
+    if (std) take('transp');
+    if (!irf && irfSame) ['U', 'V', 'W', 'X', 'Y', ...asFree].forEach(take);
     model.phases.forEach((q, k)=> {
       const c = chg[k], pf = q.pfx;
       if (out.has(k)){ model.par.forEach((p, i)=> { if (p.phase === k) take(p.name); }); vv[q.iScale] = 0; return; }
@@ -3562,10 +3898,10 @@ function autoRefine(model, opts = {}){
     const carried = liveK.filter(k=> chg[k].sh1 && !chg[k].shape && !chg[k].rej0), search = liveK.filter(k=> chg[k].sh1 && !carried.includes(k) && !keptIso.includes(k));
     const F = [...liveK.map(k=> scales[k]), ...lin];
     // (a lattice the last result did not refine: its cell search found no minimum there)
-    if (std) F.push('zero', 'disp');
+    if (std) F.push('zero', 'disp', 'transp');
     else { liveK.forEach(k=> model.phases[k].iLat.forEach(i=> { if (was(model.par[i].name)) F.push(model.par[i].name); })); F.push('disp'); }
     if (irf) liveK.forEach(k=> { if (!model.phases[k].sizeOff && !carried.includes(k)) F.push(pfxOf(k) + 'Ys'); }); else F.push('W', 'Y');
-    if (irf) liveK.forEach(k=> { if (!model.phases[k].strainOff) F.push(pfxOf(k) + 'Xs'); }); else F.push(...(uvFree ? ['X', 'U', 'V', 'asym'] : ['X']));
+    if (irf) liveK.forEach(k=> { if (!model.phases[k].strainOff) F.push(pfxOf(k) + 'Xs'); }); else F.push(...(uvFree ? ['X', 'U', 'V', ...asFree] : ['X']));
     liveK.forEach(k=> { const q = model.phases[k]; if (q.iS && !q.noIrf) F.push(...q.iS.map(i=> model.par[i].name)); });
     liveK.forEach(k=> { const q = model.phases[k]; if (q.iFA != null && !q.noIrf) F.push(q.pfx + 'FA'); });
     liveK.forEach(k=> { const q = model.phases[k]; if (q.iLS != null && q.wppm) F.push(q.pfx + 'LS'); });
@@ -3774,7 +4110,7 @@ function autoRefine(model, opts = {}){
     setParams(model, vv);
     free = free.filter(name=> !out.has(scales.indexOf(name)));
     const keep = list => list.filter(name=> !model.phases.some((_, k)=> out.has(k) && name.startsWith(pfxOf(k))));
-    free = free.concat(std ? ['zero', 'disp'] : [...keep(lattice).filter(name=> !latHeld(name)), 'disp']);
+    free = free.concat(std ? ['zero', 'disp', 'transp'] : [...keep(lattice).filter(name=> !latHeld(name)), 'disp']);
     res = run(2, std ? 'zero and displacement' : 'lattice and displacement', free);
     free = free.concat(irf ? keep(model.phases.filter(q=> !q.sizeOff).map(q=> q.pfx + 'Ys')) : ['W', 'Y']);
     res = run(3, 'widths', free);
@@ -3789,8 +4125,8 @@ function autoRefine(model, opts = {}){
        χ²_ν 1.04, for an esd 0.8–2.3× as large and about twice the time. */
     const uvFree = !irf && nIn.positions >= UV_POSITIONS;
     // Freed from a typical value (at 0 it has no derivative); held, none.
-    if (!irf && (uvFree ? !(model.v[model.iAsym] > 0) : model.v[model.iAsym] !== 0)){ const vv = model.v.slice(); vv[model.iAsym] = uvFree ? asym0 : 0; setParams(model, vv); }
-    free = free.concat(irf ? keep(model.phases.filter(q=> !q.strainOff).map(q=> q.pfx + 'Xs')) : uvFree ? ['X', 'U', 'V', 'asym'] : ['X']);
+    if (!irf && AS === 'asym' && (uvFree ? !(model.v[model.iAsym] > 0) : model.v[model.iAsym] !== 0)){ const vv = model.v.slice(); vv[model.iAsym] = uvFree ? asym0 : 0; setParams(model, vv); }
+    free = free.concat(irf ? keep(model.phases.filter(q=> !q.strainOff).map(q=> q.pfx + 'Xs')) : uvFree ? ['X', 'U', 'V', ...asFree] : ['X']);
     res = run(4, irf ? 'size and strain' : uvFree ? 'full profile' : 'profile shape', free);
     // The optional stages, each on top of what is free already.
     let kSt = 5;
@@ -4249,4 +4585,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
          fcjNodes, addPeak, addPeakFCJ, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
-         phaseSites, phaseMass, OCC_MAX };
+         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach };
