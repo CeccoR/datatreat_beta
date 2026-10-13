@@ -252,8 +252,41 @@ function solveLinear(A, b){
       norm: document.getElementById('xrdNorm').value,
     };
   }
+  /* A project keeps each file's arrays as the version that loaded it read them. Up to v262
+     the intensities came in with their minimum subtracted, which the Rietveld weights then
+     took for the counts: the user's LaB6, so kept, fitted at χ²_ν 3.93, R_exp 3.89 % where
+     the file itself gives 2.17 and 3.54 % (the same parameters, the esds and the weights
+     off). Restored, a file is read again from its own bytes (rawBytes), as a file loaded
+     now is, and a note names those whose arrays changed; one whose bytes were not kept is
+     used as it was, with a note where its lowest point is exactly 0. The readings are kept
+     by their bytes, so an undo does not read a file again. */
+  const reread = new WeakMap();
+  function readAgain(f){
+    const b = f.rawBytes;
+    if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')){
+      let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
+      return { f: ascending({ ...f }), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
+    }
+    let sc = reread.get(b);
+    if (!sc){
+      try {
+        const xml = new DOMParser().parseFromString(decodeXml(b instanceof Uint8Array ? b : Uint8Array.from(b)), 'text/xml');
+        sc = xml.getElementsByTagName('parsererror').length ? { error: 'not well-formed XML' } : readXrdmlScan(xml);
+      } catch (e){ sc = { error: String(e && e.message || e) }; }
+      reread.set(b, sc);
+    }
+    if (sc.error) return { f: ascending({ ...f }), note: null };
+    const { varMul: _, ...rest } = f;
+    const g = ascending({ ...rest, x: sc.x.slice(), y: sc.y.slice(), ...(sc.varMul ? { varMul: sc.varMul.slice() } : {}) });
+    const old = ascending({ ...f }), n = g.y.length;
+    let moved = !old.y || old.y.length !== n || !old.x || old.x.length !== n || !!old.varMul !== !!g.varMul;
+    for (let i = 0; !moved && i < n; i++)
+      moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
+    return { f: g, note: moved ? 'read again from the file itself: the project held its data as an earlier version had read them (up to v262, with their minimum subtracted). Results refined before are from those: refine again' : null };
+  }
   function xrdRestore(s){
-    allFiles = s.files.map(f=> ascending({...f}));
+    const reads = s.files.map(readAgain);
+    allFiles = reads.map(r=> r.f);
     files = includedOf(allFiles);
     perParams = s.perParams.map(p=>({...p}));
     manualPeaks = s.manualPeaks.map(a=>a.slice());
@@ -269,7 +302,10 @@ function solveLinear(A, b){
     syncModeButtons();
     afterFilesChange();
     // Clear the previous tab's transient upload alert and rebuild for this tab.
-    xrdLoadAlerts = ''; xrdNoteAlerts = ''; xrdUploadAlerts = ''; rebuildXrdAlerts();
+    xrdLoadAlerts = ''; xrdNoteAlerts = ''; xrdUploadAlerts = '';
+    const notes = reads.filter(r=> r.note).map(r=> esc(`${r.f.label || r.f.name}: ${r.note}.`));
+    if (notes.length) xrdNoteAlerts = buildAlertsHtml([], notes, 'Restored, with a caveat:', '', 'xrd-dismiss-notes');
+    rebuildXrdAlerts();
   }
   function syncModeButtons(){
     Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
