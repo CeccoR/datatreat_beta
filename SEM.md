@@ -1,7 +1,7 @@
 # SEM module
 
-The SEM module takes Tescan images, reads their metadata, and crops them. Later
-versions are planned to normalise their intensity and their scale and to lay them out
+The SEM module takes Tescan images, reads their metadata, crops them, and sets their
+grey levels. Later versions are planned to normalise their scale and to lay them out
 into figures. The code is in `sem-read.js` (reading) and `sem.js` (the module).
 
 ## 1. Files
@@ -72,8 +72,8 @@ says the bar may not be where Tescan puts it.
 The pixels are kept at their depth, scaled to 16 bits (an 8-bit file × 257). A
 WhiteIsZero file is turned the usual way round.
 
-Until the intensity settings come, an image is shown with black and white at the
-0.5 and 99.5 percentiles of its own pixels, the bar left out.
+Every view of an image (the crop editor, the thumbnails, the intensity preview) shows
+it through its curve (§3).
 
 ## 2. Crop
 
@@ -110,9 +110,64 @@ out.
 A crop larger than an image allows is narrowed to fit it (its ratio kept). The image is
 then marked (⚠ on its thumbnail, a note under its crop) until its crop is set again.
 
-## 3. Project and export
+## 3. Intensity
 
-### 3.1 How a project stores the images
+### 3.1 The curve
+
+Each image's grey levels go through one curve: a table of its 65536 levels, built in
+two stages.
+
+1. **The normalisation**, one for all images:
+   - **none**: the levels as acquired, with 0 black and 65535 white;
+   - **percentile stretch** (the default): black and white at two percentiles of the image's own levels, 0.5 and 99.5 % unless set otherwise;
+   - **mean and SD of the reference**: v → μ_ref + (v − μ)·σ_ref/σ, on the reference's levels;
+   - **histogram of the reference**: a level at a given share of the image's pixels goes to the reference's level at the same share.
+2. **Contrast, brightness and gamma.**
+   - Contrast scales the levels about mid-grey.
+   - Brightness then adds a share of the full scale.
+   - Gamma bends the mid-tones (y → y^(1/γ), so above 1 they brighten).
+
+   Each has a value for all images, and each image has its own correction on top: brightness is added, contrast and gamma are multiplied.
+
+The values are clipped to black and white after each stage.
+
+### 3.2 Statistics
+
+The statistics (percentiles, mean, SD, histogram) are those of each image's crop,
+with its saturated pixels (65535) left out. So what is shown is what is normalised, and
+a saturated edge does not set the white. A new crop changes them.
+
+### 3.3 The reference
+
+The reference is any loaded image (the first one unless another is chosen). Its own
+levels are taken as acquired, so with "none" it looks as the others are made to.
+
+A reference meant only for this is loaded with the others and ticked *Reference only*:
+it is used to normalise the others and kept out of the figure. Its thumbnail carries ◎.
+
+### 3.4 What the normalisations do to the user's two images
+
+The 8-bit grey of each image's preview (its whole 1024 px crop), as mean / SD:
+
+| Normalisation | STO 5kx | STO 20kx |
+|---|---|---|
+| none | 63.4 / 69.0 | 83.6 / 69.3 |
+| percentile 0.5–99.5 | 61.6 / 73.0 | 88.5 / 76.8 |
+| mean and SD of 20kx | 83.7 / 68.1 | 83.6 / 69.3 |
+| histogram of 20kx | 83.8 / 65.2 | 83.6 / 69.3 |
+| mean and SD of 5kx | 63.4 / 69.0 | 67.7 / 65.2, 37 % black |
+
+The two crops differ in content: 5kx is mostly dark substrate (median level 4967), 20kx
+mostly particles (22769). Giving one the other's statistics therefore changes what it
+shows:
+- the 5kx substrate lightens to match 20kx;
+- with 5kx as the reference, 20kx's dark substrate falls below black, and 37 % of it clips.
+
+The percentile stretch keeps each image's own content and only sets its range.
+
+## 4. Project and export
+
+### 4.1 How a project stores the images
 
 A project keeps each file's own bytes, as base64, in the module's state.
 
@@ -122,7 +177,7 @@ A project keeps each file's own bytes, as base64, in the module's state.
 - **The id.** It is a hash of the bytes. A second copy of a file already loaded, whatever its name, is reported as already loaded.
 - **Restoring.** Opened again, a project's images are read again from their bytes. One that no longer reads is left out, with a note.
 
-### 3.2 CSV
+### 4.2 CSV
 
 The CSV holds one row per included image, with these columns:
 
@@ -139,8 +194,16 @@ The CSV holds one row per included image, with these columns:
 | `info_bar_rows` | `ImageStripSize` |
 | `crop_x_px`, `crop_y_px`, `crop_width_px`, `crop_height_px` | the crop |
 | `crop_width_um`, `crop_height_um` | the crop's size |
+| `crop_mean_level`, `crop_sd_level`, `crop_saturated_pct` | the crop's statistics |
+| `normalisation`, `reference` | the normalisation, and the reference's label where it uses one |
+| `black_level`, `white_level` | the levels a linear normalisation takes to black and white (empty for the histogram) |
+| `brightness_pct`, `contrast`, `gamma` | as applied, the image's own correction included |
 
 ## Changelog
 
 **v436**: the module. Tescan TIFFs are read with their metadata, with the info bar left
 out by `ImageStripSize`, and cropped.
+
+**v437**: intensity (§3): a normalisation for all images (none, percentile stretch,
+or the reference's mean and SD or histogram), then contrast, brightness and gamma, with
+a correction per image. The statistics come from the crop.

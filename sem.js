@@ -56,35 +56,22 @@ import { readTescanTiff } from './sem-read.js';
   let files = [];
   let cur = 0;
   let loadAlerts = '', uploadAlerts = '', warnAlerts = '';
-  // id → { r (readTescanTiff's), lo, hi (the display's black and white), thumb (canvas) }
+  // id → { r (readTescanTiff's), small (a box-averaged copy, for the thumbnails) }
   const decoded = new Map();
-
-  // The display's grey levels until the intensity settings come: black and white at
-  // the 0.5 and 99.5 percentiles of the image (the bar left out).
-  function stretchOf(r){
-    const n = r.width*r.imageH, hist = new Uint32Array(65536);
-    for (let i = 0; i < n; i++) hist[r.pixels[i]]++;
-    const at = q => { let s = 0; const t = q*n; for (let v = 0; v < 65536; v++){ s += hist[v]; if (s > t) return v; } return 65535; };
-    const lo = at(0.005), hi = at(0.995);
-    return hi > lo ? [lo, hi] : [lo, lo + 1];
-  }
-  // A small copy of the image (box-averaged), for the strip of thumbnails.
-  function thumbOf(r, lo, hi, side = 112){
+  // A copy of the image some 112 px across, each pixel the mean of a k × k block, kept
+  // at 16 bits so that the thumbnails go through the same curve as the image.
+  function smallOf(r, side = 112){
     const k = Math.max(1, Math.ceil(Math.max(r.width, r.imageH)/side)), w = Math.floor(r.width/k), h = Math.floor(r.imageH/k);
-    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-    const ctx = cv.getContext('2d'), img = ctx.createImageData(w, h), d = img.data, sc = 255/(hi - lo);
+    const px = new Uint16Array(w*h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
-      let s = 0;
-      for (let j = 0; j < k; j++){ const row = (y*k + j)*r.width + x*k; for (let i = 0; i < k; i++) s += r.pixels[row + i]; }
-      const g = Math.max(0, Math.min(255, (s/(k*k) - lo)*sc)), o = 4*(y*w + x);
-      d[o] = d[o + 1] = d[o + 2] = g; d[o + 3] = 255;
+      let sum = 0;
+      for (let j = 0; j < k; j++){ const row = (y*k + j)*r.width + x*k; for (let i = 0; i < k; i++) sum += r.pixels[row + i]; }
+      px[y*w + x] = Math.round(sum/(k*k));
     }
-    ctx.putImageData(img, 0, 0);
-    return cv;
+    return { w, h, k, px };
   }
   function cache(id, r){
-    const [lo, hi] = stretchOf(r);
-    const e = { r, lo, hi, thumb: thumbOf(r, lo, hi) };
+    const e = { r, small: smallOf(r) };
     decoded.set(id, e);
     return e;
   }
@@ -93,6 +80,104 @@ import { readTescanTiff } from './sem-read.js';
   function dec(f){
     if (decoded.has(f.raw.id)) return decoded.get(f.raw.id);
     try { return cache(f.raw.id, readTescanTiff(fromB64(f.raw.b64), f.name)); } catch(e){ return null; }
+  }
+
+  /* ---- Intensity ----
+     Each image's grey levels go through one curve, a table of its 65536 levels:
+       1. the normalisation, one for every image: none (the levels as acquired), a
+          stretch between two percentiles of the image's own levels, the mean and
+          standard deviation of the reference image, or its histogram;
+       2. contrast about mid-grey and brightness, then gamma (above 1 brightening the
+          mid-tones): the global values, with each image's own correction on top
+          (brightness added, contrast and gamma multiplied).
+     The statistics are the crop's, its saturated pixels (65535) left out: what is
+     shown is what is normalised, and a saturated edge does not set the white. The
+     reference's own levels are its levels as acquired, so with "none" it looks as the
+     others are made to. */
+  const INT_DEF = { mode: 'percentile', pLo: 0.5, pHi: 99.5, ref: null, b: 0, c: 1, g: 1 };
+  const ADJ_DEF = { b: 0, c: 1, g: 1 };
+  let intensity = { ...INT_DEF };
+  const usesRef = () => intensity.mode === 'meansd' || intensity.mode === 'hist';
+  // The reference: the image chosen, else the first loaded.
+  const refFile = () => allFiles.find(f=> f.raw.id === intensity.ref) || allFiles[0] || null;
+  // An image's crop, as a histogram of its levels with their count, mean and spread
+  // (the last 64 crops kept).
+  const statsCache = new Map();
+  function statsOf(f){
+    const e = dec(f), c = f.crop, key = `${f.raw.id}|${c.x},${c.y},${c.w},${c.h}`;
+    let st = statsCache.get(key);
+    if (st) return st;
+    const W = e.r.width, px = e.r.pixels, hist = new Uint32Array(65536);
+    let n = 0, sum = 0, sq = 0;
+    for (let y = c.y; y < c.y + c.h; y++){
+      const row = y*W;
+      for (let x = c.x; x < c.x + c.w; x++){ const v = px[row + x]; if (v === 65535) continue; hist[v]++; n++; sum += v; sq += v*v; }
+    }
+    const mean = n ? sum/n : 0;
+    st = { hist, n, mean, sd: n ? Math.sqrt(Math.max(0, sq/n - mean*mean)) : 0 };
+    statsCache.set(key, st);
+    if (statsCache.size > 64) statsCache.delete(statsCache.keys().next().value);
+    return st;
+  }
+  // The level below which a share q of the crop's pixels lie.
+  function levelAt(st, q){
+    const t = q*st.n; let acc = 0;
+    for (let v = 0; v < 65535; v++){ acc += st.hist[v]; if (acc > t) return v; }
+    return 65534;
+  }
+  /* The normalisation of an image: { lo, hi }, the levels taken to black and white
+     (linear), or { table }, each level's value on 0–1 (the histogram's). */
+  function normOf(f){
+    const m = intensity.mode;
+    if (m === 'none') return { lo: 0, hi: 65535 };
+    const st = statsOf(f);
+    if (m === 'percentile'){
+      const lo = levelAt(st, intensity.pLo/100), hi = levelAt(st, intensity.pHi/100);
+      return { lo, hi: hi > lo ? hi : lo + 1 };
+    }
+    const rf = refFile(), rs = rf ? statsOf(rf) : st;
+    if (m === 'meansd'){
+      // v → μ_ref + (v − μ)·σ_ref/σ, on the reference's levels: the levels that land on
+      // 0 and 65535 there.
+      const k = st.sd > 0 && rs.sd > 0 ? st.sd/rs.sd : 1;
+      return { lo: st.mean - rs.mean*k, hi: st.mean + (65535 - rs.mean)*k };
+    }
+    // The histogram: a level at the share F of the image's crop (its bin's middle) goes
+    // to the reference's level at the same share.
+    const table = new Float32Array(65536), n = st.n || 1, nr = rs.n || 1;
+    let ci = 0, cr = 0, u = 0;
+    for (let v = 0; v < 65535; v++){
+      const F = (ci + st.hist[v]/2)/n; ci += st.hist[v];
+      while (u < 65534 && (cr + rs.hist[u])/nr < F){ cr += rs.hist[u]; u++; }
+      table[v] = u/65535;
+    }
+    table[65535] = 1;
+    return { table };
+  }
+  // The whole curve of an image, as the 8-bit grey of each of its levels.
+  function lutOf(f){
+    const nm = normOf(f), a = f.adj || ADJ_DEF;
+    const b = (intensity.b + a.b)/100, k = intensity.c*a.c, ig = 1/(intensity.g*a.g);
+    const lut = new Uint8ClampedArray(65536), span = nm.table ? 0 : 1/(nm.hi - nm.lo);
+    for (let v = 0; v < 65536; v++){
+      let y = nm.table ? nm.table[v] : (v - nm.lo)*span;
+      y = y < 0 ? 0 : y > 1 ? 1 : y;
+      y = (y - 0.5)*k + 0.5 + b;
+      y = y < 0 ? 0 : y > 1 ? 1 : y;
+      lut[v] = Math.round(Math.pow(y, ig)*255);
+    }
+    return lut;
+  }
+  // A region of 16-bit levels (row length W) through a curve, into a canvas.
+  function toCanvas(px, W, x0, y0, w, h, lut){
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d'), img = ctx.createImageData(w, h), d = new Uint32Array(img.data.buffer);
+    for (let y = 0; y < h; y++){
+      const row = (y0 + y)*W + x0, o = y*w;
+      for (let x = 0; x < w; x++){ const g = lut[px[row + x]]; d[o + x] = 0xff000000 | g << 16 | g << 8 | g; }
+    }
+    ctx.putImageData(img, 0, 0);
+    return cv;
   }
 
   /* ---- Crop rules ---- */
@@ -187,16 +272,20 @@ import { readTescanTiff } from './sem-read.js';
     const view = listView();
     renderUnifiedFileList('semFileTableWrap', view, fileCallbacks(), extraCols.map(c=> ({ header: c.header, render: (_, i)=> c.render(allFiles[i]) })));
     document.getElementById('semWorkspace').style.display = files.length ? 'block' : 'none';
+    document.getElementById('semIntensityCard').style.display = files.length ? 'block' : 'none';
+    // The editor's image is rebuilt: the files, and with them the reference, may differ.
+    off = null;
     renderAll();
     hist.commit();
   }
 
   /* ---- Undo / project state ---- */
   function semSnapshot(){
-    return { files: allFiles.map(f=> ({ ...f, crop: { ...f.crop } })), cur };
+    return { files: allFiles.map(f=> ({ ...f, crop: { ...f.crop }, adj: { ...(f.adj || ADJ_DEF) } })), cur, intensity: { ...intensity } };
   }
   function semRestore(s){
-    allFiles = (s && s.files || []).map(f=> ({ ...f, crop: { ...f.crop }, raw: f.raw instanceof RawRef ? f.raw : new RawRef(f.raw.id, f.raw.b64) }));
+    allFiles = (s && s.files || []).map(f=> ({ ...f, crop: { ...f.crop }, adj: { ...ADJ_DEF, ...(f.adj || {}) }, raw: f.raw instanceof RawRef ? f.raw : new RawRef(f.raw.id, f.raw.b64) }));
+    intensity = { ...INT_DEF, ...(s && s.intensity || {}) };
     // Images whose bytes no longer read are left out of the list, and said so.
     const lost = allFiles.filter(f=> !dec(f));
     allFiles = allFiles.filter(f=> !lost.includes(f));
@@ -207,17 +296,26 @@ import { readTescanTiff } from './sem-read.js';
     afterFilesChange();
   }
   const hist = registerHistory('sem', semSnapshot, semRestore);
-  registerTabRedraw('sem', ()=>{ if (files.length){ fitView(); drawEditor(); } });
+  registerTabRedraw('sem', ()=>{ if (files.length){ fitView(); drawEditor(); drawPreview(); drawHist(); } });
 
   /* ---- Rendering ---- */
   function renderAll(){
     if (!files.length) return;
     renderNav(); renderInfo(); renderFields(); renderThumbs();
     loadEditorImage(); fitView(); drawEditor();
+    renderIntensity();
+  }
+  // Something that changes the curves (a crop, the normalisation, a correction): every
+  // view of the images drawn again.
+  function refreshLevels(){
+    off = null; loadEditorImage(); drawEditor();
+    renderThumbs(); renderIntensity();
   }
   function renderNav(){
     const f = files[cur];
-    document.getElementById('semCurName').textContent = f ? `${f.label}  (${cur + 1}/${files.length})` : '';
+    const name = f ? `${f.label}  (${cur + 1}/${files.length})` : '';
+    document.getElementById('semCurName').textContent = name;
+    document.getElementById('semICurName').textContent = name;
   }
   function renderInfo(){
     const f = files[cur], e = f && dec(f);
@@ -255,10 +353,8 @@ import { readTescanTiff } from './sem-read.js';
     box.innerHTML = '';
     files.forEach((f, i)=>{
       const e = dec(f); if (!e) return;
-      const t = e.thumb, k = t.width/e.r.width, cv = document.createElement('canvas');
-      cv.width = t.width; cv.height = t.height;
+      const sm = e.small, k = 1/sm.k, cv = toCanvas(sm.px, sm.w, 0, 0, sm.w, sm.h, lutOf(f));
       const ctx = cv.getContext('2d');
-      ctx.drawImage(t, 0, 0);
       const c = f.crop;
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.beginPath(); ctx.rect(0, 0, cv.width, cv.height); ctx.rect(c.x*k, c.y*k, c.w*k, c.h*k); ctx.fill('evenodd');
@@ -268,7 +364,9 @@ import { readTescanTiff } from './sem-read.js';
       b.dataset.i = i;
       b.appendChild(cv);
       const cap = document.createElement('span');
-      cap.className = 'sem-thumb-cap'; cap.textContent = (f.linked ? '🔗 ' : '') + f.label + (f.clamped ? ' ⚠' : '');
+      const isRef = usesRef() && refFile() === f;
+      cap.className = 'sem-thumb-cap'; cap.textContent = (f.linked ? '🔗 ' : '') + (isRef ? '◎ ' : '') + f.label + (f.clamped ? ' ⚠' : '');
+      if (isRef) b.title = f.label + ' — the reference' + (f.refOnly ? ', not in the figure' : '');
       b.appendChild(cap);
       box.appendChild(b);
     });
@@ -284,6 +382,8 @@ import { readTescanTiff } from './sem-read.js';
   }
   document.getElementById('semPrev').addEventListener('click', ()=> go(cur - 1));
   document.getElementById('semNext').addEventListener('click', ()=> go(cur + 1));
+  document.getElementById('semIPrev').addEventListener('click', ()=> go(cur - 1));
+  document.getElementById('semINext').addEventListener('click', ()=> go(cur + 1));
 
   /* ---- The crop editor ----
      The image drawn into a canvas with the view (scale s in CSS px a pixel, and the
@@ -291,18 +391,13 @@ import { readTescanTiff } from './sem-read.js';
      handles. Dragging a handle or a side resizes, inside moves, outside pans; the
      wheel zooms about the pointer, a double click outside the crop fits the image. */
   const view = { s: 1, ox: 0, oy: 0 };
-  let off = null, offId = null;   // the current image at full size, grey
+  // The current image at full size through its curve; null when the image, its crop
+  // (its statistics) or the curve has changed since.
+  let off = null, offId = null;
   function loadEditorImage(){
     const f = files[cur], e = f && dec(f);
-    if (!e || offId === f.raw.id) return;
-    const r = e.r, W = r.width, H = r.imageH;
-    off = document.createElement('canvas'); off.width = W; off.height = H;
-    const ctx = off.getContext('2d'), img = ctx.createImageData(W, H), d = img.data, sc = 255/(e.hi - e.lo);
-    for (let i = 0; i < W*H; i++){
-      const g = Math.max(0, Math.min(255, (r.pixels[i] - e.lo)*sc)), o = 4*i;
-      d[o] = d[o + 1] = d[o + 2] = g; d[o + 3] = 255;
-    }
-    ctx.putImageData(img, 0, 0);
+    if (!e || (off && offId === f.raw.id)) return;
+    off = toCanvas(e.r.pixels, e.r.width, 0, 0, e.r.width, e.r.imageH, lutOf(f));
     offId = f.raw.id;
   }
   // (Pointer positions are taken on the canvas, which fills the pane inside its border:
@@ -461,7 +556,7 @@ import { readTescanTiff } from './sem-read.js';
   function cropChanged(){
     const f = files[cur];
     propagate(f);
-    renderFields(); renderThumbs(); drawEditor();
+    renderFields(); refreshLevels();
     hist.commit();
   }
 
@@ -512,7 +607,7 @@ import { readTescanTiff } from './sem-read.js';
       const lead = allFiles.find(g=> g !== f && g.linked);
       if (lead) takeCrop(f, lead.crop, lead.aspect);
     } else f.clamped = false;
-    renderFields(); renderThumbs(); drawEditor();
+    renderFields(); refreshLevels();
     hist.commit();
   });
 
@@ -539,20 +634,124 @@ import { readTescanTiff } from './sem-read.js';
     closeCopy();
     if (!f || !picked.length) return;
     picked.forEach(g=>{ takeCrop(g, f.crop, f.aspect); propagate(g); });
-    renderFields(); renderThumbs(); drawEditor();
+    renderFields(); refreshLevels();
     hist.commit();
   });
+
+  /* ---- The intensity card ---- */
+  const $ = id => document.getElementById(id);
+  // The fields, with the range each takes; a value outside it is refused (the field
+  // shakes and shows the last good one).
+  const INT_FIELDS = { semPLo: ['pLo', 0, 49.9], semPHi: ['pHi', 50.1, 100], semB: ['b', -100, 100], semC: ['c', 0.05, 20], semG: ['g', 0.05, 20] };
+  const ADJ_FIELDS = { semBi: ['b', -100, 100], semCi: ['c', 0.05, 20], semGi: ['g', 0.05, 20] };
+  function renderIntensity(){
+    const f = files[cur];
+    if (!f) return;
+    const I = intensity, a = f.adj || ADJ_DEF, setv = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = String(+(+v).toPrecision(6)); };
+    $('semNorm').value = I.mode;
+    for (const [id, [k]] of Object.entries(INT_FIELDS)) setv(id, I[k]);
+    for (const [id, [k]] of Object.entries(ADJ_FIELDS)) setv(id, a[k]);
+    // Disabled, not hidden, where the normalisation does not use them.
+    $('semPLo').disabled = $('semPHi').disabled = I.mode !== 'percentile';
+    const rf = refFile();
+    $('semRef').innerHTML = allFiles.map(g=> `<option value="${esc(g.raw.id)}">${esc(g.label)}</option>`).join('');
+    if (rf) $('semRef').value = rf.raw.id;
+    $('semRef').disabled = $('semRefOnly').disabled = !usesRef();
+    $('semRefOnly').checked = !!(rf && rf.refOnly);
+    drawPreview(); drawHist();
+  }
+  // The current crop as it will be shown, fitted to the column (at most 60 % of the
+  // window's height).
+  function drawPreview(){
+    const f = files[cur], e = f && dec(f), cv = $('semPreview'), box = cv.parentElement;
+    if (!e || !box.clientWidth) return;
+    const c = f.crop, w = box.clientWidth, h = Math.max(120, Math.min(Math.round(w*c.h/c.w), Math.round(window.innerHeight*0.6)));
+    box.style.height = h + 'px';
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+    const ctx = cv.getContext('2d'), img = toCanvas(e.r.pixels, e.r.width, c.x, c.y, c.w, c.h, lutOf(f));
+    const s = Math.min(cv.width/c.w, cv.height/c.h);
+    ctx.imageSmoothingEnabled = s < 2; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, (cv.width - s*c.w)/2, (cv.height - s*c.h)/2, s*c.w, s*c.h);
+  }
+  // The crop's histogram (256 bins, heights as the square root of the counts), the
+  // curve over it (level → grey), and where a linear normalisation puts black and white.
+  function drawHist(){
+    const f = files[cur], e = f && dec(f), cv = $('semHist'), box = cv.parentElement;
+    if (!e || !box.clientWidth) return;
+    const dpr = window.devicePixelRatio || 1, w = box.clientWidth, h = box.clientHeight;
+    cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const css = getComputedStyle(document.documentElement), muted = css.getPropertyValue('--muted').trim() || '#888', accent = css.getPropertyValue('--accent').trim() || '#fb5';
+    const st = statsOf(f), bins = new Float64Array(256);
+    for (let v = 0; v < 65535; v++) bins[v >> 8] += st.hist[v];
+    const top = Math.sqrt(Math.max(1, ...bins));
+    ctx.globalAlpha = 0.45; ctx.fillStyle = muted;
+    for (let i = 0; i < 256; i++){ const bh = Math.sqrt(bins[i])/top*(h - 6); ctx.fillRect(i*w/256, h - bh, Math.max(1, w/256 - 0.3), bh); }
+    ctx.globalAlpha = 1;
+    const nm = normOf(f), lut = lutOf(f);
+    if (!nm.table){
+      ctx.setLineDash([3, 3]); ctx.strokeStyle = muted; ctx.lineWidth = 1;
+      for (const L of [nm.lo, nm.hi]) if (L >= 0 && L <= 65535){ const x = L/65535*w; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+      ctx.setLineDash([]);
+    }
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.6; ctx.beginPath();
+    for (let x = 0; x <= w; x++){ const y = h - 3 - lut[Math.min(65535, Math.round(x/w*65535))]/255*(h - 6); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+    const c = f.crop, sat = c.w*c.h - st.n, satTxt = sat ? `; ${sig(100*sat/(c.w*c.h), 2)} % of the crop saturated, left out` : '';
+    const rf = refFile();
+    const what = intensity.mode === 'none' ? 'The levels as acquired: 0 is black, 65535 white'
+      : intensity.mode === 'percentile' ? `Black at level ${Math.round(nm.lo)}, white at ${Math.round(nm.hi)} (of 65535)`
+      : intensity.mode === 'meansd' ? `Crop mean ${Math.round(st.mean)}, SD ${Math.round(st.sd)}, given those of ${rf ? rf.label : '—'} (${Math.round(statsOf(rf || f).mean)}, ${Math.round(statsOf(rf || f).sd)})`
+      : `The histogram of ${rf ? rf.label : '—'}`;
+    $('semHistNote').textContent = what + satTxt + '.';
+  }
+  function readField(el, lo, hi){
+    const v = parseFloat(String(el.value).trim().replace(',', '.'));
+    if (!Number.isFinite(v) || v < lo || v > hi){ flashFieldInvalid(el); return null; }
+    return v;
+  }
+  for (const [id, [k, lo, hi]] of Object.entries(INT_FIELDS)){
+    const el = $(id);
+    el.addEventListener('keydown', e=>{ if (e.key === 'Enter') el.blur(); });
+    el.addEventListener('change', ()=>{
+      const v = readField(el, lo, hi);
+      if (v == null || !files.length){ renderIntensity(); return; }
+      intensity[k] = v; refreshLevels(); hist.commit();
+    });
+  }
+  for (const [id, [k, lo, hi]] of Object.entries(ADJ_FIELDS)){
+    const el = $(id);
+    el.addEventListener('keydown', e=>{ if (e.key === 'Enter') el.blur(); });
+    el.addEventListener('change', ()=>{
+      const f = files[cur], v = readField(el, lo, hi);
+      if (v == null || !f){ renderIntensity(); return; }
+      f.adj = { ...(f.adj || ADJ_DEF), [k]: v }; refreshLevels(); hist.commit();
+    });
+  }
+  $('semNorm').addEventListener('change', e=>{ intensity.mode = e.target.value; refreshLevels(); hist.commit(); });
+  $('semRef').addEventListener('change', e=>{ intensity.ref = e.target.value; refreshLevels(); hist.commit(); });
+  $('semRefOnly').addEventListener('change', e=>{ const rf = refFile(); if (!rf) return; rf.refOnly = e.target.checked; renderThumbs(); hist.commit(); });
+  $('semAdjReset').addEventListener('click', ()=>{ const f = files[cur]; if (!f) return; f.adj = { ...ADJ_DEF }; refreshLevels(); hist.commit(); });
+  $('semIntReset').addEventListener('click', ()=>{ intensity = { ...INT_DEF, ref: intensity.ref }; refreshLevels(); hist.commit(); });
 
   /* ---- CSV: each image's metadata and crop ---- */
   registerCsvExport('sem', ()=>{
     if (!files.length) return [];
     let t = csvLine(['file', 'sample', 'magnification', 'pixel_size_nm', 'field_of_view_um', 'HV_kV', 'WD_mm', 'detector', 'detector_gain', 'detector_offset', 'date', 'time',
-      'image_width_px', 'image_height_px', 'info_bar_rows', 'crop_x_px', 'crop_y_px', 'crop_width_px', 'crop_height_px', 'crop_width_um', 'crop_height_um']);
+      'image_width_px', 'image_height_px', 'info_bar_rows', 'crop_x_px', 'crop_y_px', 'crop_width_px', 'crop_height_px', 'crop_width_um', 'crop_height_um',
+      'crop_mean_level', 'crop_sd_level', 'crop_saturated_pct', 'normalisation', 'reference', 'black_level', 'white_level', 'brightness_pct', 'contrast', 'gamma']);
     files.forEach(f=>{
       const e = dec(f); if (!e) return;
       const r = e.r, c = f.crop, um = v => fmtNum(v*r.pixelNm/1000, 6);
+      // The curve as applied: the levels a linear normalisation takes to black and white
+      // (none for the histogram's), and brightness, contrast and gamma with the image's
+      // correction in them.
+      const st = statsOf(f), nm = normOf(f), a = f.adj || ADJ_DEF, rf = refFile();
       t += csvLine([f.name, f.label, fmtNum(r.mag, 6), fmtNum(r.pixelNm, 6), fmtNum(r.fovUm, 6), fmtNum(r.kV, 4), fmtNum(r.wdMm, 4), r.detector, fmtNum(r.gain, 5), fmtNum(r.offset, 5), r.date, r.time,
-        r.width, r.imageH, r.strip, c.x, c.y, c.w, c.h, um(c.w), um(c.h)]);
+        r.width, r.imageH, r.strip, c.x, c.y, c.w, c.h, um(c.w), um(c.h),
+        fmtNum(st.mean, 1), fmtNum(st.sd, 1), fmtNum(100*(c.w*c.h - st.n)/(c.w*c.h), 3), intensity.mode, usesRef() && rf ? rf.label : '',
+        nm.table ? '' : fmtNum(nm.lo, 1), nm.table ? '' : fmtNum(nm.hi, 1), fmtNum(intensity.b + a.b, 3), fmtNum(intensity.c*a.c, 4), fmtNum(intensity.g*a.g, 4)]);
     });
     return [{ name: 'sem_images.csv', text: t }];
   });

@@ -129,7 +129,7 @@
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg></div>
             <div class="home-card-text">
               <h3 class="txt-tile">SEM</h3>
-              <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), and cropped.</p>
+              <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), cropped and normalised in intensity.</p>
             </div>
           </div>
         </div>
@@ -673,9 +673,59 @@
         </div>
         <div class="sem-thumbs" id="semThumbs"></div>
       </div>
+      <div class="card" id="semIntensityCard" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Intensity</h3>
+        <div class="instr-block">Each image's grey levels go through one curve, drawn over the histogram of its crop. First the <b>normalisation</b>, the same for all: none (the levels as acquired); a stretch of each image between two percentiles of its own levels; or the <b>reference</b> image's mean and standard deviation, or its whole histogram, given to every image. Then contrast (about mid-grey), brightness and gamma (above 1 the mid-tones brighten): the values for all images, and each image's own correction on top. Statistics come from each crop, its saturated pixels left out. The reference can be one of the images, or one loaded only for this and kept out of the figure.</div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left">
+                <button class="btn nav-arrow" id="semIPrev" aria-label="Previous image" title="Previous image">&#8249;</button>
+                <button class="btn nav-arrow" id="semINext" aria-label="Next image" title="Next image">&#8250;</button>
+                <span class="txt-caption" id="semICurName">&mdash;</span>
+              </div>
+            </div>
+            <div class="sem-preview"><canvas id="semPreview"></canvas></div>
+            <div class="sem-hist"><canvas id="semHist"></canvas></div>
+            <div class="txt-meta" id="semHistNote"></div>
+          </div>
+          <div class="col mw260" style="align-self:flex-start">
+            <div class="txt-mini param-head">All images</div>
+            <label class="txt-label" for="semNorm">Normalisation</label>
+            <select id="semNorm">
+              <option value="none">none (as acquired)</option>
+              <option value="percentile">percentile stretch</option>
+              <option value="meansd">mean and SD of the reference</option>
+              <option value="hist">histogram of the reference</option>
+            </select>
+            <div class="field-half">
+              <div><label class="txt-label" for="semPLo">Black at (%)</label><input type="text" inputmode="decimal" id="semPLo"></div>
+              <div><label class="txt-label" for="semPHi">White at (%)</label><input type="text" inputmode="decimal" id="semPHi"></div>
+            </div>
+            <label class="txt-label" for="semRef">Reference</label>
+            <select id="semRef"></select>
+            <label class="sem-check" title="The reference is used only to normalise the others, and is not placed in the figure"><input type="checkbox" id="semRefOnly"> Reference only (not in the figure)</label>
+            <div class="sem-bcg">
+              <div><label class="txt-label" for="semB">Brightness (%)</label><input type="text" inputmode="decimal" id="semB"></div>
+              <div><label class="txt-label" for="semC">Contrast</label><input type="text" inputmode="decimal" id="semC"></div>
+              <div><label class="txt-label" for="semG">Gamma</label><input type="text" inputmode="decimal" id="semG"></div>
+            </div>
+            <div class="txt-mini param-head" style="margin-top:16px">This image, on top</div>
+            <div class="sem-bcg">
+              <div><label class="txt-label" for="semBi">Brightness (%)</label><input type="text" inputmode="decimal" id="semBi"></div>
+              <div><label class="txt-label" for="semCi">Contrast</label><input type="text" inputmode="decimal" id="semCi"></div>
+              <div><label class="txt-label" for="semGi">Gamma</label><input type="text" inputmode="decimal" id="semGi"></div>
+            </div>
+            <div class="sem-crop-btns">
+              <button class="btn" type="button" id="semAdjReset" title="This image's own correction back to none">No correction</button>
+              <button class="btn" type="button" id="semIntReset" title="Normalisation, brightness, contrast and gamma back to their defaults, for all images">Defaults</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v436</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v437</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

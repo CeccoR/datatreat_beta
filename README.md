@@ -183,7 +183,7 @@ The app natively reads Bruker BES3T files:
 
 ### 5. SEM (Scanning Electron Microscopy)
 
-Tescan SEM images, read with their metadata and cropped (more in [SEM.md](SEM.md)).
+Tescan SEM images, read with their metadata, cropped and brought to comparable grey levels (more in [SEM.md](SEM.md)).
 
 **Instrument compatibility**: Tescan (the TIFF files the Tescan software saves)  
 **File format**: grey TIFF, 8 or 16 bits, uncompressed, with Tescan's own metadata inside it (the `.hdr` beside it is not needed)
@@ -193,7 +193,8 @@ Tescan SEM images, read with their metadata and cropped (more in [SEM.md](SEM.md
 1. **Upload the `.tif` files.** Each is read with its pixel size, magnification, field of view, beam (kV, working distance) and detector (gain, offset). The info bar under the image is left out by the height the file gives for it. A file of another kind is not loaded, and the list under the drop zone says why.
 2. **Crop.** Each image starts whole. Drag the frame's handles or sides to resize it, inside it to move it, outside to pan; the wheel zooms. The fields give the crop in pixels, with its size in µm. A ratio (1:1, 4:3, 3:2 or free) holds while resizing.
 3. **Several images.** *Copy to…* gives other images the current crop; *Linked* images share one crop. A crop larger than an image is narrowed to fit it, and the image is marked.
-4. Export the images' metadata and crops as CSV. The project keeps each file's own bytes; the images themselves are never changed.
+4. **Intensity.** A normalisation for all images: none, each image stretched between two percentiles of its own levels, or the mean and SD, or the whole histogram, of a reference image (one of them, or one loaded only for this and kept out of the figure). Then contrast, brightness and gamma, for all images, with each image's own correction on top. The statistics are the crop's, with saturated pixels left out.
+5. Export the images' metadata, crops and intensity settings as CSV. The project keeps each file's own bytes; the images themselves are never changed.
 
 ---
 
