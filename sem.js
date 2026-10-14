@@ -59,6 +59,8 @@ import { readTescanTiff } from './sem-read.js';
   // The groups (Groups and scale): [{ id, name, named (typed by the user), mode
   // ('common' | 'own'), members (the images' ids) }].
   let groups = [];
+  // The figure's settings (sem-figure.js), null until it is first opened.
+  let figure = null;
   // id → { r (readTescanTiff's), small (a box-averaged copy, for the thumbnails) }
   const decoded = new Map();
   // A copy of the image some 112 px across, each pixel the mean of a k × k block, kept
@@ -277,6 +279,7 @@ import { readTescanTiff } from './sem-read.js';
     document.getElementById('semWorkspace').style.display = files.length ? 'block' : 'none';
     document.getElementById('semIntensityCard').style.display = files.length ? 'block' : 'none';
     document.getElementById('semGroupsCard').style.display = files.length ? 'block' : 'none';
+    document.getElementById('semFigureCard').style.display = files.length ? 'block' : 'none';
     syncGroups();
     // The editor's image is rebuilt: the files, and with them the reference, may differ.
     off = null;
@@ -287,12 +290,13 @@ import { readTescanTiff } from './sem-read.js';
   /* ---- Undo / project state ---- */
   function semSnapshot(){
     return { files: allFiles.map(f=> ({ ...f, crop: { ...f.crop }, adj: { ...(f.adj || ADJ_DEF) } })), cur, intensity: { ...intensity },
-      groups: groups.map(g=> ({ ...g, members: g.members.slice() })) };
+      groups: groups.map(g=> ({ ...g, members: g.members.slice() })), figure: figure ? JSON.parse(JSON.stringify(figure)) : null };
   }
   function semRestore(s){
     allFiles = (s && s.files || []).map(f=> ({ ...f, crop: { ...f.crop }, adj: { ...ADJ_DEF, ...(f.adj || {}) }, raw: f.raw instanceof RawRef ? f.raw : new RawRef(f.raw.id, f.raw.b64) }));
     intensity = { ...INT_DEF, ...(s && s.intensity || {}) };
     groups = (s && s.groups || []).map(g=> ({ ...g, members: (g.members || []).slice() }));
+    figure = s && s.figure ? JSON.parse(JSON.stringify(s.figure)) : null;
     // Images whose bytes no longer read are left out of the list, and said so.
     const lost = allFiles.filter(f=> !dec(f));
     allFiles = allFiles.filter(f=> !lost.includes(f));
@@ -301,6 +305,8 @@ import { readTescanTiff } from './sem-read.js';
     cur = s && Number.isInteger(s.cur) ? s.cur : 0;
     rebuildAlerts();
     afterFilesChange();
+    // An undo with the figure open: it shows the settings now in force.
+    if (figApi && figApi.open) figApi.refresh();
   }
   const hist = registerHistory('sem', semSnapshot, semRestore);
   registerTabRedraw('sem', ()=>{ if (files.length){ fitView(); drawEditor(); drawPreview(); drawHist(); } });
@@ -790,6 +796,27 @@ import { readTescanTiff } from './sem-read.js';
     groups = [];
     syncGroups(); renderGroups(); renderFields(); drawEditor();
     hist.commit();
+  });
+
+  /* ---- The figure (sem-figure.js, loaded when first opened) ----
+     It gets the images in the figure, in the file list's order, each as the figure
+     takes it: its group, its size in the figure's pixels, and a key that changes
+     whenever its pixels would (its narrowed crop, the curve and what the curve is
+     computed from), so that it is drawn again only then. */
+  let figApi = null;
+  function figureImages(){
+    const rf = refFile(), refKey = usesRef() && rf ? `${rf.raw.id}:${JSON.stringify(rf.crop)}` : '';
+    return files.filter(inFigure).map(f=>{
+      const o = outOf(f), g = groupOf(f);
+      if (!o || !g) return null;
+      return { id: f.raw.id, label: f.label, group: { id: g.id, name: g.name, mode: g.mode }, w: o.w, h: o.h, pxNm: o.px,
+        key: JSON.stringify([o, intensity, f.adj || ADJ_DEF, refKey]), canvas: fit => outCanvas(f, fit) };
+    }).filter(Boolean);
+  }
+  document.getElementById('semFigOpen').addEventListener('click', async ()=>{
+    if (!files.length) return;
+    const mod = await import('./sem-figure.js');
+    figApi = mod.openSemFigure({ images: figureImages, getFig: ()=> figure, setFig: f=>{ figure = f; hist.commit(); } });
   });
 
   /* ---- The intensity card ---- */

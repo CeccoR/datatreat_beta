@@ -1,8 +1,15 @@
 # SEM module
 
-The SEM module takes Tescan images, reads their metadata, crops them, sets their grey
-levels, and groups them by scale. A later version is planned to lay them out into
-figures. The code is in `sem-read.js` (reading) and `sem.js` (the module).
+The SEM module takes Tescan images and works on them in five steps:
+
+1. it reads them with their metadata;
+2. it crops them;
+3. it sets their grey levels;
+4. it groups them by scale;
+5. it lays them out into a figure with scale bars.
+
+The code is in three files: `sem-read.js` (reading), `sem.js` (the module) and
+`sem-figure.js` (the figure).
 
 ## 1. Files
 
@@ -224,9 +231,66 @@ sizes:
 **A narrower crop on 5 kx.** Cropping 5 kx to 800 px (43.63 µm) narrows the other
 image's crop to 873 px of its own pixels (43.65 µm), taken to 800 × 800.
 
-## 5. Project and export
+## 5. Figure
 
-### 5.1 How a project stores the images
+### 5.1 The page
+
+The images are laid out as the figure composer (`figure.js`) lays out plots, with the
+same modal and controls:
+- one page in millimetres, previewed as it will be exported, which the wheel zooms and a drag pans;
+- the composer's fonts (Inter embedded in the files);
+- export as SVG (with the images in it) or as PNG at the chosen dpi, or a PNG copied to the clipboard.
+
+There are no axes and no legend.
+
+### 5.2 Panels
+
+**Which images.** Each image in the figure is one panel: those that are included, and
+not a reference kept out of the figure. It enters as its group made it (§4) and through
+its curve (§3). The preview uses a copy reduced to 520 px; the export uses the full one.
+
+**The grid.** By default it is the most compact rectangle: ⌈√N⌉ columns and ⌈N/columns⌉
+rows (12 images give 4 × 3, not 6 × 2). It can be set by hand; rows are added when too
+few are given.
+- The columns are equal.
+- A row is as tall as its tallest image at that width.
+- The panels are a gap apart (1 mm by default).
+- The height follows from the layout unless set by hand. A set height narrows the images to fit (never widens them), with the grid centred.
+
+**Order.** It starts as the file list's. A panel dragged onto another goes there, and
+the others move along. *As the file list* puts the order back.
+
+**Names.** Each panel carries its sample's name, editable per panel:
+- in a corner of the image (top left by default) or above or below it;
+- by default white with a dark outline, which reads on any grey;
+- the colour and the outline can be changed.
+
+**Letters.** (a), (b)… in the panels' order, off by default, in the styles a, (a), A
+and (A).
+- They are placed apart from the name: in a corner, where a name sharing the corner moves one line in, or above the image.
+- Or they are placed before the name.
+
+### 5.3 Scale bars
+
+- **Which panels.** A group at common scale has one bar, in its last panel in the figure's order. A group at its own scale has one in every panel.
+- **Length.** A round 1, 2 or 5 × 10ⁿ µm nearest (on a log scale) to 22 % of the panel's width, unless typed: any value, as 4.56 µm. It reads in nm under 1 µm.
+- **Placing.** The text is centred over the bar, or flush with its outer end when wider than a short bar. The corner is bottom right by default, the thickness 0.7 mm.
+
+### 5.4 Settings
+
+The figure's settings are the module's: they are saved with the project, and undone
+and redone with it (Ctrl+Z inside the open figure too).
+
+**Checked** on the user's two images and two copies with other pixel sizes, four panels:
+- **The grid.** It came out 2 × 2: 175 × 175 mm, 4134 × 4134 px at 600 dpi.
+- **The bars.** There were two, one per group: 10 µm in the 5 kx group's last panel, 2 µm in the 20 kx group's.
+- **Editing.** A typed bar of 4.56 µm, letters, a dragged panel and a 4 × 1 grid were each taken up.
+- **The exports.** The PNG came out 4134 × 1016 px. The SVG was 175 mm wide, held the 4 images, and had the font embedded.
+- **Reload.** The order, the grid and the bar survived it.
+
+## 6. Project and export
+
+### 6.1 How a project stores the images
 
 A project keeps each file's own bytes, as base64, in the module's state.
 
@@ -236,7 +300,7 @@ A project keeps each file's own bytes, as base64, in the module's state.
 - **The id.** It is a hash of the bytes. A second copy of a file already loaded, whatever its name, is reported as already loaded.
 - **Restoring.** Opened again, a project's images are read again from their bytes. One that no longer reads is left out, with a note.
 
-### 5.2 CSV
+### 6.2 CSV
 
 The CSV holds one row per included image, with these columns:
 
@@ -276,3 +340,7 @@ a correction per image. The statistics come from the crop.
 **v438**: groups and scale (§4). The images are grouped by pixel size (within 10 %),
 named by magnification, and editable. A group at common scale is brought to its largest
 pixel size and its smallest field, so one scale bar serves it.
+
+**v439**: the figure (§5). The images are laid out in the figure composer's page: an
+automatic grid, draggable panels, names, letters, a scale bar per group, and PNG/SVG
+export.

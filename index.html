@@ -129,7 +129,7 @@
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg></div>
             <div class="home-card-text">
               <h3 class="txt-tile">SEM</h3>
-              <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), cropped, normalised in intensity and grouped by scale.</p>
+              <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), cropped, normalised in intensity, grouped by scale and laid out into figures with scale bars.</p>
             </div>
           </div>
         </div>
@@ -730,9 +730,14 @@
         <div id="semGroups"></div>
         <div class="sem-crop-btns" style="max-width:260px"><button class="btn" type="button" id="semRegroup" title="The groups made again from the images' pixel sizes, with their names">Regroup</button></div>
       </div>
+      <div class="card" id="semFigureCard" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Figure</h3>
+        <div class="instr-block">The images laid out for a paper, as the figure composer lays out plots: one page in millimetres, previewed as it will be exported (PNG at the chosen dpi, or SVG). The panels form the most compact grid (4 &times; 3 for 12 images) in the file list's order; drag a panel onto another to move it. Each carries its sample's name; letters (a, b&hellip;) can be added, apart from the name or before it. Each group at common scale has one scale bar, in its last panel; a group at its own scale, one in every panel; a bar's length is a round value unless typed. The settings are saved with the project.</div>
+        <button class="btn primary" type="button" id="semFigOpen" style="width:100%;max-width:260px">Figure composer</button>
+      </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v438</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v439</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

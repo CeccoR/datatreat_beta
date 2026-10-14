@@ -2920,3 +2920,9 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   .sem-gimg { width: calc(50% - 6px); }
   .sem-gimg-pic canvas { max-width: 100%; }
 }
+
+/* ===== SEM: the figure's panels in the preview ===== */
+.sem-fig-svg .sem-fig-panel { cursor: move; }
+.sem-fig-svg .sem-fig-panel.is-dragged { opacity: 0.55; }
+.sem-fig-svg .sem-fig-panel.is-target image { outline: 3px solid var(--accent); }
+.sem-fig-svg .sem-fig-panel.is-target { filter: drop-shadow(0 0 4px var(--accent)); }

@@ -3367,6 +3367,10 @@ function wireControls(){
 
 /* ---- Modal ----------------------------------------------------------------- */
 
+// Shared with the SEM figure (sem-figure.js), which lays out images with the same page,
+// fonts and export.
+export { FONTS, PX_MM, PT_PX, saveBlob, interFontCss };
+
 export function openFigureEditor(plot, opts){
   if (!plot) return;
   srcPlot = plot; srcOpts = opts || {};
