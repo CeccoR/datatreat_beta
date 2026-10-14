@@ -1107,11 +1107,11 @@ function redrawAll(){
   if (fn){ try{ fn(); }catch(e){} }
   for (const m in _tabRedraw){ if (m !== _activeTab) _needsRedraw[m] = true; }
 }
-const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
+const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','projects','settings'];
 // The sections that keep a URL hash. Module sections are reached through an open
 // project tab, so they are deliberately not addressable.
 const HASH_TABS = ['home','projects','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sem:'DataTreat · SEM', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -1212,7 +1212,7 @@ document.addEventListener('keydown', e=>{
 // ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
 // Selectors: the Tauc cards are built at run time, each with its own pair, and the
 // first one on show is the one pressed (every card steps the same sample).
-const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#xrdPrev','#xrdNext'] };
+const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#xrdPrev','#xrdNext'], sem:['#semPrev','#semNext'] };
 document.addEventListener('keydown', e=>{
   if (e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1435,8 +1435,8 @@ function applyTheme(theme, persist){
 
 /* Module state access for the session manager: reuse each module's registered
    undo snapshot()/restore() as the canonical serialize/deserialize. */
-const MODULES = ['tauc','xrd','gc','epr'];
-const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR' };
+const MODULES = ['tauc','xrd','gc','epr','sem'];
+const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM' };
 function getModuleState(mod){
   const st = _histories[mod];
   return st ? st._snap() : null;

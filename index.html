@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DataTreat</title>
-  <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (UV-Vis DRS Tauc plots, XRPD, GC H₂ rates, EPR). All processing runs locally in your browser; no data is uploaded.">
+  <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (UV-Vis DRS Tauc plots, XRPD, GC H₂ rates, EPR, SEM images). All processing runs locally in your browser; no data is uploaded.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <!-- PWA: installable + offline app shell -->
   <link rel="manifest" href="manifest.webmanifest">
@@ -14,13 +14,13 @@
   <!-- Open Graph / social preview -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="DataTreat">
-  <meta property="og:description" content="Browser-based scientific data analysis for spectroscopy and chromatography — UV-Vis DRS Tauc plots, XRPD, GC, EPR. Runs entirely in your browser; no data leaves your device.">
+  <meta property="og:description" content="Browser-based scientific data analysis for spectroscopy and chromatography — UV-Vis DRS Tauc plots, XRPD, GC, EPR, SEM images. Runs entirely in your browser; no data leaves your device.">
   <meta property="og:url" content="https://ceccor.github.io/datatreat_beta/">
   <meta property="og:image" content="https://ceccor.github.io/datatreat_beta/og-image.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="DataTreat — browser-based scientific data analysis (UV-Vis DRS, XRPD, GC, EPR)">
+  <meta property="og:image:alt" content="DataTreat — browser-based scientific data analysis (UV-Vis DRS, XRPD, GC, EPR, SEM)">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DataTreat">
   <meta name="twitter:description" content="Browser-based scientific data analysis for spectroscopy and chromatography. Runs entirely in your browser; no data leaves your device.">
@@ -123,6 +123,13 @@
             <div class="home-card-text">
               <h3 class="txt-tile">EPR</h3>
               <p>Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.</p>
+            </div>
+          </div>
+          <div class="home-card" data-go="sem">
+            <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg></div>
+            <div class="home-card-text">
+              <h3 class="txt-tile">SEM</h3>
+              <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), and cropped.</p>
             </div>
           </div>
         </div>
@@ -603,7 +610,72 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v435</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <!-- ============ SEM ============ -->
+    <section class="tab" id="tab-sem" role="tabpanel" tabindex="0">
+      <div class="card">
+        <h3 class="txt-head" style="margin:0 0 12px">File</h3>
+        <div class="instr-block" style="max-width:100%">Tescan SEM images: the TIFF files the Tescan software saves, with their metadata inside (pixel size, magnification, beam and detector). The info bar under each image is left out, by the height the file gives for it. Other files are not loaded, and the list under the drop zone says why; a .hdr beside its .tif is not needed, and is skipped.</div>
+        <div class="dropzone" id="semDropzone">
+          <div class="dz-icon">&#10514;</div>
+          <div class="dz-title">Drag here your files, or click to select them.</div>
+          <div class="txt-meta">.tif (Tescan)</div>
+          <input type="file" id="semFiles" multiple accept=".tif,.tiff,.TIF,.TIFF,.hdr" style="display:none">
+        </div>
+        <div id="semAlerts"></div>
+        <div id="semFileTableWrap"></div>
+      </div>
+      <div class="card" id="semWorkspace" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Crop</h3>
+        <div class="instr-block">Each image starts whole, its info bar left out. Drag the frame's handles to resize it, inside it to move it, outside it to pan; the wheel zooms, and a double click outside the frame fits the image again. A ratio, when locked, holds while resizing. <b>Copy to&hellip;</b> gives other images this crop; <b>linked</b> images share one crop, narrowed to fit wherever an image is smaller. The image itself is never changed: the crop is kept as a rectangle on it.</div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            <div class="plot-nav-row">
+              <div class="plot-nav-left">
+                <button class="btn nav-arrow" id="semPrev" aria-label="Previous image" title="Previous image (&#8592;)">&#8249;</button>
+                <button class="btn nav-arrow" id="semNext" aria-label="Next image" title="Next image (&#8594;)">&#8250;</button>
+                <span class="txt-caption" id="semCurName">&mdash;</span>
+              </div>
+              <div class="sem-zoom">
+                <button class="btn nav-arrow" id="semZoomOut" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
+                <button class="btn nav-arrow sem-fit" id="semZoomFit" type="button" title="Fit the image">Fit</button>
+                <button class="btn nav-arrow" id="semZoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+              </div>
+            </div>
+            <div class="sem-crop-view"><canvas id="semCropCanvas"></canvas></div>
+          </div>
+          <div class="col mw260" style="align-self:flex-start">
+            <div class="txt-mini param-head">Crop (px)</div>
+            <div class="field-half">
+              <div><label class="txt-label" for="semCropX">X</label><input type="text" inputmode="numeric" id="semCropX"></div>
+              <div><label class="txt-label" for="semCropY">Y</label><input type="text" inputmode="numeric" id="semCropY"></div>
+            </div>
+            <div class="field-half">
+              <div><label class="txt-label" for="semCropW">Width</label><input type="text" inputmode="numeric" id="semCropW"></div>
+              <div><label class="txt-label" for="semCropH">Height</label><input type="text" inputmode="numeric" id="semCropH"></div>
+            </div>
+            <div class="txt-meta sem-crop-um" id="semCropUm"></div>
+            <label class="txt-label" for="semAspect">Ratio</label>
+            <select id="semAspect">
+              <option value="1:1">1:1 (square)</option>
+              <option value="4:3">4:3</option>
+              <option value="3:2">3:2</option>
+              <option value="free">free</option>
+            </select>
+            <label class="sem-check" title="Linked images share one crop: moving or resizing it on one moves it on all"><input type="checkbox" id="semLinked"> Linked</label>
+            <div class="alert warn sem-crop-note" id="semCropNote" style="display:none"></div>
+            <div class="sem-crop-btns">
+              <button class="btn" type="button" id="semCropReset" title="The whole image, its info bar left out">Default</button>
+              <button class="btn" type="button" id="semCopyBtn" title="Give other images this crop">Copy to&hellip;</button>
+            </div>
+            <div class="txt-mini param-head" style="margin-top:16px">Image</div>
+            <div id="semInfo"></div>
+          </div>
+        </div>
+        <div class="sem-thumbs" id="semThumbs"></div>
+      </div>
+    </section>
+
+    <footer>DataTreat <span class="app-version">v436</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
@@ -628,6 +700,16 @@
       <button class="btn primary" id="xrdRvSetDone" type="button" style="width:100%;margin-top:16px">Done</button>
     </div>
   </div>
+  <!-- SEM: copy the current crop to other images -->
+  <div id="semCopyModal" class="modal-backdrop" style="display:none">
+    <div class="modal-box">
+      <h3 class="txt-head" style="margin:0 0 4px">Copy the crop to&hellip;</h3>
+      <p class="txt-meta" style="margin:0 0 12px">The same rectangle, in pixels, with its ratio; narrowed wherever an image is smaller.</p>
+      <label class="sem-copy-row sem-copy-all"><input type="checkbox" id="semCopyAll"> <span>All</span></label>
+      <div id="semCopyList"></div>
+      <button class="btn primary" id="semCopyApply" type="button" style="width:100%;margin-top:16px">Copy</button>
+    </div>
+  </div>
   <!-- New project: a mini home that asks which technique to start, then opens a tab -->
   <div id="projNewModal" class="modal-backdrop" style="display:none">
     <div class="modal-box">
@@ -638,6 +720,7 @@
         <button class="newproj-card" type="button" data-new-module="xrd"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H11 L14 6 L17 22 H25 L28 13 L31 22 H42"/></svg><span class="txt-tile">XRPD</span></button>
         <button class="newproj-card" type="button" data-new-module="gc"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H10 C13 22 13 8 16 8 C19 8 19 22 22 22 H28 C32 22 31 14 34 14 C37 14 37 22 40 22 H42"/></svg><span class="txt-tile">GC</span></button>
         <button class="newproj-card" type="button" data-new-module="epr"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 14 H15 L20 5 L24 21 L29 14 H42"/></svg><span class="txt-tile">EPR</span></button>
+        <button class="newproj-card" type="button" data-new-module="sem"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg><span class="txt-tile">SEM</span></button>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
         <button class="btn" type="button" data-new-cancel>Cancel</button>
@@ -669,6 +752,7 @@
   <script type="module" src="xrd.js"></script>
   <script type="module" src="epr.js"></script>
   <script type="module" src="gc.js"></script>
+  <script type="module" src="sem.js"></script>
   <script type="module" src="tabs.js"></script>
   <script type="module" src="sessions.js"></script>
   <!-- PWA update prompt: shown when a new service-worker version is ready -->

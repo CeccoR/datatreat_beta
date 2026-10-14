@@ -548,6 +548,7 @@ const TECH_INFO = {
   xrd:  'X-Ray Powder Diffraction. Diffractograms comparison, smoothing and normalization, with peak detection, Scherrer crystallite-size estimation and whole-pattern profile fitting.',
   gc:   'Gas Chromatography for H₂ production-rate assessment. Computes mean H₂ production rates over a chosen integration interval from time-resolved injection measurements.',
   epr:  'Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.',
+  sem:  'Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification, beam, detector), and cropped.',
 };
 const projectBar = document.getElementById('projectBar');
 const barInfoBtn = projectBar.querySelector('.pbar-info');

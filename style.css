@@ -2856,3 +2856,40 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   .fig-head { padding: 6px 10px; }
   .fig-foot { padding: 6px 10px; }
 }
+
+/* ===== SEM: the crop editor =====
+   The image and its crop are drawn in one canvas filling the pane (sem.js sets the
+   pane's height from the image's proportions); touch-action none so a drag on a phone
+   moves the frame rather than the page. */
+.sem-zoom { display: flex; gap: 6px; margin-left: auto; }
+.btn.nav-arrow.sem-fit { padding: 0 10px; font-size: 11px; }
+.sem-crop-view {
+  position: relative; width: 100%; height: 320px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  overflow: hidden; touch-action: none; user-select: none;
+}
+.sem-crop-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sem-crop-um { margin: 8px 0 2px; }
+.sem-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer; font-size: 13px; }
+.sem-crop-note { margin-top: 10px; }
+.sem-crop-btns { display: flex; gap: 8px; margin-top: 12px; }
+.sem-crop-btns .btn { flex: 1; }
+.sem-info-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.sem-info-row > span:last-child { text-align: right; }
+/* Every image with its crop; the one in the editor outlined in the accent. */
+.sem-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.sem-thumb {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 122px; padding: 5px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); cursor: pointer;
+  font: inherit; transition: border-color 0.14s, color 0.14s;
+}
+.sem-thumb:hover { color: var(--text); }
+.sem-thumb.is-on { border-color: var(--accent); color: var(--text); }
+.sem-thumb canvas { display: block; max-width: 112px; height: auto; border-radius: 4px; }
+.sem-thumb-cap { font-size: 11px; max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sem-mag { display: inline-block; font-size: 12px; line-height: 1.3; white-space: nowrap; }
+/* The list's colour palette means nothing for images. */
+#semFileTableWrap .palette-pick-btn { display: none; }
+.modal-box label.sem-copy-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer; }
+.sem-copy-row .txt-meta { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.sem-copy-all { padding-bottom: 6px; border-bottom: 1px solid var(--line); }

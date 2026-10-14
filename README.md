@@ -181,6 +181,20 @@ The app natively reads Bruker BES3T files:
 - `.DTA` contains binary float64 signal values
 - B-field axis is reconstructed and corrected for microwave frequency
 
+### 5. SEM (Scanning Electron Microscopy)
+
+Tescan SEM images, read with their metadata and cropped (more in [SEM.md](SEM.md)).
+
+**Instrument compatibility**: Tescan (the TIFF files the Tescan software saves)  
+**File format**: grey TIFF, 8 or 16 bits, uncompressed, with Tescan's own metadata inside it (the `.hdr` beside it is not needed)
+
+**How to use**:
+
+1. **Upload the `.tif` files.** Each is read with its pixel size, magnification, field of view, beam (kV, working distance) and detector (gain, offset). The info bar under the image is left out by the height the file gives for it. A file of another kind is not loaded, and the list under the drop zone says why.
+2. **Crop.** Each image starts whole. Drag the frame's handles or sides to resize it, inside it to move it, outside to pan; the wheel zooms. The fields give the crop in pixels, with its size in µm. A ratio (1:1, 4:3, 3:2 or free) holds while resizing.
+3. **Several images.** *Copy to…* gives other images the current crop; *Linked* images share one crop. A crop larger than an image is narrowed to fit it, and the image is marked.
+4. Export the images' metadata and crops as CSV. The project keeps each file's own bytes; the images themselves are never changed.
+
 ---
 
 ## Data Export
