@@ -1,8 +1,8 @@
 # SEM module
 
-The SEM module takes Tescan images, reads their metadata, crops them, and sets their
-grey levels. Later versions are planned to normalise their scale and to lay them out
-into figures. The code is in `sem-read.js` (reading) and `sem.js` (the module).
+The SEM module takes Tescan images, reads their metadata, crops them, sets their grey
+levels, and groups them by scale. A later version is planned to lay them out into
+figures. The code is in `sem-read.js` (reading) and `sem.js` (the module).
 
 ## 1. Files
 
@@ -165,9 +165,68 @@ shows:
 
 The percentile stretch keeps each image's own content and only sets its range.
 
-## 4. Project and export
+## 4. Groups and scale
 
-### 4.1 How a project stores the images
+### 4.1 Grouping
+
+The images in the figure are grouped by pixel size: those that are included, and not a
+reference kept out of the figure.
+
+**The rule.** Two images are in one group when every pixel size in it lies within 10 %
+of the others (largest/smallest ≤ 1.10). A newly loaded image joins the first group it
+fits, else starts its own.
+
+**The name.** A group is named by the magnification of its image with the largest
+pixel size, the one its common scale brings the others to. A name typed in its field
+stays; emptied, it goes back to the magnification.
+
+**Editing.**
+- An image is moved to another group, or to a new one, with the menu under it. There can be up to one group per image.
+- Empty groups disappear.
+- **Regroup** starts again from the pixel sizes.
+
+### 4.2 Common scale and own scale
+
+A group's images share one scale bar in the figure.
+
+**At common scale** (the default), every image in the group is brought to:
+- **The group's largest pixel size.** The others are reduced, each new pixel the mean of the old ones it covers, in part where it covers them in part. They are never enlarged: nothing is invented.
+- **The group's smallest field of view**, in µm, width and height apart. Each crop is narrowed about its middle to it, and the crop editor shows the narrowed crop dashed.
+
+The resampling is done on the 16-bit levels, before the curve (§3). The user's crop is
+kept as it is, and the narrowing is recomputed whenever a crop in the group changes.
+
+**At own scale**, each image keeps its pixels and its crop, and gets its own scale bar.
+
+### 4.3 Examples
+
+These used the user's two images and two copies of them whose tags give other pixel
+sizes:
+
+| Image | Pixel size | Field |
+|---|---|---|
+| 5 kx | 54.53 nm | 55.84 µm |
+| "5.45 kx" | 50.0 nm | 51.2 µm |
+| 20 kx | 13.63 nm | 13.96 µm |
+| "21.0 kx" | 13.0 nm | 13.31 µm |
+
+**Grouping.** They fell into two groups (ratios 1.09 and 1.05). The groups were named
+"5.00 kx" and "20.0 kx".
+
+**Group "5.00 kx".**
+- It is at 54.53 nm a pixel, with a field of 51.21 × 51.21 µm, 939 × 939 px.
+- The 5 kx crop is narrowed by 16 % of its area.
+- The 5.45 kx image keeps its whole crop and is reduced ×0.917.
+
+**Group "20.0 kx".**
+- It is at 13.63 nm a pixel, with a field of 13.32 µm, 977 px.
+
+**A narrower crop on 5 kx.** Cropping 5 kx to 800 px (43.63 µm) narrows the other
+image's crop to 873 px of its own pixels (43.65 µm), taken to 800 × 800.
+
+## 5. Project and export
+
+### 5.1 How a project stores the images
 
 A project keeps each file's own bytes, as base64, in the module's state.
 
@@ -177,7 +236,7 @@ A project keeps each file's own bytes, as base64, in the module's state.
 - **The id.** It is a hash of the bytes. A second copy of a file already loaded, whatever its name, is reported as already loaded.
 - **Restoring.** Opened again, a project's images are read again from their bytes. One that no longer reads is left out, with a note.
 
-### 4.2 CSV
+### 5.2 CSV
 
 The CSV holds one row per included image, with these columns:
 
@@ -198,6 +257,12 @@ The CSV holds one row per included image, with these columns:
 | `normalisation`, `reference` | the normalisation, and the reference's label where it uses one |
 | `black_level`, `white_level` | the levels a linear normalisation takes to black and white (empty for the histogram) |
 | `brightness_pct`, `contrast`, `gamma` | as applied, the image's own correction included |
+| `group`, `scale` | the image's group, and its scale (common or own) |
+| `figure_x_px`, `figure_y_px`, `figure_width_px`, `figure_height_px` | the part of the original the figure takes (the crop, narrowed in its group) |
+| `figure_pixel_nm` | the pixel size in the figure |
+| `figure_out_width_px`, `figure_out_height_px` | the image's size there |
+
+The group columns are empty for a reference kept out of the figure.
 
 ## Changelog
 
@@ -207,3 +272,7 @@ out by `ImageStripSize`, and cropped.
 **v437**: intensity (§3): a normalisation for all images (none, percentile stretch,
 or the reference's mean and SD or histogram), then contrast, brightness and gamma, with
 a correction per image. The statistics come from the crop.
+
+**v438**: groups and scale (§4). The images are grouped by pixel size (within 10 %),
+named by magnification, and editable. A group at common scale is brought to its largest
+pixel size and its smallest field, so one scale bar serves it.

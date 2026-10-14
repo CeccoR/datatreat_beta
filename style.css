@@ -2903,3 +2903,20 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 /* A field that the normalisation does not use stays in place, greyed. */
 #semIntensityCard input:disabled, #semIntensityCard select:disabled { opacity: 0.45; cursor: default; }
 #semIntensityCard .sem-check:has(input:disabled) { opacity: 0.45; cursor: default; }
+
+/* ===== SEM: groups and scale ===== */
+.sem-crop-group { margin-top: 10px; }
+.sem-group { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: var(--panel2); }
+.sem-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.sem-group-head .sem-group-name { width: 160px; }
+.sem-group-head .sem-group-mode { width: 150px; }
+.sem-group-info { flex: 1 1 220px; }
+.sem-group-imgs { display: flex; flex-wrap: wrap; gap: 12px; }
+.sem-gimg { display: flex; flex-direction: column; gap: 4px; width: 150px; }
+.sem-gimg-pic canvas { display: block; max-width: 150px; height: auto; border-radius: 4px; }
+.sem-gimg .txt-meta { font-size: 11px; min-height: 2.7em; }
+/* A phone's column: two images a row. */
+@media (max-width: 600px) {
+  .sem-gimg { width: calc(50% - 6px); }
+  .sem-gimg-pic canvas { max-width: 100%; }
+}

@@ -129,7 +129,7 @@
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg></div>
             <div class="home-card-text">
               <h3 class="txt-tile">SEM</h3>
-              <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), cropped and normalised in intensity.</p>
+              <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), cropped, normalised in intensity and grouped by scale.</p>
             </div>
           </div>
         </div>
@@ -663,6 +663,7 @@
             </select>
             <label class="sem-check" title="Linked images share one crop: moving or resizing it on one moves it on all"><input type="checkbox" id="semLinked"> Linked</label>
             <div class="alert warn sem-crop-note" id="semCropNote" style="display:none"></div>
+            <div class="txt-meta sem-crop-group" id="semCropGroup"></div>
             <div class="sem-crop-btns">
               <button class="btn" type="button" id="semCropReset" title="The whole image, its info bar left out">Default</button>
               <button class="btn" type="button" id="semCopyBtn" title="Give other images this crop">Copy to&hellip;</button>
@@ -723,9 +724,15 @@
           </div>
         </div>
       </div>
+      <div class="card" id="semGroupsCard" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Groups and scale</h3>
+        <div class="instr-block">The images are grouped by pixel size (within 10 % of each other), each group named by its magnification; a group's images share one scale bar in the figure. At <b>common scale</b> a group's images are brought to its largest pixel size (the others reduced by averaging, never enlarged) and to its smallest field of view, each crop narrowed about its middle (dashed in the crop editor). At <b>own scale</b> each image keeps its pixels and its crop, and gets its own bar. Rename a group in its field; move an image to another group, or to a new one, with the menu under it. <b>Regroup</b> starts again from the magnifications.</div>
+        <div id="semGroups"></div>
+        <div class="sem-crop-btns" style="max-width:260px"><button class="btn" type="button" id="semRegroup" title="The groups made again from the images' pixel sizes, with their names">Regroup</button></div>
+      </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v437</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v438</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
