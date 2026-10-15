@@ -2857,37 +2857,71 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   .fig-foot { padding: 6px 10px; }
 }
 
-/* ===== SEM: the crop editor =====
-   The image and its crop are drawn in one canvas filling the pane (sem.js sets the
-   pane's height from the image's proportions); touch-action none so a drag on a phone
-   moves the frame rather than the page. */
-.sem-zoom { display: flex; gap: 6px; margin-left: auto; }
-.btn.nav-arrow.sem-fit { padding: 0 10px; font-size: 11px; }
+/* ===== SEM: crop and intensity =====
+   Two halves. On top, the image (with its toolbar and the histogram of its crop
+   under it) on the left; on the right, the images' thumbnails in a box over the
+   image's details, the two as tall as the left half together: the right half is
+   laid out inside a box that fills its cell (absolutely), so that its content never
+   sets the row's height, and the thumbnails scroll in theirs. Under them, the crop's
+   fields on the left, the intensity's on the right. One column on a phone. */
+.sem-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
+.sem-split-r { position: relative; min-height: 0; }
+.sem-split-in { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px; }
+.sem-box { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; min-height: 0; }
+.sem-box-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.sem-box-head .txt-meta { font-size: 11px; }
+.sem-thumbs-box { flex: 1 1 0; overflow-y: auto; }
+.sem-info-box { flex: 0 0 auto; }
+.sem-split-fields { margin-top: 18px; align-items: start; }
+.sem-row4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.sem-row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: end; margin-bottom: 10px; }
+.sem-row2 > .sem-check { margin: 0 0 9px; }
+.sem-row2 > .sem-crop-btns { margin: 0; }
+@media (max-width: 760px) {
+  .sem-split { grid-template-columns: minmax(0, 1fr); }
+  .sem-split-in { position: static; }
+  .sem-thumbs-box { flex: 0 0 auto; max-height: 300px; }
+  .sem-row4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* The editor: the image and its crop drawn in one canvas filling the pane (sem.js
+   sets the pane's height from the image's proportions); touch-action none so a drag
+   on a phone moves the frame rather than the page. */
 .sem-crop-view {
   position: relative; width: 100%; height: 320px;
   background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
   overflow: hidden; touch-action: none; user-select: none;
 }
 .sem-crop-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.sem-crop-um { margin: 8px 0 2px; }
+.sem-crop-um { margin: 8px 0 10px; }
 .sem-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer; font-size: 13px; }
 .sem-crop-note { margin-top: 10px; }
 .sem-crop-btns { display: flex; gap: 8px; margin-top: 12px; }
 .sem-crop-btns .btn { flex: 1; }
 .sem-info-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.sem-info-row:last-child { border-bottom: 0; }
 .sem-info-row > span:last-child { text-align: right; }
-/* Every image with its crop; the one in the editor outlined in the accent. */
-.sem-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+/* Every image with its crop; the one in the editor outlined in the accent. Its chain,
+   over its corner, links its crop to the other linked images' (lit when linked). */
+.sem-thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.sem-thumb-wrap { position: relative; }
 .sem-thumb {
-  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 122px; padding: 5px;
-  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100px; padding: 5px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); cursor: pointer;
   font: inherit; transition: border-color 0.14s, color 0.14s;
 }
 .sem-thumb:hover { color: var(--text); }
 .sem-thumb.is-on { border-color: var(--accent); color: var(--text); }
-.sem-thumb canvas { display: block; max-width: 112px; height: auto; border-radius: 4px; }
-.sem-thumb-cap { font-size: 11px; max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sem-mag { display: inline-block; font-size: 12px; line-height: 1.3; white-space: nowrap; }
+.sem-thumb canvas { display: block; max-width: 88px; max-height: 88px; width: auto; height: auto; border-radius: 4px; }
+.sem-thumb-cap { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.sem-link {
+  position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,0.35); border-radius: 50%; background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.75);
+  cursor: pointer; transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+button.sem-link:hover { color: #fff; border-color: #fff; }
+button.sem-link.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* The list's colour palette means nothing for images. */
 #semFileTableWrap .palette-pick-btn { display: none; }
 .modal-box label.sem-copy-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer; }
@@ -2895,39 +2929,59 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 .sem-copy-all { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
 
 /* ===== SEM: intensity ===== */
-.sem-preview { position: relative; width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.sem-preview canvas, .sem-hist canvas { display: block; width: 100%; height: 100%; }
+.sem-hist canvas { display: block; width: 100%; height: 100%; }
 .sem-hist { width: 100%; height: 120px; margin-top: 10px; }
 .sem-bcg { display: flex; gap: 8px; }
 .sem-bcg > div { flex: 1; min-width: 0; }
-/* A field that the normalisation does not use stays in place, greyed. */
-#semWorkspace input:disabled, #semWorkspace select:disabled { opacity: 0.45; cursor: default; }
+/* A field that the settings do not use stays in place, greyed. */
+#semWorkspace input:disabled, #semWorkspace select:disabled, #semWorkspace .btn:disabled { opacity: 0.45; cursor: default; }
 #semWorkspace .sem-check:has(input:disabled) { opacity: 0.45; cursor: default; }
 
-/* ===== SEM: groups and scale ===== */
+/* ===== SEM: groups and scale =====
+   A group is a box 4φ wide to 1 high: its name, scale and figure on the left, its
+   images in one row on the right, scrolling sideways when they do not fit. Where the
+   box is too narrow for that (a phone), it grows to hold them: aspect-ratio gives way
+   to the content. */
 .sem-crop-group { margin-top: 10px; }
-.sem-group { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: var(--panel2); }
-.sem-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
-.sem-group-head .sem-group-name { width: 160px; }
-.sem-group-head .sem-group-mode { width: 150px; }
-.sem-group-info { flex: 1 1 220px; }
-.sem-group-imgs { display: flex; flex-wrap: wrap; gap: 12px; }
-.sem-gimg { display: flex; flex-direction: column; gap: 4px; width: 150px; }
-.sem-gimg-pic canvas { display: block; max-width: 150px; height: auto; border-radius: 4px; }
-.sem-gimg .txt-meta { font-size: 11px; min-height: 2.7em; }
-/* A phone's column: two images a row. */
-@media (max-width: 600px) {
-  .sem-gimg { width: calc(50% - 6px); }
-  .sem-gimg-pic canvas { max-width: 100%; }
+.sem-group {
+  display: flex; align-items: center; gap: 16px; aspect-ratio: 6.4721 / 1;
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; background: var(--panel2);
 }
-
-
-/* Groups: an image dragged between them (sem.js) */
-/* A finger may scroll the page over the images; held still, it drags one (sem.js). */
+.sem-group-side { flex: 0 0 170px; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.sem-group-side .sem-group-mode { width: 100%; }
+/* The name as the project's: plain text at rest, its field shown on hover and while
+   edited, as wide as the name (sem.js fitGroupName); pulled out by its inset so that
+   the name at rest starts on the box's content edge. */
+input[type="text"].sem-group-name {
+  display: block; width: 160px; max-width: calc(100% + 10px); margin-left: -10px;
+  font-weight: 600; background: transparent; border-color: transparent;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+input[type="text"].sem-group-name:hover { border-color: var(--line); background: var(--panel); }
+input[type="text"].sem-group-name:focus { border-color: var(--accent); background: var(--panel); outline: none; }
+.sem-group-imgs { flex: 1 1 0; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 12px; overflow-x: auto; overflow-y: hidden; }
+.sem-gimg { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 112px; }
+.sem-gimg-pic canvas { display: block; max-width: 112px; max-height: 112px; width: auto; height: auto; border-radius: 4px; }
+.sem-gimg .sem-thumb-cap { max-width: 112px; }
+.sem-group-hint { display: flex; align-items: center; gap: 10px; }
+.sem-group.is-empty { border-style: dashed; }
+.sem-add-bar { margin: 0; }
+button.an-add.is-drop { border-color: var(--accent); }
+/* A phone: the name, scale and figure over the images; a scroller with no height of
+   its own (flex-basis 0) would collapse there, so the row takes its content's. */
+@media (max-width: 600px) {
+  .sem-group { flex-direction: column; align-items: stretch; gap: 10px; aspect-ratio: auto; }
+  .sem-group-side { flex: 0 0 auto; }
+  .sem-group-imgs { flex: 0 0 auto; padding-bottom: 4px; }
+  /* The paired fields one under the other: side by side they would wrap their labels. */
+  .sem-row2 { grid-template-columns: minmax(0, 1fr); }
+  .sem-row2 > .sem-check { margin: 0; }
+}
+/* An image dragged between groups. A finger may scroll the page over the images;
+   held still, it drags one (sem.js). */
 .sem-gimg { cursor: grab; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .sem-gimg.is-held .sem-gimg-pic canvas { box-shadow: 0 0 0 2px var(--accent); }
 .sem-gimg.is-dragged { opacity: 0.4; }
 .sem-group.is-drop { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-.sem-group-new { border-style: dashed; color: var(--muted); font-size: 13px; text-align: center; padding: 16px 10px; background: transparent; }
 .sem-drag-ghost { position: fixed; z-index: 1000; width: 72px; height: auto; pointer-events: none; transform: translate(-50%, -50%); border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); opacity: 0.9; }
-.sem-group-head .sem-group-fig { margin-left: auto; }

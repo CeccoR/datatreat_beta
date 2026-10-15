@@ -9,9 +9,12 @@ The SEM module takes Tescan images and works on them in five steps:
 5. it lays each group out into a figure with scale bars.
 
 The page has three cards, in this order:
-- **File**: the files, ticked in or out;
-- **Groups and scale**: the groups (§4), each with its *Figure composer* button (§5);
-- **Crop and intensity**: one image at a time, its crop (§2) and its grey levels (§3) side by side with the image, the histogram of its crop under it.
+- **File**: the files, ticked in or out, in the list every module has (file and sample label);
+- **Groups and scale**: the groups (§4), each with its *Figure composer* button (§5), and *Reset* at the top right;
+- **Crop and intensity**, in two halves:
+  - on top, on the left, the image in its editor with the histogram of its crop under it; on the right, the images' thumbnails in a box (each with its chain, §2.3) over the image's details. The two halves are as tall as each other: the left one sets the height, and the thumbnails scroll in theirs;
+  - under them, the crop's fields (§2) on the left and the intensity's (§3) on the right;
+  - on a phone, one column.
 
 The groups come first: an image's crop is then set knowing its group, whose common scale may narrow it (dashed in the editor, §4.2).
 
@@ -122,7 +125,7 @@ out.
 ### 2.3 Several images
 
 - **Copy to…** gives the chosen images the current crop: the same rectangle in pixels, with its ratio.
-- **Linked** images share one crop: setting it on one sets it on all. An image newly linked takes the crop the linked ones share; the first one linked keeps its own.
+- **Linked** images share one crop: setting it on one sets it on all. The chain on a thumbnail links its image, or unlinks it (lit when linked). An image newly linked takes the crop the linked ones share; the first one linked keeps its own.
 
 A crop larger than an image allows is narrowed to fit it (its ratio kept). The image is
 then marked (⚠ on its thumbnail, a note under its crop) until its crop is set again.
@@ -134,7 +137,7 @@ then marked (⚠ on its thumbnail, a note under its crop) until its crop is set 
 Each image's grey levels go through one curve: a table of its 65536 levels, built in
 two stages.
 
-1. **The normalisation**, one for all images:
+1. **The normalisation**, one for the images of a group (§3.5):
    - **none**: the levels as acquired, with 0 black and 65535 white;
    - **percentile stretch** (the default): black and white at two percentiles of the image's own levels, 0.5 and 99.5 % unless set otherwise;
    - **mean and SD of the reference**: v → μ_ref + (v − μ)·σ_ref/σ, on the reference's levels;
@@ -144,7 +147,7 @@ two stages.
    - Brightness then adds a share of the full scale.
    - Gamma bends the mid-tones (y → y^(1/γ), so above 1 they brighten).
 
-   Each has a value for all images, and each image has its own correction on top: brightness is added, contrast and gamma are multiplied.
+   Each has a value for the group's images (§3.5), and each image has its own correction on top: brightness is added, contrast and gamma are multiplied.
 
 The values are clipped to black and white after each stage.
 
@@ -182,6 +185,26 @@ shows:
 
 The percentile stretch keeps each image's own content and only sets its range.
 
+### 3.5 Settings for all groups, or for one
+
+The settings (normalisation, its percentiles, the reference, contrast, brightness and
+gamma) are those of **all groups** unless a group has its own.
+- **Settings for** chooses what the fields set: all groups, or one group.
+- A group chosen follows all groups' settings, its fields showing them disabled, until *Its own settings* is ticked. It then starts from all groups' settings, and its own are changed apart from them.
+- Unticked, the group follows all groups' settings again.
+- *Defaults* puts back the defaults of the settings chosen.
+- A group with its own settings is marked *(own settings)* in the selector, and the note under the histogram names it.
+- An image that is the reference of any settings in use, ticked *Reference only*, is kept out of the figure.
+
+Each image's own correction (*This image, on top*) goes on top of its group's settings
+either way.
+
+**Checked** on the user's two images and two copies:
+- The 20 kx group was given its own settings, with brightness +20. Its thumbnails' mean grey went from 93 to 142; the 5 kx group's stayed at 47.
+- All groups' brightness was then set to −10. The 5 kx thumbnails went to 35, while the 20 kx ones kept 142.
+- The CSV's `intensity_settings` read *group* for the 20 kx images and *all groups* for the others.
+- Undone, the settings went back.
+
 ## 4. Groups and scale
 
 ### 4.1 Grouping
@@ -194,16 +217,24 @@ of the others (largest/smallest ≤ 1.10). A newly loaded image joins the first 
 fits, else starts its own.
 
 **The name.** A group is named by the magnification of its image with the largest
-pixel size, the one its common scale brings the others to. A name typed in its field
-stays; emptied, it goes back to the magnification.
+pixel size, the one its common scale brings the others to.
+- The name reads as plain text. Like the project's name, its field shows on hover and while it is edited.
+- A name typed there stays; emptied, it goes back to the magnification.
+
+**The box.** Each group is a box 4φ wide to 1 high (6.47 : 1). On the left are its name,
+its scale under it and its *Figure composer*. On the right are its images, 112 px, each
+with its name under it, in one row that scrolls sideways when they do not fit. On a
+phone the name, scale and button sit over the images, and the box grows to hold them.
 
 **Editing.**
-- An image is dragged onto another group, or onto **New group** under the groups, to move it there. A copy of it follows the pointer and the group under it lights.
+- An image is dragged onto another group, or onto **+ Group** under the groups, to move it there; + Group starts a new group with it. A copy of it follows the pointer and the group under it lights.
   - With a mouse, the drag starts as the pointer moves.
-  - With a finger, the image is held still for 0.3 s first (its border lights). A swipe over the images scrolls the page, as the images fill the card on a phone.
-- There can be up to one group per image.
-- Empty groups disappear.
-- **Regroup** starts again from the pixel sizes. A group made again with the same images keeps its figure.
+  - With a finger, the image is held still for 0.3 s first (its border lights). A swipe over the images scrolls the page; a sideways one scrolls the group's row.
+- **+ Group**, clicked, adds an empty group, to drag images into. Its *Figure composer* is disabled until it has images.
+  - A group emptied by dragging stays too, with its name and figure.
+  - An empty group is removed with its *Remove*. A group left empty because its images were removed from the file list goes.
+  - A newly loaded image never joins an empty group: it has no pixel size to be near.
+- **Reset**, at the card's top right, starts again from the pixel sizes. Groups made by hand, empty ones and typed names go; a group made again with the same images keeps its figure and its intensity settings.
 
 ### 4.2 Common scale and own scale
 
@@ -355,6 +386,7 @@ The CSV holds one row per included image, with these columns:
 | `crop_x_px`, `crop_y_px`, `crop_width_px`, `crop_height_px` | the crop |
 | `crop_width_um`, `crop_height_um` | the crop's size |
 | `crop_mean_level`, `crop_sd_level`, `crop_saturated_pct` | the crop's statistics |
+| `intensity_settings` | `all groups`, or `group` where the image's group has its own (§3.5) |
 | `normalisation`, `reference` | the normalisation, and the reference's label where it uses one |
 | `black_level`, `white_level` | the levels a linear normalisation takes to black and white (empty for the histogram) |
 | `brightness_pct`, `contrast`, `gamma` | as applied, the image's own correction included |
@@ -389,3 +421,9 @@ export.
 - **Grid.** Blocks of panels, each with its own gap.
 - **Outside placing.** Names and scale bars can also be placed outside the images (above, below, left, right).
 - **Older projects.** A project saved before v440 had one figure; each group's figure starts from its settings, its file named after the group.
+
+**v441**: the cards laid out again, and intensity per group.
+- **File list.** It shows the file and the sample label alone, as in the other modules; the magnification column is gone.
+- **Groups.** A box 4φ : 1 per group, with its name (a field on hover, as the project's), its scale under it and its figure on the left, and its images (112 px, three quarters of before, the name alone under them) in one row on the right. **+ Group** adds an empty group, and empty groups stay until removed. **Reset** (was Regroup) sits at the card's top right. The group's line of pixel size and field is gone (the crop's note gives it).
+- **Crop and intensity.** The card is split into halves. On top are the image with its histogram, and the thumbnails over the image's details, the two sides as tall as each other. Under them are the crop's fields and the intensity's. The *Linked* box became a chain on each thumbnail.
+- **Intensity.** It can be set per group (§3.5).

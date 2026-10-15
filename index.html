@@ -625,16 +625,19 @@
         <div id="semFileTableWrap"></div>
       </div>
       <div class="card" id="semGroupsCard" style="display:none">
-        <h3 class="txt-head" style="margin:0 0 12px">Groups and scale</h3>
-        <div class="instr-block">The images are grouped by pixel size (within 10 % of each other), each group named by its magnification; a group's images share one scale bar in the figure. At <b>common scale</b> a group's images are brought to its largest pixel size (the others reduced by averaging, never enlarged) and to its smallest field of view, each crop narrowed about its middle (dashed in the crop editor). At <b>own scale</b> each image keeps its pixels and its crop, and gets its own bar. Rename a group in its field; drag an image onto another group to move it there, or onto <b>New group</b>. <b>Regroup</b> starts again from the magnifications. Each group makes its own figure: <b>Figure composer</b> lays its images out on a page in millimetres, as the plots' composer does, with their names, letters if wanted and the scale bars, for PNG at a chosen dpi or SVG.</div>
+        <div class="section-head">
+          <h3 class="txt-head" style="margin:0">Groups and scale</h3>
+          <button class="btn btn-sm" type="button" id="semRegroup" title="The groups made again from the images' pixel sizes: groups made by hand, empty ones and typed names are gone">Reset</button>
+        </div>
+        <div class="instr-block">The images are grouped by pixel size (within 10 % of each other), each group named by its magnification; a group's images share one scale bar in the figure. At <b>common scale</b> a group's images are brought to its largest pixel size (the others reduced by averaging, never enlarged) and to its smallest field of view, each crop narrowed about its middle (dashed in the crop editor). At <b>own scale</b> each image keeps its pixels and its crop, and gets its own bar. Click a group's name to rename it. Drag an image onto another group to move it there, or onto <b>+ Group</b> to start a new one with it; <b>+ Group</b> clicked adds an empty group, to drag images into. <b>Reset</b> makes the groups again from the pixel sizes. Each group makes its own figure: <b>Figure composer</b> lays its images out on a page in millimetres, as the plots' composer does, with their names, letters if wanted and the scale bars, for PNG at a chosen dpi or SVG.</div>
         <div id="semGroups"></div>
-        <div class="sem-crop-btns" style="max-width:260px"><button class="btn" type="button" id="semRegroup" title="The groups made again from the images' pixel sizes, with their names">Regroup</button></div>
+        <div class="an-add-bar sem-add-bar"><button type="button" class="an-add" id="semAddGroup" data-drop="new" title="Add an empty group, or drop an image here to start a group with it">+ Group</button></div>
       </div>
       <div class="card" id="semWorkspace" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Crop and intensity</h3>
-        <div class="instr-block"><b>Crop.</b> Each image starts whole, its info bar left out. Drag the frame's handles or sides to resize it, inside it to move it; a ratio, when locked, holds while resizing. <b>Copy to&hellip;</b> gives other images this crop; <b>linked</b> images share one crop, narrowed to fit wherever an image is smaller. The toolbar on the image fits it, pans it, or zooms into an area (with a tool on, the wheel zooms and a double click fits). <b>Intensity.</b> Each image's grey levels go through one curve, drawn over the histogram of its crop: first the normalisation, the same for all (none; a stretch of each image between two percentiles of its own levels; or the reference image's mean and SD, or its whole histogram, given to every image), then contrast, brightness and gamma for all images, with each image's own correction on top. Statistics come from each crop, its saturated pixels left out. The reference can be one of the images, or one loaded only for this and kept out of the figures. The images themselves are never changed.</div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
+        <div class="instr-block"><b>Crop.</b> Each image starts whole, its info bar left out. Drag the frame's handles or sides to resize it, inside it to move it; a ratio, when locked, holds while resizing. <b>Copy to&hellip;</b> gives other images this crop; the chain on an image's thumbnail links it, and linked images share one crop, narrowed to fit wherever an image is smaller. The toolbar on the image fits it, pans it, or zooms into an area (with a tool on, the wheel zooms and a double click fits). <b>Intensity.</b> Each image's grey levels go through one curve, drawn over the histogram of its crop: first the normalisation (none; a stretch of each image between two percentiles of its own levels; or the reference image's mean and SD, or its whole histogram, given to every image), then contrast, brightness and gamma, with each image's own correction on top. The settings are those of <b>all groups</b>, unless a group, chosen in <b>Settings for</b>, is given its own. Statistics come from each crop, its saturated pixels left out. The reference can be one of the images, or one loaded only for this and kept out of the figures. The images themselves are never changed.</div>
+        <div class="sem-split">
+          <div class="sem-split-l">
             <div class="plot-nav-row">
               <div class="plot-nav-left">
                 <button class="btn nav-arrow" id="semPrev" aria-label="Previous image" title="Previous image (&#8592;)">&#8249;</button>
@@ -653,46 +656,70 @@
             <div class="sem-hist"><canvas id="semHist"></canvas></div>
             <div class="txt-meta" id="semHistNote"></div>
           </div>
-          <div class="col mw260" style="align-self:flex-start">
+          <div class="sem-split-r"><div class="sem-split-in">
+            <div class="sem-box sem-thumbs-box">
+              <div class="sem-box-head"><span class="txt-mini">Images</span><span class="txt-meta">the chain links an image's crop to the other linked ones</span></div>
+              <div class="sem-thumbs" id="semThumbs"></div>
+            </div>
+            <div class="sem-box sem-info-box">
+              <div class="sem-box-head"><span class="txt-mini">Image</span></div>
+              <div id="semInfo"></div>
+            </div>
+          </div></div>
+        </div>
+        <div class="sem-split sem-split-fields">
+          <div>
             <div class="txt-mini param-head">Crop (px)</div>
-            <div class="field-half">
+            <div class="sem-row4">
               <div><label class="txt-label" for="semCropX">X</label><input type="text" inputmode="numeric" id="semCropX"></div>
               <div><label class="txt-label" for="semCropY">Y</label><input type="text" inputmode="numeric" id="semCropY"></div>
-            </div>
-            <div class="field-half">
               <div><label class="txt-label" for="semCropW">Width</label><input type="text" inputmode="numeric" id="semCropW"></div>
               <div><label class="txt-label" for="semCropH">Height</label><input type="text" inputmode="numeric" id="semCropH"></div>
             </div>
             <div class="txt-meta sem-crop-um" id="semCropUm"></div>
-            <label class="txt-label" for="semAspect">Ratio</label>
-            <select id="semAspect">
-              <option value="1:1">1:1 (square)</option>
-              <option value="4:3">4:3</option>
-              <option value="3:2">3:2</option>
-              <option value="free">free</option>
-            </select>
-            <label class="sem-check" title="Linked images share one crop: moving or resizing it on one moves it on all"><input type="checkbox" id="semLinked"> Linked</label>
+            <div class="sem-row2">
+              <div>
+                <label class="txt-label" for="semAspect">Ratio</label>
+                <select id="semAspect">
+                  <option value="1:1">1:1 (square)</option>
+                  <option value="4:3">4:3</option>
+                  <option value="3:2">3:2</option>
+                  <option value="free">free</option>
+                </select>
+              </div>
+              <div class="sem-crop-btns">
+                <button class="btn" type="button" id="semCropReset" title="The whole image, its info bar left out">Default</button>
+                <button class="btn" type="button" id="semCopyBtn" title="Give other images this crop">Copy to&hellip;</button>
+              </div>
+            </div>
             <div class="alert warn sem-crop-note" id="semCropNote" style="display:none"></div>
             <div class="txt-meta sem-crop-group" id="semCropGroup"></div>
-            <div class="sem-crop-btns">
-              <button class="btn" type="button" id="semCropReset" title="The whole image, its info bar left out">Default</button>
-              <button class="btn" type="button" id="semCopyBtn" title="Give other images this crop">Copy to&hellip;</button>
+          </div>
+          <div>
+            <div class="txt-mini param-head">Intensity</div>
+            <div class="sem-row2">
+              <div><label class="txt-label" for="semIntScope">Settings for</label><select id="semIntScope"></select></div>
+              <label class="sem-check" title="Ticked, the group has settings of its own; unticked, it takes those of all groups"><input type="checkbox" id="semIntOwn"> Its own settings</label>
             </div>
-            <div class="txt-mini param-head" style="margin-top:16px">Intensity, all images</div>
-            <label class="txt-label" for="semNorm">Normalisation</label>
-            <select id="semNorm">
-              <option value="none">none (as acquired)</option>
-              <option value="percentile">percentile stretch</option>
-              <option value="meansd">mean and SD of the reference</option>
-              <option value="hist">histogram of the reference</option>
-            </select>
-            <div class="field-half">
-              <div><label class="txt-label" for="semPLo">Black at (%)</label><input type="text" inputmode="decimal" id="semPLo"></div>
-              <div><label class="txt-label" for="semPHi">White at (%)</label><input type="text" inputmode="decimal" id="semPHi"></div>
+            <div class="sem-row2">
+              <div>
+                <label class="txt-label" for="semNorm">Normalisation</label>
+                <select id="semNorm">
+                  <option value="none">none (as acquired)</option>
+                  <option value="percentile">percentile stretch</option>
+                  <option value="meansd">mean and SD of the reference</option>
+                  <option value="hist">histogram of the reference</option>
+                </select>
+              </div>
+              <div class="field-half">
+                <div><label class="txt-label" for="semPLo">Black at (%)</label><input type="text" inputmode="decimal" id="semPLo"></div>
+                <div><label class="txt-label" for="semPHi">White at (%)</label><input type="text" inputmode="decimal" id="semPHi"></div>
+              </div>
             </div>
-            <label class="txt-label" for="semRef">Reference</label>
-            <select id="semRef"></select>
-            <label class="sem-check" title="The reference is used only to normalise the others, and is not placed in the figure"><input type="checkbox" id="semRefOnly"> Reference only (not in the figure)</label>
+            <div class="sem-row2">
+              <div><label class="txt-label" for="semRef">Reference</label><select id="semRef"></select></div>
+              <label class="sem-check" title="The reference is used only to normalise the others, and is not placed in the figure"><input type="checkbox" id="semRefOnly"> Reference only (not in the figure)</label>
+            </div>
             <div class="sem-bcg">
               <div><label class="txt-label" for="semB">Brightness (%)</label><input type="text" inputmode="decimal" id="semB"></div>
               <div><label class="txt-label" for="semC">Contrast</label><input type="text" inputmode="decimal" id="semC"></div>
@@ -706,17 +733,14 @@
             </div>
             <div class="sem-crop-btns">
               <button class="btn" type="button" id="semAdjReset" title="This image's own correction back to none">No correction</button>
-              <button class="btn" type="button" id="semIntReset" title="Normalisation, brightness, contrast and gamma back to their defaults, for all images">Defaults</button>
+              <button class="btn" type="button" id="semIntReset" title="The settings chosen in Settings for back to their defaults">Defaults</button>
             </div>
-            <div class="txt-mini param-head" style="margin-top:16px">Image</div>
-            <div id="semInfo"></div>
           </div>
         </div>
-        <div class="sem-thumbs" id="semThumbs"></div>
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v440</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v441</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

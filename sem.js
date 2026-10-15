@@ -90,22 +90,31 @@ import { readTescanTiff } from './sem-read.js';
 
   /* ---- Intensity ----
      Each image's grey levels go through one curve, a table of its 65536 levels:
-       1. the normalisation, one for every image: none (the levels as acquired), a
-          stretch between two percentiles of the image's own levels, the mean and
-          standard deviation of the reference image, or its histogram;
+       1. the normalisation, one for every image of its group: none (the levels as
+          acquired), a stretch between two percentiles of the image's own levels, the
+          mean and standard deviation of the reference image, or its histogram;
        2. contrast about mid-grey and brightness, then gamma (above 1 brightening the
           mid-tones): the global values, with each image's own correction on top
           (brightness added, contrast and gamma multiplied).
      The statistics are the crop's, its saturated pixels (65535) left out: what is
      shown is what is normalised, and a saturated edge does not set the white. The
      reference's own levels are its levels as acquired, so with "none" it looks as the
-     others are made to. */
+     others are made to.
+     The settings (normalisation, reference, contrast, brightness, gamma) are those of
+     all groups, `intensity`, unless a group has its own (groupInt). */
   const INT_DEF = { mode: 'percentile', pLo: 0.5, pHi: 99.5, ref: null, b: 0, c: 1, g: 1 };
   const ADJ_DEF = { b: 0, c: 1, g: 1 };
   let intensity = { ...INT_DEF };
-  const usesRef = () => intensity.mode === 'meansd' || intensity.mode === 'hist';
+  // A group's own settings, by the group's id, where it has them.
+  let groupInt = {};
+  const usesRef = (I = intensity) => I.mode === 'meansd' || I.mode === 'hist';
   // The reference: the image chosen, else the first loaded.
-  const refFile = () => allFiles.find(f=> f.raw.id === intensity.ref) || allFiles[0] || null;
+  const refFile = (I = intensity) => allFiles.find(f=> f.raw.id === I.ref) || allFiles[0] || null;
+  // The settings an image goes through: its group's own, else those of all groups.
+  const intOf = f => { const g = groupOf(f); return g && groupInt[g.id] || intensity; };
+  // An image that is the reference of settings in use (all groups', or a group's own)
+  // that use one.
+  const isRef = f => [intensity, ...Object.values(groupInt)].some(I=> usesRef(I) && refFile(I) === f);
   // An image's crop, as a histogram of its levels with their count, mean and spread
   // (the last 64 crops kept).
   const statsCache = new Map();
@@ -134,14 +143,14 @@ import { readTescanTiff } from './sem-read.js';
   /* The normalisation of an image: { lo, hi }, the levels taken to black and white
      (linear), or { table }, each level's value on 0–1 (the histogram's). */
   function normOf(f){
-    const m = intensity.mode;
+    const I = intOf(f), m = I.mode;
     if (m === 'none') return { lo: 0, hi: 65535 };
     const st = statsOf(f);
     if (m === 'percentile'){
-      const lo = levelAt(st, intensity.pLo/100), hi = levelAt(st, intensity.pHi/100);
+      const lo = levelAt(st, I.pLo/100), hi = levelAt(st, I.pHi/100);
       return { lo, hi: hi > lo ? hi : lo + 1 };
     }
-    const rf = refFile(), rs = rf ? statsOf(rf) : st;
+    const rf = refFile(I), rs = rf ? statsOf(rf) : st;
     if (m === 'meansd'){
       // v → μ_ref + (v − μ)·σ_ref/σ, on the reference's levels: the levels that land on
       // 0 and 65535 there.
@@ -162,8 +171,8 @@ import { readTescanTiff } from './sem-read.js';
   }
   // The whole curve of an image, as the 8-bit grey of each of its levels.
   function lutOf(f){
-    const nm = normOf(f), a = f.adj || ADJ_DEF;
-    const b = (intensity.b + a.b)/100, k = intensity.c*a.c, ig = 1/(intensity.g*a.g);
+    const nm = normOf(f), a = f.adj || ADJ_DEF, I = intOf(f);
+    const b = (I.b + a.b)/100, k = I.c*a.c, ig = 1/(I.g*a.g);
     const lut = new Uint8ClampedArray(65536), span = nm.table ? 0 : 1/(nm.hi - nm.lo);
     for (let v = 0; v < 65536; v++){
       let y = nm.table ? nm.table[v] : (v - nm.lo)*span;
@@ -266,9 +275,6 @@ import { readTescanTiff } from './sem-read.js';
     };
   }
   const magText = r => !(r.mag > 0) ? '' : r.mag >= 1000 ? `${(r.mag/1000).toPrecision(3)} kx` : `${r.mag.toPrecision(3)} x`;
-  // The magnification and, under it, the field of view (two short lines: a phone's
-  // column is a few characters wide).
-  const extraCols = [{ header: 'Mag.', render: f=>{ const e = decoded.get(f.raw.id) || dec(f); return e ? `<span class="sem-mag">${esc(magText(e.r))}<br><span class="txt-meta">${esc(e.r.fovUm.toPrecision(3))} µm</span></span>` : '—'; } }];
 
   function afterFilesChange(){
     files = includedOf(allFiles);
@@ -276,7 +282,7 @@ import { readTescanTiff } from './sem-read.js';
     setTabLoaded('sem', allFiles.length);
     // The list's rows map onto allFiles by index; the download needs the RawRef.
     const view = listView();
-    renderUnifiedFileList('semFileTableWrap', view, fileCallbacks(), extraCols.map(c=> ({ header: c.header, render: (_, i)=> c.render(allFiles[i]) })));
+    renderUnifiedFileList('semFileTableWrap', view, fileCallbacks());
     document.getElementById('semWorkspace').style.display = files.length ? 'block' : 'none';
     document.getElementById('semGroupsCard').style.display = files.length ? 'block' : 'none';
     syncGroups();
@@ -289,11 +295,14 @@ import { readTescanTiff } from './sem-read.js';
   /* ---- Undo / project state ---- */
   function semSnapshot(){
     return { files: allFiles.map(f=> ({ ...f, crop: { ...f.crop }, adj: { ...(f.adj || ADJ_DEF) } })), cur, intensity: { ...intensity },
+      groupInt: JSON.parse(JSON.stringify(groupInt)),
       groups: groups.map(g=> ({ ...g, members: g.members.slice() })), figures: JSON.parse(JSON.stringify(figures)) };
   }
   function semRestore(s){
     allFiles = (s && s.files || []).map(f=> ({ ...f, crop: { ...f.crop }, adj: { ...ADJ_DEF, ...(f.adj || {}) }, raw: f.raw instanceof RawRef ? f.raw : new RawRef(f.raw.id, f.raw.b64) }));
     intensity = { ...INT_DEF, ...(s && s.intensity || {}) };
+    groupInt = {};
+    for (const [k, v] of Object.entries(s && s.groupInt || {})) groupInt[k] = { ...INT_DEF, ...v };
     groups = (s && s.groups || []).map(g=> ({ ...g, members: (g.members || []).slice() }));
     figures = s && s.figures ? JSON.parse(JSON.stringify(s.figures)) : {};
     // A project saved before v440 had one figure for all the groups: each group starts
@@ -356,7 +365,6 @@ import { readTescanTiff } from './sem-read.js';
     ['x', 'y', 'w', 'h'].forEach(k=>{ const el = document.getElementById('semCrop' + k.toUpperCase()); if (document.activeElement !== el) el.value = String(c[k]); });
     document.getElementById('semCropUm').textContent = `${c.w} × ${c.h} px = ${um(c.w)} × ${um(c.h)} µm`;
     document.getElementById('semAspect').value = f.aspect;
-    document.getElementById('semLinked').checked = !!f.linked;
     const note = document.getElementById('semCropNote');
     note.textContent = f.clamped ? 'This crop was narrowed to fit this image: the one copied or linked to it is larger than its image allows.' : '';
     note.style.display = f.clamped ? '' : 'none';
@@ -366,7 +374,9 @@ import { readTescanTiff } from './sem-read.js';
       : g.mode === 'own' ? `Group “${g.name}”, own scale: the figure takes this crop as it is, ${o.w} × ${o.h} px.`
       : `Group “${g.name}”, common scale: the figure takes ${sig(o.c.w*e.r.pixelNm/1000, 4)} × ${sig(o.c.h*e.r.pixelNm/1000, 4)} µm${o.c.w !== c.w || o.c.h !== c.h ? ' from the middle of this crop (dashed)' : ''}, at ${sig(o.px, 4)} nm a pixel: ${o.w} × ${o.h} px.`;
   }
-  // Every included image with its crop drawn on it; a press shows it in the editor.
+  // Every included image with its crop drawn on it; a press shows it in the editor, its
+  // chain links its crop to the other linked images'.
+  const LINK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
   function renderThumbs(){
     const box = document.getElementById('semThumbs');
     box.innerHTML = '';
@@ -378,19 +388,28 @@ import { readTescanTiff } from './sem-read.js';
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.beginPath(); ctx.rect(0, 0, cv.width, cv.height); ctx.rect(c.x*k, c.y*k, c.w*k, c.h*k); ctx.fill('evenodd');
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(c.x*k + 0.5, c.y*k + 0.5, Math.max(1, c.w*k - 1), Math.max(1, c.h*k - 1));
+      const wrap = document.createElement('div');
+      wrap.className = 'sem-thumb-wrap';
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'sem-thumb' + (i === cur ? ' is-on' : ''); b.title = f.label;
       b.dataset.i = i;
       b.appendChild(cv);
       const cap = document.createElement('span');
-      const isRef = usesRef() && refFile() === f;
-      cap.className = 'sem-thumb-cap'; cap.textContent = (f.linked ? '🔗 ' : '') + (isRef ? '◎ ' : '') + f.label + (f.clamped ? ' ⚠' : '');
-      if (isRef) b.title = f.label + ' — the reference' + (f.refOnly ? ', not in the figure' : '');
+      const r = isRef(f);
+      cap.className = 'sem-thumb-cap'; cap.textContent = (r ? '◎ ' : '') + f.label + (f.clamped ? ' ⚠' : '');
+      if (r) b.title = f.label + ' — the reference' + (f.refOnly ? ', not in the figure' : '');
       b.appendChild(cap);
-      box.appendChild(b);
+      const ln = document.createElement('button');
+      ln.type = 'button'; ln.className = 'sem-link' + (f.linked ? ' is-on' : ''); ln.dataset.link = i; ln.innerHTML = LINK_SVG;
+      ln.setAttribute('aria-pressed', String(!!f.linked));
+      ln.title = f.linked ? 'Linked: its crop is shared with the other linked images. Click to unlink it' : 'Link its crop to the other linked images';
+      wrap.append(b, ln);
+      box.appendChild(wrap);
     });
   }
   document.getElementById('semThumbs').addEventListener('click', e=>{
+    const ln = e.target.closest('.sem-link');
+    if (ln){ setLinked(files[+ln.dataset.link], !files[+ln.dataset.link].linked); return; }
     const b = e.target.closest('.sem-thumb'); if (!b) return;
     go(+b.dataset.i);
   });
@@ -654,16 +673,16 @@ import { readTescanTiff } from './sem-read.js';
   });
   // Linking an image: it takes the crop the linked ones share, if any; else it is the
   // first, and the others will take its.
-  document.getElementById('semLinked').addEventListener('change', e=>{
-    const f = files[cur]; if (!f) return;
-    f.linked = e.target.checked;
+  function setLinked(f, on){
+    if (!f) return;
+    f.linked = on;
     if (f.linked){
       const lead = allFiles.find(g=> g !== f && g.linked);
       if (lead) takeCrop(f, lead.crop, lead.aspect);
     } else f.clamped = false;
     renderFields(); refreshLevels();
     hist.commit();
-  });
+  }
 
   /* ---- Copy to… ---- */
   const copyModal = document.getElementById('semCopyModal');
@@ -700,9 +719,10 @@ import { readTescanTiff } from './sem-read.js';
      the pixels each new one covers, never enlarged: nothing is invented) and to its
      smallest field of view, each crop narrowed about its middle; at its own scale an
      image keeps its pixels and its crop. Groups can be renamed, an image moved to
-     another or to a new one (up to one group an image); Regroup starts again. */
+     another or to a new one, and empty groups added (kept, as one emptied by hand, until
+     removed); Reset starts again. */
   const GROUP_TOL = 1.10;
-  const inFigure = f => f.included !== false && !(usesRef() && f.refOnly && refFile() === f);
+  const inFigure = f => f.included !== false && !(f.refOnly && isRef(f));
   const byId = id => allFiles.find(f=> f.raw.id === id);
   const groupOf = f => groups.find(g=> g.members.includes(f.raw.id)) || null;
   const pixelOf = f => { const e = dec(f); return e ? e.r.pixelNm : NaN; };
@@ -713,25 +733,32 @@ import { readTescanTiff } from './sem-read.js';
     return r ? magText(r) || `${sig(r.pixelNm, 3)} nm/px` : 'group';
   }
   const newGroupId = ()=>{ let k = 1; while (groups.some(g=> g.id === 'g' + k)) k++; return 'g' + k; };
-  // An image into the group whose pixel sizes it stays within 10 % of, else a new one.
+  // An image into the group whose pixel sizes it stays within 10 % of, else a new one
+  // (never into an empty group: it has no pixel size to be near).
   function placeImage(f){
     const p = pixelOf(f);
-    const g = groups.find(g=>{ const ps = g.members.map(id=> pixelOf(byId(id))).filter(Number.isFinite).concat(p); return Math.max(...ps)/Math.min(...ps) <= GROUP_TOL; });
+    const g = groups.find(g=>{ if (!g.members.length) return false; const ps = g.members.map(id=> pixelOf(byId(id))).filter(Number.isFinite).concat(p); return Math.max(...ps)/Math.min(...ps) <= GROUP_TOL; });
     if (g) g.members.push(f.raw.id);
     else groups.push({ id: newGroupId(), name: '', named: false, mode: 'common', members: [f.raw.id] });
   }
-  // The groups kept in step with the images: gone ones dropped, new ones placed, empty
-  // groups removed, unnamed ones named after their images.
+  // The groups kept in step with the images: gone ones dropped, new ones placed, groups
+  // left empty removed unless made or emptied by hand, unnamed ones named after their
+  // images.
   function syncGroups(){
     const ids = new Set(allFiles.map(f=> f.raw.id));
     groups.forEach(g=>{ g.members = g.members.filter(id=> ids.has(id)); });
     const placed = new Set(groups.flatMap(g=> g.members));
     allFiles.forEach(f=>{ if (!placed.has(f.raw.id) && dec(f)) placeImage(f); });
-    groups = groups.filter(g=> g.members.length);
-    groups.forEach(g=>{ if (!g.named) g.name = groupName(g.members); });
-    for (const k of Object.keys(figures)) if (!groups.some(g=> g.id === k)) delete figures[k];
-    // Lowest magnification first.
-    groups.sort((a, b)=> pixelOf(byId(b.members[0])) - pixelOf(byId(a.members[0])));
+    groups = groups.filter(g=> g.members.length || g.keep);
+    tidyGroups();
+    // Lowest magnification first; empty groups last, in the order they were made.
+    const px = g => g.members.length ? pixelOf(byId(g.members[0])) : -1;
+    groups.sort((a, b)=> px(b) - px(a));
+  }
+  // Names, and what goes with a group that is gone (its figure, its intensity).
+  function tidyGroups(){
+    groups.forEach(g=>{ if (!g.named && g.members.length) g.name = groupName(g.members); });
+    for (const o of [figures, groupInt]) for (const k of Object.keys(o)) if (!groups.some(g=> g.id === k)) delete o[k];
   }
   /* What the figure takes from an image (null when it is not in the figure):
      { c (the crop, narrowed to the group's field), px (nm a pixel), w, h (its size in
@@ -776,68 +803,85 @@ import { readTescanTiff } from './sem-read.js';
     const k = fit ? Math.min(1, fit/Math.max(o.w, o.h)) : 1, w = Math.max(1, Math.round(o.w*k)), h = Math.max(1, Math.round(o.h*k));
     return toCanvas(resample(e.r.pixels, e.r.width, o.c, w, h), w, 0, 0, w, h, lutOf(f));
   }
+  /* A group's box: its name (plain text, a field on hover and while edited, as the
+     project's name), its scale and its figure on one side; its images in one row on
+     the other, scrolling sideways when they do not fit, each with its name under it.
+     An empty group says where its images go, its figure disabled. A group whose images
+     are all out of the figure (unticked, or the reference only) is not shown. */
+  const nameCtx = document.createElement('canvas').getContext('2d');
+  function fitGroupName(el){
+    const cs = getComputedStyle(el), room = el.parentElement.clientWidth;
+    if (!room) return;
+    nameCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    el.style.width = Math.min(nameCtx.measureText(el.value || el.placeholder).width + 24, room + 10) + 'px';
+  }
   function renderGroups(){
     const box = document.getElementById('semGroups');
     if (!box || !files.length) return;
     box.innerHTML = groups.map(g=>{
       const mem = g.members.map(byId).filter(m=> m && inFigure(m));
-      if (!mem.length) return '';
-      const o = outOf(mem[0]);
-      const info = g.mode === 'own' ? `own scale: each image its own pixels and its own scale bar`
-        : `${sig(o.px, 4)} nm a pixel · ${sig(o.w*o.px/1000, 4)} × ${sig(o.h*o.px/1000, 4)} µm · ${o.w} × ${o.h} px`;
-      return `<div class="sem-group" data-g="${g.id}">
-        <div class="sem-group-head">
-          <input type="text" class="sem-group-name" data-g="${g.id}" value="${esc(g.name)}" aria-label="Group name">
-          <select class="sem-group-mode" data-g="${g.id}"><option value="common"${g.mode === 'common' ? ' selected' : ''}>common scale</option><option value="own"${g.mode === 'own' ? ' selected' : ''}>own scale</option></select>
-          <span class="txt-meta sem-group-info">${info}</span>
-          <button class="btn primary btn-sm sem-group-fig" type="button" data-fig="${g.id}" title="Lay this group's images out into a figure">Figure composer</button>
+      if (!mem.length && g.members.length) return '';
+      const empty = !mem.length;
+      return `<div class="sem-group${empty ? ' is-empty' : ''}" data-g="${g.id}" data-drop="${g.id}">
+        <div class="sem-group-side">
+          <input type="text" class="sem-group-name" data-g="${g.id}" value="${esc(g.name)}" placeholder="Group name" spellcheck="false" aria-label="Group name" title="The group's name, on its figure and its file. Emptied, it goes back to the magnification">
+          <select class="sem-group-mode" data-g="${g.id}" aria-label="Scale"><option value="common"${g.mode === 'common' ? ' selected' : ''}>common scale</option><option value="own"${g.mode === 'own' ? ' selected' : ''}>own scale</option></select>
+          <button class="btn primary btn-sm sem-group-fig" type="button" data-fig="${g.id}"${empty ? ' disabled title="No images in this group yet"' : ' title="Lay this group\'s images out into a figure"'}>Figure composer</button>
         </div>
-        <div class="sem-group-imgs">${mem.map(m=>{ const oo = outOf(m), cut = 1 - oo.c.w*oo.c.h/(m.crop.w*m.crop.h), red = oo.px/pixelOf(m);
-          return `<div class="sem-gimg" data-id="${esc(m.raw.id)}"><div class="sem-gimg-pic"></div><span class="sem-thumb-cap" title="${esc(m.label)}">${esc(m.label)}</span>
-            <span class="txt-meta">${g.mode === 'own' ? `${sig(pixelOf(m), 4)} nm/px` : `${cut > 0.0005 ? `narrowed ${sig(100*cut, 2)} %` : 'whole crop'}${red > 1.0005 ? `, reduced ×${sig(1/red, 3)}` : ''}`}</span></div>`; }).join('')}</div>
+        <div class="sem-group-imgs">${empty
+          ? `<div class="sem-group-hint txt-meta">Empty: drag images here. <button class="btn btn-sm" type="button" data-del="${g.id}" title="Remove this empty group">Remove</button></div>`
+          : mem.map(m=> `<div class="sem-gimg" data-id="${esc(m.raw.id)}" title="${esc(m.label)}"><div class="sem-gimg-pic"></div><span class="sem-thumb-cap">${esc(m.label)}</span></div>`).join('')}</div>
       </div>`;
-    }).join('')
-    // Where an image dropped starts a group of its own (up to one group an image).
-      + (groups.length < allFiles.length ? `<div class="sem-group sem-group-new" data-g="new">New group: drop an image here</div>` : '');
+    }).join('');
     box.querySelectorAll('.sem-gimg').forEach(el=>{ const f = byId(el.dataset.id), cv = f && outCanvas(f, 150); if (cv) el.querySelector('.sem-gimg-pic').appendChild(cv); });
+    box.querySelectorAll('.sem-group-name').forEach(fitGroupName);
   }
-  const groupsBox = document.getElementById('semGroups');
+  const groupsBox = document.getElementById('semGroups'), groupsCard = document.getElementById('semGroupsCard');
+  groupsBox.addEventListener('input', e=>{ if (e.target.classList.contains('sem-group-name')) fitGroupName(e.target); });
   groupsBox.addEventListener('change', e=>{
     const t = e.target;
     if (t.classList.contains('sem-group-name')){
       const g = groups.find(g=> g.id === t.dataset.g); if (!g) return;
       const v = t.value.trim();
       // Emptied, a name goes back to the images' magnification.
-      g.named = !!v; g.name = v || groupName(g.members);
+      g.named = !!v; g.name = v || (g.members.length ? groupName(g.members) : 'New group');
     } else if (t.classList.contains('sem-group-mode')){
       const g = groups.find(g=> g.id === t.dataset.g); if (!g) return;
       g.mode = t.value;
     } else return;
-    renderGroups(); renderFields(); drawEditor();
-    hist.commit();
+    groupsChanged();
   });
-  // An image into another group, or into a new one; emptied groups go, unnamed ones are
-  // named again.
+  function groupsChanged(){
+    renderGroups(); renderFields(); renderIntensity(); drawEditor();
+    hist.commit();
+  }
+  // An image into another group, or into a new one ('new'). A group it leaves empty
+  // stays, with its name and figure, until removed.
   function moveImage(id, to){
     const from = groups.find(g=> g.members.includes(id));
     if (!from || from.id === to) return;
     if (to === 'new' && from.members.length === 1) return;
+    const into = to === 'new' ? { id: newGroupId(), name: '', named: false, mode: 'common', members: [] } : groups.find(g=> g.id === to);
+    if (!into) return;
     from.members = from.members.filter(m=> m !== id);
-    if (to === 'new') groups.push({ id: newGroupId(), name: '', named: false, mode: 'common', members: [id] });
-    else { const g = groups.find(g=> g.id === to); if (!g) return; g.members.push(id); }
-    groups = groups.filter(g=> g.members.length);
-    groups.forEach(g=>{ if (!g.named) g.name = groupName(g.members); });
-    // Its figure goes with a group that is gone.
-    for (const k of Object.keys(figures)) if (!groups.some(g=> g.id === k)) delete figures[k];
-    renderGroups(); renderFields(); drawEditor();
-    hist.commit();
+    if (!from.members.length) from.keep = true;
+    into.members.push(id);
+    if (to === 'new') groups.push(into);
+    tidyGroups();
+    groupsChanged();
   }
+  // + Group: an empty group, to drag images into.
+  document.getElementById('semAddGroup').addEventListener('click', ()=>{
+    groups.push({ id: newGroupId(), name: 'New group', named: false, mode: 'common', members: [], keep: true });
+    groupsChanged();
+  });
   /* Dragging an image between groups (pointer events: a mouse and a finger alike): a
-     copy of it follows the pointer, the group under it lights, and the drop moves it
-     there. A press without a move does nothing. A finger first holds the image still a
-     moment: a swipe over the images, which fill the card on a phone, scrolls the page. */
+     copy of it follows the pointer, the group under it lights (or + Group, for a new
+     one), and the drop moves it there. A press without a move does nothing. A finger
+     first holds the image still a moment: a swipe over the images scrolls the page. */
   let gdrag = null;
   const HOLD_MS = 300;
+  const dropTargets = ()=> groupsCard.querySelectorAll('[data-drop]');
   groupsBox.addEventListener('pointerdown', e=>{
     const card = e.target.closest('.sem-gimg');
     if (!card || e.button !== 0) return;
@@ -859,9 +903,9 @@ import { readTescanTiff } from './sem-read.js';
       gdrag.ghost = g; gdrag.card.classList.add('is-dragged');
     }
     gdrag.ghost.style.left = e.clientX + 'px'; gdrag.ghost.style.top = e.clientY + 'px';
-    const under = document.elementFromPoint(e.clientX, e.clientY), grp = under && under.closest('.sem-group');
-    const to = grp && groupsBox.contains(grp) ? grp.dataset.g : null;
-    if (to !== gdrag.over){ groupsBox.querySelectorAll('.sem-group').forEach(el=> el.classList.toggle('is-drop', el.dataset.g === to)); gdrag.over = to; }
+    const under = document.elementFromPoint(e.clientX, e.clientY), t = under && under.closest('[data-drop]');
+    const to = t && groupsCard.contains(t) ? t.dataset.drop : null;
+    if (to !== gdrag.over){ dropTargets().forEach(el=> el.classList.toggle('is-drop', el.dataset.drop === to)); gdrag.over = to; }
   });
   // Held, the finger drags the image, not the page.
   groupsBox.addEventListener('touchmove', e=>{ if (gdrag && gdrag.held && e.cancelable) e.preventDefault(); }, { passive: false });
@@ -872,23 +916,28 @@ import { readTescanTiff } from './sem-read.js';
     clearTimeout(d.timer);
     if (d.ghost) d.ghost.remove();
     d.card.classList.remove('is-dragged', 'is-held');
-    groupsBox.querySelectorAll('.sem-group').forEach(el=> el.classList.remove('is-drop'));
+    dropTargets().forEach(el=> el.classList.remove('is-drop'));
     if (d.ghost && d.over) moveImage(d.id, d.over);
   };
   groupsBox.addEventListener('pointerup', endGroupDrag);
   groupsBox.addEventListener('pointercancel', endGroupDrag);
-  groupsBox.addEventListener('click', e=>{ const b = e.target.closest('[data-fig]'); if (b) openFigure(b.dataset.fig); });
+  groupsBox.addEventListener('click', e=>{
+    const b = e.target.closest('[data-fig]'); if (b){ openFigure(b.dataset.fig); return; }
+    const d = e.target.closest('[data-del]');
+    if (d){ groups = groups.filter(g=> g.id !== d.dataset.del || g.members.length); tidyGroups(); groupsChanged(); }
+  });
   groupsBox.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.classList.contains('sem-group-name')) e.target.blur(); });
+  // Reset: the groups made again from the pixel sizes. A group made again with the same
+  // images keeps its figure and its intensity.
   document.getElementById('semRegroup').addEventListener('click', ()=>{
-    const key = g => g.members.slice().sort().join('|'), old = new Map(groups.map(g=> [key(g), figures[g.id]]));
+    const key = g => g.members.slice().sort().join('|');
+    const oldFig = new Map(groups.map(g=> [key(g), figures[g.id]])), oldInt = new Map(groups.map(g=> [key(g), groupInt[g.id]]));
     groups = [];
+    const keptFig = {}, keptInt = {};
     syncGroups();
-    // A group made again with the same images keeps its figure.
-    const kept = {};
-    groups.forEach(g=>{ const f = old.get(key(g)); if (f) kept[g.id] = f; });
-    figures = kept;
-    renderGroups(); renderFields(); drawEditor();
-    hist.commit();
+    groups.forEach(g=>{ const f = oldFig.get(key(g)), i = oldInt.get(key(g)); if (f) keptFig[g.id] = f; if (i) keptInt[g.id] = i; });
+    figures = keptFig; groupInt = keptInt;
+    groupsChanged();
   });
 
   /* ---- The figure (sem-figure.js, loaded when first opened) ----
@@ -899,12 +948,11 @@ import { readTescanTiff } from './sem-read.js';
   let figApi = null;
   // A group's images in its figure, in the file list's order.
   function figureImages(gid){
-    const rf = refFile(), refKey = usesRef() && rf ? `${rf.raw.id}:${JSON.stringify(rf.crop)}` : '';
     return files.filter(f=> inFigure(f) && groupOf(f) && groupOf(f).id === gid).map(f=>{
-      const o = outOf(f), g = groupOf(f);
+      const o = outOf(f), g = groupOf(f), I = intOf(f), rf = refFile(I), refKey = usesRef(I) && rf ? `${rf.raw.id}:${JSON.stringify(rf.crop)}` : '';
       if (!o || !g) return null;
       return { id: f.raw.id, label: f.label, group: { id: g.id, name: g.name, mode: g.mode }, w: o.w, h: o.h, pxNm: o.px,
-        key: JSON.stringify([o, intensity, f.adj || ADJ_DEF, refKey]), canvas: fit => outCanvas(f, fit) };
+        key: JSON.stringify([o, I, f.adj || ADJ_DEF, refKey]), canvas: fit => outCanvas(f, fit) };
     }).filter(Boolean);
   }
   async function openFigure(gid){
@@ -921,20 +969,35 @@ import { readTescanTiff } from './sem-read.js';
   // shakes and shows the last good one).
   const INT_FIELDS = { semPLo: ['pLo', 0, 49.9], semPHi: ['pHi', 50.1, 100], semB: ['b', -100, 100], semC: ['c', 0.05, 20], semG: ['g', 0.05, 20] };
   const ADJ_FIELDS = { semBi: ['b', -100, 100], semCi: ['c', 0.05, 20], semGi: ['g', 0.05, 20] };
+  /* Settings for: all groups, or one group. A group follows all groups' settings until
+     given its own (Its own settings), then its own: the fields show the settings chosen,
+     disabled (not hidden) while a group follows all groups'. */
+  let intScope = 'all';
+  // The settings the fields edit: all groups', a group's own, or null (a group that
+  // follows all groups': nothing to edit).
+  const edited = ()=> intScope === 'all' ? intensity : groupInt[intScope] || null;
   function renderIntensity(){
     const f = files[cur];
     if (!f) return;
-    const I = intensity, a = f.adj || ADJ_DEF, setv = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = String(+(+v).toPrecision(6)); };
+    if (intScope !== 'all' && !groups.some(g=> g.id === intScope)) intScope = 'all';
+    const scope = $('semIntScope');
+    scope.innerHTML = `<option value="all">All groups</option>` + groups.map(g=> `<option value="${g.id}">${esc(g.name)}${groupInt[g.id] ? ' (own settings)' : ''}</option>`).join('');
+    scope.value = intScope;
+    const E = edited(), I = E || intensity, a = f.adj || ADJ_DEF, setv = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = String(+(+v).toPrecision(6)); };
+    $('semIntOwn').checked = intScope !== 'all' && !!E;
+    $('semIntOwn').disabled = intScope === 'all';
     $('semNorm').value = I.mode;
     for (const [id, [k]] of Object.entries(INT_FIELDS)) setv(id, I[k]);
     for (const [id, [k]] of Object.entries(ADJ_FIELDS)) setv(id, a[k]);
-    // Disabled, not hidden, where the normalisation does not use them.
-    $('semPLo').disabled = $('semPHi').disabled = I.mode !== 'percentile';
-    const rf = refFile();
+    const rf = refFile(I);
     $('semRef').innerHTML = allFiles.map(g=> `<option value="${esc(g.raw.id)}">${esc(g.label)}</option>`).join('');
     if (rf) $('semRef').value = rf.raw.id;
-    $('semRef').disabled = $('semRefOnly').disabled = !usesRef();
     $('semRefOnly').checked = !!(rf && rf.refOnly);
+    // Disabled, not hidden: where the normalisation does not use them, and everything
+    // while a group follows all groups'.
+    $('semNorm').disabled = $('semB').disabled = $('semC').disabled = $('semG').disabled = $('semIntReset').disabled = !E;
+    $('semPLo').disabled = $('semPHi').disabled = !E || I.mode !== 'percentile';
+    $('semRef').disabled = $('semRefOnly').disabled = !E || !usesRef(I);
     drawHist();
   }
   // The crop's histogram (256 bins, heights as the square root of the counts), the
@@ -962,12 +1025,13 @@ import { readTescanTiff } from './sem-read.js';
     for (let x = 0; x <= w; x++){ const y = h - 3 - lut[Math.min(65535, Math.round(x/w*65535))]/255*(h - 6); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.stroke();
     const c = f.crop, sat = c.w*c.h - st.n, satTxt = sat ? `; ${sig(100*sat/(c.w*c.h), 2)} % of the crop saturated, left out` : '';
-    const rf = refFile();
-    const what = intensity.mode === 'none' ? 'The levels as acquired: 0 is black, 65535 white'
-      : intensity.mode === 'percentile' ? `Black at level ${Math.round(nm.lo)}, white at ${Math.round(nm.hi)} (of 65535)`
-      : intensity.mode === 'meansd' ? `Crop mean ${Math.round(st.mean)}, SD ${Math.round(st.sd)}, given those of ${rf ? rf.label : '—'} (${Math.round(statsOf(rf || f).mean)}, ${Math.round(statsOf(rf || f).sd)})`
+    const I = intOf(f), rf = refFile(I), g = groupOf(f);
+    const what = I.mode === 'none' ? 'The levels as acquired: 0 is black, 65535 white'
+      : I.mode === 'percentile' ? `Black at level ${Math.round(nm.lo)}, white at ${Math.round(nm.hi)} (of 65535)`
+      : I.mode === 'meansd' ? `Crop mean ${Math.round(st.mean)}, SD ${Math.round(st.sd)}, given those of ${rf ? rf.label : '—'} (${Math.round(statsOf(rf || f).mean)}, ${Math.round(statsOf(rf || f).sd)})`
       : `The histogram of ${rf ? rf.label : '—'}`;
-    $('semHistNote').textContent = what + satTxt + '.';
+    const whose = g && groupInt[g.id] ? `; the settings of group “${g.name}”` : '';
+    $('semHistNote').textContent = what + satTxt + whose + '.';
   }
   function readField(el, lo, hi){
     const v = parseFloat(String(el.value).trim().replace(',', '.'));
@@ -978,9 +1042,9 @@ import { readTescanTiff } from './sem-read.js';
     const el = $(id);
     el.addEventListener('keydown', e=>{ if (e.key === 'Enter') el.blur(); });
     el.addEventListener('change', ()=>{
-      const v = readField(el, lo, hi);
-      if (v == null || !files.length){ renderIntensity(); return; }
-      intensity[k] = v; refreshLevels(); hist.commit();
+      const v = readField(el, lo, hi), E = edited();
+      if (v == null || !files.length || !E){ renderIntensity(); return; }
+      E[k] = v; refreshLevels(); hist.commit();
     });
   }
   for (const [id, [k, lo, hi]] of Object.entries(ADJ_FIELDS)){
@@ -992,19 +1056,31 @@ import { readTescanTiff } from './sem-read.js';
       f.adj = { ...(f.adj || ADJ_DEF), [k]: v }; refreshLevels(); hist.commit();
     });
   }
-  $('semNorm').addEventListener('change', e=>{ intensity.mode = e.target.value; refreshLevels(); hist.commit(); });
-  $('semRef').addEventListener('change', e=>{ intensity.ref = e.target.value; refreshLevels(); hist.commit(); });
+  $('semIntScope').addEventListener('change', e=>{ intScope = e.target.value; renderIntensity(); });
+  // A group given its own settings starts from all groups'; taken back, it follows them.
+  $('semIntOwn').addEventListener('change', e=>{
+    if (intScope === 'all') return;
+    if (e.target.checked) groupInt[intScope] = { ...intensity }; else delete groupInt[intScope];
+    refreshLevels(); hist.commit();
+  });
+  $('semNorm').addEventListener('change', e=>{ const E = edited(); if (!E) return; E.mode = e.target.value; refreshLevels(); hist.commit(); });
+  $('semRef').addEventListener('change', e=>{ const E = edited(); if (!E) return; E.ref = e.target.value; refreshLevels(); hist.commit(); });
   // Kept out of the figure, the reference also leaves its group (whose field may widen).
-  $('semRefOnly').addEventListener('change', e=>{ const rf = refFile(); if (!rf) return; rf.refOnly = e.target.checked; refreshLevels(); hist.commit(); });
+  $('semRefOnly').addEventListener('change', e=>{ const E = edited(), rf = E && refFile(E); if (!rf) return; rf.refOnly = e.target.checked; refreshLevels(); hist.commit(); });
   $('semAdjReset').addEventListener('click', ()=>{ const f = files[cur]; if (!f) return; f.adj = { ...ADJ_DEF }; refreshLevels(); hist.commit(); });
-  $('semIntReset').addEventListener('click', ()=>{ intensity = { ...INT_DEF, ref: intensity.ref }; refreshLevels(); hist.commit(); });
+  // Defaults: the settings chosen in Settings for.
+  $('semIntReset').addEventListener('click', ()=>{
+    const E = edited(); if (!E) return;
+    Object.assign(E, { ...INT_DEF, ref: E.ref });
+    refreshLevels(); hist.commit();
+  });
 
   /* ---- CSV: each image's metadata and crop ---- */
   registerCsvExport('sem', ()=>{
     if (!files.length) return [];
     let t = csvLine(['file', 'sample', 'magnification', 'pixel_size_nm', 'field_of_view_um', 'HV_kV', 'WD_mm', 'detector', 'detector_gain', 'detector_offset', 'date', 'time',
       'image_width_px', 'image_height_px', 'info_bar_rows', 'crop_x_px', 'crop_y_px', 'crop_width_px', 'crop_height_px', 'crop_width_um', 'crop_height_um',
-      'crop_mean_level', 'crop_sd_level', 'crop_saturated_pct', 'normalisation', 'reference', 'black_level', 'white_level', 'brightness_pct', 'contrast', 'gamma',
+      'crop_mean_level', 'crop_sd_level', 'crop_saturated_pct', 'intensity_settings', 'normalisation', 'reference', 'black_level', 'white_level', 'brightness_pct', 'contrast', 'gamma',
       'group', 'scale', 'figure_x_px', 'figure_y_px', 'figure_width_px', 'figure_height_px', 'figure_pixel_nm', 'figure_out_width_px', 'figure_out_height_px']);
     files.forEach(f=>{
       const e = dec(f); if (!e) return;
@@ -1012,11 +1088,11 @@ import { readTescanTiff } from './sem-read.js';
       // The curve as applied: the levels a linear normalisation takes to black and white
       // (none for the histogram's), and brightness, contrast and gamma with the image's
       // correction in them.
-      const st = statsOf(f), nm = normOf(f), a = f.adj || ADJ_DEF, rf = refFile();
+      const st = statsOf(f), nm = normOf(f), a = f.adj || ADJ_DEF, I = intOf(f), rf = refFile(I), g = groupOf(f);
       t += csvLine([f.name, f.label, fmtNum(r.mag, 6), fmtNum(r.pixelNm, 6), fmtNum(r.fovUm, 6), fmtNum(r.kV, 4), fmtNum(r.wdMm, 4), r.detector, fmtNum(r.gain, 5), fmtNum(r.offset, 5), r.date, r.time,
         r.width, r.imageH, r.strip, c.x, c.y, c.w, c.h, um(c.w), um(c.h),
-        fmtNum(st.mean, 1), fmtNum(st.sd, 1), fmtNum(100*(c.w*c.h - st.n)/(c.w*c.h), 3), intensity.mode, usesRef() && rf ? rf.label : '',
-        nm.table ? '' : fmtNum(nm.lo, 1), nm.table ? '' : fmtNum(nm.hi, 1), fmtNum(intensity.b + a.b, 3), fmtNum(intensity.c*a.c, 4), fmtNum(intensity.g*a.g, 4),
+        fmtNum(st.mean, 1), fmtNum(st.sd, 1), fmtNum(100*(c.w*c.h - st.n)/(c.w*c.h), 3), g && groupInt[g.id] ? 'group' : 'all groups', I.mode, usesRef(I) && rf ? rf.label : '',
+        nm.table ? '' : fmtNum(nm.lo, 1), nm.table ? '' : fmtNum(nm.hi, 1), fmtNum(I.b + a.b, 3), fmtNum(I.c*a.c, 4), fmtNum(I.g*a.g, 4),
         // In its group: the part of the original the figure takes, and its size there
         // (empty for a reference kept out of the figure).
         ...(()=>{ const o = outOf(f), g = groupOf(f); return o ? [g.name, g.mode, o.c.x, o.c.y, o.c.w, o.c.h, fmtNum(o.px, 6), o.w, o.h] : ['', '', '', '', '', '', '', '', '']; })()]);
