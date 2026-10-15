@@ -2901,8 +2901,8 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 .sem-bcg { display: flex; gap: 8px; }
 .sem-bcg > div { flex: 1; min-width: 0; }
 /* A field that the normalisation does not use stays in place, greyed. */
-#semIntensityCard input:disabled, #semIntensityCard select:disabled { opacity: 0.45; cursor: default; }
-#semIntensityCard .sem-check:has(input:disabled) { opacity: 0.45; cursor: default; }
+#semWorkspace input:disabled, #semWorkspace select:disabled { opacity: 0.45; cursor: default; }
+#semWorkspace .sem-check:has(input:disabled) { opacity: 0.45; cursor: default; }
 
 /* ===== SEM: groups and scale ===== */
 .sem-crop-group { margin-top: 10px; }
@@ -2921,8 +2921,13 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   .sem-gimg-pic canvas { max-width: 100%; }
 }
 
-/* ===== SEM: the figure's panels in the preview ===== */
-.sem-fig-svg .sem-fig-panel { cursor: move; }
-.sem-fig-svg .sem-fig-panel.is-dragged { opacity: 0.55; }
-.sem-fig-svg .sem-fig-panel.is-target image { outline: 3px solid var(--accent); }
-.sem-fig-svg .sem-fig-panel.is-target { filter: drop-shadow(0 0 4px var(--accent)); }
+
+/* Groups: an image dragged between them (sem.js) */
+/* A finger may scroll the page over the images; held still, it drags one (sem.js). */
+.sem-gimg { cursor: grab; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.sem-gimg.is-held .sem-gimg-pic canvas { box-shadow: 0 0 0 2px var(--accent); }
+.sem-gimg.is-dragged { opacity: 0.4; }
+.sem-group.is-drop { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.sem-group-new { border-style: dashed; color: var(--muted); font-size: 13px; text-align: center; padding: 16px 10px; background: transparent; }
+.sem-drag-ghost { position: fixed; z-index: 1000; width: 72px; height: auto; pointer-events: none; transform: translate(-50%, -50%); border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); opacity: 0.9; }
+.sem-group-head .sem-group-fig { margin-left: auto; }

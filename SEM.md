@@ -6,7 +6,14 @@ The SEM module takes Tescan images and works on them in five steps:
 2. it crops them;
 3. it sets their grey levels;
 4. it groups them by scale;
-5. it lays them out into a figure with scale bars.
+5. it lays each group out into a figure with scale bars.
+
+The page has three cards, in this order:
+- **File**: the files, ticked in or out;
+- **Groups and scale**: the groups (§4), each with its *Figure composer* button (§5);
+- **Crop and intensity**: one image at a time, its crop (§2) and its grey levels (§3) side by side with the image, the histogram of its crop under it.
+
+The groups come first: an image's crop is then set knowing its group, whose common scale may narrow it (dashed in the editor, §4.2).
 
 The code is in three files: `sem-read.js` (reading), `sem.js` (the module) and
 `sem-figure.js` (the figure).
@@ -79,8 +86,8 @@ says the bar may not be where Tescan puts it.
 The pixels are kept at their depth, scaled to 16 bits (an 8-bit file × 257). A
 WhiteIsZero file is turned the usual way round.
 
-Every view of an image (the crop editor, the thumbnails, the intensity preview) shows
-it through its curve (§3).
+Every view of an image (the editor, the thumbnails, the groups, the figure) shows it
+through its curve (§3).
 
 ## 2. Crop
 
@@ -99,9 +106,12 @@ out.
 
 - **The editor.**
   - Drag a handle or a side to resize the crop, and inside it to move it.
-  - Drag outside it to pan.
-  - The wheel zooms about the pointer (it never scrolls the page under it). The −, Fit and + buttons zoom about the crop's middle.
-  - A double click outside the crop fits the image again.
+  - By default the view stays fitted to the image: the wheel scrolls the page, and a drag outside the crop does nothing.
+  - **The toolbar** over the image, as the plots' toolbar:
+    - **Fit** fits the image again;
+    - **Pan**: a drag moves the view;
+    - **Zoom area**: the rectangle drawn fills the view.
+    - While Pan or Zoom area is on, the wheel zooms about the pointer, a double click fits the image, and the crop is not edited. Clicked again, the tool is put down.
   - Shrunk, the image is drawn smoothed; enlarged past 2×, its pixels stay sharp.
 - **The fields.** X, Y, width and height in pixels, with the crop's size in µm beside them. A value that would run past the image's edge brings the crop back inside it.
 - **The ratio.** 1:1, 4:3, 3:2 or free, applied as width:height. An image starts at the ratio of its default crop (1:1 on the user's files), or free.
@@ -188,9 +198,12 @@ pixel size, the one its common scale brings the others to. A name typed in its f
 stays; emptied, it goes back to the magnification.
 
 **Editing.**
-- An image is moved to another group, or to a new one, with the menu under it. There can be up to one group per image.
+- An image is dragged onto another group, or onto **New group** under the groups, to move it there. A copy of it follows the pointer and the group under it lights.
+  - With a mouse, the drag starts as the pointer moves.
+  - With a finger, the image is held still for 0.3 s first (its border lights). A swipe over the images scrolls the page, as the images fill the card on a phone.
+- There can be up to one group per image.
 - Empty groups disappear.
-- **Regroup** starts again from the pixel sizes.
+- **Regroup** starts again from the pixel sizes. A group made again with the same images keeps its figure.
 
 ### 4.2 Common scale and own scale
 
@@ -235,6 +248,10 @@ image's crop to 873 px of its own pixels (43.65 µm), taken to 800 × 800.
 
 ### 5.1 The page
 
+**One figure per group.** Each group has its own *Figure composer* button and its own
+figure, with its own settings; the figure is titled with the group's name, and its file
+is named after it (`SEM_5.00_kx`) until named otherwise.
+
 The images are laid out as the figure composer (`figure.js`) lays out plots, with the
 same modal and controls:
 - one page in millimetres, previewed as it will be exported, which the wheel zooms and a drag pans;
@@ -245,48 +262,68 @@ There are no axes and no legend.
 
 ### 5.2 Panels
 
-**Which images.** Each image in the figure is one panel: those that are included, and
-not a reference kept out of the figure. It enters as its group made it (§4) and through
-its curve (§3). The preview uses a copy reduced to 520 px; the export uses the full one.
+**Which images.** Each image of the group in the figure is one panel: those that are
+included, and not a reference kept out of the figure. It enters as its group made it
+(§4) and through its curve (§3). The preview uses a copy reduced to 520 px; the export
+uses the full one.
 
-**The grid.** By default it is the most compact rectangle: ⌈√N⌉ columns and ⌈N/columns⌉
-rows (12 images give 4 × 3, not 6 × 2). It can be set by hand; rows are added when too
-few are given.
+**The grid.** It has two levels: **blocks** of **panels**. The images fill one block
+after another, each row by row; 2 × 1 blocks of 2 × 2 panels hold eight images, the
+first four in the left block.
+- **Automatic** (the default): one block, the most compact rectangle: ⌈√N⌉ columns and ⌈N/columns⌉ rows (12 images give 4 × 3, not 6 × 2). Its fields show what was chosen, locked; unticked, they start from it.
+- **By hand**: the panels' rows and columns in a block, and the blocks' rows and columns. Rows of blocks are added when too few places are given.
+- **The gaps**: one between the panels in a block (1 mm by default), one between the blocks (4 mm).
 - The columns are equal.
-- A row is as tall as its tallest image at that width.
-- The panels are a gap apart (1 mm by default).
+- An image row is as tall as its tallest image at that width, across its row of blocks.
 - The height follows from the layout unless set by hand. A set height narrows the images to fit (never widens them), with the grid centred.
 
-**Order.** It starts as the file list's. A panel dragged onto another goes there, and
-the others move along. *As the file list* puts the order back.
+**Order.** It starts as the file list's. In the *Images* list, a row dragged by its
+handle goes to the gap that lights, and the panels follow, as the plots' series are
+reordered in the composer. *As the file list* puts the order back. The row's field is
+the name shown on the panel.
 
 **Names.** Each panel carries its sample's name, editable per panel:
-- in a corner of the image (top left by default) or above or below it;
-- by default white with a dark outline, which reads on any grey;
-- the colour and the outline can be changed.
+- in a corner of the image (top left by default), white with a dark outline by default, which reads on any grey; the colour and the outline can be changed;
+- or outside it: above, below, left or right. Outside, the name is in black on a white page (white on a black one), along the image at the sides, reading upward on the left and downward on the right.
 
 **Letters.** (a), (b)… in the panels' order, off by default, in the styles a, (a), A
 and (A).
-- They are placed apart from the name: in a corner, where a name sharing the corner moves one line in, or above the image.
+- They are placed apart from the name: in a corner, where a name sharing the corner moves one line in, or above the image, on one line with a name above.
 - Or they are placed before the name.
+
+**Room outside.** What is placed outside an image takes a band beside it, the same
+for every panel so that the grid stays aligned: next to the image the scale bar's band,
+outside it the name's. The images narrow to leave room for the bands at the sides.
 
 ### 5.3 Scale bars
 
 - **Which panels.** A group at common scale has one bar, in its last panel in the figure's order. A group at its own scale has one in every panel.
 - **Length.** A round 1, 2 or 5 × 10ⁿ µm nearest (on a log scale) to 22 % of the panel's width, unless typed: any value, as 4.56 µm. It reads in nm under 1 µm.
-- **Placing.** The text is centred over the bar, or flush with its outer end when wider than a short bar. The corner is bottom right by default, the thickness 0.7 mm.
+- **Placing.** In a corner of the image (bottom right by default), or outside it:
+  - above or below, flush with the image's right edge, the length above the bar or under it;
+  - left or right, upright along the image from its bottom, the length along it.
+- **The text** is centred on the bar, or flush with its outer end when wider than a short bar. The thickness is 0.7 mm.
+- Outside, the bar and its length are in the page's ink (black on white), with no outline.
 
 ### 5.4 Settings
 
 The figure's settings are the module's: they are saved with the project, and undone
 and redone with it (Ctrl+Z inside the open figure too).
 
-**Checked** on the user's two images and two copies with other pixel sizes, four panels:
+**Checked** (v439) on the user's two images and two copies with other pixel sizes, four panels:
 - **The grid.** It came out 2 × 2: 175 × 175 mm, 4134 × 4134 px at 600 dpi.
 - **The bars.** There were two, one per group: 10 µm in the 5 kx group's last panel, 2 µm in the 20 kx group's.
 - **Editing.** A typed bar of 4.56 µm, letters, a dragged panel and a 4 × 1 grid were each taken up.
 - **The exports.** The PNG came out 4134 × 1016 px. The SVG was 175 mm wide, held the 4 images, and had the font embedded.
 - **Reload.** The order, the grid and the bar survived it.
+
+**Checked** (v440) on a group of eight images (the user's 5 kx image and seven copies):
+- **Blocks.** 2 × 1 blocks of 2 × 2 panels, gaps 1 and 6 mm: 175 × 84.5 mm, images 41.75 mm wide. The gaps across came out 1, 6, 1 mm and down 1 mm, and the images filled the left block first. As 1 × 2 blocks: 175 × 356 mm, gaps down 1, 6, 1 mm. Asked for one block, the grid went back to two rows of blocks.
+- **Names outside.** Above and below, the page grew to 92.1 mm (8 pt names, a 3.81 mm band each). Left and right, the images narrowed to 37.94 mm, the names upright in the band.
+- **Bars outside.** Above or below: the bar 0.4 mm from the image, flush with its right edge. Left or right: an upright bar 7.25 mm long, ending at the image's bottom edge.
+- **Letter, name and bar all above**: "(a) STO 5kx" on one line, the bar's band under it.
+- **Phone width (390 px).** No sideways scroll. A swipe over the group's images scrolled the page 347 px; a 0.45 s hold and a drag moved an image to the other group.
+- **Exports.** SVG 6.0 MB; PNG 4134 × 4134 px at 600 dpi.
 
 ## 6. Project and export
 
@@ -344,3 +381,11 @@ pixel size and its smallest field, so one scale bar serves it.
 **v439**: the figure (§5). The images are laid out in the figure composer's page: an
 automatic grid, draggable panels, names, letters, a scale bar per group, and PNG/SVG
 export.
+
+**v440**: the page reordered and one figure per group.
+- **Cards.** The groups come before the crop, and crop and intensity are one card. The editor gets the plots' toolbar (fit, pan, zoom area), off by default: the view no longer pans or zooms unless a tool is on.
+- **Groups.** An image is dragged between groups, or onto *New group* (a finger holds it first).
+- **Figures.** Each group has its own *Figure composer* and figure; the Figure card is gone. In the composer, the panels are reordered by the handles of the *Images* list (no more dragging panels on the page).
+- **Grid.** Blocks of panels, each with its own gap.
+- **Outside placing.** Names and scale bars can also be placed outside the images (above, below, left, right).
+- **Older projects.** A project saved before v440 had one figure; each group's figure starts from its settings, its file named after the group.

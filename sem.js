@@ -59,8 +59,9 @@ import { readTescanTiff } from './sem-read.js';
   // The groups (Groups and scale): [{ id, name, named (typed by the user), mode
   // ('common' | 'own'), members (the images' ids) }].
   let groups = [];
-  // The figure's settings (sem-figure.js), null until it is first opened.
-  let figure = null;
+  // Each group's figure settings (sem-figure.js), by the group's id; a group has none
+  // until its figure is first opened.
+  let figures = {};
   // id → { r (readTescanTiff's), small (a box-averaged copy, for the thumbnails) }
   const decoded = new Map();
   // A copy of the image some 112 px across, each pixel the mean of a k × k block, kept
@@ -277,9 +278,7 @@ import { readTescanTiff } from './sem-read.js';
     const view = listView();
     renderUnifiedFileList('semFileTableWrap', view, fileCallbacks(), extraCols.map(c=> ({ header: c.header, render: (_, i)=> c.render(allFiles[i]) })));
     document.getElementById('semWorkspace').style.display = files.length ? 'block' : 'none';
-    document.getElementById('semIntensityCard').style.display = files.length ? 'block' : 'none';
     document.getElementById('semGroupsCard').style.display = files.length ? 'block' : 'none';
-    document.getElementById('semFigureCard').style.display = files.length ? 'block' : 'none';
     syncGroups();
     // The editor's image is rebuilt: the files, and with them the reference, may differ.
     off = null;
@@ -290,13 +289,16 @@ import { readTescanTiff } from './sem-read.js';
   /* ---- Undo / project state ---- */
   function semSnapshot(){
     return { files: allFiles.map(f=> ({ ...f, crop: { ...f.crop }, adj: { ...(f.adj || ADJ_DEF) } })), cur, intensity: { ...intensity },
-      groups: groups.map(g=> ({ ...g, members: g.members.slice() })), figure: figure ? JSON.parse(JSON.stringify(figure)) : null };
+      groups: groups.map(g=> ({ ...g, members: g.members.slice() })), figures: JSON.parse(JSON.stringify(figures)) };
   }
   function semRestore(s){
     allFiles = (s && s.files || []).map(f=> ({ ...f, crop: { ...f.crop }, adj: { ...ADJ_DEF, ...(f.adj || {}) }, raw: f.raw instanceof RawRef ? f.raw : new RawRef(f.raw.id, f.raw.b64) }));
     intensity = { ...INT_DEF, ...(s && s.intensity || {}) };
     groups = (s && s.groups || []).map(g=> ({ ...g, members: (g.members || []).slice() }));
-    figure = s && s.figure ? JSON.parse(JSON.stringify(s.figure)) : null;
+    figures = s && s.figures ? JSON.parse(JSON.stringify(s.figures)) : {};
+    // A project saved before v440 had one figure for all the groups: each group starts
+    // from it, its file named after the group.
+    if (s && !s.figures && s.figure) for (const g of groups){ const f = JSON.parse(JSON.stringify(s.figure)); delete f.file; figures[g.id] = f; }
     // Images whose bytes no longer read are left out of the list, and said so.
     const lost = allFiles.filter(f=> !dec(f));
     allFiles = allFiles.filter(f=> !lost.includes(f));
@@ -309,7 +311,7 @@ import { readTescanTiff } from './sem-read.js';
     if (figApi && figApi.open) figApi.refresh();
   }
   const hist = registerHistory('sem', semSnapshot, semRestore);
-  registerTabRedraw('sem', ()=>{ if (files.length){ fitView(); drawEditor(); drawPreview(); drawHist(); } });
+  registerTabRedraw('sem', ()=>{ if (files.length){ fitView(); drawEditor(); drawHist(); } });
 
   /* ---- Rendering ---- */
   function renderAll(){
@@ -328,7 +330,6 @@ import { readTescanTiff } from './sem-read.js';
     const f = files[cur];
     const name = f ? `${f.label}  (${cur + 1}/${files.length})` : '';
     document.getElementById('semCurName').textContent = name;
-    document.getElementById('semICurName').textContent = name;
   }
   function renderInfo(){
     const f = files[cur], e = f && dec(f);
@@ -400,8 +401,6 @@ import { readTescanTiff } from './sem-read.js';
   }
   document.getElementById('semPrev').addEventListener('click', ()=> go(cur - 1));
   document.getElementById('semNext').addEventListener('click', ()=> go(cur + 1));
-  document.getElementById('semIPrev').addEventListener('click', ()=> go(cur - 1));
-  document.getElementById('semINext').addEventListener('click', ()=> go(cur + 1));
 
   /* ---- The crop editor ----
      The image drawn into a canvas with the view (scale s in CSS px a pixel, and the
@@ -463,6 +462,12 @@ import { readTescanTiff } from './sem-read.js';
       ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 1;
       ctx.fillRect(X(hx) - 4.5, Y(hy) - 4.5, 9, 9); ctx.strokeRect(X(hx) - 4.5, Y(hy) - 4.5, 9, 9);
     }
+    // The area being drawn with Zoom area (the plots' colours).
+    if (zoomBox){
+      const zx = Math.min(zoomBox.x0, zoomBox.x1), zy = Math.min(zoomBox.y0, zoomBox.y1), zw = Math.abs(zoomBox.x1 - zoomBox.x0), zh = Math.abs(zoomBox.y1 - zoomBox.y0);
+      ctx.fillStyle = 'rgba(100,160,255,0.12)'; ctx.fillRect(zx, zy, zw, zh);
+      ctx.strokeStyle = 'rgba(100,160,255,0.7)'; ctx.lineWidth = 1; ctx.strokeRect(zx + 0.5, zy + 0.5, zw, zh);
+    }
   }
   // The handles, in image pixels: corners and the middle of each side.
   const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -522,46 +527,76 @@ import { readTescanTiff } from './sem-read.js';
     h = Math.max(Math.max(minH, minW/r), Math.min(h, room, W/r)); w = h*r;
     return fitCrop({ x: cx - w/2, y: B ? y0 : y1 - h, w, h }, W, H, r);
   }
-  let drag = null;
+  /* The toolbar on the image, as on the plots: Fit, Pan and Zoom area. With no tool on,
+     the image stays fitted and still, the wheel scrolls the page, and a drag works the
+     crop; Pan drags the view, Zoom area zooms into the rectangle drawn. With a tool on,
+     the wheel zooms about the pointer and a double click fits the image again. */
+  let tool = null, drag = null, zoomBox = null;
+  function setTool(t){
+    tool = t;
+    document.getElementById('semToolPan').classList.toggle('is-on', t === 'pan');
+    document.getElementById('semToolZoom').classList.toggle('is-on', t === 'zoom');
+    host.closest('.plot-wrap').classList.toggle('tool-armed', !!t);
+    host.style.cursor = t === 'pan' ? 'move' : t === 'zoom' ? 'crosshair' : '';
+  }
+  document.getElementById('semToolPan').addEventListener('click', ()=> setTool(tool === 'pan' ? null : 'pan'));
+  document.getElementById('semToolZoom').addEventListener('click', ()=> setTool(tool === 'zoom' ? null : 'zoom'));
+  document.getElementById('semToolFit').addEventListener('click', ()=>{ fitView(); drawEditor(); });
   host.addEventListener('pointerdown', e=>{
     if (e.button !== 0 || !files.length) return;
     const b = canvas.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
-    const mode = hitTest(px, py, e.pointerType === 'touch'), f = files[cur];
+    const mode = tool || hitTest(px, py, e.pointerType === 'touch'), f = files[cur];
+    // Outside the crop with no tool on, nothing: the view does not move unless asked.
+    if (mode === 'pan' && !tool) return;
     drag = { mode, px, py, c0: { ...f.crop }, ox: view.ox, oy: view.oy, moved: false };
     host.setPointerCapture(e.pointerId);
-    host.style.cursor = mode === 'pan' ? 'grabbing' : CURSOR[mode];
+    if (mode === 'pan') host.style.cursor = 'grabbing';
+    else if (mode !== 'zoom') host.style.cursor = CURSOR[mode];
     e.preventDefault();
   });
   host.addEventListener('pointermove', e=>{
     const b = canvas.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
-    if (!drag){ if (files.length) host.style.cursor = CURSOR[hitTest(px, py, e.pointerType === 'touch')]; return; }
+    if (!drag){
+      if (files.length && !tool){ const m = hitTest(px, py, e.pointerType === 'touch'); host.style.cursor = m === 'pan' ? '' : CURSOR[m]; }
+      return;
+    }
     const f = files[cur], r = dec(f).r, W = r.width, H = r.imageH;
     const dx = (px - drag.px)/view.s, dy = (py - drag.py)/view.s;
     drag.moved = drag.moved || Math.abs(px - drag.px) + Math.abs(py - drag.py) > 2;
     if (drag.mode === 'pan'){ view.ox = drag.ox + px - drag.px; view.oy = drag.oy + py - drag.py; }
-    else if (drag.mode === 'move') f.crop = fitCrop({ ...drag.c0, x: drag.c0.x + dx, y: drag.c0.y + dy }, W, H, null);
-    else f.crop = resized(drag.c0, drag.mode, dx, dy, W, H, ASPECTS[f.aspect]);
-    if (drag.mode !== 'pan'){ f.clamped = false; renderFields(); }
+    else if (drag.mode === 'zoom') zoomBox = { x0: drag.px, y0: drag.py, x1: px, y1: py };
+    else {
+      if (drag.mode === 'move') f.crop = fitCrop({ ...drag.c0, x: drag.c0.x + dx, y: drag.c0.y + dy }, W, H, null);
+      else f.crop = resized(drag.c0, drag.mode, dx, dy, W, H, ASPECTS[f.aspect]);
+      f.clamped = false; renderFields();
+    }
     drawEditor();
   });
   const endDrag = ()=>{
     if (!drag) return;
-    const d = drag; drag = null; host.style.cursor = '';
-    if (d.mode !== 'pan' && d.moved) cropChanged();
+    const d = drag; drag = null;
+    host.style.cursor = tool === 'pan' ? 'move' : tool === 'zoom' ? 'crosshair' : '';
+    if (d.mode === 'zoom'){
+      const z = zoomBox; zoomBox = null;
+      // The rectangle drawn fills the pane (one too small to mean one is ignored).
+      if (z && Math.abs(z.x1 - z.x0) > 5 && Math.abs(z.y1 - z.y0) > 5){
+        const w = Math.abs(z.x1 - z.x0), h = Math.abs(z.y1 - z.y0), x = Math.min(z.x0, z.x1), y = Math.min(z.y0, z.y1);
+        const k = Math.min(host.clientWidth/w, host.clientHeight/h), s2 = Math.min(32, view.s*k);
+        const ix = (x + w/2 - view.ox)/view.s, iy = (y + h/2 - view.oy)/view.s;
+        view.s = s2; view.ox = host.clientWidth/2 - ix*s2; view.oy = host.clientHeight/2 - iy*s2;
+      }
+      drawEditor();
+    } else if (d.mode !== 'pan' && d.moved) cropChanged();
   };
   host.addEventListener('pointerup', endDrag);
   host.addEventListener('pointercancel', endDrag);
   host.addEventListener('wheel', e=>{
-    if (!files.length) return;
-    // Swallowed, as in the figure composer: the page never scrolls under it.
+    if (!files.length || !tool) return;
     e.preventDefault();
-    const b = canvas.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
-    zoomAt(px, py, Math.exp(-e.deltaY*0.004));
-  }, { passive: false });
-  host.addEventListener('dblclick', e=>{
     const b = canvas.getBoundingClientRect();
-    if (hitTest(e.clientX - b.left, e.clientY - b.top, false) === 'pan'){ fitView(); drawEditor(); }
-  });
+    zoomAt(e.clientX - b.left, e.clientY - b.top, Math.exp(-e.deltaY*0.004));
+  }, { passive: false });
+  host.addEventListener('dblclick', ()=>{ if (tool){ fitView(); drawEditor(); } });
   function zoomAt(px, py, k){
     const f = files[cur], e = dec(f);
     const fit = Math.min(host.clientWidth/e.r.width, host.clientHeight/e.r.imageH);
@@ -569,11 +604,6 @@ import { readTescanTiff } from './sem-read.js';
     view.ox = px - (px - view.ox)*s2/view.s; view.oy = py - (py - view.oy)*s2/view.s; view.s = s2;
     drawEditor();
   }
-  // The buttons zoom about the crop's centre.
-  const zoomCrop = k =>{ const c = files[cur].crop; zoomAt(view.ox + (c.x + c.w/2)*view.s, view.oy + (c.y + c.h/2)*view.s, k); };
-  document.getElementById('semZoomIn').addEventListener('click', ()=> zoomCrop(1.5));
-  document.getElementById('semZoomOut').addEventListener('click', ()=> zoomCrop(1/1.5));
-  document.getElementById('semZoomFit').addEventListener('click', ()=>{ fitView(); drawEditor(); });
 
   // A crop set (dragged, typed, reset, re-ratioed): the linked images follow, and it
   // is one step of the history.
@@ -699,6 +729,7 @@ import { readTescanTiff } from './sem-read.js';
     allFiles.forEach(f=>{ if (!placed.has(f.raw.id) && dec(f)) placeImage(f); });
     groups = groups.filter(g=> g.members.length);
     groups.forEach(g=>{ if (!g.named) g.name = groupName(g.members); });
+    for (const k of Object.keys(figures)) if (!groups.some(g=> g.id === k)) delete figures[k];
     // Lowest magnification first.
     groups.sort((a, b)=> pixelOf(byId(b.members[0])) - pixelOf(byId(a.members[0])));
   }
@@ -748,7 +779,6 @@ import { readTescanTiff } from './sem-read.js';
   function renderGroups(){
     const box = document.getElementById('semGroups');
     if (!box || !files.length) return;
-    const opts = gid => groups.map(g=> `<option value="${g.id}"${g.id === gid ? ' selected' : ''}>${esc(g.name)}</option>`).join('');
     box.innerHTML = groups.map(g=>{
       const mem = g.members.map(byId).filter(m=> m && inFigure(m));
       if (!mem.length) return '';
@@ -760,13 +790,15 @@ import { readTescanTiff } from './sem-read.js';
           <input type="text" class="sem-group-name" data-g="${g.id}" value="${esc(g.name)}" aria-label="Group name">
           <select class="sem-group-mode" data-g="${g.id}"><option value="common"${g.mode === 'common' ? ' selected' : ''}>common scale</option><option value="own"${g.mode === 'own' ? ' selected' : ''}>own scale</option></select>
           <span class="txt-meta sem-group-info">${info}</span>
+          <button class="btn primary btn-sm sem-group-fig" type="button" data-fig="${g.id}" title="Lay this group's images out into a figure">Figure composer</button>
         </div>
         <div class="sem-group-imgs">${mem.map(m=>{ const oo = outOf(m), cut = 1 - oo.c.w*oo.c.h/(m.crop.w*m.crop.h), red = oo.px/pixelOf(m);
           return `<div class="sem-gimg" data-id="${esc(m.raw.id)}"><div class="sem-gimg-pic"></div><span class="sem-thumb-cap" title="${esc(m.label)}">${esc(m.label)}</span>
-            <span class="txt-meta">${g.mode === 'own' ? `${sig(pixelOf(m), 4)} nm/px` : `${cut > 0.0005 ? `narrowed ${sig(100*cut, 2)} %` : 'whole crop'}${red > 1.0005 ? `, reduced ×${sig(1/red, 3)}` : ''}`}</span>
-            <select class="sem-move" data-id="${esc(m.raw.id)}" aria-label="Move to group">${opts(g.id)}${groups.length < allFiles.length ? '<option value="new">new group</option>' : ''}</select></div>`; }).join('')}</div>
+            <span class="txt-meta">${g.mode === 'own' ? `${sig(pixelOf(m), 4)} nm/px` : `${cut > 0.0005 ? `narrowed ${sig(100*cut, 2)} %` : 'whole crop'}${red > 1.0005 ? `, reduced ×${sig(1/red, 3)}` : ''}`}</span></div>`; }).join('')}</div>
       </div>`;
-    }).join('');
+    }).join('')
+    // Where an image dropped starts a group of its own (up to one group an image).
+      + (groups.length < allFiles.length ? `<div class="sem-group sem-group-new" data-g="new">New group: drop an image here</div>` : '');
     box.querySelectorAll('.sem-gimg').forEach(el=>{ const f = byId(el.dataset.id), cv = f && outCanvas(f, 150); if (cv) el.querySelector('.sem-gimg-pic').appendChild(cv); });
   }
   const groupsBox = document.getElementById('semGroups');
@@ -780,21 +812,82 @@ import { readTescanTiff } from './sem-read.js';
     } else if (t.classList.contains('sem-group-mode')){
       const g = groups.find(g=> g.id === t.dataset.g); if (!g) return;
       g.mode = t.value;
-    } else if (t.classList.contains('sem-move')){
-      const id = t.dataset.id, from = groups.find(g=> g.members.includes(id));
-      if (from) from.members = from.members.filter(m=> m !== id);
-      if (t.value === 'new') groups.push({ id: newGroupId(), name: '', named: false, mode: 'common', members: [id] });
-      else { const to = groups.find(g=> g.id === t.value); if (to) to.members.push(id); }
-      groups = groups.filter(g=> g.members.length);
-      groups.forEach(g=>{ if (!g.named) g.name = groupName(g.members); });
     } else return;
     renderGroups(); renderFields(); drawEditor();
     hist.commit();
   });
+  // An image into another group, or into a new one; emptied groups go, unnamed ones are
+  // named again.
+  function moveImage(id, to){
+    const from = groups.find(g=> g.members.includes(id));
+    if (!from || from.id === to) return;
+    if (to === 'new' && from.members.length === 1) return;
+    from.members = from.members.filter(m=> m !== id);
+    if (to === 'new') groups.push({ id: newGroupId(), name: '', named: false, mode: 'common', members: [id] });
+    else { const g = groups.find(g=> g.id === to); if (!g) return; g.members.push(id); }
+    groups = groups.filter(g=> g.members.length);
+    groups.forEach(g=>{ if (!g.named) g.name = groupName(g.members); });
+    // Its figure goes with a group that is gone.
+    for (const k of Object.keys(figures)) if (!groups.some(g=> g.id === k)) delete figures[k];
+    renderGroups(); renderFields(); drawEditor();
+    hist.commit();
+  }
+  /* Dragging an image between groups (pointer events: a mouse and a finger alike): a
+     copy of it follows the pointer, the group under it lights, and the drop moves it
+     there. A press without a move does nothing. A finger first holds the image still a
+     moment: a swipe over the images, which fill the card on a phone, scrolls the page. */
+  let gdrag = null;
+  const HOLD_MS = 300;
+  groupsBox.addEventListener('pointerdown', e=>{
+    const card = e.target.closest('.sem-gimg');
+    if (!card || e.button !== 0) return;
+    const touch = e.pointerType === 'touch';
+    gdrag = { id: card.dataset.id, card, x0: e.clientX, y0: e.clientY, ghost: null, over: null, held: !touch, timer: 0 };
+    if (touch) gdrag.timer = setTimeout(()=>{ if (gdrag && gdrag.card === card){ gdrag.held = true; card.classList.add('is-held'); } }, HOLD_MS);
+    else { card.setPointerCapture(e.pointerId); e.preventDefault(); }
+  });
+  groupsBox.addEventListener('pointermove', e=>{
+    if (!gdrag) return;
+    const moved = Math.abs(e.clientX - gdrag.x0) + Math.abs(e.clientY - gdrag.y0);
+    // A finger that moves before the hold is a scroll: no drag.
+    if (!gdrag.held){ if (moved > 8) endGroupDrag(); return; }
+    if (!gdrag.ghost){
+      if (moved < 5) return;
+      const pic = gdrag.card.querySelector('canvas'), g = document.createElement('canvas');
+      g.width = pic.width; g.height = pic.height; g.getContext('2d').drawImage(pic, 0, 0);
+      g.className = 'sem-drag-ghost'; document.body.appendChild(g);
+      gdrag.ghost = g; gdrag.card.classList.add('is-dragged');
+    }
+    gdrag.ghost.style.left = e.clientX + 'px'; gdrag.ghost.style.top = e.clientY + 'px';
+    const under = document.elementFromPoint(e.clientX, e.clientY), grp = under && under.closest('.sem-group');
+    const to = grp && groupsBox.contains(grp) ? grp.dataset.g : null;
+    if (to !== gdrag.over){ groupsBox.querySelectorAll('.sem-group').forEach(el=> el.classList.toggle('is-drop', el.dataset.g === to)); gdrag.over = to; }
+  });
+  // Held, the finger drags the image, not the page.
+  groupsBox.addEventListener('touchmove', e=>{ if (gdrag && gdrag.held && e.cancelable) e.preventDefault(); }, { passive: false });
+  groupsBox.addEventListener('contextmenu', e=>{ if (gdrag) e.preventDefault(); });
+  const endGroupDrag = ()=>{
+    if (!gdrag) return;
+    const d = gdrag; gdrag = null;
+    clearTimeout(d.timer);
+    if (d.ghost) d.ghost.remove();
+    d.card.classList.remove('is-dragged', 'is-held');
+    groupsBox.querySelectorAll('.sem-group').forEach(el=> el.classList.remove('is-drop'));
+    if (d.ghost && d.over) moveImage(d.id, d.over);
+  };
+  groupsBox.addEventListener('pointerup', endGroupDrag);
+  groupsBox.addEventListener('pointercancel', endGroupDrag);
+  groupsBox.addEventListener('click', e=>{ const b = e.target.closest('[data-fig]'); if (b) openFigure(b.dataset.fig); });
   groupsBox.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.classList.contains('sem-group-name')) e.target.blur(); });
   document.getElementById('semRegroup').addEventListener('click', ()=>{
+    const key = g => g.members.slice().sort().join('|'), old = new Map(groups.map(g=> [key(g), figures[g.id]]));
     groups = [];
-    syncGroups(); renderGroups(); renderFields(); drawEditor();
+    syncGroups();
+    // A group made again with the same images keeps its figure.
+    const kept = {};
+    groups.forEach(g=>{ const f = old.get(key(g)); if (f) kept[g.id] = f; });
+    figures = kept;
+    renderGroups(); renderFields(); drawEditor();
     hist.commit();
   });
 
@@ -804,22 +897,25 @@ import { readTescanTiff } from './sem-read.js';
      whenever its pixels would (its narrowed crop, the curve and what the curve is
      computed from), so that it is drawn again only then. */
   let figApi = null;
-  function figureImages(){
+  // A group's images in its figure, in the file list's order.
+  function figureImages(gid){
     const rf = refFile(), refKey = usesRef() && rf ? `${rf.raw.id}:${JSON.stringify(rf.crop)}` : '';
-    return files.filter(inFigure).map(f=>{
+    return files.filter(f=> inFigure(f) && groupOf(f) && groupOf(f).id === gid).map(f=>{
       const o = outOf(f), g = groupOf(f);
       if (!o || !g) return null;
       return { id: f.raw.id, label: f.label, group: { id: g.id, name: g.name, mode: g.mode }, w: o.w, h: o.h, pxNm: o.px,
         key: JSON.stringify([o, intensity, f.adj || ADJ_DEF, refKey]), canvas: fit => outCanvas(f, fit) };
     }).filter(Boolean);
   }
-  document.getElementById('semFigOpen').addEventListener('click', async ()=>{
-    if (!files.length) return;
+  async function openFigure(gid){
+    const g = groups.find(g=> g.id === gid);
+    if (!g) return;
     const mod = await import('./sem-figure.js');
-    figApi = mod.openSemFigure({ images: figureImages, getFig: ()=> figure, setFig: f=>{ figure = f; hist.commit(); } });
-  });
+    figApi = mod.openSemFigure({ title: g.name, images: ()=> figureImages(gid), getFig: ()=> figures[gid] || null,
+      setFig: f=>{ figures[gid] = f; hist.commit(); } });
+  }
 
-  /* ---- The intensity card ---- */
+  /* ---- Intensity (the Crop and intensity card) ---- */
   const $ = id => document.getElementById(id);
   // The fields, with the range each takes; a value outside it is refused (the field
   // shakes and shows the last good one).
@@ -839,21 +935,7 @@ import { readTescanTiff } from './sem-read.js';
     if (rf) $('semRef').value = rf.raw.id;
     $('semRef').disabled = $('semRefOnly').disabled = !usesRef();
     $('semRefOnly').checked = !!(rf && rf.refOnly);
-    drawPreview(); drawHist();
-  }
-  // The current crop as it will be shown, fitted to the column (at most 60 % of the
-  // window's height).
-  function drawPreview(){
-    const f = files[cur], e = f && dec(f), cv = $('semPreview'), box = cv.parentElement;
-    if (!e || !box.clientWidth) return;
-    const c = f.crop, w = box.clientWidth, h = Math.max(120, Math.min(Math.round(w*c.h/c.w), Math.round(window.innerHeight*0.6)));
-    box.style.height = h + 'px';
-    const dpr = window.devicePixelRatio || 1;
-    cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
-    const ctx = cv.getContext('2d'), img = toCanvas(e.r.pixels, e.r.width, c.x, c.y, c.w, c.h, lutOf(f));
-    const s = Math.min(cv.width/c.w, cv.height/c.h);
-    ctx.imageSmoothingEnabled = s < 2; ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, (cv.width - s*c.w)/2, (cv.height - s*c.h)/2, s*c.w, s*c.h);
+    drawHist();
   }
   // The crop's histogram (256 bins, heights as the square root of the counts), the
   // curve over it (level → grey), and where a linear normalisation puts black and white.

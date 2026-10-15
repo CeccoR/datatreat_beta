@@ -1,4 +1,4 @@
-import { colorPickerUI, flashFieldInvalid } from './utils.js';
+import { colorPickerUI, flashFieldInvalid, dropGap } from './utils.js';
 import { FONTS, PX_MM, PT_PX, saveBlob, interFontCss } from './figure.js';
 
 /* =========================================================
@@ -9,21 +9,26 @@ import { FONTS, PX_MM, PT_PX, saveBlob, interFontCss } from './figure.js';
    each with its sample's name, optionally a letter, and the scale bars.
 
    The grid is the most compact rectangle for the images (columns ⌈√N⌉, rows ⌈N/cols⌉:
-   12 images 4 × 3, not 6 × 2) unless set by hand; its columns are equal, a row as tall
-   as its tallest image at that width, the panels a gap apart. A group at common scale
+   12 images 4 × 3, not 6 × 2) unless set by hand, the panels in the order of the images'
+   rows, which their handles reorder. By hand it has two levels: blocks of panels (2 × 1
+   blocks of 2 × 2 panels hold eight images), with a gap between panels and another
+   between blocks. Names and scale bars go in a corner of the image or outside it (above,
+   below, left, right), in bands kept the same for every panel so that the grid stays
+   aligned. A group at common scale
    (sem.js) has one scale bar, in its last panel in the figure's order; at its own scale
    every panel has its own. A bar's length is a round 1, 2 or 5 × 10ⁿ near a fifth of the
    panel unless typed (any value). The images come in their figure's pixels (sem.js
    outCanvas): a reduced copy for the preview, the full one for the export.
 
-   The settings are the SEM module's (saved with the project, undone with it): the host
-   gives them (getFig) and takes them back (setFig) on every change.
+   One figure a group (sem.js): its images, and its settings, which are the SEM module's
+   (saved with the project, undone with it): the host gives them (getFig) and takes them
+   back (setFig) on every change.
 ========================================================= */
 
 const MM_PT = 25.4/72;
 const FIG_DEF = {
   file: 'SEM_figure', wmm: 175, hmm: 120, hAuto: true, dpi: 600, bg: '#ffffff',
-  gridAuto: true, rows: 1, cols: 1, gap: 1,
+  gridAuto: true, rows: 1, cols: 1, gap: 1, bRows: 1, bCols: 1, bGap: 4,
   order: [], names: {},
   label: { on: true, pos: 'tl', size: 8 },
   letter: { on: false, style: '(a)', pos: 'tl', link: false, size: 9 },
@@ -76,10 +81,13 @@ function ordered(){
   for (const m of imgs) if (!seen.has(m.id)) out.push(m);
   return out;
 }
+/* The grid: blocks (bRows × bCols) of panels (rows × cols each), filled block by block,
+   in reading order. Automatic: one block, the most compact rectangle. By hand, blocks
+   rows are added where the images would not fit. */
 function gridOf(n){
-  if (F.gridAuto){ const cols = Math.max(1, Math.ceil(Math.sqrt(n))); return { cols, rows: Math.max(1, Math.ceil(n/cols)) }; }
-  const cols = Math.max(1, F.cols);
-  return { cols, rows: Math.max(F.rows, Math.ceil(n/cols)) };
+  if (F.gridAuto){ const cols = Math.max(1, Math.ceil(Math.sqrt(n))); return { cols, rows: Math.max(1, Math.ceil(n/cols)), bRows: 1, bCols: 1 }; }
+  const cols = Math.max(1, F.cols), rows = Math.max(1, F.rows), bCols = Math.max(1, F.bCols);
+  return { cols, rows, bCols, bRows: Math.max(F.bRows, Math.ceil(n/(rows*cols*bCols))) };
 }
 function urlOf(m, full){
   const k = m.id + (full ? '|full' : '|prev'), c = urls.get(k);
@@ -91,55 +99,78 @@ function urlOf(m, full){
 }
 
 /* ---- Geometry (mm) ----
-   { W, H, panels: [{ m, k (its index), x, y, w, h (the image), cx, cw (its cell) }],
-     bandA, bandB (the text bands above and below each row) }. */
+   Each panel is a cell: the image with bands around it for what is drawn outside it
+   (names, letters above, scale bars), the same for every panel so that the grid stays
+   aligned. Next to the image a scale bar's band, outside it the name's. The columns
+   are equal; an image row is as tall as the tallest image in it across its block row.
+   { W, H, grid, bands, panels: [{ m, k, x, y, w, h (the image), cx, cy (its cell's
+   top left), rowH (its image row's height) }] }. */
+const lineOf = pt => pt*MM_PT*1.35;
+function bandsOf(){
+  const lp = F.label.on ? F.label.pos : null, bp = F.bar.pos;
+  const letterAbove = F.letter.on && !F.letter.link && F.letter.pos === 'above';
+  const bar = F.bar.thick + lineOf(F.bar.size) + 0.6, name = lineOf(F.label.size);
+  return {
+    bar, name,
+    top: Math.max(lp === 'above' ? name : 0, letterAbove ? lineOf(F.letter.size) : 0) + (bp === 'above' ? bar : 0),
+    bottom: (lp === 'below' ? name : 0) + (bp === 'below' ? bar : 0),
+    left: (lp === 'left' ? name : 0) + (bp === 'left' ? bar : 0),
+    right: (lp === 'right' ? name : 0) + (bp === 'right' ? bar : 0),
+  };
+}
 function layout(){
-  const imgs = ordered(), n = imgs.length, { rows, cols } = gridOf(n), g = F.gap, W = F.wmm;
-  const lineMm = pt => pt*MM_PT*1.35;
-  const outsideL = F.label.on && (F.label.pos === 'above' || F.label.pos === 'below') ? F.label.pos : null;
-  const outsideT = F.letter.on && !F.letter.link && F.letter.pos === 'above' ? 'above' : null;
-  const bandA = Math.max(outsideL === 'above' ? lineMm(F.label.size) : 0, outsideT ? lineMm(F.letter.size) : 0);
-  const bandB = outsideL === 'below' ? lineMm(F.label.size) : 0;
-  let cellW = (W - (cols - 1)*g)/cols;
-  const rowAsp = [];
-  for (let r = 0; r < rows; r++){ const row = imgs.slice(r*cols, (r + 1)*cols); rowAsp.push(row.length ? Math.max(...row.map(m=> m.h/m.w)) : 0); }
-  const fixed = rows*(bandA + bandB) + (rows - 1)*g, imgH = rowAsp.reduce((a, b)=> a + b, 0)*cellW;
-  let H = fixed + imgH, k = 1;
-  // A height set by hand: the images narrowed to fit it (never widened), the grid centred.
-  if (!F.hAuto){ H = F.hmm; if (imgH > 0) k = Math.min(1, Math.max(0.05, (H - fixed)/imgH)); }
-  const cw = cellW*k, x0 = (W - (cols*cw + (cols - 1)*g))/2;
-  const used = fixed + imgH*k, y00 = F.hAuto ? 0 : Math.max(0, (H - used)/2);
-  const panels = [];
-  let y = y00;
-  for (let r = 0; r < rows; r++){
-    const rh = rowAsp[r]*cw;
-    for (let c = 0; c < cols; c++){
-      const i = r*cols + c, m = imgs[i];
-      if (!m) continue;
-      const w = cw, h = cw*m.h/m.w, cx = x0 + c*(cw + g);
-      panels.push({ m, k: i, x: cx, y: y + bandA + (rh - h)/2, w, h, cx, cw, rowY: y, rowH: rh });
+  const imgs = ordered(), n = imgs.length, G = gridOf(n), { rows, cols, bRows, bCols } = G;
+  const g = F.gap, bg = F.bGap, W = F.wmm, B = bandsOf();
+  const per = rows*cols, at = i => { const b = Math.floor(i/per), j = i % per; return { br: Math.floor(b/bCols), bc: b % bCols, r: Math.floor(j/cols), c: j % cols }; };
+  // Each image row's height over the image width: its tallest image's.
+  const asp = Array.from({ length: bRows }, ()=> new Array(rows).fill(0));
+  imgs.forEach((m, i)=>{ const q = at(i); asp[q.br][q.r] = Math.max(asp[q.br][q.r], m.h/m.w); });
+  const used = asp.map(rr=> rr.filter(a=> a > 0).length);
+  let iw = Math.max(1, (W - (bCols - 1)*bg - bCols*(cols - 1)*g)/(bCols*cols) - B.left - B.right);
+  const fixed = asp.reduce((t, rr, br)=> t + used[br]*(B.top + B.bottom) + Math.max(0, used[br] - 1)*g, 0) + Math.max(0, asp.filter((_, br)=> used[br]).length - 1)*bg;
+  const sumAsp = asp.flat().reduce((a, b)=> a + b, 0);
+  let H = fixed + sumAsp*iw;
+  // A height set by hand: the images narrowed to fit it (never widened), centred.
+  if (!F.hAuto){ H = F.hmm; if (sumAsp > 0) iw *= Math.min(1, Math.max(0.05, (H - fixed)/(sumAsp*iw))); }
+  const cellW = B.left + iw + B.right, blockW = cols*cellW + (cols - 1)*g, usedW = bCols*blockW + (bCols - 1)*bg;
+  const x0 = (W - usedW)/2, y0 = F.hAuto ? 0 : Math.max(0, (H - fixed - sumAsp*iw)/2);
+  // Where each image row starts.
+  const rowY = [], rowH = [];
+  let y = y0;
+  for (let br = 0; br < bRows; br++){
+    rowY.push([]); rowH.push([]);
+    if (!used[br]) continue;
+    for (let r = 0; r < rows; r++){
+      rowY[br][r] = y; rowH[br][r] = asp[br][r]*iw;
+      if (asp[br][r] > 0) y += B.top + asp[br][r]*iw + B.bottom + g;
     }
-    y += bandA + rh + bandB + g;
+    y += bg - g;
   }
-  return { W, H, panels, rows, cols, bandA, bandB };
+  const panels = imgs.map((m, i)=>{
+    const q = at(i), cx = x0 + q.bc*(blockW + bg) + q.c*(cellW + g), cy = rowY[q.br][q.r], rh = rowH[q.br][q.r], h = iw*m.h/m.w;
+    return { m, k: i, x: cx + B.left, y: cy + B.top + (rh - h)/2, w: iw, h, cx, cy, rowH: rh };
+  });
+  return { W, H, panels, grid: G, bands: B };
 }
 
 /* ---- Drawing ---- */
 function draw(svg, full){
-  const L = layout(), px = v => v*PX_MM, NS = 'http://www.w3.org/2000/svg';
+  const L = layout(), B = L.bands, px = v => v*PX_MM, NS = 'http://www.w3.org/2000/svg';
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   svg.setAttribute('viewBox', `0 0 ${px(L.W)} ${px(L.H)}`);
   const add = (tag, at, parent) => { const el = document.createElementNS(NS, tag); for (const k in at) el.setAttribute(k, at[k]); (parent || svg).appendChild(el); return el; };
   add('rect', { x: 0, y: 0, width: px(L.W), height: px(L.H), fill: F.bg });
-  const stack = (FONTS[F.font] || FONTS.Inter).stack, ink = F.ink, out = contrastOf(ink);
-  // Text drawn over the images, with an outline under it so that it reads on any grey.
-  const text = (str, x, y, pt, anchor, bold, onImage) => {
-    // (Outside the images, on the page, the text takes the colour that reads on it.)
-    const fs = pt*PT_PX, t = add('text', { x, y, 'font-size': fs, 'font-family': stack, 'text-anchor': anchor, fill: onImage ? ink : contrastOf(F.bg), ...(bold ? { 'font-weight': 700 } : {}) });
+  const stack = (FONTS[F.font] || FONTS.Inter).stack, ink = F.ink, out = contrastOf(ink), page = contrastOf(F.bg);
+  // Text over the images in the chosen colour, with an outline so that it reads on any
+  // grey; outside them, on the page, in the colour that reads on it. rot: −90 reads up,
+  // 90 down.
+  const text = (str, x, y, pt, anchor, bold, onImage, rot) => {
+    const fs = pt*PT_PX, t = add('text', { x, y, 'font-size': fs, 'font-family': stack, 'text-anchor': anchor, fill: onImage ? ink : page, ...(bold ? { 'font-weight': 700 } : {}), ...(rot ? { transform: `rotate(${rot} ${x} ${y})` } : {}) });
     if (onImage && F.outline){ t.setAttribute('stroke', out); t.setAttribute('stroke-width', fs*0.12); t.setAttribute('stroke-linejoin', 'round'); t.setAttribute('paint-order', 'stroke'); }
     t.textContent = str;
     return t;
   };
+  const inside = pos => pos.length === 2;
   // Which panels carry a scale bar: a group at common scale its last panel, else each.
   const lastOf = new Map();
   L.panels.forEach(p=>{ if (p.m.group.mode !== 'own') lastOf.set(p.m.group.id, p); });
@@ -150,6 +181,7 @@ function draw(svg, full){
     const name = F.names[p.m.id] != null ? F.names[p.m.id] : p.m.label;
     const letter = F.letter.on ? letterOf(p.k, F.letter.style) : '';
     const lab = F.label.on ? (letter && F.letter.link ? `${letter} ${name}` : name) : (letter && F.letter.link ? letter : '');
+    const rowBottom = p.cy + B.top + p.rowH, imgL = p.x, imgR = p.x + p.w;
     // A corner of the image: its text's x, anchor and the baseline of line `line`.
     const corner = (pos, pt, line) => {
       const fs = px(pt*MM_PT), right = pos[1] === 'r', bottom = pos[0] === 'b';
@@ -158,19 +190,29 @@ function draw(svg, full){
       return { x, y, a };
     };
     let labelEl = null;
+    const letterAbove = letter && !F.letter.link && F.letter.pos === 'above';
     if (lab){
-      const pos = F.label.pos;
-      if (pos === 'above' || pos === 'below'){
-        const fs = px(F.label.size*MM_PT), y = pos === 'above' ? px(p.rowY + L.bandA) - fs*0.3 : px(p.rowY + L.bandA + p.rowH) + fs*1.05;
-        labelEl = text(lab, px(p.x), y, F.label.size, 'start', false, false);
-      } else { const c = corner(pos, F.label.size, 0); labelEl = text(lab, c.x, c.y, F.label.size, c.a, false, true); }
+      const pos = F.label.pos, nb = B.name, bp = F.bar.pos;
+      // Above, with the letter above too: one line, the letter (bold, its size) then the
+      // name, on one baseline, so that no width has to be guessed.
+      if (pos === 'above' && letterAbove){
+        const t = text('', px(imgL), px(p.cy + Math.max(nb, lineOf(F.letter.size))*0.78), F.label.size, 'start', false, false);
+        add('tspan', { 'font-weight': 700, 'font-size': F.letter.size*PT_PX }, t).textContent = letter;
+        add('tspan', {}, t).textContent = ' ' + lab;
+        labelEl = t;
+      }
+      else if (pos === 'above') labelEl = text(lab, px(imgL), px(p.cy + nb*0.78), F.label.size, 'start', false, false);
+      else if (pos === 'below') labelEl = text(lab, px(imgL), px(rowBottom + (bp === 'below' ? B.bar : 0) + nb*0.78), F.label.size, 'start', false, false);
+      // At the sides, along the image, reading up on the left and down on the right.
+      else if (pos === 'left') labelEl = text(lab, px(p.cx + nb*0.78), px(p.y + p.h/2), F.label.size, 'middle', false, false, -90);
+      else if (pos === 'right') labelEl = text(lab, px(imgR + (bp === 'right' ? B.bar : 0) + nb*0.22), px(p.y + p.h/2), F.label.size, 'middle', false, false, 90);
+      else { const c = corner(pos, F.label.size, 0); labelEl = text(lab, c.x, c.y, F.label.size, c.a, false, true); }
     }
     if (letter && !F.letter.link){
       const pos = F.letter.pos, lfs = px(F.letter.size*MM_PT);
       if (pos === 'above'){
-        text(letter, px(p.x), px(p.rowY + L.bandA) - lfs*0.3, F.letter.size, 'start', true, false);
-        // The name above too: after the letter, on its line.
-        if (labelEl && F.label.pos === 'above') labelEl.setAttribute('x', px(p.x) + lfs*0.62*(letter.length + 1));
+        // The name above too: written with it, on its line.
+        if (!(labelEl && F.label.pos === 'above')) text(letter, px(imgL), px(p.cy + lineOf(F.letter.size)*0.78), F.letter.size, 'start', true, false);
       } else {
         // In the name's corner: the letter at the corner, the name a line further in.
         if (labelEl && F.label.pos === pos) labelEl.setAttribute('y', +labelEl.getAttribute('y') + (pos[0] === 'b' ? -1 : 1)*lfs*1.2);
@@ -182,16 +224,34 @@ function draw(svg, full){
     if (grp.mode === 'own' || lastOf.get(grp.id) === p){
       const umW = p.m.w*p.m.pxNm/1000, set = F.bars[grp.mode === 'own' ? p.m.id : grp.id];
       const um = set && !set.auto && set.um > 0 ? set.um : niceBar(umW);
-      const bw = p.w*um/umW, t = F.bar.thick, fs = F.bar.size*MM_PT, right = F.bar.pos[1] === 'r', bottom = F.bar.pos[0] === 'b';
-      const bx = right ? p.x + p.w - margin - bw : p.x + margin;
-      const by = bottom ? p.y + p.h - margin - t : p.y + margin + fs*1.15;
-      const r = add('rect', { x: px(bx), y: px(by), width: px(bw), height: px(t), fill: ink });
-      if (F.outline){ r.setAttribute('stroke', out); r.setAttribute('stroke-width', px(t)*0.35); r.setAttribute('paint-order', 'stroke'); }
-      // The length centred over the bar, or, wider than a short bar, flush with its outer
-      // end, so that it stays inside the panel.
-      const label = lenText(um), tw = label.length*fs*0.56;
-      const [tx, ta] = tw <= bw ? [bx + bw/2, 'middle'] : right ? [bx + bw, 'end'] : [bx, 'start'];
-      text(label, px(tx), px(by) - px(fs)*0.3, F.bar.size, ta, false, true);
+      const bw = p.w*um/umW, t = F.bar.thick, fs = F.bar.size*MM_PT, pos = F.bar.pos, label = lenText(um), tw = label.length*fs*0.56;
+      const bar = (x, y, w, h, onImage) => {
+        const r = add('rect', { x: px(x), y: px(y), width: px(w), height: px(h), fill: onImage ? ink : page });
+        if (onImage && F.outline){ r.setAttribute('stroke', out); r.setAttribute('stroke-width', px(Math.min(w, h))*0.35); r.setAttribute('paint-order', 'stroke'); }
+      };
+      if (inside(pos)){
+        const right = pos[1] === 'r', bottom = pos[0] === 'b';
+        const bx = right ? p.x + p.w - margin - bw : p.x + margin, by = bottom ? p.y + p.h - margin - t : p.y + margin + fs*1.15;
+        bar(bx, by, bw, t, true);
+        // The length centred over the bar, or, wider than a short bar, flush with its
+        // outer end, so that it stays inside the panel.
+        const [tx, ta] = tw <= bw ? [bx + bw/2, 'middle'] : right ? [bx + bw, 'end'] : [bx, 'start'];
+        text(label, px(tx), px(by) - px(fs)*0.3, F.bar.size, ta, false, true);
+      } else if (pos === 'above' || pos === 'below'){
+        // Outside, next to the image, flush with its right edge: the length above the
+        // bar over the image, under it below.
+        const bx = imgR - bw, by = pos === 'above' ? p.y - 0.4 - t : rowBottom + 0.4;
+        bar(bx, by, bw, t, false);
+        const [tx, ta] = tw <= bw ? [bx + bw/2, 'middle'] : [imgR, 'end'];
+        text(label, px(tx), pos === 'above' ? px(by) - px(fs)*0.3 : px(by + t) + px(fs)*0.95, F.bar.size, ta, false, false);
+      } else {
+        // At a side, upright along the image from its bottom, the length along it.
+        const bx = pos === 'left' ? imgL - 0.4 - t : imgR + 0.4, by = p.y + p.h - bw;
+        bar(bx, by, t, bw, false);
+        const fits = tw <= bw, ty = fits ? p.y + p.h - bw/2 : p.y + p.h;
+        if (pos === 'left') text(label, px(bx - fs*0.3), px(ty), F.bar.size, fits ? 'middle' : 'start', false, false, -90);
+        else text(label, px(bx + t + fs*0.3), px(ty), F.bar.size, fits ? 'middle' : 'end', false, false, 90);
+      }
     }
   }
   return L;
@@ -205,11 +265,12 @@ function renderPreview(){
   const W = L.W*PX_MM, H = L.H*PX_MM, k = Math.min((pane.clientWidth - 24)/W, (pane.clientHeight - 24)/H, 1);
   svgEl.style.width = W*k + 'px'; svgEl.style.height = H*k + 'px';
   applyView();
-  if (dimEl) dimEl.textContent = `${sig3(L.W)} × ${sig3(L.H)} mm · ${L.cols} × ${L.rows} panels · ${Math.round(L.W/25.4*F.dpi)} × ${Math.round(L.H/25.4*F.dpi)} px @ ${F.dpi} dpi`;
+  const G = L.grid, grid = G.bRows*G.bCols > 1 ? `${G.bCols} × ${G.bRows} blocks of ${G.cols} × ${G.rows} panels` : `${G.cols} × ${G.rows} panels`;
+  if (dimEl) dimEl.textContent = `${sig3(L.W)} × ${sig3(L.H)} mm · ${grid} · ${Math.round(L.W/25.4*F.dpi)} × ${Math.round(L.H/25.4*F.dpi)} px @ ${F.dpi} dpi`;
   // The locked fields show what was chosen.
   if (controlsEl){
     const set = (k, v) => { const el = controlsEl.querySelector(`[data-auto="${k}"]`); if (el) el.value = v; };
-    set('rows', L.rows); set('cols', L.cols); set('hmm', sig3(L.H));
+    set('rows', L.grid.rows); set('cols', L.grid.cols); set('bRows', L.grid.bRows); set('bCols', L.grid.bCols); set('hmm', sig3(L.H));
   }
 }
 function wireView(){
@@ -222,35 +283,17 @@ function wireView(){
     view.x = e.clientX - cx - z2*sx; view.y = e.clientY - cy - z2*sy; view.z = z2;
     applyView();
   }, { passive: false });
-  // A press on a panel drags it onto another (where it goes, the others moving along);
-  // anywhere else it pans.
   let drag = null;
-  const panelAt = (x, y) => { const el = document.elementFromPoint(x, y), g = el && el.closest && el.closest('.sem-fig-panel'); return g && svgEl.contains(g) ? +g.dataset.i : null; };
-  const mark = i => svgEl.querySelectorAll('.sem-fig-panel').forEach(g=> g.classList.toggle('is-target', +g.dataset.i === i));
   pane.addEventListener('pointerdown', e=>{
     if (e.button !== 0) return;
-    const i = panelAt(e.clientX, e.clientY);
-    drag = i != null ? { panel: i, to: null } : { x: e.clientX - view.x, y: e.clientY - view.y };
-    pane.setPointerCapture(e.pointerId);
-    if (i == null) pane.classList.add('is-panning');
-    else svgEl.querySelector(`.sem-fig-panel[data-i="${i}"]`).classList.add('is-dragged');
+    drag = { x: e.clientX - view.x, y: e.clientY - view.y };
+    pane.setPointerCapture(e.pointerId); pane.classList.add('is-panning');
   });
-  pane.addEventListener('pointermove', e=>{
-    if (!drag) return;
-    if (drag.panel != null){ const i = panelAt(e.clientX, e.clientY); drag.to = i; mark(i != null && i !== drag.panel ? i : null); return; }
-    view.x = e.clientX - drag.x; view.y = e.clientY - drag.y; applyView();
-  });
-  const end = ()=>{
-    if (drag && drag.panel != null && drag.to != null && drag.to !== drag.panel){
-      const ids = ordered().map(m=> m.id), [id] = ids.splice(drag.panel, 1);
-      ids.splice(drag.to, 0, id);
-      F.order = ids; commit(true);
-    } else if (drag && drag.panel != null) renderPreview();
-    drag = null; pane.classList.remove('is-panning');
-  };
+  pane.addEventListener('pointermove', e=>{ if (!drag) return; view.x = e.clientX - drag.x; view.y = e.clientY - drag.y; applyView(); });
+  const end = ()=>{ drag = null; pane.classList.remove('is-panning'); };
   pane.addEventListener('pointerup', end);
   pane.addEventListener('pointercancel', end);
-  pane.addEventListener('dblclick', e=>{ if (panelAt(e.clientX, e.clientY) == null){ view = { z: 1, x: 0, y: 0 }; applyView(); } });
+  pane.addEventListener('dblclick', ()=>{ view = { z: 1, x: 0, y: 0 }; applyView(); });
 }
 
 /* ---- Controls (figure.js's rows, fields and checks) ---- */
@@ -265,6 +308,8 @@ function get(path){ return path.split('.').reduce((o, k)=> o == null ? undefined
 function put(path, v){ const ks = path.split('.'), last = ks.pop(); const o = ks.reduce((o, k)=> (o[k] = o[k] || {}), F); o[last] = v; }
 
 const CORNERS = [['tl', 'top left'], ['tr', 'top right'], ['bl', 'bottom left'], ['br', 'bottom right']];
+const OUTSIDE = [['above', 'outside, above'], ['below', 'outside, below'], ['left', 'outside, left'], ['right', 'outside, right']];
+const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 function controlsHtml(){
   const imgs = ordered();
   // The groups, each with its bar's length: one for a group at common scale, one per
@@ -291,18 +336,29 @@ function controlsHtml(){
     <label class="fig-row"><span>File name</span><input type="text" data-p="file" value="${esc(F.file)}"></label>
   </section>
   <section class="fig-sec"><h4>Layout</h4>
-    ${chk('Grid chosen automatically', 'gridAuto', 'The most compact rectangle: ⌈√N⌉ columns')}
+    ${chk('Grid chosen automatically', 'gridAuto', 'One block, the most compact rectangle: ⌈√N⌉ columns')}
+    <div class="fig-subhead">Panels in a block</div>
     ${autoNum('Rows', 'rows', 'gridAuto', 1, 40)}
     ${autoNum('Columns', 'cols', 'gridAuto', 1, 40)}
     ${num('Gap (mm)', 'gap', 0, 20)}
+    <div class="fig-subhead">Blocks</div>
+    ${autoNum('Rows', 'bRows', 'gridAuto', 1, 20)}
+    ${autoNum('Columns', 'bCols', 'gridAuto', 1, 20)}
+    ${num('Gap (mm)', 'bGap', 0, 40)}
+    <p class="txt-meta">The images fill one block after another, each row by row: 2 × 1 blocks of 2 × 2 panels hold eight.</p>
+  </section>
+  <section class="fig-sec"><h4>Images</h4>
+    <div class="fig-series">${imgs.map((m, i)=> `<div class="fig-serie" data-s="${i}">
+      <span class="fig-grip" title="Drag to reorder">${GRIP}</span>
+      <input type="text" class="fig-slabel" data-name="${esc(m.id)}" value="${esc(F.names[m.id] != null ? F.names[m.id] : m.label)}" title="Name shown on ${esc(m.label)}">
+    </div>`).join('')}</div>
     <label class="fig-row"><span>Order</span><button class="btn btn-sm" type="button" data-act="order">As the file list</button></label>
-    <p class="txt-meta">Drag a panel in the preview onto another to move it there.</p>
+    <p class="txt-meta">Drag an image by its handle to reorder the panels; its field is the name shown on it.</p>
   </section>
   <section class="fig-sec"><h4>Names</h4>
     ${chk('Show the names', 'label.on')}
-    ${sel('Position', 'label.pos', [...CORNERS, ['above', 'above the image'], ['below', 'below the image']])}
+    ${sel('Position', 'label.pos', [...CORNERS, ...OUTSIDE])}
     ${num('Size (pt)', 'label.size', 3, 36)}
-    ${imgs.map(m=> `<label class="fig-row"><span title="${esc(m.label)}">${esc(m.label)}</span><input type="text" data-name="${esc(m.id)}" value="${esc(F.names[m.id] != null ? F.names[m.id] : m.label)}"></label>`).join('')}
   </section>
   <section class="fig-sec"><h4>Letters</h4>
     ${chk('Show letters (a, b, c… in the panels\' order)', 'letter.on')}
@@ -312,7 +368,7 @@ function controlsHtml(){
     ${num('Size (pt)', 'letter.size', 3, 36)}
   </section>
   <section class="fig-sec"><h4>Scale bars</h4>
-    ${sel('Position', 'bar.pos', CORNERS)}
+    ${sel('Position', 'bar.pos', [...CORNERS, ...OUTSIDE])}
     ${num('Thickness (mm)', 'bar.thick', 0.1, 5)}
     ${num('Text size (pt)', 'bar.size', 3, 36)}
     ${barRows.join('')}
@@ -336,7 +392,38 @@ function renderControls(){
   dis('label.pos', !F.label.on); dis('label.size', !F.label.on);
   controlsEl.querySelectorAll('[data-name]').forEach(el=>{ el.disabled = !F.label.on; });
   rebuilding = false;
+  wireOrderDrag();
   renderPreview();
+}
+/* The images' rows reordered by their handles, as the plots' series are (figure.js):
+   what lights is the gap a row would land in (dropGap); the two beside it would leave
+   it where it is, and never light. */
+function wireOrderDrag(){
+  const rows = [...controlsEl.querySelectorAll('.fig-serie[data-s]')];
+  let from = null;
+  const gapOf = e =>{ const g = dropGap(rows, e.clientY); return g === from || g === from + 1 ? null : g; };
+  const clear = ()=> rows.forEach(r=> r.classList.remove('drop-before', 'drop-after', 'dragging'));
+  rows.forEach(row=>{
+    const handle = row.querySelector('.fig-grip');
+    handle.addEventListener('pointerdown', e=>{ e.preventDefault(); from = +row.dataset.s; row.classList.add('dragging'); try { handle.setPointerCapture(e.pointerId); } catch(_){} });
+    handle.addEventListener('pointermove', e=>{
+      if (from == null) return;
+      rows.forEach(r=> r.classList.remove('drop-before', 'drop-after'));
+      const g = gapOf(e);
+      if (g == null) return;
+      if (g < rows.length) rows[g].classList.add('drop-before'); else rows[rows.length - 1].classList.add('drop-after');
+    });
+    handle.addEventListener('pointerup', e=>{
+      if (from == null) return;
+      const g = gapOf(e), f = from;
+      from = null; clear();
+      if (g == null) return;
+      const ids = ordered().map(m=> m.id), [id] = ids.splice(f, 1);
+      ids.splice(g > f ? g - 1 : g, 0, id);
+      F.order = ids; commit(true);
+    });
+    handle.addEventListener('pointercancel', ()=>{ from = null; clear(); });
+  });
 }
 // Every change goes back to the module (saved, undoable), then is drawn; `rebuild` when
 // the controls themselves change (a box that locks a field, the order of the names).
@@ -369,10 +456,12 @@ function wireControls(){
     else v = t.value;
     // Unlocked, a field starts from the value that was being chosen for it.
     if (path === 'hAuto' && !v) F.hmm = +sig3(layout().H);
-    if (path === 'gridAuto' && !v){ const L = layout(); F.rows = L.rows; F.cols = L.cols; }
+    if (path === 'gridAuto' && !v){ const G = layout().grid; F.rows = G.rows; F.cols = G.cols; F.bRows = G.bRows; F.bCols = G.bCols; }
     put(path, v);
-    if (path === 'cols' || path === 'rows'){ const n = ordered().length; if (F.cols*F.rows < n){ F.rows = Math.ceil(n/F.cols); } }
-    commit(STRUCTURAL.has(path) || path === 'cols' || path === 'rows');
+    const GRID = ['rows', 'cols', 'bRows', 'bCols'];
+    // Too few places for the images: block rows are added.
+    if (GRID.includes(path)){ const n = ordered().length; F.bRows = Math.max(F.bRows, Math.ceil(n/(F.rows*F.cols*F.bCols))); }
+    commit(STRUCTURAL.has(path) || GRID.includes(path));
   });
   controlsEl.addEventListener('click', e=>{
     const b = e.target.closest('[data-act="order"]');
@@ -423,11 +512,13 @@ async function copyPng(btn){
 }
 
 /* ---- Opening ----
-   h: { images() → [{ id, label, group {id, name, mode}, w, h, pxNm, key, canvas(fit) }],
-        getFig(), setFig(fig) }. Returns { refresh, close }: refresh after the module's
+   h: { title (the group's name), images() → [{ id, label, group {id, name, mode}, w, h,
+        pxNm, key, canvas(fit) }], getFig(), setFig(fig) }. Returns { refresh, close }: refresh after the module's
    state changed under it (an undo). */
 export function openSemFigure(h){
   host = h; F = withDefaults(h.getFig());
+  // A group's figure is named after it until named otherwise.
+  if (!(h.getFig() && h.getFig().file) && h.title) F.file = 'SEM_' + String(h.title).replace(/[^\w.-]+/g, '_');
   view = { z: 1, x: 0, y: 0 };
   backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop fig-backdrop';
@@ -435,8 +526,8 @@ export function openSemFigure(h){
   backdrop.innerHTML = `
     <div class="fig-box">
       <div class="fig-head">
-        <h3 class="txt-head" style="margin:0">SEM figure</h3>
-        <span class="txt-meta">The images as cropped, normalised and scaled above; drag a panel to move it.</span>
+        <h3 class="txt-head" style="margin:0">SEM figure${h.title ? ` — ${esc(h.title)}` : ''}</h3>
+        <span class="txt-meta">The group's images as cropped, normalised and scaled in the module.</span>
         <button class="fig-x close-x" type="button" aria-label="Close">✕</button>
       </div>
       <div class="fig-body">
