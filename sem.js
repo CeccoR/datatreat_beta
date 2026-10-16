@@ -850,9 +850,9 @@ import { readTescanTiff } from './sem-read.js';
     box.querySelectorAll('.sem-group-imgs').forEach(row=>{ row.addEventListener('scroll', ()=> pageArrows(row), { passive: true }); pageArrows(row); });
   }
   /* A group's row of images, wider than the box: an arrow at each end where there is
-     more, boxed and as tall as the images, turns a page — the row slides by what it
-     shows, landing on an image's edge (scroll snap). A finger can also swipe it. */
-  const PAGE_PAD = 36;   // the arrows' room at the row's ends (style.css, scroll-padding)
+     more, boxed, as tall as the images and outside the row, turns a page — the row
+     slides by what it shows, landing on an image's edge (scroll snap). A finger can
+     also swipe it. */
   function pageArrows(row){
     const strip = row.parentElement, more = row.scrollWidth - row.clientWidth;
     strip.querySelector('.sem-page-prev').hidden = !(more > 1 && row.scrollLeft > 1);
@@ -946,7 +946,7 @@ import { readTescanTiff } from './sem-read.js';
   groupsBox.addEventListener('pointercancel', endGroupDrag);
   groupsBox.addEventListener('click', e=>{
     const pg = e.target.closest('[data-page]');
-    if (pg){ const row = pg.parentElement.querySelector('.sem-group-imgs'); row.scrollBy({ left: +pg.dataset.page*Math.max(row.clientWidth - 2*PAGE_PAD, 112), behavior: 'smooth' }); return; }
+    if (pg){ const row = pg.parentElement.querySelector('.sem-group-imgs'); row.scrollBy({ left: +pg.dataset.page*row.clientWidth, behavior: 'smooth' }); return; }
     const b = e.target.closest('[data-fig]'); if (b){ openFigure(b.dataset.fig); return; }
     const d = e.target.closest('[data-del]');
     if (d){ groups = groups.filter(g=> g.id !== d.dataset.del || g.members.length); tidyGroups(); groupsChanged(); }

@@ -2961,10 +2961,11 @@ button.sem-link.is-on { background: var(--accent); border-color: var(--accent); 
 /* ===== SEM: groups and scale =====
    A group is a box 4φ wide to 1 high (it grows where its content needs more): its name
    at the top left; under it the scale on the left and its figure on the right; then
-   its images across the whole box in one row. Wider than the box, the row pages
-   (sem.js pageArrows): an arrow at an end where there is more, boxed and as tall as
-   the images, the scrollbar hidden; snapping lands a page on an image's edge, clear
-   of the arrow. */
+   its images across the box in one row. Wider than the box, the row pages (sem.js
+   pageArrows): an arrow at an end where there is more, boxed and as tall as the
+   images, the scrollbar hidden; snapping lands a page on an image's edge. The arrows
+   stand outside the row, never over an image: their room is kept at both ends even
+   where an arrow is not needed (hidden, not removed), so the row never shifts. */
 .sem-crop-group { margin-top: 10px; }
 .sem-group {
   display: flex; flex-direction: column; gap: 8px; aspect-ratio: 6.4721 / 1;
@@ -2984,10 +2985,11 @@ input[type="text"].sem-group-name:focus { border-color: var(--accent); backgroun
 .sem-group-ctrl { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sem-group-ctrl .sem-group-mode { width: 170px; }
 .sem-group-ctrl .sem-group-fig { white-space: nowrap; }
-.sem-strip { position: relative; }
+.sem-strip { display: flex; align-items: flex-start; gap: 6px; }
 .sem-group-imgs {
+  flex: 1 1 0; min-width: 0;
   display: flex; align-items: flex-start; gap: 12px; overflow-x: auto; overflow-y: hidden;
-  scrollbar-width: none; scroll-snap-type: x mandatory; scroll-padding-inline: 36px;
+  scrollbar-width: none; scroll-snap-type: x mandatory;
 }
 .sem-group-imgs::-webkit-scrollbar { display: none; }
 .sem-gimg { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 112px; scroll-snap-align: start; }
@@ -2995,16 +2997,13 @@ input[type="text"].sem-group-name:focus { border-color: var(--accent); backgroun
 .sem-gimg-pic canvas { display: block; max-width: 112px; max-height: 112px; width: auto; height: auto; border-radius: 4px; }
 .sem-gimg .sem-thumb-cap { max-width: 112px; }
 button.sem-page {
-  position: absolute; top: 0; z-index: 2; width: 30px; height: 112px; padding: 0;
+  flex: 0 0 15px; width: 15px; height: 112px; padding: 0;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text);
-  font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.18); transition: border-color 0.15s;
+  font: inherit; font-size: 16px; line-height: 1; cursor: pointer; transition: border-color 0.15s;
 }
 button.sem-page:hover { border-color: var(--accent); }
-button.sem-page[hidden] { display: none; }
-.sem-page-prev { left: 0; }
-.sem-page-next { right: 0; }
+button.sem-page[hidden] { display: flex; visibility: hidden; }
 .sem-group-hint { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .sem-group.is-empty { border-style: dashed; }
 .sem-add-bar { margin: 0; }

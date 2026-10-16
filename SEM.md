@@ -238,9 +238,10 @@ content needs more: 1430 × 234 px at a 1500 px window.
 - Then come its images, 112 px each with its name under it, in one row across the whole box.
 
 **Paging.** A row wider than the box shows an arrow at the end where there is more,
-boxed and as tall as the images, with no scrollbar. A click turns a page: the row slides
-smoothly by what it shows, and snaps to an image's edge clear of the arrow. A finger can
-also swipe it.
+boxed, 15 px wide and as tall as the images, with no scrollbar. A click turns a page:
+the row slides smoothly by what it shows, and snaps to an image's edge. A finger can
+also swipe it. The arrows stand outside the row, never over an image. Their room is
+kept at both ends even when no arrow shows, so the row never moves when one appears.
 
 Checked:
 - At 900 px, eight images (800 px of row, 180 px more): › alone at first, ‹ alone after one page.
@@ -460,3 +461,6 @@ export.
 
 **v444**: the columns three eighths, three eighths and a quarter (thumbnails and details,
 image, settings); the settings' names back above their fields, in rows of two or three.
+
+**v445**: the groups' page arrows outside the row of images, half as wide (15 px), their
+room kept when they are not shown.
