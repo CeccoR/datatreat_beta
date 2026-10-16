@@ -466,3 +466,9 @@ room kept when they are not shown.
 
 **v446**: a group's *Figure composer* on its name's line, at the top right, with the scale
 just left of it as two radio buttons instead of a menu.
+
+**v447**: the thumbnails in *Images* sized to the window. As many a row as fit at 90 px
+or more, stretched to fill it, so a row is a whole number of them with no strip left.
+Measured: 5 a row at 93 px at 1500 px, 4 at 97 px at 1280, 3 at 110 px at 1100, 2 at
+131 px at 900; on a phone 3 at 93 px. Their copy is now drawn at about 160 px, not 112,
+so that a wider thumbnail stays sharp.

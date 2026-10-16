@@ -2921,16 +2921,19 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 .sem-info-row > span:last-child { text-align: right; }
 /* Every image with its crop; the one in the editor outlined in the accent. Its chain,
    over its corner, links its crop to the other linked images' (lit when linked). */
-.sem-thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+/* As many thumbnails a row as fit at 90 px or more, stretched to fill the row: a
+   whole number of them, no strip left over, each between 90 and under 2 × 90 + 8 px
+   (100 px before, fixed). Under 90 px the labels and the particles stop reading. */
+.sem-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
 .sem-thumb-wrap { position: relative; }
 .sem-thumb {
-  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100px; padding: 5px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 5px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); cursor: pointer;
   font: inherit; transition: border-color 0.14s, color 0.14s;
 }
 .sem-thumb:hover { color: var(--text); }
 .sem-thumb.is-on { border-color: var(--accent); color: var(--text); }
-.sem-thumb canvas { display: block; max-width: 88px; max-height: 88px; width: auto; height: auto; border-radius: 4px; }
+.sem-thumb canvas { display: block; width: 100%; height: auto; border-radius: 4px; }
 .sem-thumb-cap { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 button.sem-link {
   position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; padding: 0;

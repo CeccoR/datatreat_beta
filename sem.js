@@ -65,9 +65,10 @@ import { readTescanTiff } from './sem-read.js';
   let figures = {};
   // id → { r (readTescanTiff's), small (a box-averaged copy, for the thumbnails) }
   const decoded = new Map();
-  // A copy of the image some 112 px across, each pixel the mean of a k × k block, kept
-  // at 16 bits so that the thumbnails go through the same curve as the image.
-  function smallOf(r, side = 112){
+  // A copy of the image some 160 px across, each pixel the mean of a k × k block, kept
+  // at 16 bits so that the thumbnails go through the same curve as the image (shown at
+  // 90–188 px, as many a row as fit).
+  function smallOf(r, side = 160){
     const k = Math.max(1, Math.ceil(Math.max(r.width, r.imageH)/side)), w = Math.floor(r.width/k), h = Math.floor(r.imageH/k);
     const px = new Uint16Array(w*h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
