@@ -492,9 +492,9 @@ function controlsHtml(){
   </section>
   <section class="fig-sec"><h4>Type</h4>
     ${sel('Font', 'font', Object.entries(FONTS).map(([k, v])=> [k, v.label]))}
-    <label class="fig-row"><span>Colour on the images</span><button class="color-swatch" type="button" data-ink="ink" data-color="${esc(F.ink)}" style="background:${esc(F.ink)}" title="Names, letters and scale bars over the images"></button></label>
+    <div class="fig-row"><span>Colour on the images</span><button class="color-swatch" type="button" data-ink="ink" data-color="${esc(F.ink)}" style="background:${esc(F.ink)}" title="Names, letters and scale bars over the images"></button></div>
     ${chk('Outline, for contrast with the image', 'outline')}
-    <label class="fig-row"><span>Outline colour</span><button class="color-swatch" type="button" data-ink="outlineColor" data-color="${esc(F.outlineColor || contrastOf(F.ink))}" style="background:${esc(F.outlineColor || contrastOf(F.ink))}" title="The outline round what is drawn over the images"${F.outline ? '' : ' disabled'}></button></label>
+    <div class="fig-row"><span>Outline colour</span><button class="color-swatch" type="button" data-ink="outlineColor" data-color="${esc(F.outlineColor || contrastOf(F.ink))}" style="background:${esc(F.outlineColor || contrastOf(F.ink))}" title="The outline round what is drawn over the images"${F.outline ? '' : ' disabled'}></button></div>
   </section>`;
 }
 function renderControls(){

@@ -2455,8 +2455,8 @@ function controlsHtml(){
         ${num('Frame background opacity (0–1)','legendFrameAlpha',0,1)}`)}`}
     <div class="fig-subhead">Type</div>
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
-    <label class="fig-row"><span>Colour of every line and letter</span>
-      <button class="color-swatch" data-inksw data-color="${F.inkColor}" style="background:${F.inkColor}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></label>
+    <div class="fig-row"><span>Colour of every line and letter</span>
+      <button class="color-swatch" data-inksw data-color="${F.inkColor}" style="background:${F.inkColor}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></div>
     <div class="fig-row"><span>X tick labels tilt (&deg;)</span>${F.catRotAuto
       ? `<input type="text" value="${lastCatRot}" data-autorot disabled title="Chosen automatically: the least that keeps the names inside their panel and apart">`
       : numField('data-k="catRot"', F.catRot, 0, 90)}

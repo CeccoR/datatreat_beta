@@ -85,6 +85,21 @@ function pushRecentColor(hex){
   try { localStorage.setItem(CP_RECENT_KEY, JSON.stringify(_cpRecent)); } catch(e){}
 }
 
+/* A picker opened in a figure composer (inside .fig-box): its top, so that it stands
+   centred on its button where it can, and never nearer than 25 px to the composer's
+   head (the title) or foot (the buttons). As its button scrolls it follows, centred,
+   within that range, and stays 25 px from the head or the foot past it. null when the
+   button is not in a composer. */
+const COMPOSER_GAP = 25;
+function composerTop(anchor, rect, ph){
+  const box = anchor && anchor.closest && anchor.closest('.fig-box');
+  if (!box) return null;
+  const head = box.querySelector('.fig-head'), foot = box.querySelector('.fig-foot');
+  const lo = (head ? head.getBoundingClientRect().bottom : box.getBoundingClientRect().top) + COMPOSER_GAP;
+  const hi = (foot ? foot.getBoundingClientRect().top : box.getBoundingClientRect().bottom) - COMPOSER_GAP - ph;
+  const centred = rect.top + rect.height/2 - ph/2;
+  return hi < lo ? lo : Math.min(hi, Math.max(lo, centred));
+}
 class ColorPickerUI {
   constructor(){
     this._onChange = null;
@@ -286,7 +301,8 @@ class ColorPickerUI {
   /* Beside its swatch, level with its top; where that would run off the bottom of the
      window, level with its bottom instead, so that it keeps moving with the swatch as
      the page or a panel scrolls (pinned to the window's bottom, it stood still while
-     a swatch low in a panel scrolled away under it). It stays open while scrolling. */
+     a swatch low in a panel scrolled away under it). It stays open while scrolling.
+     In a figure composer it follows placeInComposer instead. */
   _reposition(){
     if (!this._anchorBtn) return;
     const rect = this._anchorBtn.getBoundingClientRect();
@@ -294,6 +310,8 @@ class ColorPickerUI {
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
     if (top + ph > window.innerHeight - 8) top = rect.bottom + 4 - ph;
+    const inBox = composerTop(this._anchorBtn, rect, ph);
+    if (inBox != null) top = inBox;
     this._el.style.left = Math.max(8,left)+'px';
     this._el.style.top = Math.max(8,top)+'px';
   }
@@ -462,6 +480,8 @@ class PalettePickerUI {
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
     if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+    const inBox = composerTop(this._anchorBtn, rect, ph);
+    if (inBox != null) top = inBox;
     this._el.style.left = Math.max(8,left)+'px';
     this._el.style.top = Math.max(8,top)+'px';
   }

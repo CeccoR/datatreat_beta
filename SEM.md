@@ -520,3 +520,9 @@ so that a wider thumbnail stays sharp.
 - **Unsaved changes** (every module). A project is marked unsaved only while it differs from what was saved, its name included. A value changed and set back, an edit undone, or a name changed and restored leaves it saved. Checked in XRD: smoothing 10 → 50 marked it, back to 10 cleared it; undo cleared it and redo marked it.
 - **Plot and page.** With auto margins off they are independent in both composers, and the plot may run off the page. This replaces v450's limit. In the plots' composer a 250 mm plot on a 160 mm page ran off it, and the page set to 120 mm left the plot at 250 mm.
 - **The SEM plot's sides.** Setting one shows the other: width 100 → 100 × 100, then height 150 → 150 × 150.
+
+**v452**: the colour pickers in every figure composer.
+- **Hitbox.** Only the swatch opens one. Its row was a label, so a click anywhere along it opened the picker; it is no longer.
+- **States.** The swatch keeps its hover border while its picker is open. A second click on it, or a click elsewhere, closes it.
+- **Placing.** It stands centred on its swatch where it can, never nearer than 25 px to the composer's head (the title) or foot (the buttons). While the controls scroll it follows the swatch, centred, and past that range it stays 25 px from the head or the foot. The palette picker does the same.
+- **Checked.** A series' swatch: centred at first, then 25 px from the foot or the head as it scrolled past. The ink swatches, low in the panel: 25 px over the foot. A click 80 px right of a swatch opened nothing.
