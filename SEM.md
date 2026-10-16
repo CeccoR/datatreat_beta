@@ -233,8 +233,7 @@ pixel size, the one its common scale brings the others to.
 
 **The box.** Each group is a box 4φ wide to 1 high (6.47 : 1), which grows where its
 content needs more: 1430 × 234 px at a 1500 px window.
-- At the top left is its name.
-- Under the name, its scale is on the left and its *Figure composer* on the right.
+- At the top left is its name. On the same line, at the top right, is its *Figure composer*, with the scale just left of it as two radio buttons, *common scale* or *own scale*. On a phone the scale goes under the name and the button.
 - Then come its images, 112 px each with its name under it, in one row across the whole box.
 
 **Paging.** A row wider than the box shows an arrow at the end where there is more,
@@ -464,3 +463,6 @@ image, settings); the settings' names back above their fields, in rows of two or
 
 **v445**: the groups' page arrows outside the row of images, half as wide (15 px), their
 room kept when they are not shown.
+
+**v446**: a group's *Figure composer* on its name's line, at the top right, with the scale
+just left of it as two radio buttons instead of a menu.

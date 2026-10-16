@@ -2960,8 +2960,8 @@ button.sem-link.is-on { background: var(--accent); border-color: var(--accent); 
 
 /* ===== SEM: groups and scale =====
    A group is a box 4φ wide to 1 high (it grows where its content needs more): its name
-   at the top left; under it the scale on the left and its figure on the right; then
-   its images across the box in one row. Wider than the box, the row pages (sem.js
+   at the top left, on the same line its scale (two radio buttons, one or the other)
+   and its figure at the right; then its images across the box in one row. Wider than the box, the row pages (sem.js
    pageArrows): an arrow at an end where there is more, boxed and as tall as the
    images, the scrollbar hidden; snapping lands a page on an image's edge. The arrows
    stand outside the row, never over an image: their room is kept at both ends even
@@ -2982,9 +2982,12 @@ input[type="text"].sem-group-name {
 }
 input[type="text"].sem-group-name:hover { border-color: var(--line); background: var(--panel); }
 input[type="text"].sem-group-name:focus { border-color: var(--accent); background: var(--panel); outline: none; }
-.sem-group-ctrl { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.sem-group-ctrl .sem-group-mode { width: 170px; }
-.sem-group-ctrl .sem-group-fig { white-space: nowrap; }
+.sem-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.sem-group-acts { display: flex; align-items: center; gap: 16px; flex: 0 0 auto; }
+.sem-group-acts .sem-group-fig { white-space: nowrap; }
+.sem-scale { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.sem-radio { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.sem-radio input[type="radio"] { width: auto; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .sem-strip { display: flex; align-items: flex-start; gap: 6px; }
 .sem-group-imgs {
   flex: 1 1 0; min-width: 0;
@@ -3008,8 +3011,15 @@ button.sem-page[hidden] { display: flex; visibility: hidden; }
 .sem-group.is-empty { border-style: dashed; }
 .sem-add-bar { margin: 0; }
 button.an-add.is-drop { border-color: var(--accent); }
+/* A phone: the name and the figure's button on the first line, the scale under them
+   (the three do not fit one line). */
 @media (max-width: 600px) {
   .sem-group { aspect-ratio: auto; }
+  .sem-group-head { flex-wrap: wrap; }
+  .sem-group-acts { display: contents; }
+  .sem-group-head .sem-group-name { order: 1; }
+  .sem-group-head .sem-group-fig { order: 2; }
+  .sem-group-head .sem-scale { order: 3; flex: 1 0 100%; }
 }
 /* An image dragged between groups. A finger may scroll the page over the images;
    held still, it drags one (sem.js). */

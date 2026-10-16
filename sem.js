@@ -818,7 +818,10 @@ import { readTescanTiff } from './sem-read.js';
      are all out of the figure (unticked, or the reference only) is not shown. */
   const nameCtx = document.createElement('canvas').getContext('2d');
   function fitGroupName(el){
-    const cs = getComputedStyle(el), room = el.parentElement.clientWidth*0.75;
+    // Its room: the head's width less the scale and the figure's button beside it.
+    const acts = el.parentElement.querySelector('.sem-group-acts'), cs = getComputedStyle(el);
+    const fig = el.parentElement.querySelector('.sem-group-fig'), wraps = getComputedStyle(el.parentElement).flexWrap === 'wrap';
+    const room = el.parentElement.clientWidth - (wraps ? fig.offsetWidth : acts.offsetWidth) - 16;
     if (!room) return;
     nameCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
     el.style.width = Math.min(nameCtx.measureText(el.value || el.placeholder).width + 24, room + 10) + 'px';
@@ -831,10 +834,13 @@ import { readTescanTiff } from './sem-read.js';
       if (!mem.length && g.members.length) return '';
       const empty = !mem.length;
       return `<div class="sem-group${empty ? ' is-empty' : ''}" data-g="${g.id}" data-drop="${g.id}">
-        <input type="text" class="sem-group-name" data-g="${g.id}" value="${esc(g.name)}" placeholder="Group name" spellcheck="false" aria-label="Group name" title="The group's name, on its figure and its file. Emptied, it goes back to the magnification">
-        <div class="sem-group-ctrl">
-          <select class="sem-group-mode" data-g="${g.id}" aria-label="Scale"><option value="common"${g.mode === 'common' ? ' selected' : ''}>common scale</option><option value="own"${g.mode === 'own' ? ' selected' : ''}>own scale</option></select>
-          <button class="btn primary btn-sm sem-group-fig" type="button" data-fig="${g.id}"${empty ? ' disabled title="No images in this group yet"' : ' title="Lay this group\'s images out into a figure"'}>Figure composer</button>
+        <div class="sem-group-head">
+          <input type="text" class="sem-group-name" data-g="${g.id}" value="${esc(g.name)}" placeholder="Group name" spellcheck="false" aria-label="Group name" title="The group's name, on its figure and its file. Emptied, it goes back to the magnification">
+          <div class="sem-group-acts">
+            <div class="sem-scale" role="radiogroup" aria-label="Scale">${[['common', 'common scale', 'One scale for the group: its images brought to its largest pixel size and smallest field, one scale bar'], ['own', 'own scale', 'Each image its own pixels and crop, and its own scale bar']].map(([v, t, tip])=>
+              `<label class="sem-radio" title="${tip}"><input type="radio" class="sem-group-mode" name="semScale-${g.id}" data-g="${g.id}" value="${v}"${g.mode === v ? ' checked' : ''}> ${t}</label>`).join('')}</div>
+            <button class="btn primary btn-sm sem-group-fig" type="button" data-fig="${g.id}"${empty ? ' disabled title="No images in this group yet"' : ' title="Lay this group\'s images out into a figure"'}>Figure composer</button>
+          </div>
         </div>
         <div class="sem-strip">
           <button class="sem-page sem-page-prev" type="button" data-page="-1" aria-label="Previous images" hidden>&#8249;</button>
