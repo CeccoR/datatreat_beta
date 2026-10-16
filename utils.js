@@ -163,13 +163,17 @@ class ColorPickerUI {
     const el = document.createElement('div');
     el.className = 'cp-popup';
     el.style.display = 'none';
-    el.innerHTML = `
+    // Two columns, stacked as one on the page; side by side in a figure composer
+    // (cp-wide), where a picker as tall as the stack (538 px) did not fit a laptop's
+    // composer, and could not follow its swatch as the controls scrolled.
+    el.innerHTML = `<div class="cp-cols"><div class="cp-col">
       <div class="cp-map"><div class="cp-cursor"></div></div>
       <div class="cp-hue"><div class="cp-hue-thumb"></div></div>
       <div class="cp-bottom">
         <div class="cp-preview"></div>
         <div class="cp-hex-wrap"><span>#</span><input class="cp-hex" type="text" maxlength="6" spellcheck="false" autocomplete="off"></div>
       </div>
+      </div><div class="cp-col">
       <div class="cp-rgb">
         <div class="cp-rgb-row"><span>R</span><input type="range" class="cp-slider cp-r-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
         <div class="cp-rgb-row"><span>G</span><input type="range" class="cp-slider cp-g-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
@@ -182,7 +186,8 @@ class ColorPickerUI {
       </div>
       <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>
       <div class="cp-recent-head">Recent colors</div>
-      <div class="cp-presets cp-recent"></div>`;
+      <div class="cp-presets cp-recent"></div>
+      </div></div>`;
     document.body.appendChild(el);
     this._el = el;
     forwardWheel(el, ()=> this._anchorBtn);
@@ -330,6 +335,7 @@ class ColorPickerUI {
     this._picked = null;
     this._updateUI(false);
     this._renderRecent();
+    this._el.classList.toggle('cp-wide', !!anchorBtn.closest('.fig-box'));
     this._el.style.display = 'block';
     centreInComposer(anchorBtn, this._el);
     this._reposition();

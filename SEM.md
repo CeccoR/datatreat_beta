@@ -552,3 +552,9 @@ so that a wider thumbnail stays sharp.
 - **Opening.** It now opens in the middle of the range where it can follow its swatch, rather than at the range's end. At the end, the first turn of the wheel one way pinned it at once.
 - **Line-mode wheels.** Firefox's mouse wheel counts in lines (3 a notch); forwarded over the popup, it scrolled 3 px. It now scrolls as the browser would, 16 px a line.
 - **The limit.** The picker is 538 px tall. The range where it can stand centred is the composer's body less 2 × 15 px less that height: 196 px of travel at a 1500 × 950 window, 54 px at 1366 × 768. Past it, it holds 15 px from the head or the foot, as asked.
+
+**v457**: the picker in two columns in the composers.
+- **Why it still did not move.** It is 538 px tall stacked, while a laptop's composer body is 474–614 px (windows 1280 × 620 to 1440 × 760). The range where it could follow its swatch was 46 px, 16 px, or nothing at all.
+- **The fix.** In a figure composer, the map, hue and hex now sit on the left and the RGB and HSL sliders, presets and recent colours on the right. The picker is 486 × 303 px. Elsewhere it is as before, one column, 252 × 538.
+- **Follow range.** 141 px at 1280 × 620, 171 at 1366 × 650, 251 at 1536 × 730, 481 at 1920 × 960.
+- **Checked** under the wheel at 1366 × 650 and 1536 × 730: it followed the swatch centred (261/261, 333/333, 393/393…), then held 15 px from the head or the foot.
