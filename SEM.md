@@ -537,3 +537,8 @@ so that a wider thumbnail stays sharp.
 - **The Images list.** Grouped by panel, rows dragged between panels: moved where there is room, swapped where the panel is full. Checked with 2 × 1 panels of 2 × 2 images and five images: 5kx dragged into panel 2 (1/4) moved there and left an empty place. Once panel 2 was full, 5kD dropped on its first image swapped with 5kB. Within a panel, a row went to the gap.
 - **Hint gone.** The *fill one block after another* hint is removed.
 - **Shared axis titles and the global legend** (plots' composer). They sat in the page's margins even when the plot was set by hand, so they stayed while the plot moved off the page. They now take their margins from the plot, as the tick numbers always did. A 250 × 160 mm plot on a 160 × 110 mm page took its Y title to x = −187 px, off the page with it.
+
+**v454**: the composers' colour picker moves.
+- **The wheel.** Open, the picker stands over the controls it was opened from, so a wheel over it scrolled nothing and it never moved. A wheel over the colour or palette picker now scrolls the panel its swatch is in, and the picker follows.
+- **Scroll room.** The controls end with room for their last settings to reach the panel's middle. The ink swatches at the foot can then be brought into the range where the picker stays centred on them.
+- **Checked** on the SEM composer's ink swatch under the wheel: centred on it (471/471, then 393/393) where it could, else 25 px from the foot (579).

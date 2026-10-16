@@ -91,6 +91,28 @@ function pushRecentColor(hex){
    within that range, and stays 25 px from the head or the foot past it. null when the
    button is not in a composer. */
 const COMPOSER_GAP = 25;
+/* A popup standing over the panel its button scrolls in (a composer's controls) would
+   swallow the wheel: the panel under it stopped scrolling, and the popup with it. The
+   wheel over the popup scrolls that panel instead, so the popup keeps following. */
+function forwardWheel(popup, anchorOf){
+  popup.addEventListener('wheel', e=>{
+    const a = anchorOf(); if (!a) return;
+    let p = a.parentElement;
+    for (; p && p !== document.body; p = p.parentElement){
+      const cs = getComputedStyle(p);
+      if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight) break;
+    }
+    if (!p || p === document.body) return;
+    // A popup that scrolls itself keeps the wheel while it can.
+    const own = e.target.closest && e.target.closest('.cp-popup, .pp-popup');
+    for (let q = e.target; q && q !== own && q !== popup.parentElement; q = q.parentElement){
+      const cs = getComputedStyle(q);
+      if (/(auto|scroll)/.test(cs.overflowY) && q.scrollHeight > q.clientHeight) return;
+    }
+    e.preventDefault();
+    p.scrollTop += e.deltaY;
+  }, { passive: false });
+}
 function composerTop(anchor, rect, ph){
   const box = anchor && anchor.closest && anchor.closest('.fig-box');
   if (!box) return null;
@@ -144,6 +166,7 @@ class ColorPickerUI {
       <div class="cp-presets cp-recent"></div>`;
     document.body.appendChild(el);
     this._el = el;
+    forwardWheel(el, ()=> this._anchorBtn);
     this._map = el.querySelector('.cp-map');
     this._cursor = el.querySelector('.cp-cursor');
     this._hue = el.querySelector('.cp-hue');
@@ -371,6 +394,7 @@ class PalettePickerUI {
     this._el.className = 'pp-popup';
     this._el.style.display = 'none';
     document.body.appendChild(this._el);
+    forwardWheel(this._el, ()=> this._anchorBtn);
     document.addEventListener('pointerdown', e=>{
       if (this._el.style.display==='none') return;
       if (!this._el.contains(e.target) && !(this._anchorBtn && this._anchorBtn.contains(e.target))) this.close();

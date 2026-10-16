@@ -2476,6 +2476,10 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 .sem-fig-sechead h4 { margin-bottom: 0; }
 .sem-fig-sechead + * { margin-top: 8px; }
 .fig-controls .color-swatch:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Room to scroll the last settings up to the middle of the panel, so that a picker
+   opened from one of them can follow it there (utils.js composerTop) rather than stay
+   pinned to the foot. */
+.fig-controls::after { content: ''; display: block; height: 40vh; }
 /* The close cross at the head's top right, in every composer. */
 .fig-head .fig-x { margin-left: auto; }
 /* A setting that means nothing while another is off: in place, greyed (figure.js dep). */
