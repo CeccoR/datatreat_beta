@@ -16,7 +16,7 @@ The page has three cards, in this order:
   - three eighths: the image in its editor, the navigator (‹ the image's number › and its label, as in the other modules) over it and the histogram of its crop under it;
   - a quarter: the settings, *Crop*, *Intensity* and *This image*, each with its *Default* box, each field with its name above it, in rows: X and Y; width, height and ratio; normalisation and reference; black and white; brightness, contrast and gamma (and again for this image);
   - the thumbnails' column and the settings start at the image's top edge, and the thumbnails' column is as tall as the row (its thumbnails scroll);
-  - on a phone, one column.
+  - one column (the image on top, the thumbnails, then the settings) on a phone, and wherever three columns would cut a field's name short with "…". Each resize tries three columns first, and stacks them when a name would be cut.
 
   There are no notes under the fields: the crop's size, and what the figure takes of it, are among the image's details.
 
@@ -231,8 +231,11 @@ pixel size, the one its common scale brings the others to.
 - The name reads as plain text. Like the project's name, its field shows on hover and while it is edited.
 - A name typed there stays; emptied, it goes back to the magnification.
 
-**The box.** Each group is a box 4φ wide to 1 high (6.47 : 1), which grows where its
-content needs more: 1430 × 234 px at a 1500 px window.
+**The box.** Each group is a box 4φ wide to 1 high (6.47 : 1) at full screen. Full
+screen means the screen's width, at most the page's 1500 px. It keeps that height
+whatever the window, worked out once at the first layout: narrower windows make it
+less wide, not lower. Its images take what the height leaves under the head and over
+their names, never under 80 px (as on a phone, where the box grows instead).
 - At the top left is its name. On the same line, at the top right, is its *Figure composer*, with the scale just left of it as two radio buttons, *common scale* or *own scale*. On a phone the scale goes under the name and the button.
 - Then come its images, 112 px each with its name under it, in one row across the whole box.
 
@@ -472,3 +475,7 @@ or more, stretched to fill it, so a row is a whole number of them with no strip 
 Measured: 5 a row at 93 px at 1500 px, 4 at 97 px at 1280, 3 at 110 px at 1100, 2 at
 131 px at 900; on a phone 3 at 93 px. Their copy is now drawn at about 160 px, not 112,
 so that a wider thumbnail stays sharp.
+
+**v448**:
+- **Groups.** They keep the height of a 4φ : 1 box at full screen, the images fitted to it. Measured with a 1500 px screen: the box 221 px high and the images 138 px, from a 1500 px window down to 700 px; on a phone, where the head takes two lines, 114 px.
+- **Crop and intensity.** The card goes to one column as soon as a field's name would be cut. With these files that is at 1250 px; at 1260 it is three columns, and back again on widening.

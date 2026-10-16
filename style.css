@@ -2893,6 +2893,9 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 .sem-fr2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sem-fr3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .sem-fr .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* One column: the image on top, the thumbnails in the middle, the settings under
+   them. Taken on a phone, and wherever the columns would cut a field's name short
+   (sem.js fitWork sets .sem-stacked). */
 @media (max-width: 760px) {
   .sem-work { grid-template-columns: minmax(0, 1fr); }
   .sem-work-nav, .sem-col-view, .sem-col-imgs, .sem-col-set { grid-column: 1; grid-row: auto; }
@@ -2901,6 +2904,11 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   .sem-col-in { position: static; }
   .sem-thumbs-box { flex: 0 0 auto; max-height: 300px; }
 }
+.sem-work.sem-stacked { grid-template-columns: minmax(0, 1fr); }
+.sem-work.sem-stacked > .sem-work-nav, .sem-work.sem-stacked > .sem-col-view, .sem-work.sem-stacked > .sem-col-imgs, .sem-work.sem-stacked > .sem-col-set { grid-column: 1; grid-row: auto; }
+.sem-work.sem-stacked > .sem-col-imgs, .sem-work.sem-stacked > .sem-col-set { margin-top: 16px; }
+.sem-work.sem-stacked .sem-col-in { position: static; }
+.sem-work.sem-stacked .sem-thumbs-box { flex: 0 0 auto; max-height: 300px; }
 
 /* The editor: the image and its crop drawn in one canvas filling the pane (sem.js
    sets the pane's height from the image's proportions); touch-action none so a drag
@@ -2962,16 +2970,18 @@ button.sem-link.is-on { background: var(--accent); border-color: var(--accent); 
 #semWorkspace .sem-check:has(input:disabled) { opacity: 0.45; cursor: default; }
 
 /* ===== SEM: groups and scale =====
-   A group is a box 4φ wide to 1 high (it grows where its content needs more): its name
-   at the top left, on the same line its scale (two radio buttons, one or the other)
-   and its figure at the right; then its images across the box in one row. Wider than the box, the row pages (sem.js
+   A group is a box 4φ wide to 1 high at full screen, and keeps that height whatever
+   the window (sem.js sizeGroups sets --sem-group-h, and --sem-img, the images' side:
+   what the height leaves under the head and over the names). Its name is at the top
+   left, on the same line its scale (two radio buttons, one or the other) and its
+   figure at the right; then its images across the box in one row. Wider than the box, the row pages (sem.js
    pageArrows): an arrow at an end where there is more, boxed and as tall as the
    images, the scrollbar hidden; snapping lands a page on an image's edge. The arrows
    stand outside the row, never over an image: their room is kept at both ends even
    where an arrow is not needed (hidden, not removed), so the row never shifts. */
 .sem-crop-group { margin-top: 10px; }
 .sem-group {
-  display: flex; flex-direction: column; gap: 8px; aspect-ratio: 6.4721 / 1;
+  display: flex; flex-direction: column; gap: 8px; height: var(--sem-group-h, auto); box-sizing: border-box;
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; margin-bottom: 12px; background: var(--panel2);
 }
 /* The name as the project's: plain text at rest, its field shown on hover and while
@@ -2998,12 +3008,12 @@ input[type="text"].sem-group-name:focus { border-color: var(--accent); backgroun
   scrollbar-width: none; scroll-snap-type: x mandatory;
 }
 .sem-group-imgs::-webkit-scrollbar { display: none; }
-.sem-gimg { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 112px; scroll-snap-align: start; }
-.sem-gimg-pic { height: 112px; display: flex; align-items: center; }
-.sem-gimg-pic canvas { display: block; max-width: 112px; max-height: 112px; width: auto; height: auto; border-radius: 4px; }
-.sem-gimg .sem-thumb-cap { max-width: 112px; }
+.sem-gimg { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; width: var(--sem-img, 112px); scroll-snap-align: start; }
+.sem-gimg-pic { height: var(--sem-img, 112px); display: flex; align-items: center; }
+.sem-gimg-pic canvas { display: block; max-width: var(--sem-img, 112px); max-height: var(--sem-img, 112px); width: auto; height: auto; border-radius: 4px; }
+.sem-gimg .sem-thumb-cap { max-width: var(--sem-img, 112px); }
 button.sem-page {
-  flex: 0 0 15px; width: 15px; height: 112px; padding: 0;
+  flex: 0 0 15px; width: 15px; height: var(--sem-img, 112px); padding: 0;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text);
   font: inherit; font-size: 16px; line-height: 1; cursor: pointer; transition: border-color 0.15s;
@@ -3017,7 +3027,6 @@ button.an-add.is-drop { border-color: var(--accent); }
 /* A phone: the name and the figure's button on the first line, the scale under them
    (the three do not fit one line). */
 @media (max-width: 600px) {
-  .sem-group { aspect-ratio: auto; }
   .sem-group-head { flex-wrap: wrap; }
   .sem-group-acts { display: contents; }
   .sem-group-head .sem-group-name { order: 1; }

@@ -330,12 +330,12 @@ import { readTescanTiff } from './sem-read.js';
     if (figApi && figApi.open) figApi.refresh();
   }
   const hist = registerHistory('sem', semSnapshot, semRestore);
-  registerTabRedraw('sem', ()=>{ if (files.length){ fitView(); drawEditor(); drawHist(); } });
+  registerTabRedraw('sem', ()=>{ if (files.length){ fitWork(); sizeGroups(); fitView(); drawEditor(); drawHist(); } });
 
   /* ---- Rendering ---- */
   function renderAll(){
     if (!files.length) return;
-    renderNav(); renderInfo(); renderFields(); renderThumbs();
+    renderNav(); renderInfo(); renderFields(); fitWork(); renderThumbs();
     loadEditorImage(); fitView(); drawEditor();
     renderIntensity(); renderGroups();
   }
@@ -852,9 +852,35 @@ import { readTescanTiff } from './sem-read.js';
         </div>
       </div>`;
     }).join('');
-    box.querySelectorAll('.sem-gimg').forEach(el=>{ const f = byId(el.dataset.id), cv = f && outCanvas(f, 150); if (cv) el.querySelector('.sem-gimg-pic').appendChild(cv); });
+    sizeGroups();
+    box.querySelectorAll('.sem-gimg').forEach(el=>{ const f = byId(el.dataset.id), cv = f && outCanvas(f, 200); if (cv) el.querySelector('.sem-gimg-pic').appendChild(cv); });
     box.querySelectorAll('.sem-group-name').forEach(fitGroupName);
     box.querySelectorAll('.sem-group-imgs').forEach(row=>{ row.addEventListener('scroll', ()=> pageArrows(row), { passive: true }); pageArrows(row); });
+  }
+  /* The groups' height: a box 4φ : 1 at full screen, kept whatever the window. Full
+     screen is the screen's width, at most the page's 1500 px, less what lies around a
+     group now (the page's and the card's margins). The images take what the height
+     leaves under the head and over their names, never under 80 px (on a phone, where
+     4φ : 1 would leave next to nothing, the box grows instead). */
+  const PHI4 = 4*(1 + Math.sqrt(5))/2;
+  // The full-screen width, worked out once, at the first layout: resizing the window
+  // must not change the height.
+  let groupFull = null;
+  function sizeGroups(){
+    const box = document.getElementById('semGroups'), g = box.querySelector('.sem-group');
+    if (!g || !box.clientWidth) return;
+    const main = document.querySelector('main'), mcs = getComputedStyle(main);
+    const pad = parseFloat(mcs.paddingLeft) + parseFloat(mcs.paddingRight);
+    const around = main.clientWidth - pad - g.offsetWidth;
+    const scr = screen.availWidth || window.innerWidth;
+    if (!groupFull) groupFull = { scr, w: Math.min(Math.max(scr, window.innerWidth), parseFloat(mcs.maxWidth) || Infinity) - pad - around };
+    const full = groupFull.w;
+    const gcs = getComputedStyle(g), head = g.querySelector('.sem-group-head').offsetHeight;
+    const cap = 4 + 16;   // the gap and the name under an image
+    const chrome = parseFloat(gcs.paddingTop) + parseFloat(gcs.paddingBottom) + parseFloat(gcs.borderTopWidth) + parseFloat(gcs.borderBottomWidth) + head + parseFloat(gcs.rowGap || 8) + cap;
+    const H = Math.round(full/PHI4), img = Math.max(80, Math.floor(H - chrome));
+    box.style.setProperty('--sem-img', img + 'px');
+    box.style.setProperty('--sem-group-h', Math.max(H, Math.ceil(chrome + img)) + 'px');
   }
   /* A group's row of images, wider than the box: an arrow at each end where there is
      more, boxed, as tall as the images and outside the row, turns a page — the row
@@ -865,7 +891,20 @@ import { readTescanTiff } from './sem-read.js';
     strip.querySelector('.sem-page-prev').hidden = !(more > 1 && row.scrollLeft > 1);
     strip.querySelector('.sem-page-next').hidden = !(more > 1 && row.scrollLeft < more - 1);
   }
-  window.addEventListener('resize', ()=> document.querySelectorAll('#semGroups .sem-group-imgs').forEach(pageArrows));
+  window.addEventListener('resize', ()=>{ sizeGroups(); document.querySelectorAll('#semGroups .sem-group-imgs').forEach(pageArrows); fitWork(); });
+  /* Crop and intensity in three columns, until a field's name would be cut short ("…"):
+     then one column, the image on top, the thumbnails, the settings under them. Tried
+     in three columns at every resize (synchronously, so nothing is painted between). */
+  function fitWork(){
+    const work = document.querySelector('.sem-work');
+    if (!work || !work.offsetWidth) return;
+    const was = work.classList.contains('sem-stacked');
+    work.classList.remove('sem-stacked');
+    const cut = [...work.querySelectorAll('.sem-fr .txt-label')].some(l=> l.scrollWidth > l.clientWidth + 0.5);
+    work.classList.toggle('sem-stacked', cut);
+    // The editor and the histogram are sized to their column: redrawn when it changes.
+    if (cut !== was && files.length){ fitView(); drawEditor(); drawHist(); }
+  }
   const groupsBox = document.getElementById('semGroups'), groupsCard = document.getElementById('semGroupsCard');
   groupsBox.addEventListener('input', e=>{ if (e.target.classList.contains('sem-group-name')) fitGroupName(e.target); });
   groupsBox.addEventListener('change', e=>{
