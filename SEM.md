@@ -303,8 +303,15 @@ image's crop to 873 px of its own pixels (43.65 µm), taken to 800 × 800.
 ### 5.1 The page
 
 **One figure per group.** Each group has its own *Figure composer* button and its own
-figure, with its own settings; the figure is titled with the group's name, and its file
-is named after it (`SEM_5.00_kx`) until named otherwise.
+figure, with its own settings. Its file is named after the group (`SEM_5.00_kx`) until
+named otherwise. The modal is titled *Figure composer*, as the plots' is, with its
+cross at the top right.
+
+**The page and the plot.** The page's width and height are set freely; a new figure
+starts as tall as its images need at its width.
+- **The plot** is the smallest rectangle round all the images.
+- **Auto margins** (the default): the images as large as the page allows, with what lies outside them (names, letters, bars) in the margins, the whole centred. The plot's width and height show what was chosen, locked.
+- **Unticked**, the plot's width and height and its alignment on the page (9 places) open on those values. The images are fitted in the plot, to its aligned side where their proportions leave it room.
 
 The images are laid out as the figure composer (`figure.js`) lays out plots, with the
 same modal and controls:
@@ -329,33 +336,36 @@ first four in the left block.
 - **The gaps**: one between the panels in a block (1 mm by default), one between the blocks (4 mm).
 - The columns are equal.
 - An image row is as tall as its tallest image at that width, across its row of blocks.
-- The height follows from the layout unless set by hand. A set height narrows the images to fit (never widens them), with the grid centred.
+- The controls give the blocks first, then the panels in a block.
 
 **Order.** It starts as the file list's. In the *Images* list, a row dragged by its
 handle goes to the gap that lights, and the panels follow, as the plots' series are
-reordered in the composer. *As the file list* puts the order back. The row's field is
-the name shown on the panel.
+reordered in the composer. *Restore*, at the right of the list's title, puts the file
+list's order back. The row's field is the name shown on the panel.
 
-**Names.** Each panel carries its sample's name, editable per panel:
-- in a corner of the image (top left by default), white with a dark outline by default, which reads on any grey; the colour and the outline can be changed;
-- or outside it: above, below, left or right. Outside, the name is in black on a white page (white on a black one), along the image at the sides, reading upward on the left and downward on the right.
+**Names.** Each panel carries its sample's name, editable per panel, horizontal or
+vertical (upright, reading up; outside on the right, reading down).
+- **Placed automatically** (the default): outside where there is room, above the first row and below the last. The rows between have it inside, at the top for the first half and the middle row (an odd count), at the bottom for the second half. One row: above. Vertical names go the same way by columns: left of the first, right of the last, inside left or right between. Only rows and columns that hold images count. The alignment along the name stays the user's: left, centre or right (top, centre or bottom when vertical).
+- **By hand**: the position (inside or outside) and both alignments. Outside, a name is beside an edge, never across the middle.
+- Inside, white with an outline by default, which reads on any grey; outside, black on a white page (white on a black one). The colour on the images, the outline and its colour can be changed.
 
 **Letters.** (a), (b)… in the panels' order, off by default, in the styles a, (a), A
 and (A).
-- They are placed apart from the name: in a corner, where a name sharing the corner moves one line in, or above the image, on one line with a name above.
-- Or they are placed before the name.
+- **At the start of the name**: written before it, in its size (the letters' own size is then disabled), where the name is.
+- **Apart**: inside or outside, top or bottom, left or right (8 places), in their own size. Outside, a letter shares its band's line with the name, written before it when on the same side. Inside, in the name's corner, the two go on one line.
 
-**Room outside.** What is placed outside an image takes a band beside it, the same
-for every panel so that the grid stays aligned: next to the image the scale bar's band,
-outside it the name's. The images narrow to leave room for the bands at the sides.
+**Room outside.** What is placed outside an image goes in a band above or below its
+row (or beside its column, for vertical names), as deep as the deepest thing in it, the
+same for every panel of the row so that the grid stays aligned. A bar shares the line of
+the name and letter when on the other side from them, else it takes a line of its own,
+next to the image. The bands at the outer edges are the margins round the plot.
 
 ### 5.3 Scale bars
 
-- **Which panels.** A group at common scale has one bar, in its last panel in the figure's order. A group at its own scale has one in every panel.
+- **Which panels.** A group at common scale has one bar, in its last panel in the figure's order, or one on every panel with *One bar per image* (all of one length). A group at its own scale has one in every panel, each its own length: the box is then ticked and disabled.
 - **Length.** A round 1, 2 or 5 × 10ⁿ µm nearest (on a log scale) to 22 % of the panel's width, unless typed: any value, as 4.56 µm. It reads in nm under 1 µm.
-- **Placing.** In a corner of the image (bottom right by default), or outside it:
-  - above or below, flush with the image's right edge, the length above the bar or under it;
-  - left or right, upright along the image from its bottom, the length along it.
+- **Placing.** As the letters: inside or outside, top or bottom, left or right (inside, bottom right by default). Outside, 0.4 mm above or below the image, flush with its side, the length above the bar over the image or under it below. The upright bars at the sides (v440) are gone.
+- **The lengths' fields** are named by what they measure (the image, at own scale); the group's magnification no longer heads them.
 - **The text** is centred on the bar, or flush with its outer end when wider than a short bar. The thickness is 0.7 mm.
 - Outside, the bar and its length are in the page's ink (black on white), with no outline.
 
@@ -378,6 +388,14 @@ and redone with it (Ctrl+Z inside the open figure too).
 - **Letter, name and bar all above**: "(a) STO 5kx" on one line, the bar's band under it.
 - **Phone width (390 px).** No sideways scroll. A swipe over the group's images scrolled the page 347 px; a 0.45 s hold and a drag moved an image to the other group.
 - **Exports.** SVG 6.0 MB; PNG 4134 × 4134 px at 600 dpi.
+
+**Checked** (v449) on eight images in 3 × 3 panels:
+- **Names, automatic.** The first row above, the middle row inside at the top, the last below. Vertical: the first column outside left, the middle inside left, the last outside right, reading down.
+- **Locked fields.** With names automatic, Vertical and Position read "by row", disabled. With the letter at the start of the name, its position, sides and size are disabled.
+- **Letters.** Outside top right: (a) ends on the image's right edge, above it. Inside bottom left and outside bottom left were also checked.
+- **Bars.** *One bar per image* drew eight, with one length field. Outside bottom right: 0.4 mm under the image, ending on its right edge. Outside top left and inside top right were also checked.
+- **Margins.** Auto gave the plot 175 × 175 mm in a 175 × 182.6 mm page. Unticked, the plot fields opened on 175 × 175. At 100 mm wide, top left, the first image sat at 0, 3.81 mm, under its names' band.
+- **Colour picker.** Open on the outline's swatch, it sat beside it, level with its bottom. When the swatch scrolled out of the controls' view, it closed; a click on the preview closed it too.
 
 ## 6. Project and export
 
@@ -479,3 +497,13 @@ so that a wider thumbnail stays sharp.
 **v448**:
 - **Groups.** They keep the height of a 4φ : 1 box at full screen, the images fitted to it. Measured with a 1500 px screen: the box 221 px high and the images 138 px, from a 1500 px window down to 700 px; on a phone, where the head takes two lines, 114 px.
 - **Crop and intensity.** The card goes to one column as soon as a field's name would be cut. With these files that is at 1250 px; at 1260 it is three columns, and back again on widening.
+
+**v449**: the SEM figure composer reworked, and the plots' one aligned with it.
+- **Both composers.** Titled *Figure composer*, with no strapline and the cross at the top right. A setting that means nothing while another is off stays in place, disabled: in the plots' composer the plot's width, height and alignment (Auto margins), the data labels' settings, and the legend frame's.
+- **SEM page.** Width and height free; auto margins, the plot (the smallest rectangle round the images) settable when they are off (§5.1).
+- **Layout.** Blocks before panels. *Restore* replaces *As the file list*, beside the Images title.
+- **Names.** Placed automatically by row (or column), horizontal or vertical, the alignment along them free; by hand, inside or outside and both alignments (§5.2).
+- **Letters and bars.** Eight places each; *One bar per image* at common scale; no magnification over the lengths.
+- **Type.** The outline's colour is chosen too.
+- **Colour picker** (every one in the app). It stays beside its swatch as a panel scrolls, level with the swatch's bottom where its top would run off the window; it no longer stays pinned to the window's foot. It closes when its swatch scrolls out of view.
+- **Older figures.** Read anew: corners and sides as the new positions; a height that followed the layout becomes the images' natural height.

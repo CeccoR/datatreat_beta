@@ -1339,6 +1339,8 @@ function renderPreview(){
   previewSvg.style.height = (H * k) + 'px';
   applyView();
   updateDim();
+  // The plot's size, while the margins choose it, shown as they chose it.
+  if (controlsEl && F.plotAuto) controlsEl.querySelectorAll('[data-auto-plot]').forEach(el=>{ el.value = lastInner[el.dataset.autoPlot]; });
 }
 
 /* ---- Export ---------------------------------------------------------------- */
@@ -1706,6 +1708,16 @@ const figToggle = (attrs, on, icon, title)=>
 
 const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
+/* Settings that mean something only while another is on: kept in place, disabled while
+   it is off (applyDeps), never taken away, so that nothing moves under the pointer. */
+const dep = (off, html)=> `<div class="fig-dep" data-off="${off ? 1 : 0}">${html}</div>`;
+function applyDeps(){
+  if (!controlsEl) return;
+  controlsEl.querySelectorAll('.fig-dep').forEach(d=>{
+    const off = d.dataset.off === '1';
+    d.querySelectorAll('input, select, button').forEach(el=>{ el.disabled = off; });
+  });
+}
 const chk = (label, key, obj)=>
   `<label class="fig-check"><input type="checkbox" data-${obj||'k'}="${key}"${(obj==='g'?F.grid[key]:obj==='dl'?F.dataLabels[key]:F[key])?' checked':''}> ${label}</label>`;
 const sel = (label, key, opts, cur, attr)=>
@@ -2324,9 +2336,11 @@ function controlsHtml(){
   <section class="fig-sec"><h4>Figure</h4>
     ${num('Width (mm)','wmm',5,2000)}${num('Height (mm)','hmm',5,2000)}${num('Export DPI','dpi',1,20000)}
     ${chk('Auto margins','plotAuto')}
-    ${F.plotAuto ? '' : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}
+    ${dep(F.plotAuto, `${F.plotAuto
+        ? `<label class="fig-row"><span>Plot width (mm)</span><input type="text" data-auto-plot="w" value="${lastInner.w}" title="Chosen by the auto margins"></label><label class="fig-row"><span>Plot height (mm)</span><input type="text" data-auto-plot="h" value="${lastInner.h}" title="Chosen by the auto margins"></label>`
+        : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}`}
       <label class="fig-row"><span>Alignment</span>
-        <button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot area inside the margins">${ALIGN_ICON(F.align)}</button></label>`}
+        <button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot area inside the margins">${ALIGN_ICON(F.align)}</button></label>`)}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
   </section>
 
@@ -2407,14 +2421,14 @@ function controlsHtml(){
 
   <section class="fig-sec"><h4>Data labels</h4>
     ${chk('Show a value on every data point','on','dl')}
-    ${!DL.on ? '' : `
+    ${dep(!DL.on, `
       ${sel('Position','pos',[['above','above the mark'],['inside','inside, at the top'],['center','centred'],['below','below the mark']],DL.pos,'dl')}
       <label class="fig-row"><span>Rotation (&deg;)</span>${numField('data-dl="rot"', DL.rot, 0, 90)}</label>
       <label class="fig-row"><span>Distance (px)</span>${numField('data-dl="off"', DL.off, -100, 100)}</label>
       <label class="fig-row"><span>Decimals</span>${numField('data-dl="dec"', DL.dec, 0, 6)}</label>
       <label class="fig-row"><span>Size (pt)</span>${numField('data-dl="size"', DL.size, 3, 24)}</label>
       ${chk('Colour each label for contrast with what is behind it','autoInk','dl')}
-      <p class="txt-meta">Bars keep the text the source plot formatted (value &plusmn; error); everything else shows its Y value.</p>`}
+      <p class="txt-meta">Bars keep the text the source plot formatted (value &plusmn; error); everything else shows its Y value.</p>`)}
   </section>
 
   <section class="fig-sec"><h4>Legend &amp; type</h4>
@@ -2426,8 +2440,8 @@ function controlsHtml(){
       ${sel('Alignment','legendAlign',[['left','left'],['center','centred'],['right','right']],F.legendAlign)}
       ${num('Columns (0 = one row)','legendCols',0,12)}` : ''}
     ${F.legendMode === 'none' ? '' : `${num('Distance (px)','legendGap',0,40)}${chk('Draw a frame behind it','legendFrame')}
-      ${F.legendFrame ? `${chk('Outline around the frame','legendFrameLine')}
-        ${num('Frame background opacity (0–1)','legendFrameAlpha',0,1)}` : ''}`}
+      ${dep(!F.legendFrame, `${chk('Outline around the frame','legendFrameLine')}
+        ${num('Frame background opacity (0–1)','legendFrameAlpha',0,1)}`)}`}
     <div class="fig-subhead">Type</div>
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
     <label class="fig-row"><span>Colour of every line and letter</span>
@@ -2720,6 +2734,7 @@ function refresh(rebuild){
    A field the pointer is typing in is left alone. "Neither on nor off" can only be
    said to the DOM: there is no markup for an indeterminate checkbox. */
 function markMixedToggles(){
+  applyDeps();
   if (!controlsEl || !F.series.length) return;
   const el = sel => controlsEl.querySelector('.fig-serie-all ' + sel);
   const box = (sel, get)=>{
@@ -3390,7 +3405,6 @@ export function openFigureEditor(plot, opts){
     <div class="fig-box">
       <div class="fig-head">
         <h3 class="txt-head" style="margin:0">Figure composer</h3>
-        <span class="txt-meta">Export only — the plot on the page is never changed.</span>
         <button class="fig-x close-x" type="button" aria-label="Close">✕</button>
       </div>
       <div class="fig-body">

@@ -283,13 +283,25 @@ class ColorPickerUI {
     window.addEventListener('resize', this._onScroll);
   }
 
+  /* Beside its swatch, level with its top; where that would run off the bottom of the
+     window, level with its bottom instead, so that it keeps moving with the swatch as
+     the page or a panel scrolls (pinned to the window's bottom, it stood still while
+     a swatch low in a panel scrolled away under it). A swatch scrolled out of its
+     panel's view, or gone, closes it: there is nothing left for it to stand by. */
   _reposition(){
     if (!this._anchorBtn) return;
+    if (!this._anchorBtn.isConnected){ this.close(); return; }
     const rect = this._anchorBtn.getBoundingClientRect();
+    for (let p = this._anchorBtn.parentElement; p && p !== document.body; p = p.parentElement){
+      const cs = getComputedStyle(p);
+      if (!/(auto|scroll)/.test(cs.overflowY + cs.overflowX)) continue;
+      const pr = p.getBoundingClientRect();
+      if (rect.bottom < pr.top || rect.top > pr.bottom || rect.right < pr.left || rect.left > pr.right){ this.close(); return; }
+    }
     const pw = this._el.offsetWidth || 260, ph = this._el.offsetHeight || 430;
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
-    if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+    if (top + ph > window.innerHeight - 8) top = rect.bottom + 4 - ph;
     this._el.style.left = Math.max(8,left)+'px';
     this._el.style.top = Math.max(8,top)+'px';
   }

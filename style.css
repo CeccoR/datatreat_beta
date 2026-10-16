@@ -2471,6 +2471,16 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0;
 }
+/* A section's title with a button at its right (the SEM figure's Images: Restore). */
+.sem-fig-sechead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sem-fig-sechead h4 { margin-bottom: 0; }
+.sem-fig-sechead + * { margin-top: 8px; }
+.fig-controls .color-swatch:disabled { opacity: 0.4; cursor: not-allowed; }
+/* The close cross at the head's top right, in every composer. */
+.fig-head .fig-x { margin-left: auto; }
+/* A setting that means nothing while another is off: in place, greyed (figure.js dep). */
+.fig-dep[data-off="1"] { opacity: 0.5; }
+.fig-dep[data-off="1"] input, .fig-dep[data-off="1"] select, .fig-dep[data-off="1"] button, .fig-dep[data-off="1"] label { cursor: not-allowed; }
 .fig-x {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 15px; line-height: 1; padding: 4px 6px; transition: color 0.14s;
@@ -2827,7 +2837,6 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   .fig-backdrop { padding: 6px; }
   .fig-box { border-radius: 8px; }
   .fig-head { padding: 8px 10px; gap: 8px; }
-  .fig-head .txt-meta { display: none; }        /* the strapline is desktop-only */
   .fig-controls { padding: 4px 10px 14px; }
 
   /* Label above field: a 118px label column leaves nothing for the input here. */
