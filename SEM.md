@@ -529,7 +529,7 @@ so that a wider thumbnail stays sharp.
 **v452**: the colour pickers in every figure composer.
 - **Hitbox.** Only the swatch opens one. Its row was a label, so a click anywhere along it opened the picker; it is no longer.
 - **States.** The swatch keeps its hover border while its picker is open. A second click on it, or a click elsewhere, closes it.
-- **Placing.** It stands centred on its swatch where it can, never nearer than 25 px to the composer's head (the title) or foot (the buttons). While the controls scroll it follows the swatch, centred, and past that range it stays 25 px from the head or the foot. The palette picker does the same.
+- **Placing.** It stands centred on its swatch where it can, never nearer than 15 px (25 until v455) to the composer's head (the title) or foot (the buttons). While the controls scroll it follows the swatch, centred, and past that range it stays 15 px from the head or the foot. The palette picker does the same.
 - **Checked.** A series' swatch: centred at first, then 25 px from the foot or the head as it scrolled past. The ink swatches, low in the panel: 25 px over the foot. A click 80 px right of a swatch opened nothing.
 
 **v453**:
@@ -542,3 +542,8 @@ so that a wider thumbnail stays sharp.
 - **The wheel.** Open, the picker stands over the controls it was opened from, so a wheel over it scrolled nothing and it never moved. A wheel over the colour or palette picker now scrolls the panel its swatch is in, and the picker follows.
 - **Scroll room.** The controls end with room for their last settings to reach the panel's middle. The ink swatches at the foot can then be brought into the range where the picker stays centred on them.
 - **Checked** on the SEM composer's ink swatch under the wheel: centred on it (471/471, then 393/393) where it could, else 25 px from the foot (579).
+
+**v455**: the colour picker opens centred.
+- **Margin.** It is now 15 px from the composer's head and foot.
+- **Opening.** A swatch low in the panel (the usual case: the ink at the foot) opened its picker pinned to the foot. Opening now first scrolls the panel, as far as it goes, to bring the swatch where the picker can stand centred on it.
+- **Checked** at 1500 × 950 and 1366 × 768, SEM ink and a series of the plots' composer. It opened centred on the swatch (471/471; 380/380). Under the wheel it followed it, then held 15 px from the foot or the head.

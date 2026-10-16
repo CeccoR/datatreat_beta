@@ -86,11 +86,28 @@ function pushRecentColor(hex){
 }
 
 /* A picker opened in a figure composer (inside .fig-box): its top, so that it stands
-   centred on its button where it can, and never nearer than 25 px to the composer's
+   centred on its button where it can, and never nearer than 15 px to the composer's
    head (the title) or foot (the buttons). As its button scrolls it follows, centred,
-   within that range, and stays 25 px from the head or the foot past it. null when the
+   within that range, and stays 15 px from the head or the foot past it. null when the
    button is not in a composer. */
-const COMPOSER_GAP = 25;
+const COMPOSER_GAP = 15;
+/* Opening a picker in a composer: its button's panel scrolled (as far as it goes) to
+   bring the button where the popup can stand centred on it, so that it opens centred
+   rather than pinned to the foot, a swatch low in the panel being the usual case. */
+function centreInComposer(anchor, popup){
+  const box = anchor && anchor.closest && anchor.closest('.fig-box');
+  if (!box) return;
+  let p = anchor.parentElement;
+  for (; p && p !== box; p = p.parentElement){ const cs = getComputedStyle(p); if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight) break; }
+  if (!p || p === box) return;
+  const head = box.querySelector('.fig-head'), foot = box.querySelector('.fig-foot'), ph = popup.offsetHeight || 430;
+  const lo = (head ? head.getBoundingClientRect().bottom : box.getBoundingClientRect().top) + COMPOSER_GAP + ph/2;
+  const hi = (foot ? foot.getBoundingClientRect().top : box.getBoundingClientRect().bottom) - COMPOSER_GAP - ph/2;
+  const r = anchor.getBoundingClientRect(), c = r.top + r.height/2;
+  // Where the button may stand for the popup to be centred on it: nearest that range.
+  const want = hi < lo ? (lo + hi)/2 : Math.min(hi, Math.max(lo, c));
+  p.scrollTop += c - want;
+}
 /* A popup standing over the panel its button scrolls in (a composer's controls) would
    swallow the wheel: the panel under it stopped scrolling, and the popup with it. The
    wheel over the popup scrolls that panel instead, so the popup keeps following. */
@@ -312,6 +329,7 @@ class ColorPickerUI {
     this._updateUI(false);
     this._renderRecent();
     this._el.style.display = 'block';
+    centreInComposer(anchorBtn, this._el);
     this._reposition();
     // Scroll never bubbles, but a capture-phase listener on the window still sees it
     // fire on any scrollable ancestor, so the popup can follow its button wherever
@@ -483,6 +501,7 @@ class PalettePickerUI {
     this._render();
     this._wire();
     this._el.style.display = 'block';
+    centreInComposer(anchorBtn, this._el);
     this._reposition();
     if (!this._onScroll) this._onScroll = ()=> this._reposition();
     window.addEventListener('scroll', this._onScroll, true);
