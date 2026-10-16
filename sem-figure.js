@@ -1,5 +1,5 @@
 import { colorPickerUI, flashFieldInvalid, dropGap } from './utils.js';
-import { FONTS, PX_MM, PT_PX, saveBlob, interFontCss } from './figure.js';
+import { FONTS, PX_MM, PT_PX, saveBlob, interFontCss, alignPicker, ALIGN_ICON } from './figure.js';
 
 /* =========================================================
    SEM FIGURE
@@ -37,7 +37,7 @@ const MM_PT = 25.4/72;
    letter and bar: pos in or out, va top or bottom, ha left or right (8 places). */
 const FIG_DEF = {
   file: 'SEM_figure', wmm: 175, hmm: null, dpi: 600, bg: '#ffffff',
-  plotAuto: true, plotW: 0, plotH: 0, align: 'mc',
+  plotAuto: true, plotW: 0, plotH: 0, align: 'cc',
   gridAuto: true, rows: 1, cols: 1, gap: 1, bRows: 1, bCols: 1, bGap: 4,
   order: [], names: {},
   label: { on: true, auto: true, orient: 'h', ha: 'left', va: 'top', pos: 'out', size: 8 },
@@ -67,6 +67,7 @@ function withDefaults(f){
     if (CORNER[p]){ X.pos = 'in'; [X.va, X.ha] = CORNER[p]; }
     else { X.pos = 'out'; X.va = p === 'below' ? 'bottom' : 'top'; X.ha = k === 'bar' ? 'right' : 'left'; if (p === 'left' || p === 'right'){ X.va = 'bottom'; X.ha = p; } }
   }
+  if (/^m/.test(o.align || '')) o.align = 'c' + o.align[1];   // v449 wrote the middle row as m
   if (f && f.hAuto === false && f.hmm > 0) o.hmm = f.hmm;
   else if (f && 'hAuto' in f) o.hmm = null;
   delete o.hAuto;
@@ -141,8 +142,9 @@ const lineOf = pt => pt*MM_PT*1.35;
 const BAR_GAP = 0.4;   // between an image and a bar outside it
 // The bar's box outside the image: the gap, the bar, its length's line.
 const barBox = ()=> BAR_GAP + F.bar.thick + 0.3 + F.bar.size*MM_PT*1.05;
-/* The name of the panel in row vr of the R rows holding images, column vc of C: { v
-   (upright), pos (in, out), va, ha }, or null. Auto: by row (by column when upright). */
+/* The name of the panel in row vr of the R rows of its block holding images, column vc
+   of C: { v (upright), pos (in, out), va, ha }, or null. Auto: by row within the block
+   (by column when upright). */
 function nameAt(vr, R, vc, C){
   const L = F.label;
   if (!L.on && !(F.letter.on && F.letter.link)) return null;
@@ -179,7 +181,7 @@ function layout(){
   const imgs = ordered(), n = imgs.length, G = gridOf(n), { rows, cols, bRows, bCols } = G;
   const g = F.gap, bg = F.bGap, W = F.wmm;
   const per = rows*cols, R = rows*bRows, C = cols*bCols;
-  const at = i => { const b = Math.floor(i/per), j = i % per, br = Math.floor(b/bCols), bc = b % bCols, r = Math.floor(j/cols), c = j % cols; return { vr: br*rows + r, vc: bc*cols + c }; };
+  const at = i => { const b = Math.floor(i/per), j = i % per, br = Math.floor(b/bCols), bc = b % bCols, r = Math.floor(j/cols), c = j % cols; return { b, r, c, vr: br*rows + r, vc: bc*cols + c }; };
   // Which panels carry a scale bar: every one at own scale or one a panel; else a
   // group's last.
   const lastOf = new Map();
@@ -188,10 +190,13 @@ function layout(){
   // The rows' depth over the image width, and the bands.
   const asp = new Array(R).fill(0), tb = new Array(R).fill(0), bb = new Array(R).fill(0), lb = new Array(C).fill(0), rb = new Array(C).fill(0);
   const pl = imgs.map((m, i)=>{ const q = at(i); asp[q.vr] = Math.max(asp[q.vr], m.h/m.w); return q; });
-  // First, last and middle count among the rows and columns that hold images.
-  const rowsIn = [...new Set(pl.map(q=> q.vr))].sort((a, b)=> a - b), colsIn = [...new Set(pl.map(q=> q.vc))].sort((a, b)=> a - b);
+  // First, last and middle count within a block, among its rows and columns that hold
+  // images: each block's names are placed as if it stood alone.
+  const inBlock = new Map();
+  pl.forEach(q=>{ const e = inBlock.get(q.b) || { r: new Set(), c: new Set() }; e.r.add(q.r); e.c.add(q.c); inBlock.set(q.b, e); });
+  for (const e of inBlock.values()){ e.r = [...e.r].sort((a, b)=> a - b); e.c = [...e.c].sort((a, b)=> a - b); }
   imgs.forEach((m, i)=>{
-    const q = pl[i], nm = nameAt(rowsIn.indexOf(q.vr), rowsIn.length, colsIn.indexOf(q.vc), colsIn.length), bar = hasBar(m);
+    const q = pl[i], e = inBlock.get(q.b), nm = nameAt(e.r.indexOf(q.r), e.r.length, e.c.indexOf(q.c), e.c.length), bar = hasBar(m);
     q.nm = nm; q.bar = bar; q.top = bandOf(nm, 'top', bar); q.bottom = bandOf(nm, 'bottom', bar);
     tb[q.vr] = Math.max(tb[q.vr], q.top.depth); bb[q.vr] = Math.max(bb[q.vr], q.bottom.depth);
     if (nm && nm.v && nm.pos === 'out'){ const d = lineOf(F.label.size); if (nm.ha === 'left') lb[q.vc] = Math.max(lb[q.vc], d); else rb[q.vc] = Math.max(rb[q.vc], d); }
@@ -212,7 +217,8 @@ function layout(){
     boxW = innerW + C*iw; boxH = innerH + sumAsp*iw;
     boxX = (W - (oL + boxW + oR))/2 + oL; boxY = (H - (oT + boxH + oB))/2 + oT;
   } else {
-    const pw = Math.max(5, F.plotW), ph = Math.max(5, F.plotH);
+    // Never larger than the page (a page made smaller since takes the plot down with it).
+    const pw = Math.min(W, Math.max(5, F.plotW)), ph = Math.min(H, Math.max(5, F.plotH));
     iw = Math.max(1, Math.min((pw - innerW)/C, (ph - innerH)/sumAsp));
     const cw = innerW + C*iw, ch = innerH + sumAsp*iw, al = F.align || 'mc';
     const bx = al[1] === 'l' ? oL : al[1] === 'r' ? W - oR - pw : (W - pw)/2;
@@ -407,7 +413,6 @@ function get(path){ return path.split('.').reduce((o, k)=> o == null ? undefined
 function put(path, v){ const ks = path.split('.'), last = ks.pop(); const o = ks.reduce((o, k)=> (o[k] = o[k] || {}), F); o[last] = v; }
 
 const HA = [['left', 'left'], ['center', 'centre'], ['right', 'right']], VA = [['top', 'top'], ['center', 'centre'], ['bottom', 'bottom']];
-const ALIGN = [['tl', 'top left'], ['tc', 'top'], ['tr', 'top right'], ['ml', 'left'], ['mc', 'centre'], ['mr', 'right'], ['bl', 'bottom left'], ['bc', 'bottom'], ['br', 'bottom right']];
 const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 function controlsHtml(){
   const imgs = ordered(), own = imgs.some(m=> m.group.mode === 'own'), L = F.label, Lt = F.letter, B = F.bar;
@@ -434,8 +439,8 @@ function controlsHtml(){
     ${chk('Auto margins', 'plotAuto', 'The images as large as the page allows, the names and bars outside them in the margins, the whole centred')}
     ${F.plotAuto ? `<label class="fig-row"><span>Plot width (mm)</span><input type="text" data-auto="plotW" disabled value="${sig3(lastPlot.w)}" title="Chosen by the auto margins"></label>
       <label class="fig-row"><span>Plot height (mm)</span><input type="text" data-auto="plotH" disabled value="${sig3(lastPlot.h)}" title="Chosen by the auto margins"></label>`
-      : `${num('Plot width (mm)', 'plotW', 5, 1000)}${num('Plot height (mm)', 'plotH', 5, 1000)}`}
-    ${sel('Alignment', 'align', ALIGN, F.plotAuto)}
+      : `<label class="fig-row"><span>Plot width (mm)</span>${numField('data-p="plotW"', F.plotW, 5, F.wmm)}</label><label class="fig-row"><span>Plot height (mm)</span>${numField('data-p="plotH"', F.plotH, 5, F.hmm)}</label>`}
+    <label class="fig-row"><span>Alignment</span><button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot on the page"${F.plotAuto ? ' disabled' : ''}>${ALIGN_ICON(F.align)}</button></label>
     <p class="txt-meta">The plot is the smallest rectangle round all the images.</p>
   </section>
   <section class="fig-sec"><h4>Layout</h4>
@@ -493,7 +498,7 @@ function controlsHtml(){
 function renderControls(){
   if (!controlsEl) return;
   rebuilding = true;
-  colorPickerUI.close();   // its swatch is about to be replaced
+  colorPickerUI.close(); alignPicker.close();   // their buttons are about to be replaced
   const st = controlsEl.scrollTop;
   controlsEl.innerHTML = controlsHtml();
   controlsEl.scrollTop = st;
@@ -537,7 +542,7 @@ function commit(rebuild){
   host.setFig(clone(F));
   if (rebuild) renderControls(); else renderPreview();
 }
-const STRUCTURAL = new Set(['plotAuto', 'gridAuto', 'label.on', 'label.auto', 'label.orient', 'letter.on', 'letter.link', 'outline']);
+const STRUCTURAL = new Set(['wmm', 'hmm', 'plotAuto', 'gridAuto', 'label.on', 'label.auto', 'label.orient', 'letter.on', 'letter.link', 'outline']);
 function wireControls(){
   controlsEl.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
   controlsEl.addEventListener('change', e=>{
@@ -574,6 +579,8 @@ function wireControls(){
   controlsEl.addEventListener('click', e=>{
     const b = e.target.closest('[data-act="order"]');
     if (b){ F.order = []; commit(true); return; }
+    const al = e.target.closest('[data-align-btn]');
+    if (al && !al.disabled){ alignPicker.open(al, code=>{ F.align = code; commit(true); }, F.align); return; }
     const sw = e.target.closest('[data-ink]');
     if (sw && !sw.disabled){
       const key = sw.dataset.ink;
@@ -582,9 +589,12 @@ function wireControls(){
   });
 }
 // A field's number, inside its range; outside it the field shakes and goes back.
+// The field stays (rebuilt, it would take its shake with it) and goes back to the last
+// value it took.
 function readNum(t){
   const v = parseFloat(String(t.value).replace(',', '.')), lo = +t.dataset.min, hi = +t.dataset.max;
-  if (!Number.isFinite(v) || v < lo || v > hi){ flashFieldInvalid(t); renderControls(); return null; }
+  if (!Number.isFinite(v) || v < lo || v > hi){ flashFieldInvalid(t); t.value = t.defaultValue; return null; }
+  t.defaultValue = String(v);
   return v;
 }
 
@@ -663,7 +673,7 @@ export function openSemFigure(h){
   wireControls(); wireView();
   const close = ()=>{
     document.removeEventListener('keydown', onKey); window.removeEventListener('resize', renderPreview);
-    colorPickerUI.close();
+    colorPickerUI.close(); alignPicker.close();
     backdrop.remove(); backdrop = svgEl = controlsEl = dimEl = null; F = null; host = null; urls.clear();
     api.open = false;
   };

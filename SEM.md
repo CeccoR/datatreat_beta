@@ -311,7 +311,7 @@ cross at the top right.
 starts as tall as its images need at its width.
 - **The plot** is the smallest rectangle round all the images.
 - **Auto margins** (the default): the images as large as the page allows, with what lies outside them (names, letters, bars) in the margins, the whole centred. The plot's width and height show what was chosen, locked.
-- **Unticked**, the plot's width and height and its alignment on the page (9 places) open on those values. The images are fitted in the plot, to its aligned side where their proportions leave it room.
+- **Unticked**, the plot's width and height and its alignment on the page open on those values. The plot is never larger than the page: a larger value is refused, the field shaking red and going back, as every refused value in both composers. The alignment is picked from the plots' composer's grid of 9. The images are fitted in the plot, to its aligned side where their proportions leave it room.
 
 The images are laid out as the figure composer (`figure.js`) lays out plots, with the
 same modal and controls:
@@ -345,7 +345,7 @@ list's order back. The row's field is the name shown on the panel.
 
 **Names.** Each panel carries its sample's name, editable per panel, horizontal or
 vertical (upright, reading up; outside on the right, reading down).
-- **Placed automatically** (the default): outside where there is room, above the first row and below the last. The rows between have it inside, at the top for the first half and the middle row (an odd count), at the bottom for the second half. One row: above. Vertical names go the same way by columns: left of the first, right of the last, inside left or right between. Only rows and columns that hold images count. The alignment along the name stays the user's: left, centre or right (top, centre or bottom when vertical).
+- **Placed automatically** (the default), block by block, each block as if it stood alone: outside where there is room, above the block's first row and below its last. The rows between have it inside, at the top for the first half and the middle row (an odd count), at the bottom for the second half. One row: above. Vertical names go the same way by the block's columns: left of the first, right of the last, inside left or right between. Only rows and columns that hold images count. The alignment along the name stays the user's: left, centre or right (top, centre or bottom when vertical).
 - **By hand**: the position (inside or outside) and both alignments. Outside, a name is beside an edge, never across the middle.
 - Inside, white with an outline by default, which reads on any grey; outside, black on a white page (white on a black one). The colour on the images, the outline and its colour can be changed.
 
@@ -395,7 +395,7 @@ and redone with it (Ctrl+Z inside the open figure too).
 - **Letters.** Outside top right: (a) ends on the image's right edge, above it. Inside bottom left and outside bottom left were also checked.
 - **Bars.** *One bar per image* drew eight, with one length field. Outside bottom right: 0.4 mm under the image, ending on its right edge. Outside top left and inside top right were also checked.
 - **Margins.** Auto gave the plot 175 × 175 mm in a 175 × 182.6 mm page. Unticked, the plot fields opened on 175 × 175. At 100 mm wide, top left, the first image sat at 0, 3.81 mm, under its names' band.
-- **Colour picker.** Open on the outline's swatch, it sat beside it, level with its bottom. When the swatch scrolled out of the controls' view, it closed; a click on the preview closed it too.
+- **Colour picker.** Open on the outline's swatch, it sat beside it, level with its bottom; a click on the preview closed it.
 
 ## 6. Project and export
 
@@ -505,5 +505,12 @@ so that a wider thumbnail stays sharp.
 - **Names.** Placed automatically by row (or column), horizontal or vertical, the alignment along them free; by hand, inside or outside and both alignments (§5.2).
 - **Letters and bars.** Eight places each; *One bar per image* at common scale; no magnification over the lengths.
 - **Type.** The outline's colour is chosen too.
-- **Colour picker** (every one in the app). It stays beside its swatch as a panel scrolls, level with the swatch's bottom where its top would run off the window; it no longer stays pinned to the window's foot. It closes when its swatch scrolls out of view.
+- **Colour picker** (every one in the app). It stays beside its swatch as a panel scrolls, level with the swatch's bottom where its top would run off the window; it no longer stays pinned to the window's foot.
 - **Older figures.** Read anew: corners and sides as the new positions; a height that followed the layout becomes the images' natural height.
+
+**v450**:
+- **Plot limits.** In both composers the plot's width and height can be no larger than the figure's.
+- **Refused values.** In both composers a refused value shakes red and goes back. The plots' composer used to clamp it quietly. The SEM one shook a field it had just replaced, so the shake was never seen.
+- **Alignment.** The SEM plot's alignment uses the plots' composer's picker.
+- **Names.** Placed automatically within each block. Two blocks of 2 × 2 put each block's first row above and its second below.
+- **Colour picker.** It stays open while the controls scroll, following its swatch, as in the plots' composer. v449 had it close when the swatch scrolled out of view.

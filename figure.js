@@ -1440,11 +1440,19 @@ const numField = (attrs, value, min, max)=>
   `<input type="text" inputmode="decimal" data-num="1" data-min="${min}" data-max="${max}" ${attrs} value="${value}">`;
 const num = (label, key, min, max)=>
   `<label class="fig-row"><span>${label}</span>${numField(`data-k="${key}"`, F[key], min, max)}</label>`;
+/* A field's number, inside its range. Outside it, or not a number, the field shakes
+   red and goes back to the last value it took (flashFieldInvalid), as everywhere in
+   the app: a value is refused, never quietly changed. A range may follow another
+   setting (data-max-k: the plot no larger than the figure). */
 const readNum = t=>{
   const v = parseFloat(String(t.value).replace(',', '.'));
-  if (!isFinite(v)) return null;
-  const lo = parseFloat(t.dataset.min), hi = parseFloat(t.dataset.max);
-  return Math.min(isFinite(hi) ? hi : Infinity, Math.max(isFinite(lo) ? lo : -Infinity, v));
+  const lo = parseFloat(t.dataset.min), hi = t.dataset.maxK ? F[t.dataset.maxK] : parseFloat(t.dataset.max);
+  if (!isFinite(v) || (isFinite(lo) && v < lo) || (isFinite(hi) && v > hi)){
+    flashFieldInvalid(t);
+    t.value = t.defaultValue;
+    return null;
+  }
+  return v;
 };
 
 // Panel whose axes the "Panel axes" section edits. The sentinel 'all' edits every
@@ -2096,8 +2104,10 @@ const fillPicker = {
    closing on the next click elsewhere and following the button as the page scrolls. */
 const alignPicker = {
   el: null, anchor: null, onPick: null,
-  open(anchor, onPick){
+  open(anchor, onPick, cur){
     // Toggles and holds its button lit while open, like every other picker here.
+    // cur: the alignment lit (the plots' figure's, unless another composer gives its own).
+    const lit = cur ?? (F && F.align);
     const again = this.anchor === anchor;
     this.close();
     if (again) return;
@@ -2106,7 +2116,7 @@ const alignPicker = {
     const el = document.createElement('div');
     el.className = 'fig-alignpop';
     el.innerHTML = ALIGN_CELLS.map(c=>
-      `<button type="button" class="btn btn-sm${c === F.align ? ' is-on' : ''}" data-al="${c}" title="${ALIGN_NAMES[c]}">${ALIGN_ICON(c)}</button>`).join('');
+      `<button type="button" class="btn btn-sm${c === lit ? ' is-on' : ''}" data-al="${c}" title="${ALIGN_NAMES[c]}">${ALIGN_ICON(c)}</button>`).join('');
     document.body.appendChild(el);
     this.el = el;
     el.addEventListener('click', e=>{
@@ -2338,7 +2348,7 @@ function controlsHtml(){
     ${chk('Auto margins','plotAuto')}
     ${dep(F.plotAuto, `${F.plotAuto
         ? `<label class="fig-row"><span>Plot width (mm)</span><input type="text" data-auto-plot="w" value="${lastInner.w}" title="Chosen by the auto margins"></label><label class="fig-row"><span>Plot height (mm)</span><input type="text" data-auto-plot="h" value="${lastInner.h}" title="Chosen by the auto margins"></label>`
-        : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}`}
+        : `<label class="fig-row"><span>Plot width (mm)</span>${numField('data-k="plotW" data-max-k="wmm"', F.plotW, 5, 2000)}</label><label class="fig-row"><span>Plot height (mm)</span>${numField('data-k="plotH" data-max-k="hmm"', F.plotH, 5, 2000)}</label>`}
       <label class="fig-row"><span>Alignment</span>
         <button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot area inside the margins">${ALIGN_ICON(F.align)}</button></label>`)}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
@@ -3172,8 +3182,8 @@ function wireControls(){
     // Echo the committed value back with a decimal point, so a comma typed by hand
     // is accepted but never left standing in the field.
     if (t.dataset.num && !rebuild){
-      const v = readNum(t);
-      if (v !== null) t.value = String(v);
+      const v = parseFloat(String(t.value).replace(',', '.'));
+      if (isFinite(v)){ t.value = String(v); t.defaultValue = t.value; }   // the value to go back to
     }
     pushUndo();
     refresh(rebuild);
@@ -3384,7 +3394,7 @@ function wireControls(){
 
 // Shared with the SEM figure (sem-figure.js), which lays out images with the same page,
 // fonts and export.
-export { FONTS, PX_MM, PT_PX, saveBlob, interFontCss };
+export { FONTS, PX_MM, PT_PX, saveBlob, interFontCss, alignPicker, ALIGN_ICON };
 
 export function openFigureEditor(plot, opts){
   if (!plot) return;
