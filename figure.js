@@ -1116,21 +1116,25 @@ function drawFigure(svg, ink, paper, extra){
   });
 
   // Shared titles: one per side for the whole grid, centred on the inner area and
-  // sitting in the outer margin. A side gets one when any panel asked for it.
+  // sitting in the outer margin. A side gets one when any panel asked for it. The
+  // margin is measured from the plot, not the page: with the plot set by hand (it may
+  // run off the page) the titles go with it, as the tick numbers do; with auto margins
+  // the two are the same.
   {
     const want = side => F.panels.some(p=> (p.axes || (p.axes = newAxes()))[side].title);
     const shX = F.titleModeX === 'shared', shY = F.titleModeY === 'shared';
     const cx = oX + innerW / 2, cy = oY + innerH / 2;
+    const outL = oX - mL, outR = oX + innerW + mR, outT = oY - mT, outB = oY + innerH + mB;
     if (shX && F.xlabel && want('bottom'))
-      richText(add, F.xlabel, { x:cx, y:H - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'text-anchor':'middle' }, fAxis, ink);
+      richText(add, F.xlabel, { x:cx, y:outB - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'text-anchor':'middle' }, fAxis, ink);
     if (shX && F.xlabel && want('top'))
-      richText(add, F.xlabel, { x:cx, y:fAxis, 'text-anchor':'middle' }, fAxis, ink);
+      richText(add, F.xlabel, { x:cx, y:outT + fAxis, 'text-anchor':'middle' }, fAxis, ink);
     if (shY && F.ylabel && want('left'))
-      richText(add, F.ylabel, { x:fAxis*1.1, y:cy, 'text-anchor':'middle',
-                                transform:`rotate(-90 ${fAxis*1.1} ${cy})` }, fAxis, ink);
+      richText(add, F.ylabel, { x:outL + fAxis*1.1, y:cy, 'text-anchor':'middle',
+                                transform:`rotate(-90 ${outL + fAxis*1.1} ${cy})` }, fAxis, ink);
     if (shY && F.ylabel && want('right'))
-      richText(add, F.ylabel, { x:W - fAxis*1.1, y:cy, 'text-anchor':'middle',
-                                transform:`rotate(90 ${W - fAxis*1.1} ${cy})` }, fAxis, ink);
+      richText(add, F.ylabel, { x:outR - fAxis*1.1, y:cy, 'text-anchor':'middle',
+                                transform:`rotate(90 ${outR - fAxis*1.1} ${cy})` }, fAxis, ink);
   }
 
   // Global legend: a strip above or below the panels, in one row or N columns.
@@ -1155,7 +1159,7 @@ function drawFigure(svg, ink, paper, extra){
                : F.legendAlign === 'right' ? oX + innerW - total
                : oX + Math.max(0, (innerW - total) / 2);
       const yTop = F.legendPlace === 'top' ? oY - F.legendGap - rows * rowH
-                                           : oY + innerH + (H - oY - innerH - rows * rowH) / 2;
+                                           : oY + innerH + (mB - rows * rowH) / 2;
       if (F.legendFrame){
         const pad = 4;
         legendFrameRect(add, x0-pad, yTop-pad, total+pad*2, rows*rowH+pad*2, ink, paper);

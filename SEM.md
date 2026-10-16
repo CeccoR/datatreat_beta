@@ -329,20 +329,25 @@ included. It enters as its group made it
 (§4) and through its curve (§3). The preview uses a copy reduced to 520 px; the export
 uses the full one.
 
-**The grid.** It has two levels: **blocks** of **panels**. The images fill one block
-after another, each row by row; 2 × 1 blocks of 2 × 2 panels hold eight images, the
-first four in the left block.
-- **Automatic** (the default): one block, the most compact rectangle: ⌈√N⌉ columns and ⌈N/columns⌉ rows (12 images give 4 × 3, not 6 × 2). Its fields show what was chosen, locked; unticked, they start from it.
-- **By hand**: the panels' rows and columns in a block, and the blocks' rows and columns. Rows of blocks are added when too few places are given.
-- **The gaps**: one between the panels in a block (1 mm by default), one between the blocks (4 mm).
+**The grid.** It has two levels: **panels** of **images** (in the code, blocks of
+panels). The images fill one panel after another, each row by row: 2 × 1 panels of
+2 × 2 images hold eight, the first four in the left panel.
+- **Automatic** (the default): one panel, the most compact rectangle: ⌈√N⌉ columns and ⌈N/columns⌉ rows (12 images give 4 × 3, not 6 × 2). Its fields show what was chosen, locked; unticked, they start from it.
+- **By hand**: the panels' rows and columns, and the rows and columns of images in a panel. Rows of panels are added when too few places are given.
+- **The gaps**: one between the images in a panel (1 mm by default), one between the panels (4 mm).
 - The columns are equal.
 - An image row is as tall as its tallest image at that width, across its row of blocks.
-- The controls give the blocks first, then the panels in a block.
+- The controls give the panels first, then the images in a panel.
 
-**Order.** It starts as the file list's. In the *Images* list, a row dragged by its
-handle goes to the gap that lights, and the panels follow, as the plots' series are
-reordered in the composer. *Restore*, at the right of the list's title, puts the file
-list's order back. The row's field is the name shown on the panel.
+**Order.** It starts as the file list's. The *Images* list groups the images by
+panel, as the plots' composer groups its series, each panel's head with how full it is
+(2/4). A row dragged by its handle:
+- within its panel, goes to the gap that lights;
+- into another panel with room, moves there, the gap lighting and the panel too; the place it leaves stays empty;
+- into a full panel, swaps with the image it is dropped on, which is ringed.
+
+*Restore*, at the right of the list's title, puts the file list's order back, with no
+empty places. The row's field is the name shown on the image.
 
 **Names.** Each panel carries its sample's name, editable per panel, horizontal or
 vertical (upright, reading up; outside on the right, reading down).
@@ -526,3 +531,9 @@ so that a wider thumbnail stays sharp.
 - **States.** The swatch keeps its hover border while its picker is open. A second click on it, or a click elsewhere, closes it.
 - **Placing.** It stands centred on its swatch where it can, never nearer than 25 px to the composer's head (the title) or foot (the buttons). While the controls scroll it follows the swatch, centred, and past that range it stays 25 px from the head or the foot. The palette picker does the same.
 - **Checked.** A series' swatch: centred at first, then 25 px from the foot or the head as it scrolled past. The ink swatches, low in the panel: 25 px over the foot. A click 80 px right of a swatch opened nothing.
+
+**v453**:
+- **Names.** In the SEM composer, blocks are called *panels* and panels *images*.
+- **The Images list.** Grouped by panel, rows dragged between panels: moved where there is room, swapped where the panel is full. Checked with 2 × 1 panels of 2 × 2 images and five images: 5kx dragged into panel 2 (1/4) moved there and left an empty place. Once panel 2 was full, 5kD dropped on its first image swapped with 5kB. Within a panel, a row went to the gap.
+- **Hint gone.** The *fill one block after another* hint is removed.
+- **Shared axis titles and the global legend** (plots' composer). They sat in the page's margins even when the plot was set by hand, so they stayed while the plot moved off the page. They now take their margins from the plot, as the tick numbers always did. A 250 × 160 mm plot on a 160 × 110 mm page took its Y title to x = −187 px, off the page with it.

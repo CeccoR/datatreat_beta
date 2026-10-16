@@ -2638,6 +2638,8 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   height: 2px; border-radius: 1px; background: var(--accent);
 }
 .fig-serie.drop-before::before { top: -4px; }
+/* A full panel takes a dropped image by swapping: the image it swaps with is ringed. */
+.fig-serie.drop-swap { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
 .fig-serie.drop-after::after { bottom: -4px; }
 /* The Range section: X and Y side by side, each column the same ladder of controls
    so the two can be read across as well as down. */

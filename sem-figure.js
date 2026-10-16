@@ -12,8 +12,9 @@ import { FONTS, PX_MM, PT_PX, saveBlob, interFontCss, alignPicker, ALIGN_ICON } 
    lies outside them (names, letters, bars) in the margins, the whole centred; without,
    the plot (the smallest rectangle round the images) is set and aligned by hand. The
    grid is the most compact rectangle for the images (columns ⌈√N⌉, rows ⌈N/cols⌉: 12
-   images 4 × 3, not 6 × 2) unless set by hand, in two levels: blocks of panels (2 × 1
-   blocks of 2 × 2 panels hold eight), a gap between panels and another between blocks.
+   images 4 × 3, not 6 × 2) unless set by hand, in two levels: panels of images (2 × 1
+   panels of 2 × 2 images hold eight), a gap between images and another between panels
+   (in the code, blocks of panels).
    The panels follow the images' rows, which their handles reorder. Names go where
    there is room (outside above the first row, below the last, inside between) or where
    set; letters and scale bars in 8 places (inside or outside, top or bottom, left or
@@ -105,13 +106,24 @@ let rebuilding = false;
 
 // The images in panel order: the saved order, then any image not in it, in the file
 // list's order.
-function ordered(){
+/* The places of the grid in reading order, a panel (block) after another: the images
+   in the saved order, null where a panel has room left (an image dragged out of a
+   panel leaves its place empty). F.order holds the ids, '' for an empty place; an
+   image not in it takes the first empty place, else goes last. */
+function slotsOf(){
   const imgs = host.images(), byId = new Map(imgs.map(m=> [m.id, m]));
   const seen = new Set(), out = [];
-  for (const id of F.order) if (byId.has(id) && !seen.has(id)){ out.push(byId.get(id)); seen.add(id); }
-  for (const m of imgs) if (!seen.has(m.id)) out.push(m);
+  for (const id of F.order){
+    if (!id){ out.push(null); continue; }
+    if (byId.has(id) && !seen.has(id)){ out.push(byId.get(id)); seen.add(id); }
+  }
+  for (const m of imgs) if (!seen.has(m.id)){ const hole = out.indexOf(null); if (hole >= 0) out[hole] = m; else out.push(m); }
+  while (out.length && out[out.length - 1] === null) out.pop();
   return out;
 }
+// The images in the panels' order (an automatic grid packs them: no empty places).
+function ordered(){ return slotsOf().filter(Boolean); }
+const placesOf = ()=> F.gridAuto ? ordered() : slotsOf();
 /* The grid: blocks (bRows × bCols) of panels (rows × cols each), filled block by block,
    in reading order. Automatic: one block, the most compact rectangle. By hand, blocks
    rows are added where the images would not fit. */
@@ -178,7 +190,8 @@ function bandOf(nm, side, hasBar){
   return meets ? { depth: text + bb, text, bar: true, alone: true } : { depth: Math.max(text, bb), text, bar: true, alone: false };
 }
 function layout(){
-  const imgs = ordered(), n = imgs.length, G = gridOf(n), { rows, cols, bRows, bCols } = G;
+  const places = placesOf(), imgs = places.filter(Boolean), G = gridOf(places.length), { rows, cols, bRows, bCols } = G;
+  const slotOf = new Map(); places.forEach((m, i)=>{ if (m) slotOf.set(m.id, i); });
   const g = F.gap, bg = F.bGap, W = F.wmm;
   const per = rows*cols, R = rows*bRows, C = cols*bCols;
   const at = i => { const b = Math.floor(i/per), j = i % per, br = Math.floor(b/bCols), bc = b % bCols, r = Math.floor(j/cols), c = j % cols; return { b, r, c, vr: br*rows + r, vc: bc*cols + c }; };
@@ -189,7 +202,7 @@ function layout(){
   const hasBar = m => m.group.mode === 'own' || F.bar.each || lastOf.get(m.group.id) === m.id;
   // The rows' depth over the image width, and the bands.
   const asp = new Array(R).fill(0), tb = new Array(R).fill(0), bb = new Array(R).fill(0), lb = new Array(C).fill(0), rb = new Array(C).fill(0);
-  const pl = imgs.map((m, i)=>{ const q = at(i); asp[q.vr] = Math.max(asp[q.vr], m.h/m.w); return q; });
+  const pl = imgs.map(m=>{ const q = at(slotOf.get(m.id)); asp[q.vr] = Math.max(asp[q.vr], m.h/m.w); return q; });
   // First, last and middle count within a block, among its rows and columns that hold
   // images: each block's names are placed as if it stood alone.
   const inBlock = new Map();
@@ -368,7 +381,7 @@ function renderPreview(){
   const W = L.W*PX_MM, H = L.H*PX_MM, k = Math.min((pane.clientWidth - 24)/W, (pane.clientHeight - 24)/H, 1);
   svgEl.style.width = W*k + 'px'; svgEl.style.height = H*k + 'px';
   applyView();
-  const G = L.grid, grid = G.bRows*G.bCols > 1 ? `${G.bCols} × ${G.bRows} blocks of ${G.cols} × ${G.rows} panels` : `${G.cols} × ${G.rows} panels`;
+  const G = L.grid, grid = G.bRows*G.bCols > 1 ? `${G.bCols} × ${G.bRows} panels of ${G.cols} × ${G.rows} images` : `${G.cols} × ${G.rows} images`;
   if (dimEl) dimEl.textContent = `${sig3(L.W)} × ${sig3(L.H)} mm (plot ${sig3(L.plot.w)} × ${sig3(L.plot.h)}) · ${grid} · ${Math.round(L.W/25.4*F.dpi)} × ${Math.round(L.H/25.4*F.dpi)} px @ ${F.dpi} dpi`;
   // The locked fields show what was chosen.
   if (controlsEl){
@@ -446,22 +459,18 @@ function controlsHtml(){
     <p class="txt-meta">The plot is the smallest rectangle round all the images.</p>
   </section>
   <section class="fig-sec"><h4>Layout</h4>
-    ${chk('Grid chosen automatically', 'gridAuto', 'One block, the most compact rectangle: ⌈√N⌉ columns')}
-    <div class="fig-subhead">Blocks</div>
+    ${chk('Grid chosen automatically', 'gridAuto', 'One panel, the most compact rectangle: ⌈√N⌉ columns')}
+    <div class="fig-subhead">Panels</div>
     ${autoNum('Rows', 'bRows', 'gridAuto', 1, 20)}
     ${autoNum('Columns', 'bCols', 'gridAuto', 1, 20)}
     ${num('Gap (mm)', 'bGap', 0, 40)}
-    <div class="fig-subhead">Panels in a block</div>
+    <div class="fig-subhead">Images in a panel</div>
     ${autoNum('Rows', 'rows', 'gridAuto', 1, 40)}
     ${autoNum('Columns', 'cols', 'gridAuto', 1, 40)}
     ${num('Gap (mm)', 'gap', 0, 20)}
-    <p class="txt-meta">The images fill one block after another, each row by row: 2 × 1 blocks of 2 × 2 panels hold eight.</p>
   </section>
   <section class="fig-sec"><div class="sem-fig-sechead"><h4>Images</h4><button class="btn primary btn-sm" type="button" data-act="order" title="The panels back in the file list's order">Restore</button></div>
-    <div class="fig-series">${imgs.map((m, i)=> `<div class="fig-serie" data-s="${i}">
-      <span class="fig-grip" title="Drag to reorder">${GRIP}</span>
-      <input type="text" class="fig-slabel" data-name="${esc(m.id)}" value="${esc(F.names[m.id] != null ? F.names[m.id] : m.label)}" title="Name shown on ${esc(m.label)}"${L.on ? '' : ' disabled'}>
-    </div>`).join('')}</div>
+    <div class="fig-series">${imageGroupsHtml(L)}</div>
   </section>
   <section class="fig-sec"><h4>Names</h4>
     ${chk('Show the names', 'label.on')}
@@ -497,6 +506,24 @@ function controlsHtml(){
     <div class="fig-row"><span>Outline colour</span><button class="color-swatch" type="button" data-ink="outlineColor" data-color="${esc(F.outlineColor || contrastOf(F.ink))}" style="background:${esc(F.outlineColor || contrastOf(F.ink))}" title="The outline round what is drawn over the images"${F.outline ? '' : ' disabled'}></button></div>
   </section>`;
 }
+/* The Images list, as the plots' composer lists series: a group per panel, its images
+   in order, each a handle and the name shown on it; an empty panel says where its
+   images go. */
+function imageGroupsHtml(L){
+  const places = placesOf(), G = gridOf(places.length), per = F.gridAuto ? Math.max(1, places.length) : G.rows*G.cols;
+  const nP = F.gridAuto ? 1 : G.bRows*G.bCols, out = [];
+  for (let b = 0; b < nP; b++){
+    const mine = places.slice(b*per, (b + 1)*per).filter(Boolean);
+    out.push(`<div class="fig-group" data-pg="${b}">
+      <div class="fig-group-h">Panel ${b + 1}${F.gridAuto ? '' : ` <span class="txt-meta">${mine.length}/${per}</span>`}</div>
+      ${mine.map(m=> `<div class="fig-serie" data-id="${esc(m.id)}">
+        <span class="fig-grip" title="Drag to reorder, or into another panel (where it is full, the two images swap)">${GRIP}</span>
+        <input type="text" class="fig-slabel" data-name="${esc(m.id)}" value="${esc(F.names[m.id] != null ? F.names[m.id] : m.label)}" title="Name shown on ${esc(m.label)}"${L.on ? '' : ' disabled'}>
+      </div>`).join('') || '<p class="txt-meta fig-group-empty">Drag an image here.</p>'}
+    </div>`);
+  }
+  return out.join('');
+}
 function renderControls(){
   if (!controlsEl) return;
   rebuilding = true;
@@ -508,34 +535,62 @@ function renderControls(){
   wireOrderDrag();
   renderPreview();
 }
-/* The images' rows reordered by their handles, as the plots' series are (figure.js):
-   what lights is the gap a row would land in (dropGap); the two beside it would leave
-   it where it is, and never light. */
+/* The images' rows dragged by their handles, as the plots' series are (figure.js
+   wireSeriesDrag): within a panel the gap that lights is where it goes; into another
+   panel with room, it moves there (its place in the first left empty); into a full
+   one, it swaps with the image it is dropped on, which lights. */
 function wireOrderDrag(){
-  const rows = [...controlsEl.querySelectorAll('.fig-serie[data-s]')];
+  const rows = [...controlsEl.querySelectorAll('.fig-serie[data-id]')], groups = [...controlsEl.querySelectorAll('.fig-group[data-pg]')];
+  const groupAt = (x, y)=> groups.find(el=>{ const b = el.getBoundingClientRect(); return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right; }) || null;
+  const places = ()=>{ const p = placesOf(), G = gridOf(p.length), per = F.gridAuto ? Math.max(1, p.length) : G.rows*G.cols, n = (F.gridAuto ? 1 : G.bRows*G.bCols)*per; while (p.length < n) p.push(null); return { p, per }; };
   let from = null;
-  const gapOf = e =>{ const g = dropGap(rows, e.clientY); return g === from || g === from + 1 ? null : g; };
-  const clear = ()=> rows.forEach(r=> r.classList.remove('drop-before', 'drop-after', 'dragging'));
+  const target = e =>{
+    const gp = groupAt(e.clientX, e.clientY); if (!gp) return null;
+    const gRows = [...gp.querySelectorAll('.fig-serie[data-id]')], g = dropGap(gRows, e.clientY), self = gRows.findIndex(r=> r.dataset.id === from);
+    if (self >= 0 && (g === self || g === self + 1)) return null;
+    const { per } = places(), full = self < 0 && gRows.length >= per;
+    return { gp, gRows, g, b: +gp.dataset.pg, swap: full ? gRows[Math.min(g, gRows.length - 1)] : null };
+  };
+  const clear = ()=>{ rows.forEach(r=> r.classList.remove('drop-before', 'drop-after', 'drop-swap')); groups.forEach(g=> g.classList.remove('drag-into')); };
   rows.forEach(row=>{
     const handle = row.querySelector('.fig-grip');
-    handle.addEventListener('pointerdown', e=>{ e.preventDefault(); from = +row.dataset.s; row.classList.add('dragging'); try { handle.setPointerCapture(e.pointerId); } catch(_){} });
+    handle.addEventListener('pointerdown', e=>{ e.preventDefault(); from = row.dataset.id; row.classList.add('dragging'); try { handle.setPointerCapture(e.pointerId); } catch(_){} });
     handle.addEventListener('pointermove', e=>{
       if (from == null) return;
-      rows.forEach(r=> r.classList.remove('drop-before', 'drop-after'));
-      const g = gapOf(e);
-      if (g == null) return;
-      if (g < rows.length) rows[g].classList.add('drop-before'); else rows[rows.length - 1].classList.add('drop-after');
+      clear();
+      const t = target(e); if (!t) return;
+      if (!t.gRows.some(r=> r.dataset.id === from)) t.gp.classList.add('drag-into');
+      if (t.swap){ t.swap.classList.add('drop-swap'); return; }
+      if (t.g < t.gRows.length) t.gRows[t.g].classList.add('drop-before'); else if (t.gRows.length) t.gRows[t.gRows.length - 1].classList.add('drop-after');
     });
-    handle.addEventListener('pointerup', e=>{
+    const finish = e=>{
       if (from == null) return;
-      const g = gapOf(e), f = from;
-      from = null; clear();
-      if (g == null) return;
-      const ids = ordered().map(m=> m.id), [id] = ids.splice(f, 1);
-      ids.splice(g > f ? g - 1 : g, 0, id);
-      F.order = ids; commit(true);
-    });
-    handle.addEventListener('pointercancel', ()=>{ from = null; clear(); });
+      const t = target(e), id = from;
+      from = null; clear(); rows.forEach(r=> r.classList.remove('dragging'));
+      if (!t) return;
+      const { p, per } = places(), src = p.findIndex(m=> m && m.id === id);
+      if (src < 0) return;
+      if (t.swap){
+        const dst = p.findIndex(m=> m && m.id === t.swap.dataset.id);
+        [p[src], p[dst]] = [p[dst], p[src]];
+      } else {
+        const moved = p[src], sb = Math.floor(src/per);
+        // Out of its panel: its place left empty (at the panel's end); into the target
+        // panel at the gap, the panel's empty places after its images.
+        p[src] = null;
+        const block = b => p.slice(b*per, (b + 1)*per).filter(Boolean);
+        const put = (b, list)=>{ for (let k = 0; k < per; k++) p[b*per + k] = list[k] || null; };
+        if (sb !== t.b) put(sb, block(sb));
+        const list = block(t.b), before = t.g < t.gRows.length ? t.gRows[t.g].dataset.id : null;
+        const at = before ? list.findIndex(m=> m.id === before) : list.length;
+        list.splice(at < 0 ? list.length : at, 0, moved);
+        put(t.b, list);
+      }
+      F.order = p.map(m=> m ? m.id : '');
+      commit(true);
+    };
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', ()=>{ from = null; clear(); rows.forEach(r=> r.classList.remove('dragging')); });
   });
 }
 // Every change goes back to the module (saved, undoable), then is drawn; `rebuild` when
@@ -575,7 +630,7 @@ function wireControls(){
     if (path === 'plotW' || path === 'plotH'){ F.plotBy = path === 'plotW' ? 'w' : 'h'; const P = layout().plot; F.plotW = +sig3(P.w); F.plotH = +sig3(P.h); }
     const GRID = ['rows', 'cols', 'bRows', 'bCols'];
     // Too few places for the images: block rows are added.
-    if (GRID.includes(path)){ const n = ordered().length; F.bRows = Math.max(F.bRows, Math.ceil(n/(F.rows*F.cols*F.bCols))); }
+    if (GRID.includes(path)){ const n = slotsOf().length; F.bRows = Math.max(F.bRows, Math.ceil(n/(F.rows*F.cols*F.bCols))); }
     // Outside, a name is beside an edge: the middle is not offered.
     const POS = ['label.pos', 'label.ha', 'label.va'];
     commit(STRUCTURAL.has(path) || GRID.includes(path) || POS.includes(path) || path === 'letter.pos');
