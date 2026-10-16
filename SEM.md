@@ -529,7 +529,7 @@ so that a wider thumbnail stays sharp.
 **v452**: the colour pickers in every figure composer.
 - **Hitbox.** Only the swatch opens one. Its row was a label, so a click anywhere along it opened the picker; it is no longer.
 - **States.** The swatch keeps its hover border while its picker is open. A second click on it, or a click elsewhere, closes it.
-- **Placing.** It stands centred on its swatch where it can, never nearer than 2 px (25 until v455, 15 until v458) to the composer's head (the title) or foot (the buttons). While the controls scroll it follows the swatch, centred, and past that range it stays 2 px from the head or the foot. The palette picker does the same.
+- **Placing.** It stands centred on its swatch where it can, never nearer than 5 px (25 until v455, 15 until v458, 2 in v458) to the composer's head (the title) or foot (the buttons). While the controls scroll it follows the swatch, centred, and past that range it stays 5 px from the head or the foot. The palette picker does the same.
 - **Checked.** A series' swatch: centred at first, then 25 px from the foot or the head as it scrolled past. The ink swatches, low in the panel: 25 px over the foot. A click 80 px right of a swatch opened nothing.
 
 **v453**:
@@ -562,3 +562,5 @@ so that a wider thumbnail stays sharp.
 **v458**: the picker back in one column, as asked, with its margin from the head and foot at 2 px.
 - **Follow range.** The picker is 524 px tall ("none yet" under the recent colours no longer wraps). With 2 px margins the range where it can follow its swatch centred is the body less 528 px: 286 px at a 1920 × 960 window, 86 at 1440 × 760, 56 at 1536 × 730.
 - **Small windows.** Where the body is shorter than the picker (1366 × 650, 1280 × 620), it stands 2 px under the head and does not move.
+
+**v459**: the picker's margin from the composer's head and foot set to 5 px. Its follow range is the body less 534 px: 280 px at 1920 × 960, 80 at 1440 × 760, 50 at 1536 × 730.

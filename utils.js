@@ -86,11 +86,11 @@ function pushRecentColor(hex){
 }
 
 /* A picker opened in a figure composer (inside .fig-box): its top, so that it stands
-   centred on its button where it can, and never nearer than 2 px to the composer's
+   centred on its button where it can, and never nearer than 5 px to the composer's
    head (the title) or foot (the buttons). As its button scrolls it follows, centred,
-   within that range, and stays 2 px from the head or the foot past it. null when the
+   within that range, and stays 5 px from the head or the foot past it. null when the
    button is not in a composer. */
-const COMPOSER_GAP = 2;
+const COMPOSER_GAP = 5;
 /* Opening a picker in a composer: its button's panel scrolled (as far as it goes) to
    bring the button where the popup can stand centred on it, so that it opens centred
    rather than pinned to the foot, a swatch low in the panel being the usual case. */
