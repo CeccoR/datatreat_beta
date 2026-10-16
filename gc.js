@@ -274,6 +274,9 @@ import { Plot, svgEl } from './plot.js';
     return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${value}" ${dis} style="width:100%">`;
   }
   const modeChip = (pair, mode)=> `<button type="button" class="mode-chip gc-toggle" data-pair="${pair}" title="Switch all / one">${mode}</button>`;
+  // A header over a field: its name on the field's left edge, its all/one pill on the
+  // field's right edge.
+  const thHead = (label, chip)=> `<div class="gc-th"><span>${label}</span>${chip}</div>`;
 
   function renderGcParamTable(){
     const wrap = document.getElementById('gcParamTableWrap');
@@ -291,13 +294,13 @@ import { Plot, svgEl } from './plot.js';
         <td><label class="pp-check" title="Use the method's delay, ${INJ_DELAY_AUTO} s"><input type="checkbox" class="gcDelayAuto"${delayAuto ? ' checked' : ''}> Auto</label></td>
         <td colspan="4"></td></tr></tbody></table>
       <table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
-      <tr><th rowspan="2">Sample</th>
-        <th rowspan="2">m (mg) ${modeChip('m',mMode)}</th>
-        <th rowspan="2">Q (mL/min) ${modeChip('q',qMode)}</th>
-        <th rowspan="2">Light-on date/time</th>
-        <th colspan="2" class="gc-grp">Interval (h)</th>
+      <tr><th rowspan="2">${thHead('Sample', '')}</th>
+        <th rowspan="2">${thHead('m (mg)', modeChip('m',mMode))}</th>
+        <th rowspan="2">${thHead('Q (mL/min)', modeChip('q',qMode))}</th>
+        <th rowspan="2">${thHead('Light-on date/time', '')}</th>
+        <th colspan="2" class="gc-grp"><div class="gc-grp-in">Interval (h)</div></th>
         <th rowspan="2"></th></tr>
-      <tr><th>start ${modeChip('start',startMode)}</th><th>end ${modeChip('end',endMode)}</th></tr></thead><tbody>`;
+      <tr><th>${thHead('start', modeChip('start',startMode))}</th><th>${thHead('end', modeChip('end',endMode))}</th></tr></thead><tbody>`;
     // Shared "all" row
     html += `<tr class="gc-all-row"><td class="fname">All</td>
       <td>${numCell('gcShared','data-f="m"',mShared,shareState(mMode))}</td>
