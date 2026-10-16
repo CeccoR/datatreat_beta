@@ -98,14 +98,29 @@ function restoreSaveBtns(mod){
     if (b.dataset.origHtml !== undefined) b.innerHTML = b.dataset.origHtml;
   });
 }
-// Saved state: green non-interactive Save buttons, no unsaved marker; arms a
-// one-shot listener so the next change flips back to dirty.
+/* What a project tab held when it was last saved (or opened), by tab id: its state,
+   as JSON, and its name. A change is unsaved only while the state or the name differ
+   from these: an edit undone, or a value set back by hand, is not one. */
+const _savedKey = new Map();
+const stateKey = mod => { try { return JSON.stringify(getModuleState(mod)); } catch(e){ return null; } };
+// After any change: unsaved if the tab was never saved, or now differs from what was.
+function recheckDirty(mod){
+  const t = activeTab();
+  if (!t || t.module !== mod) return;
+  if (!t.projectId){ markDirty(mod); return; }
+  const base = _savedKey.get(t.id);
+  const same = !!base && base.title === (t.title || '') && base.key === stateKey(mod);
+  if (same){ if (t.dirty) markSaved(mod); }
+  else markDirty(mod);
+}
+// Saved state: green non-interactive Save buttons, no unsaved marker; what is saved is
+// remembered, for later changes to be compared with (recheckDirty).
 function markSaved(mod){
   const t = activeTab();
   // The tab record is kept for saved projects too — it is the persistent working
   // state that comes back on the next load. Re-persist it so it records the saved
   // (not-dirty) status, and drop the "*" from the tab.
-  if (t){ setTabDirty(t.id, false); if (!isRestoring()) persistTab(t); }
+  if (t){ setTabDirty(t.id, false); if (!isRestoring()) persistTab(t); if (t.projectId) _savedKey.set(t.id, { key: stateKey(mod), title: t.title || '' }); }
   saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
     b.classList.add('is-saved');
@@ -113,7 +128,6 @@ function markSaved(mod){
     b.innerHTML = b.classList.contains('proj-icon') ? CHECK_ICON : ('Saved ' + CHECK_SM);
   });
   fitNameField(mod);
-  onModuleChangeOnce(mod, ()=> markDirty(mod));
 }
 // Unsaved changes (data edit, a file removal, or a rename in the field). Removing
 // files is a normal edit — it never clears the project; only deleting it does,
@@ -427,7 +441,7 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
     refreshProjBar(mod);
     const t = activeTab();
     if (t) setTabTitle(t.id, inp.value.trim());   // the tab label tracks the field
-    if (moduleHasData(mod)){ markDirty(mod); scheduleAutosave(); }
+    if (moduleHasData(mod)){ recheckDirty(mod); scheduleAutosave(); }
   });
   inp.addEventListener('focus', ()=> fitNameField(modOf()));   // click triggers adaptivity
   inp.addEventListener('blur',  ()=> fitNameField(modOf()));   // empty → ghost width; filled → ellipsis
@@ -533,10 +547,9 @@ renderList();
 /* ---- Tab wiring ---- */
 MODULES.forEach(m=> onModuleChange(m, ()=>{
   scheduleAutosave();
-  // A tab that was never saved is unsaved by definition, so any edit marks it —
-  // for saved projects the one-shot listener armed by markSaved does the job.
-  const t = activeTab();
-  if (t && !t.projectId) markDirty(m);
+  // A tab that was never saved is unsaved by definition; a saved one only while it
+  // differs from what was saved.
+  recheckDirty(m);
 }));
 
 /* ---- The single project bar ----
@@ -579,7 +592,17 @@ onTabActivated(tab=>{
   const inp = nameInput(mod);
   if (inp) inp.value = tab.title || '';
   if (tab.projectId && !tab.dirty) markSaved(mod);
-  else { restoreSaveBtns(mod); setSaveDirtyIcon(mod, !!tab.projectId && tab.dirty); }
+  else {
+    restoreSaveBtns(mod); setSaveDirtyIcon(mod, !!tab.projectId && tab.dirty);
+    // A tab that came back with unsaved changes (a reload): what was saved is the
+    // project's record, read into the module and out again without touching it.
+    const rec = tab.projectId && !_savedKey.has(tab.id) && recById(tab.projectId);
+    if (rec && rec.state){
+      let key = null;
+      try { runWithModuleState(mod, decode(rec.state), ()=>{ key = stateKey(mod); }); } catch(e){}
+      if (key) _savedKey.set(tab.id, { key, title: rec.title || '' });
+    }
+  }
   refreshProjBar(mod);
   normalizeProjIcons(mod);
   requestAnimationFrame(()=>{ fitNameField(mod); projectBar.classList.remove('no-anim'); });

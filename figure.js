@@ -703,20 +703,21 @@ function drawFigure(svg, ink, paper, extra){
     if (mT + mB > capH){ const k = capH / (mT + mB); mT *= k; mB *= k; }
 
     let innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
+    // Set by hand, the plot area is the size asked, whatever the page: one larger than
+    // the page runs off it, which is seen at once (no limit hides the mistake).
     if (!F.plotAuto){
-      // Room is still kept for the outward tick marks on the far sides, so a plot area
-      // asked bigger than the page can hold stops short of the edge instead of on it.
-      innerW = Math.min(Math.max(20, F.plotW * PX_MM), W - mL - 8);
-      innerH = Math.min(Math.max(20, F.plotH * PX_MM), H - mT - 8);
+      innerW = Math.max(20, F.plotW * PX_MM);
+      innerH = Math.max(20, F.plotH * PX_MM);
     }
-    /* A plot area smaller than the space the margins leave has that space to spare,
-       and `align` says where in it the area sits — centred unless asked otherwise. */
+    /* A plot area other than the space the margins leave is placed in it by `align`,
+       centred unless asked otherwise: to spare where it is smaller, over the edges
+       where it is larger. */
     const AL = { t:0, l:0, c:0.5, b:1, r:1 };
     const av = String(F.align || 'cc');
     const fy = AL[av[0]] !== undefined ? AL[av[0]] : 0.5;
     const fx = AL[av[1]] !== undefined ? AL[av[1]] : 0.5;
-    const oX = mL + Math.max(0, (W - mL - mR) - innerW) * fx;
-    const oY = mT + Math.max(0, (H - mT - mB) - innerH) * fy;
+    const oX = mL + ((W - mL - mR) - innerW) * fx;
+    const oY = mT + ((H - mT - mB) - innerH) * fy;
     const cw = innerW / F.cols, ch = innerH / F.rows;
     return { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch };
   };
@@ -1443,7 +1444,7 @@ const num = (label, key, min, max)=>
 /* A field's number, inside its range. Outside it, or not a number, the field shakes
    red and goes back to the last value it took (flashFieldInvalid), as everywhere in
    the app: a value is refused, never quietly changed. A range may follow another
-   setting (data-max-k: the plot no larger than the figure). */
+   setting (data-max-k: a key of F). */
 const readNum = t=>{
   const v = parseFloat(String(t.value).replace(',', '.'));
   const lo = parseFloat(t.dataset.min), hi = t.dataset.maxK ? F[t.dataset.maxK] : parseFloat(t.dataset.max);
@@ -2348,7 +2349,7 @@ function controlsHtml(){
     ${chk('Auto margins','plotAuto')}
     ${dep(F.plotAuto, `${F.plotAuto
         ? `<label class="fig-row"><span>Plot width (mm)</span><input type="text" data-auto-plot="w" value="${lastInner.w}" title="Chosen by the auto margins"></label><label class="fig-row"><span>Plot height (mm)</span><input type="text" data-auto-plot="h" value="${lastInner.h}" title="Chosen by the auto margins"></label>`
-        : `<label class="fig-row"><span>Plot width (mm)</span>${numField('data-k="plotW" data-max-k="wmm"', F.plotW, 5, 2000)}</label><label class="fig-row"><span>Plot height (mm)</span>${numField('data-k="plotH" data-max-k="hmm"', F.plotH, 5, 2000)}</label>`}
+        : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}`}
       <label class="fig-row"><span>Alignment</span>
         <button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot area inside the margins">${ALIGN_ICON(F.align)}</button></label>`)}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>

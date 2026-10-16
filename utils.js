@@ -1188,7 +1188,12 @@ class UndoStack {
   }
   onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
   onCommit(cb){ (this._listeners || (this._listeners = [])).push(cb); }
-  _apply(i){ this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; } }
+  // An undo or redo is a change too: the persistent listeners hear it (autosave, and
+  // the unsaved marker, which compares the state with the one last saved).
+  _apply(i){
+    this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; }
+    if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
+  }
   performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
   reset(){ this.states.length = 0; this.index = -1; }

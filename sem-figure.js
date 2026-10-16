@@ -37,7 +37,7 @@ const MM_PT = 25.4/72;
    letter and bar: pos in or out, va top or bottom, ha left or right (8 places). */
 const FIG_DEF = {
   file: 'SEM_figure', wmm: 175, hmm: null, dpi: 600, bg: '#ffffff',
-  plotAuto: true, plotW: 0, plotH: 0, align: 'cc',
+  plotAuto: true, plotW: 0, plotH: 0, plotBy: 'w', align: 'cc',
   gridAuto: true, rows: 1, cols: 1, gap: 1, bRows: 1, bCols: 1, bGap: 4,
   order: [], names: {},
   label: { on: true, auto: true, orient: 'h', ha: 'left', va: 'top', pos: 'out', size: 8 },
@@ -217,9 +217,11 @@ function layout(){
     boxW = innerW + C*iw; boxH = innerH + sumAsp*iw;
     boxX = (W - (oL + boxW + oR))/2 + oL; boxY = (H - (oT + boxH + oB))/2 + oT;
   } else {
-    // Never larger than the page (a page made smaller since takes the plot down with it).
-    const pw = Math.min(W, Math.max(5, F.plotW)), ph = Math.min(H, Math.max(5, F.plotH));
-    iw = Math.max(1, Math.min((pw - innerW)/C, (ph - innerH)/sumAsp));
+    /* The images keep their proportions, so the plot's width and height go together:
+       the one set last (plotBy) decides, the other follows (and its field shows it,
+       commit). Set by hand, the plot may run off the page: it is seen at once. */
+    const pw = Math.max(5, F.plotW), ph = Math.max(5, F.plotH);
+    iw = Math.max(1, F.plotBy === 'h' ? (ph - innerH)/sumAsp : (pw - innerW)/C);
     const cw = innerW + C*iw, ch = innerH + sumAsp*iw, al = F.align || 'mc';
     const bx = al[1] === 'l' ? oL : al[1] === 'r' ? W - oR - pw : (W - pw)/2;
     const by = al[0] === 't' ? oT : al[0] === 'b' ? H - oB - ph : (H - ph)/2;
@@ -439,7 +441,7 @@ function controlsHtml(){
     ${chk('Auto margins', 'plotAuto', 'The images as large as the page allows, the names and bars outside them in the margins, the whole centred')}
     ${F.plotAuto ? `<label class="fig-row"><span>Plot width (mm)</span><input type="text" data-auto="plotW" disabled value="${sig3(lastPlot.w)}" title="Chosen by the auto margins"></label>
       <label class="fig-row"><span>Plot height (mm)</span><input type="text" data-auto="plotH" disabled value="${sig3(lastPlot.h)}" title="Chosen by the auto margins"></label>`
-      : `<label class="fig-row"><span>Plot width (mm)</span>${numField('data-p="plotW"', F.plotW, 5, F.wmm)}</label><label class="fig-row"><span>Plot height (mm)</span>${numField('data-p="plotH"', F.plotH, 5, F.hmm)}</label>`}
+      : `${num('Plot width (mm)', 'plotW', 5, 2000)}${num('Plot height (mm)', 'plotH', 5, 2000)}`}
     <label class="fig-row"><span>Alignment</span><button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot on the page"${F.plotAuto ? ' disabled' : ''}>${ALIGN_ICON(F.align)}</button></label>
     <p class="txt-meta">The plot is the smallest rectangle round all the images.</p>
   </section>
@@ -542,7 +544,7 @@ function commit(rebuild){
   host.setFig(clone(F));
   if (rebuild) renderControls(); else renderPreview();
 }
-const STRUCTURAL = new Set(['wmm', 'hmm', 'plotAuto', 'gridAuto', 'label.on', 'label.auto', 'label.orient', 'letter.on', 'letter.link', 'outline']);
+const STRUCTURAL = new Set(['wmm', 'hmm', 'plotW', 'plotH', 'plotAuto', 'gridAuto', 'label.on', 'label.auto', 'label.orient', 'letter.on', 'letter.link', 'outline']);
 function wireControls(){
   controlsEl.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
   controlsEl.addEventListener('change', e=>{
@@ -569,6 +571,8 @@ function wireControls(){
     if (path === 'plotAuto' && !v){ F.plotW = +sig3(lastPlot.w); F.plotH = +sig3(lastPlot.h); }
     if (path === 'gridAuto' && !v){ const G = layout().grid; F.rows = G.rows; F.cols = G.cols; F.bRows = G.bRows; F.bCols = G.bCols; }
     put(path, v);
+    // The plot's other side follows the one just set (the images keep their shape).
+    if (path === 'plotW' || path === 'plotH'){ F.plotBy = path === 'plotW' ? 'w' : 'h'; const P = layout().plot; F.plotW = +sig3(P.w); F.plotH = +sig3(P.h); }
     const GRID = ['rows', 'cols', 'bRows', 'bCols'];
     // Too few places for the images: block rows are added.
     if (GRID.includes(path)){ const n = ordered().length; F.bRows = Math.max(F.bRows, Math.ceil(n/(F.rows*F.cols*F.bCols))); }

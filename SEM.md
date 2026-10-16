@@ -311,7 +311,8 @@ cross at the top right.
 starts as tall as its images need at its width.
 - **The plot** is the smallest rectangle round all the images.
 - **Auto margins** (the default): the images as large as the page allows, with what lies outside them (names, letters, bars) in the margins, the whole centred. The plot's width and height show what was chosen, locked.
-- **Unticked**, the plot's width and height and its alignment on the page open on those values. The plot is never larger than the page: a larger value is refused, the field shaking red and going back, as every refused value in both composers. The alignment is picked from the plots' composer's grid of 9. The images are fitted in the plot, to its aligned side where their proportions leave it room.
+- **Unticked**, the plot's width and height and its alignment on the page open on those values. The page and the plot are then independent: neither changes the other, and a plot larger than the page runs off it, which is seen at once. The images keep their proportions, so the plot's width and height go together: the one set last decides, and the other's field shows what follows. The alignment is picked from the plots' composer's grid of 9.
+- A value out of a field's range is refused in both composers: the field shakes red and goes back.
 
 The images are laid out as the figure composer (`figure.js`) lays out plots, with the
 same modal and controls:
@@ -514,3 +515,8 @@ so that a wider thumbnail stays sharp.
 - **Alignment.** The SEM plot's alignment uses the plots' composer's picker.
 - **Names.** Placed automatically within each block. Two blocks of 2 × 2 put each block's first row above and its second below.
 - **Colour picker.** It stays open while the controls scroll, following its swatch, as in the plots' composer. v449 had it close when the swatch scrolled out of view.
+
+**v451**:
+- **Unsaved changes** (every module). A project is marked unsaved only while it differs from what was saved, its name included. A value changed and set back, an edit undone, or a name changed and restored leaves it saved. Checked in XRD: smoothing 10 → 50 marked it, back to 10 cleared it; undo cleared it and redo marked it.
+- **Plot and page.** With auto margins off they are independent in both composers, and the plot may run off the page. This replaces v450's limit. In the plots' composer a 250 mm plot on a 160 mm page ran off it, and the page set to 120 mm left the plot at 250 mm.
+- **The SEM plot's sides.** Setting one shows the other: width 100 → 100 × 100, then height 150 → 150 × 150.
