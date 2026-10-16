@@ -86,11 +86,11 @@ function pushRecentColor(hex){
 }
 
 /* A picker opened in a figure composer (inside .fig-box): its top, so that it stands
-   centred on its button where it can, and never nearer than 15 px to the composer's
+   centred on its button where it can, and never nearer than 2 px to the composer's
    head (the title) or foot (the buttons). As its button scrolls it follows, centred,
-   within that range, and stays 15 px from the head or the foot past it. null when the
+   within that range, and stays 2 px from the head or the foot past it. null when the
    button is not in a composer. */
-const COMPOSER_GAP = 15;
+const COMPOSER_GAP = 2;
 /* Opening a picker in a composer: its button's panel scrolled (as far as it goes) to
    bring the button where the popup can stand centred on it, so that it opens centred
    rather than pinned to the foot, a swatch low in the panel being the usual case. */
@@ -163,17 +163,13 @@ class ColorPickerUI {
     const el = document.createElement('div');
     el.className = 'cp-popup';
     el.style.display = 'none';
-    // Two columns, stacked as one on the page; side by side in a figure composer
-    // (cp-wide), where a picker as tall as the stack (538 px) did not fit a laptop's
-    // composer, and could not follow its swatch as the controls scrolled.
-    el.innerHTML = `<div class="cp-cols"><div class="cp-col">
+    el.innerHTML = `
       <div class="cp-map"><div class="cp-cursor"></div></div>
       <div class="cp-hue"><div class="cp-hue-thumb"></div></div>
       <div class="cp-bottom">
         <div class="cp-preview"></div>
         <div class="cp-hex-wrap"><span>#</span><input class="cp-hex" type="text" maxlength="6" spellcheck="false" autocomplete="off"></div>
       </div>
-      </div><div class="cp-col">
       <div class="cp-rgb">
         <div class="cp-rgb-row"><span>R</span><input type="range" class="cp-slider cp-r-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
         <div class="cp-rgb-row"><span>G</span><input type="range" class="cp-slider cp-g-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
@@ -186,8 +182,7 @@ class ColorPickerUI {
       </div>
       <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>
       <div class="cp-recent-head">Recent colors</div>
-      <div class="cp-presets cp-recent"></div>
-      </div></div>`;
+      <div class="cp-presets cp-recent"></div>`;
     document.body.appendChild(el);
     this._el = el;
     forwardWheel(el, ()=> this._anchorBtn);
@@ -335,7 +330,6 @@ class ColorPickerUI {
     this._picked = null;
     this._updateUI(false);
     this._renderRecent();
-    this._el.classList.toggle('cp-wide', !!anchorBtn.closest('.fig-box'));
     this._el.style.display = 'block';
     centreInComposer(anchorBtn, this._el);
     this._reposition();
