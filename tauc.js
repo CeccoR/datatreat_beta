@@ -415,21 +415,22 @@ import { Plot } from './plot.js';
 
     // Single all/one toggle: 'all' = one common param set + shared interval lines;
     // 'one' = every sample fully independent (params AND interval-line positions).
+    // Across the switch nothing jumps: to 'one', every sample starts from the common
+    // values and lines, each then changed on its own; to 'all', the common set becomes
+    // the one of the sample on show.
     $('ModeAll').addEventListener('click', ()=>{
       const mode = P.mode==='shared' ? 'per' : 'shared';
+      const seen = files.length ? P.params(currIndex) : null, seenLines = files.length && !spec.ownLines ? { ...P.vlinesFor(currIndex) } : null;
       P.mode = mode;
       if (mode==='per'){
-        // Each sample becomes independent: params inherit the current shared values,
-        // interval lines are re-proposed per sample.
         files.forEach((f,i)=>{
           const pp = P.per[i] || (P.per[i]={});
-          keys.forEach(k=>{ if (pp[k]==null) pp[k]=P.shared[k]; });
-          if (!spec.ownLines) pp.vlines = suggestOne(i) || pp.vlines || defaultVlinesFor(i);
+          keys.forEach(k=>{ pp[k] = P.shared[k]; });
+          if (!spec.ownLines) pp.vlines = { ...P.sharedVlines };
         });
-      } else if (!spec.ownLines){
-        // Back to a single shared set: re-propose the common lines.
-        const s = suggestShared();
-        if (s) P.sharedVlines = s;
+      } else if (seen){
+        keys.forEach(k=>{ P.shared[k] = seen[k]; });
+        if (seenLines) P.sharedVlines = seenLines;
       }
       P.syncModeButton();
       P.writeStoreToInputs();
@@ -724,7 +725,7 @@ import { Plot } from './plot.js';
             ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff5050', 'Tauc linear region'], ['#d050ff', 'baseline']])}
           </div>
           <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines).">all</button></div>
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines). Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
             <div class="param-grid">
               <label class="txt-label" for="${p}A">Tauc exponent</label>
               <select id="${p}A" class="pg-field an-exp">
@@ -762,7 +763,7 @@ import { Plot } from './plot.js';
               ['rgba(255,80,80,0.35)', 'Tauc linear region', ` id="${p}LegBand"`]])}
           </div>
           <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own.">all</button></div>
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own. Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
             <div class="param-grid">
               <label class="txt-label" for="${p}Ref">Tauc reference</label>
               <select id="${p}Ref" class="pg-field an-ref" title="The Tauc analysis whose linear region the Urbach region is placed on"></select>

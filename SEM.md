@@ -11,10 +11,14 @@ The SEM module takes Tescan images and works on them in five steps:
 The page has three cards, in this order:
 - **File**: the files, ticked in or out, in the list every module has (file and sample label);
 - **Groups and scale**: the groups (§4), each with its *Figure composer* button (§5), and *Reset* at the top right;
-- **Crop and intensity**, in two halves:
-  - on top, on the left, the image in its editor with the histogram of its crop under it; on the right, the images' thumbnails in a box (each with its chain, §2.3) over the image's details. The two halves are as tall as each other: the left one sets the height, and the thumbnails scroll in theirs;
-  - under them, the crop's fields (§2) on the left and the intensity's (§3) on the right;
-  - on a phone, one column.
+- **Crop and intensity**, in three columns:
+  - a quarter of the width: the images' thumbnails in a box, over the image's details. The box's head holds the selector of the images the intensity applies to (§3.5) and *Link all* (§2.3); each thumbnail carries its chain;
+  - the image in its editor, the navigator (‹ the image's number › and its label, as in the other modules) over it and the histogram of its crop under it;
+  - the settings: *Crop*, *Intensity* and *This image*, each with its *Default* box, two settings to a row, each name on the left of its field;
+  - the thumbnails' column and the settings start at the image's top edge, and the thumbnails' column is as tall as the row (its thumbnails scroll);
+  - on a phone, one column. Under 1200 px the settings go one to a row.
+
+  There are no notes under the fields: the crop's size, and what the figure takes of it, are among the image's details.
 
 The groups come first: an image's crop is then set knowing its group, whose common scale may narrow it (dashed in the editor, §4.2).
 
@@ -102,8 +106,10 @@ The crop is a rectangle in the original's pixels:
 - inside the image, never in the bar;
 - at least 64 px a side (an image smaller than that is taken whole).
 
-The image itself is never changed. **Default** is the whole image, with the bar left
-out.
+The image itself is never changed. The default crop is the whole image, with the bar
+left out. While **Default** is ticked (as a new image starts), the crop is the default
+and its fields are locked. Unticked, they open on it; ticked again, the crop goes back
+to the default. A drag on the frame in the editor unticks it.
 
 ### 2.2 Editing
 
@@ -116,7 +122,7 @@ out.
     - **Zoom area**: the rectangle drawn fills the view.
     - While Pan or Zoom area is on, the wheel zooms about the pointer, a double click fits the image, and the crop is not edited. Clicked again, the tool is put down.
   - Shrunk, the image is drawn smoothed; enlarged past 2×, its pixels stay sharp.
-- **The fields.** X, Y, width and height in pixels, with the crop's size in µm beside them. A value that would run past the image's edge brings the crop back inside it.
+- **The fields.** X, Y, width and height, in pixels. A value that would run past the image's edge brings the crop back inside it. The crop's size in µm is in the image's details.
 - **The ratio.** 1:1, 4:3, 3:2 or free, applied as width:height. An image starts at the ratio of its default crop (1:1 on the user's files), or free.
   - A locked ratio holds while resizing. A corner scales both sides by the mean of the pointer's two moves; a side sets the other dimension about its middle.
   - A typed side sets the other side.
@@ -124,11 +130,12 @@ out.
 
 ### 2.3 Several images
 
-- **Copy to…** gives the chosen images the current crop: the same rectangle in pixels, with its ratio.
 - **Linked** images share one crop: setting it on one sets it on all. The chain on a thumbnail links its image, or unlinks it (lit when linked). An image newly linked takes the crop the linked ones share; the first one linked keeps its own.
+- **Unlinked**, an image keeps the crop it had. So linking, then unlinking, copies a crop: there is no Copy to any more.
+- **Link all** links the images the selector chose (§3.5), around the crop of the image in the editor; others linked before are unlinked, so that there is one linked crop. With all of them linked it reads **Unlink all**.
 
 A crop larger than an image allows is narrowed to fit it (its ratio kept). The image is
-then marked (⚠ on its thumbnail, a note under its crop) until its crop is set again.
+then marked (⚠ on its thumbnail and in its details) until its crop is set again.
 
 ## 3. Intensity
 
@@ -162,8 +169,9 @@ a saturated edge does not set the white. A new crop changes them.
 The reference is any loaded image (the first one unless another is chosen). Its own
 levels are taken as acquired, so with "none" it looks as the others are made to.
 
-A reference meant only for this is loaded with the others and ticked *Reference only*:
-it is used to normalise the others and kept out of the figure. Its thumbnail carries ◎.
+The reference is always one of the images, in the figure like the others (since v442;
+a reference loaded only to normalise, *Reference only*, is gone). Its thumbnail carries
+◎.
 
 ### 3.4 What the normalisations do to the user's two images
 
@@ -185,32 +193,34 @@ shows:
 
 The percentile stretch keeps each image's own content and only sets its range.
 
-### 3.5 Settings for all groups, or for one
+### 3.5 All images, or a group at a time
 
-The settings (normalisation, its percentiles, the reference, contrast, brightness and
-gamma) are those of **all groups** unless a group has its own.
-- **Settings for** chooses what the fields set: all groups, or one group.
-- A group chosen follows all groups' settings, its fields showing them disabled, until *Its own settings* is ticked. It then starts from all groups' settings, and its own are changed apart from them.
-- Unticked, the group follows all groups' settings again.
-- *Defaults* puts back the defaults of the settings chosen.
-- A group with its own settings is marked *(own settings)* in the selector, and the note under the histogram names it.
-- An image that is the reference of any settings in use, ticked *Reference only*, is kept out of the figure.
+The selector over the thumbnails chooses which images the intensity settings
+(normalisation, its percentiles, the reference, contrast, brightness and gamma) apply to.
+- **All**: one set for every image.
+- **A group**: each group has its own set. The settings shown are those of the group of the image in the editor; the other groups' images are dimmed and keep theirs. Choosing a group shows its first image; clicking a dimmed thumbnail shows that image and chooses its group.
+- **From All to a group**, every group starts from All's settings, and each is then changed on its own.
+- **From a group back to All**, All takes the settings of the group on show, and every image goes back to one set.
 
-Each image's own correction (*This image, on top*) goes on top of its group's settings
-either way.
+Nothing jumps across a switch. This is the rule of every module's all/one switch (§
+Changelog, v442).
 
-**Checked** on the user's two images and two copies:
-- The 20 kx group was given its own settings, with brightness +20. Its thumbnails' mean grey went from 93 to 142; the 5 kx group's stayed at 47.
-- All groups' brightness was then set to −10. The 5 kx thumbnails went to 35, while the 20 kx ones kept 142.
-- The CSV's `intensity_settings` read *group* for the 20 kx images and *all groups* for the others.
-- Undone, the settings went back.
+**Default** locks the settings at their defaults: percentile stretch 0.5–99.5 %, no
+change of contrast, brightness or gamma; the reference is kept. Unticked, the fields open
+on the defaults; ticked again, they go back to them. **This image** has its own
+*Default*, independent: no correction of its own.
+
+**Checked** on the user's two images and two copies (thumbnails' mean grey, 5 kx and 20 kx):
+- **All.** Default unticked and brightness 10: 93 and 118.
+- **The 20 kx group.** It inherited brightness 10 (the same greys), then set 30: 93 and 164. The 5 kx thumbnails were dimmed.
+- **A 5 kx thumbnail clicked.** The selector went to 5 kx, showing 10.
+- **Back to All from 20 kx.** All took 30: 140 and 164. Ticking Default gave 69 and 93, the defaults.
 
 ## 4. Groups and scale
 
 ### 4.1 Grouping
 
-The images in the figure are grouped by pixel size: those that are included, and not a
-reference kept out of the figure.
+The images in the figure, those that are included, are grouped by pixel size.
 
 **The rule.** Two images are in one group when every pixel size in it lies within 10 %
 of the others (largest/smallest ≤ 1.10). A newly loaded image joins the first group it
@@ -221,10 +231,20 @@ pixel size, the one its common scale brings the others to.
 - The name reads as plain text. Like the project's name, its field shows on hover and while it is edited.
 - A name typed there stays; emptied, it goes back to the magnification.
 
-**The box.** Each group is a box 4φ wide to 1 high (6.47 : 1). On the left are its name,
-its scale under it and its *Figure composer*. On the right are its images, 112 px, each
-with its name under it, in one row that scrolls sideways when they do not fit. On a
-phone the name, scale and button sit over the images, and the box grows to hold them.
+**The box.** Each group is a box 4φ wide to 1 high (6.47 : 1), which grows where its
+content needs more: 1430 × 234 px at a 1500 px window.
+- At the top left is its name.
+- Under the name, its scale is on the left and its *Figure composer* on the right.
+- Then come its images, 112 px each with its name under it, in one row across the whole box.
+
+**Paging.** A row wider than the box shows an arrow at the end where there is more,
+boxed and as tall as the images, with no scrollbar. A click turns a page: the row slides
+smoothly by what it shows, and snaps to an image's edge clear of the arrow. A finger can
+also swipe it.
+
+Checked:
+- At 900 px, eight images (800 px of row, 180 px more): › alone at first, ‹ alone after one page.
+- At 390 px (690 px more): one page moved the row 212 px, and both arrows showed.
 
 **Editing.**
 - An image is dragged onto another group, or onto **+ Group** under the groups, to move it there; + Group starts a new group with it. A copy of it follows the pointer and the group under it lights.
@@ -294,7 +314,7 @@ There are no axes and no legend.
 ### 5.2 Panels
 
 **Which images.** Each image of the group in the figure is one panel: those that are
-included, and not a reference kept out of the figure. It enters as its group made it
+included. It enters as its group made it
 (§4) and through its curve (§3). The preview uses a copy reduced to 520 px; the export
 uses the full one.
 
@@ -395,7 +415,7 @@ The CSV holds one row per included image, with these columns:
 | `figure_pixel_nm` | the pixel size in the figure |
 | `figure_out_width_px`, `figure_out_height_px` | the image's size there |
 
-The group columns are empty for a reference kept out of the figure.
+The group columns are empty for an image in no group.
 
 ## Changelog
 
@@ -427,3 +447,13 @@ export.
 - **Groups.** A box 4φ : 1 per group, with its name (a field on hover, as the project's), its scale under it and its figure on the left, and its images (112 px, three quarters of before, the name alone under them) in one row on the right. **+ Group** adds an empty group, and empty groups stay until removed. **Reset** (was Regroup) sits at the card's top right. The group's line of pixel size and field is gone (the crop's note gives it).
 - **Crop and intensity.** The card is split into halves. On top are the image with its histogram, and the thumbnails over the image's details, the two sides as tall as each other. Under them are the crop's fields and the intensity's. The *Linked* box became a chain on each thumbnail.
 - **Intensity.** It can be set per group (§3.5).
+
+**v442**: groups paged; the crop and intensity card in three columns.
+- **Groups.** The name at the top left; the scale on the left and *Figure composer* on the right under it; the images across the whole box, paged by arrows instead of a scrollbar.
+- **Navigator.** ‹ the image's number › and its label, as in the other modules.
+- **Columns.** The thumbnails and the image's details take a quarter, starting at the image's top edge. Then the image with its histogram, then the settings, two to a row with their names on the left (units in the names: X (px)…).
+- **Selector.** It sits over the thumbnails (All or a group, §3.5), with *Link all*. It replaces *Settings for* and *Its own settings*.
+- **Defaults.** A *Default* box each for the crop, the intensity and this image, in place of the Default, Copy to…, No correction and Defaults buttons.
+- **Notes.** The notes under the fields and the histogram are gone; the crop's size and what the figure takes are in the image's details.
+- **Reference only** is gone: the reference is one of the images.
+- **Other modules.** The all/one switches of Tauc and XRD now carry values the same way. To one, every sample starts from the common values (Tauc: its parameters and interval lines; XRD: each switch's field). Back to all, the common values are the shown sample's. Before, Tauc's one kept older per-sample values and re-proposed the lines, and XRD's one changed the shown sample alone. GC's switches are as they were.

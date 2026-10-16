@@ -1274,13 +1274,12 @@ function solveLinear(A, b){
       paramMode[key] = mode;
       document.getElementById(tid).textContent = mode==='shared' ? 'all' : 'one';
       if (mode==='shared'){
-        // Switching to "all": every sample takes the currently displayed value
+        // Switching to "all": every sample takes the value of the sample on show
         shared[key] = cur;
       } else {
-        // Switching to "one": keep the displayed value on this sample only;
-        // other samples' per-sample values are left untouched
-        if(!perParams[curIdx]) perParams[curIdx]={};
-        perParams[curIdx][key] = cur;
+        // Switching to "one": every sample starts from the common value, then each is
+        // changed on its own
+        files.forEach((f, i)=>{ if (!perParams[i]) perParams[i] = {}; perParams[i][key] = cur; });
       }
       writeStoreToInputs();
       if (files.length){
