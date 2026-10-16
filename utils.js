@@ -104,9 +104,10 @@ function centreInComposer(anchor, popup){
   const lo = (head ? head.getBoundingClientRect().bottom : box.getBoundingClientRect().top) + COMPOSER_GAP + ph/2;
   const hi = (foot ? foot.getBoundingClientRect().top : box.getBoundingClientRect().bottom) - COMPOSER_GAP - ph/2;
   const r = anchor.getBoundingClientRect(), c = r.top + r.height/2;
-  // Where the button may stand for the popup to be centred on it: nearest that range.
-  const want = hi < lo ? (lo + hi)/2 : Math.min(hi, Math.max(lo, c));
-  p.scrollTop += c - want;
+  // The middle of the range where the popup can stand centred on it: from there it can
+  // follow the button as far either way (at an end of it, the first turn of the wheel
+  // one way would leave it pinned at once).
+  p.scrollTop += c - (lo + hi)/2;
 }
 /* A popup standing over the panel its button scrolls in (a composer's controls) would
    swallow the wheel: the panel under it stopped scrolling, and the popup with it. The
@@ -127,7 +128,8 @@ function forwardWheel(popup, anchorOf){
       if (/(auto|scroll)/.test(cs.overflowY) && q.scrollHeight > q.clientHeight) return;
     }
     e.preventDefault();
-    p.scrollTop += e.deltaY;
+    // In lines or pages (Firefox's mouse wheel: 3 lines a notch), as the browser would.
+    p.scrollTop += e.deltaY*(e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? p.clientHeight : 1);
   }, { passive: false });
 }
 function composerTop(anchor, rect, ph){

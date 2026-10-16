@@ -547,3 +547,8 @@ so that a wider thumbnail stays sharp.
 - **Margin.** It is now 15 px from the composer's head and foot.
 - **Opening.** A swatch low in the panel (the usual case: the ink at the foot) opened its picker pinned to the foot. Opening now first scrolls the panel, as far as it goes, to bring the swatch where the picker can stand centred on it.
 - **Checked** at 1500 × 950 and 1366 × 768, SEM ink and a series of the plots' composer. It opened centred on the swatch (471/471; 380/380). Under the wheel it followed it, then held 15 px from the foot or the head.
+
+**v456**: the colour picker under the wheel.
+- **Opening.** It now opens in the middle of the range where it can follow its swatch, rather than at the range's end. At the end, the first turn of the wheel one way pinned it at once.
+- **Line-mode wheels.** Firefox's mouse wheel counts in lines (3 a notch); forwarded over the popup, it scrolled 3 px. It now scrolls as the browser would, 16 px a line.
+- **The limit.** The picker is 538 px tall. The range where it can stand centred is the composer's body less 2 × 15 px less that height: 196 px of travel at a 1500 × 950 window, 54 px at 1366 × 768. Past it, it holds 15 px from the head or the foot, as asked.
