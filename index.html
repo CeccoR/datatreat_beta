@@ -672,47 +672,20 @@
           </div></div>
           <div class="sem-col-set">
             <div class="sem-set-head"><span class="txt-mini">Crop</span><label class="sem-check" title="The default crop: the whole image less its info bar. Ticked, the fields are locked"><input type="checkbox" id="semCropDef"> Default</label></div>
-            <div class="sem-kv">
-              <label class="txt-label" for="semCropX">X (px)</label><input type="text" inputmode="numeric" id="semCropX">
-              <label class="txt-label" for="semCropY">Y (px)</label><input type="text" inputmode="numeric" id="semCropY">
-              <label class="txt-label" for="semCropW">Width (px)</label><input type="text" inputmode="numeric" id="semCropW">
-              <label class="txt-label" for="semCropH">Height (px)</label><input type="text" inputmode="numeric" id="semCropH">
-              <label class="txt-label" for="semAspect">Ratio</label>
-              <select id="semAspect">
-                <option value="1:1">1:1 (square)</option>
-                <option value="4:3">4:3</option>
-                <option value="3:2">3:2</option>
-                <option value="free">free</option>
-              </select>
-            </div>
+            <div class="sem-fr sem-fr2"><div><label class="txt-label" for="semCropX">X (px)</label><input type="text" inputmode="numeric" id="semCropX"></div><div><label class="txt-label" for="semCropY">Y (px)</label><input type="text" inputmode="numeric" id="semCropY"></div></div>
+            <div class="sem-fr sem-fr3"><div><label class="txt-label" for="semCropW">Width (px)</label><input type="text" inputmode="numeric" id="semCropW"></div><div><label class="txt-label" for="semCropH">Height (px)</label><input type="text" inputmode="numeric" id="semCropH"></div><div><label class="txt-label" for="semAspect">Ratio</label><select id="semAspect"><option value="1:1">1:1 (square)</option><option value="4:3">4:3</option><option value="3:2">3:2</option><option value="free">free</option></select></div></div>
             <div class="sem-set-head"><span class="txt-mini">Intensity</span><label class="sem-check" title="The default normalisation (percentile stretch, 0.5–99.5 %), with no change of contrast, brightness or gamma. Ticked, the fields are locked"><input type="checkbox" id="semIntDef"> Default</label></div>
-            <div class="sem-kv">
-              <label class="txt-label" for="semNorm">Normalisation</label>
-              <select id="semNorm">
-                <option value="none">none (as acquired)</option>
-                <option value="percentile">percentile stretch</option>
-                <option value="meansd">mean and SD of the reference</option>
-                <option value="hist">histogram of the reference</option>
-              </select>
-              <label class="txt-label" for="semRef">Reference</label><select id="semRef"></select>
-              <label class="txt-label" for="semPLo">Black at (%)</label><input type="text" inputmode="decimal" id="semPLo">
-              <label class="txt-label" for="semPHi">White at (%)</label><input type="text" inputmode="decimal" id="semPHi">
-              <label class="txt-label" for="semB">Brightness (%)</label><input type="text" inputmode="decimal" id="semB">
-              <label class="txt-label" for="semC">Contrast</label><input type="text" inputmode="decimal" id="semC">
-              <label class="txt-label" for="semG">Gamma</label><input type="text" inputmode="decimal" id="semG">
-            </div>
+            <div class="sem-fr sem-fr2"><div><label class="txt-label" for="semNorm">Normalisation</label><select id="semNorm"><option value="none">none (as acquired)</option><option value="percentile">percentile stretch</option><option value="meansd">mean and SD of the reference</option><option value="hist">histogram of the reference</option></select></div><div><label class="txt-label" for="semRef">Reference</label><select id="semRef"></select></div></div>
+            <div class="sem-fr sem-fr2"><div><label class="txt-label" for="semPLo">Black at (%)</label><input type="text" inputmode="decimal" id="semPLo"></div><div><label class="txt-label" for="semPHi">White at (%)</label><input type="text" inputmode="decimal" id="semPHi"></div></div>
+            <div class="sem-fr sem-fr3"><div><label class="txt-label" for="semB">Brightness (%)</label><input type="text" inputmode="decimal" id="semB"></div><div><label class="txt-label" for="semC">Contrast</label><input type="text" inputmode="decimal" id="semC"></div><div><label class="txt-label" for="semG">Gamma</label><input type="text" inputmode="decimal" id="semG"></div></div>
             <div class="sem-set-head"><span class="txt-mini">This image</span><label class="sem-check" title="No correction of this image's own. Ticked, the fields are locked"><input type="checkbox" id="semAdjDef"> Default</label></div>
-            <div class="sem-kv">
-              <label class="txt-label" for="semBi">Brightness (%)</label><input type="text" inputmode="decimal" id="semBi">
-              <label class="txt-label" for="semCi">Contrast</label><input type="text" inputmode="decimal" id="semCi">
-              <label class="txt-label" for="semGi">Gamma</label><input type="text" inputmode="decimal" id="semGi">
-            </div>
+            <div class="sem-fr sem-fr3"><div><label class="txt-label" for="semBi">Brightness (%)</label><input type="text" inputmode="decimal" id="semBi"></div><div><label class="txt-label" for="semCi">Contrast</label><input type="text" inputmode="decimal" id="semCi"></div><div><label class="txt-label" for="semGi">Gamma</label><input type="text" inputmode="decimal" id="semGi"></div></div>
           </div>
         </div>
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v443</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v444</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

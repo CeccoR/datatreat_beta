@@ -12,11 +12,11 @@ The page has three cards, in this order:
 - **File**: the files, ticked in or out, in the list every module has (file and sample label);
 - **Groups and scale**: the groups (§4), each with its *Figure composer* button (§5), and *Reset* at the top right;
 - **Crop and intensity**, in three columns:
-  - a quarter of the width: the images' thumbnails in a box, over the image's details. The box's head holds the selector of the images the intensity applies to (§3.5) and *Link all* (§2.3); each thumbnail carries its chain;
-  - the image in its editor, the navigator (‹ the image's number › and its label, as in the other modules) over it and the histogram of its crop under it;
-  - the settings: *Crop*, *Intensity* and *This image*, each with its *Default* box, two settings to a row, each name on the left of its field;
+  - three eighths of the width: the images' thumbnails in a box, over the image's details. The box's head holds the selector of the images the intensity applies to (§3.5) and *Link all* (§2.3); each thumbnail carries its chain;
+  - three eighths: the image in its editor, the navigator (‹ the image's number › and its label, as in the other modules) over it and the histogram of its crop under it;
+  - a quarter: the settings, *Crop*, *Intensity* and *This image*, each with its *Default* box, each field with its name above it, in rows: X and Y; width, height and ratio; normalisation and reference; black and white; brightness, contrast and gamma (and again for this image);
   - the thumbnails' column and the settings start at the image's top edge, and the thumbnails' column is as tall as the row (its thumbnails scroll);
-  - on a phone, one column. Under 1200 px the settings go one to a row.
+  - on a phone, one column.
 
   There are no notes under the fields: the crop's size, and what the figure takes of it, are among the image's details.
 
@@ -457,3 +457,6 @@ export.
 - **Notes.** The notes under the fields and the histogram are gone; the crop's size and what the figure takes are in the image's details.
 - **Reference only** is gone: the reference is one of the images.
 - **Other modules.** The all/one switches of Tauc and XRD now carry values the same way. To one, every sample starts from the common values (Tauc: its parameters and interval lines; XRD: each switch's field). Back to all, the common values are the shown sample's. Before, Tauc's one kept older per-sample values and re-proposed the lines, and XRD's one changed the shown sample alone. GC's switches are as they were.
+
+**v444**: the columns three eighths, three eighths and a quarter (thumbnails and details,
+image, settings); the settings' names back above their fields, in rows of two or three.

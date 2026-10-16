@@ -2868,13 +2868,13 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 }
 
 /* ===== SEM: crop and intensity =====
-   Three columns: the images' thumbnails over the image's details (a quarter), the
-   image with the histogram of its crop under it, and the settings (three eighths
-   each). The navigator sits over the image; the thumbnails and the settings start at
+   Three columns: the images' thumbnails over the image's details and the image with
+   the histogram of its crop under it (three eighths each), then the settings (a
+   quarter). The navigator sits over the image; the thumbnails and the settings start at
    the image's top edge. The thumbnails' column is laid out inside a box that fills its
    cell (absolutely), so that it takes the row's height and never sets it; the
    thumbnails scroll in theirs. One column on a phone. */
-.sem-work { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr); grid-template-rows: auto auto; column-gap: 20px; align-items: stretch; }
+.sem-work { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 3fr) minmax(0, 2fr); grid-template-rows: auto auto; column-gap: 20px; align-items: stretch; }
 .sem-work-nav { grid-column: 2; grid-row: 1; }
 .sem-col-view { grid-column: 2; grid-row: 2; }
 .sem-col-imgs { grid-column: 1; grid-row: 2; position: relative; min-height: 0; }
@@ -2885,15 +2885,14 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 .sem-box-head select { width: auto; flex: 1 1 90px; min-width: 0; padding-top: 4px; padding-bottom: 4px; }
 .sem-thumbs-box { flex: 1 1 0; overflow-y: auto; }
 .sem-info-box { flex: 0 0 auto; }
-/* Settings two to a row, each its name on the left and its field on the right. */
+/* Settings in rows of two or three fields, each with its name above it. */
 .sem-set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 8px; }
 .sem-set-head:first-child { margin-top: 0; }
 .sem-set-head .sem-check { margin: 0; }
-.sem-kv { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px 10px; align-items: center; }
-.sem-kv > .txt-label { margin: 0; white-space: nowrap; }
-@media (max-width: 1200px) {
-  .sem-kv { grid-template-columns: auto minmax(0, 1fr); }
-}
+.sem-fr { display: grid; gap: 8px; margin-bottom: 8px; }
+.sem-fr2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sem-fr3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sem-fr .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 760px) {
   .sem-work { grid-template-columns: minmax(0, 1fr); }
   .sem-work-nav, .sem-col-view, .sem-col-imgs, .sem-col-set { grid-column: 1; grid-row: auto; }
