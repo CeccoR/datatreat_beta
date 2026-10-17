@@ -143,6 +143,8 @@ Assess H₂ production rates from gas chromatography data, including light-on ti
 5. View results in a **bar chart** (mean production rate per sample) and a **summary table**.
 6. Export all data as CSV.
 
+The analysis is a card, as the DRS ones are: **+** under it adds another (its own masses, flows, light-on times, intervals and delay on the same samples), and each card can be renamed, folded, moved by its ≡ grip and closed; every card has its own plots in the Results, under its name, and its own CSVs.
+
 ⚠️ **Note**: Light-on time must be **after the first injection** in your data. If it's earlier, an orange warning appears.
 
 ---
@@ -172,7 +174,7 @@ Compare, smooth, and normalize EPR spectra from Bruker instruments. Includes pai
      - *Local*: Each spectrum normalized to its own maximum
    - **Smoothing points**: Moving-average window size
 
-4. Interactive plot overlays all spectra with your chosen normalization.
+4. Interactive plot overlays all spectra with your chosen normalization. The analysis is a card: **+** under it adds another (its own normalization and smoothing of the same spectra, on its own plot), and each card can be renamed, folded, moved by its ≡ grip and closed.
 5. Export processed data as CSV.
 
 **File format details**:  

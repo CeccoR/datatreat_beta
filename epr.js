@@ -1,5 +1,6 @@
-import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
+import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumberInputs } from './utils.js';
 import { Plot } from './plot.js';
+import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
 /* =========================================================
    EPR MODULE
@@ -8,7 +9,6 @@ import { Plot } from './plot.js';
   // Every file loaded, in list order; the analysis sees the included ones, `files`.
   let allFiles = []; // {name, label, b[], a[]}
   let files = [];
-  let lastY = [];
   let loadAlerts = '';
   let uploadAlerts = '';
   let pendingAlerts = '';   // ephemeral notice about unpaired uploads
@@ -160,52 +160,108 @@ import { Plot } from './plot.js';
     files = includedOf(allFiles);
     setTabLoaded('epr', allFiles.length);
     renderUnifiedFileList('eprFileTableWrap', allFiles, fileCallbacks());
-    if (files.length){
-      document.getElementById('eprWorkspace').style.display='block';
-      updateEpr();
-    } else {
-      document.getElementById('eprWorkspace').style.display='none';
-      rebuildAlerts();
-    }
+    document.getElementById('eprAnalyses').style.display = files.length ? 'block' : 'none';
+    if (files.length) updateEpr();
+    else rebuildAlerts();
     hist.commit();
   }
 
-  /* ---- Undo/redo: file order/labels/colours + normalization & smoothing ---- */
+  /* ---- The analysis cards (cards.js): each its own normalisation and smoothing of the
+     same spectra, stacked on its own plot ---- */
+  const KINDS = { spectra: 'Stacked Spectra' };
+  const EPR_INFO = `Spectra are normalized and stacked for visual comparison. Adjust the smoothing window and normalization mode as needed. The field axis is each spectrum's field <b>rescaled to 9.5 GHz</b>, B·(9.5 GHz / ν) with ν the microwave frequency of its .DSC (MWFQ), so that spectra recorded at different frequencies line up by g; the CSV gives the field the same way (Bfield_mT_at_9.5GHz). The top axis reads <b>g = hν / (μ<sub>B</sub>·B)</b> at 9.5 GHz. A file without its frequency is shown on the field it was measured at, and then no g axis can be drawn. ${cardInfo(false, false)}`;
+  const DEF = { norm: 'global', smooth: 10 };
+  const P = a => 'epr' + a.id;
+  const DL_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
+  const cardBody = a => `
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            <div class="plot-wrap">
+              <svg class="plot" id="${P(a)}Svg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="${P(a)}Svg" data-csv-mod="epr" data-csv-names="epr_spectra.csv" data-dl-name="EPR.svg" data-dl-legend="${P(a)}Legend">${DL_ICON}</button>
+            </div>
+            <div id="${P(a)}Legend" class="legend"></div>
+          </div>
+          <div class="col mw260" style="align-self:flex-start">
+            <div class="txt-mini param-head">Parameters</div>
+            <label class="txt-label" for="${P(a)}Norm">Normalization</label>
+            <select id="${P(a)}Norm">
+              <option value="global">Global (max of all)</option>
+              <option value="local">Local (max of each)</option>
+            </select>
+            <label class="txt-label" for="${P(a)}Smooth">Smoothing points</label>
+            <input type="number" id="${P(a)}Smooth" value="10" min="1">
+          </div>
+        </div>`;
+  // The card's fields show its record; a change is taken on confirm, not while typing
+  // (the normalisation a <select>, its change a deliberate pick; the smoothing a guarded number
+  // field, whose change only fires with a valid value).
+  function buildCard(a, card){
+    guardNumberInputs(card);
+    const norm = card.querySelector('#' + P(a) + 'Norm'), sm = card.querySelector('#' + P(a) + 'Smooth');
+    norm.value = a.norm; sm.value = a.smooth;
+    norm.addEventListener('change', ()=>{ a.norm = norm.value === 'local' ? 'local' : 'global'; if (files.length){ drawCard(a); hist.commit(); } });
+    sm.addEventListener('change', ()=>{ a.smooth = Math.max(1, Math.round(+sm.value) || 1); if (files.length){ drawCard(a); hist.commit(); } });
+  }
+  function named(a){
+    const card = deck.cardOf(a);
+    if (card) nameDownloads(card.querySelector('.plot-wrap'), `${fileSafe(a.name)} - EPR.svg`, `${fileSafe(a.name)} - epr_spectra.csv`);
+  }
+  const deck = createDeck({
+    list: document.getElementById('eprAnalyses'), addBar: document.getElementById('eprAddBar'), addBtn: document.getElementById('eprAddAn'),
+    kinds: KINDS, info: ()=> EPR_INFO, body: cardBody, make: ()=> ({ ...DEF }),
+    build: buildCard, drop: ()=>{}, autoName: ()=> 'Spectra', named,
+    added: a=>{ if (files.length) drawCard(a); },
+    wake: a=>{ if (files.length) drawCard(a, true); },
+    commit: ()=> hist.commit(),
+  });
+  const cards = ()=> deck.records;
+
+  /* ---- Undo/redo: file order/labels/colours + each card's normalization & smoothing ---- */
   function eprSnapshot(){
     return {
       files: allFiles.map(f=>({...f})),
-      norm: document.getElementById('eprNorm').value,
-      smooth: document.getElementById('eprSmooth').value,
+      cards: cards().map(a=> ({ ...deck.saved(a), norm: a.norm, smooth: a.smooth })),
     };
   }
+  // A project from before the cards had one analysis, its settings at the top level.
+  const readCard = s => ({ norm: s.norm === 'local' ? 'local' : 'global', smooth: Math.max(1, Math.round(+s.smooth) || DEF.smooth) });
   function eprRestore(s){
     allFiles = s.files.map(f=>({...f}));
-    document.getElementById('eprNorm').value = s.norm;
-    document.getElementById('eprSmooth').value = s.smooth;
+    files = includedOf(allFiles);
+    deck.load(Array.isArray(s.cards) ? s.cards : [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }], readCard, a=>{
+      const card = deck.cardOf(a);
+      card.querySelector('#' + P(a) + 'Norm').value = a.norm;
+      card.querySelector('#' + P(a) + 'Smooth').value = a.smooth;
+    });
     afterFilesChange();
     // Clear the previous tab's transient alerts, then rebuild.
     loadAlerts = ''; uploadAlerts = ''; pendingAlerts = ''; rebuildAlerts();
   }
   const hist = registerHistory('epr', eprSnapshot, eprRestore);
-  registerTabRedraw('epr', ()=>{ if (files.length) updateEpr(true); });
+  registerTabRedraw('epr', ()=>{ if (files.length){ deck.fitNames(); updateEpr(true); } });
 
+  // Every card unfolded is drawn; a folded one is drawn as it comes back (wake).
   function updateEpr(preserveView){
     if (!files.length) return;
-    const N = +document.getElementById('eprSmooth').value || 1;
-    const norm = document.getElementById('eprNorm').value;
+    cards().forEach(a=>{ if (!deck.isFolded(a)) drawCard(a, preserveView); });
+  }
+  function drawCard(a, preserveView){
+    const N = a.smooth || 1;
+    const norm = a.norm;
     let Y = files.map(f=>movingAverage(f.a, N));
     // A fresh Plot is built each render, so grab the outgoing view first to keep the
     // current zoom on a resize / tab-switch redraw instead of snapping to full range.
-    const old = document.getElementById('eprSvg')._plot;
+    const old = document.getElementById(P(a) + 'Svg')._plot;
     const prev = (preserveView && old && isFinite(old.xmin)) ? {xmin:old.xmin,xmax:old.xmax,ymin:old.ymin,ymax:old.ymax} : null;
     /* The field is each spectrum's rescaled to 9.5 GHz (buildBAxis), so the axis says so
        and carries g along the top: g = hν/(μ_B·B) at that ν, 678.753 mT / B. A file
        without its frequency is on its measured field, where g cannot be read. */
     const at95 = files.every(f=> f.rescaled !== false);
-    const plot = new Plot(document.getElementById('eprSvg'), {xlabel: at95 ? 'Magnetic Field at 9.5 GHz (mT)' : 'Magnetic Field (mT)', ylabel:'Intensity (a. u.)', noYTickLabels:true,
+    const plot = new Plot(document.getElementById(P(a) + 'Svg'), {xlabel: at95 ? 'Magnetic Field at 9.5 GHz (mT)' : 'Magnetic Field (mT)', ylabel:'Intensity (a. u.)', noYTickLabels:true,
       ...(at95 ? { topAxis: { label:'g', of: B=> G_AT_95/B, at: g=> G_AT_95/g, fmt: v=> v.toFixed(4) }, margin:{l:55,r:20,t:48,b:40} } : {})});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
-    const legend = document.getElementById('eprLegend'); legend.innerHTML='';
+    const legend = document.getElementById(P(a) + 'Legend'); legend.innerHTML='';
     const n = Y.length;
     const baseOf = k => (n-1-k)*1.1;
     const allB = files.flatMap(f=>f.b);
@@ -232,22 +288,16 @@ import { Plot } from './plot.js';
                 { raw: { xs: files[k].b, ys: csvY }, label: files[k].label, key: files[k].name });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`; legend.appendChild(s);
     });
-    lastY = Y;
   }
 
-  // Apply on confirm, not while typing. eprNorm is a <select> (its change is a
-  // deliberate pick); eprSmooth is a guarded number field, so its change only
-  // fires with a valid value (invalid input shakes + reverts via guardNumberInputs).
-  ['eprNorm','eprSmooth'].forEach(id=>{
-    document.getElementById(id).addEventListener('change', ()=>{
-      if (files.length){ updateEpr(); hist.commit(); }
-    });
-  });
-
+  // One CSV a card, named after it.
   function exportEprZip(){
     if (!files.length) return [];
-    const N = +document.getElementById('eprSmooth').value || 1;
-    const norm = document.getElementById('eprNorm').value;
+    return cards().map(a=> ({ name: `${fileSafe(a.name)} - epr_spectra.csv`, text: cardCsv(a) }));
+  }
+  function cardCsv(a){
+    const N = a.smooth || 1;
+    const norm = a.norm;
     // Smoothed column: moving-average (N pts), background subtracted as the first point,
     // then normalised the user's way — divide by the peak-to-peak (local = own,
     // global = largest across samples), matching the on-screen normalisation divisor.
@@ -268,8 +318,11 @@ import { Plot } from './plot.js';
     const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
     let t = csvLine(cols.map(c=>c.h));
     for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-    return [{name:'epr_spectra.csv', text:t}];
+    return t;
   }
   registerCsvExport('epr', exportEprZip);
+
+  // A new project starts with one card.
+  deck.start(['spectra']);
 })();
 

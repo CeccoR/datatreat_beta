@@ -1,5 +1,6 @@
-import { fmtNum, csvLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax, X_SVG, guardNumberInputs } from './utils.js';
+import { fmtNum, csvLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax, guardNumberInputs } from './utils.js';
 import { Plot } from './plot.js';
+import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
 /* =========================================================
    TAUC MODULE
@@ -481,24 +482,23 @@ import { Plot } from './plot.js';
   ========================================================= */
   // As the menus list them; the card titles set them in capitals.
   const KINDS = { tauc: 'Tauc Plot', urbach: 'Urbach Energy' };
-  let analyses = [];          // in card order
-  const live = new Map();     // id → { card, panel, res, resPlots }
+  let deck = null;            // the cards (cards.js): the records, in card order, and their cards
+  const cards = ()=> deck ? deck.records : [];
+  const live = new Map();     // id → { panel, res, resPlots, seen }
   // While set, a settling panel leaves the Results alone: whoever set it redraws
   // them once, rather than once per card.
   let quiet = false;
   const quietly = fn =>{ const was = quiet; quiet = true; try { fn(); } finally { quiet = was; } };
 
-  const nextId = ()=> analyses.reduce((m, a)=> Math.max(m, a.id), 0) + 1;
-  // `base` is the name typed in, used while `nameAuto` is off; `name` is the one
-  // shown, made unique. `ref` is the Tauc reference's id, picked by the default rule
-  // while `refAuto` is on. `states` keeps the settings of the kind not on show.
-  const newAnalysis = type => ({ id: nextId(), type, base: '', nameAuto: true, name: '', collapsed: false,
-    ref: null, refAuto: true, egSel: EG_METHODS.map(m=>m.key), urbSel: URB_ALL(), states: {} });
-  const byId = id => analyses.find(a=> a.id === id) || null;
+  // A record's own fields, beside the deck's: `ref` is the Tauc reference's id, picked
+  // by the default rule while `refAuto` is on. `states` keeps the settings of the kind
+  // not on show.
+  const newFields = ()=> ({ ref: null, refAuto: true, egSel: EG_METHODS.map(m=>m.key), urbSel: URB_ALL(), states: {} });
+  const byId = id => deck.byId(id);
   const panelOf = a => a && live.has(a.id) ? live.get(a.id).panel : null;
   const refPanel = a =>{ const r = byId(a.ref); return r && r.type === 'tauc' ? panelOf(r) : null; };
-  const livePanels = ()=> analyses.map(panelOf).filter(Boolean);
-  const isFolded = a => live.has(a.id) && live.get(a.id).card.classList.contains('is-folded');
+  const livePanels = ()=> cards().map(panelOf).filter(Boolean);
+  const isFolded = a => deck.isFolded(a);
 
   // A sample's Tauc linear region in eV: the window its Tauc fit settled on.
   function taucWindow(tp, i){
@@ -538,7 +538,7 @@ import { Plot } from './plot.js';
       show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
       hidden: ()=> isFolded(a),
       // The automatic name carries the exponent.
-      onParams: ()=> refreshNames(),
+      onParams: ()=> deck.refreshNames(),
       // The Urbach cards read against this one follow its linear region once a change
       // settles (a line released, a parameter confirmed), not while a line is dragged.
       onSettled: ()=>{
@@ -685,10 +685,7 @@ import { Plot } from './plot.js';
 
   /* ---- Card markup ---- */
   const DL_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
-  const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
-  const GRIP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>';
-  const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
-  const CARD_INFO = `Each analysis card can be renamed in the field under its title (left empty, it goes back to the automatic name), turned into the other kind of analysis from its title, folded with the arrow, closed with the ×, and moved by dragging the ≡ grip; <b>+</b> below the cards adds another. Every card has its own pair of charts in the Results, under its name.`;
+  const CARD_INFO = cardInfo(true, true);
   const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
   const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, each with its own axes: the plain curves and fits above, the subtracted ones under them (empty, and saying why, when there is nothing to subtract); the chips on the E<sub>U</sub> chart show the plain E<sub>U</sub>, the subtracted one or both. ${CARD_INFO}`;
 
@@ -705,7 +702,7 @@ import { Plot } from './plot.js';
   // At the foot of the parameter column, after what it holds.
   const suggestBtn = (p, title)=> `
             <button class="btn plot-action-btn" id="${p}Suggest" title="${title}">&#10022; Suggest intervals</button>`;
-  // The download names follow the analysis name (paintName); a CSV is offered only
+  // The download names follow the analysis name (named); a CSV is offered only
   // where there is one to give.
   const plotWrap = (svgId, legendId, csv, extra = '', cls = '')=> `
             <div class="plot-wrap">
@@ -786,117 +783,29 @@ import { Plot } from './plot.js';
           </div>
         </div>`;
   }
-  // The title is the kind, chosen in place; the name sits under it and stays in view
-  // when the card is folded, the instructions open under the name.
-  function cardHtml(a){
-    const p = 'an' + a.id;
-    return `
-        <div class="an-head">
-          <button type="button" class="an-ic an-grip" title="Drag to move this analysis" aria-label="Move analysis">${GRIP_SVG}</button>
-          <h3 class="txt-head an-title">Analysis:<span class="an-kind"><button type="button" class="an-type" data-kind="${a.type}" aria-haspopup="menu" aria-expanded="false" title="Change the kind of analysis">${KINDS[a.type]}</button><button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false">${INFO_SVG}</button></span></h3>
-          <span class="an-acts">
-            <button type="button" class="an-ic an-close" title="Close this analysis" aria-label="Close analysis">${X_SVG(15)}</button>
-            <button type="button" class="an-ic an-fold">${CHEVRON_SVG}</button>
-          </span>
-        </div>
-        <input type="text" class="an-name" spellcheck="false" aria-label="Analysis name" title="The analysis name: its charts and files are named after it. Left empty, it goes back to the automatic one.">
-        <div class="an-body">
-          <div class="instr-block an-instr" style="display:none">${{ tauc: TAUC_INFO, urbach: URBACH_INFO }[a.type]}</div>
-          ${{ tauc: taucBody, urbach: urbachBody }[a.type](p)}
-        </div>`;
-  }
+  const cardBody = a => ({ tauc: taucBody, urbach: urbachBody }[a.type])('an' + a.id);
+  const cardInfoOf = t => ({ tauc: TAUC_INFO, urbach: URBACH_INFO }[t]);
 
-  /* ---- Cards: build, place, fold, move ---- */
-  const cardList = document.getElementById('taucAnalyses');
-  const addBar = document.getElementById('taucAddBar');
-
-  // The card and the panel on it. `place` puts the card in the page first: the panel
-  // finds its elements there by id. Number fields are guarded before the panel
-  // listens to them, so an invalid entry never reaches it.
-  function buildCard(a, place){
-    const card = document.createElement('div');
-    card.className = 'card an-card' + (a.collapsed ? ' is-folded' : '');
-    card.dataset.an = a.id;
-    card.innerHTML = cardHtml(a);
-    place(card);
+  /* ---- Cards: the panel on each (the deck builds, folds and moves the cards) ---- */
+  // The card is in the page: the panel finds its elements there by id. Number fields are
+  // guarded before the panel listens to them, so an invalid entry never reaches it. On a
+  // kind switch (prev, the kind left) that kind's settings are kept for a switch back.
+  function buildPanel(a, card, prev){
+    const was = live.get(a.id);
+    if (prev && was) a.states[prev] = was.panel.snapshot();
     guardNumberInputs(card);
     const panel = makePanel(SPECS[a.type](a));
     if (a.states[a.type]) panel.restore(a.states[a.type]);
     else panel.fit();
-    const prev = live.get(a.id);
-    live.set(a.id, { card, panel, res: prev ? prev.res : null, resPlots: prev ? prev.resPlots : null });
-    wireCard(a, card);
-    syncFoldButton(a);
-  }
-  const mount = a => buildCard(a, card=> cardList.insertBefore(card, addBar));
-  function unmount(id){
-    const e = live.get(id);
-    if (!e) return;
-    e.card.remove();
-    if (e.res) e.res.remove();
-    live.delete(id);
-  }
-  const placeCards = ()=> analyses.forEach(a=> cardList.insertBefore(live.get(a.id).card, addBar));
-
-  function wireCard(a, card){
-    const q = s => card.querySelector(s);
-    const kind = q('.an-type');
-    kind.addEventListener('click', ()=> kindMenu.open(kind, t=> switchKind(a, t), { current: a.type }));
-    const name = q('.an-name');
-    name.addEventListener('change', ()=> rename(a, name.value));
-    ['input', 'focus', 'blur'].forEach(t=> name.addEventListener(t, ()=> fitName(a)));
-    name.addEventListener('keydown', e=>{
-      if (e.key === 'Enter') name.blur();
-      else if (e.key === 'Escape'){ name.value = a.name; name.blur(); }
-    });
-    q('.an-close').addEventListener('click', ()=> removeAnalysis(a));
-    q('.an-fold').addEventListener('click', ()=> setFold(a, !a.collapsed));
-    // Not initInstrCollapse's: that one wires the page's static blocks once, at load.
-    const info = q('.instr-info'), instr = q('.an-instr');
-    info.addEventListener('click', ()=>{
-      const open = instr.style.display === 'none';
-      instr.style.display = open ? '' : 'none';
-      info.classList.toggle('is-on', open);
-      info.setAttribute('aria-expanded', String(open));
-    });
-    q('.an-grip').addEventListener('pointerdown', e=> startMove(a, e));
-    const ref = q('.an-ref');
+    live.set(a.id, { panel, res: was ? was.res : null, resPlots: was ? was.resPlots : null });
+    const ref = card.querySelector('.an-ref');
     if (ref) ref.addEventListener('change', ()=> chooseRef(a, ref.value));
   }
-  function syncFoldButton(a){
-    const b = live.get(a.id).card.querySelector('.an-fold');
-    b.title = a.collapsed ? 'Unfold this analysis' : 'Fold this analysis';
-    b.setAttribute('aria-label', a.collapsed ? 'Unfold analysis' : 'Fold analysis');
-    b.setAttribute('aria-expanded', String(!a.collapsed));
-  }
-
-  /* Folding animates the body's height. The card is marked folded from the start, so
-     its panel stops drawing at once; .an-anim keeps the body laid out (and clipped)
-     until the animation ends. One taken over midway starts from where it got to. */
-  // Long enough, at ~600 px of body, to read as a slide rather than a jump; the curve
-  // starts briskly and settles gently, and the content fades as it goes.
-  const FOLD_MS = 320, FOLD_EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
-  function animateFold(card, fold){
-    const body = card.querySelector(':scope > .an-body');
-    if (!body._anim && card.classList.contains('is-folded') === fold) return;
-    const from = body.getBoundingClientRect().height, fromO = +getComputedStyle(body).opacity;
-    if (body._anim){ body._anim.cancel(); body._anim = null; }
-    card.classList.toggle('is-folded', fold);
-    card.classList.add('an-anim');
-    const to = fold ? 0 : body.getBoundingClientRect().height;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(to - from) < 1){ card.classList.remove('an-anim'); return; }
-    const an = body.animate([{ height: from + 'px', opacity: fold ? fromO : Math.min(fromO, 0.2) }, { height: to + 'px', opacity: fold ? 0 : 1 }],
-      { duration: FOLD_MS, easing: FOLD_EASE });
-    body._anim = an;
-    an.onfinish = ()=>{ if (body._anim === an){ body._anim = null; card.classList.remove('an-anim'); } };
-  }
-  // A restore puts the folds where they were, without the animation.
-  function applyFold(a){
-    const card = live.get(a.id).card, body = card.querySelector(':scope > .an-body');
-    if (body._anim){ body._anim.cancel(); body._anim = null; }
-    card.classList.remove('an-anim');
-    card.classList.toggle('is-folded', a.collapsed);
-    syncFoldButton(a);
+  function dropPanel(a){
+    const e = live.get(a.id);
+    if (!e) return;
+    if (e.res) e.res.remove();
+    live.delete(a.id);
   }
   // A card out of sight was not drawn: bring it up to date as it comes back, with
   // the zoom it had if it is still on the same sample.
@@ -906,80 +815,6 @@ import { Plot } from './plot.js';
     P.writeStoreToInputs();
     quietly(()=> P.hasPlot() ? P.update(P.shownIndex() === currIndex) : P.initPlot());
   }
-  function setFold(a, folded){
-    a.collapsed = folded;
-    syncFoldButton(a);
-    animateFold(live.get(a.id).card, folded);
-    if (!folded) wake(a);
-    hist.commit();
-  }
-
-  /* Moving: the grip picks the card up. Every card folds for the move, so the list is
-     short enough to see whole; the card held follows the pointer and the others make
-     way as it passes their middles. On release each card gets back the fold it had.
-     While the cards fold, and again while they unfold, the page scrolls to keep the
-     card held where it is on screen: the folds would otherwise pull the list out of
-     view, above it or below it. */
-  let moving = null;
-  const scrollNow = dy =>{ if (dy) window.scrollBy({ top: dy, behavior: 'instant' }); };
-  function holdInView(card, ms){
-    const y0 = card.getBoundingClientRect().top, end = performance.now() + ms;
-    const loop = ()=>{ scrollNow(card.getBoundingClientRect().top - y0); if (performance.now() < end) requestAnimationFrame(loop); };
-    requestAnimationFrame(loop);
-  }
-  function startMove(a, e){
-    if (moving || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    e.preventDefault();
-    const card = live.get(a.id).card, top = card.getBoundingClientRect().top;
-    moving = { card, y: e.clientY, dy: e.clientY - top, top, t: 0, raf: 0, folding: performance.now() + FOLD_MS + 40 };
-    card.classList.add('an-moving');
-    document.body.classList.add('an-dragging');
-    analyses.forEach(x=> animateFold(live.get(x.id).card, true));
-    const onMove = ev =>{ moving.y = ev.clientY; };
-    const onUp = ()=>{
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      endMove();
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-    const loop = ()=>{ if (!moving) return; followMove(); moving.raf = requestAnimationFrame(loop); };
-    loop();
-  }
-  function followMove(){
-    const m = moving, card = m.card;
-    if (performance.now() < m.folding) scrollNow(card.getBoundingClientRect().top - m.t - m.top);
-    else {
-      // Near the window's top or bottom the page scrolls, for a list taller than it.
-      const EDGE = 48;
-      if (m.y < EDGE) scrollNow(-10);
-      else if (m.y > window.innerHeight - EDGE) scrollNow(10);
-      const cards = [...cardList.querySelectorAll(':scope > .an-card')], i = cards.indexOf(card);
-      const mid = c =>{ const r = c.getBoundingClientRect(); return r.top + r.height/2; };
-      if (i > 0 && m.y < mid(cards[i-1])) cardList.insertBefore(card, cards[i-1]);
-      else if (i < cards.length-1 && m.y > mid(cards[i+1])) cardList.insertBefore(card, cards[i+1].nextSibling);
-    }
-    // Under the pointer, wherever the layout and the scroll have put it meanwhile.
-    const top = card.getBoundingClientRect().top - m.t;
-    m.t = m.y - m.dy - top;
-    card.style.transform = `translateY(${m.t}px)`;
-  }
-  function endMove(){
-    const m = moving;
-    moving = null;
-    cancelAnimationFrame(m.raf);
-    m.card.style.transform = '';
-    m.card.classList.remove('an-moving');
-    document.body.classList.remove('an-dragging');
-    const order = [...cardList.querySelectorAll(':scope > .an-card')].map(c=> +c.dataset.an);
-    const was = analyses.map(a=> a.id).join();
-    analyses.sort((x, y)=> order.indexOf(x.id) - order.indexOf(y.id));
-    holdInView(m.card, FOLD_MS + 40);
-    analyses.forEach(x=>{ if (!x.collapsed) animateFold(live.get(x.id).card, false); });
-    if (order.join() !== was){ afterCardsChange(); hist.commit(); }
-  }
 
   /* ---- References and names ---- */
   // Point every Urbach card at its reference: one chosen by hand while it is still a
@@ -988,7 +823,7 @@ import { Plot } from './plot.js';
   function fixRefs(){
     let above = null;
     const changed = [];
-    analyses.forEach(a=>{
+    cards().forEach(a=>{
       if (a.type === 'tauc'){ above = a; return; }
       if (!a.refAuto && a.ref != null && !(byId(a.ref) && byId(a.ref).type === 'tauc')) a.refAuto = true;
       const ref = a.refAuto ? (above ? above.id : null) : a.ref;
@@ -1001,7 +836,7 @@ import { Plot } from './plot.js';
      again, and a new reference re-centres them all. Lines moved by hand stay until
      then. What each Tauc card's regions were is kept by file name, and taken afresh
      (`see`) whenever a state is loaded rather than edited, so loading moves nothing. */
-  const followers = a => analyses.filter(u=> u.type === 'urbach' && u.ref === a.id && live.has(u.id));
+  const followers = a => cards().filter(u=> u.type === 'urbach' && u.ref === a.id && live.has(u.id));
   function regionsSeen(a){ const e = live.get(a.id); return e.seen || (e.seen = new Map()); }
   const regionKey = (a, i)=>{ const w = taucWindow(panelOf(a), i); return w ? w.join() : ''; };
   function see(a){
@@ -1034,7 +869,7 @@ import { Plot } from './plot.js';
   // What follows any change to the list of cards: references, names, Results order.
   function afterCardsChange(){
     const changed = fixRefs();
-    refreshNames();
+    deck.refreshNames();
     placeRes();
     changed.forEach(syncRefView);
   }
@@ -1051,56 +886,12 @@ import { Plot } from './plot.js';
     const r = byId(a.ref);
     return r ? `Urbach · ${r.name}` : 'Urbach';
   }
-  // Names are unique: a repeat gets " (2)", " (3)"... The Tauc ones are settled
-  // first, since an Urbach card's automatic name carries its reference's.
-  function refreshNames(){
-    const used = new Set();
-    const uniq = n =>{ let s = n, k = 2; while (used.has(s)) s = `${n} (${k++})`; used.add(s); return s; };
-    ['tauc', 'urbach'].forEach(t=> analyses.filter(a=> a.type === t).forEach(a=>{
-      a.name = uniq(a.nameAuto || !a.base ? autoName(a) : a.base);
-    }));
-    analyses.forEach(paintName);
-    syncRefSelects();
-  }
-  function rename(a, v){
-    v = v.trim();
-    if (!v || v === autoName(a)){ a.nameAuto = true; a.base = ''; }
-    else { a.nameAuto = false; a.base = v; }
-    refreshNames();
-    hist.commit();
-  }
-  // In file names: no path or reserved characters, and no comma (CSV names travel
-  // comma-separated on their buttons). A colon, as in "Tauc: allowed direct", is
-  // dropped rather than turned into "_", so the name still reads.
-  const fileSafe = n => n.replace(/:/g, '').replace(/[\\/*?"<>|,]/g, '_');
-  function nameDownloads(wrap, svgName, csvName){
-    if (!wrap) return;
-    wrap.querySelectorAll('.plot-dl-btn').forEach(b=>{ b.dataset.dlName = svgName; if (csvName) b.dataset.csvNames = csvName; });
-    if (csvName) wrap.querySelectorAll('.plot-csv-btn').forEach(b=>{ b.dataset.csvNames = csvName; });
-  }
-  // The name field is as wide as the name, as the project name's is: from room for the
-  // caret up to 3/4 of the card, past which the text scrolls (blurred, a "…").
-  const nameCtx = document.createElement('canvas').getContext('2d');
-  function fitName(a){
-    const e = live.get(a.id);
-    if (!e) return;
-    const field = e.card.querySelector('.an-name'), cc = getComputedStyle(e.card);
-    const room = e.card.clientWidth - parseFloat(cc.paddingLeft) - parseFloat(cc.paddingRight);
-    if (room <= 0) return;   // not laid out (a hidden tab, no files yet): sized when shown
-    const cs = getComputedStyle(field);
-    nameCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    const pad = 24;          // 2×9 padding + 2×1 border + a little caret slack
-    field.style.width = Math.min(nameCtx.measureText(field.value).width + pad, room * 0.75) + 'px';
-  }
-  function paintName(a){
-    const e = live.get(a.id);
-    if (!e) return;
-    const field = e.card.querySelector('.an-name');
-    if (document.activeElement !== field) field.value = a.name;
-    field.placeholder = autoName(a);
-    fitName(a);
+  // The downloads follow the card's name, and so does its section of the Results.
+  function named(a){
+    const card = deck.cardOf(a), e = live.get(a.id);
+    if (!card || !e) return;
     const n = fileSafe(a.name), t = a.type === 'tauc';
-    nameDownloads(e.card.querySelector('.plot-wrap'), `${n} - sample.svg`, t ? `${n} - analysis_info.csv` : '');
+    nameDownloads(card.querySelector('.plot-wrap'), `${n} - sample.svg`, t ? `${n} - analysis_info.csv` : '');
     if (e.res && e.res.dataset.kind === a.type){
       e.res.querySelector('.res-an-title').textContent = a.name;
       const w = e.res.querySelectorAll('.plot-wrap');
@@ -1110,8 +901,8 @@ import { Plot } from './plot.js';
     }
   }
   function syncRefSelects(){
-    const taucs = analyses.filter(a=> a.type === 'tauc');
-    analyses.forEach(u=>{
+    const taucs = cards().filter(a=> a.type === 'tauc');
+    cards().forEach(u=>{
       if (u.type !== 'urbach' || !live.has(u.id)) return;
       const p = 'an' + u.id, sel = document.getElementById(p + 'Ref');
       sel.replaceChildren(new Option('None', ''), ...taucs.map(t=> new Option(t.name, String(t.id))));
@@ -1129,37 +920,18 @@ import { Plot } from './plot.js';
     see(a);
     renderAnalysisRes(a);
   }
-  function addAnalysis(type){
-    const a = newAnalysis(type);
-    analyses.push(a);
-    mount(a);
-    afterCardsChange();
+  // A card just added: placed on the files there are.
+  function added(a){
     if (files.length){ panelOf(a).autoSuggestAll(); startPanel(a); }
-    hist.commit();
-    live.get(a.id).card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
-  // No confirmation: undo brings a closed card back.
-  function removeAnalysis(a){
-    unmount(a.id);
-    analyses = analyses.filter(x=> x !== a);
-    afterCardsChange();
-    hist.commit();
-  }
-  // The card is rebuilt for the other kind in place, with that kind's settings if it
-  // has had them; its first time as that kind, the lines are suggested.
-  function switchKind(a, type){
-    if (type === a.type || !KINDS[type]) return;
-    const e = live.get(a.id);
-    a.states[a.type] = e.panel.snapshot();
-    a.type = type;
-    buildCard(a, card=> e.card.replaceWith(card));
-    afterCardsChange();
+  // A card turned into the other kind, with that kind's settings if it has had them;
+  // its first time as that kind, the lines are suggested.
+  function switched(a){
     if (files.length){ const P = panelOf(a); P.fit(); if (!P.suggested) P.autoSuggestAll(); startPanel(a); }
     // A card that becomes a Tauc one may become the reference of Urbach cards below it
-    // (afterCardsChange): it had no lines yet when they were placed on it, so they are
+    // (fixRefs): it had no lines yet when they were placed on it, so they are
     // placed again now that it has (its region, its baseline to subtract).
-    if (files.length && type === 'tauc') followers(a).forEach(syncRefView);
-    hist.commit();
+    if (files.length && a.type === 'tauc') followers(a).forEach(syncRefView);
   }
   // A reference chosen by hand stays, wherever the cards are moved, while it is a Tauc card.
   function chooseRef(a, v){
@@ -1169,62 +941,6 @@ import { Plot } from './plot.js';
     syncRefView(a);
     hist.commit();
   }
-
-  /* The kinds' menu, anchored as the composer's pickers are: the "+" bar opens it to
-     add a card, a card's title to change its kind. The anchor again or a click
-     anywhere else closes it, so does Escape; the anchor stays lit while it is open.
-     A menu of our own rather than a <select>: the title's capitals would carry into
-     a native list, which some systems draw with the select's own styling. */
-  const kindMenu = (()=>{
-    const el = document.createElement('div');
-    el.className = 'an-menu';
-    el.setAttribute('role', 'menu');
-    el.hidden = true;
-    el.innerHTML = Object.entries(KINDS).map(([k, l])=> `<button type="button" role="menuitem" data-kind="${k}">${l}</button>`).join('');
-    document.body.appendChild(el);
-    let anchor = null, pick = null, centred = false;
-    const place = ()=>{
-      const r = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
-      let top = r.bottom + 6;
-      if (top + h > window.innerHeight - 8) top = r.top - h - 6;
-      const left = centred ? r.left + r.width/2 - w/2 : r.left;
-      el.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, left)) + 'px';
-      el.style.top = Math.max(8, top) + 'px';
-    };
-    const close = ()=>{
-      el.hidden = true;
-      if (anchor){ anchor.classList.remove('cp-anchored'); anchor.setAttribute('aria-expanded', 'false'); }
-      anchor = pick = null;
-    };
-    const open = (a, onPick, { current, centre } = {})=>{
-      if (anchor === a){ close(); return; }
-      close();
-      anchor = a; pick = onPick; centred = !!centre;
-      el.querySelectorAll('[data-kind]').forEach(b=> b.classList.toggle('is-current', b.dataset.kind === current));
-      el.hidden = false;
-      a.classList.add('cp-anchored');
-      a.setAttribute('aria-expanded', 'true');
-      place();
-    };
-    el.addEventListener('click', e=>{
-      const b = e.target.closest('[data-kind]');
-      if (!b) return;
-      const f = pick;
-      close();
-      f(b.dataset.kind);
-    });
-    document.addEventListener('pointerdown', e=>{
-      if (!el.hidden && !el.contains(e.target) && !anchor.contains(e.target)) close();
-    }, true);
-    document.addEventListener('keydown', e=>{
-      if (e.key === 'Escape' && !el.hidden){ e.stopPropagation(); close(); }
-    }, true);
-    window.addEventListener('scroll', ()=>{ if (!el.hidden) place(); }, true);
-    window.addEventListener('resize', ()=>{ if (!el.hidden) place(); });
-    return { open, close };
-  })();
-  const addBtn = document.getElementById('taucAddAn');
-  addBtn.addEventListener('click', ()=> kindMenu.open(addBtn, addAnalysis, { centre: true }));
 
   // per-upload invalid names (files that were skipped); persists until all files are removed
   let invalidUploadNames = [];
@@ -1251,7 +967,7 @@ import { Plot } from './plot.js';
   // Per-sample lists follow the file list: the panels', and the ones each card keeps
   // for the kind it is not showing.
   function eachKeptState(fn){
-    analyses.forEach(a=> Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) fn(s); }));
+    cards().forEach(a=> Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) fn(s); }));
   }
   // The same lists, each named by its card and kind, for the file list to keep
   // aligned with the included files. A file brought back in gets the parameters and
@@ -1260,7 +976,7 @@ import { Plot } from './plot.js';
   const copyPer = p => p ? {...p, vlines: p.vlines ? {...p.vlines} : undefined} : {};
   function slots(){
     const out = [];
-    analyses.forEach(a=>{
+    cards().forEach(a=>{
       Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s && s.per) out.push({ key: a.id + ':' + k, arr: s.per, make: copyPer }); });
       const P = panelOf(a);
       if (P) out.push({ key: a.id + ':' + a.type, arr: P.per, make: copyPer });
@@ -1303,12 +1019,11 @@ import { Plot } from './plot.js';
   function taucSnapshot(){
     return {
       files: allFiles.map(f=>({...f})),
-      analyses: analyses.map(a=>{
+      analyses: cards().map(a=>{
         const states = {};
         Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) states[k] = clone(s); });
         states[a.type] = panelOf(a).snapshot();
-        return { id: a.id, type: a.type, base: a.base, nameAuto: a.nameAuto, collapsed: a.collapsed,
-          ref: a.ref, refAuto: a.refAuto, egSel: a.egSel.slice(), urbSel: { b: a.urbSel.b.slice() }, states };
+        return { ...deck.saved(a), ref: a.ref, refAuto: a.refAuto, egSel: a.egSel.slice(), urbSel: { b: a.urbSel.b.slice() }, states };
       }),
     };
   }
@@ -1328,46 +1043,15 @@ import { Plot } from './plot.js';
     // Projects from before the subtraction show both, as a new card does.
     const us = sec =>{ const v = s.urbSel && Array.isArray(s.urbSel[sec]) ? s.urbSel[sec].filter(k=> URB_METHODS.some(m=> m.key === k)) : []; return v.length ? v : URB_METHODS.map(m=> m.key); };
     return {
-      id: s.id, type: KINDS[s.type] ? s.type : 'tauc',
-      base: typeof s.base === 'string' ? s.base : '', nameAuto: s.nameAuto !== false, name: '',
-      collapsed: s.collapsed === true, ref: Number.isInteger(s.ref) ? s.ref : null, refAuto: s.refAuto !== false,
+      ref: Number.isInteger(s.ref) ? s.ref : null, refAuto: s.refAuto !== false,
       egSel: eg.length ? eg : EG_METHODS.map(m=>m.key), urbSel: { b: us('b') },
       states: Object.fromEntries(Object.entries(clone(s.states || {})).filter(([k])=> KINDS[k])),
     };
   }
-  /* A card whose id and kind are both still there is kept, and its panel restored, so
-     an undo does not rebuild the whole list; any other is built afresh. A kept record
-     is updated in place: the card's handlers hold on to it. */
-  function loadAnalyses(list){
-    // A card of a kind there is no more (the debug defect band, taken out) is left
-    // out, as are the settings a card kept for one.
-    list = list.filter(s=> s && (s.type == null || KINDS[s.type]));
-    const old = new Map(analyses.map(a=> [a.id, a]));
-    const seen = new Set();
-    let free = list.reduce((m, s)=> Number.isInteger(s.id) ? Math.max(m, s.id) : m, 0) + 1;
-    const next = list.map(src=>{
-      const s = readAnalysis(src);
-      if (!Number.isInteger(s.id) || s.id < 1 || seen.has(s.id)) s.id = free++;
-      seen.add(s.id);
-      const a = old.get(s.id);
-      if (a && a.type === s.type && live.has(a.id)){
-        old.delete(a.id);
-        Object.assign(a, s);
-        live.get(a.id).panel.restore(a.states[a.type] || {});
-        applyFold(a);
-        return a;
-      }
-      return s;
-    });
-    // Left in `old`: gone, or back as the other kind.
-    old.forEach(a=> unmount(a.id));
-    analyses = next;
-    analyses.forEach(a=>{ if (!live.has(a.id)) mount(a); });
-    placeCards();
-    fixRefs();
-    refreshNames();
-    placeRes();
-  }
+  // A card of a kind there is no more (the debug defect band, taken out) is left out
+  // (deck.load), as are the settings a card kept for one (readAnalysis). A card kept
+  // has its panel restored in place.
+  const loadAnalyses = list => deck.load(list, readAnalysis, a=> panelOf(a).restore(a.states[a.type] || {}));
   function taucRestore(s){
     allFiles = s.files.map(f=>({...f}));
     files = includedOf(allFiles);
@@ -1386,7 +1070,7 @@ import { Plot } from './plot.js';
   // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.
   registerTabRedraw('tauc', ()=>{
     if (!files.length) return;
-    analyses.forEach(fitName);
+    deck.fitNames();
     quietly(()=> livePanels().forEach(p=>{ if (p.hasPlot()) p.update(true); }));
     renderResView();
   });
@@ -1452,11 +1136,11 @@ import { Plot } from './plot.js';
     // Once, when the first data lands: propose optimal interval-line positions. The
     // Tauc cards go first: the Urbach ones are placed on their regions.
     if (!hadFiles && files.length){
-      quietly(()=> ['tauc', 'urbach'].forEach(t=> analyses.filter(a=> a.type === t).forEach(a=>{
+      quietly(()=> ['tauc', 'urbach'].forEach(t=> cards().filter(a=> a.type === t).forEach(a=>{
         const P = panelOf(a); P.autoSuggestAll(); P.writeStoreToInputs(); P.update();
       })));
-      analyses.forEach(see);
-      refreshNames();
+      cards().forEach(see);
+      deck.refreshNames();
       renderResView();
       hist.commit();
     }
@@ -1468,7 +1152,7 @@ import { Plot } from './plot.js';
     setTabLoaded('tauc', allFiles.length);
     renderUnifiedFileList('taucFileTableWrap', allFiles, fileCallbacks());
     if (files.length) setupAnalysis();
-    else { SHOWN.forEach(id=> document.getElementById(id).style.display='none'); refreshNames(); }
+    else { SHOWN.forEach(id=> document.getElementById(id).style.display='none'); deck.refreshNames(); }
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
 
@@ -1488,8 +1172,8 @@ import { Plot } from './plot.js';
       p.syncModeButton();
       p.initPlot();
     }));
-    analyses.forEach(see);
-    refreshNames();
+    cards().forEach(see);
+    deck.refreshNames();
     renderResView();
   }
 
@@ -1538,10 +1222,10 @@ import { Plot } from './plot.js';
     e.res = sec;
     e.resPlots = null;
     placeRes();
-    paintName(a);
+    named(a);
     return sec;
   }
-  const placeRes = ()=> analyses.forEach(a=>{ const e = live.get(a.id); if (e && e.res) resList.appendChild(e.res); });
+  const placeRes = ()=> cards().forEach(a=>{ const e = live.get(a.id); if (e && e.res) resList.appendChild(e.res); });
 
   function renderResView(){
     if (!files.length) return;
@@ -1562,7 +1246,7 @@ import { Plot } from './plot.js';
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg0.appendChild(s);
     });
     renderLogView();
-    analyses.forEach(renderAnalysisRes);
+    cards().forEach(renderAnalysisRes);
   }
   // F(R) against hν on a log y-axis: the absorption edge and the tail below it, over
   // the decades they span, on the energy axis the analyses work on. The plot draws
@@ -1901,7 +1585,7 @@ import { Plot } from './plot.js';
       });
       entries.push({name:'FR_vs_energy.csv', text:wideCsv(cols)});
     }
-    analyses.forEach(a=>{
+    cards().forEach(a=>{
       const P = panelOf(a);
       if (!P) return;
       const n = fileSafe(a.name), fits = files.map((f,k)=> P.analyze(k));
@@ -1997,8 +1681,20 @@ import { Plot } from './plot.js';
   }
   registerCsvExport('tauc', exportTaucZip);
 
+  /* The cards (cards.js). What follows a change to their list: the references first
+     (an Urbach card's automatic name carries its reference's), then the names, then
+     the Results in card order and the Urbach cards given a new reference placed on it.
+     A state loaded keeps the references it has and moves no lines. */
+  let refsMoved = [];
+  deck = createDeck({
+    list: document.getElementById('taucAnalyses'), addBar: document.getElementById('taucAddBar'), addBtn: document.getElementById('taucAddAn'),
+    kinds: KINDS, info: cardInfoOf, body: cardBody, make: newFields,
+    build: buildPanel, drop: dropPanel, autoName, named, afterNames: syncRefSelects,
+    before: ()=>{ refsMoved = fixRefs(); },
+    changed: ()=>{ placeRes(); refsMoved.forEach(syncRefView); },
+    loaded: placeRes,
+    added, switched, wake, commit: ()=> hist.commit(),
+  });
   // A new project starts with one Tauc card.
-  analyses = [newAnalysis('tauc')];
-  analyses.forEach(a=> mount(a));
-  refreshNames();
+  deck.start(['tauc']);
 })();

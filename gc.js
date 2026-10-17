@@ -1,18 +1,15 @@
 import { settings, fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
 import { Plot, svgEl } from './plot.js';
+import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
 /* =========================================================
    GC MODULE
 ========================================================= */
 (function(){
   // Every file loaded, in list order; the analysis sees the included ones, `files`,
-  // and the per-sample arrays below are aligned with those.
+  // and the per-sample arrays each card keeps are aligned with those.
   let allFiles=[]; // {name, label, injDates:[Date], h2:[number]}
   let files=[];
-  let ms=[], Qs=[], startArr=[], endArr=[], lightOnDates=[];
-  let dataTables=[];
-  let plot1;
-  let plotResRate, plotResCum;
 
   // Axis titles. The SVG form carries the H₂ subscript and the g⁻¹/h⁻¹ superscripts;
   // the plain form is the matching CSV header.
@@ -35,42 +32,14 @@ import { Plot, svgEl } from './plot.js';
       col:/(^|[^a-z0-9])o2([^a-z0-9]|$)/ },
   ];
   // Plain-text form for series names, where markup would be drawn literally.
-  const gasTxt = g => g.csv.replace('2', '\u2082');
-  /* Analysis and Results choose their gases separately, but every plot inside a
-     section follows that section's choice — the chips on each plot are views of one
-     set, not five independent ones. Each section holds a SET of gas keys rather than
-     one mode, so any combination is reachable and a third gas would need no new
-     option; the only rule is that a section can never end up with none. */
-  let gasSel = { a: GASES.map(g=>g.key), r: GASES.map(g=>g.key) };
+  const gasTxt = g => g.csv.replace('2', '₂');
   const gasPresent = k => files.some(f=> f.gas[k]);
-  // What a section actually draws: chosen, and present in at least one sample.
-  const shownGases = sec => GASES.filter(g=> gasSel[sec].includes(g.key) && gasPresent(g.key));
-  // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
-  // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
-  let mMode='all', qMode='all', startMode='all', endMode='all';
-  let mShared=15, qShared=2, startShared=0, endShared=24;
   /* The injection date is stamped when the run starts, and the sample is injected a
      little later: every injection is moved on by this delay, in seconds, before it is
      set against light-on. "Auto" is the method's own figure, shown in the field. */
   const INJ_DELAY_AUTO = 60.6;
-  let delayAuto = true, delayMan = INJ_DELAY_AUTO;
-  const injDelay = ()=> delayAuto ? INJ_DELAY_AUTO : delayMan;
-  const injectedAt = d => new Date(+d + injDelay()*1000);
-  let costResults=[];
-  let gcSel=null, gcHov=null;   // selected / hovered sample index (interval interaction)
   let loadAlerts='';
   let gcUploadAlerts='';
-  // Outgoing plot view captured before a resize/tab-switch redraw recreates the plots,
-  // so drawGcData can restore the current zoom instead of snapping to the full range.
-  let _gcPrev1=null;
-
-  // Effective per-sample values (respect each parameter's all/one mode).
-  const mOf     = k => mMode==='all'     ? mShared     : ms[k];
-  const qOf     = k => qMode==='all'     ? qShared     : Qs[k];
-  const startOf = k => startMode==='all' ? startShared : startArr[k];
-  const endOf   = k => endMode==='all'   ? endShared   : endArr[k];
-  // The plot shows per-sample interval lines (interactive) whenever either bound is per-sample.
-  const intPerSample = () => startMode==='one' || endMode==='one';
 
   function rebuildGcAlerts(){ document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts; }
 
@@ -92,31 +61,26 @@ import { Plot, svgEl } from './plot.js';
     return new Date(+yr, +mo-1, +da, hh, +mi, +se);
   }
 
-  // The per-sample arrays, for the file list to keep aligned with the included files.
-  // An excluded file holds its own values; one with none (never so far) gets the
-  // upload defaults.
-  const slots = ()=> [
-    { key:'m', arr:ms, make: v=> v ?? 15 },
-    { key:'Q', arr:Qs, make: v=> v ?? 2 },
-    { key:'start', arr:startArr, make: v=> v ?? 0 },
-    { key:'end', arr:endArr, make: v=> v ?? 24 },
-    { key:'lightOn', arr:lightOnDates, make: (v, f)=> v !== undefined ? v : f ? firstInjection(f) : null },
-  ];
+  // Every card's per-sample arrays, for the file list to keep aligned with the included
+  // files. An excluded file holds its own values; one with none (never so far, or in a
+  // card added since) gets the upload defaults.
+  const slots = ()=> cards().flatMap(a=> live.get(a.id).slots());
+  const each = fn => cards().forEach(a=> fn(live.get(a.id), a));
   function fileCallbacks(){
     return {
       onRemove(i){
         removeFileAt(allFiles, i, slots());
         if (!allFiles.length) loadAlerts = '';
-        gcSel=gcHov=null;
+        each(c=> c.unselect());
         afterFilesChange();
       },
-      onReorder(from, to){ moveFileTo(allFiles, from, to, slots()); gcSel=gcHov=null; afterFilesChange(); },
-      onInclude(i, on){ setIncluded(allFiles, i, on, slots()); gcSel=gcHov=null; afterFilesChange(); },
-      onIncludeAll(on){ allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); gcSel=gcHov=null; afterFilesChange(); },
-      onLabelChange(i, v){ allFiles[i].label=v; renderGcParamTable(); computeAndRenderGc(); hist.commit(); },
-      onColorChange(i, v){ allFiles[i].color=v; computeAndRenderGc(); hist.commit(); },
+      onReorder(from, to){ moveFileTo(allFiles, from, to, slots()); each(c=> c.unselect()); afterFilesChange(); },
+      onInclude(i, on){ setIncluded(allFiles, i, on, slots()); each(c=> c.unselect()); afterFilesChange(); },
+      onIncludeAll(on){ allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); each(c=> c.unselect()); afterFilesChange(); },
+      onLabelChange(i, v){ allFiles[i].label=v; each(c=>{ c.renderTable(); c.compute(); }); hist.commit(); },
+      onColorChange(i, v){ allFiles[i].color=v; each(c=> c.compute()); hist.commit(); },
       onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ [allFiles,ms,Qs,startArr,endArr,lightOnDates].forEach(a=>a.length=0); gcSel=gcHov=null; loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); afterFilesChange(); },
+      onRemoveAll(){ allFiles.length=0; each(c=>{ c.clear(); c.unselect(); }); loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); afterFilesChange(); },
     };
   }
 
@@ -165,8 +129,7 @@ import { Plot, svgEl } from './plot.js';
       const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, gas, color:nextColor(allFiles), rawBytes};
       // A new file comes in included, so it goes last among the included as well.
       allFiles.push(file); files.push(file);
-      ms.push(15); Qs.push(2); startArr.push(0); endArr.push(24);
-      lightOnDates.push(firstInjection(file));
+      each(c=> c.addFile(file));
     }
     loadAlerts = buildAlertsHtml(invalidFiles, [], undefined, 'gc-dismiss-invalid');
     gcUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'gc-dismiss-upload') : '';
@@ -186,86 +149,12 @@ import { Plot, svgEl } from './plot.js';
     files = includedOf(allFiles);
     setTabLoaded('gc', allFiles.length);
     renderUnifiedFileList('gcFileTableWrap', allFiles, fileCallbacks());
-    renderGcParamTable();
-    if (files.length){
-      document.getElementById('gcResults').style.display='block';
-      computeAndRenderGc();
-    } else {
-      document.getElementById('gcResults').style.display='none';
-      document.getElementById('gcResultsBar').style.display='none';
-      rebuildGcAlerts();
-    }
+    document.getElementById('gcAnalyses').style.display = files.length ? 'block' : 'none';
+    each(c=> c.renderTable());
+    if (files.length) each((c, a)=>{ if (!deck.isFolded(a)) c.compute(); else c.computeQuiet(); });
+    else rebuildGcAlerts();
+    syncResults();
     hist.commit();
-  }
-
-  /* ---- Undo/redo: file order/labels/colours, per-sample m/Q/light-on and the
-     integration interval. Injection data arrays are shared by reference. ---- */
-  function gcSnapshot(){
-    return {
-      files: allFiles.map(f=>({...f})),
-      ms: ms.slice(), Qs: Qs.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
-      lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
-      mMode, qMode, startMode, endMode, mShared, qShared, startShared, endShared,
-      gasSel: { a:gasSel.a.slice(), r:gasSel.r.slice() },
-      delayAuto, delayMan,
-    };
-  }
-  function gcRestore(s){
-    allFiles = s.files.map(f=>({...f}));
-    files = includedOf(allFiles);
-    // Projects saved before O2 existed, or under the older single-mode selector.
-    const fromMode = m => (!m || m === 'both') ? GASES.map(g=>g.key) : [m];
-    gasSel = s.gasSel ? { a:s.gasSel.a.slice(), r:s.gasSel.r.slice() }
-           : { a: fromMode(s.gasMode && s.gasMode.a), r: fromMode(s.gasMode && s.gasMode.r) };
-    ms = s.ms.slice(); Qs = s.Qs.slice();
-    lightOnDates = s.lightOnDates.map(t=> t!=null ? new Date(t) : null);
-    // Projects from before the delay existed take it too, on Auto: the timestamps they
-    // were computed from are just as late.
-    delayAuto = s.delayAuto !== false;
-    delayMan = isFinite(s.delayMan) ? s.delayMan : INJ_DELAY_AUTO;
-    if (s.mMode !== undefined){
-      // Current format: four independent per-parameter modes.
-      mMode = s.mMode; qMode = s.qMode; startMode = s.startMode; endMode = s.endMode;
-      mShared = s.mShared; qShared = s.qShared; startShared = s.startShared; endShared = s.endShared;
-      startArr = (s.startArr||files.map(()=>startShared)).slice();
-      endArr   = (s.endArr  ||files.map(()=>endShared)).slice();
-    } else if (s.intMode !== undefined){
-      // Migrate paired-mode projects (mqMode / intMode) to independent modes.
-      mMode = qMode = s.mqMode; startMode = endMode = s.intMode;
-      mShared = s.mShared; qShared = s.qShared; startShared = s.startShared; endShared = s.endShared;
-      startArr = (s.startArr||files.map(()=>startShared)).slice();
-      endArr   = (s.endArr  ||files.map(()=>endShared)).slice();
-    } else {
-      // Migrate the oldest projects: a single global interval → interval 'all' mode.
-      mMode='one'; qMode='one'; startMode='all'; endMode='all';
-      mShared=15; qShared=2;
-      startShared = s.plateauStart ?? 0; endShared = s.plateauEnd ?? 24;
-      startArr = files.map(()=>startShared); endArr = files.map(()=>endShared);
-    }
-    gcSel=gcHov=null;
-    afterFilesChange();
-    // Clear the previous tab's transient upload alerts and rebuild for this tab.
-    loadAlerts = ''; gcUploadAlerts = ''; rebuildGcAlerts();
-  }
-  const hist = registerHistory('gc', gcSnapshot, gcRestore);
-  registerTabRedraw('gc', ()=>{ if (files.length) computeAndRenderGc(true); });
-
-  // Warning when a sample's light-on time is before (or at) its first injection
-  function lightOnWarn(i){
-    const f = files[i], lo = lightOnDates[i];
-    if (!f || !lo || isNaN(+lo)) return false;
-    return !f.injDates.some(d => injectedAt(d) < lo);
-  }
-  function refreshLightOnWarnings(){
-    document.querySelectorAll('#gcParamTableWrap .gc-row').forEach(r=>{
-      const wc = r.querySelector('.gc-warn-cell');
-      if (wc) wc.innerHTML = lightOnWarnHtml(+r.dataset.i);
-    });
-  }
-  function lightOnWarnHtml(i){
-    return lightOnWarn(i)
-      ? '<div class="alert warn" style="margin:0;padding:6px 8px;font-size:11px">⚠ Light-on time is before first injection</div>'
-      : '';
   }
 
   // A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled).
@@ -277,168 +166,6 @@ import { Plot, svgEl } from './plot.js';
   // A header over a field: its name on the field's left edge, its all/one pill on the
   // field's right edge.
   const thHead = (label, chip)=> `<div class="gc-th"><span>${label}</span>${chip}</div>`;
-
-  function renderGcParamTable(){
-    const wrap = document.getElementById('gcParamTableWrap');
-    if (!files.length){ wrap.innerHTML=''; return; }
-    // Sample x | m 1/9 | Q 1/9 | Light-on 2/9 | start 1/9 | end 1/9 | warnings x, x=(1-6/9)/2=1/6
-    const cg = `<colgroup><col style="width:16.667%"><col style="width:11.111%"><col style="width:11.111%"><col style="width:22.222%"><col style="width:11.111%"><col style="width:11.111%"><col style="width:16.667%"></colgroup>`;
-    const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
-    const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
-    // Column order: Sample | m | Q | Light-on | [Interval: start end] | warnings.
-    // The delay, one for every sample, on a row of its own above the table and on its
-    // columns: its name under Sample, its value under m, the Auto switch under Q.
-    let html = `<div style="overflow-x:auto"><table class="gc-param-table gc-delay" style="width:100%;table-layout:fixed">${cg}<tbody>
-      <tr><td class="fname">Injection delay (s)</td>
-        <td>${numCell('gcDelay', 'title="From the logged injection date to the actual injection, in seconds"', injDelay(), delayAuto ? 'off' : 'on')}</td>
-        <td><label class="pp-check" title="Use the method's delay, ${INJ_DELAY_AUTO} s"><input type="checkbox" class="gcDelayAuto"${delayAuto ? ' checked' : ''}> Auto</label></td>
-        <td colspan="4"></td></tr></tbody></table>
-      <table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
-      <tr><th rowspan="2">${thHead('Sample', '')}</th>
-        <th rowspan="2">${thHead('m (mg)', modeChip('m',mMode))}</th>
-        <th rowspan="2">${thHead('Q (mL/min)', modeChip('q',qMode))}</th>
-        <th rowspan="2">${thHead('Light-on date/time', '')}</th>
-        <th colspan="2" class="gc-grp"><div class="gc-grp-in">Interval (h)</div></th>
-        <th rowspan="2"></th></tr>
-      <tr><th>${thHead('start', modeChip('start',startMode))}</th><th>${thHead('end', modeChip('end',endMode))}</th></tr></thead><tbody>`;
-    // Shared "all" row
-    html += `<tr class="gc-all-row"><td class="fname">All</td>
-      <td>${numCell('gcShared','data-f="m"',mShared,shareState(mMode))}</td>
-      <td>${numCell('gcShared','data-f="q"',qShared,shareState(qMode))}</td>
-      <td></td>
-      <td>${numCell('gcShared','data-f="start"',startShared,shareState(startMode))}</td>
-      <td>${numCell('gcShared','data-f="end"',endShared,shareState(endMode))}</td>
-      <td></td></tr>`;
-    // Per-sample rows
-    files.forEach((f,i)=>{
-      html += `<tr class="gc-row" data-i="${i}">
-        <td class="fname" title="${f.label}">${f.label}</td>
-        <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),cellState(mMode))}</td>
-        <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),cellState(qMode))}</td>
-        <td class="gc-date-cell" data-i="${i}"></td>
-        <td>${numCell('gcCell','data-i="'+i+'" data-f="start"',startOf(i),cellState(startMode))}</td>
-        <td>${numCell('gcCell','data-i="'+i+'" data-f="end"',endOf(i),cellState(endMode))}</td>
-        <td class="gc-warn-cell">${lightOnWarnHtml(i)}</td>
-      </tr>`;
-    });
-    html += `</tbody></table></div>`;
-    wrap.innerHTML = html;
-    fitCsvIcons();
-
-    const delayIn = wrap.querySelector('.gcDelay'), delayBox = wrap.querySelector('.gcDelayAuto');
-    guardNumericInput(delayIn, { min:0 });
-    delayIn.addEventListener('change', ()=>{
-      delayMan = +delayIn.value;
-      refreshLightOnWarnings(); computeAndRenderGc(); hist.commit();
-    });
-    // Off, the field opens on the value that was in force, ready to be changed.
-    delayBox.addEventListener('change', ()=>{
-      if (!delayBox.checked && delayAuto) delayMan = INJ_DELAY_AUTO;
-      delayAuto = delayBox.checked;
-      renderGcParamTable(); computeAndRenderGc(); hist.commit();
-    });
-
-    // all/one toggles: flip a parameter, seeding across the boundary (one→all from
-    // sample 0, all→one from the shared value), then re-render + recompute.
-    wrap.querySelectorAll('.gc-toggle').forEach(btn=> btn.addEventListener('click', ()=>{
-      const flip = (mode, shared, arr, setShared)=>{
-        if (mode==='one'){ setShared(arr[0]); return 'all'; }
-        files.forEach((f,i)=>{ arr[i]=shared; }); return 'one';
-      };
-      switch (btn.dataset.pair){
-        case 'm':     mMode     = flip(mMode,     mShared,     ms,       v=>mShared=v);     break;
-        case 'q':     qMode     = flip(qMode,     qShared,     Qs,       v=>qShared=v);     break;
-        case 'start': startMode = flip(startMode, startShared, startArr, v=>startShared=v); gcSel=gcHov=null; break;
-        case 'end':   endMode   = flip(endMode,   endShared,   endArr,   v=>endShared=v);   gcSel=gcHov=null; break;
-      }
-      renderGcParamTable(); computeAndRenderGc(); hist.commit();
-    }));
-
-    // m/Q inputs (shared + per-sample) — recompute the whole series on a valid change.
-    const wireNum = (inp, apply)=>{
-      guardNumericInput(inp, { min:0.001 });
-      const shared = inp.classList.contains('gcShared');
-      inp.addEventListener('change', ()=>{
-        apply(+inp.value);
-        if (shared) mirrorShared(inp.dataset.f, inp.value);
-        computeAndRenderGc(); hist.commit();
-      });
-    };
-    wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mMode==='all' && wireNum(inp, v=>mShared=v));
-    wrap.querySelectorAll('.gcShared[data-f="q"]').forEach(inp=> qMode==='all' && wireNum(inp, v=>qShared=v));
-    wrap.querySelectorAll('.gcCell[data-f="m"]').forEach(inp=>{ if(mMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>ms[i]=v); }});
-    wrap.querySelectorAll('.gcCell[data-f="q"]').forEach(inp=>{ if(qMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Qs[i]=v); }});
-
-    // start/end inputs — start and end can be in different modes, so each input is wired
-    // independently and validated against the effective counterpart (end>start per sample).
-    if (startMode==='all') wireBoundInput(wrap.querySelector('.gcShared[data-f="start"]'), 'start', true, 0);
-    if (endMode==='all')   wireBoundInput(wrap.querySelector('.gcShared[data-f="end"]'),   'end',   true, 0);
-    files.forEach((f,i)=>{
-      if (startMode==='one') wireBoundInput(wrap.querySelector(`.gcCell[data-i="${i}"][data-f="start"]`), 'start', false, i);
-      if (endMode==='one')   wireBoundInput(wrap.querySelector(`.gcCell[data-i="${i}"][data-f="end"]`),   'end',   false, i);
-    });
-
-    wrap.querySelectorAll('.gc-date-cell').forEach(cell=>{
-      const i = +cell.dataset.i;
-      const field = createDateTimeField(lightOnDates[i], d=>{
-        lightOnDates[i] = d;
-        const wc = cell.closest('tr').querySelector('.gc-warn-cell');
-        if (wc) wc.innerHTML = lightOnWarnHtml(i);
-        computeAndRenderGc(); hist.commit();
-      });
-      cell.appendChild(field.el);
-    });
-
-    // Row ↔ plot interaction (interval mode 'one'): hover highlights the sample's lines
-    // on both plots; clicking (off the inputs) toggles the selection.
-    wrap.querySelectorAll('.gc-row').forEach(row=>{
-      const i = +row.dataset.i;
-      row.addEventListener('mouseenter', ()=> setGcHover(i));
-      row.addEventListener('mouseleave', ()=> setGcHover(null));
-      row.addEventListener('click', e=>{ if (e.target.closest('input, button, .gc-date-cell')) return; selectGc(i); });
-    });
-    refreshGcRows();
-  }
-
-  // Wire a single interval-bound input (start or end; shared or per-sample i). Since the
-  // two bounds can be in different all/one modes, each input validates against the
-  // effective counterpart so that end>start holds for every affected sample. Invalid
-  // input shakes the field and reverts.
-  /* With a parameter set to "all", the per-sample cells are read-only echoes of the
-     shared value and nothing redraws them on their own, so they are brought into step
-     when the shared field is confirmed — otherwise the rows go on showing the old
-     number until the next full render. Not while it is typed: a half-written number
-     is not a value the samples have. */
-  function mirrorShared(field, value){
-    document.querySelectorAll(`#gcParamTableWrap .gcCell[data-f="${field}"]`)
-      .forEach(inp=>{ inp.value = value; });
-  }
-
-  function wireBoundInput(inp, which, isShared, i){
-    if (!inp) return;
-    guardNumericInput(inp, {});
-    const echo = ()=>{ if (isShared) mirrorShared(which, inp.value); };
-    inp.addEventListener('change', ()=>{
-      const cur = isShared ? (which==='start'?startShared:endShared) : (which==='start'?startArr[i]:endArr[i]);
-      const v = parseIntervalField(inp.value);
-      if (v===null){ inp.value = cur; echo(); return; }
-      let ok;
-      if (which==='start'){
-        // A shared start must stay below every sample's end; a per-sample start below its own end.
-        const endBound = isShared ? (endMode==='all' ? endShared : Math.min(...endArr)) : endOf(i);
-        ok = v < endBound;
-      } else {
-        const startBound = isShared ? (startMode==='all' ? startShared : Math.max(...startArr)) : startOf(i);
-        ok = v > startBound;
-      }
-      if (!ok){ flashFieldInvalid(inp); inp.value = cur; echo(); return; }
-      if (isShared){ if (which==='start') startShared=v; else endShared=v; }
-      else { if (which==='start') startArr[i]=v; else endArr[i]=v; }
-      echo();
-      updateRegression(); hist.commit();
-    });
-    inp.addEventListener('keydown', e=>{ if (e.key==='Enter') inp.blur(); });
-  }
 
   // Parse a raw field string into a finite number, or null if incomplete/invalid.
   function parseIntervalField(v){
@@ -457,45 +184,6 @@ import { Plot, svgEl } from './plot.js';
     let a = 0; while (a + 1 < n && t[a+1] <= at) a++;
     const fa = f[a], fat = fa + (f[a+1] - fa)*(at - t[a])/((t[a+1] - t[a]) || 1);
     return cum[a] + (at - t[a])*(fa + fat)/2;
-  }
-
-  function computeAndRenderGc(preserveView){
-    if (!files.length) return;
-    // Snapshot the current zoom before renderGcPlots() builds fresh Plot instances.
-    const o1 = document.getElementById('gcSvg1')._plot;
-    _gcPrev1 = (preserveView && o1 && isFinite(o1.xmin)) ? {xmin:o1.xmin,xmax:o1.xmax,ymin:o1.ymin,ymax:o1.ymax} : null;
-    dataTables = files.map((f,h)=>{
-      const lightOn = lightOnDates[h];
-      // Rows on one shared time axis, with the light-on instant inserted as an extra
-      // point carrying the last reading before it (zero if the run starts after it).
-      const rows = f.injDates.map((d,i)=>{
-        const v = {}; for (const k in f.gas) v[k] = f.gas[k][i];
-        return { d: injectedAt(d), v };
-      }).sort((a,b)=>a.d-b.d);
-      let idxBefore = -1;
-      for (let i=0;i<rows.length;i++) if (rows[i].d < lightOn) idxBefore = i;
-      const atLight = {};
-      for (const k in f.gas) atLight[k] = idxBefore<0 ? 0 : rows[idxBefore].v[k];
-      rows.push({ d: lightOn, v: atLight });
-      rows.sort((a,b)=>a.d-b.d);
-
-      const tHours = rows.map(r=>(r.d - lightOn)/3600000);
-      // Total molar flow: mL/min -> L/h -> mol/h at standard molar volume.
-      const F = qOf(h)/1000*60/22.41396954;
-      const gas = {};
-      for (const k in f.gas){
-        const pct = rows.map(r=> isFinite(r.v[k]) ? r.v[k] : 0);
-        const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
-        const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
-        // From the first injection on; FmInt, from the interval's start (updateRegression).
-        const cum = cumtrapz(tHours, flowM);
-        gas[k] = { pct, flow, Fm: flowM, cum, FmInt: cum };
-      }
-      return {t:tHours, gas, name:f.name, label:f.label, color:f.color};
-    });
-    document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts;
-    renderGasSel();
-    renderGcPlots();
   }
 
   /* One line per sample per gas, the sample's colour throughout and the gas told by
@@ -522,68 +210,6 @@ import { Plot, svgEl } from './plot.js';
     }).join('');
   }
 
-  /* The gas selector, rendered into both cards and driving one shared state. Options
-     the loaded files cannot supply are disabled rather than hidden, so the control
-     does not change shape from one data set to the next. */
-  function renderGasSel(){
-    // A gas no sample carries cannot be chosen; if the files leave a section empty,
-    // it falls back to every gas that is there.
-    for (const sec of ['a','r']){
-      gasSel[sec] = gasSel[sec].filter(gasPresent);
-      if (files.length && !gasSel[sec].length) gasSel[sec] = GASES.filter(g=>gasPresent(g.key)).map(g=>g.key);
-    }
-    document.querySelectorAll('.gc-gas-sel').forEach(el=>{
-      const sec = el.dataset.gasSec;
-      el.innerHTML = GASES.map(g=>{
-        const on = gasSel[sec].includes(g.key);
-        // The last one standing cannot be switched off — the plot would be empty.
-        const only = on && gasSel[sec].length === 1;
-        const title = !gasPresent(g.key) ? `No ${g.csv} in the loaded files`
-                    : only ? `${g.csv} — the only one shown` : `Show / hide ${g.csv}`;
-        return `<button type="button" class="mode-chip gc-gas-chip${on?' is-on':''}"`
-             + ` data-gas="${g.key}" data-sec="${sec}" title="${title}"`
-             + `${gasPresent(g.key) ? '' : ' disabled'}>${g.label}</button>`;
-      }).join('');
-    });
-  }
-
-  document.getElementById('tab-gc').addEventListener('click', e=>{
-    const b = e.target.closest('.gc-gas-chip');
-    if (!b || b.disabled) return;
-    const sec = b.dataset.sec, key = b.dataset.gas;
-    const on = gasSel[sec].includes(key);
-    if (on && gasSel[sec].length === 1) return;    // never leave a section with none
-    // Switching changes how tall the legend is, which would shift everything below it
-    // under the pointer. Hold the clicked chip still and let the page move around it.
-    // The chips are rebuilt, so the one to measure afterwards is found by which group
-    // it belongs to, not by its selector — every plot in the section has a matching
-    // chip and the first one is metres away from the one under the pointer.
-    const groups = [...document.querySelectorAll('.gc-gas-sel')];
-    const gi = groups.indexOf(b.parentElement);
-    const before = b.getBoundingClientRect().top;
-    gasSel[sec] = on ? gasSel[sec].filter(k=>k!==key)
-                     : GASES.map(g=>g.key).filter(k=> k===key || gasSel[sec].includes(k));
-    renderGasSel();
-    computeAndRenderGc(false);     // ranges are rescaled to the gases now on show
-    // Corrected in the same task, not on a later frame: reading the chip's box forces
-    // the layout, so the final position is known before anything is painted and the
-    // page never shows the shifted state on its way back.
-    const grp = document.querySelectorAll('.gc-gas-sel')[gi];
-    const after = grp && grp.querySelector('.gc-gas-chip');
-    if (after) window.scrollBy({ top: after.getBoundingClientRect().top - before, behavior: 'instant' });
-    hist.commit();
-  });
-
-  function renderGcPlots(){
-    const legend = document.getElementById('gcLegend'); legend.innerHTML='';
-    plot1 = new Plot(document.getElementById('gcSvg1'), {xlabel:'Time (h)', ylabelSvg:LBL_RATE_SVG});
-    const resLegend = document.getElementById('gcResLegend'); resLegend.innerHTML='';
-    legend.innerHTML   = dataTables.map(d=> gasLegendHtml(d, shownGases('a'))).join('');
-    resLegend.innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
-    plot1.attachTools(plot1.svg.closest('.plot-wrap'));
-    updateRegression();
-  }
-
   /* The top of a time plot's y-range: the highest value of `key` from light-on on
      (t ≥ 0), so what comes before it (a spike, a purge) does not flatten the run; of
      all the points when none is that late. The bottom is always 0. */
@@ -602,300 +228,836 @@ import { Plot, svgEl } from './plot.js';
     return hi;
   }
 
-  // Draw the data lines with an x-range spanning both the data and every interval line
-  // (so bars are never clipped), y from 0 to the data from light-on on (yTop). Interval lines
-  // are drawn as an overlay, redrawn on pan/zoom via _onView.
-  function drawGcData(){
-    if (!plot1 || !dataTables.length) return;
-    // Restore the pre-redraw zoom captured in computeAndRenderGc (resize/tab-switch),
-    // then clear it so a subsequent data-driven redraw snaps back to the full range.
-    const prev1 = _gcPrev1; _gcPrev1 = null;
-    const allT = dataTables.flatMap(d=>d.t);
-    const intPts = dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
-    const tmin = Math.min(0, minArr(allT), ...intPts);
-    const tmax = Math.max(maxArr(allT), ...intPts);
-    // Every shown gas shares the axis: they are the same quantity in the same units.
-    const shown = shownGases('a');
-    const span = key => dataTables.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
-    if (!span('Fm').length) return;
-    plot1.setRange(tmin, tmax, 0, yTop(dataTables, shown, 'Fm')*1.05);
-    if (prev1){ plot1.xmin=prev1.xmin; plot1.xmax=prev1.xmax; plot1.ymin=prev1.ymin; plot1.ymax=prev1.ymax; }
-    plot1.drawAxes(); plot1.clearData();
-    drawGasLines(plot1, dataTables, shown, 'Fm');
-    plot1._onView = ()=> drawGcIntervals(plot1);
-    drawGcIntervals(plot1);
-  }
-
-  // Integration-interval vertical lines. 'all': one shared pair in the theme-aware
-  // grey (--plot-errbar). 'one': a pair per sample in the sample's colour (1px), with
-  // an invisible fat hit line for hover/select; hovered/selected lines thicken, the
-  // selected pair turns the highlight grey.
-  function drawGcIntervals(plot){
-    if (!plot) return;
-    const g = plot.gOverlay;
-    g.querySelectorAll('.gc-int').forEach(e=>e.remove());
-    const { h } = plot.size(), m = plot.margin;
-    const vline = (xv, o)=>{
-      const px = plot.px(xv);
-      const ln = svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,'stroke-width':o.width,'pointer-events':'none','class':'gc-int'+(o.cls?' '+o.cls:'')});
-      if (o.color) ln.setAttribute('stroke', o.color);
-      g.appendChild(ln);
-      if (o.hit){
-        const ht = svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'pointer','class':'gc-int'});
-        ht.addEventListener('pointerenter', ()=> setGcHover(o.k));
-        ht.addEventListener('pointerleave', scheduleClearGcHover);
-        ht.addEventListener('click', ()=> selectGc(o.k));
-        g.appendChild(ht);
-      }
-    };
-    if (!intPerSample()){
-      vline(startShared, {width:1.5, cls:'gc-int-hl'});
-      vline(endShared,   {width:1.5, cls:'gc-int-hl'});
-    } else {
-      dataTables.forEach((d,k)=>{
-        const sel = gcSel===k, on = sel || gcHov===k;
-        const o = { k, hit:true, width: on?2.6:1, cls: sel?'gc-int-hl':'', color: sel?null:d.color };
-        vline(startOf(k), o); vline(endOf(k), o);
-      });
-    }
-  }
-
-  // ---- Row ↔ plot interaction (both respond in unison) ----
-  let gcHoverRAF = null;
-  function scheduleClearGcHover(){
-    if (gcHoverRAF) cancelAnimationFrame(gcHoverRAF);
-    gcHoverRAF = requestAnimationFrame(()=>{ gcHoverRAF=null; setGcHover(null); });
-  }
-  function setGcHover(k){
-    if (!intPerSample()) k = null;
-    if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
-    if (gcHov === k) return;
-    gcHov = k;
-    drawGcIntervals(plot1); refreshGcRows();
-  }
-  function selectGc(k){
-    if (!intPerSample()) return;
-    // Clear any transient hover so the green .hovering tint doesn't linger after a
-    // click (mirrors the XRD peak table, whose full re-render drops it).
-    if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
-    gcHov = null;
-    gcSel = (gcSel===k) ? null : k;
-    drawGcIntervals(plot1); refreshGcRows();
-  }
-  function refreshGcRows(){
-    document.querySelectorAll('#gcParamTableWrap .gc-row').forEach(r=>{
-      const k = +r.dataset.i;
-      r.classList.toggle('hovering', k===gcHov);
-      r.classList.toggle('selected', k===gcSel);
-    });
-  }
-
-  function updateRegression(){
-    /* The production is what was made between the interval's lines: none yet at its
-       start, wherever that is moved to. Integrated from the first injection it carried
-       everything that flowed out before (the dark readings, a purge) into every later
-       point. The mean rate below, a difference, is the same either way. */
-    dataTables.forEach((d,k)=>{
-      const t0 = Math.min(startOf(k), endOf(k));
-      for (const key in d.gas){ const q = d.gas[key], c0 = cumAt(d.t, q.Fm, q.cum, t0); q.FmInt = q.cum.map(v=> v - c0); }
-    });
-    /* Mean rate over the interval: the rate taken as the straight line between each
-       pair of injections, integrated exactly from the interval's start to its end — an
-       end between two injections integrates the line up to it — and divided by the
-       duration. Read only off injections inside the interval, the mean lost the stretch
-       between the last of them and the line. The interval is what the data cover of it. */
-    costResults = dataTables.map((d,k)=>{
-      const [a, b] = spanOf(d, k);
-      if (!(b > a)) return {name:d.name, label:d.label, rate:{}, dt:NaN};
-      const rate = {};
-      for (const key in d.gas){ const q = d.gas[key]; rate[key] = (cumAt(d.t, q.Fm, q.cum, b) - cumAt(d.t, q.Fm, q.cum, a)) / (b - a); }
-      return {name:d.name, label:d.label, rate, dt: b - a};
-    });
-    drawGcData();
-    // Show the Results card before drawing into it: plots sized from a hidden element
-    // would measure 0. It stays hidden while no sample has a valid integration interval.
-    const barCard = document.getElementById('gcResultsBar');
-    barCard.style.display = costResults.some(c=> GASES.some(g=>isFinite(c.rate[g.key]))) ? 'block' : 'none';
-    drawResultPlots();
-    drawBarChart();
-  }
-
-  // The interval of sample k as far as its data reach: [start, end] within the first and
-  // last time it has.
-  function spanOf(d, k){
-    const n = d.t.length;
-    if (n < 2) return [NaN, NaN];
-    return [Math.max(Math.min(startOf(k), endOf(k)), d.t[0]), Math.min(Math.max(startOf(k), endOf(k)), d.t[n-1])];
-  }
   // The straight line between the injections either side of `at`, read there.
   function lineAt(t, v, at){
     let a = 0; while (a + 2 < t.length && t[a+1] <= at) a++;
     const w = t[a+1] - t[a];
     return w ? v[a] + (v[a+1] - v[a])*(at - t[a])/w : v[a];
   }
-  /* Results series: the Analysis curves between the interval's lines — the injections
-     inside it, and at each line the straight line between the injections around it,
-     read there — which is what the mean rate integrates. */
-  function cutTables(){
-    return dataTables.map((d,k)=>{
-      const [a, b] = spanOf(d, k);
-      if (!(b > a)) return {...d, t:[], gas: Object.fromEntries(Object.keys(d.gas).map(key=> [key, { ...d.gas[key], Fm:[], FmInt:[], pct:[], flow:[] }]))};
-      const inner = d.t.map((_, i)=> i).filter(i=> d.t[i] > a && d.t[i] < b);
-      const take = arr => [lineAt(d.t, arr, a), ...inner.map(i=> arr[i]), lineAt(d.t, arr, b)];
-      const gas = {};
-      for (const key in d.gas){
-        const q = d.gas[key], c0 = q.cum[0] - q.FmInt[0];   // FmInt = cum − c0
-        gas[key] = { ...q, Fm: take(q.Fm), pct: take(q.pct), flow: take(q.flow),
-                     FmInt: [a, ...inner.map(i=> d.t[i]), b].map(x=> cumAt(d.t, q.Fm, q.cum, x) - c0) };
-      }
-      return {...d, t:[a, ...inner.map(i=> d.t[i]), b], gas};
-    });
-  }
 
-  // The two Results plots: same quantities as Analysis, between the interval's lines and
-  // without the interval overlay (Results shows the retained data only), y from 0 to
-  // the data from light-on on, as there.
-  function drawResultPlots(){
-    const cut = cutTables();
-    if (!cut.length || !cut.some(d=>d.t.length)) return;
-    const allT = cut.flatMap(d=>d.t);
-    const tmin = Math.min(0, minArr(allT)), tmax = maxArr(allT);
-    const shown = shownGases('r');
-    const mk = (id, ylabelSvg, key)=>{
-      const svg = document.getElementById(id);
-      const p = new Plot(svg, {xlabel:'Time (h)', ylabelSvg});
-      const arrs = cut.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
-      if (!arrs.length) return p;
-      p.setRange(tmin, tmax, 0, yTop(cut, shown, key)*1.05);
-      p.drawAxes(); p.clearData();
-      drawGasLines(p, cut, shown, key);
-      p.attachTools(svg.closest('.plot-wrap'));
-      return p;
-    };
-    plotResRate = mk('gcSvgRate', LBL_RATE_SVG, 'Fm');
-    plotResCum  = mk('gcSvgCum',  LBL_CUM_SVG,  'FmInt');
-  }
+  /* =========================================================
+     A CARD: one analysis of the samples — its masses, flows, light-on times,
+     integration intervals and injection delay, its plot, and its section of the
+     Results. `a` is its record (cards.js), `card` its element; the state lives here,
+     and goes to the history through snapshot / restore.
+  ========================================================= */
+  const CSV_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
+  const DL_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
+  const P = a => 'gc' + a.id;
+  const cardBody = a => `
+        <div class="peak-box" style="margin-top:0;margin-bottom:14px">
+          <div class="peak-box-head">
+            <span class="txt-mini">Parameters</span>
+            <button class="btn table-csv-btn" data-csv-mod="gc" data-csv-names="gc_info.csv" title="Download CSV">${CSV_ICON}</button>
+          </div>
+          <div class="gc-param-wrap" id="${P(a)}ParamTableWrap"></div>
+        </div>
+        <div class="row" style="align-items:flex-start">
+          <div class="col">
+            <p class="txt-caption">Production Rate</p>
+            <div class="plot-wrap">
+              <svg class="plot plot-strip" id="${P(a)}Svg1"></svg>
+              <span class="gc-gas-sel" data-gas-sec="a"></span>
+              <button class="btn plot-dl-btn" data-dl-svg="${P(a)}Svg1" data-csv-mod="gc" data-csv-names="gc_raw.csv" data-dl-name="GC_rate.svg" data-dl-legend="${P(a)}Legend">${DL_ICON}</button>
+            </div>
+          </div>
+        </div>
+        <div id="${P(a)}Legend" class="legend" style="margin-top:8px"></div>`;
+  const resHtml = a => `
+        <h4 class="res-an-title"></h4>
+        <div class="row res-row">
+          <div class="col">
+            <p class="txt-caption">Production Rate</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="${P(a)}SvgRate"></svg>
+              <span class="gc-gas-sel" data-gas-sec="r"></span>
+              <button class="btn plot-dl-btn" data-dl-svg="${P(a)}SvgRate" data-csv-mod="gc" data-csv-names="gc_results.csv" data-dl-name="GC_results_rate.svg" data-dl-legend="${P(a)}ResLegend">${DL_ICON}</button>
+            </div>
+          </div>
+          <div class="col">
+            <p class="txt-caption">Production</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="${P(a)}SvgCum"></svg>
+              <span class="gc-gas-sel" data-gas-sec="r"></span>
+              <button class="btn plot-dl-btn" data-dl-svg="${P(a)}SvgCum" data-csv-mod="gc" data-csv-names="gc_results.csv" data-dl-name="GC_results_cumulative.svg" data-dl-legend="${P(a)}ResLegend">${DL_ICON}</button>
+            </div>
+          </div>
+        </div>
+        <div id="${P(a)}ResLegend" class="legend" style="margin-top:8px"></div>
+        <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>
+        <div class="plot-wrap">
+          <svg class="plot plot-wide" id="${P(a)}SvgBar"></svg>
+          <span class="gc-gas-sel" data-gas-sec="r"></span>
+          <button class="btn plot-dl-btn" data-dl-svg="${P(a)}SvgBar" data-csv-mod="gc" data-csv-names="mean_rates.csv" data-dl-name="GC_results.svg" data-dl-legend="${P(a)}BarLegend">${DL_ICON}</button>
+        </div>
+        <div id="${P(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
 
-  function drawBarChart(){
-    const shown = shownGases('r');
-    const has = c => shown.some(g=>isFinite(c.rate[g.key]));
-    const finite = costResults.filter(has);
-    if (!finite.length || !shown.length) return;   // card visibility handled by updateRegression
-    const svg = document.getElementById('gcSvgBar');
-    // Bottom margin adapts to the longest tilted name so names fit without changing
-    // the chart's footprint — the data area shrinks instead.
-    const mctx = document.createElement('canvas').getContext('2d');
-    mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-    const rect = svg.getBoundingClientRect();
-    const svgW = rect.width || 640, svgH = rect.height || 640;
-    // How the names are cut and tilted — see barNames.
-    const fit = barNames(mctx, costResults.map(c=> c.label), Math.max(60, svgW - 75), 55, costResults.map(has));
-    const labels = fit.labels;
-    const labelWs = labels.map((lbl,k)=> has(costResults[k]) ? mctx.measureText(lbl).width : 0);
-    let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
-    const bottom = Math.round(26 + maxLbl*fit.sin);
-    // Value label (vertical) above each bar, with reserved top headroom so it never clips.
-    const fmtVal = v => v.toFixed(4);
-    let maxValW = 0, maxTop = 0;
-    costResults.forEach(c=> shown.forEach(g=>{
-      const v = c.rate[g.key];
-      if (isFinite(v)){ maxValW = Math.max(maxValW, mctx.measureText(fmtVal(v)).width); maxTop = Math.max(maxTop, v); }
-    }));
-    const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
-    const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
-    const allVals = finite.flatMap(c=> shown.map(g=>c.rate[g.key]).filter(isFinite));
-    // Fixed at [0, n+1]: the names are made to fit it, not the other way round.
-    const x0 = 0, x1 = costResults.length+1;
-    // With both gases the pair sits side by side in the sample's slot, the way the
-    // XRPD size chart pairs raw and corrected. Widths shrink so the pair still fits.
-    const n = shown.length;
-    const pxSlot = (svgW - 75) / (x1 - x0);
-    const hw = n > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);
-    const dx = n > 1 ? Math.min(12, pxSlot*0.24) : 0;
-    const offOf = gi => (gi - (n-1)/2) * dx * 2;
-    const underChips = [];
-    costResults.forEach((c,k)=>{ if (has(c)) shown.forEach((g,gi)=>{ const v = c.rate[g.key];
-      if (isFinite(v)) underChips.push({ x:k+1, dx:offOf(gi), top:v, w:mctx.measureText(fmtVal(v)).width }); }); });
-    const ymax = Math.max(Math.max(...allVals)*1.2, maxTop/frac,
-      barChipYmax(svg.closest('.plot-wrap').querySelector('.gc-gas-sel'), svg, underChips,
-                  { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0, x1 }));
-    const barPlot = new Plot(svg, {xlabel:'', ylabelSvg:LBL_RATE_SVG, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    barPlot.setRange(x0, x1, 0, ymax||1);
-    barPlot.drawAxes();
-    costResults.forEach((c,k)=>{
-      if (!has(c)) return;
-      shown.forEach((g,gi)=>{
-        const v = c.rate[g.key];
-        if (!isFinite(v)) return;
-        const off = offOf(gi);
-        // Same hue as the sample, but the dashed gas is drawn lighter so the pair is
-        // told apart the way the curves are.
-        // Gas-coloured here rather than sample-coloured: the samples are already told
-        // apart by their position on the axis, the gases were not told apart at all.
-        // Named by gas alone, like the legend under the chart: the samples are told
-        // apart by their category on the axis, so one series per gas spans them all —
-        // the shape every other bar chart here has, and the one a split works on.
-        barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: gasTxt(g) });
-        barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
+  function gcCard(a, card){
+    const px = P(a), $ = id => document.getElementById(px + id);
+    // The card's section of the Results, kept in card order under the Results' list.
+    const res = document.createElement('div');
+    res.className = 'res-an';
+    res.dataset.an = a.id;
+    res.innerHTML = resHtml(a);
+    res.style.display = 'none';
+    resList.appendChild(res);
+    // The plots' gas chips, the card's and its section's.
+    const gasEls = ()=> [...card.querySelectorAll('.gc-gas-sel'), ...res.querySelectorAll('.gc-gas-sel')];
+
+    let ms=[], Qs=[], startArr=[], endArr=[], lightOnDates=[];
+    let dataTables=[];
+    let plot1;
+    let plotResRate, plotResCum;
+    /* Analysis and Results choose their gases separately, but every plot inside a
+       section follows that section's choice — the chips on each plot are views of one
+       set, not five independent ones. Each section holds a SET of gas keys rather than
+       one mode, so any combination is reachable and a third gas would need no new
+       option; the only rule is that a section can never end up with none. */
+    let gasSel = { a: GASES.map(g=>g.key), r: GASES.map(g=>g.key) };
+    // What a section actually draws: chosen, and present in at least one sample.
+    const shownGases = sec => GASES.filter(g=> gasSel[sec].includes(g.key) && gasPresent(g.key));
+    // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
+    // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
+    let mMode='all', qMode='all', startMode='all', endMode='all';
+    let mShared=15, qShared=2, startShared=0, endShared=24;
+    let delayAuto = true, delayMan = INJ_DELAY_AUTO;
+    const injDelay = ()=> delayAuto ? INJ_DELAY_AUTO : delayMan;
+    const injectedAt = d => new Date(+d + injDelay()*1000);
+    let costResults=[];
+    let gcSel=null, gcHov=null;   // selected / hovered sample index (interval interaction)
+    // Outgoing plot view captured before a resize/tab-switch redraw recreates the plots,
+    // so drawGcData can restore the current zoom instead of snapping to the full range.
+    let _gcPrev1=null;
+
+    // Effective per-sample values (respect each parameter's all/one mode).
+    const mOf     = k => mMode==='all'     ? mShared     : ms[k];
+    const qOf     = k => qMode==='all'     ? qShared     : Qs[k];
+    const startOf = k => startMode==='all' ? startShared : startArr[k];
+    const endOf   = k => endMode==='all'   ? endShared   : endArr[k];
+    // The plot shows per-sample interval lines (interactive) whenever either bound is per-sample.
+    const intPerSample = () => startMode==='one' || endMode==='one';
+
+    // A card added with samples loaded starts from the upload defaults for each.
+    files.forEach(f=>{ ms.push(15); Qs.push(2); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); });
+
+    // Warning when a sample's light-on time is before (or at) its first injection
+    function lightOnWarn(i){
+      const f = files[i], lo = lightOnDates[i];
+      if (!f || !lo || isNaN(+lo)) return false;
+      return !f.injDates.some(d => injectedAt(d) < lo);
+    }
+    function refreshLightOnWarnings(){
+      $('ParamTableWrap').querySelectorAll('.gc-row').forEach(r=>{
+        const wc = r.querySelector('.gc-warn-cell');
+        if (wc) wc.innerHTML = lightOnWarnHtml(+r.dataset.i);
       });
-      barPlot.tickLabel(k+1, labels[k], fit.rot, c.label, c.name);
-    });
-    barPlot.attachTools(svg.closest('.plot-wrap'));
-    document.getElementById('gcBarLegend').innerHTML =
-      shown.map(g=>`<span><i class="mk-box" style="background:${g.bar}"></i>${gasTxt(g)}</span>`).join('');
+    }
+    function lightOnWarnHtml(i){
+      return lightOnWarn(i)
+        ? '<div class="alert warn" style="margin:0;padding:6px 8px;font-size:11px">⚠ Light-on time is before first injection</div>'
+        : '';
+    }
+
+    function renderGcParamTable(){
+      const wrap = $('ParamTableWrap');
+      if (!files.length){ wrap.innerHTML=''; return; }
+      // Sample x | m 1/9 | Q 1/9 | Light-on 2/9 | start 1/9 | end 1/9 | warnings x, x=(1-6/9)/2=1/6
+      const cg = `<colgroup><col style="width:16.667%"><col style="width:11.111%"><col style="width:11.111%"><col style="width:22.222%"><col style="width:11.111%"><col style="width:11.111%"><col style="width:16.667%"></colgroup>`;
+      const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
+      const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
+      // Column order: Sample | m | Q | Light-on | [Interval: start end] | warnings.
+      // The delay, one for every sample, on a row of its own above the table and on its
+      // columns: its name under Sample, its value under m, the Auto switch under Q.
+      let html = `<div style="overflow-x:auto"><table class="gc-param-table gc-delay" style="width:100%;table-layout:fixed">${cg}<tbody>
+        <tr><td class="fname">Injection delay (s)</td>
+          <td>${numCell('gcDelay', 'title="From the logged injection date to the actual injection, in seconds"', injDelay(), delayAuto ? 'off' : 'on')}</td>
+          <td><label class="pp-check" title="Use the method's delay, ${INJ_DELAY_AUTO} s"><input type="checkbox" class="gcDelayAuto"${delayAuto ? ' checked' : ''}> Auto</label></td>
+          <td colspan="4"></td></tr></tbody></table>
+        <table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
+        <tr><th rowspan="2">${thHead('Sample', '')}</th>
+          <th rowspan="2">${thHead('m (mg)', modeChip('m',mMode))}</th>
+          <th rowspan="2">${thHead('Q (mL/min)', modeChip('q',qMode))}</th>
+          <th rowspan="2">${thHead('Light-on date/time', '')}</th>
+          <th colspan="2" class="gc-grp"><div class="gc-grp-in">Interval (h)</div></th>
+          <th rowspan="2"></th></tr>
+        <tr><th>${thHead('start', modeChip('start',startMode))}</th><th>${thHead('end', modeChip('end',endMode))}</th></tr></thead><tbody>`;
+      // Shared "all" row
+      html += `<tr class="gc-all-row"><td class="fname">All</td>
+        <td>${numCell('gcShared','data-f="m"',mShared,shareState(mMode))}</td>
+        <td>${numCell('gcShared','data-f="q"',qShared,shareState(qMode))}</td>
+        <td></td>
+        <td>${numCell('gcShared','data-f="start"',startShared,shareState(startMode))}</td>
+        <td>${numCell('gcShared','data-f="end"',endShared,shareState(endMode))}</td>
+        <td></td></tr>`;
+      // Per-sample rows
+      files.forEach((f,i)=>{
+        html += `<tr class="gc-row" data-i="${i}">
+          <td class="fname" title="${f.label}">${f.label}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),cellState(mMode))}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),cellState(qMode))}</td>
+          <td class="gc-date-cell" data-i="${i}"></td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="start"',startOf(i),cellState(startMode))}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="end"',endOf(i),cellState(endMode))}</td>
+          <td class="gc-warn-cell">${lightOnWarnHtml(i)}</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div>`;
+      wrap.innerHTML = html;
+      fitCsvIcons();
+
+      const delayIn = wrap.querySelector('.gcDelay'), delayBox = wrap.querySelector('.gcDelayAuto');
+      guardNumericInput(delayIn, { min:0 });
+      delayIn.addEventListener('change', ()=>{
+        delayMan = +delayIn.value;
+        refreshLightOnWarnings(); computeAndRenderGc(); hist.commit();
+      });
+      // Off, the field opens on the value that was in force, ready to be changed.
+      delayBox.addEventListener('change', ()=>{
+        if (!delayBox.checked && delayAuto) delayMan = INJ_DELAY_AUTO;
+        delayAuto = delayBox.checked;
+        renderGcParamTable(); computeAndRenderGc(); hist.commit();
+      });
+
+      // all/one toggles: flip a parameter, seeding across the boundary (one→all from
+      // sample 0, all→one from the shared value), then re-render + recompute.
+      wrap.querySelectorAll('.gc-toggle').forEach(btn=> btn.addEventListener('click', ()=>{
+        const flip = (mode, shared, arr, setShared)=>{
+          if (mode==='one'){ setShared(arr[0]); return 'all'; }
+          files.forEach((f,i)=>{ arr[i]=shared; }); return 'one';
+        };
+        switch (btn.dataset.pair){
+          case 'm':     mMode     = flip(mMode,     mShared,     ms,       v=>mShared=v);     break;
+          case 'q':     qMode     = flip(qMode,     qShared,     Qs,       v=>qShared=v);     break;
+          case 'start': startMode = flip(startMode, startShared, startArr, v=>startShared=v); gcSel=gcHov=null; break;
+          case 'end':   endMode   = flip(endMode,   endShared,   endArr,   v=>endShared=v);   gcSel=gcHov=null; break;
+        }
+        renderGcParamTable(); computeAndRenderGc(); hist.commit();
+      }));
+
+      // m/Q inputs (shared + per-sample) — recompute the whole series on a valid change.
+      const wireNum = (inp, apply)=>{
+        guardNumericInput(inp, { min:0.001 });
+        const shared = inp.classList.contains('gcShared');
+        inp.addEventListener('change', ()=>{
+          apply(+inp.value);
+          if (shared) mirrorShared(inp.dataset.f, inp.value);
+          computeAndRenderGc(); hist.commit();
+        });
+      };
+      wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mMode==='all' && wireNum(inp, v=>mShared=v));
+      wrap.querySelectorAll('.gcShared[data-f="q"]').forEach(inp=> qMode==='all' && wireNum(inp, v=>qShared=v));
+      wrap.querySelectorAll('.gcCell[data-f="m"]').forEach(inp=>{ if(mMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>ms[i]=v); }});
+      wrap.querySelectorAll('.gcCell[data-f="q"]').forEach(inp=>{ if(qMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Qs[i]=v); }});
+
+      // start/end inputs — start and end can be in different modes, so each input is wired
+      // independently and validated against the effective counterpart (end>start per sample).
+      if (startMode==='all') wireBoundInput(wrap.querySelector('.gcShared[data-f="start"]'), 'start', true, 0);
+      if (endMode==='all')   wireBoundInput(wrap.querySelector('.gcShared[data-f="end"]'),   'end',   true, 0);
+      files.forEach((f,i)=>{
+        if (startMode==='one') wireBoundInput(wrap.querySelector(`.gcCell[data-i="${i}"][data-f="start"]`), 'start', false, i);
+        if (endMode==='one')   wireBoundInput(wrap.querySelector(`.gcCell[data-i="${i}"][data-f="end"]`),   'end',   false, i);
+      });
+
+      wrap.querySelectorAll('.gc-date-cell').forEach(cell=>{
+        const i = +cell.dataset.i;
+        const field = createDateTimeField(lightOnDates[i], d=>{
+          lightOnDates[i] = d;
+          const wc = cell.closest('tr').querySelector('.gc-warn-cell');
+          if (wc) wc.innerHTML = lightOnWarnHtml(i);
+          computeAndRenderGc(); hist.commit();
+        });
+        cell.appendChild(field.el);
+      });
+
+      // Row ↔ plot interaction (interval mode 'one'): hover highlights the sample's lines
+      // on both plots; clicking (off the inputs) toggles the selection.
+      wrap.querySelectorAll('.gc-row').forEach(row=>{
+        const i = +row.dataset.i;
+        row.addEventListener('mouseenter', ()=> setGcHover(i));
+        row.addEventListener('mouseleave', ()=> setGcHover(null));
+        row.addEventListener('click', e=>{ if (e.target.closest('input, button, .gc-date-cell')) return; selectGc(i); });
+      });
+      refreshGcRows();
+    }
+
+    // Wire a single interval-bound input (start or end; shared or per-sample i). Since the
+    // two bounds can be in different all/one modes, each input validates against the
+    // effective counterpart so that end>start holds for every affected sample. Invalid
+    // input shakes the field and reverts.
+    /* With a parameter set to "all", the per-sample cells are read-only echoes of the
+       shared value and nothing redraws them on their own, so they are brought into step
+       when the shared field is confirmed — otherwise the rows go on showing the old
+       number until the next full render. Not while it is typed: a half-written number
+       is not a value the samples have. */
+    function mirrorShared(field, value){
+      $('ParamTableWrap').querySelectorAll(`.gcCell[data-f="${field}"]`)
+        .forEach(inp=>{ inp.value = value; });
+    }
+
+    function wireBoundInput(inp, which, isShared, i){
+      if (!inp) return;
+      guardNumericInput(inp, {});
+      const echo = ()=>{ if (isShared) mirrorShared(which, inp.value); };
+      inp.addEventListener('change', ()=>{
+        const cur = isShared ? (which==='start'?startShared:endShared) : (which==='start'?startArr[i]:endArr[i]);
+        const v = parseIntervalField(inp.value);
+        if (v===null){ inp.value = cur; echo(); return; }
+        let ok;
+        if (which==='start'){
+          // A shared start must stay below every sample's end; a per-sample start below its own end.
+          const endBound = isShared ? (endMode==='all' ? endShared : Math.min(...endArr)) : endOf(i);
+          ok = v < endBound;
+        } else {
+          const startBound = isShared ? (startMode==='all' ? startShared : Math.max(...startArr)) : startOf(i);
+          ok = v > startBound;
+        }
+        if (!ok){ flashFieldInvalid(inp); inp.value = cur; echo(); return; }
+        if (isShared){ if (which==='start') startShared=v; else endShared=v; }
+        else { if (which==='start') startArr[i]=v; else endArr[i]=v; }
+        echo();
+        updateRegression(); hist.commit();
+      });
+      inp.addEventListener('keydown', e=>{ if (e.key==='Enter') inp.blur(); });
+    }
+
+    // The data and the mean rates, from the card's parameters; `draw` false for a card
+    // folded (nothing in it is drawn), whose Results section is still kept up to date.
+    function computeTables(){
+      dataTables = files.map((f,h)=>{
+        const lightOn = lightOnDates[h];
+        // Rows on one shared time axis, with the light-on instant inserted as an extra
+        // point carrying the last reading before it (zero if the run starts after it).
+        const rows = f.injDates.map((d,i)=>{
+          const v = {}; for (const k in f.gas) v[k] = f.gas[k][i];
+          return { d: injectedAt(d), v };
+        }).sort((a,b)=>a.d-b.d);
+        let idxBefore = -1;
+        for (let i=0;i<rows.length;i++) if (rows[i].d < lightOn) idxBefore = i;
+        const atLight = {};
+        for (const k in f.gas) atLight[k] = idxBefore<0 ? 0 : rows[idxBefore].v[k];
+        rows.push({ d: lightOn, v: atLight });
+        rows.sort((a,b)=>a.d-b.d);
+
+        const tHours = rows.map(r=>(r.d - lightOn)/3600000);
+        // Total molar flow: mL/min -> L/h -> mol/h at standard molar volume.
+        const F = qOf(h)/1000*60/22.41396954;
+        const gas = {};
+        for (const k in f.gas){
+          const pct = rows.map(r=> isFinite(r.v[k]) ? r.v[k] : 0);
+          const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
+          const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
+          // From the first injection on; FmInt, from the interval's start (updateRegression).
+          const cum = cumtrapz(tHours, flowM);
+          gas[k] = { pct, flow, Fm: flowM, cum, FmInt: cum };
+        }
+        return {t:tHours, gas, name:f.name, label:f.label, color:f.color};
+      });
+    }
+    function computeAndRenderGc(preserveView){
+      if (!files.length) return;
+      // Snapshot the current zoom before renderGcPlots() builds fresh Plot instances.
+      const o1 = $('Svg1')._plot;
+      _gcPrev1 = (preserveView && o1 && isFinite(o1.xmin)) ? {xmin:o1.xmin,xmax:o1.xmax,ymin:o1.ymin,ymax:o1.ymax} : null;
+      computeTables();
+      rebuildGcAlerts();
+      renderGasSel();
+      renderGcPlots();
+    }
+
+    /* The gas selector, rendered into the card and its Results section and driving one
+       state each. Options the loaded files cannot supply are disabled rather than hidden,
+       so the control does not change shape from one data set to the next. */
+    function renderGasSel(){
+      // A gas no sample carries cannot be chosen; if the files leave a section empty,
+      // it falls back to every gas that is there.
+      for (const sec of ['a','r']){
+        gasSel[sec] = gasSel[sec].filter(gasPresent);
+        if (files.length && !gasSel[sec].length) gasSel[sec] = GASES.filter(g=>gasPresent(g.key)).map(g=>g.key);
+      }
+      gasEls().forEach(el=>{
+        const sec = el.dataset.gasSec;
+        el.innerHTML = GASES.map(g=>{
+          const on = gasSel[sec].includes(g.key);
+          // The last one standing cannot be switched off — the plot would be empty.
+          const only = on && gasSel[sec].length === 1;
+          const title = !gasPresent(g.key) ? `No ${g.csv} in the loaded files`
+                      : only ? `${g.csv} — the only one shown` : `Show / hide ${g.csv}`;
+          return `<button type="button" class="mode-chip gc-gas-chip${on?' is-on':''}"`
+               + ` data-gas="${g.key}" data-sec="${sec}" title="${title}"`
+               + `${gasPresent(g.key) ? '' : ' disabled'}>${g.label}</button>`;
+        }).join('');
+      });
+    }
+
+    function onGasChip(e){
+      const b = e.target.closest('.gc-gas-chip');
+      if (!b || b.disabled) return;
+      const sec = b.dataset.sec, key = b.dataset.gas;
+      const on = gasSel[sec].includes(key);
+      if (on && gasSel[sec].length === 1) return;    // never leave a section with none
+      // Switching changes how tall the legend is, which would shift everything below it
+      // under the pointer. Hold the clicked chip still and let the page move around it.
+      // The chips are rebuilt, so the one to measure afterwards is found by which group
+      // it belongs to, not by its selector — every plot in the section has a matching
+      // chip and the first one is metres away from the one under the pointer.
+      const groups = gasEls();
+      const gi = groups.indexOf(b.parentElement);
+      const before = b.getBoundingClientRect().top;
+      gasSel[sec] = on ? gasSel[sec].filter(k=>k!==key)
+                       : GASES.map(g=>g.key).filter(k=> k===key || gasSel[sec].includes(k));
+      renderGasSel();
+      computeAndRenderGc(false);     // ranges are rescaled to the gases now on show
+      // Corrected in the same task, not on a later frame: reading the chip's box forces
+      // the layout, so the final position is known before anything is painted and the
+      // page never shows the shifted state on its way back.
+      const grp = gasEls()[gi];
+      const after = grp && grp.querySelector('.gc-gas-chip');
+      if (after) window.scrollBy({ top: after.getBoundingClientRect().top - before, behavior: 'instant' });
+      hist.commit();
+    }
+    card.addEventListener('click', onGasChip);
+    res.addEventListener('click', onGasChip);
+
+    function renderGcPlots(){
+      const legend = $('Legend'); legend.innerHTML='';
+      plot1 = new Plot($('Svg1'), {xlabel:'Time (h)', ylabelSvg:LBL_RATE_SVG});
+      const resLegend = $('ResLegend'); resLegend.innerHTML='';
+      legend.innerHTML   = dataTables.map(d=> gasLegendHtml(d, shownGases('a'))).join('');
+      resLegend.innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
+      plot1.attachTools(plot1.svg.closest('.plot-wrap'));
+      updateRegression();
+    }
+
+    // Draw the data lines with an x-range spanning both the data and every interval line
+    // (so bars are never clipped), y from 0 to the data from light-on on (yTop). Interval lines
+    // are drawn as an overlay, redrawn on pan/zoom via _onView.
+    function drawGcData(){
+      if (!plot1 || !dataTables.length) return;
+      // Restore the pre-redraw zoom captured in computeAndRenderGc (resize/tab-switch),
+      // then clear it so a subsequent data-driven redraw snaps back to the full range.
+      const prev1 = _gcPrev1; _gcPrev1 = null;
+      const allT = dataTables.flatMap(d=>d.t);
+      const intPts = dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
+      const tmin = Math.min(0, minArr(allT), ...intPts);
+      const tmax = Math.max(maxArr(allT), ...intPts);
+      // Every shown gas shares the axis: they are the same quantity in the same units.
+      const shown = shownGases('a');
+      const span = key => dataTables.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
+      if (!span('Fm').length) return;
+      plot1.setRange(tmin, tmax, 0, yTop(dataTables, shown, 'Fm')*1.05);
+      if (prev1){ plot1.xmin=prev1.xmin; plot1.xmax=prev1.xmax; plot1.ymin=prev1.ymin; plot1.ymax=prev1.ymax; }
+      plot1.drawAxes(); plot1.clearData();
+      drawGasLines(plot1, dataTables, shown, 'Fm');
+      plot1._onView = ()=> drawGcIntervals(plot1);
+      drawGcIntervals(plot1);
+    }
+
+    // Integration-interval vertical lines. 'all': one shared pair in the theme-aware
+    // grey (--plot-errbar). 'one': a pair per sample in the sample's colour (1px), with
+    // an invisible fat hit line for hover/select; hovered/selected lines thicken, the
+    // selected pair turns the highlight grey.
+    function drawGcIntervals(plot){
+      if (!plot) return;
+      const g = plot.gOverlay;
+      g.querySelectorAll('.gc-int').forEach(e=>e.remove());
+      const { h } = plot.size(), m = plot.margin;
+      const vline = (xv, o)=>{
+        const px = plot.px(xv);
+        const ln = svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,'stroke-width':o.width,'pointer-events':'none','class':'gc-int'+(o.cls?' '+o.cls:'')});
+        if (o.color) ln.setAttribute('stroke', o.color);
+        g.appendChild(ln);
+        if (o.hit){
+          const ht = svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'pointer','class':'gc-int'});
+          ht.addEventListener('pointerenter', ()=> setGcHover(o.k));
+          ht.addEventListener('pointerleave', scheduleClearGcHover);
+          ht.addEventListener('click', ()=> selectGc(o.k));
+          g.appendChild(ht);
+        }
+      };
+      if (!intPerSample()){
+        vline(startShared, {width:1.5, cls:'gc-int-hl'});
+        vline(endShared,   {width:1.5, cls:'gc-int-hl'});
+      } else {
+        dataTables.forEach((d,k)=>{
+          const sel = gcSel===k, on = sel || gcHov===k;
+          const o = { k, hit:true, width: on?2.6:1, cls: sel?'gc-int-hl':'', color: sel?null:d.color };
+          vline(startOf(k), o); vline(endOf(k), o);
+        });
+      }
+    }
+
+    // ---- Row ↔ plot interaction (both respond in unison) ----
+    let gcHoverRAF = null;
+    function scheduleClearGcHover(){
+      if (gcHoverRAF) cancelAnimationFrame(gcHoverRAF);
+      gcHoverRAF = requestAnimationFrame(()=>{ gcHoverRAF=null; setGcHover(null); });
+    }
+    function setGcHover(k){
+      if (!intPerSample()) k = null;
+      if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
+      if (gcHov === k) return;
+      gcHov = k;
+      drawGcIntervals(plot1); refreshGcRows();
+    }
+    function selectGc(k){
+      if (!intPerSample()) return;
+      // Clear any transient hover so the green .hovering tint doesn't linger after a
+      // click (mirrors the XRD peak table, whose full re-render drops it).
+      if (gcHoverRAF){ cancelAnimationFrame(gcHoverRAF); gcHoverRAF=null; }
+      gcHov = null;
+      gcSel = (gcSel===k) ? null : k;
+      drawGcIntervals(plot1); refreshGcRows();
+    }
+    function refreshGcRows(){
+      $('ParamTableWrap').querySelectorAll('.gc-row').forEach(r=>{
+        const k = +r.dataset.i;
+        r.classList.toggle('hovering', k===gcHov);
+        r.classList.toggle('selected', k===gcSel);
+      });
+    }
+
+    function computeRates(){
+      /* The production is what was made between the interval's lines: none yet at its
+         start, wherever that is moved to. Integrated from the first injection it carried
+         everything that flowed out before (the dark readings, a purge) into every later
+         point. The mean rate below, a difference, is the same either way. */
+      dataTables.forEach((d,k)=>{
+        const t0 = Math.min(startOf(k), endOf(k));
+        for (const key in d.gas){ const q = d.gas[key], c0 = cumAt(d.t, q.Fm, q.cum, t0); q.FmInt = q.cum.map(v=> v - c0); }
+      });
+      /* Mean rate over the interval: the rate taken as the straight line between each
+         pair of injections, integrated exactly from the interval's start to its end — an
+         end between two injections integrates the line up to it — and divided by the
+         duration. Read only off injections inside the interval, the mean lost the stretch
+         between the last of them and the line. The interval is what the data cover of it. */
+      costResults = dataTables.map((d,k)=>{
+        const [a, b] = spanOf(d, k);
+        if (!(b > a)) return {name:d.name, label:d.label, rate:{}, dt:NaN};
+        const rate = {};
+        for (const key in d.gas){ const q = d.gas[key]; rate[key] = (cumAt(d.t, q.Fm, q.cum, b) - cumAt(d.t, q.Fm, q.cum, a)) / (b - a); }
+        return {name:d.name, label:d.label, rate, dt: b - a};
+      });
+    }
+    const hasResults = ()=> costResults.some(c=> GASES.some(g=>isFinite(c.rate[g.key])));
+    function updateRegression(){
+      computeRates();
+      drawGcData();
+      // Show the Results section before drawing into it: plots sized from a hidden element
+      // would measure 0. It stays hidden while no sample has a valid integration interval.
+      res.style.display = hasResults() ? '' : 'none';
+      syncResults();
+      drawResultPlots();
+      drawBarChart();
+    }
+
+    // The interval of sample k as far as its data reach: [start, end] within the first and
+    // last time it has.
+    function spanOf(d, k){
+      const n = d.t.length;
+      if (n < 2) return [NaN, NaN];
+      return [Math.max(Math.min(startOf(k), endOf(k)), d.t[0]), Math.min(Math.max(startOf(k), endOf(k)), d.t[n-1])];
+    }
+    /* Results series: the Analysis curves between the interval's lines — the injections
+       inside it, and at each line the straight line between the injections around it,
+       read there — which is what the mean rate integrates. */
+    function cutTables(){
+      return dataTables.map((d,k)=>{
+        const [a, b] = spanOf(d, k);
+        if (!(b > a)) return {...d, t:[], gas: Object.fromEntries(Object.keys(d.gas).map(key=> [key, { ...d.gas[key], Fm:[], FmInt:[], pct:[], flow:[] }]))};
+        const inner = d.t.map((_, i)=> i).filter(i=> d.t[i] > a && d.t[i] < b);
+        const take = arr => [lineAt(d.t, arr, a), ...inner.map(i=> arr[i]), lineAt(d.t, arr, b)];
+        const gas = {};
+        for (const key in d.gas){
+          const q = d.gas[key], c0 = q.cum[0] - q.FmInt[0];   // FmInt = cum − c0
+          gas[key] = { ...q, Fm: take(q.Fm), pct: take(q.pct), flow: take(q.flow),
+                       FmInt: [a, ...inner.map(i=> d.t[i]), b].map(x=> cumAt(d.t, q.Fm, q.cum, x) - c0) };
+        }
+        return {...d, t:[a, ...inner.map(i=> d.t[i]), b], gas};
+      });
+    }
+
+    // The two Results plots: same quantities as Analysis, between the interval's lines and
+    // without the interval overlay (Results shows the retained data only), y from 0 to
+    // the data from light-on on, as there.
+    function drawResultPlots(){
+      const cut = cutTables();
+      if (!cut.length || !cut.some(d=>d.t.length)) return;
+      const allT = cut.flatMap(d=>d.t);
+      const tmin = Math.min(0, minArr(allT)), tmax = maxArr(allT);
+      const shown = shownGases('r');
+      const mk = (id, ylabelSvg, key)=>{
+        const svg = $(id);
+        const p = new Plot(svg, {xlabel:'Time (h)', ylabelSvg});
+        const arrs = cut.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
+        if (!arrs.length) return p;
+        p.setRange(tmin, tmax, 0, yTop(cut, shown, key)*1.05);
+        p.drawAxes(); p.clearData();
+        drawGasLines(p, cut, shown, key);
+        p.attachTools(svg.closest('.plot-wrap'));
+        return p;
+      };
+      plotResRate = mk('SvgRate', LBL_RATE_SVG, 'Fm');
+      plotResCum  = mk('SvgCum',  LBL_CUM_SVG,  'FmInt');
+    }
+
+    function drawBarChart(){
+      const shown = shownGases('r');
+      const has = c => shown.some(g=>isFinite(c.rate[g.key]));
+      const finite = costResults.filter(has);
+      if (!finite.length || !shown.length) return;   // section visibility handled by updateRegression
+      const svg = $('SvgBar');
+      // Bottom margin adapts to the longest tilted name so names fit without changing
+      // the chart's footprint — the data area shrinks instead.
+      const mctx = document.createElement('canvas').getContext('2d');
+      mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+      const rect = svg.getBoundingClientRect();
+      const svgW = rect.width || 640, svgH = rect.height || 640;
+      // How the names are cut and tilted — see barNames.
+      const fit = barNames(mctx, costResults.map(c=> c.label), Math.max(60, svgW - 75), 55, costResults.map(has));
+      const labels = fit.labels;
+      const labelWs = labels.map((lbl,k)=> has(costResults[k]) ? mctx.measureText(lbl).width : 0);
+      let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
+      const bottom = Math.round(26 + maxLbl*fit.sin);
+      // Value label (vertical) above each bar, with reserved top headroom so it never clips.
+      const fmtVal = v => v.toFixed(4);
+      let maxValW = 0, maxTop = 0;
+      costResults.forEach(c=> shown.forEach(g=>{
+        const v = c.rate[g.key];
+        if (isFinite(v)){ maxValW = Math.max(maxValW, mctx.measureText(fmtVal(v)).width); maxTop = Math.max(maxTop, v); }
+      }));
+      const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
+      const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
+      const allVals = finite.flatMap(c=> shown.map(g=>c.rate[g.key]).filter(isFinite));
+      // Fixed at [0, n+1]: the names are made to fit it, not the other way round.
+      const x0 = 0, x1 = costResults.length+1;
+      // With both gases the pair sits side by side in the sample's slot, the way the
+      // XRPD size chart pairs raw and corrected. Widths shrink so the pair still fits.
+      const n = shown.length;
+      const pxSlot = (svgW - 75) / (x1 - x0);
+      const hw = n > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);
+      const dx = n > 1 ? Math.min(12, pxSlot*0.24) : 0;
+      const offOf = gi => (gi - (n-1)/2) * dx * 2;
+      const underChips = [];
+      costResults.forEach((c,k)=>{ if (has(c)) shown.forEach((g,gi)=>{ const v = c.rate[g.key];
+        if (isFinite(v)) underChips.push({ x:k+1, dx:offOf(gi), top:v, w:mctx.measureText(fmtVal(v)).width }); }); });
+      const ymax = Math.max(Math.max(...allVals)*1.2, maxTop/frac,
+        barChipYmax(svg.closest('.plot-wrap').querySelector('.gc-gas-sel'), svg, underChips,
+                    { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0, x1 }));
+      const barPlot = new Plot(svg, {xlabel:'', ylabelSvg:LBL_RATE_SVG, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
+      barPlot.setRange(x0, x1, 0, ymax||1);
+      barPlot.drawAxes();
+      costResults.forEach((c,k)=>{
+        if (!has(c)) return;
+        shown.forEach((g,gi)=>{
+          const v = c.rate[g.key];
+          if (!isFinite(v)) return;
+          const off = offOf(gi);
+          // Same hue as the sample, but the dashed gas is drawn lighter so the pair is
+          // told apart the way the curves are.
+          // Gas-coloured here rather than sample-coloured: the samples are already told
+          // apart by their position on the axis, the gases were not told apart at all.
+          // Named by gas alone, like the legend under the chart: the samples are told
+          // apart by their category on the axis, so one series per gas spans them all —
+          // the shape every other bar chart here has, and the one a split works on.
+          barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: gasTxt(g) });
+          barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
+        });
+        barPlot.tickLabel(k+1, labels[k], fit.rot, c.label, c.name);
+      });
+      barPlot.attachTools(svg.closest('.plot-wrap'));
+      $('BarLegend').innerHTML =
+        shown.map(g=>`<span><i class="mk-box" style="background:${g.bar}"></i>${gasTxt(g)}</span>`).join('');
+    }
+
+    // The card's CSVs, named after it.
+    function exportEntries(n){
+      if (!dataTables.length) return [];
+      const entries = [];
+      // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
+      // the full series with every intermediate quantity; gc_results.csv keeps only the
+      // three plotted columns, between the interval's lines as plotted.
+      // Only what the Results plots are showing: pick H2, O2 or both and it follows.
+      const shown = shownGases('r');
+      const buildSeriesCsv = (tables, full)=>{
+        const cols=[];
+        tables.forEach(d=>{
+          // A sample with none of the shown gases contributes nothing, not a bare time
+          // column with empty space beside it.
+          if (!shown.some(g=>d.gas[g.key])) return;
+          cols.push({h:`Time (h) [${d.label}]`, v:d.t.map(x=>fmtNum(x,5))});
+          shown.forEach(g=>{
+            const q = d.gas[g.key];
+            if (!q) return;
+            if (full){
+              cols.push({h:`${g.csv} (%mol) [${d.label}]`,      v:q.pct.map(x=>fmtNum(x,5))});
+              cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:q.flow.map(x=>fmtNum(x,5))});
+            }
+            cols.push({h:`${g.csv} ${LBL_RATE_CSV} [${d.label}]`, v:q.Fm.map(x=>fmtNum(x,5))});
+            cols.push({h:`${g.csv} ${LBL_CUM_CSV} [${d.label}]`,  v:q.FmInt.map(x=>fmtNum(x,5))});
+          });
+        });
+        const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
+        let t = csvLine(cols.map(c=>c.h));
+        for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
+        return t;
+      };
+      entries.push({name:`${n} - gc_raw.csv`,     text:buildSeriesCsv(dataTables, true)});
+      entries.push({name:`${n} - gc_results.csv`, text:buildSeriesCsv(cutTables(), false)});
+      // h2_rates.csv — bar-plot-like summary (one row per sample)
+      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`), 'Interval duration (h)']);
+      costResults.forEach(c=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)), fmtNum(c.dt,4)]));
+      entries.push({name:`${n} - mean_rates.csv`, text:t2});
+      // gc_info.csv — per-sample inputs + the integration interval used
+      // Local time, as the light-on field shows it and as the instrument logged it:
+      // toISOString() wrote UTC, two hours early in Italian summer time.
+      const pad = n => String(n).padStart(2, '0');
+      const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+      let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
+      // The inputs as they were set, in the CSV's decimal separator and not rounded:
+      // fmtNum with no decimals wrote a 60.6 s delay as 61.
+      const asSet = v => String(v).replace('.', settings.decimal);
+      dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(mOf(k)), asSet(qOf(k)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
+      entries.push({name:`${n} - gc_info.csv`, text:t3});
+      return entries;
+    }
+
+    return {
+      res,
+      // The per-sample arrays, for the file list (keys the card's own).
+      slots: ()=> [
+        { key: a.id + ':m', arr:ms, make: v=> v ?? 15 },
+        { key: a.id + ':Q', arr:Qs, make: v=> v ?? 2 },
+        { key: a.id + ':start', arr:startArr, make: v=> v ?? 0 },
+        { key: a.id + ':end', arr:endArr, make: v=> v ?? 24 },
+        { key: a.id + ':lightOn', arr:lightOnDates, make: (v, f)=> v !== undefined ? v : f ? firstInjection(f) : null },
+      ],
+      addFile(f){ ms.push(15); Qs.push(2); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); },
+      clear(){ [ms,Qs,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
+      unselect(){ gcSel = gcHov = null; },
+      renderTable: renderGcParamTable,
+      compute: computeAndRenderGc,
+      // A folded card draws nothing; its Results section is drawn all the same.
+      computeQuiet(){
+        if (!files.length) return;
+        computeTables(); renderGasSel(); computeRates();
+        res.style.display = hasResults() ? '' : 'none';
+        syncResults();
+        drawResultPlots(); drawBarChart();
+        $('ResLegend').innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
+      },
+      hasResults: ()=> res.style.display !== 'none',
+      exportEntries,
+      snapshot(){
+        return {
+          ms: ms.slice(), Qs: Qs.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
+          lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
+          mMode, qMode, startMode, endMode, mShared, qShared, startShared, endShared,
+          gasSel: { a:gasSel.a.slice(), r:gasSel.r.slice() },
+          delayAuto, delayMan,
+        };
+      },
+      restore(s){
+        // Projects saved before O2 existed, or under the older single-mode selector.
+        const fromMode = m => (!m || m === 'both') ? GASES.map(g=>g.key) : [m];
+        gasSel = s.gasSel ? { a:s.gasSel.a.slice(), r:s.gasSel.r.slice() }
+               : { a: fromMode(s.gasMode && s.gasMode.a), r: fromMode(s.gasMode && s.gasMode.r) };
+        ms = (s.ms || files.map(()=> 15)).slice(); Qs = (s.Qs || files.map(()=> 2)).slice();
+        lightOnDates = s.lightOnDates ? s.lightOnDates.map(t=> t!=null ? new Date(t) : null) : files.map(firstInjection);
+        // Projects from before the delay existed take it too, on Auto: the timestamps they
+        // were computed from are just as late.
+        delayAuto = s.delayAuto !== false;
+        delayMan = isFinite(s.delayMan) ? s.delayMan : INJ_DELAY_AUTO;
+        if (s.mMode !== undefined){
+          // Current format: four independent per-parameter modes.
+          mMode = s.mMode; qMode = s.qMode; startMode = s.startMode; endMode = s.endMode;
+          mShared = s.mShared; qShared = s.qShared; startShared = s.startShared; endShared = s.endShared;
+          startArr = (s.startArr||files.map(()=>startShared)).slice();
+          endArr   = (s.endArr  ||files.map(()=>endShared)).slice();
+        } else if (s.intMode !== undefined){
+          // Migrate paired-mode projects (mqMode / intMode) to independent modes.
+          mMode = qMode = s.mqMode; startMode = endMode = s.intMode;
+          mShared = s.mShared; qShared = s.qShared; startShared = s.startShared; endShared = s.endShared;
+          startArr = (s.startArr||files.map(()=>startShared)).slice();
+          endArr   = (s.endArr  ||files.map(()=>endShared)).slice();
+        } else {
+          // Migrate the oldest projects: a single global interval → interval 'all' mode.
+          mMode='one'; qMode='one'; startMode='all'; endMode='all';
+          mShared=15; qShared=2;
+          startShared = s.plateauStart ?? 0; endShared = s.plateauEnd ?? 24;
+          startArr = files.map(()=>startShared); endArr = files.map(()=>endShared);
+        }
+        gcSel=gcHov=null;
+      },
+    };
   }
+
+  /* ---- The cards (cards.js), and the Results: each card's section under its name ---- */
+  const KINDS = { rate: 'Production Rate' };
+  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), the light-on time and the integration interval for each sample to compute mean H₂ production rates. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). ${cardInfo(false, true)}`;
+  const resList = document.getElementById('gcResList');
+  const live = new Map();       // id → the card's analysis (gcCard)
+  const placeRes = ()=> cards().forEach(a=>{ const c = live.get(a.id); if (c) resList.appendChild(c.res); });
+  // The Results card is there while some card has a result to show.
+  function syncResults(){
+    const on = cards().filter(a=> live.has(a.id) && live.get(a.id).hasResults());
+    document.getElementById('gcResultsBar').style.display = files.length && on.length ? 'block' : 'none';
+    cards().forEach(a=>{ const c = live.get(a.id); if (c) c.res.classList.toggle('is-first', a === on[0]); });
+  }
+  function named(a){
+    const card = deck.cardOf(a), c = live.get(a.id);
+    if (!card || !c) return;
+    const n = fileSafe(a.name);
+    card.querySelector('.table-csv-btn').dataset.csvNames = `${n} - gc_info.csv`;
+    nameDownloads(card.querySelector('.plot-wrap'), `${n} - GC_rate.svg`, `${n} - gc_raw.csv`);
+    c.res.querySelector('.res-an-title').textContent = a.name;
+    const w = c.res.querySelectorAll('.plot-wrap');
+    nameDownloads(w[0], `${n} - GC_results_rate.svg`, `${n} - gc_results.csv`);
+    nameDownloads(w[1], `${n} - GC_results_cumulative.svg`, `${n} - gc_results.csv`);
+    nameDownloads(w[2], `${n} - GC_results.svg`, `${n} - mean_rates.csv`);
+  }
+  const deck = createDeck({
+    list: document.getElementById('gcAnalyses'), addBar: document.getElementById('gcAddBar'), addBtn: document.getElementById('gcAddAn'),
+    kinds: KINDS, info: ()=> GC_INFO, body: cardBody,
+    build: (a, card)=>{ const c = gcCard(a, card); live.set(a.id, c); if (a.init){ c.restore(a.init); delete a.init; } },
+    drop: a=>{ const c = live.get(a.id); if (c){ c.res.remove(); live.delete(a.id); } syncResults(); },
+    autoName: ()=> 'Production Rate', named,
+    changed: ()=>{ placeRes(); syncResults(); },
+    loaded: placeRes,
+    added: a=>{ const c = live.get(a.id); c.renderTable(); if (files.length) c.compute(); },
+    wake: a=>{ if (files.length) live.get(a.id).compute(true); },
+    commit: ()=> hist.commit(),
+  });
+  const cards = ()=> deck.records;
+
+  /* ---- Undo/redo: file order/labels/colours, and each card's per-sample m/Q/light-on,
+     integration intervals, delay and gases. Injection data arrays are shared by
+     reference. ---- */
+  function gcSnapshot(){
+    return {
+      files: allFiles.map(f=>({...f})),
+      cards: cards().map(a=> ({ ...deck.saved(a), ...live.get(a.id).snapshot() })),
+    };
+  }
+  function gcRestore(s){
+    allFiles = s.files.map(f=>({...f}));
+    files = includedOf(allFiles);
+    // A project from before the cards had one analysis, its settings at the top level.
+    // A card built afresh takes its settings when its analysis is made (init).
+    const list = Array.isArray(s.cards) ? s.cards : [{ ...s, id: 1, type: 'rate' }];
+    deck.load(list, src=> ({ init: src }), a=>{ live.get(a.id).restore(a.init); delete a.init; });
+    afterFilesChange();
+    // Clear the previous tab's transient upload alerts and rebuild for this tab.
+    loadAlerts = ''; gcUploadAlerts = ''; rebuildGcAlerts();
+  }
+  const hist = registerHistory('gc', gcSnapshot, gcRestore);
+  registerTabRedraw('gc', ()=>{ if (files.length){ deck.fitNames(); each((c, a)=>{ if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }); } });
 
   function exportGcZip(){
-    if (!dataTables.length) return [];
-    const entries = [];
-    // One block of columns per sample (each keeps its own time axis). gc_raw.csv carries
-    // the full series with every intermediate quantity; gc_results.csv keeps only the
-    // three plotted columns, between the interval's lines as plotted.
-    // Only what the Results plots are showing: pick H2, O2 or both and it follows.
-    const shown = shownGases('r');
-    const buildSeriesCsv = (tables, full)=>{
-      const cols=[];
-      tables.forEach(d=>{
-        // A sample with none of the shown gases contributes nothing, not a bare time
-        // column with empty space beside it.
-        if (!shown.some(g=>d.gas[g.key])) return;
-        cols.push({h:`Time (h) [${d.label}]`, v:d.t.map(x=>fmtNum(x,5))});
-        shown.forEach(g=>{
-          const q = d.gas[g.key];
-          if (!q) return;
-          if (full){
-            cols.push({h:`${g.csv} (%mol) [${d.label}]`,      v:q.pct.map(x=>fmtNum(x,5))});
-            cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:q.flow.map(x=>fmtNum(x,5))});
-          }
-          cols.push({h:`${g.csv} ${LBL_RATE_CSV} [${d.label}]`, v:q.Fm.map(x=>fmtNum(x,5))});
-          cols.push({h:`${g.csv} ${LBL_CUM_CSV} [${d.label}]`,  v:q.FmInt.map(x=>fmtNum(x,5))});
-        });
-      });
-      const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
-      let t = csvLine(cols.map(c=>c.h));
-      for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-      return t;
-    };
-    entries.push({name:'gc_raw.csv',     text:buildSeriesCsv(dataTables, true)});
-    entries.push({name:'gc_results.csv', text:buildSeriesCsv(cutTables(), false)});
-    // h2_rates.csv — bar-plot-like summary (one row per sample)
-    let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`), 'Interval duration (h)']);
-    costResults.forEach(c=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)), fmtNum(c.dt,4)]));
-    entries.push({name:'mean_rates.csv', text:t2});
-    // gc_info.csv — per-sample inputs + the integration interval used
-    // Local time, as the light-on field shows it and as the instrument logged it:
-    // toISOString() wrote UTC, two hours early in Italian summer time.
-    const pad = n => String(n).padStart(2, '0');
-    const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
-      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-    let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
-    // The inputs as they were set, in the CSV's decimal separator and not rounded:
-    // fmtNum with no decimals wrote a 60.6 s delay as 61.
-    const asSet = v => String(v).replace('.', settings.decimal);
-    dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(mOf(k)), asSet(qOf(k)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
-    entries.push({name:'gc_info.csv', text:t3});
-    return entries;
+    return cards().flatMap(a=> live.get(a.id).exportEntries(fileSafe(a.name)));
   }
   registerCsvExport('gc', exportGcZip);
-})();
 
+  // A new project starts with one card.
+  deck.start(['rate']);
+})();
