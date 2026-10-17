@@ -1,112 +1,38 @@
-import { fmtNum, csvLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
-import { svgEl, Plot, axisReadout } from './plot.js';
-import { createRietveld } from './xrd-rv.js';
+import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
+import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
+import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
 import { readXrdmlScan, decodeXml } from './xrd-instr.js';
+import { createDeck, cardInfo, fileSafe } from './cards.js';
 
 // File names and what a file says about itself go into the alerts as text, never as markup.
 const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// Index of the grid point nearest to a 2θ on a uniform axis.
-function nearestIdx(x, pos){
-  if (!x || !x.length) return 0;
-  const span = (x[x.length-1]-x[0]) || 1;
-  const t = (pos-x[0])/span*(x.length-1);
-  return Math.max(0, Math.min(x.length-1, Math.round(t)));
-}
-// The highest point within ±win of idx.
-function refineIdx(y, idx, win){
-  let best = idx;
-  const lo = Math.max(0, idx-win), hi = Math.min(y.length-1, idx+win);
-  for (let j=lo; j<=hi; j++) if (y[j] > y[best]) best = j;
-  return best;
-}
-// A small dense linear system by Gauss–Jordan with partial pivoting; null if singular.
-function solveLinear(A, b){
-  const n=b.length, M=A.map((r,i)=>r.concat(b[i]));
-  for (let c=0;c<n;c++){
-    let piv=c; for (let r=c+1;r<n;r++) if (Math.abs(M[r][c])>Math.abs(M[piv][c])) piv=r;
-    if (Math.abs(M[piv][c])<1e-12) return null;
-    [M[c],M[piv]]=[M[piv],M[c]];
-    for (let r=0;r<n;r++){ if (r===c) continue; const f=M[r][c]/M[c][c]; for (let k=c;k<=n;k++) M[r][k]-=f*M[c][k]; }
-  }
-  const z=new Array(n); for (let i=0;i<n;i++) z[i]=M[i][n]/M[i][i];
-  return z;
-}
-
 /* =========================================================
    XRD MODULE
+   The samples' files, and the instrumental standard's (one file, of its own: it is no
+   sample); the analysis cards (cards.js), each a Scherrer analysis of the peaks
+   (xrd-peaks.js) or a Rietveld refinement (xrd-rv.js), on the same samples, the sample
+   on show shared by them all; and the standard's two windows, its peak analysis (the
+   Caglioti fit that corrects the Scherrer sizes) and its Rietveld refinement (the
+   instrumental profile every sample's refinement takes), each opened from its kind of
+   card, both on the one standard's file.
 ========================================================= */
 (function(){
   // Every file loaded, in list order; the analysis sees the included ones, `files`, and
-  // the per-file arrays below are aligned with those.
+  // the per-file arrays the cards keep are aligned with those.
   let allFiles = []; // {name, label, x[], y[], color}
   let files = [];
-  let curIdx = 0;  // Analysis navigator index (non-standard samples only)
-  let rv = null;   // the Rietveld card (xrd-rv.js), made once the history exists
-  let processed = []; // per file: {smoothed, baseline, subtracted, peaks}
-  let manualPeaks = []; // per file: array of manually added 2θ positions
-  let removedPeaks = []; // per file: array of removed peaks' detected 2θ positions
+  let curIdx = 0;    // the sample every card shows
+  let stdFile = null;  // the instrumental standard's file, or none
+  let deck = null;     // the cards (cards.js), made once their callbacks exist
+  let xrdLoadAlerts = '';
+  let xrdNoteAlerts = '';
+  let xrdUploadAlerts = '';
   // A scan run downwards (start above end) turned round: the plots, the peak search and
   // the Rietveld card take 2θ ascending (rawBytes keep the file as it was). On loading,
   // and on restoring a project saved by an earlier version that kept the file's order.
   const ascending = f => f.x.length > 1 && f.x[0] > f.x[f.x.length-1]
     ? { ...f, x: f.x.slice().reverse(), y: f.y.slice().reverse(), ...(f.varMul ? { varMul: f.varMul.slice().reverse() } : {}) } : f;
-  // Peak marker colours
-  const PEAK_BASE = '#3f9d54';   // darker green, base
-  const PEAK_HOVER = '#5fcf6a';  // brighter green, transient hover
-  const PEAK_SEL  = '#ffffff';   // white, permanent selection
-  const FWHM_BASE  = '#b5292c';  // dark red, base (contrasts with the dark background)
-  const FWHM_HOVER = '#ff5a5a';  // brighter red, transient hover
-  const FWHM_SEL   = '#ff0000';  // pure red, permanent selection
-  // Per-panel selection/hover state — the Analysis table talks only to the Analysis
-  // plot, the Standard table to the Standard plot.
-  const panels = {
-    a: { wrap:'xrdPeakTableWrap',    box:'xrdPeakBox',    sel:null, hov:null, plot:()=>anaPlot },
-    s: { wrap:'xrdStdPeakTableWrap', box:'xrdStdPeakBox', sel:null, hov:null, plot:()=>stdPlot },
-  };
-  let resPlot;
-  let xrdLoadAlerts = '';
-  let xrdNoteAlerts = '';
-  let xrdUploadAlerts = '';
-
-  // Per-field mode: 'shared' | 'per'. Defaults: peak-search fields per-sample, rest shared.
-  const paramMode = { N:'shared', blWin:'shared', pkHeight:'per', pkProm:'per', pkDist:'per', K:'shared', lambda:'shared' };
-  // Which mode key controls each stored field
-  const FIELD_MODE = { N:'N', blWin:'blWin', pkHeight:'pkHeight', pkProm:'pkProm', pkDist:'pkDist', K:'K', lambda:'lambda' };
-
-  // Shared param values (defaults)
-  const shared = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
-
-  // Analysis parameters are no longer persisted across sessions — they always start
-  // at their defaults (projects are the way to keep a specific configuration).
-  const XRD_PERSIST_FIELDS = ['N','blWin','K','lambda'];
-  function saveXrdParams(){ /* intentionally no-op: params are not persisted */ }
-  function loadXrdParams(){
-    // Just reflect the default store values in the input fields at startup.
-    XRD_PERSIST_FIELDS.forEach(k=>{ const el = document.getElementById(FIELD_INPUT[k]); if (el) el.value = shared[k]; });
-  }
-
-  // Per-sample param overrides (indexed by file idx)
-  let perParams = []; // array of {N, blWin, pkHeight, pkProm, pkDist, K, lambda}
-
-  // Crystallite-size / Scherrer constants and state
-  const SCHERRER_K = 0.9;
-  let standardName = '';    // file.name of the instrumental standard in use ('' = none)
-  // The standard chosen. It is in use only while it is included (syncStandard), so
-  // leaving it out of the analysis is choosing none, and taking it back in restores it.
-  let standardPick = '';
-  // What the crystallite-size box plot is by: each sample's peaks ('sample'), or each
-  // reflection the samples share, over the samples ('peak').
-  let sizeBy = 'sample';
-  // Independent analysis parameters for the instrumental standard (defaults = Analysis
-  // defaults, but for the smoothing: it starts unsmoothed). The standard is analysed in
-  // its own dedicated card, never sharing the per-sample shared/per params. K/λ are
-  // unused (no crystallite size for the standard).
-  let stdParams = { N:1, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
-
-  function standardIdx(){ return files.findIndex(f=>f.name===standardName); }
-  // Indices of the non-standard samples, in file order (the Analysis navigation set).
-  function nonStdIdx(){ const out=[]; files.forEach((f,i)=>{ if (f.name!==standardName) out.push(i); }); return out; }
 
   // Delegated click handling for dynamically generated alert dismiss buttons.
   document.getElementById('tab-xrd').addEventListener('click', (e)=>{
@@ -116,34 +42,63 @@ function solveLinear(A, b){
     if (btn.dataset.action === 'xrd-dismiss-invalid'){ xrdLoadAlerts=''; rebuildXrdAlerts(); }
     if (btn.dataset.action === 'xrd-dismiss-notes'){ xrdNoteAlerts=''; rebuildXrdAlerts(); }
   });
-
   function rebuildXrdAlerts(){
     document.getElementById('xrdAlerts').innerHTML = xrdLoadAlerts + xrdNoteAlerts + xrdUploadAlerts;
   }
 
-  // The per-file arrays the user sets, for the file list to keep aligned with the
-  // included files; `processed` is not one of them: it is all rebuilt (reprocessAll)
-  // on every change to the list.
-  const slots = ()=> [
-    { key:'params', arr:perParams, make: v=> v ? {...v} : {...shared} },
-    { key:'manual', arr:manualPeaks, make: v=> v ? v.slice() : [] },
-    { key:'removed', arr:removedPeaks, make: v=> v ? v.slice() : [] },
-  ];
-  // The navigator stays on the sample it showed when another is left out or taken in.
-  function stayOn(a){
-    const ka = includedOf(allFiles).indexOf(a);
-    if (ka >= 0) curIdx = ka;
+  /* A file read (readXrdmlScan, xrd-instr.js): 2θ, the intensities on the unattenuated
+     scale (<intensities> as written, the raw <counts> of XRDML 2.x times the attenuation
+     factors) and each point's variance, var(y) = y·varMul, for the counting uncertainty of
+     the FWHMs and the Rietveld weights. A file it cannot read (wrong format, not
+     well-formed, not a 2θ scan, dropped past the file picker's accept filter) gives the
+     reason instead. rawBytes keeps the original bytes for byte-exact re-download; the text
+     is decoded from them in the file's own encoding (UTF-16 too, which f.text() is not).
+     The raw intensities are kept untouched (no minimum subtraction): the constant offset is
+     absorbed by the SNIP background, so the whole pipeline — analysis and fit alike — runs
+     on the true raw data and stays consistent with the CSVs. */
+  async function readFile(f, color){
+    const rawBytes = new Uint8Array(await f.arrayBuffer());
+    const xml = new DOMParser().parseFromString(decodeXml(rawBytes), 'text/xml');
+    const sc = xml.getElementsByTagName('parsererror').length ? { error: 'not well-formed XML' } : readXrdmlScan(xml);
+    if (sc.error) return { error: sc.error };
+    const { x, y, varMul } = sc;
+    return { file: ascending({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color, rawBytes, ...(varMul ? { varMul } : {})}), notes: sc.notes };
   }
+
+  /* ---- The samples ---- */
+  // Every card's per-sample arrays (a Scherrer card's, and those it keeps while it is a
+  // Rietveld one), for the file list to keep aligned with the included files.
+  const copyArr = v => Array.isArray(v) ? v.slice() : [];
+  function slots(){
+    const out = [];
+    cards().forEach(a=>{
+      const e = live.get(a.id);
+      if (a.type === 'scherrer' && e) out.push(...e.inst.slots('A' + a.id));
+      const s = a.states.scherrer;
+      if (a.type !== 'scherrer' && s){
+        out.push({ key: 'kA' + a.id + ':params', arr: s.perParams, make: v=> v ? {...v} : {...s.shared} },
+          { key: 'kA' + a.id + ':manual', arr: s.manualPeaks, make: copyArr },
+          { key: 'kA' + a.id + ':removed', arr: s.removedPeaks, make: copyArr });
+      }
+    });
+    return out;
+  }
+  // The cards stay on the sample they showed when another is left out or taken in.
+  function stayOn(f){ const k = includedOf(allFiles).indexOf(f); if (k >= 0) curIdx = k; }
   function fileCallbacks(){
     return {
       onRemove(i){ removeFileAt(allFiles, i, slots()); afterFilesChange(); },
       onReorder(from, to){ moveFileTo(allFiles, from, to, slots()); afterFilesChange(); },
       onInclude(i, on){ const was = files[curIdx]; setIncluded(allFiles, i, on, slots()); stayOn(was); afterFilesChange(); },
       onIncludeAll(on){ const was = files[curIdx]; allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); stayOn(was); afterFilesChange(); },
-      onLabelChange(i, v){ allFiles[i].label=v; renderPeakTable(); updateXrdResults(); if (rv) rv.redraw(); hist.commit(); },
-      onColorChange(i, v){ allFiles[i].color=v; updateXrdResults(); hist.commit(); },
+      onLabelChange(i, v){ allFiles[i].label=v; eachCard(e=> e.inst.redraw()); hist.commit(); },
+      onColorChange(i, v){ allFiles[i].color=v; eachCard(e=> e.inst.redraw()); hist.commit(); },
       onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ allFiles.length=0; processed=[]; perParams=[]; manualPeaks=[]; removedPeaks=[]; panels.a.sel=panels.a.hov=null; xrdLoadAlerts=''; xrdNoteAlerts=''; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange(); },
+      onRemoveAll(){
+        allFiles.length=0;
+        cards().forEach(a=>{ const e = live.get(a.id); if (a.type === 'scherrer' && e) e.inst.clear(); const s = a.states.scherrer; if (a.type !== 'scherrer' && s){ s.perParams = []; s.manualPeaks = []; s.removedPeaks = []; } });
+        xrdLoadAlerts=''; xrdNoteAlerts=''; xrdUploadAlerts=''; rebuildXrdAlerts(); afterFilesChange();
+      },
     };
   }
 
@@ -153,30 +108,18 @@ function solveLinear(A, b){
     const invalidFiles = [], loadNotes = [];
     for (const f of fileList){
       if (existing.has(f.name)){ alreadyLoaded.push(esc(f.name)); continue; }
-      // rawBytes keeps the original bytes for byte-exact re-download; the text is decoded
-      // from them in the file's own encoding (decodeXml: UTF-16 too, which f.text() is not).
-      const rawBytes = new Uint8Array(await f.arrayBuffer());
-      const xml = new DOMParser().parseFromString(decodeXml(rawBytes), 'text/xml');
-      /* readXrdmlScan (xrd-instr.js): 2θ, the intensities on the unattenuated scale
-         (<intensities> as written, the raw <counts> of XRDML 2.x times the attenuation
-         factors) and each point's variance, var(y) = y·varMul, for the counting
-         uncertainty of the FWHMs (fwhmSigma) and the Rietveld weights. A file it cannot
-         read (wrong format, not well-formed, not a 2θ scan, dropped past the file picker's
-         accept filter) is reported with the reason instead of dropped on the floor. */
-      const sc = xml.getElementsByTagName('parsererror').length ? { error: 'not well-formed XML' } : readXrdmlScan(xml);
-      if (sc.error){ invalidFiles.push(esc(`${f.name} (${sc.error})`)); continue; }
+      const r = await readFile(f, nextColor(allFiles));
+      if (r.error){ invalidFiles.push(esc(`${f.name} (${r.error})`)); continue; }
       existing.add(f.name);
-      for (const t of sc.notes) loadNotes.push(esc(`${f.name}: ${t}`));
-      const { x, y, varMul } = sc;
-      // Keep the raw intensities untouched (no minimum subtraction): the constant
-      // offset is absorbed by the SNIP background, so the whole pipeline — analysis
-      // and fit alike — runs on the true raw data and stays consistent with the CSVs.
+      for (const t of r.notes) loadNotes.push(esc(`${f.name}: ${t}`));
       // A new file comes in included, so it goes last among the included as well.
-      const file = ascending({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color:nextColor(allFiles), rawBytes, ...(varMul ? { varMul } : {})});
-      allFiles.push(file); files.push(file);
-      perParams.push({...shared});
-      manualPeaks.push([]);
-      removedPeaks.push([]);
+      allFiles.push(r.file); files.push(r.file);
+      cards().forEach(a=>{
+        const e = live.get(a.id);
+        if (a.type === 'scherrer' && e) e.inst.addFile();
+        const s = a.states.scherrer;
+        if (a.type !== 'scherrer' && s){ s.perParams.push({...s.shared}); s.manualPeaks.push([]); s.removedPeaks.push([]); }
+      });
     }
     xrdLoadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'xrd-dismiss-invalid') : '';
     xrdNoteAlerts = loadNotes.length ? buildAlertsHtml([], loadNotes, 'Loaded, with a caveat:', '', 'xrd-dismiss-notes') : '';
@@ -185,71 +128,200 @@ function solveLinear(A, b){
     afterFilesChange();
   });
 
-  // Union of all files' 2θ ranges (for shared plot axes)
-  function unionRange(){
-    let lo = Infinity, hi = -Infinity;
-    for (const f of files){ lo = Math.min(lo, f.x[0]); hi = Math.max(hi, f.x[f.x.length-1]); }
-    return [isFinite(lo)?lo:0, isFinite(hi)?hi:1];
-  }
-
-  // Rebuild the instrumental-standard dropdown from the current file list
-  function populateStandardSelect(){
-    const sel = document.getElementById('xrdStandard');
-    if (!sel) return;
-    // List = "None" + samples. When "None" is the selection the closed box shows a
-    // grey ghost placeholder instead of the word "None" (a hidden first option that
-    // we snap the selection back to — see the change handler).
-    sel.innerHTML = '<option value="" hidden>Choose standard…</option>' +
-      '<option value="__none__">None</option>' +
-      files.map(f=>`<option value="${f.name.replace(/"/g,'&quot;')}">${f.label}</option>`).join('');
-    if (standardName){ sel.value = standardName; sel.classList.remove('ghost'); }
-    else { sel.selectedIndex = 0; sel.classList.add('ghost'); }   // ghost placeholder
-  }
-
-  // Removed, the chosen standard is gone; left out, it is not in use while it is out.
-  function syncStandard(){
-    if (standardPick && !allFiles.some(f=>f.name===standardPick)) standardPick = '';
-    standardName = files.some(f=>f.name===standardPick) ? standardPick : '';
-  }
-
   function afterFilesChange(){
     files = includedOf(allFiles);
-    syncStandard();
-    setTabLoaded('xrd', allFiles.length);
+    setTabLoaded('xrd', allFiles.length || stdFile ? 1 : 0);
     renderUnifiedFileList('xrdFileTableWrap', allFiles, fileCallbacks());
-    if (files.length){
-      document.getElementById('xrdResults').style.display='block';
-      if (curIdx >= files.length) curIdx = files.length-1;
-      populateStandardSelect();
-      reprocessAll();
-      writeStoreToInputs();
-      updateCardVis();
-      updateXrdAnalysis();
-      updateXrdStandard();
-      updateXrdResults();
-    } else {
-      processed = [];
-      ['xrdWorkspace','xrdStdCard','xrdResults'].forEach(id=>{ document.getElementById(id).style.display='none'; });
-    }
-    if (rv) rv.refresh();
+    if (curIdx >= files.length) curIdx = Math.max(0, files.length-1);
+    document.getElementById('xrdAnalyses').style.display = files.length ? 'block' : 'none';
+    syncResults();
+    eachCard(e=> e.inst.refresh());
     hist.commit(); // baseline + file add/remove/reorder/palette
   }
+  // The sample on show, stepped by any card's arrows, for every card.
+  function step(d){
+    const n = files.length;
+    if (!n) return;
+    curIdx = (curIdx + d + n) % n;
+    eachCard((e, a)=> a.type === 'scherrer' ? e.inst.show() : e.inst.redraw());
+  }
 
-  /* ---- Undo/redo: snapshot the reversible analysis state. Raw patterns (x/y)
-     are shared by reference; the per-file params, peaks, order, labels, colours,
-     and standard are captured so any change can be stepped back. ---- */
+  /* ---- The instrumental standard: one file, in two windows ---- */
+  const stdFiles = ()=> stdFile ? [stdFile] : [];
+  function stdModal(id, title, info){
+    const m = document.createElement('div');
+    m.id = id;
+    m.className = 'modal-backdrop xrd-std-modal';
+    m.style.display = 'none';
+    m.innerHTML = `
+    <div class="xrd-std-box" role="dialog" aria-modal="true" aria-labelledby="${id}Title" tabindex="-1">
+      <div class="xrd-std-head">
+        <h3 class="txt-head" id="${id}Title">${title}<button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg></button></h3>
+        <button type="button" class="an-ic xrd-std-x" title="Close" aria-label="Close">${X_SVG(15)}</button>
+      </div>
+      <div class="instr-block xrd-std-instr" style="display:none">${info}</div>
+      <div class="dropzone xrd-std-dz" id="${id}Dz">
+        <div class="dz-icon">⤒</div>
+        <div class="dz-title">Drag here the standard's file, or click to select it.</div>
+        <div class="txt-meta">.xrdml, .xml · one file: it replaces the one loaded</div>
+        <input type="file" id="${id}Files" accept=".xrdml,.xml" style="display:none">
+      </div>
+      <div class="xrd-std-alerts"></div>
+      <div class="xrd-std-file"></div>
+      <div class="xrd-std-body"></div>
+    </div>`;
+    document.body.appendChild(m);
+    const box = m.querySelector('.xrd-std-box'), info0 = m.querySelector('.instr-info'), instr = m.querySelector('.xrd-std-instr');
+    info0.addEventListener('click', ()=>{
+      const open = instr.style.display === 'none';
+      instr.style.display = open ? '' : 'none';
+      info0.classList.toggle('is-on', open);
+      info0.setAttribute('aria-expanded', String(open));
+    });
+    m.addEventListener('click', e=>{ if (e.target === m) closeStd(); });
+    m.querySelector('.xrd-std-x').onclick = ()=> closeStd();
+    m.querySelector('.xrd-std-file').addEventListener('click', e=>{ if (e.target.closest('[data-std-del]')) setStd(null); });
+    setupDropzone(id + 'Dz', id + 'Files', async fl=>{
+      // One file: of several dropped, the first; it replaces the one loaded.
+      const f = fl[0];
+      if (!f) return;
+      const r = await readFile(f, '#d4a72c');
+      const alerts = m.querySelector('.xrd-std-alerts');
+      if (r.error){ alerts.innerHTML = buildAlertsHtml([esc(`${f.name} (${r.error})`)], []); return; }
+      alerts.innerHTML = (fl.length > 1 ? buildAlertsHtml([], [esc(`${fl.length} files dropped: the first, ${f.name}, is the standard`)], 'One file at a time:') : '')
+        + (r.notes.length ? buildAlertsHtml([], r.notes.map(t=> esc(`${f.name}: ${t}`)), 'Loaded, with a caveat:') : '');
+      setStd(r.file);
+    });
+    return { el: m, box, body: m.querySelector('.xrd-std-body') };
+  }
+  const peaksModal = stdModal('xrdStdPeaks', 'Instrumental standard', STD_INFO);
+  const rvModal = stdModal('xrdStdRv', 'Instrumental standard: Rietveld', RV_STD_INFO);
+  let openModal = null;
+  // The standard's file in both windows: its name, and × to take it away.
+  function syncStdFile(){
+    [peaksModal, rvModal].forEach(M=>{
+      M.el.querySelector('.xrd-std-file').innerHTML = stdFile
+        ? `<div class="xrd-std-row"><span class="txt-mini">Standard</span><span class="xrd-std-name" title="${esc(stdFile.name)}">${esc(stdFile.label)}</span><button type="button" class="peak-del is-danger idle-dim" data-std-del title="Remove the standard">${X_SVG(13)}</button></div>` : '';
+    });
+  }
+  function setStd(f){
+    stdFile = f;
+    stdPeaks.resetFile();
+    syncStdFile();
+    stdPeaks.refresh();
+    stdRv.refresh();
+    // Every card takes the standard's correction (or loses it).
+    eachCard((e, a)=> a.type === 'scherrer' ? e.inst.sizesChanged() : e.inst.redraw());
+    setTabLoaded('xrd', allFiles.length || stdFile ? 1 : 0);
+    hist.commit();
+  }
+  function openStd(which){
+    const M = which === 'rv' ? rvModal : peaksModal;
+    if (openModal === M) return;
+    if (openModal) closeStd();
+    openModal = M;
+    M.el.style.display = 'flex';
+    document.addEventListener('keydown', onStdKey);
+    // Drawn as it opens: closed, nothing in it was laid out.
+    if (which === 'rv') stdRv.refresh(); else stdPeaks.refresh();
+    M.box.focus({ preventScroll: true });
+  }
+  function closeStd(){
+    if (!openModal) return;
+    openModal.el.style.display = 'none';
+    openModal = null;
+    document.removeEventListener('keydown', onStdKey);
+  }
+  function onStdKey(e){ if (e.key === 'Escape') closeStd(); }
+
+  const stdPeaks = createPeakAnalysis({
+    files: stdFiles, idx: ()=> 0, step: ()=>{}, commit: ()=> hist.commit(), instr: ()=> null,
+    // The standard's peaks are the samples' correction: every Scherrer card follows.
+    changed: ()=> eachCard((e, a)=>{ if (a.type === 'scherrer') e.inst.sizesChanged(); }),
+    hidden: ()=> openModal !== peaksModal,
+  }, peaksModal.body, { prefix: 'xrdStdA', standard: true });
+  const stdRv = createRietveld({
+    files: stdFiles, allFiles: stdFiles, idx: ()=> 0, step: ()=>{}, commit: ()=> hist.commit(),
+    // Refined again or cleared: the samples' results say whether theirs rest on it.
+    changed: ()=> eachCard((e, a)=>{ if (a.type === 'rietveld') e.inst.redraw(); }),
+    hidden: ()=> openModal !== rvModal,
+  }, rvModal.body, { prefix: 'xrdStdR', standard: true });
+  stdRv.setName('standard');
+
+  /* ---- The cards (cards.js) ---- */
+  const KINDS = { scherrer: 'Scherrer', rietveld: 'Rietveld' };
+  const live = new Map();       // id → { inst }
+  const cards = ()=> deck ? deck.records : [];
+  const eachCard = fn => cards().forEach(a=>{ const e = live.get(a.id); if (e) fn(e, a); });
+  const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
+  // The card's panel: made on the samples, with the settings its kind had (a.states),
+  // the one it leaves kept for a switch back.
+  function buildCard(a, card, prev){
+    const was = live.get(a.id);
+    if (prev && was){ a.states[prev] = was.inst.snapshot(); if (was.inst.destroy) was.inst.destroy(); if (was.inst.res) was.inst.res.remove(); }
+    const host = { files: ()=> files, allFiles: ()=> allFiles, idx: ()=> curIdx, step, commit: ()=> hist.commit(),
+      instr: ()=> stdPeaks.instrModel(), irf: ()=> stdRv.irf(), hidden: ()=> deck.isFolded(a),
+      openStd: ()=> openStd(a.type === 'rietveld' ? 'rv' : 'peaks'),
+      changed: ()=>{} };
+    const el = card.querySelector('.xrd-card');
+    const inst = a.type === 'scherrer' ? createPeakAnalysis(host, el, { prefix: prefixOf(a) }) : createRietveld(host, el, { prefix: prefixOf(a) });
+    if (a.states[a.type]) inst.restore(a.states[a.type]);
+    else if (a.type === 'scherrer') inst.restore({});
+    live.set(a.id, { inst });
+    placeRes();
+  }
+  function dropCard(a){
+    const e = live.get(a.id);
+    if (!e) return;
+    if (e.inst.destroy) e.inst.destroy();
+    if (e.inst.res) e.inst.res.remove();
+    live.delete(a.id);
+    syncResults();
+  }
+  const resList = document.getElementById('xrdResList');
+  const placeRes = ()=> eachCard(e=>{ if (e.inst.res) resList.appendChild(e.inst.res); });
+  // The Results: each Scherrer card's section, under its name, in card order; the card
+  // is there while one is.
+  function syncResults(){
+    const on = cards().filter(a=> a.type === 'scherrer' && live.has(a.id));
+    document.getElementById('xrdResults').style.display = files.length && on.length ? 'block' : 'none';
+    on.forEach((a, i)=> live.get(a.id).inst.res.classList.toggle('is-first', i === 0));
+  }
+  function named(a){
+    const e = live.get(a.id);
+    if (!e) return;
+    e.inst.setName(fileSafe(a.name));
+    if (e.inst.res) e.inst.res.querySelector('.res-an-title').textContent = a.name;
+  }
+  deck = createDeck({
+    list: document.getElementById('xrdAnalyses'), addBar: document.getElementById('xrdAddBar'), addBtn: document.getElementById('xrdAddAn'),
+    kinds: KINDS, info: t=> (t === 'scherrer' ? PEAKS_INFO : RV_INFO) + ' ' + cardInfo(true, true),
+    body: ()=> '<div class="xrd-card"></div>', make: ()=> ({ states: {} }),
+    build: buildCard, drop: dropCard, autoName: a=> KINDS[a.type], named,
+    changed: ()=>{ placeRes(); syncResults(); }, loaded: ()=>{ placeRes(); syncResults(); },
+    added: a=>{ if (files.length) live.get(a.id).inst.refresh(); },
+    switched: a=>{ if (files.length) live.get(a.id).inst.refresh(); },
+    wake: a=>{ if (files.length) live.get(a.id).inst.redraw(); },
+    commit: ()=> hist.commit(),
+  });
+
+  /* ---- Undo/redo: snapshot the reversible state. Raw patterns (x/y) are shared by
+     reference; the cards' settings, peaks and results, the standard's and the files'
+     order, labels and colours are captured so any change can be stepped back. ---- */
+  const clone = o => JSON.parse(JSON.stringify(o));
   function xrdSnapshot(){
     return {
+      v: 2,
       files: allFiles.map(f=>({...f})),
-      perParams: perParams.map(p=>({...p})),
-      manualPeaks: manualPeaks.map(a=>a.slice()),
-      removedPeaks: removedPeaks.map(a=>a.slice()),
-      shared: {...shared},
-      paramMode: {...paramMode},
-      stdParams: {...stdParams},
-      standardName: standardPick, curIdx, sizeBy,
-      rv: rv ? rv.snapshot() : null,
-      norm: document.getElementById('xrdNorm').value,
+      std: stdFile ? {...stdFile} : null,
+      stdPeaks: stdPeaks.snapshot(), stdRv: stdRv.snapshot(),
+      curIdx,
+      cards: cards().map(a=>{
+        const states = {};
+        Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) states[k] = clone(s); });
+        states[a.type] = live.get(a.id).inst.snapshot();
+        return { ...deck.saved(a), states };
+      }),
     };
   }
   /* A project keeps each file's arrays as the version that loaded it read them. Up to v262
@@ -284,1364 +356,70 @@ function solveLinear(A, b){
       moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
     return { f: g, note: moved ? 'read again from the file itself: the project held its data as an earlier version had read them (up to v262, with their minimum subtracted). Results refined before are from those: refine again' : null };
   }
-  function xrdRestore(s){
-    const reads = s.files.map(readAgain);
+  /* A project from before the cards (v460): one Analysis and one Rietveld card, and the
+     standard a file among the samples, chosen in a select. It becomes the standard's own
+     file, its parameters and peaks the standard's analysis, its refinement the standard's
+     Rietveld; the samples' settings go to a Scherrer card and a Rietveld card. A standard
+     left out of the analysis was not in use: it stays a sample, left out. */
+  function migrate(s){
+    const all = s.files || [], incl = all.filter(f=> f.included !== false);
+    const si = s.standardName ? incl.findIndex(f=> f.name === s.standardName) : -1;
+    const cut = a => Array.isArray(a) ? a.filter((_, i)=> i !== si) : a;
+    const rv = s.rv || {}, res = rv.results || {};
+    const stdRes = si >= 0 && res[s.standardName] ? { [s.standardName]: res[s.standardName] } : {};
+    const smpRes = Object.fromEntries(Object.entries(res).filter(([k])=> !(si >= 0 && k === s.standardName)));
+    let ci = s.curIdx || 0; if (si >= 0 && ci > si) ci--;
+    return {
+      files: si >= 0 ? all.filter(f=> f !== incl[si]) : all,
+      std: si >= 0 ? (({ included, held, ...f })=> f)(incl[si]) : null,
+      stdPeaks: si >= 0 ? { shared: s.stdParams, perParams: [s.stdParams], manualPeaks: [(s.manualPeaks || [])[si] || []], removedPeaks: [(s.removedPeaks || [])[si] || []] } : { shared: s.stdParams },
+      stdRv: { phases: [], std: rv.std, start: rv.start, hold: rv.hold, fit: rv.fit, results: stdRes, refineB: rv.refineB },
+      curIdx: ci,
+      cards: [
+        { id: 1, type: 'scherrer', states: { scherrer: { perParams: cut(s.perParams), manualPeaks: cut(s.manualPeaks), removedPeaks: cut(s.removedPeaks), shared: s.shared, paramMode: s.paramMode, sizeBy: s.sizeBy, norm: s.norm } } },
+        { id: 2, type: 'rietveld', states: { rietveld: { ...rv, results: smpRes } } },
+      ],
+    };
+  }
+  function xrdRestore(s0){
+    const s = s0 && s0.v === 2 ? s0 : migrate(s0 || {});
+    const reads = (s.files || []).map(readAgain), stdRead = s.std ? readAgain(s.std) : null;
     allFiles = reads.map(r=> r.f);
     files = includedOf(allFiles);
-    perParams = s.perParams.map(p=>({...p}));
-    manualPeaks = s.manualPeaks.map(a=>a.slice());
-    removedPeaks = s.removedPeaks.map(a=>a.slice());
-    Object.assign(shared, s.shared);
-    Object.assign(paramMode, s.paramMode);
-    if (s.stdParams) Object.assign(stdParams, s.stdParams);
-    standardPick = s.standardName || '';
-    sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
-    curIdx = Math.min(s.curIdx, Math.max(0, files.length-1));
-    if (rv) rv.restore(s.rv);
-    document.getElementById('xrdNorm').value = s.norm;
-    syncModeButtons();
+    stdFile = stdRead ? stdRead.f : null;
+    curIdx = Math.min(s.curIdx || 0, Math.max(0, files.length-1));
+    stdPeaks.restore(s.stdPeaks || {});
+    stdRv.restore(s.stdRv || {});
+    deck.load(Array.isArray(s.cards) ? s.cards : [], src=> ({ states: Object.fromEntries(Object.entries(clone(src.states || {})).filter(([k])=> KINDS[k])) }),
+      a=> live.get(a.id).inst.restore(a.states[a.type] || {}));
+    syncStdFile();
+    stdPeaks.refresh();
+    stdRv.refresh();
     afterFilesChange();
     // Clear the previous tab's transient upload alert and rebuild for this tab.
     xrdLoadAlerts = ''; xrdNoteAlerts = ''; xrdUploadAlerts = '';
-    const notes = reads.filter(r=> r.note).map(r=> esc(`${r.f.label || r.f.name}: ${r.note}.`));
+    const notes = [...reads, ...(stdRead ? [stdRead] : [])].filter(r=> r.note).map(r=> esc(`${r.f.label || r.f.name}: ${r.note}.`));
     if (notes.length) xrdNoteAlerts = buildAlertsHtml([], notes, 'Restored, with a caveat:', '', 'xrd-dismiss-notes');
     rebuildXrdAlerts();
   }
-  function syncModeButtons(){
-    Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
-      const c = document.getElementById(tid);
-      if (c) c.textContent = paramMode[key]==='shared' ? 'all' : 'one';
-    });
-  }
   const hist = registerHistory('xrd', xrdSnapshot, xrdRestore);
-  // The Rietveld card (xrd-rv.js): it reads the files, the standard and the history
-  // through these, and keeps its own phases and results in this module's state.
-  rv = createRietveld({ files: ()=> files, allFiles: ()=> allFiles, standardName: ()=> standardName, commit: ()=> hist.commit() });
 
-  // Get params for a specific file index (respects per-field shared/per mode)
-  function getFileParams(i){
-    // The instrumental standard uses its own independent parameter set.
-    if (files[i] && files[i].name===standardName) return {...stdParams};
-    const pp = perParams[i] || {};
-    const g = k => paramMode[k]==='shared' ? shared[k] : (pp[k] ?? shared[k]);
-    return { N:g('N'), blWin:g('blWin'), pkHeight:g('pkHeight'), pkProm:g('pkProm'), pkDist:g('pkDist'), K:g('K'), lambda:g('lambda') };
-  }
+  registerTabRedraw('xrd', ()=>{
+    deck.fitNames();
+    if (files.length) eachCard((e, a)=>{ if (!deck.isFolded(a)) e.inst.redraw(); });
+    if (openModal === peaksModal) stdPeaks.redraw();
+    if (openModal === rvModal) stdRv.redraw();
+  });
 
-  // Read inputs into the appropriate store for curIdx
-  // Parse a decimal field tolerant of comma separators; only fall back on a genuinely empty/invalid value
-  function numField(id, def){
-    const raw = String(document.getElementById(id).value).trim().replace(',', '.');
-    if (raw === '') return def;
-    const v = parseFloat(raw);
-    return isNaN(v) ? def : v;
-  }
-
-  // input id ↔ stored field key
-  const FIELD_INPUT = { N:'xrdSmooth', blWin:'xrdBlWin', pkHeight:'xrdPkHeight', pkProm:'xrdPkProm', pkDist:'xrdPkDist', K:'xrdK', lambda:'xrdLambda' };
-  const FIELD_MIN   = { N:1, blWin:1, pkHeight:0, pkProm:0, pkDist:0, K:1e-6, lambda:1e-6 };
-  const FIELD_DEF   = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
-  const STD_DEF     = { ...FIELD_DEF, N:1 };   // the standard's own defaults (stdParams)
-
-  // Validation feedback (shake + auto-correct) for the decimal (type=text) fields —
-  // the type=number fields are auto-guarded globally in utils.js. Wired early so
-  // these run before the fields' own change handlers.
-  [ ['xrdPkHeight',0,5], ['xrdPkProm',0,3], ['xrdPkDist',0,0.3], ['xrdK',1e-6,0.9], ['xrdLambda',1e-6,1.540598],
-    ['xrdStdPkHeight',0,5], ['xrdStdPkProm',0,3], ['xrdStdPkDist',0,0.3],
-  ].forEach(([id,min,def])=> guardNumericInput(document.getElementById(id), { min, def }));
-
-  function readInputsToStore(){
-    for (const key in FIELD_INPUT){
-      const v = Math.max(FIELD_MIN[key], numField(FIELD_INPUT[key], FIELD_DEF[key]));
-      if (paramMode[key]==='shared') shared[key] = v;
-      else { if (!perParams[curIdx]) perParams[curIdx] = {}; perParams[curIdx][key] = v; }
-    }
-  }
-
-  // Push stored values for curIdx into the input fields
-  function writeStoreToInputs(){
-    const p = getFileParams(curIdx);
-    for (const key in FIELD_INPUT) document.getElementById(FIELD_INPUT[key]).value = p[key];
-    syncLambdaSelect();
-  }
-
-  // Keep the wavelength preset selector in step with the numeric λ value: pick the
-  // matching source preset (else "Custom"), and lock the value field unless Custom.
-  function syncLambdaSelect(){
-    const inp = document.getElementById('xrdLambda');
-    const sel = document.getElementById('xrdLambdaSel');
-    if (!inp || !sel) return;
-    const v = parseFloat(String(inp.value).replace(',','.'));
-    let matched = 'custom';
-    for (const o of sel.options){ if (o.value!=='custom' && Math.abs(parseFloat(o.value)-v) < 5e-5){ matched = o.value; break; } }
-    sel.value = matched;
-    inp.readOnly = (matched !== 'custom');
-  }
-
-  // Standard's own parameter inputs (no all/one toggle, no K/λ, no normalization choice)
-  const STD_INPUT = { N:'xrdStdSmooth', blWin:'xrdStdBlWin', pkHeight:'xrdStdPkHeight', pkProm:'xrdStdPkProm', pkDist:'xrdStdPkDist' };
-  function writeStdInputs(){ for (const k in STD_INPUT){ const el=document.getElementById(STD_INPUT[k]); if (el) el.value = stdParams[k]; } }
-  function readStdInputs(){ for (const k in STD_INPUT){ stdParams[k] = Math.max(FIELD_MIN[k], numField(STD_INPUT[k], STD_DEF[k])); } }
-
-  // Restore persisted XRD analysis defaults (norm, smoothing, baseline, K, λ) at startup
-  loadXrdParams();
-
-  // SNIP baseline: iteratively clip peaks downward
-  function computeBaseline(y, halfWin){
-    const n = y.length;
-    const z = Float64Array.from(y);
-    for (let w = halfWin; w >= 1; w--){
-      for (let i = w; i < n-w; i++){
-        const avg = (z[i-w] + z[i+w]) / 2;
-        if (avg < z[i]) z[i] = avg;
-      }
-    }
-    return Array.from(z);
-  }
-
-  // Compute prominence of each local maximum
-  function peakProminence(y, idx){
-    const h = y[idx];
-    let leftBase = h, rightBase = h;
-    for (let i=idx-1; i>=0; i--){ if (y[i]<leftBase) leftBase=y[i]; if (y[i]>h) break; }
-    for (let i=idx+1; i<y.length; i++){ if (y[i]<rightBase) rightBase=y[i]; if (y[i]>h) break; }
-    return h - Math.max(leftBase, rightBase);
-  }
-
-  // Find peaks with height + prominence thresholds and min-distance NMS
-  function findPeaks(x, y, minHeightPct, minPromPct, minDistDeg){
-    const mx = maxArr(y);
-    if (!mx) return [];
-    const minH = mx * minHeightPct / 100;
-    const minP = mx * minPromPct   / 100;
-    const step = x.length > 1 ? (x[x.length-1]-x[0])/(x.length-1) : 1;
-    const minDistPts = minDistDeg / step;
-    const candidates = [];
-    for (let i=1; i<y.length-1; i++){
-      if (y[i]>y[i-1] && y[i]>=y[i+1] && y[i]>=minH){
-        const prom = peakProminence(y, i);
-        if (prom >= minP) candidates.push({pos:x[i], height:y[i], prominence:prom, idx:i});
-      }
-    }
-    candidates.sort((a,b)=>b.height-a.height);
-    const used = new Uint8Array(y.length);
+  // The CSVs: every card's, named after it, and the standard's.
+  function exportXrdZip(){
     const out = [];
-    for (const c of candidates){
-      if (used[c.idx]) continue;
-      out.push(c);
-      // Closer than the minimum distance, not merely within its rounding: a peak
-      // 0.315° away stays with a 0.3° minimum.
-      const lo = Math.max(0, Math.ceil(c.idx-minDistPts));
-      const hi = Math.min(y.length-1, Math.floor(c.idx+minDistPts));
-      for (let j=lo; j<=hi; j++) if (Math.abs(j - c.idx) < minDistPts) used[j]=1;
-    }
-    out.sort((a,b)=>a.pos-b.pos);
+    eachCard((e, a)=> out.push(...e.inst.csvEntries(fileSafe(a.name) + ' - ')));
+    out.push(...stdPeaks.csvEntries(''), ...stdRv.csvEntries('standard - '));
     return out;
   }
-
-  // Nearest data-grid index for a 2θ position on the given axis
-
-
-  // Refine to the local maximum within ±win points
-
-  // FWHM (in degrees 2θ) by half-maximum interpolation around a peak
-  function computeFWHM(x, y, idx0){
-    const idx = refineIdx(y, idx0, 3);
-    const half = y[idx] / 2;
-    if (!(half > 0)) return NaN;
-    let l = idx; while (l > 0 && y[l] > half) l--;
-    if (y[l] > half) return NaN; // no left crossing in range
-    const xl = (y[l+1]===y[l]) ? x[l] : x[l] + (half-y[l])/(y[l+1]-y[l])*(x[l+1]-x[l]);
-    let r = idx; while (r < y.length-1 && y[r] > half) r++;
-    if (y[r] > half) return NaN; // no right crossing
-    const xr = (y[r]===y[r-1]) ? x[r] : x[r-1] + (half-y[r-1])/(y[r]-y[r-1])*(x[r]-x[r-1]);
-    return Math.abs(xr - xl);
-  }
-
-  /* The counting uncertainty of computeFWHM's width. Each crossing is interpolated
-     between two points of the smoothed, background-subtracted profile, and the half
-     level is half the apex: the counts' Poisson variance (raw y·m, m from varMul),
-     carried through the moving average that smoothed them (the covariances of
-     neighbouring smoothed points included) and through those three readings, gives
-     the width's to first order. The SNIP background, smooth over many points, counts
-     as exact. NaN where the width is, or a crossing is flat. */
-  function fwhmSigma(x, y, idx0, yraw, N, varMul){
-    const idx = refineIdx(y, idx0, 3), half = y[idx] / 2;
-    if (!(half > 0)) return NaN;
-    let l = idx; while (l > 0 && y[l] > half) l--;
-    let r = idx; while (r < y.length-1 && y[r] > half) r++;
-    if (y[l] > half || y[r] > half) return NaN;
-    const Dl = y[l+1]-y[l], Dr = y[r]-y[r-1];
-    if (!(Dl > 0 && Dr < 0)) return NaN;
-    const tl = (half-y[l])/Dl, tr = (half-y[r-1])/Dr, dl = x[l+1]-x[l], dr = x[r]-x[r-1];
-    // H = x_r − x_l, x_l = x[l] + dl·(h − y_l)/Dl (x_r alike), h = y_apex/2: ∂H/∂y.
-    const g = new Map(), add = (k, v)=> g.set(k, (g.get(k) || 0) + v);
-    add(l, dl*(1 - tl)/Dl); add(l+1, dl*tl/Dl);
-    add(r-1, dr*(tr - 1)/Dr); add(r, -dr*tr/Dr);
-    add(idx, 0.5*(dr/Dr - dl/Dl));
-    // The moving average's weights, as movingAverage takes them: N + 1 points with
-    // half-weight ends for an even N, cut short at the ends of the pattern.
-    N = Math.max(1, Math.round(N));
-    const n = yraw.length, h = Math.floor(N/2), even = N > 1 && N % 2 === 0;
-    const win = i =>{
-      const w = new Map(); let W = 0;
-      for (let k = Math.max(0, i-h); k <= Math.min(n-1, i+h); k++){ const v = even && (k === i-h || k === i+h) ? 0.5 : 1; w.set(k, v); W += v; }
-      return { w, W };
-    };
-    const vy = k => Math.max(yraw[k], 0)*(varMul ? varMul[k] : 1);
-    const ks = [...g.keys()], wins = new Map(ks.map(k=> [k, win(k)]));
-    let v = 0;
-    for (const i of ks) for (const j of ks){
-      const a = wins.get(i), b = wins.get(j);
-      let c = 0;
-      a.w.forEach((wi, k)=>{ const wj = b.w.get(k); if (wj) c += wi*wj*vy(k); });
-      v += g.get(i)*g.get(j)*c/(a.W*b.W);
-    }
-    return Math.sqrt(v);
-  }
-
-  // Same half-maximum construction as computeFWHM, but returns the geometry needed
-  // to draw the horizontal FWHM marker: left/right crossings, half-height and the
-  // refined apex index. Returns null when no clean crossing exists on both sides.
-  function fwhmGeom(x, y, idx0){
-    const idx = refineIdx(y, idx0, 3);
-    const half = y[idx] / 2;
-    if (!(half > 0)) return null;
-    let l = idx; while (l > 0 && y[l] > half) l--;
-    if (y[l] > half) return null;
-    const xl = (y[l+1]===y[l]) ? x[l] : x[l] + (half-y[l])/(y[l+1]-y[l])*(x[l+1]-x[l]);
-    let r = idx; while (r < y.length-1 && y[r] > half) r++;
-    if (y[r] > half) return null;
-    const xr = (y[r]===y[r-1]) ? x[r] : x[r-1] + (half-y[r-1])/(y[r]-y[r-1])*(x[r]-x[r-1]);
-    return { xl, xr, half, idx };
-  }
-
-  /* ---------- True Kα1/Kα2 doublet deconvolution (pseudo-Voigt profile fit) ---------- */
-  // pseudo-Voigt: η·Lorentzian + (1-η)·Gaussian, both with the same FWHM
-  // Kα1/Kα2 separation Δ(2θ) in degrees at a given 2θ position
-  // params = [A, x0, fwhm, eta, bg]; doublet = A·(pV(Kα1) + ½·pV(Kα2)) + bg
-  // Solve A·z = b (square, small) by Gaussian elimination with partial pivot
-  // One Levenberg–Marquardt run from a given start; returns {p, cost}
-  // Fit the doublet over a local window with a multi-start over η; returns peak params
-
-  /* ---------- Global whole-pattern fit: Σ Voigt doublets + polynomial background ---------- */
-  // Humlíček w4 complex error function w(x+iy), y>=0  → returns [Re, Im]
-  // Voigt shape (area·const absorbed into amplitude) value at xi; centre x0, Gaussian σ, Lorentzian γ
-  // Voigt value + analytic derivatives wrt (x0, sigma, gamma) via w'(z) = -2z·w + 2i/√π
-  // FWHM (°2θ) of a Voigt from σ,γ — Olivero & Longbothum approximation
-  // pseudo-Voigt value + derivatives (used only by the local fallback fit)
-  // Base symmetric shape value + derivatives, normalised to {val,dx0,d2,d3}
-  // (d2 = ∂/∂(first width); d3 = ∂/∂(second param: γ for Voigt, η for pV))
-  // FCJ-type axial-divergence kernel offsets (°2θ) + weights for a peak at pos.
-  // ε drawn from the convolution of the sample (S/L) and slit (H/L) extents (trapezoid),
-  // mapped to apparent angle by cos(2θ')=cos(2θ)/cos²ε (FCJ); folds direction around 90°.
-  // One doublet-component value+grad at centre c, with optional asymmetry. asym={on,mode,SL,HL,nq}
-  // returns {val, dc, d2, d3, da}
-  // Value-only version (for reconstruction) using a stored fit object fp
-
-  // Least-squares polynomial (powers of normalised u) fit of yv(x) — for background init
-  // active: [{A0,x0,w0}]; fit raw y with Voigt/pseudo-Voigt doublets (optional asymmetry)
-  // + poly background. params per peak = [A, x0, p2, p3] (+ a when split asymmetry).
-
-  // Multi-start wrapper: tries several starting configs and returns the lowest-cost result.
-
-  function reprocessOne(i){
-    const p = getFileParams(i);
-    const x = files[i].x;
-    const yraw       = files[i].y;
-    const smoothed   = movingAverage(yraw, p.N);                       // display + detection
-    const snip       = computeBaseline(smoothed, p.blWin);             // SNIP baseline (estimate/fallback/standard)
-    /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
-       profile — on the raw counts the noise stops it short — and the smoothing, a box
-       N points wide convolved into every peak, widens them in turn: the window is the
-       user's to keep small against the peak widths, the raw pattern drawn beside it. */
-    const detSub     = smoothed.map((v,j)=>Math.max(0, v-snip[j]));
-    const rawSub     = yraw.map((v,j)=>v-snip[j]);
-    // Peak detection on the smoothed, SNIP-subtracted profile (robust to noise)
-    const peaks      = findPeaks(x, detSub, p.pkHeight, p.pkProm, p.pkDist);
-    // Re-inject manually added peaks (survive param changes, cleared on reset)
-    (manualPeaks[i]||[]).forEach(pos=>{
-      const idx = nearestIdx(x, pos);
-      peaks.push({pos, height:detSub[idx], prominence:peakProminence(detSub, idx), idx, manual:true});
-    });
-    peaks.sort((a,b)=>a.pos-b.pos);
-    // detPos = detected position (stable identity, independent of fit on/off)
-    peaks.forEach(pk=>{ pk.detPos = pk.pos; });
-    // Apply persistent removals (matched by detected position, with a small tolerance)
-    const rem = removedPeaks[i] || [];
-    const remTol = Math.min(0.1, (p.pkDist || 0.3) * 0.45);
-    peaks.forEach(pk=>{ pk.removed = rem.some(v=>Math.abs(v-pk.detPos) < remTol); });
-
-    // SNIP baseline and the half-maximum FWHM.
-    peaks.forEach(pk=>{
-      if (pk.removed){ pk.fwhm=NaN; pk.fwhmClassic=NaN; return; }
-      pk.fwhmClassic=computeFWHM(x, detSub, pk.idx); pk.fwhm=pk.fwhmClassic;
-      pk.fwhmSig = fwhmSigma(x, detSub, pk.idx, yraw, p.N, files[i].varMul);
-    });
-    const subtracted = detSub;
-    processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks};
-  }
-
-  /* Caglioti instrumental resolution: FWHM² = U·tan²θ + V·tanθ + W (θ = Bragg angle).
-     Least squares on FWHM² (linear in U, V, W; at least 3 peaks), each peak weighted
-     by 1/(2·FWHM·σ)², σ its width's counting uncertainty (fwhmSigma): to first order
-     the sum minimised is χ² = Σ((FWHM − fit)/σ)², so a weak peak, whose width is less
-     certain, counts for less, and χ²/(n − 3), the reduced χ², says whether the curve
-     follows the peaks within their counting errors (≈ 1) or not (well above 1). A
-     peak with no σ (a flat crossing) is given the largest of the others'. The
-     standard errors are (XᵀWX)⁻¹'s, scaled by √χ²_red where it is above 1, so that a
-     curve the peaks do not follow does not get errors as if they did. With no σ at
-     all the fit is unweighted, its errors from the residual variance. Also given: R²
-     (weighted) and the residuals on the FWHM itself, in degrees. */
-  const cagAt = (uvw, th)=>{ const t = Math.tan(th); return uvw[0]*t*t + uvw[1]*t + uvw[2]; };
-  function fitCaglioti(pts){
-    const n = pts.length;
-    if (n < 3) return null;
-    const sv = pts.map(p=> p.s).filter(v=> isFinite(v) && v > 0);
-    const weighted = sv.length > 0, sMax = weighted ? Math.max(...sv) : NaN;
-    const w = pts.map(p=> weighted ? 1/(2*p.b*(isFinite(p.s) && p.s > 0 ? p.s : sMax))**2 : 1);
-    const A=[[0,0,0],[0,0,0],[0,0,0]], b=[0,0,0];
-    pts.forEach((p, k)=>{
-      const t=Math.tan(p.th), x=[t*t, t, 1], y=p.b*p.b;
-      for (let i=0;i<3;i++){ b[i]+=w[k]*x[i]*y; for (let j=0;j<3;j++) A[i][j]+=w[k]*x[i]*x[j]; }
-    });
-    const uvw = solveLinear(A, b);
-    if (!(uvw && uvw.every(isFinite))) return null;
-    const ys = pts.map(p=> p.b*p.b), W = w.reduce((a, v)=> a + v, 0);
-    const ym = ys.reduce((a, v, k)=> a + w[k]*v, 0)/W;
-    const chi2 = pts.reduce((a, p, k)=> a + w[k]*(ys[k] - cagAt(uvw, p.th))**2, 0);
-    const tss = ys.reduce((a, v, k)=> a + w[k]*(v - ym)**2, 0);
-    const dof = n - 3, red = dof > 0 ? chi2/dof : NaN;
-    const scale = weighted ? Math.max(1, red) : red;
-    // (XᵀWX)⁻¹, a column at a time
-    const inv = [0, 1, 2].map(j=> solveLinear(A, [0, 1, 2].map(i=> i === j ? 1 : 0)));
-    const se = [0, 1, 2].map(i=> inv[i] && dof > 0 ? Math.sqrt(Math.max(0, scale*inv[i][i])) : NaN);
-    const res = pts.map(p=> p.b - Math.sqrt(Math.max(0, cagAt(uvw, p.th))));
-    return { uvw, se, n, dof, weighted, chi2r: weighted ? red : NaN, r2: tss > 0 ? 1 - chi2/tss : NaN,
-             s: weighted ? NaN : Math.sqrt(red),
-             rms: Math.sqrt(res.reduce((a, v)=> a + v*v, 0)/n), maxRes: Math.max(...res.map(Math.abs)) };
-  }
-  // The standard's peaks the instrumental width is taken from, in 2θ order, and the
-  // Caglioti fit to them (null with fewer than 3). Null with no standard in use.
-  function instrModel(){
-    if (!standardName) return null;
-    const si = standardIdx();
-    if (si < 0 || !processed[si]) return null;
-    const pts = processed[si].peaks
-      .filter(p=>!p.removed && isFinite(p.fwhm))
-      .map(p=>({x:p.pos, th:(p.pos/2)*Math.PI/180, b:p.fwhm, s:p.fwhmSig}))
-      .sort((a,b)=>a.x-b.x);
-    return { pts, fit: fitCaglioti(pts) };
-  }
-  // Instrumental FWHM (deg) at any 2θ from the selected standard, via the Caglioti
-  // fit (evaluable at arbitrary angles, incl. between/beyond the standard's peaks).
-  // Falls back to piecewise-linear interpolation when fewer than 3 standard peaks.
-  function instrBeta(twoTheta){
-    const m = instrModel();
-    if (!m || !m.pts.length) return 0;
-    const pts = m.pts;
-    if (m.fit) return Math.sqrt(Math.max(0, cagAt(m.fit.uvw, (twoTheta/2)*Math.PI/180)));
-    // Fallback (<3 peaks): linear interpolation / clamp
-    if (twoTheta <= pts[0].x) return pts[0].b;
-    if (twoTheta >= pts[pts.length-1].x) return pts[pts.length-1].b;
-    for (let k=0; k<pts.length-1; k++){
-      if (twoTheta >= pts[k].x && twoTheta <= pts[k+1].x){
-        // Two peaks at one angle (a manual peak on a detected one) span nothing.
-        const d = pts[k+1].x - pts[k].x, t = d > 0 ? (twoTheta-pts[k].x)/d : 0;
-        return pts[k].b + (pts[k+1].b-pts[k].b)*t;
-      }
-    }
-    return pts[pts.length-1].b;
-  }
-
-  // Scherrer size (nm) from a FWHM (deg) at 2θ pos, with editable K and λ (Å)
-  function scherrerD(betaDeg, pos, K, lam){
-    if (!isFinite(betaDeg) || betaDeg <= 0) return NaN;
-    const bRad = betaDeg * Math.PI/180, thRad = (pos/2) * Math.PI/180;
-    return (K * lam / (bRad * Math.cos(thRad))) / 10; // nm (λ in Å → /10)
-  }
-  // Size WITHOUT instrumental correction (raw β)
-  function sizeRaw(betaDeg, pos, K, lam){ return scherrerD(betaDeg, pos, K, lam); }
-  // Size WITH instrumental correction: β² = β_obs² − β_instr²
-  function sizeCorr(betaDeg, pos, K, lam){
-    if (!isFinite(betaDeg) || betaDeg <= 0) return NaN;
-    const bInstr = instrBeta(pos);
-    return scherrerD(Math.sqrt(Math.max(0, betaDeg*betaDeg - bInstr*bInstr)), pos, K, lam);
-  }
-
-  function reprocessAll(){
-    processed = [];
-    for (let i=0; i<files.length; i++) reprocessOne(i);
-  }
-
-  let anaPlot = null;
-  let stdPlot = null;   // instrumental-standard card plot
-
-  // Show/hide the Analysis + Standard cards. Both are shown whenever files are loaded;
-  // the Analysis card shows a placeholder message when all files are set as the standard.
-  function updateCardVis(){
-    const hasFiles = files.length>0;
-    document.getElementById('xrdStdCard').style.display   = hasFiles ? 'block' : 'none';
-    document.getElementById('xrdWorkspace').style.display  = hasFiles ? 'block' : 'none';
-    const hasNonStd = nonStdIdx().length > 0;
-    const emptyEl   = document.getElementById('xrdAnalysisEmpty');
-    const contentEl = document.getElementById('xrdAnalysisContent');
-    if (emptyEl)   emptyEl.style.display   = hasNonStd ? 'none' : '';
-    if (contentEl) contentEl.style.display = hasNonStd ? ''     : 'none';
-  }
-
-  // ---- Generic analysis drawer: raw, smoothed, SNIP baseline, peaks (no fit).
-  // Shared by the Analysis card ('a', xrdSvg) and the Instrumental-standard card
-  // ('s', xrdStdSvg). Each sample is normalised to its own smoothed max (= 1). ----
-  function drawAnalysisInto(idx, svgId, key, preserveView){
-    const f  = files[idx];
-    const pr = processed[idx];
-    if (!f || !pr) return;
-    const mx = maxArr(pr.smoothed) || 1;
-    const prevPlot = panels[key].plot();
-    const prev = (preserveView && prevPlot) ? {xmin:prevPlot.xmin, xmax:prevPlot.xmax, ymin:prevPlot.ymin, ymax:prevPlot.ymax} : null;
-
-    const ndense = Math.min(20000, Math.max(4000, f.x.length*10));
-    const dense  = linspace(f.x[0], f.x[f.x.length-1], ndense);
-    const baseD  = interpLinear(f.x, pr.baseline, dense);
-
-    const svgNode = document.getElementById(svgId);
-    const plot  = new Plot(svgNode, {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
-    plot.attachTools(svgNode.closest('.plot-wrap'));
-    plot.setRange(minArr(f.x), maxArr(f.x), 0, 1.1);
-    if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
-    plot.drawAxes();
-    plot.line(f.x, f.y.map(v=>v/mx),         '#6a7585', 1);
-    plot.line(f.x, pr.smoothed.map(v=>v/mx), '#3aa0ff', 1.4);
-    plot.line(dense, baseD.map(v=>v/mx),     '#ff9933', 1.2);
-    const drawnPos = [];
-    const peakMarks = [], fwhmMarks = [];
-    for (const pk of pr.peaks){
-      if (pk.removed) continue;
-      if (drawnPos.some(v=>Math.abs(v-pk.pos)<1e-9)) continue;
-      drawnPos.push(pk.pos);
-      plot.vline(pk.pos, PEAK_BASE, false);
-      peakMarks.push({pos:pk.pos});
-      // Horizontal FWHM marker at half-maximum height (on the smoothed, baseline-subtracted profile)
-      const gm = fwhmGeom(f.x, pr.subtracted, pk.idx);
-      if (gm){
-        const yDisp = (pr.baseline[gm.idx] + gm.half) / mx;
-        fwhmMarks.push({pos:pk.pos, x0:gm.xl, x1:gm.xr, y:yDisp});
-      }
-    }
-    if (key==='s') stdPlot = plot; else anaPlot = plot;
-    plot._peakMarks = peakMarks;
-    plot._fwhmMarks = fwhmMarks;
-    plot._onView = ()=>{ refreshMarks(plot,key); applySelectionHighlight(); };
-    refreshMarks(plot,key);
-    applySelectionHighlight();
-  }
-
-  // ---- ANALYSIS card: current non-standard sample ----
-  function updateXrdAnalysis(preserveView){
-    if (!files.length || !processed.length) return;
-    const list = nonStdIdx();
-    if (!list.length){
-      document.getElementById('xrdCurrentLabel').textContent = '—';
-      document.getElementById('xrdIdx').textContent = '0/0';
-      return;
-    }
-    if (!list.includes(curIdx)) curIdx = list[0];
-    document.getElementById('xrdCurrentLabel').textContent = files[curIdx].label;
-    document.getElementById('xrdIdx').textContent = (list.indexOf(curIdx)+1)+'/'+list.length;
-    drawAnalysisInto(curIdx, 'xrdSvg', 'a', preserveView);
-  }
-
-  // ---- INSTRUMENTAL STANDARD card: the isolated standard sample ----
-  function updateXrdStandard(preserveView){
-    const si = standardIdx();
-    const body = document.getElementById('xrdStdBody');
-    if (!body) return;
-    // Until a standard is chosen only the select box shows; picking one spawns the
-    // plot, its parameters column and the peak table.
-    const show = !(si<0 || !processed[si]);
-    ['xrdStdBody','xrdStdParams','xrdStdPeakBox'].forEach(id=>{ const el=document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; });
-    // (Add peak sits at the foot of the parameters column, so it comes and goes with it.)
-    if (!show) return;
-    writeStdInputs();
-    drawAnalysisInto(si, 'xrdStdSvg', 's', preserveView);
-    renderStdTable();
-  }
-
-  const nearestLine = (lines, pos)=>{ let best=null,bd=Infinity; if(pos!=null) for(const el of lines){ const d=Math.abs(el._value-pos); if(d<bd){bd=d;best=el;} } return bd<0.6?best:null; };
-
-  // Recolour one panel's peak vlines AND their FWHM markers from its selection/hover.
-  function highlightPanel(key){
-    const P = panels[key], plot = P.plot(); if (!plot) return;
-    const all = [...plot.gOverlay.querySelectorAll('line')];
-    const peakLines = all.filter(el=>el._value!==undefined && !el._fwhm && !el._hit);
-    const fwhmSegs  = all.filter(el=>el._fwhm && !el._hit);
-    const selEl = nearestLine(peakLines, P.sel);
-    const hovEl = nearestLine(peakLines, P.hov);
-    peakLines.forEach(el=>{
-      if (el===selEl){ el.setAttribute('stroke',PEAK_SEL); el.setAttribute('stroke-width',1.8); }
-      else if (el===hovEl){ el.setAttribute('stroke',PEAK_HOVER); el.setAttribute('stroke-width',1.8); }
-      else { el.setAttribute('stroke',PEAK_BASE); el.setAttribute('stroke-width',1); }
-    });
-    // FWHM markers mirror the peak state (matched by shared _value = peak position)
-    fwhmSegs.forEach(el=>{
-      const isSel = selEl && Math.abs(el._value - selEl._value) < 1e-9;
-      const isHov = hovEl && Math.abs(el._value - hovEl._value) < 1e-9;
-      if (isSel){ el.setAttribute('stroke',FWHM_SEL); el.setAttribute('stroke-width',4); }
-      else if (isHov){ el.setAttribute('stroke',FWHM_HOVER); el.setAttribute('stroke-width',4); }
-      else { el.setAttribute('stroke',FWHM_BASE); el.setAttribute('stroke-width',2.2); }
-    });
-  }
-  // Refresh both plots' highlights (used after a full redraw)
-  function applySelectionHighlight(){ highlightPanel('a'); highlightPanel('s'); }
-
-  // Twin invisible thick "hit" line as a hover listener (à la Tauc draggable bars),
-  // so peaks and FWHM markers have a fat, responsive target. Scheduled clear on leave
-  // is cancelled by any enter within the same frame, avoiding flicker when the pointer
-  // slides between a peak's vertical hit line and its horizontal FWHM hit line.
-  let markHoverRAF = null;
-  function addMarkHover(el, key, pos){
-    el.addEventListener('pointerenter', ()=>{
-      const plot = panels[key].plot();
-      if (!plot || plot._mode) return;            // pan/zoom armed
-      if (addModeKey===key) return;               // placing a manual peak on this card
-      if (markHoverRAF){ cancelAnimationFrame(markHoverRAF); markHoverRAF=null; }
-      setHoverPanel(key, pos);
-    });
-    el.addEventListener('pointerleave', ()=>{
-      if (markHoverRAF) cancelAnimationFrame(markHoverRAF);
-      markHoverRAF = requestAnimationFrame(()=>{ markHoverRAF=null; setHoverPanel(key, null); });
-    });
-  }
-  // (Re)build the interactive overlay marks for a plot: visible FWHM segments plus the
-  // invisible thick hit lines for both peaks and FWHM markers. Called after every
-  // axis redraw (via _onView) since gOverlay is cleared on each refresh.
-  function buildInteractiveMarks(plot, key){
-    if (!plot) return;
-    const g = plot.gOverlay;
-    g.querySelectorAll('.xrd-mark').forEach(e=>e.remove());
-    const xlo = Math.min(plot.xmin, plot.xmax), xhi = Math.max(plot.xmin, plot.xmax);
-    // FWHM markers (visible dark-red segment + horizontal hit line)
-    (plot._fwhmMarks || []).forEach(mk=>{
-      const y  = plot.py(mk.y);
-      const xa = plot.px(mk.x0), xb = plot.px(mk.x1);
-      const seg = svgEl('line',{x1:xa,x2:xb,y1:y,y2:y,stroke:FWHM_BASE,'stroke-width':2.2,'stroke-linecap':'round','pointer-events':'none','class':'xrd-mark'});
-      seg._fwhm = true; seg._value = mk.pos;
-      g.appendChild(seg);
-      const hit = svgEl('line',{x1:xa,x2:xb,y1:y,y2:y,stroke:'transparent','stroke-width':16,'cursor':'pointer','class':'xrd-mark'});
-      hit._hit = true;
-      addMarkHover(hit, key, mk.pos);
-      g.appendChild(hit);
-    });
-    // Peak hit lines (invisible, full-height, vertical)
-    const {h} = plot.size(); const m = plot.margin;
-    (plot._peakMarks || []).forEach(mk=>{
-      if (mk.pos < xlo || mk.pos > xhi) return;
-      const px = plot.px(mk.pos);
-      const hit = svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'transparent','stroke-width':16,'cursor':'pointer','class':'xrd-mark'});
-      hit._hit = true;
-      addMarkHover(hit, key, mk.pos);
-      g.appendChild(hit);
-    });
-  }
-  function refreshMarks(plot, key){ buildInteractiveMarks(plot, key); }
-
-  // Toggle the transient 'hovering' class on the row nearest that panel's hover pos.
-  function updateRowHoverPanel(key){
-    const P = panels[key], wrap = document.getElementById(P.wrap); if (!wrap) return;
-    const rows = [...wrap.querySelectorAll('.peak-row')];
-    let best=null, bd=Infinity;
-    if (P.hov!=null) for (const r of rows){ const d=Math.abs(parseFloat(r.dataset.pos)-P.hov); if(d<bd){bd=d;best=r;} }
-    rows.forEach(r=>r.classList.toggle('hovering', r===best && bd<0.6));
-  }
-
-  // Transient hover for a panel (peak + associated row), distinct from selection.
-  function setHoverPanel(key, pos){
-    const P = panels[key];
-    if (pos===P.hov) return;
-    P.hov = pos;
-    highlightPanel(key);
-    updateRowHoverPanel(key);
-  }
-  // Permanent selection toggle for a panel.
-  function selectPanel(key, pos){
-    const P = panels[key];
-    P.sel = (P.sel!=null && Math.abs(pos-P.sel)<1e-9) ? null : pos;
-    renderPeakTable(); applySelectionHighlight();
-  }
-
-  // Stacked, baseline-subtracted overview. `curves[k]` holds each sample's raw
-  // (un-offset) trace on its own x axis; null entries (e.g. no fit) are skipped.
-  // The largest of some maxima, for a global normalisation: 1 only when there is
-  // nothing above zero to normalise by (a floor of 1 left data below 1 unnormalised).
-  function topOf(maxima){ const m = Math.max(-Infinity, ...maxima); return m > 0 ? m : 1; }
-  function drawStackedResults(svgId, legendId, curves){
-    const norm = document.getElementById('xrdNorm').value;
-    // The instrumental standard is excluded from the results entirely and from the
-    // global/local normalization; only non-standard samples with a curve are shown.
-    const shown = [];
-    files.forEach((f,k)=>{ if (f.name!==standardName && curves[k]) shown.push(k); });
-    const n = shown.length, baseOf = j => -j * 1.1;
-    const gmax = topOf(shown.map(k=>maxArr(curves[k])));
-    const plot = new Plot(document.getElementById(svgId), {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
-    plot.attachTools(plot.svg.closest('.plot-wrap'));
-    const legend = document.getElementById(legendId); legend.innerHTML='';
-    let lo=Infinity, hi=-Infinity;
-    shown.forEach(k=>{ lo=Math.min(lo, files[k].x[0]); hi=Math.max(hi, files[k].x[files[k].x.length-1]); });
-    if (!isFinite(lo)){ [lo,hi]=unionRange(); }
-    plot.setRange(lo, hi, baseOf(Math.max(0,n-1)), baseOf(0)+1.1);
-    plot.drawAxes();
-    shown.forEach((k, j)=>{
-      const raw = curves[k];
-      const mx = norm==='local' ? (maxArr(raw)||1) : gmax;
-      const norm1 = raw.map(v=> v/mx);            // exactly the CSV's own column
-      const y = norm1.map(v=> v + baseOf(j) + 0.05);
-      // Draw the stacked trace, but hand the composer the un-offset CSV values.
-      plot.line(files[k].x, y, files[k].color, 1.3, undefined,
-                { raw: { xs: files[k].x, ys: norm1 }, label: files[k].label, key: files[k].name });
-      const s=document.createElement('span');
-      s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`;
-      legend.appendChild(s);
-    });
-    return plot;
-  }
-
-  function updateXrdResults(){
-    if (!files.length || !processed.length) return;
-    // With no non-standard sample there is nothing to show — display the same
-    // placeholder the Analysis card uses instead of empty/half-drawn plots.
-    const hasNonStd = nonStdIdx().length > 0;
-    const emptyEl = document.getElementById('xrdResultsEmpty');
-    const contentEl = document.getElementById('xrdResultsContent');
-    if (emptyEl)   emptyEl.style.display   = hasNonStd ? 'none' : '';
-    if (contentEl) contentEl.style.display = hasNonStd ? ''     : 'none';
-    if (!hasNonStd){ renderPeakTable(); return; }
-    // Analysis: smoothed − SNIP baseline
-    resPlot = drawStackedResults('xrdResSvg', 'xrdResLegend', processed.map(pr=>pr.subtracted));
-    renderPeakTable();
-  }
-
-  function renderPeakTable(){ renderAnalysisTable(); renderStdTable(); renderXrdSizeChart(); fitCsvIcons(); }
-
-  // Re-derive everything downstream of a peak edit (add/remove/reset) on file `idx`.
-  // Covers the standard too: editing the standard's peaks changes β_instr and hence the
-  // samples' corrected sizes, so all cards are refreshed.
-  function refreshAfterPeakEdit(idx){
-    reprocessOne(idx);
-    updateXrdAnalysis(true);
-    updateXrdStandard(true);
-    updateXrdResults();
-    hist.commit();
-  }
-
-  // Analysis table for the current non-standard sample
-  function renderAnalysisTable(){
-    const wrap = document.getElementById('xrdPeakTableWrap');
-    if (!wrap) return;
-    if (!files.length || !processed.length || !nonStdIdx().includes(curIdx)){ wrap.innerHTML=''; return; }
-    renderClassicTable(curIdx, 'a', 'xrdPeakTableWrap', 'xrdPkReset');
-  }
-  // Standard's peak table (isolated standard sample)
-  function renderStdTable(){
-    const si = standardIdx();
-    const wrap = document.getElementById('xrdStdPeakTableWrap');
-    if (!wrap) return;
-    renderCaglioti();
-    if (si<0 || !processed[si]){ wrap.innerHTML=''; return; }
-    renderClassicTable(si, 's', 'xrdStdPeakTableWrap', 'xrdStdPkReset');
-  }
-
-  // Classic (peak-search) table: 2θ, rel intensity, classic FWHM, size. Generic over the
-  // file index, panel key ('a' or 's'), table wrap and reset-button ids.
-  // With a standard selected, non-standard samples show size both without and with correction.
-  function renderClassicTable(idx, key, wrapId, resetId){
-    const isStd = files[idx].name === standardName;
-    const fp = getFileParams(idx);
-    const allPks = processed[idx] ? processed[idx].peaks : [];
-    const wrap = document.getElementById(wrapId);
-    const resetBtn = document.getElementById(resetId);
-    const hasManual = (manualPeaks[idx]||[]).length > 0;
-    const hasRemoved = (removedPeaks[idx]||[]).length > 0;
-    if (resetBtn) resetBtn.style.display = (hasRemoved || hasManual) ? '' : 'none';
-
-    const pks = allPks.filter(p=>!p.removed);
-    if (!pks.length){ wrap.innerHTML='<p style="color:var(--muted);margin:6px 0">No peaks found with current parameters.</p>'; return; }
-    const maxH = Math.max(...pks.map(p=>p.height));
-    const showCorr = !!standardName && !isStd;
-    const sizeCol = !isStd;
-    // The table scrolls sideways in its own box when the screen is narrower than it;
-    // the summary and warnings under it stay put.
-    let html='<div class="peak-scroll"><table><thead><tr><th>#</th><th>2θ (°)</th><th>Relative Intensity</th><th>FWHM (°)</th>'+(sizeCol?'<th>Crystallite size (nm)</th>':'')+(showCorr?'<th>Crystallite size corr. (nm)</th>':'')+'<th></th></tr></thead><tbody>';
-    pks.forEach((pk,i)=>{
-      const fwhm = pk.fwhmClassic;
-      const sizeRawCell = sizeCol ? `<td>${fmtCell(sizeRaw(fwhm, pk.detPos, fp.K, fp.lambda))}</td>` : '';
-      const below = showCorr && belowInstr(fwhm, pk.detPos);
-      const corrCell = showCorr ? (below ? `<td title="Narrower than the instrumental width at this angle">⚠</td>` : `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>`) : '';
-      const sel = panels[key].sel!=null && Math.abs(pk.pos-panels[key].sel)<1e-9 ? ' selected' : '';
-      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td${isStd && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
-    });
-    html+='</tbody></table></div>';
-    if (!isStd){
-      const st = sampleSizeStats(idx);
-      html += `<div class="size-summary">Mean crystallite size: <b>${fmtMeanStd(st.rawMean, st.rawStd, st.rawN)} nm</b>`;
-      if (st.showCorr) html += `<br>Instr.-corrected: <b>${fmtMeanStd(st.corrMean, st.corrStd, st.corrN)} nm</b>`;
-      html += '</div>';
-      if (st.below) html += belowInstrHtml(st.below);
-      if (st.outside) html += outsideStdHtml(st.outside, st.span);
-    }
-    wrap.innerHTML=html;
-
-    wrap.querySelectorAll('.peak-row').forEach(row=>{
-      const pos = parseFloat(row.dataset.pos);
-      row.addEventListener('mouseenter', ()=> setHoverPanel(key, pos));
-      row.addEventListener('mouseleave', ()=> setHoverPanel(key, null));
-      row.addEventListener('click', e=>{
-        if (e.target.closest('.peak-del')) return;
-        selectPanel(key, pos);
-      });
-    });
-    wrap.querySelectorAll('.peak-del').forEach(btn=>{
-      btn.addEventListener('click', e=>{
-        e.stopPropagation();
-        const det = parseFloat(btn.dataset.det);
-        if (btn.dataset.manual === '1'){
-          // Manual peaks are deleted permanently: drop them from manualPeaks so the
-          // removal is independent of the peak-search params (which reset removedPeaks).
-          if (manualPeaks[idx]) manualPeaks[idx] = manualPeaks[idx].filter(v=>Math.abs(v-det) >= 1e-6);
-        } else {
-          if (!removedPeaks[idx]) removedPeaks[idx] = [];
-          if (!removedPeaks[idx].some(v=>Math.abs(v-det)<1e-6)) removedPeaks[idx].push(det);
-        }
-        refreshAfterPeakEdit(idx);
-      });
-    });
-  }
-
-  const fmtCell = v => isFinite(v) ? v.toFixed(1) : '—';
-
-  /* Tukey's box of some values: the quartiles (interpolated between order statistics),
-     whiskers out to the furthest values within 1.5 IQR of the box, the rest outliers. */
-  function boxStats(vals){
-    const v = vals.filter(isFinite).sort((a,b)=>a-b), n = v.length;
-    if (!n) return null;
-    const q = p =>{ const h = (n-1)*p, i = Math.floor(h); return i+1 < n ? v[i] + (h-i)*(v[i+1]-v[i]) : v[i]; };
-    const q1 = q(0.25), med = q(0.5), q3 = q(0.75), f = 1.5*(q3 - q1);
-    const inside = v.filter(x=> x >= q1 - f && x <= q3 + f);
-    return { q1, med, q3, lo: inside[0], hi: inside[inside.length-1], out: v.filter(x=> x < q1 - f || x > q3 + f) };
-  }
-  /* A sample's sizes, one per peak, summarised: their mean and their spread — the
-     standard deviation, with n − 1 (the peaks are a sample of the crystallites) — and
-     the box of the same spread. */
-  function sizeSummary(raw, corr, isStd, showCorr){
-    const one = (v, k)=>{
-      const n = v.length, m = n ? meanArr(v) : NaN;
-      return { [k+'N']: n, [k+'Mean']: m, [k+'Std']: n > 1 ? stdArr(v) : NaN, [k+'Box']: boxStats(v), [k+'Vals']: v };
-    };
-    return { isStd, showCorr, ...one(raw, 'raw'), ...one(corr, 'corr') };
-  }
-  /* A peak narrower than the instrument at its angle leaves no width for the crystallite
-     size: physically it cannot happen, so when it does the standard is at fault (its
-     peaks wider than they should be, or misread). Such a peak has no corrected size;
-     the peak table says so. */
-  function belowInstr(betaDeg, pos){
-    if (!standardName || !isFinite(betaDeg) || betaDeg <= 0) return false;
-    return betaDeg <= instrBeta(pos);
-  }
-  /* The 2θ span of the standard's peaks, each end widened by that peak's FWHM: beyond
-     it the instrumental width is extrapolated (the Caglioti curve, or the end peaks'
-     widths held), not measured. Within a FWHM of an end peak a sample peak is that
-     same reflection, as the peaks are matched across samples, and needs no warning. */
-  function stdSpan(){
-    const m = instrModel();
-    if (!m || !m.pts.length) return null;
-    const a = m.pts[0], b = m.pts[m.pts.length-1];
-    return [a.x - a.b, b.x + b.b, a.x, b.x];
-  }
-  const outsideStdHtml = (n, span)=> `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's lie' : ' lies'} beyond the standard's peaks (${span[2].toFixed(2)}–${span[3].toFixed(2)}°) by more than ${n > 1 ? 'their' : 'its'} width: there the instrumental width is extrapolated, not measured.</div>`;
-  const belowInstrHtml = n => `<div class="alert warn">⚠ ${n} peak${n > 1 ? 's are' : ' is'} narrower than the instrumental width at ${n > 1 ? 'their angles' : 'its angle'}, which is not physically possible: the standard is likely unsuitable. ${n > 1 ? 'They are' : 'It is'} left out of the corrected size.</div>`;
-  // The classic crystallite sizes of a sample's kept peaks, summarised (sizeSummary).
-  function sampleSizeStats(i){
-    const pr = processed[i];
-    const isStd = files[i] && files[i].name === standardName;
-    const showCorr = !!standardName && !isStd;
-    const raw = [], corr = [];
-    let below = 0, outside = 0;
-    const span = showCorr ? stdSpan() : null;
-    if (pr && !isStd){
-      const fp = getFileParams(i);
-      pr.peaks.filter(p=>!p.removed).forEach(pk=>{
-        const s = sizeRaw(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda);
-        if (isFinite(s)) raw.push(s);
-        if (showCorr){ const sc = sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda); if (isFinite(sc)) corr.push(sc); }
-        if (showCorr && belowInstr(pk.fwhmClassic, pk.detPos)) below++;
-        if (span && isFinite(pk.fwhmClassic) && (pk.detPos < span[0] || pk.detPos > span[1])) outside++;
-      });
-    }
-    return { ...sizeSummary(raw, corr, isStd, showCorr), below, outside, span };
-  }
-  // "mean ± std" (or just "mean" for n=1, "—" for none)
-  function fmtMeanStd(mean, std, n){
-    if (!isFinite(mean)) return '—';
-    if (n >= 2 && isFinite(std)) return `${mean.toFixed(1)} ± ${std.toFixed(1)}`;
-    return mean.toFixed(1);
-  }
-  // A fitted value and its standard error, to the error's second significant digit
-  // (four significant digits when it has none).
-  function fmtPar(v, se){
-    if (!isFinite(v)) return '—';
-    if (!(isFinite(se) && se > 0)) return (+v.toPrecision(4)).toString();
-    const d = Math.min(10, Math.max(0, 1 - Math.floor(Math.log10(se))));
-    return `${v.toFixed(d)} ± ${se.toFixed(d)}`;
-  }
-  /* The standard's Caglioti fit, in the right-hand column of its card, as the Tauc
-     cards give E_g: the formula, then one value a line — U, V, W with their standard
-     errors; R² of the fit; the RMS of the FWHM residuals, in degrees like the widths
-     in the table; the peaks it rests on and their 2θ span. The residual standard
-     error on FWHM² and the largest residual are in the tooltips. A curve that drops
-     to zero inside the standard's own range is flagged under the box: the width it
-     gives there is not physical. */
-  function renderCaglioti(){
-    const box = document.getElementById('xrdStdCag'), alert = document.getElementById('xrdStdCagAlert');
-    if (!box || !alert) return;
-    alert.innerHTML = '';
-    const m = instrModel();
-    let html = `<div class="txt-mini">Caglioti fit</div><div class="pg-stat cag-formula">FWHM² = U·tan²θ + V·tanθ + W</div>`;
-    if (!m || !m.pts.length){ box.innerHTML = html + `<div class="pg-stat cag-note">No peaks: no instrumental correction.</div>`; return; }
-    const n = m.pts.length, lo = m.pts[0].x, hi = m.pts[n-1].x;
-    const span = n > 1 ? `, 2θ ${lo.toFixed(2)}–${hi.toFixed(2)}°` : `, 2θ ${lo.toFixed(2)}°`;
-    if (!m.fit){
-      // What the fit lacks is 3 distinct angles: 3 peaks at 2 (a manual peak put on a
-      // detected one) do not make a curve either.
-      const nx = new Set(m.pts.map(q=> q.x)).size;
-      const lack = nx === n ? `it needs 3 peaks or more` : `it needs peaks at 3 angles or more, and these ${n} lie at ${nx}`;
-      box.innerHTML = html + `<div class="pg-stat">Peaks: <b>${n}</b>${span}</div>`
-        + `<div class="pg-stat cag-note">Not fitted: ${lack}. The instrumental width is ${nx === 1
-          ? "the peak's FWHM at every angle" : 'interpolated between the peaks, and held at the end ones beyond them'}.</div>`;
-      return;
-    }
-    const f = m.fit;
-    html += ['U', 'V', 'W'].map((k, i)=> `<div class="pg-stat">${k}: <b>${fmtPar(f.uvw[i], f.se[i])} °²</b></div>`).join('');
-    const dofTxt = `${f.dof} degree${f.dof === 1 ? '' : 's'} of freedom`;
-    if (f.dof > 0 && f.weighted) html += `<div class="pg-stat" title="χ² = Σ((FWHM − fit)/σ)² over ${dofTxt}, σ each width's counting uncertainty. About 1: the curve follows the peaks within their counting errors. Well above 1: it does not (Kα₂ partly resolved, asymmetry, a peak that is not the standard's), and U, V, W carry errors scaled by its square root.">χ²<sub>red</sub>: <b>${f.chi2r.toPrecision(2)}</b></div>`;
-    html += f.dof > 0
-      ? `<div class="pg-stat" title="${f.weighted ? 'Weighted as the fit is (1/σ² on each width)' : `Unweighted: no counting uncertainty for the widths. Residual standard error on FWHM²: ${f.s.toPrecision(2)} °² (${dofTxt})`}">R²: <b>${f.r2.toFixed(4)}</b></div>`
-      : `<div class="pg-stat cag-note">Exact through its 3 peaks: no degree of freedom left to judge the fit by.</div>`;
-    // To two significant digits: a good standard's residuals are tenths of a
-    // thousandth of a degree, which three decimals would show as 0.000°.
-    if (f.dof > 0) html += `<div class="pg-stat" title="Largest residual: ${f.maxRes.toPrecision(2)}°">FWHM residual (RMS): <b>${f.rms.toPrecision(2)}°</b></div>`;
-    html += `<div class="pg-stat">Peaks: <b>${n}</b>${span}</div>`;
-    box.innerHTML = html;
-    let neg = false;
-    for (let k = 0; k <= 100 && !neg; k++) neg = cagAt(f.uvw, ((lo + (hi - lo)*k/100)/2)*Math.PI/180) <= 0;
-    if (neg) alert.innerHTML = `<div class="alert warn">⚠ The fitted FWHM² drops to zero inside the standard's range: there the curve is not physical, and no correction is made.</div>`;
-  }
-
-  /* Results card: per-sample crystallite size as a box plot of its peaks' sizes — one
-     box per sample, two side by side when a standard is set (size, and corrected) —
-     with the mean ± the standard deviation written above. `statsFn` gives sizeSummary's fields. */
-  function drawSizeBarChart(svgId, legendId, rows, chips){
-    const svg = document.getElementById(svgId); if (!svg) return;
-    const wrap = svg.closest('.plot-wrap'), legend = document.getElementById(legendId);
-    const anyCorr = rows.some(r=> r.corrBox);
-    const SER = [{ k:'raw', name:'size', color:'#3aa0ff' }].concat(anyCorr ? [{ k:'corr', name:'size corr.', color:'#ff7a59' }] : []);
-    // Where each box ends on top: its whisker, or an outlier above it.
-    const topOf = b => Math.max(b.hi, ...b.out);
-    const tops = rows.flatMap(r=> SER.map(m=> r[m.k+'Box']).filter(Boolean).map(topOf)).filter(v=> isFinite(v) && v > 0);
-    if (!files.length || !processed.length || !tops.length){
-      svg.style.display='none'; if(wrap)wrap.style.display='none'; if(legend)legend.innerHTML=''; return;
-    }
-    svg.style.display=''; if(wrap)wrap.style.display='';
-    const n = rows.length;
-    const mctx = document.createElement('canvas').getContext('2d');
-    mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-    const brect = svg.getBoundingClientRect();
-    const svgW = brect.width || 640, svgH = brect.height || 420;
-    // How the names are cut and tilted — see barNames.
-    const fit = barNames(mctx, rows.map(r=> r.label), Math.max(60, svgW - 75), 55);
-    const labels = fit.labels;
-    const labelWs = labels.map(l=>mctx.measureText(l).width);
-    let maxLbl=0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
-    const bottom = Math.round(26 + maxLbl*fit.sin);
-    const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(1)}±${e.toFixed(1)}` : v.toFixed(1);
-    let maxValW=0;
-    rows.forEach(r=> SER.forEach(m=>{ if (r[m.k+'Box']) maxValW = Math.max(maxValW, mctx.measureText(fmtLab(r[m.k+'Mean'], r[m.k+'Std'])).width); }));
-    const mTop=15, gap=6, plotH=svgH-mTop-bottom, reserve=gap+maxValW+6;
-    const frac = plotH>reserve ? (1-reserve/plotH) : 0.5;
-    // Box geometry as the bars had it: capped at their sizes, shrinking to fit the
-    // per-sample spacing so many samples don't overlap; a pair keeps its ±17 px offset
-    // unless the slot is too narrow, then the two scale together.
-    const pxSlot = (svgW - 75)/(n + 1);
-    const sc = Math.min(1, (pxSlot*0.8)/66);   // 66 = full paired span at hw16/dx17
-    const hw = anyCorr ? 16*sc : Math.min(16, pxSlot*0.3), dx = anyCorr ? 17*sc : 0;
-    const offOf = mi => SER.length > 1 ? (mi ? dx : -dx) : 0;
-    // The labels kept clear of the chips in the corner, as on the other bar charts.
-    const under = [];
-    rows.forEach((r, k)=> SER.forEach((m, mi)=>{ const b = r[m.k+'Box']; if (b) under.push({ x:k+1, dx:offOf(mi), top:topOf(b), w:mctx.measureText(fmtLab(r[m.k+'Mean'], r[m.k+'Std'])).width }); }));
-    const ymax = Math.max(Math.max(...tops)*1.15, Math.max(...tops)/frac,
-      barChipYmax(chips, svg, under, { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0:0, x1:n+1 }));
-    const plot = new Plot(svg, {xlabel:'', ylabel:'Crystallite size (nm)', noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-    // Fixed at [0, n+1]: the names are made to fit it, not the other way round.
-    plot.setRange(0, n+1, 0, ymax||1);
-    plot.drawAxes();
-    for (let k=0;k<n;k++){
-      const xc=k+1, r = rows[k];
-      SER.forEach((m, mi)=>{
-        const b = r[m.k+'Box'];
-        if (!b) return;
-        const off = offOf(mi);
-        plot.box(xc, { ...b, mean: r[m.k+'Mean'], err: r[m.k+'Std'] }, m.color, hw, off, { label: m.name });
-        plot.barLabel(xc, topOf(b), fmtLab(r[m.k+'Mean'], r[m.k+'Std']), {gap, dx:off});
-      });
-      plot.tickLabel(xc, labels[k], fit.rot, r.label, r.name);
-    }
-    plot.attachTools(wrap);
-    if (legend) legend.innerHTML = SER.map(m=> `<span><i class="mk-box" style="background:${m.color}"></i>${m.name}</span>`).join('');
-  }
-  /* The reflections the samples share: their peaks matched across samples by
-     position, each position taken as a value whose uncertainty is the peak's FWHM. Two
-     are the same reflection when they lie within one sigma of each other, √(w₁² + w₂²)
-     — against a reflection already holding several, its mean position and mean FWHM.
-     A reflection holds at most one peak per sample; `common` are those every sample
-     has, `extra` the rest. */
-  function sizeReflections(){
-    const idxs = nonStdIdx().filter(k=> processed[k]);
-    if (!idxs.length) return { idxs, common: [], extra: [] };
-    const all = [];
-    idxs.forEach(k=>{
-      const fp = getFileParams(k);
-      processed[k].peaks.filter(pk=> !pk.removed).forEach(pk=>{
-        const raw = sizeRaw(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda);
-        if (!isFinite(raw)) return;
-        all.push({ k, pos: pk.detPos, w: pk.fwhmClassic, raw, corr: standardName ? sizeCorr(pk.fwhmClassic, pk.detPos, fp.K, fp.lambda) : NaN });
-      });
-    });
-    all.sort((a,b)=> a.pos - b.pos);
-    const groups = [];
-    for (const p of all){
-      const g = groups[groups.length-1];
-      if (g && !g.by.has(p.k) && Math.abs(p.pos - g.pos) < Math.hypot(p.w, g.w)){
-        g.by.set(p.k, p);
-        const ms = [...g.by.values()];
-        g.pos = ms.reduce((s, q)=> s + q.pos, 0) / ms.length;
-        g.w   = ms.reduce((s, q)=> s + q.w, 0) / ms.length;
-      } else groups.push({ pos: p.pos, w: p.w, by: new Map([[p.k, p]]) });
-    }
-    return { idxs, common: groups.filter(g=> g.by.size === idxs.length), extra: groups.filter(g=> g.by.size < idxs.length) };
-  }
-  // By peak there is something to show from two samples sharing a reflection on.
-  const byPeakOk = R => R.idxs.length >= 2 && R.common.length > 0;
-  // One box per reflection, its points the samples' sizes there.
-  const reflectionRows = R => R.common.map(g=>{
-    const ps = [...g.by.values()];
-    return { name: `2θ ${g.pos.toFixed(2)}°`, label: `${g.pos.toFixed(2)}°`, pos: g.pos, ps,
-             ...sizeSummary(ps.map(p=> p.raw), ps.map(p=> p.corr).filter(isFinite), false, !!standardName) };
-  });
-  function renderXrdSizeChart(){
-    const chips = document.getElementById('xrdSizeBy'), note = document.getElementById('xrdSizeByNote');
-    const R = sizeReflections(), ok = byPeakOk(R), by = ok ? sizeBy : 'sample';
-    // Two chips, one at a time; with a single sample there is nothing to compare by peak.
-    if (chips) chips.innerHTML = R.idxs.length < 2 ? '' : [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
-      `<button type="button" class="mode-chip plot-chip${by === k ? ' is-on' : ''}" data-size-by="${k}"`
-      + `${k === 'peak' && !ok ? ' disabled title="No reflection is found in every sample"' : ` title="Crystallite size ${t}"`}>${t}</button>`).join('');
-    const rows = by === 'peak' ? reflectionRows(R)
-      : nonStdIdx().map(k=>({name:files[k].name, label:files[k].label, ...sampleSizeStats(k)}));
-    drawSizeBarChart('xrdSizeBarSvg', 'xrdSizeBarLegend', rows, chips);
-    // What is left out by peak: the reflections not every sample has, and whose they are.
-    if (note) note.innerHTML = by === 'peak' && R.extra.length
-      ? `Not in every sample, left out: ${R.extra.map(g=> `${g.pos.toFixed(2)}° (${[...g.by.keys()].map(k=> files[k].label).join(', ')})`).join('; ')}.` : '';
-    // The chart's downloads follow what it shows.
-    const wrap = document.getElementById('xrdSizeBarSvg').closest('.plot-wrap');
-    wrap.querySelectorAll('.plot-dl-btn, .plot-csv-btn').forEach(b=>{
-      b.dataset.csvNames = by === 'peak' ? 'crystallite_size_by_peak.csv' : 'crystallite_size.csv';
-      if (b.classList.contains('plot-dl-btn')) b.dataset.dlName = by === 'peak' ? 'XRPD_crystallite_size_by_peak.svg' : 'XRPD_crystallite_size.svg';
-    });
-  }
-  document.getElementById('xrdResults').addEventListener('click', e=>{
-    const b = e.target.closest('[data-size-by]');
-    if (!b || b.disabled || b.dataset.sizeBy === sizeBy) return;
-    sizeBy = b.dataset.sizeBy;
-    renderXrdSizeChart();
-    hist.commit();
-  });
-
-  // Per-field shared/per-sample toggles (one segmented control per editable field)
-  const TOGGLE_FIELD = { xrdModeN:'N', xrdModeBl:'blWin', xrdModeH:'pkHeight', xrdModeP:'pkProm', xrdModeD:'pkDist', xrdModeK:'K', xrdModeL:'lambda' };
-  const SIZE_ONLY = new Set(['K','lambda']);
-  Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
-    document.getElementById(tid).addEventListener('click', ()=>{
-      const mode = paramMode[key]==='shared' ? 'per' : 'shared';
-      // The value currently displayed on the graph for this field
-      const cur = getFileParams(curIdx)[key];
-      paramMode[key] = mode;
-      document.getElementById(tid).textContent = mode==='shared' ? 'all' : 'one';
-      if (mode==='shared'){
-        // Switching to "all": every sample takes the value of the sample on show
-        shared[key] = cur;
-      } else {
-        // Switching to "one": every sample starts from the common value, then each is
-        // changed on its own
-        files.forEach((f, i)=>{ if (!perParams[i]) perParams[i] = {}; perParams[i][key] = cur; });
-      }
-      writeStoreToInputs();
-      if (files.length){
-        if (!SIZE_ONLY.has(key)){
-          if (mode==='shared') reprocessAll(); else reprocessOne(curIdx);
-          updateXrdAnalysis(true);
-        }
-        updateXrdResults();
-        renderPeakTable();
-        hist.commit();
-      }
-    });
-  });
-
-  // Param change listeners — store then reprocess
-  ['xrdNorm'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', ()=>{
-      saveXrdParams();
-      if (files.length){ updateXrdResults(); hist.commit(); }
-    });
-  });
-  // Choosing/clearing the standard isolates that sample in the Standard card, removes it
-  // from Analysis navigation, and refreshes every card (its peaks drive the correction).
-  document.getElementById('xrdStandard').addEventListener('change', e=>{
-    // "None" (__none__) clears the standard; snap the box back to the ghost placeholder.
-    standardPick = standardName = (e.target.value === '__none__') ? '' : e.target.value;
-    if (!standardName) e.target.selectedIndex = 0;
-    e.target.classList.toggle('ghost', !standardName);
-    if (!files.length){ hist.commit(); return; }
-    panels.a.sel=panels.a.hov=panels.s.sel=panels.s.hov=null;
-    reprocessAll();               // the (de)selected file switches param set (stdParams ↔ per/shared)
-    updateCardVis();
-    if (!nonStdIdx().includes(curIdx)){ const l=nonStdIdx(); curIdx = l.length?l[0]:0; }
-    writeStoreToInputs();
-    updateXrdAnalysis();
-    updateXrdStandard();
-    updateXrdResults();
-    rv.refresh(true);           // the standard's pattern takes the built-in LaB6 phase
-    hist.commit();
-  });
-  // Standard's own parameter inputs (no all/one, no K/λ) — reprocess just the standard
-  Object.entries(STD_INPUT).forEach(([key,id])=>{
-    const el = document.getElementById(id);
-    if (!el) return;
-    const isPeakSearch = (key==='pkHeight' || key==='pkProm' || key==='pkDist');
-    const apply = ()=>{
-      const si = standardIdx();
-      if (si<0) return;
-      readStdInputs();
-      writeStdInputs();
-      if (isPeakSearch) removedPeaks[si] = [];
-      reprocessOne(si);
-      updateXrdStandard(true);
-      updateXrdResults();       // corrected sample sizes depend on the standard
-      hist.commit();
-    };
-    el.addEventListener('change', apply);
-    el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
-  });
-  ['xrdSmooth','xrdBlWin','xrdPkHeight','xrdPkProm','xrdPkDist','xrdK','xrdLambda'].forEach(id=>{
-    const el = document.getElementById(id);
-    const isSizeOnly = (id==='xrdK' || id==='xrdLambda'); // K/λ don't affect processing
-    const isPeakSearch = (id==='xrdPkHeight' || id==='xrdPkProm' || id==='xrdPkDist');
-    const key = { xrdSmooth:'N', xrdBlWin:'blWin', xrdPkHeight:'pkHeight', xrdPkProm:'pkProm', xrdPkDist:'pkDist', xrdK:'K', xrdLambda:'lambda' }[id];
-    const apply = ()=>{
-      if (!files.length) return;
-      readInputsToStore();
-      saveXrdParams(); // persist the whitelisted analysis defaults (norm/N/blWin/K/λ)
-      writeStoreToInputs();
-      if (isSizeOnly){ renderPeakTable(); hist.commit(); return; } // only the Scherrer size changes
-      // Peak deletions reset only when this peak-search field changes
-      if (isPeakSearch){
-        if (paramMode[key]==='shared') removedPeaks = removedPeaks.map(()=>[]);
-        else removedPeaks[curIdx] = [];
-      }
-      if (paramMode[key]==='shared') reprocessAll(); else reprocessOne(curIdx);
-      updateXrdAnalysis(true);      // analysis is live
-      updateXrdResults();
-      hist.commit();
-    };
-    el.addEventListener('change', apply);
-    el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
-  });
-  // Wavelength preset selector: choosing a source fills + locks the λ value and
-  // recomputes; "Custom" unlocks the field for a free value.
-  (()=>{
-    const sel = document.getElementById('xrdLambdaSel'), inp = document.getElementById('xrdLambda');
-    if (!sel || !inp) return;
-    sel.addEventListener('change', ()=>{
-      if (sel.value === 'custom'){ inp.readOnly = false; inp.focus(); if (inp.select) inp.select(); }
-      else { inp.readOnly = true; inp.value = parseFloat(sel.value); inp.dispatchEvent(new Event('change', { bubbles:true })); }
-    });
-    syncLambdaSelect();
-  })();
-
-  // Run fn while keeping the card the user is currently looking at fixed in the
-  // viewport: if a redraw (e.g. a table with a different row count) shifts the
-  // layout, compensate the scroll so the viewed content stays put.
-  function withScrollAnchor(fn){
-    const vh = window.innerHeight, cy = vh/2;
-    const cards = ['xrdWorkspace','xrdStdCard','xrdRvCard','xrdResults'].map(id=>document.getElementById(id)).filter(el=>el && el.offsetParent!==null);
-    let anchor = cards.find(c=>{ const r=c.getBoundingClientRect(); return r.top<=cy && r.bottom>=cy; })
-              || cards.find(c=>{ const r=c.getBoundingClientRect(); return r.bottom>0 && r.top<vh; });
-    const before = anchor ? anchor.getBoundingClientRect().top : null;
-    fn();
-    if (anchor && before!=null){ const d = anchor.getBoundingClientRect().top - before; if (Math.abs(d)>0.5) window.scrollBy(0, d); }
-  }
-
-  // Analysis navigation cycles the non-standard samples only.
-  function navigate(delta){
-    const list = nonStdIdx();
-    if (!list.length) return;
-    addPeakA.setMode(false);
-    panels.a.sel=panels.a.hov=null;
-    let p = list.indexOf(curIdx); if (p<0) p=0;
-    p = (p + delta + list.length) % list.length;
-    curIdx = list[p];
-    writeStoreToInputs();
-    withScrollAnchor(()=>{ updateXrdAnalysis(); renderAnalysisTable(); });
-  }
-
-  document.getElementById('xrdPrev').onclick = ()=> navigate(-1);
-  document.getElementById('xrdNext').onclick = ()=> navigate(1);
-
-  // Reset peaks: drop manual + removed peaks and re-run the search for the current file
-  function resetPeaks(idx){
-    if (idx<0 || !files[idx]) return;
-    manualPeaks[idx] = [];
-    removedPeaks[idx] = [];
-    refreshAfterPeakEdit(idx);
-  }
-  document.getElementById('xrdPkReset').onclick = ()=>{ if (files.length) resetPeaks(curIdx); };
-  document.getElementById('xrdStdPkReset').onclick = ()=>{ resetPeaks(standardIdx()); };
-
-  /* ---------- Add-peak mode (one instance per interactive card) ---------- */
-  // Which card is currently placing a manual peak ('a' | 's' | null) — used to suppress
-  // hover highlighting on that card while placing.
-  let addModeKey = null;
-  // Factory: build an add-peak controller for a plot. getPlot/getIdx read the live plot
-  // and the file index the card is showing.
-  function makeAddPeak(key, svgId, btnId, getPlot, getIdx){
-    let addMode = false, addIdx = null;
-    const btn = document.getElementById(btnId);
-    const svgNode = document.getElementById(svgId);
-    const clearGuide = ()=> svgNode.querySelectorAll('.add-guide').forEach(e=>e.remove());
-    function drawGuide(){
-      clearGuide();
-      const plot = getPlot(), idx = getIdx();
-      if (!addMode || !plot || !processed[idx] || addIdx==null) return;
-      const m = plot.margin; const {w,h} = plot.size();
-      const pr = processed[idx];
-      const mxv = maxArr(pr.smoothed) || 1;
-      const xv = files[idx].x[addIdx];
-      const yval = pr.smoothed[addIdx] / mxv;
-      const px = plot.px(xv), py = plot.py(yval);
-      plot.svg.appendChild(svgEl('line',{x1:px,x2:px,y1:m.t,y2:h-m.b,stroke:'#ffd24a','stroke-width':1.5,'stroke-dasharray':'4,3','pointer-events':'none','class':'add-guide'}));
-      plot.svg.appendChild(svgEl('circle',{cx:px,cy:py,r:3.5,fill:'#ffd24a','pointer-events':'none','class':'add-guide'}));
-      // Readout follows the drawn vertical guide (flips to the left near the right
-      // edge), two lines using the plot's axis names + units:
-      // "2θ = 45.123 °" / "Intensity = 0.520 a. u.".
-      const fmt=v=>{ const a=Math.abs(v); return a>=1000?v.toFixed(0):a>=1?v.toFixed(3):v.toPrecision(3); };
-      const flip = px > w - m.r - 130;
-      const tx = px + (flip ? -8 : 8);
-      const t = svgEl('text',{x:tx,y:m.t+14,'font-size':12,fill:'#ffd24a',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','text-anchor':flip?'end':'start','pointer-events':'none','class':'add-guide'});
-      const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(plot.xlabel||'2θ', xv, fmt);
-      const l2=svgEl('tspan',{x:tx,dy:16}); l2.textContent=axisReadout(plot.ylabel||'Intensity', yval, fmt);
-      t.appendChild(l1); t.appendChild(l2);
-      plot.svg.appendChild(t);
-    }
-    function setMode(on){
-      addMode = !!on;
-      addModeKey = addMode ? key : (addModeKey===key ? null : addModeKey);
-      btn.classList.toggle('is-on', addMode);
-      // Drop focus once armed so the arrow keys (which nudge the guide) don't put
-      // the button into :focus-visible and paint a white selection outline.
-      if (addMode) btn.blur();
-      svgNode.style.cursor = addMode ? 'crosshair' : '';
-      // While armed, suppress the plot's x/y hover readout + crosshair (same as pan/zoom).
-      svgNode._suppressReadout = addMode;
-      const plot = getPlot();
-      if (addMode && plot){ plot.setMode(null); plot._clearCrosshair(); }
-      if (!addMode){ addIdx = null; clearGuide(); }
-    }
-    function confirmAdd(){
-      if (addIdx==null) return;
-      const idx = getIdx();
-      if (!manualPeaks[idx]) manualPeaks[idx] = [];
-      manualPeaks[idx].push(files[idx].x[addIdx]);
-      setMode(false);
-      refreshAfterPeakEdit(idx);
-    }
-    const pointToIdx = (e)=>{
-      const plot = getPlot();
-      const rect = plot.svg.getBoundingClientRect();
-      let xv = plot.invX(e.clientX - rect.left);
-      xv = Math.max(plot.xmin, Math.min(plot.xmax, xv));
-      return nearestIdx(files[getIdx()].x, xv);
-    };
-    btn.onclick = ()=>{ if (files.length && getIdx()>=0) setMode(!addMode); };
-    svgNode.addEventListener('pointermove', e=>{
-      if (!addMode || !getPlot() || !processed[getIdx()]) return;
-      addIdx = pointToIdx(e); drawGuide();
-    });
-    svgNode.addEventListener('pointerleave', ()=>{ if (addMode) clearGuide(); });
-    svgNode.addEventListener('pointerdown', e=>{
-      if (!addMode || !getPlot() || e.button!==0) return;
-      e.preventDefault(); e.stopPropagation();
-      addIdx = pointToIdx(e); confirmAdd();
-    }, true);
-    // Capture phase + stopImmediatePropagation so that while add-peak is armed
-    // it claims the arrow keys before the document-level sample-nav handler
-    // (utils.js) can fire — otherwise ← / → would change sample instead of
-    // nudging the guide.
-    document.addEventListener('keydown', e=>{
-      if (!addMode) return;
-      const plot = getPlot(), idx = getIdx();
-      if (e.key==='Escape'){ e.stopImmediatePropagation(); setMode(false); return; }
-      if (e.key==='ArrowLeft' || e.key==='ArrowRight'){
-        e.preventDefault(); e.stopImmediatePropagation();
-        const x = files[idx].x;
-        const a = nearestIdx(x, plot.xmin), b = nearestIdx(x, plot.xmax);
-        const lo = Math.min(a,b), hi = Math.max(a,b);
-        if (addIdx==null) addIdx = nearestIdx(x, (plot.xmin+plot.xmax)/2);
-        addIdx = Math.max(lo, Math.min(hi, addIdx + (e.key==='ArrowRight'?1:-1)));
-        drawGuide();
-      } else if (e.key==='Enter'){ e.preventDefault(); e.stopImmediatePropagation(); confirmAdd(); }
-    }, true);
-    return { isAdding:()=>addMode, setMode };
-  }
-  const addPeakA = makeAddPeak('a', 'xrdSvg',    'xrdAddPeak',    ()=>anaPlot, ()=>curIdx);
-  const addPeakS = makeAddPeak('s', 'xrdStdSvg', 'xrdStdAddPeak', ()=>stdPlot, ()=>standardIdx());
-  const isAddingKey = (key)=> (key==='a' && addPeakA.isAdding()) || (key==='s' && addPeakS.isAdding());
-
-  // Plot-side peak hover + click-to-select (mirror of the table interaction).
-  // Bound once per SVG; acts only when no pan/zoom tool is armed and not adding a peak.
-  // Peak/FWHM hover is handled by per-mark invisible hit lines (see buildInteractiveMarks);
-  // here we only bind click-to-(de)select, which reads the current hover position.
-  function attachPeakInteractions(svgEl, key){
-    const blocked = (plot)=> !plot || plot._mode || isAddingKey(key);
-    svgEl.addEventListener('click', ()=>{
-      const plot = svgEl._plot; if (blocked(plot)) return;
-      if (panels[key].hov!=null) selectPanel(key, panels[key].hov); // clicked a peak/FWHM → (de)select it
-      else clearSelection(key);                                     // clicked empty area → deselect
-    });
-  }
-  // Deselect when clicking anywhere in the table's dark container box that isn't a peak row
-  function attachTableDeselect(key){
-    const box = document.getElementById(panels[key].box);
-    if (box) box.addEventListener('click', e=>{ if (!e.target.closest('.peak-row')) clearSelection(key); });
-  }
-  function clearSelection(key){ if (panels[key].sel!=null){ panels[key].sel=null; renderPeakTable(); applySelectionHighlight(); } }
-  attachPeakInteractions(document.getElementById('xrdSvg'), 'a');
-  attachPeakInteractions(document.getElementById('xrdStdSvg'), 's');
-  attachTableDeselect('a');
-  attachTableDeselect('s');
-
-  registerTabRedraw('xrd', ()=>{ if (files.length){ updateXrdAnalysis(true); updateXrdStandard(true); updateXrdResults(); renderPeakTable(); rv.redraw(); } });
-
-  // Assemble a "wide" CSV from {h,v} columns, padded to the longest column.
-  function wideCsv(cols){
-    const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
-    let t = csvLine(cols.map(c=>c.h));
-    for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-    return t;
-  }
-  // ---- Reusable per-sample column builders (shared by the bulk CSVs and standard.csv) ----
-  // Diffractogram block: refined (smoothed−SNIP, normalised) + raw + smoothed + SNIP background.
-  function diffractoCols(k, refinedNorm){
-    const f=files[k], pr=processed[k], kp=getFileParams(k), mx=refinedNorm(k);
-    return [
-      {h:'2Theta_'+f.label,                          v:f.x.map(x=>fmtNum(x,6))},
-      {h:f.label,                                    v:pr.subtracted.map(v=>fmtNum(v/mx,6))},
-      {h:'Raw_'+f.label,                             v:f.y.map(v=>fmtNum(v,6))},
-      {h:`Smoothed_${f.label} (N=${kp.N})`,          v:pr.smoothed.map(v=>fmtNum(v,6))},
-      {h:`SNIP_background_${f.label} (win=${kp.blWin})`, v:pr.snip.map(v=>fmtNum(v,6))},
-    ];
-  }
-  // Classic peak-search block: 2θ, rel. intensity, FWHM, crystallite size [, corrected].
-  function peakCols(k, withCorr, withSig){
-    const f=files[k], pr=processed[k], kp=getFileParams(k);
-    const pks=pr.peaks.filter(pk=>!pk.removed);
-    const maxH=Math.max(...pks.map(pk=>pk.height))||1;
-    const cols=[
-      {h:'Peak_2Theta_'+f.label,       v:pks.map(pk=>fmtNum(pk.pos,6))},
-      {h:'Peak_RelIntensity_'+f.label, v:pks.map(pk=>fmtNum(pk.height/maxH,6))},
-      {h:'Peak_FWHM_deg_'+f.label,     v:pks.map(pk=>isFinite(pk.fwhmClassic)?fmtNum(pk.fwhmClassic,5):'')},
-      // The standard's: each width's counting uncertainty, the Caglioti fit's weights.
-      ...(withSig ? [{h:'Peak_FWHM_sigma_deg_'+f.label, v:pks.map(pk=>isFinite(pk.fwhmSig)?fmtNum(pk.fwhmSig,5):'')}] : []),
-      {h:'Peak_Size_nm_'+f.label,      v:pks.map(pk=>{const d=sizeRaw(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})},
-    ];
-    if (withCorr) cols.push({h:'Peak_Size_corr_nm_'+f.label, v:pks.map(pk=>{const d=sizeCorr(pk.fwhmClassic,pk.detPos,kp.K,kp.lambda);return isFinite(d)?fmtNum(d,3):'';})});
-    return cols;
-  }
-
-  // One sample's size columns, as the chart and the table give them.
-  const SIZE_COLS = ['nm', 'std_nm', 'n', 'median_nm', 'Q1_nm', 'Q3_nm'];
-  const sizeCsvHead = anyStd => ['Sample', ...SIZE_COLS.map(c=> 'Crystallite_size_' + c),
-    ...(anyStd ? SIZE_COLS.map(c=> 'Crystallite_size_corr_' + c) : [])];
-  function sizeCsvCells(st, k){
-    const n = st[k+'N'], b = st[k+'Box'], num = v => isFinite(v) ? fmtNum(v, 2) : '';
-    return [num(st[k+'Mean']), n > 1 ? num(st[k+'Std']) : '', String(n), b ? num(b.med) : '', b ? num(b.q1) : '', b ? num(b.q3) : ''];
-  }
-  function exportXrdZip(){
-    if (!files.length) return [];
-    const norm = document.getElementById('xrdNorm').value;
-    const anyStd = !!standardName;
-    const nonStd = files.map((f,k)=>k).filter(k=>files[k].name!==standardName);
-    // Normalization factors (match the results plots): local = own max, global = shared max.
-    const gmaxSub = topOf(nonStd.map(k=>maxArr(processed[k].subtracted)));
-    const refinedNorm = k => norm==='local' ? (maxArr(processed[k].subtracted)||1) : gmaxSub;
-
-    const entries = [];              // {name, text} collected into a single zip
-    // diffractograms.csv — every non-standard sample's refined/raw/smoothed/SNIP columns.
-    {
-      const cols=[]; nonStd.forEach(k=>cols.push(...diffractoCols(k, refinedNorm)));
-      if (cols.length) entries.push({name:'diffractograms.csv', text:wideCsv(cols)});
-    }
-    // Crystallite size (classic) — per-sample summary: mean ± std, n, and the box
-    // the chart draws.
-    // Skipped entirely when there is no non-standard sample (nothing to size).
-    if (nonStd.length){
-      const head = sizeCsvHead(anyStd);
-      let ct = csvLine(head);
-      nonStd.forEach(k=>{
-        const f=files[k], st = sampleSizeStats(k);
-        const row = [f.label, ...sizeCsvCells(st, 'raw')];
-        if (anyStd) row.push(...sizeCsvCells(st, 'corr'));
-        ct += csvLine(row);
-      });
-      entries.push({name:'crystallite_size.csv', text:ct});
-    }
-    // crystallite_size_by_peak.csv — per reflection the samples share: its 2θ, the
-    // summary over the samples, then each sample's size there.
-    {
-      const R = sizeReflections();
-      if (byPeakOk(R)){
-        const rows = reflectionRows(R);
-        let ct = csvLine(['Reflection_2theta_deg', ...sizeCsvHead(anyStd).slice(1), ...R.idxs.map(k=> 'Crystallite_size_nm_' + files[k].label)]);
-        rows.forEach(r=>{
-          const own = R.idxs.map(k=>{ const p = r.ps.find(q=> q.k === k); return p ? fmtNum(p.raw, 2) : ''; });
-          ct += csvLine([fmtNum(r.pos, 3), ...sizeCsvCells(r, 'raw'), ...(anyStd ? sizeCsvCells(r, 'corr') : []), ...own]);
-        });
-        entries.push({name:'crystallite_size_by_peak.csv', text:ct});
-      }
-    }
-    // standard.csv — everything about the standard in one file: diffractogram + peaks
-    // (normalised against its own max, as it stands alone).
-    const si = anyStd ? standardIdx() : -1;
-    const stdOn = si >= 0 && !!processed[si];
-    if (stdOn){
-      const own = () => (maxArr(processed[si].subtracted)||1);
-      entries.push({name:'standard.csv', text:wideCsv([...diffractoCols(si, own), ...peakCols(si, false, true)])});
-    }
-    // peaks.csv — classic peaks of every non-standard sample (standard has its own file).
-    {
-      const cols=[]; nonStd.forEach(k=>{ if (processed[k].peaks.some(pk=>!pk.removed)) cols.push(...peakCols(k, anyStd)); });
-      if (cols.length) entries.push({name:'peaks.csv', text:wideCsv(cols)});
-    }
-    // The Rietveld card's: every refined pattern's curves, and its results.
-    entries.push(...rv.csvEntries());
-    return entries;
-  }
   registerCsvExport('xrd', exportXrdZip);
-})();
 
+  // A new project starts with a Scherrer card and a Rietveld one.
+  deck.start(['scherrer', 'rietveld']);
+})();

@@ -42,8 +42,8 @@ The document follows the code as of v425. Functions are named with their file, e
 
 ### 1.1 Using it
 
-1. Load the patterns in the XRPD module (`.xrdml`), and mark the measurement of the instrumental standard (NIST SRM 660c LaB₆) as the standard.
-2. Add each phase from a CIF (**+ CIF**). The standard's LaB₆ is built in.
+1. Load the samples' patterns in the XRPD module (`.xrdml`). In a Rietveld card, **Instrumental standard…** opens the standard's own window: drop its measurement there (NIST SRM 660c LaB₆; one file, which replaces the one loaded, the same file the Scherrer cards' standard window shows), and refine it against the built-in LaB₆ or a CIF of the standard's, chosen with the round button of its phase list.
+2. Add each phase from a CIF (**+ CIF**, in the list beside the pattern, which gives each its formula and space group; a P1 file's space group is read off the symmetry found from its atoms, §2.4). Each phase is ticked for every pattern at first, and each pattern keeps its own ticks: a phase unticked is not refined on that pattern. A click on a phase shows its unit cell in 3D beside the list (drag to turn it, a double click to put it back), with its details under it.
 3. Optionally, in **Settings…** (beside Refine; §13.5), switch on or off, per phase, each fitting mode, and choose its depth:
    - the crystallite size (isotropic, or one of five solids);
    - WPPM, the size's profile (one size; a log-normal distribution of sizes; off: the Lorentzian);
@@ -53,8 +53,8 @@ The document follows the code as of v425. Functions are named with their file, e
    - the occupancy of one of the phase's sites (off: the CIF's);
    - a preferred orientation (*best axis*, or a plane).
 
-   The standard's LaB₆ has its B and texture there too. The same modal sets where **Refine** starts: from the CIF, or from each pattern's last result with chosen groups of parameters held there (§6.8).
-4. **Refine all** refines the standard first, then every sample with the standard's instrumental profile.
+   The standard's window has its own **Settings…**: its phase's B and texture, its start and its Refinement settings (the zero scan's range among them). The same modal sets where **Refine** starts: from the CIF, or from each pattern's last result with chosen groups of parameters held there (§6.8).
+4. Refine the standard in its window first; then **Refine all**, in the card, refines every sample with the standard's instrumental profile.
 5. Read the results:
    - the result lines (with esds in brackets) and the warnings;
    - the pattern plot (observed, calculated, background, difference, ticks);
@@ -2106,9 +2106,11 @@ An exception gives an error message. A failure of the peak widths only adds a wa
 
 ### 13.2 The card
 
-**Refine all** refines the standard first: the samples take their instrumental profile from it. An error stops the remaining patterns. A pattern's result is kept by file name, so moving, leaving out or reloading files never puts it on another pattern.
+**The card and the standard's window.** The Rietveld analysis is a card (cards.js), and there can be several, each with its own phases, settings and results on the same samples; the sample on show is shared by every card of the module. The instrumental standard is not a sample: it is a file of its own, refined in a window (**Instrumental standard…**) built by the same code as the card (`createRietveld` with the standard's role), so the two look and work alike: its phase list holds the built-in LaB₆ and any CIF added there, one of them chosen for the fit (a round button); its settings are its own. Its refinement's profile is every sample card's instrument. **Refine all** refines a card's samples; the standard is refined in its window. An error stops the remaining patterns. A pattern's result is kept by file name, so moving, leaving out or reloading files never puts it on another pattern.
 
-**Settings.** Each phase's fitting modes, the standard's, where Refine starts and the Refinement settings (the fit's hyperparameters, §6.6) are set in a modal, **Settings…** (§13.5); each phase's row says its settings in a line. They are read when a run starts (every pattern of a *Refine all* gets the phases, the standard's settings, the start, the hold and the Refinement settings as they were when it started) and apply to the next refinements; results already there keep theirs.
+**The layout.** Beside the pattern, as high as its plot: the phases (formula, space group, the tick for the pattern on show, ×) and the selected phase's structure (its cell in 3D, a, b, c in red, green and blue; its formula, Z, space group, system, cell, volume, density, atoms, elements); under them the buttons, the last row ending with the plot. Under the pattern, the results across the card. Under them, in one row, the peak widths, the Williamson–Hall plot with the tests written in its corner (the full text in its tooltip) and the crystallites' shape, which gives way sideways first.
+
+**Settings.** Each phase's fitting modes, the standard's (in its window), where Refine starts and the Refinement settings (the fit's hyperparameters, §6.6) are set in a modal, **Settings…** (§13.5); each phase's row says its settings in a line. They are read when a run starts (every pattern of a *Refine all* gets the phases, the standard's settings, the start, the hold and the Refinement settings as they were when it started) and apply to the next refinements; results already there keep theirs.
 
 **The plot.**
 - **Curves.** It shows observed, calculated, background, difference, and a row of ticks per phase. The curves are recomputed from the refined parameters (milliseconds) rather than stored: with the phases the result was refined with (a phase added since is not drawn in it; removing one of its phases removes the result), with the models it used (a size or strain switched off among them), and on a model built with the fit settings it was refined with (`fit`: its background terms and its reflection list; the defaults for a result of v428 or older), whatever the settings say now.
@@ -2119,7 +2121,7 @@ An exception gives an error message. A failure of the peak widths only adds a wa
 **Results.**
 - R_wp, R_exp and χ²;
 - under them, the Refinement settings it was refined with that are not the defaults, in a line ("settings: max 80 iterations, background degree 12"; §13.5);
-- one group per phase (or *Instrument* for the standard);
+- one group per phase (or *Instrument* for the standard), each with what its CIF gave and how it is refined under its values: its settings in a line, the notes on its symmetry and cell, the CIF's warnings (a site given no displacement parameter);
 - the warnings, among them what the numbers rest on: a refinement stopped at its iteration limit, the parameters on a bound (to be read as limits), the parameters the data do not determine (no esd);
 - a note when the widths are not corrected for the instrument (no standard refined, or refined after this pattern), or, on the standard, that the samples take its profile;
 - a warning when the standard's refinement this sample was refined with is no longer there (refined again, cleared, or another standard chosen): its numbers rest on an earlier instrument (§7.1).

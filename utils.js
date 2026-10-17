@@ -1286,7 +1286,7 @@ document.addEventListener('keydown', e=>{
 // ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
 // Selectors: the Tauc cards are built at run time, each with its own pair, and the
 // first one on show is the one pressed (every card steps the same sample).
-const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#xrdPrev','#xrdNext'], sem:['#semPrev','#semNext'] };
+const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#tab-xrd .an-prev','#tab-xrd .an-next'], sem:['#semPrev','#semNext'] };
 document.addEventListener('keydown', e=>{
   if (e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1294,6 +1294,8 @@ document.addEventListener('keydown', e=>{
   if (tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT' || (el && el.isContentEditable)) return;
   const nav = SAMPLE_NAV[_activeTab];
   if (!nav) return;
+  // A window open over the page (the XRPD standard's, a settings dialog) has the keys.
+  if ([...document.querySelectorAll('.modal-backdrop')].some(m=> m.style.display === 'flex')) return;
   const btn = [...document.querySelectorAll(e.key==='ArrowLeft' ? nav[0] : nav[1])].find(b=> b.offsetParent!==null);
   if (btn){ btn.click(); e.preventDefault(); }
 });

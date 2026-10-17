@@ -29,6 +29,8 @@ const OFF_MIN = 0.05;        // an angle off the axis under this is none (the ca
 // closed extent up to v426, a 21:1 disc had shown as 4:1 beside a 19:1 one drawn 19:1.)
 const OPEN_RATIO = 20;
 const SIZE_MIN = 200, SIZE_MAX = 320;
+// A view given its height gives way sideways down to this width.
+const SIZE_NARROW = 120;
 // The offscreen layers at 2 pixels per CSS pixel at most (the solid), or 1.5 on screen
 // (the cones, faint and soft): they are fills under crisp edges and lines drawn at full
 // resolution, and on a 3x screen the full ratio would more than double their cost for
@@ -502,7 +504,7 @@ function segBoxDist(s, x, y, w, h){
    place for it when nothing has moved (were another better by more than the move, it
    would have been taken then): a redraw of an unchanged view puts the labels back
    exactly. */
-function placeLabels(items, obstacles, fixed, Sz, prev){
+function placeLabels(items, obstacles, fixed, Wd, Ht, prev){
   const MG = 3;                               // kept off the canvas's edge
   const cands = it => {
     const out = [], [ox, oy] = it.out, [tx, ty] = it.tip, w = it.w, h = it.hgt;
@@ -530,7 +532,7 @@ function placeLabels(items, obstacles, fixed, Sz, prev){
   const pre = items.map(it => {
     const was = prev && prev.get(it.slot);
     return cands(it).map(b => {
-      if (b.x < MG || b.y < MG || b.x + it.w > Sz - MG || b.y + it.hgt > Sz - MG) return null;
+      if (b.x < MG || b.y < MG || b.x + it.w > Wd - MG || b.y + it.hgt > Ht - MG) return null;
       let c = b.cost;
       for (const s of obstacles){
         // past its reach (half-width and the 10 px of a near miss): nothing to add
@@ -578,7 +580,7 @@ function placeLabels(items, obstacles, fixed, Sz, prev){
       }
       // Nowhere on the canvas at all (a label wider than it): straight out, kept on it.
       if (!pick){
-        pick = { x: clamp(it.tip[0] + it.out[0] * 9 - it.w / 2, MG, Sz - MG - it.w), y: clamp(it.tip[1] + it.out[1] * 9 - it.hgt / 2, MG, Sz - MG - it.hgt) };
+        pick = { x: clamp(it.tip[0] + it.out[0] * 9 - it.w / 2, MG, Wd - MG - it.w), y: clamp(it.tip[1] + it.out[1] * 9 - it.hgt / 2, MG, Ht - MG - it.hgt) };
         pc = 1e6;
       }
       at[i] = pick;
@@ -592,6 +594,8 @@ function placeLabels(items, obstacles, fixed, Sz, prev){
 }
 
 /* ---------- the view ---------- */
+export { matMul, axisAngle, reortho, viewAt };
+
 export function shapeView(container, opts = {}){
   const wrap = document.createElement('div');
   wrap.className = 'shape3d';
@@ -613,7 +617,7 @@ export function shapeView(container, opts = {}){
 
   let model = null, sig = '', caption = '', keepView = false;
   let R = viewAt(HOME_AZ, HOME_EL);
-  let S = 0, ratio = 1, raf = 0, dead = false;
+  let S = 0, H = 0, ratio = 1, raf = 0, dead = false;   // S the canvas's width, H its height
   let theme = null;                     // readTheme's answer, until the theme changes
   // slot → where its label's centre sat in the last frame, relative to its tip: labels
   // keep their places as the solid turns. Forgotten on a reset and with a new solid (so
@@ -644,11 +648,11 @@ export function shapeView(container, opts = {}){
      cleared over that box and over the last frame's, a little grown: a scaled copy of
      part of a canvas may sample a pixel or two outside it, which must be empty there,
      not what an earlier frame left (the same view must always give the same pixels). */
-  const layer = (i, Sz, lr, box) => {
+  const layer = (i, Wd, Ht, lr, box) => {
     let c = layers[i];
     if (!c){ c = document.createElement('canvas'); layers[i] = c; }
-    const W = Math.round(Sz * lr);
-    if (c.width !== W || c.height !== W){ c.width = W; c.height = W; c.lastBox = null; }
+    const W = Math.round(Wd * lr), H = Math.round(Ht * lr);
+    if (c.width !== W || c.height !== H){ c.width = W; c.height = H; c.lastBox = null; }
     const g = c.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0);
     for (const b of [c.lastBox, [box.x * lr, box.y * lr, box.w * lr, box.h * lr]]) if (b) g.clearRect(b[0] - 2, b[1] - 2, b[2] + 4, b[3] + 4);
@@ -663,21 +667,22 @@ export function shapeView(container, opts = {}){
     g.globalAlpha = 1;
   };
   // A box in CSS pixels, grown out to whole pixels of a layer at lr and kept on it.
-  const snap = (x0, y0, x1, y1, lr, Sz) => {
-    const W = Math.round(Sz * lr);
-    const a = clamp(Math.floor(x0 * lr), 0, W), b = clamp(Math.floor(y0 * lr), 0, W);
-    const c = clamp(Math.ceil(x1 * lr), 0, W), d = clamp(Math.ceil(y1 * lr), 0, W);
+  const snap = (x0, y0, x1, y1, lr, Wd, Ht) => {
+    const W = Math.round(Wd * lr), H = Math.round(Ht * lr);
+    const a = clamp(Math.floor(x0 * lr), 0, W), b = clamp(Math.floor(y0 * lr), 0, H);
+    const c = clamp(Math.ceil(x1 * lr), 0, W), d = clamp(Math.ceil(y1 * lr), 0, H);
     return { x: a / lr, y: b / lr, w: Math.max(0, c - a) / lr, h: Math.max(0, d - b) / lr };
   };
 
-  /* Everything, in CSS pixels on a square of side Sz (g already scaled by r). A fast
+  /* Everything, in CSS pixels on a Wd × Ht box (g already scaled by r): the solid fits
+     the shorter side, centred. A fast
      paint (during a drag, or while an arrow key is held) coarsens what costs most and
      shows least while the solid moves: the open ends' fade mask and the cones' fine cut
      at the solid's surface. The frame after it is let go is a full one. */
-  function paint(g, Sz, r, fast, forPng = false){
-    const m = model, T = forPng ? pngTheme() : themeOf();
+  function paint(g, Wd, Ht, r, fast, forPng = false){
+    const m = model, T = forPng ? pngTheme() : themeOf(), Sz = Math.min(Wd, Ht);
     const pad = 0.1 * Sz + 6;           // room for the labels past the tips
-    const k = (Sz / 2 - pad) / m.Rb, cx = Sz / 2, cy = Sz / 2;
+    const k = (Sz / 2 - pad) / m.Rb, cx = Wd / 2, cy = Ht / 2;
     const [r00, r01, r02, r10, r11, r12, r20, r21, r22] = R;
     const r0 = [r00, r01, r02], r1 = [r10, r11, r12], r2 = [r20, r21, r22];
     const P = p => [cx + k*(r00*p[0] + r01*p[1] + r02*p[2]), cy - k*(r10*p[0] + r11*p[1] + r12*p[2]), r20*p[0] + r21*p[1] + r22*p[2]];
@@ -704,8 +709,8 @@ export function shapeView(container, opts = {}){
     const front = F.map(f => dot(r2, f.n) > 1e-9);
     let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
     for (const q of Q){ if (q[0] < bx0) bx0 = q[0]; if (q[0] > bx1) bx1 = q[0]; if (q[1] < by0) by0 = q[1]; if (q[1] > by1) by1 = q[1]; }
-    const sb = snap(bx0 - 2, by0 - 2, bx1 + 2, by1 + 2, lr, Sz);
-    const gs = layer(0, Sz, lr, sb);
+    const sb = snap(bx0 - 2, by0 - 2, bx1 + 2, by1 + 2, lr, Wd, Ht);
+    const gs = layer(0, Wd, Ht, lr, sb);
     // Lambert shading, in 96 steps: the faces of one step go into one path.
     const shades = new Map();
     F.forEach((f, i) => {
@@ -941,7 +946,7 @@ export function shapeView(container, opts = {}){
       }
       if (groups.length){
         groups.sort((x, y) => x.z - y.z);
-        const box = snap(x0 - 1, y0 - 1, x1 + 1, y1 + 1, cr, Sz), gc = layer(li, Sz, cr, box);
+        const box = snap(x0 - 1, y0 - 1, x1 + 1, y1 + 1, cr, Wd, Ht), gc = layer(li, Wd, Ht, cr, box);
         for (const gr of groups){
           gc.fillStyle = gr.col;
           gc.beginPath();
@@ -1051,14 +1056,14 @@ export function shapeView(container, opts = {}){
     const bar = m.known ? (() => {
       const want = 0.22 * Sz / k, e = Math.pow(10, Math.floor(Math.log10(want))), f = want / e;
       const nm = (f >= 5 ? 5 : f >= 2 ? 2 : 1) * e;
-      return { nm, px: nm * k, x: 10, y: Sz - 10 };
+      return { nm, px: nm * k, x: 10, y: Ht - 10 };
     })() : null;
-    const fixed = bar ? [{ x: 4, y: Sz - 28, w: bar.px + 14, hgt: 26 }] : [];
+    const fixed = bar ? [{ x: 4, y: Ht - 28, w: bar.px + 14, hgt: 26 }] : [];
     // The cell's triad, top right: its corner is taken too.
-    const triad = m.cell ? { x: Sz - 30, y: 30, L: 18 } : null;
-    if (triad) fixed.push({ x: Sz - 60, y: 0, w: 60, hgt: 60 });
+    const triad = m.cell ? { x: Wd - 30, y: 30, L: 18 } : null;
+    if (triad) fixed.push({ x: Wd - 60, y: 0, w: 60, hgt: 60 });
     if (items.length){
-      placeLabels(items, obstacles, fixed, Sz, labelsWere);
+      placeLabels(items, obstacles, fixed, Wd, Ht, labelsWere);
       // where they sat, for the next frame (a PNG takes the screen's places, as they are)
       if (!forPng){ labelsWere.clear(); for (const it of items) labelsWere.set(it.slot, [it.x + it.w / 2 - it.tip[0], it.y + it.hgt / 2 - it.tip[1]]); }
     }
@@ -1142,20 +1147,28 @@ export function shapeView(container, opts = {}){
     }
   }
 
+  /* The canvas's size in CSS pixels: a square as wide as the container, within
+     SIZE_MIN–SIZE_MAX; or, given a height (opts.height, a number or a function), that
+     height and the container's whole width, however narrow (the solid fits the shorter
+     side), so that a view in a row of panels gives way sideways. */
   function measure(){
     const cs = getComputedStyle(container);
     const w = container.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
-    return w > 0 ? Math.round(clamp(w, SIZE_MIN, SIZE_MAX)) : 0;
+    if (!(w > 0)) return null;
+    const hOpt = typeof opts.height === 'function' ? opts.height() : opts.height;
+    if (hOpt > 0) return [Math.round(Math.max(SIZE_NARROW, w)), Math.round(hOpt)];
+    const s = Math.round(clamp(w, SIZE_MIN, SIZE_MAX));
+    return [s, s];
   }
   function draw(fast = false){
     if (dead || !model) return;
-    const s = measure() || S;
-    if (!s) return;
+    const [w, h] = measure() || [S, H];
+    if (!w) return;
     const r = window.devicePixelRatio || 1;
-    if (s !== S || r !== ratio){
-      S = s; ratio = r;
-      canvas.style.width = canvas.style.height = S + 'px';
-      canvas.width = canvas.height = Math.round(S * ratio);
+    if (w !== S || h !== H || r !== ratio){
+      S = w; H = h; ratio = r;
+      canvas.style.width = S + 'px'; canvas.style.height = H + 'px';
+      canvas.width = Math.round(S * ratio); canvas.height = Math.round(H * ratio);
       cap.style.maxWidth = S + 'px';
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1164,7 +1177,7 @@ export function shapeView(container, opts = {}){
     // would make the same view come out different from one frame to the next.
     ctx.save();
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    paint(ctx, S, ratio, fast);
+    paint(ctx, S, H, ratio, fast);
     ctx.restore();
   }
   // A frame is fast while the solid is being turned continuously (a drag, a held key).
@@ -1176,7 +1189,7 @@ export function shapeView(container, opts = {}){
   const rotate = (dx, dy) => {           // screen pixels → a turn about the axis normal to the drag
     const n = Math.hypot(dx, dy);
     if (!n) return;
-    R = reortho(matMul(axisAngle([dy / n, dx / n, 0], n * 1.2 * Math.PI / (S || 260)), R));
+    R = reortho(matMul(axisAngle([dy / n, dx / n, 0], n * 1.2 * Math.PI / (Math.min(S, H) || 260)), R));
     request();
   };
   const reset = () => { R = model ? model.home.slice() : viewAt(HOME_AZ, HOME_EL); labelsWere.clear(); request(); };
@@ -1213,7 +1226,7 @@ export function shapeView(container, opts = {}){
   const onDbl = e => { if (model){ e.preventDefault(); reset(); } };
   const onKey = e => {
     if (!model || e.altKey || e.ctrlKey || e.metaKey) return;
-    const st = e.shiftKey ? 2 : 10, px = st * DEG * (S || 260) / (1.2 * Math.PI);
+    const st = e.shiftKey ? 2 : 10, px = st * DEG * (Math.min(S, H) || 260) / (1.2 * Math.PI);
     const mv = { ArrowLeft: [-px, 0], ArrowRight: [px, 0], ArrowUp: [0, -px], ArrowDown: [0, px] }[e.key];
     if (!mv && e.key !== 'Home') return;
     // The key is the view's: no page scroll, and no document-level handler (← / → step
@@ -1342,21 +1355,21 @@ export function shapeView(container, opts = {}){
     // The view as a PNG (labels and caption in), at twice the CSS size at least.
     png(){
       if (dead || !model) return null;
-      const Sz = S || measure() || SIZE_MAX, r = Math.max(2, window.devicePixelRatio || 1);
+      const [Wd, Ht] = S ? [S, H] : measure() || [SIZE_MAX, SIZE_MAX], r = Math.max(2, window.devicePixelRatio || 1);
       const T = pngTheme();
       const capH = caption ? 24 : 0;
       const c = document.createElement('canvas');
-      c.width = Math.round(Sz * r); c.height = Math.round((Sz + capH) * r);
+      c.width = Math.round(Wd * r); c.height = Math.round((Ht + capH) * r);
       const g = c.getContext('2d');
       g.setTransform(r, 0, 0, r, 0, 0);
       // (no background: transparent)
-      paint(g, Sz, r, false, true);
+      paint(g, Wd, Ht, r, false, true);
       if (caption){
         g.font = `400 12px ${T.font}`;
         g.fillStyle = T.muted;
         g.textAlign = 'center';
         g.textBaseline = 'middle';
-        g.fillText(caption, Sz / 2, Sz + capH / 2 - 2, Sz - 12);
+        g.fillText(caption, Wd / 2, Ht + capH / 2 - 2, Wd - 12);
       }
       return c.toDataURL('image/png');
     },

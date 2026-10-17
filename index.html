@@ -270,232 +270,15 @@
         <div id="xrdAlerts"></div>
         <div id="xrdFileTableWrap"></div>
       </div>
-      <div class="card" id="xrdStdCard" style="display:none">
-        <h3 class="txt-head" style="margin:0 0 12px">Instrumental standard</h3>
-        <div class="instr-block">Select a measured standard (large, strain-free crystallites — LaB₆, Si…) to characterise the instrumental broadening β_instr(2θ). Once chosen, that sample is removed from the Analysis panel and analysed here on its own: it is always normalised to its highest peak (= 1). Its peaks and FWHM feed the Caglioti fit (FWHM² = U·tan²θ + V·tanθ + W, at least 3 peaks) that supplies the instrumental correction β² = β_obs² − β_instr² used for the samples' crystallite sizes. The fit is weighted least squares on FWHM², each peak by 1/(2·FWHM·σ)², σ the counting uncertainty of its width: the Poisson noise of the counts, carried through the smoothing and the half-maximum crossings (shown as the FWHM's tooltip in the table). To first order that is χ² = Σ((FWHM − fit)/σ)², so a weak peak, whose width is less certain, counts for less. In the box under the standard's parameters: U, V and W with their standard errors; the reduced χ² (χ²/(n − 3): about 1 when the curve follows the peaks within their counting errors, well above 1 when it does not — Kα₂ partly resolved, asymmetry, a peak that is not the standard's — and then the errors of U, V and W are scaled by its square root); R² of the weighted fit; the RMS of the residuals on the FWHM itself (in degrees, like the widths in the table, the largest in its tooltip); and the peaks the fit rests on. With fewer than 3 peaks the instrumental width is interpolated linearly between them. A sample peak beyond the standard's first or last peak by more than that peak's FWHM gets an extrapolated instrumental width, and its table says so. The standard starts unsmoothed (window 1), the samples at 10 points. The smoothing widens every peak, and the correction takes off only as much as it widened the standard's: a sample smoothed more keeps the difference in its width, and comes out smaller. No crystallite size is computed for the standard itself, so the size column is omitted from its peak table.</div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-nav-row">
-              <div class="plot-nav-left"><select id="xrdStandard" class="std-select ghost"><option value="">Choose standard…</option></select></div>
-            </div>
-            <div id="xrdStdBody" style="display:none">
-              <div class="plot-wrap">
-                <svg class="plot" id="xrdStdSvg"></svg>
-                <button class="btn plot-dl-btn" data-dl-svg="xrdStdSvg" data-csv-mod="xrd" data-csv-names="standard.csv" data-dl-name="XRPD_standard.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-              </div>
-              <div class="legend">
-                <span><i style="background:#6a7585"></i>raw</span>
-                <span><i style="background:#3aa0ff"></i>smoothed</span>
-                <span><i style="background:#ff9933"></i>baseline</span>
-                <span><i style="background:#5fcf6a"></i>peaks</span>
-              </div>
-            </div>
-          </div>
-          <div class="col mw280" id="xrdStdParams" style="align-self:flex-start;display:none">
-            <div class="txt-mini param-head aligned">Parameters</div>
-            <div class="param-grid">
-              <label class="txt-label">Smoothing window (pts)</label>
-              <input type="number" class="pg-field" id="xrdStdSmooth" value="1" min="1">
-
-              <label class="txt-label">Baseline SNIP window (pts)</label>
-              <input type="number" class="pg-field" id="xrdStdBlWin" value="150" min="1">
-
-              <label class="txt-label">Peak min. height (%)</label>
-              <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkHeight" value="5">
-
-              <label class="txt-label">Peak min. prominence (%)</label>
-              <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkProm" value="3">
-
-              <label class="txt-label">Peak min. distance (&#176;2&#952;)</label>
-              <input type="text" inputmode="decimal" class="pg-field" id="xrdStdPkDist" value="0.3">
-              <div class="pg-result" id="xrdStdCag"></div>
-            </div>
-            <div id="xrdStdCagAlert"></div>
-            <button class="btn plot-action-btn" id="xrdStdAddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
-          </div>
-        </div>
-        <div class="peak-box" id="xrdStdPeakBox" style="display:none">
-          <div class="peak-box-head">
-            <span class="txt-mini">Detected peaks</span>
-            <button class="btn nav-arrow peak-reset-btn" id="xrdStdPkReset" style="display:none" title="Reset peaks">&#8634;</button>
-            <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="standard.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
-          </div>
-          <div id="xrdStdPeakTableWrap"></div>
-        </div>
+      <!-- The analysis cards are built by xrd.js, above the "+" bar. -->
+      <div id="xrdAnalyses" style="display:none">
+        <div class="an-add-bar" id="xrdAddBar"><button type="button" class="an-add" id="xrdAddAn" aria-haspopup="menu" aria-expanded="false" aria-label="Add an analysis" title="Add another analysis">+</button></div>
       </div>
 
-      <div class="card" id="xrdWorkspace" style="display:none">
-        <h3 class="txt-head" style="margin:0 0 12px">Analysis</h3>
-        <div class="instr-block">Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing window widths — a smooth background that follows the broad diffuse scattering without being pulled into the peaks. A larger window gives a slower-varying baseline. Peak search: a local maximum is accepted if it exceeds <i>Peak min. height</i> and its <i>prominence</i> (height above the highest valley between it and any taller neighbour) exceeds <i>Peak min. prominence</i>; candidates closer than <i>Peak min. distance</i> are merged keeping the tallest.<br><br><b>Crystallite size (Scherrer, classic):</b> D = K·λ / (β·cosθ). β is measured classically on the smoothed, baseline-subtracted profile as the half-maximum full width (it contains the whole Kα₁+Kα₂ doublet). The smoothing widens the peaks in turn, so keep its window small against their widths: the raw pattern is drawn beside it to compare. K and λ are editable. <b>Instrumental broadening:</b> a chosen standard (large, strain-free crystallites) measures β_instr(2θ); the sample contribution is β² = β_obs² − β_instr². Each sample's size is the mean over its peaks ± their standard deviation (n − 1). The Results chart shows the spread of the peaks' sizes as a box plot — the box from the first to the third quartile, the line the median, the cross the mean, whiskers to the furthest sizes within 1.5 IQR and circles beyond — both without and (if a standard is set) with this correction, the mean ± the standard deviation above each box. <b>by peak</b> turns it around: the samples' peaks are matched by position, each taken as a value with its FWHM as uncertainty (the same reflection when two lie within one sigma, √(FWHM₁² + FWHM₂²)), and each reflection every sample has gets a box over the samples, one point per sample; the ones some sample lacks are listed under the chart.</div>
-        <div id="xrdAnalysisEmpty" style="display:none;color:var(--muted);font-size:14px;padding:18px 0 6px">All loaded files are set as the instrumental standard — load additional samples to analyse them here.</div>
-        <div id="xrdAnalysisContent">
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-nav-row">
-              <div class="plot-nav-left">
-                <button class="btn nav-arrow" id="xrdPrev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
-                <span id="xrdIdx" class="pill nav-count" style="margin:0">1/1</span>
-                <button class="btn nav-arrow" id="xrdNext" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
-                <span class="txt-caption" id="xrdCurrentLabel">—</span>
-              </div>
-            </div>
-            <div class="plot-wrap">
-              <svg class="plot" id="xrdSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="xrdSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv,peaks.csv" data-dl-name="XRPD_sample.svg"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div class="legend">
-              <span><i style="background:#6a7585"></i>raw</span>
-              <span><i style="background:#3aa0ff"></i>smoothed</span>
-              <span><i style="background:#ff9933"></i>baseline</span>
-              <span><i style="background:#5fcf6a"></i>peaks</span>
-            </div>
-          </div>
-          <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters</div>
-            <div class="param-grid">
-              <label class="txt-label">Normalization</label>
-              <select id="xrdNorm" class="pg-field"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select>
-
-              <div class="txt-label pg-title">Smoothing window (pts) <button type="button" class="mode-chip" id="xrdModeN" title="Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's">all</button></div>
-              <input type="number" class="pg-field" id="xrdSmooth" value="10" min="1">
-
-              <div class="txt-label pg-title">Baseline SNIP window (pts) <button type="button" class="mode-chip" id="xrdModeBl" title="Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's">all</button></div>
-              <input type="number" class="pg-field" id="xrdBlWin" value="150" min="1">
-
-              <div class="txt-label pg-title">Peak min. height (%) <button type="button" class="mode-chip" id="xrdModeH" title="Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's">one</button></div>
-              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkHeight" value="5">
-
-              <div class="txt-label pg-title">Peak min. prominence (%) <button type="button" class="mode-chip" id="xrdModeP" title="Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's">one</button></div>
-              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkProm" value="3">
-
-              <div class="txt-label pg-title">Peak min. distance (&#176;2&#952;) <button type="button" class="mode-chip" id="xrdModeD" title="Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's">one</button></div>
-              <input type="text" inputmode="decimal" class="pg-field" id="xrdPkDist" value="0.3">
-
-              <div class="txt-label pg-title">Shape factor K <button type="button" class="mode-chip" id="xrdModeK" title="Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's">all</button></div>
-              <input type="text" inputmode="decimal" class="pg-field" id="xrdK" value="0.9">
-
-              <div class="txt-label pg-title">Wavelength &#955; (&#8491;) <button type="button" class="mode-chip" id="xrdModeL" title="Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's">all</button></div>
-              <div class="pg-field lambda-field">
-                <select id="xrdLambdaSel" class="lambda-sel" title="X-ray source / wavelength">
-                  <option value="1.540598">Cu Kα1</option>
-                  <option value="1.541838">Cu Kα</option>
-                  <option value="1.544426">Cu Kα2</option>
-                  <option value="0.709317">Mo Kα1</option>
-                  <option value="1.789010">Co Kα1</option>
-                  <option value="2.289760">Cr Kα1</option>
-                  <option value="custom">Custom</option>
-                </select>
-                <input type="text" inputmode="decimal" class="lambda-val" id="xrdLambda" value="1.540598" readonly title="Wavelength (Å)">
-              </div>
-            </div>
-            <button class="btn plot-action-btn" id="xrdAddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
-          </div>
-        </div>
-        <div class="peak-box" id="xrdPeakBox">
-          <div class="peak-box-head">
-            <span class="txt-mini">Detected peaks</span>
-            <button class="btn nav-arrow peak-reset-btn" id="xrdPkReset" style="display:none" title="Reset peaks">&#8634;</button>
-            <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
-          </div>
-          <div id="xrdPeakTableWrap"></div>
-        </div>
-        </div>
-      </div>
-
-      <div class="card" id="xrdRvCard" style="display:none">
-        <h3 class="txt-head" style="margin:0 0 12px">Rietveld</h3>
-        <div class="instr-block" id="xrdRvInfo">Whole-pattern Rietveld refinement. Each phase comes from a CIF (<b>+ CIF</b>): its cell, its atoms and the symmetry the structure has. A file in P1, as Materials Project gives them, has its symmetry found from the atoms, so that a cubic cell is refined by <i>a</i> alone (a primitive cell of a centred lattice through its conventional cell, whose <i>a</i> and <i>V</i> are the ones reported); a file with its own operations is checked against its formula and Z (an origin-choice mix-up shows there). The instrumental standard is refined against the built-in LaB₆ (NIST SRM 660c, <i>a</i> = 4.156826 Å, held fixed): its zero and its peak shape — the Thompson–Cox–Hastings pseudo-Voigt, Gaussian width² = U·tan²θ + V·tanθ + W and Lorentzian width = X·tanθ + Y/cosθ, made asymmetric by the axial divergence (through the Soller slits the file gives, Cheary–Coelho's full axial model, with the sample's and receiver's axial length L refined; without Sollers, Finger–Cox–Jephcoat's one parameter (S+H)/L: the tail of the low-angle peaks towards lower angles) — and a shift of 2θ as sin 2θ, the form of the sample's transparency, beside the zero and the displacement, become the instrument's, and each sample refines only its own broadening on top of them: a Lorentzian Y<sub>s</sub>/cosθ, which gives the crystallite size (D = Kλ/Y<sub>s</sub>, Y<sub>s</sub> in radians, K = 0.9 as in the Analysis), and X<sub>s</sub>·tanθ = 4ε·tanθ, the microstrain. The pattern is computed from Kα₁ and Kα₂ at the file's wavelengths and ratio, the Bragg–Brentano Lorentz–polarisation factor (with a monochromator only when the file has one), |F|² from the atoms (Waasmaier–Kirfel form factors with Chantler's anomalous terms), a Chebyshev background and a specimen displacement per sample; each point weighs by its counts (1/σ², σ² the counts times the attenuation). <b>Refine</b> starts from the CIF's cell, finds where the pattern's peaks are by scaling that cell, then frees the parameters stage by stage; <b>Refine all</b> does the standard first. <b>Settings…</b>, beside them, decides what Refine refines: for each phase, and for the standard's LaB₆ (its B and texture: its widths are the instrument's), each of the models below switched on or off and, when on, how deep (the size and the microstrain can be off too). It also sets where Refine starts: from the CIF, as above, or from each pattern's last result, with the groups of parameters ticked held at its values (whatever is new or changed since is refined) — a shape fitted, say, then held while B per site is refined. Its <b>Refinement</b> section sets, for every pattern, the least squares and the searches: the iterations allowed, the shift tolerance and the starting damping, the background's Chebyshev degree and its 1/2θ term (automatic: on when the scan starts below 20°), the cell search's range, the standard's zero scan's, and the free shape's trial starts, each result saying which it was refined with when they are not the defaults. <b>Clear</b> removes this pattern's result, <b>Clear all</b> every pattern's. With several phases each gets its weight fraction (Hill–Howard, of the crystalline part). A phase is reported <i>not detected</i>, and left out of the refinement, when its scale is not above 3 esd, or when it is significant only through intensity under another phase's peaks with no part of the pattern its own (a candidate impurity whose lines fall on the main phase's would otherwise take up whatever misfit those peaks leave). The same CIF added twice gives two size populations of one phase. <b>Size profile</b> (with a refined standard): <i>Lorentzian</i>, a Lorentzian of the right breadth read with Scherrer's K; or <i>WPPM</i> (Whole Powder Pattern Modelling, Scardi &amp; Leoni), each line synthesised as the Fourier transform of the product of the instrument's, the size's, the strain's and the faults' coefficients — the size's being the crystallites' own common-volume function (a sphere's, or a free solid's along each member of the family), so the dimensions are the true ones and the profile's shape counts too. With <i>log-normal sizes</i> the coefficients are averaged over a distribution of width σ (of ln D): the size read is the volume-weighted mean (what the breadth measures), with the median and the number-weighted mean beside. <b>Microstrain</b>: isotropic, or <i>anisotropic</i> (Stephens: ε² a quartic form of the reflection's direction that the Laue group leaves unchanged; given as its rms and along the low-index planes' normals). <b>Planar faults</b> (after Warren): faults on a family of planes, each displacing the crystal by a vector of a family (those in the plane), the probability per plane refined: reflections whose h·R is not an integer broaden, by parity rather than by order. <b>Displacement parameters</b>: the CIF's held (0.5 Å² where it has none); one ΔB added to all of a phase's B; one B per crystallographic site (the sites from the symmetry found); or the anisotropic U<sup>ij</sup> per site, only those the site's symmetry leaves free, with B<sub>eq</sub>. Each is strongly correlated with the scale, and so with the weight fractions, with the background and, on broad peaks, with the widths: they want data to high angle. <b>Site occupancy</b>: the occupancy of one of the phase's sites refined — how strongly the site scatters against its species at full occupancy, alike at every angle (a B lowers it more the higher the angle): under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. The weight fractions use the cell's mass at the refined occupancy. Every site at once would be the scale again, so a phase of one site has none to refine; the standard's structure is certified. <b>Preferred orientation</b>: March–Dollase, each reflection's members weighed by (r²·cos²α + sin²α/r)<sup>−3/2</sup>, α their angle to the normal of the chosen planes (hkl) — r under 1 when such planes lie preferentially parallel to the sample's surface (plates), over 1 when they do not (needles); <i>best axis</i> tries the low-index planes and keeps the lowest χ². For a cubic phase r has no first-order effect at 1, so it is refined from 0.8 and from 1.25 and the better kept. It changes the intensities, not the widths: an intensity misfit left in is otherwise taken up by a free shape, which widens or narrows peaks to fit it (on a SrTiO<sub>3</sub> whose Sr site scatters 0.7 of a full one, with that site held full the plates came out ⟂ ⟨310⟩; with its occupancy refined, ⟂ ⟨110⟩, as the crystals are). <b>Crystallite shape</b> (with a refined standard): the isotropic size, or a free solid — an <i>ellipsoid</i> of any proportions, a <i>spheroid</i> (two axes equal), a <i>cylinder</i>, an <i>elliptic cylinder</i> (an ellipse translated along its axis), a <i>box</i> or a <i>square-based box</i> (two edges equal: a square plate or rod) —, in any orientation. A shape that breaks the crystal's symmetry (a disc normal to one ⟨110⟩ of a cubic phase) gives the reflections of one family different widths, so each is drawn with its own and the peak is their sum; its width follows the solid's volume-weighted column length along it (Stokes &amp; Wilson), in closed form for each solid (the faces rounded off over 2° of direction during the search only: the result is the exact solid's). The fit starts from several shapes (the sphere, plates and needles along the low-index directions, slightly tilted, and random ones) and keeps the best, if it beats the isotropic size by ΔBIC under −10 (χ² divided by the isotropic fit's χ²<sub>ν</sub>, so that a misfit is not taken for evidence); else the isotropic size stays. Each solid is also refined with its axes held exactly on their nearest lattice directions — its faces lattice planes —, and kept so when that gives the lower ΔBIC and the free orientation is not better by more than its χ² allows (95 %); the free fit's angle from them is given beside. The ΔBIC of each solid against the same isotropic fit also compares the solids: under 10 is no preference, 10–30 weak (within what the search itself varies on real data), over 30 telling; and the sizes depend on the solid chosen. The result gives the solid's dimensions with their esds — true ones (diameter, height, edges, full axes): with WPPM the solid's own, else calibrated as the isotropic size, a sphere's diameter —, each axis with the simplest lattice direction within 10°, its angle from it and its angular esd (the turn of the solid that raises χ² by χ²<sub>ν</sub>, its sizes and its turns about the other axes refined again: it measures the valley of χ² the fit ends in, and of 7 free fits of synthetic boxes 2 ended 3–4 esd off, in another valley nearly as deep); two dimensions not told apart within 2 esd have no direction of their own, nor has an axis whose angular esd is over 30°. The sizes across a thin solid's faces assume ideally flat faces: a 2° spread of their orientation would shorten them by 10–30 %. The solid is drawn beside the results with the crystal's directions on it and their uncertainty as cones (an axis the data do not fix dashed, <i>not determined</i>), and the cell's <i>a</i>, <i>b</i>, <i>c</i> in a corner for reference: drag it to turn it. Under the pattern: the difference, and a row of ticks per phase at its reflections. <b>Peak widths</b>: each reflection of a sample fitted alone (the pattern less the isotropic refinement's background and every other reflection, with a straight line for what is left, Kα₁ and Kα₂ and the instrument's asymmetry) by its own Lorentzian and Gaussian widths, to which the instrument's at that angle are added as the refinement adds them: their FWHM is the sample's alone, and the size from it is as in the Analysis. Three tests read them with no model of the shape: <i>Williamson–Hall</i>, β·cosθ against 4·sinθ, where an isotropic size and strain put the points on one line (χ²<sub>ν</sub> about it and its probability); <i>orders</i>, Δd* = β·cosθ/λ of (h k l) and (n·h n·k n·l), equal for a size, in the ratio n for a strain, below 1 for faults that broaden by parity; and <i>prediction</i>, the same measurement on each model's own curve, which a model of the shape should match. Overlapped, weak or end-of-pattern peaks, and those no broader than the instrument within 2 esd, are listed but not used. R<sub>wp</sub>, R<sub>exp</sub> and χ² judge the fit; the values in brackets are the standard errors in the last digits, which the serially correlated residuals of a powder pattern make smaller than the real uncertainty. A refinement that stopped before converging, parameters on a bound (to be read as limits) and parameters the data do not determine are said under the results. How it all works in detail: RIETVELD.md in the repository.</div>
-        <div class="peak-box" id="xrdRvPhaseBox" style="margin-top:0;margin-bottom:14px">
-          <div class="peak-box-head">
-            <span class="txt-mini">Phases</span>
-            <button class="btn" id="xrdRvAddCif" title="Add a phase from a CIF file">+ CIF</button>
-            <input type="file" id="xrdRvCifInput" accept=".cif,.CIF" multiple style="display:none">
-          </div>
-          <div id="xrdRvPhaseList"></div>
-        </div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-nav-row">
-              <div class="plot-nav-left">
-                <button class="btn nav-arrow" id="xrdRvPrev" aria-label="Previous pattern">&#8249;</button>
-                <span id="xrdRvIdx" class="pill nav-count" style="margin:0">1/1</span>
-                <button class="btn nav-arrow" id="xrdRvNext" aria-label="Next pattern">&#8250;</button>
-                <span class="txt-caption" id="xrdRvLabel">—</span>
-              </div>
-            </div>
-            <div class="plot-wrap">
-              <svg class="plot" id="xrdRvSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="xrdRvSvg" data-csv-mod="xrd" data-csv-names="rietveld_pattern.csv" data-dl-name="XRPD_rietveld.svg" data-dl-legend="xrdRvLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="xrdRvLegend" class="legend"></div>
-            <p class="txt-meta" id="xrdRvInstr"></p>
-          </div>
-          <div class="col mw280" id="xrdRvSide" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Refinement</div>
-            <div id="xrdRvStatus" class="txt-meta"></div>
-            <div id="xrdRvResults"></div>
-            <div id="xrdRvSolids" class="rv-solids" style="display:none"></div>
-            <div id="xrdRvProgWrap" class="rv-prog" style="display:none"><div id="xrdRvProgBar"></div></div>
-            <div class="rv-btns" style="margin-top:10px">
-              <button class="btn primary" id="xrdRvRefine">Refine</button>
-              <button class="btn primary" id="xrdRvRefineAll">Refine all</button>
-            </div>
-            <div class="rv-btns" style="margin-top:8px">
-              <button class="btn" id="xrdRvSettings" aria-haspopup="dialog" title="What Refine refines, for each phase and for the standard, and where it starts">Settings…</button>
-              <button class="btn" id="xrdRvClear" title="This pattern's result">Clear</button>
-              <button class="btn" id="xrdRvClearAll" title="Every pattern's result">Clear all</button>
-            </div>
-          </div>
-        </div>
-        <!-- The peaks' own widths: each reflection fitted alone, and the tests on them -->
-        <div id="xrdRvWidths" class="rv-widths" style="display:none">
-          <div class="row" style="align-items:flex-start">
-            <div class="col mw520" style="flex:1">
-              <div class="peak-box" style="margin-top:0">
-                <div class="peak-box-head">
-                  <span class="txt-mini">Peak widths</span>
-                  <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-names="rietveld_peaks.csv" title="Download CSV"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg></button>
-                </div>
-                <div id="xrdRvPkWrap"></div>
-              </div>
-            </div>
-            <div class="col mw320" style="flex:1">
-              <div class="plot-nav-row"><div class="plot-nav-left"><span class="txt-caption">Williamson–Hall</span></div></div>
-              <div class="plot-wrap">
-                <svg class="plot" id="xrdRvWhSvg"></svg>
-                <button class="btn plot-dl-btn" data-dl-svg="xrdRvWhSvg" data-csv-mod="xrd" data-csv-names="rietveld_peaks.csv" data-dl-name="XRPD_williamson_hall.svg" data-dl-legend="xrdRvWhLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-              </div>
-              <div id="xrdRvWhLegend" class="legend"></div>
-              <div id="xrdRvTests"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <!-- Each Scherrer card's Results under its name, in card order (xrd.js). -->
       <div class="card" id="xrdResults" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Results</h3>
-        <div id="xrdResultsEmpty" style="display:none;color:var(--muted);font-size:14px;padding:6px 0">All loaded files are set as the instrumental standard — load additional samples to see results here.</div>
-        <div class="row" id="xrdResultsContent" style="align-items:flex-start;gap:16px">
-          <div class="col mw320" style="flex:1">
-            <p class="txt-caption">Analysis</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="xrdResSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="xrdResSvg" data-csv-mod="xrd" data-csv-names="diffractograms.csv" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="xrdResLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="xrdResLegend" class="legend"></div>
-          </div>
-          <!-- The crystallite size beside the intensities it is read from. -->
-          <div class="col mw320" style="flex:1">
-            <p class="txt-caption">Crystallite size</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="xrdSizeBarSvg"></svg>
-              <span class="plot-chips" id="xrdSizeBy"></span>
-              <button class="btn plot-dl-btn" data-dl-svg="xrdSizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="xrdSizeBarLegend"><svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg></button>
-            </div>
-            <div id="xrdSizeBarLegend" class="legend"></div>
-            <div id="xrdSizeByNote" class="txt-meta"></div>
-          </div>
-        </div>
+        <div id="xrdResList" class="res-list"></div>
       </div>
     </section>
 
@@ -622,7 +405,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v460</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v461</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
@@ -636,15 +419,6 @@
         <button class="btn" id="projSaveAsCancel" type="button">Cancel</button>
         <button class="btn primary" id="projSaveAsOk" type="button">Save</button>
       </div>
-    </div>
-  </div>
-  <!-- XRPD Rietveld: the fitting settings (xrd-rv.js fills the body) -->
-  <div id="xrdRvSetModal" class="modal-backdrop" style="display:none">
-    <div class="modal-box rvs-box" role="dialog" aria-modal="true" aria-labelledby="xrdRvSetTitle" tabindex="-1">
-      <h3 class="txt-head" id="xrdRvSetTitle" style="margin:0 0 4px">Fitting settings</h3>
-      <p class="txt-meta" style="margin:0 0 6px">What <b>Refine</b> refines, on each phase and on the standard. A change applies to the next refinement.</p>
-      <div id="xrdRvSetBody"></div>
-      <button class="btn primary" id="xrdRvSetDone" type="button" style="width:100%;margin-top:16px">Done</button>
     </div>
   </div>
   <!-- SEM: copy the current crop to other images -->
