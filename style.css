@@ -2011,9 +2011,13 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 /* The standard's Scherrer side: the parameters at the top; the Caglioti fit, its alert
    and + Add peak at the foot, the button's bottom on the plot's. A fit taller than the
    room left scrolls in its place. */
-.xrd-std-side { gap: 0; }
+/* (gap 0 over .pside-col's 8 px, which had been left in by a weaker selector: 28 px
+   between the fit and the button, which the fit's box paid for by scrolling; now 8) */
+.pside > .pside-col.xrd-std-side { gap: 0; }
 .xrd-std-side > .param-head { margin-top: 0; }
 .xrd-std-side > .xrd-cag { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding-top: 10px; }
+.xrd-std-side > .cag-alert:not(:empty) { margin-top: 8px; }
+.xrd-std-side > .plot-action-btn { margin-top: 8px; }
 .xrd-cag > .pg-result { margin-top: auto; flex: 0 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; row-gap: 6px; }
 :root.narrow-layout .xrd-std-side > .xrd-cag { flex: none; }
 /* The phases' list and the structure: boxes like the peak table's, scrolling inside. */
