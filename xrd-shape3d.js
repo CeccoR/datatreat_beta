@@ -3,7 +3,8 @@
    A small view of the solid a free-shape refinement gives (ellipsoid, spheroid,
    cylinder, elliptic cylinder, box or square-based box, in nm) with up to three crystal directions
    drawn through it, each with its 1σ angular uncertainty as a translucent cone, and
-   the cell's a, b, c as a small triad in a corner, turned with it.
+   the cell's a, b, c as a small triad in a corner, turned with it (drawTriad: the unit
+   cell's view draws the same).
    Software 3D on a 2D canvas: no WebGL, no library. The solid is drawn axis-aligned
    in its own body frame and the directions are brought into that frame, so only the
    camera moves: a drag (mouse, pen or touch) or the arrow keys rotate it, a double
@@ -594,7 +595,40 @@ function placeLabels(items, obstacles, fixed, Wd, Ht, prev){
 }
 
 /* ---------- the view ---------- */
-export { matMul, axisAngle, reortho, viewAt };
+export { matMul, axisAngle, reortho, viewAt, readTheme };
+
+/* The cell's a, b, c as a small triad, the same in both 3D views (the crystallites'
+   shape, here; the unit cell, xrd-cell3d.js): from a point in a corner (at: x, y and the
+   arrows' length L), each axis an arrow in its colour, a red, b green, c blue as
+   crystallographic programs draw them, named in italics past its tip; the far ones
+   first, and dimmed. axes: the three unit vectors, in the frame R turns. */
+export const AXIS_COLORS = ['#e8453c', '#3fb950', '#4f8ff7'];
+export function drawTriad(g, R, axes, at, T, fs){
+  const [r00, r01, r02, r10, r11, r12, r20, r21, r22] = R;
+  const ax = axes.map((u, i) => ({ i, sx: r00*u[0] + r01*u[1] + r02*u[2], sy: -(r10*u[0] + r11*u[1] + r12*u[2]), z: r20*u[0] + r21*u[1] + r22*u[2] }))
+    .sort((a, b) => a.z - b.z);
+  g.save();
+  g.lineCap = 'round';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = `italic 600 ${fs}px ${T.font}`;
+  for (const a of ax){
+    const col = AXIS_COLORS[a.i];
+    g.globalAlpha = a.z < -0.05 ? 0.5 : 1;
+    const ex = at.x + at.L*a.sx, ey = at.y + at.L*a.sy, n = Math.hypot(a.sx, a.sy);
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(at.x, at.y); g.lineTo(ex, ey); g.stroke();
+    // a small head where the axis is seen side-on enough to show one
+    if (n > 0.3){ const ux = a.sx/n, uy = a.sy/n;
+      g.beginPath(); g.moveTo(ex + 2*ux, ey + 2*uy); g.lineTo(ex - 4*ux - 2.6*uy, ey - 4*uy + 2.6*ux); g.lineTo(ex - 4*ux + 2.6*uy, ey - 4*uy - 2.6*ux); g.fill(); }
+    // the label past the tip, along the axis as seen (an axis end-on: just off it)
+    const ux = n > 1e-3 ? a.sx/n : 0.7, uy = n > 1e-3 ? a.sy/n : -0.7, t = 'abc'[a.i];
+    const lx = ex + 8*ux, ly = ey + 8*uy;
+    g.lineWidth = 3; g.strokeStyle = T.halo; g.strokeText(t, lx, ly);
+    g.fillText(t, lx, ly);
+  }
+  g.restore();
+}
 
 export function shapeView(container, opts = {}){
   const wrap = document.createElement('div');
@@ -1103,33 +1137,8 @@ export function shapeView(container, opts = {}){
       }
     }
 
-    /* The cell's a, b, c: from the corner's centre, the far ones first and dimmed. */
-    if (triad){
-      const ax = m.cell.map((u, i) => ({ i, sx: r00*u[0] + r01*u[1] + r02*u[2], sy: -(r10*u[0] + r11*u[1] + r12*u[2]), z: r20*u[0] + r21*u[1] + r22*u[2] }))
-        .sort((a, b) => a.z - b.z);
-      g.lineCap = 'round';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.font = `italic 600 ${f1}px ${T.font}`;
-      for (const a of ax){
-        g.globalAlpha = a.z < -0.05 ? 0.5 : 1;
-        const ex = triad.x + triad.L*a.sx, ey = triad.y + triad.L*a.sy, n = Math.hypot(a.sx, a.sy);
-        g.strokeStyle = T.muted; g.fillStyle = T.muted; g.lineWidth = 1.6;
-        g.beginPath(); g.moveTo(triad.x, triad.y); g.lineTo(ex, ey); g.stroke();
-        // a small head where the axis is seen side-on enough to show one
-        if (n > 0.3){ const ux = a.sx/n, uy = a.sy/n;
-          g.beginPath(); g.moveTo(ex + 2*ux, ey + 2*uy); g.lineTo(ex - 4*ux - 2.6*uy, ey - 4*uy + 2.6*ux); g.lineTo(ex - 4*ux + 2.6*uy, ey - 4*uy - 2.6*ux); g.fill(); }
-        // the label past the tip, along the axis as seen (an axis end-on: just off it)
-        const ux = n > 1e-3 ? a.sx/n : 0.7, uy = n > 1e-3 ? a.sy/n : -0.7, t = 'abc'[a.i];
-        const lx = ex + 8*ux, ly = ey + 8*uy;
-        g.lineWidth = 3; g.strokeStyle = T.halo; g.strokeText(t, lx, ly);
-        g.fillText(t, lx, ly);
-      }
-      g.globalAlpha = 1;
-      g.textAlign = 'start';
-      g.textBaseline = 'alphabetic';
-      g.lineCap = 'butt';
-    }
+    /* The cell's a, b, c. */
+    if (triad) drawTriad(g, R, m.cell, triad, T, f1);
 
     /* The scale bar: a round number of nm. */
     if (bar){

@@ -6,7 +6,7 @@
    on another pattern. The curves are not kept: they are recomputed from the refined
    parameters, which takes milliseconds.
 ========================================================= */
-import { fmtData, csvLine, X_SVG, flashFieldInvalid, settings, fitCsvIcons } from './utils.js';
+import { fmtData, csvLine, X_SVG, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax } from './utils.js';
 import { Plot } from './plot.js';
 import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
@@ -77,8 +77,9 @@ function prepPhase(text, fileName){
     const c = sc.cell, r = v => +v.toFixed(4), V = metric(c).V/metric(cif.cell).V;
     notes.push(`the structure repeats on a lattice finer than the file's cell: refined in its own cell, a ${r(c.a)}, b ${r(c.b)}, c ${r(c.c)} Å, α ${r(c.alpha)}, β ${r(c.beta)}, γ ${r(c.gamma)}° (${+V.toFixed(4)}× the file's volume; the same pattern)`);
   }
-  if (!own) notes.push(`symmetry found from the atoms: ${sym.order} operations`);
-  else if (sym.order !== cif.ops.length || sc.basis) notes.push(`${cif.ops.length} operations in the file; the structure has ${sym.order}${sc.basis ? ' in its own cell' : ''}`);
+  // (a file without operations: its symmetry found from the atoms is in the structure's
+  // details, "from the atoms" and its operations, not a note)
+  if (own && (sym.order !== cif.ops.length || sc.basis)) notes.push(`${cif.ops.length} operations in the file; the structure has ${sym.order}${sc.basis ? ' in its own cell' : ''}`);
   // A cell refined by one common scale (no conventional setting found): its axial ratios
   // and angles stay the file's, which the user should know.
   if (sym.constraint && sym.constraint.kind === 'isotropic' && sym.constraint.note) notes.push(sym.constraint.note);
@@ -184,17 +185,31 @@ function engineOf(p, std){
   return { size: on.size, shape: on.size && d.size !== 'iso' ? d.size : false, profile: on.size && on.wppm ? d.wppm : 'lorentz',
     strain: on.strain ? d.strain : 'off', faults: on.faults ? d.faults : null, adp, po, occ };
 }
-// The settings in a line, for the phase's row.
-function summaryOf(p, std){
-  const on = p.on, d = p.dep, txt = (k, v) => (MODE[k].list.find(([x])=> x === v) || [v, v])[1];
-  const po = on.po ? 'preferred orientation ' + txt('po', d.po) : null;
-  const adp = on.adp ? txt('adp', d.adp) : 'B from the CIF';
+/* What a phase is refined with, in a line: from the engine's options (engineOf's: the
+   settings, summaryOf; or a result's models, refinedOf), so both read alike. A shape is
+   'box', … or false; tried: a solid searched and not kept; po an axis, 'auto' or null. */
+function modelsLine(m, std, tried){
+  const txt = (k, v) => (MODE[k].list.find(([x])=> x === v) || [v, k === 'po' ? `(${v})` : v])[1];
+  const po = m.po ? 'preferred orientation ' + txt('po', m.po) : null;
+  const adp = m.adp && m.adp !== 'cif' ? txt('adp', m.adp) : 'B from the CIF';
   if (std) return ["the instrument's profile", adp, po].filter(Boolean).join(' · ');
-  return [on.size ? (d.size === 'iso' ? 'isotropic size' : txt('size', d.size)) : 'no size broadening',
-    on.size && (on.wppm ? 'WPPM, ' + txt('wppm', d.wppm) : 'Lorentzian'),
-    on.strain ? 'microstrain ' + txt('strain', d.strain) : 'no microstrain',
-    on.faults && 'planar faults ' + txt('faults', d.faults).replace(/,.*/, ''), adp,
-    on.occ && siteList(p).length > 1 && 'occupancy of ' + depOf(p, 'occ'), po].filter(Boolean).join(' · ');
+  return [!m.size ? 'no size broadening' : m.shape ? txt('size', m.shape) : 'isotropic size' + (tried ? ` (a free ${txt('size', tried).replace('free shape: ', '')} searched, not kept)` : ''),
+    m.size && (m.profile === 'wppm' || m.profile === 'lognormal' ? 'WPPM, ' + txt('wppm', m.profile) : 'Lorentzian'),
+    m.strain === 'off' ? 'no microstrain' : 'microstrain ' + txt('strain', m.strain),
+    m.faults && 'planar faults ' + txt('faults', m.faults).replace(/,.*/, ''), adp,
+    m.occ && m.occ.length && 'occupancy of ' + m.occ.join(', '), po].filter(Boolean).join(' · ');
+}
+// The settings in a line: what Refine will refine.
+const summaryOf = (p, std) => modelsLine(engineOf(p, std), std);
+// What a result refined a phase with (its models, the free shape it kept, its texture's
+// axis); the settings' line for a result of v428 or older, which has no models.
+function refinedOf(q, r, std){
+  const md = r.models && r.models[q.id];
+  if (!md) return summaryOf(q, std);
+  const kept = !!(r.shapes && r.shapes[q.id]), t = r.textures && r.textures[q.id];
+  const hkl = t && t.hkl ? (Array.isArray(t.hkl) ? t.hkl.join('') : String(t.hkl)) : null;
+  return modelsLine({ size: md.size !== false, shape: kept ? md.shape : false, profile: md.profile, strain: md.strain || 'iso', faults: md.faults,
+    adp: md.adp, occ: md.occ, po: hkl }, std, md.shape && !kept ? md.shape : null);
 }
 /* Where a refinement starts (the settings' Start section): from the CIF (the full staged
    refinement) or from the pattern's last result, with these groups of parameters held at
@@ -298,7 +313,7 @@ const DL_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height
 const CSV_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
 
 // The card's instructions (cards.js shows them under its title).
-export const RV_INFO = `Whole-pattern Rietveld refinement. Each phase comes from a CIF (<b>+ CIF</b>, in the list beside the pattern, which gives each its formula and space group): its cell, its atoms and the symmetry the structure has. A file in P1, as Materials Project gives them, has its symmetry found from the atoms, so that a cubic cell is refined by <i>a</i> alone (a primitive cell of a centred lattice through its conventional cell, whose <i>a</i> and <i>V</i> are the ones reported), and its space group read off those operations; a file with its own operations is checked against its formula and Z (an origin-choice mix-up shows there). A phase's tick in the list says whether it is refined on the pattern on show: every pattern has them all at first, and each its own. A click on a phase shows its unit cell beside the list, in 3D (drag it to turn it, a double click puts it back), with its details under it. The instrumental standard (<b>Instrumental standard…</b>) is a file of its own, refined in its own window against the built-in LaB₆ (NIST SRM 660c, <i>a</i> = 4.156826 Å, held fixed) or a CIF of the standard's: its zero and its peak shape — the Thompson–Cox–Hastings pseudo-Voigt, Gaussian width² = U·tan²θ + V·tanθ + W and Lorentzian width = X·tanθ + Y/cosθ, made asymmetric by the axial divergence (through the Soller slits the file gives, Cheary–Coelho's full axial model, with the sample's and receiver's axial length L refined; without Sollers, Finger–Cox–Jephcoat's one parameter (S+H)/L: the tail of the low-angle peaks towards lower angles) — and a shift of 2θ as sin 2θ, the form of the sample's transparency, beside the zero and the displacement, become the instrument's, and each sample refines only its own broadening on top of them: a Lorentzian Y<sub>s</sub>/cosθ, which gives the crystallite size (D = Kλ/Y<sub>s</sub>, Y<sub>s</sub> in radians, K = 0.9 as in the Scherrer analysis), and X<sub>s</sub>·tanθ = 4ε·tanθ, the microstrain. The pattern is computed from Kα₁ and Kα₂ at the file's wavelengths and ratio, the Bragg–Brentano Lorentz–polarisation factor (with a monochromator only when the file has one), |F|² from the atoms (Waasmaier–Kirfel form factors with Chantler's anomalous terms), a Chebyshev background and a specimen displacement per sample; each point weighs by its counts (1/σ², σ² the counts times the attenuation). <b>Refine</b> starts from the CIF's cell, finds where the pattern's peaks are by scaling that cell, then frees the parameters stage by stage; <b>Refine all</b> does every pattern. <b>Settings…</b> decides what Refine refines: for each phase each of the models below switched on or off and, when on, how deep (the size and the microstrain can be off too). It also sets where Refine starts: from the CIF, as above, or from each pattern's last result, with the groups of parameters ticked held at its values (whatever is new or changed since is refined) — a shape fitted, say, then held while B per site is refined. Its <b>Refinement</b> section sets, for every pattern, the least squares and the searches: the iterations allowed, the shift tolerance and the starting damping, the background's Chebyshev degree and its 1/2θ term (automatic: on when the scan starts below 20°), the cell search's range, and the free shape's trial starts, each result saying which it was refined with when they are not the defaults. <b>Clear</b> removes this pattern's result, <b>Clear all</b> every pattern's. With several phases each gets its weight fraction (Hill–Howard, of the crystalline part). A phase is reported <i>not detected</i>, and left out of the refinement, when its scale is not above 3 esd, or when it is significant only through intensity under another phase's peaks with no part of the pattern its own (a candidate impurity whose lines fall on the main phase's would otherwise take up whatever misfit those peaks leave). The same CIF added twice gives two size populations of one phase. <b>Size profile</b> (with a refined standard): <i>Lorentzian</i>, a Lorentzian of the right breadth read with Scherrer's K; or <i>WPPM</i> (Whole Powder Pattern Modelling, Scardi &amp; Leoni), each line synthesised as the Fourier transform of the product of the instrument's, the size's, the strain's and the faults' coefficients — the size's being the crystallites' own common-volume function (a sphere's, or a free solid's along each member of the family), so the dimensions are the true ones and the profile's shape counts too. With <i>log-normal sizes</i> the coefficients are averaged over a distribution of width σ (of ln D): the size read is the volume-weighted mean (what the breadth measures), with the median and the number-weighted mean beside. <b>Microstrain</b>: isotropic, or <i>anisotropic</i> (Stephens: ε² a quartic form of the reflection's direction that the Laue group leaves unchanged; given as its rms and along the low-index planes' normals). <b>Planar faults</b> (after Warren): faults on a family of planes, each displacing the crystal by a vector of a family (those in the plane), the probability per plane refined: reflections whose h·R is not an integer broaden, by parity rather than by order. <b>Displacement parameters</b>: the CIF's held (0.5 Å² where it has none); one ΔB added to all of a phase's B; one B per crystallographic site (the sites from the symmetry found); or the anisotropic U<sup>ij</sup> per site, only those the site's symmetry leaves free, with B<sub>eq</sub>. Each is strongly correlated with the scale, and so with the weight fractions, with the background and, on broad peaks, with the widths: they want data to high angle. <b>Site occupancy</b>: the occupancy of one of the phase's sites refined — how strongly the site scatters against its species at full occupancy, alike at every angle (a B lowers it more the higher the angle): under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. The weight fractions use the cell's mass at the refined occupancy. Every site at once would be the scale again, so a phase of one site has none to refine; the standard's structure is certified. <b>Preferred orientation</b>: March–Dollase, each reflection's members weighed by (r²·cos²α + sin²α/r)<sup>−3/2</sup>, α their angle to the normal of the chosen planes (hkl) — r under 1 when such planes lie preferentially parallel to the sample's surface (plates), over 1 when they do not (needles); <i>best axis</i> tries the low-index planes and keeps the lowest χ². For a cubic phase r has no first-order effect at 1, so it is refined from 0.8 and from 1.25 and the better kept. It changes the intensities, not the widths: an intensity misfit left in is otherwise taken up by a free shape, which widens or narrows peaks to fit it (on a SrTiO<sub>3</sub> whose Sr site scatters 0.7 of a full one, with that site held full the plates came out ⟂ ⟨310⟩; with its occupancy refined, ⟂ ⟨110⟩, as the crystals are). <b>Crystallite shape</b> (with a refined standard): the isotropic size, or a free solid — an <i>ellipsoid</i> of any proportions, a <i>spheroid</i> (two axes equal), a <i>cylinder</i>, an <i>elliptic cylinder</i> (an ellipse translated along its axis), a <i>box</i> or a <i>square-based box</i> (two edges equal: a square plate or rod) —, in any orientation. A shape that breaks the crystal's symmetry (a disc normal to one ⟨110⟩ of a cubic phase) gives the reflections of one family different widths, so each is drawn with its own and the peak is their sum; its width follows the solid's volume-weighted column length along it (Stokes &amp; Wilson), in closed form for each solid (the faces rounded off over 2° of direction during the search only: the result is the exact solid's). The fit starts from several shapes (the sphere, plates and needles along the low-index directions, slightly tilted, and random ones) and keeps the best, if it beats the isotropic size by ΔBIC under −10 (χ² divided by the isotropic fit's χ²<sub>ν</sub>, so that a misfit is not taken for evidence); else the isotropic size stays. Each solid is also refined with its axes held exactly on their nearest lattice directions — its faces lattice planes —, and kept so when that gives the lower ΔBIC and the free orientation is not better by more than its χ² allows (95 %); the free fit's angle from them is given beside. The ΔBIC of each solid against the same isotropic fit also compares the solids: under 10 is no preference, 10–30 weak (within what the search itself varies on real data), over 30 telling; and the sizes depend on the solid chosen. The result gives the solid's dimensions with their esds — true ones (diameter, height, edges, full axes): with WPPM the solid's own, else calibrated as the isotropic size, a sphere's diameter —, each axis with the simplest lattice direction within 10°, its angle from it and its angular esd (the turn of the solid that raises χ² by χ²<sub>ν</sub>, its sizes and its turns about the other axes refined again: it measures the valley of χ² the fit ends in, and of 7 free fits of synthetic boxes 2 ended 3–4 esd off, in another valley nearly as deep); two dimensions not told apart within 2 esd have no direction of their own, nor has an axis whose angular esd is over 30°. The sizes across a thin solid's faces assume ideally flat faces: a 2° spread of their orientation would shorten them by 10–30 %. The solid is drawn beside the peak widths with the crystal's directions on it and their uncertainty as cones (an axis the data do not fix dashed, <i>not determined</i>), and the cell's <i>a</i>, <i>b</i>, <i>c</i> in a corner for reference: drag it to turn it. Under the pattern: the difference, and a row of ticks per phase at its reflections; under them, the refinement's results across the card, each phase with what its CIF gave and how it was refined. <b>Peak widths</b>: each reflection of a sample fitted alone (the pattern less the isotropic refinement's background and every other reflection, with a straight line for what is left, Kα₁ and Kα₂ and the instrument's asymmetry) by its own Lorentzian and Gaussian widths, to which the instrument's at that angle are added as the refinement adds them: their FWHM is the sample's alone, and the size from it is as in the Scherrer analysis. Three tests read them with no model of the shape, written in the Williamson–Hall plot (its tooltip has them in full): <i>Williamson–Hall</i>, β·cosθ against 4·sinθ, where an isotropic size and strain put the points on one line (χ²<sub>ν</sub> about it and its probability); <i>orders</i>, Δd* = β·cosθ/λ of (h k l) and (n·h n·k n·l), equal for a size, in the ratio n for a strain, below 1 for faults that broaden by parity; and <i>prediction</i>, the same measurement on each model's own curve, which a model of the shape should match. Overlapped, weak or end-of-pattern peaks, and those no broader than the instrument within 2 esd, are listed but not used. R<sub>wp</sub>, R<sub>exp</sub> and χ² judge the fit; the values in brackets are the standard errors in the last digits, which the serially correlated residuals of a powder pattern make smaller than the real uncertainty. A refinement that stopped before converging, parameters on a bound (to be read as limits) and parameters the data do not determine are said under the results. How it all works in detail: RIETVELD.md in the repository.`;
+export const RV_INFO = `Whole-pattern Rietveld refinement. Each phase comes from a CIF (<b>+ CIF</b>, in the list beside the pattern, which gives each its formula and space group): its cell, its atoms and the symmetry the structure has. A file in P1, as Materials Project gives them, has its symmetry found from the atoms, so that a cubic cell is refined by <i>a</i> alone (a primitive cell of a centred lattice through its conventional cell, whose <i>a</i> and <i>V</i> are the ones reported), and its space group read off those operations; a file with its own operations is checked against its formula and Z (an origin-choice mix-up shows there). A phase's tick in the list says whether it is refined on the pattern on show: every pattern has them all at first, and each its own. A click on a phase shows its unit cell beside the list, in 3D (drag it to turn it, a double click puts it back), with its details under it. The instrumental standard (<b>Instrumental standard…</b>) is a file of its own, refined in its own window against the built-in LaB₆ (NIST SRM 660c, <i>a</i> = 4.156826 Å, held fixed) or a CIF of the standard's: its zero and its peak shape — the Thompson–Cox–Hastings pseudo-Voigt, Gaussian width² = U·tan²θ + V·tanθ + W and Lorentzian width = X·tanθ + Y/cosθ, made asymmetric by the axial divergence (through the Soller slits the file gives, Cheary–Coelho's full axial model, with the sample's and receiver's axial length L refined; without Sollers, Finger–Cox–Jephcoat's one parameter (S+H)/L: the tail of the low-angle peaks towards lower angles) — and a shift of 2θ as sin 2θ, the form of the sample's transparency, beside the zero and the displacement, become the instrument's, and each sample refines only its own broadening on top of them: a Lorentzian Y<sub>s</sub>/cosθ, which gives the crystallite size (D = Kλ/Y<sub>s</sub>, Y<sub>s</sub> in radians, K = 0.9 as in the Scherrer analysis), and X<sub>s</sub>·tanθ = 4ε·tanθ, the microstrain. The pattern is computed from Kα₁ and Kα₂ at the file's wavelengths and ratio, the Bragg–Brentano Lorentz–polarisation factor (with a monochromator only when the file has one), |F|² from the atoms (Waasmaier–Kirfel form factors with Chantler's anomalous terms), a Chebyshev background and a specimen displacement per sample; each point weighs by its counts (1/σ², σ² the counts times the attenuation). <b>Refine</b> starts from the CIF's cell, finds where the pattern's peaks are by scaling that cell, then frees the parameters stage by stage; <b>Refine all</b> does every pattern. <b>Settings…</b> (read only while a refinement runs) decides what Refine refines: for each phase each of the models below switched on or off and, when on, how deep (the size and the microstrain can be off too). It also sets where Refine starts: from the CIF, as above, or from each pattern's last result, with the groups of parameters ticked held at its values (whatever is new or changed since is refined) — a shape fitted, say, then held while B per site is refined. Its <b>Refinement</b> section sets, for every pattern, the least squares and the searches: the iterations allowed, the shift tolerance and the starting damping, the background's Chebyshev degree and its 1/2θ term (automatic: on when the scan starts below 20°), the cell search's range, and the free shape's trial starts, each result saying which it was refined with when they are not the defaults. <b>Clear</b> removes this pattern's result, <b>Clear all</b> every pattern's. With several phases each gets its weight fraction (Hill–Howard, of the crystalline part). A phase is reported <i>not detected</i>, and left out of the refinement, when its scale is not above 3 esd, or when it is significant only through intensity under another phase's peaks with no part of the pattern its own (a candidate impurity whose lines fall on the main phase's would otherwise take up whatever misfit those peaks leave). The same CIF added twice gives two size populations of one phase. <b>Size profile</b> (with a refined standard): <i>Lorentzian</i>, a Lorentzian of the right breadth read with Scherrer's K; or <i>WPPM</i> (Whole Powder Pattern Modelling, Scardi &amp; Leoni), each line synthesised as the Fourier transform of the product of the instrument's, the size's, the strain's and the faults' coefficients — the size's being the crystallites' own common-volume function (a sphere's, or a free solid's along each member of the family), so the dimensions are the true ones and the profile's shape counts too. With <i>log-normal sizes</i> the coefficients are averaged over a distribution of width σ (of ln D): the size read is the volume-weighted mean (what the breadth measures), with the median and the number-weighted mean beside. <b>Microstrain</b>: isotropic, or <i>anisotropic</i> (Stephens: ε² a quartic form of the reflection's direction that the Laue group leaves unchanged; given as its rms and along the low-index planes' normals). <b>Planar faults</b> (after Warren): faults on a family of planes, each displacing the crystal by a vector of a family (those in the plane), the probability per plane refined: reflections whose h·R is not an integer broaden, by parity rather than by order. <b>Displacement parameters</b>: the CIF's held (0.5 Å² where it has none); one ΔB added to all of a phase's B; one B per crystallographic site (the sites from the symmetry found); or the anisotropic U<sup>ij</sup> per site, only those the site's symmetry leaves free, with B<sub>eq</sub>. Each is strongly correlated with the scale, and so with the weight fractions, with the background and, on broad peaks, with the widths: they want data to high angle. <b>Site occupancy</b>: the occupancy of one of the phase's sites refined — how strongly the site scatters against its species at full occupancy, alike at every angle (a B lowers it more the higher the angle): under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. The weight fractions use the cell's mass at the refined occupancy. Every site at once would be the scale again, so a phase of one site has none to refine; the standard's structure is certified. <b>Preferred orientation</b>: March–Dollase, each reflection's members weighed by (r²·cos²α + sin²α/r)<sup>−3/2</sup>, α their angle to the normal of the chosen planes (hkl) — r under 1 when such planes lie preferentially parallel to the sample's surface (plates), over 1 when they do not (needles); <i>best axis</i> tries the low-index planes and keeps the lowest χ². For a cubic phase r has no first-order effect at 1, so it is refined from 0.8 and from 1.25 and the better kept. It changes the intensities, not the widths: an intensity misfit left in is otherwise taken up by a free shape, which widens or narrows peaks to fit it (on a SrTiO<sub>3</sub> whose Sr site scatters 0.7 of a full one, with that site held full the plates came out ⟂ ⟨310⟩; with its occupancy refined, ⟂ ⟨110⟩, as the crystals are). <b>Crystallite shape</b> (with a refined standard): the isotropic size, or a free solid — an <i>ellipsoid</i> of any proportions, a <i>spheroid</i> (two axes equal), a <i>cylinder</i>, an <i>elliptic cylinder</i> (an ellipse translated along its axis), a <i>box</i> or a <i>square-based box</i> (two edges equal: a square plate or rod) —, in any orientation. A shape that breaks the crystal's symmetry (a disc normal to one ⟨110⟩ of a cubic phase) gives the reflections of one family different widths, so each is drawn with its own and the peak is their sum; its width follows the solid's volume-weighted column length along it (Stokes &amp; Wilson), in closed form for each solid (the faces rounded off over 2° of direction during the search only: the result is the exact solid's). The fit starts from several shapes (the sphere, plates and needles along the low-index directions, slightly tilted, and random ones) and keeps the best, if it beats the isotropic size by ΔBIC under −10 (χ² divided by the isotropic fit's χ²<sub>ν</sub>, so that a misfit is not taken for evidence); else the isotropic size stays. Each solid is also refined with its axes held exactly on their nearest lattice directions — its faces lattice planes —, and kept so when that gives the lower ΔBIC and the free orientation is not better by more than its χ² allows (95 %); the free fit's angle from them is given beside. The ΔBIC of each solid against the same isotropic fit also compares the solids: under 10 is no preference, 10–30 weak (within what the search itself varies on real data), over 30 telling; and the sizes depend on the solid chosen. The result gives the solid's dimensions with their esds — true ones (diameter, height, edges, full axes): with WPPM the solid's own, else calibrated as the isotropic size, a sphere's diameter —, each axis with the simplest lattice direction within 10°, its angle from it and its angular esd (the turn of the solid that raises χ² by χ²<sub>ν</sub>, its sizes and its turns about the other axes refined again: it measures the valley of χ² the fit ends in, and of 7 free fits of synthetic boxes 2 ended 3–4 esd off, in another valley nearly as deep); two dimensions not told apart within 2 esd have no direction of their own, nor has an axis whose angular esd is over 30°. The sizes across a thin solid's faces assume ideally flat faces: a 2° spread of their orientation would shorten them by 10–30 %. The solid is drawn beside the tests with the crystal's directions on it and their uncertainty as cones (an axis the data do not fix dashed, <i>not determined</i>), and the cell's <i>a</i>, <i>b</i>, <i>c</i> in a corner for reference: drag it to turn it. Under the pattern: the difference, and a row of ticks per phase at its reflections; under them, the refinement's results across the card, by its title what it was refined with (each phase's models, the Refinement settings not the defaults), at its foot every warning. <b>Peak widths</b> (the table at the card's foot: a click keeps a peak marked on the pattern and on the Williamson–Hall plot): each reflection of a sample fitted alone (the pattern less the isotropic refinement's background and every other reflection, with a straight line for what is left, Kα₁ and Kα₂ and the instrument's asymmetry) by its own Lorentzian and Gaussian widths, to which the instrument's at that angle are added as the refinement adds them: their FWHM is the sample's alone, and the size from it is as in the Scherrer analysis. Three tests read them with no model of the shape, in their box beside the Williamson–Hall plot: <i>Williamson–Hall</i>, β·cosθ against 4·sinθ, where an isotropic size and strain put the points on one line (χ²<sub>ν</sub> about it and its probability); <i>orders</i>, Δd* = β·cosθ/λ of (h k l) and (n·h n·k n·l), equal for a size, in the ratio n for a strain, below 1 for faults that broaden by parity; and <i>prediction</i>, the same measurement on each model's own curve, which a model of the shape should match. Overlapped, weak or end-of-pattern peaks, and those no broader than the instrument within 2 esd, are listed but not used. R<sub>wp</sub>, R<sub>exp</sub> and χ² judge the fit; the values in brackets are the standard errors in the last digits, which the serially correlated residuals of a powder pattern make smaller than the real uncertainty. A refinement that stopped before converging, parameters on a bound (to be read as limits) and parameters the data do not determine are said under the results. How it all works in detail: RIETVELD.md in the repository.`;
 export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement: one file (a file dropped replaces the one there), refined against the phase chosen in the list (the round button) — the built-in LaB₆ (NIST SRM 660c), or a CIF of the standard's. Its zero, its peak shape (U, V, W, X, Y and the axial divergence) and its sin 2θ shift become the instrument's, which every sample's refinement then takes: refine it before the samples, and refine them again after refining it again. Its cell is held at the CIF's (a certified standard's), and its own widths are the instrument's: no size, strain or faults of its own; its <b>Settings…</b> keep its displacement parameters (one ΔB by default) and its texture, where its refinement starts, and the zero scan's range.`;
 
 /* host: {
@@ -315,7 +330,12 @@ export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement:
 export function createRietveld(host, root, o){
   const p = o.prefix, std = !!o.standard;
   root.innerHTML = rvHtml(p, std);
-  const $ = id => root.querySelector('#' + p + id);
+  // A card's section of the Results (the samples'): the refined patterns stacked, and the
+  // crystallite sizes, as the Scherrer card's.
+  const res = std ? null : document.createElement('div');
+  if (res){ res.className = 'res-an'; res.innerHTML = resHtml(p); }
+  // The elements, found in the card or its section whether or not they are in the page.
+  const $ = id => root.querySelector('#' + p + id) || (res && res.querySelector('#' + p + id));
   let phases = [];           // [{ id, cif (text), file, color, prep, on, dep (the settings: MODES), off (file name → true: not refined there) }]
   let nextId = 1;
   let results = {};          // file name → { params, esd, stats, stages, free, held, detected, shapes, isoParams, at, … }
@@ -457,7 +477,8 @@ export function createRietveld(host, root, o){
     if (busy) return;
     const todo = list.filter(f=> phasesFor(f).length);
     if (!todo.length){ setStatus(std ? 'Load the standard\'s file to refine it.' : list.length ? 'No phase ticked for this pattern: add one from a CIF, or tick one.' : 'Add a phase from a CIF to refine.'); return; }
-    busy = true; cancelled = false; closeSettings(); syncButtons();
+    // (the settings stay open if they are: read only until the run ends, syncSettings)
+    busy = true; cancelled = false; syncButtons();
     const copy = q => ({ ...q, on: { ...q.on }, dep: { ...q.dep }, off: { ...q.off } });
     const run = { ph: phases.map(copy), std: copy(stdPhase()), start: startFrom, hold: hold.slice(), fit: { ...fit }, fell: [], bgFreed: [] };
     try {
@@ -526,16 +547,18 @@ export function createRietveld(host, root, o){
     syncButtons();
     renderPhases();
     if (!fs.length){
-      $('Label').textContent = std ? 'No standard loaded' : '—';
-      if (!std) $('Idx').textContent = '0/0';
+      // (the standard's plot has no caption: its window names the file)
+      if (!std){ $('Label').textContent = '—'; $('Idx').textContent = '0/0'; }
+      renderRes();
       if (plot){ plot = null; }
       $('Svg').replaceChildren(); $('Legend').innerHTML = ''; $('Instr').textContent = '';
       renderResults(null, null); renderWidths(null, null); renderSolids(null, null);
       return;
     }
     const k = curIdx(), f = fs[k], r = results[f.name];
-    $('Label').textContent = f.label;
-    if (!std) $('Idx').textContent = (k+1) + '/' + fs.length;
+    if (!std){ $('Label').textContent = f.label; $('Idx').textContent = (k+1) + '/' + fs.length; }
+    // (the Results show every pattern, the card folded or not)
+    renderRes();
     if (host.hidden && host.hidden()) return;
     const svg = $('Svg');
     const prev = preserve && plot ? { xmin: plot.xmin, xmax: plot.xmax } : null;
@@ -581,6 +604,155 @@ export function createRietveld(host, root, o){
     fitSide();
   }
 
+  /* ---- the Results (a card's section): every refined pattern stacked, the observed
+     less its refined background, each to its own maximum; the crystallite sizes by
+     sample (each phase's refined size with its esd; a free shape's measured dimensions,
+     each with its own) or by peak (each reflection's own size, from the peak widths,
+     across the samples). Drawn again only when what they show changes. ---- */
+  let sizeBy = 'sample', resSig = '';
+  const netCache = new WeakMap();      // a result → its pattern less its background, or null
+  function netOf(f, r){
+    if (!netCache.has(r)){ let v = null; try { const c = curvesOf(f, r).c; v = Array.from(f.y, (y, i)=> y - c.bg[i]); } catch(e){} netCache.set(r, v); }
+    return netCache.get(r);
+  }
+  const refinedFiles = ()=> host.files().filter(f=> results[f.name] && results[f.name].params);
+  const phaseColor = name => (allPhases().find(q=> q.prep.name === name) || {}).color || '#888';
+  // A pattern's sizes, by phase: the isotropic size, or the free shape's dimensions that
+  // were measured (those with an esd: a mean of dimensions not told apart, not each).
+  function sizesOf(r){
+    const by = new Map();
+    (r.table || []).forEach(q=>{
+      if (!q.phase || !Number.isFinite(q.value) || !Number.isFinite(q.esd)) return;
+      const shape = /^shape_.*_nm$/.test(q.name) && !/_min_nm$/.test(q.name);
+      if (q.name !== 'crystallite_size_nm' && !shape) return;
+      if (!by.has(q.phase)) by.set(q.phase, []);
+      by.get(q.phase).push({ v: q.value, e: q.esd, shape });
+    });
+    return by;
+  }
+  function renderRes(){
+    if (!res) return;
+    const fs = refinedFiles(), anyW = fs.some(f=> results[f.name].widths);
+    if (sizeBy === 'peak' && !anyW) sizeBy = 'sample';
+    const w = $('ResSvg').getBoundingClientRect().width;
+    const sig = [fs.map(f=> f.name + ':' + results[f.name].at + ':' + f.color + ':' + f.label).join('|'), sizeBy, Math.round(w), allPhases().map(q=> q.color).join()].join('#');
+    if (sig === resSig) return;
+    resSig = sig;
+    res.querySelector('.res-row').style.display = fs.length ? '' : 'none';
+    $('ResNone').style.display = fs.length ? 'none' : '';
+    if (!fs.length) return;
+    drawStacked(fs);
+    drawSizes(fs, anyW);
+    sizeNames();
+    fitCsvIcons(res);
+  }
+  function drawStacked(fs){
+    const shown = fs.map(f=> ({ f, y: netOf(f, results[f.name]) })).filter(q=> q.y);
+    const plot = new Plot($('ResSvg'), { xlabel: '2θ (°)', ylabel: 'Intensity (a. u.)', noYTickLabels: true });
+    plot.attachTools(plot.svg.closest('.plot-wrap'));
+    const n = shown.length, baseOf = j => -j*1.1;
+    let lo = Infinity, hi = -Infinity;
+    shown.forEach(({ f })=>{ const [a, b] = scanRange(f); lo = Math.min(lo, a); hi = Math.max(hi, b); });
+    if (!isFinite(lo)){ lo = 0; hi = 1; }
+    plot.setRange(lo, hi, baseOf(Math.max(0, n - 1)), baseOf(0) + 1.1);
+    plot.drawAxes();
+    shown.forEach(({ f, y }, j)=>{
+      const norm1 = y.map(v=> v/(maxArr(y) || 1));
+      plot.line(f.x, norm1.map(v=> v + baseOf(j) + 0.05), f.color, 1.3, undefined, { raw: { xs: f.x, ys: norm1 }, label: f.label, key: f.name });
+    });
+    $('ResLegend').innerHTML = shown.map(({ f })=> `<span><i style="background:${f.color}"></i>${esc(f.label)}</span>`).join('');
+  }
+  /* The sizes as points with their esds, the names under the axis cut and tilted to fit
+     (barNames) as the Scherrer card's, the values written above. By sample: a column a
+     pattern, a point a phase (beside each other) and a dimension of a free shape; by peak:
+     a column a reflection, a point a pattern. */
+  function drawSizes(fs, anyW){
+    const svg = $('SizeSvg'), chips = $('SizeBy'), wrap = svg.closest('.plot-wrap');
+    chips.innerHTML = [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
+      `<button type="button" class="mode-chip plot-chip${sizeBy === k ? ' is-on' : ''}" data-size-by="${k}"`
+      + `${k === 'peak' && !anyW ? ' disabled title="No peak widths: they are measured on a sample refined with its phases"' : ` title="Crystallite size ${t}"`}>${t}</button>`).join('');
+    const cols = [], marks = [];     // marks: { x, v, e, color, dx, label }
+    let series = [];
+    if (sizeBy === 'peak'){
+      // The reflections the tests use, in any pattern: a column each, by phase and 2θ.
+      const refl = new Map();
+      fs.forEach(f=>{ const wd = results[f.name].widths; if (!wd) return;
+        wd.phases.forEach(ph=> ph.rows.forEach(w=>{
+          if (w.overlapped || w.edge || w.weak || w.flat || w.unread || !Number.isFinite(w.D)) return;
+          const key = ph.name + '|' + w.label;
+          if (!refl.has(key)) refl.set(key, { ph: ph.name, label: w.label, tt: w.tt, by: new Map() });
+          refl.get(key).by.set(f.name, w);
+        })); });
+      const list = [...refl.values()].sort((a, b)=> a.ph === b.ph ? a.tt - b.tt : a.ph < b.ph ? -1 : 1);
+      const many = new Set(list.map(c=> c.ph)).size > 1;
+      series = fs.map(f=> ({ name: f.label, color: f.color }));
+      const step = fs.length > 1 ? Math.min(10, 40/(fs.length - 1)) : 0;
+      list.forEach((c, i)=>{
+        cols.push({ label: many ? `${c.ph} ${c.label}` : c.label, name: `${c.ph} (${c.label})` });
+        fs.forEach((f, si)=>{ const w = c.by.get(f.name); if (w) marks.push({ x: i + 1, v: w.D, e: w.Desd, color: f.color, dx: (si - (fs.length - 1)/2)*step }); });
+      });
+    } else {
+      const names = [...new Set(fs.flatMap(f=> [...sizesOf(results[f.name]).keys()]))];
+      series = names.map(n=> ({ name: n, color: phaseColor(n) }));
+      const step = names.length > 1 ? 18 : 0;
+      fs.forEach((f, i)=>{
+        cols.push({ label: f.label, name: f.name });
+        const by = sizesOf(results[f.name]);
+        names.forEach((n, si)=>{
+          const vs = by.get(n) || [], dx = (si - (names.length - 1)/2)*step;
+          vs.forEach(q=> marks.push({ x: i + 1, v: q.v, e: q.e, color: phaseColor(n), dx }));
+          if (vs.length) marks.push({ x: i + 1, top: Math.max(...vs.map(q=> q.v + (q.e || 0))), dx, label: vs.map(q=> `${q.v.toFixed(1)}±${q.e.toFixed(1)}`).join(' / ') });
+        });
+      });
+    }
+    const pts = marks.filter(m=> m.v != null), labs = marks.filter(m=> m.label);
+    const legend = $('SizeLegend'), note = $('SizeNote');
+    if (!pts.length){ wrap.style.display = 'none'; legend.innerHTML = ''; note.textContent = sizeBy === 'peak' ? 'No peak the tests use.' : 'No size refined: the size is off, or every phase was refined without one.'; return; }
+    wrap.style.display = '';
+    const mctx = document.createElement('canvas').getContext('2d');
+    mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+    const br = svg.getBoundingClientRect(), svgW = br.width || 640, svgH = br.height || 420, n = cols.length;
+    const fit = barNames(mctx, cols.map(c=> c.label), Math.max(60, svgW - 75), 55);
+    const maxLbl = Math.max(0, ...fit.labels.map(l=> mctx.measureText(l).width));
+    const bottom = Math.round(26 + maxLbl*fit.sin), mTop = 15, gap = 8, plotH = svgH - mTop - bottom;
+    const maxValW = Math.max(0, ...labs.map(m=> mctx.measureText(m.label).width));
+    const reserve = gap + maxValW + 6, frac = plotH > reserve ? 1 - reserve/plotH : 0.5;
+    const tops = pts.map(m=> m.v + (Number.isFinite(m.e) ? m.e : 0));
+    const ymax = Math.max(Math.max(...tops)*1.15, (labs.length ? Math.max(...labs.map(m=> m.top)) : 0)/frac,
+      barChipYmax(chips, svg, labs.map(m=> ({ x: m.x, dx: m.dx, top: m.top, w: mctx.measureText(m.label).width })), { W: svgW, ml: 55, mr: 20, mTop, plotH, gap, x0: 0, x1: n + 1 }));
+    const plot = new Plot(svg, { xlabel: '', ylabel: 'Crystallite size (nm)', noXTickLabels: true, noXGrid: true, yGrid: true, margin: { l: 55, r: 20, t: mTop, b: bottom } });
+    plot.setRange(0, n + 1, 0, ymax || 1);
+    plot.drawAxes();
+    pts.forEach(m=>{ if (Number.isFinite(m.e) && m.e > 0) plot.errbar(m.x, m.v, m.e, m.dx); });
+    // (a point a colour, each beside its column's centre by its offset)
+    const groups = new Map();
+    pts.forEach(m=>{ const k = m.color + '|' + m.dx; if (!groups.has(k)) groups.set(k, { color: m.color, dx: m.dx, xs: [], ys: [] }); const g = groups.get(k); g.xs.push(m.x + m.dx/((svgW - 75)/(n + 1))); g.ys.push(m.v); });
+    groups.forEach(g=> plot.points(g.xs, g.ys, g.color, 4.5));
+    labs.forEach(m=> plot.barLabel(m.x, m.top, m.label, { gap, dx: m.dx }));
+    cols.forEach((c, i)=> plot.tickLabel(i + 1, fit.labels[i], fit.rot, c.label, c.name));
+    plot.attachTools(wrap);
+    legend.innerHTML = series.map(q=> `<span><i style="background:${q.color}"></i>${esc(q.name)}</span>`).join('');
+    note.textContent = sizeBy === 'peak'
+      ? "Each reflection's own size (Scherrer, K = 0.9, on its FWHM less the instrument's), the peaks the tests use."
+      : fs.some(f=> [...sizesOf(results[f.name]).values()].some(v=> v.some(q=> q.shape)))
+        ? "A free shape: its dimensions, each measured one with its esd (dimensions not told apart, their mean)." : '';
+  }
+  // The size chart's downloads follow what it shows, and the card's name.
+  function sizeNames(){
+    if (!res) return;
+    res.querySelectorAll('[data-size-dl]').forEach(b=>{
+      b.dataset.csvNames = csvPre + (sizeBy === 'peak' ? 'rietveld_peaks.csv' : 'rietveld_results.csv');
+      if (b.classList.contains('plot-dl-btn')) b.dataset.dlName = csvPre + (sizeBy === 'peak' ? 'XRPD_rietveld_size_by_peak.svg' : 'XRPD_rietveld_size.svg');
+    });
+  }
+  if (res) res.addEventListener('click', e=>{
+    const b = e.target.closest('[data-size-by]');
+    if (!b || b.disabled || b.dataset.sizeBy === sizeBy) return;
+    sizeBy = b.dataset.sizeBy === 'peak' ? 'peak' : 'sample';
+    renderRes();
+    host.commit();
+  });
+
   // ---- the crystallites' shape: each phase's refined solid in 3D (xrd-shape3d), the
   // crystal's directions on it with their uncertainty cones; drag to turn it ----
   let solidViews = [], solidsKey = '';
@@ -597,9 +769,16 @@ export function createRietveld(host, root, o){
       : s.type === 'sqbox' ? `square-based box, ${s.kind}: base ${n(x)} × ${n(x)} nm, height ${n(z)} nm`
       : `ellipsoid, ${s.kind}: axes ${n(x)} × ${n(y)} × ${n(z)} nm`;
   }
-  // The solids' views are as tall as the Williamson–Hall plot beside them (shared by
-  // several), and give way sideways, the table and the plot taking the room first.
-  const solidHeight = n => ()=> { const h = $('WhSvg').getBoundingClientRect().height || 300; return Math.max(160, Math.round(h/n) - (n > 1 ? 34 : 0)); };
+  /* The solids' views fill their box, square beside the Williamson–Hall plot and as tall
+     (the plot's height, the column's width): each the box's height, shared by several,
+     less its head and its caption. Stacked on a narrow screen: square, 320 px at most. */
+  const solidHeight = n => ()=>{
+    const box = $('Solids'), cs = getComputedStyle(box);
+    if (document.documentElement.classList.contains('narrow-layout')) return Math.min(320, box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+    let h = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 10*(n - 1);
+    box.querySelectorAll('.rv-solid').forEach(w=>{ const c = w.querySelector('canvas'); h -= w.offsetHeight - (c ? c.offsetHeight : 0); });
+    return Math.max(120, Math.floor(h/n));
+  };
   function renderSolids(f, r){
     const box = $('Solids'), list = (r && r.solids) || [];
     // The same solids: the views stay as they were turned.
@@ -609,9 +788,10 @@ export function createRietveld(host, root, o){
     solidViews.forEach(({ view, turnKey })=>{ if (view.getView) solidTurns.set(turnKey, view.getView()); view.destroy(); });
     solidViews = [];
     if (solidTurns.size > 50) solidTurns.delete(solidTurns.keys().next().value);
-    box.innerHTML = '';
-    root.querySelector('.rv-wrow').classList.toggle('has-solid', !!list.length);
-    box.style.display = list.length ? '' : 'none';
+    // No solid kept: the box says so, in its place (the free shape is a setting; a solid
+    // searched and not kept, the results say why).
+    box.innerHTML = list.length ? '' : `<div class="peak-box-head"><span class="txt-mini">Crystallite shape</span></div><div class="rv-empty">${r && r.params && Object.values(r.models || {}).some(m=> m && m.shape)
+      ? 'No free shape kept: none beat the isotropic size by ΔBIC under −10.' : 'Isotropic size: no free shape refined. <b>Settings…</b> sets one (Crystallite size, free shape).'}</div>`;
     list.forEach(s=>{
       const color = (allPhases().find(q=> q.id === s.id) || {}).color;
       const wrap = document.createElement('div');
@@ -631,9 +811,13 @@ export function createRietveld(host, root, o){
     });
   }
 
-  // ---- the peaks' own widths (xrd-widths, run by the worker): the table, and the
-  // Williamson–Hall plot with the tests written in it ----
+  // ---- the peaks' own widths (xrd-widths, run by the worker): the Williamson–Hall plot,
+  // the tests on them beside it, and the table at the card's foot ----
   let whPlot = null;
+  // The peak picked in the table (a click; another click lets it go), as the Scherrer
+  // card's: marked on the pattern and on the Williamson–Hall plot until then, the one
+  // under the pointer beside it. Of one pattern: another pattern's table has none.
+  let pkSel = null, pkHov = null;
   // As the worker's fmtEsd: the esd rounded first, the value to its last digit.
   const fmtE = (v, e) => {
     if (!Number.isFinite(v)) return '—';
@@ -690,65 +874,83 @@ export function createRietveld(host, root, o){
     const wrap = $('PkWrap');
     wrap.innerHTML = html;
     drawWH(phs, colorOf);
-    // Hover: the peak on the pattern and on the Williamson–Hall plot.
-    wrap.querySelectorAll('.rv-pk').forEach(tr=>{
-      tr.addEventListener('mouseenter', ()=> highlight(+tr.dataset.tt, tr.dataset.lab, +tr.dataset.ph, colorOf(+tr.dataset.ph)));
-      tr.addEventListener('mouseleave', ()=> highlight(null));
+    renderTests(phs);
+    const pk = tr => ({ file: f.name, tt: +tr.dataset.tt, lab: tr.dataset.lab, ph: +tr.dataset.ph, color: colorOf(+tr.dataset.ph) });
+    const same = (a, b) => !!a && !!b && a.file === b.file && a.lab === b.lab && a.ph === b.ph;
+    const rows = [...wrap.querySelectorAll('.rv-pk')];
+    // (the one picked stays picked through a redraw of its pattern, while its row is there)
+    if (pkSel && !rows.some(tr=> same(pk(tr), pkSel))) pkSel = null;
+    pkHov = null;
+    rows.forEach(tr=>{
+      tr.classList.toggle('selected', same(pk(tr), pkSel));
+      tr.addEventListener('mouseenter', ()=>{ pkHov = pk(tr); tr.classList.add('hovering'); markPeaks(); });
+      tr.addEventListener('mouseleave', ()=>{ pkHov = null; tr.classList.remove('hovering'); markPeaks(); });
+      tr.addEventListener('click', ()=>{
+        const k = pk(tr);
+        pkSel = same(k, pkSel) ? null : k;
+        rows.forEach(x=> x.classList.toggle('selected', same(pk(x), pkSel)));
+        markPeaks();
+      });
     });
+    markPeaks();
     fitCsvIcons(root);
   }
-  function highlight(tt, lab, phId, color){
-    if (plot){ plot.clearOverlay(); if (tt != null) plot.vline(tt, color, false); }
+  // The picked peak and the one under the pointer: a line at each on the pattern, in its
+  // phase's colour, and a ring round each on the Williamson–Hall plot (the picked one's
+  // thicker; drawn again at a zoom or a pan of it).
+  const marked = ()=> [pkSel, pkHov].filter((k, i, a)=> k && (i === 0 || !a[0] || a[0].lab !== k.lab || a[0].ph !== k.ph));
+  function markPeaks(){
+    if (plot){ plot.clearOverlay(); marked().forEach(k=> plot.vline(k.tt, k.color, false)); }
+    markWH();
+  }
+  function markWH(){
     if (!whPlot) return;
     whPlot.gOverlay.querySelectorAll('.wh-hl').forEach(e=> e.remove());
-    if (tt == null) return;
-    const q = (whPlot._pts || []).find(x=> x.label === lab && x.ph === phId);
-    if (q){
+    marked().forEach(k=>{
+      const q = (whPlot._pts || []).find(x=> x.label === k.lab && x.ph === k.ph);
+      if (!q) return;
       const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       c.setAttribute('cx', whPlot.px(q.x)); c.setAttribute('cy', whPlot.py(q.y)); c.setAttribute('r', 7);
-      c.setAttribute('fill', 'none'); c.setAttribute('stroke', color); c.setAttribute('stroke-width', 2); c.setAttribute('class', 'wh-hl');
+      c.setAttribute('fill', 'none'); c.setAttribute('stroke', k.color); c.setAttribute('stroke-width', k === pkSel ? 2.6 : 2); c.setAttribute('class', 'wh-hl');
       whPlot.gOverlay.appendChild(c);
-    }
+    });
   }
-  /* The tests, as lines of text: Williamson–Hall's χ²_ν and verdict, the line's size and
-     strain, the orders' ratios, the models' predictions; and in full, for the tooltip. */
-  function testLines(phs){
-    const short = [], full = [];
+  /* The tests on the widths, in their box beside the Williamson–Hall plot (as tall, its
+     text scrolling in it): each one's numbers and what they say — Williamson–Hall's χ²_ν
+     and the line's size and strain, the orders' ratios, the models' predictions. */
+  function renderTests(phs){
+    let html = '';
     phs.forEach(ph=>{
-      const wh = ph.wh, pre = phs.length > 1 ? ph.name + ': ' : '';
+      const wh = ph.wh;
+      if (phs.length > 1) html += `<div class="txt-mini rv-phase-name">${esc(ph.name)}</div>`;
       if (Number.isFinite(wh.chi2nu)){
         const aniso = wh.p < 1e-3;
-        short.push(`${pre}χ²ν ${wh.chi2nu.toFixed(1)}, p ${fmtP(wh.p)}: ${aniso ? 'anisotropic' : 'isotropic'}`);
-        short.push(`D ${fmtE(wh.D, wh.Desd)} nm, ε ${fmtE(wh.b, wh.bEsd)}${aniso ? ' (an average)' : ''}`);
-        full.push(`${pre}Williamson–Hall: χ²_ν ${wh.chi2nu.toFixed(1)} over ${wh.nu} degrees of freedom, p ${fmtP(wh.p)}. ${aniso ? 'The widths depend on hkl beyond their esds: the broadening is anisotropic (the crystallites\' shape, or faults).' : 'The widths lie on one line within their esds: consistent with an isotropic size and strain.'} The weighted line: D ${fmtE(wh.D, wh.Desd)} nm (Kλ/D its intercept, K = 0.9, on the corrected FWHM), ε ${fmtE(wh.b, wh.bEsd)}${aniso ? ', an average only' : ''}.`);
+        html += `<div class="pg-stat" title="χ² of the measured FWHM·cosθ (the corrected FWHM, not the integral breadth: D is read with K = 0.9 for the FWHM) about the weighted line, per degree of freedom (${wh.nu}), and the probability of so large a value were the broadening isotropic (size and strain alike in every direction)">Williamson–Hall: χ²<sub>ν</sub> <b>${wh.chi2nu.toFixed(1)}</b>, p <b>${fmtP(wh.p)}</b></div>`
+          + `<div class="rv-note">${aniso ? 'The widths depend on hkl beyond their esds: the broadening is anisotropic (the crystallites\' shape, or faults).' : 'The widths lie on one line within their esds: consistent with an isotropic size and strain.'}</div>`
+          + `<div class="pg-stat" title="The weighted line's intercept Kλ/D (K = 0.9) and slope ε; with an anisotropic broadening it is an average, not a size">line: D <b>${fmtE(wh.D, wh.Desd)} nm</b>, ε <b>${fmtE(wh.b, wh.bEsd)}</b>${aniso ? ' (an average only)' : ''}</div>`;
       } else {
         const nr = ph.rows.filter(w=> w.unread).length;
-        short.push(`${pre}fewer than three peaks to read (${wh.n})`);
-        full.push(`${pre}Williamson–Hall: fewer than three peaks to read (${wh.n})${nr ? `; ${nr} not read at all (the table says why)` : ''}.`);
+        html += `<div class="rv-note">Williamson–Hall: fewer than three peaks to read (${wh.n})${nr ? `; ${nr} not read at all (the table says why)` : ''}.</div>`;
       }
       if (ph.orders.length){
-        short.push('orders: ' + ph.orders.map(x=> `${x.a}→${x.b} ${fmtE(x.R, x.Resd)}`).join(', '));
-        full.push('Orders, Δd*(n)/Δd*(1) (size 1, strain n): ' + ph.orders.map(x=> `${x.a} → ${x.b}: ${fmtE(x.R, x.Resd)}, ${x.verdict === 'order-dependent' ? 'below 1: the higher order sharper (planar faults)' : x.verdict}`).join('; ') + '.');
-      } else full.push('Orders: no pair (h k l), (n·h n·k n·l) both measured.');
-      if (Number.isFinite(ph.scores.iso)){
-        short.push(`widths predicted, χ²ν: isotropic ${ph.scores.iso.toFixed(1)}${Number.isFinite(ph.scores.shape) ? `, free shape ${ph.scores.shape.toFixed(1)}` : ''}`);
-        full.push(`Widths predicted (the mean of ((measured − model)/esd)² over the peaks the tests use: about 1 when a model predicts them): isotropic ${ph.scores.iso.toFixed(1)}${Number.isFinite(ph.scores.shape) ? `, free shape ${ph.scores.shape.toFixed(1)}` : ''}.`);
-      }
+        html += `<div class="pg-stat rv-sub">Orders, Δd*(n)/Δd*(1): size 1, strain n</div>`;
+        ph.orders.forEach(o=>{ html += `<div class="pg-stat">${esc(o.a)} → ${esc(o.b)}: <b>${fmtE(o.R, o.Resd)}</b> <span class="txt-meta">${o.verdict === 'order-dependent' ? 'below 1: the higher order sharper (planar faults)' : esc(o.verdict)}</span></div>`; });
+      } else html += `<div class="rv-note">Orders: no pair (h k l), (n·h n·k n·l) both measured.</div>`;
+      if (Number.isFinite(ph.scores.iso)) html += `<div class="pg-stat" title="Mean of ((measured − model)/esd)² over the peaks the tests use: about 1 when a model predicts the widths">Widths predicted, χ²<sub>ν</sub>: isotropic <b>${ph.scores.iso.toFixed(1)}</b>${Number.isFinite(ph.scores.shape) ? `, free shape <b>${ph.scores.shape.toFixed(1)}</b>` : ''}</div>`;
       // The stricter overlap rule (measureWidths): why fewer peaks are used. (ph.misfit: v429,
       // null in a saved result where it was NaN; a result of v427–v428 had the 5 % limit.)
-      if (ph.overlapShare < 0.3) full.push('misfit' in ph
-        ? `The isotropic model does not predict the widths read${Number.isFinite(ph.misfit) ? ` (beyond their esds they differ from its own by ${Math.round(ph.misfit*100)} %, rms)` : ''}: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where, off by as much, they could move its width by under 2 esd, its esd widened by as much past half of one (and the others hold up to 30 % of its top).`
-        : `The isotropic model does not predict the widths read: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where they hold under ${Math.round(ph.overlapShare*100)} % of its top (the others up to 30 %).`);
+      if (ph.overlapShare < 0.3) html += 'misfit' in ph
+        ? `<div class="rv-note" title="Each of this phase's reflections is taken as off by its own misfit where its peak is read, else by the spread of the others' beyond their esds; what that does to a peak's width is read through the peak's own fit">The isotropic model does not predict the widths read${Number.isFinite(ph.misfit) ? ` (beyond their esds they differ from its own by ${Math.round(ph.misfit*100)} %, rms)` : ''}: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where, off by as much, they could move its width by under 2 esd, its esd widened by as much past half of one (and the others hold up to 30 % of its top).</div>`
+        : `<div class="rv-note">The isotropic model does not predict the widths read: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where they hold under ${Math.round(ph.overlapShare*100)} % of its top (the others up to 30 %).</div>`;
       // A WPPM phase: the sizes here are Scherrer readings, the refined one a diameter.
-      if (ph.reading) full.push(`WPPM: the sizes are Scherrer readings; read so, the model's own peaks give D ${fmtE(ph.reading.Dmodel)} nm for its ${ph.reading.lognormal ? 'volume-weighted mean diameter' : 'diameter'} of ${fmtE(ph.reading.D)} nm (the gap is the reading's, not the sample's).`);
+      if (ph.reading) html += `<div class="rv-note" title="The single-peak sizes and the line's are Scherrer readings (K = 0.9 on the corrected FWHM); WPPM's is the crystallites' own ${ph.reading.lognormal ? 'volume-weighted mean diameter' : 'diameter'}, with no Scherrer constant. The refined model's own peaks, read the same way, show how far the two kinds of size differ for these crystallites: the gap is the reading's, not the sample's">WPPM: the sizes are Scherrer readings; read so, the model's own peaks give D <b>${fmtE(ph.reading.Dmodel)} nm</b> for its ${ph.reading.lognormal ? 'volume-weighted mean diameter' : 'diameter'} of <b>${fmtE(ph.reading.D)} nm</b>.</div>`;
     });
-    return { short, full };
+    $('Tests').innerHTML = html;
   }
   /* Williamson–Hall: H·cosθ (10⁻³ rad; H the corrected FWHM, not the integral breadth β)
      against 4·sinθ for the peaks the tests use, each with its esd and hkl; the weighted
      line through them (isotropic size + strain), from 4·sinθ = 0, where it gives Kλ/D;
-     the models' own points (the isotropic model's and the free shape's) beside them; and
-     the tests written in its top left corner, above the data (their tooltip in full). */
+     and the models' own points (the isotropic model's and the free shape's) beside them. */
   function drawWH(phs, colorOf){
     const svg = $('WhSvg');
     whPlot = new Plot(svg, { xlabel: '4·sinθ', ylabel: 'FWHM·cosθ (10⁻³ rad)' });
@@ -761,18 +963,15 @@ export function createRietveld(host, root, o){
       if (Number.isFinite(w.model.iso)) mods.push({ x, y: w.model.iso*k, kind: 'iso' });
       if (ph.shaped && Number.isFinite(w.model.shape)) mods.push({ x, y: w.model.shape*k, kind: 'shape' });
     }));
-    const T = testLines(phs);
-    if (!pts.length){ whPlot.setRange(0, 1, 0, 1); whPlot.drawAxes(); $('WhLegend').innerHTML = ''; noteWH(T); return; }
+    whPlot._onView = markWH;
+    if (!pts.length){ whPlot.setRange(0, 1, 0, 1); whPlot.drawAxes(); $('WhLegend').innerHTML = ''; return; }
     // From 4·sinθ = 0, where a line meets the axis at Kλ/D; from 0 up, or from below the
-    // lowest error bar or line where one goes under 0 (a negative intercept: no size). Room
-    // above the data for the tests' lines.
+    // lowest error bar or line where one goes under 0 (a negative intercept: no size).
     const xb = 1.12*Math.max(...pts.map(q=> q.x)) || 1;
     const ys = pts.flatMap(q=> [q.y - q.e, q.y + q.e]).concat(mods.map(m=> m.y),
       phs.flatMap(ph=> Number.isFinite(ph.wh.a) ? [1e3*ph.wh.a, 1e3*(ph.wh.a + ph.wh.b*xb)] : []));
     const y0 = Math.min(0, ...ys), y1 = Math.max(...ys), dy = (y1 - y0) || 1;
-    const hPx = svg.getBoundingClientRect().height || 300, plotPx = Math.max(80, hPx - 60), need = 14*T.short.length + 16;
-    const frac = Math.min(0.75, need/plotPx);
-    whPlot.setRange(0, xb, y0 < 0 ? y0 - 0.08*dy : 0, y1 + Math.max(0.12*dy, (y1 - Math.min(0, y0))*frac/(1 - frac)));
+    whPlot.setRange(0, xb, y0 < 0 ? y0 - 0.08*dy : 0, y1 + 0.12*dy);
     whPlot.drawAxes();
     phs.forEach(ph=>{
       const wh = ph.wh;
@@ -790,30 +989,6 @@ export function createRietveld(host, root, o){
     $('WhLegend').innerHTML = phs.map(ph=> `<span><i style="background:${colorOf(ph.id)}"></i>${esc(ph.name)}, measured</span>`).join('')
       + (iso.length ? `<span><i style="background:#9aa3ad"></i>isotropic model</span>` : '')
       + (shp.length ? `<span><i style="background:#ff5050"></i>free-shape model</span>` : '');
-    noteWH(T);
-  }
-  // The tests in the plot's corner, kept there through a zoom or a pan (they are the
-  // plot's, not the data's); the full text as their tooltip.
-  function noteWH(T){
-    const svg = $('WhSvg');
-    const put = ()=>{
-      svg.querySelectorAll('.wh-note').forEach(e=> e.remove());
-      if (!whPlot || !T.short.length) return;
-      const m = whPlot.margin, NS = 'http://www.w3.org/2000/svg';
-      const g = document.createElementNS(NS, 'g');
-      g.setAttribute('class', 'wh-note');
-      const t = document.createElementNS(NS, 'title'); t.textContent = T.full.join('\n'); g.appendChild(t);
-      T.short.forEach((line, i)=>{
-        const tx = document.createElementNS(NS, 'text');
-        tx.setAttribute('x', m.l + 8); tx.setAttribute('y', m.t + 14 + 14*i);
-        tx.setAttribute('class', 'wh-note-line');
-        tx.textContent = line;
-        g.appendChild(tx);
-      });
-      svg.appendChild(g);
-    };
-    put();
-    if (whPlot){ const was = whPlot._onView; whPlot._onView = ()=>{ if (was) was(); put(); }; }
   }
   // The engine's ticks (each reflection at Kα1 where the refined cell puts it), one
   // row per phase in the phases' order.
@@ -834,44 +1009,48 @@ export function createRietveld(host, root, o){
     return FITS.filter(m=> fs[m.k] !== FIT_DEF[m.k] && (m.role !== 'std' || isS) && (m.role !== 'sample' || !isS) && (!m.shape || shaped))
       .map(m=> ({ k: m.k, v: fs[m.k], said: m.said(fs[m.k]) }));
   }
-  // What a phase's CIF and settings say, under its name in the results.
-  const phaseInfo = q => [`<div class="rv-note rv-set" title="What Refine refines for this phase: Settings… changes it">${esc(summaryOf(q, std))}</div>`]
-    .concat(q.prep.notes.length ? [`<div class="rv-note">${esc(q.prep.notes.join('; '))}</div>`] : [])
-    .concat(q.prep.warnings.map(w=> `<div class="rv-note" style="color:var(--warn)">⚠ ${esc(w)}</div>`)).join('');
   const group = (title, body, phase) => `<div class="rv-group"><div class="txt-mini${phase ? ' rv-phase-name' : ''}">${title}</div>${body}</div>`;
+  const warnNote = t => `<div class="rv-note rv-wide rv-warn">⚠ ${t}</div>`;
+  /* By the box's title, what the result was refined with — each phase's models (refinedOf)
+     and the Refinement settings that are not the defaults —, or, not refined yet, what
+     Refine will refine (the settings); a phase's name before its line when there are
+     several. */
+  function renderFitSet(f, r, shown){
+    const el = $('FitSet'), done = !!(r && r.params), list = f ? shown : [];
+    const used = done ? fitUsed(f, r) : [];
+    el.innerHTML = list.map(q=> `<span class="rv-fs">${list.length > 1 ? `<span class="rv-key-sm" style="background:${q.color}"></span>${esc(q.prep.name)}: ` : ''}${esc(done ? refinedOf(q, r, std) : summaryOf(q, std))}</span>`).join('')
+      + (used.length ? `<span class="rv-fs" title="The Refinement settings (Settings…) this result was refined with that are not the defaults">${esc(used.map(u=> u.said).join(', '))}</span>` : '');
+    el.title = done ? 'What this result was refined with' : list.length ? 'What Refine will refine: Settings… changes it' : '';
+    el.classList.toggle('is-next', !done);
+  }
+  /* The statistics, then each group the worker made of the result (the specimen or the
+     instrument, each phase's values); under them all, the notes and every warning: the
+     refinement's (a cell search without a minimum, a phase not detected, a parameter on a
+     bound), the CIFs' (their composition against the formula) and the standard's. */
   function renderResults(f, r){
     const box = $('Results');
-    if (!f){ box.innerHTML = `<div class="rv-note rv-wide">${std ? 'No standard loaded: drop its file above.' : 'No pattern.'}</div>`; return; }
+    if (!f){ renderFitSet(null, null, []); box.innerHTML = `<div class="rv-note rv-wide">${std ? 'No standard loaded: drop its file above.' : 'No pattern.'}</div>`; return; }
     const shown = r && r.params ? (()=>{ try { return curvesOf(f, r).list; } catch(e){ return phasesFor(f); } })() : phasesFor(f);
+    renderFitSet(f, r, shown);
+    const cifWarn = shown.flatMap(q=> q.prep.warnings.map(w=> warnNote(`${esc(q.prep.name)}: ${esc(w)}`))).join('');
     if (!r || !r.params){
       const n = phasesFor(f).length;
       box.innerHTML = (n ? `<div class="rv-note rv-wide">Not refined yet. <b>Refine</b> starts from the CIF's cell${std ? ' (the certified one, held fixed)' : ''}, finds where the pattern's peaks are, and refines step by step.</div>`
-        : `<div class="rv-note rv-wide">${phases.length ? 'No phase ticked for this pattern: tick one in the list.' : 'No phase: add one from a CIF (+ CIF, beside the pattern).'}</div>`)
-        + shown.map(q=> group(esc(q.prep.name), phaseInfo(q), true)).join('');
+        : `<div class="rv-note rv-wide">${phases.length ? 'No phase ticked for this pattern: tick one in the list.' : 'No phase: add one from a CIF (+ CIF, beside the pattern).'}</div>`) + cifWarn;
       return;
     }
     const s = r.stats || {};
-    const used = fitUsed(f, r);
     let html = group('Fit', `<div class="pg-stat" title="R_wp: the weighted residual; R_exp: what the counting statistics alone would give">R<sub>wp</sub>: <b>${(s.Rwp*100).toFixed(2)}%</b></div>`
       + `<div class="pg-stat">R<sub>exp</sub>: <b>${(s.Rexp*100).toFixed(2)}%</b></div>`
-      + `<div class="pg-stat" title="χ² = Σw(y − y_c)²/(N − P), the reduced χ²: (R_wp/R_exp)²">χ²: <b>${(s.chi2).toFixed(2)}</b></div>`
-      + (used.length ? `<div class="rv-note" title="The Refinement settings (Settings…) this result was refined with that are not the defaults">settings: ${esc(used.map(u=> u.said).join(', '))}</div>` : ''));
-    // A phase's group gets what its CIF gave under its values; the k-th phase group is the
-    // k-th phase refined (by name where they differ).
-    const left = shown.slice();
+      + `<div class="pg-stat" title="χ² = Σw(y − y_c)²/(N − P), the reduced χ²: (R_wp/R_exp)²">χ²: <b>${(s.chi2).toFixed(2)}</b></div>`);
     (r.phaseResults || []).forEach(q=>{
-      let info = '';
-      if (q.phase){ const i = left.findIndex(x=> x.prep.name === q.name); const ph = i >= 0 ? left.splice(i, 1)[0] : null; if (ph) info = phaseInfo(ph); }
-      html += group(esc(q.name), q.lines.map(l=> `<div class="pg-stat"${l.title ? ` title="${esc(l.title)}"` : ''}>${esc(l.label)}: <b>${esc(l.value)}</b></div>`).join('') + info, q.phase);
+      html += group(esc(q.name), q.lines.map(l=> `<div class="pg-stat"${l.title ? ` title="${esc(l.title)}"` : ''}>${esc(l.label)}: <b>${esc(l.value)}</b></div>`).join(''), q.phase);
     });
-    left.forEach(q=>{ html += group(esc(q.prep.name), phaseInfo(q), true); });
-    // What the refinement could not do (a cell search without a minimum, a phase not
-    // detected) is said beside the numbers it qualifies.
-    html += (r.warnings || []).map(w=> `<div class="rv-note rv-wide" style="color:var(--warn)">⚠ ${esc(w)}</div>`).join('');
     if (std) html += `<div class="rv-note rv-wide">The samples take this profile, its axial divergence, zero and sin 2θ shift as their instrument's.</div>`;
-    else if (r.irf && staleOf(f, r)) html += `<div class="rv-note rv-wide" style="color:var(--warn)">⚠ ${irf() ? 'The standard has been refined again since this result' : 'The standard\'s refinement this result used is gone (cleared, or another standard loaded)'}: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.</div>`;
     else if (!r.irf && !r.irfRefused) html += irf() ? `<div class="rv-note rv-wide">No instrumental profile: this pattern was refined before the standard was. Refine it again to correct its widths, and the sizes from them, for the instrument's.</div>`
       : `<div class="rv-note rv-wide">No instrumental profile (refine the standard first: <b>Instrumental standard…</b>): the widths, and the sizes from them, include the instrument's.</div>`;
+    html += (r.warnings || []).map(w=> warnNote(esc(w))).join('') + cifWarn;
+    if (!std && r.irf && staleOf(f, r)) html += warnNote(`${irf() ? 'The standard has been refined again since this result' : 'The standard\'s refinement this result used is gone (cleared, or another standard loaded)'}: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.`);
     box.innerHTML = html;
   }
   function instrLine(ins){
@@ -930,7 +1109,9 @@ export function createRietveld(host, root, o){
       + `<div><span>Volume</span> ${r4(V)} Å³ · <span>ρ</span> ${rho.toFixed(3)} g/cm³</div>`
       + `<div><span>Atoms</span> ${P.atoms.length} in the cell</div>`
       + `<div class="rv-ci-els">${els.map(e=> `<span><i style="background:${elementColor(e)}"></i>${esc(e)}</span>`).join('')}</div>`
-      + `<div class="rv-ci-file">${q === lab6 ? 'built in, the standard\'s certified cell' : esc(q.file)}</div>`;
+      + `<div class="rv-ci-file">${q === lab6 ? 'built in, the standard\'s certified cell' : esc(q.file)}</div>`
+      // what reading the CIF found (its own cell, operations it lacked, B made equal on a site)
+      + P.notes.map(t=> `<div class="rv-ci-note">${esc(t.charAt(0).toUpperCase() + t.slice(1))}.</div>`).join('');
   }
   // The square's side: the shorter of the box's width and what is left of its height
   // under the details (fitSide sets the box's height to end with the plot).
@@ -975,10 +1156,9 @@ export function createRietveld(host, root, o){
     const fs = host.files(), f = fs[curIdx()];
     $('Refine').textContent = busy ? 'Cancel' : 'Refine';
     $('Refine').disabled = !busy && !f;
-    $('RefineAll').disabled = busy || std || !fs.length;
-    $('Settings').disabled = busy;
+    if (!std) $('RefineAll').disabled = busy || !fs.length;
     $('Clear').disabled = busy || !(f && results[f.name]);
-    $('ClearAll').disabled = busy || std || !Object.keys(results).length;
+    if (!std) $('ClearAll').disabled = busy || !Object.keys(results).length;
     // (the phases are read when a run starts: one added meanwhile would not be in it)
     $('AddCif').disabled = busy;
     syncSettings();
@@ -994,6 +1174,7 @@ export function createRietveld(host, root, o){
   setModal.innerHTML = `<div class="modal-box rvs-box" role="dialog" aria-modal="true" aria-labelledby="${p}SetTitle" tabindex="-1">
       <h3 class="txt-head" id="${p}SetTitle" style="margin:0 0 4px">Fitting settings${std ? ': instrumental standard' : ''}</h3>
       <p class="txt-meta" style="margin:0 0 6px">What <b>Refine</b> refines, on each phase${std ? ' of the standard' : ''}. A change applies to the next refinement.</p>
+      <p class="rvs-busy" hidden>Refining: these are the settings it runs with, to be changed when it ends.</p>
       <div class="rvs-body"></div>
       <button class="btn primary" type="button" data-done style="width:100%;margin-top:16px">Done</button>
     </div>`;
@@ -1011,8 +1192,9 @@ export function createRietveld(host, root, o){
     : std && STD_NA.includes(k) ? "The standard's widths are the instrument's profile (U, V, W, X, Y and the asymmetry, refined on it): no size, strain or faults of its own"
     : k === 'wppm' && !q.on.size ? 'WPPM is a profile of the crystallite size: switch the size on first'
     : k === 'occ' && siteList(q).length < 2 ? "A phase of one site: its occupancy is the scale, which the pattern cannot tell from it" : '';
+  // Open while a run goes on too, to see what it refines: read only then (syncSettings).
   function openSettings(){
-    if (busy || setOpen()) return;
+    if (setOpen()) return;
     setModal.style.display = 'flex'; $('Settings').classList.add('is-on');
     setKey = ''; fitNote = null; renderSettings();
     // (capture, and stopped there: a window under this one, the standard's, closes on its own Escape)
@@ -1070,6 +1252,7 @@ export function createRietveld(host, root, o){
   }
   function syncSettings(){
     if (!setOpen()) return;
+    setModal.querySelector('.rvs-busy').hidden = !busy;
     setBody.querySelectorAll('[data-sec]').forEach(secEl=>{
       const q = phaseOf(+secEl.dataset.sec); if (!q) return;
       MODES.forEach(m=>{
@@ -1214,11 +1397,12 @@ export function createRietveld(host, root, o){
     if (busy){ cancelled = true; if (cancelJob) cancelJob(); return; }
     const f = host.files()[curIdx()]; if (f) refine([f]);
   };
-  $('RefineAll').onclick = ()=> refineAll();
   $('Clear').onclick = ()=>{ const f = host.files()[curIdx()]; if (!f || busy || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); if (std && host.changed) host.changed(); };
-  // Every pattern's result, those of the files left out too (an undo brings them back).
-  $('ClearAll').onclick = ()=>{ if (busy || !Object.keys(results).length) return; results = {}; draw(true); host.commit(); if (std && host.changed) host.changed(); };
   if (!std){
+    // (the standard is one pattern: its window has neither)
+    $('RefineAll').onclick = ()=> refineAll();
+    // Every pattern's result, those of the files left out too (an undo brings them back).
+    $('ClearAll').onclick = ()=>{ if (busy || !Object.keys(results).length) return; results = {}; draw(true); host.commit(); };
     $('Prev').onclick = ()=> host.step(-1);
     $('Next').onclick = ()=> host.step(1);
     $('Std').onclick = ()=> host.openStd();
@@ -1226,6 +1410,7 @@ export function createRietveld(host, root, o){
 
   let csvPre = '';           // the downloads' names: the card's, then the file's
   return {
+    res,
     // After any change to the files: the card follows them; results of files no
     // longer loaded go.
     refresh(preserve){
@@ -1247,7 +1432,7 @@ export function createRietveld(host, root, o){
         return { id: q.id, cif: q.cif, file: q.file, color: q.color, on: { ...q.on }, dep: { ...q.dep }, off: { ...q.off },
           shape: e.shape, po: e.po || '', profile: e.profile, strain: e.strain, faults: e.faults || '', adp: e.adp, occ: e.occ || null }; }),
       ...(std ? { std: { on: { ...lab6.on }, dep: { ...lab6.dep } }, pick } : {}), start: startFrom, hold: hold.slice(), fit: { ...fit },
-      nextId, sel, results: JSON.parse(JSON.stringify(results)) }; },
+      nextId, sel, results: JSON.parse(JSON.stringify(results)), ...(res ? { sizeBy } : {}) }; },
     restore(s){
       s = s || {};
       // A project of v428 or older has the options without the flags (migrateSettings).
@@ -1268,6 +1453,7 @@ export function createRietveld(host, root, o){
       nextId = s.nextId || phases.reduce((m, q)=> Math.max(m, q.id + 1), 1);
       sel = Number.isInteger(s.sel) ? s.sel : null;
       results = s.results ? JSON.parse(JSON.stringify(s.results)) : {};
+      sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; resSig = '';
       setKey = '';
       syncButtons();
     },
@@ -1276,12 +1462,14 @@ export function createRietveld(host, root, o){
     setName(n){ csvPre = n ? n + ' - ' : ''; nameFiles(); },
   };
 
-  // The downloads named after the card.
+  // The downloads named after the card, in the card and in its Results section.
   function nameFiles(){
-    const set = (b, name)=>{ if (b) b.dataset.csvNames = name; };
-    root.querySelectorAll('[data-csv-base]').forEach(b=> set(b, csvPre + b.dataset.csvBase));
-    root.querySelectorAll('.plot-dl-btn[data-dl-base]').forEach(b=> b.dataset.dlName = csvPre + b.dataset.dlBase);
-    root.querySelectorAll('.plot-wrap').forEach(w=>{ const d = w.querySelector('.plot-dl-btn[data-csv-base]'), c = w.querySelector('.plot-csv-btn'); if (d && c) c.dataset.csvNames = d.dataset.csvNames; });
+    sizeNames();
+    [root, res].filter(Boolean).forEach(el=>{
+      el.querySelectorAll('[data-csv-base]').forEach(b=>{ b.dataset.csvNames = csvPre + b.dataset.csvBase; });
+      el.querySelectorAll('.plot-dl-btn[data-dl-base]').forEach(b=> b.dataset.dlName = csvPre + b.dataset.dlBase);
+      el.querySelectorAll('.plot-wrap').forEach(w=>{ const d = w.querySelector('.plot-dl-btn[data-csv-names]'), c = w.querySelector('.plot-csv-btn'); if (d && c) c.dataset.csvNames = d.dataset.csvNames; });
+    });
   }
   function csvEntries(pre){
     const out = [], fs = host.files().filter(f=> results[f.name] && results[f.name].params);
@@ -1339,32 +1527,61 @@ export function createRietveld(host, root, o){
   }
 }
 
+/* The card's section of the Results: the refined patterns stacked, and the crystallite
+   sizes (by sample or by peak, the chips in the plot's corner), as the Scherrer card's. */
+function resHtml(p){
+  return `
+        <h4 class="res-an-title"></h4>
+        <p class="txt-meta" id="${p}ResNone">No pattern refined yet: <b>Refine</b> in the card above.</p>
+        <div class="row res-row" style="gap:16px">
+          <div class="col mw320" style="flex:1">
+            <p class="txt-caption">Refinement: observed less the background</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="${p}ResSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}ResSvg" data-csv-mod="xrd" data-csv-base="rietveld_pattern.csv" data-csv-names="rietveld_pattern.csv" data-dl-base="XRPD_results_rietveld.svg" data-dl-name="XRPD_results_rietveld.svg" data-dl-legend="${p}ResLegend">${DL_SVG}</button>
+            </div>
+            <div id="${p}ResLegend" class="legend"></div>
+          </div>
+          <div class="col mw320" style="flex:1">
+            <p class="txt-caption">Crystallite size</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="${p}SizeSvg"></svg>
+              <span class="plot-chips" id="${p}SizeBy"></span>
+              <button class="btn plot-dl-btn" data-size-dl data-dl-svg="${p}SizeSvg" data-csv-mod="xrd" data-csv-names="rietveld_results.csv" data-dl-name="XRPD_rietveld_size.svg" data-dl-legend="${p}SizeLegend">${DL_SVG}</button>
+            </div>
+            <div id="${p}SizeLegend" class="legend"></div>
+            <div id="${p}SizeNote" class="txt-meta"></div>
+          </div>
+        </div>`;
+}
+
 /* The card's markup (and the standard's window's: the same, with one pattern and one
    phase chosen): the pattern with the phases and the structure beside it, the buttons
-   under them ending with the plot; the results across under it; then the peak widths,
-   the Williamson–Hall plot and the crystallites' shape in one row. */
+   under them ending with the plot; the results across under it; then the Williamson–Hall
+   plot, the tests on the widths and the crystallites' shape in one row; the peak widths'
+   table at the foot. */
 function rvHtml(p, std){
   return `
-        <div class="rv-top">
-          <div class="plot-nav-row rv-nav">
+        <div class="pside">
+          <div class="plot-nav-row pside-nav">
             <div class="plot-nav-left">${std ? '' : `
               <button class="btn nav-arrow an-prev" id="${p}Prev" aria-label="Previous sample" title="Previous sample (&#8592;)">&#8249;</button>
               <span id="${p}Idx" class="pill nav-count" style="margin:0">1/1</span>
-              <button class="btn nav-arrow an-next" id="${p}Next" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>`}
-              <span class="txt-caption" id="${p}Label">—</span>
+              <button class="btn nav-arrow an-next" id="${p}Next" aria-label="Next sample" title="Next sample (&#8594;)">&#8250;</button>
+              <span class="txt-caption" id="${p}Label">—</span>`}
             </div>
           </div>
-          <div class="rv-plot">
+          <div class="pside-plot">
             <div class="plot-wrap">
               <svg class="plot" id="${p}Svg"></svg>
               <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-base="rietveld_pattern.csv" data-csv-names="rietveld_pattern.csv" data-dl-base="XRPD_rietveld.svg" data-dl-name="XRPD_rietveld.svg" data-dl-legend="${p}Legend">${DL_SVG}</button>
             </div>
           </div>
-          <div class="rv-under">
+          <div class="pside-under">
             <div id="${p}Legend" class="legend"></div>
             <p class="txt-meta" id="${p}Instr"></p>
           </div>
-          <div class="rv-side">
+          <div class="pside-col rv-side">
             <div class="rv-boxes">
               <div class="peak-box rv-cifs">
                 <div class="peak-box-head">
@@ -1382,43 +1599,53 @@ function rvHtml(p, std){
             </div>
             <div id="${p}Status" class="txt-meta rv-status"></div>
             <div id="${p}ProgWrap" class="rv-prog" style="display:none"><div id="${p}ProgBar"></div></div>
+${std ? `
             <div class="rv-btns">
               <button class="btn primary" id="${p}Refine">Refine</button>
-              <button class="btn primary" id="${p}RefineAll"${std ? ' title="The standard is one pattern: Refine refines it"' : ''}>Refine all</button>
+              <button class="btn" id="${p}Settings" aria-haspopup="dialog" title="What Refine refines, on the standard's phase, and where it starts">Settings…</button>
+              <button class="btn" id="${p}Clear" title="The standard's result">Clear</button>
+            </div>` : `
+            <div class="rv-btns">
+              <button class="btn primary" id="${p}Refine">Refine</button>
+              <button class="btn primary" id="${p}RefineAll">Refine all</button>
             </div>
             <div class="rv-btns">
-              <button class="btn" id="${p}Settings" aria-haspopup="dialog" title="What Refine refines, for each phase, and where it starts">Settings…</button>${std ? '' : `
-              <button class="btn" id="${p}Std" aria-haspopup="dialog" title="The instrumental standard: its file, its phase and its refinement, whose profile every sample takes">Instrumental standard…</button>`}
+              <button class="btn" id="${p}Settings" aria-haspopup="dialog" title="What Refine refines, for each phase, and where it starts">Settings…</button>
+              <button class="btn" id="${p}Std" aria-haspopup="dialog" title="The instrumental standard: its file, its phase and its refinement, whose profile every sample takes">Instrumental standard…</button>
             </div>
             <div class="rv-btns">
               <button class="btn" id="${p}Clear" title="This pattern's result">Clear</button>
-              <button class="btn" id="${p}ClearAll" title="Every pattern's result"${std ? ' disabled' : ''}>Clear all</button>
-            </div>
+              <button class="btn" id="${p}ClearAll" title="Every pattern's result">Clear all</button>
+            </div>`}
           </div>
         </div>
         <div class="peak-box rv-fit">
-          <div class="peak-box-head"><span class="txt-mini">Refinement</span></div>
+          <div class="peak-box-head rv-fit-head"><span class="txt-mini">Refinement</span><span class="rv-fit-set" id="${p}FitSet"></span></div>
           <div class="rv-fit-grid" id="${p}Results"></div>
         </div>
-        <!-- The peaks' own widths: each reflection fitted alone, and the tests on them -->
+        <!-- The peaks' own widths, each reflection fitted alone: the Williamson-Hall plot, the
+             tests on them and the crystallites' shape in a row, as tall as the plot; their
+             table at the card's foot -->
         <div id="${p}Widths" class="rv-widths" style="display:none">
           <div class="rv-wrow">
-            <div class="peak-box rv-wtable">
-              <div class="peak-box-head">
-                <span class="txt-mini">Peak widths</span>
-                <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" title="Download CSV">${CSV_SVG}</button>
-              </div>
-              <div id="${p}PkWrap"></div>
+            <p class="txt-caption">Williamson–Hall</p>
+            <div class="plot-wrap">
+              <svg class="plot" id="${p}WhSvg"></svg>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}WhSvg" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" data-dl-base="XRPD_williamson_hall.svg" data-dl-name="XRPD_williamson_hall.svg" data-dl-legend="${p}WhLegend">${DL_SVG}</button>
             </div>
-            <div class="rv-wh">
-              <p class="txt-caption">Williamson–Hall</p>
-              <div class="plot-wrap">
-                <svg class="plot" id="${p}WhSvg"></svg>
-                <button class="btn plot-dl-btn" data-dl-svg="${p}WhSvg" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" data-dl-base="XRPD_williamson_hall.svg" data-dl-name="XRPD_williamson_hall.svg" data-dl-legend="${p}WhLegend">${DL_SVG}</button>
-              </div>
-              <div id="${p}WhLegend" class="legend"></div>
+            <div id="${p}WhLegend" class="legend"></div>
+            <div class="peak-box rv-tests">
+              <div class="peak-box-head"><span class="txt-mini">Tests on the widths</span></div>
+              <div class="rv-tests-body" id="${p}Tests"></div>
             </div>
-            <div class="peak-box rv-solids" id="${p}Solids" style="display:none"></div>
+            <div class="peak-box rv-solids" id="${p}Solids"></div>
+          </div>
+          <div class="peak-box rv-wtable">
+            <div class="peak-box-head">
+              <span class="txt-mini">Peak widths</span>
+              <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" title="Download CSV">${CSV_SVG}</button>
+            </div>
+            <div id="${p}PkWrap"></div>
           </div>
         </div>`;
 }

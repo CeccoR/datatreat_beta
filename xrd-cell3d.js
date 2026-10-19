@@ -2,18 +2,16 @@
    XRPD — a phase's unit cell in 3D.
    The atoms of the cell (those on its faces, edges and corners in every place they
    reach: a corner atom at all eight corners), as shaded spheres in their elements'
-   colours, inside the cell's edges; the edges from the origin along a, b and c drawn
-   in red, green and blue, as crystallographic programs draw them, and named at their
-   ends. Software 3D on a 2D canvas, as the crystallites' shape (xrd-shape3d.js): a
+   colours, inside the cell's edges; a, b and c as a triad in the top right corner,
+   turned with the cell: the crystallites' shape's (drawTriad), a red, b green, c blue.
+   Software 3D on a 2D canvas, as the crystallites' shape (xrd-shape3d.js): a
    drag (mouse, pen or touch) or the arrow keys turn it about the cell's centre, a
    double click or tap (or Home) puts it back. Nothing runs while it is idle.
 ========================================================= */
-import { matMul, axisAngle, reortho, viewAt } from './xrd-shape3d.js';
+import { matMul, axisAngle, reortho, viewAt, readTheme, drawTriad } from './xrd-shape3d.js';
 
 const DEG = Math.PI / 180;
 const HOME_AZ = -62 * DEG, HOME_EL = 18 * DEG;
-// The axes as crystallographic programs colour them: a red, b green, c blue.
-const AXIS_COLORS = ['#e8453c', '#3fb950', '#4f8ff7'];
 
 // Jmol's element colours.
 const COLORS = { H:'#FFFFFF', He:'#D9FFFF', Li:'#CC80FF', Be:'#C2FF00', B:'#FFB5B5', C:'#909090', N:'#3050F8', O:'#FF0D0D', F:'#90E050', Ne:'#B3E3F5',
@@ -67,9 +65,11 @@ function buildModel(ph){
   let Rb = 0;
   for (const c of corners) Rb = Math.max(Rb, Math.hypot(...c));
   for (const b of balls) Rb = Math.max(Rb, Math.hypot(...b.p) + b.r);
-  return { balls, corners, Rb };
+  // a, b, c as unit vectors, for the triad
+  const axes = A.map(v => { const n = Math.hypot(...v) || 1; return v.map(x => x/n); });
+  return { balls, corners, Rb, axes };
 }
-// The cell's twelve edges, as corner pairs; the first three are a, b and c from the origin.
+// The cell's twelve edges, as corner pairs.
 const EDGES = [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [4, 5], [4, 6], [3, 7], [5, 7], [6, 7]];
 
 export function cellView(container, opts = {}){
@@ -83,11 +83,8 @@ export function cellView(container, opts = {}){
   container.appendChild(canvas);
   const ctx = canvas.getContext('2d');
   let model = null, name = '', R = viewAt(HOME_AZ, HOME_EL), S = 0, ratio = 1, raf = 0, dead = false, theme = null;
-  const themeOf = () => {
-    if (theme) return theme;
-    const cs = getComputedStyle(container), tok = (n, f) => cs.getPropertyValue(n).trim() || f;
-    return (theme = { text: tok('--text', '#dfe8ea'), muted: tok('--muted', '#7f97a0'), line: tok('--line', '#2a3439'), font: cs.fontFamily || 'sans-serif' });
-  };
+  // (the shape's: the triad's labels have its halo, the colour the canvas sits on)
+  const themeOf = () => theme || (theme = readTheme(container));
 
   function paint(g, Sz){
     const T = themeOf(), m = model;
@@ -96,16 +93,15 @@ export function cellView(container, opts = {}){
     const P = p => [cx + k*(r00*p[0] + r01*p[1] + r02*p[2]), cy - k*(r10*p[0] + r11*p[1] + r12*p[2]), r20*p[0] + r21*p[1] + r22*p[2]];
     const C = m.corners.map(P);
     // The edges behind the cell's centre first, the atoms back to front, the edges in
-    // front over them; a, b, c in their colours, and thicker.
-    const edge = (e, i) => {
+    // front over them.
+    const edge = e => {
       const [p, q] = [C[e[0]], C[e[1]]];
-      g.strokeStyle = i < 3 ? AXIS_COLORS[i] : T.muted;
-      g.lineWidth = i < 3 ? 2.4 : 1.1;
+      g.strokeStyle = T.muted; g.lineWidth = 1.1;
       g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); g.stroke();
     };
     const depth = e => (C[e[0]][2] + C[e[1]][2])/2;
     g.lineCap = 'round';
-    EDGES.forEach((e, i) => { if (depth(e) < 0) edge(e, i); });
+    EDGES.forEach(e => { if (depth(e) < 0) edge(e); });
     const balls = m.balls.map(b => ({ b, q: P(b.p) })).sort((u, v) => u.q[2] - v.q[2]);
     for (const { b, q } of balls){
       const rr = Math.max(1.5, b.r*k);
@@ -117,17 +113,9 @@ export function cellView(container, opts = {}){
       g.globalAlpha = 1;
       g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 0.6; g.stroke();
     }
-    EDGES.forEach((e, i) => { if (depth(e) >= 0) edge(e, i); });
-    // a, b, c at their ends, past them along the edge as seen.
-    g.font = `italic 600 ${Sz >= 220 ? 13 : 12}px ${T.font}`;
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    for (let i = 0; i < 3; i++){
-      const o = C[0], t = C[EDGES[i][1]], dx = t[0] - o[0], dy = t[1] - o[1], n = Math.hypot(dx, dy) || 1;
-      const lx = t[0] + 10*dx/n, ly = t[1] + 10*dy/n;
-      g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.25)'; g.strokeText('abc'[i], lx, ly);
-      g.fillStyle = AXIS_COLORS[i]; g.fillText('abc'[i], lx, ly);
-    }
-    g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+    EDGES.forEach(e => { if (depth(e) >= 0) edge(e); });
+    // a, b, c: where and as large as the crystallites' shape has them
+    drawTriad(g, R, m.axes, { x: Sz - 30, y: 30, L: 18 }, T, Sz >= 280 ? 12 : 11);
   }
 
   // The square's side: the container's width, or the side its card gives (opts.side).

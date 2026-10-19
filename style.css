@@ -1898,7 +1898,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .param-grid > .pg-stat.pg-gap { margin-top: 6px; }
 /* What the fits give (Eg, E_U): a line further down than the statistics above it,
    in a box like the plots' and tables', across the whole column. */
-.param-grid > .pg-result {
+.param-grid > .pg-result, .xrd-cag > .pg-result {
   grid-column: 1 / -1;
   margin-top: 24px;
   display: grid; row-gap: 9px;
@@ -1960,6 +1960,8 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rvs-range { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rvs-head button.btn.rvs-def { margin-left: auto; flex: none; padding: 2px 10px; font-size: 12px; }
 .rvs-note.is-warn { color: var(--warn); }
+/* While a run goes on the settings are shown, read only: said under the title. */
+.rvs-busy { margin: 0 0 6px; font-size: 12px; color: var(--warn); }
 /* A phone: the box takes the screen less a margin, with less padding, so that the depth
    column keeps room for its text. */
 @media (max-width: 480px){ .modal-box.rvs-box { padding: 16px 14px; --rvs-cols: 13px 158px minmax(0, 1fr); } }
@@ -1975,25 +1977,37 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .peak-row.rv-pk-out td:first-child { text-decoration: line-through; }
 /* The refined solid under the results: a box like the peak table's. */
 .rv-solid { margin-top: 12px; padding: 10px 12px 12px; }
-/* ===== XRPD Rietveld card: the pattern with its phases and their structure beside it =====
-   A grid: the sample's nav over the plot, the legend under it; the side column spans
-   the plot's row exactly, so its boxes start level with the plot's top and the last
-   row of buttons ends level with its bottom (the boxes take the height the buttons
-   leave). Stacked on a narrow screen: the side under the pattern, its two boxes side
-   by side at their own height. */
-.rv-top { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: auto auto auto;
+/* ===== A plot with a column beside it that spans the plot exactly (.pside): the
+   Rietveld card's pattern with its phases and their structure; the standard's peaks
+   with their parameters and the Caglioti fit. A grid: the nav over the plot, the
+   legend under it; the side column spans the plot's row, so it starts level with the
+   plot's top and its last line ends level with the plot's bottom (a box in it takes
+   the height the rest leaves, flex 1 1 0, so the column never makes the row taller).
+   Stacked on a narrow screen: the side under the plot, at its own height. */
+.pside { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: auto auto auto;
   column-gap: 16px; align-items: start; }
-.rv-top > .rv-nav { grid-column: 1; grid-row: 1; }
-.rv-top > .rv-plot { grid-column: 1; grid-row: 2; min-width: 0; }
-.rv-top > .rv-under { grid-column: 1; grid-row: 3; min-width: 0; }
-.rv-top > .rv-side { grid-column: 2; grid-row: 2; align-self: stretch; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.pside > .pside-nav { grid-column: 1; grid-row: 1; }
+.pside > .pside-plot { grid-column: 1; grid-row: 2; min-width: 0; }
+.pside > .pside-under { grid-column: 1; grid-row: 3; min-width: 0; }
+.pside > .pside-col { grid-column: 2; grid-row: 2; align-self: stretch; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+:root.narrow-layout .pside { display: block; }
+/* (the standard's windows: a nav with nothing in it, its line given to the toolbar alone) */
+:root.narrow-layout .pside-nav:not(:has(.plot-nav-left > *)) { display: none; }
+:root.narrow-layout .pside > .pside-col { margin-top: 12px; }
+/* The Rietveld card's side: the phases and the structure, then the buttons. */
 .rv-side > .rv-boxes { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .rv-side > .rv-status:empty { display: none; }
 .rv-side > .rv-prog { margin-top: 0; }
 .rv-side > .rv-btns > .btn { height: 33px; }
-:root.narrow-layout .rv-top { display: block; }
-:root.narrow-layout .rv-top > .rv-side { margin-top: 12px; }
 :root.narrow-layout .rv-side > .rv-boxes { flex: none; min-height: 300px; }
+/* The standard's Scherrer side: the parameters at the top; the Caglioti fit, its alert
+   and + Add peak at the foot, the button's bottom on the plot's. A fit taller than the
+   room left scrolls in its place. */
+.xrd-std-side { gap: 0; }
+.xrd-std-side > .param-head { margin-top: 0; }
+.xrd-std-side > .xrd-cag { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding-top: 10px; }
+.xrd-cag > .pg-result { margin-top: auto; flex: 0 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; row-gap: 6px; }
+:root.narrow-layout .xrd-std-side > .xrd-cag { flex: none; }
 /* The phases' list and the structure: boxes like the peak table's, scrolling inside. */
 .rv-boxes > .peak-box { margin-top: 0; padding: 10px 10px 10px; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .rv-boxes .peak-box-head { flex: none; margin-bottom: 6px; min-width: 0; }
@@ -2024,10 +2038,18 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-cell-info .rv-ci-els span { color: var(--text); display: inline-flex; align-items: center; gap: 4px; }
 .rv-cell-info .rv-ci-els i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); }
 .rv-cell-info .rv-ci-file { color: var(--muted); overflow-wrap: anywhere; }
+/* What reading the CIF found (its own cell, operations it lacked, B made equal). */
+.rv-cell-info .rv-ci-note { color: var(--muted); font-size: 12px; line-height: 1.45; margin-top: 2px; }
 /* The refinement's results across the card, flowing down and across as many columns as
    fit (the fit, the specimen or the instrument, each phase, a long one over several);
-   notes and warnings across them all, under. */
+   notes and warnings across them all, under. By the title, what it was refined with: a
+   line a phase, muted (not refined yet, what Refine will refine: in italics). */
 .rv-fit { margin-top: 12px; }
+.rv-fit > .rv-fit-head { flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 2px; }
+.rv-fit-set { display: flex; flex-wrap: wrap; column-gap: 14px; row-gap: 2px; min-width: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.rv-fit-set.is-next { font-style: italic; }
+.rv-fit-set .rv-key-sm { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }
+.rv-fit-grid .rv-note.rv-warn { color: var(--warn); }
 .rv-fit-grid { columns: 230px; column-gap: 24px; }
 .rv-fit-grid > .rv-wide { column-span: all; margin-top: 6px; }
 .rv-group { display: block; margin-bottom: 10px; }
@@ -2037,47 +2059,65 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-group > .pg-stat b { color: var(--accent); }
 .rv-group > .txt-mini.rv-phase-name { text-transform: none; letter-spacing: .02em; }
 .rv-fit-grid .rv-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
-/* The peak widths, the Williamson–Hall plot and the crystallites' shape in one row: the
-   table and the plot share the room, the shape view takes what is left and gives way
-   sideways first. */
-.rv-wrow { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-.rv-wrow.has-solid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(130px, 0.42fr); }
-.rv-wrow > .peak-box { margin-top: 0; min-width: 0; }
-/* The note under the widths: the instrument's width not taken off. */
-.rv-wtable .rv-note { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.rv-wh { min-width: 0; }
-.rv-wh > .txt-caption { margin: 0 0 6px; }
-.rv-wh svg.plot { min-width: 0; }
-.rv-solids { padding: 10px 8px 10px; }
+/* The Williamson–Hall plot, the tests on the widths and the crystallites' shape in one
+   row: a grid whose middle row is the plot's alone (its caption over it, its legend
+   under), the two boxes spanning it exactly — as tall as the plot, sized as if empty
+   (contain: size) so that they never make the row taller, their text scrolling inside.
+   The columns 1.618 : 1.2 : 1 make the shape's box square: the plot is 1.618 times as
+   wide as it is tall. Stacked on a narrow screen: the boxes at their own height. */
+.rv-wrow { display: grid; grid-template-columns: minmax(0, 1.618fr) minmax(0, 1.2fr) minmax(0, 1fr); grid-template-rows: auto auto auto; column-gap: 16px; align-items: start; }
+.rv-wrow > .txt-caption { grid-column: 1; grid-row: 1; margin: 0 0 6px; }
+.rv-wrow > .plot-wrap { grid-column: 1; grid-row: 2; min-width: 0; }
+.rv-wrow > .plot-wrap svg.plot { min-width: 0; }
+.rv-wrow > .legend { grid-column: 1; grid-row: 3; }
+.rv-wrow > .peak-box { grid-row: 2; align-self: stretch; margin-top: 0; min-width: 0; min-height: 0; contain: size; display: flex; flex-direction: column; overflow: hidden; }
+.rv-wrow > .rv-tests { grid-column: 2; padding: 10px 12px; }
+.rv-wrow > .rv-solids { grid-column: 3; padding: 10px 8px; }
+.rv-wrow > .peak-box > .peak-box-head { flex: none; margin-bottom: 6px; }
+.rv-tests-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; display: grid; align-content: start; row-gap: 6px; }
+.rv-tests-body > .pg-stat { font-size: 13px; color: var(--text); }
+.rv-tests-body > .pg-stat b { color: var(--accent); }
+.rv-tests-body > .pg-stat .txt-meta { font-size: 12px; margin-left: 4px; }
+.rv-tests-body > .pg-stat.rv-sub { margin-top: 4px; }
+.rv-tests-body > .txt-mini { margin-top: 4px; }
+/* Phase names are formulae more often than not: upper case would turn Co into CO. */
+.rv-tests-body > .txt-mini.rv-phase-name { text-transform: none; letter-spacing: .02em; }
+.rv-tests-body > .rv-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .rv-solids > .rv-solid { margin: 0; padding: 0; }
 .rv-solids > .rv-solid + .rv-solid { margin-top: 10px; }
-:root.narrow-layout .rv-wrow, :root.narrow-layout .rv-wrow.has-solid { display: block; }
-:root.narrow-layout .rv-wrow > * + * { margin-top: 16px; }
-/* The tests, in the Williamson–Hall plot's corner: the plot's text on a halo of its
-   background, so the points under them stay told apart. */
-.wh-note { pointer-events: auto; }
-.wh-note-line { font-size: 11px; fill: var(--text); paint-order: stroke; stroke: var(--panel2); stroke-width: 3px; stroke-linejoin: round; }
+:root.narrow-layout .rv-wrow { display: block; }
+:root.narrow-layout .rv-wrow > .peak-box { contain: none; margin-top: 16px; }
+:root.narrow-layout .rv-wrow > .rv-tests { max-height: 360px; }
+/* The peak widths' table at the card's foot, across it; the note under it: the
+   instrument's width not taken off. */
+.rv-widths > .rv-wtable { margin-top: 16px; }
+.rv-wtable .rv-note { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 /* The Scherrer card's two actions under its parameters, side by side. */
 .xrd-pk-btns { display: flex; gap: 8px; }
 .xrd-pk-btns > .plot-action-btn { flex: 1 1 0; min-width: 0; }
-/* ===== XRPD instrumental standard: a window of its own, as wide as a card ===== */
+/* ===== XRPD instrumental standard: a window of its own, as wide as a card. Its head
+   is a banner, as the figure composer's: it stays at the top, with the ×, while what
+   is under it scrolls. ===== */
 .xrd-std-box {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  padding: 16px 18px 18px; width: min(1320px, 96vw); max-height: 94vh; overflow: auto;
+  width: min(1320px, 96vw); max-height: 94vh; overflow: hidden;
+  display: flex; flex-direction: column;
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
 }
 .xrd-std-box:focus { outline: none; }
-.xrd-std-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.xrd-std-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px 18px; border-bottom: 1px solid var(--line); }
 .xrd-std-head > h3 { flex: 1 1 auto; margin: 0; display: flex; align-items: center; gap: 4px; }
 .xrd-std-head .an-ic { margin-right: -4px; }
+.xrd-std-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 14px 18px 18px; }
 .xrd-std-instr { margin: 0 0 12px; }
-.xrd-std-box > .dropzone { padding-top: 14px; padding-bottom: 14px; }
+.xrd-std-scroll > .dropzone { padding-top: 14px; padding-bottom: 14px; }
 .xrd-std-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; padding: 8px 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
-.xrd-std-row .xrd-std-name { flex: 1 1 auto; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The file's whole name: wrapped, if long, rather than cut. */
+.xrd-std-row .xrd-std-name { flex: 1 1 auto; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
 .xrd-std-row .peak-del { background: none; border: none; color: var(--muted); padding: 2px 4px; cursor: pointer; display: inline-flex; }
 .xrd-std-row .peak-del:hover { color: var(--bad); }
 .xrd-std-body { margin-top: 12px; }
-@media (max-width: 600px){ .xrd-std-box { padding: 12px 12px 14px; width: 100vw; max-height: 100vh; border-radius: 0; } }
+@media (max-width: 600px){ .xrd-std-box { width: 100vw; max-height: 100vh; border-radius: 0; } .xrd-std-head { padding: 10px 10px 10px 12px; } .xrd-std-scroll { padding: 12px 12px 14px; } }
 /* XRPD — the crystallites' shape in 3D (xrd-shape3d.js). The view sizes its canvas
    itself (square, 200–320 px, the container's width); these rules only centre it,
    own the drag (no page scroll or zoom under a finger) and style the caption. */
@@ -2095,16 +2135,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   margin: 4px auto 0; text-align: center;
   font-size: 12px; line-height: 1.35; color: var(--muted);
 }
-.rv-result .pg-stat .txt-meta { font-size: 12px; margin-left: 4px; }
 .rv-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
-/* What a refinement gives, in a box like the Caglioti fit's: one value a line. */
-.rv-result { margin-top: 10px; display: grid; row-gap: 7px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
-.rv-result > .pg-stat { font-size: 13px; color: var(--text); }
-.rv-result > .pg-stat b { color: var(--accent); }
-.rv-result > .txt-mini { margin-top: 4px; }
-/* Phase names are formulae more often than not: upper case would turn Co into CO. */
-.rv-result > .txt-mini.rv-phase-name { text-transform: none; letter-spacing: .02em; }
-.rv-result > .rv-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .rv-prog { height: 6px; margin-top: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
 .rv-prog > div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
 /* Remove top margin on first label in parameter panels */
@@ -2298,15 +2329,21 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .xrd-peak-wrap .peak-row .peak-del:hover:not(:disabled) { color: var(--bad); }
 /* +Add peak armed state is handled by the shared button.btn.is-on rule. */
 
-/* ===== XRD fit hyperparameters modal ===== */
+/* ===== Modal windows ===== */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 1000;
   background: rgba(0,0,0,0.55);
   display: flex; align-items: center; justify-content: center;
 }
+/* While a modal is open (a .modal-backdrop on the page and not display: none — the
+   figure composers, the calendar, the Rietveld settings, the XRPD standard's windows,
+   the projects' Save as and New), the page behind it does not scroll: the wheel and
+   the touch scroll the modal only. A page long enough to have a scrollbar keeps its
+   gutter, so it keeps its width under the modal (no reflow, no plot redrawn). */
+html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gutter: stable; }
 .modal-box {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  padding: 20px 22px; width: min(420px, 92vw); max-height: 90vh; overflow: auto;
+  padding: 20px 22px; width: min(420px, 92vw); max-height: 90vh; overflow: auto; overscroll-behavior: contain;
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
 }
 .modal-box label { display: block; margin-top: 12px; }

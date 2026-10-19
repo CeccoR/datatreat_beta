@@ -319,18 +319,21 @@ export const STD_INFO = `A measured standard (large, strain-free crystallites �
 export function createPeakAnalysis(host, root, o){
   const p = o.prefix, std = !!o.standard;
 
+  // The standard's: one file, named over it in the window, so its plot has no caption;
+  // the parameters beside the plot, the Caglioti fit and + Add peak at their foot,
+  // ending level with the plot's bottom (the frame of the Rietveld card's, .pside).
   root.innerHTML = std ? `
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-nav-row"><div class="plot-nav-left"><span class="txt-caption" id="${p}CurrentLabel">—</span></div></div>
+        <div class="pside">
+          <div class="plot-nav-row pside-nav"></div>
+          <div class="pside-plot">
             <div class="plot-wrap">
               <svg class="plot" id="${p}Svg"></svg>
               <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-names="standard.csv" data-dl-name="XRPD_standard.svg">${DL_ICON}</button>
             </div>
-            ${LEGEND}
           </div>
-          <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters</div>
+          <div class="pside-under">${LEGEND}</div>
+          <div class="pside-col xrd-std-side">
+            <div class="txt-mini param-head">Parameters</div>
             <div class="param-grid">
               <label class="txt-label" for="${p}Smooth">Smoothing window (pts)</label>
               <input type="number" class="pg-field" id="${p}Smooth" value="1" min="1">
@@ -342,8 +345,8 @@ export function createPeakAnalysis(host, root, o){
               <input type="text" inputmode="decimal" class="pg-field" id="${p}PkProm" value="3">
               <label class="txt-label" for="${p}PkDist">Peak min. distance (&#176;2&#952;)</label>
               <input type="text" inputmode="decimal" class="pg-field" id="${p}PkDist" value="0.3">
-              <div class="pg-result" id="${p}Cag"></div>
             </div>
+            <div class="xrd-cag"><div class="pg-result" id="${p}Cag"></div></div>
             <div id="${p}CagAlert" class="cag-alert"></div>
             <button class="btn plot-action-btn" id="${p}AddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
           </div>
@@ -665,9 +668,10 @@ export function createPeakAnalysis(host, root, o){
   // The sample on show (the standard's file), its plot and its label.
   function updateView(preserveView){
     const fs = files();
-    if (!fs.length || !processed.length){ $$('CurrentLabel').textContent = '—'; return; }
+    const label = $$('CurrentLabel');     // (none on the standard's: its window names it)
+    if (!fs.length || !processed.length){ if (label) label.textContent = '—'; return; }
     const k = Math.min(curIdx(), fs.length - 1);
-    $$('CurrentLabel').textContent = fs[k].label;
+    if (label) label.textContent = fs[k].label;
     if (!std) $$('Idx').textContent = (k+1)+'/'+fs.length;
     if (host.hidden && host.hidden()) return;
     drawAnalysisInto(k, preserveView);

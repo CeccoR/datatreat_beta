@@ -159,16 +159,18 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
         <h3 class="txt-head" id="${id}Title">${title}<button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg></button></h3>
         <button type="button" class="an-ic xrd-std-x" title="Close" aria-label="Close">${X_SVG(15)}</button>
       </div>
-      <div class="instr-block xrd-std-instr" style="display:none">${info}</div>
-      <div class="dropzone xrd-std-dz" id="${id}Dz">
-        <div class="dz-icon">⤒</div>
-        <div class="dz-title">Drag here the standard's file, or click to select it.</div>
-        <div class="txt-meta">.xrdml, .xml · one file: it replaces the one loaded</div>
-        <input type="file" id="${id}Files" accept=".xrdml,.xml" style="display:none">
+      <div class="xrd-std-scroll">
+        <div class="instr-block xrd-std-instr" style="display:none">${info}</div>
+        <div class="dropzone xrd-std-dz" id="${id}Dz">
+          <div class="dz-icon">⤒</div>
+          <div class="dz-title">Drag here the standard's file, or click to select it.</div>
+          <div class="txt-meta">.xrdml, .xml · one file: it replaces the one loaded</div>
+          <input type="file" id="${id}Files" accept=".xrdml,.xml" style="display:none">
+        </div>
+        <div class="xrd-std-alerts"></div>
+        <div class="xrd-std-file"></div>
+        <div class="xrd-std-body"></div>
       </div>
-      <div class="xrd-std-alerts"></div>
-      <div class="xrd-std-file"></div>
-      <div class="xrd-std-body"></div>
     </div>`;
     document.body.appendChild(m);
     const box = m.querySelector('.xrd-std-box'), info0 = m.querySelector('.instr-info'), instr = m.querySelector('.xrd-std-instr');
@@ -197,11 +199,12 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
   const peaksModal = stdModal('xrdStdPeaks', 'Instrumental standard', STD_INFO);
   const rvModal = stdModal('xrdStdRv', 'Instrumental standard: Rietveld', RV_STD_INFO);
   let openModal = null;
-  // The standard's file in both windows: its name, and × to take it away.
+  // The standard's file in both windows: its whole name (the plot under it has no
+  // caption: it is the one file), and × to take it away.
   function syncStdFile(){
     [peaksModal, rvModal].forEach(M=>{
       M.el.querySelector('.xrd-std-file').innerHTML = stdFile
-        ? `<div class="xrd-std-row"><span class="txt-mini">Standard</span><span class="xrd-std-name" title="${esc(stdFile.name)}">${esc(stdFile.label)}</span><button type="button" class="peak-del is-danger idle-dim" data-std-del title="Remove the standard">${X_SVG(13)}</button></div>` : '';
+        ? `<div class="xrd-std-row"><span class="txt-mini">Standard</span><span class="xrd-std-name">${esc(stdFile.name)}</span><button type="button" class="peak-del is-danger idle-dim" data-std-del title="Remove the standard">${X_SVG(13)}</button></div>` : '';
     });
   }
   function setStd(f){
@@ -280,10 +283,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
   }
   const resList = document.getElementById('xrdResList');
   const placeRes = ()=> eachCard(e=>{ if (e.inst.res) resList.appendChild(e.inst.res); });
-  // The Results: each Scherrer card's section, under its name, in card order; the card
-  // is there while one is.
+  // The Results: each card's section (a Scherrer card's, a Rietveld card's), under its
+  // name, in card order; the card is there while one is.
   function syncResults(){
-    const on = cards().filter(a=> a.type === 'scherrer' && live.has(a.id));
+    const on = cards().filter(a=> live.has(a.id) && live.get(a.id).inst.res);
     document.getElementById('xrdResults').style.display = files.length && on.length ? 'block' : 'none';
     on.forEach((a, i)=> live.get(a.id).inst.res.classList.toggle('is-first', i === 0));
   }
