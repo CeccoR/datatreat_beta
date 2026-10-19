@@ -7,7 +7,7 @@
    file, its own parameters, and the Caglioti fit of its widths that corrects the
    samples' sizes for the instrument's).
 ========================================================= */
-import { fmtNum, csvLine, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax } from './utils.js';
+import { fmtNum, csvLine, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 
 // Index of the grid point nearest to a 2θ on a uniform axis.
@@ -296,13 +296,15 @@ const CSV_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" heig
 const LEGEND = `<div class="legend">
               <span><i style="background:#6a7585"></i>raw</span>
               <span><i style="background:#3aa0ff"></i>smoothed</span>
-              <span><i style="background:#ff9933"></i>baseline</span>
+              <span class="lg-bl"><i style="background:#ff9933"></i>baseline</span>
               <span><i style="background:#5fcf6a"></i>peaks</span>
             </div>`;
+// The baseline's box, before its window's title: on (the default), the SNIP baseline.
+const BL_TITLE = 'Subtract a SNIP baseline (the background) before the peak search and the FWHM; unticked, none: the pattern is taken as it is, from zero';
 const CHIP_TITLE = "Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's";
 const chip = (p, k, mode)=> `<button type="button" class="mode-chip" id="${p}Mode${k}" title="${CHIP_TITLE}">${mode}</button>`;
 
-export const PEAKS_INFO = `Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing distances, from the window width down to one point, so the peaks are cut away and the slowly varying background is left. Peaks are searched on the smoothed pattern with the baseline taken off: a peak must reach the minimum height and stand out by the minimum prominence (both in % of the highest), and two peaks closer than the minimum distance keep the taller. The FWHM is read where the profile crosses half its height, interpolated between points; the crystallite size is Scherrer's, D = Kλ / (β·cosθ). With an instrumental standard (<b>Instrumental standard…</b>), the instrument's width at each angle is taken off in quadrature, β² = β<sub>obs</sub>² − β<sub>instr</sub>², for the corrected size. <b>+ Add peak</b> places a peak by hand on the plot; the × in a row removes one. Use the <b>all / one</b> toggles to share a value across samples or set it per sample.`;
+export const PEAKS_INFO = `Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing distances, from the window width down to one point, so the peaks are cut away and the slowly varying background is left; its box unticked, there is none, and the pattern is read from zero as it is. Peaks are searched on the smoothed pattern with the baseline taken off: a peak must reach the minimum height and stand out by the minimum prominence (both in % of the highest), and two peaks closer than the minimum distance keep the taller. The FWHM is read where the profile crosses half its height, interpolated between points; the crystallite size is Scherrer's, D = Kλ / (β·cosθ). With an instrumental standard (<b>Instrumental standard…</b>), the instrument's width at each angle is taken off in quadrature, β² = β<sub>obs</sub>² − β<sub>instr</sub>², for the corrected size. <b>+ Add peak</b> places a peak by hand on the plot; the × in a row removes one. Use the <b>all / one</b> toggles to share a value across samples or set it per sample.`;
 export const STD_INFO = `A measured standard (large, strain-free crystallites — LaB₆, Si…) characterises the instrumental broadening β<sub>instr</sub>(2θ). It is analysed here on its own, always normalised to its highest peak (= 1), with parameters of its own. Its peaks' FWHM are fitted with the Caglioti function, FWHM² = U·tan²θ + V·tanθ + W, which gives the instrument's width at any angle: the samples' corrected sizes take it off in quadrature. One file at a time: a file dropped replaces the one there.`;
 
 /* host: {
@@ -337,7 +339,7 @@ export function createPeakAnalysis(host, root, o){
             <div class="param-grid">
               <label class="txt-label" for="${p}Smooth">Smoothing window (pts)</label>
               <input type="number" class="pg-field" id="${p}Smooth" value="1" min="1">
-              <label class="txt-label" for="${p}BlWin">Baseline SNIP window (pts)</label>
+              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP window (pts)</label></div>
               <input type="number" class="pg-field" id="${p}BlWin" value="150" min="1">
               <label class="txt-label" for="${p}PkHeight">Peak min. height (%)</label>
               <input type="text" inputmode="decimal" class="pg-field" id="${p}PkHeight" value="5">
@@ -379,10 +381,10 @@ export function createPeakAnalysis(host, root, o){
             <div class="txt-mini param-head aligned">Parameters</div>
             <div class="param-grid">
               <label class="txt-label" for="${p}Norm">Normalization</label>
-              <select id="${p}Norm" class="pg-field"><option value="global">Global (max of all)</option><option value="local">Local (max of each)</option></select>
+              <select id="${p}Norm" class="pg-field">${NORM_OPTIONS}</select>
               <div class="txt-label pg-title">Smoothing window (pts) ${chip(p, 'N', 'all')}</div>
               <input type="number" class="pg-field" id="${p}Smooth" value="10" min="1">
-              <div class="txt-label pg-title">Baseline SNIP window (pts) ${chip(p, 'Bl', 'all')}</div>
+              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP window (pts)</label> ${chip(p, 'Bl', 'all')}</div>
               <input type="number" class="pg-field" id="${p}BlWin" value="150" min="1">
               <div class="txt-label pg-title">Peak min. height (%) ${chip(p, 'H', 'one')}</div>
               <input type="text" inputmode="decimal" class="pg-field" id="${p}PkHeight" value="5">
@@ -464,8 +466,10 @@ export function createPeakAnalysis(host, root, o){
   const FIELD_DEF = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
   const shared = std ? { ...FIELD_DEF, N:1 } : { ...FIELD_DEF };
   if (std) Object.keys(paramMode).forEach(k=> paramMode[k] = 'shared');
-  // Per-sample param overrides (indexed by file idx)
-  let perParams = []; // array of {N, blWin, pkHeight, pkProm, pkDist, K, lambda}
+  // Per-sample param overrides (indexed by file idx). blOn: the SNIP baseline subtracted
+  // (its box ticked, the default) or not; it goes with its window, under the window's
+  // all / one (paramMode.blWin). Absent (projects before v463) is on.
+  let perParams = []; // array of {N, blWin, blOn, pkHeight, pkProm, pkDist, K, lambda}
   // What the crystallite-size box plot is by: each sample's peaks ('sample'), or each
   // reflection the samples share, over the samples ('peak').
   let sizeBy = 'sample';
@@ -489,8 +493,8 @@ export function createPeakAnalysis(host, root, o){
   // Get params for a specific file index (respects per-field shared/per mode)
   function getFileParams(i){
     const pp = perParams[i] || {};
-    const g = k => paramMode[k]==='shared' ? shared[k] : (pp[k] ?? shared[k]);
-    return { N:g('N'), blWin:g('blWin'), pkHeight:g('pkHeight'), pkProm:g('pkProm'), pkDist:g('pkDist'), K:g('K'), lambda:g('lambda') };
+    const g = (k, m = k) => paramMode[m]==='shared' ? shared[k] : (pp[k] ?? shared[k]);
+    return { N:g('N'), blWin:g('blWin'), blOn:g('blOn', 'blWin') !== false, pkHeight:g('pkHeight'), pkProm:g('pkProm'), pkDist:g('pkDist'), K:g('K'), lambda:g('lambda') };
   }
   // Parse a decimal field tolerant of comma separators; only fall back on a genuinely empty/invalid value
   function numField(id, def){
@@ -507,11 +511,16 @@ export function createPeakAnalysis(host, root, o){
       if (paramMode[key]==='shared') shared[key] = v;
       else { if (!perParams[k]) perParams[k] = {}; perParams[k][key] = v; }
     }
+    const on = $$('BlOn').checked;
+    if (paramMode.blWin==='shared') shared.blOn = on;
+    else { if (!perParams[k]) perParams[k] = {}; perParams[k].blOn = on; }
   }
   // Push stored values for the sample on show into the input fields
   function writeStoreToInputs(){
     const pr = getFileParams(curIdx());
     for (const key in FIELD_INPUT) $$(FIELD_INPUT[key]).value = pr[key];
+    // (disabled, not hidden: the window means nothing with no baseline)
+    $$('BlOn').checked = pr.blOn; $$('BlWin').disabled = !pr.blOn;
     if (!std){ $$('Norm').value = norm; syncLambdaSelect(); }
   }
   // Keep the wavelength preset selector in step with the numeric λ value: pick the
@@ -532,7 +541,8 @@ export function createPeakAnalysis(host, root, o){
     const x = f.x;
     const yraw       = f.y;
     const smoothed   = movingAverage(yraw, pr.N);                      // display + detection
-    const snip       = computeBaseline(smoothed, pr.blWin);            // SNIP baseline (estimate/fallback/standard)
+    // SNIP baseline (estimate/fallback/standard); switched off, none: the pattern from zero
+    const snip       = pr.blOn ? computeBaseline(smoothed, pr.blWin) : new Array(smoothed.length).fill(0);
     /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
        profile — on the raw counts the noise stops it short — and the smoothing, a box
        N points wide convolved into every peak, widens them in turn: the window is the
@@ -641,7 +651,10 @@ export function createPeakAnalysis(host, root, o){
     plot.drawAxes();
     plot.line(f.x, f.y.map(v=>v/mx),         '#6a7585', 1);
     plot.line(f.x, pr.smoothed.map(v=>v/mx), '#3aa0ff', 1.4);
-    plot.line(dense, baseD.map(v=>v/mx),     '#ff9933', 1.2);
+    const blOn = getFileParams(idx).blOn;
+    if (blOn) plot.line(dense, baseD.map(v=>v/mx), '#ff9933', 1.2);
+    // (the legend's entry stays, struck through: no baseline on this pattern)
+    root.querySelectorAll('.lg-bl').forEach(e=> e.classList.toggle('is-off', !blOn));
     const drawnPos = [];
     const peakMarks = [], fwhmMarks = [];
     for (const pk of pr.peaks){
@@ -893,21 +906,22 @@ export function createPeakAnalysis(host, root, o){
     const fs = files();
     const shown = [];
     fs.forEach((f,k)=>{ if (curves[k]) shown.push(k); });
-    const n = shown.length, baseOf = j => -j * 1.1;
     const gmax = topOf(shown.map(k=>maxArr(curves[k])));
+    // (none: the curves as they are, spaced by the largest — the plot's unit)
+    const unit = norm==='none' ? gmax : 1, n = shown.length, baseOf = j => -j * 1.1 * unit;
     const plot = new Plot($$('ResSvg'), {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = $$('ResLegend'); legend.innerHTML='';
     let lo=Infinity, hi=-Infinity;
     shown.forEach(k=>{ lo=Math.min(lo, fs[k].x[0]); hi=Math.max(hi, fs[k].x[fs[k].x.length-1]); });
     if (!isFinite(lo)){ lo = 0; hi = 1; }
-    plot.setRange(lo, hi, baseOf(Math.max(0,n-1)), baseOf(0)+1.1);
+    plot.setRange(lo, hi, baseOf(Math.max(0,n-1)), baseOf(0)+1.1*unit);
     plot.drawAxes();
     shown.forEach((k, j)=>{
       const raw = curves[k];
-      const mx = norm==='local' ? (maxArr(raw)||1) : gmax;
+      const mx = norm==='local' ? (maxArr(raw)||1) : norm==='none' ? 1 : gmax;
       const norm1 = raw.map(v=> v/mx);            // exactly the CSV's own column
-      const y = norm1.map(v=> v + baseOf(j) + 0.05);
+      const y = norm1.map(v=> v + baseOf(j) + 0.05*unit);
       // Draw the stacked trace, but hand the composer the un-offset CSV values.
       plot.line(fs[k].x, y, fs[k].color, 1.3, undefined,
                 { raw: { xs: fs[k].x, ys: norm1 }, label: fs[k].label, key: fs[k].name });
@@ -1079,17 +1093,19 @@ export function createPeakAnalysis(host, root, o){
   if (!std) Object.entries(TOGGLE_FIELD).forEach(([tid, key])=>{
     $$('Mode' + tid).addEventListener('click', ()=>{
       const mode = paramMode[key]==='shared' ? 'per' : 'shared';
-      // The value currently displayed on the graph for this field
-      const cur = getFileParams(curIdx())[key];
+      // The value currently displayed on the graph for this field (the baseline's
+      // window with its box: one chip for both)
+      const keys = key==='blWin' ? ['blWin', 'blOn'] : [key];
+      const cur = getFileParams(curIdx());
       paramMode[key] = mode;
       $$('Mode' + tid).textContent = mode==='shared' ? 'all' : 'one';
       if (mode==='shared'){
         // Switching to "all": every sample takes the value of the sample on show
-        shared[key] = cur;
+        keys.forEach(k=>{ shared[k] = cur[k]; });
       } else {
         // Switching to "one": every sample starts from the common value, then each is
         // changed on its own
-        files().forEach((f, i)=>{ if (!perParams[i]) perParams[i] = {}; perParams[i][key] = cur; });
+        files().forEach((f, i)=>{ if (!perParams[i]) perParams[i] = {}; keys.forEach(k=>{ perParams[i][k] = cur[k]; }); });
       }
       writeStoreToInputs();
       if (files().length){
@@ -1103,8 +1119,19 @@ export function createPeakAnalysis(host, root, o){
     });
   });
   if (!std) $$('Norm').addEventListener('change', e=>{
-    norm = e.target.value === 'local' ? 'local' : 'global';
+    norm = normOf(e.target.value);
     if (files().length){ renderResults(); host.commit(); }
+  });
+  // The baseline's box: as a change of its window (no peak deletion undone).
+  $$('BlOn').addEventListener('change', ()=>{
+    if (!files().length){ $$('BlWin').disabled = !$$('BlOn').checked; return; }
+    readInputsToStore();
+    writeStoreToInputs();
+    if (paramMode.blWin==='shared') reprocessAll(); else reprocessOne(curIdx());
+    updateView(true);
+    renderTable(); renderResults();
+    if (host.changed) host.changed();
+    host.commit();
   });
   Object.entries(FIELD_INPUT).forEach(([key, id])=>{
     const el = $$(id);
@@ -1262,7 +1289,7 @@ export function createPeakAnalysis(host, root, o){
       {h:f.label,                                    v:pr.subtracted.map(v=>fmtNum(v/mx,6))},
       {h:'Raw_'+f.label,                             v:f.y.map(v=>fmtNum(v,6))},
       {h:`Smoothed_${f.label} (N=${kp.N})`,          v:pr.smoothed.map(v=>fmtNum(v,6))},
-      {h:`SNIP_background_${f.label} (win=${kp.blWin})`, v:pr.snip.map(v=>fmtNum(v,6))},
+      {h:`SNIP_background_${f.label} (${kp.blOn ? 'win=' + kp.blWin : 'off'})`, v:pr.snip.map(v=>fmtNum(v,6))},
     ];
   }
   // Classic peak-search block: 2θ, rel. intensity, FWHM, crystallite size [, corrected].
@@ -1301,9 +1328,10 @@ export function createPeakAnalysis(host, root, o){
     }
     const anyStd = !!model();
     const all = fs.map((f,k)=>k);
-    // Normalization factors (match the results plots): local = own max, global = shared max.
+    // Normalization factors (match the results plots): local = own max, global = shared
+    // max, none = 1 (the counts as they are).
     const gmaxSub = topOf(all.map(k=>maxArr(processed[k].subtracted)));
-    const refinedNorm = k => norm==='local' ? (maxArr(processed[k].subtracted)||1) : gmaxSub;
+    const refinedNorm = k => norm==='local' ? (maxArr(processed[k].subtracted)||1) : norm==='none' ? 1 : gmaxSub;
     const entries = [];
     // diffractograms.csv — every sample's refined/raw/smoothed/SNIP columns.
     { const cols=[]; all.forEach(k=>cols.push(...diffractoCols(k, refinedNorm)));
@@ -1392,7 +1420,7 @@ export function createPeakAnalysis(host, root, o){
       manualPeaks = arr(s.manualPeaks, ()=> []).map(a=> a.slice());
       removedPeaks = arr(s.removedPeaks, ()=> []).map(a=> a.slice());
       sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
-      norm = s.norm === 'local' ? 'local' : 'global';
+      norm = normOf(s.norm);
       panel.sel = panel.hov = null;
     },
   };

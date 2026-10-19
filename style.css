@@ -1877,6 +1877,14 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   gap: 6px;
 }
 .param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
+/* A setting switched on or off by a box at the start of its title (the Scherrer
+   baseline), the box in the title's text so that they wrap together; its value's field
+   beside it disabled when off. */
+.pg-title > label.pg-on { cursor: pointer; min-width: 0; }
+.pg-title > label.pg-on > input { width: auto; margin: 0 4px 0 0; vertical-align: -2px; cursor: pointer; }
+.param-grid > .pg-field:disabled { opacity: 0.45; cursor: not-allowed; }
+/* A plot's legend entry for a curve switched off (no baseline): struck through, dimmed. */
+.legend .lg-bl.is-off { text-decoration: line-through; opacity: .5; }
 /* Wavelength cell: split the field column into a source preset selector (left) and
    the numeric value (right, read-only unless the preset is "Custom"). */
 .lambda-field { display: flex; gap: 6px; align-items: center; }
@@ -1969,7 +1977,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
    Williamson–Hall plot and the tests' box. */
 .rv-widths { margin-top: 16px; }
 .rv-pk .rv-key-sm { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
-/* hkl on one line: a coincident pair (300/221) wrapped under its key. */
+/* hkl on one line: a coincident pair (300 + 221) not wrapped under its key. */
 .rv-pk td:nth-child(2) { white-space: nowrap; }
 /* A peak the tests leave out (overlapped, weak, at an end, not broadened): dimmed, its
    number struck. */

@@ -1,4 +1,4 @@
-import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, movingAverage, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumberInputs } from './utils.js';
+import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, movingAverage, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumberInputs } from './utils.js';
 import { Plot } from './plot.js';
 import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
@@ -169,7 +169,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   /* ---- The analysis cards (cards.js): each its own normalisation and smoothing of the
      same spectra, stacked on its own plot ---- */
   const KINDS = { spectra: 'Stacked Spectra' };
-  const EPR_INFO = `Spectra are normalized and stacked for visual comparison. Adjust the smoothing window and normalization mode as needed. The field axis is each spectrum's field <b>rescaled to 9.5 GHz</b>, B·(9.5 GHz / ν) with ν the microwave frequency of its .DSC (MWFQ), so that spectra recorded at different frequencies line up by g; the CSV gives the field the same way (Bfield_mT_at_9.5GHz). The top axis reads <b>g = hν / (μ<sub>B</sub>·B)</b> at 9.5 GHz. A file without its frequency is shown on the field it was measured at, and then no g axis can be drawn. ${cardInfo(false, false)}`;
+  const EPR_INFO = `Spectra are stacked for visual comparison, each normalized to the largest peak-to-peak (global) or to its own (local), or left as they are (none: the stacking only spaces them). Adjust the smoothing window and normalization mode as needed. The field axis is each spectrum's field <b>rescaled to 9.5 GHz</b>, B·(9.5 GHz / ν) with ν the microwave frequency of its .DSC (MWFQ), so that spectra recorded at different frequencies line up by g; the CSV gives the field the same way (Bfield_mT_at_9.5GHz). The top axis reads <b>g = hν / (μ<sub>B</sub>·B)</b> at 9.5 GHz. A file without its frequency is shown on the field it was measured at, and then no g axis can be drawn. ${cardInfo(false, false)}`;
   const DEF = { norm: 'global', smooth: 10 };
   const P = a => 'epr' + a.id;
   const DL_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
@@ -185,10 +185,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
           <div class="col mw260" style="align-self:flex-start">
             <div class="txt-mini param-head">Parameters</div>
             <label class="txt-label" for="${P(a)}Norm">Normalization</label>
-            <select id="${P(a)}Norm">
-              <option value="global">Global (max of all)</option>
-              <option value="local">Local (max of each)</option>
-            </select>
+            <select id="${P(a)}Norm">${NORM_OPTIONS}</select>
             <label class="txt-label" for="${P(a)}Smooth">Smoothing points</label>
             <input type="number" id="${P(a)}Smooth" value="10" min="1">
           </div>
@@ -200,7 +197,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     guardNumberInputs(card);
     const norm = card.querySelector('#' + P(a) + 'Norm'), sm = card.querySelector('#' + P(a) + 'Smooth');
     norm.value = a.norm; sm.value = a.smooth;
-    norm.addEventListener('change', ()=>{ a.norm = norm.value === 'local' ? 'local' : 'global'; if (files.length){ drawCard(a); hist.commit(); } });
+    norm.addEventListener('change', ()=>{ a.norm = normOf(norm.value); if (files.length){ drawCard(a); hist.commit(); } });
     sm.addEventListener('change', ()=>{ a.smooth = Math.max(1, Math.round(+sm.value) || 1); if (files.length){ drawCard(a); hist.commit(); } });
   }
   function named(a){
@@ -225,7 +222,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     };
   }
   // A project from before the cards had one analysis, its settings at the top level.
-  const readCard = s => ({ norm: s.norm === 'local' ? 'local' : 'global', smooth: Math.max(1, Math.round(+s.smooth) || DEF.smooth) });
+  const readCard = s => ({ norm: normOf(s.norm), smooth: Math.max(1, Math.round(+s.smooth) || DEF.smooth) });
   function eprRestore(s){
     allFiles = s.files.map(f=>({...f}));
     files = includedOf(allFiles);
@@ -263,27 +260,29 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     const legend = document.getElementById(P(a) + 'Legend'); legend.innerHTML='';
     const n = Y.length;
-    const baseOf = k => (n-1-k)*1.1;
     const allB = files.flatMap(f=>f.b);
+    // (none: the spectra as they are, each centred in a slot as tall as the largest
+    // peak-to-peak — the plot's unit — as global draws them divided by it)
+    const gPP0 = Math.max(...Y.map(y=> maxArr(y) - minArr(y))) || 1, unit = norm==='none' ? gPP0 : 1;
+    const baseOf = k => (n-1-k)*1.1*unit;
     if (norm==='local'){
       Y = Y.map((y,k)=>{ const mn=minArr(y),mx=maxArr(y); const sc=mx===mn?0:1.0/(mx-mn); return y.map(v=>(v-mn)*sc+baseOf(k)+0.05); });
+    } else if (norm==='none'){
+      Y = Y.map((y,k)=>{ const mid=(maxArr(y)+minArr(y))/2; return y.map(v=>v-mid+baseOf(k)+0.55*unit); });
     } else {
       Y = Y.map(y=>{ const m=minArr(y); return y.map(v=>v-m); });
       const gmax = Math.max(...Y.map(maxArr));
       Y = Y.map((y,k)=>{ const mid=maxArr(y)/(2*gmax); return y.map(v=>v/gmax+baseOf(k)+0.55-mid); });
     }
-    plot.setRange(minArr(allB), maxArr(allB), baseOf(n-1), baseOf(0)+1.1);
+    plot.setRange(minArr(allB), maxArr(allB), baseOf(n-1), baseOf(0)+1.1*unit);
     if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
     plot.drawAxes();
-    // The composer gets the CSV's own "Smoothed_" column: moving average, background
-    // taken as the first point, divided by the peak-to-peak the chosen normalisation
-    // uses. Same numbers as the export, without the stacking offset.
+    // The composer gets the CSV's own "Smoothed_" column (smoothedOut): the same numbers
+    // as the export, without the stacking offset.
     const sms = files.map(f=>movingAverage(f.a, N));
-    const ppks = sms.map(sm => (maxArr(sm)-minArr(sm)) || 1);
-    const gPP = Math.max(...ppks);
+    const out = smoothedOut(sms, norm);
     Y.forEach((y,k)=>{
-      const sm = sms[k], bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP;
-      const csvY = sm.map(v=>(v-bg)/div);
+      const csvY = out[k];
       plot.line(files[k].b, y, files[k].color, 1.3, undefined,
                 { raw: { xs: files[k].b, ys: csvY }, label: files[k].label, key: files[k].name });
       const s=document.createElement('span'); s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`; legend.appendChild(s);
@@ -295,25 +294,31 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     if (!files.length) return [];
     return cards().map(a=> ({ name: `${fileSafe(a.name)} - epr_spectra.csv`, text: cardCsv(a) }));
   }
-  function cardCsv(a){
-    const N = a.smooth || 1;
-    const norm = a.norm;
-    // Smoothed column: moving-average (N pts), background subtracted as the first point,
-    // then normalised the user's way — divide by the peak-to-peak (local = own,
-    // global = largest across samples), matching the on-screen normalisation divisor.
-    const sms = files.map(f=>movingAverage(f.a, N));
+  /* The smoothed column: moving average (N pts), then the user's normalisation — the
+     background taken as the first point and divided by the peak-to-peak (local = own,
+     global = largest across samples), matching the on-screen divisor; none: the smoothed
+     trace as it is, background and all. */
+  function smoothedOut(sms, norm){
+    if (norm==='none') return sms;
     const ppks = sms.map(sm => (maxArr(sm)-minArr(sm)) || 1);
     const gPP = Math.max(...ppks);
+    return sms.map((sm, k)=>{ const bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP; return sm.map(v=>(v-bg)/div); });
+  }
+  function cardCsv(a){
+    const N = a.smooth || 1;
+    const sms = files.map(f=>movingAverage(f.a, N));
+    const out = smoothedOut(sms, a.norm);
+    // (as they are, intensities of any scale keep their digits, as the raw ones: fmtData)
+    const fmt = a.norm==='none' ? fmtData : fmtNum;
     // Per sample: the (already g-corrected) field, the raw intensity — already
     // baseline-centred at import — and the processed smoothed trace.
     const cols = [];
     files.forEach((f,k)=>{
-      const sm = sms[k], bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP;
       // Rescaled to 9.5 GHz, which the header says: it is not the field measured.
       cols.push({h:(f.rescaled !== false ? 'Bfield_mT_at_9.5GHz_' : 'Bfield_mT_')+f.label, v:f.b.map(v=>fmtNum(v,6))});
       // Intensities of any scale keep their digits (fmtData): a tiny one is not 0.
       cols.push({h:'Raw_'+f.label,                   v:f.a.map(v=>fmtData(v,6))});
-      cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:sm.map(v=>fmtNum((v-bg)/div,6))});
+      cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:out[k].map(v=>fmt(v,6))});
     });
     const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
     let t = csvLine(cols.map(c=>c.h));

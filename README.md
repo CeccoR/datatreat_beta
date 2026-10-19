@@ -93,7 +93,7 @@ Compare, smooth, and normalize X-ray powder diffractograms.
 1. Upload your XRDML/XML files (the samples).
 2. The analyses are cards, as in DRS: a **Scherrer** card (peak search, FWHM and the Scherrer crystallite size, with the stacked patterns and the sizes in the Results) and a **Rietveld** card. **+** under them adds another of either kind; each card can be renamed, turned into the other kind, folded, moved by its ≡ grip and closed. Every card shows the same sample: its arrows (or ← / →) step them all.
 3. **Instrumental standard…** (in either kind of card) opens the standard's window: it is a file of its own, not a sample. Drop its measurement there (one file: a new one replaces it; its whole name is shown under the drop zone, and the window's head, with its ×, stays at the top while the rest scrolls). In a Scherrer card's window it is analysed as the samples are, and its peaks' Caglioti fit corrects every sample's size for the instrument's width; in a Rietveld card's, it is refined, and its profile is the samples' instrument.
-4. Scherrer card: **Normalization** (global or local, for the stacked Results), smoothing, baseline and peak search, K and λ, each shared by all samples or set per sample (**all / one**); **+ Add peak** places a peak by hand.
+4. Scherrer card: **Normalization** (global, local or none — the data as they are — for the stacked Results), smoothing, baseline (its box unticked: no baseline subtracted, the pattern read from zero) and peak search, K and λ, each shared by all samples or set per sample (**all / one**); **+ Add peak** places a peak by hand.
 
 **Rietveld refinement** (the *Rietveld* card):
 
@@ -105,7 +105,7 @@ Compare, smooth, and normalize X-ray powder diffractograms.
 6. **Preferred orientation** (per phase): March–Dollase along a chosen (hkl), or the best of the low-index planes.
 7. **Crystallite shape** (per phase): the isotropic size, or a free solid — ellipsoid, spheroid, cylinder, elliptic cylinder, box or square-based box — in any orientation, each reflection of a family with its own width (the solid's column length along it), from several starting shapes. It is kept only when the data support it against an isotropic size (ΔBIC under −10), and reports the solid's dimensions with their esds and its axes' lattice directions with their angular esds (those of the χ² valley the fit ends in), drawn as a rotatable 3D solid with the crystal's directions, their uncertainty cones and the cell's a, b, c.
 8. **Peak widths**: each reflection fitted alone and corrected for the instrument: a Williamson–Hall plot, beside it the tests that tell an anisotropic broadening (shape), a strain and faults apart (Williamson–Hall χ², ratios of successive orders, the models' predicted widths), and the crystallites' shape; at the card's foot the table, like the Scherrer card's (a click keeps a peak marked on the pattern and on the plot).
-9. **Results**: each Rietveld card's refined patterns stacked and its crystallite sizes, by sample or by peak.
+9. **Results**: each Rietveld card's refined patterns stacked (normalised global, local or none, in **Settings…**) and its crystallite sizes, by sample or by peak.
 
 How it all works, in detail (the model, the solver, the strategy, the broadening, displacement, occupancy, texture and shape models, the tests, the evidence behind each choice and the limits): [RIETVELD.md](RIETVELD.md). A critical review of all this code (the errors fixed in v425, the imprecisions it found and how v426 resolved each, and the catalogue of every chosen number, each tested on synthetic data in v427): [RIETVELD-REVIEW.md](RIETVELD-REVIEW.md).
 
@@ -168,6 +168,7 @@ Compare, smooth, and normalize EPR spectra from Bruker instruments. Includes pai
    - **Normalization**:
      - *Global*: All spectra normalized to the global maximum
      - *Local*: Each spectrum normalized to its own maximum
+     - *None*: The spectra as they are (the stacking only spaces them)
    - **Smoothing points**: Moving-average window size
 
 4. Interactive plot overlays all spectra with your chosen normalization. The analysis is a card: **+** under it adds another (its own normalization and smoothing of the same spectra, on its own plot), and each card can be renamed, folded, moved by its ≡ grip and closed.

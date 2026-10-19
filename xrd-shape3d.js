@@ -384,23 +384,26 @@ function hueOf(c){
   return { h: h * 60, ch };
 }
 
-/* The directions' colours: six hues, each in a shade for the light theme (dark enough on
-   white) and one for the dark (light enough on near-black), in order of preference. The
-   directions take, in turn, the hues at least HUE_GAP from the solid's, so a line never
-   melts into the solid it runs through: a blue phase gets no blue line, a green one no
-   green. Six hues about 60° apart leave at least four free whatever the solid. */
+/* The directions' colours, each in a shade for the light theme (dark enough on white) and
+   one for the dark (light enough on near-black), in order of preference. None is near the
+   cell's a, b, c (red, green, blue: AXIS_COLORS, the triad in the corner), so a direction
+   is never read for an axis (up to v462 they were blue, magenta, green…: a [110] in the
+   blue of c). Between those hues and the default amber solid little room is left, so the
+   third is a slate grey, of no hue (h null: never near the solid's). The directions take,
+   in turn, the colours at least HUE_GAP from the solid's, so a line never melts into the
+   solid it runs through; teal (as near green and blue as allowed) and ochre (the amber
+   solid's) come after. */
 const DIR_HUES = [
-  { h: 211, light: '#1d6fc4', dark: '#6cb6ff' },   // blue, the farthest from the default amber
-  { h: 306, light: '#9c4b93', dark: '#d98fd1' },   // magenta (the app's second accent)
-  { h: 125, light: '#2e8b3a', dark: '#7fd17f' },   // green
-  { h: 27,  light: '#b9560f', dark: '#ffa04d' },   // orange
-  { h: 178, light: '#0e7f86', dark: '#4fd1c5' },   // teal
-  { h: 348, light: '#c42b4f', dark: '#ff7b93' },   // crimson
+  { h: 267, light: '#7b3fc4', dark: '#bf8cff' },   // violet
+  { h: 324, light: '#b0377f', dark: '#f07ac0' },   // magenta
+  { h: null, light: '#3d4a55', dark: '#c9d3db' },  // slate
+  { h: 174, light: '#0e8478', dark: '#4fd1c5' },   // teal
+  { h: 52,  light: '#8c7a00', dark: '#e6cf4a' },   // ochre
 ];
 const HUE_GAP = 45;
 function dirColours(solid, light){
   const { h, ch } = hueOf(solid);
-  const far = e => ch < 0.12 || Math.abs(((e.h - h) % 360 + 540) % 360 - 180) >= HUE_GAP;
+  const far = e => e.h == null || ch < 0.12 || Math.abs(((e.h - h) % 360 + 540) % 360 - 180) >= HUE_GAP;
   const pick = e => light ? e.light : e.dark;
   return [...DIR_HUES.filter(far).map(pick), ...DIR_HUES.filter(e => !far(e)).map(pick)];
 }
