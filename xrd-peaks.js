@@ -551,18 +551,23 @@ export function createPeakAnalysis(host, root, o){
     const rawSub     = yraw.map((v,j)=>v-snip[j]);
     // Peak detection on the smoothed, SNIP-subtracted profile (robust to noise)
     const peaks      = findPeaks(x, detSub, pr.pkHeight, pr.pkProm, pr.pkDist);
-    // Re-inject manually added peaks (survive param changes, cleared on reset)
-    (manualPeaks[i]||[]).forEach(pos=>{
+    // Re-inject manually added peaks (survive param changes, cleared on reset); one with
+    // no position (an add on a stale index could store one, to v473, and a save keep it)
+    // is skipped.
+    (manualPeaks[i]||[]).filter(Number.isFinite).forEach(pos=>{
       const idx = nearestIdx(x, pos);
       peaks.push({pos, height:detSub[idx], prominence:peakProminence(detSub, idx), idx, manual:true});
     });
     peaks.sort((a,b)=>a.pos-b.pos);
     // detPos = detected position (stable identity, independent of fit on/off)
     peaks.forEach(pk=>{ pk.detPos = pk.pos; });
-    // Apply persistent removals (matched by detected position, with a small tolerance)
+    // Apply persistent removals (matched by detected position, with a small tolerance) to
+    // the detected peaks: a manual one goes by its own ×, out of manualPeaks. (To v473 they
+    // took the manual ones too: one placed by a removed peak, as to put it back by hand,
+    // was hidden as it was added, and removing a peak by a manual one hid both.)
     const rem = removedPeaks[i] || [];
     const remTol = Math.min(0.1, (pr.pkDist || 0.3) * 0.45);
-    peaks.forEach(pk=>{ pk.removed = rem.some(v=>Math.abs(v-pk.detPos) < remTol); });
+    peaks.forEach(pk=>{ pk.removed = !pk.manual && rem.some(v=>Math.abs(v-pk.detPos) < remTol); });
 
     // SNIP baseline and the half-maximum FWHM.
     peaks.forEach(pk=>{
@@ -1225,9 +1230,11 @@ export function createPeakAnalysis(host, root, o){
     }
     function confirmAdd(){
       if (addIdx==null) return;
-      const idx = getIdx();
+      const idx = getIdx(), x = files()[idx] && files()[idx].x;
+      // (an index past the end of the pattern on show, as a stale one could be, adds nothing)
+      if (!x || !Number.isFinite(x[addIdx])){ setMode(false); return; }
       if (!manualPeaks[idx]) manualPeaks[idx] = [];
-      manualPeaks[idx].push(files()[idx].x[addIdx]);
+      manualPeaks[idx].push(x[addIdx]);
       setMode(false);
       refreshAfterPeakEdit(idx);
     }
@@ -1249,25 +1256,36 @@ export function createPeakAnalysis(host, root, o){
       e.preventDefault(); e.stopPropagation();
       addIdx = pointToIdx(e); confirmAdd();
     }, true);
+    /* On show: the panel in the page (a card closed, switched to the other kind or rebuilt
+       by an undo is out of it), laid out (its tab on show, the standard's window open, the
+       card unfolded) and under no window (the standard's over the cards, a figure composer,
+       the calendar, a settings window): a window is any backdrop laid out, as the composers
+       and the calendar have no inline display to read. */
+    const onShow = ()=> root.isConnected && root.getClientRects().length > 0 && !(host.hidden && host.hidden())
+      && ![...document.querySelectorAll('.modal-backdrop')].some(m=> m.getClientRects().length > 0 && !m.contains(root));
     // Capture phase + stopImmediatePropagation so that while add-peak is armed
     // it claims the arrow keys before the document-level sample-nav handler
     // (utils.js) can fire — otherwise ← / → would change sample instead of
-    // nudging the guide.
-    document.addEventListener('keydown', e=>{
+    // nudging the guide. Only while the panel is on show: off show the mode is dropped
+    // and the key goes on (to v473 a card closed, or the standard's window, kept ← / →
+    // and Enter page-wide, and Enter added a peak where it was no longer seen).
+    function onKey(e){
       if (!addMode) return;
-      const plot = anaPlot, idx = getIdx();
+      const plot = anaPlot, idx = getIdx(), f = files()[idx];
+      if (!onShow() || !plot || !f){ setMode(false); return; }
       if (e.key==='Escape'){ e.stopImmediatePropagation(); setMode(false); return; }
       if (e.key==='ArrowLeft' || e.key==='ArrowRight'){
         e.preventDefault(); e.stopImmediatePropagation();
-        const x = files()[idx].x;
+        const x = f.x;
         const a = nearestIdx(x, plot.xmin), b = nearestIdx(x, plot.xmax);
         const lo = Math.min(a,b), hi = Math.max(a,b);
         if (addIdx==null) addIdx = nearestIdx(x, (plot.xmin+plot.xmax)/2);
         addIdx = Math.max(lo, Math.min(hi, addIdx + (e.key==='ArrowRight'?1:-1)));
         drawGuide();
       } else if (e.key==='Enter'){ e.preventDefault(); e.stopImmediatePropagation(); confirmAdd(); }
-    }, true);
-    return { isAdding:()=>addMode, setMode };
+    }
+    document.addEventListener('keydown', onKey, true);
+    return { isAdding:()=>addMode, setMode, off(){ document.removeEventListener('keydown', onKey, true); setMode(false); } };
   })();
 
   // Plot-side peak click-to-select (mirror of the table interaction), acting only when
@@ -1364,9 +1382,12 @@ export function createPeakAnalysis(host, root, o){
   }
 
   // Everything again from the files: after a change to them (added, removed, left out,
-  // reordered, read again), or a state loaded.
+  // reordered, read again), or a state loaded. A peak being placed is dropped: its index
+  // may be on another pattern than the one now on show (to v473 kept while there were
+  // files: a standard replaced by a shorter one left it past the end, and Enter threw).
   function refresh(preserveView){
-    if (!files().length){ processed = []; panel.sel = panel.hov = null; addPeak.setMode(false); updateView(); renderTable(); return; }
+    addPeak.setMode(false);
+    if (!files().length){ processed = []; panel.sel = panel.hov = null; updateView(); renderTable(); return; }
     reprocessAll();
     writeStoreToInputs();
     syncModeButtons();
@@ -1406,6 +1427,10 @@ export function createPeakAnalysis(host, root, o){
       sizeNames();
     },
     csvEntries,
+    // The card closed, switched to the other kind or rebuilt (xrd.js): its document
+    // listener goes, and the add mode with it (to v473 it stayed, and kept the card's
+    // closure, its arrays with it, for as long as the page).
+    destroy(){ addPeak.off(); if (markHoverRAF){ cancelAnimationFrame(markHoverRAF); markHoverRAF = null; } },
     snapshot(){
       return { perParams: perParams.map(q=>({...q})), manualPeaks: manualPeaks.map(a=>a.slice()), removedPeaks: removedPeaks.map(a=>a.slice()),
         shared: {...shared}, paramMode: {...paramMode}, sizeBy, norm };
