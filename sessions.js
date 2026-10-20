@@ -564,7 +564,7 @@ MODULES.forEach(m=> onModuleChange(m, ()=>{
 const TECH_INFO = {
   tauc: 'Diffuse Reflectance Spectroscopy in the UV-Vis range. Used to assess light absorption of powdered samples. Semiconductor band gaps (E<sub>g</sub>) can be inferred through Tauc Plot analysis.',
   xrd:  'X-Ray Powder Diffraction. Diffractograms comparison, smoothing and normalization, with peak detection, Scherrer crystallite-size estimation and whole-pattern profile fitting.',
-  gc:   'Gas Chromatography for H₂ production-rate assessment. Computes mean H₂ production rates over a chosen integration interval from time-resolved injection measurements.',
+  gc:   'Gas Chromatography for H₂ and O₂ production-rate assessment. Computes mean H₂ and O₂ production rates over a chosen integration interval from time-resolved injection measurements.',
   epr:  'Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.',
   sem:  'Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification, beam, detector), cropped, normalised in intensity, grouped by scale and laid out into figures with scale bars.',
 };

@@ -8,7 +8,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 (function(){
   // Every file loaded, in list order; the analysis sees the included ones, `files`,
   // and the per-sample arrays each card keeps are aligned with those.
-  let allFiles=[]; // {name, label, injDates:[Date], h2:[number]}
+  let allFiles=[]; // {name, label, injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has), emptyRows}
   let files=[];
 
   // Axis titles. The SVG form carries the H₂ subscript and the g⁻¹/h⁻¹ superscripts;
@@ -33,15 +33,40 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   ];
   // Plain-text form for series names, where markup would be drawn literally.
   const gasTxt = g => g.csv.replace('2', '₂');
-  const gasPresent = k => files.some(f=> f.gas[k]);
+  /* A cell with no value: blank or not a number at parse (NaN), null once a project has
+     been through JSON. It is left out of its gas's series (computeTables). A sample has
+     a gas when its column holds a value in at least one injection. */
+  const noValue = v => !Number.isFinite(v);
+  const hasGas = (f, k)=> !!f.gas[k] && !f.gas[k].every(noValue);
+  const gasPresent = k => files.some(f=> hasGas(f, k));
   /* The injection date is stamped when the run starts, and the sample is injected a
      little later: every injection is moved on by this delay, in seconds, before it is
      set against light-on. "Auto" is the method's own figure, shown in the field. */
   const INJ_DELAY_AUTO = 60.6;
   let loadAlerts='';
   let gcUploadAlerts='';
+  /* The empty cells skipped, per file and gas: the blank cells of a row kept, and the
+     rows with none of the file's gases (dropped at parse, `emptyRows`, an empty cell for
+     each gas it has). Read off the loaded files each time, not kept from the drop, so it
+     is there again when the project is reopened (or its tab brought back) and goes with
+     a file removed. Dismissed, it stays away for the files on show through undo and redo:
+     the mark is on the file's data as this load holds them, which the undo steps share,
+     so a file dropped anew (a same-named one too), a reopened project, a tab brought back
+     are named again, and a dismissal in one tab leaves the others' files named. */
+  const blankSeen = new WeakSet();
+  // (a number however a project's .json writes it: the count goes into markup)
+  function blankCounts(f){ return GASES.map(g=> f.gas[g.key] ? f.gas[g.key].filter(noValue).length + (+f.emptyRows || 0) : 0); }
+  function blankAlertsHtml(){
+    const lines = [];
+    allFiles.forEach(f=>{
+      const n = blankCounts(f);
+      if (!n.some(Boolean) || blankSeen.has(f.gas)) return;
+      lines.push(esc(f.name) + ': ' + GASES.map((g, j)=> n[j] ? `${n[j]} empty ${g.label} cell${n[j] > 1 ? 's' : ''}` : '').filter(Boolean).join(', '));
+    });
+    return lines.length ? buildAlertsHtml([], lines, 'Empty cells skipped: each injection is left out of that gas only (its rate, production and mean come from the injections with a value):', '', 'gc-dismiss-blank') : '';
+  }
 
-  function rebuildGcAlerts(){ document.getElementById('gcAlerts').innerHTML = loadAlerts + gcUploadAlerts; }
+  function rebuildGcAlerts(){ document.getElementById('gcAlerts').innerHTML = loadAlerts + blankAlertsHtml() + gcUploadAlerts; }
 
   // Delegated click handling for dynamically generated alert dismiss buttons.
   document.getElementById('tab-gc').addEventListener('click', (e)=>{
@@ -50,6 +75,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     switch (btn.dataset.action){
       case 'gc-dismiss-invalid': loadAlerts=''; rebuildGcAlerts(); break;
       case 'gc-dismiss-upload':  gcUploadAlerts=''; rebuildGcAlerts(); break;
+      case 'gc-dismiss-blank':   allFiles.forEach(f=> blankSeen.add(f.gas)); rebuildGcAlerts(); break;
     }
   });
 
@@ -109,6 +135,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       }
       if (idxDate<0 || !Object.keys(idxGas).length){ invalidFiles.push(f.name); continue; }
       const injDates=[], gas={};
+      let emptyRows = 0;
       for (const k in idxGas) gas[k] = [];
       for (let i=1;i<lines.length;i++){
         const parts = splitCSVLine(lines[i], delim);
@@ -122,11 +149,15 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
           if (isFinite(v)) any = true;
         }
         // One row, every gas kept on the same time axis; a blank cell stays NaN so the
-        // columns never slip out of step with the dates.
+        // columns never slip out of step with the dates. The analysis leaves it out of
+        // that gas's series (computeTables) and the alerts count it (blankAlertsHtml). A
+        // row with no gas at all is left out, as it was, and the alert counts it too (to
+        // v474 it went unsaid).
         if (any){ injDates.push(d); for (const k in idxGas) gas[k].push(vals[k]); }
+        else emptyRows++;
       }
       if (!injDates.length){ invalidFiles.push(f.name); continue; }
-      const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, gas, color:nextColor(allFiles), rawBytes};
+      const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, gas, emptyRows, color:nextColor(allFiles), rawBytes};
       // A new file comes in included, so it goes last among the included as well.
       allFiles.push(file); files.push(file);
       each(c=> c.addFile(file));
@@ -152,7 +183,8 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     document.getElementById('gcAnalyses').style.display = files.length ? 'block' : 'none';
     each(c=> c.renderTable());
     if (files.length) each((c, a)=>{ if (!deck.isFolded(a)) c.compute(); else c.computeQuiet(); });
-    else rebuildGcAlerts();
+    // Always: the empty-cell alert follows the files, and a folded card does not rebuild it.
+    rebuildGcAlerts();
     syncResults();
     hist.commit();
   }
@@ -194,7 +226,8 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       shown.forEach(g=>{
         const q = d.gas[g.key];
         if (!q) return;
-        plot.line(d.t, q[key], d.color, 1.3, g.dash, { label: seriesName(d.label, g, shown), key: d.name + '/' + g.key });
+        // On the gas's own times: an injection it has no value for is not one of its points.
+        plot.line(q.t, q[key], d.color, 1.3, g.dash, { label: seriesName(d.label, g, shown), key: d.name + '/' + g.key });
       });
     });
   }
@@ -217,7 +250,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     let hi = -Infinity, any = false;
     const take = after => tables.forEach(d=> shown.forEach(g=>{
       const q = d.gas[g.key]; if (!q) return;
-      d.t.forEach((t, i)=>{
+      q.t.forEach((t, i)=>{
         const v = q[key][i];
         if (!isFinite(v) || (after && t < 0)) return;
         hi = Math.max(hi, v); any = true;
@@ -314,8 +347,16 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
        one mode, so any combination is reachable and a third gas would need no new
        option; the only rule is that a section can never end up with none. */
     let gasSel = { a: GASES.map(g=>g.key), r: GASES.map(g=>g.key) };
-    // What a section actually draws: chosen, and present in at least one sample.
-    const shownGases = sec => GASES.filter(g=> gasSel[sec].includes(g.key) && gasPresent(g.key));
+    /* What a section actually draws: chosen, and present in at least one included
+       sample; when none chosen is there, every gas that is. Worked out at each render
+       from the files of the moment, the choice itself left as the user made it: to v474
+       renderGasSel pruned it to the gases loaded, so an O2 file added after an H2-only
+       one stayed hidden. */
+    function shownGases(sec){
+      const there = GASES.filter(g=> gasPresent(g.key));
+      const chosen = there.filter(g=> gasSel[sec].includes(g.key));
+      return chosen.length ? chosen : there;
+    }
     // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
     // Each of m, Q, start and end toggles independently. Default: everything shared ('all').
     let mMode='all', qMode='all', startMode='all', endMode='all';
@@ -525,32 +566,35 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     function computeTables(){
       dataTables = files.map((f,h)=>{
         const lightOn = lightOnDates[h];
-        // Rows on one shared time axis, with the light-on instant inserted as an extra
-        // point carrying the last reading before it (zero if the run starts after it).
-        const rows = f.injDates.map((d,i)=>{
-          const v = {}; for (const k in f.gas) v[k] = f.gas[k][i];
-          return { d: injectedAt(d), v };
-        }).sort((a,b)=>a.d-b.d);
-        let idxBefore = -1;
-        for (let i=0;i<rows.length;i++) if (rows[i].d < lightOn) idxBefore = i;
-        const atLight = {};
-        for (const k in f.gas) atLight[k] = idxBefore<0 ? 0 : rows[idxBefore].v[k];
-        rows.push({ d: lightOn, v: atLight });
-        rows.sort((a,b)=>a.d-b.d);
-
-        const tHours = rows.map(r=>(r.d - lightOn)/3600000);
+        const hours = d => (d - lightOn)/3600000;
+        // The injections in time order; `t`, the sample's times (the light-on instant
+        // among them), spans the plot's x-range.
+        const rows = f.injDates.map((d,i)=> ({ d: injectedAt(d), i })).sort((a,b)=>a.d-b.d);
+        const t = [...rows.map(r=> r.d), lightOn].sort((a,b)=>a-b).map(hours);
         // Total molar flow: mL/min -> L/h -> mol/h at standard molar volume.
         const F = qOf(h)/1000*60/22.41396954;
         const gas = {};
         for (const k in f.gas){
-          const pct = rows.map(r=> isFinite(r.v[k]) ? r.v[k] : 0);
+          /* Each gas on its own times: the injections it has a value for, with the
+             light-on instant inserted as an extra point carrying its last reading before
+             it (zero if the run starts after it). An empty cell is left out of this gas
+             alone, so its rate, production and mean come from the injections it has; to
+             v474 it was read as 0 %, which pulled them all down. */
+          const pts = rows.filter(r=> !noValue(f.gas[k][r.i])).map(r=> ({ d: r.d, v: f.gas[k][r.i] }));
+          if (!pts.length) continue;
+          let idxBefore = -1;
+          for (let i=0;i<pts.length;i++) if (pts[i].d < lightOn) idxBefore = i;
+          pts.push({ d: lightOn, v: idxBefore<0 ? 0 : pts[idxBefore].v });
+          pts.sort((a,b)=>a.d-b.d);
+          const tHours = pts.map(p=> hours(p.d));
+          const pct = pts.map(p=> p.v);
           const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
           const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
           // From the first injection on; FmInt, from the interval's start (updateRegression).
           const cum = cumtrapz(tHours, flowM);
-          gas[k] = { pct, flow, Fm: flowM, cum, FmInt: cum };
+          gas[k] = { t: tHours, pct, flow, Fm: flowM, cum, FmInt: cum };
         }
-        return {t:tHours, gas, name:f.name, label:f.label, color:f.color};
+        return {t, gas, name:f.name, label:f.label, color:f.color};
       });
     }
     function computeAndRenderGc(preserveView){
@@ -568,19 +612,15 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
        state each. Options the loaded files cannot supply are disabled rather than hidden,
        so the control does not change shape from one data set to the next. */
     function renderGasSel(){
-      // A gas no sample carries cannot be chosen; if the files leave a section empty,
-      // it falls back to every gas that is there.
-      for (const sec of ['a','r']){
-        gasSel[sec] = gasSel[sec].filter(gasPresent);
-        if (files.length && !gasSel[sec].length) gasSel[sec] = GASES.filter(g=>gasPresent(g.key)).map(g=>g.key);
-      }
+      // A gas no included sample carries cannot be chosen, and is off while it is not
+      // there; the chips show what is drawn (shownGases), the choice stays untouched.
       gasEls().forEach(el=>{
-        const sec = el.dataset.gasSec;
+        const sec = el.dataset.gasSec, shown = shownGases(sec);
         el.innerHTML = GASES.map(g=>{
-          const on = gasSel[sec].includes(g.key);
+          const on = shown.includes(g);
           // The last one standing cannot be switched off — the plot would be empty.
-          const only = on && gasSel[sec].length === 1;
-          const title = !gasPresent(g.key) ? `No ${g.csv} in the loaded files`
+          const only = on && shown.length === 1;
+          const title = !gasPresent(g.key) ? `No ${g.csv} in the included files`
                       : only ? `${g.csv} — the only one shown` : `Show / hide ${g.csv}`;
           return `<button type="button" class="mode-chip gc-gas-chip${on?' is-on':''}"`
                + ` data-gas="${g.key}" data-sec="${sec}" title="${title}"`
@@ -593,8 +633,9 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       const b = e.target.closest('.gc-gas-chip');
       if (!b || b.disabled) return;
       const sec = b.dataset.sec, key = b.dataset.gas;
-      const on = gasSel[sec].includes(key);
-      if (on && gasSel[sec].length === 1) return;    // never leave a section with none
+      const shown = shownGases(sec).map(g=>g.key);
+      const on = shown.includes(key);
+      if (on && shown.length === 1) return;    // never leave a section with none
       // Switching changes how tall the legend is, which would shift everything below it
       // under the pointer. Hold the clicked chip still and let the page move around it.
       // The chips are rebuilt, so the one to measure afterwards is found by which group
@@ -603,7 +644,9 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       const groups = gasEls();
       const gi = groups.indexOf(b.parentElement);
       const before = b.getBoundingClientRect().top;
-      gasSel[sec] = on ? gasSel[sec].filter(k=>k!==key)
+      // Switched off, what was on show stays chosen (a fallback included); a gas chosen
+      // but not loaded now stays chosen too, for when a file brings it.
+      gasSel[sec] = on ? GASES.map(g=>g.key).filter(k=> k!==key && (gasSel[sec].includes(k) || shown.includes(k)))
                        : GASES.map(g=>g.key).filter(k=> k===key || gasSel[sec].includes(k));
       renderGasSel();
       computeAndRenderGc(false);     // ranges are rescaled to the gases now on show
@@ -723,19 +766,24 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
          point. The mean rate below, a difference, is the same either way. */
       dataTables.forEach((d,k)=>{
         const t0 = Math.min(startOf(k), endOf(k));
-        for (const key in d.gas){ const q = d.gas[key], c0 = cumAt(d.t, q.Fm, q.cum, t0); q.FmInt = q.cum.map(v=> v - c0); }
+        for (const key in d.gas){ const q = d.gas[key], c0 = cumAt(q.t, q.Fm, q.cum, t0); q.FmInt = q.cum.map(v=> v - c0); }
       });
       /* Mean rate over the interval: the rate taken as the straight line between each
          pair of injections, integrated exactly from the interval's start to its end — an
          end between two injections integrates the line up to it — and divided by the
          duration. Read only off injections inside the interval, the mean lost the stretch
-         between the last of them and the line. The interval is what the data cover of it. */
+         between the last of them and the line. The interval is what the data cover of it:
+         each gas's own data, so its duration `dt` is the gas's too (one with an empty
+         cell at the interval's edge reaches less far). `span`, what all the sample's
+         times cover, is the duration given for a sample with none of the gases shown. */
       costResults = dataTables.map((d,k)=>{
-        const [a, b] = spanOf(d, k);
-        if (!(b > a)) return {name:d.name, label:d.label, rate:{}, dt:NaN};
-        const rate = {};
-        for (const key in d.gas){ const q = d.gas[key]; rate[key] = (cumAt(d.t, q.Fm, q.cum, b) - cumAt(d.t, q.Fm, q.cum, a)) / (b - a); }
-        return {name:d.name, label:d.label, rate, dt: b - a};
+        const rate = {}, dt = {};
+        for (const key in d.gas){
+          const q = d.gas[key], [a, b] = spanOf(q.t, k);
+          if (b > a){ rate[key] = (cumAt(q.t, q.Fm, q.cum, b) - cumAt(q.t, q.Fm, q.cum, a)) / (b - a); dt[key] = b - a; }
+        }
+        const [a0, b0] = spanOf(d.t, k);
+        return {name:d.name, label:d.label, rate, dt, span: b0 > a0 ? b0 - a0 : NaN};
       });
     }
     const hasResults = ()=> costResults.some(c=> GASES.some(g=>isFinite(c.rate[g.key])));
@@ -750,29 +798,30 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       drawBarChart();
     }
 
-    // The interval of sample k as far as its data reach: [start, end] within the first and
-    // last time it has.
-    function spanOf(d, k){
-      const n = d.t.length;
+    // The interval of sample k as far as a gas's data reach: [start, end] within the first
+    // and last of its times `t`.
+    function spanOf(t, k){
+      const n = t.length;
       if (n < 2) return [NaN, NaN];
-      return [Math.max(Math.min(startOf(k), endOf(k)), d.t[0]), Math.min(Math.max(startOf(k), endOf(k)), d.t[n-1])];
+      return [Math.max(Math.min(startOf(k), endOf(k)), t[0]), Math.min(Math.max(startOf(k), endOf(k)), t[n-1])];
     }
     /* Results series: the Analysis curves between the interval's lines — the injections
        inside it, and at each line the straight line between the injections around it,
-       read there — which is what the mean rate integrates. */
+       read there — which is what the mean rate integrates. Each gas on its own times, as
+       in Analysis; `t`, all of them, spans the x-range. */
     function cutTables(){
       return dataTables.map((d,k)=>{
-        const [a, b] = spanOf(d, k);
-        if (!(b > a)) return {...d, t:[], gas: Object.fromEntries(Object.keys(d.gas).map(key=> [key, { ...d.gas[key], Fm:[], FmInt:[], pct:[], flow:[] }]))};
-        const inner = d.t.map((_, i)=> i).filter(i=> d.t[i] > a && d.t[i] < b);
-        const take = arr => [lineAt(d.t, arr, a), ...inner.map(i=> arr[i]), lineAt(d.t, arr, b)];
         const gas = {};
         for (const key in d.gas){
-          const q = d.gas[key], c0 = q.cum[0] - q.FmInt[0];   // FmInt = cum − c0
-          gas[key] = { ...q, Fm: take(q.Fm), pct: take(q.pct), flow: take(q.flow),
-                       FmInt: [a, ...inner.map(i=> d.t[i]), b].map(x=> cumAt(d.t, q.Fm, q.cum, x) - c0) };
+          const q = d.gas[key], [a, b] = spanOf(q.t, k);
+          if (!(b > a)){ gas[key] = { ...q, t:[], Fm:[], FmInt:[], pct:[], flow:[] }; continue; }
+          const inner = q.t.map((_, i)=> i).filter(i=> q.t[i] > a && q.t[i] < b);
+          const take = arr => [lineAt(q.t, arr, a), ...inner.map(i=> arr[i]), lineAt(q.t, arr, b)];
+          const t = [a, ...inner.map(i=> q.t[i]), b], c0 = q.cum[0] - q.FmInt[0];   // FmInt = cum − c0
+          gas[key] = { ...q, t, Fm: take(q.Fm), pct: take(q.pct), flow: take(q.flow),
+                       FmInt: t.map(x=> cumAt(q.t, q.Fm, q.cum, x) - c0) };
         }
-        return {...d, t:[a, ...inner.map(i=> d.t[i]), b], gas};
+        return {...d, t: Object.values(gas).flatMap(q=> q.t).sort((x,y)=> x-y), gas};
       });
     }
 
@@ -883,17 +932,28 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         tables.forEach(d=>{
           // A sample with none of the shown gases contributes nothing, not a bare time
           // column with empty space beside it.
-          if (!shown.some(g=>d.gas[g.key])) return;
-          cols.push({h:`Time (h) [${d.label}]`, v:d.t.map(x=>fmtNum(x,5))});
-          shown.forEach(g=>{
-            const q = d.gas[g.key];
-            if (!q) return;
+          const qs = shown.filter(g=>d.gas[g.key]).map(g=> [g, d.gas[g.key]]);
+          if (!qs.length) return;
+          /* The gases each have their own times (an empty cell is not one of its points),
+             so they are merged onto one time column: a time they share is one row, and a
+             gas with no point at a row leaves its cells there empty, rather than its
+             values slipping up against the dates of another gas. */
+          const pos = qs.map(()=> 0), rows = [];
+          for (;;){
+            let tm = Infinity;
+            qs.forEach(([, q], j)=>{ if (pos[j] < q.t.length) tm = Math.min(tm, q.t[pos[j]]); });
+            if (!(tm < Infinity)) break;
+            rows.push({ t: tm, at: qs.map(([, q], j)=> pos[j] < q.t.length && q.t[pos[j]] === tm ? pos[j]++ : -1) });
+          }
+          const col = (j, arr)=> rows.map(r=> r.at[j] < 0 ? '' : fmtNum(arr[r.at[j]],5));
+          cols.push({h:`Time (h) [${d.label}]`, v:rows.map(r=>fmtNum(r.t,5))});
+          qs.forEach(([g, q], j)=>{
             if (full){
-              cols.push({h:`${g.csv} (%mol) [${d.label}]`,      v:q.pct.map(x=>fmtNum(x,5))});
-              cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:q.flow.map(x=>fmtNum(x,5))});
+              cols.push({h:`${g.csv} (%mol) [${d.label}]`,      v:col(j, q.pct)});
+              cols.push({h:`${g.csv} (umol h^-1) [${d.label}]`, v:col(j, q.flow)});
             }
-            cols.push({h:`${g.csv} ${LBL_RATE_CSV} [${d.label}]`, v:q.Fm.map(x=>fmtNum(x,5))});
-            cols.push({h:`${g.csv} ${LBL_CUM_CSV} [${d.label}]`,  v:q.FmInt.map(x=>fmtNum(x,5))});
+            cols.push({h:`${g.csv} ${LBL_RATE_CSV} [${d.label}]`, v:col(j, q.Fm)});
+            cols.push({h:`${g.csv} ${LBL_CUM_CSV} [${d.label}]`,  v:col(j, q.FmInt)});
           });
         });
         const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
@@ -903,9 +963,16 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       };
       entries.push({name:`${n} - gc_raw.csv`,     text:buildSeriesCsv(dataTables, true)});
       entries.push({name:`${n} - gc_results.csv`, text:buildSeriesCsv(cutTables(), false)});
-      // h2_rates.csv — bar-plot-like summary (one row per sample)
-      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`), 'Interval duration (h)']);
-      costResults.forEach(c=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)), fmtNum(c.dt,4)]));
+      // mean_rates.csv — bar-plot-like summary (one row per sample). One duration column
+      // while every sample's shown gases cover the same span (a sample with none of them,
+      // its own span, as before); when a gas of some sample reaches less far (an empty
+      // cell at the interval's edge), one column per gas for every sample.
+      const durs = c => shown.map(g=> fmtNum(c.dt[g.key],4));
+      const perGas = shown.length > 1 && costResults.some(c=> new Set(durs(c).filter(Boolean)).size > 1);
+      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`),
+        ...(perGas ? shown.map(g=>`${g.csv} interval duration (h)`) : ['Interval duration (h)'])]);
+      costResults.forEach(c=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)),
+        ...(perGas ? durs(c) : [durs(c).find(Boolean) || fmtNum(c.span,4)])]));
       entries.push({name:`${n} - mean_rates.csv`, text:t2});
       // gc_info.csv — per-sample inputs + the integration interval used
       // Local time, as the light-on field shows it and as the instrument logged it:
@@ -994,7 +1061,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
   /* ---- The cards (cards.js), and the Results: each card's section under its name ---- */
   const KINDS = { rate: 'Production Rate' };
-  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), the light-on time and the integration interval for each sample to compute mean H₂ production rates. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). ${cardInfo(false, true)}`;
+  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). ${cardInfo(false, true)}`;
   const resList = document.getElementById('gcResList');
   const live = new Map();       // id → the card's analysis (gcCard)
   const placeRes = ()=> cards().forEach(a=>{ const c = live.get(a.id); if (c) resList.appendChild(c.res); });
