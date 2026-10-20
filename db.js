@@ -69,10 +69,25 @@ async function deleteTabRec(id){ return txStore(TABS_STORE, 'readwrite', os=>{ o
 
 /* ---- helpers ---- */
 const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-// Encode module state into a JSON-safe form: typed arrays → plain arrays, Date
-// objects → a tagged marker. Same representation for IndexedDB and .json.
+// Encode module state into a JSON-safe form: bytes (a Uint8Array: a file's own, kept for
+// its download) → base64, other typed arrays → plain arrays, Date objects → a tagged
+// marker. Same representation for IndexedDB and .json. Up to v470 bytes became plain
+// arrays too, 9 bytes stored for each and read back as an Array, not as the Uint8Array
+// the module had; such records still decode, as the arrays they hold.
+const B64_CHUNK = 0x8000;   // String.fromCharCode over megabytes at once overflows the stack
+function toB64(b){
+  let s = '';
+  for (let i = 0; i < b.length; i += B64_CHUNK) s += String.fromCharCode.apply(null, b.subarray(i, i + B64_CHUNK));
+  return btoa(s);
+}
+function fromB64(t){
+  const s = atob(t), b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+  return b;
+}
 function encode(v){
   if (v instanceof Date) return { __t:'date', v:v.getTime() };
+  if (v instanceof Uint8Array) return { __t:'u8', v:toB64(v) };
   if (ArrayBuffer.isView(v)) return Array.from(v);
   if (Array.isArray(v)) return v.map(encode);
   if (v && typeof v === 'object'){ const o = {}; for (const k in v) o[k] = encode(v[k]); return o; }
@@ -82,6 +97,7 @@ function decode(v){
   if (Array.isArray(v)) return v.map(decode);
   if (v && typeof v === 'object'){
     if (v.__t === 'date') return new Date(v.v);
+    if (v.__t === 'u8' && typeof v.v === 'string'){ try { return fromB64(v.v); } catch(e){ return new Uint8Array(0); } }
     const o = {}; for (const k in v) o[k] = decode(v[k]); return o;
   }
   return v;

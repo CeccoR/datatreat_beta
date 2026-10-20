@@ -1249,45 +1249,69 @@ function onSectionChange(fn){ _sectionHooks.push(fn); }
    just before a reversible change. Ctrl/⌘+Z undoes, Ctrl/⌘+Y (or ⇧+Z)
    redoes, acting on the module of the currently active tab.
 ========================================================= */
+/* What two module states are compared by (a commit that changes nothing, the "*" of a
+   saved project): their JSON, with each byte array (a file's own bytes, kept for its
+   download and for reading it again) as its length and a hash of its content, taken
+   once per array. Written out, a Uint8Array is an object of index keys, about 12
+   characters a byte: with 12 XRPD patterns an edit spent 227 of its 431 ms writing
+   them, three times over (to v470). */
+const _bytesKey = new WeakMap();
+function bytesKey(b){
+  let k = _bytesKey.get(b);
+  if (k == null){
+    let h1 = 0x811c9dc5, h2 = 0x9747b28c;
+    for (let i = 0; i < b.length; i++){ h1 = Math.imul(h1 ^ b[i], 0x01000193); h2 = Math.imul(h2 ^ b[i], 0x5bd1e995); h2 ^= h2 >>> 15; }
+    k = 'bytes:' + b.length + ':' + (h1 >>> 0).toString(36) + ':' + (h2 >>> 0).toString(36);
+    _bytesKey.set(b, k);
+  }
+  return k;
+}
+const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : x);
 class UndoStack {
   constructor(snapshot, restore, limit=80){
     this._snap = snapshot; this._restore = restore; this._limit = limit;
     this.states = []; this.index = -1; this._busy = false;
+    this._key = null;       // stateKey of states[index], kept from its commit (null: unknown)
+    this._liveKey = null;   // stateKey of the live state, while the listeners of a commit run
   }
   // Record the CURRENT state (called after a reversible change, and once as baseline).
   // `silent` records the state without firing change listeners — used for the
   // baseline commit after a programmatic restore (not a user edit).
   commit(silent){
     if (this._busy) return;
-    const snap = this._snap();
-    const cur = this.index >= 0 ? this.states[this.index] : null;
+    const snap = this._snap(), key = stateKey(snap);
+    const cur = this.index < 0 ? null : this._key != null ? this._key : stateKey(this.states[this.index]);
     // Skip commits that don't actually change anything (avoids dead undo steps).
-    if (cur && JSON.stringify(cur) === JSON.stringify(snap)) return;
+    if (cur === key){ this._key = key; return; }
     // Drop any redo branch, then append the new state.
     if (this.index < this.states.length - 1) this.states.length = this.index + 1;
     this.states.push(snap);
     if (this.states.length > this._limit) this.states.shift();
     this.index = this.states.length - 1;
+    this._key = key;
     if (silent) return;
-    // Fire (and clear) any one-shot change listeners for a real, recorded change.
-    if (this._onceListeners && this._onceListeners.length){
-      const cbs = this._onceListeners; this._onceListeners = [];
-      cbs.forEach(cb=>{ try { cb(); } catch(e){} });
-    }
-    // Persistent change listeners (e.g. autosave).
-    if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
+    this._liveKey = key;
+    try {
+      // Fire (and clear) any one-shot change listeners for a real, recorded change.
+      if (this._onceListeners && this._onceListeners.length){
+        const cbs = this._onceListeners; this._onceListeners = [];
+        cbs.forEach(cb=>{ try { cb(); } catch(e){} });
+      }
+      // Persistent change listeners (e.g. autosave).
+      if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
+    } finally { this._liveKey = null; }
   }
   onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
   onCommit(cb){ (this._listeners || (this._listeners = [])).push(cb); }
   // An undo or redo is a change too: the persistent listeners hear it (autosave, and
   // the unsaved marker, which compares the state with the one last saved).
   _apply(i){
-    this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; }
+    this.index = i; this._key = null; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; }
     if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
   }
   performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
-  reset(){ this.states.length = 0; this.index = -1; }
+  reset(){ this.states.length = 0; this.index = -1; this._key = null; }
 }
 const _histories = {};
 function registerHistory(key, snapshot, restore){
@@ -1369,9 +1393,8 @@ const ICON_RATIO = {
   default: 0.67,   // nav, save/save-as/delete/new, plot download & tools
   csv: 0.75,       // CSV export buttons (per-table / per-plot / project bar)
 };
-function fitIconCircle(svg, ratio, forceScale){
-  if (!svg) return null;
-  ratio = ratio || ICON_RATIO.default;
+// The writes before the reads: the icon's paths in one <g> to scale, with no transform.
+function iconGroup(svg){
   const NS = 'http://www.w3.org/2000/svg';
   let g = svg.querySelector('g.icon-fit');
   if (!g){
@@ -1382,6 +1405,10 @@ function fitIconCircle(svg, ratio, forceScale){
   }
   svg.style.overflow = 'visible';                 // don't clip an icon scaled past the viewBox
   g.removeAttribute('transform');
+  return g;
+}
+// The reads: the transform that fits the icon (null when it cannot be measured).
+function iconFit(svg, g, ratio, forceScale){
   let bb; try { bb = g.getBBox(); } catch(e){ return null; }
   if (!bb.width || !bb.height) return null;
   const vb = svg.viewBox && svg.viewBox.baseVal;
@@ -1402,8 +1429,23 @@ function fitIconCircle(svg, ratio, forceScale){
     s = (ratio * cmin * vbW) / (D * svgPx);
   }
   const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
-  g.setAttribute('transform', `translate(${vcx} ${vcy}) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
-  return s;
+  return { g, s, t: `translate(${vcx} ${vcy}) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})` };
+}
+function fitIconCircle(svg, ratio, forceScale){
+  if (!svg) return null;
+  const f = iconFit(svg, iconGroup(svg), ratio || ICON_RATIO.default, forceScale);
+  if (!f) return null;
+  f.g.setAttribute('transform', f.t);
+  return f.s;
+}
+/* Many icons at once: every write before the reads, then the reads, then the transforms,
+   so the page is laid out once for the lot. One at a time, each icon's measurement laid
+   the page out again after the last one's transform: a plot's toolbar, rebuilt at every
+   redraw, has up to seven (to v470, about 17 ms of an XRPD edit with 12 patterns). */
+function fitIconCircles(svgs, ratio){
+  const gs = svgs.map(iconGroup);
+  const fits = svgs.map((svg, i)=> iconFit(svg, gs[i], ratio || ICON_RATIO.default));
+  fits.forEach(f=>{ if (f) f.g.setAttribute('transform', f.t); });
 }
 // Back-compat alias: every caller now goes through the single circle rule.
 const fitIcon = fitIconCircle;
@@ -1462,11 +1504,11 @@ function makeCsvButton(mod, names, title){
 }
 // CSV export icons (per-plot / per-table) → the CSV ratio (0.75).
 function fitCsvIcons(root){
-  (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIconCircle(s, ICON_RATIO.csv));
+  fitIconCircles([...(root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg')], ICON_RATIO.csv);
 }
 // Plot-toolbar download / tool icons → the default ratio.
 function fitPlotIcons(root){
-  (root||document).querySelectorAll('.plot-dl-btn .plot-btn-icon, .plot-tool-btn .plot-btn-icon').forEach(s=>fitIconCircle(s));
+  fitIconCircles([...(root||document).querySelectorAll('.plot-dl-btn .plot-btn-icon, .plot-tool-btn .plot-btn-icon')]);
 }
 // One delegated handler drives every per-view CSV button.
 document.addEventListener('click', e=>{
@@ -1564,7 +1606,14 @@ function getModuleHistory(mod){
 function setModuleHistory(mod, h){
   const st = _histories[mod];
   if (!st || !h) return;
-  st.states = h.states.slice(); st.index = h.index;
+  st.states = h.states.slice(); st.index = h.index; st._key = null;
+}
+// The stateKey of a module's live state: the one a commit just took while its listeners
+// run (the unsaved marker's check), else taken now.
+function moduleStateKey(mod){
+  const st = _histories[mod];
+  if (!st) return null;
+  return st._liveKey != null ? st._liveKey : stateKey(st._snap());
 }
 // Run cb once, the next time the module records a real change (edit/add/remove…).
 function onModuleChangeOnce(mod, cb){
@@ -2083,5 +2132,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, esc, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, esc, stateKey, moduleStateKey, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

@@ -7,7 +7,7 @@
    "*" when there are unsaved changes); the Save buttons sit in a green "saved"
    state until the next change.
 ========================================================= */
-import { MODULES, MODULE_LABELS, esc, getModuleState, restoreModuleState,
+import { MODULES, MODULE_LABELS, esc, moduleStateKey, getModuleState, restoreModuleState,
          moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab, onSectionChange } from './utils.js';
 import { allProjects, putProject, deleteProject, uid, encode, decode } from './db.js';
 import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
@@ -102,7 +102,7 @@ function restoreSaveBtns(mod){
    as JSON, and its name. A change is unsaved only while the state or the name differ
    from these: an edit undone, or a value set back by hand, is not one. */
 const _savedKey = new Map();
-const stateKey = mod => { try { return JSON.stringify(getModuleState(mod)); } catch(e){ return null; } };
+const stateKey = mod => { try { return moduleStateKey(mod); } catch(e){ return null; } };
 // After any change: unsaved if the tab was never saved, or now differs from what was.
 function recheckDirty(mod){
   const t = activeTab();

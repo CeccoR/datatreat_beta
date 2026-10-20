@@ -117,11 +117,20 @@ class Plot{
     this._onModeChange = null;
     this._initInteraction();
   }
+  /* Read once a drawing: a redraw adds an element, then places the next one, and each
+     read after an element was added laid the page out again (every tick, box, label and
+     line: about 45 ms of an XRPD edit with 12 patterns, to v470). Kept until the task
+     ends, or until setRange starts another drawing. */
   size(){
-    const r = this.svg.getBoundingClientRect();
-    return {w: r.width||900, h: r.height||480};
+    if (!this._sz){
+      const r = this.svg.getBoundingClientRect();
+      this._sz = {w: r.width||900, h: r.height||480};
+      queueMicrotask(()=>{ this._sz = null; });
+    }
+    return this._sz;
   }
   setRange(xmin,xmax,ymin,ymax){
+    this._sz = null;
     if (xmax===xmin) xmax=xmin+1; if (ymax===ymin) ymax=ymin+1;
     this.xmin=xmin; this.xmax=xmax; this.ymin=ymin; this.ymax=ymax;
     this._origXmin=xmin; this._origXmax=xmax; this._origYmin=ymin; this._origYmax=ymax;
