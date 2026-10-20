@@ -93,6 +93,17 @@ function encode(v){
   if (v && typeof v === 'object'){ const o = {}; for (const k in v) o[k] = encode(v[k]); return o; }
   return v;
 }
+/* A .json export writes bytes as before v471, plain arrays of numbers: a file exported
+   now opens whole (its files' originals included) in an older DataTreat too. IndexedDB
+   keeps them as base64, a third of the size; decode reads either. */
+function exportForm(v){
+  if (Array.isArray(v)) return v.map(exportForm);
+  if (v && typeof v === 'object'){
+    if (v.__t === 'u8' && typeof v.v === 'string'){ try { return Array.from(fromB64(v.v)); } catch(e){ return []; } }
+    const o = {}; for (const k in v) o[k] = exportForm(v[k]); return o;
+  }
+  return v;
+}
 function decode(v){
   if (Array.isArray(v)) return v.map(decode);
   if (v && typeof v === 'object'){
@@ -103,4 +114,4 @@ function decode(v){
   return v;
 }
 
-export { allProjects, putProject, deleteProject, allTabRecs, putTabRec, deleteTabRec, uid, encode, decode };
+export { allProjects, putProject, deleteProject, allTabRecs, putTabRec, deleteTabRec, uid, encode, decode, exportForm };

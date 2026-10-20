@@ -579,7 +579,14 @@ function fmtData(v, decimals){
   const t = v !== 0 && Math.abs(v) < Math.pow(10, 2 - d) ? String(parseFloat(v.toPrecision(Math.max(3, d)))) : v.toFixed(d);
   return t.replace('.', settings.decimal);
 }
-function csvJoin(vals){ return vals.join(settings.field); }
+/* A field holding the separator, a quote or a line break goes in quotes, its quotes
+   doubled (RFC 4180): a label with a comma or a semicolon in it shifted every column
+   after it, up to v471. */
+function csvField(v){
+  const s = v == null ? '' : String(v);
+  return s.includes(settings.field) || /["\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function csvJoin(vals){ return vals.map(csvField).join(settings.field); }
 function csvLine(vals){ return csvJoin(vals) + '\n'; }
 
 (function initSettings(){
@@ -1242,6 +1249,16 @@ function goTab(tab, fromHash){
 // hook list rather than imports, which would be circular.
 const _sectionHooks = [];
 function onSectionChange(fn){ _sectionHooks.push(fn); }
+/* A module running a long job (a Rietveld refinement) says so: busy() gives what runs, as
+   a phrase ("A Rietveld refinement"), or null; stop() ends it. The job belongs to the
+   project live in the module: the tab manager asks before that state leaves the module
+   (a switch, a close), and undo and redo wait for the job to end. Up to v471 a switch
+   left the job running, and its result went into whichever project the module held when
+   it ended. */
+const _busy = {};
+function registerBusy(mod, o){ _busy[mod] = o; }
+function moduleBusy(mod){ const o = _busy[mod]; try { return (o && o.busy()) || null; } catch(e){ return null; } }
+function stopModule(mod){ const o = _busy[mod]; if (o){ try { o.stop(); } catch(e){} } }
 
 /* =========================================================
    UNDO / REDO — per-module snapshot stacks (command pattern)
@@ -1330,6 +1347,8 @@ document.addEventListener('keydown', e=>{
   if (tag==='INPUT' || tag==='TEXTAREA' || (el && el.isContentEditable)) return;
   const st = _histories[_activeTab];
   if (!st) return;
+  const running = moduleBusy(_activeTab);
+  if (running){ e.preventDefault(); confirmBanner(running + ' is running: undo and redo wait for it to end.', 'OK'); return; }
   const did = isUndo ? st.performUndo() : st.performRedo();
   if (did) e.preventDefault();
 });
@@ -2132,5 +2151,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, esc, stateKey, moduleStateKey, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

@@ -9,7 +9,7 @@
 ========================================================= */
 import { MODULES, MODULE_LABELS, esc, moduleStateKey, getModuleState, restoreModuleState,
          moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab, onSectionChange } from './utils.js';
-import { allProjects, putProject, deleteProject, uid, encode, decode } from './db.js';
+import { allProjects, putProject, deleteProject, uid, encode, decode, exportForm } from './db.js';
 import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
          setTabDirty, setTabProject, onTabActivated, onTabLoaded, onCloseSave, initTabs,
          persistTab, isRestoring, isLive, ensureLive, UNTITLED } from './tabs.js';
@@ -195,7 +195,7 @@ async function exportJson(mod){
   const cur = curProject();
   const title = (inp && inp.value.trim()) || (cur ? cur.title : (MODULE_LABELS[mod]||mod));
   const payload = { datatreat_session: 1, module: mod, title, createdAt: now, updatedAt: now,
-                    state: encode(getModuleState(mod)) };
+                    state: exportForm(encode(getModuleState(mod))) };
   const safe = title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
   downloadTextFile(mod + '_' + safe + '.json', JSON.stringify(payload));
 }
@@ -248,7 +248,7 @@ async function openProjects(recs){
 /* ---- Export a saved project record / import a .json ---- */
 function exportProjectRecord(rec){
   const payload = { datatreat_session: 1, module: rec.module, title: rec.title,
-                    createdAt: rec.createdAt, updatedAt: rec.updatedAt, state: rec.state };
+                    createdAt: rec.createdAt, updatedAt: rec.updatedAt, state: exportForm(rec.state) };
   const safe = rec.title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
   downloadTextFile(rec.module + '_' + safe + '.json', JSON.stringify(payload));
 }

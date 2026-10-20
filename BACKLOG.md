@@ -171,3 +171,16 @@ was proposed; nothing here is in the code yet.
 
 - **Baseline.** Drawn through the first and last raw points only, so a noisy end
   tilts it. Being reworked by the user; left as it is meanwhile.
+- The rest of what the module does not do yet (2D data, a non-linear field axis, spectra
+  with and without a frequency on one axis, normalisation by the acquisition's gain,
+  scans, power and modulation, the CSV's columns): [EPR-TODO.md](EPR-TODO.md).
+
+## General
+
+- **The browser storage is shared with every page of the same origin.** On GitHub Pages
+  the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
+  `ceccor.github.io` is the same origin: any of them can read and write DataTreat's
+  IndexedDB (the saved projects and open tabs) and localStorage (settings, palettes,
+  presets). Nothing in the app can wall them apart. Proposed: serve DataTreat from an
+  origin of its own (a custom domain for the Pages site, or a dedicated host), and until
+  then publish nothing else under `ceccor.github.io` that runs untrusted code.

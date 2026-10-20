@@ -13,7 +13,7 @@
 ========================================================= */
 import { MODULES, MODULE_LABELS, goTab, getModuleState, restoreModuleState,
          getModuleHistory, setModuleHistory, confirmBanner, moduleHasData, X_SVG,
-         onSectionChange } from './utils.js';
+         onSectionChange, moduleBusy, stopModule } from './utils.js';
 import { allTabRecs, putTabRec, deleteTabRec, uid, encode, decode } from './db.js';
 
 const MAX_TABS = 20;
@@ -162,6 +162,23 @@ window.addEventListener('load', ()=> setTimeout(revealApp, 0));
 setTimeout(revealApp, 2500);
 
 /* ---- Open / activate / close --------------------------------------------- */
+/* A job running in the live tab's module (a Rietveld refinement: moduleBusy) belongs to
+   that tab's project: once another tab takes the module, or this one is parked, its
+   result has nowhere right to go. So before the live tab is left the user chooses: stop
+   the job, or stay. True when nothing runs, or it was stopped. */
+async function mayLeaveLive(){
+  const t = tabById(_liveId);
+  const running = t && moduleBusy(t.module);
+  if (!running) return true;
+  if (!await confirmBanner(running + ' is running in “' + (t.title || UNTITLED) + '”: leaving this tab stops it.', 'Stop it and leave')) return false;
+  stopModule(t.module);
+  return true;
+}
+// A tab chosen in the bar: shown at once, unless leaving the live one would stop a job.
+async function switchTo(id){
+  if (id !== _liveId && !await mayLeaveLive()) return;
+  activateTab(id);
+}
 // Open a project (or a blank technique) in a NEW tab and focus it. Opening a
 // project that is already open is a no-op: it never steals focus.
 async function openTab({ module, title, projectId, state, dirty, focus = true }){
@@ -174,6 +191,9 @@ async function openTab({ module, title, projectId, state, dirty, focus = true })
     await confirmBanner('You already have '+MAX_TABS+' tabs open. Close one before opening another.', 'OK');
     return null;
   }
+  // Shown at once only if leaving the live tab stops nothing (or the user stops it);
+  // otherwise it opens beside it, as from the Projects list.
+  if (focus && !await mayLeaveLive()) focus = false;
   const t = { id: uid(), module, title: title || untitledName(module),
               projectId: projectId || null, dirty: !!dirty, state: state || null, hist: null };
   TABS.push(t);
@@ -216,6 +236,8 @@ function closeTab(id){
   const i = tabIndex(id);
   if (i < 0) return;
   const wasActive = TABS[i].id === _activeId;
+  // Its job goes with it (a deleted project, a close the user agreed to).
+  if (id === _liveId && moduleBusy(TABS[i].module)) stopModule(TABS[i].module);
   TABS.splice(i, 1);
   deleteTabRec(id).catch(()=>{});
   if (!wasActive){ renderTabs(); persistAll(); return; }
@@ -305,7 +327,7 @@ function initBar(){
     if (!el) return;
     if (x){ e.stopPropagation(); requestClose(el.dataset.id); return; }
     if (_dragMoved){ _dragMoved = false; return; }
-    activateTab(el.dataset.id);
+    switchTo(el.dataset.id);
   });
   initDrag(bar);
 }
@@ -395,6 +417,8 @@ function onCloseSave(fn){ _saveForClose = fn; }
 async function requestClose(id){
   const t = tabById(id);
   if (!t) return;
+  // Closing the live tab leaves it: a job running there stops only if the user says so.
+  if (t.id === _liveId && !await mayLeaveLive()) return;
   // Nothing to lose: an empty file list (whatever the name says) or a saved project
   // with no pending change closes straight away.
   if (isEmpty(t) || (t.projectId && !t.dirty)){ closeTab(id); return; }
@@ -402,6 +426,7 @@ async function requestClose(id){
   if (res === false) return;                               // cancel
   if (res === true){
     if (!_saveForClose) return;
+    if (t.id !== _liveId && !await mayLeaveLive()) return; // saving another tab shows it
     if (t.id !== _activeId) activateTab(t.id);             // save acts on the live module:
     ensureLive();                                          // the tab's, loaded now
     if (!await _saveForClose(t)) return;                   // save aborted → keep the tab
