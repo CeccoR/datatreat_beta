@@ -6,7 +6,7 @@
    on another pattern. The curves are not kept: they are recomputed from the refined
    parameters, which takes milliseconds.
 ========================================================= */
-import { fmtData, csvLine, X_SVG, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
+import { fmtData, csvLine, X_SVG, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmBanner } from './utils.js';
 import { Plot } from './plot.js';
 import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
@@ -319,8 +319,8 @@ const DL_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height
 const CSV_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
 
 // The card's instructions (cards.js shows them under its title).
-export const RV_INFO = `Whole-pattern Rietveld refinement. Each phase comes from a CIF (<b>+ CIF</b>, in the list beside the pattern, which gives each its formula and space group): its cell, its atoms and the symmetry the structure has. A file in P1, as Materials Project gives them, has its symmetry found from the atoms, so that a cubic cell is refined by <i>a</i> alone (a primitive cell of a centred lattice through its conventional cell, whose <i>a</i> and <i>V</i> are the ones reported), and its space group read off those operations; a file with its own operations is checked against its formula and Z (an origin-choice mix-up shows there). A phase's tick in the list says whether it is refined on the pattern on show: every pattern has them all at first, and each its own. A click on a phase shows its unit cell beside the list, in 3D (drag it to turn it, a double click puts it back), with its details under it. The instrumental standard (<b>Instrumental standard…</b>) is a file of its own, refined in its own window against the built-in LaB₆ (NIST SRM 660c, <i>a</i> = 4.156826 Å, held fixed) or a CIF of the standard's: its zero and its peak shape — the Thompson–Cox–Hastings pseudo-Voigt, Gaussian width² = U·tan²θ + V·tanθ + W and Lorentzian width = X·tanθ + Y/cosθ, made asymmetric by the axial divergence (through the Soller slits the file gives, Cheary–Coelho's full axial model, with the sample's and receiver's axial length L refined; without Sollers, Finger–Cox–Jephcoat's one parameter (S+H)/L: the tail of the low-angle peaks towards lower angles) — and a shift of 2θ as sin 2θ, the form of the sample's transparency, beside the zero and the displacement, become the instrument's, and each sample refines only its own broadening on top of them: a Lorentzian Y<sub>s</sub>/cosθ, which gives the crystallite size (D = Kλ/Y<sub>s</sub>, Y<sub>s</sub> in radians, K = 0.9 as in the Scherrer analysis), and X<sub>s</sub>·tanθ = 4ε·tanθ, the microstrain. The pattern is computed from Kα₁ and Kα₂ at the file's wavelengths and ratio, the Bragg–Brentano Lorentz–polarisation factor (with a monochromator only when the file has one), |F|² from the atoms (Waasmaier–Kirfel form factors with Chantler's anomalous terms), a Chebyshev background and a specimen displacement per sample; each point weighs by its counts (1/σ², σ² the counts times the attenuation). <b>Refine</b> starts from the CIF's cell, finds where the pattern's peaks are by scaling that cell, then frees the parameters stage by stage; <b>Refine all</b> does every pattern. <b>Settings…</b> (read only while a refinement runs) decides what Refine refines: for each phase each of the models below switched on or off and, when on, how deep (the size and the microstrain can be off too). It also sets where Refine starts: from the CIF, as above, or from each pattern's last result, with the groups of parameters ticked held at its values (whatever is new or changed since is refined) — a shape fitted, say, then held while B per site is refined. Its <b>Refinement</b> section sets, for every pattern, the least squares and the searches: the iterations allowed, the shift tolerance and the starting damping, the background's Chebyshev degree and its 1/2θ term (automatic: on when the scan starts below 20°), the cell search's range, and the free shape's trial starts, each result saying which it was refined with when they are not the defaults. Its <b>Results</b> section sets how the patterns stacked in the card's section of the Results are normalised: to the largest (global), each to its own maximum (local), or as they are (none). <b>Clear</b> removes this pattern's result, <b>Clear all</b> every pattern's. With several phases each gets its weight fraction (Hill–Howard, of the crystalline part). A phase is reported <i>not detected</i>, and left out of the refinement, when its scale is not above 3 esd, or when it is significant only through intensity under another phase's peaks with no part of the pattern its own (a candidate impurity whose lines fall on the main phase's would otherwise take up whatever misfit those peaks leave). The same CIF added twice gives two size populations of one phase. <b>Size profile</b> (with a refined standard): <i>Lorentzian</i>, a Lorentzian of the right breadth read with Scherrer's K; or <i>WPPM</i> (Whole Powder Pattern Modelling, Scardi &amp; Leoni), each line synthesised as the Fourier transform of the product of the instrument's, the size's, the strain's and the faults' coefficients — the size's being the crystallites' own common-volume function (a sphere's, or a free solid's along each member of the family), so the dimensions are the true ones and the profile's shape counts too. With <i>log-normal sizes</i> the coefficients are averaged over a distribution of width σ (of ln D): the size read is the volume-weighted mean (what the breadth measures), with the median and the number-weighted mean beside. <b>Microstrain</b>: isotropic, or <i>anisotropic</i> (Stephens: ε² a quartic form of the reflection's direction that the Laue group leaves unchanged; given as its rms and along the low-index planes' normals). <b>Planar faults</b> (after Warren): faults on a family of planes, each displacing the crystal by a vector of a family (those in the plane), the probability per plane refined: reflections whose h·R is not an integer broaden, by parity rather than by order. <b>Displacement parameters</b>: the CIF's held (0.5 Å² where it has none); one ΔB added to all of a phase's B; one B per crystallographic site (the sites from the symmetry found); or the anisotropic U<sup>ij</sup> per site, only those the site's symmetry leaves free, with B<sub>eq</sub>. Each is strongly correlated with the scale, and so with the weight fractions, with the background and, on broad peaks, with the widths: they want data to high angle. <b>Site occupancy</b>: the occupancy of one of the phase's sites refined — how strongly the site scatters against its species at full occupancy, alike at every angle (a B lowers it more the higher the angle): under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. The weight fractions use the cell's mass at the refined occupancy. Every site at once would be the scale again, so a phase of one site has none to refine; the standard's structure is certified. <b>Preferred orientation</b>: March–Dollase, each reflection's members weighed by (r²·cos²α + sin²α/r)<sup>−3/2</sup>, α their angle to the normal of the chosen planes (hkl) — r under 1 when such planes lie preferentially parallel to the sample's surface (plates), over 1 when they do not (needles); <i>best axis</i> tries the low-index planes and keeps the lowest χ². For a cubic phase r has no first-order effect at 1, so it is refined from 0.8 and from 1.25 and the better kept. It changes the intensities, not the widths: an intensity misfit left in is otherwise taken up by a free shape, which widens or narrows peaks to fit it (on a SrTiO<sub>3</sub> whose Sr site scatters 0.7 of a full one, with that site held full the plates came out ⟂ ⟨310⟩; with its occupancy refined, ⟂ ⟨110⟩, as the crystals are). <b>Crystallite shape</b> (with a refined standard): the isotropic size, or a free solid — an <i>ellipsoid</i> of any proportions, a <i>spheroid</i> (two axes equal), a <i>cylinder</i>, an <i>elliptic cylinder</i> (an ellipse translated along its axis), a <i>box</i> or a <i>square-based box</i> (two edges equal: a square plate or rod) —, in any orientation. A shape that breaks the crystal's symmetry (a disc normal to one ⟨110⟩ of a cubic phase) gives the reflections of one family different widths, so each is drawn with its own and the peak is their sum; its width follows the solid's volume-weighted column length along it (Stokes &amp; Wilson), in closed form for each solid (the faces rounded off over 2° of direction during the search only: the result is the exact solid's). The fit starts from several shapes (the sphere, plates and needles along the low-index directions, slightly tilted, and random ones) and keeps the best, if it beats the isotropic size by ΔBIC under −10 (χ² divided by the isotropic fit's χ²<sub>ν</sub>, so that a misfit is not taken for evidence); else the isotropic size stays. Each solid is also refined with its axes held exactly on their nearest lattice directions — its faces lattice planes —, and kept so when that gives the lower ΔBIC and the free orientation is not better by more than its χ² allows (95 %); the free fit's angle from them is given beside. The ΔBIC of each solid against the same isotropic fit also compares the solids: under 10 is no preference, 10–30 weak (within what the search itself varies on real data), over 30 telling; and the sizes depend on the solid chosen. The result gives the solid's dimensions with their esds — true ones (diameter, height, edges, full axes): with WPPM the solid's own, else calibrated as the isotropic size, a sphere's diameter —, each axis with the simplest lattice direction within 10°, its angle from it and its angular esd (the turn of the solid that raises χ² by χ²<sub>ν</sub>, its sizes and its turns about the other axes refined again: it measures the valley of χ² the fit ends in, and of 7 free fits of synthetic boxes 2 ended 3–4 esd off, in another valley nearly as deep); two dimensions not told apart within 2 esd have no direction of their own, nor has an axis whose angular esd is over 30°. The sizes across a thin solid's faces assume ideally flat faces: a 2° spread of their orientation would shorten them by 10–30 %. The solid is drawn beside the tests with the crystal's directions on it and their uncertainty as cones (an axis the data do not fix dashed, <i>not determined</i>), and the cell's <i>a</i>, <i>b</i>, <i>c</i> in a corner for reference: drag it to turn it. Under the pattern: the difference, and a row of ticks per phase at its reflections; under them, the refinement's results across the card, by its title what it was refined with (each phase's models, the Refinement settings not the defaults), at its foot every warning. <b>Peak widths</b> (the table at the card's foot: a click keeps a peak marked on the pattern and on the Williamson–Hall plot): each reflection of a sample fitted alone (the pattern less the isotropic refinement's background and every other reflection, with a straight line for what is left, Kα₁ and Kα₂ and the instrument's asymmetry) by its own Lorentzian and Gaussian widths, to which the instrument's at that angle are added as the refinement adds them: their FWHM is the sample's alone, and the size from it is as in the Scherrer analysis. Three tests read them with no model of the shape, in their box beside the Williamson–Hall plot: <i>Williamson–Hall</i>, β·cosθ against 4·sinθ, where an isotropic size and strain put the points on one line (χ²<sub>ν</sub> about it and its probability); <i>orders</i>, Δd* = β·cosθ/λ of (h k l) and (n·h n·k n·l), equal for a size, in the ratio n for a strain, below 1 for faults that broaden by parity; and <i>prediction</i>, the same measurement on each model's own curve, which a model of the shape should match. Overlapped, weak or end-of-pattern peaks, and those no broader than the instrument within 2 esd, are listed but not used. R<sub>wp</sub>, R<sub>exp</sub> and χ² judge the fit; the values in brackets are the standard errors in the last digits, which the serially correlated residuals of a powder pattern make smaller than the real uncertainty. A refinement that stopped before converging, parameters on a bound (to be read as limits) and parameters the data do not determine are said under the results. How it all works in detail: RIETVELD.md in the repository.`;
-export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement: one file (a file dropped replaces the one there), refined against the phase chosen in the list (the round button) — the built-in LaB₆ (NIST SRM 660c), or a CIF of the standard's. Its zero, its peak shape (U, V, W, X, Y and the axial divergence) and its sin 2θ shift become the instrument's, which every sample's refinement then takes: refine it before the samples, and refine them again after refining it again. Its cell is held at the CIF's (a certified standard's), and its own widths are the instrument's: no size, strain or faults of its own; its <b>Settings…</b> keep its displacement parameters (one ΔB by default) and its texture, where its refinement starts, and the zero scan's range.`;
+export const RV_INFO = `Whole-pattern Rietveld refinement. Each phase comes from a CIF (<b>+ CIF</b>, in the list beside the pattern, which gives each its formula and space group): its cell, its atoms and the symmetry the structure has. A file in P1, as Materials Project gives them, has its symmetry found from the atoms, so that a cubic cell is refined by <i>a</i> alone (a primitive cell of a centred lattice through its conventional cell, whose <i>a</i> and <i>V</i> are the ones reported), and its space group read off those operations; a file with its own operations is checked against its formula and Z (an origin-choice mix-up shows there). A phase's tick in the list says whether it is refined on the pattern on show: every pattern has them all at first, and each its own. A click on a phase shows its unit cell beside the list, in 3D (drag it to turn it, a double click puts it back), with its details under it. The instrumental standard (<b>Instrumental standard…</b>) is a file of its own, refined in its own window against the built-in LaB₆ (NIST SRM 660c, <i>a</i> = 4.156826 Å, held fixed) or a CIF of the standard's: its zero and its peak shape — the Thompson–Cox–Hastings pseudo-Voigt, Gaussian width² = U·tan²θ + V·tanθ + W and Lorentzian width = X·tanθ + Y/cosθ, made asymmetric by the axial divergence (through the Soller slits the file gives, Cheary–Coelho's full axial model, with the sample's and receiver's axial length L refined; without Sollers, Finger–Cox–Jephcoat's one parameter (S+H)/L: the tail of the low-angle peaks towards lower angles) — and a shift of 2θ as sin 2θ, the form of the sample's transparency, beside the zero and the displacement, become the instrument's, and each sample refines only its own broadening on top of them: a Lorentzian Y<sub>s</sub>/cosθ, which gives the crystallite size (D = Kλ/Y<sub>s</sub>, Y<sub>s</sub> in radians, K = 0.9 as in the Scherrer analysis), and X<sub>s</sub>·tanθ = 4ε·tanθ, the microstrain. The pattern is computed from Kα₁ and Kα₂ at the file's wavelengths and ratio, the Bragg–Brentano Lorentz–polarisation factor (with a monochromator only when the file has one), |F|² from the atoms (Waasmaier–Kirfel form factors with Chantler's anomalous terms), a Chebyshev background and a specimen displacement per sample; each point weighs by its counts (1/σ², σ² the counts times the attenuation). <b>Refine</b> starts from the CIF's cell, finds where the pattern's peaks are by scaling that cell, then frees the parameters stage by stage; <b>Refine all</b> does every pattern. With no refined standard they ask first: refine the standard first (as its window's <b>Settings…</b> are) and then the samples, refine without it, or neither; with none loaded, load one. While the standard refines no sample does, and the other way round, so that a batch takes one instrumental profile throughout. <b>Settings…</b> (read only while a refinement runs) decides what Refine refines: for each phase each of the models below switched on or off and, when on, how deep (the size and the microstrain can be off too). It also sets where Refine starts: from the CIF, as above, or from each pattern's last result, with the groups of parameters ticked held at its values (whatever is new or changed since is refined) — a shape fitted, say, then held while B per site is refined. Its <b>Refinement</b> section sets, for every pattern, the least squares and the searches: the iterations allowed, the shift tolerance and the starting damping, the background's Chebyshev degree and its 1/2θ term (automatic: on when the scan starts below 20°), the cell search's range, and the free shape's trial starts, each result saying which it was refined with when they are not the defaults. Its <b>Results</b> section sets how the patterns stacked in the card's section of the Results are normalised: to the largest (global), each to its own maximum (local), or as they are (none). <b>Clear</b> removes this pattern's result, <b>Clear all</b> every pattern's. With several phases each gets its weight fraction (Hill–Howard, of the crystalline part). A phase is reported <i>not detected</i>, and left out of the refinement, when its scale is not above 3 esd, or when it is significant only through intensity under another phase's peaks with no part of the pattern its own (a candidate impurity whose lines fall on the main phase's would otherwise take up whatever misfit those peaks leave). The same CIF added twice gives two size populations of one phase. <b>Size profile</b> (with a refined standard): <i>Lorentzian</i>, a Lorentzian of the right breadth read with Scherrer's K; or <i>WPPM</i> (Whole Powder Pattern Modelling, Scardi &amp; Leoni), each line synthesised as the Fourier transform of the product of the instrument's, the size's, the strain's and the faults' coefficients — the size's being the crystallites' own common-volume function (a sphere's, or a free solid's along each member of the family), so the dimensions are the true ones and the profile's shape counts too. With <i>log-normal sizes</i> the coefficients are averaged over a distribution of width σ (of ln D): the size read is the volume-weighted mean (what the breadth measures), with the median and the number-weighted mean beside. <b>Microstrain</b>: isotropic, or <i>anisotropic</i> (Stephens: ε² a quartic form of the reflection's direction that the Laue group leaves unchanged; given as its rms and along the low-index planes' normals). <b>Planar faults</b> (after Warren): faults on a family of planes, each displacing the crystal by a vector of a family (those in the plane), the probability per plane refined: reflections whose h·R is not an integer broaden, by parity rather than by order. <b>Displacement parameters</b>: the CIF's held (0.5 Å² where it has none); one ΔB added to all of a phase's B; one B per crystallographic site (the sites from the symmetry found); or the anisotropic U<sup>ij</sup> per site, only those the site's symmetry leaves free, with B<sub>eq</sub>. Each is strongly correlated with the scale, and so with the weight fractions, with the background and, on broad peaks, with the widths: they want data to high angle. <b>Site occupancy</b>: the occupancy of one of the phase's sites refined — how strongly the site scatters against its species at full occupancy, alike at every angle (a B lowers it more the higher the angle): under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. The weight fractions use the cell's mass at the refined occupancy. Every site at once would be the scale again, so a phase of one site has none to refine; the standard's structure is certified. <b>Preferred orientation</b>: March–Dollase, each reflection's members weighed by (r²·cos²α + sin²α/r)<sup>−3/2</sup>, α their angle to the normal of the chosen planes (hkl) — r under 1 when such planes lie preferentially parallel to the sample's surface (plates), over 1 when they do not (needles); <i>best axis</i> tries the low-index planes and keeps the lowest χ². For a cubic phase r has no first-order effect at 1, so it is refined from 0.8 and from 1.25 and the better kept. It changes the intensities, not the widths: an intensity misfit left in is otherwise taken up by a free shape, which widens or narrows peaks to fit it (on a SrTiO<sub>3</sub> whose Sr site scatters 0.7 of a full one, with that site held full the plates came out ⟂ ⟨310⟩; with its occupancy refined, ⟂ ⟨110⟩, as the crystals are). <b>Crystallite shape</b> (with a refined standard): the isotropic size, or a free solid — an <i>ellipsoid</i> of any proportions, a <i>spheroid</i> (two axes equal), a <i>cylinder</i>, an <i>elliptic cylinder</i> (an ellipse translated along its axis), a <i>box</i> or a <i>square-based box</i> (two edges equal: a square plate or rod) —, in any orientation. A shape that breaks the crystal's symmetry (a disc normal to one ⟨110⟩ of a cubic phase) gives the reflections of one family different widths, so each is drawn with its own and the peak is their sum; its width follows the solid's volume-weighted column length along it (Stokes &amp; Wilson), in closed form for each solid (the faces rounded off over 2° of direction during the search only: the result is the exact solid's). The fit starts from several shapes (the sphere, plates and needles along the low-index directions, slightly tilted, and random ones) and keeps the best, if it beats the isotropic size by ΔBIC under −10 (χ² divided by the isotropic fit's χ²<sub>ν</sub>, so that a misfit is not taken for evidence); else the isotropic size stays. Each solid is also refined with its axes held exactly on their nearest lattice directions — its faces lattice planes —, and kept so when that gives the lower ΔBIC and the free orientation is not better by more than its χ² allows (95 %); the free fit's angle from them is given beside. The ΔBIC of each solid against the same isotropic fit also compares the solids: under 10 is no preference, 10–30 weak (within what the search itself varies on real data), over 30 telling; and the sizes depend on the solid chosen. The result gives the solid's dimensions with their esds — true ones (diameter, height, edges, full axes): with WPPM the solid's own, else calibrated as the isotropic size, a sphere's diameter —, each axis with the simplest lattice direction within 10°, its angle from it and its angular esd (the turn of the solid that raises χ² by χ²<sub>ν</sub>, its sizes and its turns about the other axes refined again: it measures the valley of χ² the fit ends in, and of 7 free fits of synthetic boxes 2 ended 3–4 esd off, in another valley nearly as deep); two dimensions not told apart within 2 esd have no direction of their own, nor has an axis whose angular esd is over 30°. The sizes across a thin solid's faces assume ideally flat faces: a 2° spread of their orientation would shorten them by 10–30 %. The solid is drawn beside the tests with the crystal's directions on it and their uncertainty as cones (an axis the data do not fix dashed, <i>not determined</i>), and the cell's <i>a</i>, <i>b</i>, <i>c</i> in a corner for reference: drag it to turn it. Under the pattern: the difference, and a row of ticks per phase at its reflections; under them, the refinement's results across the card, by its title what it was refined with (each phase's models, the Refinement settings not the defaults), at its foot every warning. <b>Peak widths</b> (the table at the card's foot: a click keeps a peak marked on the pattern and on the Williamson–Hall plot): each reflection of a sample fitted alone (the pattern less the isotropic refinement's background and every other reflection, with a straight line for what is left, Kα₁ and Kα₂ and the instrument's asymmetry) by its own Lorentzian and Gaussian widths, to which the instrument's at that angle are added as the refinement adds them: their FWHM is the sample's alone, and the size from it is as in the Scherrer analysis. Three tests read them with no model of the shape, in their box beside the Williamson–Hall plot: <i>Williamson–Hall</i>, β·cosθ against 4·sinθ, where an isotropic size and strain put the points on one line (χ²<sub>ν</sub> about it and its probability); <i>orders</i>, Δd* = β·cosθ/λ of (h k l) and (n·h n·k n·l), equal for a size, in the ratio n for a strain, below 1 for faults that broaden by parity; and <i>prediction</i>, the same measurement on each model's own curve, which a model of the shape should match. Overlapped, weak or end-of-pattern peaks, and those no broader than the instrument within 2 esd, are listed but not used. R<sub>wp</sub>, R<sub>exp</sub> and χ² judge the fit; the values in brackets are the standard errors in the last digits, which the serially correlated residuals of a powder pattern make smaller than the real uncertainty. A refinement that stopped before converging, parameters on a bound (to be read as limits) and parameters the data do not determine are said under the results. How it all works in detail: RIETVELD.md in the repository.`;
+export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement: one file (a file dropped replaces the one there), refined against the phase chosen in the list (the round button) — the built-in LaB₆ (NIST SRM 660c), or a CIF of the standard's. Its zero, its peak shape (U, V, W, X, Y and the axial divergence) and its sin 2θ shift become the instrument's, which every sample's refinement then takes: refine it before the samples (a sample's Refine offers to), and refine them again after refining it again. It cannot be refined while a sample refines, nor the samples while it does. Its cell is held at the CIF's (a certified standard's), and its own widths are the instrument's: no size, strain or faults of its own; its <b>Settings…</b> keep its displacement parameters (one ΔB by default) and its texture, where its refinement starts, and the zero scan's range.`;
 
 /* host: {
      files()        the patterns refined (the included samples; the standard's one)
@@ -329,6 +329,14 @@ export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement:
      commit()       a step of the undo history
      irf()          the standard's instrumental profile (samples)
      openStd()      open the standard's window (samples)
+     stdLoaded()    a standard's file is loaded (samples)
+     refineStd(tell) refine the standard, as its window's Refine (samples, "Refine the
+                    standard first"): { own, done }, done resolving to { ok, why }; tell(frac,
+                    text) its progress. Its run going on already, that one (own false)
+     stopStd(commit) stop the standard's run (samples; commit as cancel's)
+     blocked()      why Refine cannot run now (the standard refining, for the samples; a
+                    sample, for the standard), or ''
+     onBusy()       a run started or ended here: the others' buttons follow
      changed()      the standard's result changed (the standard): the samples' notes follow
      hidden()       the card is folded: nothing is drawn
    }
@@ -347,7 +355,10 @@ export function createRietveld(host, root, o){
   let results = {};          // file name → { params, esd, stats, stages, free, held, detected, shapes, isoParams, at, … }
   let startFrom = 'cif', hold = HOLD_DEFAULT.slice();   // where Refine starts (HOLDS)
   let fit = {};              // the Refinement settings changed from their defaults (FITS)
-  let busy = false, cancelled = false;
+  let busy = false;
+  let cur = null, curP = null; // the run going on (refine's) and its promise
+  let waiting = null;        // a sample's Refine waiting for the standard's run ("Refine the standard first")
+  let gen = 0;               // the states restored so far: a choice outlived by one is dropped
   let plot = null;
   let sel = null;            // the phase whose structure is on show
   // The standard's: the built-in LaB6, its own colour apart from the CIF phases'; the
@@ -456,12 +467,14 @@ export function createRietveld(host, root, o){
   // A pattern's background terms under fit settings: the Chebyshev degree and whether the
   // 1/2θ term is used (buildModel's rule: 'auto' is on from below 20°, never from 0°).
   const bgTerms = (fs, f) => { const x0 = scanRange(f)[0]; return fs.bgDegree + (x0 > 0 && (fs.bgInv === 'auto' ? x0 < 20 : fs.bgInv) ? '+inv' : ''); };
-  // run: the phases and the start as they were when the run started, the same for all its
-  // files (an undo during a run would otherwise change them between files); run.fell
-  // collects the patterns refined from the CIF instead, run.bgFreed those whose scales and
-  // background are refined rather than held.
+  // run: the phases, the start and the standard's profile as they were when the run
+  // started, the same for all its files (an undo during a run would otherwise change them
+  // between files; up to v477 the profile was read per file, and the standard refined
+  // during a batch gave the patterns after it another); run.fell collects the patterns
+  // refined from the CIF instead, run.bgFreed those whose scales and background are
+  // refined rather than held.
   function payloadFor(f, run){
-    const list = std ? [run.std] : run.ph.filter(q=> !q.off[f.name]), opts = { standard: std, irf: std ? null : irf(), fit: { ...run.fit } };
+    const list = std ? [run.std] : run.ph.filter(q=> !q.off[f.name]), opts = { standard: std, irf: run.irf, fit: { ...run.fit } };
     if (run.start === 'last'){
       const r = results[f.name], why = lastUnusable(f, r, list);
       if (why) run.fell.push(`${f.label} (${why})`);
@@ -479,39 +492,128 @@ export function createRietveld(host, root, o){
       phases: phaseData(list), opts, list };
   }
 
-  async function refine(list){
-    if (busy) return;
+  /* A run: the patterns one by one, each result written whole once its pattern is done,
+     into the results the card holds then (a module read out and in again meanwhile, as a
+     saved project's CSV export from the Projects list does, puts back the same; the card
+     set aside by it is taken up again, xrd.js), and only for a file still loaded. Cancel,
+     a tab left (the tab manager's stop) or a kind switch ends it at once (cancel): it says
+     so, the patterns done are kept, the one under way is not written, and nothing comes of
+     the worker's answer after. Resolves to { ok, why }. */
+  async function refine(list, tell){
+    if (busy) return { ok: false, why: 'a refinement is running' };
+    // A batch takes one instrumental profile throughout: no sample refines while the
+    // standard does, nor the standard while a sample does.
+    const why = host.blocked ? host.blocked() : '';
+    if (why){ setStatus(why); return { ok: false, why }; }
     const todo = list.filter(f=> phasesFor(f).length);
-    if (!todo.length){ setStatus(std ? 'Load the standard\'s file to refine it.' : list.length ? 'No phase ticked for this pattern: add one from a CIF, or tick one.' : 'Add a phase from a CIF to refine.'); return; }
+    if (!todo.length){
+      const t = std ? 'Load the standard\'s file to refine it.' : list.length ? 'No phase ticked for this pattern: add one from a CIF, or tick one.' : 'Add a phase from a CIF to refine.';
+      setStatus(t); return { ok: false, why: t };
+    }
     // (the settings stay open if they are: read only until the run ends, syncSettings)
-    busy = true; cancelled = false; syncButtons();
+    busy = true; syncButtons();
     const copy = q => ({ ...q, on: { ...q.on }, dep: { ...q.dep }, off: { ...q.off } });
-    const run = { ph: phases.map(copy), std: copy(stdPhase()), start: startFrom, hold: hold.slice(), fit: { ...fit }, fell: [], bgFreed: [] };
+    const run = cur = { ph: phases.map(copy), std: copy(stdPhase()), start: startFrom, hold: hold.slice(), fit: { ...fit }, irf: std ? null : irf(),
+      fell: [], bgFreed: [], n: todo.length, done: 0, tell };
+    if (host.onBusy) host.onBusy();
     try {
-      for (let k = 0; k < todo.length && !cancelled; k++){
+      for (let k = 0; k < todo.length; k++){
         const f = todo[k], pay = payloadFor(f, run), from = pay.opts.start ? ' from its last result' : '';
         const ph = pay.list; delete pay.list;
         setStatus(`Refining ${f.label}${from}…`);
         // (the stages say the rest: a start from the last result has its own)
-        const res = await runInWorker(pay, (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`); });
+        const res = await runInWorker(pay, (frac, stage)=>{ showProg((k + frac)/todo.length); if (stage) setStatus(`Refining ${f.label}: ${stage}…`);
+          if (run.tell) run.tell((k + frac)/todo.length, stage ? `${f.label}: ${stage}` : f.label); });
+        if (cur !== run) return { ok: false, why: 'stopped' };
         if (!res) break;
+        // (a file taken away meanwhile: its result has no pattern to go with)
+        if (!host.allFiles().some(g=> g.name === f.name)) continue;
         // (the phases it was refined with: a CIF added meanwhile is not among them; the
         // standard's profile as the worker used it, kept to tell when the standard changes;
         // free, held, detected, shapes, isoParams: what the next start from it needs)
         results[f.name] = { ...res, standard: std, phases: ph.map(q=> q.id), irf: std ? null : res.irf || null, at: Date.now(),
           cells: Object.fromEntries(ph.map(q=> [q.id, cellKey(q.prep.cell)])) };
-        if (f === host.files()[curIdx()]) draw();
+        run.done++;
+        // (by name: a module read out and in again gives the same files as new objects)
+        if (f.name === (host.files()[curIdx()] || {}).name) draw();
       }
       setStatus([run.fell.length && `From the CIF, no last result to start from: ${run.fell.join('; ')}.`,
         run.bgFreed.length && `Scales and background refined, not held: the background's terms changed since the last result (${run.bgFreed.join(', ')}).`].filter(Boolean).join(' '));
+      return { ok: true };
     } catch(e){
+      if (cur !== run) return { ok: false, why: 'stopped' };
       setStatus('⚠ ' + e.message);
+      return { ok: false, why: e.message };
     } finally {
-      busy = false; hideProg(); syncButtons(); draw(); host.commit();
-      if (std && host.changed) host.changed();
+      if (cur === run) endRun(true);
     }
   }
-  const refineAll = ()=> refine(host.files().slice());
+  function endRun(commit){
+    cur = null; busy = false; hideProg(); syncButtons(); draw();
+    if (commit) host.commit();
+    if (std && host.changed) host.changed();
+    if (host.onBusy) host.onBusy();
+  }
+  const start = (list, tell)=> (curP = refine(list, tell));
+  /* Ends the run at once, or a sample's wait for the standard's: Cancel, the tab manager's
+     stop (a tab left, xrd.js), a kind switch (commit false: the switch commits). Up to v477
+     Cancel let the worker's last answer end the run, and an end that came after a switch
+     went to the project then shown. */
+  function cancel(commit = true){
+    if (waiting){
+      const w = waiting; waiting = null; w.cancelled = true;
+      if (w.own && host.stopStd) host.stopStd(commit);
+      hideProg(); syncButtons();
+      setStatus(w.own ? 'Stopped, the standard\'s refinement with it: nothing refined.' : 'Stopped waiting for the standard\'s refinement: nothing refined.');
+    }
+    const run = cur;
+    if (!run) return;
+    if (cancelJob) cancelJob();
+    endRun(commit);
+    setStatus(run.n > 1 ? `Stopped after ${run.done} of ${run.n} patterns: the others keep what they had.` : `Stopped: ${std ? 'the standard' : 'the pattern'} keeps what it had.`);
+  }
+  /* Refine and Refine all on a sample with no refined standard (no result of the standard's
+     file to take its profile from, ownIrf) ask first: refine the standard (its window's
+     Settings… as they are) and then these, refine without it, or not (×, Escape); with no
+     standard loaded, load one (its window) instead of the first. The patterns are those of
+     the press, found again by name when the choice is made. A press with no phase to refine
+     on any of them asks nothing: Refine says so at once (asked first, the standard was
+     refined before that was said). */
+  async function press(all){
+    const f = host.files()[curIdx()];
+    if (!all && !f) return;
+    const names = all ? null : [f.name];
+    const list = ()=> all ? host.files().slice() : host.files().filter(g=> names.includes(g.name));
+    if (std || irf() || !list().some(g=> phasesFor(g).length)){ start(list()); return; }
+    const g = gen, loaded = !!(host.stdLoaded && host.stdLoaded());
+    const c = await confirmBanner(loaded
+      ? 'The instrumental standard is not refined: without its profile the widths, and the sizes from them, include the instrument\'s. Refine it first, with the settings of its window?'
+      : 'No instrumental standard is loaded: without its profile the widths, and the sizes from them, include the instrument\'s.',
+      loaded ? 'Refine the standard first' : 'Load a standard…', 'Refine without the standard');
+    // (outlived: another state restored in the card, the card closed, a run started meanwhile)
+    if (!c || g !== gen || !root.isConnected || busy || waiting) return;
+    // The banner stays over a tab left (another module's, Home): answered there, with the
+    // card not on show, it starts nothing. The XRPD project may then no longer be the live
+    // tab, the one the tab manager guards: a run started so went into the next XRPD project
+    // opened, unasked, and "Load a standard…" opened its window over the other module.
+    // Back on the card, its Refine asks again.
+    if (!root.closest('.tab.active')){ setStatus('Nothing refined: the question was answered with the card not on show.'); return; }
+    if (c === 'alt' || irf()){ start(list()); return; }
+    if (!loaded){ host.openStd(); return; }
+    // (the standard refining already: this waits for that run; refused while a sample refines)
+    const w = { cancelled: false, own: false };
+    const sr = host.refineStd((frac, t)=>{ if (waiting === w){ showProg(frac); setStatus(`Refining the standard first: ${t}…`); } });
+    if (sr.why){ setStatus(sr.why); return; }
+    w.own = sr.own; waiting = w;
+    setStatus('Refining the instrumental standard first…'); syncButtons();
+    const r = await sr.done;
+    // (stopped from here, or by the tab manager: cancel said so)
+    if (w.cancelled || !root.isConnected) return;
+    waiting = null; hideProg(); syncButtons();
+    if (!r.ok || !irf()){ setStatus(r.ok ? 'The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.'
+      : r.why === 'stopped' ? 'The standard\'s refinement was stopped: nothing refined.' : `The standard's refinement failed (${String(r.why).replace(/\.$/, '')}): nothing refined.`); return; }
+    start(list());
+  }
 
   // ---- the plot: observed, calculated, the background, the difference under them,
   // and a row of ticks per phase between the two ----
@@ -1163,11 +1265,21 @@ export function createRietveld(host, root, o){
   function setStatus(t){ $('Status').textContent = t || ''; }
   function showProg(frac){ $('ProgWrap').style.display = ''; $('ProgBar').style.width = Math.max(0, Math.min(1, frac))*100 + '%'; }
   function hideProg(){ $('ProgWrap').style.display = 'none'; $('ProgBar').style.width = '0%'; }
+  // A press of Refine or Refine all within a moment of the last, or one of Refine within a
+  // moment of its turning into Cancel or back, is not taken: the second click of a double
+  // click (up to v477 it cancelled the run the first had started). A later click is.
+  const QUICK = 600;
+  let pressT = -Infinity, turnT = -Infinity;
+  function quick(turn){ const t = performance.now(); if (t - pressT < QUICK || (turn && t - turnT < QUICK)) return true; pressT = t; return false; }
   function syncButtons(){
-    const fs = host.files(), f = fs[curIdx()];
-    $('Refine').textContent = busy ? 'Cancel' : 'Refine';
-    $('Refine').disabled = !busy && !f;
-    if (!std) $('RefineAll').disabled = busy || !fs.length;
+    const fs = host.files(), f = fs[curIdx()], on = busy || !!waiting;
+    // Not now (host.blocked): a sample while the standard refines, the standard while a sample does.
+    const why = !on && host.blocked ? host.blocked() : '', b = $('Refine'), label = on ? 'Cancel' : 'Refine';
+    if (b.textContent !== label){ b.textContent = label; turnT = performance.now(); }
+    b.disabled = !on && (!f || !!why);
+    // (a wait on a run the standard's window started: Cancel ends the wait, not that run)
+    b.title = waiting ? (waiting.own ? 'The standard is refined first: Cancel stops it' : 'Waiting for the standard\'s refinement: Cancel stops waiting (the standard goes on)') : why;
+    if (!std){ $('RefineAll').disabled = on || !fs.length || !!why; $('RefineAll').title = why; }
     $('Clear').disabled = busy || !(f && results[f.name]);
     if (!std) $('ClearAll').disabled = busy || !Object.keys(results).length;
     // (the phases are read when a run starts: one added meanwhile would not be in it)
@@ -1412,13 +1524,14 @@ export function createRietveld(host, root, o){
     }
   });
   $('Refine').onclick = ()=>{
-    if (busy){ cancelled = true; if (cancelJob) cancelJob(); return; }
-    const f = host.files()[curIdx()]; if (f) refine([f]);
+    if (quick(true)) return;
+    if (busy || waiting){ cancel(); return; }
+    press(false);
   };
   $('Clear').onclick = ()=>{ const f = host.files()[curIdx()]; if (!f || busy || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); if (std && host.changed) host.changed(); };
   if (!std){
     // (the standard is one pattern: its window has neither)
-    $('RefineAll').onclick = ()=> refineAll();
+    $('RefineAll').onclick = ()=>{ if (!quick() && !busy && !waiting) press(true); };
     // Every pattern's result, those of the files left out too (an undo brings them back).
     $('ClearAll').onclick = ()=>{ if (busy || !Object.keys(results).length) return; results = {}; draw(true); host.commit(); };
     $('Prev').onclick = ()=> host.step(-1);
@@ -1442,6 +1555,19 @@ export function createRietveld(host, root, o){
     redraw(){ draw(true); },
     // The standard's profile for the samples (the standard's card).
     irf: ownIrf,
+    // A run going on here (its own worker's: not a wait for the standard's), or either
+    // (active), ending it as Cancel does, and the buttons as the other cards' runs leave
+    // them (host.blocked).
+    running: ()=> busy,
+    active: ()=> busy || !!waiting,
+    cancel,
+    sync: syncButtons,
+    // The standard refined for a sample ("Refine the standard first", host.refineStd).
+    run(tell){
+      if (busy){ if (cur) cur.tell = tell; return { own: false, done: curP }; }
+      const why = host.blocked ? host.blocked() : '';
+      return why ? { why } : { own: true, done: start(host.files().slice(), tell) };
+    },
     destroy(){ closeSettings(); setModal.remove(); if (cellV) cellV.destroy(); solidViews.forEach(({ view })=> view.destroy()); },
     // Each phase's settings (on, dep) and the patterns it is not refined on, and beside them
     // the options as v428 named them (engineOf), which an older version opening the
@@ -1473,6 +1599,12 @@ export function createRietveld(host, root, o){
       results = s.results ? JSON.parse(JSON.stringify(s.results)) : {};
       sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; resNorm = normOf(s.resNorm); resSig = '';
       setKey = '';
+      // A run going on is the module's own, read out and in again (a run is stopped before
+      // another project comes in): it goes on into the results restored. Nothing running,
+      // the last run's words go (they were about the state before: "Stopped…" otherwise
+      // showed on the next project), and a choice still open is dropped (press).
+      gen++;
+      if (!busy && !waiting) setStatus('');
       syncButtons();
     },
     // The CSVs: every refined pattern's curves, and one row per pattern and phase.

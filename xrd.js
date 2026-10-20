@@ -1,4 +1,4 @@
-import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG } from './utils.js';
+import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, X_SVG } from './utils.js';
 import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
 import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
 import { readXrdmlScan, decodeXml } from './xrd-instr.js';
@@ -67,18 +67,23 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 
   /* ---- The samples ---- */
   // Every card's per-sample arrays (a Scherrer card's, and those it keeps while it is a
-  // Rietveld one), for the file list to keep aligned with the included files.
+  // Rietveld one), for the file list to keep aligned with the included files. A file left
+  // out holds its entries under the card's keys, the same whichever kind the card is, so
+  // they come back with it after a switch (up to v477 the kept ones were 'kA' + id: left
+  // out under one kind and taken in under the other, a file's per-sample parameters and
+  // peaks started afresh). A file held so by an earlier version is read under either.
   const copyArr = v => Array.isArray(v) ? v.slice() : [];
+  const heldAs = sl => ({ ...sl, make: (v, f)=> sl.make(v === undefined && f && f.held ? f.held['k' + sl.key] : v, f) });
   function slots(){
     const out = [];
     cards().forEach(a=>{
-      const e = live.get(a.id);
-      if (a.type === 'scherrer' && e) out.push(...e.inst.slots('A' + a.id));
+      const e = live.get(a.id), key = 'A' + a.id;
+      if (a.type === 'scherrer' && e) out.push(...e.inst.slots(key).map(heldAs));
       const s = a.states.scherrer;
       if (a.type !== 'scherrer' && s){
-        out.push({ key: 'kA' + a.id + ':params', arr: s.perParams, make: v=> v ? {...v} : {...s.shared} },
-          { key: 'kA' + a.id + ':manual', arr: s.manualPeaks, make: copyArr },
-          { key: 'kA' + a.id + ':removed', arr: s.removedPeaks, make: copyArr });
+        out.push(...[{ key: key + ':params', arr: s.perParams, make: v=> v ? {...v} : {...s.shared} },
+          { key: key + ':manual', arr: s.manualPeaks, make: copyArr },
+          { key: key + ':removed', arr: s.removedPeaks, make: copyArr }].map(heldAs));
       }
     });
     return out;
@@ -248,37 +253,75 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     // Refined again or cleared: the samples' results say whether theirs rest on it.
     changed: ()=> eachCard((e, a)=>{ if (a.type === 'rietveld') e.inst.redraw(); }),
     hidden: ()=> openModal !== rvModal,
+    blocked: ()=> rvCards().some(i=> i.running()) ? 'A sample refinement is running: the standard can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
+    onBusy: ()=> syncRv(),
   }, rvModal.body, { prefix: 'xrdStdR', standard: true });
   stdRv.setName('standard');
 
   /* ---- The cards (cards.js) ---- */
   const KINDS = { scherrer: 'Scherrer', rietveld: 'Rietveld' };
-  const live = new Map();       // id → { inst }
+  const live = new Map();       // id → { inst, el }
+  /* A Rietveld card dropped by a state loaded while it refines, or waits for the
+     standard to (runWithModuleState: a saved project's CSVs exported from the Projects
+     list, read in and out again at once), is set aside, its run going on, and taken up
+     again, panel and all, when the state put back has it (buildCard). Up to v477 it was
+     rebuilt afresh: the run went on in a panel no longer in the page, its results lost,
+     and the card said nothing ran. */
+  const parked = new Map();     // id → { inst, el }
+  let restoring = false;
   const cards = ()=> deck ? deck.records : [];
   const eachCard = fn => cards().forEach(a=>{ const e = live.get(a.id); if (e) fn(e, a); });
   const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
+
+  /* ---- The refinements running: the samples' (each Rietveld card's) and the standard's ----
+     A run belongs to the project live here: the tab manager asks before that leaves the
+     module, and stop ends every run as Cancel does (registerBusy). A sample and the
+     standard never refine at once (host.blocked): a batch takes one instrumental profile. */
+  // (the Rietveld cards' panels, and those set aside by a restore)
+  const rvCards = ()=> [...[...live.values()].map(e=> e.inst).filter(i=> i.running), ...[...parked.values()].map(e=> e.inst)];
+  // A run started or ended: every Rietveld panel's buttons follow; a card set aside by a
+  // restore (parked), its run over, goes.
+  function syncRv(){
+    rvCards().forEach(i=> i.sync());
+    stdRv.sync();
+    parked.forEach((e, id)=>{ if (!e.inst.active()){ parked.delete(id); e.inst.destroy(); if (e.inst.res) e.inst.res.remove(); } });
+  }
+  registerBusy('xrd', {
+    busy: ()=> rvCards().some(i=> i.running()) ? 'A Rietveld refinement' : stdRv.running() ? 'The standard\'s refinement' : null,
+    // (the samples first: one waiting for the standard's run stops with it)
+    stop: ()=>{ rvCards().forEach(i=> i.cancel()); stdRv.cancel(); },
+  });
+
   // The card's panel: made on the samples, with the settings its kind had (a.states),
   // the one it leaves kept for a switch back.
   function buildCard(a, card, prev){
     const was = live.get(a.id);
-    if (prev && was){ a.states[prev] = was.inst.snapshot(); if (was.inst.destroy) was.inst.destroy(); if (was.inst.res) was.inst.res.remove(); }
+    // (a run going on stops first, as Cancel: the patterns done go with the kind's settings
+    // kept; up to v477 it went on unseen, its results lost)
+    if (prev && was){ if (was.inst.cancel) was.inst.cancel(false); a.states[prev] = was.inst.snapshot(); if (was.inst.destroy) was.inst.destroy(); if (was.inst.res) was.inst.res.remove(); }
     const host = { files: ()=> files, allFiles: ()=> allFiles, idx: ()=> curIdx, step, commit: ()=> hist.commit(),
       instr: ()=> stdPeaks.instrModel(), irf: ()=> stdRv.irf(), hidden: ()=> deck.isFolded(a),
       openStd: ()=> openStd(a.type === 'rietveld' ? 'rv' : 'peaks'),
+      stdLoaded: ()=> !!stdFile, refineStd: tell=> stdRv.run(tell), stopStd: commit=> stdRv.cancel(commit),
+      blocked: ()=> stdRv.running() ? 'The standard is being refined: the samples can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
+      onBusy: ()=> syncRv(),
       changed: ()=>{} };
-    const el = card.querySelector('.xrd-card');
-    const inst = a.type === 'scherrer' ? createPeakAnalysis(host, el, { prefix: prefixOf(a) }) : createRietveld(host, el, { prefix: prefixOf(a) });
+    let el = card.querySelector('.xrd-card');
+    const back = !prev && a.type === 'rietveld' ? parked.get(a.id) : null;
+    if (back){ parked.delete(a.id); el.replaceWith(back.el); el = back.el; }
+    const inst = back ? back.inst : a.type === 'scherrer' ? createPeakAnalysis(host, el, { prefix: prefixOf(a) }) : createRietveld(host, el, { prefix: prefixOf(a) });
     if (a.states[a.type]) inst.restore(a.states[a.type]);
     else if (a.type === 'scherrer') inst.restore({});
-    live.set(a.id, { inst });
+    live.set(a.id, { inst, el });
     placeRes();
   }
   function dropCard(a){
     const e = live.get(a.id);
     if (!e) return;
-    if (e.inst.destroy) e.inst.destroy();
-    if (e.inst.res) e.inst.res.remove();
     live.delete(a.id);
+    if (restoring && e.inst.active && e.inst.active()) parked.set(a.id, e);
+    else if (e.inst.destroy) e.inst.destroy();
+    if (e.inst.res) e.inst.res.remove();
     syncResults();
   }
   const resList = document.getElementById('xrdResList');
@@ -393,8 +436,11 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     curIdx = Math.min(s.curIdx || 0, Math.max(0, files.length-1));
     stdPeaks.restore(s.stdPeaks || {});
     stdRv.restore(s.stdRv || {});
-    deck.load(Array.isArray(s.cards) ? s.cards : [], src=> ({ states: Object.fromEntries(Object.entries(clone(src.states || {})).filter(([k])=> KINDS[k])) }),
-      a=> live.get(a.id).inst.restore(a.states[a.type] || {}));
+    restoring = true;
+    try {
+      deck.load(Array.isArray(s.cards) ? s.cards : [], src=> ({ states: Object.fromEntries(Object.entries(clone(src.states || {})).filter(([k])=> KINDS[k])) }),
+        a=> live.get(a.id).inst.restore(a.states[a.type] || {}));
+    } finally { restoring = false; }
     syncStdFile();
     stdPeaks.refresh();
     stdRv.refresh();
