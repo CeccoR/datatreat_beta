@@ -1,4 +1,4 @@
-import { fmtNum, csvLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax, guardNumberInputs } from './utils.js';
+import { fmtNum, csvLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, barNames, barChipYmax, guardNumberInputs, esc } from './utils.js';
 import { Plot } from './plot.js';
 import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
@@ -959,9 +959,9 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   });
 
   function rebuildTaucAlerts(){
-    const warnNames = taucWarnDismissed ? [] : allFiles.filter(f=>f.warn).map(f=>f.name);
+    const warnNames = taucWarnDismissed ? [] : allFiles.filter(f=>f.warn).map(f=>esc(f.name));
     document.getElementById('taucAlerts').innerHTML =
-      buildAlertsHtml(invalidUploadNames, warnNames, undefined, 'tauc-dismiss-invalid', 'tauc-dismiss-warn') + taucUploadAlerts;
+      buildAlertsHtml(invalidUploadNames.map(esc), warnNames, undefined, 'tauc-dismiss-invalid', 'tauc-dismiss-warn') + taucUploadAlerts;
   }
 
   // Per-sample lists follow the file list: the panels', and the ones each card keeps
@@ -1130,7 +1130,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     }
     invalidUploadNames = newInvalid;
     taucWarnDismissed = false;
-    taucUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'tauc-dismiss-upload') : '';
+    taucUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded.map(esc), 'Already loaded file(s):', '', 'tauc-dismiss-upload') : '';
     rebuildTaucAlerts();
     afterFilesChange();
     // Once, when the first data lands: propose optimal interval-line positions. The
@@ -1243,7 +1243,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     plot0.drawAxes();
     files.forEach((f,k)=>{
       plot0.line(f.wl, f.FR, f.color, 1.3, undefined, { label: f.label, key: f.name });
-      const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg0.appendChild(s);
+      const s=document.createElement('span'); s.innerHTML=`<i style="background:${esc(f.color)}"></i>${esc(f.label)}`; leg0.appendChild(s);
     });
     renderLogView();
     cards().forEach(renderAnalysisRes);
@@ -1271,7 +1271,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       // The composer takes F(R) itself and draws it on a log axis of its own, which
       // can then be switched off like any other.
       p.line(f.hv, logs[k], f.color, 1.3, undefined, { label: f.label, key: f.name, raw: { xs: f.hv, ys: f.FR } });
-      const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg.appendChild(s);
+      const s=document.createElement('span'); s.innerHTML=`<i style="background:${esc(f.color)}"></i>${esc(f.label)}`; leg.appendChild(s);
     });
   }
   function renderAnalysisRes(a){
@@ -1330,7 +1330,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         plot1.line(xExt, xExt.map(x=>r.regs2.slope*x+r.regs2.intercept), f.color, 1, '2,3',
                    { label: `${f.label} baseline`, key: `${f.name}/regs2 line` });
       }
-      const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
+      const s=document.createElement('span'); s.innerHTML=`<i style="background:${esc(f.color)}"></i>${esc(f.label)}`; leg1.appendChild(s);
     });
 
     // The Eg bar chart. With mixed exponents (per-sample mode) there is no single
@@ -1407,7 +1407,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     // With no subtracted curve at all, the plot under the plain one says why it is empty.
     const noSub = !curves.some(c=> c.s && c.s.some(isFinite));
     $('RS').textContent = noSub ? why + '.' : ''; $('RS').hidden = !noSub;
-    $('RL1').innerHTML = files.map(f=> `<span><i style="background:${f.color}"></i>${f.label}</span>`).join('');
+    $('RL1').innerHTML = files.map(f=> `<span><i style="background:${esc(f.color)}"></i>${esc(f.label)}</span>`).join('');
 
     // The E_U bar chart, in meV as the Urbach card shows it: the plain and the
     // subtracted E_U side by side in each sample's slot, as the gaps' two are.
@@ -1456,7 +1456,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   // Negative values → one alert per series on show, under its chart, listing the
   // affected samples one per line. Live-computed → no X.
   function negWarnHtml(vals, what){
-    const list = files.filter((f,k)=> isFinite(vals[k]) && vals[k] < 0).map(f=>f.label);
+    const list = files.filter((f,k)=> isFinite(vals[k]) && vals[k] < 0).map(f=>esc(f.label));
     return list.length ? `<div class="alert warn">⚠ Negative ${what} for:<br>${list.join('<br>')}</div>` : '';
   }
 

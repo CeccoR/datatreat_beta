@@ -602,7 +602,7 @@ export function createRietveld(host, root, o){
     const leg = $('Legend');
     leg.innerHTML = `<span><i style="background:var(--plot-errbar)"></i>observed</span>`
       + (c ? `<span><i style="background:#ff5050"></i>calculated</span><span><i style="background:#ff9933"></i>background</span><span><i style="background:#3aa0ff"></i>difference</span>` : '')
-      + groups.map(g=> `<span><i style="background:${g.color}"></i>${esc(g.name)}</span>`).join('');
+      + groups.map(g=> `<span><i style="background:${esc(g.color)}"></i>${esc(g.name)}</span>`).join('');
     $('Instr').textContent = instrLine(instrOf(f));
     renderResults(f, r);
     renderWidths(f, r);
@@ -671,7 +671,7 @@ export function createRietveld(host, root, o){
       const norm1 = y.map(v=> v/mx);
       plot.line(f.x, norm1.map(v=> v + baseOf(j) + 0.05*unit), f.color, 1.3, undefined, { raw: { xs: f.x, ys: norm1 }, label: f.label, key: f.name });
     });
-    $('ResLegend').innerHTML = shown.map(({ f })=> `<span><i style="background:${f.color}"></i>${esc(f.label)}</span>`).join('');
+    $('ResLegend').innerHTML = shown.map(({ f })=> `<span><i style="background:${esc(f.color)}"></i>${esc(f.label)}</span>`).join('');
   }
   /* The sizes as points with their esds, the names under the axis cut and tilted to fit
      (barNames) as the Scherrer card's, the values written above. By sample: a column a
@@ -742,7 +742,7 @@ export function createRietveld(host, root, o){
     labs.forEach(m=> plot.barLabel(m.x, m.top, m.label, { gap, dx: m.dx }));
     cols.forEach((c, i)=> plot.tickLabel(i + 1, fit.labels[i], fit.rot, c.label, c.name));
     plot.attachTools(wrap);
-    legend.innerHTML = series.map(q=> `<span><i style="background:${q.color}"></i>${esc(q.name)}</span>`).join('');
+    legend.innerHTML = series.map(q=> `<span><i style="background:${esc(q.color)}"></i>${esc(q.name)}</span>`).join('');
     note.textContent = sizeBy === 'peak'
       ? "Each reflection's own size (Scherrer, K = 0.9, on its FWHM less the instrument's), the peaks the tests use."
       : fs.some(f=> [...sizesOf(results[f.name]).values()].some(v=> v.some(q=> q.shape)))
@@ -876,8 +876,8 @@ export function createRietveld(host, root, o){
       const wide = !skip && w.HsEsdFit > 0 ? `Its esds widened from the fit's ${+w.HsEsdFit.toPrecision(2)}° to ${+w.HsEsd.toPrecision(2)}°: ${offTxt}, off as their widths were measured, could move this width by ${bz.toFixed(1)} of the fit's esds` : '';
       // No broadening measured: the corrected FWHM as its upper limit.
       const corr = w.flat && Number.isFinite(w.HsMax) ? `&lt; ${+w.HsMax.toPrecision(2)}` : fmtE(w.Hs, w.HsEsd);
-      html += `<tr class="peak-row rv-pk${skip ? ' rv-pk-out' : ''}" data-tt="${w.tt}" data-ph="${ph.id}" data-lab="${esc(w.label)}"${why ? ` title="Not used by the tests: ${esc(why)}"` : wide ? ` title="${esc(wide)}"` : ''}>`
-        + `<td>${++n}</td><td><span class="rv-key-sm" style="background:${colorOf(ph.id)}"></span>${esc(hklShow(w.label))}</td><td>${w.tt.toFixed(3)}</td><td>${Number.isFinite(w.rel) ? (w.rel*100).toFixed(1) + '%' : '—'}</td>`
+      html += `<tr class="peak-row rv-pk${skip ? ' rv-pk-out' : ''}" data-tt="${esc(w.tt)}" data-ph="${esc(ph.id)}" data-lab="${esc(w.label)}"${why ? ` title="Not used by the tests: ${esc(why)}"` : wide ? ` title="${esc(wide)}"` : ''}>`
+        + `<td>${++n}</td><td><span class="rv-key-sm" style="background:${esc(colorOf(ph.id))}"></span>${esc(hklShow(w.label))}</td><td>${w.tt.toFixed(3)}</td><td>${Number.isFinite(w.rel) ? (w.rel*100).toFixed(1) + '%' : '—'}</td>`
         + `<td>${fmtE(w.H, w.Hesd)}</td><td>${corr}</td><td>${w.flat ? '—' : fmtE(w.D, w.Desd)}</td><td>${f3(w.model.iso)}</td>${shapeOn ? `<td>${ph.shaped ? f3(w.model.shape) : '—'}</td>` : ''}</tr>`;
     }));
     html += '</tbody></table></div>';
@@ -936,12 +936,12 @@ export function createRietveld(host, root, o){
       if (phs.length > 1) html += `<div class="txt-mini rv-phase-name">${esc(ph.name)}</div>`;
       if (Number.isFinite(wh.chi2nu)){
         const aniso = wh.p < 1e-3;
-        html += `<div class="pg-stat" title="χ² of the measured FWHM·cosθ (the corrected FWHM, not the integral breadth: D is read with K = 0.9 for the FWHM) about the weighted line, per degree of freedom (${wh.nu}), and the probability of so large a value were the broadening isotropic (size and strain alike in every direction)">Williamson–Hall: χ²<sub>ν</sub> <b>${wh.chi2nu.toFixed(1)}</b>, p <b>${fmtP(wh.p)}</b></div>`
+        html += `<div class="pg-stat" title="χ² of the measured FWHM·cosθ (the corrected FWHM, not the integral breadth: D is read with K = 0.9 for the FWHM) about the weighted line, per degree of freedom (${esc(wh.nu)}), and the probability of so large a value were the broadening isotropic (size and strain alike in every direction)">Williamson–Hall: χ²<sub>ν</sub> <b>${wh.chi2nu.toFixed(1)}</b>, p <b>${fmtP(wh.p)}</b></div>`
           + `<div class="rv-note">${aniso ? 'The widths depend on hkl beyond their esds: the broadening is anisotropic (the crystallites\' shape, or faults).' : 'The widths lie on one line within their esds: consistent with an isotropic size and strain.'}</div>`
           + `<div class="pg-stat" title="The weighted line's intercept Kλ/D (K = 0.9) and slope ε; with an anisotropic broadening it is an average, not a size">line: D <b>${fmtE(wh.D, wh.Desd)} nm</b>, ε <b>${fmtE(wh.b, wh.bEsd)}</b>${aniso ? ' (an average only)' : ''}</div>`;
       } else {
         const nr = ph.rows.filter(w=> w.unread).length;
-        html += `<div class="rv-note">Williamson–Hall: fewer than three peaks to read (${wh.n})${nr ? `; ${nr} not read at all (the table says why)` : ''}.</div>`;
+        html += `<div class="rv-note">Williamson–Hall: fewer than three peaks to read (${esc(wh.n)})${nr ? `; ${nr} not read at all (the table says why)` : ''}.</div>`;
       }
       if (ph.orders.length){
         html += `<div class="pg-stat rv-sub">Orders, Δd*(n)/Δd*(1): size 1, strain n</div>`;
@@ -997,7 +997,7 @@ export function createRietveld(host, root, o){
     phs.forEach(ph=>{ const q = pts.filter(x=> x.ph === ph.id); whPlot.points(q.map(x=> x.x), q.map(x=> x.y), colorOf(ph.id), 4.5); });
     pts.forEach(q=> whPlot.barLabel(q.x, q.y + q.e, hklShow(q.label), { rot: 0, gap: 8, size: 10 }));
     whPlot._pts = pts;
-    $('WhLegend').innerHTML = phs.map(ph=> `<span><i style="background:${colorOf(ph.id)}"></i>${esc(ph.name)}, measured</span>`).join('')
+    $('WhLegend').innerHTML = phs.map(ph=> `<span><i style="background:${esc(colorOf(ph.id))}"></i>${esc(ph.name)}, measured</span>`).join('')
       + (iso.length ? `<span><i style="background:#9aa3ad"></i>isotropic model</span>` : '')
       + (shp.length ? `<span><i style="background:#ff5050"></i>free-shape model</span>` : '');
   }
@@ -1029,7 +1029,7 @@ export function createRietveld(host, root, o){
   function renderFitSet(f, r, shown){
     const el = $('FitSet'), done = !!(r && r.params), list = f ? shown : [];
     const used = done ? fitUsed(f, r) : [];
-    el.innerHTML = list.map(q=> `<span class="rv-fs">${list.length > 1 ? `<span class="rv-key-sm" style="background:${q.color}"></span>${esc(q.prep.name)}: ` : ''}${esc(done ? refinedOf(q, r, std) : summaryOf(q, std))}</span>`).join('')
+    el.innerHTML = list.map(q=> `<span class="rv-fs">${list.length > 1 ? `<span class="rv-key-sm" style="background:${esc(q.color)}"></span>${esc(q.prep.name)}: ` : ''}${esc(done ? refinedOf(q, r, std) : summaryOf(q, std))}</span>`).join('')
       + (used.length ? `<span class="rv-fs" title="The Refinement settings (Settings…) this result was refined with that are not the defaults">${esc(used.map(u=> u.said).join(', '))}</span>` : '');
     el.title = done ? 'What this result was refined with' : list.length ? 'What Refine will refine: Settings… changes it' : '';
     el.classList.toggle('is-next', !done);
@@ -1087,12 +1087,12 @@ export function createRietveld(host, root, o){
     el.innerHTML = list.length ? list.map(q=>{
       const builtIn = q === lab6, on = std ? q.id === pick : !(f && q.off[f.name]);
       const pickEl = std
-        ? `<input type="radio" name="${p}Pick" data-pick="${q.id}"${on ? ' checked' : ''}${busy ? ' disabled' : ''} title="The phase the standard is refined with" aria-label="Refine the standard with ${esc(q.prep.name)}">`
-        : `<input type="checkbox" data-on="${q.id}"${on ? ' checked' : ''}${busy || !f ? ' disabled' : ''} title="Refined on this pattern (each pattern its own)" aria-label="Refine ${esc(q.prep.name)} on this pattern">`;
-      return `<div class="rv-cif${q.id === sel ? ' is-sel' : ''}" data-sel="${q.id}" title="${esc(q.prep.name)}${q.file ? ' · ' + esc(q.file) : builtIn ? ' · built in' : ''}">${pickEl}`
-        + `<span class="rv-key" style="background:${q.color}"></span><span class="rv-cif-f">${formulaPretty(formulaOf(q.prep))}</span>`
+        ? `<input type="radio" name="${p}Pick" data-pick="${esc(q.id)}"${on ? ' checked' : ''}${busy ? ' disabled' : ''} title="The phase the standard is refined with" aria-label="Refine the standard with ${esc(q.prep.name)}">`
+        : `<input type="checkbox" data-on="${esc(q.id)}"${on ? ' checked' : ''}${busy || !f ? ' disabled' : ''} title="Refined on this pattern (each pattern its own)" aria-label="Refine ${esc(q.prep.name)} on this pattern">`;
+      return `<div class="rv-cif${q.id === sel ? ' is-sel' : ''}" data-sel="${esc(q.id)}" title="${esc(q.prep.name)}${q.file ? ' · ' + esc(q.file) : builtIn ? ' · built in' : ''}">${pickEl}`
+        + `<span class="rv-key" style="background:${esc(q.color)}"></span><span class="rv-cif-f">${formulaPretty(formulaOf(q.prep))}</span>`
         + `<span class="rv-cif-sg"${q.prep.sgFrom === 'atoms' ? ' title="Found from the atoms: the file is in P1"' : ''}>${esc(sgPretty(q.prep.sg) || '—')}</span>`
-        + `<button class="peak-del is-danger idle-dim rv-del" data-del="${q.id}"${builtIn || busy ? ' disabled' : ''} title="${builtIn ? 'Built in: it cannot be removed' : 'Remove phase'}">${X_SVG(13)}</button></div>`;
+        + `<button class="peak-del is-danger idle-dim rv-del" data-del="${esc(q.id)}"${builtIn || busy ? ' disabled' : ''} title="${builtIn ? 'Built in: it cannot be removed' : 'Remove phase'}">${X_SVG(13)}</button></div>`;
     }).join('') : `<div class="rv-empty">No phase yet: <b>+ CIF</b> adds one from a crystallographic file (COD, ICSD, Materials Project…).</div>`;
     renderCell();
   }
@@ -1229,10 +1229,10 @@ export function createRietveld(host, root, o){
     const key = list.map(q=> [q.id, q.color, q.prep.name].join()).join('|');
     if (key !== setKey){
       setKey = key;
-      const sec = q => `<div class="rvs-sec" data-sec="${q.id}"><div class="rvs-head"><span class="rv-key" style="background:${q.color}"></span><b>${esc(q.prep.name)}</b>${q === lab6 ? '<span class="txt-meta">built in</span>' : ''}</div>`
-        + MODES.map(m=>{ const id = `${p}Set${q.id}_${m.k}`;
-          return `<div class="rvs-row" data-row="${m.k}"><input type="checkbox" id="${id}" data-on="${m.k}" data-ph="${q.id}"><label for="${id}">${m.label}</label>`
-            + `<select data-depth="${m.k}" data-ph="${q.id}" aria-label="${esc(m.label)} of ${esc(q.prep.name)}: depth">${listOf(q, m).map(([v, t])=> `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></div>`; }).join('') + '</div>';
+      const sec = q => `<div class="rvs-sec" data-sec="${esc(q.id)}"><div class="rvs-head"><span class="rv-key" style="background:${esc(q.color)}"></span><b>${esc(q.prep.name)}</b>${q === lab6 ? '<span class="txt-meta">built in</span>' : ''}</div>`
+        + MODES.map(m=>{ const id = `${p}Set${esc(q.id)}_${m.k}`;
+          return `<div class="rvs-row" data-row="${m.k}"><input type="checkbox" id="${id}" data-on="${m.k}" data-ph="${esc(q.id)}"><label for="${id}">${m.label}</label>`
+            + `<select data-depth="${m.k}" data-ph="${esc(q.id)}" aria-label="${esc(m.label)} of ${esc(q.prep.name)}: depth">${listOf(q, m).map(([v, t])=> `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></div>`; }).join('') + '</div>';
       // The hold boxes two to a row, in the phases' columns: the first under their
       // checkboxes, the second under their depths.
       const hb = ([k, t, title]) => `<input type="checkbox" id="${p}Hold_${k}" data-hold="${k}" title="${esc(title)}"><label for="${p}Hold_${k}" title="${esc(title)}">${t}</label>`;

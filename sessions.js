@@ -7,7 +7,7 @@
    "*" when there are unsaved changes); the Save buttons sit in a green "saved"
    state until the next change.
 ========================================================= */
-import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
+import { MODULES, MODULE_LABELS, esc, getModuleState, restoreModuleState,
          moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab, onSectionChange } from './utils.js';
 import { allProjects, putProject, deleteProject, uid, encode, decode } from './db.js';
 import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
@@ -260,7 +260,7 @@ async function importProjectFile(file){
     await confirmBanner('This file is not a DataTreat project.', 'OK'); return;
   }
   const now = Date.now();
-  await putProject({ id: uid(), module: obj.module, title: (obj.title||'Imported project').trim(),
+  await putProject({ id: uid(), module: obj.module, title: String(obj.title||'Imported project').trim(),
                      state: obj.state, createdAt: obj.createdAt||now, updatedAt: now });
   renderList();
 }
@@ -313,10 +313,10 @@ async function renderList(){
     + '<th class="sess-sort" data-key="updatedAt" style="cursor:pointer">SAVED'+arrow('updatedAt')+'</th>'
     + '<th></th></tr></thead><tbody>';
   rows.forEach(r=>{
-    html += '<tr class="sess-row" data-id="'+r.id+'" title="Click to open">'
+    html += '<tr class="sess-row" data-id="'+esc(r.id)+'" title="Click to open">'
       + '<td><input type="checkbox" class="sess-check" style="width:auto"></td>'
-      + '<td><input type="text" class="proj-rename" value="'+r.title.replace(/"/g,'&quot;')+'"></td>'
-      + '<td style="white-space:nowrap"><span class="pill">'+(MODULE_LABELS[r.module]||r.module)+'</span></td>'
+      + '<td><input type="text" class="proj-rename" value="'+esc(r.title)+'"></td>'
+      + '<td style="white-space:nowrap"><span class="pill">'+esc(MODULE_LABELS[r.module]||r.module)+'</span></td>'
       + '<td style="color:var(--muted)">'+fmtDate(r.updatedAt)+'</td>'
       + '<td class="row-acts"><div class="row-acts-inner idle-dim">'
         + '<button class="row-ic pr-csv" title="Export .csv">'+ROW_CSV+'</button>'

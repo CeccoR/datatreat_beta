@@ -8,6 +8,11 @@ const COLORS = [
   '#7b1fa2','#43a047','#fb8c00','#00838f','#c62828','#1976d2',
 ];
 function colorOf(i){return COLORS[i % COLORS.length];}
+/* Text put into markup (innerHTML, an attribute, an SVG string) goes through esc: file
+   names, labels, project and card names, and anything else a file or an imported project
+   brings (a project's .json can carry any text in any field). Up to v469 a file named
+   <img src=x onerror=…>.csv ran its script as soon as it was listed. */
+const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /* =========================================================
    CUSTOM COLOR PICKER
@@ -286,7 +291,7 @@ class ColorPickerUI {
 
   _renderRecent(){
     this._recentEl.innerHTML = recentColors().map(c=>
-      `<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')
+      `<div class="cp-preset" style="background:${esc(c)}" title="${esc(c)}" data-color="${esc(c)}"></div>`).join('')
       || '<span class="cp-recent-empty">none yet</span>';
   }
 
@@ -425,9 +430,9 @@ class PalettePickerUI {
     const mine = userPalettes().length;
     const rows = this._list().map((p,i)=>{
       const swatches = Array.from({length:12}, (_,k)=>
-        `<span class="pp-swatch" style="background:${p.colors[k%p.colors.length]}"></span>`).join('');
+        `<span class="pp-swatch" style="background:${esc(p.colors[k%p.colors.length])}"></span>`).join('');
       const own = i >= CP_PALETTES.length;
-      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${p.name}</span>
+      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${esc(p.name)}</span>
         <div class="pp-swatches">${swatches}</div>
         ${own ? `<button type="button" class="pp-del" data-del="${i - CP_PALETTES.length}" title="Delete this palette">&#10005;</button>` : ''}</div>`;
     }).join('');
@@ -553,6 +558,11 @@ try {
   const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
   if (saved && typeof saved === 'object') Object.assign(settings, saved);
 } catch(e){}
+// Only the values the selects offer: the decimal separator goes into every number fmtNum
+// writes, which the modules put into markup as it is.
+if (settings.decimal !== ',') settings.decimal = '.';
+if (![';', ',', '\t'].includes(settings.field)) settings.field = ';';
+if (!['png', 'svg', 'jpeg', 'webp'].includes(settings.plotFmt)) settings.plotFmt = 'png';
 if (settings.decimal === ',' && settings.field === ',') settings.field = ';'; // guard invalid combo
 function saveSettings(){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){} }
 
@@ -851,19 +861,19 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   const nIn = files.filter(isIncluded).length;
 
   let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th><th>SAMPLE LABEL</th>`;
-  ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
+  ec.forEach(c=> html += `<th>${esc(String(c.header).toUpperCase())}</th>`);
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
   html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
-    const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
+    const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '';
     const on = isIncluded(f);
     html += `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
     html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
-    html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
-    html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
+    html += `<td class="fname" title="${esc(f.name)}"><span class="fname-inner">${swatch}<span class="fname-text">${esc(f.name)}</span></span></td>`;
+    html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}"></td>`;
     ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
     html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
@@ -1916,11 +1926,13 @@ function confirmBanner(message, confirmLabel, altLabel){
 ========================================================= */
 // dismissInvalidAction / dismissWarnAction are data-action values handled by the
 // owning tab's delegated click listener; when omitted, the button just removes its
-// own alert inline (no global handler needed).
+// own alert (the delegated listener under this function: no inline handler, which the
+// page's Content-Security-Policy would refuse). The names and the header are markup:
+// the callers escape what they put in them (esc).
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
   const makeX = act => act
     ? `<button class="alert-dismiss close-x" data-action="${act}" title="Dismiss">${X_SVG(15)}</button>`
-    : `<button class="alert-dismiss close-x" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(15)}</button>`;
+    : `<button class="alert-dismiss close-x" data-dismiss-alert title="Dismiss">${X_SVG(15)}</button>`;
   let html = '';
   if (invalidNames.length)
     html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';
@@ -1928,6 +1940,10 @@ function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidActi
     html += '<div class="alert warn">⚠ ' + (warnHeader || 'Non-standard format — verify these files:') + '<br>' + warnNames.join('<br>') + makeX(dismissWarnAction) + '</div>';
   return html;
 }
+document.addEventListener('click', e=>{
+  const b = e.target.closest && e.target.closest('[data-dismiss-alert]');
+  if (b){ const a = b.closest('.alert'); if (a) a.remove(); }
+});
 
 function nextColor(existingFiles){
   const used = new Set(existingFiles.map(f=>f.color));
@@ -2067,5 +2083,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, esc, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

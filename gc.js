@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, barNames, barChipYmax } from './utils.js';
+import { settings, fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, barNames, barChipYmax, esc } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
@@ -131,8 +131,8 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       allFiles.push(file); files.push(file);
       each(c=> c.addFile(file));
     }
-    loadAlerts = buildAlertsHtml(invalidFiles, [], undefined, 'gc-dismiss-invalid');
-    gcUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'gc-dismiss-upload') : '';
+    loadAlerts = buildAlertsHtml(invalidFiles.map(esc), [], undefined, 'gc-dismiss-invalid');
+    gcUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded.map(esc), 'Already loaded file(s):', '', 'gc-dismiss-upload') : '';
     rebuildGcAlerts();
     afterFilesChange();
   });
@@ -160,9 +160,9 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   // A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled).
   function numCell(cls, attrs, value, state){
     const dis = state==='off' ? 'disabled' : (state==='ro' ? 'readonly' : '');
-    return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${value}" ${dis} style="width:100%">`;
+    return `<input class="${cls}" ${attrs} type="text" inputmode="decimal" value="${esc(value)}" ${dis} style="width:100%">`;
   }
-  const modeChip = (pair, mode)=> `<button type="button" class="mode-chip gc-toggle" data-pair="${pair}" title="Switch all / one">${mode}</button>`;
+  const modeChip = (pair, mode)=> `<button type="button" class="mode-chip gc-toggle" data-pair="${pair}" title="Switch all / one">${esc(mode)}</button>`;
   // A header over a field: its name on the field's left edge, its all/one pill on the
   // field's right edge.
   const thHead = (label, chip)=> `<div class="gc-th"><span>${label}</span>${chip}</div>`;
@@ -204,9 +204,9 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   function gasLegendHtml(d, shown){
     return shown.filter(g=>d.gas[g.key]).map(g=>{
       const key = g.dash
-        ? `<i class="mk-dash" style="color:${d.color}"></i>`
-        : `<i style="background:${d.color}"></i>`;
-      return `<span>${key}${seriesName(d.label, g, shown)}</span>`;
+        ? `<i class="mk-dash" style="color:${esc(d.color)}"></i>`
+        : `<i style="background:${esc(d.color)}"></i>`;
+      return `<span>${key}${esc(seriesName(d.label, g, shown))}</span>`;
     }).join('');
   }
 
@@ -392,7 +392,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       // Per-sample rows
       files.forEach((f,i)=>{
         html += `<tr class="gc-row" data-i="${i}">
-          <td class="fname" title="${f.label}">${f.label}</td>
+          <td class="fname" title="${esc(f.label)}">${esc(f.label)}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),cellState(mMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),cellState(qMode))}</td>
           <td class="gc-date-cell" data-i="${i}"></td>

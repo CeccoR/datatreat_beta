@@ -10,7 +10,7 @@
    `base` the name typed in, used while `nameAuto` is off, `name` the one shown, made
    unique.
 ========================================================= */
-import { X_SVG } from './utils.js';
+import { X_SVG, esc } from './utils.js';
 
 const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
 const GRIP_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>';
@@ -29,7 +29,7 @@ function kindMenu(kinds){
   el.className = 'an-menu';
   el.setAttribute('role', 'menu');
   el.hidden = true;
-  el.innerHTML = Object.entries(kinds).map(([k, l])=> `<button type="button" role="menuitem" data-kind="${k}">${l}</button>`).join('');
+  el.innerHTML = Object.entries(kinds).map(([k, l])=> `<button type="button" role="menuitem" data-kind="${esc(k)}">${esc(l)}</button>`).join('');
   document.body.appendChild(el);
   let anchor = null, pick = null, centred = false;
   const place = ()=>{
@@ -142,8 +142,8 @@ export function createDeck(o){
   // it and stays in view when the card is folded, the instructions open under the name.
   function cardHtml(a){
     const kind = several
-      ? `<button type="button" class="an-type" data-kind="${a.type}" aria-haspopup="menu" aria-expanded="false" title="Change the kind of analysis">${kinds[a.type]}</button>`
-      : `<span class="an-type is-fixed">${kinds[a.type]}</span>`;
+      ? `<button type="button" class="an-type" data-kind="${esc(a.type)}" aria-haspopup="menu" aria-expanded="false" title="Change the kind of analysis">${esc(kinds[a.type])}</button>`
+      : `<span class="an-type is-fixed">${esc(kinds[a.type])}</span>`;
     return `
         <div class="an-head">
           <button type="button" class="an-ic an-grip" title="Drag to move this analysis" aria-label="Move analysis">${GRIP_SVG}</button>

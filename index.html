@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Scripts run from the app's own files only: no inline script or event handler, so
+       markup injected through a file name or an imported project cannot run code. -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; base-uri 'self'">
   <title>DataTreat</title>
   <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (UV-Vis DRS Tauc plots, XRPD, GC H₂ rates, EPR, SEM images). All processing runs locally in your browser; no data is uploaded.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
@@ -26,19 +29,8 @@
   <meta name="twitter:description" content="Browser-based scientific data analysis for spectroscopy and chromatography. Runs entirely in your browser; no data leaves your device.">
   <meta name="twitter:image" content="https://ceccor.github.io/datatreat_beta/og-image.png">
   <link rel="stylesheet" href="style.css">
-  <!-- Apply the saved (or OS-preferred) theme before first paint to avoid a flash -->
-  <script>
-    (function(){
-      try {
-        var saved = localStorage.getItem('datatreat-theme');
-        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-        document.documentElement.setAttribute('data-theme', theme);
-      } catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
-      // Keep the app hidden until its shell is fully assembled, so the bars/icons
-      // don't visibly build up piece by piece; tabs.js fades it in once ready.
-      document.documentElement.classList.add('app-booting');
-    })();
-  </script>
+  <!-- The saved (or OS-preferred) theme before first paint, to avoid a flash -->
+  <script src="boot-head.js"></script>
 </head>
 
 <body>
@@ -405,7 +397,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v469</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v470</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
@@ -440,24 +432,8 @@
     </div>
   </div>
   <button id="scrollTopBtn" type="button" aria-label="Back to top" title="Back to top">&#8593;</button>
-  <!-- Apply the section from the URL hash synchronously (before paint) so a reload
-       lands there instead of flashing Home first. Only the fixed sections are
-       addressable; module sections are reached through an open project tab. -->
-  <script>
-    (function(){
-      try {
-        var t = location.hash.slice(1);
-        if (['home','projects','settings'].indexOf(t) < 0) return;
-        var sec = document.getElementById('tab-'+t);
-        var btn = document.querySelector('#nav button[data-tab="'+t+'"]');
-        if (sec && btn){
-          document.querySelectorAll('.tab.active').forEach(function(e){ e.classList.remove('active'); });
-          document.querySelectorAll('#nav button.active').forEach(function(e){ e.classList.remove('active'); e.setAttribute('aria-selected','false'); });
-          sec.classList.add('active'); btn.classList.add('active'); btn.setAttribute('aria-selected','true');
-        }
-      } catch(e){}
-    })();
-  </script>
+  <!-- The section in the URL hash shown before paint, and the service worker -->
+  <script src="boot-body.js"></script>
   <script type="module" src="utils.js"></script>
   <script type="module" src="plot.js"></script>
   <script type="module" src="tauc.js"></script>
@@ -473,39 +449,6 @@
     <button id="pwaUpdateBtn" class="btn primary" type="button">Update</button>
     <button id="pwaUpdateDismiss" class="pwa-toast-x" type="button" aria-label="Dismiss">&#10005;</button>
   </div>
-  <!-- Register the service worker for offline / installable use (secure contexts only) -->
-  <script>
-    function showPwaUpdate(worker){
-      const t = document.getElementById('pwaUpdateToast');
-      if (!t || t.classList.contains('show')) return;
-      t.classList.add('show');
-      document.getElementById('pwaUpdateBtn').onclick = () => {
-        worker.postMessage('SKIP_WAITING');   // activate the waiting SW → controllerchange → reload
-        t.classList.remove('show');
-      };
-      document.getElementById('pwaUpdateDismiss').onclick = () => t.classList.remove('show');
-    }
-    if ('serviceWorker' in navigator) {
-      let reloading = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloading) return; reloading = true; location.reload();
-      });
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').then(reg => {
-          // Already-waiting worker (update downloaded on a previous visit)
-          if (reg.waiting && navigator.serviceWorker.controller) showPwaUpdate(reg.waiting);
-          reg.addEventListener('updatefound', () => {
-            const nw = reg.installing;
-            if (!nw) return;
-            nw.addEventListener('statechange', () => {
-              // "installed" + an existing controller ⇒ this is an update, not first install
-              if (nw.state === 'installed' && navigator.serviceWorker.controller) showPwaUpdate(nw);
-            });
-          });
-        }).catch(() => {});
-      });
-    }
-  </script>
 </body>
 
 </html>

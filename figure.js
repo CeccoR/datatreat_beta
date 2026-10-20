@@ -1442,7 +1442,7 @@ const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'
    translated on commit — and `data-num` marks the field as commit-on-change, so a
    value only takes effect once confirmed instead of on every keystroke. */
 const numField = (attrs, value, min, max)=>
-  `<input type="text" inputmode="decimal" data-num="1" data-min="${min}" data-max="${max}" ${attrs} value="${value}">`;
+  `<input type="text" inputmode="decimal" data-num="1" data-min="${esc(min)}" data-max="${esc(max)}" ${attrs} value="${esc(value)}">`;
 const num = (label, key, min, max)=>
   `<label class="fig-row"><span>${label}</span>${numField(`data-k="${key}"`, F[key], min, max)}</label>`;
 /* A field's number, inside its range. Outside it, or not a number, the field shakes
@@ -1696,7 +1696,7 @@ function divisionsHtml(s, i){
         ${many
           ? `<button type="button" class="fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${X_SVG(13)}</button>`
           : '<span class="fig-divx-gap"></span>'}
-        <button class="color-swatch" data-dsw="${i}:${k}" data-color="${divColor(s,k)}" style="background:${divColor(s,k)}" title="Pick the colour of this division"></button>
+        <button class="color-swatch" data-dsw="${i}:${k}" data-color="${esc(divColor(s,k))}" style="background:${esc(divColor(s,k))}" title="Pick the colour of this division"></button>
         <button type="button" class="fig-fill" data-fill="${i}:${k}" title="How this division's bars are filled">${fillPreview(divTexture(s,k), divInv(s,k))}</button>
         <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">
       </div>
@@ -2289,7 +2289,7 @@ function allSeriesHtml(){
       <button type="button" class="btn btn-sm primary fig-restore" data-restore
               title="Drop the names typed here and take the project's own again">Restore</button>
       <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
-             value="${w === null ? '' : w}" placeholder="—" title="Line / bar width for every series">
+             value="${w === null ? '' : esc(w)}" placeholder="—" title="Line / bar width for every series">
       ${bars ? '' : `
         <select data-all="dash" title="Line style for every series">
           ${DASH_MIX ? '<option value="" selected>—</option>' : ''}
@@ -2316,11 +2316,11 @@ function serieRowHtml(s, i){
       ${s.kind === 'bar'
         ? `${F.palByDiv
              ? `<button class="palette-pick-btn fig-spal" type="button" data-spal="${i}" title="Apply a colour palette to this series' divisions"></button>`
-             : `<button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick the colour of this series and its divisions"></button>`}
+             : `<button class="color-swatch" data-sw="${i}" data-color="${esc(s.color)}" style="background:${esc(s.color)}" title="Pick the colour of this series and its divisions"></button>`}
            ${F.texByDiv
              ? `<button class="palette-pick-btn fig-texpal" type="button" data-stexpal="${i}" title="Apply a texture palette to this series' divisions">${texPalIcon()}</button>`
              : `<button type="button" class="fig-fill" data-fill="${i}" title="How this series' bars are filled">${fillPreview(s.texture, s.texInv)}</button>`}`
-        : `<button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>`}
+        : `<button class="color-swatch" data-sw="${i}" data-color="${esc(s.color)}" style="background:${esc(s.color)}" title="Pick color"></button>`}
       <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
       ${s.kind === 'bar'
         ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}`
@@ -2460,7 +2460,7 @@ function controlsHtml(){
     <div class="fig-subhead">Type</div>
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
     <div class="fig-row"><span>Colour of every line and letter</span>
-      <button class="color-swatch" data-inksw data-color="${F.inkColor}" style="background:${F.inkColor}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></div>
+      <button class="color-swatch" data-inksw data-color="${esc(F.inkColor)}" style="background:${esc(F.inkColor)}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></div>
     <div class="fig-row"><span>X tick labels tilt (&deg;)</span>${F.catRotAuto
       ? `<input type="text" value="${lastCatRot}" data-autorot disabled title="Chosen automatically: the least that keeps the names inside their panel and apart">`
       : numField('data-k="catRot"', F.catRot, 0, 90)}

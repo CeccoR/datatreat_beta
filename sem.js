@@ -366,8 +366,8 @@ import { readTescanTiff } from './sem-read.js';
     ];
     // The crop, and what the figure takes of it in its group (narrowed, at its pixel).
     const c = f.crop, um = v => sig(v*r.pixelNm/1000, 4), o = outOf(f);
-    rows.push(['Crop', `${c.w} × ${c.h} px, ${um(c.w)} × ${um(c.h)} µm${f.clamped ? ' ⚠ narrowed to fit' : ''}`]);
-    if (o) rows.push(['In the figure', `${o.w} × ${o.h} px at ${sig(o.px, 4)} nm${o.c.w !== c.w || o.c.h !== c.h ? `, ${um(o.c.w)} × ${um(o.c.h)} µm of the crop` : ''}`]);
+    rows.push(['Crop', `${esc(c.w)} × ${esc(c.h)} px, ${um(c.w)} × ${um(c.h)} µm${f.clamped ? ' ⚠ narrowed to fit' : ''}`]);
+    if (o) rows.push(['In the figure', `${esc(o.w)} × ${esc(o.h)} px at ${sig(o.px, 4)} nm${o.c.w !== c.w || o.c.h !== c.h ? `, ${um(o.c.w)} × ${um(o.c.h)} µm of the crop` : ''}`]);
     box.innerHTML = rows.map(([k, v])=> `<div class="sem-info-row"><span class="txt-meta">${k}</span><span>${v}</span></div>`).join('')
       + (r.warning ? `<div class="alert warn" style="margin-top:8px">⚠ ${esc(r.warning)}</div>` : '');
   }
@@ -834,19 +834,19 @@ import { readTescanTiff } from './sem-read.js';
       const mem = g.members.map(byId).filter(m=> m && inFigure(m));
       if (!mem.length && g.members.length) return '';
       const empty = !mem.length;
-      return `<div class="sem-group${empty ? ' is-empty' : ''}" data-g="${g.id}" data-drop="${g.id}">
+      return `<div class="sem-group${empty ? ' is-empty' : ''}" data-g="${esc(g.id)}" data-drop="${esc(g.id)}">
         <div class="sem-group-head">
-          <input type="text" class="sem-group-name" data-g="${g.id}" value="${esc(g.name)}" placeholder="Group name" spellcheck="false" aria-label="Group name" title="The group's name, on its figure and its file. Emptied, it goes back to the magnification">
+          <input type="text" class="sem-group-name" data-g="${esc(g.id)}" value="${esc(g.name)}" placeholder="Group name" spellcheck="false" aria-label="Group name" title="The group's name, on its figure and its file. Emptied, it goes back to the magnification">
           <div class="sem-group-acts">
             <div class="sem-scale" role="radiogroup" aria-label="Scale">${[['common', 'common scale', 'One scale for the group: its images brought to its largest pixel size and smallest field, one scale bar'], ['own', 'own scale', 'Each image its own pixels and crop, and its own scale bar']].map(([v, t, tip])=>
-              `<label class="sem-radio" title="${tip}"><input type="radio" class="sem-group-mode" name="semScale-${g.id}" data-g="${g.id}" value="${v}"${g.mode === v ? ' checked' : ''}> ${t}</label>`).join('')}</div>
-            <button class="btn primary btn-sm sem-group-fig" type="button" data-fig="${g.id}"${empty ? ' disabled title="No images in this group yet"' : ' title="Lay this group\'s images out into a figure"'}>Figure composer</button>
+              `<label class="sem-radio" title="${tip}"><input type="radio" class="sem-group-mode" name="semScale-${esc(g.id)}" data-g="${esc(g.id)}" value="${v}"${g.mode === v ? ' checked' : ''}> ${t}</label>`).join('')}</div>
+            <button class="btn primary btn-sm sem-group-fig" type="button" data-fig="${esc(g.id)}"${empty ? ' disabled title="No images in this group yet"' : ' title="Lay this group\'s images out into a figure"'}>Figure composer</button>
           </div>
         </div>
         <div class="sem-strip">
           <button class="sem-page sem-page-prev" type="button" data-page="-1" aria-label="Previous images" hidden>&#8249;</button>
           <div class="sem-group-imgs">${empty
-            ? `<div class="sem-group-hint txt-meta">Empty: drag images here. <button class="btn btn-sm" type="button" data-del="${g.id}" title="Remove this empty group">Remove</button></div>`
+            ? `<div class="sem-group-hint txt-meta">Empty: drag images here. <button class="btn btn-sm" type="button" data-del="${esc(g.id)}" title="Remove this empty group">Remove</button></div>`
             : mem.map(m=> `<div class="sem-gimg" data-id="${esc(m.raw.id)}" title="${esc(m.label)}"><div class="sem-gimg-pic"></div><span class="sem-thumb-cap">${esc(m.label)}</span></div>`).join('')}</div>
           <button class="sem-page sem-page-next" type="button" data-page="1" aria-label="Next images" hidden>&#8250;</button>
         </div>
@@ -1072,7 +1072,7 @@ import { readTescanTiff } from './sem-read.js';
     const f = files[cur];
     if (!f) return;
     const sc = scopeOf(), scope = $('semIntScope');
-    scope.innerHTML = `<option value="all">All</option>` + groups.filter(g=> g.members.length).map(g=> `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+    scope.innerHTML = `<option value="all">All</option>` + groups.filter(g=> g.members.length).map(g=> `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
     scope.value = sc;
     renderLinkAll();
     const I = edited(), a = f.adj || ADJ_DEF, setv = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = String(+(+v).toPrecision(6)); };

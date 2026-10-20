@@ -7,7 +7,7 @@
    file, its own parameters, and the Caglioti fit of its widths that corrects the
    samples' sizes for the instrument's).
 ========================================================= */
-import { fmtNum, csvLine, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
+import { esc, fmtNum, csvLine, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 
 // Index of the grid point nearest to a 2θ on a uniform axis.
@@ -816,7 +816,7 @@ export function createPeakAnalysis(host, root, o){
       const below = showCorr && belowInstr(fwhm, pk.detPos);
       const corrCell = showCorr ? (below ? `<td title="Narrower than the instrumental width at this angle">⚠</td>` : `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>`) : '';
       const sel = panel.sel!=null && Math.abs(pk.pos-panel.sel)<1e-9 ? ' selected' : '';
-      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${pk.pos}" data-det="${pk.detPos}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td${std && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${pk.detPos}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
+      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${esc(pk.pos)}" data-det="${esc(pk.detPos)}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td${std && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${esc(pk.detPos)}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
     });
     html+='</tbody></table></div>';
     if (!std){
@@ -926,7 +926,7 @@ export function createPeakAnalysis(host, root, o){
       plot.line(fs[k].x, y, fs[k].color, 1.3, undefined,
                 { raw: { xs: fs[k].x, ys: norm1 }, label: fs[k].label, key: fs[k].name });
       const s=document.createElement('span');
-      s.innerHTML=`<i style="background:${fs[k].color}"></i>${fs[k].label}`;
+      s.innerHTML=`<i style="background:${esc(fs[k].color)}"></i>${esc(fs[k].label)}`;
       legend.appendChild(s);
     });
     return plot;
@@ -1044,7 +1044,7 @@ export function createPeakAnalysis(host, root, o){
     drawSizeBarChart(rows, chips);
     // What is left out by peak: the reflections not every sample has, and whose they are.
     if (note) note.innerHTML = by === 'peak' && R.extra.length
-      ? `Not in every sample, left out: ${R.extra.map(g=> `${g.pos.toFixed(2)}° (${[...g.by.keys()].map(k=> files()[k].label).join(', ')})`).join('; ')}.` : '';
+      ? `Not in every sample, left out: ${R.extra.map(g=> `${g.pos.toFixed(2)}° (${[...g.by.keys()].map(k=> esc(files()[k].label)).join(', ')})`).join('; ')}.` : '';
     sizeNames();
   }
   // The chart's downloads follow what it shows, and the card's name.

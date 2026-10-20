@@ -1,4 +1,4 @@
-import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, movingAverage, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumberInputs } from './utils.js';
+import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, movingAverage, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumberInputs, esc } from './utils.js';
 import { Plot } from './plot.js';
 import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
@@ -50,7 +50,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   // A .DTA/.DSC arriving without its partner in the same drop is simply not loaded —
   // nothing is held back waiting for it. This is just the ephemeral warning saying so.
   function buildPendingAlert(names){
-    pendingAlerts = names.length ? buildAlertsHtml([], names,
+    pendingAlerts = names.length ? buildAlertsHtml([], names.map(esc),
       'Not loaded — a .DTA and its .DSC must be uploaded together:',
       undefined, 'epr-dismiss-pending') : '';
   }
@@ -149,8 +149,8 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       }
     }
 
-    loadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'epr-dismiss-invalid') : '';
-    uploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'epr-dismiss-upload') : '';
+    loadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles.map(esc), [], undefined, 'epr-dismiss-invalid') : '';
+    uploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded.map(esc), 'Already loaded file(s):', '', 'epr-dismiss-upload') : '';
     buildPendingAlert(unpaired);
     rebuildAlerts();
     afterFilesChange();
@@ -285,7 +285,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       const csvY = out[k];
       plot.line(files[k].b, y, files[k].color, 1.3, undefined,
                 { raw: { xs: files[k].b, ys: csvY }, label: files[k].label, key: files[k].name });
-      const s=document.createElement('span'); s.innerHTML=`<i style="background:${files[k].color}"></i>${files[k].label}`; legend.appendChild(s);
+      const s=document.createElement('span'); s.innerHTML=`<i style="background:${esc(files[k].color)}"></i>${esc(files[k].label)}`; legend.appendChild(s);
     });
   }
 
