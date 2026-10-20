@@ -38,6 +38,27 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   // error reported here (Eg, E_U) is multiplied by.
   const T_Q = 0.995;
 
+  /* A curve with points that have no value (F(R) < 0 under a fractional exponent, F(R) ≤ 0
+     under the logarithm) is smoothed and differentiated over the points that have one,
+     as though the others had not been measured: those stay without a value, and every
+     other point is averaged with its nearest neighbours that have one. Run over every
+     point (to v478), the moving average spread each missing point to N/2 neighbours on
+     either side, the derivative's to N2/2 more, the second derivative's as far again:
+     10 points of F(R) < 0 left 279 of 551 values of Y'' without one, which the
+     suggestion took for curvature, and no fit window could hold a point the spread had
+     reached. `fn(y, x)` runs on the points with a finite y (or those `has(i)` keeps) and
+     their x; a curve with none left out goes through it as it is. */
+  function onFinite(y, x, fn, has = i=> isFinite(y[i])){
+    const ok = []; for (let i=0;i<y.length;i++) if (has(i)) ok.push(i);
+    if (ok.length === y.length) return fn(y, x);
+    const r = fn(ok.map(i=> y[i]), x && ok.map(i=> x[i])), out = new Array(y.length).fill(NaN);
+    ok.forEach((i, j)=> out[i] = r[j]);
+    return out;
+  }
+  const smoothY = (y, N)=> onFinite(y, null, v=> movingAverage(v, N));
+  // dy/dx smoothed over N points.
+  const slopeOf = (y, x, N)=> onFinite(y, x, (v, e)=> movingAverage(gradientArr(v, e), N));
+
   // Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
   // minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
   // by the y-range makes the criterion robust — it locks onto the steep linear edge
@@ -47,10 +68,17 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   // it: fitted to smoothed values its residuals are averaged together, no longer
   // independent, and every error came out too small (a "99%" interval held the truth
   // 72% of the time at N = 5, 37% at N = 15). `n` is how many points it was fitted on.
-  function scanRegr(hv, Ys, M, x1, x2, Yraw){
+  // A window is M points that have a value: one without (F(R) at or below zero, see
+  // onFinite) is left out, and the window reaches past it. One holding such a point was
+  // passed over (to v478), so a few of F(R) < 0 through the baseline region left it no
+  // window to fit. With `strict` it still is, and only a point whose energy has no value
+  // is left out: the subtracted Urbach curve gives none to those of F(R) ≤ 0, which the
+  // plain curve leaves out, so a point there without a value is one where the Tauc
+  // baseline lies above F(R), which the card reports.
+  function scanRegr(hv, Ys, M, x1, x2, Yraw, strict){
     const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
     const idxSel = [];
-    for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi) idxSel.push(i);
+    for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi && (strict || isFinite(Ys[i]))) idxSel.push(i);
     let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,NRMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
     if (idxSel.length < M) return best;
     let bestScore = Infinity;
@@ -132,10 +160,14 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
   const SUGG_CONT   = 25;     // required consecutive points above ε
   const SUGG_TAIL   = 0.10;   // fraction of the energy range skimmed off each end
+  // Read over the points that have a slope (onFinite): one without has no curvature.
+  // A non-finite |Y''| left (a repeated energy) counts as none: it made ε an absolute 0.1
+  // (Math.max with NaN is NaN) and stood "above ε" in every run (to v478).
   function curvatureEdge(c, p){
-    const hv = c.hv, n = hv.length;
+    const ok = []; for (let i=0;i<c.hv.length;i++) if (isFinite(c.dYs[i])) ok.push(i);
+    const hv = ok.map(i=> c.hv[i]), n = hv.length;
     if (n < 7) return null;
-    const d2  = movingAverage(gradientArr(c.dYs, hv), p.N2);      // Y''
+    const d2  = movingAverage(gradientArr(ok.map(i=> c.dYs[i]), hv), p.N2);      // Y''
     // energy-ascending order of indices, so we can scan by energy regardless of layout
     const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
     const eLo = hv[ord[0]], eHi = hv[ord[n-1]], cut = SUGG_TAIL * (eHi - eLo);
@@ -143,7 +175,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     while (a < n && hv[ord[a]] < eLo + cut) a++;
     while (b >= 0 && hv[ord[b]] > eHi - cut) b--;
     if (b - a < 2) return null;
-    const ax = j => Math.abs(d2[ord[j]]);
+    const ax = j =>{ const v = Math.abs(d2[ord[j]]); return isFinite(v) ? v : 0; };
     let A = 0; for (let j=a;j<=b;j++) A = Math.max(A, ax(j));
     const eps = SUGG_THRESH * (A || 1);
     const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
@@ -193,8 +225,8 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     function curves(i, p){
       const hv = files[i].hv;
       const Yraw = files[i].FR.map((v,k)=> spec.curve(v, hv[k], p));
-      const Ys  = movingAverage(Yraw, p.N);
-      const dYs = movingAverage(gradientArr(Ys, hv), p.N2);        // Y'
+      const Ys  = smoothY(Yraw, p.N);
+      const dYs = slopeOf(Ys, hv, p.N2);                            // Y'
       return { hv, Yraw, Ys, dYs };
     }
 
@@ -325,7 +357,9 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       let tooSmall = false;
       windows.forEach((w, wi)=>{
         const lo = Math.min(vlines[w.lo], vlines[w.hi]), hi = Math.max(vlines[w.lo], vlines[w.hi]);
-        const sel = hv.filter(v=> v>=lo && v<=hi).length;
+        // Only the points with a value, as scanRegr takes them: counted all (to v478), an
+        // interval of F(R) ≤ 0 had no fit and the card no word why.
+        const sel = hv.filter((v, i)=> v>=lo && v<=hi && isFinite(c.Ys[i])).length;
         const reg = sel >= p[w.M] ? scanRegr(hv, c.Ys, p[w.M], vlines[w.lo], vlines[w.hi], c.Yraw) : null;
         fits.push(reg);
         $(w.stats[0]).textContent = reg && isFinite(reg.NRMSE) ? reg.NRMSE.toFixed(4) : '-';
@@ -564,21 +598,27 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     const hv = files[k].hv, FR = files[k].FR;
     const Fb = hv.map(e=>{ const y = r.slope*e + r.intercept; return y > 0 ? Math.pow(y, 1/ta)/e : 0; });
     const Yraw = FR.map((v, i)=> v - Fb[i] > 0 ? Math.log(v - Fb[i]) : NaN);
-    const Ys = movingAverage(Yraw, p.N);
-    const regs = scanRegr(hv, Ys, p.M, vl.v1, vl.v2, Yraw);
-    // How many points between the lines lost their logarithm (F(R) ≤ F_b): with too
-    // many there is no window to fit, and the card says why.
+    // The points of F(R) ≤ 0 are left out, as in the plain curve, of the smoothing and the
+    // scan: without a logarithm in either, they are no sign of the baseline. Counted with
+    // those where it lies above F(R) (to v478), they blocked every window holding one,
+    // and the card blamed the baseline for them. Those where it does stay in, as they
+    // were: there the curve was measured and has no value, nor has an average holding one.
+    const Ys = onFinite(Yraw, null, v=> movingAverage(v, p.N), i=> FR[i] > 0);
+    const regs = scanRegr(hv.map((e, i)=> FR[i] > 0 ? e : NaN), Ys, p.M, vl.v1, vl.v2, Yraw, true);
+    // How many points of F(R) > 0 between the lines lost their logarithm (F(R) ≤ F_b):
+    // with too many there is no window to fit, and the card says why (and, with `neg`
+    // of F(R) ≤ 0 there too, that its count is of the others).
     const lo = Math.min(vl.v1, vl.v2), hi = Math.max(vl.v1, vl.v2);
-    let inside = 0, lost = 0;
-    hv.forEach((e, i)=>{ if (e >= lo && e <= hi){ inside++; if (!isFinite(Yraw[i])) lost++; } });
+    let inside = 0, lost = 0, neg = 0;
+    hv.forEach((e, i)=>{ if (e >= lo && e <= hi){ if (!(FR[i] > 0)) neg++; else { inside++; if (!isFinite(Yraw[i])) lost++; } } });
     // The baseline is to blame only where the region holds a window to fit: with fewer
-    // points than M the plain fit fails too, and the card says so already.
+    // points of F(R) > 0 than M the plain fit fails too, and the card says so already.
     const blocked = !isFinite(regs.slope) && lost > 0 && inside >= p.M;
     // E_U's error: the fit's own and the Tauc baseline's carried through the subtraction,
     // independent, so added in quadrature (each already times its own t factor).
     const fit = urbachEu(regs, p.M), m = regs.slope;
     const EuErrBase = subBaselineSlopeErr(regs, Yraw, r, ta, hv, FR, T.params(k).M2)/(m*m);
-    return { Fb, Yraw, Ys, regs, inside, lost, blocked, Eu: fit.Eu, EuErr: Math.hypot(fit.EuErr, EuErrBase), EuErrFit: fit.EuErr, EuErrBase };
+    return { Fb, Yraw, Ys, regs, inside, lost, neg, blocked, Eu: fit.Eu, EuErr: Math.hypot(fit.EuErr, EuErrBase), EuErrFit: fit.EuErr, EuErrBase };
   }
   /* What the Tauc baseline's own uncertainty adds to the subtracted slope s. With the
      window and its points held, s = Σ w_i·ln(F_i − F_b,i), w_i = (hν_i − mean)/S_xx, is a
@@ -661,7 +701,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         $('LegSub').style.display = sb ? '' : 'none';
         $('LegSubFit').style.display = g && isFinite(g.slope) ? '' : 'none';
         if (sb && sb.blocked) $('Alert').insertAdjacentHTML('beforeend',
-          `<div class="alert warn">⚠ No subtracted fit: the Tauc baseline lies above F(R) at ${sb.lost} of the ${sb.inside} points between the lines, where F(R) − F<sub>b</sub> has no logarithm.</div>`);
+          `<div class="alert warn">⚠ No subtracted fit: the Tauc baseline lies above F(R) at ${sb.lost} of the ${sb.inside} points between the lines${sb.neg ? ' with F(R) > 0' : ''}, where F(R) − F<sub>b</sub> has no logarithm.</div>`);
       },
       hidden: ()=> isFolded(a),
       onSettled: ()=>{ if (!quiet) renderAnalysisRes(a); },
@@ -686,7 +726,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   /* ---- Card markup ---- */
   const DL_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
   const CARD_INFO = cardInfo(true, true);
-  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
+  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. Where F(R) &lt; 0, [F(R)·hν]<sup>a</sup> has no value for a = 0.5, 2/3 or 1/3: those points are left out, as though not measured, of the smoothing, the derivatives, the suggestion and the fits. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
   const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, each with its own axes: the plain curves and fits above, the subtracted ones under them (empty, and saying why, when there is nothing to subtract); the chips on the E<sub>U</sub> chart show the plain E<sub>U</sub>, the subtracted one or both. ${CARD_INFO}`;
 
 
@@ -1308,7 +1348,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     const Ys_all = files.map((f,k)=>{
       const fp = P.params(k);
       const Yraw = f.FR.map((v,i)=>Math.pow(v*f.hv[i], fp.a));
-      return movingAverage(Yraw, fp.N);
+      return smoothY(Yraw, fp.N);
     });
     const ymax1 = Math.max(...Ys_all.map(maxArr));
     const [hv0, hv1] = unionHv();
@@ -1357,7 +1397,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     const P = panelOf(a), p = 'an' + a.id, $ = id => document.getElementById(p + id);
     const fits = files.map((f,k)=> P.analyze(k));
     const curves = files.map((f,k)=> ({
-      p: movingAverage(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), P.params(k).N),
+      p: smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), P.params(k).N),
       s: fits[k].sub ? fits[k].sub.Ys : null,
     }));
     const vals = { p: fits.map(r=> r.Eu*1000), s: fits.map(r=> r.sub ? r.sub.Eu*1000 : NaN) };
@@ -1604,7 +1644,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         const r = fits[k];
         cols.push({h:'energy_eV_'+f.label,       v:f.hv.map(x=>fmtNum(x,6))});
         // The curve as plotted and fitted: smoothed with the card's window.
-        const fp = P.params(k), Ys = movingAverage(f.FR.map((v,i)=> Math.pow(v*f.hv[i], fp.a)), fp.N);
+        const fp = P.params(k), Ys = smoothY(f.FR.map((v,i)=> Math.pow(v*f.hv[i], fp.a)), fp.N);
         cols.push({h:f.label,                    v:Ys.map(v=> fmtNum(v,6))});
         cols.push({h:f.label+'_reg_linear',      v:f.hv.map(hv=> fmtNum(r.regs.slope*hv  + r.regs.intercept, 6))});
         cols.push({h:f.label+'_reg_baseline',    v:f.hv.map(hv=> fmtNum(r.regs2.slope*hv + r.regs2.intercept, 6))});
@@ -1656,7 +1696,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         const r = fits[k].regs;
         cols.push({h:'energy_eV_'+f.label,  v:f.hv.map(x=>fmtNum(x,6))});
         // As plotted and fitted: smoothed with the card's window.
-        const Ys = movingAverage(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), P.params(k).N);
+        const Ys = smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), P.params(k).N);
         cols.push({h:f.label,               v:Ys.map(v=> isFinite(v) ? fmtNum(v,6) : '')});
         cols.push({h:f.label+'_reg_urbach', v:f.hv.map(hv=> isFinite(r.slope) ? fmtNum(r.slope*hv + r.intercept, 6) : '')});
         // With the reference Tauc card's baseline taken out of F(R) (empty with none).
