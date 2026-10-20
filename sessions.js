@@ -11,8 +11,8 @@ import { MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
          moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab, onSectionChange } from './utils.js';
 import { allProjects, putProject, deleteProject, uid, encode, decode } from './db.js';
 import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
-         setTabDirty, setTabProject, onTabActivated, onCloseSave, initTabs,
-         persistTab, isRestoring, UNTITLED } from './tabs.js';
+         setTabDirty, setTabProject, onTabActivated, onTabLoaded, onCloseSave, initTabs,
+         persistTab, isRestoring, isLive, ensureLive, UNTITLED } from './tabs.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
@@ -120,7 +120,8 @@ function markSaved(mod){
   // The tab record is kept for saved projects too — it is the persistent working
   // state that comes back on the next load. Re-persist it so it records the saved
   // (not-dirty) status, and drop the "*" from the tab.
-  if (t){ setTabDirty(t.id, false); if (!isRestoring()) persistTab(t); if (t.projectId) _savedKey.set(t.id, { key: stateKey(mod), title: t.title || '' }); }
+  // A tab just activated is not live yet: onTabLoaded below takes what it holds then.
+  if (t){ setTabDirty(t.id, false); if (!isRestoring()) persistTab(t); if (t.projectId && isLive(t)) _savedKey.set(t.id, { key: stateKey(mod), title: t.title || '' }); }
   saveBtns(mod).forEach(b=>{
     if (b.dataset.origHtml === undefined) b.dataset.origHtml = b.innerHTML;
     b.classList.add('is-saved');
@@ -154,6 +155,7 @@ function flashInvalid(inp){
 // Returns true when the project was actually written, false on any abort (no data,
 // missing name, or a declined overwrite) — callers like "New project" rely on this.
 async function doSave(mod, asNew){
+  ensureLive();
   if (!moduleHasData(mod)){ await confirmBanner('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.', 'OK'); return false; }
   if (asNew){ openSaveAsModal(mod); return false; }
 
@@ -186,6 +188,7 @@ async function doSave(mod, asNew){
 
 /* ---- Export current module as .json ---- */
 async function exportJson(mod){
+  ensureLive();
   if (!moduleHasData(mod)){ await confirmBanner('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.', 'OK'); return; }
   const inp = nameInput(mod);
   const now = Date.now();
@@ -352,6 +355,7 @@ async function deleteProjectRec(rec){
 //  • Saved project → confirm "delete «name»" (Delete + cancel).
 //  • Never saved   → nothing is stored yet, so just confirm losing the work.
 async function deleteOpenProject(mod){
+  ensureLive();
   const t = activeTab(); if (!t) return;
   const cur = curProject();
   // An empty file list means there is nothing to lose, named or not: delete the
@@ -400,6 +404,7 @@ document.addEventListener('click', async e=>{
   if (!b || b.disabled) return;
   // The delete / new-project buttons carry no data-module; take it from their project-bar.
   const mod = b.dataset.module || (b.closest('.project-bar') || {}).dataset && b.closest('.project-bar').dataset.module;
+  ensureLive();   // the module holds the active tab's state, not the one before a switch
   const isExport = b.classList.contains('proj-save') || b.classList.contains('proj-saveas')
                 || b.classList.contains('proj-csv')  || b.classList.contains('proj-json');
   // Save / Save as / export need files; with an empty list say so (delete & new are fine).
@@ -617,6 +622,11 @@ onSectionChange(tab=>{
   } else {
     projectBar.style.display = '';
   }
+});
+// A saved, unchanged tab is what was saved: once its state is live, that is what later
+// changes are compared with.
+onTabLoaded(tab=>{
+  if (tab.projectId && !tab.dirty) _savedKey.set(tab.id, { key: stateKey(tab.module), title: tab.title || '' });
 });
 // Closing a tab may offer to save it first; the tab manager has no access to the
 // project store, so it calls back in here.

@@ -52,10 +52,12 @@ function untitledName(module){
 /* ---- Persistence ----------------------------------------------------------
    Every open tab is stored, saved or not: on the next load the app comes back
    with the same tabs and the same unsaved work. */
+// The module holds a tab's state only once the tab is live: between a switch and its
+// deferred load (loadTabIfActive) the active tab's state is still the one parked.
 function tabRec(t, order){
   return { id:t.id, module:t.module, title:t.title, projectId:t.projectId || null,
            dirty:!!t.dirty, order, active: t.id===_activeId,
-           state: t.id===_activeId ? encode(getModuleState(t.module)) : t.state,
+           state: t.id===_liveId ? encode(getModuleState(t.module)) : t.state,
            updatedAt: Date.now() };
 }
 function persistTab(t){
@@ -72,6 +74,7 @@ function persistAll(){
 // superseded switch (see loadTabIfActive) neither stashes stale data nor reloads a
 // tab that is already live.
 let _liveId = null;
+const isLive = t => !!t && t.id === _liveId;
 // Park the live module state (and undo history) of the currently active tab — but
 // only if that tab is genuinely the live one. During rapid switching an outgoing
 // tab may never have been loaded (its deferred load was skipped); its record is
@@ -92,6 +95,15 @@ function loadTab(t){
   try { if (st != null) restoreModuleState(t.module, decode(st)); } catch(e){}
   if (t.hist) setModuleHistory(t.module, t.hist);
   _liveId = t.id;
+  if (_onLoaded){ try { _onLoaded(t); } catch(e){} }
+}
+// Whatever reads the active tab's module (a save, an export, a close that saves) calls
+// this first: a switch loads the tab a frame or two after the click, and read in between
+// the module still holds the tab before it. Up to v468 closing an inactive tab with
+// "Save" saved the tab on show into the closed one's project.
+function ensureLive(){
+  const t = activeTab();
+  if (t && _liveId !== t.id) loadTab(t);
 }
 // Deferred loader guarded against fast switching: if the user has already moved on
 // to another tab by the time this runs, do nothing — only the final tab loads.
@@ -106,10 +118,12 @@ function loadTabIfActive(t){
 /* ---- Project bar sync -----------------------------------------------------
    Only one module is live, so its project-name field always shows the active
    tab's title. sessions.js owns everything else about saving. */
-let _onActivate = null;
-// sessions.js registers what to do once a tab's state is live (name field, save
-// button state, dirty markers) — it owns that logic, this module owns the tabs.
+let _onActivate = null, _onLoaded = null;
+// sessions.js registers what to do once a tab is activated (name field, save button
+// state, dirty markers) — it owns that logic, this module owns the tabs — and once its
+// state is live in its module (what it was saved as, to compare later changes with).
 function onTabActivated(fn){ _onActivate = fn; }
+function onTabLoaded(fn){ _onLoaded = fn; }
 function syncProjectBar(t){
   if (_onActivate){ try { _onActivate(t); } catch(e){} }
 }
@@ -368,7 +382,7 @@ function moveTab(id, to){
 // directly; a parked one is empty when its state still matches the pristine
 // default (a typed name lives on the record, not in the module state).
 function isEmpty(t){
-  if (t.id === _activeId) return !moduleHasData(t.module);
+  if (t.id === _liveId) return !moduleHasData(t.module);
   if (!t.state) return true;
   try { return JSON.stringify(t.state) === JSON.stringify(DEFAULT_STATE[t.module]); }
   catch(e){ return false; }
@@ -388,7 +402,8 @@ async function requestClose(id){
   if (res === false) return;                               // cancel
   if (res === true){
     if (!_saveForClose) return;
-    if (t.id !== _activeId) activateTab(t.id);             // save acts on the live module
+    if (t.id !== _activeId) activateTab(t.id);             // save acts on the live module:
+    ensureLive();                                          // the tab's, loaded now
     if (!await _saveForClose(t)) return;                   // save aborted → keep the tab
   }
   closeTab(id);
@@ -433,4 +448,5 @@ async function initTabs(){
 
 export { TABS, MAX_TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,
          closeTab, requestClose, setTabTitle, setTabDirty, setTabProject, renderTabs,
-         onTabActivated, onCloseSave, initTabs, persistTab, persistAll, isRestoring, untitledName };
+         onTabActivated, onTabLoaded, onCloseSave, initTabs, persistTab, persistAll, isRestoring,
+         isLive, ensureLive, untitledName };
