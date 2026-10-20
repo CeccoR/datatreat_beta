@@ -52,7 +52,7 @@ Note: The decimal and field separator cannot both be set to comma.
 
 ## Modules
 
-DataTreat is a modular application. New analysis modules may be added in the future. Currently available modules are:
+DataTreat is a modular application. New analysis modules may be added in the future. In every module the loaded files are listed with a **sample label** each, used in the plots, the legends and the exports: a label is taken when you leave its field (or press Enter), not while you type, and Escape puts back the one it had. Currently available modules are:
 
 ### 1. DRS UV-Vis (Tauc Plot Analysis)
 

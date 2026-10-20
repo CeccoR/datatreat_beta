@@ -822,7 +822,8 @@ function moveFileTo(all, from, to, slots){
    UNIFIED FILE LIST RENDERER
    files: array of objects with at least {name, label} — every file loaded, included
    or not (see INCLUDED FILES)
-   callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel),
+   callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel)
+               (on leaving the field, not while typing),
                onColorChange(i,color), onPaletteChange(colors), onInclude(i,on),
                onIncludeAll(on)}
    extraCols: optional array of {header, render(file,i)} for additional columns
@@ -910,9 +911,19 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
       });
     });
   });
+  /* A label is taken when the field is left (or on Enter), in every module: not at each
+     key, where a module redrew its plots and stored a step of the undo history, which made
+     typing slow (to v466). Escape puts back the label the field had when entered. */
   wrap.querySelectorAll('.file-label').forEach(inp=>{
-    inp.addEventListener('input', e=>{
+    inp.addEventListener('focus', ()=>{ inp.dataset.was = inp.value; });
+    inp.addEventListener('change', e=>{
+      if (e.target.value === inp.dataset.was) return;
+      inp.dataset.was = e.target.value;
       if (callbacks.onLabelChange) callbacks.onLabelChange(+e.target.dataset.i, e.target.value);
+    });
+    inp.addEventListener('keydown', e=>{
+      if (e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
+      else if (e.key === 'Escape' && inp.dataset.was != null){ e.preventDefault(); e.stopPropagation(); inp.value = inp.dataset.was; inp.blur(); }
     });
   });
   wrap.querySelectorAll('.row-del').forEach(btn=>{
