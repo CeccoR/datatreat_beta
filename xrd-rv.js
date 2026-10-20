@@ -1103,6 +1103,8 @@ export function createRietveld(host, root, o){
     $('CellName').textContent = q ? q.prep.name : '';
     if (!q){ if (cellV) cellV.set(null); cellKeyShown = ''; info.innerHTML = '<div class="rv-empty">Select a phase to see its structure.</div>'; return; }
     if (!cellV) cellV = cellView($('Cell'), { side: ()=> cellSide() });
+    const k = q.id + '|' + cellKey(q.prep.cell);
+    if (k !== cellKeyShown){ cellKeyShown = k; cellV.set({ name: q.id + q.prep.name, cell: q.prep.cell, atoms: q.prep.atoms }); }
     const P = q.prep, K = P.constraint || {}, c = K.conv && K.basis ? K.conv : P.cell, r4 = v => +(+v).toFixed(4);
     const V = metric(c).V, Vc = metric(P.cell).V;
     // The density: the cell's mass (g/mol) over its volume, 1 g/mol/Å³ = 1.66054 g/cm³.
@@ -1121,27 +1123,15 @@ export function createRietveld(host, root, o){
       + `<div class="rv-ci-file">${q === lab6 ? 'built in, the standard\'s certified cell' : esc(q.file)}</div>`
       // what reading the CIF found (its own cell, operations it lacked, B made equal on a site)
       + P.notes.map(t=> `<div class="rv-ci-note">${esc(t.charAt(0).toUpperCase() + t.slice(1))}.</div>`).join('');
-    // (after the details: the cell's side leaves them their height, cellSide)
-    const k = q.id + '|' + cellKey(q.prep.cell);
-    if (k !== cellKeyShown){ cellKeyShown = k; cellV.set({ name: q.id + q.prep.name, cell: q.prep.cell, atoms: q.prep.atoms }); }
-    else cellV.redraw();
   }
-  // The square's side, and the details first: the square gives up height to them, down
-  // to 60 % of the box's width, so that they read whole without scrolling where the column allows (v465;
-  // before, the square took the whole width and the details what was left: at 1280 px
-  // 148 px for 208). Stacked on a narrow screen the box is as tall as what it holds.
+  // The square's side: the shorter of the box's width and what is left of its height
+  // under the details (fitSide sets the box's height to end with the plot).
   function cellSide(){
     const box = $('Cell').closest('.rv-cellbox');
     if (!box) return 0;
     const cs = getComputedStyle(box), w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const h = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - box.querySelector('.peak-box-head').offsetHeight - 8;
-    if (document.documentElement.classList.contains('narrow-layout') || !(h > 0)) return Math.max(80, w);
-    // (the details' own height, a range over them: their box's scrollHeight is never under
-    // the height it was given, which would keep whatever room they had)
-    const info = $('CellInfo'), rg = document.createRange();
-    rg.selectNodeContents(info);
-    const need = Math.ceil(rg.getBoundingClientRect().height) + (parseFloat(getComputedStyle(info).marginTop) || 0) + 2;
-    return Math.max(80, Math.min(w, Math.max(h - need, Math.round(0.6*w))));
+    return Math.max(80, Math.min(w, h > 0 ? h : w));
   }
   // The column beside the pattern ends where the plot does: its boxes take the height the
   // buttons leave (set by the grid; on a narrow screen, where it sits under the pattern,
