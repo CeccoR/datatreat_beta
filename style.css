@@ -2043,9 +2043,9 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .cell3d-canvas.is-grabbing { cursor: grabbing; }
 .cell3d-canvas:focus { outline: none; }
 .cell3d-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.rv-cell-info { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-top: 6px; font-size: 12px; line-height: 1.55; color: var(--text); }
+.rv-cell-info { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-top: 6px; font-size: 13px; line-height: 1.45; color: var(--text); }
 .rv-cell-info span { color: var(--muted); }
-.rv-cell-info .rv-ci-name { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.rv-cell-info .rv-ci-name { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
 .rv-cell-info .rv-ci-els { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
 .rv-cell-info .rv-ci-els span { color: var(--text); display: inline-flex; align-items: center; gap: 4px; }
 .rv-cell-info .rv-ci-els i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); }
