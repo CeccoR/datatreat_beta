@@ -92,6 +92,8 @@ function svgEl(tag, attrs){
   for (const k in attrs) e.setAttribute(k, attrs[k]);
   return e;
 }
+// A figure composer is being opened from a plot's toolbar (figBtn, in attachTools).
+let _figOpening = false;
 class Plot{
   constructor(svg, opts){
     this.svg = svg;
@@ -446,23 +448,40 @@ class Plot{
       // Grip dot near the top for an easy drag target
       const grip = svgEl('circle',{cx:x0, cy:m.t+15, r:7.5, fill:entry.color, 'cursor':'ew-resize'});
       this.gOverlay.appendChild(grip);
-      let dragging = false;
-      const move = (clientX)=>{
-        const rect = this.svg.getBoundingClientRect();
-        let xv2 = this.invX(clientX - rect.left);
-        xv2 = Math.max(this.xmin, Math.min(this.xmax, xv2));
-        entry.xv = xv2;
-        if (entry.onDrag) entry.onDrag(xv2);
-      };
-      const startDrag = e=>{ dragging = true; e.preventDefault(); e.stopPropagation(); };
+      const startDrag = e=>{ e.preventDefault(); e.stopPropagation(); this._dragVline(entry, e.pointerId); };
       hit.addEventListener('pointerdown', startDrag);
       grip.addEventListener('pointerdown', startDrag);
-      // Listen on svg + window so dragging survives gOverlay clears during redraws
-      this.svg.addEventListener('pointermove', e=>{ if (dragging) move(e.clientX); });
-      window.addEventListener('pointerup', ()=>{ if (dragging){ dragging = false; if (entry.onDragEnd) entry.onDragEnd(entry.xv); } });
     }
     line._value = entry.xv;
     return line;
+  }
+  /* One drag of a vline, from the press on it to its release (or cancel). The move and
+     the release are heard on the svg and the window, not on the line, so the drag
+     survives the redraws that replace the line under the pointer, and only while it
+     lasts: each render of a draggable line added both for good (to v475), and Tauc,
+     which redraws its four lines on every drag frame, sample step, parameter change and
+     pan, piled them up by the thousand. Only the pointer that pressed moves the line, so
+     two fingers on two lines drag one each (both lines took whichever moved last). */
+  _dragVline(entry, id){
+    const svg = this.svg;
+    const move = e=>{
+      if (e.pointerId !== id) return;
+      const rect = svg.getBoundingClientRect();
+      let xv2 = this.invX(e.clientX - rect.left);
+      xv2 = Math.max(this.xmin, Math.min(this.xmax, xv2));
+      entry.xv = xv2;
+      if (entry.onDrag) entry.onDrag(xv2);
+    };
+    const end = e=>{
+      if (e.pointerId !== id) return;
+      svg.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      if (entry.onDragEnd) entry.onDragEnd(entry.xv);
+    };
+    svg.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
   }
   _redrawFromStored(){
     this.gData.innerHTML=''; this.gOverlay.innerHTML='';
@@ -548,14 +567,22 @@ class Plot{
     figBtn.className = 'btn plot-tool-btn';
     figBtn.title = 'Figure composer (advanced export)';
     figBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="3" y1="12" x2="21" y2="12"/></svg>`;
+    /* One composer at a time. A click while one is loading is ignored, and none opens
+       over a composer already open (this one or the SEM figure's: a press of Enter on
+       the button, still focused, reaches it under the modal). A double click before
+       figure.js had loaded opened two, the first left with no way to close (to v475). */
     figBtn.onclick = async ()=>{
+      if (_figOpening) return;
+      _figOpening = true;
       const dlBtn = wrapEl.querySelector('.plot-dl-btn');
       const legId = dlBtn && dlBtn.dataset.dlLegend;
       const name = (dlBtn && dlBtn.dataset.dlName || 'figure').replace(/\.[^.]+$/, '');
       try {
         const mod = await import('./figure.js');
-        mod.openFigureEditor(this, { legendEl: legId ? document.getElementById(legId) : null, name });
+        if (!document.querySelector('.fig-backdrop'))
+          mod.openFigureEditor(this, { legendEl: legId ? document.getElementById(legId) : null, name });
       } catch(err){ console.error('figure composer failed to load', err); }
+      finally { _figOpening = false; }
     };
 
     // Order, top to bottom: composer, CSV, download image, snapshot, copy, pan, zoom.
