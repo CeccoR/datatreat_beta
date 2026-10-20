@@ -216,6 +216,7 @@ import { readTescanTiff } from './sem-read.js';
     const x = Math.round(Math.min(Math.max(0, c.x), W - w)), y = Math.round(Math.min(Math.max(0, c.y), H - h));
     return { x, y, w, h };
   }
+  const sameCrop = (a, b) => ['x', 'y', 'w', 'h'].every(k=> a[k] === b[k]);
   const defaultCrop = r => ({ x: 0, y: 0, w: r.width, h: r.imageH });
   const isDefaultCrop = f =>{ const e = dec(f), d = e && defaultCrop(e.r); return !!d && ['x', 'y', 'w', 'h'].every(k=> f.crop[k] === d[k]); };
   // Set a file's crop from another's (a copy, the linked crop): narrowed to fit where
@@ -277,7 +278,9 @@ import { readTescanTiff } from './sem-read.js';
       onReorder(from, to){ moveFileTo(allFiles, from, to, []); afterFilesChange(); },
       onInclude(i, on){ setIncluded(allFiles, i, on, []); afterFilesChange(); },
       onIncludeAll(on){ allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, [])); afterFilesChange(); },
-      onLabelChange(i, v){ allFiles[i].label = v; renderNav(); renderThumbs(); hist.commit(); },
+      // Everywhere the label shows: the groups' captions and the Reference menu too (to
+      // v474 only the navigator and the thumbnails).
+      onLabelChange(i, v){ allFiles[i].label = v; renderNav(); renderThumbs(); renderGroups(); renderIntensity(); hist.commit(); },
       onRemoveAll(){ allFiles.length = 0; loadAlerts = uploadAlerts = warnAlerts = ''; rebuildAlerts(); afterFilesChange(); },
     };
   }
@@ -313,6 +316,9 @@ import { readTescanTiff } from './sem-read.js';
     groupInt = {};
     for (const [k, v] of Object.entries(s && s.groupInt || {})) groupInt[k] = withDef(v);
     groups = (s && s.groups || []).map(g=> ({ ...g, members: (g.members || []).slice() }));
+    // Only an empty group is kept by hand: a state saved to v476 also kept, for good,
+    // one filled since (made with + Group, or emptied by dragging, then filled).
+    groups.forEach(g=>{ if (g.members.length) delete g.keep; });
     figures = s && s.figures ? JSON.parse(JSON.stringify(s.figures)) : {};
     // A project saved before v440 had one figure for all the groups: each group starts
     // from it, its file named after the group.
@@ -579,7 +585,7 @@ import { readTescanTiff } from './sem-read.js';
     const mode = tool || hitTest(px, py, e.pointerType === 'touch'), f = files[cur];
     // Outside the crop with no tool on, nothing: the view does not move unless asked.
     if (mode === 'pan' && !tool) return;
-    drag = { mode, px, py, c0: { ...f.crop }, ox: view.ox, oy: view.oy, moved: false };
+    drag = { mode, px, py, c0: { ...f.crop }, clamped: f.clamped, def: f.cropDef, ox: view.ox, oy: view.oy, moved: false };
     host.setPointerCapture(e.pointerId);
     if (mode === 'pan') host.style.cursor = 'grabbing';
     else if (mode !== 'zoom') host.style.cursor = CURSOR[mode];
@@ -596,11 +602,17 @@ import { readTescanTiff } from './sem-read.js';
     drag.moved = drag.moved || Math.abs(px - drag.px) + Math.abs(py - drag.py) > 2;
     if (drag.mode === 'pan'){ view.ox = drag.ox + px - drag.px; view.oy = drag.oy + py - drag.py; }
     else if (drag.mode === 'zoom') zoomBox = { x0: drag.px, y0: drag.py, x1: px, y1: py };
-    else {
-      if (drag.mode === 'move') f.crop = fitCrop({ ...drag.c0, x: drag.c0.x + dx, y: drag.c0.y + dy }, W, H, null);
-      else f.crop = resized(drag.c0, drag.mode, dx, dy, W, H, ASPECTS[f.aspect]);
+    // The crop follows once the pointer has moved more than 2 px, so that a click's
+    // jitter leaves it (to v476 it followed at once, and a drag that stayed within the
+    // 2 px changed it uncommitted). Back where it started, it is the crop it was, with
+    // its flags.
+    else if (drag.moved){
+      const c = !dx && !dy ? drag.c0 : drag.mode === 'move' ? fitCrop({ ...drag.c0, x: drag.c0.x + dx, y: drag.c0.y + dy }, W, H, null)
+        : resized(drag.c0, drag.mode, dx, dy, W, H, ASPECTS[f.aspect]);
+      const same = sameCrop(c, drag.c0);
+      f.crop = { ...c };
       // The frame moved by hand: no longer the default (its box unticks).
-      f.clamped = false; f.cropDef = false; renderFields();
+      f.clamped = same && drag.clamped; f.cropDef = same && drag.def; renderFields();
     }
     drawEditor();
   });
@@ -618,7 +630,9 @@ import { readTescanTiff } from './sem-read.js';
         view.s = s2; view.ox = host.clientWidth/2 - ix*s2; view.oy = host.clientHeight/2 - iy*s2;
       }
       drawEditor();
-    } else if (d.mode !== 'pan' && d.moved) cropChanged();
+    // A crop the drag changed is committed (the linked images, statistics and
+    // thumbnails with it), whatever the pointer's move; one it left as it was, nothing.
+    } else if (d.mode !== 'pan' && !sameCrop(files[cur].crop, d.c0)) cropChanged();
   };
   host.addEventListener('pointerup', endDrag);
   host.addEventListener('pointercancel', endDrag);
@@ -735,33 +749,49 @@ import { readTescanTiff } from './sem-read.js';
   const byId = id => allFiles.find(f=> f.raw.id === id);
   const groupOf = f => groups.find(g=> g.members.includes(f.raw.id)) || null;
   const pixelOf = f => { const e = dec(f); return e ? e.r.pixelNm : NaN; };
-  // A group's name: the magnification of its image with the largest pixel size, the
-  // one its common scale brings the others to.
+  // A group's images in the figure: they alone decide its name, its scale, its place
+  // and where a new image goes. An excluded image stays a member, so that it comes back
+  // where it was when included again, but decides nothing while the group has images in
+  // the figure (to v476 it still named the group, ordered it, and kept out of it a new
+  // image the others had room for).
+  const inGroup = g => g.members.map(byId).filter(f=> f && inFigure(f) && dec(f));
+  // A group's name: the magnification of its image in the figure with the largest
+  // pixel size, the one its common scale brings the others to (a group whose images are
+  // all excluded, not shown, by theirs).
   function groupName(ids){
-    const r = ids.map(id=> byId(id)).filter(f=> f && dec(f)).map(f=> dec(f).r).sort((a, b)=> b.pixelNm - a.pixelNm)[0];
+    const fs = ids.map(id=> byId(id)).filter(f=> f && dec(f)), inc = fs.filter(inFigure);
+    const r = (inc.length ? inc : fs).map(f=> dec(f).r).sort((a, b)=> b.pixelNm - a.pixelNm)[0];
     return r ? magText(r) || `${sig(r.pixelNm, 3)} nm/px` : 'group';
   }
   const newGroupId = ()=>{ let k = 1; while (groups.some(g=> g.id === 'g' + k)) k++; return 'g' + k; };
-  // An image into the group whose pixel sizes it stays within 10 % of, else a new one
-  // (never into an empty group: it has no pixel size to be near).
+  // An image into the group whose pixel sizes (its images' in the figure) it stays
+  // within 10 % of, else one whose images are all excluded, by theirs, so that images
+  // near in scale stay together when those come back, else a new one (never into an
+  // empty group: it has no pixel size to be near).
   function placeImage(f){
-    const p = pixelOf(f);
-    const g = groups.find(g=>{ if (!g.members.length) return false; const ps = g.members.map(id=> pixelOf(byId(id))).filter(Number.isFinite).concat(p); return Math.max(...ps)/Math.min(...ps) <= GROUP_TOL; });
+    const p = pixelOf(f), fits = m =>{ const ps = m.map(pixelOf).concat(p); return Math.max(...ps)/Math.min(...ps) <= GROUP_TOL; };
+    const g = groups.find(g=>{ const m = inGroup(g); return m.length && fits(m); })
+      || groups.find(g=>{ const m = g.members.map(byId).filter(m=> m && dec(m)); return !inGroup(g).length && m.length && fits(m); });
     if (g) g.members.push(f.raw.id);
     else groups.push({ id: newGroupId(), name: '', named: false, mode: 'common', members: [f.raw.id] });
   }
   // The groups kept in step with the images: gone ones dropped, new ones placed, groups
-  // left empty removed unless made or emptied by hand, unnamed ones named after their
-  // images.
+  // left empty removed unless made with + Group (and not filled since) or emptied by
+  // dragging, unnamed ones named after their images.
   function syncGroups(){
     const ids = new Set(allFiles.map(f=> f.raw.id));
     groups.forEach(g=>{ g.members = g.members.filter(id=> ids.has(id)); });
     const placed = new Set(groups.flatMap(g=> g.members));
-    allFiles.forEach(f=>{ if (!placed.has(f.raw.id) && dec(f)) placeImage(f); });
-    groups = groups.filter(g=> g.members.length || g.keep);
+    // The included first: an excluded image never decides where they go.
+    [...allFiles.filter(inFigure), ...allFiles.filter(f=> !inFigure(f))].forEach(f=>{ if (!placed.has(f.raw.id) && dec(f)) placeImage(f); });
+    // With no image left in the list (Remove all, or the last one removed) the groups
+    // made or emptied by hand go too: unseen while there is none, they came back empty
+    // with the next files (to v476).
+    groups = groups.filter(g=> g.members.length || g.keep && ids.size);
     tidyGroups();
-    // Lowest magnification first; empty groups last, in the order they were made.
-    const px = g => g.members.length ? pixelOf(byId(g.members[0])) : -1;
+    // Lowest magnification first (by the images in the figure, else, for a group of
+    // excluded ones, by theirs); empty groups last, in the order they were made.
+    const px = g =>{ const m = inGroup(g); return m.length ? pixelOf(m[0]) : g.members.length ? pixelOf(byId(g.members[0])) : -1; };
     groups.sort((a, b)=> px(b) - px(a));
   }
   // Names, and what goes with a group that is gone (its figure, its intensity).
@@ -925,15 +955,20 @@ import { readTescanTiff } from './sem-read.js';
     hist.commit();
   }
   // An image into another group, or into a new one ('new'). A group it leaves empty
-  // stays, with its name and figure, until removed.
+  // stays, with its name and figure, until removed; one it goes into holds images now,
+  // and goes when they are removed from the file list (to v476 a group made with
+  // + Group, or emptied by dragging, stayed for good).
   function moveImage(id, to){
     const from = groups.find(g=> g.members.includes(id));
     if (!from || from.id === to) return;
-    if (to === 'new' && from.members.length === 1) return;
+    // Alone in its group's figure (an excluded image beside it decides nothing), it
+    // would only make the same group again.
+    if (to === 'new' && inGroup(from).length === 1) return;
     const into = to === 'new' ? { id: newGroupId(), name: '', named: false, mode: 'common', members: [] } : groups.find(g=> g.id === to);
     if (!into) return;
     from.members = from.members.filter(m=> m !== id);
     if (!from.members.length) from.keep = true;
+    delete into.keep;
     into.members.push(id);
     if (to === 'new') groups.push(into);
     tidyGroups();
@@ -1072,7 +1107,9 @@ import { readTescanTiff } from './sem-read.js';
     const f = files[cur];
     if (!f) return;
     const sc = scopeOf(), scope = $('semIntScope');
-    scope.innerHTML = `<option value="all">All</option>` + groups.filter(g=> g.members.length).map(g=> `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
+    // The groups shown, those with images in the figure (to v476 also one whose images
+    // were all excluded: hidden, and its choice went back at once).
+    scope.innerHTML = `<option value="all">All</option>` + groups.filter(g=> inGroup(g).length).map(g=> `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
     scope.value = sc;
     renderLinkAll();
     const I = edited(), a = f.adj || ADJ_DEF, setv = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = String(+(+v).toPrecision(6)); };
