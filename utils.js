@@ -847,19 +847,27 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   if (!wrap) return;
   if (!files.length){ wrap.innerHTML=''; return; }
 
-  const ec = extraCols || [];
+  // extraCols: { header, render(f, i), lead, width }; a lead one sits left of the label
+  // (header '' for none), the others after it; width in px, else an equal share.
+  const ec = extraCols || [], lead = ec.filter(c=> c.lead), tail = ec.filter(c=> !c.lead);
+  const colOf = c => c.width ? `<col style="width:${+c.width}px">` : `<col>`;
   // colgroup: drag and include box fixed 26px each, side by side at the left edge;
   // actions fixed 58px (a fixed width guarantees the download+remove icons fit even on
   // narrow phones); FILE, LABEL and any extraCols share the rest equally. A drag column
   // in % was too narrow for its grip on a phone, and the box sat on it.
-  let colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col><col>`;
-  for (let i = 0; i < ec.length; i++) colgroup += `<col>`;
+  let colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col>`;
+  lead.forEach(c=> colgroup += colOf(c));
+  colgroup += `<col>`;
+  tail.forEach(c=> colgroup += colOf(c));
   colgroup += `<col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
   const nIn = files.filter(isIncluded).length;
 
-  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th><th>SAMPLE LABEL</th>`;
-  ec.forEach(c=> html += `<th>${esc(String(c.header).toUpperCase())}</th>`);
+  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th>`;
+  const th = c => `<th>${esc(String(c.header || '').toUpperCase())}</th>`;
+  lead.forEach(c=> html += th(c));
+  html += `<th>SAMPLE LABEL</th>`;
+  tail.forEach(c=> html += th(c));
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
   html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
@@ -871,8 +879,9 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
     html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
     html += `<td class="fname" title="${esc(f.name)}"><span class="fname-inner">${swatch}<span class="fname-text">${esc(f.name)}</span></span></td>`;
+    lead.forEach(c=> html += `<td class="lead-cell">${c.render(f, i)}</td>`);
     html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}"></td>`;
-    ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
+    tail.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
     html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });

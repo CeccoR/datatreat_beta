@@ -3217,3 +3217,6 @@ button.an-add.is-drop { border-color: var(--accent); }
 .sem-gimg.is-dragged { opacity: 0.4; }
 .sem-group.is-drop { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .sem-drag-ghost { position: fixed; z-index: 1000; width: 72px; height: auto; pointer-events: none; transform: translate(-50%, -50%); border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); opacity: 0.9; }
+
+/* A short note left of a file's label (DRS: how its second column was read) */
+.file-row td.lead-cell { color: var(--muted); font-size: 0.78rem; white-space: nowrap; text-align: center; padding-left: 2px; padding-right: 2px; }
