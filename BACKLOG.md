@@ -184,3 +184,35 @@ was proposed; nothing here is in the code yet.
   presets). Nothing in the app can wall them apart. Proposed: serve DataTreat from an
   origin of its own (a custom domain for the Pages site, or a dedicated host), and until
   then publish nothing else under `ceccor.github.io` that runs untrusted code.
+- **Tabs that work while they are not on show.** Only one tab is live: each technique's
+  module exists once, bound to the page's fixed ids, and a tab is a project that takes
+  its module in turn (tabs.js parks the state it leaves and restores the one it shows).
+  So nothing runs in a tab that is not on show, and since v478 leaving a tab while a
+  Rietveld refinement runs asks whether to stop it. Two ways out, weighed in v482:
+  - *(a) A refinement that carries on in the background.* The run, detached from the
+    card instance (cards 1 and 2 serve every XRPD project in turn), keeps going after its
+    tab is left and writes each result into that tab's parked state (decoded, updated,
+    encoded again, persisted), with its undo history and its "*" decided; coming back
+    mid-run re-attaches the card to it (progress, Cancel); closing, deleting, saving or
+    exporting the parked project mid-run, and several runs at once, are handled. For:
+    small scope (xrd-rv.js, xrd.js, some of tabs.js and sessions.js), the architecture,
+    the memory and the switch logic unchanged, the pieces there already (a Worker per
+    run, the run object, results by file name). Against: detaching the run from a card
+    the next project reuses is delicate; writing into a parked state and its history
+    takes care; it helps the Rietveld alone, each later long job needing the same.
+    A few days, testing included.
+  - *(b) Tabs truly live, one module instance each.* Every tab owns its module's DOM,
+    state, undo stack and workers; a switch only shows and hides. For: instant switches
+    (no restore, which large XRPD and SEM projects feel), anything can run in the
+    background in any module, the parking, the "leaving stops it" question and the state
+    swaps for exporting a saved project gone, with whole classes of bugs (v469's save of
+    the wrong tab, a card reused across projects, listeners left behind). Against: a
+    rewrite — every module is a singleton with fixed ids, document listeners and module
+    state, and the core's registries (history, redraw, CSV, busy, the project bar) are
+    keyed by module; every open tab keeps its DOM, plots and decoded data in memory (a
+    decoded 2048² SEM image is about 8 MB); the shared pickers, composer and banner need
+    several owners; regressions in every module, so automated tests first. Weeks; it can
+    go in steps (a factory per module with one live instance first, then XRPD alone with
+    several), at the price of a mixed model meanwhile.
+  To take (a) when waiting on a refinement is what hurts; (b) as a longer rework, after
+  the tests, if switch speed or background work in other modules come to matter.
