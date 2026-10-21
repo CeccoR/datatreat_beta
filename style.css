@@ -1935,6 +1935,20 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
    keeps to one line). */
 .rv-btns { display: flex; gap: 8px; }
 .rv-btns > .btn { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+/* Instrumental standard… while the standard refines (xrd-rv.js syncStd): a spinner before
+   its label, the drop zones' (dz-spin), and the run's progress in a bar along its foot, in
+   the accent of the card's own (.rv-prog); the label cut with an ellipsis where the two
+   do not fit. */
+.rv-btns > .btn.rv-std-run { position: relative; overflow: hidden; text-overflow: ellipsis; }
+.rv-std-run::before {
+  content: ''; display: inline-block; box-sizing: border-box; width: 12px; height: 12px;
+  margin-right: 7px; vertical-align: -2px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--accent); animation: dz-spin 0.7s linear infinite;
+}
+.rv-std-run::after {
+  content: ''; position: absolute; left: 0; bottom: 0; height: 3px;
+  width: calc(var(--rv-std-prog, 0) * 100%); background: var(--accent); transition: width .08s linear;
+}
 /* The settings modal (xrd-rv.js renderSettings): a section per phase, a row per fitting
    mode — checkbox, label, depth — 23 px high, in columns that line up across the
    sections (one grid template for all); then the Start section, its hold boxes two to a
@@ -2365,6 +2379,15 @@ html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gut
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
 }
 .modal-box label { display: block; margin-top: 12px; }
+/* A question in a window (utils.js confirmModal): its title and × in a row, as the XRPD
+   standard's window's head; the message; the answers at the foot, the primary last, as
+   Save as… has them, wrapping on a phone. */
+.modal-box.confirm-box { width: min(460px, 92vw); }
+.confirm-head { display: flex; align-items: flex-start; gap: 8px; }
+.confirm-head > h3 { flex: 1 1 auto; margin: 0; }
+.confirm-head > .confirm-x { margin: -2px -6px 0 auto; }
+.confirm-msg { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--text); }
+.confirm-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
 
 

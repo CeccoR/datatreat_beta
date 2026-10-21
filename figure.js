@@ -121,8 +121,10 @@ function seriesFromPlot(plot, legendEl){
   const stored = plot._stored || [];
   const out = [];
   const cats = stored.filter(e=> e.type === 'ticklabel')
-                     // The whole name, not the one the axis had room for.
-                     .map(e=>({ x: e.xv, text: e.full || e.text, rot: e.rot || 0, key: e.key || e.full || e.text }));
+                     // The whole name, not the one the axis had room for; its runs where
+                     // some are overlined (a negative Miller index's bar, catRuns).
+                     .map(e=>({ x: e.xv, text: e.full || e.text, rot: e.rot || 0, key: e.key || e.full || e.text,
+                                ...(e.fullRuns ? { runs: e.fullRuns } : {}) }));
 
   stored.forEach((e, i)=>{
     if (e.type !== 'line' && e.type !== 'points') return;
@@ -657,7 +659,7 @@ function drawFigure(svg, ink, paper, extra){
     for (const t of ts) maxYNum = Math.max(maxYNum, tickW('y', t, ts, fTick));
   });
   // The category names, measured once: whole, as the figure always draws them.
-  const catWs = (F.cats || []).map(cat=> textW(catText(cat.x), fTick));
+  const catWs = (F.cats || []).map(cat=> catW(cat.x, fTick));
   // Margins and placing for a given tilt of the X labels. `lean` reserves room for
   // names that hang past their panel's left side.
   const layoutFor = (xRot, lean)=>{
@@ -1037,7 +1039,8 @@ function drawFigure(svg, ink, paper, extra){
                                    'text-anchor': rot ? 'end' : 'middle' });
           // Tilted, it turns about the middle of its last character, as on the page.
           if (rot){ el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`); el.setAttribute('dy', TILT_DY); }
-          el.textContent = catText(c.x);
+          const runs = catRuns(c.x);
+          if (runs) catLabel(el, c.x, runs, fTick); else el.textContent = catText(c.x);
         }
         continue;
       }
@@ -2667,6 +2670,35 @@ function catText(x){
   if (own != null && own !== '') return own;
   const cat = F.cats && F.cats.find(c=> c.x === x);
   return cat ? cat.text : '';
+}
+/* The plot's name of a category in runs, [[text, over], …], where some are overlined (a
+   negative Miller index's bar: the size by peak, xrd-rv.js), or null: a name typed into
+   the composer, plain text there, and any other is drawn as text. Up to v493 the bar was
+   lost here, the minus drawn. */
+function catRuns(x){
+  const own = F.catNames && F.catNames[x];
+  if (own != null && own !== '') return null;
+  const cat = F.cats && F.cats.find(c=> c.x === x);
+  return cat && Array.isArray(cat.runs) && cat.runs.some(r=> r[1]) ? cat.runs : null;
+}
+// Two overlined runs side by side kept a tenth of the font apart, each its own bar.
+const barGap = (runs, i, px)=> i && runs[i - 1][1] ? px / 10 : 0;
+// A category's width as drawn: its runs' text (each minus hidden) and the gaps between bars.
+function catW(x, px){
+  const r = catRuns(x);
+  return r ? textW(r.map(q=> q[0]).join(''), px) + r.reduce((s, q, i)=> s + (q[1] ? barGap(r, i, px) : 0), 0) : textW(catText(x), px);
+}
+/* A category drawn in runs, as plot.js labelText draws a tick label: each overlined run a
+   tspan after its minus in one not displayed (no glyph, no advance), the name whole as the
+   text's aria-label, so the file's text still reads 1-11. */
+function catLabel(el, x, runs, px){
+  el.setAttribute('aria-label', catText(x));
+  runs.forEach(([s, over], i)=>{
+    if (over){ const m = svgEl('tspan', { display: 'none' }); m.textContent = '-'; el.appendChild(m); }
+    const g = barGap(runs, i, px);
+    const t = svgEl('tspan', over ? { 'text-decoration': 'overline', ...(g ? { dx: g } : {}) } : {});
+    t.textContent = s; el.appendChild(t);
+  });
 }
 
 /* The name of one bar: the category it stands on, failing that its place in the series.

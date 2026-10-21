@@ -313,6 +313,8 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     hidden: ()=> openModal !== rvModal,
     blocked: ()=> rvCards().some(i=> i.running()) ? 'A sample refinement is running: the standard can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
     onBusy: ()=> syncRv(),
+    // (its run's progress on every Rietveld card's Instrumental standard…)
+    onProgress: ()=> rvCards().forEach(i=> i.syncStd()),
   }, rvModal.body, { prefix: 'xrdStdR', standard: true });
   stdRv.setName('standard');
 
@@ -360,7 +362,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     const host = { files: ()=> files, allFiles: ()=> allFiles, idx: ()=> curIdx, step, commit: ()=> hist.commit(),
       instr: ()=> stdPeaks.instrModel(), irf: ()=> stdRv.irf(), hidden: ()=> deck.isFolded(a),
       openStd: ()=> openStd(a.type === 'rietveld' ? 'rv' : 'peaks'),
-      stdLoaded: ()=> !!stdFile, refineStd: tell=> stdRv.run(tell), stopStd: commit=> stdRv.cancel(commit),
+      stdLoaded: ()=> !!stdFile, refineStd: tell=> stdRv.run(tell), stopStd: commit=> stdRv.cancel(commit), stdRun: ()=> stdRv.progress(),
       blocked: ()=> stdRv.running() ? 'The standard is being refined: the samples can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
       onBusy: ()=> syncRv(),
       changed: ()=>{} };

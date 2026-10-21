@@ -2016,6 +2016,74 @@ function confirmBanner(message, confirmLabel, altLabel){
     document.addEventListener('keydown', onKey);
   });
 }
+/* confirmBanner's question in a window at the centre of the screen, over the page (the
+   app's modal, .modal-backdrop and .modal-box), for one that is not to be missed: the
+   same answers, true (the primary), 'alt' (the middle button, with altLabel) or false (×,
+   Escape, a click beside the box). The primary has the focus; Tab goes round the window's
+   buttons only; Escape is its own (a window under it, the XRPD standard's, does not close
+   on it). The focus goes back where it was (o.back, else where it was when it opened)
+   before the answer is given. One at a time: a new one answers the last false, as a new
+   banner does. o.title: a heading over the message. Text only, never markup. */
+let _confirmModalCancel = null, _confirmModalN = 0;
+function confirmModal(message, confirmLabel, altLabel, o = {}){
+  return new Promise(resolve=>{
+    if (_confirmModalCancel) _confirmModalCancel();
+    const back = o.back || document.activeElement, id = 'dtConfirm' + (++_confirmModalN);
+    const bd = document.createElement('div');
+    bd.className = 'modal-backdrop confirm-modal';
+    const box = document.createElement('div');
+    box.className = 'modal-box confirm-box';
+    box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true');
+    const head = document.createElement('div'); head.className = 'confirm-head';
+    if (o.title){
+      const h = document.createElement('h3'); h.className = 'txt-head'; h.id = id + 'T'; h.textContent = o.title;
+      head.appendChild(h);
+    }
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'an-ic confirm-x'; x.title = 'Cancel'; x.setAttribute('aria-label', 'Cancel');
+    x.innerHTML = X_SVG(15);
+    head.appendChild(x);
+    const msg = document.createElement('p'); msg.className = 'confirm-msg'; msg.id = id + 'M'; msg.textContent = message;
+    box.setAttribute('aria-labelledby', o.title ? id + 'T' : id + 'M');
+    box.setAttribute('aria-describedby', id + 'M');
+    const btns = document.createElement('div'); btns.className = 'confirm-btns';
+    let alt = null;
+    if (altLabel){ alt = document.createElement('button'); alt.type = 'button'; alt.className = 'btn'; alt.textContent = altLabel; btns.appendChild(alt); }
+    const ok = document.createElement('button');
+    ok.type = 'button'; ok.className = 'btn primary'; ok.textContent = confirmLabel || 'OK';
+    btns.appendChild(ok);
+    box.append(head, msg, btns); bd.appendChild(box);
+    const keys = [x, alt, ok].filter(Boolean);
+    const done = val =>{
+      if (_confirmModalCancel !== cancel) return;   // already answered
+      _confirmModalCancel = null;
+      document.removeEventListener('keydown', onKey, true);
+      bd.remove();
+      if (back && back.isConnected && back.focus) back.focus({ preventScroll: true });
+      resolve(val);
+    };
+    const cancel = ()=> done(false);
+    // (capture, and stopped there: the standard's window, under it, closes on its own Escape)
+    const onKey = e=>{
+      if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(false); return; }
+      if (e.key !== 'Tab') return;
+      const i = keys.indexOf(document.activeElement), n = keys.length;
+      e.preventDefault();
+      keys[i < 0 ? (e.shiftKey ? n - 1 : 0) : (i + (e.shiftKey ? n - 1 : 1)) % n].focus();
+    };
+    // (a press on the box let go beside it, a text selected, is no click beside it)
+    let downOut = false;
+    bd.addEventListener('mousedown', e=>{ downOut = e.target === bd; });
+    bd.addEventListener('click', e=>{ if (e.target === bd && downOut) done(false); });
+    ok.addEventListener('click', ()=> done(true));
+    if (alt) alt.addEventListener('click', ()=> done('alt'));
+    x.addEventListener('click', cancel);
+    _confirmModalCancel = cancel;
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(bd);
+    ok.focus({ preventScroll: true });
+  });
+}
 
 /* =========================================================
    ALERT HELPERS
@@ -2179,5 +2247,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };

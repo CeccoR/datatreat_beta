@@ -4,7 +4,10 @@
    more written, the button back to Refine, the module no longer busy. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { start, openModule, loadFiles, banner, answer, moduleState, until, settle } from './helpers.mjs';
+import { start, openModule, loadFiles, moduleState, until, settle } from './helpers.mjs';
+// The question about the standard (a window, utils.js confirmModal): its message, and the answer 'Refine without the standard'.
+const asked = async page => (await page.waitForSelector('.confirm-modal'), page.textContent('.confirm-modal .confirm-msg'));
+const without = async page =>{ await page.click('.confirm-modal .btn:not(.primary)'); await page.waitForFunction(()=> !document.querySelector('.confirm-modal')); await settle(page); };
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -25,9 +28,8 @@ test('Rietveld: one pattern refined, then Refine all cancelled', async ()=>{
     await page.waitForSelector(P + 'PhaseList input[data-on]');
     // Refine, on the pattern on show: asked about the standard first.
     await page.click(P + 'Refine');
-    await page.waitForSelector('.pwa-confirm.show');
-    assert.match((await banner(page)).text, /No instrumental standard is loaded/);
-    await answer(page, 'alt');
+    assert.match(await asked(page), /No instrumental standard is loaded/);
+    await without(page);
     assert.equal(await label(page), 'Cancel');
     assert.match(await busy(page), /Rietveld/i);
     await page.waitForFunction(p=> document.querySelector(p + 'Refine').textContent === 'Refine', P, { timeout: 120000 });
@@ -43,7 +45,8 @@ test('Rietveld: one pattern refined, then Refine all cancelled', async ()=>{
     const before = await results(page);
     await page.waitForTimeout(700);   // (a press within 600 ms of the last is not taken: a double click)
     await page.click(P + 'RefineAll');
-    await answer(page, 'alt');
+    await asked(page);
+    await without(page);
     await until(async ()=> (await label(page)) === 'Cancel', { what: 'the run to start' });
     await page.waitForTimeout(700);
     await page.click(P + 'Refine');

@@ -391,9 +391,10 @@ class Plot{
   /* `full` is the name before it was shortened to fit the axis. The plot draws the
      short one; anything reading the plot back — the figure composer — wants the name
      the sample actually has, and `key` for which sample it is (as line()'s meta.key).
-     `runs`, the text in runs with some overlined (labelText). */
-  tickLabel(xv, text, rot, full, key, runs){
-    const entry = {type:'ticklabel', xv, text, rot: rot||0, full: full || text, key, runs: runs || null};
+     `runs`, the text in runs with some overlined (labelText); `fullRuns`, the whole
+     name's, kept for the composer, which draws that one (to v493 it had no bar there). */
+  tickLabel(xv, text, rot, full, key, runs, fullRuns){
+    const entry = {type:'ticklabel', xv, text, rot: rot||0, full: full || text, key, runs: runs || null, fullRuns: fullRuns || null};
     this._stored.push(entry);
     return this._renderTickLabel(entry);
   }
