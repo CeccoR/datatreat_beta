@@ -131,6 +131,25 @@ function frozen(v){
   if (v && typeof v === 'object' && !ArrayBuffer.isView(v) && !Object.isFrozen(v)){ Object.freeze(v); for (const k in v) frozen(v[k]); }
   return v;
 }
+/* A view (the pattern's plot, the widths' table and plot, the Results' charts, a list, a
+   box of text) is drawn again only when what it is drawn from changed: a plot keeps the
+   key of its inputs as last drawn, a box of markup the markup it was given. In a key an
+   object is a number of its own (idOf: the same object, the same number; a pattern's
+   arrays never change, xrd.js), a result is when it was refined (resKey: an undo gives
+   back the same as a copy), and a plot's size on the page is there (sizeOf: 0 out of
+   sight, so one drawn hidden is drawn again when shown). Up to v490 every edit drew the
+   whole card again (a setting changed: its plots, tables and 3D cell, 55 ms with 12
+   patterns), and a label changed every card. A value that is no object, which a project
+   read in may hold where one should be (a result or a file's instrument a number), is
+   there as itself: a WeakMap takes no such key (it threw in the restore, which drew such
+   a project before). */
+const ids = new WeakMap();
+let nid = 0;
+const idOf = o => o == null ? '-' : typeof o !== 'object' && typeof o !== 'function' ? typeof o + ':' + String(o) : ids.get(o) || (ids.set(o, ++nid), nid);
+const resKey = r => !r ? '-' : Number.isFinite(r.at) ? 'at' + r.at : 'r' + idOf(r);
+const sizeOf = el => { if (!el) return '-'; const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
+// (a plot at the range it was drawn with: not zoomed nor panned)
+const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin === P._origYmin && P.ymax === P._origYmax;
 
 // The engine's options as the v428 pickers named them; read from projects of v428 or older
 // (migrateSettings) and from results (curvesOf). The crystallite shapes (xrd-rietveld
@@ -755,6 +774,13 @@ export function createRietveld(host, root, o){
     return phasesFor(f).map(q=> ({ color: q.color, name: q.prep.name,
       tt: reflections(q.prep.cell, q.prep.ops, dmin).map(r=> 2*Math.asin(lam/(2*r.d))*180/Math.PI).filter(t=> t >= x0 && t <= x1) }));
   }
+  /* The pattern's plot as last drawn (plotKey): the pattern, its instrument, its result,
+     the phases (each one's structure, colour and tick on it, the standard's chosen) and
+     the plot's size. The same again, it stays as it is (kept in view, as preserve keeps
+     it; else only where not zoomed): the label, which only the figure composer's name of
+     the observed trace has, is set in place. */
+  let plotKey = '', instrTxt = '';
+  const setText = (id, t)=>{ const el = $(id); if (el.textContent !== t) el.textContent = t; };
   function draw(preserve){
     if (gone) return;
     const fs = host.files();
@@ -762,19 +788,36 @@ export function createRietveld(host, root, o){
     renderPhases();
     if (!fs.length){
       // (the standard's plot has no caption: its window names the file)
-      if (!std){ $('Label').textContent = '—'; $('Idx').textContent = '0/0'; }
+      if (!std){ setText('Label', '—'); setText('Idx', '0/0'); }
       renderRes();
       if (plot){ plot = null; }
-      $('Svg').replaceChildren(); $('Legend').innerHTML = ''; $('Instr').textContent = '';
+      $('Svg').replaceChildren(); $('Legend').innerHTML = ''; $('Instr').textContent = ''; plotKey = instrTxt = '';
       renderResults(null, null); renderWidths(null, null); renderSolids(null, null);
       return;
     }
     const k = curIdx(), f = fs[k], r = results[f.name];
-    if (!std){ $('Label').textContent = f.label; $('Idx').textContent = (k+1) + '/' + fs.length; }
+    if (!std){ setText('Label', f.label); setText('Idx', (k+1) + '/' + fs.length); }
     // (the Results show every pattern, the card folded or not)
     renderRes();
     if (host.hidden && host.hidden()) return;
     const svg = $('Svg');
+    const key = [f.name, idOf(f.x), idOf(f.y), idOf(f.varMul), idOf(instrOf(f)), resKey(r), std ? pick : '',
+      allPhases().map(q=> [q.id, q.color, idOf(q.prep), q.off[f.name] ? 0 : 1].join(':')).join(), sizeOf(svg)].join('|');
+    const drawn = !(plot && key === plotKey && (preserve || atOrigin(plot)));
+    if (drawn){ plotKey = ''; drawPattern(f, r, svg, preserve); plotKey = key; }
+    else plot._stored.forEach(e=>{ if (e.key === f.name) e.label = f.label; });
+    const it = instrLine(instrOf(f));
+    if (it !== instrTxt){ instrTxt = it; $('Instr').textContent = it; }
+    renderResults(f, r);
+    // (the picked peak's line again on a plot drawn anew, where the widths' table is there
+    // as it was and so did not mark it: its picked peak is this pattern's. With no widths
+    // (no result, one cleared, none measured) none is marked, as before: the one picked
+    // is another pattern's or the cleared result's)
+    if (!renderWidths(f, r) && drawn && whPlot) markPeaks();
+    renderSolids(f, r);
+    fitSide();
+  }
+  function drawPattern(f, r, svg, preserve){
     const prev = preserve && plot ? { xmin: plot.xmin, xmax: plot.xmax } : null;
     plot = new Plot(svg, { xlabel: '2θ (°)', ylabel: 'Intensity (counts)' });
     plot.attachTools(svg.closest('.plot-wrap'));
@@ -811,20 +854,15 @@ export function createRietveld(host, root, o){
     leg.innerHTML = `<span><i style="background:var(--plot-errbar)"></i>observed</span>`
       + (c ? `<span><i style="background:#ff5050"></i>calculated</span><span><i style="background:#ff9933"></i>background</span><span><i style="background:#3aa0ff"></i>difference</span>` : '')
       + groups.map(g=> `<span><i style="background:${esc(g.color)}"></i>${esc(g.name)}</span>`).join('');
-    $('Instr').textContent = instrLine(instrOf(f));
-    renderResults(f, r);
-    renderWidths(f, r);
-    renderSolids(f, r);
-    fitSide();
   }
 
   /* ---- the Results (a card's section): every refined pattern stacked, the observed
      less its refined background, normalised as Settings… say (resNorm); the crystallite sizes by
      sample (each phase's refined size with its esd; a free shape's measured dimensions,
      each with its own) or by peak (each reflection's own size, from the peak widths,
-     across the samples). Drawn again only when what they show changes. ---- */
+     across the samples). Each drawn again only when what it shows changes. ---- */
   // resNorm: the stacked patterns' normalisation (Settings…, Results), as the Scherrer card's.
-  let sizeBy = 'sample', resNorm = 'global', resSig = '';
+  let sizeBy = 'sample', resNorm = 'global';
   // A pattern's observed less its refined background, or null (curveKept's rule; the last 64).
   const netKept = new Map();
   function netOf(f, r){
@@ -856,25 +894,37 @@ export function createRietveld(host, root, o){
     });
     return by;
   }
+  // (up to v490 the section was drawn whole again on any change to it: a label, the
+  // Results' charts both)
   function renderRes(){
     if (!res) return;
     const fs = refinedFiles(), anyW = fs.some(f=> results[f.name].widths);
     if (sizeBy === 'peak' && !anyW) sizeBy = 'sample';
-    const w = $('ResSvg').getBoundingClientRect().width;
-    const sig = [fs.map(f=> f.name + ':' + results[f.name].at + ':' + f.color + ':' + f.label).join('|'), sizeBy, resNorm, Math.round(w), allPhases().map(q=> q.color).join()].join('#');
-    if (sig === resSig) return;
-    resSig = sig;
-    res.querySelector('.res-row').style.display = fs.length ? '' : 'none';
-    $('ResNone').style.display = fs.length ? 'none' : '';
+    const row = res.querySelector('.res-row'), none = $('ResNone'), on = fs.length ? '' : 'none';
+    if (row.style.display !== on) row.style.display = on;
+    if (none.style.display !== (fs.length ? 'none' : '')) none.style.display = fs.length ? 'none' : '';
     if (!fs.length) return;
-    drawStacked(fs);
-    drawSizes(fs, anyW);
+    const a = drawStacked(fs), b = drawSizes(fs, anyW);
     sizeNames();
-    fitCsvIcons(res);
+    if (a || b) fitCsvIcons(res);
   }
+  /* The stacked plot as last drawn: the patterns, each one's observed less its background
+     (one array while what it is made from is the same: netOf), colour and 2θ, the
+     normalisation and the plot's size. A label is no part of it: the legend's, written
+     again alone, and the figure composer's name of its trace, set in place. */
+  let stackKey = '', stackPlot = null, stackLeg = '';
   function drawStacked(fs){
-    const shown = fs.map(f=> ({ f, y: netOf(f, results[f.name]) })).filter(q=> q.y);
-    const plot = new Plot($('ResSvg'), { xlabel: '2θ (°)', ylabel: 'Intensity (a. u.)', noYTickLabels: true });
+    const shown = fs.map(f=> ({ f, y: netOf(f, results[f.name]) })).filter(q=> q.y), svg = $('ResSvg');
+    const leg = shown.map(({ f })=> `<span><i style="background:${esc(f.color)}"></i>${esc(f.label)}</span>`).join('');
+    if (leg !== stackLeg){ stackLeg = leg; $('ResLegend').innerHTML = leg; }
+    const key = [resNorm, sizeOf(svg), ...shown.map(({ f, y })=> [f.name, f.color, idOf(f.x), idOf(y)].join(':'))].join('|');
+    if (stackPlot && key === stackKey){
+      const lab = new Map(shown.map(({ f })=> [f.name, f.label]));
+      stackPlot._stored.forEach(e=>{ if (lab.has(e.key)) e.label = lab.get(e.key); });
+      return false;
+    }
+    stackKey = '';
+    const plot = stackPlot = new Plot(svg, { xlabel: '2θ (°)', ylabel: 'Intensity (a. u.)', noYTickLabels: true });
     plot.attachTools(plot.svg.closest('.plot-wrap'));
     // (global: each divided by the largest; local: by its own; none: as they are, the
     // largest spacing them, the plot's unit)
@@ -890,17 +940,22 @@ export function createRietveld(host, root, o){
       const norm1 = y.map(v=> v/mx);
       plot.line(f.x, norm1.map(v=> v + baseOf(j) + 0.05*unit), f.color, 1.3, undefined, { raw: { xs: f.x, ys: norm1 }, label: f.label, key: f.name });
     });
-    $('ResLegend').innerHTML = shown.map(({ f })=> `<span><i style="background:${esc(f.color)}"></i>${esc(f.label)}</span>`).join('');
+    stackKey = key;
+    return true;
   }
   /* The sizes as points with their esds, the names under the axis cut and tilted to fit
      (barNames) as the Scherrer card's, the values written above. By sample: a column a
      pattern, a point a phase (beside each other) and a dimension of a free shape; by peak:
      a column a reflection, a point a pattern. */
+  // The chart as last drawn (sizeKey): its columns, its points and their values, the chips
+  // in its corner and its size; the chips, the legend and the note as last written.
+  let sizeKey = '', sizeChips = '', sizeLeg = '', sizeNote = '';
   function drawSizes(fs, anyW){
     const svg = $('SizeSvg'), chips = $('SizeBy'), wrap = svg.closest('.plot-wrap');
-    chips.innerHTML = [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
+    const ch = [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
       `<button type="button" class="mode-chip plot-chip${sizeBy === k ? ' is-on' : ''}" data-size-by="${k}"`
       + `${k === 'peak' && !anyW ? ' disabled title="No peak widths: they are measured on a sample refined with its phases"' : ` title="Crystallite size ${t}"`}>${t}</button>`).join('');
+    if (ch !== sizeChips){ sizeChips = ch; chips.innerHTML = ch; }
     const cols = [], marks = [];     // marks: { x, v, e, color, dx, label }
     let series = [];
     if (sizeBy === 'peak'){
@@ -942,8 +997,15 @@ export function createRietveld(host, root, o){
     }
     const pts = marks.filter(m=> m.v != null), labs = marks.filter(m=> m.label);
     const legend = $('SizeLegend'), note = $('SizeNote');
-    if (!pts.length){ wrap.style.display = 'none'; legend.innerHTML = ''; note.textContent = sizeBy === 'peak' ? 'No peak the tests use.' : 'No size refined: the size is off, or every phase was refined without one.'; return; }
-    wrap.style.display = '';
+    const put = (lg, nt)=>{ if (lg !== sizeLeg){ sizeLeg = lg; legend.innerHTML = lg; } if (nt !== sizeNote){ sizeNote = nt; note.textContent = nt; } };
+    if (!pts.length){ wrap.style.display = 'none'; sizeKey = ''; put('', sizeBy === 'peak' ? 'No peak the tests use.' : 'No size refined: the size is off, or every phase was refined without one.'); return false; }
+    if (wrap.style.display) wrap.style.display = '';
+    put(series.map(q=> `<span><i style="background:${esc(q.color)}"></i>${esc(q.name)}</span>`).join(''), sizeBy === 'peak'
+      ? "Each reflection's own size (Scherrer, K = 0.9, on its FWHM less the instrument's), the peaks the tests use."
+      : sizeKinds(fs).map(k=> SIZE_KINDS[k][1]).join(' '));
+    const key = JSON.stringify([ch, cols, marks, sizeOf(svg)]);
+    if (key === sizeKey) return false;
+    sizeKey = '';
     const mctx = document.createElement('canvas').getContext('2d');
     mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
     const br = svg.getBoundingClientRect(), svgW = br.width || 640, svgH = br.height || 420, n = cols.length;
@@ -966,10 +1028,8 @@ export function createRietveld(host, root, o){
     labs.forEach(m=> plot.barLabel(m.x, m.top, m.label, { gap, dx: m.dx }));
     cols.forEach((c, i)=> plot.tickLabel(i + 1, fit.labels[i], fit.rot, c.label, c.name, c.hkl ? plotRuns(fit.labels[i], c.hkl) : null));
     plot.attachTools(wrap);
-    legend.innerHTML = series.map(q=> `<span><i style="background:${esc(q.color)}"></i>${esc(q.name)}</span>`).join('');
-    note.textContent = sizeBy === 'peak'
-      ? "Each reflection's own size (Scherrer, K = 0.9, on its FWHM less the instrument's), the peaks the tests use."
-      : sizeKinds(fs).map(k=> SIZE_KINDS[k][1]).join(' ');
+    sizeKey = key;
+    return true;
   }
   // The kinds of size charted by sample, of one phase or of all, in SIZE_KINDS' order.
   const sizeKinds = (fs, name) => { const on = new Set(fs.flatMap(f=> [...sizesOf(results[f.name])].filter(([n])=> name == null || n === name).flatMap(([, v])=> v.map(q=> q.kind))));
@@ -1061,11 +1121,18 @@ export function createRietveld(host, root, o){
   // A probability: two significant digits, one below 10⁻³ (where the verdict turns, 2·10⁻⁴
   // read 0.000), and under the smallest a double holds as that bound.
   const fmtP = q => q < 1e-300 ? '< 1e-300' : q < 1e-3 ? q.toExponential(0) : String(+q.toPrecision(2));
+  /* The table, the Williamson–Hall plot and the tests as last drawn (widthsKey): the
+     pattern, its result, the phases' colours and the plot's size. Drawn again, it says so
+     (the picked peak is marked again with it). */
+  let widthsKey = '';
   function renderWidths(f, r){
     const box = $('Widths'), wd = r && r.widths;
     const phs = wd ? wd.phases.filter(ph=> ph.rows.length) : [];
-    box.style.display = phs.length ? '' : 'none';
-    if (!phs.length){ whPlot = null; return; }
+    if (box.style.display !== (phs.length ? '' : 'none')) box.style.display = phs.length ? '' : 'none';
+    if (!phs.length){ whPlot = null; widthsKey = ''; return false; }
+    const key = [f.name, resKey(r), allPhases().map(q=> q.id + ':' + q.color).join(), sizeOf($('WhSvg'))].join('|');
+    if (whPlot && key === widthsKey) return false;
+    widthsKey = '';
     // The free shape's column when some phase kept one; a phase without has none to give.
     const shapeOn = phs.some(ph=> ph.shaped);
     const colorOf = id => (allPhases().find(q=> q.id === id) || {}).color || '#888';
@@ -1120,6 +1187,8 @@ export function createRietveld(host, root, o){
     });
     markPeaks();
     fitCsvIcons(root);
+    widthsKey = key;
+    return true;
   }
   // The picked peak and the one under the pointer: a line at each on the pattern, in its
   // phase's colour, and a ring round each on the Williamson–Hall plot (the picked one's
@@ -1241,12 +1310,16 @@ export function createRietveld(host, root, o){
      and the Refinement settings that are not the defaults —, or, not refined yet, what
      Refine will refine (the settings); a phase's name before its line when there are
      several. */
+  // (each box of markup written again only when its markup changed: up to v490 at every draw)
+  let fitSetHtml = null, resultsHtml = null;
   function renderFitSet(f, r, shown){
     const el = $('FitSet'), done = !!(r && r.params), list = f ? shown : [];
     const used = done ? fitUsed(f, r) : [];
-    el.innerHTML = list.map(q=> `<span class="rv-fs">${list.length > 1 ? `<span class="rv-key-sm" style="background:${esc(q.color)}"></span>${esc(q.prep.name)}: ` : ''}${barIdx(esc(done ? refinedOf(q, r, std) : summaryOf(q, std)))}</span>`).join('')
+    const html = list.map(q=> `<span class="rv-fs">${list.length > 1 ? `<span class="rv-key-sm" style="background:${esc(q.color)}"></span>${esc(q.prep.name)}: ` : ''}${barIdx(esc(done ? refinedOf(q, r, std) : summaryOf(q, std)))}</span>`).join('')
       + (used.length ? `<span class="rv-fs" title="The Refinement settings (Settings…) this result was refined with that are not the defaults">${esc(used.map(u=> u.said).join(', '))}</span>` : '');
-    el.title = done ? 'What this result was refined with' : list.length ? 'What Refine will refine: Settings… changes it' : '';
+    if (html !== fitSetHtml){ fitSetHtml = html; el.innerHTML = html; }
+    const t = done ? 'What this result was refined with' : list.length ? 'What Refine will refine: Settings… changes it' : '';
+    if (el.title !== t) el.title = t;
     el.classList.toggle('is-next', !done);
   }
   /* The statistics, then each group the worker made of the result (the specimen or the
@@ -1254,15 +1327,15 @@ export function createRietveld(host, root, o){
      refinement's (a cell search without a minimum, a phase not detected, a parameter on a
      bound), the CIFs' (their composition against the formula) and the standard's. */
   function renderResults(f, r){
-    const box = $('Results');
-    if (!f){ renderFitSet(null, null, []); box.innerHTML = `<div class="rv-note rv-wide">${std ? 'No standard loaded: drop its file above.' : 'No pattern.'}</div>`; return; }
+    const box = $('Results'), put = h =>{ if (h !== resultsHtml){ resultsHtml = h; box.innerHTML = h; } };
+    if (!f){ renderFitSet(null, null, []); put(`<div class="rv-note rv-wide">${std ? 'No standard loaded: drop its file above.' : 'No pattern.'}</div>`); return; }
     const shown = r && r.params ? (()=>{ try { return curvesOf(f, r).list; } catch(e){ return phasesFor(f); } })() : phasesFor(f);
     renderFitSet(f, r, shown);
     const cifWarn = shown.flatMap(q=> q.prep.warnings.map(w=> warnNote(`${esc(q.prep.name)}: ${esc(w)}`))).join('');
     if (!r || !r.params){
       const n = phasesFor(f).length;
-      box.innerHTML = (n ? `<div class="rv-note rv-wide">Not refined yet. <b>Refine</b> starts from the CIF's cell${std ? ' (the certified one, held fixed)' : ''}, finds where the pattern's peaks are, and refines step by step.</div>`
-        : `<div class="rv-note rv-wide">${phases.length ? 'No phase ticked for this pattern: tick one in the list.' : 'No phase: add one from a CIF (+ CIF, beside the pattern).'}</div>`) + cifWarn;
+      put((n ? `<div class="rv-note rv-wide">Not refined yet. <b>Refine</b> starts from the CIF's cell${std ? ' (the certified one, held fixed)' : ''}, finds where the pattern's peaks are, and refines step by step.</div>`
+        : `<div class="rv-note rv-wide">${phases.length ? 'No phase ticked for this pattern: tick one in the list.' : 'No phase: add one from a CIF (+ CIF, beside the pattern).'}</div>`) + cifWarn);
       return;
     }
     const s = r.stats || {};
@@ -1277,7 +1350,7 @@ export function createRietveld(host, root, o){
       : `<div class="rv-note rv-wide">No instrumental profile (refine the standard first: <b>Instrumental standard…</b>): the widths, and the sizes from them, include the instrument's.</div>`;
     html += (r.warnings || []).map(w=> warnNote(barIdx(esc(w)))).join('') + cifWarn;
     if (!std && r.irf && staleOf(f, r)) html += warnNote(`${irf() ? 'The standard has been refined again since this result' : 'The standard\'s refinement this result used is gone (cleared, or another standard loaded)'}: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.`);
-    box.innerHTML = html;
+    put(html);
   }
   function instrLine(ins){
     if (!ins) return '';
@@ -1296,10 +1369,13 @@ export function createRietveld(host, root, o){
   // ---- the phases: a short list beside the pattern (formula and space group), each
   // ticked for the pattern on show (the standard's: one chosen), and the structure of the
   // one selected ----
+  // (the list and the details written again only when their markup changed: up to v490 at
+  // every draw; its handlers are the list's own, delegated)
+  let phasesHtml = null, cellInfoHtml = null;
   function renderPhases(){
     const el = $('PhaseList'), list = allPhases(), f = host.files()[curIdx()];
     if (!list.some(q=> q.id === sel)) sel = list.length ? (std ? pick : list[0].id) : null;
-    el.innerHTML = list.length ? list.map(q=>{
+    const html = list.length ? list.map(q=>{
       const builtIn = q === lab6, on = std ? q.id === pick : !(f && q.off[f.name]);
       const pickEl = std
         ? `<input type="radio" name="${p}Pick" data-pick="${esc(q.id)}"${on ? ' checked' : ''}${busy ? ' disabled' : ''} title="The phase the standard is refined with" aria-label="Refine the standard with ${esc(q.prep.name)}">`
@@ -1309,14 +1385,16 @@ export function createRietveld(host, root, o){
         + `<span class="rv-cif-sg"${q.prep.sgFrom === 'atoms' ? ' title="Found from the atoms: the file is in P1"' : ''}>${esc(sgPretty(q.prep.sg) || '—')}</span>`
         + `<button class="peak-del is-danger idle-dim rv-del" data-del="${esc(q.id)}"${builtIn || busy ? ' disabled' : ''} title="${builtIn ? 'Built in: it cannot be removed' : 'Remove phase'}">${X_SVG(13)}</button></div>`;
     }).join('') : `<div class="rv-empty">No phase yet: <b>+ CIF</b> adds one from a crystallographic file (COD, ICSD, Materials Project…).</div>`;
+    if (html !== phasesHtml){ phasesHtml = html; el.innerHTML = html; }
     renderCell();
   }
   // The selected phase's cell in 3D (xrd-cell3d) and its details under it.
   let cellV = null, cellKeyShown = '';
   function renderCell(){
     const q = allPhases().find(x=> x.id === sel) || null, info = $('CellInfo');
-    $('CellName').textContent = q ? q.prep.name : '';
-    if (!q){ if (cellV) cellV.set(null); cellKeyShown = ''; info.innerHTML = '<div class="rv-empty">Select a phase to see its structure.</div>'; return; }
+    const put = h =>{ if (h !== cellInfoHtml){ cellInfoHtml = h; info.innerHTML = h; } };
+    setText('CellName', q ? q.prep.name : '');
+    if (!q){ if (cellV) cellV.set(null); cellKeyShown = ''; put('<div class="rv-empty">Select a phase to see its structure.</div>'); return; }
     if (!cellV) cellV = cellView($('Cell'), { side: ()=> cellSide() });
     // (by the CIF's content too: ids start again at 1 in each project and after an undo, so
     // another CIF of the same cell kept the atoms shown before, the details the new ones, to v486)
@@ -1329,7 +1407,7 @@ export function createRietveld(host, root, o){
     const els = [...new Set(P.atoms.map(a=> a.element))];
     const lens = K.kind === 'cubic' ? `a = ${r4(c.a)} Å` : `a ${r4(c.a)}, b ${r4(c.b)}, c ${r4(c.c)} Å`;
     const angs = ['alpha', 'beta', 'gamma'].every(x=> Math.abs(c[x] - 90) < 1e-6) ? '' : `α ${r4(c.alpha)}, β ${r4(c.beta)}, γ ${r4(c.gamma)}°`;
-    info.innerHTML = `<div class="rv-ci-name">${esc(P.name)}</div>`
+    put(`<div class="rv-ci-name">${esc(P.name)}</div>`
       + `<div><span>Formula</span> ${formulaPretty(formulaOf(P))}${P.Z ? `, Z = ${esc(P.Z)}` : ''}</div>`
       + `<div><span>Space group</span> ${esc(sgPretty(P.sg) || '—')}${P.sgFrom === 'atoms' ? ' (from the atoms)' : ''}</div>`
       + `<div><span>System</span> ${SYSTEM_NAMES[P.system] || esc(P.system)}, ${P.order} operations</div>`
@@ -1339,7 +1417,7 @@ export function createRietveld(host, root, o){
       + `<div class="rv-ci-els">${els.map(e=> `<span><i style="background:${elementColor(e)}"></i>${esc(e)}</span>`).join('')}</div>`
       + `<div class="rv-ci-file">${q === lab6 ? 'built in, the standard\'s certified cell' : esc(q.file)}</div>`
       // what reading the CIF found (its own cell, operations it lacked, B made equal on a site)
-      + P.notes.map(t=> `<div class="rv-ci-note">${esc(t.charAt(0).toUpperCase() + t.slice(1))}.</div>`).join('');
+      + P.notes.map(t=> `<div class="rv-ci-note">${esc(t.charAt(0).toUpperCase() + t.slice(1))}.</div>`).join(''));
   }
   // The square's side: the shorter of the box's width and what is left of its height
   // under the details (fitSide sets the box's height to end with the plot).
@@ -1352,8 +1430,18 @@ export function createRietveld(host, root, o){
   }
   // The column beside the pattern ends where the plot does: its boxes take the height the
   // buttons leave (set by the grid; on a narrow screen, where it sits under the pattern,
-  // their own).
-  function fitSide(){ if (cellV) cellV.redraw(); }
+  // their own). The cell is drawn again, next frame, only when its square is no longer the
+  // one drawn (up to v490 at every draw).
+  let sideRaf = 0;
+  function fitSide(){
+    if (!cellV || sideRaf) return;
+    sideRaf = requestAnimationFrame(()=>{
+      sideRaf = 0;
+      const cv = $('Cell').querySelector('canvas'), s = Math.round(cellSide());
+      if (gone || !cv || cv.hidden || (cv.style.width === s + 'px' && cv.width === Math.round(s*(window.devicePixelRatio || 1)))) return;
+      cellV.redraw();
+    });
+  }
   async function addCifs(fileList){
     if (busy) return;
     const errs = [];
@@ -1667,6 +1755,9 @@ export function createRietveld(host, root, o){
       draw(preserve);
       renderSettings();
     },
+    // A label or a colour changed, a sample stepped to, the card unfolded, the tab on show
+    // again or resized, the standard refined: each view drawn again where what it shows
+    // changed (a table drawn out of sight with its plot, whose size is in its key).
     redraw(){ draw(true); },
     // The standard's profile for the samples (the standard's card).
     irf: ownIrf,
@@ -1725,7 +1816,7 @@ export function createRietveld(host, root, o){
       // again here)
       results = {};
       if (s.results && typeof s.results === 'object') Object.keys(s.results).forEach(k=>{ results[k] = frozen(s.results[k]); });
-      sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; resNorm = normOf(s.resNorm); resSig = '';
+      sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; resNorm = normOf(s.resNorm);
       setKey = '';
       // A run going on is the module's own, read out and in again (a run is stopped before
       // another project comes in): it goes on into the results restored. Nothing running,

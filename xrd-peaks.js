@@ -10,6 +10,21 @@
 import { esc, fmtNum, csvLine, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 
+/* A view (a plot, a table, a chart, a legend) is drawn again only when what it is drawn
+   from changed: each keeps the key of its inputs as last drawn, the objects among them by
+   a number of their own (idOf: the same object, the same number; a pattern's arrays and a
+   processing kept, below, stay the same objects), and its size on the page (sizeOf: 0 when
+   out of sight, so that a view drawn hidden is drawn again when shown). Up to v490 every
+   edit drew every view of the card again, and a label changed or the standard's peaks did
+   so in every card: with 12 patterns, 90 ms for a K changed, 160 for a label. A value
+   that is no object is there as itself (a WeakMap takes no such key). */
+const ids = new WeakMap();
+let nid = 0;
+const idOf = o => o == null ? '-' : typeof o !== 'object' && typeof o !== 'function' ? typeof o + ':' + String(o) : ids.get(o) || (ids.set(o, ++nid), nid);
+const sizeOf = el => { if (!el) return '-'; const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
+// (a plot at the range it was drawn with: not zoomed nor panned)
+const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin === P._origYmin && P.ymax === P._origYmax;
+
 // Index of the grid point nearest to a 2θ, by bisection: an axis need not be even (a scan
 // with points left out, xrd-instr.js, or listed positions). Up to v484 it was taken as
 // even, and an index came out as many points off as were missing before it.
@@ -543,20 +558,35 @@ export function createPeakAnalysis(host, root, o){
     inp.readOnly = (matched !== 'custom');
   }
 
-  function reprocessOne(i){
+  /* A pattern's processing is kept while what it is made from is the same (its arrays
+     never change: xrd.js), so that what is drawn from it is not drawn again: the smoothing
+     and the baseline by the intensities and their windows (k1), the peaks by those, the 2θ,
+     the variance factors, the peak search and the peaks added and removed by hand (k2).
+     Up to v490 every edit made both anew for every pattern it touched or not (a shared
+     field, a restore), and a peak-search field the smoothing and the baseline too. */
+  function procKeys(i){
+    const pr = getFileParams(i), f = files()[i];
+    const k1 = [idOf(f.y), pr.N, pr.blOn ? pr.blWin : 'off'].join('|');
+    return { k1, k2: [k1, idOf(f.x), idOf(f.varMul), pr.pkHeight, pr.pkProm, pr.pkDist, (manualPeaks[i]||[]).join(), (removedPeaks[i]||[]).join()].join('|') };
+  }
+  function reprocessOne(i, was = [processed[i]]){
+    const { k1, k2 } = procKeys(i);
+    const same = was.find(q=> q && q.k2 === k2);
+    if (same){ processed[i] = same; return; }
     const pr = getFileParams(i);
     const f = files()[i];
     const x = f.x;
     const yraw       = f.y;
-    const smoothed   = movingAverage(yraw, pr.N);                      // display + detection
+    const near = was.find(q=> q && q.k1 === k1);
+    const smoothed   = near ? near.smoothed : movingAverage(yraw, pr.N);   // display + detection
     // SNIP baseline (estimate/fallback/standard); switched off, none: the pattern from zero
-    const snip       = pr.blOn ? computeBaseline(smoothed, pr.blWin) : new Array(smoothed.length).fill(0);
+    const snip       = near ? near.snip : pr.blOn ? computeBaseline(smoothed, pr.blWin) : new Array(smoothed.length).fill(0);
     /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
        profile — on the raw counts the noise stops it short — and the smoothing, a box
        N points wide convolved into every peak, widens them in turn: the window is the
        user's to keep small against the peak widths, the raw pattern drawn beside it. */
-    const detSub     = smoothed.map((v,j)=>Math.max(0, v-snip[j]));
-    const rawSub     = yraw.map((v,j)=>v-snip[j]);
+    const detSub     = near ? near.subtracted : smoothed.map((v,j)=>Math.max(0, v-snip[j]));
+    const rawSub     = near ? near.rawSub : yraw.map((v,j)=>v-snip[j]);
     // Peak detection on the smoothed, SNIP-subtracted profile (robust to noise)
     const peaks      = findPeaks(x, detSub, pr.pkHeight, pr.pkProm, pr.pkDist);
     // Re-inject manually added peaks (survive param changes, cleared on reset); one with
@@ -584,22 +614,28 @@ export function createPeakAnalysis(host, root, o){
       pk.fwhmSig = fwhmSigma(x, detSub, pk.idx, yraw, pr.N, f.varMul);
     });
     const subtracted = detSub;
-    processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks};
+    processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks, k1, k2};
   }
   function reprocessAll(){
+    const was = processed;
     processed = [];
-    for (let i=0; i<files().length; i++) reprocessOne(i);
+    for (let i=0; i<files().length; i++) reprocessOne(i, was);
   }
 
   // The standard's peaks the instrumental width is taken from, in 2θ order, and the
-  // Caglioti fit to them (null with fewer than 3). Null with no file.
+  // Caglioti fit to them (null with fewer than 3). Null with no file. Kept while the
+  // standard's processing is the same object: one object, which the samples' views take
+  // among their inputs (up to v490 made anew for each size read, a fit each time).
+  let modelKept = null;
   function instrModel(){
     if (!std || !files().length || !processed[0]) return null;
+    if (modelKept && modelKept.pr === processed[0]) return modelKept.m;
     const pts = processed[0].peaks
       .filter(pk=>!pk.removed && isFinite(pk.fwhm))
       .map(pk=>({x:pk.pos, th:(pk.pos/2)*Math.PI/180, b:pk.fwhm, s:pk.fwhmSig}))
       .sort((a,b)=>a.x-b.x);
-    return { pts, fit: fitCaglioti(pts) };
+    modelKept = { pr: processed[0], m: { pts, fit: fitCaglioti(pts) } };
+    return modelKept.m;
   }
   // The samples' correction, from the standard's model (host.instr).
   const model = ()=> std ? null : host.instr();
@@ -644,10 +680,17 @@ export function createPeakAnalysis(host, root, o){
 
   /* ---- The plot: raw, smoothed, SNIP baseline, peaks (no fit). Each pattern is
      normalised to its own smoothed max (= 1). ---- */
+  // The plot drawn from the pattern and its processing, as last drawn: the same again, it
+  // stays as it is (kept in view, as preserveView keeps it; else only where not zoomed).
+  let anaKey = '';
   function drawAnalysisInto(idx, preserveView){
     const f  = files()[idx];
     const pr = processed[idx];
     if (!f || !pr) return;
+    const svgNode = $$('Svg');
+    const key = [idx, idOf(f.x), idOf(f.y), idOf(pr), sizeOf(svgNode)].join('|');
+    if (anaPlot && key === anaKey && (preserveView || atOrigin(anaPlot))){ highlightPanel(); return; }
+    anaKey = '';
     const mx = maxArr(pr.smoothed) || 1;
     const prevPlot = anaPlot;
     const prev = (preserveView && prevPlot) ? {xmin:prevPlot.xmin, xmax:prevPlot.xmax, ymin:prevPlot.ymin, ymax:prevPlot.ymax} : null;
@@ -656,7 +699,6 @@ export function createPeakAnalysis(host, root, o){
     const dense  = linspace(f.x[0], f.x[f.x.length-1], ndense);
     const baseD  = interpLinear(f.x, pr.baseline, dense);
 
-    const svgNode = $$('Svg');
     const plot  = new Plot(svgNode, {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(svgNode.closest('.plot-wrap'));
     plot.setRange(minArr(f.x), maxArr(f.x), 0, 1.1);
@@ -689,6 +731,7 @@ export function createPeakAnalysis(host, root, o){
     plot._onView = ()=>{ buildInteractiveMarks(plot); highlightPanel(); };
     buildInteractiveMarks(plot);
     highlightPanel();
+    anaKey = key;
   }
 
   // The sample on show (the standard's file), its plot and its label.
@@ -697,8 +740,8 @@ export function createPeakAnalysis(host, root, o){
     const label = $$('CurrentLabel');     // (none on the standard's: its window names it)
     if (!fs.length || !processed.length){ if (label) label.textContent = '—'; return; }
     const k = Math.min(curIdx(), fs.length - 1);
-    if (label) label.textContent = fs[k].label;
-    if (!std) $$('Idx').textContent = (k+1)+'/'+fs.length;
+    if (label && label.textContent !== fs[k].label) label.textContent = fs[k].label;
+    if (!std && $$('Idx').textContent !== (k+1)+'/'+fs.length) $$('Idx').textContent = (k+1)+'/'+fs.length;
     if (host.hidden && host.hidden()) return;
     drawAnalysisInto(k, preserveView);
   }
@@ -802,11 +845,19 @@ export function createPeakAnalysis(host, root, o){
   /* ---- The peak table ---- */
   // Classic (peak-search) table: 2θ, rel intensity, classic FWHM, size. With a standard
   // in use, the samples show the size both without and with the correction.
+  // (as last drawn: the sample, its processing, its K and λ, the standard's model, the peak
+  // picked, and whether it was laid out, for its CSV icon, fitted only on the page; the same
+  // again, the rows and their handlers stay)
+  let tableKey = '';
   function renderTable(){
     const wrap = $$('PeakTableWrap');
     if (!wrap) return;
     if (std) renderCaglioti();
     const fs = files(), idx = Math.min(curIdx(), fs.length - 1);
+    const kp = fs.length && processed[idx] && !std ? getFileParams(idx) : null;
+    const key = !fs.length || !processed[idx] ? 'none' : [idx, idOf(processed[idx]), ...(kp ? [kp.K, kp.lambda, idOf(model())] : []), panel.sel, wrap.getClientRects().length > 0].join('|');
+    if (key === tableKey) return;
+    tableKey = key;
     if (!fs.length || !processed[idx]){ wrap.innerHTML=''; const rb = $$('PkReset'); if (rb) rb.style.display = 'none'; fitCsvIcons(root); return; }
     const fp = getFileParams(idx);
     const allPks = processed[idx].peaks;
@@ -878,11 +929,14 @@ export function createPeakAnalysis(host, root, o){
      largest residual are in the tooltips. A curve that drops to zero inside the
      standard's own range is flagged under the box: the width it gives there is not
      physical. */
+  let cagKey = '';
   function renderCaglioti(){
     const box = $$('Cag'), alert = $$('CagAlert');
     if (!box || !alert) return;
+    const m = instrModel(), key = files().length + '|' + idOf(m);
+    if (key === cagKey) return;
+    cagKey = key;
     alert.innerHTML = '';
-    const m = instrModel();
     let html = `<div class="txt-mini">Caglioti fit</div><div class="pg-stat cag-formula">FWHM² = U·tan²θ + V·tanθ + W</div>`;
     if (!m || !m.pts.length){ box.innerHTML = html + `<div class="pg-stat cag-note">${files().length ? 'No peaks' : 'No standard loaded'}: no instrumental correction.</div>`; return; }
     const n = m.pts.length, lo = m.pts[0].x, hi = m.pts[n-1].x;
@@ -917,16 +971,29 @@ export function createPeakAnalysis(host, root, o){
   /* ---- Results (a card's): the patterns stacked, and the crystallite sizes ---- */
   // Stacked, baseline-subtracted overview. `curves[k]` holds each sample's raw
   // (un-offset) trace on its own x axis; null entries (e.g. no fit) are skipped.
+  // The plot as last drawn: the patterns, their curves and colours, the normalisation, its
+  // size. A label is no part of it: the legend's (written again alone), and the name the
+  // figure composer gives its trace (set in place).
+  let stackKey = '', stackPlot = null, stackLeg = '';
   function drawStackedResults(curves){
     const fs = files();
     const shown = [];
     fs.forEach((f,k)=>{ if (curves[k]) shown.push(k); });
+    const svg = $$('ResSvg'), legend = $$('ResLegend');
+    const leg = shown.map(k=> `<span><i style="background:${esc(fs[k].color)}"></i>${esc(fs[k].label)}</span>`).join('');
+    if (leg !== stackLeg){ stackLeg = leg; legend.innerHTML = leg; }
+    const key = [norm, sizeOf(svg), ...shown.map(k=> [fs[k].name, fs[k].color, idOf(fs[k].x), idOf(curves[k])].join(':'))].join('|');
+    if (stackPlot && key === stackKey){
+      const lab = new Map(shown.map(k=> [fs[k].name, fs[k].label]));
+      stackPlot._stored.forEach(e=>{ if (lab.has(e.key)) e.label = lab.get(e.key); });
+      return stackPlot;
+    }
+    stackKey = '';
     const gmax = topOf(shown.map(k=>maxArr(curves[k])));
     // (none: the curves as they are, spaced by the largest — the plot's unit)
     const unit = norm==='none' ? gmax : 1, n = shown.length, baseOf = j => -j * 1.1 * unit;
-    const plot = new Plot($$('ResSvg'), {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
+    const plot = stackPlot = new Plot(svg, {xlabel:'2θ (°)', ylabel:'Intensity (a. u.)', noYTickLabels:true});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
-    const legend = $$('ResLegend'); legend.innerHTML='';
     let lo=Infinity, hi=-Infinity;
     shown.forEach(k=>{ lo=Math.min(lo, fs[k].x[0]); hi=Math.max(hi, fs[k].x[fs[k].x.length-1]); });
     if (!isFinite(lo)){ lo = 0; hi = 1; }
@@ -940,23 +1007,23 @@ export function createPeakAnalysis(host, root, o){
       // Draw the stacked trace, but hand the composer the un-offset CSV values.
       plot.line(fs[k].x, y, fs[k].color, 1.3, undefined,
                 { raw: { xs: fs[k].x, ys: norm1 }, label: fs[k].label, key: fs[k].name });
-      const s=document.createElement('span');
-      s.innerHTML=`<i style="background:${esc(fs[k].color)}"></i>${esc(fs[k].label)}`;
-      legend.appendChild(s);
     });
+    stackKey = key;
     return plot;
   }
   /* Per-sample crystallite size as a box plot of its peaks' sizes — one box per sample,
      two side by side when a standard is in use (size, and corrected) — with the mean ±
      the standard deviation written above. */
+  // The series (a standard in use: two), and where each box ends on top: its whisker, or an
+  // outlier above it.
+  const sizeSeries = rows => [{ k:'raw', name:'size', color:'#3aa0ff' }].concat(rows.some(r=> r.corrBox) ? [{ k:'corr', name:'size corr.', color:'#ff7a59' }] : []);
+  const boxTop = b => Math.max(b.hi, ...b.out);
+  const sizeTops = (rows, SER = sizeSeries(rows)) => rows.flatMap(r=> SER.map(m=> r[m.k+'Box']).filter(Boolean).map(boxTop)).filter(v=> isFinite(v) && v > 0);
   function drawSizeBarChart(rows, chips){
     const svg = $$('SizeBarSvg'); if (!svg) return;
     const wrap = svg.closest('.plot-wrap'), legend = $$('SizeBarLegend');
-    const anyCorr = rows.some(r=> r.corrBox);
-    const SER = [{ k:'raw', name:'size', color:'#3aa0ff' }].concat(anyCorr ? [{ k:'corr', name:'size corr.', color:'#ff7a59' }] : []);
-    // Where each box ends on top: its whisker, or an outlier above it.
-    const boxTop = b => Math.max(b.hi, ...b.out);
-    const tops = rows.flatMap(r=> SER.map(m=> r[m.k+'Box']).filter(Boolean).map(boxTop)).filter(v=> isFinite(v) && v > 0);
+    const SER = sizeSeries(rows), anyCorr = SER.length > 1;
+    const tops = sizeTops(rows, SER);
     if (!files().length || !processed.length || !tops.length){
       svg.style.display='none'; if(wrap)wrap.style.display='none'; if(legend)legend.innerHTML=''; return;
     }
@@ -1047,19 +1114,28 @@ export function createPeakAnalysis(host, root, o){
     return { name: `2θ ${g.pos.toFixed(2)}°`, label: `${g.pos.toFixed(2)}°`, pos: g.pos, ps,
              ...sizeSummary(ps.map(q=> q.raw), ps.map(q=> q.corr).filter(isFinite), false, !!model()) };
   });
+  // The chart as last drawn: what it draws (its rows, the chips in its corner) and its size;
+  // the chips and the note under it as last written.
+  let sizeKey = '', chipsHtml = '', noteHtml = '';
   function renderSizeChart(){
-    const chips = $$('SizeBy'), note = $$('SizeByNote');
+    const chips = $$('SizeBy'), note = $$('SizeByNote'), svg = $$('SizeBarSvg');
     const R = sizeReflections(), ok = byPeakOk(R), by = ok ? sizeBy : 'sample';
     // Two chips, one at a time; with a single sample there is nothing to compare by peak.
-    if (chips) chips.innerHTML = R.idxs.length < 2 ? '' : [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
+    const ch = R.idxs.length < 2 ? '' : [['sample', 'by sample'], ['peak', 'by peak']].map(([k, t])=>
       `<button type="button" class="mode-chip plot-chip${by === k ? ' is-on' : ''}" data-size-by="${k}"`
       + `${k === 'peak' && !ok ? ' disabled title="No reflection is found in every sample"' : ` title="Crystallite size ${t}"`}>${t}</button>`).join('');
+    if (chips && ch !== chipsHtml){ chipsHtml = ch; chips.innerHTML = ch; }
     const rows = by === 'peak' ? reflectionRows(R)
       : files().map((f, k)=>({name:f.name, label:f.label, ...sampleSizeStats(k)}));
-    drawSizeBarChart(rows, chips);
+    // (shown before it is measured: one hidden measures nothing)
+    const hide = !files().length || !processed.length || !sizeTops(rows).length;
+    if (svg && !hide){ svg.style.display = ''; svg.closest('.plot-wrap').style.display = ''; }
+    const key = hide ? 'none' : JSON.stringify([rows, ch, sizeOf(svg)]);
+    if (key !== sizeKey){ sizeKey = ''; drawSizeBarChart(rows, chips); sizeKey = key; }
     // What is left out by peak: the reflections not every sample has, and whose they are.
-    if (note) note.innerHTML = by === 'peak' && R.extra.length
+    const nt = by === 'peak' && R.extra.length
       ? `Not in every sample, left out: ${R.extra.map(g=> `${g.pos.toFixed(2)}° (${[...g.by.keys()].map(k=> esc(files()[k].label)).join(', ')})`).join('; ')}.` : '';
+    if (note && nt !== noteHtml){ noteHtml = nt; note.innerHTML = nt; }
     sizeNames();
   }
   // The chart's downloads follow what it shows, and the card's name.
@@ -1433,6 +1509,8 @@ export function createPeakAnalysis(host, root, o){
     show(){ addPeak.setMode(false); panel.sel=panel.hov=null; writeStoreToInputs(); updateView(); renderTable(); },
     // The standard changed: the corrected sizes, here and in the Results.
     sizesChanged(){ if (files().length){ renderTable(); renderResults(); } },
+    // A label or a colour changed, the card unfolded, the tab on show again or resized: each
+    // view drawn again where what it shows changed.
     redraw(){ if (files().length){ updateView(true); renderTable(); renderResults(); } },
     instrModel,
     // The downloads named after the card ("<name> - peaks.csv"), the size chart's by what it shows.

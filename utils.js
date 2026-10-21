@@ -1290,7 +1290,30 @@ function bytesKey(b){
   }
   return k;
 }
-const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : x);
+/* A frozen array of numbers (an XRPD pattern's 2θ, intensities and variance factors,
+   frozen where the file is read: nothing changes them after) is written so too, once per
+   array: its length and two hashes of its numbers as JSON has them (one not finite is
+   null, −0 is 0); one holding anything else is written out. Written out, 12 patterns'
+   arrays took 25 of the 26 ms of the key every XRPD edit takes (to v490). */
+const _numsKey = new WeakMap(), _f64 = new Float64Array(1), _u32 = new Uint32Array(_f64.buffer);
+function numsKey(a){
+  let k = _numsKey.get(a);
+  if (k === undefined){
+    let h1 = 0x811c9dc5, h2 = 0x9747b28c;
+    for (let i = 0; i < a.length; i++){
+      const v = a[i];
+      let lo = 1, hi = 0x7ff80000;     // (null)
+      if (typeof v === 'number' && Number.isFinite(v)){ _f64[0] = v || 0; lo = _u32[0]; hi = _u32[1]; }
+      else if (v !== null && typeof v !== 'number'){ h1 = null; break; }
+      h1 = Math.imul(Math.imul(h1 ^ lo, 0x01000193) ^ hi, 0x01000193);
+      h2 = Math.imul(h2 ^ lo, 0x5bd1e995); h2 ^= h2 >>> 15; h2 = Math.imul(h2 ^ hi, 0x5bd1e995); h2 ^= h2 >>> 15;
+    }
+    k = h1 === null ? null : 'nums:' + a.length + ':' + (h1 >>> 0).toString(36) + ':' + (h2 >>> 0).toString(36);
+    _numsKey.set(a, k);
+  }
+  return k;
+}
+const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && Object.isFrozen(x) ? numsKey(x) || x : x);
 class UndoStack {
   constructor(snapshot, restore, limit=80){
     this._snap = snapshot; this._restore = restore; this._limit = limit;

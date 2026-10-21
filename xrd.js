@@ -33,6 +33,15 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
   // and on restoring a project saved by an earlier version that kept the file's order.
   const ascending = f => f.x.length > 1 && f.x[0] > f.x[f.x.length-1]
     ? { ...f, x: f.x.slice().reverse(), y: f.y.slice().reverse(), ...(f.varMul ? { varMul: f.varMul.slice().reverse() } : {}) } : f;
+  /* A pattern's 2θ, intensities and variance factors never change once read (a file read
+     again gives new ones): frozen, so that the undo history's key of a state (stateKey)
+     takes each once, by a hash kept for it, and a view drawn from them is not drawn again
+     for a state that holds the same (to v490 every edit wrote them out, 25 ms with 12
+     patterns, and every restore, an undo too, copied them anew, each view drawn again).
+     A scan's arrays are made so once, 2θ ascending, and shared by the pattern loaded and
+     every restore of it; a file's of a project with no bytes are frozen where restored. */
+  const frozenArrs = f => { ['x', 'y', 'varMul'].forEach(k=>{ if (Array.isArray(f[k])) Object.freeze(f[k]); }); return f; };
+  const scanArrays = sc => sc.arrs || (sc.arrs = frozenArrs(ascending({ x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) })));
 
   // Delegated click handling for dynamically generated alert dismiss buttons.
   document.getElementById('tab-xrd').addEventListener('click', (e)=>{
@@ -60,7 +69,11 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
   async function readFile(f){
     const rawBytes = new Uint8Array(await f.arrayBuffer());
     const xml = new DOMParser().parseFromString(decodeXml(rawBytes), 'text/xml');
-    return patternsOf(f.name, rawBytes, xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml));
+    const scans = xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml);
+    // (kept by its bytes, as readAgain keeps its readings: up to v490 the first restore
+    // after a file was loaded, an undo, read it again)
+    reread.set(rawBytes, scans);
+    return patternsOf(f.name, rawBytes, scans);
   }
   /* A file's scans, each a pattern of its own: one scan, the file as it was read up to
      v483; several (a series measured in one go), "<file> (scan k)" each, k counting every
@@ -74,8 +87,9 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     const n = scans.length, base = name.replace(/\.[^.]+$/, ''), ext = name.slice(base.length);
     const ok = scans.map((sc, k)=> ({ sc, k })).filter(q=> !q.sc.error);
     if (!ok.length) return { error: n > 1 ? scans.map((sc, k)=> `scan ${k+1}: ${sc.error}`).join('; ') : scans[0].error };
-    const pats = ok.map(({ sc, k })=> ({ k, notes: sc.notes, f: ascending({ name: n > 1 ? `${base} (scan ${k+1})${ext}` : name, label: n > 1 ? `${base} (scan ${k+1})` : base,
-      x: sc.x, y: sc.y, rawBytes, ...(n > 1 ? { src: name, scan: k } : {}), ...(sc.meas ? { meas: sc.meas } : {}), ...(sc.varMul ? { varMul: sc.varMul } : {}) }) }));
+    const pats = ok.map(({ sc, k })=>{ const a = scanArrays(sc);
+      return { k, notes: sc.notes, f: { name: n > 1 ? `${base} (scan ${k+1})${ext}` : name, label: n > 1 ? `${base} (scan ${k+1})` : base,
+        x: a.x, y: a.y, rawBytes, ...(n > 1 ? { src: name, scan: k } : {}), ...(sc.meas ? { meas: sc.meas } : {}), ...(a.varMul ? { varMul: a.varMul } : {}) } }; });
     return { pats, n, skipped: scans.map((sc, k)=> sc.error ? `scan ${k+1} not read (${sc.error})` : null).filter(Boolean) };
   }
 
@@ -429,7 +443,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     const b = f.rawBytes;
     if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')){
       let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
-      return { f: ascending({ ...f }), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
+      return { f: frozenArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
     }
     let all = reread.get(b);
     if (!all){
@@ -440,12 +454,14 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
       reread.set(b, all);
     }
     const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
-    if (sc.error) return { f: ascending({ ...f }), note: null };
-    const { varMul: _, ...rest } = f;
-    const g = ascending({ ...rest, x: sc.x.slice(), y: sc.y.slice(), ...(sc.varMul ? { varMul: sc.varMul.slice() } : {}) });
+    if (sc.error) return { f: frozenArrs(ascending({ ...f })), note: null };
+    const { varMul: _, ...rest } = f, a = scanArrays(sc);
+    const g = { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };
     const old = ascending({ ...f }), n = g.y.length;
-    let moved = !old.y || old.y.length !== n || !old.x || old.x.length !== n || !!old.varMul !== !!g.varMul;
-    for (let i = 0; !moved && i < n; i++)
+    // (the arrays the state holds, the scan's own: nothing moved)
+    const same = old.x === g.x && old.y === g.y && old.varMul === g.varMul;
+    let moved = !same && (!old.y || old.y.length !== n || !old.x || old.x.length !== n || !!old.varMul !== !!g.varMul);
+    for (let i = 0; !same && !moved && i < n; i++)
       moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
     // (points left out that an earlier version, to v484, kept as no number: those)
     const lost = sc.dropped && old.y && old.y.length === n + sc.dropped;
