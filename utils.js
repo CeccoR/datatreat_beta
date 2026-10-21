@@ -731,25 +731,6 @@ function makeDownloadLink(container, filename, text, label){
   container.appendChild(b);
 }
 
-function parseNumber(s, decSepIsComma){
-  if (s === undefined || s === null) return NaN;
-  s = String(s).trim();
-  if (decSepIsComma) s = s.replace(',', '.');
-  return parseFloat(s);
-}
-
-function detectDelim(line){
-  const counts = {';':0, ',':0, '\t':0};
-  for (const c of line){ if (counts.hasOwnProperty(c)) counts[c]++; }
-  let best=';', bestN=-1;
-  for (const k in counts){ if (counts[k]>bestN){bestN=counts[k]; best=k;} }
-  return bestN>0 ? best : ',';
-}
-
-function splitCSVLine(line, delim){
-  return line.split(delim).map(s=>s.trim().replace(/^"|"$/g,''));
-}
-
 /* =========================================================
    SHARED FILE DROPZONE
 ========================================================= */
@@ -759,12 +740,15 @@ function setupDropzone(dropzoneId, inputId, onFiles){
   if (!dz || !input) return;
 
   // Show a "Loading…" state on the dropzone while onFiles (async parsing) runs,
-  // so large XRDML files or big batches don't look like a frozen UI.
+  // so large XRDML files or big batches don't look like a frozen UI. It lasts until the
+  // last drop is read: to v491 the first of two drops in a row, ending, cleared it while
+  // the second was still being read.
+  let pending = 0;
   const runFiles = (files)=>{
-    dz.classList.add('dz-loading');
+    pending++; dz.classList.add('dz-loading');
     let ret;
     try { ret = onFiles(files); } finally {
-      Promise.resolve(ret).finally(()=> dz.classList.remove('dz-loading'));
+      Promise.resolve(ret).finally(()=>{ if (--pending === 0) dz.classList.remove('dz-loading'); });
     }
   };
 
@@ -2186,5 +2170,5 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 };
