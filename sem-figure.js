@@ -55,14 +55,18 @@ const FIG_DEF = {
 const CORNER = { tl: ['top', 'left'], tr: ['top', 'right'], bl: ['bottom', 'left'], br: ['bottom', 'right'] };
 // The settings filled with the defaults wherever a project lacks them; those of
 // v439–v448 (a corner or a side as one position, a height from the layout) read anew.
+// (A corner is one of CORNER's own keys: 'toString' or 'constructor' as a position, in
+// a damaged project, threw here, and the figure did not open, to v487.)
+const isCorner = p => typeof p === 'string' && Object.prototype.hasOwnProperty.call(CORNER, p);
 function withDefaults(f){
   const o = { ...FIG_DEF, ...(f || {}) };
   for (const k of ['label', 'letter', 'bar']) o[k] = { ...FIG_DEF[k], ...((f || {})[k] || {}) };
-  o.order = (f && f.order || []).slice(); o.names = { ...(f && f.names || {}) }; o.bars = { ...(f && f.bars || {}) };
+  // (an order that is not a list, 5 or {}, threw on slice, to v487)
+  o.order = Array.isArray(f && f.order) ? f.order.slice() : []; o.names = { ...(f && f.names || {}) }; o.bars = { ...(f && f.bars || {}) };
   const old = f && f.label && f.label.pos;
   if (old && !['in', 'out'].includes(old)){
     const L = o.label; L.auto = false; L.orient = 'h';
-    if (CORNER[old]){ L.pos = 'in'; [L.va, L.ha] = CORNER[old]; }
+    if (isCorner(old)){ L.pos = 'in'; [L.va, L.ha] = CORNER[old]; }
     else if (old === 'above' || old === 'below'){ L.pos = 'out'; L.va = old === 'above' ? 'top' : 'bottom'; L.ha = 'left'; }
     else { L.pos = 'out'; L.orient = 'v'; L.ha = old; L.va = 'center'; }
   }
@@ -70,13 +74,46 @@ function withDefaults(f){
     const p = f && f[k] && f[k].pos;
     if (!p || ['in', 'out'].includes(p)) continue;
     const X = o[k];
-    if (CORNER[p]){ X.pos = 'in'; [X.va, X.ha] = CORNER[p]; }
+    if (isCorner(p)){ X.pos = 'in'; [X.va, X.ha] = CORNER[p]; }
     else { X.pos = 'out'; X.va = p === 'below' ? 'bottom' : 'top'; X.ha = k === 'bar' ? 'right' : 'left'; if (p === 'left' || p === 'right'){ X.va = 'bottom'; X.ha = p; } }
   }
   if (/^m/.test(o.align || '')) o.align = 'c' + o.align[1];   // v449 wrote the middle row as m
   if (f && f.hAuto === false && f.hmm > 0) o.hmm = f.hmm;
   else if (f && 'hAuto' in f) o.hmm = null;
   delete o.hAuto;
+  return sane(o);
+}
+/* The settings as the composer can draw them, whatever a project holds (a file edited
+   by hand or damaged): each number a number within its field's range (wider for those
+   the layout also sets: the grid's counts, the height, the plot), each choice one of
+   its options, each box true or false, else the default; the order, names and bar
+   lengths as the controls write them. To v487 they went in as they were: a width that
+   was not a number drew the figure as NaN. */
+const RANGES = { wmm: [10, 1000], dpi: [50, 4800], plotW: [0, 1e5], plotH: [0, 1e5], rows: [1, 1e4], cols: [1, 1e4], gap: [0, 20], bRows: [1, 1e4], bCols: [1, 1e4], bGap: [0, 40],
+  'label.size': [3, 36], 'letter.size': [3, 36], 'bar.thick': [0.1, 5], 'bar.size': [3, 36] };
+const CHOICES = { bg: ['#ffffff', '#000000'], plotBy: ['w', 'h'], align: ['tl', 'tc', 'tr', 'cl', 'cc', 'cr', 'bl', 'bc', 'br'],
+  'label.orient': ['h', 'v'], 'label.ha': ['left', 'center', 'right'], 'label.va': ['top', 'center', 'bottom'], 'label.pos': ['in', 'out'],
+  'letter.style': ['a', '(a)', 'A', '(A)'], 'letter.pos': ['in', 'out'], 'letter.va': ['top', 'bottom'], 'letter.ha': ['left', 'right'],
+  'bar.pos': ['in', 'out'], 'bar.va': ['top', 'bottom'], 'bar.ha': ['left', 'right'] };
+const FLAGS = ['plotAuto', 'gridAuto', 'outline', 'label.on', 'label.auto', 'letter.on', 'letter.link', 'bar.each'];
+const COLOR = /^#[0-9a-f]{3}([0-9a-f]{3})?$/i;
+function sane(o){
+  const at = p => p.split('.').reduce((x, k)=> x[k], o), def = p => p.split('.').reduce((x, k)=> x[k], FIG_DEF);
+  const set = (p, v)=>{ const ks = p.split('.'), last = ks.pop(); ks.reduce((x, k)=> x[k], o)[last] = v; };
+  for (const [p, [lo, hi]] of Object.entries(RANGES)){ const v = at(p); if (!(typeof v === 'number' && v >= lo && v <= hi)) set(p, def(p)); }
+  for (const k of ['rows', 'cols', 'bRows', 'bCols']) o[k] = Math.round(o[k]);
+  if (o.hmm !== null && !(typeof o.hmm === 'number' && o.hmm > 0 && o.hmm <= 1e5)) o.hmm = null;
+  for (const [p, opts] of Object.entries(CHOICES)) if (!opts.includes(at(p))) set(p, def(p));
+  for (const p of FLAGS) if (typeof at(p) !== 'boolean') set(p, def(p));
+  if (typeof o.file !== 'string') o.file = FIG_DEF.file;
+  if (!Object.prototype.hasOwnProperty.call(FONTS, o.font)) o.font = FIG_DEF.font;
+  if (!COLOR.test(o.ink)) o.ink = FIG_DEF.ink;
+  if (o.outlineColor !== null && !COLOR.test(o.outlineColor)) o.outlineColor = null;
+  o.order = Array.isArray(o.order) ? o.order.map(id=> typeof id === 'string' ? id : '') : [];
+  for (const k of Object.keys(o.names)) if (typeof o.names[k] !== 'string') delete o.names[k];
+  for (const [k, b] of Object.entries(o.bars)){
+    if (!b || typeof b !== 'object' || typeof b.auto !== 'boolean' || !(typeof b.um === 'number' && b.um > 0 && b.um <= 100000)) delete o.bars[k];
+  }
   return o;
 }
 const clone = v => JSON.parse(JSON.stringify(v));

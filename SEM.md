@@ -22,8 +22,9 @@ The page has three cards, in this order:
 
 The groups come first: an image's crop is then set knowing its group, whose common scale may narrow it (dashed in the editor, §4.2).
 
-The code is in three files: `sem-read.js` (reading), `sem.js` (the module) and
-`sem-figure.js` (the figure, a kind of figure of the composer in `figure.js`).
+The code is in four files: `sem-read.js` (reading), `sem-read.worker.js` (reading the
+files dropped off the page's thread, §6.3), `sem.js` (the module) and `sem-figure.js`
+(the figure, a kind of figure of the composer in `figure.js`).
 
 ## 1. Files
 
@@ -36,10 +37,46 @@ else is refused, each file with its reason in the list under the drop zone:
 - not a TIFF, or a BigTIFF;
 - a TIFF without the Tescan tag;
 - a compressed, colour, tiled, signed or floating-point TIFF;
-- a damaged one (its pixels run past the end of the file, or fall short of its size).
+- a damaged one: its size needs more bytes than the whole file holds, its pixels run past the end of the file, or they fall short of its size;
+- an image (the info bar left out) over 32767 px a side or 268 million px in all (2²⁸: a 16384 × 16384 image is taken), the most a browser draws in one canvas (Firefox's side, Chromium's area), as the editor draws the image whole. An image whose pixels are made square (§1.5) is held to the same, at its square size. The bar is never drawn: a frame over the limits whose image is within them is taken (a 16384 × 16448 frame with its 64-row bar).
+
+**Checked before anything is allocated.** The size the header declares is checked
+against the file's length and the strips' byte counts, and against the limits above,
+before the pixels are given any memory. To v487 the pixels were allocated first: a
+328-byte file declaring 20000 × 20000 px took 800 MB before it was refused (fewer
+pixels than its size), and at 40000² or 70000² the list said only *Array buffer
+allocation failed*. Now: *a damaged TIFF: its 40000 × 40000 px of 8 bits take 1.6 GB,
+more than the whole file (328 bytes)*, with nothing allocated.
+
+**Strips of 16-bit pixels with an odd byte count.** A strip's pixels are its whole
+samples; a stray last byte is no pixel. To v487 such a strip was read one byte past its
+end (a file whose odd strip ended the file was refused with *Offset is outside the
+bounds of the DataView*), and every strip after it landed half a pixel off: a 64 × 64
+image with three odd strips of seven loaded with 2176 pixels wrong, and no word. Now it
+loads with every pixel right.
 
 A `.hdr` dropped beside its `.tif` is skipped without a message: it holds the same
 text as the tag.
+
+**The alerts under the drop zone** (files refused, files already loaded, files loaded
+but to check, and images a project opened could not read) belong to the tab they were
+made in: another tab, empty or holding the same images, never shows them, and they show
+again when their tab is back (the module tells a tab by its line of undo history, which
+each state it saves carries; a state with none, as a tab's or a project's put in the
+module, starts a new line). Within their tab they are about files: those they name, or,
+for the refused and the unreadable, which were never loaded, the files in the list when
+they were made (none: while the list is empty). Each shows while those files are in the
+list: an alert about an image loaded with a warning goes with an undo past the upload and
+comes back with the redo. It goes when they go (an image removed takes its own alerts
+with it, *Remove all* all of them), when dismissed, or with the next upload. An undo,
+and a project read in and out again (a saved project's CSV exported from the list, the
+saved state of a tab compared on its return), leave them as they are, and what such a
+project could not read is never said. To v487 every restore wiped them, though they are
+about the upload, not the state. Checked with three tabs: the first tab's three alerts
+stayed through an undo, two projects read in and out (one with an image that no longer
+reads) and an undo and redo past the upload; a new tab showed none, then only its own
+refused file; a project with an unreadable image, opened in a third tab, said so; each
+tab, switched back to, showed its own again.
 
 ### 1.2 The Tescan tag
 
@@ -57,7 +94,7 @@ Tag 50431 holds blocks, each one being:
 | 0 | the end | — |
 
 **From `[MAIN]`:**
-- `PixelSizeX` and `PixelSizeY` (m);
+- `PixelSizeX` and `PixelSizeY` (m): a pixel's width and height (§1.5);
 - `Magnification`;
 - `ImageStripSize`, the info bar's height in rows;
 - `Sign`, the sample's name. The file's `OrigFileName`, then its name, stand in when it is missing.
@@ -69,9 +106,10 @@ Tag 50431 holds blocks, each one being:
 - `Detector`;
 - `Detector0Gain` and `Detector0Offset`.
 
-The field of view is `PixelSizeX` × the width. On the user's two files (VEGA, 1024 px
-wide) it gives 55.84 µm at 5 kx and 13.96 µm at 20 kx, the values printed in their
-info bars.
+The field of view is `PixelSizeX` × the width (for an image made of square pixels, its
+pixel × its width, the same within half a pixel, §1.5). On the user's two files (VEGA,
+1024 px wide) it gives 55.84 µm at 5 kx and 13.96 µm at 20 kx, the values printed in
+their info bars.
 
 ### 1.3 The info bar
 
@@ -95,6 +133,28 @@ WhiteIsZero file is turned the usual way round.
 
 Every view of an image (the editor, the thumbnails, the groups, the figure) shows it
 through its curve (§3).
+
+### 1.5 Square pixels
+
+Tescan gives a pixel's width (`PixelSizeX`) and height (`PixelSizeY`). Where they
+differ by more than 0.1 %, the image is brought to square pixels as it is read
+(`sem-read.js` `squarePixels`), so that the crop, the statistics, the grouping by pixel
+size, the common scale, the figure and its scale bars all work on it as on any other.
+To v487 `PixelSizeY` was read and left unused: such an image was drawn with square
+pixels, stretched, and its scale bar held along X only.
+
+- **The size.** The finer of the two. Along the finer side the pixels stay as acquired; along the coarser there are more of them, coarser/finer as many (rounded). Nothing acquired is lost, which the coarser size (an average over the finer side's pixels) would do, and the field is the same. Keeping X and resampling the rows would have reduced the rows where Y is the finer. The coarser side's pixel then differs from the finer's by at most half a pixel over the image (0.05 % over 1000 px).
+- **The resampling.** On the 16-bit levels, before the curve, side by side: linear between the two nearest pixels when enlarging (the only case with the finer size), the end ones held; the mean of the pixels covered, in part where covered in part, when reducing.
+- **The details** say so: *Image 300 × 300 px, 300 × 200 px as acquired*; *Pixel size 20 nm, square: resampled from 20 × 30 nm pixels*. The CSV's pixel size, image size and crop are in the square pixels.
+- **Within 0.1 %** the image is taken as it is, the pixel size `PixelSizeX`: what it shows is what it showed to v487, byte for byte.
+- **A project saved to v487** with such an image held its crop in the pixels as acquired: opened now, the crop is brought to the square ones (the same part of the specimen; the default crop stays the default), once, and the image's entry is marked so (`sq`).
+
+**Checked** (v488) on generated images of a disc 4 µm across on a 6 µm field:
+- **20 × 30 nm pixels** (300 × 200): read as 300 × 300 at 20 nm, the disc 200 × 200 px = 4.00 × 4.00 µm. To v487 it was 200 × 134 px, 4.00 × 2.68 µm. **30 × 20 nm** (200 × 300): 300 × 300 at 20 nm, the disc 200 × 200 px; to v487 at 30 nm, 134 × 200 px. A square control at 20.5 nm: 195 × 195 px, 4.00 × 4.00 µm.
+- **A ramp** of 300 levels a row at 20 × 25 nm: 100 rows became 125, each the line between its two rows (1000, 1210, 1450, 1690… 30490, 30700).
+- **Grouping.** The five of the test (the two discs, the ramp, a file within 0.1 % at 20 nm, the control at 20.5 nm) fell into one group; to v487 the 30 × 20 nm one, taken at 30 nm, made its own.
+- **A v487 project** with a 150 × 100 px crop (3 × 3 µm) on the 20 × 30 nm image opened with 150 × 150 px, 3 × 3 µm; saved and reopened, unchanged.
+- **Within 0.1 %** (20 × 20.019 nm, 21 × 20.98 nm): the editor, the histogram, every thumbnail and card the same pixels as v487.
 
 ## 2. Crop
 
@@ -437,7 +497,14 @@ A project keeps each file's own bytes, as base64, in the module's state.
 - **The undo stack.** It compares snapshots with `JSON.stringify` on every edit. The bytes' holder serialises in JSON as its id alone, so a snapshot compares at the cost of its crops: 2 ms an edit with two images.
 - **Saved projects and `.json` files.** These keep the bytes. A project with the user's two images exports as a 6.5 MB `.json`.
 - **The id.** It is a hash of the bytes. A second copy of a file already loaded, whatever its name, is reported as already loaded.
-- **Restoring.** Opened again, a project's images are read again from their bytes. One that no longer reads is left out, with a note.
+- **Restoring.** Opened again, a project's images are read again from their bytes. One that no longer reads is left out, with a note. Which still read, and their sizes, are learnt from the headers alone; the pixels are decoded when drawn (§6.3).
+- **A malformed project** (a project file edited by hand or damaged) is taken as the module would have made it. To v487 what it held went in as it was: a crop that was not a number threw in the canvas (*Value is not of type 'long'*) and the views drew NaN; a `files` that was not a list, a null entry or a null group threw and left the module empty; a correction of 1e9, a normalisation *evil*, an index of −3, `__proto__` among the groups' settings went in. Now:
+  - an image: its bytes, and an id of the form the hash gives (else made from the bytes), once (a second entry of one id is dropped); strings for its name and label; its crop whole pixels inside the image, at least 64 px a side, else the default crop; its ratio one of the four; its correction within the fields' ranges; its *Default* boxes ticked only where the crop and the correction are the defaults;
+  - the settings, all groups' and each group's: a normalisation of the four, every number within its field's range, else its default;
+  - the groups: ids that are names (no key of a plain object's own, as `__proto__` or `toString`), once each; each image in one group; the scale common or own; the image shown at index 0 or more;
+  - a group's figure: each number within its field's range (wider for the grid's counts, the height and the plot, which the layout also sets), each choice one of its options, each box true or false, the ink a colour, else the default; the order, names and bar lengths as the controls write them. To v487 a width that was not a number drew the figure as NaN.
+
+  Checked on 13 projects malformed so, and on the payload fuzz (every string and number prefixed with markup): every one opened, its images, settings and groups sane, an image stepped to and its crop edited, every group's figure drawn without NaN, and no page error; the fuzz found nothing injected.
 
 ### 6.2 CSV
 
@@ -467,6 +534,68 @@ The CSV holds one row per included image, with these columns:
 | `figure_out_width_px`, `figure_out_height_px` | the image's size there |
 
 The group columns are empty for an image in no group.
+
+### 6.3 Speed and memory
+
+**Reading files off the page's thread.** Each file dropped is read by a worker
+(`sem-read.worker.js`, a module file of the page's origin, as the page's script policy
+asks): its id, the image, its 160-px copy, its default crop's statistics, its card in a
+group, its base64. The page answers meanwhile; the files read join the list together,
+one step of the history, as before. While files are read the module is busy: a switch
+to another tab asks first (*The reading of SEM files is running in "…": leaving this
+tab stops it*) and stops it, nothing going into either project, as closing the tab
+does; undo and redo wait. Files dropped meanwhile are read after, the drop zone reading
+until the last. Where no worker runs, the files are read on the page's thread, a frame
+let through between two, with the same result. To v487 all of it ran on the page's
+thread.
+
+**Drawing only what changed.** Each image keeps what was drawn of it with what it was
+drawn from: its curve (one for each set of what it is made from: the crop's statistics,
+the reference's, the settings, its correction; to v487 three or four an image at every
+edit), its thumbnail (its curve and crop), its card in its group (the part of the
+original it takes and its size, then its curve: a brightness change puts the curve
+again on the levels kept, a crop that leaves the group's field puts nothing), the
+editor's image (its curve). An edit draws again only those whose inputs changed; to
+v487 every thumbnail and card, each card resampled from its whole crop.
+- **The cards are still made from the whole crop**, not from the thumbnails' 160-px copy: a card is drawn at up to 200 px, and a crop of half the image is some 80 px of that copy, which the card would show enlarged, blurred. Kept as they are, they look as they did, pixel for pixel.
+- **The same numbers.** The statistics, the resampling and the curves are computed as before, to the last bit: the crop's sums are taken from its histogram where that is exact (a sum of squares under 2⁵², every partial sum then a whole number), else pixel by pixel as before; the resampling adds the same terms in the same order, its weights in flat arrays; a large region goes through a table of each level's whole pixel. The browser's own base64 (`fromBase64`, `toBase64`), where it has it, reads a 8.6 MB file in 13 ms, not 50.
+- **A restore** is drawn once the task that made it is over (a microtask, before anything is painted), and learns which images read from their headers alone, decoding none. A project read in and out again is not drawn: for the saved state of a tab compared on its return nothing is decoded; a saved project's CSV decodes the images it includes, for their statistics, and lets them go afterwards under the memory budget below (both timed below). To v487 both were drawn, every image of the project decoded and kept.
+
+**Memory.** The decoded images (8.4 MB for a 2048² one) of the images in the list are
+kept; the others (an image removed, which an undo may bring back; a project read in; a
+tab parked) go, the least recently used first, once all of them take more than 128 MB,
+and are read again from their bytes when needed (what their headers say is kept). To
+v487 every image ever loaded or restored stayed decoded until the page was reloaded.
+
+**Measured** (v488, headless Chromium, eight 2048² images in two groups, v487 against
+v488, each edit the time its handler holds the page):
+
+| | v487 16-bit | v488 16-bit | v487 8-bit | v488 8-bit |
+|---|---|---|---|---|
+| brightness, all images | 279–329 ms | 39–55 ms | 226–269 ms | 44–47 ms |
+| contrast, all images | 238–286 | 41–44 | 217–271 | 42–49 |
+| brightness, one image | 227–284 | 24–27 | 232–280 | 21–25 |
+| crop width, one image | 258–332 | 71–85 | 262–337 | 70–111 |
+| crop width, eight linked | 333–413 | 106–135 | 192–294 | 105–151 |
+| normalisation: histogram, mean and SD, percentiles | 235, 158, 162 | 61, 40, 26 | 203, 157, 168 | 70, 44, 27 |
+| next image | 151 | 22 | 152 | 22 |
+| undo (with its drawing) | 152–214 | 27–38 | 156–163 | 29–40 |
+| loading: frames held over 50 ms | 8 (each file's, then 787 ms), 1824 ms in all | one, 234 ms | 8, 1342 ms in all, longest 693 | one, 216 ms |
+
+The loading's frames are measured with the tab's saving left out: the tabs' autosave
+writes the whole project, every image's base64 in it, into the browser's database on
+the page's thread (`db.js`), some 400 ms for these eight (with it, 16-bit: v487 ten
+frames, 2838 ms in all; v488 three, 1035 ms). Every view (the editor, the histogram,
+every thumbnail and card, the image's details), the CSV and the figure's SVG and PNG
+were compared over 22 steps of edits and 16 figure settings: the same, byte for byte.
+
+**A project read in and out again**, three 2048² 16-bit images, in a fresh page: its
+saved state 35–44 ms (v487 570–585 ms, every image decoded and drawn); its CSV 255–260 ms
+(v487 620–800 ms).
+
+**The heap** (decoded images included), six projects of four 2048² 16-bit images opened
+in turn, each also read in and out once, then the first again: v487 124, 160, 196, 232,
+267, 267, 267 MB, every image kept; v488 106, 142, 179, 197, 197, 197, 197 MB.
 
 ## Changelog
 
