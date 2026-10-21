@@ -98,12 +98,39 @@ function prepPhase(text, fileName){
     name: cif.name || (fileName || '').replace(/\.cif$/i, ''), file: fileName || '', formula: cif.formulaSum || '', sites,
     cell: sc.cell, ops: sym.ops, atoms: sc.atoms, system: sym.system, constraint: sym.constraint, order: sym.order,
     mass: cellMass(sc.atoms), notes, warnings, ownCell: !!sc.basis, Z: cif.Z || null,
-    sg: sg || null, sgFrom: named ? 'cif' : sg ? 'atoms' : null,
+    sg: sg || null, sgFrom: named ? 'cif' : sg ? 'atoms' : null, src: textKey(text),
   };
+}
+// A text's content as a short key: FNV-1a over its characters, and its length.
+function textKey(s){
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36) + '.' + s.length;
+}
+/* prepPhase by the CIF's text and the file's name (which names a phase whose CIF has none):
+   an undo, a redo or a tab switch restores every phase, and each was read again there (to
+   v483), its CIF parsed and its symmetry found anew. What it gives is shared by the phases
+   of that text, every card's, and nothing changes it. The last 32 read are kept. */
+const PREPS = new Map();
+function prepOf(text, fileName){
+  const k = (fileName || '') + '\n' + text;
+  let q = PREPS.get(k);
+  if (q){ PREPS.delete(k); PREPS.set(k, q); return q; }
+  q = prepPhase(text, fileName);
+  PREPS.set(k, q);
+  if (PREPS.size > 32) PREPS.delete(PREPS.keys().next().value);
+  return q;
 }
 // The cell a phase is refined in, as a key: a result refined in another (the file's, before
 // v426 re-expressed supercells and orthohexagonal cells) does not belong to the phase now.
 const cellKey = c => [c.a, c.b, c.c, c.alpha, c.beta, c.gamma].map(v=> +(+v).toFixed(6)).join();
+/* A result is never changed once written (a new one replaces it): frozen, deep, it is shared
+   by the undo states it is in and by the curves drawn from it. (A typed array cannot be
+   frozen; a result holds none.) */
+function frozen(v){
+  if (v && typeof v === 'object' && !ArrayBuffer.isView(v) && !Object.isFrozen(v)){ Object.freeze(v); for (const k in v) frozen(v[k]); }
+  return v;
+}
 
 // The engine's options as the v428 pickers named them; read from projects of v428 or older
 // (migrateSettings) and from results (curvesOf). The crystallite shapes (xrd-rietveld
@@ -308,12 +335,69 @@ function formulaOf(prep){
   return order.map(([e, c]) => e + (c === 1 ? '' : c)).join('');
 }
 const SUBS = '₀₁₂₃₄₅₆₇₈₉';
+/* The sizes the Results chart by sample (sizesOf): a result's rows, and what each is — in
+   the legend by its phase's name, how it is read in the note under the chart, and by the
+   value where a phase has sizes of several kinds. */
+const SIZE_ROWS = { crystallite_size_nm: 'scherrer', sphere_diameter_nm: 'sphere', size_volume_mean_nm: 'volume' };
+const SIZE_KINDS = {
+  scherrer: ['Scherrer size', "Scherrer size: the Lorentzian's, K = 0.9, an apparent size (spheres of one size read 1.0–1.7 times their diameter).", 'Scherrer'],
+  sphere: ['sphere diameter (WPPM)', 'Sphere diameter (WPPM): the true diameter of spheres of one size.', 'sphere'],
+  volume: ['volume-weighted mean diameter (WPPM)', 'Volume-weighted mean diameter (WPPM, log-normal sizes): what the breadth measures; the median and the number-weighted mean are in the results.', 'volume mean'],
+  shape: ["free shape's dimensions", "Free shape: its dimensions, each measured one with its esd (dimensions not told apart, their mean) — with WPPM the solid's own, else read as the Scherrer size is.", 'shape'],
+};
 /* Reflections at one 2θ (a cubic phase's 300 and 221: the same h² + k² + l²) are one peak,
    the sum of both: written "300 + 221" (up to v462 "300/221", which read as a division).
    The widths keep "300/221" as the peak's name, which matches it across patterns and
    saved results; only what is shown and exported is written so. */
 const hklShow = lab => String(lab).split('/').join(' + ');
 const hklPlain = t => String(t).split(' / ').join(' + ');
+/* A negative Miller index has a bar over it where the text is rich: the results, the
+   settings' line by their title, the widths' table and tests, the plots' labels (plot.js
+   runs) and the 3D views (xrd-shape3d). Plain text keeps the minus hklText writes (the
+   CSVs, the tooltips); an <option>, which takes no markup, has a combining overline after
+   each digit (optBars). To v486 the minus was shown everywhere (v480 had made it one sign).
+   hklRuns: an index label ('1-10', '1 -1 11', '300 + 221' as hklShow writes it; '11̅0', a
+   bar after its digit, in a result of v479 or older, whose result lines had '−') as
+   [text, barred] runs, each negative index's digits barred and its minus dropped. Without
+   spaces every index is one digit (hklText); with them, each number is one index. */
+function hklRuns(t){
+  const out = [], add = (s, bar) => { const l = out[out.length - 1]; if (l && !l[1] && !bar) l[0] += s; else out.push([s, bar]); };
+  String(t).split(' + ').forEach((part, i)=>{
+    if (i) add(' + ', false);
+    const spaced = part.includes(' ');
+    for (let j = 0; j < part.length; j++){
+      const ch = part[j];
+      if ((ch === '-' || ch === '−') && /\d/.test(part[j + 1] || '')){
+        let e = j + 2;
+        if (spaced) while (/\d/.test(part[e] || '')) e++;
+        add(part.slice(j + 1, e), true); j = e - 1;
+      } else if (/\d/.test(ch) && part[j + 1] === '\u0305'){ add(ch, true); j++; }
+      else add(ch, false);
+    }
+  });
+  return out;
+}
+// The runs as markup (a bar after another a little apart: each index its own), and an
+// index label so (hklHtml); the indices in brackets within a line of text already escaped,
+// three digits or three spaced numbers, barred where one is negative (barIdx). The minus
+// stays in the text under the bar, hidden and out of the flow (.hkl-sign: no new place to
+// break the line): a copy and a screen reader read (1-11), as they did to v486.
+const barHtml = runs => runs.map(([s, bar], i)=> bar ? `<span class="hkl-bar${i && runs[i - 1][1] ? ' hkl-bar2' : ''}"><span class="hkl-sign">-</span>${esc(s)}</span>` : esc(s)).join('');
+const hklHtml = t => barHtml(hklRuns(t));
+const IDX_IN = /([([{⟨])((?:[-−]?\d){3}|[-−]?\d+(?: [-−]?\d+){2})([)\]}⟩])/g, IDX_PAIR = { '(': ')', '[': ']', '{': '}', '⟨': '⟩' };
+const barIdx = html => String(html).replace(IDX_IN, (m, a, t, b)=> IDX_PAIR[a] === b && /[-−]/.test(t) ? a + barHtml(hklRuns(t)) + b : m);
+// An index in a list's <option>, which takes no markup: its bar a combining overline
+// (U+0305) after each digit, as Chromium draws it well over the digit; a hair space between
+// two indices barred side by side, each its own bar.
+const optBars = t => String(t).replace(IDX_IN, (m, a, x, b)=> IDX_PAIR[a] === b && /[-−]/.test(x)
+  ? a + hklRuns(x).map(([s, bar], i, r)=> bar ? (i && r[i - 1][1] ? '\u200a' : '') + s.replace(/\d/g, '$&\u0305') : s).join('') + b : m);
+// A label's runs for a plot (plot.js tickLabel, barLabel), as shown (cut to fit, its index
+// at its end: whole), or null where nothing is barred: the label drawn as it always was.
+function plotRuns(shown, hkl){
+  if (!shown.endsWith(hkl)) return null;
+  const r = hklRuns(hkl), pre = shown.slice(0, shown.length - hkl.length);
+  return r.some(x=> x[1]) ? (pre ? [[pre, false], ...r] : r) : null;
+}
 const formulaPretty = f => esc(f).replace(/(\d+(?:\.\d+)?)/g, m => m.replace(/\d/g, d => SUBS[d]));
 
 const DL_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>';
@@ -362,6 +446,7 @@ export function createRietveld(host, root, o){
   let gen = 0;               // the states restored so far: a choice outlived by one is dropped
   let plot = null;
   let sel = null;            // the phase whose structure is on show
+  let gone = false;          // destroyed: nothing is drawn
   // The standard's: the built-in LaB6, its own colour apart from the CIF phases'; the
   // phase its refinement uses (pick).
   const lab6 = { id: 0, cif: LAB6_CIF, file: '', color: '#4cc9a0', ...stdSettings(), prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)'), off: {} };
@@ -526,8 +611,8 @@ export function createRietveld(host, root, o){
         // (the phases it was refined with: a CIF added meanwhile is not among them; the
         // standard's profile as the worker used it, kept to tell when the standard changes;
         // free, held, detected, shapes, isoParams: what the next start from it needs)
-        results[f.name] = { ...res, standard: std, phases: ph.map(q=> q.id), irf: std ? null : res.irf || null, at: Date.now(),
-          cells: Object.fromEntries(ph.map(q=> [q.id, cellKey(q.prep.cell)])) };
+        results[f.name] = frozen({ ...res, standard: std, phases: ph.map(q=> q.id), irf: std ? null : res.irf || null, at: Date.now(),
+          cells: Object.fromEntries(ph.map(q=> [q.id, cellKey(q.prep.cell)])) });
         run.done++;
         // (by name: a module read out and in again gives the same files as new objects)
         if (f.name === (host.files()[curIdx()] || {}).name) draw();
@@ -613,14 +698,24 @@ export function createRietveld(host, root, o){
   // ---- the plot: observed, calculated, the background, the difference under them,
   // and a row of ticks per phase between the two ----
   function curvesOf(f, r){
-    /* The phases as the result was refined: those it was refined with (a phase added
-       since, or one unticked, would draw its default scale in the curve), with the free
-       shape when its parameters are there and the models it used (a size or strain
-       switched off among them), whatever the settings say now. */
+    const list = resultPhases(f, r), inp = curveInputs(f, r, list);
+    if (!(curveKept && sameInputs(curveKept.inp, inp))) curveKept = { inp, c: curvesFrom(f, r, list) };
+    return { c: curveKept.c, list };
+  }
+  /* The phases as the result was refined: those it was refined with (a phase added
+     since, or one unticked, would draw its default scale in the curve), in the cells it
+     was refined in (else it throws). */
+  function resultPhases(f, r){
     const ids = r.phases || null, list = ids ? allPhases().filter(q=> ids.includes(q.id)) : phasesFor(f);
     if (ids && list.length !== ids.length) throw new Error('The phases changed since this refinement.');
     if (r.cells ? list.some(q=> r.cells[q.id] != null && r.cells[q.id] !== cellKey(q.prep.cell)) : list.some(q=> q.prep.ownCell))
       throw new Error('A phase is refined in another cell since this refinement.');
+    return list;
+  }
+  // The curves themselves: the phases with the free shape when its parameters are there
+  // and the models the result used (a size or strain switched off among them), whatever
+  // the settings say now.
+  function curvesFrom(f, r, list){
     const ph = phaseData(list).map(q=>{
       const md = (r.models || {})[q.id] || {};
       return { ...q, shape: shapeOfParams(r.params, q.id), po: r.textures && r.textures[q.id] ? r.textures[q.id].hkl : null, size: md.size !== false,
@@ -632,8 +727,23 @@ export function createRietveld(host, root, o){
     // older), not the settings now — a background of degree 12 drawn with 6 terms is wrong.
     const fs = fitSettings(r.fit);
     const model = buildModel({ x: f.x, y: f.y, varMul: f.varMul || null, instr: instrOf(f), phases: ph, bgDegree: fs.bgDegree, bgInv: fs.bgInv, cellRange: fs.cellRange });
-    return { c: calc(model, r.params), list };
+    return calc(model, r.params);
   }
+  /* Curves kept while what they are built from is the same (sameInputs): the pattern's data
+     (by value: a restore reads the files' arrays anew), its instrument, all the curves take
+     from the result (exactly: a NaN is not a null, nor −0 0), each phase's structure (its
+     prep, one object for one CIF text: prepOf) and colour. The last drawn (curveKept), and
+     each pattern's observed less its background for the Results (netKept). Up to v486 a
+     redraw built and calculated the model twice (draw, then renderResults for its phases),
+     and an undo or a tab switch, whose results come back as new objects, again for every
+     refined pattern in the Results: 1.5–2.5 s for twelve. */
+  let curveKept = null;
+  const exactJson = v => JSON.stringify(v, (k, x)=> typeof x === 'number' && (!Number.isFinite(x) || Object.is(x, -0)) ? '#' + (Object.is(x, -0) ? '-0' : x) : x);
+  const curveInputs = (f, r, list) => ({ x: f.x, y: f.y, vm: f.varMul || null, ins: exactJson(instrOf(f)),
+    res: exactJson([r.params, r.models, r.textures, r.fit, r.phases, r.cells]), ph: list.map(q=> [q.id, q.prep, q.color]) });
+  const sameArr = (a, b) => a === b || (!!a && !!b && a.length === b.length && Array.prototype.every.call(a, (v, i)=> Object.is(v, b[i])));
+  const sameInputs = (a, b) => sameArr(a.x, b.x) && sameArr(a.y, b.y) && sameArr(a.vm, b.vm) && a.ins === b.ins && a.res === b.res
+    && a.ph.length === b.ph.length && a.ph.every((p, i)=> p.every((v, j)=> v === b.ph[i][j]));
   // The scan's 2θ range, low end first (the host turns a scan run downwards round, and
   // the engine takes either order).
   const scanRange = f => { const a = f.x[0], b = f.x[f.x.length-1]; return a <= b ? [a, b] : [b, a]; };
@@ -646,6 +756,7 @@ export function createRietveld(host, root, o){
       tt: reflections(q.prep.cell, q.prep.ops, dmin).map(r=> 2*Math.asin(lam/(2*r.d))*180/Math.PI).filter(t=> t >= x0 && t <= x1) }));
   }
   function draw(preserve){
+    if (gone) return;
     const fs = host.files();
     syncButtons();
     renderPhases();
@@ -714,23 +825,34 @@ export function createRietveld(host, root, o){
      across the samples). Drawn again only when what they show changes. ---- */
   // resNorm: the stacked patterns' normalisation (Settings…, Results), as the Scherrer card's.
   let sizeBy = 'sample', resNorm = 'global', resSig = '';
-  const netCache = new WeakMap();      // a result → its pattern less its background, or null
+  // A pattern's observed less its refined background, or null (curveKept's rule; the last 64).
+  const netKept = new Map();
   function netOf(f, r){
-    if (!netCache.has(r)){ let v = null; try { const c = curvesOf(f, r).c; v = Array.from(f.y, (y, i)=> y - c.bg[i]); } catch(e){} netCache.set(r, v); }
-    return netCache.get(r);
+    let list; try { list = resultPhases(f, r); } catch(e){ return null; }
+    const inp = curveInputs(f, r, list), k = netKept.get(f.name);
+    if (k && sameInputs(k.inp, inp)) return k.y;
+    let v = null; try { const c = curvesFrom(f, r, list); v = Array.from(f.y, (y, i)=> y - c.bg[i]); } catch(e){}
+    netKept.delete(f.name); netKept.set(f.name, { inp, y: v });
+    if (netKept.size > 64) netKept.delete(netKept.keys().next().value);
+    return v;
   }
   const refinedFiles = ()=> host.files().filter(f=> results[f.name] && results[f.name].params);
   const phaseColor = name => (allPhases().find(q=> q.prep.name === name) || {}).color || '#888';
-  // A pattern's sizes, by phase: the isotropic size, or the free shape's dimensions that
-  // were measured (those with an esd: a mean of dimensions not told apart, not each).
+  /* A pattern's sizes, by phase: the isotropic size — the Lorentzian's Scherrer size, WPPM's
+     sphere diameter, or over a log-normal distribution its volume-weighted mean diameter,
+     what the Results give first (the median and the number mean beside it are not
+     charted) — or the free shape's dimensions that were measured (those with an esd: a
+     mean of dimensions not told apart, not each). Each with its kind (SIZE_KINDS). Up to
+     v483 WPPM's sizes were left out: a WPPM phase had no point. */
   function sizesOf(r){
     const by = new Map();
     (r.table || []).forEach(q=>{
       if (!q.phase || !Number.isFinite(q.value) || !Number.isFinite(q.esd)) return;
       const shape = /^shape_.*_nm$/.test(q.name) && !/_min_nm$/.test(q.name);
-      if (q.name !== 'crystallite_size_nm' && !shape) return;
+      const kind = shape ? 'shape' : SIZE_ROWS[q.name];
+      if (!kind) return;
       if (!by.has(q.phase)) by.set(q.phase, []);
-      by.get(q.phase).push({ v: q.value, e: q.esd, shape });
+      by.get(q.phase).push({ v: q.value, e: q.esd, shape, kind });
     });
     return by;
   }
@@ -798,12 +920,15 @@ export function createRietveld(host, root, o){
       series = fs.map(f=> ({ name: f.label, color: f.color }));
       const step = fs.length > 1 ? Math.min(10, 40/(fs.length - 1)) : 0;
       list.forEach((c, i)=>{
-        cols.push({ label: many ? `${c.ph} ${hklShow(c.label)}` : hklShow(c.label), name: `${c.ph} (${hklShow(c.label)})` });
+        cols.push({ label: many ? `${c.ph} ${hklShow(c.label)}` : hklShow(c.label), name: `${c.ph} (${hklShow(c.label)})`, hkl: hklShow(c.label) });
         fs.forEach((f, si)=>{ const w = c.by.get(f.name); if (w) marks.push({ x: i + 1, v: w.D, e: w.Desd, color: f.color, dx: (si - (fs.length - 1)/2)*step }); });
       });
     } else {
       const names = [...new Set(fs.flatMap(f=> [...sizesOf(results[f.name]).keys()]))];
-      series = names.map(n=> ({ name: n, color: phaseColor(n) }));
+      // Each phase with the sizes it has; one with sizes of several kinds (a pattern refined
+      // with WPPM, another without) has its kind written by each value too.
+      const kinds = new Map(names.map(n=> [n, sizeKinds(fs, n)]));
+      series = names.map(n=> ({ name: `${n}: ${kinds.get(n).map(k=> SIZE_KINDS[k][0]).join(' / ')}`, color: phaseColor(n) }));
       const step = names.length > 1 ? 18 : 0;
       fs.forEach((f, i)=>{
         cols.push({ label: f.label, name: f.name });
@@ -811,7 +936,7 @@ export function createRietveld(host, root, o){
         names.forEach((n, si)=>{
           const vs = by.get(n) || [], dx = (si - (names.length - 1)/2)*step;
           vs.forEach(q=> marks.push({ x: i + 1, v: q.v, e: q.e, color: phaseColor(n), dx }));
-          if (vs.length) marks.push({ x: i + 1, top: Math.max(...vs.map(q=> q.v + (q.e || 0))), dx, label: vs.map(q=> `${q.v.toFixed(1)}±${q.e.toFixed(1)}`).join(' / ') });
+          if (vs.length) marks.push({ x: i + 1, top: Math.max(...vs.map(q=> q.v + (q.e || 0))), dx, label: vs.map(q=> `${q.v.toFixed(1)}±${q.e.toFixed(1)}`).join(' / ') + (kinds.get(n).length > 1 ? ' ' + SIZE_KINDS[vs[0].kind][2] : '') });
         });
       });
     }
@@ -839,14 +964,16 @@ export function createRietveld(host, root, o){
     pts.forEach(m=>{ const k = m.color + '|' + m.dx; if (!groups.has(k)) groups.set(k, { color: m.color, dx: m.dx, xs: [], ys: [] }); const g = groups.get(k); g.xs.push(m.x + m.dx/((svgW - 75)/(n + 1))); g.ys.push(m.v); });
     groups.forEach(g=> plot.points(g.xs, g.ys, g.color, 4.5));
     labs.forEach(m=> plot.barLabel(m.x, m.top, m.label, { gap, dx: m.dx }));
-    cols.forEach((c, i)=> plot.tickLabel(i + 1, fit.labels[i], fit.rot, c.label, c.name));
+    cols.forEach((c, i)=> plot.tickLabel(i + 1, fit.labels[i], fit.rot, c.label, c.name, c.hkl ? plotRuns(fit.labels[i], c.hkl) : null));
     plot.attachTools(wrap);
     legend.innerHTML = series.map(q=> `<span><i style="background:${esc(q.color)}"></i>${esc(q.name)}</span>`).join('');
     note.textContent = sizeBy === 'peak'
       ? "Each reflection's own size (Scherrer, K = 0.9, on its FWHM less the instrument's), the peaks the tests use."
-      : fs.some(f=> [...sizesOf(results[f.name]).values()].some(v=> v.some(q=> q.shape)))
-        ? "A free shape: its dimensions, each measured one with its esd (dimensions not told apart, their mean)." : '';
+      : sizeKinds(fs).map(k=> SIZE_KINDS[k][1]).join(' ');
   }
+  // The kinds of size charted by sample, of one phase or of all, in SIZE_KINDS' order.
+  const sizeKinds = (fs, name) => { const on = new Set(fs.flatMap(f=> [...sizesOf(results[f.name])].filter(([n])=> name == null || n === name).flatMap(([, v])=> v.map(q=> q.kind))));
+    return Object.keys(SIZE_KINDS).filter(k=> on.has(k)); };
   // The size chart's downloads follow what it shows, and the card's name.
   function sizeNames(){
     if (!res) return;
@@ -965,7 +1092,7 @@ export function createRietveld(host, root, o){
       // No broadening measured: the corrected FWHM as its upper limit.
       const corr = w.flat && Number.isFinite(w.HsMax) ? `&lt; ${+w.HsMax.toPrecision(2)}` : fmtEsd(w.Hs, w.HsEsd);
       html += `<tr class="peak-row rv-pk${skip ? ' rv-pk-out' : ''}" data-tt="${esc(w.tt)}" data-ph="${esc(ph.id)}" data-lab="${esc(w.label)}"${why ? ` title="Not used by the tests: ${esc(why)}"` : wide ? ` title="${esc(wide)}"` : ''}>`
-        + `<td>${++n}</td><td><span class="rv-key-sm" style="background:${esc(colorOf(ph.id))}"></span>${esc(hklShow(w.label))}</td><td>${w.tt.toFixed(3)}</td><td>${Number.isFinite(w.rel) ? (w.rel*100).toFixed(1) + '%' : '—'}</td>`
+        + `<td>${++n}</td><td><span class="rv-key-sm" style="background:${esc(colorOf(ph.id))}"></span>${hklHtml(hklShow(w.label))}</td><td>${w.tt.toFixed(3)}</td><td>${Number.isFinite(w.rel) ? (w.rel*100).toFixed(1) + '%' : '—'}</td>`
         + `<td>${fmtEsd(w.H, w.Hesd)}</td><td>${corr}</td><td>${w.flat ? '—' : fmtEsd(w.D, w.Desd)}</td><td>${f3(w.model.iso)}</td>${shapeOn ? `<td>${ph.shaped ? f3(w.model.shape) : '—'}</td>` : ''}</tr>`;
     }));
     html += '</tbody></table></div>';
@@ -1033,7 +1160,7 @@ export function createRietveld(host, root, o){
       }
       if (ph.orders.length){
         html += `<div class="pg-stat rv-sub">Orders, Δd*(n)/Δd*(1): size 1, strain n</div>`;
-        ph.orders.forEach(o=>{ html += `<div class="pg-stat">${esc(hklShow(o.a))} → ${esc(hklShow(o.b))}: <b>${fmtEsd(o.R, o.Resd)}</b> <span class="txt-meta">${o.verdict === 'order-dependent' ? 'below 1: the higher order sharper (planar faults)' : esc(o.verdict)}</span></div>`; });
+        ph.orders.forEach(o=>{ html += `<div class="pg-stat">${hklHtml(hklShow(o.a))} → ${hklHtml(hklShow(o.b))}: <b>${fmtEsd(o.R, o.Resd)}</b> <span class="txt-meta">${o.verdict === 'order-dependent' ? 'below 1: the higher order sharper (planar faults)' : esc(o.verdict)}</span></div>`; });
       } else html += `<div class="rv-note">Orders: no pair (h k l), (n·h n·k n·l) both measured.</div>`;
       if (Number.isFinite(ph.scores.iso)) html += `<div class="pg-stat" title="Mean of ((measured − model)/esd)² over the peaks the tests use: about 1 when a model predicts the widths">Widths predicted, χ²<sub>ν</sub>: isotropic <b>${ph.scores.iso.toFixed(1)}</b>${Number.isFinite(ph.scores.shape) ? `, free shape <b>${ph.scores.shape.toFixed(1)}</b>` : ''}</div>`;
       // The stricter overlap rule (measureWidths): why fewer peaks are used. (ph.misfit: v429,
@@ -1083,7 +1210,7 @@ export function createRietveld(host, root, o){
     if (shp.length) whPlot.points(shp.map(m=> m.x), shp.map(m=> m.y), '#ff5050', 3);
     pts.forEach(q=>{ if (q.e > 0) whPlot.errbar(q.x, q.y, q.e); });
     phs.forEach(ph=>{ const q = pts.filter(x=> x.ph === ph.id); whPlot.points(q.map(x=> x.x), q.map(x=> x.y), colorOf(ph.id), 4.5); });
-    pts.forEach(q=> whPlot.barLabel(q.x, q.y + q.e, hklShow(q.label), { rot: 0, gap: 8, size: 10 }));
+    pts.forEach(q=>{ const t = hklShow(q.label); whPlot.barLabel(q.x, q.y + q.e, t, { rot: 0, gap: 8, size: 10, runs: plotRuns(t, t) }); });
     whPlot._pts = pts;
     $('WhLegend').innerHTML = phs.map(ph=> `<span><i style="background:${esc(colorOf(ph.id))}"></i>${esc(ph.name)}, measured</span>`).join('')
       + (iso.length ? `<span><i style="background:#9aa3ad"></i>isotropic model</span>` : '')
@@ -1117,7 +1244,7 @@ export function createRietveld(host, root, o){
   function renderFitSet(f, r, shown){
     const el = $('FitSet'), done = !!(r && r.params), list = f ? shown : [];
     const used = done ? fitUsed(f, r) : [];
-    el.innerHTML = list.map(q=> `<span class="rv-fs">${list.length > 1 ? `<span class="rv-key-sm" style="background:${esc(q.color)}"></span>${esc(q.prep.name)}: ` : ''}${esc(done ? refinedOf(q, r, std) : summaryOf(q, std))}</span>`).join('')
+    el.innerHTML = list.map(q=> `<span class="rv-fs">${list.length > 1 ? `<span class="rv-key-sm" style="background:${esc(q.color)}"></span>${esc(q.prep.name)}: ` : ''}${barIdx(esc(done ? refinedOf(q, r, std) : summaryOf(q, std)))}</span>`).join('')
       + (used.length ? `<span class="rv-fs" title="The Refinement settings (Settings…) this result was refined with that are not the defaults">${esc(used.map(u=> u.said).join(', '))}</span>` : '');
     el.title = done ? 'What this result was refined with' : list.length ? 'What Refine will refine: Settings… changes it' : '';
     el.classList.toggle('is-next', !done);
@@ -1143,12 +1270,12 @@ export function createRietveld(host, root, o){
       + `<div class="pg-stat">R<sub>exp</sub>: <b>${(s.Rexp*100).toFixed(2)}%</b></div>`
       + `<div class="pg-stat" title="χ² = Σw(y − y_c)²/(N − P), the reduced χ²: (R_wp/R_exp)²">χ²: <b>${(s.chi2).toFixed(2)}</b></div>`);
     (r.phaseResults || []).forEach(q=>{
-      html += group(esc(q.name), q.lines.map(l=> `<div class="pg-stat"${l.title ? ` title="${esc(l.title)}"` : ''}>${esc(l.label)}: <b>${esc(l.value)}</b></div>`).join(''), q.phase);
+      html += group(esc(q.name), q.lines.map(l=> `<div class="pg-stat"${l.title ? ` title="${esc(l.title)}"` : ''}>${barIdx(esc(l.label))}: <b>${barIdx(esc(l.value))}</b></div>`).join(''), q.phase);
     });
     if (std) html += `<div class="rv-note rv-wide">The samples take this profile, its axial divergence, zero and sin 2θ shift as their instrument's.</div>`;
     else if (!r.irf && !r.irfRefused) html += irf() ? `<div class="rv-note rv-wide">No instrumental profile: this pattern was refined before the standard was. Refine it again to correct its widths, and the sizes from them, for the instrument's.</div>`
       : `<div class="rv-note rv-wide">No instrumental profile (refine the standard first: <b>Instrumental standard…</b>): the widths, and the sizes from them, include the instrument's.</div>`;
-    html += (r.warnings || []).map(w=> warnNote(esc(w))).join('') + cifWarn;
+    html += (r.warnings || []).map(w=> warnNote(barIdx(esc(w)))).join('') + cifWarn;
     if (!std && r.irf && staleOf(f, r)) html += warnNote(`${irf() ? 'The standard has been refined again since this result' : 'The standard\'s refinement this result used is gone (cleared, or another standard loaded)'}: its profile, zero and asymmetry are not the ones these numbers rest on. Refine this pattern again, or <b>Refine all</b>.`);
     box.innerHTML = html;
   }
@@ -1191,7 +1318,9 @@ export function createRietveld(host, root, o){
     $('CellName').textContent = q ? q.prep.name : '';
     if (!q){ if (cellV) cellV.set(null); cellKeyShown = ''; info.innerHTML = '<div class="rv-empty">Select a phase to see its structure.</div>'; return; }
     if (!cellV) cellV = cellView($('Cell'), { side: ()=> cellSide() });
-    const k = q.id + '|' + cellKey(q.prep.cell);
+    // (by the CIF's content too: ids start again at 1 in each project and after an undo, so
+    // another CIF of the same cell kept the atoms shown before, the details the new ones, to v486)
+    const k = q.id + '|' + cellKey(q.prep.cell) + '|' + q.prep.src;
     if (k !== cellKeyShown){ cellKeyShown = k; cellV.set({ name: q.id + q.prep.name, cell: q.prep.cell, atoms: q.prep.atoms }); }
     const P = q.prep, K = P.constraint || {}, c = K.conv && K.basis ? K.conv : P.cell, r4 = v => +(+v).toFixed(4);
     const V = metric(c).V, Vc = metric(P.cell).V;
@@ -1232,7 +1361,7 @@ export function createRietveld(host, root, o){
     for (const file of fileList){
       try {
         const text = await file.text();
-        const prep = prepPhase(text, file.name);
+        const prep = prepOf(text, file.name);
         // The default settings: an isotropic size and strain, the rest off — the CIF's B
         // held, also for a CIF that gives none (v428: one ΔB on nanocrystalline samples
         // came out negative, taking up what the model lacks; RIETVELD.md §8.1). The
@@ -1330,7 +1459,7 @@ export function createRietveld(host, root, o){
       const sec = q => `<div class="rvs-sec" data-sec="${esc(q.id)}"><div class="rvs-head"><span class="rv-key" style="background:${esc(q.color)}"></span><b>${esc(q.prep.name)}</b>${q === lab6 ? '<span class="txt-meta">built in</span>' : ''}</div>`
         + MODES.map(m=>{ const id = `${p}Set${esc(q.id)}_${m.k}`;
           return `<div class="rvs-row" data-row="${m.k}"><input type="checkbox" id="${id}" data-on="${m.k}" data-ph="${esc(q.id)}"><label for="${id}">${m.label}</label>`
-            + `<select data-depth="${m.k}" data-ph="${esc(q.id)}" aria-label="${esc(m.label)} of ${esc(q.prep.name)}: depth">${listOf(q, m).map(([v, t])=> `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></div>`; }).join('') + '</div>';
+            + `<select data-depth="${m.k}" data-ph="${esc(q.id)}" aria-label="${esc(m.label)} of ${esc(q.prep.name)}: depth">${listOf(q, m).map(([v, t])=> `<option value="${esc(v)}">${esc(optBars(t))}</option>`).join('')}</select></div>`; }).join('') + '</div>';
       // The hold boxes two to a row, in the phases' columns: the first under their
       // checkboxes, the second under their depths.
       const hb = ([k, t, title]) => `<input type="checkbox" id="${p}Hold_${k}" data-hold="${k}" title="${esc(title)}"><label for="${p}Hold_${k}" title="${esc(title)}">${t}</label>`;
@@ -1554,7 +1683,14 @@ export function createRietveld(host, root, o){
       const why = host.blocked ? host.blocked() : '';
       return why ? { why } : { own: true, done: start(host.files().slice(), tell) };
     },
-    destroy(){ closeSettings(); setModal.remove(); if (cellV) cellV.destroy(); solidViews.forEach(({ view })=> view.destroy()); },
+    /* The card closed (or turned into another kind, set aside then dropped): a run going on
+       ends as the kind switch ends it (cancel(false): the card goes, its last state is the
+       history's), nothing drawn after, and its worker goes with the engine's caches. Up to
+       v483 a card closed mid-run kept refining unseen, drew its 3D views on the detached
+       card when it ended, and every card that had refined left its worker alive. */
+    destroy(){ gone = true; cancel(false);
+      if (worker){ try { worker.terminate(); } catch(e){} worker = null; }
+      closeSettings(); setModal.remove(); if (cellV) cellV.destroy(); solidViews.forEach(({ view })=> view.destroy()); solidViews = []; },
     // Each phase's settings (on, dep) and the patterns it is not refined on, and beside them
     // the options as v428 named them (engineOf), which an older version opening the
     // project reads.
@@ -1562,12 +1698,14 @@ export function createRietveld(host, root, o){
         return { id: q.id, cif: q.cif, file: q.file, color: q.color, on: { ...q.on }, dep: { ...q.dep }, off: { ...q.off },
           shape: e.shape, po: e.po || '', profile: e.profile, strain: e.strain, faults: e.faults || '', adp: e.adp, occ: e.occ || null }; }),
       ...(std ? { std: { on: { ...lab6.on }, dep: { ...lab6.dep } }, pick } : {}), start: startFrom, hold: hold.slice(), fit: { ...fit },
-      nextId, sel, results: JSON.parse(JSON.stringify(results)), ...(res ? { sizeBy, resNorm } : {}) }; },
+      // (the results as they are: each frozen, shared by the states it is in; up to v486
+      // every commit copied them all through JSON)
+      nextId, sel, results: { ...results }, ...(res ? { sizeBy, resNorm } : {}) }; },
     restore(s){
       s = s || {};
       // A project of v428 or older has the options without the flags (migrateSettings).
       phases = (s.phases || []).flatMap(q=>{ try { return [{ id: q.id, cif: q.cif, file: q.file, color: q.color,
-        ...(q.on ? cleanSettings(q, std ? stdSettings() : defSettings()) : migrateSettings(q, s.refineB)), prep: prepPhase(q.cif, q.file),
+        ...(q.on ? cleanSettings(q, std ? stdSettings() : defSettings()) : migrateSettings(q, s.refineB)), prep: prepOf(q.cif, q.file),
         off: q.off && typeof q.off === 'object' ? Object.fromEntries(Object.keys(q.off).filter(k=> q.off[k]).map(k=> [k, true])) : {} }]; } catch(e){ return []; } });
       if (std){
         // (the rows that do not apply to the standard stay off, whatever a file says)
@@ -1582,7 +1720,11 @@ export function createRietveld(host, root, o){
       fit = cleanFit(s.fit); fitNote = null;
       nextId = s.nextId || phases.reduce((m, q)=> Math.max(m, q.id + 1), 1);
       sel = Number.isInteger(s.sel) ? s.sel : null;
-      results = s.results ? JSON.parse(JSON.stringify(s.results)) : {};
+      // (the results frozen as they come: the standard's the state's own, shared with the
+      // history; a sample card's a JSON copy xrd.js xrdRestore makes; up to v486 copied
+      // again here)
+      results = {};
+      if (s.results && typeof s.results === 'object') Object.keys(s.results).forEach(k=>{ results[k] = frozen(s.results[k]); });
       sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; resNorm = normOf(s.resNorm); resSig = '';
       setKey = '';
       // A run going on is the module's own, read out and in again (a run is stopped before

@@ -92,6 +92,22 @@ function svgEl(tag, attrs){
   for (const k in attrs) e.setAttribute(k, attrs[k]);
   return e;
 }
+/* A tick or bar label's text: as it is, or, given runs [[text, over], …] (their texts
+   joined are the label's), each a tspan, those with `over` overlined — a negative Miller
+   index's bar (xrd-rv.js). Two overlined side by side are kept 1 px apart, each its own
+   bar. Before each overlined run its minus, in a tspan not displayed (no glyph, no
+   advance), and the label whole as the text's aria-label: its text, an exported SVG's
+   too, and a screen reader read 1-11, not 111. A label without runs is set as it always
+   was. */
+function labelText(t, text, runs){
+  if (!runs){ t.textContent = text; return; }
+  t.setAttribute('aria-label', text);
+  runs.forEach(([s, over], i)=>{
+    if (over){ const m = svgEl('tspan', { display: 'none' }); m.textContent = '-'; t.appendChild(m); }
+    const r = svgEl('tspan', over ? { 'text-decoration': 'overline', ...(i && runs[i - 1][1] ? { dx: 1 } : {}) } : {});
+    r.textContent = s; t.appendChild(r);
+  });
+}
 // A figure composer is being opened from a plot's toolbar (figBtn, in attachTools).
 let _figOpening = false;
 class Plot{
@@ -374,9 +390,10 @@ class Plot{
   }
   /* `full` is the name before it was shortened to fit the axis. The plot draws the
      short one; anything reading the plot back — the figure composer — wants the name
-     the sample actually has, and `key` for which sample it is (as line()'s meta.key). */
-  tickLabel(xv, text, rot, full, key){
-    const entry = {type:'ticklabel', xv, text, rot: rot||0, full: full || text, key};
+     the sample actually has, and `key` for which sample it is (as line()'s meta.key).
+     `runs`, the text in runs with some overlined (labelText). */
+  tickLabel(xv, text, rot, full, key, runs){
+    const entry = {type:'ticklabel', xv, text, rot: rot||0, full: full || text, key, runs: runs || null};
     this._stored.push(entry);
     return this._renderTickLabel(entry);
   }
@@ -389,18 +406,19 @@ class Plot{
       // glyphs' centre onto it, so that character sits under the tick at any angle.
       const y = h-m.b+14;
       const t = svgEl('text',{x, y, dy:TILT_DY, 'font-size':10, fill:'#93a0b0', 'text-anchor':'end', 'class':'plot-tick', transform:`rotate(-${entry.rot} ${x} ${y})`});
-      t.textContent = entry.text;
+      labelText(t, entry.text, entry.runs);
       this.gAxes.appendChild(t);
       return t;
     }
     const t = svgEl('text',{x, y:h-m.b+28, 'font-size':10, fill:'#93a0b0', 'text-anchor':'middle', 'class':'plot-tick'});
-    t.textContent = entry.text;
+    labelText(t, entry.text, entry.runs);
     this.gAxes.appendChild(t);
     return t;
   }
   // Value label anchored at data coords, drawn rotated (default vertical, reading
   // upward) a few px above the point — used for the numeric value above a bar. Lives
-  // in gData so it tracks pan/zoom; colour comes from CSS (.plot-errlabel).
+  // in gData so it tracks pan/zoom; colour comes from CSS (.plot-errlabel). opts.runs:
+  // the text in runs with some overlined (labelText).
   barLabel(xv, yval, text, opts){
     const entry = Object.assign({type:'barlabel', xv, yval, text}, opts||{});
     this._stored.push(entry);
@@ -413,7 +431,7 @@ class Plot{
     const t = svgEl('text',{x, y, 'font-size':entry.size||10, 'text-anchor':'start',
       'dominant-baseline':'central', 'class':'plot-errlabel', 'pointer-events':'none',
       transform:`rotate(-${rot} ${x} ${y})`});
-    t.textContent = entry.text;
+    labelText(t, entry.text, entry.runs);
     this.gData.appendChild(t);
     return t;
   }

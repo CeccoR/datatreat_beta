@@ -8,11 +8,19 @@
 
 /* ---------- quadratures ---------- */
 // Gauss–Legendre nodes t and weights w of order n on [−1, 1], by Newton's method on P_n,
-// kept per n (xrd-rietveld's FCJ nodes, xrd-broad's log-normal averages).
-const GL_CACHE = new Map();
+// kept per n (xrd-rietveld's FCJ nodes, xrd-broad's log-normal averages): the most recently
+// used, up to GL_KEEP nodes in all (16 bytes a node: 16 MB). A pass holds its lines' counts
+// (4 to 4000 nodes each), so it asks for the same few orders at every calc: 12 orders, 144
+// nodes, over a standard and five samples without Sollers; sharp lines under a large
+// asymmetry, 25–505 orders, up to 570 000 nodes (a monoclinic cell at (S + H)/L 0.2), whose
+// first calc takes 30 s and the next 0.5 s, from here. Up to v486 every order ever asked for
+// was kept, in a worker that lives as long as its card: up to 8 million nodes (128 MB).
+const GL_CACHE = new Map(), GL_KEEP = 1 << 20;
+let glHeld = 0;
 function gaussLegendre(n){
   let g = GL_CACHE.get(n);
-  if (g) return g;
+  // (the latest at the end of the map's order: the oldest goes first)
+  if (g){ GL_CACHE.delete(n); GL_CACHE.set(n, g); return g; }
   const t = new Float64Array(n), w = new Float64Array(n);
   for (let i = 0; i < n; i++){
     let z = Math.cos(Math.PI*(i + 0.75)/(n + 0.5)), dp = 1;
@@ -25,7 +33,8 @@ function gaussLegendre(n){
     }
     t[i] = z; w[i] = 2/((1 - z*z)*dp*dp);
   }
-  g = { t, w }; GL_CACHE.set(n, g);
+  g = { t, w }; GL_CACHE.set(n, g); glHeld += n;
+  while (glHeld > GL_KEEP && GL_CACHE.size > 1){ const k = GL_CACHE.keys().next().value; glHeld -= k; GL_CACHE.delete(k); }
   return g;
 }
 

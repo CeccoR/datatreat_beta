@@ -1562,7 +1562,7 @@ button.an-type:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .an-grip { cursor: grab; touch-action: none; margin-left: -6px; }
 .an-fold { margin-right: -6px; }
 .an-acts { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 0 auto; }
-.an-fold svg { transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1); }   /* as the fold (tauc.js FOLD_MS) */
+.an-fold svg { transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1); }   /* as the fold (cards.js FOLD_MS) */
 /* The name behaves as the project name does, in the card's own type: plain text at
    rest, its field shown on hover and while editing, as wide as the name (tauc.js
    fitName). Pulled out by its inset (border 1 + padding 9), the name at rest starts
@@ -2071,6 +2071,12 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-group > .pg-stat b { color: var(--accent); }
 .rv-group > .txt-mini.rv-phase-name { text-transform: none; letter-spacing: .02em; }
 .rv-fit-grid .rv-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+/* A negative Miller index: a bar over its digits (xrd-rv.js hklRuns); a bar right after
+   another a little apart, each index its own (1̄1̄0 is two). Its minus is in the text,
+   hidden (.hkl-sign), so that a copy or a screen reader reads (1-10). */
+.hkl-bar { text-decoration: overline; text-decoration-thickness: 1px; }
+.hkl-bar2 { margin-left: .1em; }
+.hkl-sign { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* The Williamson–Hall plot, the tests on the widths and the crystallites' shape in one
    row: a grid whose middle row is the plot's alone (its caption over it, its legend
    under), the two boxes spanning it exactly — as tall as the plot, sized as if empty
