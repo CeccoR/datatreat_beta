@@ -22,6 +22,9 @@ function niceTicks(min, max, n){
   return ticks;
 }
 function fixedTicks(min, max, step){
+  // Past 1000 ticks the step does not fit the range (a malformed project's 1e308 nm, say):
+  // the nice ticks instead. To v496 the loop ran on until the array ran out of memory.
+  if (!((max - min) / step <= 1000)) return niceTicks(min, max, 5);
   const ticks = [];
   const start = Math.ceil(min / step - 1e-9) * step;
   for (let v = start; v <= max + step * 1e-9; v += step) ticks.push(Math.round(v / step) * step);

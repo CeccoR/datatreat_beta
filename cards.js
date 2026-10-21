@@ -414,15 +414,20 @@ export function createDeck(o){
   /* A card whose id and kind are both still there is kept, and its panel restored (keep),
      so an undo does not rebuild the whole list; any other is built afresh. A kept record
      is updated in place: the card's handlers hold on to it. */
+  // A kind is one of this deck's own (to v496 'constructor' or 'toString', inherited by the
+  // kinds' object, passed for one), an id a whole number up to 1e6 (to v496 any integer,
+  // and 1e308 made element ids no selector reads and nextId give the same id twice).
+  const isKind = t => Object.prototype.hasOwnProperty.call(kinds, t);
+  const okId = id => Number.isInteger(id) && id >= 1 && id <= 1e6;
   function load(list, read, keep){
-    list = list.filter(s=> s && (s.type == null || kinds[s.type]));
+    list = list.filter(s=> s && (s.type == null || isKind(s.type)));
     const old = new Map(recs.map(a=> [a.id, a]));
     const seen = new Set();
-    let free = list.reduce((m, s)=> Number.isInteger(s.id) ? Math.max(m, s.id) : m, 0) + 1;
+    let free = list.reduce((m, s)=> okId(s.id) ? Math.max(m, s.id) : m, 0) + 1;
     const next = list.map(src=>{
       const s = { base: typeof src.base === 'string' ? src.base : '', nameAuto: src.nameAuto !== false, name: '', collapsed: src.collapsed === true,
-        ...read(src), id: src.id, type: kinds[src.type] ? src.type : types[0] };
-      if (!Number.isInteger(s.id) || s.id < 1 || seen.has(s.id)) s.id = free++;
+        ...read(src), id: src.id, type: isKind(src.type) ? src.type : types[0] };
+      if (!okId(s.id) || seen.has(s.id)) s.id = free++;
       seen.add(s.id);
       const a = old.get(s.id);
       if (a && a.type === s.type && live.has(a.id)){
