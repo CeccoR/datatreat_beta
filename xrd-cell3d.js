@@ -208,14 +208,23 @@ export function cellView(container, opts = {}){
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
   return {
-    // A phase (its cell and atoms), or null for none. Another phase starts from the home view.
+    /* A phase (its cell and atoms), or null for none. Another phase starts from the home
+       view. None: the canvas cleared and out of the layout, by its style (to v498 by its
+       hidden attribute alone, which the class's display: block overrode: the cell drawn
+       last stayed on show where there was no phase, another project's, a phase removed or
+       undone). */
     set(ph){
       if (dead) return;
-      if (!ph){ model = null; name = ''; canvas.hidden = true; return; }
+      if (!ph){
+        model = null; name = '';
+        canvas.hidden = true; canvas.style.display = 'none'; canvas.removeAttribute('aria-label');
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
       if (ph.name !== name) R = viewAt(HOME_AZ, HOME_EL);
       name = ph.name;
       model = buildModel(ph);
-      canvas.hidden = false;
+      canvas.hidden = false; canvas.style.display = '';
       canvas.setAttribute('aria-label', `The unit cell of ${ph.name} in 3D: ${ph.atoms.length} atoms. Drag or use the arrow keys to rotate, Home to reset.`);
       theme = null;
       draw();

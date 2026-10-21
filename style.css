@@ -2037,7 +2037,6 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 /* The phases' list and the structure: boxes like the peak table's, scrolling inside. */
 .rv-boxes > .peak-box { margin-top: 0; padding: 10px 10px 10px; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .rv-boxes .peak-box-head { flex: none; margin-bottom: 6px; min-width: 0; }
-.rv-boxes .peak-box-head .rv-addcif { margin-left: auto; padding: 3px 10px; font-size: 12px; }
 .rv-ciflist { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .rv-cif { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 4px; border-radius: 6px; cursor: pointer; font-size: 13px; min-width: 0; }
 .rv-cif:hover { background: var(--panel); }
@@ -2594,6 +2593,29 @@ html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gut
   color: var(--accent);
 }
 @keyframes dz-spin { to { transform: rotate(360deg); } }
+
+/* ===== The Rietveld card's CIF drop zones =====
+   The Phases box takes CIFs in. With no phase, a drop zone in the list's place: the app's
+   own (.dropzone, .dz-icon, .dz-title, .txt-meta), scaled to the box and filling it. With
+   one, + CIF, a zone of one line at the box's foot, of the same look (dashed border lit by
+   the accent on hover, its sign in the accent). The whole box lights while files are
+   dragged over it, its zone as a .dropzone.dragover; while a run goes on the zones are
+   disabled as a button is (aria-disabled). */
+.rv-cifs > .rv-cifdz[hidden] { display: none; }
+.rv-cifs > .rv-cifdz { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 14px 10px; border-radius: 10px; overflow: hidden; }
+.rv-cifdz .dz-icon { font-size: 22px; margin-bottom: 6px; }
+.rv-cifdz .dz-title { font-size: 13px; line-height: 1.35; }
+/* (one line, a second on a box too narrow for it) */
+.rv-cifs > .rv-cifdz-mini { flex: none; display: block; margin-top: 6px; padding: 5px 8px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; line-height: 16px; color: var(--text); }
+.rv-cifdz-mini .rv-cifdz-plus { color: var(--accent); font-size: 15px; }
+.rv-cifdz:focus { outline: none; }
+.rv-cifdz:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rv-cifs.dragover { border-color: var(--accent); }
+.rv-cifs.dragover > .rv-cifdz { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.rv-cifdz[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+.rv-cifdz[aria-disabled="true"]:hover { border-color: var(--line); }
 
 /* Module loader: covers the content area (everything below the project bar) with the
    themed backdrop + a spinner while a tab's charts are (re)built on open / tab switch,
