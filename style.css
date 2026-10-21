@@ -831,9 +831,11 @@ td input {
   width: 90px;
   padding: 3px 5px;
 }
+/* The file list's label field fills its cell, and no more: at least 120px wide (to v501),
+   on a phone it ran over the columns right of it. */
 td input.label-input {
   width: 100%;
-  min-width: 120px;
+  min-width: 0;
 }
 /* Sample counter (e.g. "3/12"): styled like the all/one mode-chip — small, muted,
    rounded — so it and the nav arrows read as one control group. */
@@ -1134,12 +1136,13 @@ footer a:hover {
 .drag-handle:active { cursor: grabbing; }
 .grip-icon { width: 15px; height: 15px; display: block; }
 /* Include box (second column): a file unticked stays in the list, dimmed, and out of
-   the analysis. Only its name and label dim: the box, the grip and the actions keep
+   the analysis. Only its name, label and note dim: the box, the grip and the actions keep
    working as they look. */
 .incl-cell { text-align: center; padding-left: 0 !important; padding-right: 0 !important; }
 .incl-cell input[type="checkbox"] { width: auto; margin: 0; vertical-align: middle; cursor: pointer; }
 .file-row.is-excluded td.fname,
-.file-row.is-excluded .file-label { opacity: 0.4; }
+.file-row.is-excluded .file-label,
+.file-row.is-excluded td.note-cell { opacity: 0.4; }
 .file-none { margin: 8px 0 0; }
 .file-row.dragging { opacity: 0.45; }
 /* Drop indicator: the gap the dragged row would land in — over a row, or under the last. */
@@ -3266,5 +3269,20 @@ button.an-add.is-drop { border-color: var(--accent); }
 .sem-group.is-drop { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .sem-drag-ghost { position: fixed; z-index: 1000; width: 72px; height: auto; pointer-events: none; transform: translate(-50%, -50%); border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); opacity: 0.9; }
 
-/* A short note left of a file's label (DRS: how its second column was read) */
-.file-row td.lead-cell { color: var(--muted); font-size: 0.78rem; white-space: nowrap; text-align: center; padding-left: 2px; padding-right: 2px; }
+/* The file list's note, right of the label in a column with no header (DRS: how its
+   second column was read; empty in the modules with none): muted, small, one line cut short
+   with an ellipsis. To v501 a 40px column left of the label, centred, DRS's alone. */
+.file-row td.note-cell { color: var(--muted); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A phone: FILE and SAMPLE LABEL with half the cells' side padding, the note with a
+   quarter (so that "F(R)" shows whole down to 320px), the label field with less of its own,
+   and the field, while typed in, laid over the note beside it, so that a label of a dozen
+   characters shows whole: its cell's width, then the note's column (2/3 of the label's,
+   the cell's and its padding), less that column's right padding. The note under it is
+   hidden meanwhile: an excluded file's field, dimmed, let it show through what is typed. */
+@media (max-width: 600px) {
+  .file-table :is(th, td):nth-child(n+3):nth-last-child(n+3) { padding-left: 4px; padding-right: 4px; }
+  .file-table .note-cell { padding-left: 2px; padding-right: 2px; }
+  .file-table input.label-input { padding-left: 6px; padding-right: 6px; }
+  .file-table input.label-input:focus { position: relative; z-index: 1; width: calc(100% * 5 / 3 + 22px / 3); }
+  .file-table tr:has(input.label-input:focus) td.note-cell { visibility: hidden; }
+}

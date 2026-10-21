@@ -9,11 +9,13 @@
      the global normalisation (30e);
    - GC: the temperature T of the flow, all/one, 25 °C by default, 0 °C in a project saved
      before it; V_m = RT/P; in the table and the CSVs (37);
-   - DRS: R% recognised by its header and read as F(R) = (1 − R)²/2R, a file of no standard
-     format said; the points that are no physical value left out, and counted (38, 39);
+   - DRS: R% recognised by its header and read as F(R) = (1 − R)²/2R; the standard format
+     the Cary 5000's layout alone (the name, then "Wavelength (nm)" and "%R" or "F(R)" on the
+     second line, the data from the third), any other file said with how it was read; the
+     points that are no physical value left out, and counted (38, 39);
    - DRS: the Cary 5000's %R export loaded with no alert, as a standard F(R) one is; how
-     each file was read in the file list; R (%) against λ in the Results, beside F(R),
-     the log plot under them;
+     each file was read in the file list's note, right of the label; R (%) against λ in the
+     Results, beside F(R), the log plot under them;
    - a malformed project (every value of its state replaced by one of another type, a file
      with nothing to show) restores without a throw or a page error (22). */
 import { test, before, after } from 'node:test';
@@ -237,7 +239,7 @@ function asReflectance(text, head){
   const lines = text.trim().split('\n');
   return [lines[0], head, ...lines.slice(2).map(l=>{ const [w, f] = l.split(','), F = +f; return w + ',' + (100*(1 + F - Math.sqrt(F*F + 2*F))).toFixed(6); })].join('\n') + '\n';
 }
-test('38, 39: DRS reads R% by its header, says the files of no standard format, leaves out non-physical points', async ()=>{
+test('38, 39: DRS reads R% by its header; only the Cary layout is standard, any other file said with how it was read; non-physical points left out', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'tauc');
@@ -256,19 +258,33 @@ test('38, 39: DRS reads R% by its header, says the files of no standard format, 
       file('meta-r.csv', 'Title,abc\nOperator,R%\nWavelength (nm),KM\n' + ref.split('\n').slice(2).join('\n')),
       file('meta-r.txt', 'Operator   R%\nnm   KM\n' + ref.split('\n').slice(2).join('\n').replace(/,/g, '   ')),
       file('jasco.csv', 'TITLE,x\nXUNITS,NANOMETERS\nYUNITS,%R\nXYDATA\n' + R.split('\n').slice(2).join('\n')),
-      file('quoted.txt', '"Sample"\n"Wavelength (nm)"   "R%"\n' + R.split('\n').slice(2).join('\n').replace(/,/g, '   '))];
+      file('quoted.txt', '"Sample"\n"Wavelength (nm)"   "R%"\n' + R.split('\n').slice(2).join('\n').replace(/,/g, '   ')),
+      // The Cary layout under ';' and decimal ',', any case, in quotes: standard; its header
+      // on the first line or the third, F(R)'s too, or a unit after F(R): not.
+      file('prsemi.csv', R.replace('R%', '%r').replace(/,/g, ';').replace(/(\d)\.(\d)/g, '$1,$2').replace('Wavelength (nm)', '"WAVELENGTH (nm)"')),
+      file('pr1.csv', R.replace('R%', '%R').split('\n').slice(1).join('\n')),
+      file('pr3.csv', 'Run 4\n' + R.replace('R%', '%R')),
+      file('fr1.csv', ref.split('\n').slice(1).join('\n')), file('fru.csv', ref.replace('F(R)', 'F(R) (a.u.)'))];
     await page.setInputFiles('#taucFiles', files);
-    await page.waitForFunction(()=> document.querySelectorAll('#taucFileTableWrap tr.file-row').length === 13); await settle(page);
+    await page.waitForFunction(()=> document.querySelectorAll('#taucFileTableWrap tr.file-row').length === 18); await settle(page);
     const st = await moduleState(page, 'tauc', true), by = Object.fromEntries(st.files.map(f=> [f.name, f]));
-    // R% read as F(R) = (1 − R)²/2R: the fixture's F(R) again, to the digits R was written with.
-    for (const n of ['r.csv', 'pr.csv', 'refl.csv', 'spaced.txt', 'semi.csv', 'jasco.csv', 'quoted.txt']){
+    // R% read as F(R) = (1 − R)²/2R: the fixture's F(R) again, to the digits R was written with;
+    // with no warning only in the Cary layout ("%R" on the second line, the data from the third).
+    const STD_R = ['pr.csv', 'prsemi.csv'];
+    for (const n of ['r.csv', 'pr.csv', 'refl.csv', 'spaced.txt', 'semi.csv', 'jasco.csv', 'quoted.txt', 'prsemi.csv', 'pr1.csv', 'pr3.csv']){
       assert.equal(by[n].read, 'R%', n);
-      assert.equal(by[n].warn, false, n);
+      assert.equal(by[n].warn, !STD_R.includes(n), n);
+      assert.equal(by[n].head, undefined, n);
       assert.deepEqual(by[n].wl, by['ref.csv'].wl, n);
       by[n].FR.forEach((v, i)=> assert.ok(Math.abs(v - by['ref.csv'].FR[i]) < 1e-4*Math.max(1, by['ref.csv'].FR[i]), `${n}: F(R) at ${by[n].wl[i]} nm, ${v} for ${by['ref.csv'].FR[i]}`));
     }
     assert.equal(by['ref.csv'].read, undefined); assert.equal(by['ref.csv'].warn, false);
-    assert.equal(by['noheader.csv'].read, undefined); assert.equal(by['noheader.csv'].warn, true);
+    assert.equal(by['noheader.csv'].read, undefined); assert.equal(by['noheader.csv'].warn, true); assert.equal(by['noheader.csv'].head, undefined);
+    // F(R) named on the first line, or with a unit after it: read as F(R), not the standard.
+    for (const n of ['fr1.csv', 'fru.csv']){
+      assert.deepEqual([by[n].read, by[n].warn, by[n].head], [undefined, true, true], n);
+      assert.deepEqual([by[n].wl, by[n].FR], [by['ref.csv'].wl, by['ref.csv'].FR], n);
+    }
     for (const n of ['meta-r.csv', 'meta-r.txt']){
       assert.equal(by[n].read, undefined, n); assert.equal(by[n].warn, true, n);
       assert.deepEqual([by[n].wl, by[n].FR], [by['ref.csv'].wl, by['ref.csv'].FR], n);
@@ -284,11 +300,15 @@ test('38, 39: DRS reads R% by its header, says the files of no standard format, 
     assert.match(alerts, /Verify how these files were read:/);
     assert.match(alerts, /^noheader\.csv: no header naming the columns F\(R\) or R%: read as F\(R\)$/m);
     assert.match(alerts, /^meta-r\.csv: no header naming the columns F\(R\) or R%: read as F\(R\)$/m);
-    // A standard format, F(R) or R%, has no note on how it was read (the file list says it);
+    // A header naming the reflectance in any other layout: read as %R, and said.
+    for (const n of ['r.csv', 'refl.csv', 'spaced.txt', 'semi.csv', 'jasco.csv', 'quoted.txt', 'pr1.csv', 'pr3.csv'])
+      assert.match(alerts, new RegExp('^' + n.replace('.', '\\.') + ': not a standard format: its header names the reflectance in %, read as %R$', 'm'), n);
+    for (const n of ['fr1', 'fru']) assert.match(alerts, new RegExp('^' + n + '\\.csv: not a standard format: its header names F\\(R\\), read as F\\(R\\)$', 'm'), n);
+    // The standard format, F(R) or %R, has no note on how it was read (the file list says it);
     // the points left out keep theirs.
-    assert.match(alerts, /^bad-r\.csv: 3 points left out \(2 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\)$/m);
+    assert.match(alerts, /^bad-r\.csv: not a standard format: its header names the reflectance in %, read as %R; 3 points left out \(2 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\)$/m);
     assert.match(alerts, /^bad-f\.csv: 3 points left out \(1 with F\(R\) < 0, 2 with a value that is no finite number\)$/m);
-    assert.doesNotMatch(alerts, /^(ref|r|pr|refl|semi|jasco)\.csv|^(spaced|quoted)\.txt|reflectance R in %/m, 'a standard format, read as such: no note');
+    assert.doesNotMatch(alerts, /^(ref|pr|prsemi)\.csv/m, 'the standard format, read as such: no note');
     // The file itself is downloaded as it came.
     const d = await download(page, ()=> page.locator('#taucFileTableWrap tr.file-row:nth-child(2) .dl-file').click());
     assert.equal(d.buf.toString('utf8'), R);
@@ -301,9 +321,9 @@ test('38, 39: DRS reads R% by its header, says the files of no standard format, 
 });
 
 /* The Cary 5000's own %R export, a standard F(R) export and a file of no standard format: in
-   the file list, left of each label in a column with no header, how its second column was
-   read (%R, F(R)), the title saying it in full; an alert for the one of no standard format
-   only. The Results' top: F(R) and R (%) against λ side by side, the log plot under them
+   the file list, in the note right of each label (a column with no header), how its second
+   column was read (%R, F(R)), the title saying it in full; an alert for the one of no
+   standard format only. The Results' top: F(R) and R (%) against λ side by side, the log plot under them
    across the card (2φ : 1); the R (%) plot, for every sample whatever it was read as, gives
    the Cary's values back, and so does its CSV (reflectance_R.csv); a file left out is left
    out of it. */
@@ -321,17 +341,17 @@ test('DRS: a Cary %R export loads with no alert, the file list says how each fil
     assert.deepEqual(by['cary.csv'].wl, cary.wl, 'its wavelengths, 800 down to 200 nm');
     // F(R) = (1 − R)²/2R of the values written, to round-off.
     by['cary.csv'].FR.forEach((v, i)=>{ const R = cary.R[i]/100, F = (1 - R)**2/(2*R); assert.ok(Math.abs(v - F) <= 1e-12*Math.max(1, F), `F(R) at ${cary.wl[i]} nm: ${v} for ${F}`); });
-    // The file list: a cell left of the label, with no header.
+    // The file list: the note right of the label, with no header.
     const list = await page.$$eval('#taucFileTableWrap tr.file-row', rs=> rs.map(r=>{
-      const c = r.querySelector('td.lead-cell'), s = c && c.querySelector('[title]');
-      return [c && c.textContent, s && s.title, !!(c && c.nextElementSibling.querySelector('.file-label'))];
+      const c = r.querySelector('td.note-cell'), s = c && c.querySelector('[title]');
+      return [c && c.textContent, s && s.title, !!(c && c.previousElementSibling.querySelector('.file-label'))];
     }));
     assert.deepEqual(list, [
       ['%R', 'second column read as the reflectance in %, converted to F(R)', true],
       ['F(R)', 'second column read as F(R)', true],
       ['F(R)', 'second column read as F(R), with no header naming it', true]]);
     const heads = await page.$$eval('#taucFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim()));
-    assert.deepEqual(heads.slice(2, 5), ['FILE', '', 'SAMPLE LABEL']);
+    assert.deepEqual(heads.slice(2, 5), ['FILE', 'SAMPLE LABEL', '']);
     // The Results' top: the pair side by side, the log plot under both, across the card at 2φ : 1.
     const box = await page.$$eval('#taucResults svg.plot', ss=> Object.fromEntries(ss.slice(0, 3).map(s=>{ const r = s.getBoundingClientRect(); return [s.id, [r.left, r.top, r.width, r.bottom]]; })));
     const [f0, rr, lg] = ['taucResSvg0', 'taucResSvgR', 'taucResSvgLog'].map(k=> box[k]);
@@ -359,7 +379,7 @@ test('DRS: a Cary %R export loads with no alert, the file list says how each fil
     const s = await encoded(page, 'tauc');
     s.files.forEach(f=>{ delete f.read; });
     assert.equal(await restore(page, 'tauc', s), 'ok');
-    assert.deepEqual(await page.$$eval('#taucFileTableWrap td.lead-cell', cs=> cs.map(c=> c.textContent)), ['F(R)', 'F(R)', 'F(R)']);
+    assert.deepEqual(await page.$$eval('#taucFileTableWrap td.note-cell', cs=> cs.map(c=> c.textContent)), ['F(R)', 'F(R)', 'F(R)']);
     // The R (%) plot's figure composer opens with the samples' traces.
     await page.locator('#taucResSvgR').locator('xpath=..').locator('button[title="Figure composer (advanced export)"]').click();
     await page.waitForSelector('.fig-backdrop .fig-svg path');

@@ -68,13 +68,14 @@ test('DRS: every encoding and dialect loads to the numbers of the fixture', asyn
       assert.ok(by[n], n + ' not loaded');
       assert.deepEqual(by[n].wl, by['ref.csv'].wl, n + ': wavelengths');
       assert.deepEqual(by[n].FR, by['ref.csv'].FR, n + ': F(R)');
-      // The standard header (title, then "Wavelength (nm)" and "F(R)") whatever the dialect.
-      assert.equal(by[n].warn, n === 'spaces-comma.txt', n + ': the non-standard-format warning');
+      // The standard header (title, then "Wavelength (nm)" and "F(R)") whatever the dialect; a
+      // unit after F(R) makes another format, said (from v502).
+      assert.equal(by[n].warn, n === 'spaces-comma.txt' || n === 'units.csv', n + ': the non-standard-format warning');
     }
     const alerts = await page.locator('#taucAlerts').textContent();
     assert.match(alerts, /Invalid file\(s\):\s*three\.csv/, 'three columns refused, and said');
     // (how it was read said: no header, F(R); the standard ones need no word)
-    assert.match(alerts, /Verify how these files were read:\s*spaces-comma\.txt: no header naming the columns F\(R\) or R%: read as F\(R\)\s*$/);
+    assert.match(alerts, /Verify how these files were read:\s*spaces-comma\.txt: no header naming the columns F\(R\) or R%: read as F\(R\)\s*units\.csv: not a standard format: its header names F\(R\), read as F\(R\)\s*$/);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

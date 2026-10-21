@@ -10,14 +10,14 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
 ========================================================= */
 (function(){
   /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
-     warn, read, left, hv[]} (each on its own native axis), and the included ones, which the
-     analysis sees, `files`, with which every per-sample list the cards keep is aligned; in
-     the file list, left of each label, how its second column was read (readCell); the
-     alerts under the drop zone, among them what to verify of how files were read
-     (fileNotes: a format not standard, points left out; until dismissed); every card in
-     the history. */
+     warn, read, head, left, hv[]} (each on its own native axis), and the included ones,
+     which the analysis sees, `files`, with which every per-sample list the cards keep is
+     aligned; in the file list, the note right of each label, how its second column was
+     read (readNote); the alerts under the drop zone, among them what to verify of how files
+     were read (fileNotes: a format not standard, points left out; until dismissed); every
+     card in the history. */
   const kit = moduleKit('tauc', {
-    cols: [{ lead: true, header: '', width: 40, render: readCell }],
+    note: readNote,
     alerts: p =>{
       const notes = warnDismissed ? [] : allFiles.map(f=> [f, fileNotes(f)]).filter(([, n])=> n.length).map(([f, n])=> esc(`${f.name}: ${n.join('; ')}`));
       document.getElementById('taucAlerts').innerHTML = p.invalid + buildAlertsHtml([], notes, 'Verify how these files were read:', '', 'tauc-dismiss-warn') + p.upload;
@@ -46,8 +46,9 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
     file: f =>{
       const p = finitePairs(f.wl, f.FR, x=> x > 0);
       if (!p || !p[0].length) return null;
-      const { read, left, ...g } = f, n = isObj(left) ? Object.keys(LEFT).filter(k=> num(left[k], 0) > 0) : [];
-      return { ...g, wl: p[0], FR: p[1], warn: f.warn === true, ...(read === 'R%' ? { read } : {}), ...(n.length ? { left: Object.fromEntries(n.map(k=> [k, left[k]])) } : {}) };
+      const { read, head, left, ...g } = f, n = isObj(left) ? Object.keys(LEFT).filter(k=> num(left[k], 0) > 0) : [];
+      return { ...g, wl: p[0], FR: p[1], warn: f.warn === true, ...(read === 'R%' ? { read } : {}), ...(head === true && f.warn === true && read !== 'R%' ? { head } : {}),
+        ...(n.length ? { left: Object.fromEntries(n.map(k=> [k, left[k]])) } : {}) };
     },
     // The notes are the restored files' own, shown again.
     restore: (s, gone)=>{ warnDismissed = false; loadAnalyses(cardList(s.analyses, KINDS) || legacyAnalyses(s), gone); },
@@ -1110,36 +1111,56 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
   function readDrs(text){
     const lines = textLines(text), t = readXY(lines);
     if (!t) return null;
-    const { R, std } = drsReading(lines, t), { wl, FR, left } = drsPoints(t, R);
+    const { R, std, head } = drsReading(lines, t), { wl, FR, left } = drsPoints(t, R);
     if (!wl.length) return { error: `no point with a physical value: ${leftText(left)}` };
-    return { wl, FR, warn: !std, ...(R ? { read: 'R%' } : {}), ...(Object.keys(left).length ? { left } : {}) };
+    return { wl, FR, warn: !std, ...(R ? { read: 'R%' } : !std && head ? { head } : {}), ...(Object.keys(left).length ? { left } : {}) };
   }
-  /* How a spectrum's second column is read: the one place that decides (to v494 every file
-     was F(R)). The lines above the data are read up from it to the first that names the
-     columns:
+  /* How a spectrum's second column is read, and whether its format is the standard one:
+     the one place that decides (to v501 every file was F(R)). The standard is the Cary
+     5000's export, as the user's own files are: the sample's name on the first line, the
+     columns' header on the second, "Wavelength (nm)" then "%R" (the reflectance in
+     percent, R = value/100 and F(R) = (1 − R)²/2R) or "F(R)", nothing else in either (a
+     unit after F(R), "(a.u.)" say, makes it another format), any case, any separators
+     after them, and the data from the third, under whatever separator and decimal mark
+     the reader finds (lines as it counts them: a blank one is none). That loads with no
+     word (std).
+     Any other file loads with a warning (std false), read as its header says. The lines
+     above the data are read up from it to the first that names the columns:
        its second column R% (or %R, R %, R (%), Reflectance (%), any case): the reflectance
-         in percent, the instruments' own output, R = value/100 and F(R) = (1 − R)²/2R;
-       "Wavelength (nm)" and "F(R)": F(R), the standard export;
+         in percent, as the instruments write it; read as such (as F(R), it would give
+         nonsense);
+       "Wavelength…nm" and "F(R)": F(R) (head);
        its first column the wavelength (Wavelength, nm, λ), its second neither: the columns'
          header, of neither kind, where the reading stops (a line above it, "Operator,R%"
-         say, decides nothing): F(R), with a warning, as with none such (std false; to v494
-         the header had to be the second line).
+         say, decides nothing): F(R), as with none such.
      A line that names no wavelength is passed over unless it names R% (Jasco's "YUNITS,%R"
      above "XYDATA"). Under a run of spaces, which may split the names too, a line is read
      whole, its quotes dropped, and names the wavelength when it begins with it.
-     → { R: whether the column is R%, std: a header of either kind } */
+     To v501 any header of either kind, on any line above the data, was standard, with no
+     word: the Cary's own layout was not told from the others.
+     → { R: whether the column is R%, std: the standard format, head: a header names it } */
   const R_HEAD = /^(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))$/i;
   const R_LINE = /\s(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))\s*$/i;
   const WL_HEAD = /wavelength|^nm\b|λ/i, WL_LINE = /^(wavelength|nm\b|λ)/i;
+  // The standard header's two names, and its line under spaces (read whole).
+  const STD_WL = /^wavelength\s*\(\s*nm\s*\)$/i, STD_R = /^%\s*r$/i, STD_F = /^f\s*\(\s*r\s*\)$/i;
+  const STD_LINE = /^wavelength\s*\(\s*nm\s*\)\s+(\S.*)$/i;
   function drsReading(lines, t){
     const first = t.rows.findIndex(r=> isFinite(parseNum(r[0])) && isFinite(parseNum(r[1]))), spaces = t.sep[0] === ' ';
+    // The standard: the header the second line, the data from the third.
+    if (first === 2){
+      let h = null;
+      if (spaces){ const m = STD_LINE.exec(lines[1].replace(/"/g, '').trim()); h = m && m[1].trim(); }
+      else { const f = splitFields(lines[1], t.sep); while (f.length && f[f.length - 1] === '') f.pop(); h = f.length === 2 && STD_WL.test(f[0]) ? f[1] : null; }
+      if (h && (STD_R.test(h) || STD_F.test(h))) return { R: STD_R.test(h), std: true, head: true };
+    }
     for (let i = first - 1; i >= 0; i--){
       const l = lines[i].replace(/"/g, '').trim(), hp = splitFields(lines[i], t.sep), two = hp.length >= 2;
       const R = spaces ? R_LINE.test(l) : two && R_HEAD.test(hp[1]);
-      if (R || (spaces ? /wavelength.*nm.*\sf\s*\(r\)/i.test(l) : two && /wavelength.*nm/i.test(hp[0]) && /f\s*\(r\)/i.test(hp[1]))) return { R, std: true };
+      if (R || (spaces ? /wavelength.*nm.*\sf\s*\(r\)/i.test(l) : two && /wavelength.*nm/i.test(hp[0]) && /f\s*\(r\)/i.test(hp[1]))) return { R, std: false, head: true };
       if (spaces ? WL_LINE.test(l) : WL_HEAD.test(hp[0])) break;
     }
-    return { R: false, std: false };
+    return { R: false, std: false, head: false };
   }
   /* The points of a spectrum that are physical values, the others left out and counted by
      why: a wavelength not above 0 (wl), a reflectance outside 0–100 % (r) or of 0, where
@@ -1167,24 +1188,29 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
     const ks = Object.keys(LEFT).filter(k=> left[k] > 0), n = ks.reduce((t, k)=> t + left[k], 0);
     return `${n} point${n > 1 ? 's' : ''} left out (${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')})`;
   }
-  /* What the alert says of a file: that it was read as F(R) with no header naming its
-     columns, and the points left out (to v494 the files of a non-standard format were
-     named, no more). A file in a standard format, the R% exports among them, has no word
-     on how it was read: the file list's column says it (to v497 an R% file was said here,
-     the Cary's own export as well). */
+  /* What the alert says of a file: how a file of no standard format was read (drsReading),
+     and the points left out (to v501 the files of a non-standard format were named, no
+     more). A file in the standard format has no word on how it was read: the file list's
+     note says it (to v501 an R% file was said here, the Cary's own export as well; to v501
+     a header naming R% or F(R) anywhere above the data was a standard format). */
+  const WARNS = { R: 'not a standard format: its header names the reflectance in %, read as %R', F: 'not a standard format: its header names F(R), read as F(R)',
+    none: 'no header naming the columns F(R) or R%: read as F(R)' };
+  const warnOf = f => f.read === 'R%' ? 'R' : f.head ? 'F' : 'none';
   function fileNotes(f){
     const out = [];
-    if (f.warn) out.push('no header naming the columns F(R) or R%: read as F(R)');
+    if (f.warn) out.push(WARNS[warnOf(f)]);
     if (f.left && Object.keys(LEFT).some(k=> f.left[k] > 0)) out.push(leftText(f.left));
     return out;
   }
-  /* The file list's cell left of the label: how the file's second column was read, %R
-     (the reflectance in percent, converted to F(R)) or F(R), its title saying it in full.
-     A project saved before the R% reading holds none: F(R), as it was read. */
+  /* The file list's note, right of the label (to v501 a column of its own left of it): how
+     the file's second column was read, %R (the reflectance in percent, converted to F(R)) or
+     F(R), its title saying it in full, and a format not standard. A project saved before the
+     R% reading holds none: F(R), as it was read. */
   const READS = { R: ['%R', 'second column read as the reflectance in %, converted to F(R)'], F: ['F(R)', 'second column read as F(R)'] };
-  function readCell(f){
+  const NOT_STD = { R: '; not a standard format', F: '; not a standard format', none: ', with no header naming it' };
+  function readNote(f){
     const [t, title] = READS[f.read === 'R%' ? 'R' : 'F'];
-    return `<span title="${esc(title + (f.warn ? ', with no header naming it' : ''))}">${esc(t)}</span>`;
+    return `<span title="${esc(title + (f.warn ? NOT_STD[warnOf(f)] : ''))}">${esc(t)}</span>`;
   }
   kit.dropText(readDrs, had =>{
     warnDismissed = false;

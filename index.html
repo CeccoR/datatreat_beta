@@ -205,7 +205,7 @@
     <section class="tab" id="tab-tauc" role="tabpanel" tabindex="0">
       <div class="card">
         <h3 class="txt-head" style="margin:0 0 12px">File</h3>
-        <div class="instr-block" style="max-width:100%">Compatible with Cary 5000 Instrument. Upload files with two columns: wavelength (nm), and the Kubelka-Munk function F(R) or the reflectance in % (a column headed %R, as the Cary exports it, or R%), converted to F(R). Points with no physical value are left out, and counted.</div>
+        <div class="instr-block" style="max-width:100%">Compatible with Cary 5000 Instrument. Its export is the standard format: the sample's name on the first line, the header "Wavelength (nm)" and "%R" or "F(R)" on the second, the data from the third; %R (the reflectance in %) is converted to F(R). Any other file is read as its header says (a column headed R%, R (%) or Reflectance (%) as the reflectance in %, otherwise F(R)) and loads with a warning. Points with no physical value are left out, and counted.</div>
         <div class="dropzone" id="taucDropzone">
           <div class="dz-icon">⤒</div>
           <div class="dz-title">Drag here your files, or click to select them.</div>
@@ -404,7 +404,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v501</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v502</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

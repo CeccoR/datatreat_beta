@@ -26,9 +26,10 @@ import { decodeText } from './textdata.js';
      refresh()         the files changed: the module draws again (it calls showFiles
                        first, and commits)
      redraw(what)      a file's 'label' or 'color' changed: what is drawn again
-     cols              the file list's columns of the module's own (utils
-                       renderUnifiedFileList extraCols: a lead one sits left of the label,
-                       its header '' for none), each cell's markup its own render(f, i)'s
+     note(f, i)        the file list's note on a file, in the column right of its label
+                       (utils renderUnifiedFileList), markup; none: the column left empty
+                       (to v501 `cols`, columns of the module's own, a lead one left of
+                       the label)
      cleared()         every file removed: the module empties what it keeps per sample
      snapshot()        the module's own state, beside its files
      file(f)           a file's record as a restore reads it (a project read in may hold
@@ -82,7 +83,7 @@ export function moduleKit(mod, o){
   kit.showFiles = ()=>{
     files.splice(0, files.length, ...includedOf(all));
     setTabLoaded(mod, all.length);
-    renderUnifiedFileList(mod + 'FileTableWrap', all, cb, o.cols);
+    renderUnifiedFileList(mod + 'FileTableWrap', all, cb, o.note);
     kit.drawAlerts();
   };
   // A file read: last in the list and among the included, with its entry in every
