@@ -2381,13 +2381,16 @@ html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gut
 .modal-box label { display: block; margin-top: 12px; }
 /* A question in a window (utils.js confirmModal): its title and × in a row, as the XRPD
    standard's window's head; the message; the answers at the foot, the primary last, as
-   Save as… has them, wrapping on a phone. */
-.modal-box.confirm-box { width: min(460px, 92vw); }
+   Save as… has them. They share the width equally, so they sit centred whatever their
+   labels (to v495 at the right, each as wide as its label), and wrap one under the other
+   on a phone. */
+.modal-box.confirm-box { width: min(520px, 92vw); }
 .confirm-head { display: flex; align-items: flex-start; gap: 8px; }
 .confirm-head > h3 { flex: 1 1 auto; margin: 0; }
 .confirm-head > .confirm-x { margin: -2px -6px 0 auto; }
 .confirm-msg { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--text); }
-.confirm-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.confirm-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.confirm-btns > .btn { flex: 1 1 180px; }
 
 
 
