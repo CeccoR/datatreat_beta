@@ -25,6 +25,7 @@ import { metric, reflections, latticeNames, latticeParams, cellFrom, cellMass, a
 import { lineForWavelength, f0, fprime, atomicMass } from './xrd-data.js';
 import { noiseCountScale } from './xrd-instr.js';
 import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
+import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
 
 const D2R = Math.PI/180, R2D = 180/Math.PI;
 const LN2 = Math.LN2;
@@ -70,6 +71,12 @@ const LAT_RANGE = 0.1;
 const LAT_ANGLE = 15;          // deg
 const OCC_MAX = 2;             // a refined occupancy's upper bound (occSetup)
 const BG_DEGREE = 6;           // the Chebyshev background's degree (a fit setting, bgDegree)
+// Whether the background has its 1/2θ term, for a pattern starting at x0 (°) and the fit
+// setting bgInv (true, false or 'auto'): automatic, on where air scatter rises, a pattern
+// starting below BG_INV_BELOW; never one that reaches 2θ ≤ 0, where 1/2θ is undefined.
+// (buildModel, autoRefine and the card's settings; up to v479 each wrote the rule out.)
+const BG_INV_BELOW = 20;       // deg
+const bgInvOn = (x0, bgInv) => x0 > 0 && (bgInv != null && bgInv !== 'auto' ? !!bgInv : x0 < BG_INV_BELOW);
 /* (S + H)/L to start the asymmetry's refinement from (at 0 it has no derivative). Its effect
    grows as A², so a Gauss–Newton step from A₀ aims at about (A₀² + A²)/(2A₀): from above it
    comes down to A, from far below it overshoots. A quarter of its bound (0.2) keeps every
@@ -92,12 +99,6 @@ function chebyshev(u, N, out){
   out[0] = 1; if (N >= 1) out[1] = u;
   for (let k = 2; k <= N; k++) out[k] = 2*u*out[k-1] - out[k-2];
   return out;
-}
-// First index with x[i] ≥ v (x ascending).
-function lowerBound(x, v){
-  let lo = 0, hi = x.length;
-  while (lo < hi){ const mid = (lo + hi) >> 1; if (x[mid] < v) lo = mid + 1; else hi = mid; }
-  return lo;
 }
 /* Cholesky factor of a symmetric positive (semi)definite m×m matrix. The matrices here
    are correlation-scaled (unit diagonal), so the pivot tolerance is relative by
@@ -268,6 +269,14 @@ function addPeakFCJ(out, x, c, H, eta, I, nodes, win = WIN_FWHM){
     out[i] += T*core + (1 - T)*wing;
   }
 }
+// One line spread by the axial divergence's nodes (lineNodes, axialNodes): none, the one
+// peak; one node, the peak at its shift; more, addPeakFCJ over them. (The refinement's
+// lines and xrd-widths' single peaks; up to v479 each wrote the three cases out.)
+function addLine(out, x, c, H, eta, I, nodes, win = WIN_FWHM){
+  if (!nodes) addPeak(out, x, c, H, eta, I, win);
+  else if (nodes.length === 1) addPeak(out, x, c + nodes[0].d, H, eta, I, win);
+  else addPeakFCJ(out, x, c, H, eta, I, nodes, win);
+}
 
 /* Axial divergence: Finger, Cox & Jephcoat, J. Appl. Cryst. 27 (1994) 892, with the
    sample's and the receiving slit's half-heights equal (S = H), so one parameter
@@ -285,25 +294,6 @@ function addPeakFCJ(out, x, c, H, eta, I, nodes, win = WIN_FWHM){
    → nodes [{ d (deg, 2φ − 2θ), w }] with Σw = 1, enough of them that neighbouring shifts
    lie well within the peak's width H; one node at the mean shift when the whole tail is
    a small part of H (a broad peak, or near 90°). */
-const GL_CACHE = new Map();
-function gaussLegendre(n){
-  let g = GL_CACHE.get(n);
-  if (g) return g;
-  const t = new Float64Array(n), w = new Float64Array(n);
-  for (let i = 0; i < n; i++){
-    let z = Math.cos(Math.PI*(i + 0.75)/(n + 0.5)), dp = 1;
-    for (let it = 0; it < 100; it++){
-      let p0 = 1, p1 = 0;
-      for (let j = 1; j <= n; j++){ const p2 = p1; p1 = p0; p0 = ((2*j - 1)*z*p1 - (j - 1)*p2)/j; }
-      dp = n*(z*p0 - p1)/(z*z - 1);
-      const dz = p0/dp; z -= dz;
-      if (Math.abs(dz) < 1e-15) break;
-    }
-    t[i] = z; w[i] = 2/((1 - z*z)*dp*dp);
-  }
-  g = { t, w }; GL_CACHE.set(n, g);
-  return g;
-}
 /* Nodes: n = ⌈4|dMax|/H⌉ + 2, neighbouring shifts H/4 apart on average and at most about
    H/2 (Gauss–Legendre nodes in h, the shift ∝ h²), the profile then within about 0.04 %
    of the peak of the exact one; FCJ_MAX_NODES at most, which only a tail over 1000 H
@@ -429,7 +419,7 @@ function fcjNodes(th, A, H, nForce){
 }
 
 /* The FCJ nodes of one line of one reflection. Under model.fcjFreeze (for the whole of a
-   refine(), and for each Jacobian column outside one) the count is fixed at the line's
+   refine(), its Jacobians included) the count is fixed at the line's
    first use, so that χ² is a smooth function of the parameters throughout the
    refinement: a count that changed with U..Y or the asymmetry moved χ² in steps and a
    derivative by up to 10×. refine() checks the counts at its end (model.fcjAudit) and
@@ -758,6 +748,18 @@ const BODIES = {
 };
 const ROT_NAMES = ['R1', 'R2', 'R3'], QREF_NAMES = ['Q0', 'Q1', 'Q2', 'Q3'];
 const shapeTypeOf = p => p === true ? 'ellipsoid' : SHAPE_TYPES.includes(p) ? p : null;
+/* shapeNamed(P, pfx) → the solid a result was refined with, from its parameters' names
+   (P {name: value}, pfx the phase's 'p' + id + '.'): the one whose widths they name, each
+   solid having its own (v420's ellipsoid SHAPE_NAMES), when in use (a width not 0); else
+   false. autoRefine's start from the last result and the card's redraw of a result (up
+   to v479 the card's own copy named the widths itself, and took a v420 ellipsoid by its
+   diagonal alone and a width saved as null, a NaN, for one there). */
+const SHAPE_WN = [...new Set([...SHAPE_NAMES, ...Object.values(BODIES).flatMap(B=> B.W)])];
+function shapeNamed(P, pfx){
+  const on = SHAPE_WN.filter(n=> Object.prototype.hasOwnProperty.call(P, pfx + n) && Number.isFinite(P[pfx + n]));
+  const t = SHAPE_TYPES.find(t=> { const W = t === 'ellipsoidL' ? SHAPE_NAMES : BODIES[t].W; return W.length === on.length && W.every(n=> on.includes(n)); });
+  return t && on.some(n=> P[pfx + n]) ? t : false;
+}
 
 /* columnLengthV(base, w) → <L>_V of the unit base body along the direction of w (any
    length): 'ball' (diameter 1), 'cylinder' (diameter 1, height 1, axis z), 'cube'
@@ -1053,9 +1055,7 @@ function eigSym3(S){
    candidates for a held body's second axis (freeShape). */
 function latticeAcross(q, n, R0, tolDeg = 5, count = 2){
   const B = q.Bm, M = q.constraint && q.constraint.basis;
-  const inv = m => { const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
-    return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det]; };
-  const Bi = inv(B), gcd = (a, b) => b ? gcd(b, a % b) : Math.abs(a), lim = Math.sin(tolDeg*D2R);
+  const Bi = inv3n(B), gcd = (a, b) => b ? gcd(b, a % b) : Math.abs(a), lim = Math.sin(tolDeg*D2R);
   const cand = [];
   for (let u = -3; u <= 3; u++) for (let v = -3; v <= 3; v++) for (let w = -3; w <= 3; w++){
     if ((!u && !v && !w) || gcd(gcd(u, v), w) !== 1) continue;
@@ -1075,7 +1075,7 @@ function latticeAcross(q, n, R0, tolDeg = 5, count = 2){
   const canon = t => t.find(x=> x !== 0) < 0 ? t.map(x=> -x) : t;
   return out.map(({ tc, vec })=>{
     const dir = canon(R0 ? [0, 1, 2].map(r=> R0[3*r]*tc[0] + R0[3*r + 1]*tc[1] + R0[3*r + 2]*tc[2]) : tc);
-    return { uvw: '[' + idxText(dir) + ']', vec: alongLabel(q, R0, dir, vec) };
+    return { uvw: '[' + hklText(dir) + ']', vec: alongLabel(q, R0, dir, vec) };
   });
 }
 // A turn by phi about the unit axis n (row-major).
@@ -1255,15 +1255,11 @@ function framedAxes(q, dirs, ref){
   const R0 = dirs[ref].R, canon = t => t.find(x=> x !== 0) < 0 ? t.map(x=> -x) : t;
   return dirs.map((d, i)=>{
     const t = d.tc, dir = i === ref ? d.dir : canon([0, 1, 2].map(r=> R0[3*r]*t[0] + R0[3*r + 1]*t[1] + R0[3*r + 2]*t[2]));
-    return { dir, label: d.family ? d.label : '[' + idxText(dir) + ']', uvw: '[' + idxText(dir) + ']', angle: d.angle, vec: alongLabel(q, R0, dir, d.vec) };
+    return { dir, label: d.family ? d.label : '[' + hklText(dir) + ']', uvw: '[' + hklText(dir) + ']', angle: d.angle, vec: alongLabel(q, R0, dir, d.vec) };
   });
 }
 // A Laue operation made proper: −1 is in every Laue group, and an improper frame drew the
 // cell's a, b, c left-handed (half the time, as the first operation of an orbit came).
-function inv3(m){
-  const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
-  return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det];
-}
 function properOp(R){
   const det = R[0]*(R[4]*R[8] - R[5]*R[7]) - R[1]*(R[3]*R[8] - R[5]*R[6]) + R[2]*(R[3]*R[7] - R[4]*R[6]);
   return det < 0 ? R.map(x=> -x) : R;
@@ -1272,7 +1268,7 @@ function properOp(R){
 // R0, conventional indices) turned onto dir's own sense: the crystal direction R0⁻¹·dir.
 function alongLabel(q, R0, dir, vec){
   if (!R0 || !vec) return vec;
-  const B = q.Bm, M = q.constraint && q.constraint.basis, Ri = inv3(R0), Bi = inv3(B);
+  const B = q.Bm, M = q.constraint && q.constraint.basis, Ri = inv3n(R0), Bi = inv3n(B);
   const tc = [0, 1, 2].map(r=> Ri[3*r]*dir[0] + Ri[3*r + 1]*dir[1] + Ri[3*r + 2]*dir[2]);
   const t = M ? [M[0]*tc[0] + M[1]*tc[1] + M[2]*tc[2], M[3]*tc[0] + M[4]*tc[1] + M[5]*tc[2], M[6]*tc[0] + M[7]*tc[1] + M[8]*tc[2]] : tc;
   const c = [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
@@ -1506,7 +1502,6 @@ function bodyShapeOf(model, v, k, res){
     : lone >= 0 && axes[order.indexOf(lone)].resolved ? latticeAcross(q, dirs[order.indexOf(lone)].vec, dirs[order.indexOf(lone)].R).map(d=> ({ ...d, esdAngle: tiltEsd(lone) })) : [];
   return { type, kind, dims, groups, axes, across, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)], cell: cellAxes(q, dirs[refIx].R) } };
 }
-const idxText = t => t.map(x=> x < 0 ? '-' + (-x) : String(x)).join('');
 /* lattDirection(q, e) → { dir, label, angle, tc, R, family, vec }: the lattice direction
    [uvw] of a Cartesian unit vector e, u ∝ Bᵀe, in the conventional cell when there is
    one. The simplest small-integer direction (least u² + v² + w², indices up to 4)
@@ -1521,10 +1516,8 @@ const SNAP_DEG = 10;
 function lattDirection(q, e, exact = false){
   const B = q.Bm;
   // Cartesian of a direction t (file basis): A·t with A = (B⁻¹)ᵀ; the angle is taken there.
-  const inv = m => { const [a, b, c, d, e2, f, g, h, i] = m, A = e2*i - f*h, Bc = -(d*i - f*g), C = d*h - e2*g, det = a*A + b*Bc + c*C;
-    return [A/det, -(b*i - c*h)/det, (b*f - c*e2)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e2 - b*d)/det]; };
-  const Binv = inv(B), cart = t => [Binv[0]*t[0] + Binv[3]*t[1] + Binv[6]*t[2], Binv[1]*t[0] + Binv[4]*t[1] + Binv[7]*t[2], Binv[2]*t[0] + Binv[5]*t[1] + Binv[8]*t[2]];
-  const M = q.constraint && q.constraint.basis, Mi = M ? inv(M) : null;
+  const Binv = inv3n(B), cart = t => [Binv[0]*t[0] + Binv[3]*t[1] + Binv[6]*t[2], Binv[1]*t[0] + Binv[4]*t[1] + Binv[7]*t[2], Binv[2]*t[0] + Binv[5]*t[1] + Binv[8]*t[2]];
+  const M = q.constraint && q.constraint.basis, Mi = M ? inv3n(M) : null;
   let near = null, low = null;
   for (let u = -4; u <= 4; u++) for (let w2 = -4; w2 <= 4; w2++) for (let x = -4; x <= 4; x++){
     if (!u && !w2 && !x) continue;
@@ -1552,7 +1545,7 @@ function lattDirection(q, e, exact = false){
   }
   const nice = [...orbit.values()].sort(({ r: a }, { r: b })=> (a.filter(x=> x < 0).length - b.filter(x=> x < 0).length) || (b[0] - a[0]) || (b[1] - a[1]) || (b[2] - a[2]))[0];
   const family = orbit.size > 2;
-  return { dir: nice.r, label: family ? '⟨' + idxText(nice.r) + '⟩' : '[' + idxText(nice.r) + ']', angle: best.angle, tc: t0, R: properOp(nice.R), family, vec };
+  return { dir: nice.r, label: family ? '⟨' + hklText(nice.r) + '⟩' : '[' + hklText(nice.r) + ']', angle: best.angle, tc: t0, R: properOp(nice.R), family, vec };
 }
 
 // The cell's a, b, c (the conventional cell's, when there is one) as Cartesian unit
@@ -1562,10 +1555,8 @@ function lattDirection(q, e, exact = false){
 // the triad's c pointed against the solid's "[001]".
 function cellAxes(q, R0){
   const B = q.Bm, M = q.constraint && q.constraint.basis;
-  const inv = m => { const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
-    return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det]; };
-  const Bi = inv(B), cart = t => [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
-  const Ri = R0 ? inv(R0) : null;
+  const Bi = inv3n(B), cart = t => [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
+  const Ri = R0 ? inv3n(R0) : null;
   return [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(e0=>{
     const tc = Ri ? [0, 1, 2].map(r=> Ri[3*r]*e0[0] + Ri[3*r + 1]*e0[1] + Ri[3*r + 2]*e0[2]) : e0;
     const t = M ? [M[0]*tc[0] + M[1]*tc[1] + M[2]*tc[2], M[3]*tc[0] + M[4]*tc[1] + M[5]*tc[2], M[6]*tc[0] + M[7]*tc[1] + M[8]*tc[2]] : tc;
@@ -1579,9 +1570,7 @@ function cellAxes(q, R0){
 // family: the axes a plate's normal or a needle most often takes.
 function lowIndexAxes(q){
   const B = q.Bm, M = q.constraint && q.constraint.basis;
-  const inv = m => { const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
-    return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det]; };
-  const Bi = inv(B), cart = t => [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
+  const Bi = inv3n(B), cart = t => [Bi[0]*t[0] + Bi[3]*t[1] + Bi[6]*t[2], Bi[1]*t[0] + Bi[4]*t[1] + Bi[7]*t[2], Bi[2]*t[0] + Bi[5]*t[1] + Bi[8]*t[2]];
   const cand = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1],[1,-1,0],[1,0,-1],[0,1,-1],[1,1,1]];
   const out = [], fams = new Set();
   for (const tc of cand){
@@ -1631,6 +1620,10 @@ function tickLabels(list, ops, M){
 const PROFILES = ['lorentz', 'wppm', 'lognormal'];
 // The refined sites as one key (a result's models.occ against the options now).
 const occText = a => (Array.isArray(a) ? a : a ? [a] : []).map(String).sort().join(',');
+// A phase parameter's kind → the group it is held in (opts.hold; autoRefine's start from
+// the last result, and the worker's "held at the last result"): Ys, Xs, S_j and σ the
+// size and strain, ΔB, B and Uⁱʲ the displacements. (Up to v479 both listed the kinds.)
+const KIND_GROUP = { lattice: 'cell', size: 'sizestrain', strain: 'sizestrain', dist: 'sizestrain', shape: 'shape', faults: 'faults', B: 'adp', adp: 'adp', occ: 'occ', texture: 'texture' };
 function faultOf(spec){
   const m = typeof spec === 'string' && spec.trim().match(/^(-?\d)\s*(-?\d)\s*(-?\d)\s*:\s*(\d+)\s*\/\s*(\d+)\s*<\s*(-?\d)\s*(-?\d)\s*(-?\d)\s*>$/);
   if (!m) return null;
@@ -1727,15 +1720,15 @@ function strainFrame(q, cell, trans){
     // 2/3, 1/3, 2/3 of the hexagonal cell; a primitive file's axes may hold either one
     // alone): −a, −b make it the obverse one (2/3, 1/3, 1/3). The trigonal groups' forms
     // change sign with that turn (it is not in −3 or −3m).
-    const Mi = inv3(M || I), fr = t => [0, 1, 2].map(i=> { const x = Mi[3*i]*t[0] + Mi[3*i + 1]*t[1] + Mi[3*i + 2]*t[2]; return x - Math.floor(x + 1e-9); });
+    const Mi = inv3n(M || I), fr = t => [0, 1, 2].map(i=> { const x = Mi[3*i]*t[0] + Mi[3*i + 1]*t[1] + Mi[3*i + 2]*t[2]; return x - Math.floor(x + 1e-9); });
     const at = (f, p) => f.every((x, i)=> Math.abs(x - p[i]) < 1e-6);
     const rev = [[1, 0, 0], [0, 1, 0], [0, 0, 1], ...(trans || [])].some(t=> { const f = fr(t); return at(f, [1/3, 2/3, 1/3]) || at(f, [2/3, 1/3, 2/3]); });
     if (rev) M = mul(M || I, turn);
   }
   if (!M || M.every((x, i)=> x === I[i])) return null;
-  const Mi = inv3(M), S = mul(mul(Mi, Gs), tr(Mi));
+  const Mi = inv3n(M), S = mul(mul(Mi, Gs), tr(Mi));
   const b11 = Math.sqrt(S[0]), b12 = S[1]/b11, b13 = S[2]/b11, b22 = Math.sqrt(S[4] - b12*b12), b23 = (S[5] - b12*b13)/b22, b33 = Math.sqrt(S[8] - b13*b13 - b23*b23);
-  return mul(mul([b11, b12, b13, 0, b22, b23, 0, 0, b33], tr(M)), inv3(q.Bm));
+  return mul(mul([b11, b12, b13, 0, b22, b23, 0, 0, b33], tr(M)), inv3n(q.Bm));
 }
 // Stephens' forms at the direction of the reflection h (the file's indices).
 function strainFormsAt(q, h){
@@ -2167,9 +2160,7 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     iZero: index.zero, iDisp: index.disp, iTr: index.transp, iProf: ['U','V','W','X','Y'].map(k=> index[k]), iAsym: index.asym,
     axial, iAx: index.axL,
     iBg: par.map((p, i)=> p.group === 'bg' ? i : -1).filter(i=> i >= 0),
-    // The 1/2θ term is used where air scatter rises: patterns that start below 20° (and
-    // above 0, where it is defined).
-    useInv: x0 > 0 && (bgInv != null && bgInv !== 'auto' ? !!bgInv : x0 < 20),
+    useInv: bgInvOn(x0, bgInv),
     win: WIN_FWHM, noise0, latRange,
     // The FCJ counts' keys (lineNodes): (k·rStride + r)·4 + j, a member's ·64 (at most 24 a
     // family, Friedel mates merged). A fixed 65536 shared keys between two phases once one
@@ -2364,9 +2355,7 @@ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw
     const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
     if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
     const nodes = axialOn(A) ? lineNodes(model, -1 - ((k*model.rStride + r)*64 + i)*4 - j, th, A, pr.H, sollerTol(model, S*Im, pr.H, pr.eta)) : null;
-    if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, Im, win);
-    else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, Im, win);
-    else addPeakFCJ(out, x, tt, pr.H, pr.eta, Im, nodes, win);
+    addLine(out, x, tt, pr.H, pr.eta, Im, nodes, win);
   }
   // The tick: the line's intensity with its texture, its width the members' mean
   // (weighed as their intensities).
@@ -2543,9 +2532,7 @@ function phasePattern(model, v, k, out, ticks){
       const half = lineHalf(model, pr.H, pr.eta, S*I), win = half/pr.H;
       if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
       const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, pr.H, sollerTol(model, S*I, pr.H, pr.eta)) : null;
-      if (!nodes) addPeak(out, x, tt, pr.H, pr.eta, I, win);
-      else if (nodes.length === 1) addPeak(out, x, tt + nodes[0].d, pr.H, pr.eta, I, win);
-      else addPeakFCJ(out, x, tt, pr.H, pr.eta, I, nodes, win);
+      addLine(out, x, tt, pr.H, pr.eta, I, nodes, win);
       if (ticks && j === 0 && tt >= xa && tt <= xb)
         ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
                      tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: pr.H, eta: pr.eta, j: 0, pk: k, r });
@@ -2739,13 +2726,11 @@ function jacobian(model, v, st, free, cols){
     const ks = p.group === 'phase' ? [p.phase] : [...Array(np).keys()];
     for (const k of ks){
       const S = v[model.phases[k].iScale]; if (!S) continue;
-      // Both displaced points with the same FCJ node counts (lineNodes): refine()'s, or,
-      // outside one, those of this column's first point.
-      const own = !model.fcjFreeze;
-      if (own) model.fcjFreeze = new Map();
+      // Both displaced points with the same FCJ node counts (lineNodes): refine()'s, held
+      // over the whole refinement (a Jacobian is taken only inside one; up to v479 a
+      // column taken outside one held counts of its own, a case that never arose).
       if (dn === v[j]){ phasePattern(model, v, k, tmpB); phasePattern(model, vu, k, tmpA); }
       else { phasePattern(model, vu, k, tmpA); phasePattern(model, vd, k, tmpB); }
-      if (own) model.fcjFreeze = null;
       const f = S/(up - dn);
       for (let i = 0; i < n; i++) col[i] += f*(tmpA[i] - tmpB[i]);
     }
@@ -3544,7 +3529,7 @@ function autoRefine(model, opts = {}){
   const nStages = 5 + optStages.length;
   const lin = ['bg' + 0];
   for (let k = 1; k <= model.bgDegree; k++) lin.push('bg' + k);
-  if (F.bgInv !== 'auto') model.useInv = F.bgInv && model.x0 > 0;
+  if (F.bgInv !== 'auto') model.useInv = bgInvOn(model.x0, F.bgInv);
   if (model.useInv) lin.push('bgInv'); else model.v[model.index.bgInv] = 0;
   const scales = model.phases.map(q=> q.pfx + 'scale');
   const lattice = std ? [] : model.phases.flatMap(q=> q.latNames.map(nm=> q.pfx + nm));
@@ -3680,7 +3665,7 @@ function autoRefine(model, opts = {}){
      so (not searched again). */
   const finish = ({ res, out, lastFree, nIn, cs, carried = [], held = [], iso0 = null, keptIso = [] }) => {
     lsFailed.forEach(k=> { if (!out.has(k)) warnings.push(`${nm(k)}: the size distribution could not be refined (the refinements from σ = 0.3 and 0.6 both failed): a single size is reported (σ = 0).`); });
-    poFailed.forEach(k=> { if (!out.has(k)){ const s = model.phases[k].poSpec; warnings.push(`${nm(k)}: the preferred orientation ${s === 'auto' ? 'on its trial axes' : '(' + idxText(s) + ')'} could not be refined (every trial failed): none is applied.`); } });
+    poFailed.forEach(k=> { if (!out.has(k)){ const s = model.phases[k].poSpec; warnings.push(`${nm(k)}: the preferred orientation ${s === 'auto' ? 'on its trial axes' : '(' + hklText(s) + ')'} could not be refined (every trial failed): none is applied.`); } });
     const live = model.phases.map((_, k)=> k).filter(k=> !out.has(k));
     if (live.length > 1){
       const ev = ownEvidence(model, model.v, res.stats.chi2);
@@ -3816,14 +3801,8 @@ function autoRefine(model, opts = {}){
     // values rather than held. (Its zero moved: the cell, below.)
     const irfMoved = irfSame && !!irf && !!S0.irf && ['U', 'V', 'W', 'X', 'Y', 'asym', 'axL', 'transp'].some(k=> (+irf[k] || 0) !== (+S0.irf[k] || 0));
     const BROAD = ['sizestrain', 'shape', 'faults'];
-    // The solid of the last result: the one whose widths its parameters name (each solid
-    // has its own), when in use (a width not 0).
-    const WN = [...new Set([...SHAPE_NAMES, ...Object.values(BODIES).flatMap(B=> B.W)])];
-    const shapeThen = q => {
-      const on = WN.filter(n=> has(q.pfx + n));
-      const t = SHAPE_TYPES.find(t=> { const W = t === 'ellipsoidL' ? SHAPE_NAMES : BODIES[t].W; return W.length === on.length && W.every(n=> on.includes(n)); });
-      return t && on.some(n=> P0[q.pfx + n]) ? t : false;
-    };
+    // The solid of the last result (shapeNamed).
+    const shapeThen = q => shapeNamed(P0, q.pfx);
     const sameAxis = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === 3 && a.every((x, i)=> x === +b[i]);
     const chg = model.phases.map((q, k)=> {
       const m0 = M0[q.id] || null, m1 = modelOf(q, k), t0 = T0[q.id], sh0 = shapeThen(q), sh1 = irf && q.shapeType || false;
@@ -3852,8 +3831,7 @@ function autoRefine(model, opts = {}){
     });
     const groupOf = i => { const p = model.par[i];
       return p.linear ? 'linear' : p.kind === 'lattice' || p.name === 'zero' || p.name === 'disp' || p.name === 'transp' ? 'cell' : p.group === 'profile' ? 'instrument'
-        : p.kind === 'size' || p.kind === 'strain' || p.kind === 'dist' ? 'sizestrain' : p.kind === 'shape' ? 'shape' : p.kind === 'faults' ? 'faults'
-        : p.kind === 'B' || p.kind === 'adp' ? 'adp' : p.kind === 'occ' ? 'occ' : p.kind === 'texture' ? 'texture' : null; };
+        : KIND_GROUP[p.kind] || null; };
     /* The background's terms there and here (the degree and the 1/2θ term, fit settings):
        held across a change, the terms left had been fitted beside the others (degree 12
        → 6 on 33A, 'linear' held: χ²_ν 135, the background up to 424 counts off), so the
@@ -4600,5 +4578,5 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 
 export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
-         fcjNodes, addPeak, addPeakFCJ, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
-         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach };
+         fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
+         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };

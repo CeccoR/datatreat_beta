@@ -54,7 +54,7 @@ The document follows the code as of v425. Functions are named with their file, e
    - a preferred orientation (*best axis*, or a plane).
 
    The standard's window has its own **Settings…**: its phase's B and texture, its start and its Refinement settings (the zero scan's range among them). The same modal sets where **Refine** starts: from the CIF, or from each pattern's last result with chosen groups of parameters held there (§6.8).
-4. Refine the standard in its window first; then **Refine all**, in the card, refines every sample with the standard's instrumental profile.
+4. Refine the standard in its window first; then **Refine all**, in the card, refines every sample with the standard's instrumental profile. With no refined standard, Refine and Refine all ask first: the standard refined first (with its window's Settings), the samples refined without it, or nothing; and while the samples refine the standard cannot be refined, nor the samples while it refines, so a batch has one profile throughout. A run belongs to its project: leaving its tab or closing it asks whether to stop it, and undo waits for it.
 5. Read the results:
    - the result lines (with esds in brackets) and the warnings;
    - the pattern plot (observed, calculated, background, difference, ticks);
@@ -67,17 +67,20 @@ The document follows the code as of v425. Functions are named with their file, e
 
 | File | Lines | Role |
 |---|---|---|
-| `xrd-data.js` | 450 | Reference tables: X-ray form factors (Waasmaier–Kirfel), anomalous dispersion (Chantler; Cromer–Liberman for Np–Cf), atomic masses; the species of a site label. |
-| `xrd-cryst.js` | 1063 | CIF reading, symmetry from the atoms, conventional cells, reflection lists with multiplicities and absences, structure factors, the sites and the displacement parameters their symmetry allows. |
-| `xrd-instr.js` | 328 | The instrument as the `.xrdml` header describes it; the scan itself (2θ, intensities, their variance) and the file's encoding. |
-| `xrd-rietveld.js` | 2819 | The engine: the model, the profile, least squares, the staged strategy, preferred orientation, the free shape, sizes and weight fractions. |
-| `xrd-broad.js` | 430 | Whole Powder Pattern Modelling (a line synthesised from its Fourier coefficients by FFT; the solids' common-volume functions; the log-normal average), Stephens' quartic invariants, the planar-fault table. |
-| `xrd-rietveld.worker.js` | 400 | Runs a refinement off the main thread; formats the result lines and the CSV rows. |
-| `xrd-widths.js` | 333 | Single-peak widths after the refinement; Williamson–Hall, order and prediction tests. |
-| `xrd-rv.js` | 652 | The card: phases, options, runs, plots, results, state, exports. |
-| `xrd-shape3d.js` | 1359 | The rotatable 3D view of a crystallite solid (2D canvas, no WebGL). |
+| `xrd-data.js` | 526 | Reference tables: X-ray form factors (Waasmaier–Kirfel), anomalous dispersion (Chantler; Cromer–Liberman for Np–Cf), atomic masses; the species of a site label. |
+| `xrd-cryst.js` | 1905 | CIF reading, symmetry from the atoms, conventional cells, reflection lists with multiplicities and absences, structure factors, the sites and the displacement parameters their symmetry allows. |
+| `xrd-sg.js` | 223 | A phase's space group as its Hermann–Mauguin symbol: the CIF's, or for a file in P1 read off the symmetry found from its atoms. |
+| `xrd-instr.js` | 565 | The instrument as the `.xrdml` header describes it; the scan itself (2θ, intensities, their variance) and the file's encoding. |
+| `xrd-math.js` | 99 | Small numerics and number formats shared by the XRPD modules: Gauss–Legendre nodes, a bisection, the 3×3 inverse (in the two forms the code had, so that no zero changes sign); Miller indices, esds and angles as text. |
+| `xrd-rietveld.js` | 4582 | The engine: the model, the profile, least squares, the staged strategy, preferred orientation, the free shape, sizes and weight fractions. |
+| `xrd-broad.js` | 444 | Whole Powder Pattern Modelling (a line synthesised from its Fourier coefficients by FFT; the solids' common-volume functions; the log-normal average), Stephens' quartic invariants, the planar-fault table. |
+| `xrd-rietveld.worker.js` | 501 | Runs a refinement off the main thread; formats the result lines and the CSV rows. |
+| `xrd-widths.js` | 697 | Single-peak widths after the refinement; Williamson–Hall, order and prediction tests. |
+| `xrd-rv.js` | 1787 | The card: phases, options, runs (one at a time per instrument profile, stopped if their project is left), plots, results, state, exports. |
+| `xrd-shape3d.js` | 1385 | The rotatable 3D view of a crystallite solid (2D canvas, no WebGL). |
+| `xrd-cell3d.js` | 236 | The rotatable 3D view of a phase's unit cell and its atoms, beside the phase list. |
 
-The engine modules (`xrd-data`, `xrd-cryst`, `xrd-instr`, `xrd-broad`, `xrd-rietveld`, `xrd-widths`) are pure functions, with no DOM. The page, the worker and Node all import them, so they can be tested under Node (§14).
+The engine modules (`xrd-data`, `xrd-cryst`, `xrd-sg`, `xrd-instr`, `xrd-math`, `xrd-broad`, `xrd-rietveld`, `xrd-widths`) are pure functions, with no DOM. The page, the worker and Node all import them, so they can be tested under Node (§14).
 
 ### 1.3 What happens on Refine
 
@@ -114,7 +117,8 @@ The standard's refinement produces the instrumental resolution function (*irf*):
   - (hkl) is a plane and its reflection; {hkl} is its family.
   - [uvw] is a lattice direction; ⟨uvw⟩ is its family.
   - All are given in the **conventional** cell, even when the CIF holds a primitive one.
-- **Esds** are written as 3.9151(8): the esd rounded to one significant digit (two when that digit is 1), the value rounded to the same last digit, and the esd in units of that digit (`fmtEsd`, worker; `fmtE`, card). An esd that rounds up to the next leading digit keeps one digit (0.0096 gives 1.50(1)); one of 10 or more in the units rounds the value to its tens or hundreds (125 ± 314 gives 100(300)). An esd under 10⁻¹⁵ of the value, below what a double holds, gives the value alone (an esd under 10⁻¹⁰⁰ had thrown, and lost the whole summary).
+  - A negative index is written with a minus, (1-10), [1-10]; when an index has two digits the three are spaced, (1 -1 11), so that no two read alike (`hklText`, `xrd-math.js`). Up to v479 the minus was written three ways (−, -, an overbar).
+- **Esds** are written as 3.9151(8): the esd rounded to one significant digit (two when that digit is 1), the value rounded to the same last digit, and the esd in units of that digit (`fmtEsd` in `xrd-math.js`, for the worker and the card alike; a value with no esd is given to six significant digits). An esd that rounds up to the next leading digit keeps one digit (0.0096 gives 1.50(1)); one of 10 or more in the units rounds the value to its tens or hundreds (125 ± 314 gives 100(300)). An esd under 10⁻¹⁵ of the value, below what a double holds, gives the value alone (an esd under 10⁻¹⁰⁰ had thrown, and lost the whole summary).
 
 ## 2. Inputs: the pattern, the instrument, the phases
 

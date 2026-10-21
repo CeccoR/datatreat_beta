@@ -19,6 +19,7 @@
    solid as hidden (inside it, or behind it from the viewer) or not: the hidden bits
    go under the solid's layer and show through it dimmed, the others on top.
 ========================================================= */
+import { fmtDeg, fmtOff } from './xrd-math.js';
 
 const DEG = Math.PI / 180;
 const SOLID_ALPHA = 0.66;    // the solid over what it hides: the lines through it stay readable
@@ -51,11 +52,6 @@ const unit = a => { const n = Math.hypot(a[0], a[1], a[2]); return n > 1e-12 ? [
 const vec3 = v => (v && typeof v.length === 'number' && v.length >= 3) ? [Number(v[0]), Number(v[1]), Number(v[2])] : null;
 const num = v => (v == null || v === '') ? NaN : Number(v);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-// An esd in degrees as the card gives it (the worker's deg): one significant figure under
-// 0.095° (a tight angle never reads as a flat ±0.0°), one decimal to 9.95°, whole degrees
-// past it; an angle off the axis with one decimal.
-const fmtDeg = x => !(x > 0) ? '0' : x < 0.095 ? String(+x.toPrecision(1)) : x < 9.95 ? x.toFixed(1) : String(Math.round(x));
-const fmtOff = x => x < 0.05 ? '0' : x.toFixed(1);
 const fmtNm = x => x >= 100 ? String(Math.round(x)) : x >= 10 ? String(+x.toFixed(1)) : String(+x.toPrecision(2));
 // The angle off the nearest body axis, worth a mention only for a determined direction and
 // when it is there at all (a direction held on the axis has 0).

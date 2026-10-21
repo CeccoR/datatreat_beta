@@ -8,6 +8,7 @@
 //   numbers, acting as x' = R·x + t. A reflection is a row vector and goes as h' = h·R.
 // - a cell is {a, b, c, alpha, beta, gamma} in Å and degrees; s = sinθ/λ = 1/(2d).
 import { speciesKey, labelSpecies, f0, fprime, atomicMass } from './xrd-data.js';
+import { det3, inv3 } from './xrd-math.js';
 
 const IDENT = [1,0,0, 0,1,0, 0,0,1];
 // Å², B of a site the CIF gives none: a middle value of inorganic solids at room temperature
@@ -16,18 +17,7 @@ const IDENT = [1,0,0, 0,1,0, 0,0,1];
 const B_DEFAULT = 0.5;
 const EIGHT_PI2 = 8*Math.PI*Math.PI;
 
-/* ---------- small linear algebra ---------- */
-function det3(m){
-  return m[0]*(m[4]*m[8]-m[5]*m[7]) - m[1]*(m[3]*m[8]-m[5]*m[6]) + m[2]*(m[3]*m[7]-m[4]*m[6]);
-}
-function inv3(m){
-  const d = det3(m);
-  return [
-    (m[4]*m[8]-m[5]*m[7])/d, (m[2]*m[7]-m[1]*m[8])/d, (m[1]*m[5]-m[2]*m[4])/d,
-    (m[5]*m[6]-m[3]*m[8])/d, (m[0]*m[8]-m[2]*m[6])/d, (m[2]*m[3]-m[0]*m[5])/d,
-    (m[3]*m[7]-m[4]*m[6])/d, (m[1]*m[6]-m[0]*m[7])/d, (m[0]*m[4]-m[1]*m[3])/d,
-  ];
-}
+/* ---------- small linear algebra (det3, inv3: xrd-math) ---------- */
 function mul3(a, b){
   const o = new Array(9);
   for (let i=0;i<3;i++) for (let j=0;j<3;j++) o[3*i+j] = a[3*i]*b[j] + a[3*i+1]*b[3+j] + a[3*i+2]*b[6+j];

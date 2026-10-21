@@ -16,6 +16,7 @@
      every fault where h·R is not an integer. faultTable.
    Pure functions: no DOM, importable by the page, a Worker and Node.
 ========================================================= */
+import { gaussLegendre, lowerBound, inv3n } from './xrd-math.js';
 
 const D2R = Math.PI/180;
 const LN2 = Math.LN2;
@@ -49,26 +50,7 @@ function fftPlus(p){
   }
 }
 
-/* ---------- quadratures ---------- */
-const GL = new Map();
-function gaussLegendre(n){
-  let g = GL.get(n);
-  if (g) return g;
-  const t = new Float64Array(n), w = new Float64Array(n);
-  for (let i = 0; i < n; i++){
-    let z = Math.cos(Math.PI*(i + 0.75)/(n + 0.5)), dp = 1;
-    for (let it = 0; it < 100; it++){
-      let p0 = 1, p1 = 0;
-      for (let j = 1; j <= n; j++){ const p2 = p1; p1 = p0; p0 = ((2*j - 1)*z*p1 - (j - 1)*p2)/j; }
-      dp = n*(z*p0 - p1)/(z*z - 1);
-      const dz = p0/dp; z -= dz;
-      if (Math.abs(dz) < 1e-15) break;
-    }
-    t[i] = z; w[i] = 2/((1 - z*z)*dp*dp);
-  }
-  g = { t, w }; GL.set(n, g);
-  return g;
-}
+/* ---------- quadratures (Gauss–Legendre: xrd-math) ---------- */
 // The standard normal's tail below −7, Φ(−7): the log-normal's mass below the quadrature's
 // range, where every common-volume function is 1.
 const PHI_M7 = 1.279812543885835e-12;
@@ -310,11 +292,6 @@ function lineFwhm(f){
   const dh = d - step*(half - b)/(a - b), a1 = f.s0 + dh*f.lam/2, a0 = f.s0 - dh*f.lam/2;
   return a1 < 1 && a0 > -1 ? 2*(Math.asin(a1) - Math.asin(a0))/D2R : 2*dh/f.c1;
 }
-function lowerBound(x, v){
-  let lo = 0, hi = x.length;
-  while (lo < hi){ const mid = (lo + hi) >> 1; if (x[mid] < v) lo = mid + 1; else hi = mid; }
-  return lo;
-}
 
 /* ---------- Stephens' anisotropic microstrain ----------
    The strain of a reflection whose diffraction vector has the Cartesian unit direction
@@ -404,12 +381,8 @@ function quarticInvariants(ops){
    g = |u·n_p|; c = c_p. geom: { Bm (upper-triangular, Cartesian reciprocal = B·h),
    M (conventional basis or null), laue (file-basis R's), trans (centring translations,
    file fractions) }. */
-function inv3(m){
-  const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C;
-  return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det];
-}
 function faultTable(geom, plane, disp, refl){
-  const { Bm, M, laue } = geom, Mi = M ? inv3(M) : null;
+  const { Bm, M, laue } = geom, Mi = M ? inv3n(M) : null;
   const hRow = (h, R) => [h[0]*R[0] + h[1]*R[3] + h[2]*R[6], h[0]*R[1] + h[1]*R[4] + h[2]*R[7], h[0]*R[2] + h[1]*R[5] + h[2]*R[8]];
   const col = (R, t) => [R[0]*t[0] + R[1]*t[1] + R[2]*t[2], R[3]*t[0] + R[4]*t[1] + R[5]*t[2], R[6]*t[0] + R[7]*t[1] + R[8]*t[2]];
   const key = v => v.map(t=> Math.round(t*1e6)/1e6).join(',');
@@ -419,7 +392,7 @@ function faultTable(geom, plane, disp, refl){
   // Orbits: planes as h·R⁻¹ (±h one plane), displacements as R·t.
   const planes = [], pk = new Set(), ts = [], tk = new Set();
   for (const R of laue){
-    const Ri = inv3(R), hp = hRow(hf, Ri), k1 = key(hp), k2 = key(hp.map(t=> -t));
+    const Ri = inv3n(R), hp = hRow(hf, Ri), k1 = key(hp), k2 = key(hp.map(t=> -t));
     if (!pk.has(k1) && !pk.has(k2)){ pk.add(k1); planes.push(hp); }
     const tp = col(R, tf), k3 = key(tp);
     if (!tk.has(k3)){ tk.add(k3); ts.push(tp); }

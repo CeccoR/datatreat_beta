@@ -23,7 +23,8 @@
    Pure functions on the engine's model (xrd-rietveld.js): the worker runs them after
    a refinement.
 ========================================================= */
-import { calc, axialNodes, axialOf, axialOn, addPeak, addPeakFCJ, tch, lpFactor, HG2_FLOOR, K_SCHERRER } from './xrd-rietveld.js';
+import { calc, axialNodes, axialOf, axialOn, addLine, tch, lpFactor, HG2_FLOOR, K_SCHERRER } from './xrd-rietveld.js';
+import { hklText as millerText } from './xrd-math.js';
 
 const D2R = Math.PI/180;
 // Overlapped (measureWidths): the others' share of a peak's intensity across its top past
@@ -99,9 +100,7 @@ function peakShape(xs, c, hl, u, lines, A, instAt, held, members = ONE, cAx = c)
       const sA = sol ? L.lam/lines[0].lam*Math.sin(thA) : st, thN = sol ? (sA < 1 ? Math.asin(sA) : th) : th;
       const nodes = axialOn(A) ? axialNodes(thN, A, pr.H, held ? held[counts.length] : undefined) : null;
       counts.push(nodes ? nodes.n : 0);
-      if (!nodes) addPeak(out, xs, tt, pr.H, pr.eta, L.w*M.w, 40);
-      else if (nodes.length === 1) addPeak(out, xs, tt + nodes[0].d, pr.H, pr.eta, L.w*M.w, 40);
-      else addPeakFCJ(out, xs, tt, pr.H, pr.eta, L.w*M.w, nodes, 40);
+      addLine(out, xs, tt, pr.H, pr.eta, L.w*M.w, nodes);
     }
   }
   return { f: out, counts };
@@ -272,8 +271,8 @@ function nelderMead(fn, S0, maxIt){
   }
   return S.sort((a, b)=> a.f - b.f);
 }
-// hkl as crystallographers write it: a negative index with a bar over it.
-function hklText(h, k, l){ return [h, k, l].map(v=> v < 0 ? String(-v) + '\u0305' : String(v)).join(''); }
+// A peak's hkl as the results write them (xrd-math; up to v479 a bar over a negative index).
+function hklText(h, k, l){ return millerText([h, k, l]); }
 function solve(M, b){
   const n = b.length, a = M.map((r, i)=> [...r, b[i]]);
   for (let i = 0; i < n; i++){

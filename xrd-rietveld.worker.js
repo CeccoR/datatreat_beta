@@ -5,13 +5,13 @@
    values a line, in standard notation (the esd in brackets in the last digits), and
    the rows of the results CSV.
 ========================================================= */
-import { buildModel, autoRefine, fitSettings, displacementMm, shapeOf, siteU, lowIndexPlanes, strainFormsAt, K_SCHERRER, OCC_MAX } from './xrd-rietveld.js';
+import { buildModel, autoRefine, fitSettings, displacementMm, shapeOf, siteU, lowIndexPlanes, strainFormsAt, K_SCHERRER, OCC_MAX, KIND_GROUP } from './xrd-rietveld.js';
 import { measureWidths, williamsonHall } from './xrd-widths.js';
 import { metric, cellFrom, uEquiv, betaOf } from './xrd-cryst.js';
 import { evalQuartic } from './xrd-broad.js';
+import { inv3n, hklText, fmtEsd, fmtDeg, fmtOff } from './xrd-math.js';
 
 const D2R = Math.PI/180;
-const hklText = t => t.map(x=> x < 0 ? '−' + (-x) : x).join('');
 // What a parameter is, for the notes on parameters at a bound or undetermined.
 function friendly(model, name){
   const q = model.phases.find(p=> name.startsWith(p.pfx)), nm = q ? (q.name || 'phase ' + q.id) : 'instrument';
@@ -22,24 +22,11 @@ function friendly(model, name){
   return q ? `${nm} ${what}` : what;
 }
 
-// 3.9151(8): the value to the esd's first significant digit (two when that digit is
-// 1), the esd in brackets in units of the last digit shown. The esd is rounded first:
-// one rounded up to the next leading digit keeps one digit (0.0096 gives 1.50(1), not
-// 1.500(10)); a last digit left of the units rounds the value there (100(300), not
-// 125(314)). An esd under 10⁻¹⁵ of the value is below what a double holds (and past
-// 100 decimals toFixed throws): the value alone, as without an esd.
-function fmtEsd(v, e, unit = ''){
-  if (!isFinite(v)) return '—';
-  const p = Math.floor(Math.log10(e)), n = e/Math.pow(10, p) < 2 ? 2 : 1;
-  if (!(isFinite(e) && e > 1e-15*Math.abs(v)) || n - 1 - p > 100) return (+v.toPrecision(6)).toString() + unit;
-  let d = n - 1 - p, k = Math.round(e*Math.pow(10, d));
-  if (k >= (n === 2 ? 20 : 10)){ k = Math.round(k/10); d--; }
-  if (d >= 0) return v.toFixed(d) + '(' + k + ')' + unit;
-  const s = Math.pow(10, -d);
-  return String(Math.round(v/s)*s) + '(' + k*s + ')' + unit;
-}
 const LAT_UNIT = { a: ' Å', b: ' Å', c: ' Å', alpha: '°', beta: '°', gamma: '°' };
 const LAT_LABEL = { a: 'a', b: 'b', c: 'c', alpha: 'α', beta: 'β', gamma: 'γ' };
+// "held at the last result": a held parameter's group (xrd-rietveld KIND_GROUP) as named
+// there, the scale, and the strain apart from the size.
+const HELD_WORD = { cell: 'cell', sizestrain: 'size', shape: 'shape', faults: 'faults', adp: 'displacements', occ: 'occupancy', texture: 'texture' };
 
 // The variance of f(p) over the refined parameters `names`, by numerical gradient and
 // the refinement's covariance (free names × free names).
@@ -128,7 +115,7 @@ function summarise(model, res, phases, opts){
   const textureLine = (q, nm, lines)=>{
     const tx = (res.textures || {})[q.id];
     if (!(tx && tx.hkl)) return;
-    const hkl = tx.hkl.map(x=> x < 0 ? '−' + (-x) : x).join(''), sig = Number.isFinite(tx.esd) && tx.esd > 0 ? Math.abs(tx.r - 1)/tx.esd : NaN;
+    const hkl = hklText(tx.hkl), sig = Number.isFinite(tx.esd) && tx.esd > 0 ? Math.abs(tx.r - 1)/tx.esd : NaN;
     lines.push({ label: `preferred orientation (${hkl})`, value: `r = ${fmtEsd(tx.r, tx.esd)}`, title: `March–Dollase: each reflection's members weighed by (r²·cos²α + sin²α/r)^(−3/2), α their angle to the (${hkl}) planes' normal. r under 1: more crystallites with (${hkl}) parallel to the sample's surface (plates lying flat); over 1, fewer (needles); 1, none.${Number.isFinite(sig) ? ` Here ${sig.toFixed(0)} esd from 1${sig < 2 ? ': not told from no texture' : ''}.` : ''} It changes the intensities, not the widths: an intensity misfit it does not take up, a free shape would (on a SrTiO₃ sample whose Sr site scatters 0.7 of a full one, with that occupancy held at 1 and no texture, the plates came out ⟂ ⟨310⟩ by widening the (111) and narrowing the (200); with it refined, ⟂ ⟨110⟩, as the crystals are)` });
     row(nm, `texture_r_${tx.hkl.join('_')}`, tx.r, tx.esd);
   };
@@ -241,8 +228,7 @@ function summarise(model, res, phases, opts){
     const sNames = names.slice(1), anis = p => Math.hypot(...sNames.map(k=> p[k])), an = anis(P), anE = propagate(res, sNames, anis);
     lines.push({ label: 'anisotropy, rms of ε² − ε₀² over directions', value: `${fmtEsd(an, anE)}·10⁻⁶`, title: `√Σ S_j² ·10⁻⁶, beside ε₀² = ${(1e6*e0*e0).toPrecision(3)}·10⁻⁶: how far ε² departs from its mean over the directions. It does not depend on how the cell is set. The S_j (in the CSV) are built on the conventional cell’s axes, reduced where the symmetry leaves them open (an orthorhombic cell’s in order of length, a monoclinic cell’s a–c pair, a triclinic cell’s Buerger cell); a turn of a and b that only the atoms tell apart ((b, a, −c) for 4/m and −3, (−a, −b, c) for −3 and −3m on a primitive lattice) still changes the sign of one or two` });
     row(nm, 'stephens_anisotropy_rms_1e-6', an, anE);
-    const inv = m => { const [a, b, c, d, e, f, g, h, i] = m, A = e*i - f*h, Bc = -(d*i - f*g), C = d*h - e*g, det = a*A + b*Bc + c*C; return [A/det, -(b*i - c*h)/det, (b*f - c*e)/det, Bc/det, (a*i - c*g)/det, -(a*f - c*d)/det, C/det, -(a*h - b*g)/det, (a*e - b*d)/det]; };
-    const Mi = M ? inv(M) : null;
+    const Mi = M ? inv3n(M) : null;
     for (const hc of lowIndexPlanes(q)){
       const h = Mi ? [0, 1, 2].map(j=> hc[0]*Mi[j] + hc[1]*Mi[3 + j] + hc[2]*Mi[6 + j]) : hc;
       const qv = strainFormsAt(q, h);
@@ -300,17 +286,15 @@ function summarise(model, res, phases, opts){
     textureLine(q, nm, lines);
     const sh = ss && ss.shape ? shapeOf(model, P, k, res) : null, info = (res.shapes || {})[q.id];
     if (sh){
-      const off = a => `${a.angle < 0.05 ? '0' : a.angle.toFixed(1)}° off`;
-      // The angular esd, by profile (xrd-rietveld turnEsds): none beyond 60°. One
-      // significant digit at least (a rod's 0.04° is not ±0.0°), one decimal to 9.95°, whole
-      // degrees past it: as the 3D view's labels give it (xrd-shape3d fmtDeg).
-      const deg = x => x < 0.095 ? (+x.toPrecision(1)).toString() : x < 9.95 ? x.toFixed(1) : x.toFixed(0);
-      const pm = a => Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? ` ±${deg(a.esdAngle)}°` : '';
+      const off = a => `${fmtOff(a.angle)}° off`;
+      // The angular esd, by profile (xrd-rietveld turnEsds): none beyond 60°, else as the 3D
+      // view's labels give it (xrd-math fmtDeg).
+      const pm = a => Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? ` ±${fmtDeg(a.esdAngle)}°` : '';
       // (the v420 ellipsoid's esds are linear: from the covariance of its L)
       // A profile sees only the valley of χ² the fit ends in: 2 of 7 free fits of
       // synthetic boxes ended 3–4 esd off, in another valley nearly as deep.
       const how = sh.type === 'ellipsoidL' ? '1σ, from the covariance of the refined parameters' : '1σ: the turn of the solid that raises χ² by χ²_ν (the linear esds\' convention too: their covariance is scaled by χ²_ν), with every other parameter, its turns about the other axes too, refined again. It measures the valley of χ² the fit ends in, not a second orientation nearly as good, which noise can make the best';
-      const angTitle = a => `the axis is ${a.angle.toFixed(1)}° from ${a.uvw}${a.label !== a.uvw ? ` (of ${a.label})` : ''}, the simplest lattice direction within 10°${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `; it is fixed to ±${deg(a.esdAngle)}° (${how})` : '; its direction is not fixed by the data within 60°'}; the axes' directions are given in one frame`;
+      const angTitle = a => `the axis is ${a.angle.toFixed(1)}° from ${a.uvw}${a.label !== a.uvw ? ` (of ${a.label})` : ''}, the simplest lattice direction within 10°${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `; it is fixed to ±${fmtDeg(a.esdAngle)}° (${how})` : '; its direction is not fixed by the data within 60°'}; the axes' directions are given in one frame`;
       const long = ' The longest size is the least bounded: noise spreads the axes apart, and it comes out long.';
       if (sh.type === 'ellipsoidL'){
         // An axis's direction is shown only where its size is told from the other two;
@@ -369,7 +353,7 @@ function summarise(model, res, phases, opts){
             : 'Within 2 esd its dimensions are equal: a sphere has no axis';
           const val = grouped ? (Number.isFinite(a.D) ? `${a.D.toPrecision(3)} nm` : dimTxt(a)) : dimTxt(a);
           const heldOn = `held ${a.angle >= 0.05 ? `${a.angle.toFixed(1)}° off ` : 'on '}${a.uvw}`;
-          if (a.resolved) lines.push({ label: `${lab} ∥ ${a.uvw}`, value: `${val} · ${at(a)}`, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}${grouped ? ' (its own value: only the mean above is measured)' : ''}; ${held ? `${heldOn}${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `, which a turn of ±${deg(a.esdAngle)}° (1σ, every other parameter refined again) would cost χ²_ν` : ''}` : angTitle(a)}` });
+          if (a.resolved) lines.push({ label: `${lab} ∥ ${a.uvw}`, value: `${val} · ${at(a)}`, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}${grouped ? ' (its own value: only the mean above is measured)' : ''}; ${held ? `${heldOn}${Number.isFinite(a.esdAngle) && a.esdAngle <= 60 ? `, which a turn of ±${fmtDeg(a.esdAngle)}° (1σ, every other parameter refined again) would cost χ²_ν` : ''}` : angTitle(a)}` });
           else if (!grouped) lines.push({ label: lab, value: val, title: `${lab[0].toUpperCase() + lab.slice(1)} of the ${NAME}. ${why}: no direction of its own` });
           row(nm, `shape_${lab.replace(/[ -]/g, '_')}_${a.role}_nm`, a.D, a.Desd);
           // An unbounded dimension's lower limit (the card's "over N nm").
@@ -445,8 +429,7 @@ function summarise(model, res, phases, opts){
     // refinement's, shown without an esd here.
     const heldHere = new Set((res.held || []).filter(n=> n.startsWith(q.pfx)).map(n=> {
       const i = model.index[n], p = model.par[i];
-      return p.kind === 'scale' ? 'scale' : p.kind === 'lattice' ? 'cell' : i === q.iXs || p.kind === 'strain' ? 'strain' : p.kind === 'size' || p.kind === 'dist' ? 'size'
-        : p.kind === 'shape' ? 'shape' : p.kind === 'faults' ? 'faults' : p.kind === 'B' || p.kind === 'adp' ? 'displacements' : p.kind === 'occ' ? 'occupancy' : p.kind === 'texture' ? 'texture' : null;
+      return p.kind === 'scale' ? 'scale' : i === q.iXs || p.kind === 'strain' ? 'strain' : HELD_WORD[KIND_GROUP[p.kind]] || null;
     }).filter(Boolean));
     if (heldHere.size) lines.push({ label: 'held at the last result', value: ['scale', 'cell', 'size', 'strain', 'shape', 'faults', 'displacements', 'occupancy', 'texture'].filter(g=> heldHere.has(g)).join(' · '),
       title: 'These values are the last refinement’s, held in this one: they have no esd here (that refinement gave theirs), and what was refined here is conditional on them. A last refinement with nothing held gives values and esds free of that' });

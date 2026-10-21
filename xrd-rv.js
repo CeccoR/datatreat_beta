@@ -10,7 +10,8 @@ import { fmtData, csvLine, X_SVG, flashFieldInvalid, settings, fitCsvIcons, maxA
 import { Plot } from './plot.js';
 import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metric, reflections } from './xrd-cryst.js';
 import { readXrdmlInstrumentText } from './xrd-instr.js';
-import { buildModel, calc, fitSettings, phaseSites } from './xrd-rietveld.js';
+import { buildModel, calc, fitSettings, phaseSites, bgInvOn, shapeNamed } from './xrd-rietveld.js';
+import { fmtEsd } from './xrd-math.js';
 import { shapeView } from './xrd-shape3d.js';
 import { cellView, elementColor } from './xrd-cell3d.js';
 import { spaceGroupName, spaceGroupSymbol, sgPretty } from './xrd-sg.js';
@@ -443,14 +444,8 @@ export function createRietveld(host, root, o){
   const phaseData = list => list.map(q=> ({ id: q.id, name: q.prep.name, cell: q.prep.cell, constraint: q.prep.constraint, ops: q.prep.ops, atoms: q.prep.atoms, mass: q.prep.mass, color: q.color,
     ...engineOf(q, std) }));
   // The solid a result was refined with, from its parameters' names (each solid has its
-  // own), and only when they are in use (any width ≠ 0).
-  function shapeOfParams(P, id){
-    const g = n => P['p' + id + '.' + n], has = n => ('p' + id + '.' + n) in P;
-    // v420's ellipsoid (S = L·Lᵀ) is 'ellipsoidL'; the bodies by their widths' names.
-    if (['L11', 'L22', 'L33'].some(n=> g(n))) return 'ellipsoidL';
-    const type = has('Ea') ? 'ellipsoid' : has('Ws') ? 'sqbox' : has('Wd') ? 'cylinder' : has('Wh') ? 'ellcyl' : has('Wb') ? 'box' : has('Wc') ? 'spheroid' : null;
-    return type && ['Ea', 'Eb', 'Ec', 'Wa', 'Wb', 'Wc', 'Wd', 'Wh', 'Ws'].some(n=> g(n)) ? type : false;
-  }
+  // own), and only when they are in use (any width ≠ 0): the engine's shapeNamed.
+  const shapeOfParams = (P, id) => shapeNamed(P, 'p' + id + '.');
   /* Why a pattern's last result cannot be started from — it must be of this pattern in
      this role, with these phases in these cells (autoRefine checks the parameters too) —
      or '' when it can. */
@@ -465,8 +460,8 @@ export function createRietveld(host, root, o){
     return '';
   }
   // A pattern's background terms under fit settings: the Chebyshev degree and whether the
-  // 1/2θ term is used (buildModel's rule: 'auto' is on from below 20°, never from 0°).
-  const bgTerms = (fs, f) => { const x0 = scanRange(f)[0]; return fs.bgDegree + (x0 > 0 && (fs.bgInv === 'auto' ? x0 < 20 : fs.bgInv) ? '+inv' : ''); };
+  // 1/2θ term is used (the engine's rule, bgInvOn: 'auto' is on from below 20°, never from 0°).
+  const bgTerms = (fs, f) => fs.bgDegree + (bgInvOn(scanRange(f)[0], fs.bgInv) ? '+inv' : '');
   // run: the phases, the start and the standard's profile as they were when the run
   // started, the same for all its files (an undo during a run would otherwise change them
   // between files; up to v477 the profile was read per file, and the standard refined
@@ -792,7 +787,9 @@ export function createRietveld(host, root, o){
       fs.forEach(f=>{ const wd = results[f.name].widths; if (!wd) return;
         wd.phases.forEach(ph=> ph.rows.forEach(w=>{
           if (w.overlapped || w.edge || w.weak || w.flat || w.unread || !Number.isFinite(w.D)) return;
-          const key = ph.name + '|' + w.label;
+          // (by its indices as numbers: a result of v479 or older wrote a negative index's
+          // label with a bar, a later one with a minus)
+          const key = ph.name + '|' + (w.plain || w.label);
           if (!refl.has(key)) refl.set(key, { ph: ph.name, label: w.label, tt: w.tt, by: new Map() });
           refl.get(key).by.set(f.name, w);
         })); });
@@ -931,17 +928,6 @@ export function createRietveld(host, root, o){
   // card's: marked on the pattern and on the Williamson–Hall plot until then, the one
   // under the pointer beside it. Of one pattern: another pattern's table has none.
   let pkSel = null, pkHov = null;
-  // As the worker's fmtEsd: the esd rounded first, the value to its last digit.
-  const fmtE = (v, e) => {
-    if (!Number.isFinite(v)) return '—';
-    const pw = Math.floor(Math.log10(e)), n = e/Math.pow(10, pw) < 2 ? 2 : 1;
-    if (!(Number.isFinite(e) && e > 1e-15*Math.abs(v)) || n - 1 - pw > 100) return (+v.toPrecision(4)).toString();
-    let d = n - 1 - pw, k = Math.round(e*Math.pow(10, d));
-    if (k >= (n === 2 ? 20 : 10)){ k = Math.round(k/10); d--; }
-    if (d >= 0) return v.toFixed(d) + '(' + k + ')';
-    const sc = Math.pow(10, -d);
-    return String(Math.round(v/sc)*sc) + '(' + k*sc + ')';
-  };
   // A model's width: three decimals, or three significant digits under 0.1° (a sharp
   // peak's 0.0004° read 0.000).
   const f3 = v => !Number.isFinite(v) ? '—' : Math.abs(v) < 0.1 && v !== 0 ? String(+v.toPrecision(3)) : v.toFixed(3);
@@ -977,10 +963,10 @@ export function createRietveld(host, root, o){
       // Used with its esd widened (measureWidths: what those reflections could do to it).
       const wide = !skip && w.HsEsdFit > 0 ? `Its esds widened from the fit's ${+w.HsEsdFit.toPrecision(2)}° to ${+w.HsEsd.toPrecision(2)}°: ${offTxt}, off as their widths were measured, could move this width by ${bz.toFixed(1)} of the fit's esds` : '';
       // No broadening measured: the corrected FWHM as its upper limit.
-      const corr = w.flat && Number.isFinite(w.HsMax) ? `&lt; ${+w.HsMax.toPrecision(2)}` : fmtE(w.Hs, w.HsEsd);
+      const corr = w.flat && Number.isFinite(w.HsMax) ? `&lt; ${+w.HsMax.toPrecision(2)}` : fmtEsd(w.Hs, w.HsEsd);
       html += `<tr class="peak-row rv-pk${skip ? ' rv-pk-out' : ''}" data-tt="${esc(w.tt)}" data-ph="${esc(ph.id)}" data-lab="${esc(w.label)}"${why ? ` title="Not used by the tests: ${esc(why)}"` : wide ? ` title="${esc(wide)}"` : ''}>`
         + `<td>${++n}</td><td><span class="rv-key-sm" style="background:${esc(colorOf(ph.id))}"></span>${esc(hklShow(w.label))}</td><td>${w.tt.toFixed(3)}</td><td>${Number.isFinite(w.rel) ? (w.rel*100).toFixed(1) + '%' : '—'}</td>`
-        + `<td>${fmtE(w.H, w.Hesd)}</td><td>${corr}</td><td>${w.flat ? '—' : fmtE(w.D, w.Desd)}</td><td>${f3(w.model.iso)}</td>${shapeOn ? `<td>${ph.shaped ? f3(w.model.shape) : '—'}</td>` : ''}</tr>`;
+        + `<td>${fmtEsd(w.H, w.Hesd)}</td><td>${corr}</td><td>${w.flat ? '—' : fmtEsd(w.D, w.Desd)}</td><td>${f3(w.model.iso)}</td>${shapeOn ? `<td>${ph.shaped ? f3(w.model.shape) : '—'}</td>` : ''}</tr>`;
     }));
     html += '</tbody></table></div>';
     if (!wd.corrected) html += `<div class="rv-note">${r.irfRefused ? 'The standard\'s profile did not apply to this pattern (see the warnings)' : 'No instrumental standard refined'}: the widths are not corrected for the instrument's.</div>`;
@@ -1040,14 +1026,14 @@ export function createRietveld(host, root, o){
         const aniso = wh.p < 1e-3;
         html += `<div class="pg-stat" title="χ² of the measured FWHM·cosθ (the corrected FWHM, not the integral breadth: D is read with K = 0.9 for the FWHM) about the weighted line, per degree of freedom (${esc(wh.nu)}), and the probability of so large a value were the broadening isotropic (size and strain alike in every direction)">Williamson–Hall: χ²<sub>ν</sub> <b>${wh.chi2nu.toFixed(1)}</b>, p <b>${fmtP(wh.p)}</b></div>`
           + `<div class="rv-note">${aniso ? 'The widths depend on hkl beyond their esds: the broadening is anisotropic (the crystallites\' shape, or faults).' : 'The widths lie on one line within their esds: consistent with an isotropic size and strain.'}</div>`
-          + `<div class="pg-stat" title="The weighted line's intercept Kλ/D (K = 0.9) and slope ε; with an anisotropic broadening it is an average, not a size">line: D <b>${fmtE(wh.D, wh.Desd)} nm</b>, ε <b>${fmtE(wh.b, wh.bEsd)}</b>${aniso ? ' (an average only)' : ''}</div>`;
+          + `<div class="pg-stat" title="The weighted line's intercept Kλ/D (K = 0.9) and slope ε; with an anisotropic broadening it is an average, not a size">line: D <b>${fmtEsd(wh.D, wh.Desd)} nm</b>, ε <b>${fmtEsd(wh.b, wh.bEsd)}</b>${aniso ? ' (an average only)' : ''}</div>`;
       } else {
         const nr = ph.rows.filter(w=> w.unread).length;
         html += `<div class="rv-note">Williamson–Hall: fewer than three peaks to read (${esc(wh.n)})${nr ? `; ${nr} not read at all (the table says why)` : ''}.</div>`;
       }
       if (ph.orders.length){
         html += `<div class="pg-stat rv-sub">Orders, Δd*(n)/Δd*(1): size 1, strain n</div>`;
-        ph.orders.forEach(o=>{ html += `<div class="pg-stat">${esc(hklShow(o.a))} → ${esc(hklShow(o.b))}: <b>${fmtE(o.R, o.Resd)}</b> <span class="txt-meta">${o.verdict === 'order-dependent' ? 'below 1: the higher order sharper (planar faults)' : esc(o.verdict)}</span></div>`; });
+        ph.orders.forEach(o=>{ html += `<div class="pg-stat">${esc(hklShow(o.a))} → ${esc(hklShow(o.b))}: <b>${fmtEsd(o.R, o.Resd)}</b> <span class="txt-meta">${o.verdict === 'order-dependent' ? 'below 1: the higher order sharper (planar faults)' : esc(o.verdict)}</span></div>`; });
       } else html += `<div class="rv-note">Orders: no pair (h k l), (n·h n·k n·l) both measured.</div>`;
       if (Number.isFinite(ph.scores.iso)) html += `<div class="pg-stat" title="Mean of ((measured − model)/esd)² over the peaks the tests use: about 1 when a model predicts the widths">Widths predicted, χ²<sub>ν</sub>: isotropic <b>${ph.scores.iso.toFixed(1)}</b>${Number.isFinite(ph.scores.shape) ? `, free shape <b>${ph.scores.shape.toFixed(1)}</b>` : ''}</div>`;
       // The stricter overlap rule (measureWidths): why fewer peaks are used. (ph.misfit: v429,
@@ -1056,7 +1042,7 @@ export function createRietveld(host, root, o){
         ? `<div class="rv-note" title="Each of this phase's reflections is taken as off by its own misfit where its peak is read, else by the spread of the others' beyond their esds; what that does to a peak's width is read through the peak's own fit">The isotropic model does not predict the widths read${Number.isFinite(ph.misfit) ? ` (beyond their esds they differ from its own by ${Math.round(ph.misfit*100)} %, rms)` : ''}: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where, off by as much, they could move its width by under 2 esd, its esd widened by as much past half of one (and the others hold up to 30 % of its top).</div>`
         : `<div class="rv-note">The isotropic model does not predict the widths read: as it takes this phase's reflections off the peaks they overlap, of any phase, a peak is used only where they hold under ${Math.round(ph.overlapShare*100)} % of its top (the others up to 30 %).</div>`;
       // A WPPM phase: the sizes here are Scherrer readings, the refined one a diameter.
-      if (ph.reading) html += `<div class="rv-note" title="The single-peak sizes and the line's are Scherrer readings (K = 0.9 on the corrected FWHM); WPPM's is the crystallites' own ${ph.reading.lognormal ? 'volume-weighted mean diameter' : 'diameter'}, with no Scherrer constant. The refined model's own peaks, read the same way, show how far the two kinds of size differ for these crystallites: the gap is the reading's, not the sample's">WPPM: the sizes are Scherrer readings; read so, the model's own peaks give D <b>${fmtE(ph.reading.Dmodel)} nm</b> for its ${ph.reading.lognormal ? 'volume-weighted mean diameter' : 'diameter'} of <b>${fmtE(ph.reading.D)} nm</b>.</div>`;
+      if (ph.reading) html += `<div class="rv-note" title="The single-peak sizes and the line's are Scherrer readings (K = 0.9 on the corrected FWHM); WPPM's is the crystallites' own ${ph.reading.lognormal ? 'volume-weighted mean diameter' : 'diameter'}, with no Scherrer constant. The refined model's own peaks, read the same way, show how far the two kinds of size differ for these crystallites: the gap is the reading's, not the sample's">WPPM: the sizes are Scherrer readings; read so, the model's own peaks give D <b>${fmtEsd(ph.reading.Dmodel)} nm</b> for its ${ph.reading.lognormal ? 'volume-weighted mean diameter' : 'diameter'} of <b>${fmtEsd(ph.reading.D)} nm</b>.</div>`;
     });
     $('Tests').innerHTML = html;
   }
@@ -1398,11 +1384,11 @@ export function createRietveld(host, root, o){
     if (rn){ rn.value = resNorm; rn.disabled = busy; }
     syncFit();
   }
-  // What the automatic 1/2θ term gives for the pattern on show (buildModel's rule).
+  // What the automatic 1/2θ term gives for the pattern on show (the engine's rule, bgInvOn).
   function autoInv(){
     const f = host.files()[curIdx()];
     if (!f) return { on: false, why: '' };
-    const x0 = scanRange(f)[0], on = x0 > 0 && x0 < 20;
+    const x0 = scanRange(f)[0], on = bgInvOn(x0, 'auto');
     return { on, why: ` Here automatic gives ${on ? 'on' : 'off'}: ${f.label} starts at ${fitTxt(+x0.toFixed(2))}°.` };
   }
   // The Refinement section as the settings are: each field its value (the default when
