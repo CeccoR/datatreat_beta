@@ -116,6 +116,15 @@ export function nameDownloads(wrap, svgName, csvName){
   if (csvName) wrap.querySelectorAll('.plot-csv-btn, .table-csv-btn').forEach(b=>{ b.dataset.csvNames = csvName; });
 }
 
+/* An undo or a redo: the history's Ctrl/⌘+Z or Y (utils.js, the only way to either), whose
+   state is put back at once, inside the key's own dispatch. The key is seen first here, on
+   the window's capture, and a load made while its dispatch is under way is a step of the
+   history; a load made otherwise is a tab's state or a project opened (restoreModuleState),
+   or a project's CSVs read out (runWithModuleState). */
+let histKey = null;
+window.addEventListener('keydown', e=>{ if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) histKey = e; }, true);
+const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
+
 /* o: {
      list, addBar, addBtn       the cards' container, the "+" bar in it (cards go above it), its button
      kinds                      { type: label }, in menu order; names are settled in this order
@@ -136,6 +145,9 @@ export function nameDownloads(wrap, svgName, csvName){
      wake(rec)                  a card unfolded by its arrow, or one unfolding at the end of a move
                                 that a draw was skipped for meanwhile: bring it up to date (it was
                                 not drawn folded); laid out, not yet seen
+     folded(rec)                a card folded by its arrow: what it had going on show is left (an
+                                XRPD card's peak being placed). Not for the folds of a move, which
+                                the cards come out of as they were
      commit()                   a step of the undo history
    } */
 export function createDeck(o){
@@ -240,11 +252,13 @@ export function createDeck(o){
     syncFoldButton(a);
   }
   // Unfolding: the card brought up to date (wake) laid out but unseen, then the animation.
+  // Folding: the module leaves what the card had going (folded), as the fold starts (to
+  // v498 an XRPD card's + Add peak stayed on, folded and unfolded again, until a key).
   function setFold(a, folded){
     a.collapsed = folded;
     syncFoldButton(a);
     const go = foldTo(live.get(a.id), folded);
-    try { if (!folded && o.wake) o.wake(a); } finally { go(); }
+    try { if (!folded && o.wake) o.wake(a); else if (folded && o.folded) o.folded(a); } finally { go(); }
     o.commit();
   }
 
@@ -398,6 +412,24 @@ export function createDeck(o){
     afterChange();
     o.commit();
   }
+  /* A card an undo or a redo brings back (closed by its ×, or added, and the step undone or
+     redone) is brought into view, as a card added is, where it is not in view already: in
+     view, its head is whole on screen, under the page's sticky bar, or the card covers the
+     screen. A frame on, the restore done and laid out; smoothly (at once, the motion
+     reduced), the card whole where it fits, else from its head. Up to v499 it came back
+     where it had been, off screen as often as not, and the page did not move. */
+  function reveal(a){
+    requestAnimationFrame(()=>{
+      const card = live.get(a.id);
+      if (!card || !card.isConnected || !card.getClientRects().length) return;
+      const bar = document.getElementById('topbar'), top = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
+      const r = card.getBoundingClientRect(), h = card.querySelector(':scope > .an-head').getBoundingClientRect(), bot = window.innerHeight;
+      if ((h.top >= top && h.bottom <= bot) || (r.top <= top && r.bottom >= bot)) return;
+      const M = 12, fits = r.height + 2*M <= bot - top;
+      const dy = fits && r.top > top ? r.bottom + M - bot : r.top - M - top;
+      window.scrollBy({ top: dy, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    });
+  }
   // The card is rebuilt for the other kind in place; the module keeps what the kind left
   // had (build's prev) and gives it back if the card turns into it again.
   function switchKind(a, type){
@@ -421,6 +453,9 @@ export function createDeck(o){
   const okId = id => Number.isInteger(id) && id >= 1 && id <= 1e6;
   function load(list, read, keep){
     list = list.filter(s=> s && (s.type == null || isKind(s.type)));
+    // (the cards in the page before: one not among them that an undo or a redo brings is
+    // brought into view, the first of them)
+    const step = stepping(), was = new Set(live.keys());
     const old = new Map(recs.map(a=> [a.id, a]));
     const seen = new Set();
     let free = list.reduce((m, s)=> okId(s.id) ? Math.max(m, s.id) : m, 0) + 1;
@@ -445,6 +480,8 @@ export function createDeck(o){
     recs.forEach(a=>{ if (!live.has(a.id)) mount(a); });
     placeCards();
     afterChange(true);
+    const back = step ? recs.find(a=> !was.has(a.id)) : null;
+    if (back) reveal(back);
   }
   // What a record saves of itself (the module adds its panel's).
   const saved = a => ({ id: a.id, type: a.type, base: a.base, nameAuto: a.nameAuto, collapsed: a.collapsed });

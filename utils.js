@@ -1365,9 +1365,11 @@ document.addEventListener('keydown', e=>{
   const isUndo = k==='z' && !e.shiftKey;
   const isRedo = k==='y' || (k==='z' && e.shiftKey);
   if (!isUndo && !isRedo) return;
-  // Let the browser handle native text undo while editing a field
+  // Let the browser handle native text undo while editing a field: one that holds text. A
+  // box, a radio, a colour or a range has no undo of its own, and the history's goes on
+  // (up to v499 a box just ticked, which keeps the focus, held Ctrl+Z off until it lost it).
   const el = document.activeElement, tag = el && el.tagName;
-  if (tag==='INPUT' || tag==='TEXTAREA' || (el && el.isContentEditable)) return;
+  if (tag==='TEXTAREA' || (el && el.isContentEditable) || (tag==='INPUT' && !/^(checkbox|radio|range|color|file|button|submit|reset|image)$/.test(el.type))) return;
   const st = _histories[_activeTab];
   if (!st) return;
   const running = moduleBusy(_activeTab);

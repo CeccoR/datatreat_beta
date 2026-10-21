@@ -292,8 +292,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     if (which === 'rv') stdRv.refresh(); else stdPeaks.refresh();
     M.box.focus({ preventScroll: true });
   }
+  // Closed, the standard's peak analysis leaves a peak being placed (to v499 on until a key).
   function closeStd(){
     if (!openModal) return;
+    if (openModal === peaksModal) stdPeaks.disarm();
     openModal.el.style.display = 'none';
     openModal = null;
     document.removeEventListener('keydown', onStdKey);
@@ -408,6 +410,8 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     added: a=>{ if (files.length) live.get(a.id).inst.refresh(); },
     switched: a=>{ if (files.length) live.get(a.id).inst.refresh(); },
     wake: a=>{ if (files.length) live.get(a.id).inst.redraw(); },
+    // (a Scherrer card folded: its + Add peak left)
+    folded: a=>{ const e = live.get(a.id); if (e && e.inst.disarm) e.inst.disarm(); },
     commit: ()=> hist.commit(),
   });
 

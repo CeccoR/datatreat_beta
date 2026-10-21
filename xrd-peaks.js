@@ -1368,9 +1368,16 @@ export function createPeakAnalysis(host, root, o){
       // was not applied).
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      // Enter on a button is the button's: the fold arrow reached by Tab folds the card, and
+      // the fold leaves the mode (to v499 Enter placed the peak there, and the card stayed
+      // open). The arrows move the guide and take the focus off a button, so a button clicked
+      // meanwhile does not keep Enter: it places the peak.
+      const onBtn = t && t.closest && t.closest('button, a[href], [role="button"], [role="menuitem"]');
+      if (e.key==='Enter' && onBtn) return;
       if (e.key==='Escape'){ e.stopImmediatePropagation(); setMode(false); return; }
       if (e.key==='ArrowLeft' || e.key==='ArrowRight'){
         e.preventDefault(); e.stopImmediatePropagation();
+        if (onBtn) t.blur();
         const x = f.x;
         const a = nearestIdx(x, plot.xmin), b = nearestIdx(x, plot.xmax);
         const lo = Math.min(a,b), hi = Math.max(a,b);
@@ -1507,6 +1514,10 @@ export function createPeakAnalysis(host, root, o){
     refresh,
     // Another sample on show (the cards share it).
     show(){ addPeak.setMode(false); panel.sel=panel.hov=null; writeStoreToInputs(); updateView(); renderTable(); },
+    /* The card folded by its arrow, the standard's window closed: a peak being placed is
+       left, as by + Add peak again (its button off, the guide gone). Up to v499 it stayed
+       on, unseen, until the next key dropped it: a card unfolded again had it still on. */
+    disarm(){ addPeak.setMode(false); },
     // The standard changed: the corrected sizes, here and in the Results.
     sizesChanged(){ if (files().length){ renderTable(); renderResults(); } },
     // A label or a colour changed, the card unfolded, the tab on show again or resized: each
