@@ -59,7 +59,7 @@ DataTreat is a modular application. New analysis modules may be added in the fut
 Analyze diffuse reflectance spectroscopy (DRS) data in the UV-Visible range to assess light absorption and estimate semiconductor band gaps.
 
 **Instrument compatibility**: Cary 5000  
-**File format**: CSV or TXT with two columns: the wavelength in nm, and F(R) (the Kubelka-Munk function) or the reflectance in percent. A second column headed `%R`, `R%`, `R (%)` or `Reflectance (%)` is the reflectance, as the Cary 5000 exports it (`Wavelength (nm),%R`, the sample's name above, the method's parameters after the data), converted to F(R) = (1 − R)²/2R; one headed `F(R)` is F(R); a file with neither header is taken as F(R), and the alert says so. Points with no physical value (R outside 0–100 % or of 0, F(R) below 0, a value that is no number) are left out, and the alert says how many and why. The field separator (`;`, `,`, a tab or spaces) and the decimal mark (`.` or `,`) are found in each file; fields may be in quotes; the text may be UTF-8 or UTF-16, with or without its byte-order mark.
+**File format**: CSV or TXT with two columns: the wavelength in nm, and F(R) (the Kubelka-Munk function) or the reflectance in percent. A second column headed `%R`, `R%`, `R (%)` or `Reflectance (%)` is the reflectance, as the Cary 5000 exports it (`Wavelength (nm),%R`, the sample's name above, the method's parameters after the data), converted to F(R) = (1 − R)²/2R; one headed `F(R)` is F(R); a file with neither header is taken as F(R), and the alert says so (a file in one of these standard formats loads with no alert). The file list says how each file's second column was read, `%R` or `F(R)`, in a short column left of its label (hover it for the whole). Points with no physical value (R outside 0–100 % or of 0, F(R) below 0, a value that is no number) are left out, and the alert says how many and why. The field separator (`;`, `,`, a tab or spaces) and the decimal mark (`.` or `,`) are found in each file; fields may be in quotes; the text may be UTF-8 or UTF-16, with or without its byte-order mark.
 
 **How to use**:
 
@@ -72,7 +72,7 @@ Analyze diffuse reflectance spectroscopy (DRS) data in the UV-Visible range to a
    - **Baseline regression window**: number of points for baseline fit
 
 3. **Interactive plot**: Drag the vertical red line (Tauc region) and magenta line (baseline) to adjust the linear fit regions.
-4. Results show:
+4. The Results open with F(R) and the reflectance R (%) against the wavelength, side by side, whatever the files held (R from F(R) by the exact inverse, R = 1 + F − √(F² + 2F)), and under them F(R) against the energy on a log axis, across the card. Then each card's charts:
    - **Eg (x-axis)**: Band gap from intersection with x-axis
    - **Eg (baseline)**: Band gap from intersection with baseline
    - **NRMSE & R²** for both regressions (the RMSE divided by the range of the values in the window)

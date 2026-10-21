@@ -83,6 +83,38 @@ export function drsCsv({ Eg = 3.2, A = 60, seed = 3 } = {}){
   return Buffer.from(rows.join('\n') + '\n', 'utf8');
 }
 
+/* UV-Vis DRS as the Cary 5000 exports it, reflectance in percent: the sample's name on the
+   first line ('S1,,'), the columns' header 'Wavelength (nm),%R,', then rows of the
+   wavelength from 800 down to 200 nm by 0.5 nm (1201) and R to 10 significant digits, each
+   with a trailing comma, CRLF line ends; after a blank line the instrument's footer: the
+   name twice, the collection time, the parameter list (columns aligned with spaces, 'Y Mode
+   %R' among them), the method's log (lines holding commas), the '<…> , number' lines, two
+   blank lines at the end. R (= 1/(1 + F + √(F² + 2F))) from an F(R) of drsCsv's form (the
+   indirect gap and the Urbach tail), on a lower baseline (a white powder, R near 98 %) with
+   a smaller tail and noise. → { buffer, wl[], R[] } (R as written). */
+export function caryCsv({ name = 'S1', Eg = 3.2, A = 60, seed = 21 } = {}){
+  const r = rng(seed), wl = [], R = [];
+  for (let k = 0; k <= 1200; k++){
+    const w = 800 - k/2, e = 1239.842/w;
+    const F = Math.max(1e-6, 0.0002 + (e > Eg ? A*(e - Eg)*(e - Eg)/e : 0) + 0.002*Math.exp(Math.min(0, e - Eg)/0.08) + 0.00002*r.n());
+    wl.push(w); R.push(+(100/(1 + F + Math.sqrt(F*F + 2*F))).toPrecision(10));
+  }
+  const pad = (k, v)=> k.padEnd(34) + v;
+  const lines = [name + ',,', 'Wavelength (nm),%R,', ...wl.map((w, i)=> w + ',' + R[i] + ','), '',
+    name + ',', name, 'Collection Time: 10/20/2026 1:04:06 PM', 'Operator Name  :', 'Scan Software Version: 3.00(182)', 'Parameter List :',
+    ...[['Instrument', 'Cary 5000'], ['Instrument Version', '1.12'], ['Start (nm)', '800.00'], ['Stop (nm)', '200.00'], ['X Mode', 'Nanometers'],
+      ['Y Mode', '%R'], ['UV-Vis Scan Rate (nm/min)', '75.000'], ['UV-Vis Data Interval (nm)', '0.500'], ['UV-Vis Ave. Time (sec)', '0.400'],
+      ['UV-Vis SBW (nm)', '1.000'], ['Slit Height', 'Full'], ['Beam Mode', 'Double'], ['Signal-to-noise Mode', 'Off'], ['UV Source', 'On'],
+      ['Vis Source', 'On'], ['Third Source', 'Off'], ['Source Changeover (nm)', '350.00'], ['Detector Changeover (nm)', '800.00'],
+      ['Grating Changeover (nm)', '800.00'], ['Baseline Correction', 'On'], ['Baseline Type', 'Baseline correction'],
+      ['Baseline File Name', 'C:\\Data\\baseline.CSW']].map(([k, v])=> pad(k, v)),
+    'Baseline Std Ref File Name', pad('Cycle Mode', 'Off'), 'Comments', 'Method Log     :', 'Method Name    : C:\\Data\\uvvis.MSW',
+    'Date/Time stamp: 10/20/2026 12:20:30 PM', 'Method Modifications:', 'Current Data Changed: 10/20/2026 12:01:37 PM, Old:, New:C:\\Data\\blank.DSW',
+    `Current Data Changed: 10/20/2026 12:04:29 PM, Old:C:\\Data\\blank.DSW, New:C:\\Data\\${name}.DSW`, 'Baseline Correction Changed: 10/20/2026 12:19:16 PM, Old:2, New:1', 'Saved as C:\\Data\\uvvis.MSW', 'End Method Modifications',
+    '<SBW (nm)> , 1.00', '<Energy> , 2754.23', '<Slit height> , Full', '<Current Wavelength> , 200.00', '', ''];
+  return { buffer: Buffer.from(lines.join('\r\n'), 'utf8'), wl, R };
+}
+
 /* EPR: a Bruker BES3T pair, the .DSC descriptor and the .DTA data (1024 big-endian
    doubles): the first derivative of a Lorentzian line at the field B0, with noise. */
 export function eprPair({ title = 'sample one', B0 = 3400, w = 4, amp = 650, seed = 11 } = {}){

@@ -18,7 +18,8 @@ was proposed; nothing here is in the code yet.
   `R (%)`, `Reflectance (%)`; any other file is taken as F(R). To be refined: the
   headers other instruments write (other languages, other units), files with no header,
   the Cary's `Y Mode` line read as well, and a per-file switch for when the guess is
-  wrong.
+  wrong (since v498 the file list shows the reading, `%R` or `F(R)`, left of each label:
+  a click there could switch it).
 
 ## GC
 

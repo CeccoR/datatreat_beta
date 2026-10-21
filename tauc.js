@@ -11,11 +11,13 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
 (function(){
   /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
      warn, read, left, hv[]} (each on its own native axis), and the included ones, which the
-     analysis sees, `files`, with which every per-sample list the cards keep is aligned; the
-     alerts under the drop zone, among them how files were read (fileNotes: a reflectance
-     column, a format not standard, points left out; until dismissed); every card in the
-     history. */
+     analysis sees, `files`, with which every per-sample list the cards keep is aligned; in
+     the file list, left of each label, how its second column was read (readCell); the
+     alerts under the drop zone, among them what to verify of how files were read
+     (fileNotes: a format not standard, points left out; until dismissed); every card in
+     the history. */
   const kit = moduleKit('tauc', {
+    cols: [{ lead: true, header: '', width: 40, render: readCell }],
     alerts: p =>{
       const notes = warnDismissed ? [] : allFiles.map(f=> [f, fileNotes(f)]).filter(([, n])=> n.length).map(([f, n])=> esc(`${f.name}: ${n.join('; ')}`));
       document.getElementById('taucAlerts').innerHTML = p.invalid + buildAlertsHtml([], notes, 'Verify how these files were read:', '', 'tauc-dismiss-warn') + p.upload;
@@ -61,7 +63,7 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
   const { all: allFiles, files } = kit;
   let warnDismissed = false;
   let currIndex=0;                    // the sample every analysis card shows
-  let resPlot0=null, resPlotLog=null; // the Kubelka-Munk summary plots (created once)
+  let resPlot0=null, resPlotR=null, resPlotLog=null; // the Results' top plots (created once)
   // How Eg is read off the Tauc plot; each Tauc analysis picks which its bar chart shows.
   const EG_METHODS = [
     // Named E_g in plain text: a legend's sub run sits badly beside its swatch.
@@ -1165,14 +1167,24 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
     const ks = Object.keys(LEFT).filter(k=> left[k] > 0), n = ks.reduce((t, k)=> t + left[k], 0);
     return `${n} point${n > 1 ? 's' : ''} left out (${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')})`;
   }
-  // What the alert says of a file: how it was read, but for the standard F(R) export, and
-  // the points left out (to v494 the files of a non-standard format were named, no more).
+  /* What the alert says of a file: that it was read as F(R) with no header naming its
+     columns, and the points left out (to v494 the files of a non-standard format were
+     named, no more). A file in a standard format, the R% exports among them, has no word
+     on how it was read: the file list's column says it (to v497 an R% file was said here,
+     the Cary's own export as well). */
   function fileNotes(f){
     const out = [];
-    if (f.read === 'R%') out.push('its second column is the reflectance R in %, read as F(R) = (1 − R)²/2R');
-    else if (f.warn) out.push('no header naming the columns F(R) or R%: read as F(R)');
+    if (f.warn) out.push('no header naming the columns F(R) or R%: read as F(R)');
     if (f.left && Object.keys(LEFT).some(k=> f.left[k] > 0)) out.push(leftText(f.left));
     return out;
+  }
+  /* The file list's cell left of the label: how the file's second column was read, %R
+     (the reflectance in percent, converted to F(R)) or F(R), its title saying it in full.
+     A project saved before the R% reading holds none: F(R), as it was read. */
+  const READS = { R: ['%R', 'second column read as the reflectance in %, converted to F(R)'], F: ['F(R)', 'second column read as F(R)'] };
+  function readCell(f){
+    const [t, title] = READS[f.read === 'R%' ? 'R' : 'F'];
+    return `<span title="${esc(title + (f.warn ? ', with no header naming it' : ''))}">${esc(t)}</span>`;
   }
   kit.dropText(readDrs, had =>{
     warnDismissed = false;
@@ -1223,8 +1235,9 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
   function unionWl(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.wl)); hi=Math.max(hi,maxArr(f.wl)); }); return [lo,hi]; }
   function unionHv(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); }); return [lo,hi]; }
 
-  /* ---- Results: the Kubelka-Munk pair (F(R) against λ, and against hν on a log
-     axis), then each card's pair of charts under its name, in card order ---- */
+  /* ---- Results: F(R) and R (%) against λ side by side, F(R) against hν on a log axis
+     under them across the card (2φ : 1), then each card's pair of charts under its name,
+     in card order. To v497 the top was a pair, F(R) against λ and the log plot. ---- */
   const resList = document.getElementById('taucResList');
   function resHtml(a){
     const p = 'an' + a.id, t = a.type === 'tauc';
@@ -1284,8 +1297,29 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
     plot0.setRange(wl0, wl1, 0, ymax0);
     plot0.drawAxes();
     files.forEach(f=> plot0.line(f.wl, f.FR, f.color, 1.3, undefined, { label: f.label, key: f.name }));
+    renderReflView();
     renderLogView();
     cards().forEach(renderAnalysisRes);
+  }
+  /* The reflectance in percent from F(R), whatever the file's second column was read as:
+     the exact inverse of F = (1 − R)²/2R, R = 1 + F − √(F² + 2F), written as
+     1/(1 + F + √(F² + 2F)), the same number without the two near-equal terms that cancel
+     where F is large. For a file read as R% it gives its own values back, to round-off.
+     F(R) < 0 (a project from before the points that are no physical value were left out
+     may hold it) has none. */
+  const reflOf = F => F >= 0 ? 100/(1 + F + Math.sqrt(F*F + 2*F)) : NaN;
+  // R (%) against λ, every sample's, on 0–100 %, all R can be.
+  function renderReflView(){
+    if (!resPlotR){
+      resPlotR = new Plot(document.getElementById('taucResSvgR'), {xlabel:'Wavelength (nm)', ylabel:'R (%)', xTickStep:50});
+      resPlotR.attachTools(resPlotR.svg.closest('.plot-wrap'));
+    }
+    const p = resPlotR; p.clearData();
+    document.getElementById('taucResLegendR').innerHTML = swatchLegend(files);
+    const [wl0, wl1] = unionWl();
+    p.setRange(wl0, wl1, 0, 100);
+    p.drawAxes();
+    files.forEach(f=> p.line(f.wl, f.FR.map(reflOf), f.color, 1.3, undefined, { label: f.label, key: f.name }));
   }
   // F(R) against hν on a log y-axis: the absorption edge and the tail below it, over
   // the decades they span, on the energy axis the analyses work on. The plot draws
@@ -1503,6 +1537,16 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
         cols.push({h:f.label,                  v:f.FR.map(x=>fmtNum(x,6))});
       });
       entries.push({name:'reflectance_FR.csv', text:wideCsv(cols)});
+    }
+    // reflectance_R.csv — (wavelength, R in %) per sample: the Reflectance plot's data
+    // (a point with no R, empty)
+    {
+      const cols=[];
+      files.forEach(f=>{
+        cols.push({h:'wavelength_nm_'+f.label, v:f.wl.map(x=>fmtNum(x,6))});
+        cols.push({h:'R_percent_'+f.label,     v:f.FR.map(x=>fmtNum(reflOf(x),6))});
+      });
+      entries.push({name:'reflectance_R.csv', text:wideCsv(cols)});
     }
     // FR_vs_energy.csv — (energy, F(R)) per sample: the log-scale plot's data, as values
     {

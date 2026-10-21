@@ -9,8 +9,11 @@
      the global normalisation (30e);
    - GC: the temperature T of the flow, all/one, 25 °C by default, 0 °C in a project saved
      before it; V_m = RT/P; in the table and the CSVs (37);
-   - DRS: R% recognised by its header and read as F(R) = (1 − R)²/2R, each file's reading
-     said; the points that are no physical value left out, and counted (38, 39);
+   - DRS: R% recognised by its header and read as F(R) = (1 − R)²/2R, a file of no standard
+     format said; the points that are no physical value left out, and counted (38, 39);
+   - DRS: the Cary 5000's %R export loaded with no alert, as a standard F(R) one is; how
+     each file was read in the file list; R (%) against λ in the Results, beside F(R),
+     the log plot under them;
    - a malformed project (every value of its state replaced by one of another type, a file
      with nothing to show) restores without a throw or a page error (22). */
 import { test, before, after } from 'node:test';
@@ -18,7 +21,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { start, openModule, loadFiles, settle, moduleState, banner, answer, download, readZip, parseCsv, undo } from './helpers.mjs';
-import { drsCsv, gcCsv, eprPair } from './fixtures.mjs';
+import { drsCsv, caryCsv, gcCsv, eprPair } from './fixtures.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -234,7 +237,7 @@ function asReflectance(text, head){
   const lines = text.trim().split('\n');
   return [lines[0], head, ...lines.slice(2).map(l=>{ const [w, f] = l.split(','), F = +f; return w + ',' + (100*(1 + F - Math.sqrt(F*F + 2*F))).toFixed(6); })].join('\n') + '\n';
 }
-test('38, 39: DRS reads R% by its header, says how each file was read, leaves out non-physical points', async ()=>{
+test('38, 39: DRS reads R% by its header, says the files of no standard format, leaves out non-physical points', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'tauc');
@@ -279,13 +282,13 @@ test('38, 39: DRS reads R% by its header, says how each file was read, leaves ou
     const alerts = await page.locator('#taucAlerts').innerText();
     assert.match(alerts, /Invalid file\(s\):\s*all-bad\.csv \(no point with a physical value: 2 points left out \(1 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\)\)/);
     assert.match(alerts, /Verify how these files were read:/);
-    assert.match(alerts, /^r\.csv: its second column is the reflectance R in %, read as F\(R\) = \(1 − R\)²\/2R$/m);
     assert.match(alerts, /^noheader\.csv: no header naming the columns F\(R\) or R%: read as F\(R\)$/m);
     assert.match(alerts, /^meta-r\.csv: no header naming the columns F\(R\) or R%: read as F\(R\)$/m);
-    assert.match(alerts, /^jasco\.csv: its second column is the reflectance R in %/m);
-    assert.match(alerts, /^bad-r\.csv: its second column is the reflectance R in %, read as F\(R\) = \(1 − R\)²\/2R; 3 points left out \(2 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\)$/m);
+    // A standard format, F(R) or R%, has no note on how it was read (the file list says it);
+    // the points left out keep theirs.
+    assert.match(alerts, /^bad-r\.csv: 3 points left out \(2 with R outside 0–100 %, 1 with R = 0 %, where F\(R\) is infinite\)$/m);
     assert.match(alerts, /^bad-f\.csv: 3 points left out \(1 with F\(R\) < 0, 2 with a value that is no finite number\)$/m);
-    assert.doesNotMatch(alerts, /^ref\.csv/m, 'the standard F(R) export, read as such: no note');
+    assert.doesNotMatch(alerts, /^(ref|r|pr|refl|semi|jasco)\.csv|^(spaced|quoted)\.txt|reflectance R in %/m, 'a standard format, read as such: no note');
     // The file itself is downloaded as it came.
     const d = await download(page, ()=> page.locator('#taucFileTableWrap tr.file-row:nth-child(2) .dl-file').click());
     assert.equal(d.buf.toString('utf8'), R);
@@ -293,6 +296,75 @@ test('38, 39: DRS reads R% by its header, says how each file was read, leaves ou
     const s = await encoded(page, 'tauc');
     assert.equal(await restore(page, 'tauc', s), 'ok');
     assert.match(await page.locator('#taucAlerts').innerText(), /^bad-f\.csv: 3 points left out/m);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+/* The Cary 5000's own %R export, a standard F(R) export and a file of no standard format: in
+   the file list, left of each label in a column with no header, how its second column was
+   read (%R, F(R)), the title saying it in full; an alert for the one of no standard format
+   only. The Results' top: F(R) and R (%) against λ side by side, the log plot under them
+   across the card (2φ : 1); the R (%) plot, for every sample whatever it was read as, gives
+   the Cary's values back, and so does its CSV (reflectance_R.csv); a file left out is left
+   out of it. */
+test('DRS: a Cary %R export loads with no alert, the file list says how each file was read, R (%) is plotted', async ()=>{
+  const { page, errors, close } = await env.page();
+  try {
+    await openModule(page, 'tauc');
+    const cary = caryCsv(), ref = drsCsv({ Eg: 3.2 }).toString('utf8');
+    await loadFiles(page, 'tauc', [file('cary.csv', cary.buffer), file('ref.csv', ref)]);
+    assert.equal((await page.locator('#taucAlerts').innerText()).trim(), '', 'standard formats: no alert');
+    await loadFiles(page, 'tauc', [file('noheader.csv', ref.split('\n').slice(2).join('\n'))]);
+    assert.match(await page.locator('#taucAlerts').innerText(), /^⚠ Verify how these files were read:\s*noheader\.csv: no header naming the columns F\(R\) or R%: read as F\(R\)\s*$/);
+    const st = await moduleState(page, 'tauc', true), by = Object.fromEntries(st.files.map(f=> [f.name, f]));
+    assert.deepEqual([by['cary.csv'].read, by['cary.csv'].warn, by['cary.csv'].wl.length], ['R%', false, 1201]);
+    assert.deepEqual(by['cary.csv'].wl, cary.wl, 'its wavelengths, 800 down to 200 nm');
+    // F(R) = (1 − R)²/2R of the values written, to round-off.
+    by['cary.csv'].FR.forEach((v, i)=>{ const R = cary.R[i]/100, F = (1 - R)**2/(2*R); assert.ok(Math.abs(v - F) <= 1e-12*Math.max(1, F), `F(R) at ${cary.wl[i]} nm: ${v} for ${F}`); });
+    // The file list: a cell left of the label, with no header.
+    const list = await page.$$eval('#taucFileTableWrap tr.file-row', rs=> rs.map(r=>{
+      const c = r.querySelector('td.lead-cell'), s = c && c.querySelector('[title]');
+      return [c && c.textContent, s && s.title, !!(c && c.nextElementSibling.querySelector('.file-label'))];
+    }));
+    assert.deepEqual(list, [
+      ['%R', 'second column read as the reflectance in %, converted to F(R)', true],
+      ['F(R)', 'second column read as F(R)', true],
+      ['F(R)', 'second column read as F(R), with no header naming it', true]]);
+    const heads = await page.$$eval('#taucFileTableWrap thead th', ts=> ts.map(t=> t.textContent.trim()));
+    assert.deepEqual(heads.slice(2, 5), ['FILE', '', 'SAMPLE LABEL']);
+    // The Results' top: the pair side by side, the log plot under both, across the card at 2φ : 1.
+    const box = await page.$$eval('#taucResults svg.plot', ss=> Object.fromEntries(ss.slice(0, 3).map(s=>{ const r = s.getBoundingClientRect(); return [s.id, [r.left, r.top, r.width, r.bottom]]; })));
+    const [f0, rr, lg] = ['taucResSvg0', 'taucResSvgR', 'taucResSvgLog'].map(k=> box[k]);
+    assert.ok(f0 && rr && lg, 'the three plots, in that order: ' + Object.keys(box));
+    assert.ok(Math.abs(f0[1] - rr[1]) < 1 && rr[0] > f0[0] + f0[2], 'F(R) and R (%) side by side');
+    assert.ok(lg[1] > Math.max(f0[3], rr[3]) && lg[2] > 1.9*f0[2], 'the log plot under both, across the card');
+    assert.ok(Math.abs(lg[2]/(lg[3] - lg[1]) - 3.236) < 0.02, `the log plot at 2φ : 1, ${lg[2]/(lg[3] - lg[1])}`);
+    // The R (%) plot: the Cary's values back; for the F(R) files, R whose F(R) is theirs.
+    const lines = await page.evaluate(()=> Object.fromEntries(document.getElementById('taucResSvgR')._plot._stored.filter(e=> e.type === 'line').map(e=> [e.key, [e.label, e.xs, e.ys]])));
+    assert.deepEqual(Object.keys(lines), ['cary.csv', 'ref.csv', 'noheader.csv']);
+    assert.equal(lines['cary.csv'][0], 'cary');
+    lines['cary.csv'][2].forEach((v, i)=> assert.ok(Math.abs(v - cary.R[i]) < 1e-9, `R at ${cary.wl[i]} nm: ${v} for ${cary.R[i]}`));
+    lines['ref.csv'][2].forEach((v, i)=>{ const R = v/100, F = by['ref.csv'].FR[i]; assert.ok(v > 0 && v <= 100 && Math.abs((1 - R)**2/(2*R) - F) < 1e-9*Math.max(1, F), `ref.csv at ${by['ref.csv'].wl[i]} nm`); });
+    assert.equal(await page.getAttribute('#taucResults .plot-dl-btn[data-dl-svg="taucResSvgR"]', 'data-csv-names'), 'reflectance_R.csv');
+    assert.match(await page.locator('#taucResLegendR').innerText(), /cary\s*ref\s*noheader/);
+    // Its CSV: each sample's wavelength and R in %, beside the others; a file left out, left out.
+    await page.click('#taucFileTableWrap tr.file-row:nth-child(2) .file-incl'); await settle(page);
+    const R = await csvOf(page, 'reflectance_R.csv');
+    assert.deepEqual(R[0], ['wavelength_nm_cary', 'R_percent_cary', 'wavelength_nm_noheader', 'R_percent_noheader']);
+    assert.equal(R.length, 1202);
+    // (six decimals: within half the last of the value written)
+    R.slice(1).forEach((r, i)=> assert.ok(Math.abs(+r[1] - cary.R[i]) <= 5.000001e-7 && +r[0] === cary.wl[i], `reflectance_R.csv row ${i + 1}: ${r}`));
+    assert.deepEqual(await page.evaluate(()=> document.getElementById('taucResSvgR')._plot._stored.filter(e=> e.type === 'line').map(e=> e.key)), ['cary.csv', 'noheader.csv']);
+    // A project from before the reading was kept (no `read`): F(R), as it was read.
+    const s = await encoded(page, 'tauc');
+    s.files.forEach(f=>{ delete f.read; });
+    assert.equal(await restore(page, 'tauc', s), 'ok');
+    assert.deepEqual(await page.$$eval('#taucFileTableWrap td.lead-cell', cs=> cs.map(c=> c.textContent)), ['F(R)', 'F(R)', 'F(R)']);
+    // The R (%) plot's figure composer opens with the samples' traces.
+    await page.locator('#taucResSvgR').locator('xpath=..').locator('button[title="Figure composer (advanced export)"]').click();
+    await page.waitForSelector('.fig-backdrop .fig-svg path');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=> !document.querySelector('.fig-backdrop'));
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
