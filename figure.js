@@ -1,5 +1,5 @@
 import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap } from './utils.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc } from './utils.js';
 import { activeTab, TABS } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
@@ -31,6 +31,12 @@ function saveBlob(filename, data, mime){
    off, the numbers along a shared border belong to the panel that owns that edge and
    describe that panel alone. Leave a gap in the grid, or turn the numbers on for the
    side you want, when each panel needs its own scale spelled out.
+
+   Two kinds of figure, one composer: the plots' (plotKind, below) and the SEM images'
+   (sem-figure.js). The composer is the modal, the preview with its zoom and pan, the
+   footer with the exports and a status line, the field kit and the rows dragged by
+   their handles; a kind gives the model, its drawing and its controls (openComposer).
+   One composer is open at a time, of either kind.
 ========================================================= */
 
 const PX_MM = 96 / 25.4;      // CSS px per mm at the nominal 96 dpi
@@ -96,8 +102,9 @@ function markerShape(kind, cx, cy, r, color, width){
   return ['polygon', { points: pts.join(' '), ...paint }];
 }
 
-let F = null;                 // the figure model
-let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, presetBar = null;
+let F = null;                 // the figure model (the plots')
+let K = null;                 // the kind of figure the composer is open on (openComposer)
+let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, msgEl = null, presetBar = null;
 let lastInner = { w: 0, h: 0 };   // drawing area of the last pass, in mm
 let lastCatRot = 30;              // X label tilt the last pass drew, for its locked field
 let view = { z: 1, x: 0, y: 0 };  // preview zoom and pan, on top of the fit scale
@@ -599,8 +606,9 @@ function lightShade(color, amount){
 }
 
 /* Black or white, whichever a reader can see against `bg` — the usual relative
-   luminance, with the threshold where the two contrast ratios cross. */
-function contrastInk(bg){
+   luminance, with the threshold where the two contrast ratios cross. The SEM figure's
+   outline takes it too. */
+export function contrastInk(bg){
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(bg || '').trim());
   let r = 255, g = 255, b = 255;
   if (m){
@@ -1275,13 +1283,20 @@ function renderInto(svg, ink, paper){
   if (rotField) rotField.value = lastCatRot;
 }
 
-// Physical size and pixel count of the export, shown in the footer. Driven by the
-// redraw rather than by input events: numeric fields commit on 'change', and hanging
-// this off the events meant the line reported the value from before the last commit.
-function updateDim(){
-  if (!dimEl || !F) return;
-  dimEl.textContent = `${F.wmm}×${F.hmm} mm (plot ${lastInner.w}×${lastInner.h}) · `
+// Physical size and pixel count of the export, shown in the footer (the plots' line).
+// Driven by the redraw rather than by input events: numeric fields commit on 'change',
+// and hanging this off the events meant the line reported the value from before the
+// last commit.
+const plotDimText = ()=> `${F.wmm}×${F.hmm} mm (plot ${lastInner.w}×${lastInner.h}) · `
     + `${Math.round(F.wmm / 25.4 * F.dpi)}×${Math.round(F.hmm / 25.4 * F.dpi)} px @ ${F.dpi} dpi`;
+/* The kind's line, and, while the page is one an export found too large for a PNG at
+   this dpi (pngLim), the most it takes. */
+let shownSize = { W: 0, H: 0 };   // the page of the last preview, mm
+let pngLim = null;                // { W, H, dpi }: the largest dpi a PNG of that page could be made at, 0 none
+function updateDim(){
+  if (!dimEl || !K) return;
+  const { W, H } = shownSize, over = pngLim && pngLim.W === W && pngLim.H === H && K.dpi() > pngLim.dpi;
+  dimEl.textContent = K.dimText() + (over ? ' · too large for a PNG here' + (pngLim.dpi ? `: at most ${pngLim.dpi} dpi` : '') : '');
 }
 
 /* The preview is a fixed-size drawing scaled to fit its pane; this puts a zoom and a
@@ -1333,19 +1348,30 @@ function wirePreviewView(){
   host.addEventListener('dblclick', resetView);   // back to fit
 }
 
+/* The kind draws its figure at its real size; it is fitted inside the preview pane
+   without distorting it. Nothing to draw once the composer is closed, which a frame
+   asked for at opening may find. */
 function renderPreview(){
-  renderInto(previewSvg, '#1a2327', '#ffffff');
-  // Fit the real-size figure inside the preview pane without distorting it.
+  if (!backdrop) return;
+  const { W, H } = K.draw(previewSvg, false);
   const host = previewSvg.parentElement;
   const availW = host.clientWidth - 24, availH = host.clientHeight - 24;
-  const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
-  const k = Math.min(availW / W, availH / H, 1);
-  previewSvg.style.width = (W * k) + 'px';
-  previewSvg.style.height = (H * k) + 'px';
+  const w = W * PX_MM, h = H * PX_MM;
+  const k = Math.min(availW / w, availH / h, 1);
+  previewSvg.style.width = (w * k) + 'px';
+  previewSvg.style.height = (h * k) + 'px';
   applyView();
+  shownSize = { W, H };
   updateDim();
-  // The plot's size, while the margins choose it, shown as they chose it.
-  if (controlsEl && F.plotAuto) controlsEl.querySelectorAll('[data-auto-plot]').forEach(el=>{ el.value = lastInner[el.dataset.autoPlot]; });
+  say('');
+  if (K.afterRender) K.afterRender();
+}
+
+/* The footer's status line: why an export failed, until the next export or redraw. */
+function say(msg){
+  if (!msgEl) return;
+  msgEl.textContent = msg || '';
+  msgEl.hidden = !msg;
 }
 
 /* ---- Export ---------------------------------------------------------------- */
@@ -1368,83 +1394,180 @@ async function interFontCss(){
   return _interCss;
 }
 
-async function figureSvgString(){
-  const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  tmp.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  renderInto(tmp, '#000000', '#ffffff');
-  const face = FONTS[F.font.family] || FONTS.Inter;
-  if (face.embed){
+/* What an export needs is taken at the click, before anything waits: the kind, its
+   file name, dpi, paper and page, and the drawing (draw, called before the first
+   wait). A composer closed while its file is being made still saves it: the file was
+   read from the model after a wait, so closing it then threw and saved nothing (to
+   v480). An edit not yet gone back to its module goes first (flush). */
+function exportJob(){
+  const k = K;
+  if (k.flush) k.flush();
+  say('');
+  const { W, H } = k.size();
+  return { k, W, H, file: k.file(), dpi: k.dpi(), paper: k.paper(), embed: !!(FONTS[k.font()] || FONTS.Inter).embed,
+    draw(){
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      k.draw(svg, true);
+      return svg;
+    } };
+}
+// An error the composer words itself (shown), and where an export that failed says so:
+// in the composer it came from, if still open, never in silence.
+const failure = msg => Object.assign(new Error(msg), { shown: true });
+function exportFailed(k, e, what){
+  const msg = e && e.shown ? e.message : `${what} could not be made: ${(e && e.message) || e}`;
+  if (k && K === k) say(msg); else console.error(msg, e);
+}
+
+// The drawing as a standalone file: Inter embedded, the size in millimetres.
+async function svgString(job, svg){
+  if (job.embed){
     const css = await interFontCss();
     if (css){
       const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
       style.textContent = css;
-      tmp.insertBefore(style, tmp.firstChild);
+      svg.insertBefore(style, svg.firstChild);
     }
   }
   // Physical size so the file lands at the right scale in Word/Illustrator/LaTeX.
-  tmp.setAttribute('width', F.wmm + 'mm');
-  tmp.setAttribute('height', F.hmm + 'mm');
-  return new XMLSerializer().serializeToString(tmp);
+  svg.setAttribute('width', job.W + 'mm');
+  svg.setAttribute('height', job.H + 'mm');
+  return new XMLSerializer().serializeToString(svg);
 }
 
 async function exportSVG(){
-  saveBlob(F.name + '.svg', await figureSvgString(), 'image/svg+xml');
+  const k = K;
+  try {
+    const job = exportJob(), svg = job.draw();
+    saveBlob(job.file + '.svg', await svgString(job, svg), 'image/svg+xml');
+  } catch(e){ exportFailed(k, e, 'The SVG'); }
 }
 
-// The figure rasterised at the chosen dpi, as a PNG blob — saved to a file or handed
-// to the clipboard, which wants the very same bytes.
-async function figurePngBlob(){
-  const str = await figureSvgString();
-  const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
-  const scale = F.dpi / 96;                       // px at the requested dpi
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(W * scale); canvas.height = Math.round(H * scale);
-  const ctx = canvas.getContext('2d');
-  return new Promise((resolve, reject)=>{
+/* The canvas sizes browsers make, [longest side, area] in px: Chromium's (measured: a
+   side of 65535 and 2²⁸ px in all; past either a canvas draws nothing and gives no PNG,
+   with no error), Firefox's, Safari's and iOS's (their published limits), then smaller
+   ones, for a device short of memory. */
+const CANVAS_LIMITS = [[65535, 2**28], [32767, 472907776], [4194303, 2**28], [4194303, 2**24],
+  [16384, 2**26], [8192, 2**24], [4096, 2**24]];
+const pxOf = (W, H, dpi)=> [Math.round(W / 25.4 * dpi), Math.round(H / 25.4 * dpi)];
+/* A w × h canvas, where this browser makes one: a pixel drawn in its far corner reads
+   back. Null where it does not (Chromium past its limits draws nothing, Safari gives
+   no context, Firefox may throw), its memory given back at once. */
+function canvasOf(w, h){
+  const cv = document.createElement('canvas');
+  try {
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    if (ctx){
+      ctx.fillStyle = '#000000'; ctx.fillRect(w - 1, h - 1, 1, 1);
+      if (ctx.getImageData(w - 1, h - 1, 1, 1).data[3] === 255) return cv;
+    }
+  } catch(e){}
+  cv.width = cv.height = 0;
+  return null;
+}
+/* The largest dpi under `dpi` at which this browser makes the canvas of a W × H mm
+   page: what each size of CANVAS_LIMITS allows, tried largest first; the first canvas
+   made (given back at once) says it. 0: none. */
+function maxDpi(W, H, dpi){
+  const wi = W / 25.4, hi = H / 25.4, cands = new Set();
+  for (const [side, area] of CANVAS_LIMITS){
+    let d = Math.floor(Math.min(side / wi, side / hi, Math.sqrt(area / (wi * hi))));
+    // The rounded sizes have to fit too.
+    const fits = d =>{ const [w, h] = pxOf(W, H, d); return w <= side && h <= side && w * h <= area; };
+    while (d > 0 && !fits(d)) d--;
+    if (d > 0 && d < dpi) cands.add(d);
+  }
+  for (const d of [...cands].sort((a, b)=> b - a)){
+    const cv = canvasOf(...pxOf(W, H, d));
+    if (cv){ cv.width = cv.height = 0; return d; }
+  }
+  return 0;
+}
+/* The figure rasterised at the chosen dpi, as a PNG blob — saved to a file or handed
+   to the clipboard, which wants the very same bytes — on the kind's paper (the SEM
+   figure's background; white for the plots). The canvas comes first: a page too large
+   for this browser at that dpi says so, with the most it takes, before anything is
+   drawn; it gave no file and no word, nor did a drawing that would not load or a PNG
+   the browser would not make (to v480). Through a blob URL: the SEM figure holds its
+   images at full size, too long a string for a data URL. */
+async function pngBlob(job){
+  const [w, h] = pxOf(job.W, job.H, job.dpi);
+  const cv = canvasOf(w, h);
+  if (!cv){
+    const d = maxDpi(job.W, job.H, job.dpi);
+    pngLim = { W: job.W, H: job.H, dpi: d };
+    if (K === job.k) updateDim();
+    throw failure(`Too large for a PNG in this browser: ${w} × ${h} px. `
+      + (d ? `At most ${d} dpi for this page.` : 'No dpi makes a PNG of this page here.'));
+  }
+  // Made after all (memory given back since): the page's limit is not known any more.
+  if (pngLim && pngLim.W === job.W && pngLim.H === job.H && job.dpi > pngLim.dpi){ pngLim = null; if (K === job.k) updateDim(); }
+  const str = await svgString(job, job.draw());
+  const url = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+  let blob = null;
+  try {
     const img = new Image();
-    img.onload = ()=>{
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(b=> b ? resolve(b) : reject(new Error('no blob')), 'image/png');
-    };
-    img.onerror = ()=> reject(new Error('render failed'));
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str);
-  });
+    await new Promise((res, rej)=>{ img.onload = res; img.onerror = ()=> rej(failure('The figure could not be drawn into a PNG.')); img.src = url; });
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = job.paper; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    blob = await new Promise(res=> cv.toBlob(res, 'image/png'));
+  } finally { URL.revokeObjectURL(url); cv.width = cv.height = 0; }
+  if (!blob) throw failure(`The browser could not make the PNG (${w} × ${h} px): try a lower dpi.`);
+  return blob;
 }
 
 async function exportPNG(){
-  saveBlob(F.name + '.png', await figurePngBlob());
+  const k = K;
+  try {
+    const job = exportJob();
+    saveBlob(job.file + '.png', await pngBlob(job));
+  } catch(e){ exportFailed(k, e, 'The PNG'); }
 }
 
 /* Safari only honours a clipboard write made in the same turn as the click, so the
    item is handed the promise of the blob rather than the blob itself where that is
-   supported; elsewhere the plain await is fine. */
+   supported; elsewhere the write fails and is made again with the same blob, awaited:
+   the figure is drawn once (twice, to v480), and a PNG that could not be made says
+   why rather than only "Copy failed". */
 async function copyPNG(btn){
   if (!(navigator.clipboard && window.ClipboardItem && navigator.clipboard.write)) return;
   const done = txt => { btn.textContent = txt; setTimeout(()=>{ btn.textContent = 'Copy PNG'; }, 1200); };
+  const k = K;
+  let p;
+  try { p = pngBlob(exportJob()); } catch(e){ exportFailed(k, e, 'The PNG'); done('Copy failed'); return; }
+  p.catch(()=>{});   // awaited below where it matters: never an unhandled rejection
   try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': figurePngBlob() })]);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': p })]);
     done('Copied');
   } catch(e){
+    let blob;
+    try { blob = await p; } catch(e2){ exportFailed(k, e2, 'The PNG'); done('Copy failed'); return; }
     try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': await figurePngBlob() })]);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       done('Copied');
-    } catch(e2){ done('Copy failed'); }
+    } catch(e3){ done('Copy failed'); }
   }
 }
 
 /* ---- Controls -------------------------------------------------------------- */
 
-const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 /* Numeric fields are plain text boxes, not <input type="number">: Chrome renders a
    number input's value with the BROWSER's decimal separator whatever lang says, and
    a figure has to read with a point. Typing a comma is still accepted — it is
    translated on commit — and `data-num` marks the field as commit-on-change, so a
-   value only takes effect once confirmed instead of on every keystroke. */
-const numField = (attrs, value, min, max)=>
-  `<input type="text" inputmode="decimal" data-num="1" data-min="${esc(min)}" data-max="${esc(max)}" ${attrs} value="${esc(value)}">`;
-const num = (label, key, min, max)=>
-  `<label class="fig-row"><span>${label}</span>${numField(`data-k="${key}"`, F[key], min, max)}</label>`;
+   value only takes effect once confirmed instead of on every keystroke.
+   The field kit serves both kinds. A control names its setting by a data attribute,
+   `at`: k by default (the plots' F[key]; g, dl, f their grid, data labels and font; p a
+   dotted path into the SEM figure's settings), and shows the value the open kind gives
+   for it (K.val). `off`: disabled, kept in place. */
+const valOf = (at, key)=> K.val(at || 'k', key);
+const numField = (attrs, value, min, max, off)=>
+  `<input type="text" inputmode="decimal" data-num="1" data-min="${esc(min)}" data-max="${esc(max)}" ${attrs} value="${esc(value)}"${off ? ' disabled' : ''}>`;
+const num = (label, key, min, max, at, off)=>
+  `<label class="fig-row"><span>${label}</span>${numField(`data-${at || 'k'}="${key}"`, valOf(at, key), min, max, off)}</label>`;
 /* A field's number, inside its range. Outside it, or not a number, the field shakes
    red and goes back to the last value it took (flashFieldInvalid), as everywhere in
    the app: a value is refused, never quietly changed. A range may follow another
@@ -1731,18 +1854,22 @@ function applyDeps(){
     d.querySelectorAll('input, select, button').forEach(el=>{ el.disabled = off; });
   });
 }
-const chk = (label, key, obj)=>
-  `<label class="fig-check"><input type="checkbox" data-${obj||'k'}="${key}"${(obj==='g'?F.grid[key]:obj==='dl'?F.dataLabels[key]:F[key])?' checked':''}> ${label}</label>`;
-const sel = (label, key, opts, cur, attr)=>
-  `<label class="fig-row"><span>${label}</span><select data-${attr||'k'}="${key}">${
-    opts.map(([v,t])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${t}</option>`).join('')}</select></label>`;
+const chk = (label, key, at, title, off)=>
+  `<label class="fig-check"${title ? ` title="${esc(title)}"` : ''}><input type="checkbox" data-${at||'k'}="${key}"${valOf(at, key)?' checked':''}${off ? ' disabled' : ''}> ${label}</label>`;
+// cur: the option shown, the setting's own value where null.
+const sel = (label, key, opts, cur, at, off)=>
+  `<label class="fig-row"><span>${label}</span><select data-${at||'k'}="${key}"${off ? ' disabled' : ''}>${
+    opts.map(([v,t])=>`<option value="${v}"${String(cur ?? valOf(at, key))===String(v)?' selected':''}>${t}</option>`).join('')}</select></label>`;
 
 /* A number the figure works out for itself until you say otherwise: while the
-   automatic switch is on the field shows what was chosen and cannot be typed in. */
-const autoNum = (label, key, autoKey, min, max, autoVal)=>
-  `<label class="fig-row"><span>${label}</span>${F[autoKey]
-    ? `<input type="text" value="${autoVal}" disabled title="Chosen automatically">`
-    : numField(`data-k="${key}"`, F[key], min, max)}</label>`;
+   automatic switch is on the field shows what was chosen and cannot be typed in. It
+   shows autoVal, or, without one, what the drawing fills in (data-auto: the SEM
+   figure's afterRender). */
+const autoNum = (label, key, autoKey, min, max, autoVal, at)=>
+  `<label class="fig-row"><span>${label}</span>${valOf(at, autoKey)
+    ? (autoVal == null ? `<input type="text" data-auto="${key}" disabled title="Chosen automatically">`
+                       : `<input type="text" value="${autoVal}" disabled title="Chosen automatically">`)
+    : numField(`data-${at||'k'}="${key}"`, valOf(at, key), min, max)}</label>`;
 
 // How many minors each major interval automatically gets, for that field to show.
 function autoMinorsOf(axis){
@@ -2717,6 +2844,13 @@ function texturesInUse(){
    superseded — applying that would quietly undo whatever caused the rebuild (loading
    a preset, say). Those events are ignored. */
 let rebuilding = false;
+// The sidebar drawn again from the open kind's model, then wired where it needs it
+// (the rows' handles: afterRebuild).
+function rebuildControls(){
+  rebuilding = true;
+  try { controlsEl.innerHTML = K.controlsHtml(); } finally { rebuilding = false; }
+  if (K.afterRebuild) K.afterRebuild();
+}
 
 /* The names this plot's project gives, back over the ones typed into the composer —
    the first division's included, since that is the series' name said twice. Anything
@@ -2735,11 +2869,7 @@ function restoreNames(){
 
 function refresh(rebuild){
   clampPanels();
-  if (rebuild){
-    rebuilding = true;
-    try { controlsEl.innerHTML = controlsHtml(); } finally { rebuilding = false; }
-    wireSeriesDrag();
-  }
+  if (rebuild) rebuildControls();
   markMixedToggles();
   renderPreview();
 }
@@ -2821,34 +2951,38 @@ function syncSwatches(){
   });
 }
 
-/* Drag-to-reorder over the series rows, as in the file list: press the handle and move
-   to the gap the series should land in, in its own panel's group or another's. The gap
-   lit (dropGap, in the group under the pointer) is where it goes: before the row the
-   bar is over, or after the last row of the group; into an empty group, at its end.
-   The two gaps beside the dragged row, in its own group, would leave it where it is:
-   they never light, and a drop there does nothing. (The bar used to be under the row
-   the pointer was on, and the series took that row's place: dragged up it landed over
-   that row, the gap over the dragged row itself lit, and the top of a group could not
-   be reached.) */
-function wireSeriesDrag(){
-  const rows = [...controlsEl.querySelectorAll('.fig-serie[data-s]')];
+/* Drag-to-reorder over rows listed in groups (.fig-group): the plots' series by panel,
+   the SEM figure's images by panel. As in the file list: press the handle and move to
+   the gap the row should land in, in its own group or another's. The gap lit (dropGap,
+   in the group under the pointer) is where it goes: before the row the bar is over, or
+   after the last row of the group; into an empty group, at its end. The two gaps beside
+   the dragged row, in its own group, would leave it where it is: they never light, and
+   a drop there does nothing. (The bar used to be under the row the pointer was on, and
+   the series took that row's place: dragged up it landed over that row, the gap over
+   the dragged row itself lit, and the top of a group could not be reached.) Another
+   group is lit as a whole too: the row changes group. Into a group swapIn says is full
+   (the SEM figure's panel), a row swaps with the one it is dropped on, which lights.
+   onDrop(row, { gp, gRows, g, swap }) moves it. */
+function wireRowDrag(rowSel, { swapIn, onDrop }){
+  const rows = [...controlsEl.querySelectorAll(rowSel)];
   const groups = [...controlsEl.querySelectorAll('.fig-group')];
   const groupAt = (x, y)=> groups.find(el=>{
     const b = el.getBoundingClientRect();
     return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right;
   }) || null;
-  let from = null;
-  // The group and the gap in it the series would land in, null where it would not move.
+  let from = null;   // the row being dragged
+  // The group and the gap in it the row would land in, null where it would not move.
   const target = e =>{
     const gp = groupAt(e.clientX, e.clientY);
     if (!gp) return null;
-    const gRows = [...gp.querySelectorAll('.fig-serie[data-s]')];
-    const g = dropGap(gRows, e.clientY), self = gRows.findIndex(r=> +r.dataset.s === from);
+    const gRows = [...gp.querySelectorAll(rowSel)];
+    const g = dropGap(gRows, e.clientY), self = gRows.indexOf(from);
     if (self >= 0 && (g === self || g === self + 1)) return null;
-    return { gp, gRows, g, panel: +gp.dataset.pg };
+    const swap = self < 0 && swapIn && swapIn(gp, gRows) ? gRows[Math.min(g, gRows.length - 1)] : null;
+    return { gp, gRows, g, swap, into: self < 0 };
   };
   const clear = ()=>{
-    rows.forEach(r=> r.classList.remove('drop-before', 'drop-after'));
+    rows.forEach(r=> r.classList.remove('drop-before', 'drop-after', 'drop-swap'));
     groups.forEach(g=> g.classList.remove('drag-into'));
   };
   rows.forEach(row=>{
@@ -2856,7 +2990,7 @@ function wireSeriesDrag(){
     if (!handle) return;
     handle.addEventListener('pointerdown', e=>{
       e.preventDefault();
-      from = +row.dataset.s;
+      from = row;
       row.classList.add('dragging');
       try { handle.setPointerCapture(e.pointerId); } catch(_){}
     });
@@ -2865,28 +2999,17 @@ function wireSeriesDrag(){
       clear();
       const t = target(e);
       if (!t) return;
-      // Another panel's group is lit as a whole too: the series changes panel.
-      if (F.series[from] && t.panel !== F.series[from].panel) t.gp.classList.add('drag-into');
+      if (t.into) t.gp.classList.add('drag-into');
+      if (t.swap){ t.swap.classList.add('drop-swap'); return; }
       if (t.g < t.gRows.length) t.gRows[t.g].classList.add('drop-before');
       else if (t.gRows.length) t.gRows[t.gRows.length - 1].classList.add('drop-after');
     });
     const finish = e=>{
       if (from == null) return;
-      const t = target(e), f = from;
+      const t = target(e), moved = from;
       from = null;
       clear(); rows.forEach(r=> r.classList.remove('dragging'));
-      const moved = F.series[f];
-      if (!moved || !t) return;
-      // Before the series of the row the gap is over; after the group's last one; or,
-      // in an empty group, at the end.
-      const before = t.g < t.gRows.length ? F.series[+t.gRows[t.g].dataset.s] : null;
-      const after = !before && t.gRows.length ? F.series[+t.gRows[t.gRows.length - 1].dataset.s] : null;
-      F.series.splice(f, 1);
-      const at = before ? F.series.indexOf(before) : after ? F.series.indexOf(after) + 1 : F.series.length;
-      F.series.splice(at, 0, moved);
-      moved.panel = t.panel;
-      redealPalettes();
-      pushUndo(); refresh(true);
+      if (t) onDrop(moved, t);
     };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', ()=>{
@@ -2894,6 +3017,23 @@ function wireSeriesDrag(){
       clear(); rows.forEach(r=> r.classList.remove('dragging'));
     });
   });
+}
+// The plots' series, into the panel of the group they are dropped in.
+function wireSeriesDrag(){
+  wireRowDrag('.fig-serie[data-s]', { onDrop(row, t){
+    const f = +row.dataset.s, moved = F.series[f];
+    if (!moved) return;
+    // Before the series of the row the gap is over; after the group's last one; or,
+    // in an empty group, at the end.
+    const before = t.g < t.gRows.length ? F.series[+t.gRows[t.g].dataset.s] : null;
+    const after = !before && t.gRows.length ? F.series[+t.gRows[t.gRows.length - 1].dataset.s] : null;
+    F.series.splice(f, 1);
+    const at = before ? F.series.indexOf(before) : after ? F.series.indexOf(after) + 1 : F.series.length;
+    F.series.splice(at, 0, moved);
+    moved.panel = +t.gp.dataset.pg;
+    redealPalettes();
+    pushUndo(); refresh(true);
+  } });
   wireBarDrag();
 }
 
@@ -3397,103 +3537,209 @@ function wireControls(){
 
 /* ---- Modal ----------------------------------------------------------------- */
 
-// Shared with the SEM figure (sem-figure.js), which lays out images with the same page,
-// fonts and export.
-export { FONTS, PX_MM, PT_PX, saveBlob, interFontCss, alignPicker, ALIGN_ICON };
+// For the SEM figure (sem-figure.js), the composer's other kind: the page, the fonts,
+// the composer itself and its parts.
+export { FONTS, PX_MM, PT_PX, alignPicker, ALIGN_ICON, GRIP, controlsEl, rebuilding, renderPreview, rebuildControls,
+  numField, num, chk, sel, autoNum, readNum, wireRowDrag };
 
-export function openFigureEditor(plot, opts){
-  if (!plot) return;
-  srcPlot = plot; srcOpts = opts || {};
-  F = buildModel(plot, srcOpts);
-  axSel = 'all'; presetSel = '';
-  recallSettings();
-  redealPalettes();
-  undoStack = [snapshot()]; redoStack = [];
-  if (!F.series.length){ /* still open — the user may only want axes/labels */ }
-
-  backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop fig-backdrop';
-  // Force an English locale inside the modal: number inputs then use a decimal
-  // point everywhere, whatever the browser's locale would otherwise render.
-  backdrop.lang = 'en';
-  backdrop.innerHTML = `
-    <div class="fig-box">
+/* The composer, on one kind of figure. A kind is a plain object of hooks:
+     open()                takes its model and state (called once the composer is its own)
+     size()                the page { W, H } in mm; draw(svg, forExport) draws it, giving the same
+     dimText()             the footer's line; afterRender() fills what the drawing chose
+     controlsHtml()        the sidebar; val(at, key) a control's value (the field kit)
+     afterRebuild()        after each sidebar; wire() once, on the sidebar's box
+     mounted()             once the modal is up
+     undo(), redo()        a history of its own, which then takes Ctrl+Z / Ctrl+Y (the
+                           plots'); without, the keys go to the page's (the SEM figure's
+                           settings are its module's)
+     flush()               an edit still on its way to the module, sent now (also when
+                           the page is hidden or left)
+     reset()               Reset; refresh() the module's state changed under it (an undo)
+     closing()             before the modal goes
+     dpi(), file(), paper(), font()   the export's dpi, file name, paper and FONTS key
+     svgClass, footHtml, titles { svg, png, copy }   its markup
+   Gives { open, refresh, close } for it, or null while a composer is open: one at a
+   time, of either kind. Two opened at once (a double click before the code had
+   loaded, or Enter on the button still focused under the modal) left the first with
+   no way to close (to v480); the focus now goes into the modal, and back on closing. */
+let lastFocus = null;
+export function openComposer(kind){
+  if (K) return null;
+  K = kind;
+  try {
+    lastFocus = document.activeElement;
+    K.open();
+    backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop fig-backdrop';
+    // Force an English locale inside the modal: number inputs then use a decimal
+    // point everywhere, whatever the browser's locale would otherwise render.
+    backdrop.lang = 'en';
+    const T = K.titles;
+    backdrop.innerHTML = `
+    <div class="fig-box" tabindex="-1">
       <div class="fig-head">
         <h3 class="txt-head" style="margin:0">Figure composer</h3>
         <button class="fig-x close-x" type="button" aria-label="Close">✕</button>
       </div>
       <div class="fig-body">
-        <div class="fig-preview"><svg class="fig-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <div class="fig-preview"><svg class="fig-svg${K.svgClass ? ' ' + K.svgClass : ''}" xmlns="http://www.w3.org/2000/svg"></svg></div>
         <div class="fig-controls"></div>
       </div>
       <div class="fig-foot">
         <span class="txt-meta fig-dim"></span>
+        <span class="txt-meta fig-msg" role="status" hidden></span>
         <span style="flex:1"></span>
-        <button class="btn btn-sm fig-reset" type="button" data-fig-reset title="Back to the defaults, as if this plot's composer had just been opened">Reset</button>
+        ${K.footHtml}
+        <button class="btn btn-sm" type="button" data-fig-svg title="${esc(T.svg)}">Export SVG</button>
+        <button class="btn btn-sm" type="button" data-fig-png title="${esc(T.png)}">Export PNG</button>
+        <button class="btn primary" type="button" data-fig-copy title="${esc(T.copy)}">Copy PNG</button>
+      </div>
+    </div>`;
+    document.body.appendChild(backdrop);
+    previewSvg = backdrop.querySelector('.fig-svg');
+    controlsEl = backdrop.querySelector('.fig-controls');
+    dimEl = backdrop.querySelector('.fig-dim');
+    msgEl = backdrop.querySelector('.fig-msg');
+    rebuildControls();
+    K.wire();
+    wirePreviewView();
+    resetView();
+    if (K.mounted) K.mounted();
+    document.addEventListener('keydown', onKeyFirst, true);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('visibilitychange', onHide, true);
+    for (const t of ['beforeunload', 'pagehide']) window.addEventListener(t, onHide);
+    window.addEventListener('resize', renderPreview);
+    backdrop.querySelector('.fig-x').addEventListener('click', closeComposer);
+    backdrop.addEventListener('click', e=>{ if (e.target === backdrop) closeComposer(); });
+    backdrop.querySelector('[data-fig-reset]').addEventListener('click', ()=> K.reset());
+    backdrop.querySelector('[data-fig-svg]').addEventListener('click', exportSVG);
+    backdrop.querySelector('[data-fig-png]').addEventListener('click', exportPNG);
+    const copyBtn = backdrop.querySelector('[data-fig-copy]');
+    // Without clipboard images there is nothing the button could do, so PNG export
+    // takes its place as the main action rather than leaving a button that fails.
+    if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write)
+      copyBtn.addEventListener('click', ()=> copyPNG(copyBtn));
+    else { copyBtn.remove(); backdrop.querySelector('[data-fig-png]').classList.replace('btn-sm', 'primary'); }
+    backdrop.querySelector('.fig-box').focus({ preventScroll: true });
+    requestAnimationFrame(renderPreview);
+  } catch(e){
+    try { closeComposer(); } catch(_){}
+    throw e;
+  }
+  return {
+    get open(){ return K === kind; },
+    refresh(){ if (K === kind && K.refresh) K.refresh(); },
+    close(){ if (K === kind) closeComposer(); },
+  };
+}
+
+/* Closing: the kind's last edit sent and its state let go, every popup the composer
+   can open with it (left behind they would float over the page, still writing into a
+   figure that is gone), the focus back where it was. Whatever throws on the way, the
+   composer is free again after. */
+export function closeComposer(){
+  if (!K) return;
+  const k = K;
+  try {
+    if (k.flush) k.flush();
+    if (k.closing) k.closing();
+  } finally {
+    document.removeEventListener('keydown', onKeyFirst, true);
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('visibilitychange', onHide, true);
+    for (const t of ['beforeunload', 'pagehide']) window.removeEventListener(t, onHide);
+    window.removeEventListener('resize', renderPreview);
+    for (const p of [charPicker, alignPicker, fillPicker, texPalettePicker, colorPickerUI, palettePickerUI]){ try { p.close(); } catch(_){} }
+    if (backdrop) backdrop.remove();
+    K = null; backdrop = previewSvg = controlsEl = dimEl = msgEl = null;
+    const f = lastFocus; lastFocus = null;
+    if (f && f.isConnected && f.focus) f.focus({ preventScroll: true });
+  }
+}
+// Escape closes the composer; a popup of its own that Escape closes first (the
+// character map) keeps it from here.
+function onKey(e){ if (e.key === 'Escape') closeComposer(); }
+/* The page hidden or left: the kind's last edit sent before the page saves its tab
+   (sessions.js, on visibilitychange and pagehide). An edit held back for a moment (a
+   drag in the SEM figure's colour picker) would be missing from that save, and lost.
+   A phone putting the app away: visibilitychange, here in the capture phase, so first.
+   A reload or a closed tab: beforeunload, which comes before pagehide (whose listeners
+   on the window run in the order they were added, the page's first). pagehide as the
+   last resort. Nothing is asked: no prompt. */
+function onHide(e){ if (K && K.flush && (e.type !== 'visibilitychange' || document.visibilityState === 'hidden')) K.flush(); }
+/* Before the page's keys (utils.js), in the capture phase. Ctrl+Z / Ctrl+Y undo the
+   plots' figure in its own history, and stop there: they undid the module behind it
+   as well (to v480). A kind without a history of its own (the SEM figure, whose
+   settings are its module's) leaves them to the page, its last edit sent first so
+   that it is the one undone. ← and →, out of a field, stay in the composer: they
+   stepped the image or the sample behind it (to v480). */
+function onKeyFirst(e){
+  const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (mod && (key === 'z' || key === 'y')){
+    if (!K.undo){ if (K.flush) K.flush(); return; }
+    e.preventDefault(); e.stopPropagation();
+    (key === 'y' || e.shiftKey) ? K.redo() : K.undo();
+    return;
+  }
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !mod && !e.altKey){
+    const el = document.activeElement, tag = el && el.tagName;
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && !(el && el.isContentEditable)) e.stopPropagation();
+  }
+}
+
+/* The plots' kind: a snapshot of the plot the composer was opened on, with its own
+   undo, presets and per-plot memory. Its state is taken in open(), never before: a
+   composer refused (another one open) leaves the open one's plot, memory key and Reset
+   as they were. */
+function plotKind(plot, opts){
+  return {
+    open(){
+      srcPlot = plot; srcOpts = opts || {};
+      F = buildModel(plot, srcOpts);
+      axSel = 'all'; presetSel = '';
+      recallSettings();
+      redealPalettes();
+      undoStack = [snapshot()]; redoStack = [];
+    },
+    size: ()=> ({ W: F.wmm, H: F.hmm }),
+    draw(svg, forExport){ renderInto(svg, forExport ? '#000000' : '#1a2327', '#ffffff'); return { W: F.wmm, H: F.hmm }; },
+    dimText: plotDimText,
+    // The plot's size, while the margins choose it, shown as they chose it.
+    afterRender(){ if (controlsEl && F.plotAuto) controlsEl.querySelectorAll('[data-auto-plot]').forEach(el=>{ el.value = lastInner[el.dataset.autoPlot]; }); },
+    controlsHtml,
+    val: (at, key)=> at === 'g' ? F.grid[key] : at === 'dl' ? F.dataLabels[key] : at === 'f' ? F.font[key] : F[key],
+    afterRebuild: wireSeriesDrag,
+    wire: wireControls,
+    mounted(){
+      markMixedToggles();
+      presetBar = backdrop.querySelector('.fig-presets');
+      wirePresetBar();
+      renderPresetBar();
+    },
+    undo, redo,
+    reset: resetFigure,
+    closing(){
+      clearTimeout(undoTimer); undoTimer = null;   // nothing left to record once the model is gone
+      rememberSettings();
+      F = null; presetBar = null; srcPlot = null; srcOpts = null;
+    },
+    dpi: ()=> F.dpi, file: ()=> F.name, paper: ()=> '#ffffff', font: ()=> F.font.family,
+    svgClass: '',
+    footHtml: `<button class="btn btn-sm fig-reset" type="button" data-fig-reset title="Back to the defaults, as if this plot's composer had just been opened">Reset</button>
         <div class="fig-presets">
           <select data-preset="load" title="Apply a saved preset"></select>
           <button class="btn btn-sm" type="button" data-preset="save" title="Save these settings into the selected preset">Save</button>
           <input type="text" data-preset="name" placeholder="new preset name">
           <button class="btn btn-sm" type="button" data-preset="saveas" title="Save these settings as a new preset">Save as</button>
           <button class="btn is-danger btn-sm" type="button" data-preset="del" title="Delete the selected preset">&#10005;</button>
-        </div>
-        <button class="btn btn-sm" type="button" data-fig-svg title="Save the figure as a vector file">Export SVG</button>
-        <button class="btn btn-sm" type="button" data-fig-png title="Save the figure as an image file">Export PNG</button>
-        <button class="btn primary" type="button" data-fig-copy title="Copy the figure to the clipboard, ready to paste">Copy PNG</button>
-      </div>
-    </div>`;
-  document.body.appendChild(backdrop);
-  previewSvg = backdrop.querySelector('.fig-svg');
-  controlsEl = backdrop.querySelector('.fig-controls');
-  presetBar = backdrop.querySelector('.fig-presets');
-  controlsEl.innerHTML = controlsHtml();
-  markMixedToggles();
-  wireControls();
-  wireSeriesDrag();
-  wirePreviewView();
-  resetView();
-  wirePresetBar();
-  renderPresetBar();
-
-  const close = ()=>{
-    clearTimeout(undoTimer); undoTimer = null;   // nothing left to record once the model is gone
-    rememberSettings();
-    window.removeEventListener('resize', onResize);
-    // Every popup the composer can open goes with it; left behind they would float
-    // over the page, still writing into a figure that is gone.
-    charPicker.close();
-    alignPicker.close();
-    fillPicker.close();
-    texPalettePicker.close();
-    colorPickerUI.close();
-    palettePickerUI.close();
-    document.removeEventListener('keydown', onKey);
-    backdrop.remove(); backdrop = null; F = null; dimEl = null; presetBar = null;
-    srcPlot = null; srcOpts = null;
+        </div>`,
+    titles: { svg: 'Save the figure as a vector file', png: 'Save the figure as an image file', copy: 'Copy the figure to the clipboard, ready to paste' },
   };
-  const onKey = e => {
-    if (e.key === 'Escape'){ close(); return; }
-    const z = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z';
-    const y = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y';
-    if (!z && !y) return;
-    e.preventDefault(); e.stopPropagation();
-    (y || e.shiftKey) ? redo() : undo();
-  };
-  const onResize = ()=> renderPreview();
-  backdrop.querySelector('.fig-x').addEventListener('click', close);
-  backdrop.addEventListener('click', e=>{ if (e.target === backdrop) close(); });
-  document.addEventListener('keydown', onKey);
-  window.addEventListener('resize', onResize);
-  backdrop.querySelector('[data-fig-reset]').addEventListener('click', resetFigure);
-  backdrop.querySelector('[data-fig-svg]').addEventListener('click', exportSVG);
-  backdrop.querySelector('[data-fig-png]').addEventListener('click', exportPNG);
-  const copyBtn = backdrop.querySelector('[data-fig-copy]');
-  // Without clipboard images there is nothing the button could do, so PNG export
-  // takes its place as the main action rather than leaving a button that fails.
-  if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write)
-    copyBtn.addEventListener('click', ()=> copyPNG(copyBtn));
-  else { copyBtn.remove(); backdrop.querySelector('[data-fig-png]').classList.replace('btn-sm', 'primary'); }
-
-  dimEl = backdrop.querySelector('.fig-dim');
-  requestAnimationFrame(renderPreview);
+}
+// The plots' composer, on the plot whose toolbar opened it: { open, refresh, close },
+// or null while a composer is open.
+export function openFigureEditor(plot, opts){
+  if (!plot) return null;
+  return openComposer(plotKind(plot, opts));
 }

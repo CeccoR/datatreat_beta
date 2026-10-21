@@ -1061,12 +1061,22 @@ import { readTescanTiff } from './sem-read.js';
         key: JSON.stringify([o, I, f.adj || ADJ_DEF, refKey]), canvas: fit => outCanvas(f, fit) };
     }).filter(Boolean);
   }
+  /* One composer at a time: a click while the figure is loading is ignored, and none
+     opens over a composer already open (figure.js refuses it too; the open one keeps
+     its refresh). A double click before sem-figure.js had loaded opened two, the first
+     left with no way to close (to v480). */
+  let figOpening = false;
   async function openFigure(gid){
     const g = groups.find(g=> g.id === gid);
-    if (!g) return;
-    const mod = await import('./sem-figure.js');
-    figApi = mod.openSemFigure({ title: g.name, images: ()=> figureImages(gid), getFig: ()=> figures[gid] || null,
-      setFig: f=>{ figures[gid] = f; hist.commit(); } });
+    if (!g || figOpening || document.querySelector('.fig-backdrop')) return;
+    figOpening = true;
+    try {
+      const mod = await import('./sem-figure.js');
+      const api = mod.openSemFigure({ title: g.name, images: ()=> figureImages(gid), getFig: ()=> figures[gid] || null,
+        setFig: f=>{ figures[gid] = f; hist.commit(); }, alive: ()=> groups.some(x=> x.id === gid) });
+      if (api) figApi = api;
+    } catch(err){ console.error('SEM figure failed to open', err); }
+    finally { figOpening = false; }
   }
 
   /* ---- Intensity (the Crop and intensity card) ---- */

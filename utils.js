@@ -1363,8 +1363,10 @@ document.addEventListener('keydown', e=>{
   if (tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT' || (el && el.isContentEditable)) return;
   const nav = SAMPLE_NAV[_activeTab];
   if (!nav) return;
-  // A window open over the page (the XRPD standard's, a settings dialog) has the keys.
-  if ([...document.querySelectorAll('.modal-backdrop')].some(m=> m.style.display === 'flex')) return;
+  // A window open over the page (the XRPD standard's, a settings dialog, a figure
+  // composer, the calendar) has the keys: any backdrop laid out, however it is shown (to
+  // v479 only one with an inline display:flex, which the composers never have).
+  if ([...document.querySelectorAll('.modal-backdrop')].some(m=> m.getClientRects().length > 0)) return;
   const btn = [...document.querySelectorAll(e.key==='ArrowLeft' ? nav[0] : nav[1])].find(b=> b.offsetParent!==null);
   if (btn){ btn.click(); e.preventDefault(); }
 });

@@ -23,7 +23,7 @@ The page has three cards, in this order:
 The groups come first: an image's crop is then set knowing its group, whose common scale may narrow it (dashed in the editor, §4.2).
 
 The code is in three files: `sem-read.js` (reading), `sem.js` (the module) and
-`sem-figure.js` (the figure).
+`sem-figure.js` (the figure, a kind of figure of the composer in `figure.js`).
 
 ## 1. Files
 
@@ -314,13 +314,26 @@ starts as tall as its images need at its width.
 - **Unticked**, the plot's width and height and its alignment on the page open on those values. The page and the plot are then independent: neither changes the other, and a plot larger than the page runs off it, which is seen at once. The images keep their proportions, so the plot's width and height go together: the one set last decides, and the other's field shows what follows. The alignment is picked from the plots' composer's grid of 9.
 - A value out of a field's range is refused in both composers: the field shakes red and goes back.
 
-The images are laid out as the figure composer (`figure.js`) lays out plots, with the
-same modal and controls:
+**One composer.** The SEM figure is a kind of figure of the figure composer
+(`figure.js`), the plots being the other. The composer is the same for both: its modal,
+preview, field kit, rows dragged by their handles and exports; `sem-figure.js` gives the
+figure's settings, layout, drawing and controls. So:
 - one page in millimetres, previewed as it will be exported, which the wheel zooms and a drag pans;
 - the composer's fonts (Inter embedded in the files);
-- export as SVG (with the images in it) or as PNG at the chosen dpi, or a PNG copied to the clipboard.
+- export as SVG (with the images in it) or as PNG at the chosen dpi on the figure's background, or a PNG copied to the clipboard;
+- one composer open at a time, of either kind. A double click on *Figure composer* before its code had loaded, or Enter on the button (still focused under the modal), opened a second one, and the first could no longer be closed (to v480). The focus now goes into the composer, and back to the button when it closes. ← and → no longer step the image behind it.
 
 There are no axes and no legend.
+
+**A PNG too large for the browser.** Before drawing, the export makes its canvas and
+checks that it works. Chromium makes none over 65535 px a side or 2²⁸ px in all (measured);
+Firefox, Safari and iOS have their own limits. Too large, the composer says so in its
+footer, in red, with the most this page takes: *Too large for a PNG in this browser:
+33071 × 34507 px. At most 2328 dpi for this page.* (175 × 182.6 mm at 4800 dpi). From then
+the footer's line adds *too large for a PNG here: at most 2328 dpi* while that page is
+asked for at more. A drawing that will not load, a PNG the browser will not make and an
+SVG too large to write each give their own message. All of these failed in silence, with
+no file and no word (to v480). A composer closed before its file is made still saves it.
 
 ### 5.2 Panels
 
@@ -354,6 +367,7 @@ vertical (upright, reading up; outside on the right, reading down).
 - **Placed automatically** (the default), block by block, each block as if it stood alone: outside where there is room, above the block's first row and below its last. The rows between have it inside, at the top for the first half and the middle row (an odd count), at the bottom for the second half. One row: above. Vertical names go the same way by the block's columns: left of the first, right of the last, inside left or right between. Only rows and columns that hold images count. The alignment along the name stays the user's: left, centre or right (top, centre or bottom when vertical).
 - **By hand**: the position (inside or outside) and both alignments. Outside, a name is beside an edge, never across the middle.
 - Inside, white with an outline by default, which reads on any grey; outside, black on a white page (white on a black one). The colour on the images, the outline and its colour can be changed.
+- **The outline's colour**, unless picked, is black or white by the plots' composer's rule (WCAG relative luminance over 0.179: black), as their labels are. To v480 the SEM figure had its own rule (YIQ luma over 0.5), which gave a white outline where this gives a black one to mid-luminance inks: pure reds, pinks and magentas (`#ff0000` to `#ff3399`, `#cc00ff`, `#cc33cc`), oranges (`#cc6600`, `#ff3300`), mid greens (`#009900`, `#00cc00`, `#339933`, `#669900`), azure blues (`#0099ff`), `#6666ff`, `#996699` and the greys `#767676` to `#7f7f7f` (31 of the 216 web colours, and those greys). A project with such an ink and no outline colour picked now draws a black outline. White, black, blue, navy, dark red and green, yellow and cyan are unchanged. Its swatch follows the ink as it is picked (it kept the old colour until the controls were drawn again, to v480).
 
 **Letters.** (a), (b)… in the panels' order, off by default, in the styles a, (a), A
 and (A).
@@ -379,6 +393,9 @@ next to the image. The bands at the outer edges are the margins round the plot.
 
 The figure's settings are the module's: they are saved with the project, and undone
 and redone with it (Ctrl+Z inside the open figure too).
+- **One step a colour drag.** A change is drawn at once and reaches the module at once, as one undo step; a drag in the colour picker reaches it 250 ms after its last tick, as one step. It made one a tick (30 for 30 ticks, to v480), pushing the crop and intensity steps out of the module's 80. Ctrl+Z, an export, closing the composer, and the page being hidden or left send a waiting change first, so Ctrl+Z right after a drag undoes it and a reload keeps it.
+- **The file name** stays the group's after an undo. An undo back to before the first change named it *SEM_figure* (to v480).
+- **Undo past *Reset* of the groups** (which makes them anew) closes the figure: its group is gone. It showed an empty figure (to v480).
 
 **Checked** (v439) on the user's two images and two copies with other pixel sizes, four panels:
 - **The grid.** It came out 2 × 2: 175 × 175 mm, 4134 × 4134 px at 600 dpi.
@@ -402,6 +419,13 @@ and redone with it (Ctrl+Z inside the open figure too).
 - **Bars.** *One bar per image* drew eight, with one length field. Outside bottom right: 0.4 mm under the image, ending on its right edge. Outside top left and inside top right were also checked.
 - **Margins.** Auto gave the plot 175 × 175 mm in a 175 × 182.6 mm page. Unticked, the plot fields opened on 175 × 175. At 100 mm wide, top left, the first image sat at 0, 3.81 mm, under its names' band.
 - **Colour picker.** Open on the outline's swatch, it sat beside it, level with its bottom; a click on the preview closed it.
+
+**Checked** (v481, the one composer) on eight generated images in two groups and the three fixtures, against v480:
+- **Same figures.** 15 SEM figures (grid and blocks, names automatic, by hand and vertical, letters apart and before the name, bars per group and per image in 8 places, round and typed lengths, own scale, auto margins and a plot set by hand, white and black pages, five inks, Times, the shapes of v439 and before v440) gave the same preview, controls, SVG, PNG and clipboard bytes, but for the outline of the red, `#777`, magenta and `#0099ff` inks (white to black) and `#000`/`#fff` written out in full. A project saved with v480 opened with the same figures.
+- **Plots unchanged.** Ten plots (GC, DRS, XRPD, EPR, and a GC bar plot with 2 panels, log Y, a global legend, a division and a texture): every preview, control, dim line, SVG, PNG and clipboard byte the same. So were 42 scripted edits in the two composers (the figures, the SEM undo steps, the plots' presets and memory), but for one fix: Ctrl+Z in the plots' composer no longer also undoes the GC module behind it.
+- **PNG limits.** 175 × 182.6 mm at 4800 dpi: the message with 2328 dpi, no file. 1000 × 10 mm at 4800 dpi: 1664 dpi, then 65512 × 655 px at 1664 and the message again at 1665. Plots at 20000 dpi: at most 3136 dpi for 160 × 110 mm.
+- **One composer.** A double click with the code 400 ms late opened one; Enter on the button opened none more; Escape closed it.
+- **History.** 30 picker ticks made 1 step (30 in v480).
 
 ## 6. Project and export
 

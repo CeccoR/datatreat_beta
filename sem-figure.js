@@ -1,12 +1,17 @@
-import { colorPickerUI, flashFieldInvalid, dropGap } from './utils.js';
-import { FONTS, PX_MM, PT_PX, saveBlob, interFontCss, alignPicker, ALIGN_ICON } from './figure.js';
+import { colorPickerUI, esc } from './utils.js';
+import { FONTS, PX_MM, PT_PX, alignPicker, ALIGN_ICON, GRIP, contrastInk, openComposer, closeComposer, renderPreview, rebuildControls,
+  controlsEl, rebuilding, numField, num, chk, sel, autoNum, readNum, wireRowDrag } from './figure.js';
 
 /* =========================================================
    SEM FIGURE
-   The SEM images laid out for a paper, as the figure composer lays out plots
-   (figure.js): one drawing in real millimetres, previewed as it will be exported, with
-   the composer's page, fonts and export. No axes and no legend: a grid of image panels,
-   each with its sample's name, optionally a letter, and the scale bars.
+   The SEM images laid out for a paper: a kind of figure of the figure composer
+   (figure.js openComposer), as the plots are the other. The composer gives the modal,
+   the preview in real millimetres with its zoom and pan, the field kit, the rows
+   dragged by their handles, the exports (SVG with the images in it, PNG at the chosen
+   dpi on the figure's background, the clipboard) and one composer open at a time; this
+   gives the figure: its settings, layout, drawing and controls. No axes and no legend:
+   a grid of image panels, each with its sample's name, optionally a letter, and the
+   scale bars.
 
    The page is set freely; with auto margins the images are as large as it allows, what
    lies outside them (names, letters, bars) in the margins, the whole centred; without,
@@ -27,7 +32,7 @@ import { FONTS, PX_MM, PT_PX, saveBlob, interFontCss, alignPicker, ALIGN_ICON } 
 
    One figure a group (sem.js): its images, and its settings, which are the SEM module's
    (saved with the project, undone with it): the host gives them (getFig) and takes them
-   back (setFig) on every change.
+   back (setFig) after every change (commit).
 ========================================================= */
 
 const MM_PT = 25.4/72;
@@ -75,7 +80,6 @@ function withDefaults(f){
   return o;
 }
 const clone = v => JSON.parse(JSON.stringify(v));
-const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const sig3 = v => String(+(+v).toPrecision(3));
 // A length in µm as the bar reads it: nm under 1 µm.
 const lenText = um => um >= 1 ? `${sig3(um)} µm` : `${sig3(um*1000)} nm`;
@@ -91,18 +95,14 @@ function niceBar(widthUm){
 }
 const letterOf = (k, style) => { const c = String.fromCharCode(97 + (k % 26)) + (k >= 26 ? Math.floor(k/26) : '');
   return style === 'A' ? c.toUpperCase() : style === '(A)' ? `(${c.toUpperCase()})` : style === 'a' ? c : `(${c})`; };
-// Black or white, whichever stands out against a colour (for the outline).
-function contrastOf(hex){
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#000';
-  const n = parseInt(m[1], 16), L = (0.299*(n >> 16) + 0.587*(n >> 8 & 255) + 0.114*(n & 255))/255;
-  return L > 0.5 ? '#000' : '#fff';
-}
-
-let host = null, F = null, backdrop = null, svgEl = null, controlsEl = null, dimEl = null;
-let view = { z: 1, x: 0, y: 0 };
+/* The open figure: its host and its settings, the layout of the last preview, the
+   images' PNGs, an edit on its way to the module. At module level, which holds because
+   the composer is open on one figure at a time (figure.js openComposer); taken when it
+   opens, let go when it closes. */
+let host = null, F = null, lastL = null;
 let lastPlot = { w: 0, h: 0 };   // the plot of the last drawing (mm), for its locked fields
 const urls = new Map();   // id|full → { key, url }: an image's PNG, made once while it does not change
-let rebuilding = false;
+let saveTimer = null;     // an edit not yet gone back to the module (commit)
 
 // The images in panel order: the saved order, then any image not in it, in the file
 // list's order.
@@ -261,7 +261,11 @@ function draw(svg, full){
   svg.setAttribute('viewBox', `0 0 ${px(L.W)} ${px(L.H)}`);
   const add = (tag, at, parent) => { const el = document.createElementNS(NS, tag); for (const k in at) el.setAttribute(k, at[k]); (parent || svg).appendChild(el); return el; };
   add('rect', { x: 0, y: 0, width: px(L.W), height: px(L.H), fill: F.bg });
-  const stack = (FONTS[F.font] || FONTS.Inter).stack, ink = F.ink, out = F.outlineColor || contrastOf(ink), page = contrastOf(F.bg);
+  /* The outline, unless its colour is picked, and what is drawn on the page are black or
+     white by the composer's rule (figure.js contrastInk, WCAG luminance), as the plots'
+     labels are. To v480 the figure had its own (YIQ), which gave a white outline where
+     this gives black to mid-luminance inks: pure red, magenta, #0099ff, #777. */
+  const stack = (FONTS[F.font] || FONTS.Inter).stack, ink = F.ink, out = F.outlineColor || contrastInk(ink), page = contrastInk(F.bg);
   // Text over the images in the chosen colour, with an outline so that it reads on any
   // grey; outside them, on the page, in the colour that reads on it. parts: [[text,
   // pt, bold]]; rot −90 reads up, 90 down.
@@ -373,62 +377,27 @@ function draw(svg, full){
   return L;
 }
 
-/* ---- Preview: fitted to its pane, with a zoom and a pan on top (figure.js) ---- */
-function applyView(){ svgEl.style.transformOrigin = 'center center'; svgEl.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.z})`; }
-function renderPreview(){
-  if (!svgEl) return;
-  const L = draw(svgEl, false), pane = svgEl.parentElement;
-  const W = L.W*PX_MM, H = L.H*PX_MM, k = Math.min((pane.clientWidth - 24)/W, (pane.clientHeight - 24)/H, 1);
-  svgEl.style.width = W*k + 'px'; svgEl.style.height = H*k + 'px';
-  applyView();
-  const G = L.grid, grid = G.bRows*G.bCols > 1 ? `${G.bCols} × ${G.bRows} panels of ${G.cols} × ${G.rows} images` : `${G.cols} × ${G.rows} images`;
-  if (dimEl) dimEl.textContent = `${sig3(L.W)} × ${sig3(L.H)} mm (plot ${sig3(L.plot.w)} × ${sig3(L.plot.h)}) · ${grid} · ${Math.round(L.W/25.4*F.dpi)} × ${Math.round(L.H/25.4*F.dpi)} px @ ${F.dpi} dpi`;
-  // The locked fields show what was chosen.
-  if (controlsEl){
-    const set = (k, v) => { const el = controlsEl.querySelector(`[data-auto="${k}"]`); if (el) el.value = v; };
-    set('rows', L.grid.rows); set('cols', L.grid.cols); set('bRows', L.grid.bRows); set('bCols', L.grid.bCols);
-    set('plotW', sig3(L.plot.w)); set('plotH', sig3(L.plot.h));
-  }
+/* ---- Preview (figure.js renderPreview) ---- */
+// The footer's line: the page, the plot, the grid, the export's pixels.
+function dimText(){
+  const L = lastL, G = L.grid, grid = G.bRows*G.bCols > 1 ? `${G.bCols} × ${G.bRows} panels of ${G.cols} × ${G.rows} images` : `${G.cols} × ${G.rows} images`;
+  return `${sig3(L.W)} × ${sig3(L.H)} mm (plot ${sig3(L.plot.w)} × ${sig3(L.plot.h)}) · ${grid} · ${Math.round(L.W/25.4*F.dpi)} × ${Math.round(L.H/25.4*F.dpi)} px @ ${F.dpi} dpi`;
+}
+// The locked fields show what was chosen.
+function afterRender(){
+  const L = lastL, set = (k, v) => { const el = controlsEl.querySelector(`[data-auto="${k}"]`); if (el) el.value = v; };
+  set('rows', L.grid.rows); set('cols', L.grid.cols); set('bRows', L.grid.bRows); set('bCols', L.grid.bCols);
+  set('plotW', sig3(L.plot.w)); set('plotH', sig3(L.plot.h));
   lastPlot = L.plot;
 }
-function wireView(){
-  const pane = svgEl.parentElement;
-  const centre = ()=>{ const r = pane.getBoundingClientRect(); return [r.left + r.width/2, r.top + r.height/2]; };
-  pane.addEventListener('wheel', e=>{
-    e.preventDefault();
-    const [cx, cy] = centre(), z2 = Math.min(24, Math.max(0.25, view.z*Math.exp(-e.deltaY*0.004)));
-    const sx = (e.clientX - cx - view.x)/view.z, sy = (e.clientY - cy - view.y)/view.z;
-    view.x = e.clientX - cx - z2*sx; view.y = e.clientY - cy - z2*sy; view.z = z2;
-    applyView();
-  }, { passive: false });
-  let drag = null;
-  pane.addEventListener('pointerdown', e=>{
-    if (e.button !== 0) return;
-    drag = { x: e.clientX - view.x, y: e.clientY - view.y };
-    pane.setPointerCapture(e.pointerId); pane.classList.add('is-panning');
-  });
-  pane.addEventListener('pointermove', e=>{ if (!drag) return; view.x = e.clientX - drag.x; view.y = e.clientY - drag.y; applyView(); });
-  const end = ()=>{ drag = null; pane.classList.remove('is-panning'); };
-  pane.addEventListener('pointerup', end);
-  pane.addEventListener('pointercancel', end);
-  pane.addEventListener('dblclick', ()=>{ view = { z: 1, x: 0, y: 0 }; applyView(); });
-}
 
-/* ---- Controls (figure.js's rows, fields and checks) ----
+/* ---- Controls (figure.js's field kit: `p` names a setting by its dotted path) ----
    Disabled, not hidden: a setting that means nothing while another is off stays in
    place, greyed (`off`). */
-const numField = (attrs, value, min, max, off) => `<input type="text" inputmode="decimal" data-num="1" data-min="${min}" data-max="${max}" ${attrs} value="${esc(value)}"${off ? ' disabled' : ''}>`;
-const num = (label, path, min, max, off) => `<label class="fig-row"><span>${label}</span>${numField(`data-p="${path}"`, get(path), min, max, off)}</label>`;
-const chk = (label, path, title, off) => `<label class="fig-check"${title ? ` title="${esc(title)}"` : ''}><input type="checkbox" data-p="${path}"${get(path) ? ' checked' : ''}${off ? ' disabled' : ''}> ${label}</label>`;
-const sel = (label, path, opts, off, shown) => `<label class="fig-row"><span>${label}</span><select data-p="${path}"${off ? ' disabled' : ''}>${opts.map(([v, t])=> `<option value="${v}"${String(shown ?? get(path)) === String(v) ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
-// A value worked out until set by hand: the field shows it, locked, while its box is ticked.
-const autoNum = (label, path, autoPath, min, max) => `<label class="fig-row"><span>${label}</span>${get(autoPath)
-  ? `<input type="text" data-auto="${path}" disabled title="Chosen automatically">` : numField(`data-p="${path}"`, get(path), min, max)}</label>`;
 function get(path){ return path.split('.').reduce((o, k)=> o == null ? undefined : o[k], F); }
 function put(path, v){ const ks = path.split('.'), last = ks.pop(); const o = ks.reduce((o, k)=> (o[k] = o[k] || {}), F); o[last] = v; }
 
 const HA = [['left', 'left'], ['center', 'centre'], ['right', 'right']], VA = [['top', 'top'], ['center', 'centre'], ['bottom', 'bottom']];
-const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 function controlsHtml(){
   const imgs = ordered(), own = imgs.some(m=> m.group.mode === 'own'), L = F.label, Lt = F.letter, B = F.bar;
   // The bars' lengths: one for the group at common scale (whether one bar or one a
@@ -446,64 +415,64 @@ function controlsHtml(){
   const vName = L.orient === 'v', namesOff = !L.on && !(Lt.on && Lt.link);
   return `
   <section class="fig-sec"><h4>Figure</h4>
-    ${num('Width (mm)', 'wmm', 10, 1000)}
-    ${num('Height (mm)', 'hmm', 10, 1000)}
-    ${num('Export DPI', 'dpi', 50, 4800)}
-    ${sel('Background', 'bg', [['#ffffff', 'white'], ['#000000', 'black']])}
+    ${num('Width (mm)', 'wmm', 10, 1000, 'p')}
+    ${num('Height (mm)', 'hmm', 10, 1000, 'p')}
+    ${num('Export DPI', 'dpi', 50, 4800, 'p')}
+    ${sel('Background', 'bg', [['#ffffff', 'white'], ['#000000', 'black']], null, 'p')}
     <label class="fig-row"><span>File name</span><input type="text" data-p="file" value="${esc(F.file)}"></label>
-    ${chk('Auto margins', 'plotAuto', 'The images as large as the page allows, the names and bars outside them in the margins, the whole centred')}
+    ${chk('Auto margins', 'plotAuto', 'p', 'The images as large as the page allows, the names and bars outside them in the margins, the whole centred')}
     ${F.plotAuto ? `<label class="fig-row"><span>Plot width (mm)</span><input type="text" data-auto="plotW" disabled value="${sig3(lastPlot.w)}" title="Chosen by the auto margins"></label>
       <label class="fig-row"><span>Plot height (mm)</span><input type="text" data-auto="plotH" disabled value="${sig3(lastPlot.h)}" title="Chosen by the auto margins"></label>`
-      : `${num('Plot width (mm)', 'plotW', 5, 2000)}${num('Plot height (mm)', 'plotH', 5, 2000)}`}
+      : `${num('Plot width (mm)', 'plotW', 5, 2000, 'p')}${num('Plot height (mm)', 'plotH', 5, 2000, 'p')}`}
     <label class="fig-row"><span>Alignment</span><button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot on the page"${F.plotAuto ? ' disabled' : ''}>${ALIGN_ICON(F.align)}</button></label>
     <p class="txt-meta">The plot is the smallest rectangle round all the images.</p>
   </section>
   <section class="fig-sec"><h4>Layout</h4>
-    ${chk('Grid chosen automatically', 'gridAuto', 'One panel, the most compact rectangle: ⌈√N⌉ columns')}
+    ${chk('Grid chosen automatically', 'gridAuto', 'p', 'One panel, the most compact rectangle: ⌈√N⌉ columns')}
     <div class="fig-subhead">Panels</div>
-    ${autoNum('Rows', 'bRows', 'gridAuto', 1, 20)}
-    ${autoNum('Columns', 'bCols', 'gridAuto', 1, 20)}
-    ${num('Gap (mm)', 'bGap', 0, 40)}
+    ${autoNum('Rows', 'bRows', 'gridAuto', 1, 20, null, 'p')}
+    ${autoNum('Columns', 'bCols', 'gridAuto', 1, 20, null, 'p')}
+    ${num('Gap (mm)', 'bGap', 0, 40, 'p')}
     <div class="fig-subhead">Images in a panel</div>
-    ${autoNum('Rows', 'rows', 'gridAuto', 1, 40)}
-    ${autoNum('Columns', 'cols', 'gridAuto', 1, 40)}
-    ${num('Gap (mm)', 'gap', 0, 20)}
+    ${autoNum('Rows', 'rows', 'gridAuto', 1, 40, null, 'p')}
+    ${autoNum('Columns', 'cols', 'gridAuto', 1, 40, null, 'p')}
+    ${num('Gap (mm)', 'gap', 0, 20, 'p')}
   </section>
   <section class="fig-sec"><div class="sem-fig-sechead"><h4>Images</h4><button class="btn primary btn-sm" type="button" data-act="order" title="The panels back in the file list's order">Restore</button></div>
     <div class="fig-series">${imageGroupsHtml(L)}</div>
   </section>
   <section class="fig-sec"><h4>Names</h4>
-    ${chk('Show the names', 'label.on')}
-    ${chk('Placed automatically', 'label.auto', 'Outside where there is room: above the first row, below the last; inside the rows between, at the top for the first half (and the middle row), at the bottom for the second. Upright names go by columns: left and right.', namesOff)}
-    ${sel('Orientation', 'label.orient', [['h', 'horizontal'], ['v', 'vertical']], namesOff)}
-    ${sel('Horizontal', 'label.ha', L.auto && vName ? [['auto', 'by column']] : HA, namesOff || (L.auto && vName), L.auto && vName ? 'auto' : null)}
-    ${sel('Vertical', 'label.va', L.auto && !vName ? [['auto', 'by row']] : VA, namesOff || (L.auto && !vName), L.auto && !vName ? 'auto' : null)}
-    ${sel('Position', 'label.pos', L.auto ? [['auto', vName ? 'by column' : 'by row']] : [['in', 'inside'], ['out', 'outside']], namesOff || L.auto, L.auto ? 'auto' : null)}
-    ${num('Size (pt)', 'label.size', 3, 36, namesOff)}
+    ${chk('Show the names', 'label.on', 'p')}
+    ${chk('Placed automatically', 'label.auto', 'p', 'Outside where there is room: above the first row, below the last; inside the rows between, at the top for the first half (and the middle row), at the bottom for the second. Upright names go by columns: left and right.', namesOff)}
+    ${sel('Orientation', 'label.orient', [['h', 'horizontal'], ['v', 'vertical']], null, 'p', namesOff)}
+    ${sel('Horizontal', 'label.ha', L.auto && vName ? [['auto', 'by column']] : HA, L.auto && vName ? 'auto' : null, 'p', namesOff || (L.auto && vName))}
+    ${sel('Vertical', 'label.va', L.auto && !vName ? [['auto', 'by row']] : VA, L.auto && !vName ? 'auto' : null, 'p', namesOff || (L.auto && !vName))}
+    ${sel('Position', 'label.pos', L.auto ? [['auto', vName ? 'by column' : 'by row']] : [['in', 'inside'], ['out', 'outside']], L.auto ? 'auto' : null, 'p', namesOff || L.auto)}
+    ${num('Size (pt)', 'label.size', 3, 36, 'p', namesOff)}
   </section>
   <section class="fig-sec"><h4>Letters</h4>
-    ${chk('Show letters (a, b, c… in the panels\' order)', 'letter.on')}
-    ${sel('Style', 'letter.style', [['a', 'a'], ['(a)', '(a)'], ['A', 'A'], ['(A)', '(A)']], !Lt.on)}
-    ${chk('At the start of the name', 'letter.link', 'Written before the name, where the name is, in its size', !Lt.on)}
-    ${sel('Position', 'letter.pos', [['in', 'inside'], ['out', 'outside']], !Lt.on || Lt.link)}
-    ${sel('Vertical', 'letter.va', [['top', 'top'], ['bottom', 'bottom']], !Lt.on || Lt.link)}
-    ${sel('Horizontal', 'letter.ha', [['left', 'left'], ['right', 'right']], !Lt.on || Lt.link)}
-    ${num('Size (pt)', 'letter.size', 3, 36, !Lt.on || Lt.link)}
+    ${chk('Show letters (a, b, c… in the panels\' order)', 'letter.on', 'p')}
+    ${sel('Style', 'letter.style', [['a', 'a'], ['(a)', '(a)'], ['A', 'A'], ['(A)', '(A)']], null, 'p', !Lt.on)}
+    ${chk('At the start of the name', 'letter.link', 'p', 'Written before the name, where the name is, in its size', !Lt.on)}
+    ${sel('Position', 'letter.pos', [['in', 'inside'], ['out', 'outside']], null, 'p', !Lt.on || Lt.link)}
+    ${sel('Vertical', 'letter.va', [['top', 'top'], ['bottom', 'bottom']], null, 'p', !Lt.on || Lt.link)}
+    ${sel('Horizontal', 'letter.ha', [['left', 'left'], ['right', 'right']], null, 'p', !Lt.on || Lt.link)}
+    ${num('Size (pt)', 'letter.size', 3, 36, 'p', !Lt.on || Lt.link)}
   </section>
   <section class="fig-sec"><h4>Scale bars</h4>
     <label class="fig-check" title="${own ? 'At its own scale every image has its own bar' : 'One bar on every panel, rather than one on the last'}"><input type="checkbox" data-p="bar.each"${B.each || own ? ' checked' : ''}${own ? ' disabled' : ''}> One bar per image</label>
-    ${sel('Position', 'bar.pos', [['in', 'inside'], ['out', 'outside']])}
-    ${sel('Vertical', 'bar.va', [['top', 'top'], ['bottom', 'bottom']])}
-    ${sel('Horizontal', 'bar.ha', [['left', 'left'], ['right', 'right']])}
-    ${num('Thickness (mm)', 'bar.thick', 0.1, 5)}
-    ${num('Text size (pt)', 'bar.size', 3, 36)}
+    ${sel('Position', 'bar.pos', [['in', 'inside'], ['out', 'outside']], null, 'p')}
+    ${sel('Vertical', 'bar.va', [['top', 'top'], ['bottom', 'bottom']], null, 'p')}
+    ${sel('Horizontal', 'bar.ha', [['left', 'left'], ['right', 'right']], null, 'p')}
+    ${num('Thickness (mm)', 'bar.thick', 0.1, 5, 'p')}
+    ${num('Text size (pt)', 'bar.size', 3, 36, 'p')}
     ${barRows.join('')}
   </section>
   <section class="fig-sec"><h4>Type</h4>
-    ${sel('Font', 'font', Object.entries(FONTS).map(([k, v])=> [k, v.label]))}
+    ${sel('Font', 'font', Object.entries(FONTS).map(([k, v])=> [k, v.label]), null, 'p')}
     <div class="fig-row"><span>Colour on the images</span><button class="color-swatch" type="button" data-ink="ink" data-color="${esc(F.ink)}" style="background:${esc(F.ink)}" title="Names, letters and scale bars over the images"></button></div>
-    ${chk('Outline, for contrast with the image', 'outline')}
-    <div class="fig-row"><span>Outline colour</span><button class="color-swatch" type="button" data-ink="outlineColor" data-color="${esc(F.outlineColor || contrastOf(F.ink))}" style="background:${esc(F.outlineColor || contrastOf(F.ink))}" title="The outline round what is drawn over the images"${F.outline ? '' : ' disabled'}></button></div>
+    ${chk('Outline, for contrast with the image', 'outline', 'p')}
+    <div class="fig-row"><span>Outline colour</span><button class="color-swatch" type="button" data-ink="outlineColor" data-color="${esc(F.outlineColor || contrastInk(F.ink))}" style="background:${esc(F.outlineColor || contrastInk(F.ink))}" title="The outline round what is drawn over the images"${F.outline ? '' : ' disabled'}></button></div>
   </section>`;
 }
 /* The Images list, as the plots' composer lists series: a group per panel, its images
@@ -524,50 +493,26 @@ function imageGroupsHtml(L){
   }
   return out.join('');
 }
+// The controls drawn again (figure.js rebuildControls), the scroll kept; the pickers
+// hanging from their buttons go first, the buttons being replaced.
 function renderControls(){
   if (!controlsEl) return;
-  rebuilding = true;
-  colorPickerUI.close(); alignPicker.close();   // their buttons are about to be replaced
+  colorPickerUI.close(); alignPicker.close();
   const st = controlsEl.scrollTop;
-  controlsEl.innerHTML = controlsHtml();
+  rebuildControls();
   controlsEl.scrollTop = st;
-  rebuilding = false;
-  wireOrderDrag();
   renderPreview();
 }
 /* The images' rows dragged by their handles, as the plots' series are (figure.js
-   wireSeriesDrag): within a panel the gap that lights is where it goes; into another
+   wireRowDrag): within a panel the gap that lights is where it goes; into another
    panel with room, it moves there (its place in the first left empty); into a full
    one, it swaps with the image it is dropped on, which lights. */
 function wireOrderDrag(){
-  const rows = [...controlsEl.querySelectorAll('.fig-serie[data-id]')], groups = [...controlsEl.querySelectorAll('.fig-group[data-pg]')];
-  const groupAt = (x, y)=> groups.find(el=>{ const b = el.getBoundingClientRect(); return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right; }) || null;
   const places = ()=>{ const p = placesOf(), G = gridOf(p.length), per = F.gridAuto ? Math.max(1, p.length) : G.rows*G.cols, n = (F.gridAuto ? 1 : G.bRows*G.bCols)*per; while (p.length < n) p.push(null); return { p, per }; };
-  let from = null;
-  const target = e =>{
-    const gp = groupAt(e.clientX, e.clientY); if (!gp) return null;
-    const gRows = [...gp.querySelectorAll('.fig-serie[data-id]')], g = dropGap(gRows, e.clientY), self = gRows.findIndex(r=> r.dataset.id === from);
-    if (self >= 0 && (g === self || g === self + 1)) return null;
-    const { per } = places(), full = self < 0 && gRows.length >= per;
-    return { gp, gRows, g, b: +gp.dataset.pg, swap: full ? gRows[Math.min(g, gRows.length - 1)] : null };
-  };
-  const clear = ()=>{ rows.forEach(r=> r.classList.remove('drop-before', 'drop-after', 'drop-swap')); groups.forEach(g=> g.classList.remove('drag-into')); };
-  rows.forEach(row=>{
-    const handle = row.querySelector('.fig-grip');
-    handle.addEventListener('pointerdown', e=>{ e.preventDefault(); from = row.dataset.id; row.classList.add('dragging'); try { handle.setPointerCapture(e.pointerId); } catch(_){} });
-    handle.addEventListener('pointermove', e=>{
-      if (from == null) return;
-      clear();
-      const t = target(e); if (!t) return;
-      if (!t.gRows.some(r=> r.dataset.id === from)) t.gp.classList.add('drag-into');
-      if (t.swap){ t.swap.classList.add('drop-swap'); return; }
-      if (t.g < t.gRows.length) t.gRows[t.g].classList.add('drop-before'); else if (t.gRows.length) t.gRows[t.gRows.length - 1].classList.add('drop-after');
-    });
-    const finish = e=>{
-      if (from == null) return;
-      const t = target(e), id = from;
-      from = null; clear(); rows.forEach(r=> r.classList.remove('dragging'));
-      if (!t) return;
+  wireRowDrag('.fig-serie[data-id]', {
+    swapIn: (gp, gRows)=> gRows.length >= places().per,
+    onDrop(row, t){
+      const id = row.dataset.id, tb = +t.gp.dataset.pg;
       const { p, per } = places(), src = p.findIndex(m=> m && m.id === id);
       if (src < 0) return;
       if (t.swap){
@@ -580,26 +525,35 @@ function wireOrderDrag(){
         p[src] = null;
         const block = b => p.slice(b*per, (b + 1)*per).filter(Boolean);
         const put = (b, list)=>{ for (let k = 0; k < per; k++) p[b*per + k] = list[k] || null; };
-        if (sb !== t.b) put(sb, block(sb));
-        const list = block(t.b), before = t.g < t.gRows.length ? t.gRows[t.g].dataset.id : null;
+        if (sb !== tb) put(sb, block(sb));
+        const list = block(tb), before = t.g < t.gRows.length ? t.gRows[t.g].dataset.id : null;
         const at = before ? list.findIndex(m=> m.id === before) : list.length;
         list.splice(at < 0 ? list.length : at, 0, moved);
-        put(t.b, list);
+        put(tb, list);
       }
       F.order = p.map(m=> m ? m.id : '');
       commit(true);
-    };
-    handle.addEventListener('pointerup', finish);
-    handle.addEventListener('pointercancel', ()=>{ from = null; clear(); rows.forEach(r=> r.classList.remove('dragging')); });
+    },
   });
 }
-// Every change goes back to the module (saved, undoable), then is drawn; `rebuild` when
-// the controls themselves change (a box that locks a field, the order of the names).
-function commit(rebuild){
-  host.setFig(clone(F));
+/* Every change is drawn at once, and goes back to the module (saved, undoable) as one
+   step (save): at once, or, for a tick of a drag in the colour picker (`burst`), a
+   moment after the last, the drag one step: it made a step of every tick, pushing the
+   module's own steps out of its history (to v480). Only a drag waits: a field's edit
+   held back would be missing from the tab the page saves as it goes (sessions.js) on
+   a reload right after. An undo, an export, closing and the page hidden or left send
+   a drag's first (flush). `rebuild` when the controls themselves change (a box that
+   locks a field, the order of the names). */
+function commit(rebuild, burst){
+  if (burst){ clearTimeout(saveTimer); saveTimer = setTimeout(save, 250); } else save();
   if (rebuild) renderControls(); else renderPreview();
 }
+function save(){ clearTimeout(saveTimer); saveTimer = null; if (host && F) host.setFig(clone(F)); }
 const STRUCTURAL = new Set(['wmm', 'hmm', 'plotW', 'plotH', 'plotAuto', 'gridAuto', 'label.on', 'label.auto', 'label.orient', 'letter.on', 'letter.link', 'outline']);
+/* A field's number, inside its range (figure.js readNum); outside it the field shakes
+   and goes back. The field stays (rebuilt, it would take its shake with it) and goes
+   back to the last value it took. */
+const numOf = t =>{ const v = readNum(t); if (v != null) t.defaultValue = String(v); return v; };
 function wireControls(){
   controlsEl.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
   controlsEl.addEventListener('change', e=>{
@@ -614,13 +568,13 @@ function wireControls(){
         F.bars[key] = { auto: t.checked, um: t.checked ? cur.um : (m ? niceBar(m.w*m.pxNm/1000) : cur.um) };
         commit(true); return;
       }
-      const v = readNum(t); if (v == null) return;
+      const v = numOf(t); if (v == null) return;
       F.bars[key] = { ...cur, auto: false, um: v }; commit(false); return;
     }
     const path = t.dataset.p; if (!path) return;
     let v;
     if (t.type === 'checkbox') v = t.checked;
-    else if (t.dataset.num){ v = readNum(t); if (v == null) return; }
+    else if (t.dataset.num){ v = numOf(t); if (v == null) return; }
     else v = t.value;
     // Unlocked, a field starts from the value that was being chosen for it.
     if (path === 'plotAuto' && !v){ F.plotW = +sig3(lastPlot.w); F.plotH = +sig3(lastPlot.h); }
@@ -643,113 +597,65 @@ function wireControls(){
     const sw = e.target.closest('[data-ink]');
     if (sw && !sw.disabled){
       const key = sw.dataset.ink;
-      colorPickerUI.open(sw, key === 'ink' ? F.ink : (F.outlineColor || contrastOf(F.ink)), c=>{ F[key] = c; sw.style.background = c; sw.dataset.color = c; commit(false); });
+      colorPickerUI.open(sw, key === 'ink' ? F.ink : (F.outlineColor || contrastInk(F.ink)), c=>{
+        F[key] = c; sw.style.background = c; sw.dataset.color = c;
+        // An outline left to follow the ink: its swatch shows the colour it now takes. It
+        // went on showing the one for the ink before (to v480).
+        const o = controlsEl.querySelector('[data-ink="outlineColor"]');
+        if (key === 'ink' && !F.outlineColor && o){ const oc = contrastInk(c); o.style.background = oc; o.dataset.color = oc; }
+        commit(false, true);
+      });
     }
   });
-}
-// A field's number, inside its range; outside it the field shakes and goes back.
-// The field stays (rebuilt, it would take its shake with it) and goes back to the last
-// value it took.
-function readNum(t){
-  const v = parseFloat(String(t.value).replace(',', '.')), lo = +t.dataset.min, hi = +t.dataset.max;
-  if (!Number.isFinite(v) || v < lo || v > hi){ flashFieldInvalid(t); t.value = t.defaultValue; return null; }
-  t.defaultValue = String(v);
-  return v;
-}
-
-/* ---- Export ---- */
-async function svgString(){
-  const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  tmp.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  const L = draw(tmp, true);
-  if ((FONTS[F.font] || FONTS.Inter).embed){
-    const css = await interFontCss();
-    if (css){ const st = document.createElementNS('http://www.w3.org/2000/svg', 'style'); st.textContent = css; tmp.insertBefore(st, tmp.firstChild); }
-  }
-  tmp.setAttribute('width', L.W + 'mm'); tmp.setAttribute('height', L.H + 'mm');
-  return { str: new XMLSerializer().serializeToString(tmp), L };
-}
-// The figure at the chosen dpi. Through a blob URL: the drawing holds the images at
-// full size, too long a string for a data URL.
-async function pngBlob(){
-  const { str, L } = await svgString();
-  const scale = F.dpi/25.4, cv = document.createElement('canvas');
-  cv.width = Math.round(L.W*scale); cv.height = Math.round(L.H*scale);
-  const url = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
-  try {
-    const img = new Image();
-    await new Promise((res, rej)=>{ img.onload = res; img.onerror = ()=> rej(new Error('render failed')); img.src = url; });
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = F.bg; ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.drawImage(img, 0, 0, cv.width, cv.height);
-  } finally { URL.revokeObjectURL(url); }
-  return new Promise((res, rej)=> cv.toBlob(b=> b ? res(b) : rej(new Error('no blob')), 'image/png'));
-}
-async function copyPng(btn){
-  const done = txt => { btn.textContent = txt; setTimeout(()=>{ btn.textContent = 'Copy PNG'; }, 1200); };
-  try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob() })]); done('Copied'); }
-  catch(e){ try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': await pngBlob() })]); done('Copied'); } catch(e2){ done('Copy failed'); } }
 }
 
 // A page with no height yet (a new figure, or one whose height followed the layout
 // before v449): as tall as the images need at its width.
 function fillHeight(){ if (!(F.hmm > 0)) F.hmm = Math.max(10, Math.round(layout().natural(F.wmm)*10)/10); }
+/* The figure as the module holds it: the defaults filled in, named after its group
+   until named otherwise, as tall as its images need until given a height. At opening
+   and after an undo alike: an undo used to drop the group's name for SEM_figure (to
+   v480). */
+function load(){
+  const f = host.getFig();
+  F = withDefaults(f);
+  if (!(f && f.file) && host.title) F.file = 'SEM_' + String(host.title).replace(/[^\w.-]+/g, '_');
+  fillHeight();
+}
 
 /* ---- Opening ----
    h: { title (the group's name), images() → [{ id, label, group {id, name, mode}, w, h,
-        pxNm, key, canvas(fit) }], getFig(), setFig(fig) }. Returns { refresh, close }: refresh after the module's
-   state changed under it (an undo). */
+        pxNm, key, canvas(fit) }], getFig(), setFig(fig), alive() (its group is still
+        there) }. Opens the composer on the group's figure (figure.js openComposer):
+   gives { open, refresh, close }, or null while a composer is open. refresh after the
+   module's state changed under it (an undo). Undo is the page's: the figure has no
+   history of its own. */
 export function openSemFigure(h){
-  host = h; F = withDefaults(h.getFig());
-  // A group's figure is named after it until named otherwise.
-  if (!(h.getFig() && h.getFig().file) && h.title) F.file = 'SEM_' + String(h.title).replace(/[^\w.-]+/g, '_');
-  fillHeight();
-  view = { z: 1, x: 0, y: 0 };
-  backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop fig-backdrop';
-  backdrop.lang = 'en';
-  backdrop.innerHTML = `
-    <div class="fig-box">
-      <div class="fig-head">
-        <h3 class="txt-head" style="margin:0">Figure composer</h3>
-        <button class="fig-x close-x" type="button" aria-label="Close">✕</button>
-      </div>
-      <div class="fig-body">
-        <div class="fig-preview"><svg class="fig-svg sem-fig-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
-        <div class="fig-controls"></div>
-      </div>
-      <div class="fig-foot">
-        <span class="txt-meta fig-dim"></span>
-        <span style="flex:1"></span>
-        <button class="btn btn-sm" type="button" data-fig-reset title="Every setting back to its default">Reset</button>
-        <button class="btn btn-sm" type="button" data-fig-svg title="Save the figure as a vector file, with the images in it">Export SVG</button>
-        <button class="btn btn-sm" type="button" data-fig-png title="Save the figure as an image at the chosen dpi">Export PNG</button>
-        <button class="btn primary" type="button" data-fig-copy title="Copy the figure to the clipboard">Copy PNG</button>
-      </div>
-    </div>`;
-  document.body.appendChild(backdrop);
-  svgEl = backdrop.querySelector('.fig-svg'); controlsEl = backdrop.querySelector('.fig-controls'); dimEl = backdrop.querySelector('.fig-dim');
-  wireControls(); wireView();
-  const close = ()=>{
-    document.removeEventListener('keydown', onKey); window.removeEventListener('resize', renderPreview);
-    colorPickerUI.close(); alignPicker.close();
-    backdrop.remove(); backdrop = svgEl = controlsEl = dimEl = null; F = null; host = null; urls.clear();
-    api.open = false;
-  };
-  const onKey = e=>{ if (e.key === 'Escape') close(); };
-  document.addEventListener('keydown', onKey);
-  window.addEventListener('resize', renderPreview);
-  backdrop.querySelector('.fig-x').addEventListener('click', close);
-  backdrop.addEventListener('click', e=>{ if (e.target === backdrop) close(); });
-  backdrop.querySelector('[data-fig-reset]').addEventListener('click', ()=>{ F = withDefaults({ file: F.file }); fillHeight(); commit(true); });
-  backdrop.querySelector('[data-fig-svg]').addEventListener('click', async ()=>{ saveBlob((F.file || 'SEM_figure') + '.svg', (await svgString()).str, 'image/svg+xml'); });
-  backdrop.querySelector('[data-fig-png]').addEventListener('click', async ()=>{ saveBlob((F.file || 'SEM_figure') + '.png', await pngBlob()); });
-  const copyBtn = backdrop.querySelector('[data-fig-copy]');
-  if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write) copyBtn.addEventListener('click', ()=> copyPng(copyBtn));
-  else { copyBtn.remove(); backdrop.querySelector('[data-fig-png]').classList.replace('btn-sm', 'primary'); }
-  requestAnimationFrame(renderControls);
-  const api = { open: true, refresh(){ if (!backdrop) return; F = withDefaults(host.getFig()); fillHeight(); renderControls(); }, close };
-  return api;
+  return openComposer({
+    open(){ host = h; load(); },
+    size(){ const L = layout(); return { W: L.W, H: L.H }; },
+    draw(svg, full){ const L = draw(svg, full); if (!full) lastL = L; return { W: L.W, H: L.H }; },
+    dimText, afterRender, controlsHtml,
+    val: (at, key)=> get(key),
+    afterRebuild: wireOrderDrag,
+    wire: wireControls,
+    flush(){ if (saveTimer !== null) save(); },
+    reset(){ F = withDefaults({ file: F.file }); fillHeight(); commit(true); },
+    /* The settings now in force, after an undo: an edit not yet sent is dropped, the
+       module's state is what holds. With its group gone (an undo past a Reset of the
+       groups, which makes them anew), it closes: it showed an empty figure and wrote
+       into a group that no longer was (to v480). */
+    refresh(){
+      clearTimeout(saveTimer); saveTimer = null;
+      if (host.alive && !host.alive()){ closeComposer(); return; }
+      load(); renderControls();
+    },
+    closing(){ clearTimeout(saveTimer); saveTimer = null; urls.clear(); host = F = lastL = null; },
+    dpi: ()=> F.dpi, file: ()=> F.file || 'SEM_figure', paper: ()=> F.bg, font: ()=> F.font,
+    svgClass: 'sem-fig-svg',
+    footHtml: '<button class="btn btn-sm fig-reset" type="button" data-fig-reset title="Every setting back to its default">Reset</button>',
+    titles: { svg: 'Save the figure as a vector file, with the images in it', png: 'Save the figure as an image at the chosen dpi', copy: 'Copy the figure to the clipboard' },
+  });
 }
 
 export { FIG_DEF, niceBar, lenText };

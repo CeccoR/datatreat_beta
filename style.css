@@ -2618,6 +2618,8 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   display: flex; flex-direction: column;
   width: 100%; height: 100%; overflow: hidden;
 }
+/* It takes the focus while open (keys stay in it), with no ring round the whole box. */
+.fig-box:focus { outline: none; }
 .fig-head {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0;
@@ -2958,6 +2960,8 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   display: flex; align-items: center; gap: 8px;
   padding: 10px 16px; border-top: 1px solid var(--line); flex-shrink: 0;
 }
+/* Why an export failed (a PNG too large for the browser, say), beside the readout. */
+.fig-msg { color: var(--bad); }
 @media (max-width: 900px) {
   /* Stacked: the preview keeps a guaranteed share of the height instead of being
      squeezed to nothing by the controls' own content, which is what `flex: 1 1 auto`
@@ -3009,6 +3013,7 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
      export buttons sat off-screen. It wraps now, readout first, actions after. */
   .fig-foot { flex-wrap: wrap; padding: 8px 10px; gap: 6px; }
   .fig-foot .fig-dim { flex: 1 0 100%; font-size: 10px; }
+  .fig-foot .fig-msg { flex: 1 0 100%; font-size: 11px; }
   .fig-foot > span[style] { display: none; }     /* the desktop spacer */
   .fig-presets { flex: 1 1 100%; border-right: none; padding-right: 0; margin-right: 0; flex-wrap: wrap; }
   .fig-presets select { flex: 1 1 90px; max-width: none; }
