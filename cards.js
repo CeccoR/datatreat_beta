@@ -104,6 +104,16 @@ function foldTo(card, fold){
     an.onfinish = ()=>{ if (body._anim === an){ body._anim = null; card.classList.remove('an-anim'); } };
   };
 }
+/* A card an undo or a redo brings back or takes away grows from nothing or shrinks to it,
+   as a fold goes: its height, with its padding, border and margins, and its opacity. */
+const BOX = ['height', 'paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth', 'marginTop', 'marginBottom'];
+const NO_BOX = { ...Object.fromEntries(BOX.map(k=> [k, '0px'])), opacity: 0 };
+// Where a card's box is now, an animation's under way too.
+function boxOf(el){
+  const cs = getComputedStyle(el);
+  return { ...Object.fromEntries(BOX.map(k=> [k, k === 'height' ? el.getBoundingClientRect().height + 'px' : cs[k]])), opacity: +cs.opacity };
+}
+const reduced = ()=> matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // In file names: no path or reserved characters, and no comma (CSV names travel
 // comma-separated on their buttons). A colon, as in "Tauc: allowed direct", is dropped
@@ -144,10 +154,11 @@ const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
      switched(rec, from)        a card just turned into another kind, built and named
      wake(rec)                  a card unfolded by its arrow, or one unfolding at the end of a move
                                 that a draw was skipped for meanwhile: bring it up to date (it was
-                                not drawn folded); laid out, not yet seen
-     folded(rec)                a card folded by its arrow: what it had going on show is left (an
-                                XRPD card's peak being placed). Not for the folds of a move, which
-                                the cards come out of as they were
+                                not drawn folded); laid out, not yet seen. One an undo or a redo
+                                unfolds is laid out unseen the same, and drawn by the restore itself
+     folded(rec)                a card folded by its arrow, or by an undo or a redo: what it had
+                                going on show is left (an XRPD card's peak being placed). Not for
+                                the folds of a move, which the cards come out of as they were
      commit()                   a step of the undo history
    } */
 export function createDeck(o){
@@ -203,15 +214,166 @@ export function createDeck(o){
     wireCard(a, card);
     syncFoldButton(a);
   }
-  const mount = a => buildCard(a, card=> o.list.insertBefore(card, o.addBar));
-  function unmount(a){
+  // p: the step of the history that brings the card back, to grow it as the step ends.
+  function mount(a, p){
+    const from = unghost(a.id);
+    buildCard(a, card=> o.list.insertBefore(card, o.addBar));
+    if (p) p.grow.push([live.get(a.id), from]);
+  }
+  // fade: an undo or a redo takes the card away, and a copy of it shrinks where it was.
+  function unmount(a, fade){
     const card = live.get(a.id);
     if (!card) return;
+    if (fade) leave(a.id, card);
+    stopGrow(card);
     card.remove();
     live.delete(a.id);
     o.drop(a);
   }
-  const placeCards = ()=> recs.forEach(a=> o.list.insertBefore(live.get(a.id), o.addBar));
+  // Each card after the one before it, in the records' order: a card already there is left
+  // alone, and a copy shrinking keeps its place among them. Every card was put in again at
+  // every load (to v503), which would have sent the copies above them all, and took the
+  // focus off a field in a card that had not moved.
+  function placeCards(){
+    let prev = null;
+    recs.forEach(a=>{
+      const c = live.get(a.id);
+      let p = c.previousElementSibling;
+      while (p && !p.classList.contains('an-card')) p = p.previousElementSibling;
+      if (p !== prev) o.list.insertBefore(c, prev ? prev.nextSibling : o.list.firstChild);
+      prev = c;
+    });
+  }
+
+  /* ---- The steps of the history, animated ----
+     A card an undo or a redo takes away leaves a copy of itself, which shrinks where it was
+     and then goes, while the card is gone at once, its panel dropped (o.drop), as one closed
+     by its ×. A copy: no handler, no id (its plots' clips renamed), no field of a form, none
+     focused or clicked (inert), none counted as a card; drawn as the card was (a canvas, a
+     select's choice, a fold under way, none of which a copy carries). A card brought back
+     grows from nothing, or from where its copy had got to. */
+  const ghosts = new Map();     // id → the copy of a card taken away, shrinking
+  let ghostN = 0;
+  function leave(id, card){
+    if (!card.getClientRects().length) return;
+    const g = card.cloneNode(true), from = boxOf(card);
+    g.classList.remove('an-card', 'an-anim');
+    g.removeAttribute('data-an');
+    const src = card.querySelectorAll('canvas, select'), dst = g.querySelectorAll('canvas, select');
+    // (a canvas that cannot be read is left blank in the copy)
+    src.forEach((s, i)=>{ try { if (s.tagName === 'SELECT') dst[i].selectedIndex = s.selectedIndex; else if (s.width && s.height) dst[i].getContext('2d').drawImage(s, 0, 0); } catch(e){} });
+    const clips = new Map();
+    g.querySelectorAll('[id]').forEach(e=>{
+      if (e.tagName !== 'clipPath'){ e.removeAttribute('id'); return; }
+      const n = 'an-ghost' + (++ghostN);
+      clips.set(e.id, n);
+      e.id = n;
+    });
+    g.querySelectorAll('[clip-path]').forEach(e=>{ const m = /^url\(#(.+)\)$/.exec(e.getAttribute('clip-path')); if (m && clips.has(m[1])) e.setAttribute('clip-path', `url(#${clips.get(m[1])})`); });
+    g.querySelectorAll('[name]').forEach(e=> e.removeAttribute('name'));
+    // (what the card's own class gave it: the folded body out, the chevron turned)
+    const body = card.querySelector(':scope > .an-body'), gb = g.querySelector(':scope > .an-body');
+    if (!body.getClientRects().length) gb.style.display = 'none';
+    else if (card.classList.contains('an-anim')) Object.assign(gb.style, { height: body.getBoundingClientRect().height + 'px', overflow: 'hidden', opacity: getComputedStyle(body).opacity });
+    g.querySelector('.an-fold svg').style.transform = getComputedStyle(card.querySelector('.an-fold svg')).transform;
+    if (!card.querySelector('.an-head .instr-info').getClientRects().length) g.querySelector('.an-head .instr-info').style.display = 'none';
+    g.inert = true;
+    g.setAttribute('aria-hidden', 'true');
+    g.style.overflow = 'hidden';
+    card.before(g);
+    const an = g._an = g.animate([from, NO_BOX], { duration: FOLD_MS, easing: FOLD_EASE, fill: 'forwards' });
+    ghosts.set(id, g);
+    an.onfinish = an.oncancel = ()=>{ if (ghosts.get(id) === g) ghosts.delete(id); g.remove(); };
+  }
+  // The copy of a card taken off at once: the card is back (its box given, where the copy had
+  // got to), or a state is loaded otherwise.
+  function unghost(id){
+    const g = ghosts.get(id);
+    if (!g) return null;
+    const box = g.getClientRects().length ? boxOf(g) : null;
+    ghosts.delete(id);
+    g._an.cancel();
+    g.remove();
+    return box;
+  }
+  function grow(card, from, to){
+    card.style.overflow = 'hidden';
+    const an = card._grow = card.animate([from, to], { duration: FOLD_MS, easing: FOLD_EASE });
+    an.onfinish = ()=>{ if (card._grow === an){ card._grow = null; card.style.overflow = ''; } };
+  }
+  function stopGrow(card){
+    const an = card._grow;
+    if (!an) return;
+    card._grow = null;
+    card.style.overflow = '';
+    an.cancel();
+  }
+  /* A card still growing folded or unfolded (by a step, its arrow, a move): its growth gives
+     way to one from where it had got to, to its box once the fold is made, beside the body's
+     slide and as long, so the card goes on from there. Left, the growth held the card on
+     towards the box it had measured, the body folding or unfolding inside it, and the card
+     took its new height in a frame as the growth ended. foldTo's two steps, the same. */
+  function foldCard(card, fold){
+    if (!card._grow || card.classList.contains('is-folded') === fold) return foldTo(card, fold);
+    const from = boxOf(card);
+    stopGrow(card);
+    const go = foldTo(card, fold);
+    return ()=>{
+      // (the box with the fold made: a folded body out, an unfolded one at its height, drawn)
+      card.classList.remove('an-anim');
+      const to = card.getClientRects().length ? { ...boxOf(card), opacity: 1 } : null;
+      card.classList.add('an-anim');
+      go();
+      if (to && !reduced()) grow(card, from, to);
+    };
+  }
+  /* What an undo or a redo leaves to do as it ends, the restore it makes done and drawn: a
+     microtask, run as the history's key listener (utils.js) returns, the key's dispatch
+     still under way (a listener after it runs after this), before the page is painted. The
+     folds it made are animated (an unfold laid out unseen until then, its panel drawn by the
+     restore), the cards it brought back grow and the copies of those it took away shrink,
+     all together; the first card brought back is brought into view (revealBy). */
+  let pend = null;
+  function later(){
+    if (!pend){
+      const p = pend = { go: [], grow: [], back: null };
+      queueMicrotask(()=>{ if (pend === p){ pend = null; stepEnd(p); } });
+    }
+    return pend;
+  }
+  /* The card brought back into view: below it, the page scrolls down to where the card will
+     be once grown, measured as the page will be when the animations end (the copies gone,
+     the folds made), as the card grows (to v503 measured a frame on, nothing growing).
+     Above it, the card is put whole at once, and the page scrolls up to it a frame on, as
+     before: the browser keeps what is on screen in place while the content above it changes
+     (scroll anchoring), which a growth there would fight, out of sight as it is. */
+  function stepEnd(p){
+    const card = p.back && live.get(p.back.id), smooth = { behavior: reduced() ? 'instant' : 'smooth' };
+    let dy = 0;
+    if (card){
+      const gs = [...ghosts.values()], fs = [...o.list.querySelectorAll(':scope > .an-card.is-folded.an-anim')];
+      gs.forEach(g=> g.style.display = 'none');
+      fs.forEach(c=> c.classList.remove('an-anim'));
+      dy = revealBy(card);
+      if (dy > 0) window.scrollBy({ top: dy, ...smooth });
+      gs.forEach(g=> g.style.display = '');
+      fs.forEach(c=> c.classList.add('an-anim'));
+    }
+    if (dy < 0){
+      p.grow = p.grow.filter(([c])=> c !== card);
+      requestAnimationFrame(()=>{ const d = revealBy(card); if (d) window.scrollBy({ top: d, ...smooth }); });
+    }
+    const to = p.grow.map(([c])=> c.isConnected && c.getClientRects().length ? { ...boxOf(c), opacity: 1 } : null);
+    p.go.forEach(f=> f());
+    p.grow.forEach(([c, from], i)=>{ if (to[i]) grow(c, from || NO_BOX, to[i]); });
+  }
+  // A load that is no step (a tab's state, a project opened, a CSV export's state): nothing
+  // animated, and what a step left going is ended at once.
+  function quiet(){
+    pend = null;
+    [...ghosts.keys()].forEach(unghost);
+    live.forEach(stopGrow);
+  }
 
   function wireCard(a, card){
     const q = s => card.querySelector(s);
@@ -242,7 +404,8 @@ export function createDeck(o){
     b.setAttribute('aria-label', a.collapsed ? 'Unfold analysis' : 'Fold analysis');
     b.setAttribute('aria-expanded', String(!a.collapsed));
   }
-  // A restore puts the folds where they were, without the animation.
+  // A state loaded that is no step of the history (or one with the motion reduced) puts the
+  // folds where they were, without the animation.
   function applyFold(a){
     const card = live.get(a.id), body = card.querySelector(':scope > .an-body');
     if (body._anim){ body._anim.cancel(); body._anim = null; }
@@ -257,7 +420,7 @@ export function createDeck(o){
   function setFold(a, folded){
     a.collapsed = folded;
     syncFoldButton(a);
-    const go = foldTo(live.get(a.id), folded);
+    const go = foldCard(live.get(a.id), folded);
     try { if (!folded && o.wake) o.wake(a); else if (folded && o.folded) o.folded(a); } finally { go(); }
     o.commit();
   }
@@ -291,7 +454,7 @@ export function createDeck(o){
     card.classList.add('an-moving');
     document.body.classList.add('an-dragging');
     missed.clear();
-    recs.forEach(x=> foldTo(live.get(x.id), true)());
+    recs.forEach(x=> foldCard(live.get(x.id), true)());
     const onMove = ev =>{ moving.y = ev.clientY; };
     const onUp = ()=>{
       window.removeEventListener('pointermove', onMove);
@@ -337,7 +500,7 @@ export function createDeck(o){
     const y0 = m.card.getBoundingClientRect().top, open = recs.filter(x=> !x.collapsed);
     const stale = open.filter(x=> missed.has(x.id));
     missed.clear();
-    const go = open.map(x=> foldTo(live.get(x.id), false));
+    const go = open.map(x=> foldCard(live.get(x.id), false));
     try {
       if (order.join() !== was) afterChange();
       if (o.wake) stale.forEach(x=> o.wake(x));
@@ -415,20 +578,16 @@ export function createDeck(o){
   /* A card an undo or a redo brings back (closed by its ×, or added, and the step undone or
      redone) is brought into view, as a card added is, where it is not in view already: in
      view, its head is whole on screen, under the page's sticky bar, or the card covers the
-     screen. A frame on, the restore done and laid out; smoothly (at once, the motion
-     reduced), the card whole where it fits, else from its head. Up to v499 it came back
-     where it had been, off screen as often as not, and the page did not move. */
-  function reveal(a){
-    requestAnimationFrame(()=>{
-      const card = live.get(a.id);
-      if (!card || !card.isConnected || !card.getClientRects().length) return;
-      const bar = document.getElementById('topbar'), top = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
-      const r = card.getBoundingClientRect(), h = card.querySelector(':scope > .an-head').getBoundingClientRect(), bot = window.innerHeight;
-      if ((h.top >= top && h.bottom <= bot) || (r.top <= top && r.bottom >= bot)) return;
-      const M = 12, fits = r.height + 2*M <= bot - top;
-      const dy = fits && r.top > top ? r.bottom + M - bot : r.top - M - top;
-      window.scrollBy({ top: dy, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-    });
+     screen. Smoothly (at once, the motion reduced), the card whole where it fits, else from
+     its head (as the step ends: stepEnd). The scroll it takes; 0, none. Up to v499 it came
+     back where it had been, off screen as often as not, and the page did not move. */
+  function revealBy(card){
+    if (!card.isConnected || !card.getClientRects().length) return 0;
+    const bar = document.getElementById('topbar'), top = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
+    const r = card.getBoundingClientRect(), h = card.querySelector(':scope > .an-head').getBoundingClientRect(), bot = window.innerHeight;
+    if ((h.top >= top && h.bottom <= bot) || (r.top <= top && r.bottom >= bot)) return 0;
+    const M = 12, fits = r.height + 2*M <= bot - top;
+    return fits && r.top > top ? r.bottom + M - bot : r.top - M - top;
   }
   // The card is rebuilt for the other kind in place; the module keeps what the kind left
   // had (build's prev) and gives it back if the card turns into it again.
@@ -451,11 +610,17 @@ export function createDeck(o){
   // and 1e308 made element ids no selector reads and nextId give the same id twice).
   const isKind = t => Object.prototype.hasOwnProperty.call(kinds, t);
   const okId = id => Number.isInteger(id) && id >= 1 && id <= 1e6;
+  /* An undo or a redo (step) animates what it changes: a fold as the arrow does, a card
+     brought back growing in its place, one taken away shrinking out of it (a card turned
+     into another kind is rebuilt in place, as a switch is, and a move only puts the cards in
+     order); the motion reduced, nothing. Up to v503 a step put each as it was at once. */
   function load(list, read, keep){
     list = list.filter(s=> s && (s.type == null || isKind(s.type)));
     // (the cards in the page before: one not among them that an undo or a redo brings is
     // brought into view, the first of them)
-    const step = stepping(), was = new Set(live.keys());
+    const step = stepping(), motion = step && !reduced(), was = new Set(live.keys());
+    if (!step) quiet();
+    const p = step ? later() : null;
     const old = new Map(recs.map(a=> [a.id, a]));
     const seen = new Set();
     let free = list.reduce((m, s)=> okId(s.id) ? Math.max(m, s.id) : m, 0) + 1;
@@ -467,21 +632,25 @@ export function createDeck(o){
       const a = old.get(s.id);
       if (a && a.type === s.type && live.has(a.id)){
         old.delete(a.id);
+        // (a fold under way to where the state has it is left to end)
+        const card = live.get(a.id), flip = card.classList.contains('is-folded') !== s.collapsed;
         Object.assign(a, s);
         keep(a);
-        applyFold(a);
+        if (!motion) applyFold(a);
+        else if (flip){ p.go.push(foldCard(card, a.collapsed)); syncFoldButton(a); }
+        if (step && flip && a.collapsed && o.folded) o.folded(a);
         return a;
       }
       return s;
     });
-    // Left in `old`: gone, or back as another kind.
-    old.forEach(a=> unmount(a));
+    // Left in `old`: gone, or back as another kind (its id still there).
+    const ids = new Set(next.map(s=> s.id));
+    old.forEach(a=> unmount(a, motion && !ids.has(a.id)));
     recs = next;
-    recs.forEach(a=>{ if (!live.has(a.id)) mount(a); });
+    recs.forEach(a=>{ if (!live.has(a.id)) mount(a, motion && !was.has(a.id) ? p : null); });
     placeCards();
     afterChange(true);
-    const back = step ? recs.find(a=> !was.has(a.id)) : null;
-    if (back) reveal(back);
+    if (step && !p.back) p.back = recs.find(a=> !was.has(a.id)) || null;
   }
   // What a record saves of itself (the module adds its panel's).
   const saved = a => ({ id: a.id, type: a.type, base: a.base, nameAuto: a.nameAuto, collapsed: a.collapsed });
