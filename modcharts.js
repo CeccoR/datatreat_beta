@@ -25,9 +25,20 @@ export const plotWrap = (id, { legend, mod, csv, name = id + '.svg', cls = '', e
 export const swatchLegend = list => list.map(f=> `<span><i style="background:${esc(f.color)}"></i>${esc(f.label)}</span>`).join('');
 
 /* The zoom a plot is at, to keep across a redraw that builds it anew or sets its range
-   again (null with no plot drawn yet), and that zoom put back after the range is set. */
-export const viewOf = p => p && isFinite(p.xmin) ? { xmin: p.xmin, xmax: p.xmax, ymin: p.ymin, ymax: p.ymax } : null;
-export const setView = (p, v)=>{ if (v) Object.assign(p, v); };
+   again (null with no plot drawn yet), and that zoom put back after the range is set: only
+   on the data it was set on, `key` naming them (the files shown, in order) and the full
+   range just set the one the plot had. Else the plot shows the full range: to v494 a card
+   unfolded kept the zoom it had folded, on files since removed, moved, left out or
+   changed. */
+const homeOf = p => [p._origXmin, p._origXmax, p._origYmin, p._origYmax];
+export const viewOf = p => p && isFinite(p.xmin) ? { xmin: p.xmin, xmax: p.xmax, ymin: p.ymin, ymax: p.ymax, home: homeOf(p), key: p._viewKey } : null;
+export function setView(p, v, key = ''){
+  const home = homeOf(p);
+  p._viewKey = key;
+  if (v && v.key === key && v.home.every((x, i)=> x === home[i])) Object.assign(p, { xmin: v.xmin, xmax: v.xmax, ymin: v.ymin, ymax: v.ymax });
+}
+// The key of a plot's data (setView): the files it shows, in order.
+export const viewKey = list => list.map(f=> f.name).join('\n');
 
 /* The chips over a chart choosing which of its series it shows (GC's gases, DRS's two
    E_g and two E_U): a chip per option, on while its series is shown (`shown`, keys),

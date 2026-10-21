@@ -59,7 +59,7 @@ DataTreat is a modular application. New analysis modules may be added in the fut
 Analyze diffuse reflectance spectroscopy (DRS) data in the UV-Visible range to assess light absorption and estimate semiconductor band gaps.
 
 **Instrument compatibility**: Cary 5000  
-**File format**: CSV or TXT with two columns (wavelength in nm, Kubelka-Munk absorbance F(R)). The field separator (`;`, `,`, a tab or spaces) and the decimal mark (`.` or `,`) are found in each file; fields may be in quotes; the text may be UTF-8 or UTF-16, with or without its byte-order mark.
+**File format**: CSV or TXT with two columns: the wavelength in nm, and F(R) (the Kubelka-Munk function) or the reflectance in percent. A second column headed `%R`, `R%`, `R (%)` or `Reflectance (%)` is the reflectance, as the Cary 5000 exports it (`Wavelength (nm),%R`, the sample's name above, the method's parameters after the data), converted to F(R) = (1 − R)²/2R; one headed `F(R)` is F(R); a file with neither header is taken as F(R), and the alert says so. Points with no physical value (R outside 0–100 % or of 0, F(R) below 0, a value that is no number) are left out, and the alert says how many and why. The field separator (`;`, `,`, a tab or spaces) and the decimal mark (`.` or `,`) are found in each file; fields may be in quotes; the text may be UTF-8 or UTF-16, with or without its byte-order mark.
 
 **How to use**:
 
@@ -130,6 +130,7 @@ Assess H₂ and O₂ production rates from gas chromatography data, including li
 2. Set parameters for each sample:
    - **m (mg)**: Catalyst mass in milligrams
    - **Q (mL/min)**: Carrier gas flow rate
+   - **T (°C)**: The temperature the flow Q is given at (25 °C by default; the same for every sample, or one each with *all / one*). The molar volume is V<sub>m</sub> = RT/P at 1 atm, so the rates scale with it: for a mass-flow controller that reports standard flow, use the reference temperature on its datasheet (0, 20 or 25 °C), not its body's; for a flow measured as a volume (a bubble meter), the gas temperature where it is measured. Projects saved before v495 keep 0 °C.
    - **Light-on date/time**: When irradiation started (determines when H₂ production begins)
 
 3. Adjust the **time interval** (in hours from light-on) for rate calculation:

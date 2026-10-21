@@ -1,8 +1,8 @@
 import { fmtNum, fmtData, setupDropzone, movingAverage, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumberInputs, esc } from './utils.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-import { moduleKit, wideCsv } from './modkit.js';
-import { plotWrap, swatchLegend, viewOf, setView } from './modcharts.js';
+import { moduleKit, wideCsv, num, numStr, finitePairs, cardList } from './modkit.js';
+import { plotWrap, swatchLegend, viewOf, setView, viewKey } from './modcharts.js';
 import { decodeText } from './textdata.js';
 
 /* =========================================================
@@ -19,10 +19,17 @@ import { decodeText } from './textdata.js';
       document.getElementById('eprPendingWrap').innerHTML = p.pending;
     },
     refresh: afterFilesChange,
-    redraw: ()=> updateEpr(),
+    // A label or a colour changed: the zoom kept, the data being the same.
+    redraw: ()=> updateEpr(true),
     snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), norm: a.norm, smooth: a.smooth })) }),
+    // A file as a restore takes it (modkit RESTORED): its field and intensities, the points
+    // where both are numbers, two at least (else it is left out).
+    file: f =>{
+      const p = finitePairs(f.b, f.a);
+      return p && p[0].length > 1 ? { ...f, b: p[0], a: p[1], rescaled: f.rescaled !== false } : null;
+    },
     // A project from before the cards had one analysis, its settings at the top level.
-    restore: s => deck.load(Array.isArray(s.cards) ? s.cards : [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }], readCard, a=>{
+    restore: s => deck.load(cardList(s.cards, KINDS) || [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }], readCard, a=>{
       const card = deck.cardOf(a);
       card.querySelector('#' + P(a) + 'Norm').value = a.norm;
       card.querySelector('#' + P(a) + 'Smooth').value = a.smooth;
@@ -62,11 +69,15 @@ import { decodeText } from './textdata.js';
     return b;
   }
 
+  /* A pair read: the spectrum, or { error } saying why it cannot be: a field axis needs
+     two points at least and its start and width (with XPTS 1 every field was NaN, to
+     v483), and the data must be in a format the reader knows and as long as XPTS says. */
   async function processPair(stem, dtaFile, dscFile){
     const dscBytes = new Uint8Array(await dscFile.arrayBuffer());
     const p = parseDsc(decodeText(dscBytes));
     const npts = parseInt(p.XPTS);
-    if (!npts){ return null; }
+    if (!(npts >= 2)) return { error: p.XPTS == null ? 'its .DSC gives no XPTS, the number of points' : `XPTS ${dscWord(p.XPTS)}: a spectrum needs two points at least` };
+    if (!isFinite(parseFloat(p.XMIN)) || !isFinite(parseFloat(p.XWID))) return { error: 'its .DSC gives no field axis (XMIN and XWID)' };
 
     const bigEndian = (p.BSEQ || 'BIG') !== 'LIT';
     const dtaBuf = await dtaFile.arrayBuffer();
@@ -77,10 +88,10 @@ import { decodeText } from './textdata.js';
     const fmt = dscWord(p.IRFMT).split(',')[0].toUpperCase() || 'D';
     const READ = { D: [8, (o, le)=> view.getFloat64(o, le)], F: [4, (o, le)=> view.getFloat32(o, le)],
                    I: [4, (o, le)=> view.getInt32(o, le)],   S: [2, (o, le)=> view.getInt16(o, le)], C: [1, o=> view.getInt8(o)] };
-    if (!READ[fmt]) return null;
+    if (!READ[fmt]) return { error: `IRFMT ${fmt}: a data format not read` };
     const [size, read] = READ[fmt];
     const stride = dscWord(p.IKKF).split(',')[0].toUpperCase() === 'CPLX' ? 2 : 1;
-    if (dtaBuf.byteLength < npts * stride * size) return null;
+    if (dtaBuf.byteLength < npts * stride * size) return { error: `its .DTA holds fewer than the ${npts} points its .DSC gives` };
     const s = [];
     for (let i = 0; i < npts; i++)
       s.push(read(i * stride * size, !bigEndian));
@@ -119,9 +130,10 @@ import { decodeText } from './textdata.js';
     const unpaired = [];
     for (const [stem, pair] of Object.entries(groups)){
       if (pair.dta && pair.dsc){
-        const result = await processPair(stem, pair.dta, pair.dsc);
-        if (result){ result.color = nextColor(allFiles); kit.add(result); existingStems.add(stem); }
-        else { invalidFiles.push(stem); }
+        let result;
+        try { result = await processPair(stem, pair.dta, pair.dsc); } catch(e){ result = { error: String(e && e.message || e) }; }
+        if (!result.error){ result.color = nextColor(allFiles); kit.add(result); existingStems.add(stem); }
+        else { invalidFiles.push(`${stem} (${result.error})`); }
       } else {
         unpaired.push((pair.dta || pair.dsc).name);
       }
@@ -179,8 +191,9 @@ import { decodeText } from './textdata.js';
     wake: a=>{ if (files.length) drawCard(a, true); },
   });
   const cards = ()=> deck.records;
-  // A card's settings in the history: its normalization and smoothing (kit.snapshot).
-  const readCard = s => ({ norm: normOf(s.norm), smooth: Math.max(1, Math.round(+s.smooth) || DEF.smooth) });
+  // A card's settings in the history: its normalization and smoothing (kit.snapshot), a
+  // whole number from 1 (a string in a project from before the cards; modkit RESTORED).
+  const readCard = s => ({ norm: normOf(s.norm), smooth: Math.round(num(numStr(s.smooth), DEF.smooth, v=> v >= 1)) });
 
   // Every card unfolded is drawn; a folded one is drawn as it comes back (wake).
   function updateEpr(preserveView){
@@ -193,6 +206,7 @@ import { decodeText } from './textdata.js';
     let Y = files.map(f=>movingAverage(f.a, N));
     // A fresh Plot is built each render, so grab the outgoing view first to keep the
     // current zoom on a resize / tab-switch redraw instead of snapping to full range.
+    // (only on the same spectra and the same full range: modcharts setView)
     const prev = preserveView ? viewOf(document.getElementById(P(a) + 'Svg')._plot) : null;
     /* The field is each spectrum's rescaled to 9.5 GHz (buildBAxis), so the axis says so
        and carries g along the top: g = hν/(μ_B·B) at that ν, 678.753 mT / B. A file
@@ -214,11 +228,13 @@ import { decodeText } from './textdata.js';
       Y = Y.map((y,k)=>{ const mid=(maxArr(y)+minArr(y))/2; return y.map(v=>v-mid+baseOf(k)+0.55*unit); });
     } else {
       Y = Y.map(y=>{ const m=minArr(y); return y.map(v=>v-m); });
-      const gmax = Math.max(...Y.map(maxArr));
-      Y = Y.map((y,k)=>{ const mid=maxArr(y)/(2*gmax); return y.map(v=>v/gmax+baseOf(k)+0.55-mid); });
+      // Spectra all flat have no peak-to-peak to divide by: drawn as they are, each a line
+      // in its slot (to v494 0/0 drew nothing).
+      const gmax = Math.max(...Y.map(maxArr)), g = gmax > 0 && isFinite(gmax) ? gmax : 1;
+      Y = Y.map((y,k)=>{ const mid=maxArr(y)/(2*g); return y.map(v=>v/g+baseOf(k)+0.55-mid); });
     }
     plot.setRange(minArr(allB), maxArr(allB), baseOf(n-1), baseOf(0)+1.1*unit);
-    setView(plot, prev);
+    setView(plot, prev, viewKey(files));
     plot.drawAxes();
     // The composer gets the CSV's own "Smoothed_" column (smoothedOut): the same numbers
     // as the export, without the stacking offset.

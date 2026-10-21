@@ -7,8 +7,9 @@
    No element may come of it anywhere. Page errors fail F and A; under B a project of
    nonsense numbers may fail to draw (a known XRPD error on its sample index), so they are
    reported, not failed on, and so is a B project its module cannot open (v484: it opens
-   empty, with a banner). A project changed after its export is a doubtful file: the
-   import asks first, and is told to import it anyway. */
+   empty, with a banner) — but for DRS, GC and EPR, whose restore takes every value as
+   what it should be, B fails on either too. A project changed after its export is a
+   doubtful file: the import asks first, and is told to import it anyway. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -29,6 +30,8 @@ function mutate(v, nums, key){
   return v;
 }
 const uniq = a => [...new Set(a)];
+// The modules whose B project must open and draw with no page error.
+const STRICT_B = new Set(['tauc', 'gc', 'epr']);
 
 for (const mod of MODS){
   test(`${mod}: payload in file names, in an imported project's strings and numbers`, async t=>{
@@ -58,6 +61,9 @@ for (const mod of MODS){
         if (pass === 'A'){
           assert.equal(damaged, null, 'A: the project with its strings marked did not open');
           assert.deepEqual(errs, [], 'A: page errors');
+        } else if (STRICT_B.has(mod)){
+          assert.equal(damaged, null, 'B: the project with its numbers replaced did not open');
+          assert.deepEqual(errs, [], 'B: page errors');
         } else {
           if (damaged) t.diagnostic(`B (numbers replaced) opened empty, not failed on: ${damaged.text}`);
           if (errs.length) t.diagnostic(`B (numbers replaced) page errors, not failed on: ${errs.slice(0, 4).join(' | ')}`);

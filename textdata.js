@@ -56,7 +56,7 @@ const RUN = { '  ': /[ \t]{2,}|\t/y, ' ': /[ \t]+/y };
 /* A line's fields under `sep`, each trimmed. A field that opens with a double quote runs
    to the quote that closes it, the separator inside it text and "" a quote; a quote at the
    end of a field without one is dropped, and a line whose quote never closes is split as
-   it stands, a quote at either end of a field dropped (as utils.splitCSVLine does). */
+   it stands, a quote at either end of a field dropped (as utils.splitCSVLine did, to v491). */
 export function splitFields(line, sep){
   const run = RUN[sep], s = run ? line.trim() : line, out = [];
   // Whether a separator starts at i; a run of spaces is gone past (lastIndex).

@@ -13,9 +13,12 @@ was proposed; nothing here is in the code yet.
   dropped. Proposed: read the same cells the check looks at, or say how many rows were
   dropped and why.
 - **R% or F(R) from other instruments.** The app tells reflectance from Kubelka–Munk by
-  the column header of the user's instrument (`R%`) and takes any other file as F(R).
-  To be refined: the headers other instruments write (`%R`, `Reflectance`, other
-  languages), files with no header, and a per-file switch for when the guess is wrong.
+  the column header: the Cary 5000's own export (`Wavelength (nm),%R,`, the sample's
+  name on the line above, the method's parameters after the data) and the forms `R%`,
+  `R (%)`, `Reflectance (%)`; any other file is taken as F(R). To be refined: the
+  headers other instruments write (other languages, other units), files with no header,
+  the Cary's `Y Mode` line read as well, and a per-file switch for when the guess is
+  wrong.
 
 ## GC
 

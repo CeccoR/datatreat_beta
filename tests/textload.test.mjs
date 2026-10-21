@@ -73,7 +73,8 @@ test('DRS: every encoding and dialect loads to the numbers of the fixture', asyn
     }
     const alerts = await page.locator('#taucAlerts').textContent();
     assert.match(alerts, /Invalid file\(s\):\s*three\.csv/, 'three columns refused, and said');
-    assert.match(alerts, /verify these files:\s*spaces-comma\.txt\s*$/);
+    // (how it was read said: no header, F(R); the standard ones need no word)
+    assert.match(alerts, /Verify how these files were read:\s*spaces-comma\.txt: no header naming the columns F\(R\) or R%: read as F\(R\)\s*$/);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

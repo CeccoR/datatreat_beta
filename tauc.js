@@ -1,29 +1,36 @@
 import { fmtNum, csvLine, includedOf, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumberInputs, esc } from './utils.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-import { moduleKit, wideCsv } from './modkit.js';
+import { moduleKit, wideCsv, isObj, num, ownKey, without, cardList, finitePairs } from './modkit.js';
 import { plotWrap, swatchLegend, viewOf, setView, chipRow, toggleChip, valueBars } from './modcharts.js';
-import { textLines, readXY, splitFields } from './textdata.js';
+import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
 
 /* =========================================================
    TAUC MODULE
 ========================================================= */
 (function(){
   /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
-     warn, hv[]} (each on its own native axis), and the included ones, which the analysis
-     sees, `files`, with which every per-sample list the cards keep is aligned; the alerts
-     under the drop zone, the files of a non-standard format among them (`warn`, until
-     dismissed); every card in the history. */
+     warn, read, left, hv[]} (each on its own native axis), and the included ones, which the
+     analysis sees, `files`, with which every per-sample list the cards keep is aligned; the
+     alerts under the drop zone, among them how files were read (fileNotes: a reflectance
+     column, a format not standard, points left out; until dismissed); every card in the
+     history. */
   const kit = moduleKit('tauc', {
-    alerts: p =>{ document.getElementById('taucAlerts').innerHTML = p.invalid + (warnDismissed ? '' :
-      buildAlertsHtml([], allFiles.filter(f=> f.warn).map(f=> esc(f.name)), undefined, '', 'tauc-dismiss-warn')) + p.upload; },
+    alerts: p =>{
+      const notes = warnDismissed ? [] : allFiles.map(f=> [f, fileNotes(f)]).filter(([, n])=> n.length).map(([f, n])=> esc(`${f.name}: ${n.join('; ')}`));
+      document.getElementById('taucAlerts').innerHTML = p.invalid + buildAlertsHtml([], notes, 'Verify how these files were read:', '', 'tauc-dismiss-warn') + p.upload;
+    },
     dismiss: { warn: ()=>{ warnDismissed = true; } },
     slots,
-    // The cards stay on the sample they showed when another is left out or taken in
-    // (`files` holds the ones included before).
-    listed: op =>{ if (op === 'include') stayOn(files[currIndex]); },
+    /* The cards stay on the sample they showed when another is removed, moved, left out or
+       taken in (`files` holds the ones included before); the one on show removed or left
+       out, on the one now in its place (the last, it was the last: setupAnalysis). To v494
+       a removal or a move kept the index, and the cards showed another sample. */
+    listed: op =>{ if (op !== 'palette' && op !== 'clear') stayOn(files[currIndex]); },
     refresh: afterFilesChange,
-    redraw: ()=> renderResView(),
+    // A label changed: the cards' captions and plots name the sample anew, as the Results do
+    // (to v494 the caption kept the old label until the sample was stepped).
+    redraw: what =>{ if (what === 'label') quietly(()=> livePanels().forEach(p=>{ if (p.hasPlot()) p.update(true); })); renderResView(); },
     cleared: ()=>{ livePanels().forEach(p=> p.clear()); eachKeptState(s=>{ s.per = []; s.sharedVlines = {}; }); warnDismissed = false; },
     snapshot: ()=> ({ analyses: cards().map(a=>{
       const states = {};
@@ -31,8 +38,17 @@ import { textLines, readXY, splitFields } from './textdata.js';
       states[a.type] = panelOf(a).snapshot();
       return { ...deck.saved(a), ref: a.ref, refAuto: a.refAuto, egSel: a.egSel.slice(), urbSel: { b: a.urbSel.b.slice() }, states };
     }) }),
-    // The non-standard-format warning is the restored files' own (their .warn), shown again.
-    restore: s =>{ warnDismissed = false; loadAnalyses(Array.isArray(s.analyses) ? s.analyses : legacyAnalyses(s)); },
+    /* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
+       with both a finite number and a wavelength above 0 (none: left out); how it was read,
+       and the points left out at its load, as its notes say them. */
+    file: f =>{
+      const p = finitePairs(f.wl, f.FR, x=> x > 0);
+      if (!p || !p[0].length) return null;
+      const { read, left, ...g } = f, n = isObj(left) ? Object.keys(LEFT).filter(k=> num(left[k], 0) > 0) : [];
+      return { ...g, wl: p[0], FR: p[1], warn: f.warn === true, ...(read === 'R%' ? { read } : {}), ...(n.length ? { left: Object.fromEntries(n.map(k=> [k, left[k]])) } : {}) };
+    },
+    // The notes are the restored files' own, shown again.
+    restore: (s, gone)=>{ warnDismissed = false; loadAnalyses(cardList(s.analyses, KINDS) || legacyAnalyses(s), gone); },
     // Re-fit at the current size, keeping the zoom.
     redrawTab: ()=>{
       if (!files.length) return;
@@ -264,12 +280,25 @@ import { textLines, readXY, splitFields } from './textdata.js';
       return { hv, Yraw, Ys, dYs };
     }
 
+    /* What a parameter can be, and an interval-line set: as the fields take them (the
+       exponent above 0, a smoothing window 1 or more, a regression window 2 or more), and
+       every line of the spec's windows a number. A sample's own value that is none (a
+       project read in may hold anything: modkit RESTORED) gives way to the common one, a
+       line set to the default lines (to v494 a value that was no number made the fits NaN,
+       an entry that was no object threw as the lines were put in it). */
+    const PARAM_OK = { a: v=> v > 0, N: v=> v >= 1, N2: v=> v >= 1, M: v=> v >= 2, M2: v=> v >= 2 };
+    const okParam = (k, v)=> Number.isFinite(v) && PARAM_OK[k](v);
+    const lineKeys = windows.flatMap(w=> [w.lo, w.hi]);
+    const okLines = l => isObj(l) && lineKeys.every(k=> Number.isFinite(l[k]));
+    const paramsIn = o =>{ const out = {}; if (isObj(o)) for (const k of keys) if (okParam(k, o[k])) out[k] = o[k]; return out; };
+    const linesIn = l => okLines(l) ? Object.fromEntries(lineKeys.map(k=> [k, l[k]])) : {};
+    const perIn = p =>{ const o = paramsIn(p); if (isObj(p) && okLines(p.vlines)) o.vlines = linesIn(p.vlines); return o; };
     // Resolve the effective params for a given file index
     P.params = i =>{
       const s = P.shared;
       const src = (P.mode==='per') ? (P.per[i] || {}) : s;
       const out = {};
-      for (const k of keys) out[k] = CLAMP[k](src[k] ?? s[k]);
+      for (const k of keys) out[k] = CLAMP[k](okParam(k, src[k]) ? src[k] : s[k]);
       return out;
     };
     const defaultVlinesFor = i =>{
@@ -282,8 +311,8 @@ import { textLines, readXY, splitFields } from './textdata.js';
     // set an older project kept, if there is one.
     P.vlinesFor = i =>{
       if (P.mode==='shared' && !spec.ownLines) return P.sharedVlines;
-      let pp = P.per[i]; if (!pp) pp = P.per[i] = {};
-      if (!pp.vlines || !isFinite(pp.vlines.v1))
+      let pp = P.per[i]; if (!isObj(pp)) pp = P.per[i] = {};
+      if (!okLines(pp.vlines))
         pp.vlines = spec.ownLines && isFinite(P.sharedVlines.v1) ? {...P.sharedVlines} : defaultVlinesFor(i);
       return pp.vlines;
     };
@@ -375,7 +404,7 @@ import { textLines, readXY, splitFields } from './textdata.js';
       const prev = preserveView ? viewOf(plot) : null;
       const rLo = spec.zeroFloor ? 0 : minArr(c.Yraw), rHi = maxArr(c.Yraw), pad = spec.zeroFloor ? 0 : 0.05*(rHi - rLo);
       plot.setRange(minArr(hv), maxArr(hv), rLo - pad, spec.zeroFloor ? rHi*1.05 : rHi + pad);
-      setView(plot, prev);
+      setView(plot, prev, files[currIndex].name);
       plot.clearData();
       plot.ylabelSvg = spec.yLabel(p) + ' (a. u.)';
       plot.drawAxes();
@@ -448,17 +477,19 @@ import { textLines, readXY, splitFields } from './textdata.js';
 
     const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
     P.snapshot = ()=>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer), suggested: P.suggested });
-    P.restore = s =>{
-      P.mode = (typeof s.mode==='string') ? s.mode : 'shared';   // older snapshots stored a per-field object
-      P.shared = { ...spec.defaults, ...(s.shared || {}) };
-      P.sharedVlines = s.sharedVlines ? {...s.sharedVlines} : (s.vlines ? {...s.vlines} : {});
-      P.per = s.per ? s.per.map(clonePer) : files.map(()=>({}));
+    // (each value as paramsIn, linesIn and perIn take it: a project read in may hold anything)
+    P.restore = s0 =>{
+      const s = isObj(s0) ? s0 : {};
+      P.mode = s.mode === 'per' ? 'per' : 'shared';   // older snapshots stored a per-field object
+      P.shared = { ...spec.defaults, ...paramsIn(s.shared) };
+      P.sharedVlines = linesIn(s.sharedVlines || s.vlines);
+      P.per = Array.isArray(s.per) ? s.per.map(perIn) : files.map(()=>({}));
       // Snapshots from before the flag had their lines suggested whenever they had any.
-      P.suggested = s.suggested != null ? !!s.suggested : isFinite((s.sharedVlines || s.vlines || {}).v1);
+      P.suggested = s.suggested != null ? !!s.suggested : isFinite(P.sharedVlines.v1);
       // Backward compatibility with pre-all/one snapshots (params stored by input id,
       // passed on keyed by the field's suffix: the cards' ids are not the ones they had).
-      if (s.params){
-        for (const k of keys){ const v = s.params[FIELD[k]]; if (v != null) P.shared[k] = k === 'a' ? parseFloat(v) : +v; }
+      if (isObj(s.params)){
+        for (const k of keys){ const v = s.params[FIELD[k]], x = k === 'a' ? parseFloat(v) : +v; if (v != null && okParam(k, x)) P.shared[k] = x; }
       }
       P.fit();
       P.syncModeButton();
@@ -1029,7 +1060,8 @@ import { textLines, readXY, splitFields } from './textdata.js';
     });
     return out;
   }
-  // The cards stay on the sample they showed when another is left out or taken in.
+  // The cards stay on the sample they showed when another is removed, moved, left out or
+  // taken in (kit.listed).
   function stayOn(f){ const k = includedOf(allFiles).indexOf(f); if (k >= 0) currIndex = k; }
 
   /* ---- Undo/redo (kit.snapshot): every analysis card, its kind, name, fold, reference,
@@ -1047,33 +1079,100 @@ import { textLines, readXY, splitFields } from './textdata.js';
     if (s.urbachOn === true) list.push({ id: 2, type: 'urbach', states: { urbach: s.urbach || {} } });
     return list;
   }
-  function readAnalysis(s){
+  /* A card's own fields as a state holds them, each as it should be (modkit RESTORED): the
+     settings of a kind the module has, each an object, its per-sample list an array (the
+     file list keeps a kind's not on show aligned too: slots) without the entries of the
+     files the restore left out (`gone`). */
+  function readAnalysis(s, gone){
     const eg = Array.isArray(s.egSel) ? s.egSel.filter(k=> EG_METHODS.some(m=> m.key === k)) : [];
     // Projects from before the subtraction show both, as a new card does.
     const us = sec =>{ const v = s.urbSel && Array.isArray(s.urbSel[sec]) ? s.urbSel[sec].filter(k=> URB_METHODS.some(m=> m.key === k)) : []; return v.length ? v : URB_METHODS.map(m=> m.key); };
     return {
       ref: Number.isInteger(s.ref) ? s.ref : null, refAuto: s.refAuto !== false,
       egSel: eg.length ? eg : EG_METHODS.map(m=>m.key), urbSel: { b: us('b') },
-      states: Object.fromEntries(Object.entries(clone(s.states || {})).filter(([k])=> KINDS[k])),
+      states: Object.fromEntries(Object.entries(clone(isObj(s.states) ? s.states : {})).filter(([k, v])=> ownKey(KINDS, k) && isObj(v))
+        .map(([k, v])=> [k, { ...v, per: Array.isArray(v.per) ? without(v.per, gone) : [] }])),
     };
   }
   // A card of a kind there is no more (the debug defect band, taken out) is left out
   // (deck.load), as are the settings a card kept for one (readAnalysis). A card kept
   // has its panel restored in place.
-  const loadAnalyses = list => deck.load(list, readAnalysis, a=> panelOf(a).restore(a.states[a.type] || {}));
+  const loadAnalyses = (list, gone)=> deck.load(list, s=> readAnalysis(s, gone), a=> panelOf(a).restore(a.states[a.type] || {}));
 
   /* A spectrum (textdata.js: its encoding, separator, decimal mark and quotes found from
-     the file): wavelength (nm) and F(R), two columns of numbers. A file whose second line
-     is not the standard header ("Wavelength (nm)", "F(R)"; under either run of spaces,
-     which may split the names too, the line read whole) loads with a warning; one with no such columns is not
-     loaded, and the alert says so (one whose rows all had an empty cell went without a
-     word, to v489). */
+     the file): wavelength (nm) and, beside it, F(R) or the reflectance in percent, two
+     columns of numbers, the second read as drsReading says; the points that are no
+     physical value left out (drsPoints). The file itself is kept as it came (rawBytes),
+     for its download. One with no such columns, or no point left, is not loaded, and the
+     alert says so (one whose rows all had an empty cell went without a word, to v494). */
   function readDrs(text){
     const lines = textLines(text), t = readXY(lines);
     if (!t) return null;
-    const l2 = lines[1] || '', hp = splitFields(l2, t.sep);
-    const std = t.sep[0] === ' ' ? /wavelength.*nm.*\sf\s*\(r\)/i.test(l2) : hp.length >= 2 && /wavelength.*nm/i.test(hp[0]) && /f\s*\(r\)/i.test(hp[1]);
-    return { wl: t.x, FR: t.y, warn: !std };
+    const { R, std } = drsReading(lines, t), { wl, FR, left } = drsPoints(t, R);
+    if (!wl.length) return { error: `no point with a physical value: ${leftText(left)}` };
+    return { wl, FR, warn: !std, ...(R ? { read: 'R%' } : {}), ...(Object.keys(left).length ? { left } : {}) };
+  }
+  /* How a spectrum's second column is read: the one place that decides (to v494 every file
+     was F(R)). The lines above the data are read up from it to the first that names the
+     columns:
+       its second column R% (or %R, R %, R (%), Reflectance (%), any case): the reflectance
+         in percent, the instruments' own output, R = value/100 and F(R) = (1 − R)²/2R;
+       "Wavelength (nm)" and "F(R)": F(R), the standard export;
+       its first column the wavelength (Wavelength, nm, λ), its second neither: the columns'
+         header, of neither kind, where the reading stops (a line above it, "Operator,R%"
+         say, decides nothing): F(R), with a warning, as with none such (std false; to v494
+         the header had to be the second line).
+     A line that names no wavelength is passed over unless it names R% (Jasco's "YUNITS,%R"
+     above "XYDATA"). Under a run of spaces, which may split the names too, a line is read
+     whole, its quotes dropped, and names the wavelength when it begins with it.
+     → { R: whether the column is R%, std: a header of either kind } */
+  const R_HEAD = /^(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))$/i;
+  const R_LINE = /\s(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))\s*$/i;
+  const WL_HEAD = /wavelength|^nm\b|λ/i, WL_LINE = /^(wavelength|nm\b|λ)/i;
+  function drsReading(lines, t){
+    const first = t.rows.findIndex(r=> isFinite(parseNum(r[0])) && isFinite(parseNum(r[1]))), spaces = t.sep[0] === ' ';
+    for (let i = first - 1; i >= 0; i--){
+      const l = lines[i].replace(/"/g, '').trim(), hp = splitFields(lines[i], t.sep), two = hp.length >= 2;
+      const R = spaces ? R_LINE.test(l) : two && R_HEAD.test(hp[1]);
+      if (R || (spaces ? /wavelength.*nm.*\sf\s*\(r\)/i.test(l) : two && /wavelength.*nm/i.test(hp[0]) && /f\s*\(r\)/i.test(hp[1]))) return { R, std: true };
+      if (spaces ? WL_LINE.test(l) : WL_HEAD.test(hp[0])) break;
+    }
+    return { R: false, std: false };
+  }
+  /* The points of a spectrum that are physical values, the others left out and counted by
+     why: a wavelength not above 0 (wl), a reflectance outside 0–100 % (r) or of 0, where
+     F(R) is ∞ (zero), F(R) below 0 (neg), a value that is no finite number (inf: a NaN or
+     an Inf written in the file, a number past the doubles' range). To v494 they were kept,
+     and the analysis left out of each curve it made the values it could not take (F(R) ≤ 0
+     under a logarithm). */
+  function drsPoints(t, R){
+    const wl = [], FR = [], left = {}, out = k =>{ left[k] = (left[k] || 0) + 1; };
+    t.x.forEach((x, i)=>{
+      const v = t.y[i], F = R ? (1 - v/100)**2/(2*v/100) : v;
+      if (!(x > 0)) out('wl');
+      else if (R && !(v >= 0 && v <= 100)) out('r');
+      else if (!isFinite(F)) out(R ? 'zero' : 'inf');
+      else if (F < 0) out('neg');
+      else { wl.push(x); FR.push(F); }
+    });
+    // (the rows readXY leaves out: a wavelength beside a number that is no finite one)
+    for (const r of t.rows) if (isFinite(parseNum(r[0])) && (isNum(r[1]) || /^[+-]?(nan|inf(inity)?)$/i.test(String(r[1] || '').trim())) && !isFinite(parseNum(r[1]))) out('inf');
+    return { wl, FR, left };
+  }
+  // The points left out, said: how many, and why.
+  const LEFT = { wl: 'a wavelength not above 0', r: 'R outside 0–100 %', zero: 'R = 0 %, where F(R) is infinite', neg: 'F(R) < 0', inf: 'a value that is no finite number' };
+  function leftText(left){
+    const ks = Object.keys(LEFT).filter(k=> left[k] > 0), n = ks.reduce((t, k)=> t + left[k], 0);
+    return `${n} point${n > 1 ? 's' : ''} left out (${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')})`;
+  }
+  // What the alert says of a file: how it was read, but for the standard F(R) export, and
+  // the points left out (to v494 the files of a non-standard format were named, no more).
+  function fileNotes(f){
+    const out = [];
+    if (f.read === 'R%') out.push('its second column is the reflectance R in %, read as F(R) = (1 − R)²/2R');
+    else if (f.warn) out.push('no header naming the columns F(R) or R%: read as F(R)');
+    if (f.left && Object.keys(LEFT).some(k=> f.left[k] > 0)) out.push(leftText(f.left));
+    return out;
   }
   kit.dropText(readDrs, had =>{
     warnDismissed = false;

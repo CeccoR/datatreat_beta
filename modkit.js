@@ -1,4 +1,4 @@
-import { esc, buildAlertsHtml, includedOf, setIncluded, removeFileAt, moveFileTo, renderUnifiedFileList, setTabLoaded, setupDropzone, registerHistory, registerTabRedraw, registerCsvExport, csvLine, nextColor } from './utils.js';
+import { esc, buildAlertsHtml, includedOf, setIncluded, removeFileAt, moveFileTo, renderUnifiedFileList, setTabLoaded, setupDropzone, registerHistory, registerTabRedraw, registerCsvExport, csvLine, nextColor, colorOf } from './utils.js';
 import { createDeck } from './cards.js';
 import { decodeText } from './textdata.js';
 
@@ -28,7 +28,12 @@ import { decodeText } from './textdata.js';
      redraw(what)      a file's 'label' or 'color' changed: what is drawn again
      cleared()         every file removed: the module empties what it keeps per sample
      snapshot()        the module's own state, beside its files
-     restore(s)        the module's own state put back (its files are in place)
+     file(f)           a file's record as a restore reads it (a project read in may hold
+                       anything: RESTORED, below): what it holds taken only as what it
+                       should be, or null when it holds nothing to show (left out)
+     restore(s, gone)  the module's own state put back (its files are in place); `gone`
+                       the places among the included of the files left out, whose entries
+                       its per-sample arrays drop (without)
      redrawTab()       the tab shown or resized
      csv()             the CSV export's files, [{ name, text }]
    } */
@@ -81,10 +86,11 @@ export function moduleKit(mod, o){
   // per-sample array.
   kit.add = f =>{ all.push(f); files.push(f); slots().forEach(s=> s.arr.push(s.make(undefined, f))); };
   /* Text files dropped on the module: each decoded (textdata.js) and read by `read(text)`,
-     which gives what the file holds, or null when it cannot (a reader that throws leaves
-     out that file, not the rest of the drop). A name already loaded is not loaded again. Each
-     record is { name, label, ...what it holds, color, rawBytes } (the file as it came, for
-     its download); then `done(had)`, `had` the files there were. */
+     which gives what the file holds, or null when it cannot, or { error } saying why (a
+     reader that throws leaves out that file, not the rest of the drop). A name already
+     loaded is not loaded again. Each record is { name, label, ...what it holds, color,
+     rawBytes } (the file as it came, for its download); then `done(had)`, `had` the files
+     there were. */
   kit.dropText = (read, done)=> setupDropzone(mod + 'Dropzone', mod + 'Files', async list=>{
     const had = all.length, names = new Set(all.map(f=> f.name)), bad = [], dup = [];
     for (const f of list){
@@ -93,7 +99,7 @@ export function moduleKit(mod, o){
       const rawBytes = new Uint8Array(await f.arrayBuffer());
       let data = null;
       try { data = read(decodeText(rawBytes)); } catch(e){ data = null; }
-      if (!data){ bad.push(f.name); continue; }
+      if (!data || data.error){ bad.push(data ? `${f.name} (${data.error})` : f.name); continue; }
       kit.add({ name: f.name, label: f.name.replace(/\.[^.]+$/, ''), ...data, color: nextColor(all), rawBytes });
     }
     kit.said(bad, dup);
@@ -103,13 +109,31 @@ export function moduleKit(mod, o){
   /* ---- The undo history: every file's record (its data shared, not copied) and the
      module's own state. A state restored puts its files in place, has the module put its
      own back and draw all again, and leaves no alert of an upload: those belong to the
-     upload, not to the state (nor to another tab's). ---- */
-  const hist = registerHistory(mod, ()=> ({ files: all.map(f=> ({ ...f })), ...o.snapshot() }), s=>{
-    all.splice(0, all.length, ...s.files.map(f=> ({ ...f })));
+     upload, not to the state (nor to another tab's). A project read in may hold anything:
+     the state, its files and each file's record are taken as RESTORED says, a file with
+     nothing to show left out with its entries in the per-sample arrays (`gone`), and an
+     alert says how many (to v494 a state or a list of files that was no object or array
+     threw, and the tab opened empty). ---- */
+  const keptFile = (f, i)=>{
+    if (!isObj(f)) return null;
+    const name = typeof f.name === 'string' && f.name ? f.name : `file ${i + 1}`;
+    const g = { ...f, name, label: typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, ''), color: typeof f.color === 'string' ? f.color : colorOf(i) };
+    if (f.included !== false){ delete g.included; delete g.held; }
+    else if (!isObj(g.held)) g.held = {};
+    try { return o.file ? o.file(g) : g; } catch(e){ return null; }
+  };
+  const hist = registerHistory(mod, ()=> ({ files: all.map(f=> ({ ...f })), ...o.snapshot() }), s0=>{
+    const s = isObj(s0) ? s0 : {}, raw = Array.isArray(s.files) ? s.files : [], kept = raw.map(keptFile), gone = new Set();
+    // (an entry that is no file counts as included: it holds no included:false)
+    raw.reduce((j, f, i)=>{ if (isObj(f) && f.included === false) return j; if (!kept[i]) gone.add(j); return j + 1; }, 0);
+    all.splice(0, all.length, ...kept.filter(Boolean));
     files.splice(0, files.length, ...includedOf(all));
-    o.restore(s);
+    o.restore(s, gone);
     o.refresh();
-    clearAlerts(); kit.drawAlerts();
+    clearAlerts();
+    const lost = raw.length - all.length;
+    if (lost) parts.invalid = buildAlertsHtml([], [`${lost} file${lost > 1 ? 's' : ''} in the project with no data to show: left out.`], 'Restored, with a caveat:', '', pre + 'invalid');
+    kit.drawAlerts();
   });
   kit.commit = ()=> hist.commit();
   // The cards, in the module's list above its "+" bar; each change a step of the history.
@@ -117,6 +141,47 @@ export function moduleKit(mod, o){
   if (o.redrawTab) registerTabRedraw(mod, o.redrawTab);
   if (o.csv) registerCsvExport(mod, o.csv);
   return kit;
+}
+
+/* ---- RESTORED: a project read in may hold anything (an imported .json), so a restore
+   takes what it reads only as what it should be — an object where one is due, arrays
+   where arrays are, numbers through Number.isFinite (a string of digits is none), dates
+   valid ones, a choice one of its own, an id a whole number in range — and anything else
+   as its default. ---- */
+export const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+export const isArr = v => Array.isArray(v) || (ArrayBuffer.isView(v) && !(v instanceof DataView));
+// A finite number `ok` takes, or the default.
+export const num = (v, d, ok = ()=> true)=> Number.isFinite(v) && ok(v) ? v : d;
+// A number as an older state may hold it, in a string too (a field's value: '12').
+export const numStr = v => typeof v === 'string' && v.trim() ? +v : v;
+// One of `opts`, or the first.
+export const oneOf = (v, opts)=> opts.includes(v) ? v : opts[0];
+// A key of `o`'s own: 'constructor', 'toString' and the like are none.
+export const ownKey = (o, k)=> typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+// A date that is one (a Date, or its time in ms), or null.
+export const dateOf = v =>{ const d = v instanceof Date ? v : Number.isFinite(v) ? new Date(v) : null; return d && Number.isFinite(d.getTime()) ? d : null; };
+// An array of `n` entries, each `item(v, i)` from the array's own (none: undefined).
+export const arrOf = (v, n, item)=> Array.from({ length: n }, (_, i)=> item(Array.isArray(v) ? v[i] : undefined, i));
+// A per-sample array without the entries of the files a restore left out (their places).
+export const without = (a, gone)=> Array.isArray(a) && gone && gone.size ? a.filter((_, i)=> !gone.has(i)) : a;
+/* The cards of a state: objects of a kind the module has (none named: its first), or null;
+   an id that is no whole number from 1 to 99999 taken off, for the deck to give one (an
+   id of 1e308 is an integer, which made element ids no selector reads, and the next id
+   the same). */
+export const cardList = (v, kinds)=> Array.isArray(v) ? v.filter(c=> isObj(c) && (c.type == null || ownKey(kinds, c.type)))
+  .map(c=> Number.isInteger(c.id) && c.id >= 1 && c.id < 1e5 ? c : (({ id, ...r })=> r)(c)) : null;
+/* Two arrays of numbers point by point (an x and its y): the same arrays when every point
+   is two finite numbers `ok` takes, else those that are, in arrays of their own; null when
+   they are not arrays. */
+export function finitePairs(xs, ys, ok = ()=> true){
+  if (!isArr(xs) || !isArr(ys)) return null;
+  const n = Math.min(xs.length, ys.length), good = i => Number.isFinite(xs[i]) && Number.isFinite(ys[i]) && ok(xs[i], ys[i]);
+  let all = xs.length === ys.length;
+  for (let i = 0; all && i < n; i++) all = good(i);
+  if (all) return [xs, ys];
+  const x = [], y = [];
+  for (let i = 0; i < n; i++) if (good(i)){ x.push(xs[i]); y.push(ys[i]); }
+  return [x, y];
 }
 
 /* A "wide" CSV: each column { h: header, v: [values] } beside the others, padded to the
