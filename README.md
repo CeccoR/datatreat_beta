@@ -130,7 +130,8 @@ Assess H₂ and O₂ production rates from gas chromatography data, including li
 2. Set parameters for each sample:
    - **m (mg)**: Catalyst mass in milligrams
    - **Q (mL/min)**: Carrier gas flow rate
-   - **T (°C)**: The temperature the flow Q is given at (25 °C by default; the same for every sample, or one each with *all / one*). The molar volume is V<sub>m</sub> = RT/P at 1 atm, so the rates scale with it: for a mass-flow controller that reports standard flow, use the reference temperature on its datasheet (0, 20 or 25 °C), not its body's; for a flow measured as a volume (a bubble meter), the gas temperature where it is measured. Projects saved before v495 keep 0 °C.
+   - **T (°C)**: The temperature the flow Q is given at (25 °C by default; the same for every sample, or one each with *all / one*). The molar volume is V<sub>m</sub> = RT/p, so the rates scale with it: for a mass-flow controller that reports standard flow, use the reference temperature on its datasheet (0, 20 or 25 °C), not its body's; for a flow measured as a volume (a bubble meter), the gas temperature where it is measured. Projects saved before v495 keep 0 °C.
+   - **p**: The absolute pressure the flow Q refers to (1 atm by default; *all / one* as T). Its unit (atm, bar, kPa, mbar, Torr ≈ mmHg, psi) is chosen in its header and only changes how the values are shown and written, never the pressure. For a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar); for a flow measured as a volume, the gas's absolute pressure there (ambient ≈ 1 atm). Projects saved before v501 are at 1 atm.
    - **Light-on date/time**: When irradiation started (determines when H₂ production begins)
 
 3. Adjust the **time interval** (in hours from light-on) for rate calculation:

@@ -83,16 +83,32 @@ import { textLines, readTable, parseNum } from './textdata.js';
      little later: every injection is moved on by this delay, in seconds, before it is
      set against light-on. "Auto" is the method's own figure, shown in the field. */
   const INJ_DELAY_AUTO = 60.6;
-  /* The molar volume the flow Q is turned into moles with: an ideal gas at P = 1 atm
-     (101325 Pa) and the temperature T (°C) the flow is measured at, V_m = R·T/P, 22.414
-     L/mol at 0 °C, 24.465 at 25 °C. T is each card's, all/one as m and Q are: 25 °C in a
-     new card and for a new file, 0 °C in a project saved before it existed, whose rates
-     were worked out at 22.41396954 L/mol (to v494, whatever the flow meter's). */
-  const R_OVER_P = 0.0820573661;    // R/P, L/(mol·K)
-  const molarVolume = T => R_OVER_P*(T + 273.15);
+  /* The molar volume the flow Q is turned into moles with: an ideal gas at the temperature
+     T (°C) and the absolute pressure p the flow is measured at, V_m = R·T/p, 22.414 L/mol
+     at 0 °C and 1 atm, 24.465 at 25 °C. T is each card's, all/one as m and Q are: 25 °C in
+     a new card and for a new file, 0 °C in a project saved before it existed, whose rates
+     were worked out at 22.41396954 L/mol (to v500, whatever the flow meter's). p the same
+     way: 1 atm in a new card, for a new file and in a project saved before it, whose rates
+     were worked out at it (to v500 p was 1 atm, fixed). */
+  const R_ATM = 0.0820573661;    // R, L·atm/(mol·K)
+  const molarVolume = (T, p)=> R_ATM*(T + 273.15)/(p/P_ATM);
   const T_NEW = 25, T_OLD = 0, okT = v => v >= -273;
+  /* p is kept in Pa, as typed in its unit; the unit, the card's, is only how it is shown
+     and written, so switching it never moves the pressure. Each unit's size in Pa is a
+     fraction, so that a value typed goes to Pa and back exactly where it can (760 Torr is
+     101325 Pa); shown to 12 digits, which leaves out the last bit a conversion may add
+     (1.1 bar is 110000.00000000001 Pa). Torr is mmHg to 1 part in 7 million. */
+  const P_ATM = 101325, P_MAX = 1e300;   // (a p below P_MAX in its unit is a number in Pa)
+  const P_UNITS = { atm: [P_ATM, 1], bar: [1e5, 1], kPa: [1000, 1], mbar: [100, 1], Torr: [P_ATM, 760], psi: [6894.757293168361, 1] };
+  const toPa = (v, u)=> v*P_UNITS[u][0]/P_UNITS[u][1];
+  const inUnit = (pa, u)=> +(pa*P_UNITS[u][1]/P_UNITS[u][0]).toPrecision(12);
+  /* A pressure as the fields make one: above 0, and at most P_MAX in the largest unit (atm),
+     so that it is a number in every unit. One restored or kept for a file past these is
+     taken as the default, as a mass or a flow is (a hand-edited project's 1e307 Pa was
+     shown as Infinity in Torr, and written so in the CSVs). */
+  const okP = v => v > 0 && v <= P_MAX*P_ATM;
   // A card's per-sample arrays, as its state names them.
-  const PER_SAMPLE = ['ms', 'Qs', 'Ts', 'startArr', 'endArr', 'lightOnDates'];
+  const PER_SAMPLE = ['ms', 'Qs', 'Ts', 'Ps', 'startArr', 'endArr', 'lightOnDates'];
   /* The empty cells skipped, per file and gas: the blank cells of a row kept, and the
      rows with none of the file's gases (dropped at parse, `emptyRows`, an empty cell for
      each gas it has). Read off the loaded files each time, not kept from the drop, so it
@@ -302,7 +318,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
     // The plots' gas chips, the card's and its section's.
     const gasEls = ()=> [...card.querySelectorAll('.gc-gas-sel'), ...res.querySelectorAll('.gc-gas-sel')];
 
-    let ms=[], Qs=[], Ts=[], startArr=[], endArr=[], lightOnDates=[];
+    let ms=[], Qs=[], Ts=[], Ps=[], startArr=[], endArr=[], lightOnDates=[];
     let dataTables=[];
     let plot1;
     /* Analysis and Results choose their gases separately, but every plot inside a
@@ -322,9 +338,10 @@ import { textLines, readTable, parseNum } from './textdata.js';
       return chosen.length ? chosen : there;
     }
     // all/one per parameter: 'all' = one shared value for every sample; 'one' = per-sample.
-    // Each of m, Q, T, start and end toggles independently. Default: everything shared ('all').
-    let mMode='all', qMode='all', tMode='all', startMode='all', endMode='all';
-    let mShared=15, qShared=2, tShared=T_NEW, startShared=0, endShared=24;
+    // Each of m, Q, T, p, start and end toggles independently. Default: everything shared ('all').
+    let mMode='all', qMode='all', tMode='all', pMode='all', startMode='all', endMode='all';
+    let mShared=15, qShared=2, tShared=T_NEW, pShared=P_ATM, startShared=0, endShared=24;
+    let pUnit = 'atm';
     let delayAuto = true, delayMan = INJ_DELAY_AUTO;
     const injDelay = ()=> delayAuto ? INJ_DELAY_AUTO : delayMan;
     const injectedAt = d => new Date(+d + injDelay()*1000);
@@ -340,13 +357,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
     const mOf     = k => mMode==='all'     ? mShared     : ms[k];
     const qOf     = k => qMode==='all'     ? qShared     : Qs[k];
     const tOf     = k => tMode==='all'     ? tShared     : Ts[k];
+    const pOf     = k => pMode==='all'     ? pShared     : Ps[k];   // Pa
     const startOf = k => startMode==='all' ? startShared : startArr[k];
     const endOf   = k => endMode==='all'   ? endShared   : endArr[k];
     // The plot shows per-sample interval lines (interactive) whenever either bound is per-sample.
     const intPerSample = () => startMode==='one' || endMode==='one';
 
     // A card added with samples loaded starts from the upload defaults for each.
-    files.forEach(f=>{ ms.push(15); Qs.push(2); Ts.push(T_NEW); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); });
+    files.forEach(f=>{ ms.push(15); Qs.push(2); Ts.push(T_NEW); Ps.push(P_ATM); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); });
 
     // Warning when a sample's light-on time is before (or at) its first injection
     function lightOnWarn(i){
@@ -369,25 +387,33 @@ import { textLines, readTable, parseNum } from './textdata.js';
     function renderGcParamTable(){
       const wrap = $('ParamTableWrap');
       if (!files.length){ wrap.innerHTML=''; return; }
-      // Sample 12 | m 10 | Q 11 | T 10 | Light-on 22.5 | start 10 | end 10 | warnings 14.5 (%):
-      // at the table's least width (860 px) each header's name and its pill side by side,
-      // and the date field whole.
-      const cg = `<colgroup><col style="width:12%"><col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:22.5%"><col style="width:10%"><col style="width:10%"><col style="width:14.5%"></colgroup>`;
+      // Sample 9 | m 9 | Q 11.5 | T 9 | p 12 | Light-on 20.5 | start 9 | end 9 | warnings 11 (%):
+      // at the table's least width, 1000 px (style.css's .gc-param-table min-width), each
+      // header's pill beside its name (the name on two lines where it must) and the date
+      // field whole. At 860 px, the least width to v500, Q's pill already ran over its
+      // cell, and the date field by a few px; with p's column, every pill would.
+      const cg = `<colgroup><col style="width:9%"><col style="width:9%"><col style="width:11.5%"><col style="width:9%"><col style="width:12%"><col style="width:20.5%"><col style="width:9%"><col style="width:9%"><col style="width:11%"></colgroup>`;
       const shareState = mode => mode==='all' ? 'on'  : 'off';   // shared "All" row cell
       const cellState  = mode => mode==='all' ? 'ro'  : 'on';    // per-sample row cell
-      // Column order: Sample | m | Q | T | Light-on | [Interval: start end] | warnings.
+      // Column order: Sample | m | Q | T | p | Light-on | [Interval: start end] | warnings.
       // The delay, one for every sample, on a row of its own above the table and on its
       // columns: its name under Sample, its value under m, the Auto switch under Q.
+      // p's unit is chosen in its header, where the other columns name theirs: in the
+      // header's own type, its box let out of the line's height as the pill's is (-3 px),
+      // so that p's name and pill sit level with the others' and the box with the pill.
+      const unitSel = `<select class="gc-unit" aria-label="Unit of p" title="The unit p is shown and written in: switching it converts the values, not the pressure (Torr: mmHg)" style="width:auto;margin:-3px 0;padding:0 2px;border-radius:5px;font:inherit;color:inherit">${
+        Object.keys(P_UNITS).map(u=> `<option value="${u}"${u === pUnit ? ' selected' : ''}>${u}</option>`).join('')}</select>`;
       let html = `<div style="overflow-x:auto"><table class="gc-param-table gc-delay" style="width:100%;table-layout:fixed">${cg}<tbody>
         <tr><td class="fname">Injection delay (s)</td>
           <td>${numCell('gcDelay', 'title="From the logged injection date to the actual injection, in seconds"', injDelay(), delayAuto ? 'off' : 'on')}</td>
           <td><label class="pp-check" title="Use the method's delay, ${INJ_DELAY_AUTO} s"><input type="checkbox" class="gcDelayAuto"${delayAuto ? ' checked' : ''}> Auto</label></td>
-          <td colspan="5"></td></tr></tbody></table>
+          <td colspan="6"></td></tr></tbody></table>
         <table class="gc-param-table" style="width:100%;table-layout:fixed">${cg}<thead>
         <tr><th rowspan="2">${thHead('Sample', '')}</th>
           <th rowspan="2">${thHead('m (mg)', modeChip('m',mMode))}</th>
           <th rowspan="2">${thHead('Q (mL/min)', modeChip('q',qMode))}</th>
           <th rowspan="2" title="T: ${T_TITLE}">${thHead('T (°C)', modeChip('t',tMode))}</th>
+          <th rowspan="2" title="p: ${P_TITLE}">${thHead('p ' + unitSel, modeChip('p',pMode))}</th>
           <th rowspan="2">${thHead('Light-on date/time', '')}</th>
           <th colspan="2" class="gc-grp"><div class="gc-grp-in">Interval (h)</div></th>
           <th rowspan="2"></th></tr>
@@ -397,6 +423,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
         <td>${numCell('gcShared','data-f="m"',mShared,shareState(mMode))}</td>
         <td>${numCell('gcShared','data-f="q"',qShared,shareState(qMode))}</td>
         <td>${numCell('gcShared','data-f="t"',tShared,shareState(tMode))}</td>
+        <td>${numCell('gcShared','data-f="p"',inUnit(pShared, pUnit),shareState(pMode))}</td>
         <td></td>
         <td>${numCell('gcShared','data-f="start"',startShared,shareState(startMode))}</td>
         <td>${numCell('gcShared','data-f="end"',endShared,shareState(endMode))}</td>
@@ -408,6 +435,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
           <td>${numCell('gcCell','data-i="'+i+'" data-f="m"',mOf(i),cellState(mMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="q"',qOf(i),cellState(qMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="t"',tOf(i),cellState(tMode))}</td>
+          <td>${numCell('gcCell','data-i="'+i+'" data-f="p"',inUnit(pOf(i), pUnit),cellState(pMode))}</td>
           <td class="gc-date-cell" data-i="${i}"></td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="start"',startOf(i),cellState(startMode))}</td>
           <td>${numCell('gcCell','data-i="'+i+'" data-f="end"',endOf(i),cellState(endMode))}</td>
@@ -430,6 +458,15 @@ import { textLines, readTable, parseNum } from './textdata.js';
         delayAuto = delayBox.checked;
         renderGcParamTable(); computeAndRenderGc(); kit.commit();
       });
+      // p's unit: the values shown again in it, the pressure and so the rates as they were.
+      // The fields in place, not the table drawn anew, which would take the focus off the
+      // select (an arrow key on it is a change at once).
+      const unitIn = wrap.querySelector('.gc-unit');
+      unitIn.addEventListener('change', ()=>{
+        pUnit = oneOf(unitIn.value, Object.keys(P_UNITS));
+        wrap.querySelectorAll('input[data-f="p"]').forEach(inp=>{ inp.value = inUnit(inp.classList.contains('gcShared') ? pShared : pOf(+inp.dataset.i), pUnit); });
+        kit.commit();
+      });
 
       // all/one toggles: flip a parameter, seeding across the boundary (one→all from
       // sample 0, all→one from the shared value), then re-render + recompute. An interval
@@ -448,15 +485,16 @@ import { textLines, readTable, parseNum } from './textdata.js';
           case 'm':     mMode     = flip(mMode,     mShared,     ms,       v=>mShared=v);     break;
           case 'q':     qMode     = flip(qMode,     qShared,     Qs,       v=>qShared=v);     break;
           case 't':     tMode     = flip(tMode,     tShared,     Ts,       v=>tShared=v);     break;
+          case 'p':     pMode     = flip(pMode,     pShared,     Ps,       v=>pShared=v);     break;
           case 'start': startMode = flip(startMode, startShared, startArr, v=>startShared=v); gcSel=gcHov=null; break;
           case 'end':   endMode   = flip(endMode,   endShared,   endArr,   v=>endShared=v);   gcSel=gcHov=null; break;
         }
         renderGcParamTable(); computeAndRenderGc(); kit.commit();
       }));
 
-      // m/Q/T inputs (shared + per-sample) — recompute the whole series on a valid change.
-      const wireNum = (inp, apply, min = 0.001)=>{
-        guardNumericInput(inp, { min });
+      // m/Q/T/p inputs (shared + per-sample) — recompute the whole series on a valid change.
+      const wireNum = (inp, apply, min = 0.001, max = null)=>{
+        guardNumericInput(inp, { min, max });
         const shared = inp.classList.contains('gcShared');
         inp.addEventListener('change', ()=>{
           apply(+inp.value);
@@ -470,6 +508,9 @@ import { textLines, readTable, parseNum } from './textdata.js';
       wrap.querySelectorAll('.gcCell[data-f="q"]').forEach(inp=>{ if(qMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Qs[i]=v); }});
       wrap.querySelectorAll('.gcShared[data-f="t"]').forEach(inp=> tMode==='all' && wireNum(inp, v=>tShared=v, -273));
       wrap.querySelectorAll('.gcCell[data-f="t"]').forEach(inp=>{ if(tMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Ts[i]=v, -273); }});
+      // p typed in its unit, kept in Pa; 0 and below refused (the least min above 0).
+      wrap.querySelectorAll('.gcShared[data-f="p"]').forEach(inp=> pMode==='all' && wireNum(inp, v=>pShared=toPa(v, pUnit), Number.MIN_VALUE, P_MAX));
+      wrap.querySelectorAll('.gcCell[data-f="p"]').forEach(inp=>{ if(pMode==='one'){ const i=+inp.dataset.i; wireNum(inp, v=>Ps[i]=toPa(v, pUnit), Number.MIN_VALUE, P_MAX); }});
 
       // start/end inputs — start and end can be in different modes, so each input is wired
       // independently and validated against the effective counterpart (end>start per sample).
@@ -556,8 +597,8 @@ import { textLines, readTable, parseNum } from './textdata.js';
         // among them), spans the plot's x-range.
         const rows = f.injDates.map((d,i)=> ({ d: injectedAt(d), i })).sort((a,b)=>a.d-b.d);
         const t = [...rows.map(r=> r.d), lightOn].sort((a,b)=>a-b).map(hours);
-        // Total molar flow: mL/min -> L/h -> mol/h at the molar volume of the flow's T.
-        const F = qOf(h)/1000*60/molarVolume(tOf(h));
+        // Total molar flow: mL/min -> L/h -> mol/h at the molar volume of the flow's T and p.
+        const F = qOf(h)/1000*60/molarVolume(tOf(h), pOf(h));
         const gas = {};
         for (const k in f.gas){
           /* Each gas on its own times: the injections it has a value for, with the
@@ -882,13 +923,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
       // while every sample's shown gases cover the same span (a sample with none of them,
       // its own span, as before); when a gas of some sample reaches less far (an empty
       // cell at the interval's edge), one column per gas for every sample.
-      // The flow's temperature last: the rates were worked out at its molar volume.
+      // The flow's pressure, in the card's unit, and its temperature last: the rates were
+      // worked out at their molar volume (T the last column since v495, p beside it).
       const durs = c => shown.map(g=> fmtNum(c.dt[g.key],4));
       const perGas = shown.length > 1 && costResults.some(c=> new Set(durs(c).filter(Boolean)).size > 1);
       let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`),
-        ...(perGas ? shown.map(g=>`${g.csv} interval duration (h)`) : ['Interval duration (h)']), 'T (°C)']);
+        ...(perGas ? shown.map(g=>`${g.csv} interval duration (h)`) : ['Interval duration (h)']), `p (${pUnit})`, 'T (°C)']);
       costResults.forEach((c, k)=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)),
-        ...(perGas ? durs(c) : [durs(c).find(Boolean) || fmtNum(c.span,4)]), asSet(tOf(k))]));
+        ...(perGas ? durs(c) : [durs(c).find(Boolean) || fmtNum(c.span,4)]), asSet(inUnit(pOf(k), pUnit)), asSet(tOf(k))]));
       entries.push({name:`${n} - mean_rates.csv`, text:t2});
       // gc_info.csv — per-sample inputs + the integration interval used
       // Local time, as the light-on field shows it and as the instrument logged it:
@@ -896,8 +938,8 @@ import { textLines, readTable, parseNum } from './textdata.js';
       const pad = n => String(n).padStart(2, '0');
       const fmtDate = v =>{ if (!v) return ''; const d = new Date(v);
         return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-      let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','T (°C)','Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
-      dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(mOf(k)), asSet(qOf(k)), asSet(tOf(k)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
+      let t3 = csvLine(['Sample','m (mg)','Q (mL/min)','T (°C)',`p (${pUnit})`,'Light-on','Interval start (h)','Interval end (h)','Injection delay (s)']);
+      dataTables.forEach((d,k)=> t3 += csvLine([d.label, asSet(mOf(k)), asSet(qOf(k)), asSet(tOf(k)), asSet(inUnit(pOf(k), pUnit)), fmtDate(lightOnDates[k]), asSet(startOf(k)), asSet(endOf(k)), asSet(injDelay())]));
       entries.push({name:`${n} - gc_info.csv`, text:t3});
       return entries;
     }
@@ -910,11 +952,12 @@ import { textLines, readTable, parseNum } from './textdata.js';
         { key: a.id + ':m', arr:ms, make: v=> num(v, 15, x=> x > 0) },
         { key: a.id + ':Q', arr:Qs, make: v=> num(v, 2, x=> x > 0) },
         { key: a.id + ':T', arr:Ts, make: v=> num(v, T_NEW, okT) },
+        { key: a.id + ':p', arr:Ps, make: v=> num(v, P_ATM, okP) },
         { key: a.id + ':start', arr:startArr, make: v=> num(v, 0) },
         { key: a.id + ':end', arr:endArr, make: v=> num(v, 24) },
         { key: a.id + ':lightOn', arr:lightOnDates, make: (v, f)=> dateOf(v) || (f ? firstInjection(f) : null) },
       ],
-      clear(){ [ms,Qs,Ts,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
+      clear(){ [ms,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
       unselect(){ gcSel = gcHov = null; },
       renderTable: renderGcParamTable,
       compute: computeAndRenderGc,
@@ -931,18 +974,18 @@ import { textLines, readTable, parseNum } from './textdata.js';
       exportEntries,
       snapshot(){
         return {
-          ms: ms.slice(), Qs: Qs.slice(), Ts: Ts.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
+          ms: ms.slice(), Qs: Qs.slice(), Ts: Ts.slice(), Ps: Ps.slice(), startArr: startArr.slice(), endArr: endArr.slice(),
           lightOnDates: lightOnDates.map(d=> d ? d.getTime() : null),
-          mMode, qMode, tMode, startMode, endMode, mShared, qShared, tShared, startShared, endShared,
+          mMode, qMode, tMode, pMode, startMode, endMode, mShared, qShared, tShared, pShared, startShared, endShared, pUnit,
           gasSel: { a:gasSel.a.slice(), r:gasSel.r.slice() },
           delayAuto, delayMan,
         };
       },
       /* Each value as it should be (modkit RESTORED): a mode 'all' or 'one', a mass and a
-         flow above 0, a temperature from −273 °C, a bound and the delay numbers, a light-on
-         a date (else the sample's first injection), every per-sample array one entry a
-         sample (to v494 an array that was none threw, a value that was no number drew
-         NaN). */
+         flow above 0, a pressure as the fields take it (okP), a temperature from −273 °C,
+         p's unit one of its own, a bound and the delay numbers, a light-on a date (else the sample's first injection),
+         every per-sample array one entry a sample (to v500 an array that was none threw, a
+         value that was no number drew NaN). */
       restore(s0){
         const s = isObj(s0) ? s0 : {}, n = files.length, GK = GASES.map(g=> g.key), mode = v => oneOf(v, ['all', 'one']), pos = v => v > 0;
         // Projects saved before O2 existed, or under the older single-mode selector.
@@ -972,6 +1015,9 @@ import { textLines, readTable, parseNum } from './textdata.js';
         // were worked out at: the field shows it, and it can be changed.
         const T0 = ['tMode', 'tShared', 'Ts'].some(k=> k in s) ? T_NEW : T_OLD;
         tMode = mode(s.tMode); tShared = num(s.tShared, T0, okT); Ts = arrOf(s.Ts, n, v=> num(v, tShared, okT));
+        // One from before the pressure was worked out at 1 atm, where a new card starts too.
+        pMode = mode(s.pMode); pShared = num(s.pShared, P_ATM, okP); Ps = arrOf(s.Ps, n, v=> num(v, pShared, okP));
+        pUnit = oneOf(s.pUnit, Object.keys(P_UNITS));
         gcSel=gcHov=null;
       },
     };
@@ -979,9 +1025,10 @@ import { textLines, readTable, parseNum } from './textdata.js';
 
   /* ---- The cards (cards.js), and the Results: each card's section under its name ---- */
   const KINDS = { rate: 'Production Rate' };
-  // What T is (its column's title, and the card's instructions).
+  // What T and p are (their columns' titles, and the card's instructions).
   const T_TITLE = 'the temperature at which the flow Q is measured — for a mass-flow controller, the reference temperature of its standard units (often 0 °C or 20 °C: see its datasheet), not the temperature of its body';
-  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q) and its temperature (T), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}: the flow is turned into moles with the molar volume of an ideal gas at that temperature and 1 atm, V<sub>m</sub> = RT/P (22.414 L/mol at 0 °C, 24.465 L/mol at 25 °C). A new analysis starts at 25 °C; a project saved before T existed keeps the 0 °C its rates were worked out at. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). ${cardInfo(false, true)}`;
+  const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar: see its datasheet); for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
+  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). ${cardInfo(false, true)}`;
   const resList = document.getElementById('gcResList');
   const live = new Map();       // id → the card's analysis (gcCard)
   const placeRes = ()=> cards().forEach(a=>{ const c = live.get(a.id); if (c) resList.appendChild(c.res); });
