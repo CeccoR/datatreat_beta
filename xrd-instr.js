@@ -6,9 +6,10 @@
    the warnings say when a value had to be assumed, or when the file describes a
    geometry the model does not handle (transmission, an uncoupled scan, an automatic
    slit). Two entry points, one field logic:
-   - readXrdmlInstrument(doc): a parsed Document (the page has DOMParser);
-   - readXrdmlInstrumentText(text): the raw file (Node, a Worker), through a small
+   - readXrdmlInstrument(doc, k): a parsed Document (the page has DOMParser);
+   - readXrdmlInstrumentText(text, k): the raw file (Node, a Worker), through a small
      tolerant XML reader.
+   k: the file's <xrdMeasurement> whose header is read (0, the first, by default).
    The logic sees the tree only through a five-function accessor, so the two cannot
    drift apart. No DOM required. Not an .xrdml → null.
    Numbers the file does not give are left undefined (not null, not NaN), so isFinite,
@@ -172,8 +173,8 @@ const LITE_ACCESS = {
    instructions and the DOCTYPE skipped; the predefined entities and character references
    decoded; namespace prefixes tracked only so xsi:type can be found under another prefix.
    Tolerant — a stray end tag closes back to its element or is ignored — because a header
-   half-read beats none. It stops at the end of the first <xrdMeasurement>: the later
-   measurements of a multi-scan file are never tokenised. */
+   half-read beats none. It stops at the end of the <xrdMeasurement> numbered upTo (0, the
+   first): the later measurements of the file are never tokenised. */
 const ENTITIES = { lt:'<', gt:'>', amp:'&', quot:'"', apos:"'" };
 function decode(s){
   if (s.indexOf('&') < 0) return s;
@@ -186,10 +187,10 @@ function decode(s){
 }
 const TOKEN = /<!--[\s\S]*?-->|<!\[CDATA\[([\s\S]*?)\]\]>|<[?!][^>]*>|<(\/?)([A-Za-z_][\w.:-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
 const ATTR = /([^\s=/]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
-function parseXmlLite(text){
+function parseXmlLite(text, upTo = 0){
   const doc = { name:'#document', attrs:{}, ns:{}, kids:[], parts:[] };
   const stack = [doc], re = new RegExp(TOKEN.source, 'g');
-  let last = 0, m;
+  let last = 0, m, done = 0;
   while ((m = re.exec(text))){
     const top = stack[stack.length-1];
     if (m.index > last) top.parts.push(decode(text.slice(last, m.index)));
@@ -200,7 +201,7 @@ function parseXmlLite(text){
     if (m[2]){
       let i = stack.length-1;
       while (i > 0 && stack[i].name !== local) i--;
-      if (i > 0){ stack.length = i; if (local === 'xrdMeasurement') break; }
+      if (i > 0){ stack.length = i; if (local === 'xrdMeasurement' && ++done > upTo) break; }
       continue;
     }
     const attrs = {};
@@ -236,6 +237,13 @@ function find(A, n, test){
   }
   return null;
 }
+// Every element named `name` under n, depth-first, not looked inside once found.
+function findAll(A, n, name, out = []){
+  if (n) for (const c of A.kids(n)){ if (A.name(c) === name) out.push(c); else findAll(A, c, name, out); }
+  return out;
+}
+// The file's measurements, in order (the element itself, given one).
+const measurementsOf = (A, doc)=> A.name(doc) === 'xrdMeasurement' ? [doc] : findAll(A, doc, 'xrdMeasurement');
 const textOf = (A, n)=> n ? A.text(n).trim() : '';
 const numOf = (A, n)=> n ? num(A.text(n)) : NaN;
 const unitOf = (A, n)=> (n && A.attr(n, 'unit')) || '';
@@ -280,8 +288,8 @@ function readSoller(A, el){
   return fin(v);
 }
 
-function readInstrument(A, doc){
-  const meas = A.name(doc) === 'xrdMeasurement' ? doc : find(A, doc, 'xrdMeasurement');
+function readInstrument(A, doc, k = 0){
+  const meas = measurementsOf(A, doc)[k] || null;
   if (!meas) return null;
   const warnings = [];
   const inc = kid(A, meas, 'incidentBeamPath'), dif = kid(A, meas, 'diffractedBeamPath');
@@ -419,8 +427,15 @@ function readInstrument(A, doc){
    y is a rate. Counts over unequal times (<countingTimes>: a pre-set-counts scan, whose
    counts sit about the preset at every point) make a pattern only as rates, so they are
    divided by their times. A rate with no counting time at all: the time is estimated from
-   the noise, with a note.
-   → { x, y, varMul (null when m is 1 throughout), unit, rate, mode, notes } or { error }.
+   the noise, with a note. A point whose intensity, or the counting time or attenuation
+   factor it is read with, is no finite number ('NaN', '-', 1e999) is left out, the others
+   kept in their order, with a note saying how many (to v484 it went in as NaN or Infinity,
+   and with it the plots' paths, the maxima and the peak search); fewer than two left, the
+   scan is refused.
+   Every <scan> of the file is read (readScans), each of every <xrdMeasurement> in order:
+   a file of several (a series measured in one go) is several patterns.
+   → { x, y, varMul (null when m is 1 throughout), unit, rate, mode, notes, dropped } or
+   { error }; readScans: [one of those for each scan, with meas, its measurement's index].
 ========================================================= */
 const listOf = (A, n)=> n ? A.text(n).trim().split(/\s+/).map(Number) : [];
 // Intensities per second: cps, counts/s(ec), per second, s-1, s⁻¹, Hz. Up to v426 any '/s' or
@@ -444,9 +459,7 @@ function noiseCountScale(y){
   z.sort((a, b)=> a - b);
   return z[z.length >> 1]/0.454936;
 }
-function readScan(A, doc){
-  const meas = A.name(doc) === 'xrdMeasurement' ? doc : find(A, doc, 'xrdMeasurement');
-  const scan = meas && (kid(A, meas, 'scan') || find(A, meas, 'scan'));
+function readScan(A, scan){
   const dp = scan && (kid(A, scan, 'dataPoints') || find(A, scan, 'dataPoints'));
   if (!dp) return { error: 'no scan data' };
   const yEl = kid(A, dp, 'intensities') || kid(A, dp, 'counts');
@@ -465,7 +478,7 @@ function readScan(A, doc){
     } else if (lp){
       const v = listOf(A, lp).map(t=> toDeg(t, u));
       if (v.length === n && v.every(Number.isFinite)) x = v;
-      else why = `${v.length} 2θ positions for ${n} intensities`;
+      else why = v.length === n ? '2θ positions that are not all numbers' : `${v.length} 2θ positions for ${n} intensities`;
     } else if (cp) fixed = toDeg(numOf(A, cp), u);
     break;
   }
@@ -474,18 +487,19 @@ function readScan(A, doc){
   const ctEl = kid(A, dp, 'commonCountingTime'), tsEl = kid(A, dp, 'countingTimes');
   let t = ctEl ? toSeconds(numOf(A, ctEl), unitOf(A, ctEl)) : NaN, ts = null;
   if (tsEl){
-    const v = listOf(A, tsEl).map(s=> toSeconds(s, unitOf(A, tsEl)));
-    if (v.length === n && v.every(s=> s > 0)){
-      if (v.some(s=> Math.abs(s - v[0]) > 1e-9*v[0])) ts = v;
-      else if (!(t > 0)) t = v[0];
+    // (a time that is no number leaves its point out, below, not the list)
+    const v = listOf(A, tsEl).map(s=> toSeconds(s, unitOf(A, tsEl))), vf = v.filter(Number.isFinite);
+    if (v.length === n && vf.length && vf.every(s=> s > 0)){
+      if (vf.some(s=> Math.abs(s - vf[0]) > 1e-9*vf[0])) ts = v;
+      else if (!(t > 0)) t = vf[0];
     }
   }
   const mode = attrOf(A, scan, 'mode'), unit = A.attr(yEl, 'unit') || '', rate = RATE_UNIT.test(unit);
   const preset = /pre-?set\s*counts/i.test(mode || '');
   if (preset && !ts && !rate)
     return { error: 'a pre-set-counts scan without its per-point counting times (its counts are about the preset everywhere)' };
-  const attIn = listOf(A, kid(A, dp, 'beamAttenuationFactors'));
-  const att = attIn.length === n && attIn.every(v=> v > 0) ? attIn : null;
+  const attIn = listOf(A, kid(A, dp, 'beamAttenuationFactors')), attF = attIn.filter(Number.isFinite);
+  const att = attIn.length === n && attF.length && attF.every(v=> v > 0) ? attIn : null;
   const notes = [], isCounts = A.name(yEl) === 'counts';
   // (as rates the pattern is right; only the weights need each point's time)
   if (preset && !ts) notes.push(`a pre-set-counts scan in ${unit} without its per-point counting times: weighed as if every point were counted for the same time`);
@@ -496,33 +510,50 @@ function readScan(A, doc){
     if (isCounts) return { error: `raw <counts> with ${why}: the attenuated points cannot be corrected` };
     notes.push(`${why}: ignored, the attenuated points weighed as if counted unattenuated`);
   }
-  const y = new Array(n), m = new Array(n);
+  const xs = [], y = [], m = [], aK = [], out = { intensity: 0, 'counting time': 0, 'attenuation factor': 0 };
   for (let i = 0; i < n; i++){
     const a = att ? att[i] : 1;
-    y[i] = isCounts ? raw[i]*a : raw[i];
-    m[i] = a;
-    if (ts && !rate){ y[i] /= ts[i]; m[i] /= ts[i]; }
-    else if (rate) m[i] = a/(ts ? ts[i] : t);
+    const bad = !Number.isFinite(raw[i]) ? 'intensity' : ts && !Number.isFinite(ts[i]) ? 'counting time' : !Number.isFinite(a) ? 'attenuation factor' : null;
+    if (bad){ out[bad]++; continue; }
+    let yi = isCounts ? raw[i]*a : raw[i], mi = a;
+    if (ts && !rate){ yi /= ts[i]; mi /= ts[i]; }
+    else if (rate) mi = a/(ts ? ts[i] : t);
+    if (!Number.isFinite(yi)){ out.intensity++; continue; }
+    xs.push(x[i]); y.push(yi); m.push(mi); aK.push(a);
   }
+  const dropped = n - y.length, why0 = Object.entries(out).filter(([, c])=> c);
+  const whyTxt = why0.length > 1 ? why0.map(([k, c])=> `${k} (${c})`).join(' or ') : why0.length ? why0[0][0] : '';
+  if (y.length < 2) return { error: `${whyTxt} not a finite number at ${dropped} of ${n} points: fewer than two left` };
+  if (dropped) notes.push(`${dropped} of ${n} points left out, their ${whyTxt} not a finite number`);
   if (ts && !rate) notes.push(`counts over unequal counting times${mode ? ` (${mode})` : ''}: loaded as counts per second`);
   if (rate && !ts && !(t > 0)){
     const s = noiseCountScale(y);
     if (s > 0){
-      for (let i = 0; i < n; i++) m[i] = (att ? att[i] : 1)*s;
+      for (let i = 0; i < y.length; i++) m[i] = aK[i]*s;
       notes.push(`intensities in ${unit} with no counting time: ${+(1/s).toPrecision(3)} s per point estimated from the noise, for the weights`);
     } else return { error: `intensities in ${unit} with no counting time, and none could be estimated` };
   }
   const varMul = m.some(v=> v !== 1) ? m : null;
-  return { x, y, varMul, unit, rate: rate || !!ts, mode, notes };
+  return { x: xs, y, varMul, unit, rate: rate || !!ts, mode, notes, dropped };
+}
+function readScans(A, doc){
+  const out = [];
+  measurementsOf(A, doc).forEach((meas, k)=>{
+    let sc = A.kids(meas).filter(c=> A.name(c) === 'scan');
+    if (!sc.length){ const d = find(A, meas, 'scan'); if (d) sc = [d]; }
+    sc.forEach(s=> out.push({ ...readScan(A, s), meas: k }));
+  });
+  return out.length ? out : [{ error: 'no scan data', meas: 0 }];
 }
 
 /* =========================================================
    ENTRY POINTS
 ========================================================= */
 // A parsed DOM Document (DOMParser, 'text/xml'), its root, or the <xrdMeasurement> element.
-function readXrdmlInstrument(xmlDoc){
+const measIdx = k => Number.isInteger(k) && k > 0 ? k : 0;
+function readXrdmlInstrument(xmlDoc, k){
   if (!xmlDoc) return null;
-  return readInstrument(DOM_ACCESS, xmlDoc);
+  return readInstrument(DOM_ACCESS, xmlDoc, measIdx(k));
 }
 
 /* The text of an XML file from its bytes, its encoding found as the XML specification's
@@ -548,18 +579,22 @@ const asText = t => t instanceof ArrayBuffer || ArrayBuffer.isView(t) ? decodeXm
 const isXrdml = t => typeof t === 'string' && /<(?:[\w.-]+:)?xrdMeasurement[\s>]/.test(t);
 
 // The raw file: a string, or its bytes (any encoding decodeXml finds).
-function readXrdmlInstrumentText(text){
+function readXrdmlInstrumentText(text, k){
   text = asText(text);
   if (!isXrdml(text)) return null;
-  return readInstrument(LITE_ACCESS, parseXmlLite(text));
+  return readInstrument(LITE_ACCESS, parseXmlLite(text, measIdx(k)), measIdx(k));
 }
-// The scan (readScan): from a parsed DOM Document, or from the raw file.
+// The scans (readScans): every one, from a parsed DOM Document; the first, from that or
+// from the raw file.
+function readXrdmlScans(xmlDoc){
+  return xmlDoc ? readScans(DOM_ACCESS, xmlDoc) : [{ error: 'no document' }];
+}
 function readXrdmlScan(xmlDoc){
-  return xmlDoc ? readScan(DOM_ACCESS, xmlDoc) : { error: 'no document' };
+  return readXrdmlScans(xmlDoc)[0];
 }
 function readXrdmlScanText(text){
   text = asText(text);
-  return isXrdml(text) ? readScan(LITE_ACCESS, parseXmlLite(text)) : { error: 'not an .xrdml file' };
+  return isXrdml(text) ? readScans(LITE_ACCESS, parseXmlLite(text))[0] : { error: 'not an .xrdml file' };
 }
 
-export { readXrdmlInstrument, readXrdmlInstrumentText, readXrdmlScan, readXrdmlScanText, decodeXml, noiseCountScale };
+export { readXrdmlInstrument, readXrdmlInstrumentText, readXrdmlScan, readXrdmlScans, readXrdmlScanText, decodeXml, noiseCountScale };

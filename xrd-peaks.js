@@ -10,12 +10,17 @@
 import { esc, fmtNum, csvLine, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 
-// Index of the grid point nearest to a 2θ on a uniform axis.
+// Index of the grid point nearest to a 2θ, by bisection: an axis need not be even (a scan
+// with points left out, xrd-instr.js, or listed positions). Up to v484 it was taken as
+// even, and an index came out as many points off as were missing before it.
 function nearestIdx(x, pos){
   if (!x || !x.length) return 0;
-  const span = (x[x.length-1]-x[0]) || 1;
-  const t = (pos-x[0])/span*(x.length-1);
-  return Math.max(0, Math.min(x.length-1, Math.round(t)));
+  const n = x.length, s = x[n-1] < x[0] ? -1 : 1;
+  if (!(s*pos > s*x[0])) return 0;
+  if (!(s*pos < s*x[n-1])) return n-1;
+  let lo = 0, hi = n-1;
+  while (hi - lo > 1){ const mid = (lo + hi) >> 1; if (s*x[mid] <= s*pos) lo = mid; else hi = mid; }
+  return Math.abs(pos - x[lo]) <= Math.abs(x[hi] - pos) ? lo : hi;
 }
 // The highest point within ±win of idx.
 function refineIdx(y, idx, win){
@@ -460,12 +465,14 @@ export function createPeakAnalysis(host, root, o){
   let removedPeaks = []; // per file: array of removed peaks' detected 2θ positions
   const curIdx = ()=> std ? 0 : host.idx();
   // Per-field mode: 'shared' | 'per'. Defaults: peak-search fields per-sample, rest shared.
-  const paramMode = { N:'shared', blWin:'shared', pkHeight:'per', pkProm:'per', pkDist:'per', K:'shared', lambda:'shared' };
+  const MODE_DEF = std ? { N:'shared', blWin:'shared', pkHeight:'shared', pkProm:'shared', pkDist:'shared', K:'shared', lambda:'shared' }
+    : { N:'shared', blWin:'shared', pkHeight:'per', pkProm:'per', pkDist:'per', K:'shared', lambda:'shared' };
+  const paramMode = { ...MODE_DEF };
   // Shared param values (defaults); the standard's own start unsmoothed, and never
-  // share anything (one file), nor size anything (K, λ unused).
-  const FIELD_DEF = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598 };
-  const shared = std ? { ...FIELD_DEF, N:1 } : { ...FIELD_DEF };
-  if (std) Object.keys(paramMode).forEach(k=> paramMode[k] = 'shared');
+  // share anything (one file), nor size anything (K, λ unused). blOn: the baseline's box.
+  const FIELD_DEF = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598, blOn:true };
+  const SHARED_DEF = std ? { ...FIELD_DEF, N:1 } : FIELD_DEF;
+  const shared = { ...SHARED_DEF };
   // Per-sample param overrides (indexed by file idx). blOn: the SNIP baseline subtracted
   // (its box ticked, the default) or not; it goes with its window, under the window's
   // all / one (paramMode.blWin). Absent (projects before v463) is on.
@@ -503,16 +510,17 @@ export function createPeakAnalysis(host, root, o){
     const v = parseFloat(raw);
     return isNaN(v) ? def : v;
   }
-  // Read inputs into the appropriate store for the sample on show
+  // Read inputs into the appropriate store for the sample on show; with no file, every
+  // value into the shared ones, those a file loaded starts from (addFile).
   function readInputsToStore(){
-    const k = curIdx();
+    const k = curIdx(), own = m => paramMode[m]!=='shared' && files().length > 0;
     for (const key in FIELD_INPUT){
       const v = Math.max(FIELD_MIN[key], numField(FIELD_INPUT[key], FIELD_DEF[key]));
-      if (paramMode[key]==='shared') shared[key] = v;
+      if (!own(key)) shared[key] = v;
       else { if (!perParams[k]) perParams[k] = {}; perParams[k][key] = v; }
     }
     const on = $$('BlOn').checked;
-    if (paramMode.blWin==='shared') shared.blOn = on;
+    if (!own('blWin')) shared.blOn = on;
     else { if (!perParams[k]) perParams[k] = {}; perParams[k].blOn = on; }
   }
   // Push stored values for the sample on show into the input fields
@@ -809,7 +817,9 @@ export function createPeakAnalysis(host, root, o){
 
     const pks = allPks.filter(pk=>!pk.removed);
     if (!pks.length){ wrap.innerHTML='<p style="color:var(--muted);margin:6px 0">No peaks found with current parameters.</p>'; return; }
-    const maxH = Math.max(...pks.map(pk=>pk.height));
+    // (only peaks of height 0 left — manual ones on the baseline — none has a relative
+    // intensity: a dash; up to v484 0/0 printed NaN%)
+    const maxH = Math.max(...pks.map(pk=>pk.height)), relOf = h => maxH > 0 ? (h/maxH*100).toFixed(1) + '%' : '—';
     const showCorr = !!model() && !std;
     const sizeCol = !std;
     // The table scrolls sideways in its own box when the screen is narrower than it;
@@ -821,7 +831,7 @@ export function createPeakAnalysis(host, root, o){
       const below = showCorr && belowInstr(fwhm, pk.detPos);
       const corrCell = showCorr ? (below ? `<td title="Narrower than the instrumental width at this angle">⚠</td>` : `<td>${fmtCell(sizeCorr(fwhm, pk.detPos, fp.K, fp.lambda))}</td>`) : '';
       const sel = panel.sel!=null && Math.abs(pk.pos-panel.sel)<1e-9 ? ' selected' : '';
-      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${esc(pk.pos)}" data-det="${esc(pk.detPos)}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${(pk.height/maxH*100).toFixed(1)}%</td><td${std && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${esc(pk.detPos)}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
+      html+=`<tr class="peak-row${pk.manual?' manual-peak':''}${sel}" data-pos="${esc(pk.pos)}" data-det="${esc(pk.detPos)}"><td>${i+1}</td><td>${pk.pos.toFixed(3)}</td><td>${relOf(pk.height)}</td><td${std && isFinite(pk.fwhmSig) ? ` title="± ${pk.fwhmSig.toPrecision(2)}° (counting statistics)"` : ''}>${isFinite(fwhm)?fwhm.toFixed(3):'—'}</td>${sizeRawCell}${corrCell}<td style="text-align:center"><button class="peak-del is-danger idle-dim" data-det="${esc(pk.detPos)}" data-manual="${pk.manual?1:0}" title="Remove peak">${X_SVG(13)}</button></td></tr>`;
     });
     html+='</tbody></table></div>';
     if (!std){
@@ -1087,7 +1097,10 @@ export function createPeakAnalysis(host, root, o){
     host.commit();
   }
 
-  /* ---- The fields ---- */
+  /* ---- The fields ----
+     With no file a field, the box, the chips and the λ preset set the stored values all the
+     same, for the files to come, as a step of the history (up to v484 a field and the box
+     were not kept: the next refresh put the stored values back in them). */
   // Per-field shared/per-sample toggles (one segmented control per editable field)
   const TOGGLE_FIELD = { N:'N', Bl:'blWin', H:'pkHeight', P:'pkProm', D:'pkDist', K:'K', L:'lambda' };
   const SIZE_ONLY = new Set(['K','lambda']);
@@ -1119,19 +1132,20 @@ export function createPeakAnalysis(host, root, o){
           updateView(true);
         }
         renderTable(); renderResults();
-        host.commit();
       }
+      host.commit();
     });
   });
   if (!std) $$('Norm').addEventListener('change', e=>{
     norm = normOf(e.target.value);
-    if (files().length){ renderResults(); host.commit(); }
+    if (files().length) renderResults();
+    host.commit();
   });
   // The baseline's box: as a change of its window (no peak deletion undone).
   $$('BlOn').addEventListener('change', ()=>{
-    if (!files().length){ $$('BlWin').disabled = !$$('BlOn').checked; return; }
     readInputsToStore();
     writeStoreToInputs();
+    if (!files().length){ host.commit(); return; }
     if (paramMode.blWin==='shared') reprocessAll(); else reprocessOne(curIdx());
     updateView(true);
     renderTable(); renderResults();
@@ -1143,9 +1157,9 @@ export function createPeakAnalysis(host, root, o){
     const isSizeOnly = SIZE_ONLY.has(key);   // K/λ don't affect processing
     const isPeakSearch = (key==='pkHeight' || key==='pkProm' || key==='pkDist');
     const apply = ()=>{
-      if (!files().length) return;
       readInputsToStore();
       writeStoreToInputs();
+      if (!files().length){ host.commit(); return; }
       if (isSizeOnly){ renderTable(); renderResults(); host.commit(); return; } // only the Scherrer size changes
       // Peak deletions reset only when this peak-search field changes
       if (isPeakSearch){
@@ -1273,6 +1287,11 @@ export function createPeakAnalysis(host, root, o){
       if (!addMode) return;
       const plot = anaPlot, idx = getIdx(), f = files()[idx];
       if (!onShow() || !plot || !f){ setMode(false); return; }
+      // A key typed in a field is the field's: Enter applies it, the arrows move the caret
+      // (up to v484 the armed mode took them there too: Enter placed the peak, the field
+      // was not applied).
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       if (e.key==='Escape'){ e.stopImmediatePropagation(); setMode(false); return; }
       if (e.key==='ArrowLeft' || e.key==='ArrowRight'){
         e.preventDefault(); e.stopImmediatePropagation();
@@ -1387,7 +1406,8 @@ export function createPeakAnalysis(host, root, o){
   // files: a standard replaced by a shorter one left it past the end, and Enter threw).
   function refresh(preserveView){
     addPeak.setMode(false);
-    if (!files().length){ processed = []; panel.sel = panel.hov = null; updateView(); renderTable(); return; }
+    // (with no file the fields and the chips too: they show what a file loaded will take)
+    if (!files().length){ processed = []; panel.sel = panel.hov = null; writeStoreToInputs(); syncModeButtons(); updateView(); renderTable(); return; }
     reprocessAll();
     writeStoreToInputs();
     syncModeButtons();
@@ -1435,18 +1455,37 @@ export function createPeakAnalysis(host, root, o){
       return { perParams: perParams.map(q=>({...q})), manualPeaks: manualPeaks.map(a=>a.slice()), removedPeaks: removedPeaks.map(a=>a.slice()),
         shared: {...shared}, paramMode: {...paramMode}, sizeBy, norm };
     },
+    /* Every setting from the state, each set whether the state holds it or not: a value
+       it has none of, or one that is no number (a project read in may hold anything), the
+       default; a sample's own number only where it is one (the shared value otherwise),
+       its baseline's box on unless the state says off. Up to v484 the shared values and
+       the modes were merged over those in use: an undo past the box's untick, or a project
+       without it, kept the box as it was left (the baseline off, the widths and sizes
+       changed), and a list holding something else than lists (a project read in) threw. */
     restore(s){
-      s = s || {};
+      const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+      s = obj(s);
       const n = files().length;
       const arr = (a, make)=> Array.isArray(a) ? a.slice(0, n).concat(Array.from({ length: Math.max(0, n - a.length) }, make)) : Array.from({ length: n }, make);
-      if (s.shared) Object.assign(shared, s.shared);
-      if (s.paramMode && !std) Object.assign(paramMode, s.paramMode);
-      perParams = arr(s.perParams, ()=> ({...shared})).map(q=> ({...q}));
-      manualPeaks = arr(s.manualPeaks, ()=> []).map(a=> a.slice());
-      removedPeaks = arr(s.removedPeaks, ()=> []).map(a=> a.slice());
+      const numOf = (q, k)=> Number.isFinite(q[k]) ? Math.max(FIELD_MIN[k], q[k]) : undefined;
+      const sh = obj(s.shared), pm = std ? {} : obj(s.paramMode);
+      for (const k in FIELD_MIN) shared[k] = numOf(sh, k) ?? SHARED_DEF[k];
+      shared.blOn = sh.blOn !== false;
+      for (const k in MODE_DEF) paramMode[k] = pm[k] === 'shared' || pm[k] === 'per' ? pm[k] : MODE_DEF[k];
+      perParams = arr(s.perParams, ()=> ({...shared})).map(q=>{
+        q = obj(q);
+        const o = {};
+        for (const k in FIELD_MIN){ const v = numOf(q, k); if (v !== undefined) o[k] = v; }
+        o.blOn = q.blOn !== false;
+        return o;
+      });
+      const posOf = a => Array.isArray(a) ? a.filter(Number.isFinite) : [];
+      manualPeaks = arr(s.manualPeaks, ()=> []).map(posOf);
+      removedPeaks = arr(s.removedPeaks, ()=> []).map(posOf);
       sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample';
       norm = normOf(s.norm);
       panel.sel = panel.hov = null;
+      writeStoreToInputs(); syncModeButtons();
     },
   };
 }

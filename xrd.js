@@ -1,7 +1,7 @@
-import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, X_SVG } from './utils.js';
+import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, X_SVG } from './utils.js';
 import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
 import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
-import { readXrdmlScan, decodeXml } from './xrd-instr.js';
+import { readXrdmlScans, decodeXml } from './xrd-instr.js';
 import { createDeck, cardInfo, fileSafe } from './cards.js';
 
 // File names and what a file says about itself go into the alerts as text, never as markup.
@@ -46,7 +46,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     document.getElementById('xrdAlerts').innerHTML = xrdLoadAlerts + xrdNoteAlerts + xrdUploadAlerts;
   }
 
-  /* A file read (readXrdmlScan, xrd-instr.js): 2θ, the intensities on the unattenuated
+  /* A file read (readXrdmlScans, xrd-instr.js): 2θ, the intensities on the unattenuated
      scale (<intensities> as written, the raw <counts> of XRDML 2.x times the attenuation
      factors) and each point's variance, var(y) = y·varMul, for the counting uncertainty of
      the FWHMs and the Rietveld weights. A file it cannot read (wrong format, not
@@ -55,14 +55,28 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      is decoded from them in the file's own encoding (UTF-16 too, which f.text() is not).
      The raw intensities are kept untouched (no minimum subtraction): the constant offset is
      absorbed by the SNIP background, so the whole pipeline — analysis and fit alike — runs
-     on the true raw data and stays consistent with the CSVs. */
-  async function readFile(f, color){
+     on the true raw data and stays consistent with the CSVs.
+     Every scan of the file is a pattern (patternsOf); the caller gives each its colour. */
+  async function readFile(f){
     const rawBytes = new Uint8Array(await f.arrayBuffer());
     const xml = new DOMParser().parseFromString(decodeXml(rawBytes), 'text/xml');
-    const sc = xml.getElementsByTagName('parsererror').length ? { error: 'not well-formed XML' } : readXrdmlScan(xml);
-    if (sc.error) return { error: sc.error };
-    const { x, y, varMul } = sc;
-    return { file: ascending({name:f.name, label:f.name.replace(/\.[^.]+$/,''), x, y, color, rawBytes, ...(varMul ? { varMul } : {})}), notes: sc.notes };
+    return patternsOf(f.name, rawBytes, xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml));
+  }
+  /* A file's scans, each a pattern of its own: one scan, the file as it was read up to
+     v483; several (a series measured in one go), "<file> (scan k)" each, k counting every
+     scan of the file, its name the file's with " (scan k)" before the extension (a key of
+     the cards' results: one per pattern), the file's bytes shared, and scan (k − 1) and
+     src (the file's name) kept for reading it again and for the "already loaded" test (to
+     v483 the first scan alone was read, the others never seen). A scan that cannot be read
+     is left out (skipped says why); none readable, the file is refused with the reasons.
+     → { pats: [{ f, k, notes }], skipped, n } or { error } */
+  function patternsOf(name, rawBytes, scans){
+    const n = scans.length, base = name.replace(/\.[^.]+$/, ''), ext = name.slice(base.length);
+    const ok = scans.map((sc, k)=> ({ sc, k })).filter(q=> !q.sc.error);
+    if (!ok.length) return { error: n > 1 ? scans.map((sc, k)=> `scan ${k+1}: ${sc.error}`).join('; ') : scans[0].error };
+    const pats = ok.map(({ sc, k })=> ({ k, notes: sc.notes, f: ascending({ name: n > 1 ? `${base} (scan ${k+1})${ext}` : name, label: n > 1 ? `${base} (scan ${k+1})` : base,
+      x: sc.x, y: sc.y, rawBytes, ...(n > 1 ? { src: name, scan: k } : {}), ...(sc.meas ? { meas: sc.meas } : {}), ...(sc.varMul ? { varMul: sc.varMul } : {}) }) }));
+    return { pats, n, skipped: scans.map((sc, k)=> sc.error ? `scan ${k+1} not read (${sc.error})` : null).filter(Boolean) };
   }
 
   /* ---- The samples ---- */
@@ -88,12 +102,14 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     });
     return out;
   }
-  // The cards stay on the sample they showed when another is left out or taken in.
+  // The cards stay on the sample they showed when another is left out, taken in, removed or
+  // moved; the one on show removed, on the one now in its place (or the last, it was the
+  // last). Up to v484 a removal or a move kept the index: the cards showed another sample.
   function stayOn(f){ const k = includedOf(allFiles).indexOf(f); if (k >= 0) curIdx = k; }
   function fileCallbacks(){
     return {
-      onRemove(i){ removeFileAt(allFiles, i, slots()); afterFilesChange(); },
-      onReorder(from, to){ moveFileTo(allFiles, from, to, slots()); afterFilesChange(); },
+      onRemove(i){ const was = files[curIdx]; removeFileAt(allFiles, i, slots()); stayOn(was); afterFilesChange(); },
+      onReorder(from, to){ const was = files[curIdx]; moveFileTo(allFiles, from, to, slots()); stayOn(was); afterFilesChange(); },
       onInclude(i, on){ const was = files[curIdx]; setIncluded(allFiles, i, on, slots()); stayOn(was); afterFilesChange(); },
       onIncludeAll(on){ const was = files[curIdx]; allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); stayOn(was); afterFilesChange(); },
       onLabelChange(i, v){ allFiles[i].label=v; eachCard(e=> e.inst.redraw()); hist.commit(); },
@@ -108,23 +124,40 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
   }
 
   setupDropzone('xrdDropzone', 'xrdFiles', async (fileList)=>{
-    const existing = new Set(allFiles.map(f=>f.name));
+    // (by the patterns' names: a file of several scans is tested scan by scan, below)
+    const existing = new Set(allFiles.map(f=> f.name));
     const alreadyLoaded = [];
     const invalidFiles = [], loadNotes = [];
     for (const f of fileList){
       if (existing.has(f.name)){ alreadyLoaded.push(esc(f.name)); continue; }
-      const r = await readFile(f, nextColor(allFiles));
+      // Each file on its own: one that cannot be read at all (its bytes gone from the disk,
+      // anything thrown) is refused with why, the others loaded. Up to v484 a throw ended
+      // the batch: the files read before it were in the list, unseen, no card drawn.
+      let r;
+      try { r = await readFile(f); } catch (e){ r = { error: String(e && e.message || e) }; }
       if (r.error){ invalidFiles.push(esc(`${f.name} (${r.error})`)); continue; }
+      // A scan whose name is in the list stays as it is (one of the file's, dropped again
+      // after others were removed, or a file loaded under that name: its results by it), the
+      // others load; every scan there, the file is already loaded.
+      const fresh = r.pats.filter(q=> !(q.f.src && existing.has(q.f.name)));
+      if (!fresh.length){ alreadyLoaded.push(esc(f.name)); continue; }
       existing.add(f.name);
-      for (const t of r.notes) loadNotes.push(esc(`${f.name}: ${t}`));
-      // A new file comes in included, so it goes last among the included as well.
-      allFiles.push(r.file); files.push(r.file);
-      cards().forEach(a=>{
-        const e = live.get(a.id);
-        if (a.type === 'scherrer' && e) e.inst.addFile();
-        const s = a.states.scherrer;
-        if (a.type !== 'scherrer' && s){ s.perParams.push({...s.shared}); s.manualPeaks.push([]); s.removedPeaks.push([]); }
-      });
+      for (const q of r.pats) if (!fresh.includes(q)) alreadyLoaded.push(esc(q.f.name));
+      if (r.n > 1) loadNotes.push(esc(`${f.name}: ${r.n} scans, ${fresh.length === r.n ? '' : fresh.length + ' of them loaded, '}each a pattern of its own`));
+      for (const t of r.skipped) loadNotes.push(esc(`${f.name}: ${t}`));
+      for (const { f: p, notes } of fresh){
+        p.color = nextColor(allFiles);
+        existing.add(p.name);
+        for (const t of notes) loadNotes.push(esc(`${p.name}: ${t}`));
+        // A new file comes in included, so it goes last among the included as well.
+        allFiles.push(p); files.push(p);
+        cards().forEach(a=>{
+          const e = live.get(a.id);
+          if (a.type === 'scherrer' && e) e.inst.addFile();
+          const s = a.states.scherrer;
+          if (a.type !== 'scherrer' && s){ s.perParams.push({...s.shared}); s.manualPeaks.push([]); s.removedPeaks.push([]); }
+        });
+      }
     }
     xrdLoadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles, [], undefined, 'xrd-dismiss-invalid') : '';
     xrdNoteAlerts = loadNotes.length ? buildAlertsHtml([], loadNotes, 'Loaded, with a caveat:', '', 'xrd-dismiss-notes') : '';
@@ -189,15 +222,21 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     m.querySelector('.xrd-std-x').onclick = ()=> closeStd();
     m.querySelector('.xrd-std-file').addEventListener('click', e=>{ if (e.target.closest('[data-std-del]')) setStd(null); });
     setupDropzone(id + 'Dz', id + 'Files', async fl=>{
-      // One file: of several dropped, the first; it replaces the one loaded.
+      // One file: of several dropped, the first; it replaces the one loaded. One pattern:
+      // of a file of several scans, the first that can be read.
       const f = fl[0];
       if (!f) return;
-      const r = await readFile(f, '#d4a72c');
+      let r;
+      try { r = await readFile(f); } catch (e){ r = { error: String(e && e.message || e) }; }
       const alerts = m.querySelector('.xrd-std-alerts');
       if (r.error){ alerts.innerHTML = buildAlertsHtml([esc(`${f.name} (${r.error})`)], []); return; }
+      const { f: p, k, notes } = r.pats[0];
+      p.color = '#d4a72c';
+      setStd(p);
+      // (after setStd, which clears the windows' alerts: these are the new file's)
       alerts.innerHTML = (fl.length > 1 ? buildAlertsHtml([], [esc(`${fl.length} files dropped: the first, ${f.name}, is the standard`)], 'One file at a time:') : '')
-        + (r.notes.length ? buildAlertsHtml([], r.notes.map(t=> esc(`${f.name}: ${t}`)), 'Loaded, with a caveat:') : '');
-      setStd(r.file);
+        + (r.n > 1 ? buildAlertsHtml([], [esc(`${f.name}: ${r.n} scans: the standard is ${k ? `scan ${k+1}, the first that could be read` : 'the first'}, the others are not used`)], 'One pattern:') : '')
+        + (notes.length ? buildAlertsHtml([], notes.map(t=> esc(`${p.name}: ${t}`)), 'Loaded, with a caveat:') : '');
     });
     return { el: m, box, body: m.querySelector('.xrd-std-body') };
   }
@@ -212,8 +251,13 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
         ? `<div class="xrd-std-row"><span class="txt-mini">Standard</span><span class="xrd-std-name">${esc(stdFile.name)}</span><button type="button" class="peak-del is-danger idle-dim" data-std-del title="Remove the standard">${X_SVG(13)}</button></div>` : '';
     });
   }
+  // The windows' alerts are the last file dropped there: they go with the standard,
+  // replaced or removed, and on a restore (up to v484 they stayed, on another standard,
+  // on none, in another project).
+  const clearStdAlerts = ()=> [peaksModal, rvModal].forEach(M=>{ M.el.querySelector('.xrd-std-alerts').innerHTML = ''; });
   function setStd(f){
     stdFile = f;
+    clearStdAlerts();
     stdPeaks.resetFile();
     syncStdFile();
     stdPeaks.refresh();
@@ -377,7 +421,9 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      off). Restored, a file is read again from its own bytes (rawBytes), as a file loaded
      now is, and a note names those whose arrays changed; one whose bytes were not kept is
      used as it was, with a note where its lowest point is exactly 0. The readings are kept
-     by their bytes, so an undo does not read a file again. */
+     by their bytes, so an undo does not read a file again. A pattern is its scan of the
+     file (f.scan; the first, none given), so a file of several gives its scans again, in
+     their order. */
   const reread = new WeakMap();
   function readAgain(f){
     const b = f.rawBytes;
@@ -385,14 +431,15 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
       let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
       return { f: ascending({ ...f }), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
     }
-    let sc = reread.get(b);
-    if (!sc){
+    let all = reread.get(b);
+    if (!all){
       try {
         const xml = new DOMParser().parseFromString(decodeXml(b instanceof Uint8Array ? b : Uint8Array.from(b)), 'text/xml');
-        sc = xml.getElementsByTagName('parsererror').length ? { error: 'not well-formed XML' } : readXrdmlScan(xml);
-      } catch (e){ sc = { error: String(e && e.message || e) }; }
-      reread.set(b, sc);
+        all = xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml);
+      } catch (e){ all = [{ error: String(e && e.message || e) }]; }
+      reread.set(b, all);
     }
+    const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
     if (sc.error) return { f: ascending({ ...f }), note: null };
     const { varMul: _, ...rest } = f;
     const g = ascending({ ...rest, x: sc.x.slice(), y: sc.y.slice(), ...(sc.varMul ? { varMul: sc.varMul.slice() } : {}) });
@@ -400,7 +447,30 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     let moved = !old.y || old.y.length !== n || !old.x || old.x.length !== n || !!old.varMul !== !!g.varMul;
     for (let i = 0; !moved && i < n; i++)
       moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
-    return { f: g, note: moved ? 'read again from the file itself: the project held its data as an earlier version had read them (up to v262, with their minimum subtracted). Results refined before are from those: refine again' : null };
+    // (points left out that an earlier version, to v484, kept as no number: those)
+    const lost = sc.dropped && old.y && old.y.length === n + sc.dropped;
+    return { f: g, note: !moved ? null : lost ? `read again from the file itself, ${sc.dropped} point${sc.dropped > 1 ? 's' : ''} whose values are no finite number left out (the project held ${sc.dropped > 1 ? 'them' : 'it'} as up to v484). Results refined before are from those: refine again`
+      : 'read again from the file itself: the project held its data as an earlier version had read them (up to v262, with their minimum subtracted). Results refined before are from those: refine again' };
+  }
+  /* A project read in may hold anything (an imported .json): the restore takes what it reads
+     only as what it should be — a file an object with its pattern, 2θ and intensities as
+     many and two at least (else it is left out, with a note), its name and label text; an
+     index an integer in range; arrays where arrays are kept; the cards of a known kind —
+     and anything else as its default (up to v484 a curIdx that was no number made the index
+     NaN, and the cards read files[NaN].label; a file not an object, or with no arrays,
+     threw before anything was drawn). */
+  const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const isArr = v => Array.isArray(v) || ArrayBuffer.isView(v);
+  // (a kind of KINDS' own: 'constructor', 'toString' and the like are none)
+  const isKind = k => Object.prototype.hasOwnProperty.call(KINDS, k);
+  function keptFile(f, i, color){
+    if (!isObj(f)) return null;
+    const name = typeof f.name === 'string' && f.name ? f.name : `file ${i+1}`;
+    const g = { ...f, name, label: typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, ''), color: typeof f.color === 'string' ? f.color : color };
+    if (!(isArr(g.varMul) && isArr(g.y) && g.varMul.length === g.y.length)) delete g.varMul;
+    let r;
+    try { r = readAgain(g); } catch (e){ return null; }
+    return isArr(r.f.x) && isArr(r.f.y) && r.f.x.length === r.f.y.length && r.f.x.length > 1 ? r : null;
   }
   /* A project from before the cards (v460): one Analysis and one Rietveld card, and the
      standard a file among the samples, chosen in a select. It becomes the standard's own
@@ -408,10 +478,12 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      Rietveld; the samples' settings go to a Scherrer card and a Rietveld card. A standard
      left out of the analysis was not in use: it stays a sample, left out. */
   function migrate(s){
-    const all = s.files || [], incl = all.filter(f=> f.included !== false);
-    const si = s.standardName ? incl.findIndex(f=> f.name === s.standardName) : -1;
+    // (an entry that is no file kept in its place: the restore leaves it out with its
+    // entries in the per-sample lists)
+    const all = Array.isArray(s.files) ? s.files : [], incl = all.filter(f=> !isObj(f) || f.included !== false);
+    const si = s.standardName ? incl.findIndex(f=> isObj(f) && f.name === s.standardName) : -1;
     const cut = a => Array.isArray(a) ? a.filter((_, i)=> i !== si) : a;
-    const rv = s.rv || {}, res = rv.results || {};
+    const rv = isObj(s.rv) ? s.rv : {}, res = isObj(rv.results) ? rv.results : {};
     const stdRes = si >= 0 && res[s.standardName] ? { [s.standardName]: res[s.standardName] } : {};
     const smpRes = Object.fromEntries(Object.entries(res).filter(([k])=> !(si >= 0 && k === s.standardName)));
     let ci = s.curIdx || 0; if (si >= 0 && ci > si) ci--;
@@ -427,27 +499,47 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
       ],
     };
   }
+  // A kind's settings, the card's or kept while it is the other kind: an object, and the
+  // Scherrer one's per-sample lists arrays (the file list keeps them aligned: slots), the
+  // entries of the included files left out (gone: their places among the included) taken
+  // out, so each file after them keeps its own.
+  function keptState(k, v, gone){
+    if (!isObj(v)) return null;
+    if (k !== 'scherrer') return v;
+    const arr = a => Array.isArray(a) ? a.filter((_, i)=> !gone.has(i)) : [];
+    return { ...v, shared: isObj(v.shared) ? v.shared : {}, perParams: arr(v.perParams), manualPeaks: arr(v.manualPeaks), removedPeaks: arr(v.removedPeaks) };
+  }
   function xrdRestore(s0){
-    const s = s0 && s0.v === 2 ? s0 : migrate(s0 || {});
-    const reads = (s.files || []).map(readAgain), stdRead = s.std ? readAgain(s.std) : null;
-    allFiles = reads.map(r=> r.f);
+    const s = isObj(s0) && s0.v === 2 ? s0 : migrate(isObj(s0) ? s0 : {});
+    const raw = Array.isArray(s.files) ? s.files : [], reads = raw.map((f, i)=> keptFile(f, i, colorOf(i)));
+    const stdRead = s.std ? keptFile(s.std, 0, '#d4a72c') : null, lost = reads.filter(r=> !r).length;
+    // The places among the included of the files left out (an entry that is no file counts
+    // as included: it holds no included:false), whose entries the cards' per-sample lists
+    // drop; the sample on show stays the one it was, or the one now in its place.
+    const gone = new Set();
+    raw.reduce((j, f, i)=>{ if (isObj(f) && f.included === false) return j; if (!reads[i]) gone.add(j); return j + 1; }, 0);
+    allFiles = reads.filter(Boolean).map(r=> r.f);
     files = includedOf(allFiles);
     stdFile = stdRead ? stdRead.f : null;
-    curIdx = Math.min(s.curIdx || 0, Math.max(0, files.length-1));
-    stdPeaks.restore(s.stdPeaks || {});
-    stdRv.restore(s.stdRv || {});
+    const ci = Number.isFinite(s.curIdx) ? Math.max(0, Math.trunc(s.curIdx)) : 0;
+    curIdx = Math.min(ci - [...gone].filter(j=> j < ci).length, Math.max(0, files.length-1));
+    stdPeaks.restore(isObj(s.stdPeaks) ? s.stdPeaks : {});
+    stdRv.restore(isObj(s.stdRv) ? s.stdRv : {});
     restoring = true;
     try {
-      deck.load(Array.isArray(s.cards) ? s.cards : [], src=> ({ states: Object.fromEntries(Object.entries(clone(src.states || {})).filter(([k])=> KINDS[k])) }),
+      deck.load(Array.isArray(s.cards) ? s.cards.filter(c=> isObj(c) && (c.type == null || isKind(c.type))) : [],
+        src=> ({ states: Object.fromEntries(Object.entries(clone(isObj(src.states) ? src.states : {})).filter(([k])=> isKind(k)).map(([k, v])=> [k, keptState(k, v, gone)]).filter(([, v])=> v)) }),
         a=> live.get(a.id).inst.restore(a.states[a.type] || {}));
     } finally { restoring = false; }
+    clearStdAlerts();
     syncStdFile();
     stdPeaks.refresh();
     stdRv.refresh();
     afterFilesChange();
     // Clear the previous tab's transient upload alert and rebuild for this tab.
     xrdLoadAlerts = ''; xrdNoteAlerts = ''; xrdUploadAlerts = '';
-    const notes = [...reads, ...(stdRead ? [stdRead] : [])].filter(r=> r.note).map(r=> esc(`${r.f.label || r.f.name}: ${r.note}.`));
+    const notes = [...reads, ...(stdRead ? [stdRead] : [])].filter(r=> r && r.note).map(r=> esc(`${r.f.label || r.f.name}: ${r.note}.`));
+    if (lost || (s.std && !stdRead)) notes.push(esc(`${lost ? `${lost} file${lost > 1 ? 's' : ''}` : ''}${lost && s.std && !stdRead ? ' and ' : ''}${s.std && !stdRead ? 'the standard' : ''} in the project with no pattern to show (no 2θ and intensities): left out.`));
     if (notes.length) xrdNoteAlerts = buildAlertsHtml([], notes, 'Restored, with a caveat:', '', 'xrd-dismiss-notes');
     rebuildXrdAlerts();
   }

@@ -86,22 +86,55 @@ function fromB64(t){
   for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
   return b;
 }
+// A byte array held in several places (the scans of one XRDML file are patterns of their
+// own, sharing its bytes) is written once: where it is first met, with an id, and as
+// {__t:'u8', ref: id} after that; decode gives back one array for all of them. To v484
+// each place wrote its own copy, so a 40-scan file was stored 40 times.
 function encode(v){
-  if (v instanceof Date) return { __t:'date', v:v.getTime() };
-  if (v instanceof Uint8Array) return { __t:'u8', v:toB64(v) };
-  if (ArrayBuffer.isView(v)) return Array.from(v);
-  if (Array.isArray(v)) return v.map(encode);
-  if (v && typeof v === 'object'){ const o = {}; for (const k in v) o[k] = encode(v[k]); return o; }
-  return v;
+  const met = new Map();   // a Uint8Array → its encoded form
+  let ids = 0;
+  const enc = x=>{
+    if (x instanceof Date) return { __t:'date', v:x.getTime() };
+    if (x instanceof Uint8Array){
+      const first = met.get(x);
+      if (first){ if (first.id == null) first.id = ids++; return { __t:'u8', ref:first.id }; }
+      const o = { __t:'u8', v:toB64(x) }; met.set(x, o); return o;
+    }
+    if (ArrayBuffer.isView(x)) return Array.from(x);
+    if (Array.isArray(x)) return x.map(enc);
+    if (x && typeof x === 'object'){ const o = {}; for (const k in x) o[k] = enc(x[k]); return o; }
+    return x;
+  };
+  return enc(v);
 }
+const bytesOf = t=>{ try { return fromB64(t); } catch(e){ return new Uint8Array(0); } };
 function decode(v){
-  if (Array.isArray(v)) return v.map(decode);
-  if (v && typeof v === 'object'){
-    if (v.__t === 'date') return new Date(v.v);
-    if (v.__t === 'u8' && typeof v.v === 'string'){ try { return fromB64(v.v); } catch(e){ return new Uint8Array(0); } }
-    const o = {}; for (const k in v) o[k] = decode(v[k]); return o;
-  }
-  return v;
+  const shared = new Map();   // id → the bytes, from where they are written out
+  // Decoding walks in the order encoding did, so the bytes come before their references;
+  // should a reference come first all the same, the whole state is searched for its id.
+  const find = (x, id)=>{
+    if (!x || typeof x !== 'object') return null;
+    if (x.__t === 'u8' && x.id === id && typeof x.v === 'string') return x;
+    for (const k in x){ const r = find(x[k], id); if (r) return r; }
+    return null;
+  };
+  const dec = x=>{
+    if (Array.isArray(x)) return x.map(dec);
+    if (x && typeof x === 'object'){
+      if (x.__t === 'date') return new Date(x.v);
+      if (x.__t === 'u8' && typeof x.v === 'string'){
+        if (x.id != null && shared.has(x.id)) return shared.get(x.id);
+        const b = bytesOf(x.v); if (x.id != null) shared.set(x.id, b); return b;
+      }
+      if (x.__t === 'u8' && x.ref != null){
+        if (!shared.has(x.ref)){ const at = find(v, x.ref); shared.set(x.ref, at ? bytesOf(at.v) : new Uint8Array(0)); }
+        return shared.get(x.ref);
+      }
+      const o = {}; for (const k in x) o[k] = dec(x[k]); return o;
+    }
+    return x;
+  };
+  return dec(v);
 }
 
 export { allProjects, putProject, deleteProject, allTabRecs, putTabRec, deleteTabRec, uid, encode, decode };
