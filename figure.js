@@ -1613,12 +1613,23 @@ function pushUndo(){
   clearTimeout(undoTimer);
   undoTimer = setTimeout(recordUndo, 250);
 }
+// Two snapshots of one figure: the same settings over the same data arrays.
+const json = v => JSON.stringify(v);
+const sameSnap = (a, b)=> !!a && !!b && json(a.scalars) === json(b.scalars) && a.series.length === b.series.length
+  && a.series.every((e, i)=> e.keep.every((v, j)=> v === b.series[i].keep[j]) && json(e.rest) === json(b.series[i].rest));
+/* An edit that leaves the figure as it is is no step: a number committed with Enter
+   fires 'change' once more on blur, past the coalescing window, and that repeat was a
+   second copy of the step, so the first Ctrl+Z seemed to do nothing (to v485). It
+   leaves the redo as it is too. One that redoes by hand the step just undone takes it
+   back from the redo, so the steps undone after it can still be redone. */
 function recordUndo(){
   undoTimer = null;
   if (!F) return;            // the modal was closed inside the coalescing window
-  undoStack.push(snapshot());
+  const snap = snapshot();
+  if (sameSnap(snap, undoStack[undoStack.length - 1])) return;
+  if (sameSnap(snap, redoStack[redoStack.length - 1])) undoStack.push(redoStack.pop());
+  else { undoStack.push(snap); redoStack.length = 0; }
   if (undoStack.length > 60) undoStack.shift();
-  redoStack.length = 0;
 }
 /* An edit still inside its coalescing window is an edit all the same: recorded before
    undo, so undo takes back that one and not the step before it with it, and before
@@ -3320,8 +3331,11 @@ function wireControls(){
     return rebuild;
   };
 
+  /* Not while the composer closes either: the focused field, thrown away with it, fires
+     one last 'change' (after Enter, the value it committed, once more) when the model
+     is already let go, and writing into it threw (to v485). */
   const run = t=>{
-    if (rebuilding || !t.isConnected) return;
+    if (rebuilding || !F || !t.isConnected) return;
     const rebuild = applyControl(t);
     if (rebuild === null) return;
     // Echo the committed value back with a decimal point, so a comma typed by hand

@@ -75,24 +75,34 @@ function kindMenu(kinds){
 
 /* Folding animates the body's height. The card is marked folded from the start, so its
    panel stops drawing at once; .an-anim keeps the body laid out (and clipped) until the
-   animation ends. One taken over midway starts from where it got to. */
+   animation ends. One taken over midway starts from where it got to.
+   It goes in two steps: foldTo marks the card and gives back the step that starts the
+   animation. Unfolding, the body is meanwhile laid out at its full size but unseen, so
+   that its panel is drawn in between, its plots measuring the room they will have, and
+   the animation then slides open what was drawn, to its height. Unfolding started the
+   animation and drew the card after, inside it: the redraw ran in the sliding body,
+   which slid to the height it had before the redraw (to v485). */
 // Long enough, at ~600 px of body, to read as a slide rather than a jump; the curve
 // starts briskly and settles gently, and the content fades as it goes.
 export const FOLD_MS = 320;
 const FOLD_EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
-function animateFold(card, fold){
+function foldTo(card, fold){
   const body = card.querySelector(':scope > .an-body');
-  if (!body._anim && card.classList.contains('is-folded') === fold) return;
+  if (!body._anim && card.classList.contains('is-folded') === fold) return ()=>{};
   const from = body.getBoundingClientRect().height, fromO = +getComputedStyle(body).opacity;
   if (body._anim){ body._anim.cancel(); body._anim = null; }
   card.classList.toggle('is-folded', fold);
   card.classList.add('an-anim');
-  const to = fold ? 0 : body.getBoundingClientRect().height;
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(to - from) < 1){ card.classList.remove('an-anim'); return; }
-  const an = body.animate([{ height: from + 'px', opacity: fold ? fromO : Math.min(fromO, 0.2) }, { height: to + 'px', opacity: fold ? 0 : 1 }],
-    { duration: FOLD_MS, easing: FOLD_EASE });
-  body._anim = an;
-  an.onfinish = ()=>{ if (body._anim === an){ body._anim = null; card.classList.remove('an-anim'); } };
+  if (!fold) body.style.opacity = '0';
+  return ()=>{
+    body.style.opacity = '';
+    const to = fold ? 0 : body.getBoundingClientRect().height;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(to - from) < 1){ card.classList.remove('an-anim'); return; }
+    const an = body.animate([{ height: from + 'px', opacity: fold ? fromO : Math.min(fromO, 0.2) }, { height: to + 'px', opacity: fold ? 0 : 1 }],
+      { duration: FOLD_MS, easing: FOLD_EASE });
+    body._anim = an;
+    an.onfinish = ()=>{ if (body._anim === an){ body._anim = null; card.classList.remove('an-anim'); } };
+  };
 }
 
 // In file names: no path or reserved characters, and no comma (CSV names travel
@@ -123,7 +133,9 @@ export function nameDownloads(wrap, svgName, csvName){
      loaded()                   a state was loaded, names settled (else changed())
      added(rec)                 a card just added, built and named: start it on the files
      switched(rec, from)        a card just turned into another kind, built and named
-     wake(rec)                  a card unfolded: bring it up to date (it was not drawn folded)
+     wake(rec)                  a card unfolded by its arrow, or one unfolding at the end of a move
+                                that a draw was skipped for meanwhile: bring it up to date (it was
+                                not drawn folded); laid out, not yet seen
      commit()                   a step of the undo history
    } */
 export function createDeck(o){
@@ -136,7 +148,14 @@ export function createDeck(o){
   const newRec = type => ({ id: nextId(), type, base: '', nameAuto: true, name: '', collapsed: false, ...(o.make ? o.make(type) : {}) });
   const byId = id => recs.find(a=> a.id === id) || null;
   const cardOf = a => live.get(a.id) || null;
-  const isFolded = a => live.has(a.id) && live.get(a.id).classList.contains('is-folded');
+  // Folded: its panel draws nothing. An open card asked this while folded for a move had a
+  // draw skipped (a resize, a result come in): it is noted, to be brought up to date as the
+  // move ends.
+  const isFolded = a =>{
+    const f = live.has(a.id) && live.get(a.id).classList.contains('is-folded');
+    if (f && moving && !a.collapsed) missed.add(a.id);
+    return f;
+  };
 
   // The title is the kind, chosen in place (with one kind, plain text); the name sits under
   // it and stays in view when the card is folded, the instructions open under the name.
@@ -216,14 +235,16 @@ export function createDeck(o){
     const card = live.get(a.id), body = card.querySelector(':scope > .an-body');
     if (body._anim){ body._anim.cancel(); body._anim = null; }
     card.classList.remove('an-anim');
+    body.style.opacity = '';
     card.classList.toggle('is-folded', a.collapsed);
     syncFoldButton(a);
   }
+  // Unfolding: the card brought up to date (wake) laid out but unseen, then the animation.
   function setFold(a, folded){
     a.collapsed = folded;
     syncFoldButton(a);
-    animateFold(live.get(a.id), folded);
-    if (!folded && o.wake) o.wake(a);
+    const go = foldTo(live.get(a.id), folded);
+    try { if (!folded && o.wake) o.wake(a); } finally { go(); }
     o.commit();
   }
 
@@ -232,11 +253,19 @@ export function createDeck(o){
      way as it passes their middles. On release each card gets back the fold it had.
      While the cards fold, and again while they unfold, the page scrolls to keep the
      card held where it is on screen: the folds would otherwise pull the list out of
-     view, above it or below it. */
+     view, above it or below it. The cards unfold as one does by its arrow: laid out
+     unseen, the list's change settled and each card a draw was skipped for during the
+     move brought up to date (wake), then the animations. A card nothing came for is
+     left as it was, its plots with the tool and the zoom they had, and a plain press
+     and release of the grip redraws nothing. They unfolded with no wake, so a draw
+     skipped (a resize while they were folded) was never made up, and what the list's
+     change redrew (an Urbach card's reference) was drawn in the sliding body (to v485). */
   let moving = null;
+  const missed = new Set();     // ids of the open cards a draw was skipped for, in a move
   const scrollNow = dy =>{ if (dy) window.scrollBy({ top: dy, behavior: 'instant' }); };
-  function holdInView(card, ms){
-    const y0 = card.getBoundingClientRect().top, end = performance.now() + ms;
+  // y0: where the card is to stay, if not where it is now.
+  function holdInView(card, ms, y0 = card.getBoundingClientRect().top){
+    const end = performance.now() + ms;
     const loop = ()=>{ scrollNow(card.getBoundingClientRect().top - y0); if (performance.now() < end) requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   }
@@ -247,7 +276,8 @@ export function createDeck(o){
     moving = { card, y: e.clientY, dy: e.clientY - top, top, t: 0, raf: 0, folding: performance.now() + FOLD_MS + 40 };
     card.classList.add('an-moving');
     document.body.classList.add('an-dragging');
-    recs.forEach(x=> animateFold(live.get(x.id), true));
+    missed.clear();
+    recs.forEach(x=> foldTo(live.get(x.id), true)());
     const onMove = ev =>{ moving.y = ev.clientY; };
     const onUp = ()=>{
       window.removeEventListener('pointermove', onMove);
@@ -289,9 +319,16 @@ export function createDeck(o){
     const order = [...o.list.querySelectorAll(':scope > .an-card')].map(c=> +c.dataset.an);
     const was = recs.map(a=> a.id).join();
     recs.sort((x, y)=> order.indexOf(x.id) - order.indexOf(y.id));
-    holdInView(m.card, FOLD_MS + 40);
-    recs.forEach(x=>{ if (!x.collapsed) animateFold(live.get(x.id), false); });
-    if (order.join() !== was){ afterChange(); o.commit(); }
+    // Where the card is now, before the unseen bodies take their room.
+    const y0 = m.card.getBoundingClientRect().top, open = recs.filter(x=> !x.collapsed);
+    const stale = open.filter(x=> missed.has(x.id));
+    missed.clear();
+    const go = open.map(x=> foldTo(live.get(x.id), false));
+    try {
+      if (order.join() !== was) afterChange();
+      if (o.wake) stale.forEach(x=> o.wake(x));
+    } finally { go.forEach(f=> f()); holdInView(m.card, FOLD_MS + 40, y0); }
+    if (order.join() !== was) o.commit();
   }
 
   /* ---- Names ---- */
