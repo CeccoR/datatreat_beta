@@ -1,2 +1,3 @@
 node_modules/
-node_modules
+# the tests' own output: actual plots on a golden mismatch, downloads kept for a look
+tests/out/

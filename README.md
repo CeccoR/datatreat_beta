@@ -218,6 +218,12 @@ A file unticked in the file list (the box beside its name) stays loaded, with it
 
 ---
 
+## Tests
+
+`tests/` holds automated browser tests (Playwright, from Node's own test runner): every module loads its files with no error, nothing from a file or a project becomes markup, projects and their files come back byte for byte, the plots match their recorded hashes, CSVs parse, a Rietveld refinement runs and stops. `npm i` once, then `npm test`; [tests/README.md](tests/README.md) says what each file covers. The app itself still needs no build and no dependency.
+
+---
+
 ## Technical Notes
 
 - **Client-side processing**: All calculations happen in your browser. No data is uploaded to any server.
