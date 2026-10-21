@@ -1,15 +1,15 @@
 /* =========================================================
    PROJECT MANAGER
    Save/restore a whole module's state (raw data + parameters + fits) to
-   IndexedDB as a named "project", with .json export/import and a per-module CSV
-   export. A dedicated "Projects" tab lists every saved project, filterable by
+   IndexedDB as a named "project", with .datatreat export/import and a per-module
+   CSV export. A dedicated "Projects" tab lists every saved project, filterable by
    name and module. Each module shows its open project's name (white, with a
    "*" when there are unsaved changes); the Save buttons sit in a green "saved"
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, esc, moduleStateKey, getModuleState, restoreModuleState,
          moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab, onSectionChange } from './utils.js';
-import { allProjects, putProject, deleteProject, uid, encode, decode, exportForm } from './db.js';
+import { allProjects, putProject, deleteProject, uid, encode, decode } from './db.js';
 import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
          setTabDirty, setTabProject, onTabActivated, onTabLoaded, onCloseSave, initTabs,
          persistTab, isRestoring, isLive, ensureLive, UNTITLED } from './tabs.js';
@@ -186,7 +186,47 @@ async function doSave(mod, asNew){
   return true;
 }
 
-/* ---- Export current module as .json ---- */
+/* ---- Project files (.datatreat) ----
+   A project file is JSON: a header saying who wrote it, the project, and a signature,
+   the SHA-256 of its module and state. The signature does not keep anyone from writing
+   such a file (the app is open, its way of signing too): it tells a file DataTreat wrote
+   and nobody changed from one that was edited, cut short, or written by something else.
+   Its bytes (a file's original, kept for its download) are base64, as in IndexedDB.
+   Up to v483 the export was a .json with no header, its bytes as arrays of numbers; such
+   files still import, after a question. */
+const FILE_EXT = '.datatreat', FILE_FORMAT = 'datatreat-project', FILE_VERSION = 2;
+const appVersion = ()=>{ const el = document.querySelector('.app-version'); return el ? el.textContent.trim() : ''; };
+// null where the browser has no WebCrypto (a page not served over https or localhost)
+async function signatureOf(module, state){
+  if (!(globalThis.crypto && crypto.subtle)) return null;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([module, state])));
+  return [...new Uint8Array(buf)].map(b=> b.toString(16).padStart(2, '0')).join('');
+}
+async function downloadProject(rec){
+  const payload = { datatreat_session: 1, app: 'DataTreat', format: FILE_FORMAT, formatVersion: FILE_VERSION,
+                    appVersion: appVersion(), module: rec.module, title: rec.title,
+                    createdAt: rec.createdAt, updatedAt: rec.updatedAt, state: rec.state };
+  const sig = await signatureOf(rec.module, rec.state);
+  if (sig) payload.signature = { alg: 'SHA-256', value: sig };
+  const safe = String(rec.title).replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
+  // octet-stream, so no browser swaps the extension for the one of a JSON type
+  downloadTextFile(rec.module + '_' + safe + FILE_EXT, JSON.stringify(payload), 'application/octet-stream');
+}
+// What makes a file doubtful, in words; empty when it is a project DataTreat signed.
+async function doubtsAbout(file, obj){
+  const doubts = [];
+  if (!file.name.toLowerCase().endsWith(FILE_EXT)) doubts.push('its name does not end in ' + FILE_EXT);
+  if (obj.format !== FILE_FORMAT || !obj.signature || typeof obj.signature.value !== 'string'){
+    doubts.push('it carries no DataTreat signature (an export from v483 or earlier, or a file written elsewhere)');
+  } else {
+    if (+obj.formatVersion > FILE_VERSION) doubts.push('it was written by a newer DataTreat (' + String(obj.appVersion || '?') + ')');
+    const sig = await signatureOf(obj.module, obj.state);
+    if (sig && sig !== obj.signature.value) doubts.push('its content changed after DataTreat signed it');
+  }
+  return doubts;
+}
+
+/* ---- Export current module as .datatreat ---- */
 async function exportJson(mod){
   ensureLive();
   if (!moduleHasData(mod)){ await confirmBanner('No data loaded in ' + (MODULE_LABELS[mod]||mod) + '.', 'OK'); return; }
@@ -194,10 +234,7 @@ async function exportJson(mod){
   const now = Date.now();
   const cur = curProject();
   const title = (inp && inp.value.trim()) || (cur ? cur.title : (MODULE_LABELS[mod]||mod));
-  const payload = { datatreat_session: 1, module: mod, title, createdAt: now, updatedAt: now,
-                    state: exportForm(encode(getModuleState(mod))) };
-  const safe = title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
-  downloadTextFile(mod + '_' + safe + '.json', JSON.stringify(payload));
+  await downloadProject({ module: mod, title, createdAt: now, updatedAt: now, state: encode(getModuleState(mod)) });
 }
 
 /* ---- Save as… — custom in-page modal (no browser prompt) ---- */
@@ -245,23 +282,21 @@ async function openProjects(recs){
   }
 }
 
-/* ---- Export a saved project record / import a .json ---- */
-function exportProjectRecord(rec){
-  const payload = { datatreat_session: 1, module: rec.module, title: rec.title,
-                    createdAt: rec.createdAt, updatedAt: rec.updatedAt, state: exportForm(rec.state) };
-  const safe = rec.title.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'project';
-  downloadTextFile(rec.module + '_' + safe + '.json', JSON.stringify(payload));
-}
+/* ---- Export a saved project record / import a project file ---- */
+function exportProjectRecord(rec){ return downloadProject(rec); }
 async function importProjectFile(file){
   let obj;
   try { obj = JSON.parse(await file.text()); }
-  catch(e){ await confirmBanner('Not a valid JSON file.', 'OK'); return; }
-  if (!obj || !obj.datatreat_session || !MODULES.includes(obj.module) || !obj.state){
-    await confirmBanner('This file is not a DataTreat project.', 'OK'); return;
+  catch(e){ await confirmBanner('“' + file.name + '” is not a DataTreat project: it cannot be read as one.', 'OK'); return; }
+  if (!obj || typeof obj !== 'object' || !obj.datatreat_session || !MODULES.includes(obj.module)
+      || !obj.state || typeof obj.state !== 'object' || Array.isArray(obj.state)){
+    await confirmBanner('“' + file.name + '” is not a DataTreat project.', 'OK'); return;
   }
+  const doubts = await doubtsAbout(file, obj);
+  if (doubts.length && !await confirmBanner('“' + file.name + '”: ' + doubts.join('; ') + '. Import it anyway?', 'Import anyway')) return;
   const now = Date.now();
-  await putProject({ id: uid(), module: obj.module, title: String(obj.title||'Imported project').trim(),
-                     state: obj.state, createdAt: obj.createdAt||now, updatedAt: now });
+  await putProject({ id: uid(), module: obj.module, title: String(obj.title||'').trim().slice(0, 200) || 'Imported project',
+                     state: obj.state, createdAt: +obj.createdAt || now, updatedAt: now });
   renderList();
 }
 
@@ -320,7 +355,7 @@ async function renderList(){
       + '<td style="color:var(--muted)">'+fmtDate(r.updatedAt)+'</td>'
       + '<td class="row-acts"><div class="row-acts-inner idle-dim">'
         + '<button class="row-ic pr-csv" title="Export .csv">'+ROW_CSV+'</button>'
-        + '<button class="row-ic pr-json" title="Export .json">'+ROW_JSON+'</button>'
+        + '<button class="row-ic pr-json" title="Export .datatreat">'+ROW_JSON+'</button>'
         + '<button class="row-ic pr-del" title="Delete">'+ROW_TRASH+'</button>'
       + '</div></td></tr>';
   });

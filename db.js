@@ -71,9 +71,10 @@ async function deleteTabRec(id){ return txStore(TABS_STORE, 'readwrite', os=>{ o
 const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 // Encode module state into a JSON-safe form: bytes (a Uint8Array: a file's own, kept for
 // its download) → base64, other typed arrays → plain arrays, Date objects → a tagged
-// marker. Same representation for IndexedDB and .json. Up to v470 bytes became plain
-// arrays too, 9 bytes stored for each and read back as an Array, not as the Uint8Array
-// the module had; such records still decode, as the arrays they hold.
+// marker. Same representation for IndexedDB and project files (from v473 to v483 a .json
+// export wrote bytes as plain arrays, for older DataTreats). Up to v470 bytes became
+// plain arrays everywhere, 9 bytes stored for each and read back as an Array, not as the
+// Uint8Array the module had; such records still decode, as the arrays they hold.
 const B64_CHUNK = 0x8000;   // String.fromCharCode over megabytes at once overflows the stack
 function toB64(b){
   let s = '';
@@ -93,17 +94,6 @@ function encode(v){
   if (v && typeof v === 'object'){ const o = {}; for (const k in v) o[k] = encode(v[k]); return o; }
   return v;
 }
-/* A .json export writes bytes as before v471, plain arrays of numbers: a file exported
-   now opens whole (its files' originals included) in an older DataTreat too. IndexedDB
-   keeps them as base64, a third of the size; decode reads either. */
-function exportForm(v){
-  if (Array.isArray(v)) return v.map(exportForm);
-  if (v && typeof v === 'object'){
-    if (v.__t === 'u8' && typeof v.v === 'string'){ try { return Array.from(fromB64(v.v)); } catch(e){ return []; } }
-    const o = {}; for (const k in v) o[k] = exportForm(v[k]); return o;
-  }
-  return v;
-}
 function decode(v){
   if (Array.isArray(v)) return v.map(decode);
   if (v && typeof v === 'object'){
@@ -114,4 +104,4 @@ function decode(v){
   return v;
 }
 
-export { allProjects, putProject, deleteProject, allTabRecs, putTabRec, deleteTabRec, uid, encode, decode, exportForm };
+export { allProjects, putProject, deleteProject, allTabRecs, putTabRec, deleteTabRec, uid, encode, decode };

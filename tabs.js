@@ -92,8 +92,19 @@ function stashActive(){
 function loadTab(t){
   if (_liveId === t.id) return;
   const st = t.state || DEFAULT_STATE[t.module];
-  try { if (st != null) restoreModuleState(t.module, decode(st)); } catch(e){}
-  if (t.hist) setModuleHistory(t.module, t.hist);
+  let hist = t.hist;
+  try { if (st != null) restoreModuleState(t.module, decode(st)); }
+  catch(e){
+    // A state its module cannot read (a damaged or hand-edited project): the tab opens
+    // empty and says so. To v483 the error was swallowed and the module stayed as far as
+    // its restore had got, partly the tab before's data.
+    hist = null;
+    try { restoreModuleState(t.module, decode(DEFAULT_STATE[t.module])); } catch(e2){}
+    console.warn('DataTreat: “' + t.title + '” could not be restored:', e);
+    confirmBanner('“' + t.title + '” could not be opened: its ' + (MODULE_LABELS[t.module]||t.module)
+      + ' project is damaged. The tab shows an empty module; what is saved stays as it is unless you save over it.', 'OK');
+  }
+  if (hist) setModuleHistory(t.module, hist);
   _liveId = t.id;
   if (_onLoaded){ try { _onLoaded(t); } catch(e){} }
 }

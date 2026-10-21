@@ -196,6 +196,16 @@ Tescan SEM images, read with their metadata, cropped, brought to comparable grey
 
 ---
 
+## Projects
+
+Each tab holds one project. **Save project** keeps it in the browser (IndexedDB), and the **Projects** tab lists every saved one; the export button writes it to a `.datatreat` file, to keep or pass on.
+
+A `.datatreat` file is JSON: a header (the app, the file format's version, the DataTreat version that wrote it), the project with its files' original bytes (base64), and a signature, the SHA-256 of the project. **Import project** takes `.datatreat` files and the `.json` exports of v483 and earlier. A file whose name does not end in `.datatreat`, that has no signature, that a newer DataTreat wrote, or whose content changed after it was signed is imported only once you confirm. The signature tells a file DataTreat wrote and nobody changed from one that was edited, cut short or written by something else; it does not prove who wrote it, since anyone can compute it.
+
+A project its module cannot read (damaged, or edited by hand) opens as an empty tab, with a warning; the saved project stays as it is unless you save over it.
+
+---
+
 ## Data Export
 
 All modules support CSV export. The exported CSV format respects your **Settings** choices:

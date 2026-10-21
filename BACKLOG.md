@@ -3,6 +3,19 @@
 Things looked at and deliberately left for later. Each says what was found and what
 was proposed; nothing here is in the code yet.
 
+## DRS
+
+- **Rows with an empty cell in between.** A row like `350,,0.5` passes the first check
+  (it looks at the non-empty cells, 350 and 0.5) but is read from the first two columns
+  (350 and nothing), so it is dropped; a file made only of such rows passes, gives no
+  data and goes without a word. It comes from CSVs with an empty column in the middle.
+  Proposed: read the same cells the check looks at, or say how many rows were dropped
+  and why.
+- **R% or F(R) from other instruments.** The app tells reflectance from Kubelka–Munk by
+  the column header of the user's instrument (`R%`) and takes any other file as F(R).
+  To be refined: the headers other instruments write (`%R`, `Reflectance`, other
+  languages), files with no header, and a per-file switch for when the guess is wrong.
+
 ## GC
 
 - **CSV fields in quotes.** `splitCSVLine` splits on the delimiter even inside quotes,
@@ -177,6 +190,15 @@ was proposed; nothing here is in the code yet.
 
 ## General
 
+- **Long functions.** A handful of functions run to hundreds of lines: `createRietveld`
+  (xrd-rv.js, ~1300), `createPeakAnalysis` (xrd-peaks.js, ~1100), `autoRefine`
+  (xrd-rietveld.js, ~800), `shapeView` (xrd-shape3d.js, ~750), `drawFigure` (figure.js,
+  ~560), and the modules that are one closure each (tauc.js, gc.js, sem.js). Not a bug:
+  in them a change acts far from where it is made, the parts cannot be tested one by
+  one, and a closure holds on to whatever it once referenced (up to v473 a closed
+  Scherrer card stayed in memory through its keyboard listener). Proposed: no rewrite;
+  split a function when work takes us into it, its calculations moved out into
+  functions the tests can call.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's

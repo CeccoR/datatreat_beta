@@ -398,9 +398,16 @@ const CP_PALETTES = [
    beside the built-in ones and offered the same way; applying either wraps, so three
    colours over seven series run 1,2,3,1,2,3,1. */
 const USER_PAL_KEY = 'dt-user-palettes';
+// Only well-formed entries: a name and at least one colour the browser reads as one. To
+// v483 any array was taken as it was, and one entry without `colors` broke the popup.
+const isColor = c => typeof c === 'string' && c.length < 64 && CSS.supports('color', c);
 function userPalettes(){
-  try { const a = JSON.parse(localStorage.getItem(USER_PAL_KEY)); return Array.isArray(a) ? a : []; }
-  catch(e){ return []; }
+  let a;
+  try { a = JSON.parse(localStorage.getItem(USER_PAL_KEY)); } catch(e){ return []; }
+  if (!Array.isArray(a)) return [];
+  return a.filter(p=> p && typeof p === 'object' && Array.isArray(p.colors))
+          .map(p=> ({ name: String(p.name == null ? '' : p.name).slice(0, 80) || 'Palette', colors: p.colors.filter(isColor) }))
+          .filter(p=> p.colors.length);
 }
 function saveUserPalettes(list){
   try { localStorage.setItem(USER_PAL_KEY, JSON.stringify(list)); } catch(e){}
@@ -1945,13 +1952,15 @@ function openDateModal(baseDate, onPick, onClose){
 // In-site replacement for window.confirm(): a top-centered banner reusing the
 // PWA-toast styling. Returns a Promise<boolean> (true = confirmed).
 // Only one banner is shown at a time; a second call cancels the first.
-let _confirmBannerEl = null;
+let _confirmBannerEl = null, _confirmBannerCancel = null;
 // Two-button banner by default: resolves true (confirm) / false (cancel or X).
 // Passing altLabel adds a middle secondary button and turns it three-way, resolving
 // 'alt' when that button is clicked (e.g. Save / Don't save / Cancel).
 function confirmBanner(message, confirmLabel, altLabel){
   return new Promise(resolve=>{
-    if (_confirmBannerEl){ _confirmBannerEl.remove(); _confirmBannerEl = null; }
+    // The banner this one replaces answers "no" and goes. To v483 it was only removed:
+    // its question never settled and its Escape listener stayed on the document.
+    if (_confirmBannerCancel) _confirmBannerCancel();
     const t = document.createElement('div');
     t.className = 'pwa-toast pwa-confirm';
     t.setAttribute('role', 'alertdialog');
@@ -1975,14 +1984,15 @@ function confirmBanner(message, confirmLabel, altLabel){
     document.body.appendChild(t);
     _confirmBannerEl = t;
     requestAnimationFrame(()=> t.classList.add('show'));
-    const done = (val)=>{
-      if (_confirmBannerEl !== t){ resolve(val); return; }
-      _confirmBannerEl = null;
+    const done = (val, now)=>{
+      if (_confirmBannerEl !== t) return;   // already answered
+      _confirmBannerEl = null; _confirmBannerCancel = null;
       document.removeEventListener('keydown', onKey);
-      t.classList.remove('show');
-      setTimeout(()=> t.remove(), 200);
+      if (now) t.remove();
+      else { t.classList.remove('show'); setTimeout(()=> t.remove(), 200); }
       resolve(val);
     };
+    _confirmBannerCancel = ()=> done(false, true);
     const onKey = e=>{ if (e.key === 'Escape') done(false); };
     ok.addEventListener('click', ()=> done(true));
     if (alt) alt.addEventListener('click', ()=> done('alt'));
