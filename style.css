@@ -2051,6 +2051,16 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-cif .rv-del { flex: none; background: none; border: none; color: var(--muted); padding: 2px 3px; cursor: pointer; line-height: 1; display: inline-flex; }
 .rv-cif .rv-del:hover:not(:disabled) { color: var(--bad); }
 .rv-cif .rv-del:disabled { opacity: .3; cursor: default; }
+/* Its CIF's download, left of the ×: the file list's (.dl-bare, lit by the accent), padded
+   as the × and as near it as the file list's pair (8 px between the glyphs, not the row's gap). */
+.rv-cif .rv-dl { flex: none; padding: 2px 3px; margin-right: -5px; }
+/* A list too narrow for a row with it leaves out the space group, which the Structure box
+   gives: under 155 px (a phone, a window under about 1180 px), where the button and the
+   widest common symbols (P4₂/mnm, P6₃/mmc: under 152 px; Pm-3m under 140) push the × out of
+   the row. Wider, the space group stays and the formula has what is left (to v502 the space
+   group shown at any width, the × out of the row on a phone with those symbols). */
+.rv-ciflist { container-type: inline-size; }
+@container (max-width: 155px) { .rv-cif .rv-cif-sg { display: none; } }
 .rv-cellbox .rv-cell-name { margin-left: auto; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The cell in a square as wide as its box (or as the height left), at the top; the
    details under it, scrolling when they are more than the box holds. */
