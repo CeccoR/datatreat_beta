@@ -24,7 +24,7 @@ node --test tests/csv.test.mjs     # one file
 node --test --test-name-pattern="Rietveld" "tests/*.test.mjs"   # the tests whose name matches
 ```
 
-A full run takes about 1 min 20 s (38 tests, on the machine they were written on). Each
+A full run takes about 1 min 25 s (48 tests, on the machine they were written on). Each
 file opens its own server and browser; each test its own browser context, so IndexedDB,
 localStorage and the open tabs start empty every time.
 
@@ -51,6 +51,8 @@ exports) goes to `tests/out/`, which git ignores.
 | `plots.test.mjs` | Every plot SVG of each module (DRS, XRPD, GC, EPR) with its fixtures, every card unfolded and stepped once, hashed and compared with `tests/golden/<module>.json`. A mismatch names the plot; its new markup is written to `tests/out/plots/<module>/`. |
 | `composer.test.mjs` | The figure composer of a plot and of an SEM group: opens, exports an SVG (an svg document with the drawing) and a PNG (of the size its footer says), takes the focus (Enter does not press the button behind it), refuses a second composer of either kind while one is open, closes on Escape with the focus back on its button. |
 | `csv.test.mjs` | Each module's CSV zip read with an RFC 4180 parser, under the field separator `;` and then `,`, a sample label holding both and a quote: every file parses, is rectangular, holds numbers, and the label comes back whole. The Projects list's CSV of a saved project equals the project bar's. |
+| `textdata.test.mjs` | The text reader (`textdata.js`) in Node, no browser: UTF-8 with and without its mark, UTF-16 LE and BE with and without theirs; line ends, quotes (RFC 4180), runs of spaces, a trailing separator; numbers with either decimal mark; the separator found per file (`350,5;0,523`, `350,5 0,523`, a tie going to `,` before spaces); the DRS and GC fixtures written in every dialect read back to the same numbers, three columns and text refused. |
+| `textload.test.mjs` | The same dialects and encodings loaded into DRS and GC in one drop beside the fixture, each file to the fixture's numbers (a GC export quoting its `,` decimals included); a file that is not the module's table refused and said; a name already loaded said, and its alert dismissed. |
 | `db.test.mjs` | The form a module state takes in IndexedDB and in a project file (`db.js`), in Node: bytes as base64, a byte array held in several places written once and read back as one array, dates and other typed arrays, the older forms (bytes as arrays, a dangling reference). |
 | `sem.test.mjs` | SEM groups by scale, an excluded image deciding nothing about its group's name or the scope selector; a renamed label shown in the navigation, thumbnails, groups and Reference, and undone; in the crop editor a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step. |
 

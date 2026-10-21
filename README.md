@@ -59,7 +59,7 @@ DataTreat is a modular application. New analysis modules may be added in the fut
 Analyze diffuse reflectance spectroscopy (DRS) data in the UV-Visible range to assess light absorption and estimate semiconductor band gaps.
 
 **Instrument compatibility**: Cary 5000  
-**File format**: CSV or TXT with two columns (wavelength in nm, Kubelka-Munk absorbance F(R))
+**File format**: CSV or TXT with two columns (wavelength in nm, Kubelka-Munk absorbance F(R)). The field separator (`;`, `,`, a tab or spaces) and the decimal mark (`.` or `,`) are found in each file; fields may be in quotes; the text may be UTF-8 or UTF-16, with or without its byte-order mark.
 
 **How to use**:
 
@@ -121,6 +121,8 @@ Assess H₂ and O₂ production rates from gas chromatography data, including li
 **File format**: CSV with columns:
   - "Injection date" (datetime)
   - "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]", or similar (mole percentages; a file needs at least one of them)
+
+  The header may come after title lines. Separator, decimal mark, quotes and encoding are found in each file, as for DRS; a `,`-separated file whose `,` decimals are not in quotes cannot be read either way and is refused.
 
 **How to use**:
 

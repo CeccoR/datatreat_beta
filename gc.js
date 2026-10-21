@@ -1,19 +1,41 @@
-import { settings, fmtNum, csvLine, downloadZip, splitCSVLine, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, cumtrapz, maxArr, minArr, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, barNames, barChipYmax, esc } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, esc } from './utils.js';
 import { Plot, svgEl } from './plot.js';
-import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
+import { cardInfo, fileSafe, nameDownloads } from './cards.js';
+import { moduleKit, wideCsv } from './modkit.js';
+import { CSV_ICON, plotWrap, viewOf, setView, chipRow, toggleChip, valueBars } from './modcharts.js';
+import { textLines, readTable, parseNum } from './textdata.js';
 
 /* =========================================================
    GC MODULE
 ========================================================= */
 (function(){
-  // Every file loaded, in list order; the analysis sees the included ones, `files`,
-  // and the per-sample arrays each card keeps are aligned with those.
-  let allFiles=[]; // {name, label, injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has), emptyRows}
-  let files=[];
+  /* The module (modkit.js): every file loaded, in list order, {name, label,
+     injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has), emptyRows}, and the
+     included ones, which the analysis sees, `files`, with which the per-sample arrays each
+     card keeps are aligned; the alerts under the drop zone, the empty cells skipped among
+     them; each card's settings in the history. */
+  const kit = moduleKit('gc', {
+    alerts: p =>{ document.getElementById('gcAlerts').innerHTML = p.invalid + blankAlertsHtml() + p.upload; },
+    dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)) },
+    // Every card's per-sample arrays. An excluded file holds its own values; one with none
+    // (never so far, or in a card added since) gets the upload defaults.
+    slots: ()=> cards().flatMap(a=> live.get(a.id).slots()),
+    listed: op =>{ if (op !== 'palette') each(c=> c.unselect()); },
+    refresh: afterFilesChange,
+    redraw: what => each(c=>{ if (what === 'label') c.renderTable(); c.compute(); }),
+    cleared: ()=> each(c=> c.clear()),
+    snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), ...live.get(a.id).snapshot() })) }),
+    // A project from before the cards had one analysis, its settings at the top level. A
+    // card built afresh takes its settings when its analysis is made (init).
+    restore: s => deck.load(Array.isArray(s.cards) ? s.cards : [{ ...s, id: 1, type: 'rate' }], src=> ({ init: src }), a=>{ live.get(a.id).restore(a.init); delete a.init; }),
+    redrawTab: ()=>{ if (files.length){ deck.fitNames(); each((c, a)=>{ if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }); } },
+    csv: ()=> cards().flatMap(a=> live.get(a.id).exportEntries(fileSafe(a.name))),
+  });
+  const { all: allFiles, files } = kit;
+  const each = fn => cards().forEach(a=> fn(live.get(a.id), a));
 
-  // Axis titles. The SVG form carries the H₂ subscript and the g⁻¹/h⁻¹ superscripts;
-  // the plain form is the matching CSV header.
-  const SUB2 = '<tspan baseline-shift="sub" font-size="8">2</tspan>';
+  // Axis titles. The SVG form carries the g⁻¹/h⁻¹ superscripts; the plain form is the
+  // matching CSV header.
   const SUP1 = '<tspan baseline-shift="super" font-size="8">-1</tspan>';
   const LBL_RATE_SVG = `Production Rate (mmol g${SUP1} h${SUP1})`;
   const LBL_CUM_SVG  = `Production (mmol g${SUP1})`;
@@ -43,8 +65,6 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
      little later: every injection is moved on by this delay, in seconds, before it is
      set against light-on. "Auto" is the method's own figure, shown in the field. */
   const INJ_DELAY_AUTO = 60.6;
-  let loadAlerts='';
-  let gcUploadAlerts='';
   /* The empty cells skipped, per file and gas: the blank cells of a row kept, and the
      rows with none of the file's gases (dropped at parse, `emptyRows`, an empty cell for
      each gas it has). Read off the loaded files each time, not kept from the drop, so it
@@ -66,19 +86,6 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     return lines.length ? buildAlertsHtml([], lines, 'Empty cells skipped: each injection is left out of that gas only (its rate, production and mean come from the injections with a value):', '', 'gc-dismiss-blank') : '';
   }
 
-  function rebuildGcAlerts(){ document.getElementById('gcAlerts').innerHTML = loadAlerts + blankAlertsHtml() + gcUploadAlerts; }
-
-  // Delegated click handling for dynamically generated alert dismiss buttons.
-  document.getElementById('tab-gc').addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-action]');
-    if (!btn || !document.getElementById('tab-gc').contains(btn)) return;
-    switch (btn.dataset.action){
-      case 'gc-dismiss-invalid': loadAlerts=''; rebuildGcAlerts(); break;
-      case 'gc-dismiss-upload':  gcUploadAlerts=''; rebuildGcAlerts(); break;
-      case 'gc-dismiss-blank':   allFiles.forEach(f=> blankSeen.add(f.gas)); rebuildGcAlerts(); break;
-    }
-  });
-
   function parseGCDate(str){
     const m = str.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
     if (!m) return null;
@@ -87,86 +94,39 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     return new Date(+yr, +mo-1, +da, hh, +mi, +se);
   }
 
-  // Every card's per-sample arrays, for the file list to keep aligned with the included
-  // files. An excluded file holds its own values; one with none (never so far, or in a
-  // card added since) gets the upload defaults.
-  const slots = ()=> cards().flatMap(a=> live.get(a.id).slots());
-  const each = fn => cards().forEach(a=> fn(live.get(a.id), a));
-  function fileCallbacks(){
-    return {
-      onRemove(i){
-        removeFileAt(allFiles, i, slots());
-        if (!allFiles.length) loadAlerts = '';
-        each(c=> c.unselect());
-        afterFilesChange();
-      },
-      onReorder(from, to){ moveFileTo(allFiles, from, to, slots()); each(c=> c.unselect()); afterFilesChange(); },
-      onInclude(i, on){ setIncluded(allFiles, i, on, slots()); each(c=> c.unselect()); afterFilesChange(); },
-      onIncludeAll(on){ allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, slots())); each(c=> c.unselect()); afterFilesChange(); },
-      onLabelChange(i, v){ allFiles[i].label=v; each(c=>{ c.renderTable(); c.compute(); }); hist.commit(); },
-      onColorChange(i, v){ allFiles[i].color=v; each(c=> c.compute()); hist.commit(); },
-      onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ allFiles.length=0; each(c=>{ c.clear(); c.unselect(); }); loadAlerts=''; gcUploadAlerts=''; rebuildGcAlerts(); afterFilesChange(); },
-    };
+  /* A GC export, as textdata.js reads a table (its encoding, separator, decimal mark and
+     quotes found from the file). Its header names the injection date and at least one
+     gas, each in a column of its own: whichever gases it has are read, the rest simply are
+     not there for that sample. The header is the first line that names them (to v489 it
+     had to be the first line), the data the lines under it with an injection date. */
+  function gcColumns(fields){
+    const lo = fields.map(h=> h.toLowerCase()), date = lo.findIndex(h=> h.includes('injection date')), gas = {};
+    for (const g of GASES){ const i = lo.findIndex(h=> g.col.test(h) && h.includes('%mol')); if (i >= 0 && i !== date) gas[g.key] = i; }
+    return date >= 0 && Object.keys(gas).length ? { date, gas } : null;
   }
-
-  setupDropzone('gcDropzone', 'gcFiles', async (fileList)=>{
-    const existing = new Set(allFiles.map(f=>f.name));
-    const invalidFiles=[];
-    const alreadyLoaded=[];
-    for (const f of fileList){
-      if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
-      existing.add(f.name);
-      // f.text() auto-detects the encoding (incl. UTF-16 via BOM, as some GC
-      // instruments export); rawBytes keeps the original for byte-exact re-download.
-      const rawBytes = new Uint8Array(await f.arrayBuffer());
-      const text = await f.text();
-      const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
-      if (!lines.length){ invalidFiles.push(f.name); continue; }
-      const delim = lines[0].includes(';') ? ';' : (lines[0].includes(',')? ',' : '\t');
-      const header = splitCSVLine(lines[0], delim);
-      const idxDate = header.findIndex(h=>h.toLowerCase().includes('injection date'));
-      // A file needs a date column and at least one gas; whichever gases it has are
-      // read, the rest simply are not there for that sample.
-      const idxGas = {};
-      for (const g of GASES){
-        const i = header.findIndex(h=>{ const lo=h.toLowerCase(); return g.col.test(lo) && lo.includes('%mol'); });
-        if (i >= 0) idxGas[g.key] = i;
-      }
-      if (idxDate<0 || !Object.keys(idxGas).length){ invalidFiles.push(f.name); continue; }
-      const injDates=[], gas={};
-      let emptyRows = 0;
-      for (const k in idxGas) gas[k] = [];
-      for (let i=1;i<lines.length;i++){
-        const parts = splitCSVLine(lines[i], delim);
-        const d = parseGCDate(parts[idxDate]||'');
-        if (!d) continue;
-        const vals = {};
-        let any = false;
-        for (const k in idxGas){
-          const v = parseFloat((parts[idxGas[k]]||'').replace(',','.'));
-          vals[k] = isFinite(v) ? v : NaN;
-          if (isFinite(v)) any = true;
-        }
-        // One row, every gas kept on the same time axis; a blank cell stays NaN so the
-        // columns never slip out of step with the dates. The analysis leaves it out of
-        // that gas's series (computeTables) and the alerts count it (blankAlertsHtml). A
-        // row with no gas at all is left out, as it was, and the alert counts it too (to
-        // v474 it went unsaid).
-        if (any){ injDates.push(d); for (const k in idxGas) gas[k].push(vals[k]); }
-        else emptyRows++;
-      }
-      if (!injDates.length){ invalidFiles.push(f.name); continue; }
-      const file = {name:f.name, label:f.name.replace(/\.[^.]+$/,''), injDates, gas, emptyRows, color:nextColor(allFiles), rawBytes};
-      // A new file comes in included, so it goes last among the included as well.
-      allFiles.push(file); files.push(file);
-      each(c=> c.addFile(file));
+  function readGc(text){
+    const t = readTable(textLines(text), gcColumns, (r, c)=> !!parseGCDate(r[c.date] || ''));
+    if (!t) return null;
+    const { date, gas: idx } = t.cols, injDates = [], gas = {};
+    let emptyRows = 0;
+    for (const k in idx) gas[k] = [];
+    for (const r of t.rows){
+      const d = parseGCDate(r[date] || '');
+      if (!d) continue;
+      const vals = {};
+      let any = false;
+      for (const k in idx){ const v = parseNum(r[idx[k]]); vals[k] = isFinite(v) ? v : NaN; if (isFinite(v)) any = true; }
+      // One row, every gas kept on the same time axis; a blank cell stays NaN so the
+      // columns never slip out of step with the dates. The analysis leaves it out of
+      // that gas's series (computeTables) and the alerts count it (blankAlertsHtml). A
+      // row with no gas at all is left out, as it was, and the alert counts it too (to
+      // v474 it went unsaid).
+      if (any){ injDates.push(d); for (const k in idx) gas[k].push(vals[k]); }
+      else emptyRows++;
     }
-    loadAlerts = buildAlertsHtml(invalidFiles.map(esc), [], undefined, 'gc-dismiss-invalid');
-    gcUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded.map(esc), 'Already loaded file(s):', '', 'gc-dismiss-upload') : '';
-    rebuildGcAlerts();
-    afterFilesChange();
-  });
+    return injDates.length ? { injDates, gas, emptyRows } : null;
+  }
+  kit.dropText(readGc, ()=> afterFilesChange());
 
   // The first injection, to the minute: the field shows and sets minutes only, so a
   // default carrying the seconds would change the moment the field was merely tabbed
@@ -176,17 +136,14 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     return d;
   }
 
+  // (The alerts are drawn with the list, kit.showFiles: the empty-cell alert follows the files.)
   function afterFilesChange(){
-    files = includedOf(allFiles);
-    setTabLoaded('gc', allFiles.length);
-    renderUnifiedFileList('gcFileTableWrap', allFiles, fileCallbacks());
+    kit.showFiles();
     document.getElementById('gcAnalyses').style.display = files.length ? 'block' : 'none';
     each(c=> c.renderTable());
     if (files.length) each((c, a)=>{ if (!deck.isFolded(a)) c.compute(); else c.computeQuiet(); });
-    // Always: the empty-cell alert follows the files, and a folded card does not rebuild it.
-    rebuildGcAlerts();
     syncResults();
-    hist.commit();
+    kit.commit();
   }
 
   // A numeric text cell; `state` = 'on' (editable), 'ro' (read-only) or 'off' (disabled).
@@ -274,9 +231,9 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
      Results. `a` is its record (cards.js), `card` its element; the state lives here,
      and goes to the history through snapshot / restore.
   ========================================================= */
-  const CSV_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
-  const DL_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
   const P = a => 'gc' + a.id;
+  // A plot of a card's, with the gas chips of its section (`sec`: 'a' Analysis, 'r' Results) over it.
+  const gasPlot = (id, sec, o)=> plotWrap(id, { mod: 'gc', extra: `\n              <span class="gc-gas-sel" data-gas-sec="${sec}"></span>`, ...o });
   const cardBody = a => `
         <div class="peak-box" style="margin-top:0;margin-bottom:14px">
           <div class="peak-box-head">
@@ -287,12 +244,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         </div>
         <div class="row" style="align-items:flex-start">
           <div class="col">
-            <p class="txt-caption">Production Rate</p>
-            <div class="plot-wrap">
-              <svg class="plot plot-strip" id="${P(a)}Svg1"></svg>
-              <span class="gc-gas-sel" data-gas-sec="a"></span>
-              <button class="btn plot-dl-btn" data-dl-svg="${P(a)}Svg1" data-csv-mod="gc" data-csv-names="gc_raw.csv" data-dl-name="GC_rate.svg" data-dl-legend="${P(a)}Legend">${DL_ICON}</button>
-            </div>
+            <p class="txt-caption">Production Rate</p>${gasPlot(P(a) + 'Svg1', 'a', { cls: 'plot-strip', csv: 'gc_raw.csv', name: 'GC_rate.svg', legend: P(a) + 'Legend' })}
           </div>
         </div>
         <div id="${P(a)}Legend" class="legend" style="margin-top:8px"></div>`;
@@ -300,29 +252,14 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         <h4 class="res-an-title"></h4>
         <div class="row res-row">
           <div class="col">
-            <p class="txt-caption">Production Rate</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="${P(a)}SvgRate"></svg>
-              <span class="gc-gas-sel" data-gas-sec="r"></span>
-              <button class="btn plot-dl-btn" data-dl-svg="${P(a)}SvgRate" data-csv-mod="gc" data-csv-names="gc_results.csv" data-dl-name="GC_results_rate.svg" data-dl-legend="${P(a)}ResLegend">${DL_ICON}</button>
-            </div>
+            <p class="txt-caption">Production Rate</p>${gasPlot(P(a) + 'SvgRate', 'r', { csv: 'gc_results.csv', name: 'GC_results_rate.svg', legend: P(a) + 'ResLegend' })}
           </div>
           <div class="col">
-            <p class="txt-caption">Production</p>
-            <div class="plot-wrap">
-              <svg class="plot" id="${P(a)}SvgCum"></svg>
-              <span class="gc-gas-sel" data-gas-sec="r"></span>
-              <button class="btn plot-dl-btn" data-dl-svg="${P(a)}SvgCum" data-csv-mod="gc" data-csv-names="gc_results.csv" data-dl-name="GC_results_cumulative.svg" data-dl-legend="${P(a)}ResLegend">${DL_ICON}</button>
-            </div>
+            <p class="txt-caption">Production</p>${gasPlot(P(a) + 'SvgCum', 'r', { csv: 'gc_results.csv', name: 'GC_results_cumulative.svg', legend: P(a) + 'ResLegend' })}
           </div>
         </div>
         <div id="${P(a)}ResLegend" class="legend" style="margin-top:8px"></div>
-        <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>
-        <div class="plot-wrap">
-          <svg class="plot plot-wide" id="${P(a)}SvgBar"></svg>
-          <span class="gc-gas-sel" data-gas-sec="r"></span>
-          <button class="btn plot-dl-btn" data-dl-svg="${P(a)}SvgBar" data-csv-mod="gc" data-csv-names="mean_rates.csv" data-dl-name="GC_results.svg" data-dl-legend="${P(a)}BarLegend">${DL_ICON}</button>
-        </div>
+        <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>${gasPlot(P(a) + 'SvgBar', 'r', { cls: 'plot-wide', csv: 'mean_rates.csv', name: 'GC_results.svg', legend: P(a) + 'BarLegend' })}
         <div id="${P(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
 
   function gcCard(a, card){
@@ -340,7 +277,6 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     let ms=[], Qs=[], startArr=[], endArr=[], lightOnDates=[];
     let dataTables=[];
     let plot1;
-    let plotResRate, plotResCum;
     /* Analysis and Results choose their gases separately, but every plot inside a
        section follows that section's choice — the chips on each plot are views of one
        set, not five independent ones. Each section holds a SET of gas keys rather than
@@ -368,7 +304,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     let gcSel=null, gcHov=null;   // selected / hovered sample index (interval interaction)
     // Outgoing plot view captured before a resize/tab-switch redraw recreates the plots,
     // so drawGcData can restore the current zoom instead of snapping to the full range.
-    let _gcPrev1=null;
+    let prevView=null;
 
     // Effective per-sample values (respect each parameter's all/one mode).
     const mOf     = k => mMode==='all'     ? mShared     : ms[k];
@@ -450,13 +386,13 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       guardNumericInput(delayIn, { min:0 });
       delayIn.addEventListener('change', ()=>{
         delayMan = +delayIn.value;
-        refreshLightOnWarnings(); computeAndRenderGc(); hist.commit();
+        refreshLightOnWarnings(); computeAndRenderGc(); kit.commit();
       });
       // Off, the field opens on the value that was in force, ready to be changed.
       delayBox.addEventListener('change', ()=>{
         if (!delayBox.checked && delayAuto) delayMan = INJ_DELAY_AUTO;
         delayAuto = delayBox.checked;
-        renderGcParamTable(); computeAndRenderGc(); hist.commit();
+        renderGcParamTable(); computeAndRenderGc(); kit.commit();
       });
 
       // all/one toggles: flip a parameter, seeding across the boundary (one→all from
@@ -472,7 +408,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
           case 'start': startMode = flip(startMode, startShared, startArr, v=>startShared=v); gcSel=gcHov=null; break;
           case 'end':   endMode   = flip(endMode,   endShared,   endArr,   v=>endShared=v);   gcSel=gcHov=null; break;
         }
-        renderGcParamTable(); computeAndRenderGc(); hist.commit();
+        renderGcParamTable(); computeAndRenderGc(); kit.commit();
       }));
 
       // m/Q inputs (shared + per-sample) — recompute the whole series on a valid change.
@@ -482,7 +418,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         inp.addEventListener('change', ()=>{
           apply(+inp.value);
           if (shared) mirrorShared(inp.dataset.f, inp.value);
-          computeAndRenderGc(); hist.commit();
+          computeAndRenderGc(); kit.commit();
         });
       };
       wrap.querySelectorAll('.gcShared[data-f="m"]').forEach(inp=> mMode==='all' && wireNum(inp, v=>mShared=v));
@@ -505,7 +441,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
           lightOnDates[i] = d;
           const wc = cell.closest('tr').querySelector('.gc-warn-cell');
           if (wc) wc.innerHTML = lightOnWarnHtml(i);
-          computeAndRenderGc(); hist.commit();
+          computeAndRenderGc(); kit.commit();
         });
         cell.appendChild(field.el);
       });
@@ -556,7 +492,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         if (isShared){ if (which==='start') startShared=v; else endShared=v; }
         else { if (which==='start') startArr[i]=v; else endArr[i]=v; }
         echo();
-        updateRegression(); hist.commit();
+        updateRegression(); kit.commit();
       });
       inp.addEventListener('keydown', e=>{ if (e.key==='Enter') inp.blur(); });
     }
@@ -600,10 +536,8 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     function computeAndRenderGc(preserveView){
       if (!files.length) return;
       // Snapshot the current zoom before renderGcPlots() builds fresh Plot instances.
-      const o1 = $('Svg1')._plot;
-      _gcPrev1 = (preserveView && o1 && isFinite(o1.xmin)) ? {xmin:o1.xmin,xmax:o1.xmax,ymin:o1.ymin,ymax:o1.ymax} : null;
+      prevView = preserveView ? viewOf($('Svg1')._plot) : null;
       computeTables();
-      rebuildGcAlerts();
       renderGasSel();
       renderGcPlots();
     }
@@ -613,29 +547,22 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
        so the control does not change shape from one data set to the next. */
     function renderGasSel(){
       // A gas no included sample carries cannot be chosen, and is off while it is not
-      // there; the chips show what is drawn (shownGases), the choice stays untouched.
+      // there; the chips show what is drawn (shownGases), the choice stays untouched. The
+      // last one standing cannot be switched off — the plot would be empty.
       gasEls().forEach(el=>{
-        const sec = el.dataset.gasSec, shown = shownGases(sec);
-        el.innerHTML = GASES.map(g=>{
-          const on = shown.includes(g);
-          // The last one standing cannot be switched off — the plot would be empty.
-          const only = on && shown.length === 1;
-          const title = !gasPresent(g.key) ? `No ${g.csv} in the included files`
-                      : only ? `${g.csv} — the only one shown` : `Show / hide ${g.csv}`;
-          return `<button type="button" class="mode-chip gc-gas-chip${on?' is-on':''}"`
-               + ` data-gas="${g.key}" data-sec="${sec}" title="${title}"`
-               + `${gasPresent(g.key) ? '' : ' disabled'}>${g.label}</button>`;
-        }).join('');
+        const sec = el.dataset.gasSec;
+        el.innerHTML = chipRow(GASES, shownGases(sec).map(g=> g.key), { cls: 'gc-gas-chip', data: g=> `data-gas="${g.key}" data-sec="${sec}"`,
+          name: g=> g.csv, can: g=> gasPresent(g.key), why: g=> `No ${g.csv} in the included files` });
       });
     }
 
     function onGasChip(e){
       const b = e.target.closest('.gc-gas-chip');
       if (!b || b.disabled) return;
-      const sec = b.dataset.sec, key = b.dataset.gas;
-      const shown = shownGases(sec).map(g=>g.key);
-      const on = shown.includes(key);
-      if (on && shown.length === 1) return;    // never leave a section with none
+      // Switched off, what was on show stays chosen (a fallback included); a gas chosen
+      // but not loaded now stays chosen too, for when a file brings it (toggleChip).
+      const sec = b.dataset.sec, sel = toggleChip(GASES.map(g=> g.key), gasSel[sec], shownGases(sec).map(g=> g.key), b.dataset.gas);
+      if (!sel) return;    // never leave a section with none
       // Switching changes how tall the legend is, which would shift everything below it
       // under the pointer. Hold the clicked chip still and let the page move around it.
       // The chips are rebuilt, so the one to measure afterwards is found by which group
@@ -644,10 +571,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       const groups = gasEls();
       const gi = groups.indexOf(b.parentElement);
       const before = b.getBoundingClientRect().top;
-      // Switched off, what was on show stays chosen (a fallback included); a gas chosen
-      // but not loaded now stays chosen too, for when a file brings it.
-      gasSel[sec] = on ? GASES.map(g=>g.key).filter(k=> k!==key && (gasSel[sec].includes(k) || shown.includes(k)))
-                       : GASES.map(g=>g.key).filter(k=> k===key || gasSel[sec].includes(k));
+      gasSel[sec] = sel;
       renderGasSel();
       computeAndRenderGc(false);     // ranges are rescaled to the gases now on show
       // Corrected in the same task, not on a later frame: reading the chip's box forces
@@ -656,7 +580,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       const grp = gasEls()[gi];
       const after = grp && grp.querySelector('.gc-gas-chip');
       if (after) window.scrollBy({ top: after.getBoundingClientRect().top - before, behavior: 'instant' });
-      hist.commit();
+      kit.commit();
     }
     card.addEventListener('click', onGasChip);
     res.addEventListener('click', onGasChip);
@@ -678,7 +602,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       if (!plot1 || !dataTables.length) return;
       // Restore the pre-redraw zoom captured in computeAndRenderGc (resize/tab-switch),
       // then clear it so a subsequent data-driven redraw snaps back to the full range.
-      const prev1 = _gcPrev1; _gcPrev1 = null;
+      const prev = prevView; prevView = null;
       const allT = dataTables.flatMap(d=>d.t);
       const intPts = dataTables.flatMap((d,k)=>[startOf(k), endOf(k)]);
       const tmin = Math.min(0, minArr(allT), ...intPts);
@@ -688,7 +612,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       const span = key => dataTables.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
       if (!span('Fm').length) return;
       plot1.setRange(tmin, tmax, 0, yTop(dataTables, shown, 'Fm')*1.05);
-      if (prev1){ plot1.xmin=prev1.xmin; plot1.xmax=prev1.xmax; plot1.ymin=prev1.ymin; plot1.ymax=prev1.ymax; }
+      setView(plot1, prev);
       plot1.drawAxes(); plot1.clearData();
       drawGasLines(plot1, dataTables, shown, 'Fm');
       plot1._onView = ()=> drawGcIntervals(plot1);
@@ -838,84 +762,26 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         const svg = $(id);
         const p = new Plot(svg, {xlabel:'Time (h)', ylabelSvg});
         const arrs = cut.flatMap(d=> shown.filter(g=>d.gas[g.key]).map(g=> d.gas[g.key][key]));
-        if (!arrs.length) return p;
+        if (!arrs.length) return;
         p.setRange(tmin, tmax, 0, yTop(cut, shown, key)*1.05);
         p.drawAxes(); p.clearData();
         drawGasLines(p, cut, shown, key);
         p.attachTools(svg.closest('.plot-wrap'));
-        return p;
       };
-      plotResRate = mk('SvgRate', LBL_RATE_SVG, 'Fm');
-      plotResCum  = mk('SvgCum',  LBL_CUM_SVG,  'FmInt');
+      mk('SvgRate', LBL_RATE_SVG, 'Fm');
+      mk('SvgCum',  LBL_CUM_SVG,  'FmInt');
     }
 
+    /* The mean rates (modcharts.js valueBars), each shown gas a series of its own beside the
+       others in each sample's slot, the way the XRPD size chart pairs raw and corrected:
+       coloured by gas (the samples are told apart by their place on the axis, the gases
+       would not be) and named by it, as the legend under the chart is. Nothing to show
+       draws nothing: the section's visibility is updateRegression's. */
     function drawBarChart(){
-      const shown = shownGases('r');
-      const has = c => shown.some(g=>isFinite(c.rate[g.key]));
-      const finite = costResults.filter(has);
-      if (!finite.length || !shown.length) return;   // section visibility handled by updateRegression
       const svg = $('SvgBar');
-      // Bottom margin adapts to the longest tilted name so names fit without changing
-      // the chart's footprint — the data area shrinks instead.
-      const mctx = document.createElement('canvas').getContext('2d');
-      mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-      const rect = svg.getBoundingClientRect();
-      const svgW = rect.width || 640, svgH = rect.height || 640;
-      // How the names are cut and tilted — see barNames.
-      const fit = barNames(mctx, costResults.map(c=> c.label), Math.max(60, svgW - 75), 55, costResults.map(has));
-      const labels = fit.labels;
-      const labelWs = labels.map((lbl,k)=> has(costResults[k]) ? mctx.measureText(lbl).width : 0);
-      let maxLbl = 0; labelWs.forEach(w=>maxLbl=Math.max(maxLbl, w));
-      const bottom = Math.round(26 + maxLbl*fit.sin);
-      // Value label (vertical) above each bar, with reserved top headroom so it never clips.
-      const fmtVal = v => v.toFixed(4);
-      let maxValW = 0, maxTop = 0;
-      costResults.forEach(c=> shown.forEach(g=>{
-        const v = c.rate[g.key];
-        if (isFinite(v)){ maxValW = Math.max(maxValW, mctx.measureText(fmtVal(v)).width); maxTop = Math.max(maxTop, v); }
-      }));
-      const mTop = 15, gap = 6, plotH = svgH - mTop - bottom, reserve = gap + maxValW + 6;
-      const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
-      const allVals = finite.flatMap(c=> shown.map(g=>c.rate[g.key]).filter(isFinite));
-      // Fixed at [0, n+1]: the names are made to fit it, not the other way round.
-      const x0 = 0, x1 = costResults.length+1;
-      // With both gases the pair sits side by side in the sample's slot, the way the
-      // XRPD size chart pairs raw and corrected. Widths shrink so the pair still fits.
-      const n = shown.length;
-      const pxSlot = (svgW - 75) / (x1 - x0);
-      const hw = n > 1 ? Math.min(11, pxSlot*0.22) : Math.min(16, pxSlot*0.3);
-      const dx = n > 1 ? Math.min(12, pxSlot*0.24) : 0;
-      const offOf = gi => (gi - (n-1)/2) * dx * 2;
-      const underChips = [];
-      costResults.forEach((c,k)=>{ if (has(c)) shown.forEach((g,gi)=>{ const v = c.rate[g.key];
-        if (isFinite(v)) underChips.push({ x:k+1, dx:offOf(gi), top:v, w:mctx.measureText(fmtVal(v)).width }); }); });
-      const ymax = Math.max(Math.max(...allVals)*1.2, maxTop/frac,
-        barChipYmax(svg.closest('.plot-wrap').querySelector('.gc-gas-sel'), svg, underChips,
-                    { W:svgW, ml:55, mr:20, mTop, plotH, gap, x0, x1 }));
-      const barPlot = new Plot(svg, {xlabel:'', ylabelSvg:LBL_RATE_SVG, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-      barPlot.setRange(x0, x1, 0, ymax||1);
-      barPlot.drawAxes();
-      costResults.forEach((c,k)=>{
-        if (!has(c)) return;
-        shown.forEach((g,gi)=>{
-          const v = c.rate[g.key];
-          if (!isFinite(v)) return;
-          const off = offOf(gi);
-          // Same hue as the sample, but the dashed gas is drawn lighter so the pair is
-          // told apart the way the curves are.
-          // Gas-coloured here rather than sample-coloured: the samples are already told
-          // apart by their position on the axis, the gases were not told apart at all.
-          // Named by gas alone, like the legend under the chart: the samples are told
-          // apart by their category on the axis, so one series per gas spans them all —
-          // the shape every other bar chart here has, and the one a split works on.
-          barPlot.barPx(k+1, 0, v, g.bar, hw, off, { label: gasTxt(g) });
-          barPlot.barLabel(k+1, v, fmtVal(v), {gap, dx:off});
-        });
-        barPlot.tickLabel(k+1, labels[k], fit.rot, c.label, c.name);
-      });
-      barPlot.attachTools(svg.closest('.plot-wrap'));
-      $('BarLegend').innerHTML =
-        shown.map(g=>`<span><i class="mk-box" style="background:${g.bar}"></i>${gasTxt(g)}</span>`).join('');
+      valueBars(svg, { cats: costResults, digits: 4, yLabel: LBL_RATE_SVG, legend: $('BarLegend'),
+        series: shownGases('r').map(g=> ({ name: gasTxt(g), color: g.bar, vals: costResults.map(c=> c.rate[g.key]) })),
+        chips: svg.closest('.plot-wrap').querySelector('.gc-gas-sel') });
     }
 
     // The card's CSVs, named after it.
@@ -956,10 +822,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
             cols.push({h:`${g.csv} ${LBL_CUM_CSV} [${d.label}]`,  v:col(j, q.FmInt)});
           });
         });
-        const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
-        let t = csvLine(cols.map(c=>c.h));
-        for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-        return t;
+        return wideCsv(cols);
       };
       entries.push({name:`${n} - gc_raw.csv`,     text:buildSeriesCsv(dataTables, true)});
       entries.push({name:`${n} - gc_results.csv`, text:buildSeriesCsv(cutTables(), false)});
@@ -999,7 +862,6 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
         { key: a.id + ':end', arr:endArr, make: v=> v ?? 24 },
         { key: a.id + ':lightOn', arr:lightOnDates, make: (v, f)=> v !== undefined ? v : f ? firstInjection(f) : null },
       ],
-      addFile(f){ ms.push(15); Qs.push(2); startArr.push(0); endArr.push(24); lightOnDates.push(firstInjection(f)); },
       clear(){ [ms,Qs,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
       unselect(){ gcSel = gcHov = null; },
       renderTable: renderGcParamTable,
@@ -1083,8 +945,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     nameDownloads(w[1], `${n} - GC_results_cumulative.svg`, `${n} - gc_results.csv`);
     nameDownloads(w[2], `${n} - GC_results.svg`, `${n} - mean_rates.csv`);
   }
-  const deck = createDeck({
-    list: document.getElementById('gcAnalyses'), addBar: document.getElementById('gcAddBar'), addBtn: document.getElementById('gcAddAn'),
+  const deck = kit.deck({
     kinds: KINDS, info: ()=> GC_INFO, body: cardBody,
     build: (a, card)=>{ const c = gcCard(a, card); live.set(a.id, c); if (a.init){ c.restore(a.init); delete a.init; } },
     drop: a=>{ const c = live.get(a.id); if (c){ c.res.remove(); live.delete(a.id); } syncResults(); },
@@ -1093,37 +954,10 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     loaded: placeRes,
     added: a=>{ const c = live.get(a.id); c.renderTable(); if (files.length) c.compute(); },
     wake: a=>{ if (files.length) live.get(a.id).compute(true); },
-    commit: ()=> hist.commit(),
   });
   const cards = ()=> deck.records;
-
-  /* ---- Undo/redo: file order/labels/colours, and each card's per-sample m/Q/light-on,
-     integration intervals, delay and gases. Injection data arrays are shared by
-     reference. ---- */
-  function gcSnapshot(){
-    return {
-      files: allFiles.map(f=>({...f})),
-      cards: cards().map(a=> ({ ...deck.saved(a), ...live.get(a.id).snapshot() })),
-    };
-  }
-  function gcRestore(s){
-    allFiles = s.files.map(f=>({...f}));
-    files = includedOf(allFiles);
-    // A project from before the cards had one analysis, its settings at the top level.
-    // A card built afresh takes its settings when its analysis is made (init).
-    const list = Array.isArray(s.cards) ? s.cards : [{ ...s, id: 1, type: 'rate' }];
-    deck.load(list, src=> ({ init: src }), a=>{ live.get(a.id).restore(a.init); delete a.init; });
-    afterFilesChange();
-    // Clear the previous tab's transient upload alerts and rebuild for this tab.
-    loadAlerts = ''; gcUploadAlerts = ''; rebuildGcAlerts();
-  }
-  const hist = registerHistory('gc', gcSnapshot, gcRestore);
-  registerTabRedraw('gc', ()=>{ if (files.length){ deck.fitNames(); each((c, a)=>{ if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }); } });
-
-  function exportGcZip(){
-    return cards().flatMap(a=> live.get(a.id).exportEntries(fileSafe(a.name)));
-  }
-  registerCsvExport('gc', exportGcZip);
+  // A card's settings in the history (kit.snapshot): its per-sample m/Q/light-on,
+  // integration intervals, delay and gases.
 
   // A new project starts with one card.
   deck.start(['rate']);

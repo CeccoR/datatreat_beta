@@ -1,59 +1,37 @@
-import { fmtNum, fmtData, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, movingAverage, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, X_SVG, guardNumberInputs, esc } from './utils.js';
+import { fmtNum, fmtData, setupDropzone, movingAverage, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumberInputs, esc } from './utils.js';
 import { Plot } from './plot.js';
-import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
+import { cardInfo, fileSafe, nameDownloads } from './cards.js';
+import { moduleKit, wideCsv } from './modkit.js';
+import { plotWrap, swatchLegend, viewOf, setView } from './modcharts.js';
+import { decodeText } from './textdata.js';
 
 /* =========================================================
    EPR MODULE
 ========================================================= */
 (function(){
-  // Every file loaded, in list order; the analysis sees the included ones, `files`.
-  let allFiles = []; // {name, label, b[], a[]}
-  let files = [];
-  let loadAlerts = '';
-  let uploadAlerts = '';
-  let pendingAlerts = '';   // ephemeral notice about unpaired uploads
-
-  // Delegated click handling for the dynamically generated alert dismiss buttons.
-  document.getElementById('tab-epr').addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-action]');
-    if (!btn || !document.getElementById('tab-epr').contains(btn)) return;
-    switch (btn.dataset.action){
-      case 'epr-dismiss-invalid': loadAlerts=''; rebuildAlerts(); break;
-      case 'epr-dismiss-upload':  uploadAlerts=''; rebuildAlerts(); break;
-      case 'epr-dismiss-pending': pendingAlerts=''; rebuildAlerts(); break;
-    }
+  /* The module (modkit.js): every file loaded, in list order, {name, label, b[], a[]}, and
+     the included ones, which the analysis sees, `files`; the alerts under the drop zone,
+     `pending` the halves of a pair dropped alone; the cards' settings in the history. */
+  const kit = moduleKit('epr', {
+    parts: ['pending'],
+    alerts: p =>{
+      document.getElementById('eprAlerts').innerHTML = p.invalid + p.upload;
+      document.getElementById('eprPendingWrap').innerHTML = p.pending;
+    },
+    refresh: afterFilesChange,
+    redraw: ()=> updateEpr(),
+    snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), norm: a.norm, smooth: a.smooth })) }),
+    // A project from before the cards had one analysis, its settings at the top level.
+    restore: s => deck.load(Array.isArray(s.cards) ? s.cards : [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }], readCard, a=>{
+      const card = deck.cardOf(a);
+      card.querySelector('#' + P(a) + 'Norm').value = a.norm;
+      card.querySelector('#' + P(a) + 'Smooth').value = a.smooth;
+    }),
+    redrawTab: ()=>{ if (files.length){ deck.fitNames(); updateEpr(true); } },
+    // One CSV a card, named after it.
+    csv: ()=> files.length ? cards().map(a=> ({ name: `${fileSafe(a.name)} - epr_spectra.csv`, text: cardCsv(a) })) : [],
   });
-
-  function fileCallbacks(){
-    return {
-      onRemove(i){
-        removeFileAt(allFiles, i, []);
-        if (!allFiles.length) loadAlerts = '';
-        rebuildAlerts();
-        afterFilesChange();
-      },
-      onReorder(from, to){ moveFileTo(allFiles, from, to, []); afterFilesChange(); },
-      onInclude(i, on){ setIncluded(allFiles, i, on, []); afterFilesChange(); },
-      onIncludeAll(on){ allFiles.forEach((_, j)=> setIncluded(allFiles, j, on, [])); afterFilesChange(); },
-      onLabelChange(i, v){ allFiles[i].label=v; updateEpr(); hist.commit(); },
-      onColorChange(i, v){ allFiles[i].color=v; updateEpr(); hist.commit(); },
-      onPaletteChange(colors){ allFiles.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ allFiles.length=0; loadAlerts=''; uploadAlerts=''; pendingAlerts=''; rebuildAlerts(); afterFilesChange(); },
-    };
-  }
-
-  function rebuildAlerts(){
-    document.getElementById('eprAlerts').innerHTML = loadAlerts + uploadAlerts;
-    document.getElementById('eprPendingWrap').innerHTML = pendingAlerts;
-  }
-
-  // A .DTA/.DSC arriving without its partner in the same drop is simply not loaded —
-  // nothing is held back waiting for it. This is just the ephemeral warning saying so.
-  function buildPendingAlert(names){
-    pendingAlerts = names.length ? buildAlertsHtml([], names.map(esc),
-      'Not loaded — a .DTA and its .DSC must be uploaded together:',
-      undefined, 'epr-dismiss-pending') : '';
-  }
+  const { all: allFiles, files } = kit;
 
   function parseDsc(text){
     const p = {};
@@ -86,8 +64,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
 
   async function processPair(stem, dtaFile, dscFile){
     const dscBytes = new Uint8Array(await dscFile.arrayBuffer());
-    const dscText = await dscFile.text();
-    const p = parseDsc(dscText);
+    const p = parseDsc(decodeText(dscBytes));
     const npts = parseInt(p.XPTS);
     if (!npts){ return null; }
 
@@ -137,33 +114,29 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       groups[stem][ext] = f;
     }
 
-    // Complete pairs load; a lone half is reported and dropped.
+    // Complete pairs load; a lone half is not (nothing is held back waiting for its
+    // partner), and the alert `pending` says so.
     const unpaired = [];
     for (const [stem, pair] of Object.entries(groups)){
       if (pair.dta && pair.dsc){
         const result = await processPair(stem, pair.dta, pair.dsc);
-        if (result){ result.color = nextColor(allFiles); allFiles.push(result); existingStems.add(stem); }
+        if (result){ result.color = nextColor(allFiles); kit.add(result); existingStems.add(stem); }
         else { invalidFiles.push(stem); }
       } else {
         unpaired.push((pair.dta || pair.dsc).name);
       }
     }
-
-    loadAlerts = invalidFiles.length ? buildAlertsHtml(invalidFiles.map(esc), [], undefined, 'epr-dismiss-invalid') : '';
-    uploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded.map(esc), 'Already loaded file(s):', '', 'epr-dismiss-upload') : '';
-    buildPendingAlert(unpaired);
-    rebuildAlerts();
+    kit.said(invalidFiles, alreadyLoaded);
+    kit.alerts.pending = unpaired.length ? buildAlertsHtml([], unpaired.map(esc),
+      'Not loaded — a .DTA and its .DSC must be uploaded together:', undefined, 'epr-dismiss-pending') : '';
     afterFilesChange();
   });
 
   function afterFilesChange(){
-    files = includedOf(allFiles);
-    setTabLoaded('epr', allFiles.length);
-    renderUnifiedFileList('eprFileTableWrap', allFiles, fileCallbacks());
+    kit.showFiles();
     document.getElementById('eprAnalyses').style.display = files.length ? 'block' : 'none';
-    if (files.length) updateEpr();
-    else rebuildAlerts();
-    hist.commit();
+    updateEpr();
+    kit.commit();
   }
 
   /* ---- The analysis cards (cards.js): each its own normalisation and smoothing of the
@@ -172,14 +145,9 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
   const EPR_INFO = `Spectra are stacked for visual comparison, each normalized to the largest peak-to-peak (global) or to its own (local), or left as they are (none: the stacking only spaces them). Adjust the smoothing window and normalization mode as needed. The field axis is each spectrum's field <b>rescaled to 9.5 GHz</b>, B·(9.5 GHz / ν) with ν the microwave frequency of its .DSC (MWFQ), so that spectra recorded at different frequencies line up by g; the CSV gives the field the same way (Bfield_mT_at_9.5GHz). The top axis reads <b>g = hν / (μ<sub>B</sub>·B)</b> at 9.5 GHz. A file without its frequency is shown on the field it was measured at, and then no g axis can be drawn. ${cardInfo(false, false)}`;
   const DEF = { norm: 'global', smooth: 10 };
   const P = a => 'epr' + a.id;
-  const DL_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
   const cardBody = a => `
         <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-wrap">
-              <svg class="plot" id="${P(a)}Svg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="${P(a)}Svg" data-csv-mod="epr" data-csv-names="epr_spectra.csv" data-dl-name="EPR.svg" data-dl-legend="${P(a)}Legend">${DL_ICON}</button>
-            </div>
+          <div class="col mw520" style="flex:2">${plotWrap(P(a) + 'Svg', { mod: 'epr', csv: 'epr_spectra.csv', name: 'EPR.svg', legend: P(a) + 'Legend' })}
             <div id="${P(a)}Legend" class="legend"></div>
           </div>
           <div class="col mw260" style="align-self:flex-start">
@@ -197,46 +165,22 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     guardNumberInputs(card);
     const norm = card.querySelector('#' + P(a) + 'Norm'), sm = card.querySelector('#' + P(a) + 'Smooth');
     norm.value = a.norm; sm.value = a.smooth;
-    norm.addEventListener('change', ()=>{ a.norm = normOf(norm.value); if (files.length){ drawCard(a); hist.commit(); } });
-    sm.addEventListener('change', ()=>{ a.smooth = Math.max(1, Math.round(+sm.value) || 1); if (files.length){ drawCard(a); hist.commit(); } });
+    norm.addEventListener('change', ()=>{ a.norm = normOf(norm.value); if (files.length){ drawCard(a); kit.commit(); } });
+    sm.addEventListener('change', ()=>{ a.smooth = Math.max(1, Math.round(+sm.value) || 1); if (files.length){ drawCard(a); kit.commit(); } });
   }
   function named(a){
     const card = deck.cardOf(a);
     if (card) nameDownloads(card.querySelector('.plot-wrap'), `${fileSafe(a.name)} - EPR.svg`, `${fileSafe(a.name)} - epr_spectra.csv`);
   }
-  const deck = createDeck({
-    list: document.getElementById('eprAnalyses'), addBar: document.getElementById('eprAddBar'), addBtn: document.getElementById('eprAddAn'),
+  const deck = kit.deck({
     kinds: KINDS, info: ()=> EPR_INFO, body: cardBody, make: ()=> ({ ...DEF }),
     build: buildCard, drop: ()=>{}, autoName: ()=> 'Spectra', named,
     added: a=>{ if (files.length) drawCard(a); },
     wake: a=>{ if (files.length) drawCard(a, true); },
-    commit: ()=> hist.commit(),
   });
   const cards = ()=> deck.records;
-
-  /* ---- Undo/redo: file order/labels/colours + each card's normalization & smoothing ---- */
-  function eprSnapshot(){
-    return {
-      files: allFiles.map(f=>({...f})),
-      cards: cards().map(a=> ({ ...deck.saved(a), norm: a.norm, smooth: a.smooth })),
-    };
-  }
-  // A project from before the cards had one analysis, its settings at the top level.
+  // A card's settings in the history: its normalization and smoothing (kit.snapshot).
   const readCard = s => ({ norm: normOf(s.norm), smooth: Math.max(1, Math.round(+s.smooth) || DEF.smooth) });
-  function eprRestore(s){
-    allFiles = s.files.map(f=>({...f}));
-    files = includedOf(allFiles);
-    deck.load(Array.isArray(s.cards) ? s.cards : [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }], readCard, a=>{
-      const card = deck.cardOf(a);
-      card.querySelector('#' + P(a) + 'Norm').value = a.norm;
-      card.querySelector('#' + P(a) + 'Smooth').value = a.smooth;
-    });
-    afterFilesChange();
-    // Clear the previous tab's transient alerts, then rebuild.
-    loadAlerts = ''; uploadAlerts = ''; pendingAlerts = ''; rebuildAlerts();
-  }
-  const hist = registerHistory('epr', eprSnapshot, eprRestore);
-  registerTabRedraw('epr', ()=>{ if (files.length){ deck.fitNames(); updateEpr(true); } });
 
   // Every card unfolded is drawn; a folded one is drawn as it comes back (wake).
   function updateEpr(preserveView){
@@ -249,8 +193,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     let Y = files.map(f=>movingAverage(f.a, N));
     // A fresh Plot is built each render, so grab the outgoing view first to keep the
     // current zoom on a resize / tab-switch redraw instead of snapping to full range.
-    const old = document.getElementById(P(a) + 'Svg')._plot;
-    const prev = (preserveView && old && isFinite(old.xmin)) ? {xmin:old.xmin,xmax:old.xmax,ymin:old.ymin,ymax:old.ymax} : null;
+    const prev = preserveView ? viewOf(document.getElementById(P(a) + 'Svg')._plot) : null;
     /* The field is each spectrum's rescaled to 9.5 GHz (buildBAxis), so the axis says so
        and carries g along the top: g = hν/(μ_B·B) at that ν, 678.753 mT / B. A file
        without its frequency is on its measured field, where g cannot be read. */
@@ -258,7 +201,7 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
     const plot = new Plot(document.getElementById(P(a) + 'Svg'), {xlabel: at95 ? 'Magnetic Field at 9.5 GHz (mT)' : 'Magnetic Field (mT)', ylabel:'Intensity (a. u.)', noYTickLabels:true,
       ...(at95 ? { topAxis: { label:'g', of: B=> G_AT_95/B, at: g=> G_AT_95/g, fmt: v=> v.toFixed(4) }, margin:{l:55,r:20,t:48,b:40} } : {})});
     plot.attachTools(plot.svg.closest('.plot-wrap'));
-    const legend = document.getElementById(P(a) + 'Legend'); legend.innerHTML='';
+    document.getElementById(P(a) + 'Legend').innerHTML = swatchLegend(files);
     const n = Y.length;
     const allB = files.flatMap(f=>f.b);
     // (none: the spectra as they are, each centred in a slot as tall as the largest
@@ -275,25 +218,16 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       Y = Y.map((y,k)=>{ const mid=maxArr(y)/(2*gmax); return y.map(v=>v/gmax+baseOf(k)+0.55-mid); });
     }
     plot.setRange(minArr(allB), maxArr(allB), baseOf(n-1), baseOf(0)+1.1*unit);
-    if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
+    setView(plot, prev);
     plot.drawAxes();
     // The composer gets the CSV's own "Smoothed_" column (smoothedOut): the same numbers
     // as the export, without the stacking offset.
     const sms = files.map(f=>movingAverage(f.a, N));
     const out = smoothedOut(sms, norm);
-    Y.forEach((y,k)=>{
-      const csvY = out[k];
-      plot.line(files[k].b, y, files[k].color, 1.3, undefined,
-                { raw: { xs: files[k].b, ys: csvY }, label: files[k].label, key: files[k].name });
-      const s=document.createElement('span'); s.innerHTML=`<i style="background:${esc(files[k].color)}"></i>${esc(files[k].label)}`; legend.appendChild(s);
-    });
+    Y.forEach((y,k)=> plot.line(files[k].b, y, files[k].color, 1.3, undefined,
+      { raw: { xs: files[k].b, ys: out[k] }, label: files[k].label, key: files[k].name }));
   }
 
-  // One CSV a card, named after it.
-  function exportEprZip(){
-    if (!files.length) return [];
-    return cards().map(a=> ({ name: `${fileSafe(a.name)} - epr_spectra.csv`, text: cardCsv(a) }));
-  }
   /* The smoothed column: moving average (N pts), then the user's normalisation — the
      background taken as the first point and divided by the peak-to-peak (local = own,
      global = largest across samples), matching the on-screen divisor; none: the smoothed
@@ -320,12 +254,8 @@ import { createDeck, cardInfo, fileSafe, nameDownloads } from './cards.js';
       cols.push({h:'Raw_'+f.label,                   v:f.a.map(v=>fmtData(v,6))});
       cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:out[k].map(v=>fmt(v,6))});
     });
-    const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
-    let t = csvLine(cols.map(c=>c.h));
-    for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-    return t;
+    return wideCsv(cols);
   }
-  registerCsvExport('epr', exportEprZip);
 
   // A new project starts with one card.
   deck.start(['spectra']);

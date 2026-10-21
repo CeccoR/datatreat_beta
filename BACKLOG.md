@@ -8,9 +8,10 @@ was proposed; nothing here is in the code yet.
 - **Rows with an empty cell in between.** A row like `350,,0.5` passes the first check
   (it looks at the non-empty cells, 350 and 0.5) but is read from the first two columns
   (350 and nothing), so it is dropped; a file made only of such rows passes, gives no
-  data and goes without a word. It comes from CSVs with an empty column in the middle.
-  Proposed: read the same cells the check looks at, or say how many rows were dropped
-  and why.
+  data. It comes from CSVs with an empty column in the middle. Since v490 such a file is
+  refused ("Invalid file(s)") rather than skipped without a word; its rows are still
+  dropped. Proposed: read the same cells the check looks at, or say how many rows were
+  dropped and why.
 - **R% or F(R) from other instruments.** The app tells reflectance from Kubelka–Munk by
   the column header of the user's instrument (`R%`) and takes any other file as F(R).
   To be refined: the headers other instruments write (`%R`, `Reflectance`, other
@@ -18,10 +19,6 @@ was proposed; nothing here is in the code yet.
 
 ## GC
 
-- **CSV fields in quotes.** `splitCSVLine` splits on the delimiter even inside quotes,
-  so a comma-separated export with quoted comma decimals (`"0,5089"`) shifts the
-  columns: H₂ reads 0 and O₂ takes the next column. Semicolon files with comma
-  decimals are fine. Proposed: split on delimiters outside quotes only.
 - **Impossible dates.** `parseGCDate` takes month/day/year and does not check the
   ranges: `13/10/2025` silently becomes 10 Jan 2026, `2/30/2025` 2 Mar. Proposed:
   refuse a date that does not exist (or detect day/month order from the file).
@@ -199,6 +196,16 @@ was proposed; nothing here is in the code yet.
   Scherrer card stayed in memory through its keyboard listener). Proposed: no rewrite;
   split a function when work takes us into it, its calculations moved out into
   functions the tests can call.
+- **Saving large projects: the files' bytes written at every change.** Autosave, a tab
+  switch and a save each encode the whole module state, every file's bytes included
+  (base64), and write it to IndexedDB on the main thread. With eight 2048² 16-bit SEM
+  images that is about 92 MB per write: the put alone takes about 550 ms, the largest
+  freeze left after v488, and a tab switch encodes the same again. The bytes never
+  change once a file is loaded. Proposed: keep them in a store of their own, keyed by
+  their hash and written once, the state holding only the key (as v485 already writes
+  bytes shared by several patterns once inside a state); a parked tab keeps them as they
+  are, not as base64; a .datatreat export puts them back in. Reading a project then
+  needs them fetched before the restore, which today is synchronous.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's
