@@ -75,7 +75,7 @@ Analyze diffuse reflectance spectroscopy (DRS) data in the UV-Visible range to a
 4. Results show:
    - **Eg (x-axis)**: Band gap from intersection with x-axis
    - **Eg (baseline)**: Band gap from intersection with baseline
-   - **RMSE & R²** for both regressions
+   - **NRMSE & R²** for both regressions (the RMSE divided by the range of the values in the window)
 
 5. Export processed data as CSV using the **Export CSV** button.
 
@@ -100,6 +100,8 @@ Compare, smooth, and normalize X-ray powder diffractograms.
 1. Add each phase from a CIF (**+ CIF**, in the list beside the pattern: each phase's formula and space group, found from the atoms for a file in P1). Files in P1, such as Materials Project's, have their symmetry found from the atoms, so a cubic cell is refined by *a* alone. Each phase is ticked for every pattern at first; untick it on a pattern to leave it out of that pattern's refinement. A click on a phase shows its unit cell in 3D (drag to turn it, double click to reset) with its details.
 2. Refine the instrumental standard in its window (**Instrumental standard…**) against the built-in LaB₆ (NIST SRM 660c) or a CIF of the standard's: it gives the instrument's zero and peak shape, axial-divergence asymmetry included.
 3. **Refine all** refines every sample: cell, specimen displacement, crystallite size and microstrain (above the instrument's broadening), weight fractions with several phases, with R<sub>wp</sub>, R<sub>exp</sub>, χ² and the standard errors, shown across the card under the pattern, with what the result was refined with by its title and every warning at its foot. A phase with no significant intensity of its own is reported *not detected* and left out; the same CIF added twice gives two size populations of one phase. **Settings…** (under the pattern's side column; read only while a refinement runs) decides what Refine refines: per phase, each model below switched on or off and its depth, the size and the strain included; and where it starts, from the CIF or from each pattern's last result with chosen groups of parameters held there (fit the shape, hold it, then refine B per site from there). The standard's window has its own. **Clear all** clears every pattern's result.
+   - With no refined standard, **Refine** and **Refine all** first ask: refine the standard first (with its window's Settings, then the samples with its profile), refine without the standard, or cancel; with no standard loaded, *Load a standard…* opens its window. While samples refine the standard cannot be refined, and while the standard refines the samples cannot, so a batch always has one instrumental profile.
+   - A refinement belongs to its project: leaving its tab (another tab, a new one) or closing it asks whether to stop it, and undo waits for it to end. A stopped run keeps the patterns already done.
 4. **Size profile, strain and faults** (per phase, with a refined standard): the size as a Lorentzian of the right breadth (Scherrer's K = 0.9), or by **WPPM** (Whole Powder Pattern Modelling: each line the Fourier transform of the instrument's, the crystallites', the strain's and the faults' coefficients, so the sizes are the true ones), with one size or a **log-normal distribution** of sizes (volume-weighted mean, median, number mean and σ); the microstrain isotropic or **anisotropic** (Stephens: ε² a quartic form of the direction that the Laue group leaves unchanged); **planar faults** (after Warren: stacking faults, antiphase boundaries, Ruddlesden–Popper faults), their probability per plane refined.
 5. **Displacement parameters and site occupancy** (per phase): the CIF's B, one ΔB, one B per crystallographic site, or the anisotropic U<sup>ij</sup> per site within its symmetry (with B<sub>eq</sub>); and the occupancy of one of the phase's sites, refined — a site that has lost atoms, as the Sr site of a Sr-poor SrTiO₃, scatters less at every angle alike.
 6. **Preferred orientation** (per phase): March–Dollase along a chosen (hkl), or the best of the low-index planes.
@@ -113,16 +115,16 @@ How it all works, in detail (the model, the solver, the strategy, the broadening
 
 ### 3. GC (Gas Chromatography)
 
-Assess H₂ production rates from gas chromatography data, including light-on time and time-interval analysis.
+Assess H₂ and O₂ production rates from gas chromatography data, including light-on time and time-interval analysis.
 
 **Instrument compatibility**: Agilent Gas Chromatographer  
 **File format**: CSV with columns:
   - "Injection date" (datetime)
-  - "H2 (B) (%Mol)" or similar (hydrogen mole percentage)
+  - "H2 (B) [%Mol]" and/or "O2 (B) [%Mol]", or similar (mole percentages; a file needs at least one of them)
 
 **How to use**:
 
-1. Upload your CSV files. The app auto-detects injection date and H₂ columns (case-insensitive).
+1. Upload your CSV files. The app auto-detects the injection date and the H₂ and O₂ columns (case-insensitive). An empty H₂ or O₂ cell leaves that injection out of that gas only (its rate, its cumulative production and its mean are computed from the injections that have a value), and an alert under the drop zone says, per file, how many empty cells were skipped.
 2. Set parameters for each sample:
    - **m (mg)**: Catalyst mass in milligrams
    - **Q (mL/min)**: Carrier gas flow rate
@@ -132,9 +134,9 @@ Assess H₂ production rates from gas chromatography data, including light-on ti
    - **Interval start** and **Interval end** define the window
    - White vertical lines on the plot mark these boundaries
 
-4. Two interactive plots:
-   - **H₂ Rate (mmol/h/g)**: Production rate over time
-   - **Cumulative H₂ (mmol/g)**: H₂ accumulated from the start of the interval
+4. Two interactive plots, for the gases chosen with the **H₂ / O₂** chips (a gas no included file has is greyed out, and comes back when such a file is loaded or included):
+   - **Rate (mmol/h/g)**: Production rate over time
+   - **Cumulative (mmol/g)**: gas accumulated from the start of the interval
 
 5. View results in a **bar chart** (mean production rate per sample) and a **summary table**.
 6. Export all data as CSV.
@@ -147,32 +149,27 @@ The analysis is a card, as the DRS ones are: **+** under it adds another (its ow
 
 ### 4. EPR (Electron Paramagnetic Resonance)
 
-Compare, smooth, and normalize EPR spectra from Bruker instruments. Includes paired-file validation and interactive pending-file management.
+Compare, smooth, and normalize EPR spectra from Bruker instruments, each pair of files checked as it loads.
 
 **Instrument compatibility**: Bruker EPR spectrometers (BES3T format)  
 **File format**: Paired `.DTA` (binary signal data) and `.DSC` (text parameters) files
 
 **How to use**:
 
-1. **Upload paired files**: Both `.DTA` and `.DSC` files are required for each sample.
+1. **Upload paired files**: Both `.DTA` and `.DSC` files are required for each sample, in the same upload.
    - Files are matched by their stem name (e.g., `sample.DTA` and `sample.DSC`)
-   - You can upload files in separate batches — the app waits for the pair to complete
-   - If you attempt to re-upload a file whose pair is already loaded, you'll see a yellow warning
+   - A `.DTA` or `.DSC` whose partner is not in the same upload is not loaded, and a warning names it (nothing is held back waiting for the other half: upload the two together)
+   - Re-uploading a sample already loaded gives a yellow warning, and the file is not loaded again
 
-2. **Pending files table**: While waiting for a pair, an interactive table shows which files are pending:
-   - ✓ Green checkmark = file present
-   - ✗ Red X = file missing
-   - Click **✕** to remove an unpaired file from the queue
-
-3. Adjust:
+2. Adjust:
    - **Normalization**:
-     - *Global*: All spectra normalized to the global maximum
-     - *Local*: Each spectrum normalized to its own maximum
+     - *Global*: All spectra divided by the largest peak-to-peak
+     - *Local*: Each spectrum divided by its own peak-to-peak
      - *None*: The spectra as they are (the stacking only spaces them)
    - **Smoothing points**: Moving-average window size
 
-4. Interactive plot overlays all spectra with your chosen normalization. The analysis is a card: **+** under it adds another (its own normalization and smoothing of the same spectra, on its own plot), and each card can be renamed, folded, moved by its ≡ grip and closed.
-5. Export processed data as CSV.
+3. Interactive plot overlays all spectra with your chosen normalization. The analysis is a card: **+** under it adds another (its own normalization and smoothing of the same spectra, on its own plot), and each card can be renamed, folded, moved by its ≡ grip and closed.
+4. Export processed data as CSV.
 
 **File format details**:  
 The app natively reads Bruker BES3T files:
@@ -190,11 +187,11 @@ Tescan SEM images, read with their metadata, cropped, brought to comparable grey
 **How to use**:
 
 1. **Upload the `.tif` files.** Each is read with its pixel size, magnification, field of view, beam (kV, working distance) and detector (gain, offset). The info bar under the image is left out by the height the file gives for it. A file of another kind is not loaded, and the list under the drop zone says why.
-2. **Groups and scale.** The images are grouped by pixel size (within 10 %), each group named by its magnification; rename a group by clicking its name, or drag an image onto another group or onto *+ Group* (on a phone, hold it a moment first); *+ Group* clicked adds an empty group, and *Reset* makes the groups again. At *common scale* (the default) a group's images are brought to its largest pixel size (reduced by averaging, never enlarged) and to its smallest field of view, so that one scale bar serves the group; at *own scale* each keeps its pixels and gets its own bar.
+2. **Groups and scale.** The images are grouped by pixel size (within 10 %), each group named by its magnification; rename a group by clicking its name, or drag an image onto another group or onto *+ Group* (on a phone, hold it a moment first); *+ Group* clicked adds an empty group (kept while it is empty, until its *Remove*; once filled it goes, as the others, when its images are removed from the list), and *Reset* makes the groups again. Only the images ticked in the file list name, order and fill the groups; an image left out keeps its group and comes back to it. At *common scale* (the default) a group's images are brought to its largest pixel size (reduced by averaging, never enlarged) and to its smallest field of view, so that one scale bar serves the group; at *own scale* each keeps its pixels and gets its own bar.
 3. **Crop and intensity.** One image at a time, with the histogram of its crop under it, beside the thumbnails of all the images and the image's details. Each image starts whole. With *Default* ticked the crop is the whole image, its fields locked; drag the frame's handles or sides to resize it, inside it to move it; the view stays fitted unless a tool of the toolbar over it is on (pan, zoom area; fit). The fields give the crop in pixels, with its size in µm. A ratio (1:1, 4:3, 3:2 or free) holds while resizing.
 4. **Several images.** Images linked by the chain on their thumbnails share one crop (*Link all* links the images chosen); unlinked, an image keeps the crop it had. A crop larger than an image is narrowed to fit it, and the image is marked.
 5. **Intensity.** A normalisation for all images: none, each image stretched between two percentiles of its own levels, or the mean and SD, or the whole histogram, of a reference image (one of them). Then contrast, brightness and gamma, with each image's own correction on top. The selector over the thumbnails applies them to all images alike, or to one group at a time (each group starting from All's settings; back to All, All takes the group's on show). Each set of settings has a *Default* box that locks it at its defaults. The statistics are the crop's, with saturated pixels left out.
-6. **Figure.** Each group has its own *Figure composer* button and figure, laid out as the plots' composer does: a page in millimetres, the most compact grid (4 × 3 for 12 images), or blocks of panels set by hand (2 × 1 blocks of 2 × 2 panels), with a gap between panels and another between blocks; panels in the file list's order, reordered by the handles of the image list; each with its sample's name (placed automatically where there is room, or by hand; horizontal or vertical), letters (a), (b)… if wanted (before the name, or in any of 8 places), and scale bars (one per group at common scale, or one per image; 8 places), their length a round value or any value typed; the page's size free, with auto margins or a plot set by hand. PNG at the chosen dpi, or SVG with the images in it.
+6. **Figure.** Each group has its own *Figure composer* button and figure, made in the plots' composer (one composer open at a time): a page in millimetres, the most compact grid (4 × 3 for 12 images), or blocks of panels set by hand (2 × 1 blocks of 2 × 2 panels), with a gap between panels and another between blocks; panels in the file list's order, reordered by the handles of the image list; each with its sample's name (placed automatically where there is room, or by hand; horizontal or vertical), letters (a), (b)… if wanted (before the name, or in any of 8 places), and scale bars (one per group at common scale, or one per image; 8 places), their length a round value or any value typed; the page's size free, with auto margins or a plot set by hand. PNG at the chosen dpi (a page too large for a PNG in the browser says so, with the largest dpi it can make), or SVG with the images in it.
 7. Export the images' metadata, crops, intensity settings and groups as CSV. The project keeps each file's own bytes; the images themselves are never changed.
 
 ---
@@ -205,7 +202,7 @@ All modules support CSV export. The exported CSV format respects your **Settings
 - Decimal separator (`.` or `,`)
 - Field separator (`;`, `,`, or `Tab`)
 
-Click **Export CSV** in any module to download processed results.
+Click **Export CSV** in any module to download processed results. A value holding the field separator, a quote or a line break (a sample label with a comma, say) is written in quotes, its quotes doubled, as spreadsheets expect.
 
 A file unticked in the file list (the box beside its name) stays loaded, with its settings, but is left out of the analysis, the results, the charts and the export until it is ticked again. An XRPD standard left out counts as no standard.
 
