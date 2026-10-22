@@ -468,14 +468,15 @@ button.btn.icon-save {
 }
 .home-action-btn:hover { border-color: var(--accent); }
 .home-action-btn:hover .home-action-icon svg { color: var(--accent); }
-/* A window under 340 px (a 320-px phone). To v504 the top bar's row, at its full spacing
-   26 px wider than the window, ran past it (the gear ending at 330 of 320, the page
-   scrolling sideways, the tabs squeezed to nothing), and the home's two tiles side by side,
-   38 px wider than the card's inside, ended at 323. The brand keeps its mark, its name
-   clipped (still read out); the bar's side padding and the nav's gaps tighten, so the tabs
-   get about a tab's width (111 px at 320) and scroll inside it as they do wider; the tiles
-   wrap, one under the other. Nothing changes from 340 px up. */
-@media (max-width: 339px) {
+/* A window under 480 px (a phone held upright). The brand keeps its mark, its name clipped
+   (still read out); the bar's side padding and the nav's gaps tighten, so the tab strip
+   gets the window less 209 px (111 at 320, 131 at 340, 181 at 390, 270 at 479: a tab
+   asks 120 at least) and its tabs scroll inside it. To v504 under 340 px the row, 26 px
+   wider than the window, ran past it (the gear at 330 of 320, the page scrolling
+   sideways); to v507 the rule held only under 340, and from 340 to about 465 the strip,
+   beside the brand's name in full, was narrower than a tab (0 px at 340, 44 at 390, 74 at
+   420). From 480 px up the bar is as it was (its strip 134 px at 480). */
+@media (max-width: 479px) {
   header { padding: 6px 10px; }
   header h1 { width: 23px; flex-shrink: 0; margin-right: 0; overflow: hidden; }
   #nav { gap: 6px; }

@@ -82,6 +82,18 @@ function slides(v, up, what){
   assert.ok(hi - lo > 0.5 && mid.size >= 4, `${what}: frames in between, ${mid.size} (in % of the way: ${all})`);
 }
 
+// The page's animations at a quarter of their pace (DevTools' playback rate), for a step taken
+// while another's animation runs: the wait before it is stretched to match (inside), so that it
+// lands where it did at full pace, but a machine slowed by the full suite now has 0.8 to 1 s
+// more before the animation would end first (v508: at full pace a 120-ms wait, taken under
+// that load, once let a copy shrink to its end before the step came).
+const PACE = 0.25;
+async function pace(page, rate){
+  const s = page.__cdp || (page.__cdp = await page.context().newCDPSession(page));
+  await s.send('Animation.enable');
+  await s.send('Animation.setPlaybackRate', { playbackRate: rate });
+}
+const inside = (page, ms)=> page.waitForTimeout(ms / PACE);
 // Ctrl+Z / Ctrl+Y, no field focused; not waited for.
 async function key(page, redo){
   await page.evaluate(()=> document.activeElement && document.activeElement.blur && document.activeElement.blur());
@@ -280,9 +292,10 @@ test('(4) several cards in a step together; steps taken during an animation; a m
     await addCard(page, mod);
     await exact(page, mod, 'three cards open');
     // A fold taken over midway: unfolded by an undo, folded by a redo while it slides.
+    await pace(page, PACE);
     await fold(page, mod, 1);
     await record(page);
-    await key(page); await page.waitForTimeout(120); await key(page, true); await rest(page, mod);
+    await key(page); await inside(page, 120); await key(page, true); await rest(page, mod);
     let c = (await rec(page)).calls;
     assert.deepEqual(c.map(x=> [x.what, x.id]), [['body', 1], ['body', 1]], 'unfolded, then folded');
     assert.ok(c[1].kf[0].height > 2 && c[1].kf[0].height < c[0].kf[1].height - 2, `the fold taken over from where the unfold had got to (${c[1].kf[0].height} of ${c[0].kf[1].height})`);
@@ -291,7 +304,7 @@ test('(4) several cards in a step together; steps taken during an animation; a m
     // A card taken away while it grows: its copy shrinks from where it had got to.
     await closeCard(page, mod, 3);
     await record(page);
-    await key(page); await page.waitForTimeout(120); await key(page, true); await rest(page, mod);
+    await key(page); await inside(page, 120); await key(page, true); await rest(page, mod);
     c = (await rec(page)).calls;
     assert.deepEqual(c.map(x=> x.what), ['card', 'ghost'], 'grown, then taken away');
     assert.ok(c[1].kf[0].height > 2 && c[1].kf[0].height < c[0].kf[1].height - 2, `its copy from where it had got to (${c[1].kf[0].height} of ${c[0].kf[1].height})`);
@@ -300,13 +313,14 @@ test('(4) several cards in a step together; steps taken during an animation; a m
     // the card and its copy together).
     await key(page); await rest(page, mod);
     await record(page); await sample(page, mod);
-    await key(page, true); await page.waitForTimeout(120); await key(page); await rest(page, mod);
+    await key(page, true); await inside(page, 120); await key(page); await rest(page, mod);
     c = (await rec(page)).calls;
     const smp = await samples(page);
     assert.deepEqual(c.map(x=> x.what), ['ghost', 'card'], 'taken away, then back');
     assert.ok(c[1].kf[0].height > 2 && c[1].kf[0].height < c[1].kf[1].height - 2 && c[1].kf[0].opacity > 0, `grown from where its copy had got to (${c[1].kf[0].height} of ${c[1].kf[1].height})`);
     assert.ok(smp.every(s=> s.c.filter(x=> x.id === 3 || x.id === 0).length <= 1), 'never the card and its copy together');
     await exact(page, mod, 'back while its copy shrank');
+    await pace(page, 1);
     // A burst of keys: the end exact.
     for (let i = 0; i < 9; i++){ await key(page, i % 2 === 1); await page.waitForTimeout(40); }
     await rest(page, mod);
@@ -395,7 +409,9 @@ test('(4) a card still growing folded or unfolded by the next step or by its arr
         const tag = `${mod}: a card growing, ${what}`;
         if (setup) await setup();
         await record(page); await sampleCard(page, sel, 1200);
-        await key(page); await page.waitForTimeout(80); await then(); await rest(page, mod);
+        await pace(page, PACE);
+        await key(page); await inside(page, 80); await then(); await rest(page, mod);
+        await pace(page, 1);
         const c = (await rec(page)).calls, v = await page.evaluate(()=> window.__cs), end = await page.$eval(sel, e=> e.getBoundingClientRect().height);
         assert.deepEqual(c.map(x=> [x.what, x.id]), [['card', id], ['body', id], ['card', id]], tag + ': grown, then the body\'s slide and the card\'s from where it had got to');
         const [g, , r] = c;
@@ -448,18 +464,20 @@ test('(3) nothing animated by a tab switch, a project opened, a CSV export\'s st
     const left = m => page.evaluate(m=>{ const l = document.getElementById(m + 'Analyses'); return { copies: [...l.children].filter(e=> !e.classList.contains('an-card') && !e.classList.contains('an-add-bar')).length, animated: [...l.querySelectorAll('.an-card')].filter(e=> e.getAnimations().length || e.getAttribute('style')).length }; }, m);
     const csvState = ()=> page.evaluate(async m=>{ const u = await import('./utils.js'); u.runWithModuleState(m, u.getModuleState(m), ()=>{}); }, mod);
     await closeCard(page, mod, 1);
-    await key(page); await page.waitForTimeout(60);
+    await pace(page, PACE);
+    await key(page); await inside(page, 60);
     assert.equal((await left(mod)).animated, 1, 'a card growing');
     await csvState();
     assert.deepEqual(await left(mod), { copies: 0, animated: 0 }, 'a CSV export\'s state over a growth: ended at once');
     await rest(page, mod);
     await exact(page, mod, 'after a CSV export\'s state over a growth');
-    await key(page, true); await page.waitForTimeout(60);
+    await key(page, true); await inside(page, 60);
     assert.equal((await left(mod)).copies, 1, 'a copy shrinking');
     await csvState();
     assert.deepEqual(await left(mod), { copies: 0, animated: 0 }, 'a CSV export\'s state over a copy shrinking: ended at once');
     await rest(page, mod);
     await exact(page, mod, 'after a CSV export\'s state over a copy shrinking');
+    await pace(page, 1);
     // The motion reduced: the steps put at once, the card back in view all the same.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await key(page); await rest(page, mod);
