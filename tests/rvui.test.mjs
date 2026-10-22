@@ -266,7 +266,9 @@ test('C: the standard refining, its window closed: every card\'s Instrumental st
     await page.evaluate(()=> document.activeElement && document.activeElement.blur());
     await page.keyboard.press('Control+z');
     await page.waitForSelector('.pwa-confirm.show');
-    assert.match(await page.textContent('.pwa-confirm span'), /undo and redo wait/);
+    // (the banner on show: the one answered just before, leaving, stays in the page 200 ms
+    // after, and a page slow to run that timer had it read first, the first .pwa-confirm)
+    assert.match(await page.textContent('.pwa-confirm.show span'), /undo and redo wait/);
     await page.keyboard.press('Escape');
     await busyNow('xrdR2Std', 'an undo refused');
     // The window opened again shows the run.

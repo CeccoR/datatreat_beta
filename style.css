@@ -2064,6 +2064,14 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .rv-cif .rv-del { flex: none; background: none; border: none; color: var(--muted); padding: 2px 3px; cursor: pointer; line-height: 1; display: inline-flex; }
 .rv-cif .rv-del:hover:not(:disabled) { color: var(--bad); }
 .rv-cif .rv-del:disabled { opacity: .3; cursor: default; }
+/* A row's × and tick while a run goes on (.is-locked, xrd-rv.js lockRows): dimmed, the × as
+   when disabled (no hover colour: it has none so), the tick (the standard's choice), only
+   aria-disabled, to .6 in its accent, so that a ticked or chosen phase reads as such (the
+   browser's disabled look draws ticked and not in one grey), the pointer 'not-allowed' over
+   them, as over the CIF drop zones then. To v505 they looked enabled, the tick's pointer a
+   hand even disabled. The built-in LaB6's ×, never locked, keeps the arrow. */
+.rv-cif .rv-del.is-locked, .rv-cif input.is-locked { cursor: not-allowed; }
+.rv-cif input.is-locked { opacity: .6; }
 /* Its CIF's download, left of the ×: the file list's (.dl-bare, lit by the accent), padded
    as the × and as near it as the file list's pair (8 px between the glyphs, not the row's gap). */
 .rv-cif .rv-dl { flex: none; padding: 2px 3px; margin-right: -5px; }
