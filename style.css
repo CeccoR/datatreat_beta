@@ -479,8 +479,11 @@ button.btn.icon-save {
   header { padding: 6px 10px; }
   header h1 { width: 23px; flex-shrink: 0; margin-right: 0; overflow: hidden; }
   #nav { gap: 6px; }
-  .home-actions { flex-wrap: wrap; flex-shrink: 1; }
 }
+/* The home's two tiles wrap, one under the other, where they do not fit side by side: under
+   358 px (to v506 only under 340, and from 340 to 357 the Settings tile ran over its card's
+   edge by up to a pixel). */
+@media (max-width: 357px) { .home-actions { flex-wrap: wrap; flex-shrink: 1; } }
 .settings-tab.active {
   display: block;
   padding-top: 40px;
@@ -1950,7 +1953,9 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
    Clear all (three in the column's 280 px: the side padding narrowed so that "Settings…"
    keeps to one line). */
 .rv-btns { display: flex; gap: 8px; }
-.rv-btns > .btn { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+.rv-btns > .btn { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* (a label wider than its half of the row is cut with an ellipsis: to v506 'Instrumental
+   standard…' ran half a pixel past a 320-px window) */
 /* Instrumental standard… while the standard refines (xrd-rv.js syncStd): a spinner before
    its label, the drop zones' (dz-spin), and the run's progress in a bar along its foot, in
    the accent of the card's own (.rv-prog); the label cut with an ellipsis where the two

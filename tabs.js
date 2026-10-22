@@ -324,6 +324,15 @@ function renderTabs(){
   add.setAttribute('aria-label', 'New project'); add.title = 'New project';
   add.textContent = '+';
   bar.appendChild(add);
+  // The tab on show is scrolled into the strip where the strip is narrower than the tabs (a
+  // phone): up to v505 the strip stayed where it was, on the first tab whatever was on.
+  const cur = bar.querySelector('.ptab.is-on');
+  if (cur && bar.scrollWidth > bar.clientWidth){
+    const b = bar.getBoundingClientRect(), r = cur.getBoundingClientRect();
+    // (its start shown first: a tab wider than the strip shows its technique)
+    if (r.left < b.left || r.width > b.width) bar.scrollLeft += r.left - b.left;
+    else if (r.right > b.right) bar.scrollLeft += r.right - b.right;
+  }
 }
 
 // One delegated handler for the whole bar: the close button first, then the tab.

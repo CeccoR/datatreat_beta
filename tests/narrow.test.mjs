@@ -3,8 +3,9 @@
    Settings tabs and in each module with its fixtures, every card unfolded. The top bar there
    keeps the brand's mark alone, its name clipped; the tab strip gets about a tab's width and
    scrolls inside itself, each tab and the + reached in it; the home's two tiles stand one
-   under the other. From 340 px up the bar and the home are as they were (to v503): the
-   brand's name in full, the bar's 16-px side padding and 8-px gaps, the tiles side by side. */
+   under the other, as they do up to 357 px. From 340 px up the bar is as it was (to v503):
+   the brand's name in full, the bar's 16-px side padding and 8-px gaps; from 358 px the
+   tiles stand side by side. The tab on show is scrolled into the strip. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, poke, settle, MODS } from './helpers.mjs';
@@ -41,15 +42,12 @@ const past = page => page.evaluate(()=>{
   }
   return { cw, scroll: de.scrollWidth - cw, scrollX: x, past: out };
 });
-// Nothing past the window, and no sideways scroll. One exception, a rule of the XRPD
-// Rietveld card's (not the top bar's or the home's): its "Instrumental standard…" label,
-// wider than its half of the row, ends 0.5 px past at 320; it alone may pass, by under a
-// pixel, until that card's rule cuts it.
+// Nothing past the window, and no sideways scroll (v507: the XRPD Rietveld card's
+// 'Instrumental standard…', which ended 0.5 px past at 320, is cut with an ellipsis).
 async function fits(page, where){
-  const m = await past(page), std = m.past.filter(p=> p.std);
-  assert.deepEqual(m.past.filter(p=> !p.std), [], where + ': past the right edge of ' + m.cw);
-  if (std.length) assert.ok(std.every(p=> p.right < m.cw + 1) && m.scroll <= 1, where + ': the Rietveld label ' + JSON.stringify(std) + ', scroll ' + m.scroll);
-  else assert.equal(m.scroll, 0, where + ': the page scrolls sideways');
+  const m = await past(page);
+  assert.deepEqual(m.past, [], where + ': past the right edge of ' + m.cw);
+  assert.equal(m.scroll, 0, where + ': the page scrolls sideways');
   assert.equal(m.scrollX, 0, where + ': the page scrolled sideways');
 }
 const show = async (page, tab)=>{ await page.click(`#nav button[data-tab="${tab}"]`); await page.waitForSelector(`#tab-${tab}.active`); await settle(page); };
@@ -112,9 +110,10 @@ test('320 px, three tabs open: the strip about a tab wide, scrolling inside itse
     let b = await bar(page);
     assert.ok(b.strip.cw >= 110, 'the strip about a tab wide: ' + b.strip.cw);
     assert.ok(b.strip.sw > b.strip.cw, 'its tabs scroll inside it');
-    // The first tab's × whole inside the strip.
-    const x = await page.evaluate(()=>{ const s = document.getElementById('tabBar').getBoundingClientRect(), g = document.querySelector('#tabBar .ptab .ptab-x svg').getBoundingClientRect(); return g.left >= s.left && g.right <= s.right + 0.5; });
-    assert.ok(x, 'the first tab\'s × inside the strip');
+    // The tab on show (the last opened) scrolled into the strip, its × whole inside it (v507:
+    // to v506 the strip stayed on the first tab).
+    const x = await page.evaluate(()=>{ const s = document.getElementById('tabBar').getBoundingClientRect(), on = document.querySelector('#tabBar .ptab.is-on'), t = on.getBoundingClientRect(), g = on.querySelector('.ptab-x svg').getBoundingClientRect(); return t.left >= s.left - 0.5 && g.right <= s.right + 0.5; });
+    assert.ok(x, 'the tab on show, its × included, inside the strip');
     for (const [i, mod] of [[0, 'tauc'], [2, 'gc'], [1, 'xrd']]){
       await page.locator('#tabBar .ptab').nth(i).locator('.ptab-label').click();
       await page.waitForSelector(`#tab-${mod}.active`);
@@ -146,7 +145,9 @@ for (const width of [340, 360, 390, 768, 1400]){
       assert.deepEqual([b.pad, b.gap, b.h1margin], [['16px', '16px'], '8px', '16px'], 'the bar\'s padding and gaps');
       assert.ok(b.brand.w > 100 && b.brand.sw <= b.brand.w, 'the brand\'s name in full: ' + JSON.stringify(b.brand));
       const [p, s] = b.tiles;
-      assert.ok(Math.abs(s.t - p.t) < 0.5 && s.l > p.r, 'the tiles side by side: ' + JSON.stringify(b.tiles));
+      // (under 358 px the tiles do not fit side by side and wrap: v507)
+      if (width < 358) assert.ok(s.t > p.b - 0.5, 'the tiles one under the other: ' + JSON.stringify(b.tiles));
+      else assert.ok(Math.abs(s.t - p.t) < 0.5 && s.l > p.r, 'the tiles side by side: ' + JSON.stringify(b.tiles));
       await fits(page, 'Home');
       for (const mod of ['tauc', 'xrd']) await openModule(page, mod);
       await show(page, 'home');
