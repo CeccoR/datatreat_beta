@@ -84,7 +84,7 @@ function stashActive(){
   const t = activeTab();
   if (!t || t.id !== _liveId) return;
   try { t.state = encode(getModuleState(t.module)); } catch(e){}
-  t.hist = getModuleHistory(t.module);
+  t.hist = getModuleHistory(t.module, true);   // (parked: a job's hold on it ends, utils.js)
 }
 // Load a tab's parked state into its module. restoreModuleState resets the undo
 // stack to a fresh baseline, so the parked history is put back afterwards. If the

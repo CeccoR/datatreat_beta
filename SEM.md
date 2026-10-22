@@ -544,10 +544,14 @@ group, its base64. The page answers meanwhile; the files read join the list toge
 one step of the history, as before. While files are read the module is busy: a switch
 to another tab asks first (*The reading of SEM files is running in "…": leaving this
 tab stops it*) and stops it, nothing going into either project, as closing the tab
-does; undo and redo wait. Files dropped meanwhile are read after, the drop zone reading
-until the last. Where no worker runs, the files are read on the page's thread, a frame
-let through between two, with the same result. To v487 all of it ran on the page's
-thread.
+does. A reading holds the history from the state on show as it starts: undo goes down to
+it and no lower, silently there, and above it undo and redo go as ever, the reading going
+on; the files read join the list as one step at its end, as before (a step undone
+meanwhile cannot be redone after it, as after any new step). Up to v508 undo and redo
+waited for the reading's end, a banner saying so. Files dropped meanwhile are read after,
+the drop zone reading until the last. Where no worker runs, the files are read on the
+page's thread, a frame let through between two, with the same result. To v487 all of it
+ran on the page's thread.
 
 **Drawing only what changed.** Each image keeps what was drawn of it with what it was
 drawn from: its curve (one for each set of what it is made from: the crop's statistics,

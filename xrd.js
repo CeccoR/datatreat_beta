@@ -314,7 +314,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     changed: ()=> eachCard((e, a)=>{ if (a.type === 'rietveld') e.inst.redraw(); }),
     hidden: ()=> openModal !== rvModal,
     blocked: ()=> rvCards().some(i=> i.running()) ? 'A sample refinement is running: the standard can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
-    onBusy: ()=> syncRv(),
+    onBusy: ()=> syncRv(), ...holder(null),
     // (its run's progress on every Rietveld card's Instrumental standard…)
     onProgress: ()=> rvCards().forEach(i=> i.syncStd()),
   }, rvModal.body, { prefix: 'xrdStdR', standard: true });
@@ -338,7 +338,14 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
   /* ---- The refinements running: the samples' (each Rietveld card's) and the standard's ----
      A run belongs to the project live here: the tab manager asks before that leaves the
      module, and stop ends every run as Cancel does (registerBusy). A sample and the
-     standard never refine at once (host.blocked): a batch takes one instrumental profile. */
+     standard never refine at once (host.blocked): a batch takes one instrumental profile.
+     Each run holds the history (host.hold, UndoStack.hold) from the state on show as it
+     starts (a sample's, as it starts waiting for the standard's run): undo goes no lower
+     while it runs, silently, and above it goes as ever, the running card's panel kept as it
+     is (xrd-rv.js restore). As it ends (finished, stopped, failed, its card closed or
+     switched) the patterns it wrote go into the states saved meanwhile and, as a step of
+     their own, after the one it started from (runPatch): undoing a step taken meanwhile
+     keeps them. Up to v508 undo and redo waited for every run to end. */
   // (the Rietveld cards' panels, and those set aside by a restore)
   const rvCards = ()=> [...[...live.values()].map(e=> e.inst).filter(i=> i.running), ...[...parked.values()].map(e=> e.inst)];
   // A run started or ended: every Rietveld panel's buttons follow; a card set aside by a
@@ -353,6 +360,36 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     // (the samples first: one waiting for the standard's run stops with it)
     stop: ()=>{ rvCards().forEach(i=> i.cancel()); stdRv.cancel(); },
   });
+  /* What a run wrote (file name → result) in a state of the history: in its card's Rietveld
+     settings (by id: the card of that kind, or one switched to the other that keeps them,
+     states.rietveld), or the standard's, each pattern where its file is (by name). With it
+     each file's instrument as read from its header (f.instr, which the run keeps on the live
+     file as it reads it: a cache, the same for the file's own bytes; left out, the run's end
+     saw it as a change, a step with nothing to see), the samples' from their list and the
+     standard's from its own (it may bear a sample's name). A copy, the state itself where
+     nothing goes: the states' objects and the results, frozen and shared by them, are never
+     changed. */
+  function withResults(rv, names, wrote, put){
+    const old = rv.results || {}, add = Object.entries(wrote).filter(([k, r])=> names.has(k) && old[k] !== r);
+    return add.length ? put({ ...rv, results: { ...old, ...Object.fromEntries(add) } }) : null;
+  }
+  function runPatch(id, wrote){
+    const read = l =>{ const m = new Map(l.filter(f=> 'instr' in f).map(f=> [f.name, f]));
+      return f =>{ const g = isObj(f) && m.get(f.name); return g && g.rawBytes === f.rawBytes && g.instr !== f.instr ? { ...f, instr: g.instr } : f; }; };
+    const withIns = read(allFiles), stdIns = read(stdFiles());
+    return s =>{
+      const f0 = s.files || [], files = f0.map(withIns), std = s.std && stdIns(s.std);
+      if (std !== s.std || files.some((f, i)=> f !== f0[i])) s = { ...s, files, std };
+      if (id == null) return s.std && s.stdRv && withResults(s.stdRv, new Set([s.std.name]), wrote, r=> ({ ...s, stdRv: r })) || s;
+      const c = (s.cards || []).find(x=> x.id === id), rv = c && c.states && c.states.rietveld;
+      return rv && withResults(rv, new Set((s.files || []).map(f=> f.name)), wrote, r=> ({ ...s, cards: s.cards.map(x=> x === c ? { ...c, states: { ...c.states, rietveld: r } } : x) })) || s;
+    };
+  }
+  // A run's host: its mark in the history, and its release with what it wrote (a card's, by
+  // its id; the standard's, none). A run that wrote nothing leaves the history as it was.
+  function holder(id){
+    return { hold: ()=> hist.hold(), release: (h, wrote, quiet)=> hist.release(h, wrote && Object.keys(wrote).length ? runPatch(id, wrote) : null, quiet) };
+  }
 
   // The card's panel: made on the samples, with the settings its kind had (a.states),
   // the one it leaves kept for a switch back.
@@ -366,7 +403,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
       openStd: ()=> openStd(a.type === 'rietveld' ? 'rv' : 'peaks'),
       stdLoaded: ()=> !!stdFile, refineStd: tell=> stdRv.run(tell), stopStd: commit=> stdRv.cancel(commit), stdRun: ()=> stdRv.progress(),
       blocked: ()=> stdRv.running() ? 'The standard is being refined: the samples can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
-      onBusy: ()=> syncRv(),
+      onBusy: ()=> syncRv(), ...holder(a.id),
       changed: ()=>{} };
     let el = card.querySelector('.xrd-card');
     const back = !prev && a.type === 'rietveld' ? parked.get(a.id) : null;
@@ -531,7 +568,9 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     const arr = a => Array.isArray(a) ? a.filter((_, i)=> !gone.has(i)) : [];
     return { ...v, shared: isObj(v.shared) ? v.shared : {}, perParams: arr(v.perParams), manualPeaks: arr(v.manualPeaks), removedPeaks: arr(v.removedPeaks) };
   }
-  function xrdRestore(s0){
+  // step: an undo or a redo (UndoStack), which a run going on keeps its own panel through
+  // (xrd-rv.js restore).
+  function xrdRestore(s0, step){
     const s = isObj(s0) && s0.v === 2 ? s0 : migrate(isObj(s0) ? s0 : {});
     const raw = Array.isArray(s.files) ? s.files : [], reads = raw.map((f, i)=> keptFile(f, i, colorOf(i)));
     const stdRead = s.std ? keptFile(s.std, 0, '#d4a72c') : null, lost = reads.filter(r=> !r).length;
@@ -546,12 +585,12 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     const ci = Number.isFinite(s.curIdx) ? Math.max(0, Math.trunc(s.curIdx)) : 0;
     curIdx = Math.min(ci - [...gone].filter(j=> j < ci).length, Math.max(0, files.length-1));
     stdPeaks.restore(isObj(s.stdPeaks) ? s.stdPeaks : {});
-    stdRv.restore(isObj(s.stdRv) ? s.stdRv : {});
+    stdRv.restore(isObj(s.stdRv) ? s.stdRv : {}, step);
     restoring = true;
     try {
       deck.load(Array.isArray(s.cards) ? s.cards.filter(c=> isObj(c) && (c.type == null || isKind(c.type))) : [],
         src=> ({ states: Object.fromEntries(Object.entries(clone(isObj(src.states) ? src.states : {})).filter(([k])=> isKind(k)).map(([k, v])=> [k, keptState(k, v, gone)]).filter(([, v])=> v)) }),
-        a=> live.get(a.id).inst.restore(a.states[a.type] || {}));
+        a=> live.get(a.id).inst.restore(a.states[a.type] || {}, step));
     } finally { restoring = false; }
     clearStdAlerts();
     syncStdFile();

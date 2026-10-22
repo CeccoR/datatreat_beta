@@ -1,9 +1,10 @@
 /* Tabs: closing an inactive tab with "Save" saves that tab's project; the unsaved marker
    follows the state across a switch, an undo and a reload; a running job (a busy guard
-   registered by hand) is asked about before its tab is left, and blocks undo. */
+   registered by hand) is asked about before its tab is left, and, holding no mark of the
+   history, leaves undo doing nothing, silently. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { start, openModule, loadFiles, saveAs, switchTab, tabLabels, activeLabel, undo, banner, answer, idb, settle, ready } from './helpers.mjs';
+import { start, openModule, loadFiles, saveAs, switchTab, tabLabels, activeLabel, undo, banner, answer, idb, settle, ready, moduleState } from './helpers.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -60,7 +61,7 @@ test('the unsaved marker: an edit after a switch marks it, its undo clears it, a
   } finally { await close(); }
 });
 
-test('a running job: leaving its tab asks, undo waits, Stop it and leave stops it', async ()=>{
+test('a running job: leaving its tab asks, undo does nothing, Stop it and leave stops it', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     for (const f of env.fx.files.gc){ await openModule(page, 'gc'); await loadFiles(page, 'gc', [f]); }
@@ -77,12 +78,16 @@ test('a running job: leaving its tab asks, undo waits, Stop it and leave stops i
     assert.ok(b.buttons.includes('Stop it and leave'));
     await answer(page, 'x');
     assert.equal(await activeLabel(page), 'GC · Untitled project 2*'); assert.equal(await stops(), 0);
-    // 2) undo while it runs: refused, said so
+    // 2) undo while it runs: nothing undone (the files' load, the step before), nothing said
+    // (a job that holds no mark of the history; to v508 a banner said undo waited)
     await page.evaluate(()=> document.activeElement && document.activeElement.blur());
+    const files = (await moduleState(page, 'gc')).files.map(f=> f.name);
+    assert.equal(files.length, 1);
     await page.keyboard.press('Control+z');
-    await page.waitForSelector('.pwa-confirm.show');
-    assert.match((await banner(page)).text, /A test job is running: undo and redo wait for it to end/);
-    await answer(page, 'ok');
+    await settle(page);
+    assert.equal(await banner(page), null, 'no banner');
+    assert.equal(await page.locator('.confirm-modal').count(), 0, 'no question either');
+    assert.deepEqual((await moduleState(page, 'gc')).files.map(f=> f.name), files, 'nothing undone');
     // 3) another tab chosen: Stop it and leave
     await page.locator('#tabBar .ptab').nth(0).locator('.ptab-label').click();
     await answer(page, 'ok');

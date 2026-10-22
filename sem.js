@@ -355,7 +355,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      Where no worker runs (a browser without module workers), the files are read here,
      a frame let through between two. While files are read the module is busy
      (registerBusy): a tab switch asks first, and stops the reading, as closing the tab
-     does; undo and redo wait. Files dropped meanwhile are read after. */
+     does. A reading holds the history from the state on show as it starts (UndoStack.hold),
+     let go as it ends or is stopped: undo goes no lower meanwhile, silently, and above it
+     undo and redo go as ever, the reading going on (to v508 both waited for its end, a
+     banner saying so). Files dropped meanwhile are read after. */
   let worker = null, workerFailed = false, workerAnswered = false, seq = 0;
   const pending = new Map();
   function workerOf(){
@@ -411,7 +414,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
     return drained(queue);
   });
   async function loadFiles(list){
-    const job = { ids: new Set(), stopped: false }, bad = [], dup = [], warn = [], add = [];
+    const job = { ids: new Set(), stopped: false }, bad = [], dup = [], warn = [], add = [], mark = hist.hold();
     loading = job;
     try {
       for (const file of list){
@@ -432,8 +435,11 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
         const crop = defaultCrop(r);
         add.push({ name: file.name, label: r.name, raw: new RawRef(id, res.b64), crop, aspect: aspectOf(crop.w, crop.h), cropDef: true, linked: false, clamped: false, adjDef: true, ...(r.squared ? { sq: true } : {}) });
       }
-    } finally { if (loading === job) loading = null; }
-    allFiles.push(...add);
+    } finally { if (loading === job) loading = null; hist.release(mark); }
+    // The files read join the list as it is now, one step (an undo meanwhile may have put
+    // back one of them: already loaded then).
+    const here = new Set(allFiles.map(f=> f.raw.id));
+    add.forEach(f=>{ if (here.has(f.raw.id)) dup.push({ id: f.raw.id, html: esc(f.name) }); else allFiles.push(f); });
     setAlerts({ bad: bad.length ? { names: bad, ids: allFiles.map(f=> f.raw.id) } : null, dup, warn });
     afterFilesChange();
   }

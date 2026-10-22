@@ -8,8 +8,8 @@
    the samples' keep every row.
    C: while the standard refines, its window closed, every Rietveld card's "Instrumental
    standard…" says so (a card added meanwhile, after Home and back, a project opened and
-   the question to stop it dismissed, an undo refused), and stops saying so when the run
-   ends or is stopped. */
+   the question to stop it dismissed, that card undone and redone, an undo stopped at the
+   run's start), and stops saying so when the run ends or is stopped. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, moduleState, until, settle, answer } from './helpers.mjs';
@@ -262,15 +262,23 @@ test('C: the standard refining, its window closed: every card\'s Instrumental st
     await settle(page);
     assert.equal(await page.locator('#tabBar .ptab').count(), 2);
     await busyNow('xrdR2Std', 'the question to leave dismissed');
-    // An undo waits for the run: still running.
+    // Undo during the run: the card added meanwhile goes (a step taken during it); a second
+    // stops at the run's start, nothing more undone, nothing said (to v508 a banner said undo
+    // waited); a redo brings the card back, showing the run. Still running.
     await page.evaluate(()=> document.activeElement && document.activeElement.blur());
     await page.keyboard.press('Control+z');
-    await page.waitForSelector('.pwa-confirm.show');
-    // (the banner on show: the one answered just before, leaving, stays in the page 200 ms
-    // after, and a page slow to run that timer had it read first, the first .pwa-confirm)
-    assert.match(await page.textContent('.pwa-confirm.show span'), /undo and redo wait/);
-    await page.keyboard.press('Escape');
-    await busyNow('xrdR2Std', 'an undo refused');
+    await page.waitForSelector('#xrdR3Std', { state: 'detached' });
+    await settle(page);
+    const atStart = await moduleState(page, 'xrd');
+    await page.keyboard.press('Control+z');
+    await settle(page);
+    assert.deepEqual(await moduleState(page, 'xrd'), atStart, 'nothing undone below the run\'s start');
+    assert.equal(await page.locator('.pwa-confirm.show, .confirm-modal').count(), 0, 'nothing said');
+    await busyNow('xrdR2Std', 'an undo stopped at the run\'s start');
+    await page.keyboard.press('Control+y');
+    await page.waitForSelector('#xrdR3Std');
+    await settle(page);
+    await busyNow('xrdR3Std', 'the card added, back by a redo');
     // The window opened again shows the run.
     await page.click(P + 'Std');
     await page.waitForSelector('#xrdStdRv', { state: 'visible' });

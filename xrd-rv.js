@@ -451,6 +451,10 @@ export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement:
      blocked()      why Refine cannot run now (the standard refining, for the samples; a
                     sample, for the standard), or ''
      onBusy()       a run started or ended here: the others' buttons follow
+     hold()         the history held from the state on show (a run's start, a sample's wait
+                    for the standard's run): its mark (utils.js UndoStack.hold)
+     release(h, wrote, quiet)  the mark closed, with the patterns the run wrote (file name →
+                    result) for the history's states (quiet: a commit follows)
      onProgress()   the run here went on (the standard: the samples' Instrumental standard…)
      changed()      the standard's result changed (the standard): the samples' notes follow
      hidden()       the card is folded: nothing is drawn
@@ -473,6 +477,12 @@ export function createRietveld(host, root, o){
   let busy = false;
   let cur = null, curP = null; // the run going on (refine's) and its promise
   let waiting = null;        // a sample's Refine waiting for the standard's run ("Refine the standard first")
+  let mark = null, wrote = null; // the history held by the run or the wait (host.hold), and the patterns the run wrote (name → result)
+  // What a run takes as it starts locked (the phases' × and ticks, Settings…, + CIF, Clear):
+  // while it goes on, and while a sample's waits for the standard's run, the history held
+  // from there (press), so that the states above hold them as the run takes them (up to
+  // v508 open during the wait, the run taking them as it started after it).
+  const locked = ()=> busy || !!waiting;
   let gen = 0;               // the states restored so far: a choice outlived by one is dropped
   let plot = null;
   let sel = null;            // the phase whose structure is on show
@@ -615,20 +625,27 @@ export function createRietveld(host, root, o){
      set aside by it is taken up again, xrd.js), and only for a file still loaded. Cancel,
      a tab left (the tab manager's stop) or a kind switch ends it at once (cancel): it says
      so, the patterns done are kept, the one under way is not written, and nothing comes of
-     the worker's answer after. Resolves to { ok, why }. */
+     the worker's answer after. Resolves to { ok, why }.
+     It holds the history from its start (holdHist; a sample's from its wait for the
+     standard's run, press): the steps taken meanwhile are undone and redone around it, and
+     as it ends, however it ends, the patterns written go into the states saved meanwhile
+     and, a step of their own, after the one it started from (releaseHist). Up to v508 the
+     steps taken meanwhile could be neither undone nor redone until it ended, a banner
+     saying so, and its results came in as a step at its end. */
   async function refine(list, tell){
     if (busy) return { ok: false, why: 'a refinement is running' };
     // A batch takes one instrumental profile throughout: no sample refines while the
-    // standard does, nor the standard while a sample does.
+    // standard does, nor the standard while a sample does. (A wait for the standard's run
+    // that comes to nothing lets the history go.)
     const why = host.blocked ? host.blocked() : '';
-    if (why){ setStatus(why); return { ok: false, why }; }
+    if (why){ setStatus(why); releaseHist(); return { ok: false, why }; }
     const todo = list.filter(f=> phasesFor(f).length);
     if (!todo.length){
       const t = std ? 'Load the standard\'s file to refine it.' : list.length ? 'No phase ticked for this pattern: add one from a CIF, or tick one.' : 'Add a phase from a CIF to refine.';
-      setStatus(t); return { ok: false, why: t };
+      setStatus(t); releaseHist(); return { ok: false, why: t };
     }
     // (the settings stay open if they are: read only until the run ends, syncSettings)
-    busy = true; syncButtons();
+    busy = true; holdHist(); syncButtons();
     const copy = q => ({ ...q, on: { ...q.on }, dep: { ...q.dep }, off: { ...q.off } });
     const run = cur = { ph: phases.map(copy), std: copy(stdPhase()), start: startFrom, hold: hold.slice(), fit: { ...fit }, irf: std ? null : irf(),
       fell: [], bgFreed: [], n: todo.length, done: 0, tell };
@@ -652,6 +669,7 @@ export function createRietveld(host, root, o){
         // free, held, detected, shapes, isoParams: what the next start from it needs)
         results[f.name] = frozen({ ...res, standard: std, phases: ph.map(q=> q.id), irf: std ? null : res.irf || null, at: Date.now(),
           cells: Object.fromEntries(ph.map(q=> [q.id, cellKey(q.prep.cell)])) });
+        if (wrote) wrote[f.name] = results[f.name];
         run.done++;
         // (by name: a module read out and in again gives the same files as new objects)
         if (f.name === (host.files()[curIdx()] || {}).name) draw();
@@ -667,12 +685,20 @@ export function createRietveld(host, root, o){
       if (cur === run) endRun(true);
     }
   }
+  // (the history let go before the run's own commit: the state on show then has the run's
+  // results, and the commit adds no step; one not committed here is the switch's or the
+  // close's, which the change listeners hear)
   function endRun(commit){
     cur = null; busy = false; hideProg(); syncButtons(); draw();
+    releaseHist(!commit);
     if (commit) host.commit();
     if (std && host.changed) host.changed();
     if (host.onBusy) host.onBusy();
   }
+  // The history held from a run's start or a wait's (host.hold), once; let go with what the
+  // run wrote (host.release), once, whichever way it ends.
+  function holdHist(){ if (!mark && host.hold){ mark = host.hold(); wrote = {}; } }
+  function releaseHist(quiet){ const m = mark, w = wrote; mark = wrote = null; if (m && host.release) host.release(m, w, quiet); }
   const start = (list, tell)=> (curP = refine(list, tell));
   /* Ends the run at once, or a sample's wait for the standard's: Cancel, the tab manager's
      stop (a tab left, xrd.js), a kind switch (commit false: the switch commits). Up to v477
@@ -682,6 +708,7 @@ export function createRietveld(host, root, o){
     if (waiting){
       const w = waiting; waiting = null; w.cancelled = true;
       if (w.own && host.stopStd) host.stopStd(commit);
+      releaseHist();
       hideProg(); syncButtons();
       setStatus(w.own ? 'Stopped, the standard\'s refinement with it: nothing refined.' : 'Stopped waiting for the standard\'s refinement: nothing refined.');
     }
@@ -727,13 +754,14 @@ export function createRietveld(host, root, o){
     const w = { cancelled: false, own: false };
     const sr = host.refineStd((frac, t)=>{ if (waiting === w){ showProg(frac); setStatus(`Refining the standard first: ${t}…`); } });
     if (sr.why){ setStatus(sr.why); return; }
-    w.own = sr.own; waiting = w;
+    // (the history held from here: the patterns go in after the standard's own step)
+    w.own = sr.own; waiting = w; holdHist();
     setStatus('Refining the instrumental standard first…'); syncButtons();
     const r = await sr.done;
     // (stopped from here, or by the tab manager: cancel said so)
-    if (w.cancelled || !root.isConnected) return;
+    if (w.cancelled || !root.isConnected){ if (!w.cancelled) releaseHist(); return; }
     waiting = null; hideProg(); syncButtons();
-    if (!r.ok || !irf()){ setStatus(r.ok ? 'The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.'
+    if (!r.ok || !irf()){ releaseHist(); setStatus(r.ok ? 'The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.'
       : r.why === 'stopped' ? 'The standard\'s refinement was stopped: nothing refined.' : `The standard's refinement failed (${String(r.why).replace(/\.$/, '')}): nothing refined.`); return; }
     start(list());
   }
@@ -1429,31 +1457,32 @@ export function createRietveld(host, root, o){
   }
   /* A row's × and tick (the standard's: its choice) are locked while a run goes on here (in
      the standard's window, while the standard refines), which took the phases as it started
-     (run.ph): at once as it starts and until it ends, is stopped or fails (syncButtons),
-     titled why, the pointer 'not-allowed' over them (.is-locked). The × disabled; the tick
-     and the choice aria-disabled, not disabled, so that they keep their accent and a ticked
-     phase or the one chosen reads as such (the browser's disabled look draws ticked and not
-     alike, one grey), a click on them cancelled (the list's click). To v505 they kept their
+     (run.ph), or waits for the standard's run to start after it (locked): at once as it
+     starts and until it ends, is stopped or fails (syncButtons), titled why, the pointer
+     'not-allowed' over them (.is-locked). The × disabled; the tick and the choice
+     aria-disabled, not disabled, so that they keep their accent and a ticked phase or the
+     one chosen reads as such (the browser's disabled look draws ticked and not alike, one
+     grey), a click on them cancelled (the list's click). To v505 they kept their
      look until the list was next drawn, which a run did only once the pattern on show was
      refined: never in a run of one pattern, the standard's, or Refine all with a later
      pattern on show; a click was refused unsaid. The list's markup leaves this out, so that a
      run starting or ending does not write it again. The download stays enabled (a run
      changes nothing of a CIF); the built-in LaB6's × is disabled for good, with its own title
-     (data-built). A sample's card does not lock its rows while the standard refines, nor the
-     standard's window while samples do: their runs took the phases they refine as they
-     started. */
+     (data-built). A sample's card does not lock its rows while the standard refines, unless
+     it waits for that run, nor the standard's window while samples do: their runs took the
+     phases they refine as they started. */
   const ROW_TITLES = { del: ['Remove phase', 'the phase stays until it ends'], on: ['Refined on this pattern (each pattern its own)', 'the tick stays as it is until it ends'],
     pick: ['The phase the standard is refined with', 'the phase chosen stays until it ends'] };
   function lockRows(){
-    const f = host.files()[curIdx()];
+    const f = host.files()[curIdx()], lock = locked();
     $('PhaseList').querySelectorAll('[data-del]:not([data-built]), [data-on], [data-pick]').forEach(c=>{
       const k = c.dataset.del != null ? 'del' : c.dataset.on != null ? 'on' : 'pick', t = ROW_TITLES[k];
       // (a tick with no pattern on show disabled, as ever)
-      const off = k === 'del' ? busy : k === 'on' && !f, title = busy ? 'A refinement is running: ' + t[1] : t[0];
+      const off = k === 'del' ? lock : k === 'on' && !f, title = lock ? 'A refinement is running: ' + t[1] : t[0];
       if (c.disabled !== off) c.disabled = off;
-      if (k !== 'del' && c.hasAttribute('aria-disabled') !== busy){ if (busy) c.setAttribute('aria-disabled', 'true'); else c.removeAttribute('aria-disabled'); }
+      if (k !== 'del' && c.hasAttribute('aria-disabled') !== lock){ if (lock) c.setAttribute('aria-disabled', 'true'); else c.removeAttribute('aria-disabled'); }
       if (c.title !== title) c.title = title;
-      if (c.classList.contains('is-locked') !== busy) c.classList.toggle('is-locked', busy);
+      if (c.classList.contains('is-locked') !== lock) c.classList.toggle('is-locked', lock);
     });
   }
   /* The selected phase's cell in 3D (xrd-cell3d) and its details under it; no phase, none
@@ -1514,7 +1543,7 @@ export function createRietveld(host, root, o){
     });
   }
   async function addCifs(fileList){
-    if (busy) return;
+    if (locked()) return;
     const errs = [];
     let first = null;
     for (const file of fileList){
@@ -1560,11 +1589,11 @@ export function createRietveld(host, root, o){
     // (a wait on a run the standard's window started: Cancel ends the wait, not that run)
     b.title = waiting ? (waiting.own ? 'The standard is refined first: Cancel stops it' : 'Waiting for the standard\'s refinement: Cancel stops waiting (the standard goes on)') : why;
     if (!std){ $('RefineAll').disabled = on || !fs.length || !!why; $('RefineAll').title = why; }
-    $('Clear').disabled = busy || !(f && results[f.name]);
-    if (!std) $('ClearAll').disabled = busy || !Object.keys(results).length;
+    $('Clear').disabled = on || !(f && results[f.name]);
+    if (!std) $('ClearAll').disabled = on || !Object.keys(results).length;
     // (the phases are read when a run starts: one added meanwhile would not be in it) The
     // drop zones as + CIF was, a button disabled then; the box refuses a drop then (cifBox).
-    const off = String(busy);
+    const off = String(on);
     [$('CifDz'), $('AddCif')].forEach(z=>{ if (z.getAttribute('aria-disabled') !== off) z.setAttribute('aria-disabled', off); });
     // (the rows' × and tick with them, at once: lockRows)
     lockRows();
@@ -1693,23 +1722,24 @@ export function createRietveld(host, root, o){
   }
   function syncSettings(){
     if (!setOpen()) return;
-    setModal.querySelector('.rvs-busy').hidden = !busy;
+    const lock = locked();
+    setModal.querySelector('.rvs-busy').hidden = !lock;
     setBody.querySelectorAll('[data-sec]').forEach(secEl=>{
       const q = phaseOf(+secEl.dataset.sec); if (!q) return;
       modesHere.forEach(m=>{
         const row = secEl.querySelector(`[data-row="${m.k}"]`), cb = row.querySelector('input'), sl = row.querySelector('select'), na = naOf(q, m.k);
         cb.checked = !!q.on[m.k]; sl.value = depOf(q, m.k);
-        cb.disabled = busy || !!na; sl.disabled = busy || !!na || !q.on[m.k];
+        cb.disabled = lock || !!na; sl.disabled = lock || !!na || !q.on[m.k];
         row.classList.toggle('is-na', !!na);
         // (the standard's B: why one ΔB is its default — LAB6_CIF's numbers)
         row.title = cb.title = sl.title = na || (std && m.k === 'adp' ? m.title + ". On the standard, one ΔB is the default: held, a B 0.1 Å² off moved the profile's X by 10 esd, the profile taking up the intensities' fall with angle" : m.title);
       });
     });
-    setBody.querySelectorAll('[data-start]').forEach(b=>{ const on = b.dataset.start === startFrom; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on); b.disabled = busy; });
-    setBody.querySelectorAll('[data-hold]').forEach(cb=>{ cb.checked = hold.includes(cb.dataset.hold); cb.disabled = busy || startFrom !== 'last'; });
+    setBody.querySelectorAll('[data-start]').forEach(b=>{ const on = b.dataset.start === startFrom; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on); b.disabled = lock; });
+    setBody.querySelectorAll('[data-hold]').forEach(cb=>{ cb.checked = hold.includes(cb.dataset.hold); cb.disabled = lock || startFrom !== 'last'; });
     setBody.querySelectorAll('.rvs-hold').forEach(r=> r.classList.toggle('is-off', startFrom !== 'last'));
     const rn = setBody.querySelector('[data-res-norm]');
-    if (rn){ rn.value = resNorm; rn.disabled = busy; }
+    if (rn){ rn.value = resNorm; rn.disabled = lock; }
     syncFit();
   }
   // What the automatic 1/2θ term gives for the pattern on show (the engine's rule, bgInvOn).
@@ -1722,25 +1752,25 @@ export function createRietveld(host, root, o){
   // The Refinement section as the settings are: each field its value (the default when
   // not set), a field being typed in left as it is.
   function syncFit(){
-    const fs = fitSettings(fit), ai = autoInv();
+    const fs = fitSettings(fit), ai = autoInv(), lock = locked();
     fitsHere.forEach(m=>{
       const row = setBody.querySelector(`[data-fit-row="${m.k}"]`); if (!row) return;
       const el = row.querySelector('[data-fit]');
       if (m.bool){
         const auto = !(m.k in fit), a = row.querySelector('[data-fit-auto]');
-        a.checked = auto; a.disabled = busy;
-        el.checked = auto ? ai.on : fit[m.k]; el.disabled = busy || auto;
+        a.checked = auto; a.disabled = lock;
+        el.checked = auto ? ai.on : fit[m.k]; el.disabled = lock || auto;
         row.title = el.title = a.title = m.title + ai.why;
         row.querySelector('label').title = row.title;
         return;
       }
       const txt = fitTxt(m.pct ? fs[m.k]*100 : fs[m.k]);
       if (el !== document.activeElement || el.value === el.dataset.shown) el.value = txt;
-      el.dataset.shown = txt; el.disabled = busy;
+      el.dataset.shown = txt; el.disabled = lock;
       row.title = m.full;
     });
     const def = setBody.querySelector('[data-fit-def]');
-    if (def) def.disabled = busy || !fitShown();
+    if (def) def.disabled = lock || !fitShown();
     const note = setBody.querySelector('[data-fit-note]');
     if (note){
       note.classList.toggle('is-warn', !!fitNote);
@@ -1751,7 +1781,7 @@ export function createRietveld(host, root, o){
   // its default dropped — else the field shakes, goes back to the value it had, and the
   // note says what is allowed.
   function commitFit(t){
-    if (busy || rebuilding || !t.isConnected) return;
+    if (locked() || rebuilding || !t.isConnected) return;
     const k = t.dataset.fit || t.dataset.fitAuto, m = FIT[k]; if (!m) return;
     if (t.dataset.fitAuto){ if (t.checked) delete fit[k]; else fit[k] = autoInv().on; }
     else if (m.bool) fit[k] = t.checked;
@@ -1777,8 +1807,8 @@ export function createRietveld(host, root, o){
   setBody.addEventListener('change', e=>{
     const t = e.target, d = t.dataset;
     if (d.fit || d.fitAuto){ commitFit(t); return; }
-    if (d.resNorm != null){ if (busy) return; resNorm = normOf(t.value); renderRes(); host.commit(); return; }
-    if (busy || !(d.on || d.depth || d.hold)) return;
+    if (d.resNorm != null){ if (locked()) return; resNorm = normOf(t.value); renderRes(); host.commit(); return; }
+    if (locked() || !(d.on || d.depth || d.hold)) return;
     if (d.hold) hold = HOLD_KEYS.filter(k=> k === d.hold ? t.checked : hold.includes(k));
     else {
       const q = phaseOf(+d.ph); if (!q) return;
@@ -1792,12 +1822,12 @@ export function createRietveld(host, root, o){
   });
   setBody.addEventListener('click', e=>{
     if (e.target.closest('[data-fit-def]')){
-      if (busy || !fitShown()) return;
+      if (locked() || !fitShown()) return;
       fit = {}; fitNote = null; host.commit(); syncFit();
       return;
     }
     const b = e.target.closest('[data-start]');
-    if (!b || busy || b.dataset.start === startFrom) return;
+    if (!b || locked() || b.dataset.start === startFrom) return;
     startFrom = b.dataset.start === 'last' ? 'last' : 'cif';
     host.commit(); syncSettings();
   });
@@ -1810,7 +1840,7 @@ export function createRietveld(host, root, o){
      box are taken, several at once, the box lit while they are dragged over it. While a run
      goes on neither selects, and a drop is refused (the pointer says so), as + CIF was
      disabled then. Up to v498 only + CIF, a button, took CIFs in. */
-  const pickCifs = ()=>{ if (!busy) $('CifInput').click(); };
+  const pickCifs = ()=>{ if (!locked()) $('CifInput').click(); };
   [$('CifDz'), $('AddCif')].forEach(z=>{
     z.addEventListener('click', pickCifs);
     z.addEventListener('keydown', e=>{ if ((e.key === 'Enter' || e.key === ' ') && !e.altKey && !e.ctrlKey && !e.metaKey){ e.preventDefault(); if (!e.repeat) pickCifs(); } });
@@ -1819,8 +1849,8 @@ export function createRietveld(host, root, o){
   ['dragenter', 'dragover'].forEach(t=> cifBox.addEventListener(t, e=>{
     if (!withFiles(e)) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = busy ? 'none' : 'copy';
-    cifBox.classList.toggle('dragover', !busy);
+    e.dataTransfer.dropEffect = locked() ? 'none' : 'copy';
+    cifBox.classList.toggle('dragover', !locked());
   }));
   cifBox.addEventListener('dragleave', e=>{ if (!cifBox.contains(e.relatedTarget)) cifBox.classList.remove('dragover'); });
   cifBox.addEventListener('drop', e=>{
@@ -1828,7 +1858,7 @@ export function createRietveld(host, root, o){
     e.preventDefault();
     cifBox.classList.remove('dragover');
     const fl = [...e.dataTransfer.files];
-    if (!busy && fl.length) addCifs(fl);
+    if (!locked() && fl.length) addCifs(fl);
   });
   $('CifInput').addEventListener('change', e=>{ const fl = [...e.target.files]; e.target.value = ''; if (fl.length) addCifs(fl); });
   /* A phase's CIF downloaded (its button left of its ×; up to v502 none): its text as the
@@ -1844,7 +1874,7 @@ export function createRietveld(host, root, o){
     if (dl){ const q = allPhases().find(x=> x.id === +dl.dataset.dl); if (q && typeof q.cif === 'string') downloadBytes(cifFile(q), new TextEncoder().encode(q.cif)); return; }
     const del = e.target.closest('[data-del]');
     if (del){
-      if (busy || del.disabled) return;
+      if (locked() || del.disabled) return;
       const id = +del.dataset.del;
       phases = phases.filter(q=> q.id !== id);
       if (pick === id) pick = 0;
@@ -1856,7 +1886,7 @@ export function createRietveld(host, root, o){
     }
     /* A tick or choice locked (lockRows): its click cancelled, which puts its state back,
        a click's, Space's or an arrow key's between the choices, and no change follows. */
-    if (e.target.closest('input')){ if (busy) e.preventDefault(); return; }
+    if (e.target.closest('input')){ if (locked()) e.preventDefault(); return; }
     const row = e.target.closest('[data-sel]');
     if (!row || +row.dataset.sel === sel) return;
     sel = +row.dataset.sel;
@@ -1864,7 +1894,7 @@ export function createRietveld(host, root, o){
   });
   $('PhaseList').addEventListener('change', e=>{
     const t = e.target;
-    if (busy) return;
+    if (locked()) return;
     if (t.dataset.pick != null){ pick = +t.dataset.pick; draw(true); host.commit(); return; }
     if (t.dataset.on != null){
       const q = phases.find(x=> x.id === +t.dataset.on), f = host.files()[curIdx()];
@@ -1878,12 +1908,12 @@ export function createRietveld(host, root, o){
     if (busy || waiting){ cancel(); return; }
     press(false);
   };
-  $('Clear').onclick = ()=>{ const f = host.files()[curIdx()]; if (!f || busy || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); if (std && host.changed) host.changed(); };
+  $('Clear').onclick = ()=>{ const f = host.files()[curIdx()]; if (!f || locked() || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); if (std && host.changed) host.changed(); };
   if (!std){
     // (the standard is one pattern: its window has neither)
     $('RefineAll').onclick = ()=>{ if (!quick() && !busy && !waiting) press(true); };
     // Every pattern's result, those of the files left out too (an undo brings them back).
-    $('ClearAll').onclick = ()=>{ if (busy || !Object.keys(results).length) return; results = {}; draw(true); host.commit(); };
+    $('ClearAll').onclick = ()=>{ if (locked() || !Object.keys(results).length) return; results = {}; draw(true); host.commit(); };
     $('Prev').onclick = ()=> host.step(-1);
     $('Next').onclick = ()=> host.step(1);
     $('Std').onclick = ()=> host.openStd();
@@ -1943,34 +1973,49 @@ export function createRietveld(host, root, o){
       // (the results as they are: each frozen, shared by the states it is in; up to v486
       // every commit copied them all through JSON)
       nextId, sel, results: { ...results }, ...(res ? { sizeBy, resNorm } : {}) }; },
-    restore(s){
+    /* step: an undo or a redo. One while a run goes on here, or waits for the standard's
+       (locked), keeps what the run takes as it starts (the phases with their settings and
+       ticks, the standard's settings and choice, the start, the Refinement settings: their
+       controls locked meanwhile, the states above the history's mark hold them alike) and
+       the patterns it has written (wrote), over the state's results, whose others come in
+       (a file brought back brings its own; a during-run state's part of the run's is the
+       release's to write); what the views show (the phase on show, the Results' size by and
+       normalisation) is the state's. The panel is not built again: its run, its progress,
+       Cancel, the Settings read only, the rows locked (to v508 no step came while a run went
+       on). */
+    restore(s, step){
       s = s || {};
-      // A project of v428 or older has the options without the flags (migrateSettings).
-      phases = (s.phases || []).flatMap(q=>{ try { return [{ id: q.id, cif: q.cif, file: q.file, color: q.color,
-        ...(q.on ? cleanSettings(q, std ? stdSettings() : defSettings()) : migrateSettings(q, s.refineB)), prep: prepOf(q.cif, q.file),
-        off: q.off && typeof q.off === 'object' ? Object.fromEntries(Object.keys(q.off).filter(k=> q.off[k]).map(k=> [k, true])) : {} }]; } catch(e){ return []; } });
-      if (std){
-        // (the rows that do not apply to the standard stay off, whatever a file says)
-        Object.assign(lab6, s.std ? cleanSettings(s.std, stdSettings()) : stdSettings());
-        [lab6, ...phases].forEach(q=> STD_NA.forEach(k=> { q.on[k] = false; }));
-        pick = phases.some(q=> q.id === s.pick) ? s.pick : 0;
+      const keep = !!step && locked();
+      if (!keep){
+        // A project of v428 or older has the options without the flags (migrateSettings).
+        phases = (s.phases || []).flatMap(q=>{ try { return [{ id: q.id, cif: q.cif, file: q.file, color: q.color,
+          ...(q.on ? cleanSettings(q, std ? stdSettings() : defSettings()) : migrateSettings(q, s.refineB)), prep: prepOf(q.cif, q.file),
+          off: q.off && typeof q.off === 'object' ? Object.fromEntries(Object.keys(q.off).filter(k=> q.off[k]).map(k=> [k, true])) : {} }]; } catch(e){ return []; } });
+        if (std){
+          // (the rows that do not apply to the standard stay off, whatever a file says)
+          Object.assign(lab6, s.std ? cleanSettings(s.std, stdSettings()) : stdSettings());
+          [lab6, ...phases].forEach(q=> STD_NA.forEach(k=> { q.on[k] = false; }));
+          pick = phases.some(q=> q.id === s.pick) ? s.pick : 0;
+        }
+        startFrom = s.start === 'last' ? 'last' : 'cif';
+        hold = Array.isArray(s.hold) ? HOLD_KEYS.filter(k=> s.hold.includes(k)) : HOLD_DEFAULT.slice();
+        // (a project of v428 or older has none: the defaults; a note on an entry not taken
+        // is about the settings before)
+        fit = cleanFit(s.fit); fitNote = null;
+        nextId = s.nextId || phases.reduce((m, q)=> Math.max(m, q.id + 1), 1);
+        setKey = '';
       }
-      startFrom = s.start === 'last' ? 'last' : 'cif';
-      hold = Array.isArray(s.hold) ? HOLD_KEYS.filter(k=> s.hold.includes(k)) : HOLD_DEFAULT.slice();
-      // (a project of v428 or older has none: the defaults; a note on an entry not taken
-      // is about the settings before)
-      fit = cleanFit(s.fit); fitNote = null;
-      nextId = s.nextId || phases.reduce((m, q)=> Math.max(m, q.id + 1), 1);
       sel = Number.isInteger(s.sel) ? s.sel : null;
       // (the results frozen as they come: the standard's the state's own, shared with the
       // history; a sample card's a JSON copy xrd.js xrdRestore makes; up to v486 copied
       // again here)
       results = {};
       if (s.results && typeof s.results === 'object') Object.keys(s.results).forEach(k=>{ results[k] = frozen(s.results[k]); });
+      if (keep && wrote) Object.assign(results, wrote);
       sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; resNorm = normOf(s.resNorm);
-      setKey = '';
-      // A run going on is the module's own, read out and in again (a run is stopped before
-      // another project comes in): it goes on into the results restored. Nothing running,
+      // A run going on is the module's own, read out and in again (a saved project's CSVs,
+      // runWithModuleState; a run is stopped before another project comes in): it goes on
+      // into the results restored; or stepped through (above). Nothing running,
       // the last run's words go (they were about the state before: "Stopped…" otherwise
       // showed on the next project), and a choice still open is dropped (press).
       gen++;

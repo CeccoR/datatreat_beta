@@ -1242,12 +1242,15 @@ function goTab(tab, fromHash){
 // hook list rather than imports, which would be circular.
 const _sectionHooks = [];
 function onSectionChange(fn){ _sectionHooks.push(fn); }
-/* A module running a long job (a Rietveld refinement) says so: busy() gives what runs, as
-   a phrase ("A Rietveld refinement"), or null; stop() ends it. The job belongs to the
-   project live in the module: the tab manager asks before that state leaves the module
-   (a switch, a close), and undo and redo wait for the job to end. Up to v471 a switch
-   left the job running, and its result went into whichever project the module held when
-   it ended. */
+/* A module running a long job (a Rietveld refinement, the reading of SEM files) says so:
+   busy() gives what runs, as a phrase ("A Rietveld refinement"), or null; stop() ends it.
+   The job belongs to the project live in the module: the tab manager asks before that
+   state leaves the module (a switch, a close). A job holds the module's history from the
+   state on show as it starts (UndoStack.hold): undo stops there, silently, and above it
+   undo and redo go as ever; a busy module whose job holds none has neither do anything,
+   silently. Up to v471 a switch left the job running, and its result went into whichever
+   project the module held when it ended; up to v508 undo and redo waited for the job to
+   end, a banner saying so at each press. */
 const _busy = {};
 function registerBusy(mod, o){ _busy[mod] = o; }
 function moduleBusy(mod){ const o = _busy[mod]; try { return (o && o.busy()) || null; } catch(e){ return null; } }
@@ -1306,6 +1309,7 @@ class UndoStack {
     this.states = []; this.index = -1; this._busy = false;
     this._key = null;       // stateKey of states[index], kept from its commit (null: unknown)
     this._liveKey = null;   // stateKey of the live state, while the listeners of a commit run
+    this._marks = [];       // the jobs holding the history (hold): { i, the index of the state each began from; redo }
   }
   // Record the CURRENT state (called after a reversible change, and once as baseline).
   // `silent` records the state without firing change listeners — used for the
@@ -1319,7 +1323,7 @@ class UndoStack {
     // Drop any redo branch, then append the new state.
     if (this.index < this.states.length - 1) this.states.length = this.index + 1;
     this.states.push(snap);
-    if (this.states.length > this._limit) this.states.shift();
+    this._trim();
     this.index = this.states.length - 1;
     this._key = key;
     if (silent) return;
@@ -1338,13 +1342,82 @@ class UndoStack {
   onCommit(cb){ (this._listeners || (this._listeners = [])).push(cb); }
   // An undo or redo is a change too: the persistent listeners hear it (autosave, and
   // the unsaved marker, which compares the state with the one last saved).
+  // (restore's second argument: a step of the history, which a job running leaves its own to)
   _apply(i){
-    this.index = i; this._key = null; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; }
-    if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
+    this.index = i; this._key = null; this._busy = true; try { this._restore(this.states[i], true); } finally { this._busy = false; }
+    this._hear();
   }
-  performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
+  _hear(){ if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} }); }
+  // (no undo below the state the latest job holding the history started from)
+  performUndo(){ if (this.index <= Math.max(0, ...this._marks.map(m=> m.i))) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
-  reset(){ this.states.length = 0; this.index = -1; this._key = null; }
+  reset(){ this.states.length = 0; this.index = -1; this._key = null; this._marks = []; }
+  // The states kept to the limit, the oldest going: the index and the marks move down with
+  // them (a mark whose state went is at -1).
+  _trim(){ while (this.states.length > this._limit){ this.states.shift(); this.index--; this._marks.forEach(m=>{ if (m.i >= 0) m.i--; }); } }
+  /* A job holding the history (a Rietveld refinement, the reading of SEM files): hold() marks
+     the state on show as its start and gives the mark. While a mark is open undo stops at
+     the highest one (the latest job's start: below a later job's start an undo could change
+     what that job uses); above it undo and redo go as ever, over the steps taken meanwhile,
+     which the job's locked controls keep off what it uses. A redo branch is set aside (redo),
+     as a step would drop it, and put back by a release that leaves the history as it was
+     (nothing written, no step since); a job held after it from the same state, with none of
+     its own set aside, takes it over then, to put back as it ends so (the standard's run
+     and a sample's waiting for it, the standard's held first). A reset, or the history
+     parked or put back (a tab's: getModuleHistory's park, setModuleHistory), ends the marks:
+     a release after does nothing.
+     release(h, patch, quiet) closes the mark; patch(state) gives that state with what the
+     job wrote, or the state itself where none of it goes, a copy (a state's own objects, and
+     the results the states share, never changed): written into every state above the mark,
+     and into the branches the other jobs set aside (those of the jobs held since, saved
+     after its start: put back without it, a redo would take its results away), and as a
+     step of its own inserted right after the mark's state, that state so, the index with
+     it (one at the mark, the live state having the job's results, goes onto it). The open
+     marks at or above the mark's state move up one: one on the same state is a job that
+     began from it, whose step follows this one, as their results came. A mark whose state
+     went to the limit: the job's results written into every state kept, no step. The
+     change listeners hear it as an undo (quiet: a commit follows that they hear), so the
+     job's own commit at its end, the state on show the one written, adds nothing. */
+  hold(){
+    const h = { i: this.index, redo: this.states.splice(this.index + 1) };
+    this._marks.push(h);
+    return h;
+  }
+  release(h, patch, quiet){
+    const k = this._marks.indexOf(h);
+    if (k < 0) return;
+    this._marks.splice(k, 1);
+    if (!patch){
+      // (the mark held next after h, if any, the marks being in hold order: on h's state
+      // then, as every mark held since, none sitting above the state on show)
+      if (h.redo.length && this.index === h.i && this.states.length === h.i + 1){
+        const m = this._marks[k];
+        if (!m){ this.states.push(...h.redo); this._trim(); }
+        else if (!m.redo.length) m.redo = h.redo;
+      }
+      return;
+    }
+    this._marks.forEach(m=>{ m.redo = m.redo.map(patch); });
+    let moved = false;
+    for (let i = Math.max(0, h.i + 1); i < this.states.length; i++){
+      const s = patch(this.states[i]);
+      if (s !== this.states[i]){ this.states[i] = s; moved = true; }
+    }
+    const s = h.i >= 0 ? patch(this.states[h.i]) : null;
+    if (s && s !== this.states[h.i]){
+      // (a job held before h from h's state: the branch it set aside, from before both
+      // began, goes, h's step now following that state, as a step drops a redo branch)
+      this._marks.slice(0, k).forEach(m=>{ if (m.i === h.i) m.redo = []; });
+      this.states.splice(h.i + 1, 0, s);
+      if (this.index >= h.i) this.index++;
+      this._marks.forEach(m=>{ if (m.i >= h.i) m.i++; });
+      this._trim();
+      moved = true;
+    }
+    if (!moved) return;
+    this._key = null;
+    if (!quiet) this._hear();
+  }
 }
 const _histories = {};
 function registerHistory(key, snapshot, restore){
@@ -1365,10 +1438,14 @@ document.addEventListener('keydown', e=>{
   if (tag==='TEXTAREA' || (el && el.isContentEditable) || (tag==='INPUT' && !/^(checkbox|radio|range|color|file|button|submit|reset|image)$/.test(el.type))) return;
   const st = _histories[_activeTab];
   if (!st) return;
-  const running = moduleBusy(_activeTab);
-  if (running){ e.preventDefault(); confirmBanner(running + ' is running: undo and redo wait for it to end.', 'OK'); return; }
+  // A job running (registerBusy): undo goes down to the state it started from, if it holds
+  // the history (UndoStack.hold), and no further; one that holds none leaves undo and redo
+  // doing nothing. Silently, the key taken either way (to v508 both waited for the job's
+  // end, a banner saying so).
+  const held = st._marks.length > 0;
+  if (!held && moduleBusy(_activeTab)){ e.preventDefault(); return; }
   const did = isUndo ? st.performUndo() : st.performRedo();
-  if (did) e.preventDefault();
+  if (did || held) e.preventDefault();
 });
 // ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
 // Selectors: the Tauc cards are built at run time, each with its own pair, and the
@@ -1637,15 +1714,21 @@ function restoreModuleState(mod, state){
 }
 // Undo/redo stack contents. Only one instance of each module is live, so the tab
 // manager parks the outgoing tab's history here and restores the incoming one —
-// otherwise an undo after a tab switch would replay another project's states.
-function getModuleHistory(mod){
+// otherwise an undo after a tab switch would replay another project's states. The
+// history parked (park) or put back ends the marks of the jobs holding it
+// (UndoStack.hold), stopped before: as a release of nothing written, a redo branch set
+// aside coming back where nothing came since; a release after does nothing. A read alone
+// leaves them.
+function getModuleHistory(mod, park){
   const st = _histories[mod];
-  return st ? { states: st.states.slice(), index: st.index } : null;
+  if (!st) return null;
+  if (park) st._marks.slice().reverse().forEach(m=> st.release(m));
+  return { states: st.states.slice(), index: st.index };
 }
 function setModuleHistory(mod, h){
   const st = _histories[mod];
   if (!st || !h) return;
-  st.states = h.states.slice(); st.index = h.index; st._key = null;
+  st.states = h.states.slice(); st.index = h.index; st._key = null; st._marks = [];
 }
 // The stateKey of a module's live state: the one a commit just took while its listeners
 // run (the unsaved marker's check), else taken now.
