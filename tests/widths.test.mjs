@@ -77,17 +77,20 @@ test('XRPD: the widths in °2θ, each field showing its points at the step of th
     await openModule(page, 'xrd');
     await loadFiles(page, 'xrd', [env.fx.files.xrd[0], h00]);
     const titles = await page.$$eval('#xrdAnalyses .param-grid > .pg-title', ts=> ts.map(t=> t.textContent.replace(/\s+/g, ' ').trim()));
-    assert.ok(titles.includes('Smoothing width (°2θ) all') && titles.includes('Baseline SNIP half-width (°2θ) all'), JSON.stringify(titles));
+    assert.ok(titles.includes('Smoothing width (°2θ) all') && titles.includes('Baseline SNIP width (°2θ) all'), JSON.stringify(titles));
     for (const id of ['xrdA1Smooth', 'xrdA1BlWin']) assert.deepEqual(await page.$eval('#' + id, e=> [e.type, e.inputMode]), ['text', 'decimal']);
-    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await val(page, 'xrdA1BlWin'), await pts(page, 'xrdA1BlWin')], ['0.13', '≈ 10 pts', '2', '±154 pts']);
-    assert.deepEqual([xrdShared(await moduleState(page, 'xrd')).shared.smoothW, xrdShared(await moduleState(page, 'xrd')).shared.snipW], [0.13, 2]);
+    // (the SNIP's field its whole width, 5°, its points 384.5 steps of 0.0130°; to v515 the
+    // half-width, 2°, '±154 pts'; the defaults to v515 0.13° and 2°)
+    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await val(page, 'xrdA1BlWin')], ['0.25', '≈ 19 pts', '5']);
+    assert.match(await pts(page, 'xrdA1BlWin'), /^≈ 38[45] pts$/);
+    assert.deepEqual([xrdShared(await moduleState(page, 'xrd')).shared.smoothW, xrdShared(await moduleState(page, 'xrd')).shared.snipW], [0.25, 2.5]);
     // The pattern at twice the step on show: the same widths, half the points.
     await page.click('#xrdA1Next'); await settle(page);
-    assert.deepEqual([await pts(page, 'xrdA1Smooth'), await pts(page, 'xrdA1BlWin')], ['≈ 5 pts', '±77 pts']);
+    assert.deepEqual([await pts(page, 'xrdA1Smooth'), await pts(page, 'xrdA1BlWin')], ['≈ 10 pts', '≈ 192 pts']);
     // As typed, before it is taken; then taken.
     await page.fill('#xrdA1Smooth', '0.26');
     assert.equal(await pts(page, 'xrdA1Smooth'), '≈ 10 pts');
-    assert.equal(xrdShared(await moduleState(page, 'xrd')).shared.smoothW, 0.13, 'not taken while typed');
+    assert.equal(xrdShared(await moduleState(page, 'xrd')).shared.smoothW, 0.25, 'not taken while typed');
     await page.press('#xrdA1Smooth', 'Enter'); await settle(page);
     assert.equal(xrdShared(await moduleState(page, 'xrd')).shared.smoothW, 0.26);
     await page.click('#xrdA1Prev'); await settle(page);
@@ -98,7 +101,8 @@ test('XRPD: the widths in °2θ, each field showing its points at the step of th
     await enter(page, 'xrdA1Smooth', -1);
     assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth')], ['0', 'off']);
     await enter(page, 'xrdA1BlWin', 0);
-    assert.deepEqual([await val(page, 'xrdA1BlWin'), await pts(page, 'xrdA1BlWin')], ['2', '±154 pts'], 'the SNIP\'s half-width above 0');
+    assert.equal(await val(page, 'xrdA1BlWin'), '5', 'the SNIP\'s width above 0');
+    assert.match(await pts(page, 'xrdA1BlWin'), /^≈ 38[45] pts$/);
     // Shown to 4 significant digits, kept exact through another field's change.
     await enter(page, 'xrdA1Smooth', '0,123456');
     assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth')], ['0.1235', '≈ 9.5 pts']);
@@ -108,7 +112,7 @@ test('XRPD: the widths in °2θ, each field showing its points at the step of th
     await page.click('#xrdA1BlOn'); await settle(page);
     assert.equal(await page.isDisabled('#xrdA1BlWin'), true);
     assert.ok(await page.$eval('#xrdA1BlWin', e=> +getComputedStyle(e.parentNode).opacity) < 1);
-    assert.equal(await pts(page, 'xrdA1BlWin'), '±154 pts');
+    assert.match(await pts(page, 'xrdA1BlWin'), /^≈ 38[45] pts$/);
     await page.click('#xrdA1BlOn'); await settle(page);
     // One width treats both patterns alike: their FWHMs within 2.5 % (v510's 10 points:
     // 0.217° and 0.296° for the 32.4° peak, 36 % apart).
@@ -130,22 +134,22 @@ test('XRPD: the standard\'s widths at its own file\'s step; the CSV headers give
     assert.deepEqual([await val(page, 'xrdStdASmooth'), await pts(page, 'xrdStdASmooth')], ['0', ''], 'no standard: no points');
     await page.setInputFiles('#xrdStdPeaksFiles', h00);
     await page.waitForSelector('#xrdStdPeaks .xrd-std-name'); await settle(page);
-    assert.deepEqual([await pts(page, 'xrdStdASmooth'), await val(page, 'xrdStdABlWin'), await pts(page, 'xrdStdABlWin')], ['off', '2', '±77 pts']);
+    assert.deepEqual([await pts(page, 'xrdStdASmooth'), await val(page, 'xrdStdABlWin'), await pts(page, 'xrdStdABlWin')], ['off', '5', '≈ 192 pts']);
     await page.fill('#xrdStdASmooth', '0.052');
     assert.equal(await pts(page, 'xrdStdASmooth'), '≈ 2 pts');
     await page.press('#xrdStdASmooth', 'Enter'); await settle(page);
     assert.equal((await moduleState(page, 'xrd')).stdPeaks.shared.smoothW, 0.052);
     await page.keyboard.press('Escape'); await settle(page);
     const c = await csvs(page), h = c['Scherrer - diffractograms.csv'][0], hs = c['standard.csv'][0];
-    for (const t of ['Smoothed_s00 (w=0.13°)', 'SNIP_background_s00 (W=2°)', 'Smoothed_h00 (w=0.13°)', 'SNIP_background_h00 (W=2°)'])
+    for (const t of ['Smoothed_s00 (w=0.25°)', 'SNIP_background_s00 (W=5°)', 'Smoothed_h00 (w=0.25°)', 'SNIP_background_h00 (W=5°)'])
       assert.ok(h.includes(t), t + ' in ' + JSON.stringify(h));
-    assert.ok(hs.includes('Smoothed_h00 (w=0.052°)') && hs.includes('SNIP_background_h00 (W=2°)'), JSON.stringify(hs));
+    assert.ok(hs.includes('Smoothed_h00 (w=0.052°)') && hs.includes('SNIP_background_h00 (W=5°)'), JSON.stringify(hs));
     // One pattern's baseline off (one): its column says so, the other's its width.
     await page.click('#xrdA1ModeBl'); await settle(page);
     await page.click('#xrdA1Next'); await settle(page);
     await page.click('#xrdA1BlOn'); await settle(page);
     const h2 = (await csvs(page))['Scherrer - diffractograms.csv'][0];
-    assert.ok(h2.includes('SNIP_background_h00 (off)') && h2.includes('SNIP_background_s00 (W=2°)'), JSON.stringify(h2));
+    assert.ok(h2.includes('SNIP_background_h00 (off)') && h2.includes('SNIP_background_s00 (W=5°)'), JSON.stringify(h2));
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
@@ -171,7 +175,7 @@ test('XRPD: a project to v510 at one step opens with its points as widths, and v
     assert.deepEqual([s.stdPeaks.shared.smoothW, s.stdPeaks.shared.snipW.toFixed(6)], [0, (150*S0).toFixed(6)], 'the standard: N = 1 is none');
     assert.deepEqual(await page.$$eval('#xrdA1ModeN, #xrdA1ModeBl', cs=> cs.map(c=> c.textContent)), ['all', 'all']);
     assert.equal(await page.textContent('#xrdA1StepNote'), '');
-    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await val(page, 'xrdA1BlWin'), await pts(page, 'xrdA1BlWin')], ['0.13', '≈ 10 pts', '1.951', '±150 pts']);
+    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await val(page, 'xrdA1BlWin'), await pts(page, 'xrdA1BlWin')], ['0.13', '≈ 10 pts', '3.901', '≈ 300 pts']);
     // v510's FWHMs (the last peak, 2.8° from the end, within 1e-4: the end points count half now)
     const f = fwhms(await csvs(page), 's00');
     assert.equal(f.length, V509.s00.length);
@@ -192,7 +196,7 @@ test('XRPD: a project to v510 at different steps: those chips to one, a width ea
     [S0, SH].forEach((st, i)=>{ near(sc.perParams[i].smoothW, 10*st, 1e-15, 'smoothing ' + i); near(sc.perParams[i].snipW, 150*st, 1e-13, 'SNIP ' + i); assert.equal(sc.perParams[i].blOn, true); });
     near(sc.shared.smoothW, 10*SH, 1e-15, 'the shared value at the median step');
     assert.deepEqual(await page.$$eval('#xrdA1ModeN, #xrdA1ModeBl', cs=> cs.map(c=> c.textContent)), ['one', 'one']);
-    assert.match(await page.textContent('#xrdA1StepNote'), /different steps: the smoothing and SNIP half-width, set in points up to v510, are kept as they were, a width for each pattern \(one\)\. Set one width in all/);
+    assert.match(await page.textContent('#xrdA1StepNote'), /different steps: the smoothing and SNIP width, set in points up to v510, are kept as they were, a width for each pattern \(one\)\. Set one width in all/);
     const c = await csvs(page);
     for (const [lab, want] of Object.entries(V509)){
       const f = fwhms(c, lab);
@@ -200,18 +204,18 @@ test('XRPD: a project to v510 at different steps: those chips to one, a width ea
       f.forEach((v, i)=> near(v, want[i], i < f.length - 2 ? 1e-5 : 2e-4, `${lab} peak ${i + 1}`));
     }
     await page.click('#xrdA1Next'); await settle(page);
-    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await pts(page, 'xrdA1BlWin')], ['0.2601', '≈ 10 pts', '±150 pts']);
+    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await pts(page, 'xrdA1BlWin')], ['0.2601', '≈ 10 pts', '≈ 300 pts']);
     // The smoothing back to all: the width on show for both, its note gone; the SNIP's stays.
     await page.click('#xrdA1ModeN'); await settle(page);
     sc = xrdShared(await moduleState(page, 'xrd'));
     assert.deepEqual([sc.paramMode.N, sc.stepNote], ['shared', ['blWin']]);
     near(sc.shared.smoothW, 10*SH, 1e-15, 'the width on show, shared');
-    assert.match(await page.textContent('#xrdA1StepNote'), /the SNIP half-width, set in points up to v510, is kept as it was/);
+    assert.match(await page.textContent('#xrdA1StepNote'), /the SNIP width, set in points up to v510, is kept as it was/);
     await page.click('#xrdA1StepNote [data-step-x]'); await settle(page);
     assert.equal(await page.textContent('#xrdA1StepNote'), '');
     assert.equal(xrdShared(await moduleState(page, 'xrd')).stepNote, undefined);
     await undo(page);
-    assert.match(await page.textContent('#xrdA1StepNote'), /SNIP half-width/, 'the dismissal undone');
+    assert.match(await page.textContent('#xrdA1StepNote'), /SNIP width/, 'the dismissal undone');
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });
@@ -236,7 +240,7 @@ test('XRPD: points per sample, N = 1, values that are no number, a file left out
     // points kept for h00)
     assert.deepEqual([sc.perParams[0].smoothW, sc.paramMode.N, sc.paramMode.blWin, sc.stepNote, sc.heldPts], [0, 'per', 'per', ['blWin'], { blWin: -5, blOn: true }], 'N = 1: none');
     near(sc.perParams[1].smoothW, 9*S0, 1e-15, 'an odd N');
-    assert.equal(sc.shared.smoothW, 0.13, 'no number: the default');
+    assert.equal(sc.shared.smoothW, 0.25, 'no number: the default');
     near(sc.shared.snipW, S0, 1e-15, 'below 1: one point, as v510 took it');
     near(sc.perParams[1].snipW, S0, 1e-15, 'its own no number: the shared value, one point');
     assert.equal(await pts(page, 'xrdA1Smooth'), 'off');
@@ -312,7 +316,7 @@ test('XRPD: files left out of a project to v510 come back with the points v510 g
     near(sc.perParams[2].smoothW, 10*SH, 1e-15, 'h00\'s smoothing');
     near(sc.perParams[2].snipW, 150*SH, 1e-13, 'h00\'s SNIP');
     await page.click('#xrdA1Next'); await page.click('#xrdA1Next'); await settle(page);
-    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await pts(page, 'xrdA1BlWin')], ['0.2601', '≈ 10 pts', '±150 pts']);
+    assert.deepEqual([await val(page, 'xrdA1Smooth'), await pts(page, 'xrdA1Smooth'), await pts(page, 'xrdA1BlWin')], ['0.2601', '≈ 10 pts', '≈ 300 pts']);
     // The smoothing shared again: its points for the files left out go with its note.
     await page.click('#xrdA1ModeN'); await settle(page);
     assert.deepEqual(xrdShared(await moduleState(page, 'xrd')).heldPts, { blWin: 150, blOn: true });

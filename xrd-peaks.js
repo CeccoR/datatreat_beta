@@ -356,10 +356,10 @@ const chip = (p, k, mode)=> `<button type="button" class="mode-chip" id="${p}Mod
    it, muted, what it spans in points of the pattern on show (syncHints). The box is a
    label: a click on the points is one in the field. */
 const W_TITLE = { Smooth: "The smoothing box's width, in °2θ (0: none); beside it, the points it spans at the step of the pattern on show",
-  BlWin: "The SNIP baseline's half-width, in °2θ: each point is compared with the curve up to this far on either side; beside it, the points on each side at the step of the pattern on show" };
+  BlWin: "The SNIP baseline's width, in °2θ: each point is compared with the curve up to half this far on either side; beside it, the points it spans at the step of the pattern on show" };
 const wField = (p, id, v)=> `<label class="pg-field wfield" title="${W_TITLE[id]}"><input type="text" inputmode="decimal" id="${p}${id}" value="${v}" autocomplete="off" aria-describedby="${p}${id}Pts"><span class="wf-pts" id="${p}${id}Pts"></span></label>`;
 
-export const PEAKS_INFO = `Per-sample view. Raw pattern (grey), smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>smoothing</b> takes at each point the mean of the line through the points over a window w wide (°2θ) centred on it, a box convolution, cut short at the ends of the pattern; 0 is none. The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of the curve on either side at decreasing distances, from the half-width W (°2θ) down to one step, so the peaks are cut away and the slowly varying background is left; its box unticked, there is none, and the pattern is read from zero as it is. Both are widths on the 2θ axis, so that one setting treats alike patterns measured at different steps; each field shows beside its value the points it spans at the step of the pattern on show. Peaks are searched on the smoothed pattern with the baseline taken off: a peak must reach the minimum height and stand out by the minimum prominence (both in % of the highest), and two peaks closer than the minimum distance keep the taller. The FWHM is read where the profile crosses half its height, interpolated between points; the crystallite size is Scherrer's, D = Kλ / (β·cosθ). With an instrumental standard (<b>Instrumental standard…</b>), the instrument's width at each angle is taken off in quadrature, β² = β<sub>obs</sub>² − β<sub>instr</sub>², for the corrected size. <b>+ Add peak</b> places a peak by hand on the plot; the × in a row removes one. Use the <b>all / one</b> toggles to share a value across samples or set it per sample.`;
+export const PEAKS_INFO = `Per-sample view. Raw pattern (grey), smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>smoothing</b> takes at each point the mean of the line through the points over a window w wide (°2θ) centred on it, a box convolution, cut short at the ends of the pattern; 0 is none. The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of the curve on either side at decreasing distances, from half its width W (°2θ) down to one step, so the peaks are cut away and the slowly varying background is left; its box unticked, there is none, and the pattern is read from zero as it is. Both are widths on the 2θ axis, so that one setting treats alike patterns measured at different steps; each field shows beside its value the points it spans at the step of the pattern on show. Peaks are searched on the smoothed pattern with the baseline taken off: a peak must reach the minimum height and stand out by the minimum prominence (both in % of the highest), and two peaks closer than the minimum distance keep the taller. The FWHM is read where the profile crosses half its height, interpolated between points; the crystallite size is Scherrer's, D = Kλ / (β·cosθ). With an instrumental standard (<b>Instrumental standard…</b>), the instrument's width at each angle is taken off in quadrature, β² = β<sub>obs</sub>² − β<sub>instr</sub>², for the corrected size. <b>+ Add peak</b> places a peak by hand on the plot; the × in a row removes one. Use the <b>all / one</b> toggles to share a value across samples or set it per sample.`;
 export const STD_INFO = `A measured standard (large, strain-free crystallites — LaB₆, Si…) characterises the instrumental broadening β<sub>instr</sub>(2θ). It is analysed here on its own, always normalised to its highest peak (= 1), with parameters of its own. Its peaks' FWHM are fitted with the Caglioti function, FWHM² = U·tan²θ + V·tanθ + W, which gives the instrument's width at any angle: the samples' corrected sizes take it off in quadrature. One file at a time: a file dropped replaces the one there.`;
 
 /* host: {
@@ -394,8 +394,8 @@ export function createPeakAnalysis(host, root, o){
             <div class="param-grid">
               <label class="txt-label" for="${p}Smooth">Smoothing width (&#176;2&#952;)</label>
               ${wField(p, 'Smooth', 0)}
-              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP half-width (&#176;2&#952;)</label></div>
-              ${wField(p, 'BlWin', 2)}
+              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP width (&#176;2&#952;)</label></div>
+              ${wField(p, 'BlWin', 5)}
               <label class="txt-label" for="${p}PkHeight">Peak min. height (%)</label>
               <input type="text" inputmode="decimal" class="pg-field" id="${p}PkHeight" value="5">
               <label class="txt-label" for="${p}PkProm">Peak min. prominence (%)</label>
@@ -438,9 +438,9 @@ export function createPeakAnalysis(host, root, o){
               <label class="txt-label" for="${p}Norm">Normalization</label>
               <select id="${p}Norm" class="pg-field">${NORM_OPTIONS}</select>
               <div class="txt-label pg-title">Smoothing width (&#176;2&#952;) ${chip(p, 'N', 'all')}</div>
-              ${wField(p, 'Smooth', 0.13)}
-              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP half-width (&#176;2&#952;)</label> ${chip(p, 'Bl', 'all')}</div>
-              ${wField(p, 'BlWin', 2)}
+              ${wField(p, 'Smooth', 0.25)}
+              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP width (&#176;2&#952;)</label> ${chip(p, 'Bl', 'all')}</div>
+              ${wField(p, 'BlWin', 5)}
               <div class="txt-label pg-title">Peak min. height (%) ${chip(p, 'H', 'one')}</div>
               <input type="text" inputmode="decimal" class="pg-field" id="${p}PkHeight" value="5">
               <div class="txt-label pg-title">Peak min. prominence (%) ${chip(p, 'P', 'one')}</div>
@@ -522,10 +522,14 @@ export function createPeakAnalysis(host, root, o){
   const paramMode = { ...MODE_DEF };
   /* Shared param values (defaults); the standard's own start unsmoothed, and never
      share anything (one file), nor size anything (K, λ unused). blOn: the baseline's box.
-     smoothW, the smoothing's width, and snipW, the SNIP's half-width, are in °2θ: 0.13°
-     is 10 points at a step of 0.013°, 2° about 150 (to v510 numbers of points, N 10 and
-     blWin 150, whatever the step: restore converts them). */
-  const FIELD_DEF = { smoothW:0.13, snipW:2, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598, blOn:true };
+     smoothW, the smoothing's width, and snipW, the SNIP's half-width, are in °2θ: 0.25°
+     is about 19 points at a step of 0.013°; 2.5°, its field showing the whole width, 5°
+     (SHOWN), about 385 points there, 299 at 0.0167° (to v515 0.13° and 2°, the field the
+     half-width; to v510 numbers of points, N 10 and blWin 150, whatever the step: restore
+     converts them). */
+  const FIELD_DEF = { smoothW:0.25, snipW:2.5, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598, blOn:true };
+  // (what a width's field shows of the value stored: the SNIP's, its whole width)
+  const SHOWN = { smoothW:1, snipW:2 };
   const SHARED_DEF = std ? { ...FIELD_DEF, smoothW:0 } : FIELD_DEF;
   const shared = { ...SHARED_DEF };
   // Per-sample param overrides (indexed by file idx). blOn: the SNIP baseline subtracted
@@ -560,7 +564,7 @@ export function createPeakAnalysis(host, root, o){
   // the number fields are guarded as any of the page's. Wired before the fields' own
   // change handlers.
   guardNumberInputs(root);
-  [ ['Smooth',0,SHARED_DEF.smoothW], ['BlWin',1e-6,2], ['PkHeight',0,5], ['PkProm',0,3], ['PkDist',0,0.3], ...(std ? [] : [['K',1e-6,0.9], ['Lambda',1e-6,1.540598]]) ]
+  [ ['Smooth',0,SHARED_DEF.smoothW], ['BlWin',1e-6,FIELD_DEF.snipW*SHOWN.snipW], ['PkHeight',0,5], ['PkProm',0,3], ['PkDist',0,0.3], ...(std ? [] : [['K',1e-6,0.9], ['Lambda',1e-6,1.540598]]) ]
     .forEach(([id,min,def])=> guardNumericInput($$(id), { min, def }));
 
   /* A state's settings as a restore takes them (a project read in may hold anything): a
@@ -607,7 +611,8 @@ export function createPeakAnalysis(host, root, o){
       // (a width's field as written, to 4 significant digits, is the value stored, kept
       // exact: only a value typed replaces it)
       const el = $$(FIELD_INPUT[key]);
-      const v = key in LEGACY && el.value === el._shown ? el._exact : Math.max(FIELD_MIN[key], numField(FIELD_INPUT[key], FIELD_DEF[key]));
+      const sh = SHOWN[key] || 1;
+      const v = key in LEGACY && el.value === el._shown ? el._exact : Math.max(FIELD_MIN[key], numField(FIELD_INPUT[key], FIELD_DEF[key]*sh)/sh);
       if (!own(modeOf(key))) shared[key] = v;
       else { if (!perParams[k]) perParams[k] = {}; perParams[k][key] = v; }
     }
@@ -620,7 +625,7 @@ export function createPeakAnalysis(host, root, o){
     const pr = getFileParams(curIdx());
     for (const key in FIELD_INPUT){
       const el = $$(FIELD_INPUT[key]);
-      if (key in LEGACY){ el.value = el._shown = widthText(pr[key]); el._exact = pr[key]; }
+      if (key in LEGACY){ el.value = el._shown = widthText(pr[key]*SHOWN[key]); el._exact = pr[key]; }
       else el.value = pr[key];
     }
     // (disabled, not hidden: the width means nothing with no baseline)
@@ -630,20 +635,22 @@ export function createPeakAnalysis(host, root, o){
     syncStepNote();
   }
   /* What each width spans in points of the pattern on show (the standard's: its file),
-     in its field after the value, from the value as it is typed: the smoothing's box over
-     the step (off at 0), the SNIP's passes on each side as computeBaseline rounds them.
-     Nothing with no file, or no value. */
+     in its field after the value, from the value as it is typed: the width over the step
+     (the smoothing off at 0; the SNIP's passes on each side, as computeBaseline rounds
+     them, in its title; to v515 those, '±K pts', in the field). Nothing with no file, or
+     no value. */
   function syncHints(){
     const fs = files(), f = fs[Math.min(curIdx(), fs.length - 1)], st = f ? meanStep(f.x) : NaN;
     for (const id of ['Smooth', 'BlWin']){
       // (the width stored, exact, while the field shows it unchanged: one converted from
       // points is that many steps, not its 4 digits' worth)
-      const el = $$(id), v = el.value === el._shown && Number.isFinite(el._exact) ? el._exact : parseFloat(String(el.value).trim().replace(',', '.')), out = $$(id + 'Pts');
+      const el = $$(id), sh = id === 'BlWin' ? SHOWN.snipW : 1;
+      const v = el.value === el._shown && Number.isFinite(el._exact) ? el._exact*sh : parseFloat(String(el.value).trim().replace(',', '.')), out = $$(id + 'Pts');
       let t = '', tip = '';
       if (st > 0 && v >= 0 && isFinite(v)){
         const at = ` at the step of ${f.label}, ${widthText(st)}°`;
         if (id === 'Smooth'){ t = v ? ptsText(v/st) : 'off'; tip = v ? `${widthText(v/st)} steps${at}` : 'No smoothing'; }
-        else if (v > 0){ const K = Math.max(1, Math.round(v/st) || 1); t = `±${K} ${K === 1 ? 'pt' : 'pts'}`; tip = `${K} point${K === 1 ? '' : 's'} on each side${at}`; }
+        else if (v > 0){ const K = Math.max(1, Math.round(v/sh/st) || 1); t = ptsText(v/st); tip = `${widthText(v/st)} steps across, ${K} point${K === 1 ? '' : 's'} on each side${at}`; }
       }
       if (out.textContent !== t) out.textContent = t;
       if (out.title !== tip) out.title = tip;
@@ -656,7 +663,7 @@ export function createPeakAnalysis(host, root, o){
   function syncStepNote(){
     const el = $$('StepNote');
     if (!el) return;
-    const on = stepNote.filter(m=> paramMode[m] === 'per'), what = on.map(m=> m === 'N' ? 'smoothing' : 'SNIP half-width').join(' and ');
+    const on = stepNote.filter(m=> paramMode[m] === 'per'), what = on.map(m=> m === 'N' ? 'smoothing' : 'SNIP width').join(' and ');
     const t = on.length ? `<div class="alert warn">⚠ The patterns were measured at different steps: the ${what}, set in points up to v510, ${on.length > 1 ? 'are' : 'is'} kept as ${on.length > 1 ? 'they were' : 'it was'}, a width for each pattern (one). Set one width in all to treat them alike.<button class="alert-dismiss close-x" data-step-x title="Dismiss">${X_SVG(15)}</button></div>` : '';
     if (t !== stepNoteHtml){ stepNoteHtml = t; el.innerHTML = t; }
   }
@@ -1532,7 +1539,7 @@ export function createPeakAnalysis(host, root, o){
       {h:'Raw_'+f.label,                             v:f.y.map(v=>fmtNum(v,6))},
       // (the widths in °2θ, as the fields show them; to v510 the points, N= and win=)
       {h:`Smoothed_${f.label} (w=${widthText(kp.smoothW)}°)`,          v:pr.smoothed.map(v=>fmtNum(v,6))},
-      {h:`SNIP_background_${f.label} (${kp.blOn ? 'W=' + widthText(kp.snipW) + '°' : 'off'})`, v:pr.snip.map(v=>fmtNum(v,6))},
+      {h:`SNIP_background_${f.label} (${kp.blOn ? 'W=' + widthText(kp.snipW*SHOWN.snipW) + '°' : 'off'})`, v:pr.snip.map(v=>fmtNum(v,6))},
     ];
   }
   // Classic peak-search block: 2θ, rel. intensity, FWHM, crystallite size [, corrected].
