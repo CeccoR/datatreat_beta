@@ -1,4 +1,5 @@
-import { fmtNum, csvLine, includedOf, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumberInputs, esc } from './utils.js';
+import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc } from './utils.js';
+import { boxSmooth, boxSlope, widthText, ptsNum, ptsText } from './smooth.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, ownKey, without, cardList, finitePairs } from './modkit.js';
@@ -85,22 +86,21 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
   ];
   const URB_ALL = ()=> ({ b: URB_METHODS.map(m=> m.key) });
 
-  const clampN = v => Math.max(1, Math.round(v));
-  const clampM = v => Math.max(2, Math.round(v));
   // Two-sided 99% confidence: the 99.5% quantile of Student's t, the factor every
   // error reported here (Eg, E_U) is multiplied by.
   const T_Q = 0.995;
 
   /* A curve with points that have no value (F(R) < 0 under a fractional exponent, F(R) ≤ 0
      under the logarithm) is smoothed and differentiated over the points that have one,
-     as though the others had not been measured: those stay without a value, and every
-     other point is averaged with its nearest neighbours that have one. Run over every
-     point (to v478), the moving average spread each missing point to N/2 neighbours on
-     either side, the derivative's to N2/2 more, the second derivative's as far again:
-     10 points of F(R) < 0 left 279 of 551 values of Y'' without one, which the
-     suggestion took for curvature, and no fit window could hold a point the spread had
-     reached. `fn(y, x)` runs on the points with a finite y (or those `has(i)` keeps) and
-     their x; a curve with none left out goes through it as it is. */
+     as though the others had not been measured: those stay without a value, and the line
+     through the others bridges them (to v514 the moving average took the nearest points
+     with a value as neighbours, however far). Run over every point (to
+     v478), the moving average spread each missing point to N/2 neighbours on either side,
+     the derivative's to N2/2 more, the second derivative's as far again: 10 points of
+     F(R) < 0 left 279 of 551 values of Y'' without one, which the suggestion took for
+     curvature, and no fit window could hold a point the spread had reached. `fn(y, x)`
+     runs on the points with a finite y (or those `has(i)` keeps) and their x; a curve
+     with none left out goes through it as it is. */
   function onFinite(y, x, fn, has = i=> isFinite(y[i])){
     const ok = []; for (let i=0;i<y.length;i++) if (has(i)) ok.push(i);
     if (ok.length === y.length) return fn(y, x);
@@ -108,11 +108,52 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     ok.forEach((i, j)=> out[i] = r[j]);
     return out;
   }
-  const smoothY = (y, N)=> onFinite(y, null, v=> movingAverage(v, N));
-  // dy/dx smoothed over N points.
-  const slopeOf = (y, x, N)=> onFinite(y, x, (v, e)=> movingAverage(gradientArr(v, e), N));
+  /* The smoothing and the derivative are widths on the energy axis (smooth.js), in eV: the
+     curve's mean over a window w wide (the line through the points, a box convolution, cut
+     short at the ends; 0 none), and its slope, the secant across a window w2 wide (no wider
+     than a point's neighbours span, the central difference). Up to v514 they were numbers of
+     points, N and N2, a moving average and that of the central differences: hν = hc/λ is
+     uneven on an even λ grid, so N points spanned 10 times more eV at 250 nm than at 800, and
+     smoothed alike spectra measured at different steps differently. */
+  const smoothY = (y, x, w)=> onFinite(y, x, (v, e)=> boxSmooth(e, v, w));
+  const slopeOf = (y, x, w)=> onFinite(y, x, (v, e)=> boxSlope(e, v, w));
+  /* The subtracted Urbach curve's smoothing (urbachSub): over the points `has` keeps, the
+     line bridging those of them with no value (no logarithm), which keep none, nor does a
+     point whose window holds one: there the curve was measured and has no value, nor has a
+     mean holding one (to v514 a moving average holding one). */
+  function smoothKept(y, x, w, has){
+    const ys = onFinite(y, x, (v, e)=> boxSmooth(e, v, w), has), bad = [];
+    y.forEach((v, i)=>{ if (has(i) && !isFinite(v)) bad.push(x[i]); });
+    if (!bad.length || !(w > 0)) return ys;
+    bad.sort((a, b)=> a - b);
+    return ys.map((v, i)=>{
+      let lo = 0, hi = bad.length;
+      while (lo < hi){ const m = (lo + hi) >> 1; if (bad[m] < x[i] - w/2) lo = m + 1; else hi = m; }
+      return lo < bad.length && bad[lo] <= x[i] + w/2 ? NaN : v;
+    });
+  }
 
-  // Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
+  /* The regression windows of an interval: from each of its points `E` (energies, ascending)
+     every point up to W above it, a window W wide, kept while its end is in the interval
+     (`hi`); fn(s, e) for each, its first and last. A point within 10⁻⁹ eV of a window's end
+     is in it (a width converted from points is their span, which rounding may leave a
+     hair short). */
+  const TOL = 1e-9;
+  function windowsIn(E, W, hi, fn){
+    for (let s = 0, e = 0; s < E.length && E[s] + W <= hi + TOL; s++){
+      if (e < s) e = s;
+      while (e + 1 < E.length && E[e+1] <= E[s] + W + TOL) e++;
+      fn(s, e);
+    }
+  }
+  /* A window the scan fits: 3 points at least, spread over half its width at least. Beside
+     a gap in the data (a range left out, a run of points with no value) or past their end,
+     a window W wide holds only the few points on one side of it, close together, whose
+     line fits them better than any full window's does its own: E_g came from 3 points.
+     Where the data run on, a window holding 3 points has steps of W/2 at most, and its
+     points span more than W/2: only those beside a gap are passed over. */
+  const fitsW = (E, s, e, W)=> e - s >= 2 && E[e] - E[s] >= W/2 - TOL;
+  // Best linear fit inside [x1,x2]: slide a window W wide (eV) and pick the one that
   // minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
   // by the y-range makes the criterion robust — it locks onto the steep linear edge
   // instead of a flat low-value stretch that merely has a small absolute RMSE.
@@ -121,24 +162,37 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
   // it: fitted to smoothed values its residuals are averaged together, no longer
   // independent, and every error came out too small (a "99%" interval held the truth
   // 72% of the time at N = 5, 37% at N = 15). `n` is how many points it was fitted on.
-  // A window is M points that have a value: one without (F(R) at or below zero, see
-  // onFinite) is left out, and the window reaches past it. One holding such a point was
-  // passed over (to v478), so a few of F(R) < 0 through the baseline region left it no
-  // window to fit. With `strict` it still is, and only a point whose energy has no value
-  // is left out: the subtracted Urbach curve gives none to those of F(R) ≤ 0, which the
-  // plain curve leaves out, so a point there without a value is one where the Tauc
-  // baseline lies above F(R), which the card reports.
-  function scanRegr(hv, Ys, M, x1, x2, Yraw, strict){
+  // A window holds every point within W, 3 at least (the line's two and one degree of
+  // freedom for its error) over half its width (fitsW), so that it spans the same energy
+  // wherever it is and in every sample; its points are more at low energy than at high.
+  // Up to v514 it was M points (2 at least), whatever energy they spanned. With none to
+  // fit, `small` says why: 'narrow', no window W wide in the interval from its first point
+  // with a value (the lines, or the points between them, narrower than W); 'few', windows
+  // but none holding 3 points over half its width, or no point with a value.
+  // A window's points are those that have a value: one without (F(R) at or below zero,
+  // see onFinite) is left out, and the window holds those beside it. One holding such a
+  // point was passed over (to v478), so a few of F(R) < 0 through the baseline region
+  // left it no window to fit. With `strict` it still is, and only a point whose energy
+  // has no value is left out: the subtracted Urbach curve gives none to those of F(R) ≤ 0,
+  // which the plain curve leaves out, so a point there without a value is one where the
+  // Tauc baseline lies above F(R), which the card reports.
+  function scanRegr(hv, Ys, W, x1, x2, Yraw, strict){
     const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
     const idxSel = [];
     for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi && (strict || isFinite(Ys[i]))) idxSel.push(i);
+    idxSel.sort((a, b)=> hv[a] - hv[b]);
     let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,NRMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
-    if (idxSel.length < M) return best;
-    let bestScore = Infinity;
-    for (let s=0; s<=idxSel.length-M; s++){
-      const block = idxSel.slice(s, s+M);
+    let bestScore = Infinity, any = false, some = false;
+    const E = idxSel.map(i=> hv[i]);
+    windowsIn(E, W, hi, (s, e)=>{
+      some = true;
+      if (!fitsW(E, s, e, W)) return;
+      any = true;
+      // (in the points' own order, as to v514, where it runs down in energy)
+      const block = idxSel.slice(s, e+1);
+      if (block[0] > block[block.length-1]) block.reverse();
       const yb = block.map(i=>Ys[i]);
-      if (yb.some(v=>!isFinite(v))) continue;
+      if (yb.some(v=>!isFinite(v))) return;
       const xb = block.map(i=>hv[i]);
       const r = fitLinear(xb, yb);
       const range = Math.max(...yb) - Math.min(...yb);
@@ -146,9 +200,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       const score = nrmse / r.R2;
       if (score < bestScore){
         bestScore = score;
-        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB, n:M};
+        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB, n:block.length};
       }
-    }
+    });
+    if (!any) best.small = some || !idxSel.length ? 'few' : 'narrow';
     if (!Yraw || Yraw === Ys || !best.bestIdx.length) return best;
     const idx = best.bestIdx.filter(i=> isFinite(Yraw[i]));
     if (idx.length < 3) return {...best, slope:NaN, intercept:NaN, R2:NaN, NRMSE:Infinity, varM:NaN, varB:NaN, covMB:NaN, n:idx.length};
@@ -157,10 +212,46 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
             bestIdx:best.bestIdx, varM:r.varM, varB:r.varB, covMB:r.covMB, n:idx.length};
   }
 
+  /* ---- v514's points, for the projects saved up to then (makePanel fromPoints) ----
+     Its moving average over N points (utils.js movingAverage: an even N's window N + 1
+     points, the ends at half weight, cut short at the ends of the data) and its window
+     choice, the M points in a row that have a value with the least NRMSE/R² on the
+     smoothed curve (scanRegr to v514), kept here to convert those projects, and for
+     nothing else. */
+  function avgPts(y, N){
+    const n = y.length, h = N >> 1, even = N % 2 === 0;
+    return y.map((_, i)=>{ let s = 0, c = 0; for (let k = Math.max(0, i-h); k <= Math.min(n-1, i+h); k++){ const w = even && (k === i-h || k === i+h) ? 0.5 : 1; s += w*y[k]; c += w; } return s/c; });
+  }
+  function scanPts(hv, Ys, M, x1, x2){
+    const lo = Math.min(x1, x2), hi = Math.max(x1, x2), sel = [];
+    for (let i = 0; i < hv.length; i++) if (hv[i] >= lo && hv[i] <= hi && isFinite(Ys[i])) sel.push(i);
+    let best = [], bs = Infinity;
+    for (let s = 0; s + M <= sel.length; s++){
+      const b = sel.slice(s, s + M), yb = b.map(i=> Ys[i]), r = fitLinear(b.map(i=> hv[i]), yb), range = Math.max(...yb) - Math.min(...yb);
+      const score = (range > 0 ? r.rmse/range : Infinity)/r.R2;
+      if (score < bs){ bs = score; best = b; }
+    }
+    return best;
+  }
+  // A spectrum's narrowest and widest steps (each point's, to its two neighbours, in
+  // energy order) and where they are: { lo, eLo, hi, eHi }.
+  function stepEnds(hv){
+    const E = hv.filter(Number.isFinite).sort((a, b)=> a - b), n = E.length;
+    let lo = Infinity, hi = -Infinity, eLo = NaN, eHi = NaN;
+    for (let i = 0; i < n; i++){
+      const a = Math.max(0, i-1), b = Math.min(n-1, i+1), s = (E[b] - E[a])/(b - a);
+      if (!(s > 0)) continue;
+      if (s < lo){ lo = s; eLo = E[i]; }
+      if (s > hi){ hi = s; eHi = E[i]; }
+    }
+    return { lo, eLo, hi, eHi };
+  }
+
   /* Eg from the two Tauc fits: where the Tauc line crosses the x-axis, and where it
      crosses the baseline. Each error is the fit's own (co)variances carried through
-     the formula, every term scaled by the t factor of the fit it comes from. */
-  function taucEg(regs, regs2, M, M2){
+     the formula, every term scaled by the t factor of the fit it comes from (n − 2
+     degrees of freedom, n its points: to v514 the window's M where a fit had no n). */
+  function taucEg(regs, regs2){
     let Eg=NaN, EgErr=NaN, EgInt=NaN, EgIntErr=NaN;
     if ([regs.slope,regs.intercept,regs2.slope,regs2.intercept].every(isFinite)){
       const xInt = (regs2.intercept - regs.intercept)/(regs.slope - regs2.slope);
@@ -170,33 +261,33 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       // from hν = 0, added to the variance instead of taking from it.
       const dxdm1 = -(regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
       const dxdm2 = -dxdm1;
-      const t1 = tinv(T_Q, (regs.n || M)-2), t2 = tinv(T_Q, (regs2.n || M2)-2);
+      const t1 = tinv(T_Q, regs.n-2), t2 = tinv(T_Q, regs2.n-2);
       const varX = dxdb1*dxdb1*regs.varB*t1*t1 + dxdb2*dxdb2*regs2.varB*t2*t2 +
                    dxdm1*dxdm1*regs.varM*t1*t1 + dxdm2*dxdm2*regs2.varM*t2*t2 +
                    2*dxdb1*dxdm1*regs.covMB*t1*t1 + 2*dxdb2*dxdm2*regs2.covMB*t2*t2;
       EgInt = xInt;
       EgIntErr = varX>0 ? Math.sqrt(varX) : NaN;
     }
-    ({ x: Eg, err: EgErr } = xCross(regs, M));
+    ({ x: Eg, err: EgErr } = xCross(regs));
     return {Eg,EgErr,EgInt,EgIntErr};
   }
   // Where a fitted line crosses y = 0, −b/m, and its error: the slope and intercept
   // variances and their covariance carried through, times the fit's t factor.
-  function xCross(r, M){
+  function xCross(r){
     if (!(r.slope !== 0 && isFinite(r.slope))) return { x: NaN, err: NaN };
     const x = -r.intercept/r.slope;
     if (![r.varM, r.varB, r.covMB].every(isFinite)) return { x, err: NaN };
     const v = (r.intercept**2/r.slope**4)*r.varM + (1/r.slope**2)*r.varB - 2*(r.intercept/r.slope**3)*r.covMB;
-    return { x, err: v >= 0 ? Math.sqrt(v)*tinv(T_Q, (r.n || M)-2) : NaN };
+    return { x, err: v >= 0 ? Math.sqrt(v)*tinv(T_Q, r.n-2) : NaN };
   }
   // The inverse of a fit's slope, and its error σ_m/m² times the fit's t factor.
-  function invSlope(r, M){
+  function invSlope(r){
     const m = r.slope;
     if (!isFinite(m) || m === 0) return { v: NaN, err: NaN };
-    return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, (r.n || M)-2) : NaN };
+    return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, r.n-2) : NaN };
   }
   // The Urbach energy is the inverse of the tail's slope in ln F(R) against hν.
-  function urbachEu(regs, M){ const s = invSlope(regs, M); return { Eu: s.v, EuErr: s.err }; }
+  function urbachEu(regs){ const s = invSlope(regs); return { Eu: s.v, EuErr: s.err }; }
 
   const fmtE = (v, e, unit, k = 3, scale = 1)=> !isFinite(v) ? '-'
     : isFinite(e) ? `${(v*scale).toFixed(k)} ± ${(e*scale).toFixed(k)} ${unit}` : `${(v*scale).toFixed(k)} ${unit}`;
@@ -206,12 +297,21 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
   // linear/constant background has zero curvature, so it cancels). The "zero zones"
   // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
   // ε = 10%·max|Y''|. The outer 10% of the energy range on each side is skimmed off
-  // first: the tails are where the spectrum is noisiest and the moving averages are
+  // first: the tails are where the spectrum is noisiest and the smoothings are
   // one-sided, so neither ε nor the bounds are taken from them. The region bounds are
   // found from each end of what is kept inward: the first start of a sustained run of
-  // CONT points with |Y''| >= ε (interpolated).
+  // points with |Y''| >= ε spanning half the derivative smoothing width, w2/2 in eV
+  // (interpolated). Y'' is the slope of Y' over w2, as Y' is of the curve: a lobe of it
+  // is about w2 wide. A run is read only where Y'' is smoothed, at points whose two
+  // neighbours span less than w2: elsewhere Y' and Y'' are central differences (smooth.js
+  // boxSlope), the curve's noise grown as 1/step², and w2/2 is less than a step: a single
+  // point above ε would make a run, and the lines would fall on the noise. With none found
+  // (w2 = 0, or no wider than the steps), the region is the whole span kept, as v514 gave
+  // it at N2 = 1. Up to v514 the run was 25 points, whatever they spanned, against lobes
+  // N2 = 20 points wide: on a spectrum with a sharp edge measured at 1 nm none was found,
+  // and the region fell back to the whole span (E_g −1.929 eV on the e2e fixture).
   const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
-  const SUGG_CONT   = 25;     // required consecutive points above ε
+  const SUGG_RUN    = 0.5;    // the run above ε, as a fraction of w2 (where Y'' is smoothed)
   const SUGG_TAIL   = 0.10;   // fraction of the energy range skimmed off each end
   // Read over the points that have a slope (onFinite): one without has no curvature.
   // A non-finite |Y''| left (a repeated energy) counts as none: it made ε an absolute 0.1
@@ -220,7 +320,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     const ok = []; for (let i=0;i<c.hv.length;i++) if (isFinite(c.dYs[i])) ok.push(i);
     const hv = ok.map(i=> c.hv[i]), n = hv.length;
     if (n < 7) return null;
-    const d2  = movingAverage(gradientArr(ok.map(i=> c.dYs[i]), hv), p.N2);      // Y''
+    const d2  = boxSlope(hv, ok.map(i=> c.dYs[i]), p.w2);      // Y''
     // energy-ascending order of indices, so we can scan by energy regardless of layout
     const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
     const eLo = hv[ord[0]], eHi = hv[ord[n-1]], cut = SUGG_TAIL * (eHi - eLo);
@@ -233,8 +333,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     const eps = SUGG_THRESH * (A || 1);
     const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
     const inR = j => j>=a && j<=b;
-    // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
-    const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
+    // sustained run (from j, stepping dir) of points all with |Y''| >= eps, spanning `run` eV,
+    // each where Y'' is smoothed (`sm`: w2 wider than its two neighbours span, as boxSlope takes it)
+    const run = SUGG_RUN * p.w2;
+    const sm = j => p.w2 > hv[ord[Math.min(n-1, j+1)]] - hv[ord[Math.max(0, j-1)]];
+    const runGE = (j,dir) => { for (let jj=j;;jj+=dir){ if (!inR(jj) || ax(jj)<eps || !sm(jj)) return false; if (Math.abs(hv[ord[jj]] - hv[ord[j]]) >= run) return true; } };
     let v1=hv[ord[a]], v2=hv[ord[b]];
     for (let j=a;j<=b;j++){ if (runGE(j,+1)){ v1 = j>a?cross(j-1,j):hv[ord[j]]; break; } }
     for (let j=b;j>=a;j--){ if (runGE(j,-1)){ v2 = j<b?cross(j+1,j):hv[ord[j]]; break; } }
@@ -252,8 +355,16 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      folded out of sight (`hidden`) is not drawn: it is brought up to date when it
      is unfolded.
   ========================================================= */
-  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
-  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM };
+  /* The fields of the parameters, by key: the exponent, and the widths in eV (to v514
+     numbers of points, N, N2, M and M2, in the fields A, N, N2, M, M2): w, the curve's
+     smoothing; w2, the derivative's; W and W2, the regression windows (the spec's windows
+     say which is whose). A width's least: 0 for a smoothing (none), above 0 for a window. */
+  const FIELD = { a:'A', w:'Smooth', w2:'DSmooth', W:'Win', W2:'Win2' };
+  const W_MIN = { w: 0, w2: 0, W: 1e-6, W2: 1e-6 };
+  // The widths by the keys of the points they were up to v514 (fromPoints), v514's
+  // defaults and the least it took.
+  const OLD = { w:'N', w2:'N2', W:'M', W2:'M2' }, OLD_DEF = { N:1, N2:20, M:25, M2:100 }, OLD_MIN = { w: 1, w2: 1, W: 2, W2: 2 };
+  const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
   function makePanel(spec){
     const { prefix, keys, windows } = spec;
     const $ = id => document.getElementById(prefix + id);
@@ -273,35 +384,43 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     let dragging = false;     // true while an interval line is being dragged
     let throttle = null;
     let shown = -1;           // the sample the plot last drew
+    let drawn = null;         // what the plot last drew: { i, ok (the points with a value), fits }
 
     // The curve and the derivatives the panel works from, for sample i.
     function curves(i, p){
       const hv = files[i].hv;
       const Yraw = files[i].FR.map((v,k)=> spec.curve(v, hv[k], p));
-      const Ys  = smoothY(Yraw, p.N);
-      const dYs = slopeOf(Ys, hv, p.N2);                            // Y'
+      const Ys  = smoothY(Yraw, hv, p.w);
+      const dYs = slopeOf(Ys, hv, p.w2);                            // Y'
       return { hv, Yraw, Ys, dYs };
     }
 
     /* What a parameter can be, and an interval-line set: as the fields take them (the
-       exponent above 0, a smoothing window 1 or more, a regression window 2 or more), and
+       exponent above 0, a smoothing width 0 or more, a regression window above 0), and
        every line of the spec's windows a number. A sample's own value that is none (a
        project read in may hold anything: modkit RESTORED) gives way to the common one, a
        line set to the default lines (to v494 a value that was no number made the fits NaN,
        an entry that was no object threw as the lines were put in it). */
-    const PARAM_OK = { a: v=> v > 0, N: v=> v >= 1, N2: v=> v >= 1, M: v=> v >= 2, M2: v=> v >= 2 };
+    const PARAM_OK = { a: v=> v > 0, w: v=> v >= 0, w2: v=> v >= 0, W: v=> v > 0, W2: v=> v > 0 };
     const okParam = (k, v)=> Number.isFinite(v) && PARAM_OK[k](v);
     const lineKeys = windows.flatMap(w=> [w.lo, w.hi]);
     const okLines = l => isObj(l) && lineKeys.every(k=> Number.isFinite(l[k]));
     const paramsIn = o =>{ const out = {}; if (isObj(o)) for (const k of keys) if (okParam(k, o[k])) out[k] = o[k]; return out; };
     const linesIn = l => okLines(l) ? Object.fromEntries(lineKeys.map(k=> [k, l[k]])) : {};
-    const perIn = p =>{ const o = paramsIn(p); if (isObj(p) && okLines(p.vlines)) o.vlines = linesIn(p.vlines); return o; };
+    // (a sample's own points, to v514, converted in one mode at its spectrum: fromPoints)
+    const perIn = (p, i, oldSh)=>{
+      const o = paramsIn(p);
+      if (isObj(p) && okLines(p.vlines)) o.vlines = linesIn(p.vlines);
+      const q = oldIn(p);
+      if (P.mode === 'per' && files[i] && Object.keys(q).length) ownFromPoints(o, q, files[i], oldSh);
+      return o;
+    };
     // Resolve the effective params for a given file index
     P.params = i =>{
       const s = P.shared;
       const src = (P.mode==='per') ? (P.per[i] || {}) : s;
       const out = {};
-      for (const k of keys) out[k] = CLAMP[k](okParam(k, src[k]) ? src[k] : s[k]);
+      for (const k of keys) out[k] = okParam(k, src[k]) ? src[k] : s[k];
       return out;
     };
     const defaultVlinesFor = i =>{
@@ -322,8 +441,80 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     // Every fit of sample k, and what the spec makes of them.
     P.analyze = k =>{
       const p = P.params(k), vl = P.vlinesFor(k), c = curves(k, p);
-      const fits = windows.map(w=> scanRegr(c.hv, c.Ys, p[w.M], vl[w.lo], vl[w.hi], c.Yraw));
+      const fits = windows.map(w=> scanRegr(c.hv, c.Ys, p[w.W], vl[w.lo], vl[w.hi], c.Yraw));
       return { ...spec.results(fits, p, k, vl), fits };
+    };
+
+    /* ---- Projects saved up to v514: the widths were numbers of points ----
+       Each becomes the width it had where it acted, on each sample: v514's own window
+       choice is made again (scanPts, on avgPts: its scan and moving average), W (W2) the
+       energy span of the window it chose, w (w2) N (N2) times the step at the middle of
+       the region's window (the Tauc or Urbach region's; N = 1, none, 0; w less where the
+       scan would not take v514's windows again with it, below). With no window chosen
+       (`none` says which), the step at the middle of the lines, M − 1 of them for W. In
+       all mode the common value is the median of the samples' (each with the lines
+       it is read between), of those with a window chosen if any; in one mode each
+       sample's own from its own. A value that was none, or no project's file to count on:
+       the default. The lines and the rest are kept: nothing is suggested again. `q` the
+       points (N, N2, M, M2: v514's defaults for those not given) and the exponent a. */
+    function fromPoints(f, q, vl){
+      const hv = f.wl.map(x=> HC/x), n = hv.length, pt = k => q[k] ?? OLD_DEF[k];
+      if (!okLines(vl)){ const lo = minArr(hv); vl = spec.defaultLines(lo, maxArr(hv) - lo); }
+      const Yraw = f.FR.map((v, k)=> spec.curve(v, hv[k], q)), Ys = onFinite(Yraw, null, v=> avgPts(v, pt('N')));
+      const stepAt = k =>{ const a = Math.max(0, k-1), b = Math.min(n-1, k+1); return Math.abs(hv[b] - hv[a])/(b - a); };
+      const out = { none: {} }, chose = [];
+      let st = NaN, least = Infinity;
+      windows.forEach((w, wi)=>{
+        const M = pt(OLD[w.W]), b = scanPts(hv, Ys, M, vl[w.lo], vl[w.hi]), e = b.map(i=> hv[i]);
+        let mid = b[b.length >> 1];
+        if (!b.length){ const m = (vl[w.lo] + vl[w.hi])/2; mid = 0; hv.forEach((x, k)=>{ if (Math.abs(x - m) < Math.abs(hv[mid] - m)) mid = k; }); }
+        const s = stepAt(mid);
+        if (!wi){ st = s; if (!b.length) out.none.w = out.none.w2 = true; }
+        out[w.W] = b.length ? Math.max(...e) - Math.min(...e) : (M - 1)*s;
+        if (!b.length) out.none[w.W] = true;
+        chose.push(b);
+        const lo = Math.min(vl[w.lo], vl[w.hi]), hi = Math.max(vl[w.lo], vl[w.hi]);
+        hv.forEach((x, k)=>{ if (x >= lo && x <= hi) least = Math.min(least, stepAt(k)); });
+      });
+      /* N steps of the region's window smooth as v514 did there, but the box, a width in eV,
+         holds more points where the step is narrower, at lower energy, and smooths the curve
+         more there: on a near tie the scan took another window than v514's (the tests' first
+         fixture, N 6, M 25, between the lines suggested for both: the foot below the edge,
+         E_g −0.57 eV against v514's 3.158). So the scan is made again with it, and where it
+         does not take v514's window again (half its points at least) in every interval v514
+         had one in, w is N times the narrowest step between the lines, where no point is
+         averaged over more than N, if that one does. */
+      const shares = (a, b)=>{ const B = new Set(b); return 2*a.filter(i=> B.has(i)).length >= b.length; };
+      const keeps = v =>{ const ys = smoothY(Yraw, hv, v); return windows.every((w, wi)=> !chose[wi].length || shares(scanRegr(hv, ys, out[w.W], vl[w.lo], vl[w.hi]).bestIdx, chose[wi])); };
+      const N = pt('N');
+      out.w = N === 1 ? 0 : [N*st, N*least].find(keeps) ?? N*st;
+      out.w2 = pt('N2') === 1 ? 0 : pt('N2')*st;
+      return out;
+    }
+    // An object's points as v514 took them (a whole number, from 1 for N, N2, from 2 for M,
+    // M2), for each width it does not hold.
+    function oldIn(o){
+      const out = {};
+      if (isObj(o)) for (const k of keys) if (k in OLD && !(k in o)){ const v = o[OLD[k]]; if (Number.isFinite(v) && v >= OLD_MIN[k]) out[OLD[k]] = Math.max(OLD_MIN[k], Math.round(v)); }
+      return out;
+    }
+    // The lines sample i is read between, none made (none yet: null).
+    const linesOf = i => P.mode === 'shared' && !spec.ownLines ? (okLines(P.sharedVlines) ? P.sharedVlines : null)
+      : isObj(P.per[i]) && okLines(P.per[i].vlines) ? P.per[i].vlines : spec.ownLines && okLines(P.sharedVlines) ? P.sharedVlines : null;
+    // A sample's own widths from its points `q` (those it lacks, v514's common ones for the
+    // choice made again), at its spectrum.
+    function ownFromPoints(o, q, f, oldSh){
+      const c = fromPoints(f, { ...oldSh, ...q, a: okParam('a', o.a) ? o.a : P.shared.a }, o.vlines);
+      for (const k in OLD) if (OLD[k] in q && okParam(k, c[k])) o[k] = c[k];
+    }
+    /* A file taken back in (the file list's slot): the entry it left with; one of a project
+       to v514, its points, converted at its spectrum in one mode, dropped in all mode
+       (where the common widths are used). */
+    P.back = (v, f)=>{
+      const o = v ? {...v, vlines: v.vlines ? {...v.vlines} : undefined} : {}, q = oldIn(v);
+      Object.values(OLD).forEach(K=>{ delete o[K]; });
+      if (P.mode === 'per' && f && Array.isArray(f.wl) && Object.keys(q).length) ownFromPoints(o, q, f, {});
+      return o;
     };
 
     // ---- Auto-suggested interval-line positions ----
@@ -360,23 +551,85 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     // One sample's own lines placed again by the suggestion.
     P.suggestAt = i =>{ const s = suggestOne(i); if (s){ if (!P.per[i]) P.per[i] = {}; P.per[i].vlines = s; } };
 
-    // Read the input fields into the active store (shared, or the current sample)
+    // Read the input fields into the active store (shared, or the current sample). A
+    // width's field as written, to 4 significant digits, is the value stored, kept exact:
+    // only a value typed replaces it (one converted from points stays as it was).
+    const typedOf = el => parseFloat(String(el.value).trim().replace(',', '.'));
+    const widthOf = el => el.value === el._shown ? el._exact : typedOf(el);
     function readInputsToStore(){
       const vals = {};
       for (const k of keys){
-        const raw = $(FIELD[k]).value;
-        if (k === 'a'){ const v = parseFloat(raw); if (isFinite(v)) vals.a = v; }
-        else vals[k] = CLAMP[k](+raw || 0);
+        const el = $(FIELD[k]), v = k === 'a' ? parseFloat(el.value) : widthOf(el);
+        if (okParam(k, v)) vals[k] = v;
       }
       if (P.mode==='shared') Object.assign(P.shared, vals);
       else { const pp = P.per[currIndex] || (P.per[currIndex]={}); Object.assign(pp, vals); }
     }
-    // Push the current sample's stored params into the input fields
+    // Push the current sample's stored params into the input fields (a width to 4
+    // significant digits: smooth.js widthText), and what each spans in points.
     P.writeStoreToInputs = ()=>{
       const p = P.params(currIndex);
-      for (const k of keys) $(FIELD[k]).value = p[k];
+      for (const k of keys){
+        const el = $(FIELD[k]);
+        if (k === 'a') el.value = p.a;
+        else { el.value = el._shown = widthText(p[k]); el._exact = p[k]; }
+      }
       if ($('NExp')) $('NExp').textContent = spec.fmtA(p.a);
+      syncPts();
     };
+    /* What each width spans in points of the sample on show, in its field after the value,
+       from the value as it is typed (hν = hc/λ: its step uneven, 10 times wider at 250 nm
+       than at 800 on an even λ grid):
+       - a smoothing's, over the spectrum, the width over its widest step and over its
+         narrowest ('≈ 2.5–25 pts'), off at 0;
+       - a regression window's, the points of the window the scan chose ('≈ 24 pts'); while
+         another value is typed, or with no fit, those a window that wide holds between
+         the lines, the fewest and the most ('≈ 12–40 pts': of the windows the scan fits,
+         or with none of every window), more than the interval's points ('> 15 pts') when
+         it is wider than they span.
+       Nothing with no sample, or no value. */
+    function syncPts(){
+      const f = files[currIndex], hv = f && f.hv;
+      for (const k of keys){
+        if (k === 'a') continue;
+        const el = $(FIELD[k]), out = $(FIELD[k] + 'Pts');
+        if (!el || !out) continue;
+        const typed = el.value !== el._shown, v = typed ? typedOf(el) : el._exact;
+        const wi = windows.findIndex(w=> w.W === k);
+        let t = '', tip = '';
+        if (hv && hv.length > 1 && v >= 0 && isFinite(v)){
+          if (wi < 0){
+            const { lo, hi, eLo, eHi } = stepEnds(hv);
+            if (!v){ t = 'off'; tip = k === 'w' ? 'No smoothing' : 'No smoothing: the central difference'; }
+            else if (lo > 0){
+              const few = v/hi, many = v/lo;
+              t = ptsNum(few) === ptsNum(many) ? ptsText(few) : `≈ ${ptsNum(few)}–${ptsNum(many)} pts`;
+              tip = `${f.label}: ${widthText(few)} steps of ${widthText(hi)} eV at ${eHi.toFixed(2)} eV to ${widthText(many)} of ${widthText(lo)} eV at ${eLo.toFixed(2)} eV`;
+            }
+          } else if (v > 0){
+            const w = windows[wi], fit = !typed && drawn && drawn.i === currIndex ? drawn.fits[wi] : null;
+            if (fit && fit.bestIdx.length){
+              const e = fit.bestIdx.map(j=> hv[j]);
+              t = ptsText(e.length);
+              tip = `${f.label}: the window the scan chose, ${e.length} points from ${Math.min(...e).toFixed(3)} to ${Math.max(...e).toFixed(3)} eV`;
+            } else if (linesOf(currIndex)){
+              const vl = linesOf(currIndex), a = Math.min(vl[w.lo], vl[w.hi]), b = Math.max(vl[w.lo], vl[w.hi]);
+              const ok = drawn && drawn.i === currIndex ? drawn.ok : f.FR.map((y, j)=> isFinite(spec.curve(y, hv[j], P.params(currIndex))));
+              const E = hv.filter((x, j)=> x >= a && x <= b && ok[j]).sort((x, y)=> x - y);
+              // (those the scan fits, fitsW; with none, every window's, and no fit said)
+              const cnt = [[Infinity, 0], [Infinity, 0]];
+              windowsIn(E, v, b, (s, e)=>{ for (const m of fitsW(E, s, e, v) ? cnt : [cnt[1]]){ m[0] = Math.min(m[0], e - s + 1); m[1] = Math.max(m[1], e - s + 1); } });
+              const [few, many] = cnt[0][1] ? cnt[0] : cnt[1], none = cnt[0][1] ? '' : ', none 3 over half its width: no window to fit';
+              const at = `between the lines (${a.toFixed(2)}–${b.toFixed(2)} eV)`;
+              if (many){ t = few === many ? ptsText(few) : `≈ ${few}–${many} pts`; tip = `${f.label}: a window ${widthText(v)} eV wide holds ${few === many ? few : few + ' to ' + many} point${many === 1 ? '' : 's'} ${at}${none}`; }
+              else { t = E.length ? `> ${E.length} pts` : '0 pts'; tip = `${f.label}: wider than the ${E.length} points with a value ${at}: no window to fit`; }
+            }
+          }
+        }
+        if (out.textContent !== t) out.textContent = t;
+        if (out.title !== tip) out.title = tip;
+      }
+    }
     P.syncModeButton = ()=>{ const c = $('ModeAll'); if (c) c.textContent = P.mode==='shared' ? 'all' : 'one'; };
 
     P.initPlot = ()=>{
@@ -419,18 +672,19 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       curveTraces(c).forEach(t=>
         plot.line(hv, t.ys, t.color, t.width, undefined, { label: `${nm} ${t.name}`, key: t.key }));
 
-      const fits = [];
-      let tooSmall = false;
+      /* Each fit, its statistics and the points it took (n); an interval with no window to
+         fit says why (scanRegr `small`): narrower than its regression window, or no window
+         in it holding 3 points with a value over half its width (counted all, to v478, an
+         interval of F(R) ≤ 0 had no fit and the card no word why; to v514, fewer points
+         than the window's M). */
+      const fits = [], small = [];
       windows.forEach((w, wi)=>{
-        const lo = Math.min(vlines[w.lo], vlines[w.hi]), hi = Math.max(vlines[w.lo], vlines[w.hi]);
-        // Only the points with a value, as scanRegr takes them: counted all (to v478), an
-        // interval of F(R) ≤ 0 had no fit and the card no word why.
-        const sel = hv.filter((v, i)=> v>=lo && v<=hi && isFinite(c.Ys[i])).length;
-        const reg = sel >= p[w.M] ? scanRegr(hv, c.Ys, p[w.M], vlines[w.lo], vlines[w.hi], c.Yraw) : null;
+        const reg = scanRegr(hv, c.Ys, p[w.W], vlines[w.lo], vlines[w.hi], c.Yraw);
         fits.push(reg);
-        $(w.stats[0]).textContent = reg && isFinite(reg.NRMSE) ? reg.NRMSE.toFixed(4) : '-';
-        $(w.stats[1]).textContent = reg && isFinite(reg.R2) ? reg.R2.toFixed(4) : '-';
-        if (!reg){ tooSmall = true; return; }
+        $(w.stats[0]).textContent = isFinite(reg.NRMSE) ? reg.NRMSE.toFixed(4) : '-';
+        $(w.stats[1]).textContent = isFinite(reg.R2) ? reg.R2.toFixed(4) : '-';
+        $(w.stats[2]).textContent = isFinite(reg.slope) ? `${reg.n} pts` : '-';
+        if (reg.small){ small.push(`the ${w.what} ${reg.small === 'narrow' ? 'is narrower than its regression window' : 'has no regression window holding 3 points over half its width'}`); return; }
         if (reg.bestIdx.length){
           const xb = reg.bestIdx.map(i=>hv[i]);
           plot.line(xb, xb.map(x=>reg.slope*x+reg.intercept), w.color, 2.2, undefined, { label: `${nm} ${w.name}`, key: w.key });
@@ -439,7 +693,9 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
                     { label: `${nm} ${w.name}, extended`, key: w.key + ' line' });
         }
       });
-      $('Alert').innerHTML = tooSmall ? '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>' : '';
+      $('Alert').innerHTML = small.length ? `<div class="alert warn">⚠ Interval too small: ${small.join('; ')}.</div>` : '';
+      drawn = { i: currIndex, ok: c.Ys.map(v=> isFinite(v)), fits };
+      syncPts();
       const res = P.analyze(currIndex);
       if (spec.extra) spec.extra(plot, res, hv, nm);
       spec.show($, res);
@@ -480,34 +736,54 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
 
     const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
     P.snapshot = ()=>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer), suggested: P.suggested });
-    // (each value as paramsIn, linesIn and perIn take it: a project read in may hold anything)
+    // (each value as paramsIn, linesIn and perIn take it: a project read in may hold
+    // anything; the points of one saved up to v514 converted: fromPoints)
     P.restore = s0 =>{
-      const s = isObj(s0) ? s0 : {};
+      const s = isObj(s0) ? s0 : {}, sh = isObj(s.shared) ? s.shared : {};
       P.mode = s.mode === 'per' ? 'per' : 'shared';   // older snapshots stored a per-field object
-      P.shared = { ...spec.defaults, ...paramsIn(s.shared) };
+      P.shared = { ...spec.defaults, ...paramsIn(sh) };
+      // Backward compatibility with pre-all/one snapshots (params stored by input id,
+      // passed on keyed by the field's suffix as it was, A, N, N2, M, M2: the cards' ids
+      // are not the ones they had), over the common ones.
+      const pre = {};
+      if (isObj(s.params)) for (const k of keys){
+        const v = s.params[k === 'a' ? 'A' : OLD[k]], x = k === 'a' ? parseFloat(v) : +v;
+        if (v == null) continue;
+        if (k === 'a'){ if (okParam(k, x)) P.shared.a = x; }
+        else pre[OLD[k]] = x;
+      }
+      const oldSh = { ...oldIn(sh), ...oldIn(pre) };
       P.sharedVlines = linesIn(s.sharedVlines || s.vlines);
-      P.per = Array.isArray(s.per) ? s.per.map(perIn) : files.map(()=>({}));
+      P.per = Array.isArray(s.per) ? s.per.map((q, i)=> perIn(q, i, oldSh)) : files.map(()=>({}));
       // Snapshots from before the flag had their lines suggested whenever they had any.
       P.suggested = s.suggested != null ? !!s.suggested : isFinite(P.sharedVlines.v1);
-      // Backward compatibility with pre-all/one snapshots (params stored by input id,
-      // passed on keyed by the field's suffix: the cards' ids are not the ones they had).
-      if (isObj(s.params)){
-        for (const k of keys){ const v = s.params[FIELD[k]], x = k === 'a' ? parseFloat(v) : +v; if (v != null && okParam(k, x)) P.shared[k] = x; }
+      if (Object.keys(oldSh).length && files.length){
+        const c = files.map((f, i)=> fromPoints(f, { ...oldSh, a: P.shared.a }, linesOf(i)));
+        for (const k in OLD) if (OLD[k] in oldSh){
+          const v = c.filter(o=> okParam(k, o[k])), got = v.filter(o=> !o.none[k]);
+          if (v.length) P.shared[k] = median((got.length ? got : v).map(o=> o[k]));
+        }
       }
       P.fit();
       P.syncModeButton();
     };
 
     // Param updates apply on confirm (blur / Enter), not while typing. The exponent is
-    // a <select>, so its change already is a deliberate choice; the numeric fields are
-    // guarded (invalid input shakes + reverts) by guardNumberInputs, and their change
-    // fires only once a valid value is committed. Changing the exponent rescales the
+    // a <select>, so its change already is a deliberate choice; the width fields are
+    // guarded (invalid input shakes + reverts) by guardNumericInput, wired first, and
+    // their change fires only once a valid value is committed (a smoothing from 0, a
+    // window above it); their points follow what is typed, and the field as it is left (a
+    // value refused is set back with no input event). Changing the exponent rescales the
     // y-axis, so it does a full reset; the smoothing/window fields keep the zoom.
     keys.forEach(k=>{
       const el = $(FIELD[k]);
+      if (k !== 'a'){
+        guardNumericInput(el, { min: W_MIN[k], def: spec.defaults[k] });
+        ['input', 'blur'].forEach(t=> el.addEventListener(t, syncPts));
+      }
       el.addEventListener('change', ()=>{
         readInputsToStore();  // route the edit to shared or this sample's slot
-        if (k === 'a' && $('NExp')) $('NExp').textContent = spec.fmtA(parseFloat(el.value));
+        P.writeStoreToInputs();
         if (spec.suggestOn && spec.suggestOn.includes(k) && files.length) resuggestEdited();
         if (plot) P.update(k !== 'a');
         if (spec.onParams) spec.onParams();
@@ -570,6 +846,12 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
   // are drawn.
   const URB_SUB_COLORS = { curve: '#b46cff', fit: '#00acc1' };
   const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
+  /* The widths' defaults, in eV (to v514 points: N 1, N2 20, M 25, M2 100): no smoothing;
+     the derivative's 0.15, 20 points at 1 nm near 3.1 eV; the Tauc region's window 0.2, 25
+     points at 1 nm near 3.3 eV; the baseline's 0.5, which slides inside the 0.75 eV the
+     suggestion gives it (100 points at 1 nm, 0.72 eV, nearly filled it, and at 2 nm did not
+     fit: no E_g from the baseline); the Urbach region's 0.15, 25 points at 1 nm near 2.8 eV. */
+  const TAUC_DEF = { a:0.5, w:0, w2:0.15, W:0.2, W2:0.5 }, URB_DEF = { w:0, w2:0.15, W:0.15 };
 
   /* =========================================================
      ANALYSIS CARDS
@@ -615,8 +897,8 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
   function taucSpec(a){
     return {
       prefix: 'an' + a.id,
-      keys: ['a','N','N2','M','M2'],
-      defaults: { a:0.5, N:1, N2:20, M:25, M2:100 },
+      keys: ['a','w','w2','W','W2'],
+      defaults: TAUC_DEF,
       curve: (fr, hv, p)=> Math.pow(fr*hv, p.a),
       // The exponent changes the curve the edge is found on, so the lines follow it.
       suggestOn: ['a'],
@@ -624,8 +906,8 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       fmtA,
       zeroFloor: true,
       windows: [
-        { lo:'v1', hi:'v2', M:'M',  color: TAUC_COLORS.regs,  name:'Tauc region', key:'regs',  stats:['RMSE1','R21'] },
-        { lo:'v3', hi:'v4', M:'M2', color: TAUC_COLORS.regs2, name:'baseline',    key:'regs2', stats:['RMSE2','R22'] },
+        { lo:'v1', hi:'v2', W:'W',  color: TAUC_COLORS.regs,  name:'Tauc region', what:'Tauc linear region', key:'regs',  stats:['RMSE1','R21','Pts1'] },
+        { lo:'v3', hi:'v4', W:'W2', color: TAUC_COLORS.regs2, name:'baseline',    what:'baseline region',    key:'regs2', stats:['RMSE2','R22','Pts2'] },
       ],
       defaultLines: (lo, d)=> ({ v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d }),
       // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span); the
@@ -635,7 +917,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       // inside it (the window scan then finds each one's linear part); baseline computed
       // once from min(v1), below every edge.
       combine: ss =>{ const v1 = Math.min(...ss.map(s=>s.v1)), v2 = Math.max(...ss.map(s=>s.v2)); return { v1, v2, v3: v1-0.85, v4: v1-0.1 }; },
-      results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
+      results: f => ({ ...taucEg(f[0], f[1]), regs: f[0], regs2: f[1] }),
       show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
       hidden: ()=> isFolded(a),
       // The automatic name carries the exponent.
@@ -654,7 +936,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      a line in the Tauc plot, Y_b = m·hν + b in [F(R)·hν]^a, so in F(R) it is
      F_b = Y_b^(1/a) / hν where Y_b > 0, and nothing where it is not. It is subtracted in
      F(R), where absorptions add up, and what is left goes through the card's own
-     treatment: ln (nothing where F(R) − F_b ≤ 0), smoothing over N, the window scan
+     treatment: ln (nothing where F(R) − F_b ≤ 0), smoothing over w, the window scan
      between the same lines, the line fitted to the unsmoothed values. Null with no
      reference, or no baseline fit in it. */
   function urbachSub(a, k, p, vl){
@@ -670,21 +952,22 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     // those where it lies above F(R) (to v478), they blocked every window holding one,
     // and the card blamed the baseline for them. Those where it does stay in, as they
     // were: there the curve was measured and has no value, nor has an average holding one.
-    const Ys = onFinite(Yraw, null, v=> movingAverage(v, p.N), i=> FR[i] > 0);
-    const regs = scanRegr(hv.map((e, i)=> FR[i] > 0 ? e : NaN), Ys, p.M, vl.v1, vl.v2, Yraw, true);
+    const Ys = smoothKept(Yraw, hv, p.w, i=> FR[i] > 0);
+    const regs = scanRegr(hv.map((e, i)=> FR[i] > 0 ? e : NaN), Ys, p.W, vl.v1, vl.v2, Yraw, true);
     // How many points of F(R) > 0 between the lines lost their logarithm (F(R) ≤ F_b):
     // with too many there is no window to fit, and the card says why (and, with `neg`
     // of F(R) ≤ 0 there too, that its count is of the others).
     const lo = Math.min(vl.v1, vl.v2), hi = Math.max(vl.v1, vl.v2);
     let inside = 0, lost = 0, neg = 0;
     hv.forEach((e, i)=>{ if (e >= lo && e <= hi){ if (!(FR[i] > 0)) neg++; else { inside++; if (!isFinite(Yraw[i])) lost++; } } });
-    // The baseline is to blame only where the region holds a window to fit: with fewer
-    // points of F(R) > 0 than M the plain fit fails too, and the card says so already.
-    const blocked = !isFinite(regs.slope) && lost > 0 && inside >= p.M;
+    // The baseline is to blame only where the region holds a window to fit, W wide with 3
+    // points of F(R) > 0 (to v514, M points): without, the plain fit fails too, and the
+    // card says so already.
+    const blocked = !isFinite(regs.slope) && lost > 0 && !regs.small;
     // E_U's error: the fit's own and the Tauc baseline's carried through the subtraction,
     // independent, so added in quadrature (each already times its own t factor).
-    const fit = urbachEu(regs, p.M), m = regs.slope;
-    const EuErrBase = subBaselineSlopeErr(regs, Yraw, r, ta, hv, FR, T.params(k).M2)/(m*m);
+    const fit = urbachEu(regs), m = regs.slope;
+    const EuErrBase = subBaselineSlopeErr(regs, Yraw, r, ta, hv, FR)/(m*m);
     return { Fb, Yraw, Ys, regs, inside, lost, neg, blocked, Eu: fit.Eu, EuErr: Math.hypot(fit.EuErr, EuErrBase), EuErrFit: fit.EuErr, EuErrBase };
   }
   /* What the Tauc baseline's own uncertainty adds to the subtracted slope s. With the
@@ -698,7 +981,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      Σ_b the baseline fit's covariance. Its square root is returned times that fit's t
      factor (99%, n_b − 2), as each fit's term is in E_g (baseline). The derivatives are
      exact (no step to take), and finite wherever the window's points have a logarithm. */
-  function subBaselineSlopeErr(regs, Yraw, rb, ta, hv, FR, Mb){
+  function subBaselineSlopeErr(regs, Yraw, rb, ta, hv, FR){
     if (!isFinite(regs.slope) || !regs.bestIdx || ![rb.varM, rb.varB, rb.covMB].every(isFinite)) return NaN;
     // The fit's own points: those of its window with a logarithm (scanRegr).
     const idx = regs.bestIdx.filter(i=> isFinite(Yraw[i]));
@@ -714,18 +997,18 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     });
     const v = Jm*Jm*rb.varM + Jb*Jb*rb.varB + 2*Jm*Jb*rb.covMB;
     if (!isFinite(v)) return NaN;
-    return Math.sqrt(Math.max(0, v))*tinv(T_Q, (rb.n || Mb) - 2);
+    return Math.sqrt(Math.max(0, v))*tinv(T_Q, rb.n - 2);
   }
   function urbachSpec(a){
     return {
       prefix: 'an' + a.id,
-      keys: ['N','N2','M'],
-      defaults: { N:1, N2:20, M:25 },
+      keys: ['w','w2','W'],
+      defaults: URB_DEF,
       curve: fr => fr > 0 ? Math.log(fr) : NaN,
       yLabel: ()=> 'ln[F(R)]',
       zeroFloor: false,
       windows: [
-        { lo:'v1', hi:'v2', M:'M', color: URBACH_COLOR, name:'Urbach region', key:'regs', stats:['RMSE1','R21'] },
+        { lo:'v1', hi:'v2', W:'W', color: URBACH_COLOR, name:'Urbach region', what:'Urbach region', key:'regs', stats:['RMSE1','R21','Pts1'] },
       ],
       defaultLines: restLines,
       /* The region is placed under the sample's Tauc linear region in the reference
@@ -742,7 +1025,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
         if (!w){ const hv = files[i].hv, lo = minArr(hv); return restLines(lo, maxArr(hv) - lo); }
         return { v1: (w[0] + w[1]) / 2 - 1, v2: w[0] };
       },
-      results: (f, p, k, vl)=> ({ ...urbachEu(f[0], p.M), regs: f[0], sub: urbachSub(a, k, p, vl) }),
+      results: (f, p, k, vl)=> ({ ...urbachEu(f[0]), regs: f[0], sub: urbachSub(a, k, p, vl) }),
       // The tail with the Tauc baseline taken out, on the same plot, drawn as the plain
       // traces are but in colours of its own (URB_SUB_COLORS): its smoothed curve solid,
       // its fit solid and thick in its window, dashed and thin beyond.
@@ -762,6 +1045,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
         const sb = r.sub, g = sb && sb.regs;
         $('RMSE1s').textContent = g && isFinite(g.NRMSE) ? g.NRMSE.toFixed(4) : '-';
         $('R21s').textContent = g && isFinite(g.R2) ? g.R2.toFixed(4) : '-';
+        $('Pts1s').textContent = g && isFinite(g.slope) ? `${g.n} pts` : '-';
         $('EuS').textContent = sb ? fmtE(sb.Eu, sb.EuErr, 'meV', 1, 1000) : '-';
         $('EuS').parentElement.title = sb && isFinite(sb.EuErrBase)
           ? `± ${(sb.EuErrFit*1000).toFixed(1)} meV from the fit, ± ${(sb.EuErrBase*1000).toFixed(1)} meV from the Tauc baseline, in quadrature` : '';
@@ -792,8 +1076,8 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
 
   /* ---- Card markup ---- */
   const CARD_INFO = cardInfo(true, true);
-  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. Where F(R) &lt; 0, [F(R)·hν]<sup>a</sup> has no value for a = 0.5, 2/3 or 1/3: those points are left out, as though not measured, of the smoothing, the derivatives, the suggestion and the fits. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
-  const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, each with its own axes: the plain curves and fits above, the subtracted ones under them (empty, and saying why, when there is nothing to subtract); the chips on the E<sub>U</sub> chart show the plain E<sub>U</sub>, the subtracted one or both. ${CARD_INFO}`;
+  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method: the region where |Y''| stays above 10% of its largest over half the derivative smoothing width, read only where that width smooths it, wider than a point's two neighbours span; with no such stretch, the whole span), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window, the <b>regression window</b>'s width in eV, through it and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed to choose each window, at each point the mean of the line through the points over a window w wide (eV) centred on it, a box convolution cut short at the ends (0: none), and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. The derivative is the slope of the smoothed curve across the derivative smoothing width (the secant; 0: the central difference). Every width is in eV, so that it is the same along the spectrum, whose energy step is uneven (on an even wavelength grid, 10 times wider at 250 nm than at 800 nm), and for samples measured at different steps; a window holds every point within its width, 3 at least, spread over half of it at least (beside a gap in the data a window holding only the few points on one side is passed over), and the card gives the points each fit took (n). Each field shows beside its value the points it spans for the sample on show: a smoothing, over the spectrum, at its widest steps and at its narrowest; a regression window, those of the window chosen (while another value is typed, those a window that wide holds between the lines). Where F(R) &lt; 0, [F(R)·hν]<sup>a</sup> has no value for a = 0.5, 2/3 or 1/3: those points are left out, as though not measured, of the smoothing, the derivatives, the suggestion and the fits. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, n − 2 degrees of freedom for each fit, n its points). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
+  const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression window's width (eV) is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc, the smoothing and the derivative widths in eV as there (each field shows beside its value the points it spans for the sample on show). <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, n − 2 degrees of freedom, n the fit's points). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the baseline fit's points − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, each with its own axes: the plain curves and fits above, the subtracted ones under them (empty, and saying why, when there is nothing to subtract); the chips on the E<sub>U</sub> chart show the plain E<sub>U</sub>, the subtracted one or both. ${CARD_INFO}`;
 
 
   const navRow = p => `
@@ -815,6 +1099,14 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
   // draws its key in that pattern.
   const legend = (id, items)=> `<div class="legend" id="${id}">${items.map(([c, t, x, d])=> `<span${x || ''}>${d ? `<i class="${d}" style="color:${c}"></i>` : `<i style="background:${c}"></i>`}${t}</span>`).join('')}</div>`;
 
+  /* A width's field (smooth.js; XRPD's, EPR's): its value in eV and, in the same box after
+     it, muted, what it spans in points of the sample on show (makePanel syncPts). The box is
+     a label: a click on the points is one in the field. */
+  const W_TIP = {
+    w: "The smoothing's width, in eV: the mean of the curve over a window this wide (0: none); beside it, the points it spans over the spectrum on show, at its widest steps (high energy) and at its narrowest",
+    w2: "The derivative's smoothing width, in eV: the slope of the smoothed curve across a window this wide (0: the central difference); beside it, the points it spans over the spectrum on show, at its widest steps and at its narrowest",
+    W: "The regression window's width, in eV: a window this wide slides through the interval, and the straightest is fitted; beside it, the points of the one chosen for the sample on show (while another value is typed, those a window this wide holds between the lines, the fewest and the most)" };
+  const wField = (p, k, v)=> `<label class="pg-field wfield" title="${W_TIP[k[0] === 'W' ? 'W' : k]}"><input type="text" inputmode="decimal" id="${p}${FIELD[k]}" value="${v}" autocomplete="off" aria-describedby="${p}${FIELD[k]}Pts"><span class="wf-pts" id="${p}${FIELD[k]}Pts"></span></label>`;
   function taucBody(p){
     return `
         <div class="row" style="align-items:flex-start">
@@ -830,18 +1122,20 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
               <select id="${p}A" class="pg-field an-exp">
                 ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label} (${e.name})</option>`).join('')}
               </select>
-              <label class="txt-label" for="${p}N">[F(R)hν]<sup id="${p}NExp">0.5</sup> smoothing window</label>
-              <input type="number" class="pg-field" id="${p}N" value="1" min="1">
-              <label class="txt-label" for="${p}N2">Derivative smoothing window</label>
-              <input type="number" class="pg-field" id="${p}N2" value="20" min="1">
-              <label class="txt-label" for="${p}M">Tauc linear region regression window</label>
-              <input type="number" class="pg-field" id="${p}M" value="25" min="2">
+              <label class="txt-label" for="${p}Smooth">[F(R)hν]<sup id="${p}NExp">0.5</sup> smoothing width (eV)</label>
+              ${wField(p, 'w', TAUC_DEF.w)}
+              <label class="txt-label" for="${p}DSmooth">Derivative smoothing width (eV)</label>
+              ${wField(p, 'w2', TAUC_DEF.w2)}
+              <label class="txt-label" for="${p}Win">Tauc linear region regression window (eV)</label>
+              ${wField(p, 'W', TAUC_DEF.W)}
               <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
               <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
-              <label class="txt-label" for="${p}M2">Baseline regression window</label>
-              <input type="number" class="pg-field" id="${p}M2" value="100" min="2">
+              <div class="pg-stat">n = <b id="${p}Pts1">-</b></div>
+              <label class="txt-label" for="${p}Win2">Baseline regression window (eV)</label>
+              ${wField(p, 'W2', TAUC_DEF.W2)}
               <div class="pg-stat">NRMSE: <b id="${p}RMSE2">-</b></div>
               <div class="pg-stat">R²: <b id="${p}R22">-</b></div>
+              <div class="pg-stat">n = <b id="${p}Pts2">-</b></div>
               <div class="pg-result">
                 <div class="pg-stat">E<sub>g</sub> (x-axis): <b id="${p}Eg">-</b></div>
                 <div class="pg-stat">E<sub>g</sub> (baseline): <b id="${p}EgInt">-</b></div>
@@ -866,16 +1160,18 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
             <div class="param-grid">
               <label class="txt-label" for="${p}Ref">Tauc reference</label>
               <select id="${p}Ref" class="pg-field an-ref" title="The Tauc analysis whose linear region the Urbach region is placed on"></select>
-              <label class="txt-label" for="${p}N">ln[F(R)] smoothing window</label>
-              <input type="number" class="pg-field" id="${p}N" value="1" min="1">
-              <label class="txt-label" for="${p}N2">Derivative smoothing window</label>
-              <input type="number" class="pg-field" id="${p}N2" value="20" min="1">
-              <label class="txt-label" for="${p}M">Urbach linear region regression window</label>
-              <input type="number" class="pg-field" id="${p}M" value="25" min="2">
+              <label class="txt-label" for="${p}Smooth">ln[F(R)] smoothing width (eV)</label>
+              ${wField(p, 'w', URB_DEF.w)}
+              <label class="txt-label" for="${p}DSmooth">Derivative smoothing width (eV)</label>
+              ${wField(p, 'w2', URB_DEF.w2)}
+              <label class="txt-label" for="${p}Win">Urbach linear region regression window (eV)</label>
+              ${wField(p, 'W', URB_DEF.W)}
               <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
               <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
+              <div class="pg-stat">n = <b id="${p}Pts1">-</b></div>
               <div class="pg-stat pg-gap" title="The fit with the reference Tauc card's baseline taken out of F(R)">NRMSE (subtracted): <b id="${p}RMSE1s">-</b></div>
               <div class="pg-stat" title="The fit with the reference Tauc card's baseline taken out of F(R)">R² (subtracted): <b id="${p}R21s">-</b></div>
+              <div class="pg-stat" title="The fit with the reference Tauc card's baseline taken out of F(R)">n (subtracted) = <b id="${p}Pts1s">-</b></div>
               <div class="pg-result">
                 <div class="pg-stat">E<sub>U</sub>: <b id="${p}Eu">-</b></div>
                 <div class="pg-stat">E<sub>U</sub> (subtracted): <b id="${p}EuS">-</b></div>
@@ -889,13 +1185,12 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
   const cardInfoOf = t => ({ tauc: TAUC_INFO, urbach: URBACH_INFO }[t]);
 
   /* ---- Cards: the panel on each (the deck builds, folds and moves the cards) ---- */
-  // The card is in the page: the panel finds its elements there by id. Number fields are
-  // guarded before the panel listens to them, so an invalid entry never reaches it. On a
-  // kind switch (prev, the kind left) that kind's settings are kept for a switch back.
+  // The card is in the page: the panel finds its elements there by id (its width fields
+  // guarded before it listens to them, so an invalid entry never reaches it: makePanel).
+  // On a kind switch (prev, the kind left) that kind's settings are kept for a switch back.
   function buildPanel(a, card, prev){
     const was = live.get(a.id);
     if (prev && was) a.states[prev] = was.panel.snapshot();
-    guardNumberInputs(card);
     const panel = makePanel(SPECS[a.type](a));
     if (a.states[a.type]) panel.restore(a.states[a.type]);
     else panel.fit();
@@ -1052,14 +1347,16 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
   // The same lists, each named by its card and kind, for the file list to keep
   // aligned with the included files. A file brought back in gets the parameters and
   // lines it left with, in each card that was there then; in a card added since, it
-  // starts from the card's defaults, as a file uploaded into it does.
+  // starts from the card's defaults, as a file uploaded into it does. (A panel's own
+  // entry of a project to v514, in points, is converted as it comes back: P.back; one
+  // of a kind not on show, when that kind is restored.)
   const copyPer = p => p ? {...p, vlines: p.vlines ? {...p.vlines} : undefined} : {};
   function slots(){
     const out = [];
     cards().forEach(a=>{
       Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s && s.per) out.push({ key: a.id + ':' + k, arr: s.per, make: copyPer }); });
       const P = panelOf(a);
-      if (P) out.push({ key: a.id + ':' + a.type, arr: P.per, make: copyPer });
+      if (P) out.push({ key: a.id + ':' + a.type, arr: P.per, make: P.back });
     });
     return out;
   }
@@ -1476,7 +1773,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     const Ys_all = files.map((f,k)=>{
       const fp = P.params(k);
       const Yraw = f.FR.map((v,i)=>Math.pow(v*f.hv[i], fp.a));
-      return smoothY(Yraw, fp.N);
+      return smoothY(Yraw, f.hv, fp.w);
     });
     const ymax1 = Math.max(...Ys_all.map(maxArr));
     const [hv0, hv1] = unionHv();
@@ -1522,7 +1819,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     const P = panelOf(a), p = 'an' + a.id, $ = id => document.getElementById(p + id);
     const fits = files.map((f,k)=> P.analyze(k));
     const curves = files.map((f,k)=> ({
-      p: smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), P.params(k).N),
+      p: smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), f.hv, P.params(k).w),
       s: fits[k].sub ? fits[k].sub.Ys : null,
     }));
     const vals = { p: fits.map(r=> r.Eu*1000), s: fits.map(r=> r.sub ? r.sub.Eu*1000 : NaN) };
@@ -1674,7 +1971,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
         const r = fits[k];
         cols.push({h:'energy_eV_'+f.label,       v:f.hv.map(x=>fmtNum(x,6))});
         // The curve as plotted and fitted: smoothed with the card's window.
-        const fp = P.params(k), Ys = smoothY(f.FR.map((v,i)=> Math.pow(v*f.hv[i], fp.a)), fp.N);
+        const fp = P.params(k), Ys = smoothY(f.FR.map((v,i)=> Math.pow(v*f.hv[i], fp.a)), f.hv, fp.w);
         cols.push({h:f.label,                    v:Ys.map(v=> fmtNum(v,6))});
         cols.push({h:f.label+'_reg_linear',      v:f.hv.map(hv=> fmtNum(r.regs.slope*hv  + r.regs.intercept, 6))});
         cols.push({h:f.label+'_reg_baseline',    v:f.hv.map(hv=> fmtNum(r.regs2.slope*hv + r.regs2.intercept, 6))});
@@ -1692,11 +1989,13 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
     }
     // analysis_info.csv — per-sample regression settings & results (the info that
     // is otherwise only readable off the Analysis plot). Endpoints are in eV, taken
-    // from the best-fit window; R²/NRMSE are the fit-quality metrics for each line.
+    // from the best-fit window; R²/NRMSE are the fit-quality metrics for each line, and
+    // its points the ones it was fitted on. The widths in eV (to v514 the points: 'Smoothing
+    // points', 'Tauc regression points', 'Baseline regression points').
     {
-      let t = csvLine(['Sample','Tauc Exponent','Smoothing points',
-        'Tauc regression points','Tauc start (eV)','Tauc end (eV)','Tauc R^2','Tauc NRMSE',
-        'Baseline regression points','Baseline start (eV)','Baseline end (eV)','Baseline R^2','Baseline NRMSE']);
+      let t = csvLine(['Sample','Tauc Exponent','Smoothing width (eV)',
+        'Tauc regression window (eV)','Tauc fit points','Tauc start (eV)','Tauc end (eV)','Tauc R^2','Tauc NRMSE',
+        'Baseline regression window (eV)','Baseline fit points','Baseline start (eV)','Baseline end (eV)','Baseline R^2','Baseline NRMSE']);
       files.forEach((f,k)=>{
         const fp = P.params(k), r = fits[k];
         const span = (reg) => {
@@ -1706,10 +2005,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
           idx.forEach(i=>{ const e=f.hv[i]; if(e<lo)lo=e; if(e>hi)hi=e; });
           return [fmtNum(lo,6), fmtNum(hi,6)];
         };
-        const [ts,te] = span(r.regs), [bs,be] = span(r.regs2);
-        t += csvLine([f.label, +fp.a.toFixed(6), fp.N, fp.M, ts, te,
+        const [ts,te] = span(r.regs), [bs,be] = span(r.regs2), pts = reg => isFinite(reg.slope) ? reg.n : '';
+        t += csvLine([f.label, +fp.a.toFixed(6), fmtNum(fp.w,6), fmtNum(fp.W,6), pts(r.regs), ts, te,
           isFinite(r.regs.R2)?fmtNum(r.regs.R2,6):'', isFinite(r.regs.NRMSE)?fmtNum(r.regs.NRMSE,6):'',
-          fp.M2, bs, be,
+          fmtNum(fp.W2,6), pts(r.regs2), bs, be,
           isFinite(r.regs2.R2)?fmtNum(r.regs2.R2,6):'', isFinite(r.regs2.NRMSE)?fmtNum(r.regs2.NRMSE,6):'']);
       });
       entries.push({name:`${n} - analysis_info.csv`, text:t});
@@ -1726,7 +2025,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
         const r = fits[k].regs;
         cols.push({h:'energy_eV_'+f.label,  v:f.hv.map(x=>fmtNum(x,6))});
         // As plotted and fitted: smoothed with the card's window.
-        const Ys = smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), P.params(k).N);
+        const Ys = smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), f.hv, P.params(k).w);
         cols.push({h:f.label,               v:Ys.map(v=> isFinite(v) ? fmtNum(v,6) : '')});
         cols.push({h:f.label+'_reg_urbach', v:f.hv.map(hv=> isFinite(r.slope) ? fmtNum(r.slope*hv + r.intercept, 6) : '')});
         // With the reference Tauc card's baseline taken out of F(R) (empty with none).

@@ -66,16 +66,18 @@ Analyze diffuse reflectance spectroscopy (DRS) data in the UV-Visible range to a
 1. Upload your CSV/TXT files via drag-and-drop or click to select.
 2. For each spectrum, adjust:
    - **Tauc exponent**: 0.5 (indirect semiconductors) or 2 (direct semiconductors)
-   - **[F(R)hν]^a smoothing window**: smoothing parameter for the absorption function
-   - **Derivative smoothing window**: smoothing for the first derivative (helps identify inflection points)
-   - **Tauc linear region regression window**: number of points for linear fit
-   - **Baseline regression window**: number of points for baseline fit
+   - **[F(R)hν]^a smoothing width (eV)**: the curve smoothed, at each point, by the mean of the line through the points over a window this wide in eV (a box convolution, cut short at the ends); 0, the default, is none
+   - **Derivative smoothing width (eV)**: the slope of the smoothed curve across a window this wide (0.15 eV; 0: the central difference); the suggested intervals are placed from it
+   - **Tauc linear region regression window (eV)**: the width of the window that slides through the Tauc interval, the straightest one fitted (0.2 eV; 3 points at least, spread over half its width)
+   - **Baseline regression window (eV)**: the same for the baseline (0.5 eV)
+
+   The widths are on the energy axis, so they are the same along the spectrum, whose energy step is uneven (on an even wavelength grid, 10 times wider at 250 nm than at 800 nm), and for samples measured at different steps. Each field shows, inside it, the points it spans for the sample on show: a smoothing, over the spectrum (`≈ 7.6–77 pts`); a window, the points of the one chosen (`≈ 24 pts`; while another value is typed, those a window that wide holds between the lines). Each fit gives its points (n) beside its NRMSE and R², and analysis_info.csv gives the widths in eV and the points fitted. The Urbach card has the same, on ln F(R) (0, 0.15 and 0.15 eV). Up to v514 they were numbers of points: a project saved before opens with each as the width it had where it acted (v514's own window choice made again: a window, its span; a smoothing, its points times the step there, kept so that the scan takes the same windows), in all mode the median of the samples'.
 
 3. **Interactive plot**: Drag the vertical red line (Tauc region) and magenta line (baseline) to adjust the linear fit regions.
 4. The Results open with F(R) and the reflectance R (%) against the wavelength, side by side, whatever the files held (R from F(R) by the exact inverse, R = 1 + F − √(F² + 2F)), and under them F(R) against the energy on a log axis, across the card. Then each card's charts:
    - **Eg (x-axis)**: Band gap from intersection with x-axis
    - **Eg (baseline)**: Band gap from intersection with baseline
-   - **NRMSE & R²** for both regressions (the RMSE divided by the range of the values in the window)
+   - **NRMSE & R²** for both regressions (the RMSE divided by the range of the values in the window), and the points each was fitted on (n)
 
 5. Export processed data as CSV using the **Export CSV** button.
 
