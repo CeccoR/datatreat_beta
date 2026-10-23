@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, tinv, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, isArr, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
@@ -11,21 +11,26 @@ import { textLines, readTable, parseNum } from './textdata.js';
 (function(){
   /* The module (modkit.js): every file loaded, in list order, {name, label,
      injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has), emptyRows, and
-     dayMonth: true, badDates: n where they apply (readGc)}, and the included ones, which
-     the analysis sees, `files`, with which the per-sample arrays each card keeps are
-     aligned; the alerts under the drop zone, the dates read day first or left out and the
-     empty cells skipped among them; each card's settings in the history. */
+     dayMonth: true, badDates: n where they apply (readGc), and sample, the file it is a
+     replicate of, where it is one (REPLICATES)}, and the included ones, which the analysis
+     sees, `files`, with which the per-sample arrays each card keeps are aligned; the
+     alerts under the drop zone, the dates read day first or left out and the empty cells
+     skipped among them; each card's settings in the history. */
   const kit = moduleKit('gc', {
     alerts: p =>{ document.getElementById('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + p.upload; },
     dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)) },
     // Every card's per-sample arrays. An excluded file holds its own values; one with none
     // (never so far, or in a card added since) gets the upload defaults.
     slots: ()=> cards().flatMap(a=> live.get(a.id).slots()),
-    listed: op =>{ if (op !== 'palette') each(c=> c.unselect()); },
+    // (a head removed: its group stays, headed by its next file, relink)
+    listed: op =>{ if (op !== 'palette') each(c=> c.unselect()); if (op === 'remove') relink(); },
     refresh: afterFilesChange,
+    // The Sample column of the file list (REPLICATES).
+    note: sampleCell, noteHead: 'SAMPLE', noteChange: setSample,
     // A label or a colour changed: the zoom kept (the data are the same), a folded card not
-    // drawn (to v494 it was, hidden, at no size, and lost its zoom).
-    redraw: what => each((c, a)=>{ if (what === 'label') c.renderTable(); if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }),
+    // drawn (to v494 it was, hidden, at no size, and lost its zoom). A file's sample: the
+    // mean-rate bars alone, the only plot per sample.
+    redraw: what => what === 'note' ? each(c=> c.bars()) : each((c, a)=>{ if (what === 'label') c.renderTable(); if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }),
     cleared: ()=> each(c=> c.clear()),
     snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), ...live.get(a.id).snapshot() })) }),
     /* A file as a restore takes it (modkit RESTORED): its injections, each with a date that
@@ -45,14 +50,83 @@ import { textLines, readTable, parseNum } from './textdata.js';
     },
     // A project from before the cards had one analysis, its settings at the top level. A
     // card built afresh takes its settings when its analysis is made (init), its
-    // per-sample arrays without the entries of the files the restore left out.
-    restore: (s, gone)=> deck.load(cardList(s.cards, KINDS) || [{ ...s, id: 1, type: 'rate' }],
-      src=> ({ init: { ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, without(src[k], gone)])) } }), a=>{ live.get(a.id).restore(a.init); delete a.init; }),
+    // per-sample arrays without the entries of the files the restore left out. The files'
+    // samples as they should be (relink): a project from before them, each file its own.
+    restore: (s, gone)=>{ relink(); deck.load(cardList(s.cards, KINDS) || [{ ...s, id: 1, type: 'rate' }],
+      src=> ({ init: { ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, without(src[k], gone)])) } }), a=>{ live.get(a.id).restore(a.init); delete a.init; }); },
     redrawTab: ()=>{ if (files.length){ deck.fitNames(); each((c, a)=>{ if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }); } },
     csv: ()=> cards().flatMap(a=> live.get(a.id).exportEntries(fileSafe(a.name))),
   });
   const { all: allFiles, files } = kit;
   const each = fn => cards().forEach(a=> fn(live.get(a.id), a));
+
+  /* ---- REPLICATES ----
+     Each file is a sample of its own, or a replicate of another file's: its record's
+     `sample`, the name of the file that heads the group, which the list's Sample column
+     chooses. Linked by the file's name, its identity in the list (the drop loads no name
+     twice), not by its label: a label renamed changes nothing. No chains: a file is linked
+     to a head alone (a file linked to none), and a head linked to another takes its group
+     along. Every plot and CSV stays per file but the mean-rate bars and mean_rates.csv,
+     one per sample (samplesOf, sampleRates). */
+  // The files by name, those whose name is theirs alone (`twice`, the others: a hand-edited project's).
+  function byName(){
+    const by = new Map(), twice = new Set();
+    allFiles.forEach(f=>{ if (by.has(f.name)) twice.add(f.name); by.set(f.name, f); });
+    twice.forEach(n=> by.delete(n));
+    return { by, twice };
+  }
+  const isHead = f => !('sample' in f);
+  /* The links as they should be. A head no longer in the list (removed): its group stays,
+     the first of it in list order heading it and the others linked to that one. What a
+     project read in may hold besides (RESTORED): a link that is no name, to the file
+     itself, to a name two files have, or to a file linked in turn (a chain): taken off,
+     the file its own sample. */
+  function relink(){
+    const { by, twice } = byName(), heir = new Map();
+    allFiles.forEach(f=>{
+      const s = f.sample;
+      if (typeof s !== 'string' || by.has(s) || twice.has(s)) return;
+      if (heir.has(s)) f.sample = heir.get(s); else { heir.set(s, f.name); delete f.sample; }
+    });
+    allFiles.forEach(f=>{ if (isHead(f)) return; const h = typeof f.sample === 'string' && by.get(f.sample); if (!h || h === f || !isHead(h)) delete f.sample; });
+  }
+  // A file's head: the file it is linked to, or itself.
+  const headOf = (f, by)=> (!isHead(f) && by.get(f.sample)) || f;
+  /* The file list's Sample column: a select of the file's own name and the heads', in list
+     order, on its head's; dimmed with the row when the file is left out, as its label is. */
+  function sampleCell(f, i){
+    const h = headOf(f, byName().by);
+    return `<select class="file-sample" data-i="${i}" aria-label="Sample" title="The sample this file is: its own, or the one another file heads (its replicates)">${
+      allFiles.filter(g=> g === f || isHead(g)).map(g=> `<option value="${esc(g.name)}"${g === h ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}</select>`;
+  }
+  /* File i's sample chosen (modkit noteChange): its own, it heads one again; a head's, it
+     joins that one's, with the files it headed. A walk through its select's options
+     (`again`: the arrow keys, each a choice, the focus kept) is one choice changed: the
+     files it headed as the walk began (`walk`) go with it at each step, and back to it
+     with its own. Taken each step from the links then, a head stepped on to a second head
+     left its group on the first, and stepped back to its own left it there, the select
+     showing what it showed before. */
+  let walk = null;
+  function setSample(i, name, again){
+    const f = allFiles[i], h = byName().by.get(name);
+    if (!f || !h || !(h === f || isHead(h))) return;
+    if (!again || !walk || walk.f !== f) walk = { f, m: allFiles.filter(g=> g.sample === f.name) };
+    walk.m.forEach(g=>{ g.sample = h.name; });
+    if (h === f) delete f.sample; else f.sample = h.name;
+  }
+  /* The samples of the included files, in the order of their first: each { name, label, ks,
+     the places of its files among the included }, named after its head (its file's name,
+     the key of its bar), labelled with its head's label, or, the head left out, its first
+     included file's. Each included file its own: the files, as before replicates. */
+  function samplesOf(){
+    const { by } = byName(), out = new Map();
+    files.forEach((f, k)=>{
+      const h = headOf(f, by);
+      if (!out.has(h)) out.set(h, { name: h.name, label: (h.included !== false ? h : f).label, ks: [] });
+      out.get(h).ks.push(k);
+    });
+    return [...out.values()];
+  }
 
   // Axis titles. The SVG form carries the g⁻¹/h⁻¹ superscripts; the plain form is the
   // matching CSV header.
@@ -909,15 +983,34 @@ import { textLines, readTable, parseNum } from './textdata.js';
       mk('SvgCum',  LBL_CUM_SVG,  'FmInt');
     }
 
-    /* The mean rates (modcharts.js valueBars), each shown gas a series of its own beside the
-       others in each sample's slot, the way the XRPD size chart pairs raw and corrected:
-       coloured by gas (the samples are told apart by their place on the axis, the gases
-       would not be) and named by it, as the legend under the chart is. Nothing to show
-       draws nothing: the section's visibility is updateRegression's. */
+    /* The mean rates per sample (samplesOf), of each gas: the mean over the sample's files
+       of each one's mean rate (costResults: worked out with its own m, Q, T, p, light-on
+       and interval), `n` the files with one, and its ± (`err`) the half-width of the 99 %
+       confidence interval of that mean, t(0.995, n − 1)·s/√n, s the files' standard
+       deviation (n − 1 under it); none for one file. To v511 a bar per file, with no ±. */
+    function sampleRates(){
+      return samplesOf().map(s=>{
+        const rate = {}, err = {}, n = {};
+        for (const g of GASES){
+          const v = s.ks.map(k=> costResults[k] && costResults[k].rate[g.key]).filter(Number.isFinite);
+          n[g.key] = v.length;
+          if (!v.length) continue;
+          rate[g.key] = meanArr(v);
+          err[g.key] = v.length > 1 ? tinv(0.995, v.length - 1)*stdArr(v)/Math.sqrt(v.length) : NaN;
+        }
+        return { ...s, rate, err, n };
+      });
+    }
+    /* The mean rates (modcharts.js valueBars), a bar per sample, each shown gas a series of
+       its own beside the others in each sample's slot, the way the XRPD size chart pairs
+       raw and corrected: coloured by gas (the samples are told apart by their place on the
+       axis, the gases would not be) and named by it, as the legend under the chart is; its
+       error bar the ± of the sample's replicates. Nothing to show draws nothing: the
+       section's visibility is updateRegression's. */
     function drawBarChart(){
-      const svg = $('SvgBar');
-      valueBars(svg, { cats: costResults, digits: 4, yLabel: LBL_RATE_SVG, legend: $('BarLegend'),
-        series: shownGases('r').map(g=> ({ name: gasTxt(g), color: g.bar, vals: costResults.map(c=> c.rate[g.key]) })),
+      const svg = $('SvgBar'), sm = sampleRates();
+      valueBars(svg, { cats: sm, digits: 4, yLabel: LBL_RATE_SVG, legend: $('BarLegend'),
+        series: shownGases('r').map(g=> ({ name: gasTxt(g), color: g.bar, vals: sm.map(s=> s.rate[g.key]), errs: sm.map(s=> s.err[g.key]) })),
         chips: svg.closest('.plot-wrap').querySelector('.gc-gas-sel') });
     }
 
@@ -966,19 +1059,35 @@ import { textLines, readTable, parseNum } from './textdata.js';
       };
       entries.push({name:`${n} - gc_raw.csv`,     text:buildSeriesCsv(dataTables, true)});
       entries.push({name:`${n} - gc_results.csv`, text:buildSeriesCsv(cutTables(), false)});
-      // mean_rates.csv — bar-plot-like summary (one row per sample). One duration column
-      // while every sample's shown gases cover the same span (a sample with none of them,
-      // its own span, as before); when a gas of some sample reaches less far (an empty
-      // cell at the interval's edge), one column per gas for every sample.
+      // mean_rates.csv — bar-plot-like summary (one row per file). One duration column
+      // while every file's shown gases cover the same span (a file with none of them,
+      // its own span, as before); when a gas of some file reaches less far (an empty
+      // cell at the interval's edge), one column per gas for every file.
       // The flow's pressure, in the card's unit, and its temperature last: the rates were
       // worked out at their molar volume (T the last column since v495, p beside it).
       const durs = c => shown.map(g=> fmtNum(c.dt[g.key],4));
       const perGas = shown.length > 1 && costResults.some(c=> new Set(durs(c).filter(Boolean)).size > 1);
-      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`),
-        ...(perGas ? shown.map(g=>`${g.csv} interval duration (h)`) : ['Interval duration (h)']), `p (${pUnit})`, 'T (°C)']);
-      costResults.forEach((c, k)=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)),
-        ...(perGas ? durs(c) : [durs(c).find(Boolean) || fmtNum(c.span,4)]), asSet(inUnit(pOf(k), pUnit)), asSet(tOf(k))]));
-      entries.push({name:`${n} - mean_rates.csv`, text:t2});
+      // The columns after the rates, and file k's.
+      const tailHead = [...(perGas ? shown.map(g=>`${g.csv} interval duration (h)`) : ['Interval duration (h)']), `p (${pUnit})`, 'T (°C)'];
+      const tail = k =>{ const c = costResults[k]; return [...(perGas ? durs(c) : [durs(c).find(Boolean) || fmtNum(c.span,4)]), asSet(inUnit(pOf(k), pUnit)), asSet(tOf(k))]; };
+      let t2 = csvLine(['Sample', ...shown.map(g=>`Mean ${g.csv} ${LBL_RATE_CSV}`), ...tailHead]);
+      costResults.forEach((c, k)=> t2 += csvLine([c.label, ...shown.map(g=>fmtNum(c.rate[g.key],6)), ...tail(k)]));
+      /* With replicates (a sample of more than one included file), mean_rates.csv has a row
+         per sample: its name (its bar's), each gas's mean, ± and n (sampleRates), then its
+         files' durations, p and T, each one value where they agree, else all of them in
+         list order joined by '/' (a gas's duration, of the files that have it); the rows per
+         file above are mean_rates_by_file.csv. With none, mean_rates.csv is those, as to
+         v511. */
+      const sm = sampleRates();
+      if (sm.some(s=> s.ks.length > 1)){
+        const one = vs =>{ const w = vs.filter(v=> v !== ''); return w.every(v=> v === w[0]) ? (w[0] || '') : w.join('/'); };
+        let t4 = csvLine(['Sample', ...shown.flatMap(g=> [`Mean ${g.csv} ${LBL_RATE_CSV}`, `${g.csv} ± (99% CI half-width, mmol g^-1 h^-1)`, `${g.csv} n`]), ...tailHead]);
+        sm.forEach(s=>{
+          const tails = s.ks.map(tail);
+          t4 += csvLine([s.label, ...shown.flatMap(g=> [fmtNum(s.rate[g.key],6), fmtNum(s.err[g.key],6), String(s.n[g.key])]), ...tailHead.map((_, j)=> one(tails.map(t=> t[j])))]);
+        });
+        entries.push({name:`${n} - mean_rates.csv`, text:t4}, {name:`${n} - mean_rates_by_file.csv`, text:t2});
+      } else entries.push({name:`${n} - mean_rates.csv`, text:t2});
       // gc_info.csv — per-sample inputs + the integration interval used
       // Local time, as the light-on field shows it and as the instrument logged it:
       // toISOString() wrote UTC, two hours early in Italian summer time.
@@ -1006,6 +1115,8 @@ import { textLines, readTable, parseNum } from './textdata.js';
       ],
       clear(){ [ms,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
       unselect(){ gcSel = gcHov = null; },
+      // (a file's sample changed: the bars alone are per sample)
+      bars(){ if (files.length) drawBarChart(); },
       renderTable: renderGcParamTable,
       compute: computeAndRenderGc,
       // A folded card draws nothing; its Results section is drawn all the same.
@@ -1075,7 +1186,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
   // What T and p are (their columns' titles, and the card's instructions).
   const T_TITLE = 'the temperature at which the flow Q is measured — for a mass-flow controller, the reference temperature of its standard units (often 0 °C or 20 °C: see its datasheet), not the temperature of its body';
   const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar: see its datasheet); for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
-  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). ${cardInfo(false, true)}`;
+  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, by that file's name (a label renamed changes nothing); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the half-width of the 99 % confidence interval of that mean, t(0.995, n−1)·s/√n (s the files' standard deviation, n of them; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
   const resList = document.getElementById('gcResList');
   const live = new Map();       // id → the card's analysis (gcCard)
   const placeRes = ()=> cards().forEach(a=>{ const c = live.get(a.id); if (c) resList.appendChild(c.res); });

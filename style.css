@@ -3306,11 +3306,12 @@ button.an-add.is-drop { border-color: var(--accent); }
 .sem-group.is-drop { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .sem-drag-ghost { position: fixed; z-index: 1000; width: 72px; height: auto; pointer-events: none; transform: translate(-50%, -50%); border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); opacity: 0.9; }
 
-/* The file list's note, right of the label in a column with no header (DRS: how its
-   second column was read; empty in the modules with none): muted, small, one line cut short
+/* The file list's note, right of the label in a column with no header but GC's (SAMPLE, a
+   select of the sample the file is) (DRS: how its second column was read; empty in the
+   other modules): muted, small, one line cut short
    with an ellipsis. To v501 a 40px column left of the label, centred, DRS's alone. */
 .file-row td.note-cell { color: var(--muted); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* A phone: FILE and SAMPLE LABEL with half the cells' side padding, the note with a
+/* A phone: FILE and LABEL with half the cells' side padding, the note with a
    quarter (so that "F(R)" shows whole down to 320px), the label field with less of its own,
    and the field, while typed in, laid over the note beside it, so that a label of a dozen
    characters shows whole: its cell's width, then the note's column (2/3 of the label's,
@@ -3322,6 +3323,15 @@ button.an-add.is-drop { border-color: var(--accent); }
   .file-table input.label-input { padding-left: 6px; padding-right: 6px; }
   .file-table input.label-input:focus { position: relative; z-index: 1; width: calc(100% * 5 / 3 + 22px / 3); }
   .file-table tr:has(input.label-input:focus) td.note-cell { visibility: hidden; }
+}
+/* GC's Sample column (gc.js REPLICATES): its select fills the note's cell, as tall as the
+   label field beside it, in the field's type. A phone: the header cut short with an
+   ellipsis as the file names are (its title whole), the select with the least padding,
+   in smaller type, its name cut at its arrow (its list shows them whole). */
+.file-table th.note-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row td.note-cell select.file-sample { width: 100%; min-width: 0; padding-top: 6px; padding-bottom: 6px; cursor: pointer; }
+@media (max-width: 600px) {
+  .file-row td.note-cell select.file-sample { padding: 7.5px 0 7.5px 3px; font-size: 11px; }
 }
 
 /* A width's field (XRPD's smoothing and SNIP, EPR's smoothing: smooth.js): the value, and

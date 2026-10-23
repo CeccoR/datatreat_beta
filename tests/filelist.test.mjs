@@ -1,10 +1,10 @@
 /* The file list (utils.js renderUnifiedFileList), the same in every module (DRS, XRPD, GC,
-   EPR, SEM): the grip and the include box 26 px each, then FILE, SAMPLE LABEL and a note
-   with no header sharing what is left as 3 : 3 : 2, then the actions 58 px, measured in the
-   browser at several widths, a phone's among them (no horizontal scroll, the label field
-   inside its cell, laid over the note while typed in on the phone); the note right of the
-   label, DRS's how each file's second column was read (%R or F(R), its title in full), the
-   others' empty. */
+   EPR, SEM): the grip and the include box 26 px each, then FILE, LABEL and a note with no
+   header but GC's (SAMPLE) sharing what is left as 3 : 3 : 2, then the actions 58 px,
+   measured in the browser at several widths, a phone's among them (no horizontal scroll,
+   the label field inside its cell, laid over the note while typed in on the phone); the
+   note right of the label, DRS's how each file's second column was read (%R or F(R), its
+   title in full), GC's a select of the sample the file is (its own), the others' empty. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, MODS } from './helpers.mjs';
@@ -26,7 +26,9 @@ const measure = (page, mod)=> page.evaluate(mod=>{
     rows: [...table.querySelectorAll('tr.file-row')].map(r=>{
       const tds = [...r.children], inp = r.querySelector('.file-label'), note = r.querySelector('td.note-cell'), t = note.querySelector('[title]');
       const ir = inp.getBoundingClientRect(), cr = inp.parentElement.getBoundingClientRect();
-      return { w: tds.map(w), cls: tds.map(t=> t.className), note: note.textContent, title: t && t.title,
+      // (GC's: its select's value, the sample the file is)
+      const sel = note.querySelector('select');
+      return { w: tds.map(w), cls: tds.map(t=> t.className), note: sel ? sel.value : note.textContent, title: t && t.title,
         noteRightOfLabel: note.previousElementSibling === inp.parentElement, inCell: ir.left >= cr.left - 0.5 && ir.right <= cr.right + 0.5 };
     }),
     lead: wrap.querySelectorAll('.lead-cell').length,
@@ -35,16 +37,16 @@ const measure = (page, mod)=> page.evaluate(mod=>{
   };
 }, mod);
 
-const NOTES = { tauc: ['F(R)', 'F(R)'] };
+const NOTES = { tauc: ['F(R)', 'F(R)'], gc: ['alpha.csv', 'beta.csv'] };
 for (const [vw, vh] of [[1400, 900], [800, 800], [375, 740]]){
-  test(`the file list at ${vw} px: FILE, SAMPLE LABEL and the note at 3 : 3 : 2 in every module, the note right of the label`, async ()=>{
+  test(`the file list at ${vw} px: FILE, LABEL and the note at 3 : 3 : 2 in every module, the note right of the label`, async ()=>{
     const { page, errors, close } = await env.page({ viewport: { width: vw, height: vh } });
     try {
       for (const mod of MODS){
         await openModule(page, mod);
         await loadFiles(page, mod, env.fx.files[mod]);
         const m = await measure(page, mod), left = m.table - 26 - 26 - 58;
-        assert.deepEqual(m.heads, ['', '', 'FILE', 'SAMPLE LABEL', '', ''], mod + ': the heads, the note with none');
+        assert.deepEqual(m.heads, ['', '', 'FILE', 'LABEL', mod === 'gc' ? 'SAMPLE' : '', ''], mod + ': the heads, the note with none but GC\'s');
         assert.equal(m.rows.length, ROWS[mod], mod);
         assert.equal(m.lead, 0, mod + ': no column left of the label');
         const want = [26, 26, left*3/8, left*3/8, left*2/8, 58];

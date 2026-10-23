@@ -16,12 +16,6 @@ was proposed; nothing here is in the code yet.
   when the reading is wrong (the file list's `%R`/`F(R)` note: a click there could switch
   it), and DataTreat's own exports named so that they load back.
 
-## GC
-
-- **Replicates.** A way to say that several datasets are the same sample, so the
-  mean rate gets real statistics (mean ± spread over replicates) instead of an
-  error estimated from one run. Until then the mean rate is reported as it is.
-
 ## XRPD
 
 - **Kα1/Kα2 separation without fitting, through the standard.** The classic FWHM is

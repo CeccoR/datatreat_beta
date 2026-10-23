@@ -25,11 +25,20 @@ import { decodeText } from './textdata.js';
                        'clear'), before refresh: what the module does first
      refresh()         the files changed: the module draws again (it calls showFiles
                        first, and commits)
-     redraw(what)      a file's 'label' or 'color' changed: what is drawn again
+     redraw(what)      a file's 'label', 'color' or 'note' (noteChange) changed: what is
+                       drawn again
      note(f, i)        the file list's note on a file, in the column right of its label
                        (utils renderUnifiedFileList), markup; none: the column left empty
                        (to v501 `cols`, columns of the module's own, a lead one left of
                        the label)
+     noteHead          that column's header, plain text (GC: SAMPLE); none: no header
+     noteChange(i, v, again)  a select in a file's note changed (GC's Sample): file
+                       all[i], `v` its value; the module takes it, then the list is drawn
+                       again (the other rows' choices may follow) and redraw('note'), a step
+                       of the history. `again`: the same select made the choice before and
+                       has kept the focus since (a walk through its options, the arrow keys'
+                       each a choice): the module takes it as that walk's first choice
+                       changed, from where the walk began
      cleared()         every file removed: the module empties what it keeps per sample
      snapshot()        the module's own state, beside its files
      file(f)           a file's record as a restore reads it (a project read in may hold
@@ -83,9 +92,28 @@ export function moduleKit(mod, o){
   kit.showFiles = ()=>{
     files.splice(0, files.length, ...includedOf(all));
     setTabLoaded(mod, all.length);
-    renderUnifiedFileList(mod + 'FileTableWrap', all, cb, o.note);
+    renderUnifiedFileList(mod + 'FileTableWrap', all, cb, o.note, o.noteHead);
     kit.drawAlerts();
   };
+  /* (on the list's box, which stays: the list inside is drawn anew at each change, its
+     select given the focus back, which an arrow key changes at once.) `walk`, the select
+     given the focus back, until it loses it: a change of its own goes on its walk (a
+     change from elsewhere, or after the focus left, is a choice of its own). */
+  if (o.noteChange){
+    const box = $(mod + 'FileTableWrap');
+    let walk = null;
+    box.addEventListener('change', e=>{
+      const sel = e.target.closest('td.note-cell select[data-i]'), i = sel ? +sel.dataset.i : -1;
+      if (!all[i]) return;
+      const had = document.activeElement === sel, again = sel === walk;
+      walk = null;
+      o.noteChange(i, sel.value, again);
+      kit.showFiles(); o.redraw('note'); kit.commit();
+      const s = had && box.querySelector(`td.note-cell select[data-i="${i}"]`);
+      if (s){ s.focus(); walk = s; }
+    });
+    box.addEventListener('focusout', e=>{ if (e.target === walk) walk = null; });
+  }
   // A file read: last in the list and among the included, with its entry in every
   // per-sample array.
   kit.add = f =>{ all.push(f); files.push(f); slots().forEach(s=> s.arr.push(s.make(undefined, f))); };

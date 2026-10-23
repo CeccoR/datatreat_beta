@@ -52,7 +52,7 @@ Note: The decimal and field separator cannot both be set to comma.
 
 ## Modules
 
-DataTreat is a modular application. New analysis modules may be added in the future. In every module the loaded files are listed with a **sample label** each, used in the plots, the legends and the exports: a label is taken when you leave its field (or press Enter), not while you type, and Escape puts back the one it had. Currently available modules are:
+DataTreat is a modular application. New analysis modules may be added in the future. In every module the loaded files are listed with a **label** each, used in the plots, the legends and the exports: a label is taken when you leave its field (or press Enter), not while you type, and Escape puts back the one it had. Currently available modules are:
 
 ### 1. DRS UV-Vis (Tauc Plot Analysis)
 
@@ -145,6 +145,8 @@ Assess H₂ and O₂ production rates from gas chromatography data, including li
    - **Cumulative (mmol/g)**: gas accumulated from the start of the interval
 
 5. View results in a **bar chart** (mean production rate per sample) and a **summary table**.
+
+**Replicates**: the file list's **Sample** column says which sample each file is: its own, as every file starts, or another file's, chosen by that file's name (a label renamed changes no link). Each row offers its own file and the files that head a sample (linked to none): there are no chains, a file that heads a group, set to another, takes its whole group along, and a head removed leaves its group to its next file in list order. The time plots stay one per file. The mean-rate bar chart has one bar per sample, named after its head's label (the first included file's when the head is left out): its height the mean over the sample's included files of each one's mean rate, each worked out with its own m, Q, T, p, light-on and interval; its error bar the half-width of the 99 % Student-t confidence interval of that mean, t(0.995, n−1)·s/√n (s the files' standard deviation, n − 1 under it; none for a sample of one file, as before). A file left out is out of the mean and of n. With replicates `mean_rates.csv` has a row per sample (each gas's mean, its ± and n, then the duration, p and T, a value that differs between the replicates written as all of them joined by `/`) and `mean_rates_by_file.csv` the rows per file, as `mean_rates.csv` was; with none, `mean_rates.csv` is as before. Each choice is a step of the undo history and is saved with the project; a project saved before v512 opens with each file its own sample.
 6. Export all data as CSV.
 
 The analysis is a card, as the DRS ones are: **+** under it adds another (its own masses, flows, light-on times, intervals and delay on the same samples), and each card can be renamed, folded, moved by its ≡ grip and closed; every card has its own plots in the Results, under its name, and its own CSVs.

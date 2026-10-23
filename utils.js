@@ -835,7 +835,10 @@ function moveFileTo(all, from, to, slots){
                onColorChange(i,color), onPaletteChange(colors), onInclude(i,on),
                onIncludeAll(on)}
    note: optional (file, i) => markup, the file's note, in the column right of its label
-         (DRS: how its second column was read); none, that column is left empty
+         (DRS: how its second column was read; GC: the sample's select); none, that
+         column is left empty
+   noteHead: optional, the note column's header, plain text (GC: SAMPLE); none, it has
+         none (DRS, the others)
 ========================================================= */
 // A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
 // Inked box 15×15, centred on (12,12) — same size as the download glyph below.
@@ -843,25 +846,26 @@ const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size
 // Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
 const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
 
-function renderUnifiedFileList(containerId, files, callbacks, note){
+function renderUnifiedFileList(containerId, files, callbacks, note, noteHead){
   const wrap = document.getElementById(containerId);
   if (!wrap) return;
   if (!files.length){ wrap.innerHTML=''; return; }
 
   /* The columns, the same in every module: drag and include box fixed 26px each, side by
      side at the left edge; actions fixed 58px (a fixed width guarantees the download+remove
-     icons fit even on narrow phones); FILE, SAMPLE LABEL and the note, with no header,
-     share what those leave as 3 : 3 : 2. Their percentages add up to 100%, more than is
-     left, and a fixed table layout scales them to it, the px columns kept. A drag column
-     in % was too narrow for its grip on a phone, and the box sat on it. To v501 FILE and
-     the label shared it equally, with DRS's note (extraCols, its only use) a 40px column
-     left of the label, and the other modules had none. */
+     icons fit even on narrow phones); FILE, LABEL and the note, with no header but the
+     module's (GC's SAMPLE), share what those leave as 3 : 3 : 2. Their percentages add up
+     to 100%, more than is left, and a fixed table layout scales them to it, the px columns
+     kept. A drag column in % was too narrow for its grip on a phone, and the box sat on it.
+     To v501 FILE and the label shared it equally, with DRS's note (extraCols, its only
+     use) a 40px column left of the label, and the other modules had none. The label's
+     header was SAMPLE LABEL (to v511). */
   const colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col style="width:37.5%"><col style="width:37.5%"><col style="width:25%"><col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
   const nIn = files.filter(isIncluded).length;
 
   let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th>`;
-  html += `<th>SAMPLE LABEL</th><th class="note-cell"></th>`;
+  html += `<th>LABEL</th><th class="note-cell"${noteHead ? ` title="${esc(noteHead)}"` : ''}>${noteHead ? esc(noteHead) : ''}</th>`;
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
   html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
