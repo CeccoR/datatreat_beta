@@ -5,27 +5,18 @@ was proposed; nothing here is in the code yet.
 
 ## DRS
 
-- **Rows with an empty cell in between.** A row like `350,,0.5` passes the first check
-  (it looks at the non-empty cells, 350 and 0.5) but is read from the first two columns
-  (350 and nothing), so it is dropped; a file made only of such rows passes, gives no
-  data. It comes from CSVs with an empty column in the middle. Since v490 such a file is
-  refused ("Invalid file(s)") rather than skipped without a word; its rows are still
-  dropped. Proposed: read the same cells the check looks at, or say how many rows were
-  dropped and why.
-- **R% or F(R) from other instruments.** The app tells reflectance from Kubelka–Munk by
-  the column header: the Cary 5000's own export (`Wavelength (nm),%R,`, the sample's
-  name on the line above, the method's parameters after the data) and the forms `R%`,
-  `R (%)`, `Reflectance (%)`; any other file is taken as F(R). To be refined: the
-  headers other instruments write (other languages, other units), files with no header,
-  the Cary's `Y Mode` line read as well, and a per-file switch for when the guess is
-  wrong (since v498 the file list shows the reading, `%R` or `F(R)`, left of each label:
-  a click there could switch it).
+- **R% or F(R) from other instruments.** The Cary 5000's own export (`Wavelength (nm)` and
+  `%R` or `F(R)` on its second line) is read silently from its first two columns; since
+  v510 any other file is read, with a warning, from the columns its header names (a
+  wavelength in nm, and F(R) or %R), and refused when it names none or names them more
+  than one way: a file with no header, a JASCO export (its `YUNITS,%R` line, no column
+  named), DataTreat's own `reflectance_FR.csv` (its header `wavelength_nm_<label>,<label>`
+  names no F(R)). To be refined (postponed): the headers other instruments write (other
+  languages, other units), the Cary's `Y Mode` line read as well, a per-file switch for
+  when the reading is wrong (the file list's `%R`/`F(R)` note: a click there could switch
+  it), and DataTreat's own exports named so that they load back.
 
 ## GC
-
-- **Impossible dates.** `parseGCDate` takes month/day/year and does not check the
-  ranges: `13/10/2025` silently becomes 10 Jan 2026, `2/30/2025` 2 Mar. Proposed:
-  refuse a date that does not exist (or detect day/month order from the file).
 
 - **Replicates.** A way to say that several datasets are the same sample, so the
   mean rate gets real statistics (mean ± spread over replicates) instead of an

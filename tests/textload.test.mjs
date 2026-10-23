@@ -5,7 +5,8 @@
    a header with units, a table aligned in columns. Each variant of the fixture loads, in
    one drop beside the fixture itself, to the same numbers; a file that is not a table of
    the module's, or not one way only (a GC export with ',' as both separator and decimal
-   mark, one aligned in columns with a blank cell), is refused and said. */
+   mark, one aligned in columns with a blank cell; a DRS file with no header naming its
+   columns, or naming them more than one way), is refused and said. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, settle, moduleState } from './helpers.mjs';
@@ -53,7 +54,8 @@ test('DRS: every encoding and dialect loads to the numbers of the fixture', asyn
     return {
       'spaces.txt': Buffer.from('Sample\n  Wavelength (nm)   F(R)\n' + data.map(r=> '  ' + r[0] + '   ' + r[1]).join('\n')),
       'aligned.txt': Buffer.from(align(R)),
-      'spaces-comma.txt': Buffer.from(data.map(r=> r[0] + ' ' + r[1].replace('.', ',')).join('\n')),
+      // (a header naming the columns: a file with none is refused from v510, below)
+      'spaces-comma.txt': Buffer.from('Wavelength (nm) F(R)\n' + data.map(r=> r[0] + ' ' + r[1].replace('.', ',')).join('\n')),
       'units.csv': Buffer.from('Spectrum 1;\nWavelength (nm);F(R) (a.u.);\n\n' + data.map(r=> r[0] + ';' + r[1].replace('.', ',') + ';').join('\n\n')),
     }; });
   const { page, errors, close } = await env.page();
@@ -61,7 +63,8 @@ test('DRS: every encoding and dialect loads to the numbers of the fixture', asyn
     await openModule(page, 'tauc');
     const names = Object.keys(vs);
     await drop(page, 'tauc', [file('ref.csv', Buffer.from(ref)), ...names.map(n=> file(n, vs[n])),
-      file('three.csv', Buffer.from('Sample,\nWavelength (nm),R%,F(R)\n250,10,0.5\n251,11,0.6\n'))], 1 + names.length);
+      file('three.csv', Buffer.from('Sample,\nWavelength (nm),R%,F(R)\n250,10,0.5\n251,11,0.6\n')),
+      file('noheader.txt', Buffer.from(vs['spaces-comma.txt'].toString('utf8').split('\n').slice(1).join('\n')))], 1 + names.length);
     const st = await moduleState(page, 'tauc', true), by = Object.fromEntries(st.files.map(f=> [f.name, f]));
     assert.equal(by['ref.csv'].wl.length, 551);
     for (const n of names){
@@ -73,9 +76,11 @@ test('DRS: every encoding and dialect loads to the numbers of the fixture', asyn
       assert.equal(by[n].warn, n === 'spaces-comma.txt' || n === 'units.csv', n + ': the non-standard-format warning');
     }
     const alerts = await page.locator('#taucAlerts').textContent();
-    assert.match(alerts, /Invalid file\(s\):\s*three\.csv/, 'three columns refused, and said');
-    // (how it was read said: no header, F(R); the standard ones need no word)
-    assert.match(alerts, /Verify how these files were read:\s*spaces-comma\.txt: no header naming the columns F\(R\) or R%: read as F\(R\)\s*units\.csv: not a standard format: its header names F\(R\), read as F\(R\)\s*$/);
+    // Three columns named two ways, and two columns with no header (to v509 read as F(R),
+    // with a warning): refused, and why said.
+    assert.match(alerts, /Invalid file\(s\):\s*three\.csv \(which columns to read cannot be told: its header names both F\(R\) and %R\)\s*noheader\.txt \(no header naming its columns: the wavelength in nm, and F\(R\) or %R\)/);
+    // (how it was read said: the F(R) its header names; the standard ones need no word)
+    assert.match(alerts, /Verify how these files were read:\s*spaces-comma\.txt: not a standard format: its header names F\(R\), read as F\(R\)\s*units\.csv: not a standard format: its header names F\(R\), read as F\(R\)\s*$/);
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

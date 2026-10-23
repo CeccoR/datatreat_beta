@@ -3,7 +3,7 @@ import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, num, ownKey, without, cardList, finitePairs } from './modkit.js';
 import { plotWrap, swatchLegend, viewOf, setView, chipRow, toggleChip, valueBars } from './modcharts.js';
-import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
+import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from './textdata.js';
 
 /* =========================================================
    TAUC MODULE
@@ -12,10 +12,10 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
   /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
      warn, read, head, left, hv[]} (each on its own native axis), and the included ones,
      which the analysis sees, `files`, with which every per-sample list the cards keep is
-     aligned; in the file list, the note right of each label, how its second column was
-     read (readNote); the alerts under the drop zone, among them what to verify of how files
-     were read (fileNotes: a format not standard, points left out; until dismissed); every
-     card in the history. */
+     aligned; in the file list, the note right of each label, how the file was read, %R
+     or F(R) (readNote); the alerts under the drop zone, among them what to verify of how
+     files were read (fileNotes: a format not standard, points left out; until dismissed);
+     every card in the history. */
   const kit = moduleKit('tauc', {
     note: readNote,
     alerts: p =>{
@@ -1103,64 +1103,133 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
   const loadAnalyses = (list, gone)=> deck.load(list, s=> readAnalysis(s, gone), a=> panelOf(a).restore(a.states[a.type] || {}));
 
   /* A spectrum (textdata.js: its encoding, separator, decimal mark and quotes found from
-     the file): wavelength (nm) and, beside it, F(R) or the reflectance in percent, two
-     columns of numbers, the second read as drsReading says; the points that are no
-     physical value left out (drsPoints). The file itself is kept as it came (rawBytes),
-     for its download. One with no such columns, or no point left, is not loaded, and the
-     alert says so (one whose rows all had an empty cell went without a word, to v494). */
+     the file), read in this order (from v510; the other formats as GC reads its own):
+     - the standard format (drsStandard): its first two columns, the wavelength (nm) and
+       %R or F(R) as its header says, read with no word, as to v509;
+     - any other file: the columns its header names (drsColumns), read with a warning;
+     - columns not named, or not one way only: the file is not loaded, and the alert says
+       why (the error).
+     The points that are no physical value are left out (drsPoints). The file itself is
+     kept as it came (rawBytes), for its download; a project keeps what was read, and opens
+     as it was. One with no point left is not loaded, and the alert says so (one whose rows
+     all had an empty cell went without a word, to v494). To v509 every file was read from
+     its first two columns, the second as a header above it said: F(R) with no header (two
+     bare columns of numbers), %R under a line naming it (a JASCO export's YUNITS,%R), and
+     a row with an empty cell between its numbers (350,,0.5) left out, without a word. */
   function readDrs(text){
-    const lines = textLines(text), t = readXY(lines);
-    if (!t) return null;
-    const { R, std, head } = drsReading(lines, t), { wl, FR, left } = drsPoints(t, R);
-    if (!wl.length) return { error: `no point with a physical value: ${leftText(left)}` };
-    return { wl, FR, warn: !std, ...(R ? { read: 'R%' } : !std && head ? { head } : {}), ...(Object.keys(left).length ? { left } : {}) };
+    const lines = textLines(text), t = readXY(lines), std = t && drsStandard(lines, t), c = std || drsColumns(lines);
+    if (c.error) return { error: c.error };
+    const { wl, FR, left } = drsPoints(c.t, c.R);
+    if (!wl.length) return { error: Object.keys(left).length ? `no point with a physical value: ${leftText(left)}` : NO_DATA };
+    return { wl, FR, warn: !std, ...(c.R ? { read: 'R%' } : std ? {} : { head: true }), ...(Object.keys(left).length ? { left } : {}) };
   }
-  /* How a spectrum's second column is read, and whether its format is the standard one:
-     the one place that decides (to v501 every file was F(R)). The standard is the Cary
-     5000's export, as the user's own files are: the sample's name on the first line, the
-     columns' header on the second, "Wavelength (nm)" then "%R" (the reflectance in
-     percent, R = value/100 and F(R) = (1 − R)²/2R) or "F(R)", nothing else in either (a
-     unit after F(R), "(a.u.)" say, makes it another format), any case, any separators
-     after them, and the data from the third, under whatever separator and decimal mark
-     the reader finds (lines as it counts them: a blank one is none). That loads with no
-     word (std).
-     Any other file loads with a warning (std false), read as its header says. The lines
-     above the data are read up from it to the first that names the columns:
-       its second column R% (or %R, R %, R (%), Reflectance (%), any case): the reflectance
-         in percent, as the instruments write it; read as such (as F(R), it would give
-         nonsense);
-       "Wavelength…nm" and "F(R)": F(R) (head);
-       its first column the wavelength (Wavelength, nm, λ), its second neither: the columns'
-         header, of neither kind, where the reading stops (a line above it, "Operator,R%"
-         say, decides nothing): F(R), as with none such.
-     A line that names no wavelength is passed over unless it names R% (Jasco's "YUNITS,%R"
-     above "XYDATA"). Under a run of spaces, which may split the names too, a line is read
-     whole, its quotes dropped, and names the wavelength when it begins with it.
-     To v501 any header of either kind, on any line above the data, was standard, with no
-     word: the Cary's own layout was not told from the others.
-     → { R: whether the column is R%, std: the standard format, head: a header names it } */
-  const R_HEAD = /^(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))$/i;
-  const R_LINE = /\s(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))\s*$/i;
-  const WL_HEAD = /wavelength|^nm\b|λ/i, WL_LINE = /^(wavelength|nm\b|λ)/i;
-  // The standard header's two names, and its line under spaces (read whole).
+  /* The standard format, the Cary 5000's export, as the user's own files are: the sample's
+     name on the first line, the columns' header on the second, "Wavelength (nm)" then "%R"
+     (the reflectance in percent, R = value/100 and F(R) = (1 − R)²/2R) or "F(R)", nothing
+     else in either (a unit after F(R), "(a.u.)" say, makes it another format), any case,
+     any separators after them, and the data from the third, two columns of numbers
+     (readXY), under whatever separator and decimal mark the reader finds (lines as it
+     counts them: a blank one is none). Its rows are read from their first two fields: a
+     row with an empty cell between its numbers (350,,0.5) gives 350 and nothing, and is
+     left out, as to v509; the Cary writes none (each row is "wavelength,%R,"). Under a run
+     of spaces, which may split the names too, the header is read whole, its quotes
+     dropped. The one place that decides the standard (to v501 any header naming R% or
+     F(R), on any line above the data, was standard, with no word).
+     → { R: whether the column is %R, t: the two columns (readXY) } or null */
   const STD_WL = /^wavelength\s*\(\s*nm\s*\)$/i, STD_R = /^%\s*r$/i, STD_F = /^f\s*\(\s*r\s*\)$/i;
   const STD_LINE = /^wavelength\s*\(\s*nm\s*\)\s+(\S.*)$/i;
-  function drsReading(lines, t){
-    const first = t.rows.findIndex(r=> isFinite(parseNum(r[0])) && isFinite(parseNum(r[1]))), spaces = t.sep[0] === ' ';
-    // The standard: the header the second line, the data from the third.
-    if (first === 2){
-      let h = null;
-      if (spaces){ const m = STD_LINE.exec(lines[1].replace(/"/g, '').trim()); h = m && m[1].trim(); }
-      else { const f = splitFields(lines[1], t.sep); while (f.length && f[f.length - 1] === '') f.pop(); h = f.length === 2 && STD_WL.test(f[0]) ? f[1] : null; }
-      if (h && (STD_R.test(h) || STD_F.test(h))) return { R: STD_R.test(h), std: true, head: true };
+  function drsStandard(lines, t){
+    if (t.rows.findIndex(r=> isFinite(parseNum(r[0])) && isFinite(parseNum(r[1]))) !== 2) return null;
+    let h = null;
+    if (t.sep[0] === ' '){ const m = STD_LINE.exec(lines[1].replace(/"/g, '').trim()); h = m && m[1].trim(); }
+    else { const f = splitFields(lines[1], t.sep); while (f.length && f[f.length - 1] === '') f.pop(); h = f.length === 2 && STD_WL.test(f[0]) ? f[1] : null; }
+    return h && (STD_R.test(h) || STD_F.test(h)) ? { R: STD_R.test(h), t } : null;
+  }
+  /* Any other file: its columns found by their names in its header, as GC finds its own
+     (textdata.js readTable): the header the first line naming a wavelength column and one
+     of F(R) or %R, the data the lines under it, the separator the one under which most
+     lines are data (both those columns numbers), each column read by its place in the
+     header, so that an empty cell in another column shifts nothing (350,,50 under
+     "Wavelength,,%R" is 350 and 50). A first such line with no data under it (a title
+     whose words under spaces name them, "Kubelka-Munk F(R) vs wavelength") is no header:
+     the one nearest above the first line of data is, as drsReading read up from the data
+     to v509. The names, any case:
+       the wavelength in nm: Wavelength, λ or nm, with or without its unit, "(nm)", "[nm]",
+         "/nm", "nm", "in nm", ", nm", "_nm", "nm." ("Wavelength nm."); a wavelength in
+         another unit, Å, µm, eV, cm⁻¹… ("(eV)", "in eV"), is not read: said;
+       F(R): F(R) anywhere in the name ("F(R) (a.u.)");
+       the reflectance in percent: R%, %R, R %, % R, R (%), R [%], Reflectance (%)…
+     Other columns are not read. Under a run of single spaces, which splits names too, the
+     header's names are its words, each with the unit after it ('Wavelength (nm) R (%)':
+     two; 'Wavelength nm % R': two, as drsReading read such a line whole to v509); under
+     runs of two or more, its fields, else its words so.
+     Columns named one way only, a wavelength and one of F(R) or %R: read, the second as it
+     is named. Two wavelength columns, both F(R) and %R, two of either (a Cary export of
+     several samples side by side), no such header: not read, and the error says why (to
+     v509 those with two columns of numbers were read, as F(R) when no header named it; the
+     others were refused with no reason).
+     → { R: whether the column is %R, t: { rows: each line's two cells, x, y } } or { error } */
+  const R_HEAD = /^(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))$/i, F_HEAD = /f\s*\(r\)/i;
+  const WL_HEAD = /^((wavelength|λ)([\s,_]*(in\s+)?(\(\s*nm\.?\s*\)|\[\s*nm\.?\s*\]|\/\s*nm\.?|nm\.?))?|nm\.?)$/i, WL_UNIT = /^(wavelength|λ)([\s,_]*(in\s+)?(\(.*\)|\[.*\]|\/.*)|,?\s+in\s+\S.*)$/i;
+  const kindOf = s => WL_HEAD.test(s) ? 'wl' : F_HEAD.test(s) ? 'F' : R_HEAD.test(s) ? 'R' : WL_UNIT.test(s) ? 'unit' : '';
+  /* A line's words, each with what follows it in brackets, a lone '%' or '/unit': "% R" one
+     word, its '%' not the word's before it; "Wavelength nm", "Wavelength in eV" one word. */
+  const WORDS = /((wavelength|λ),?\s+(in\s+[^\s([/]+|nm\.?(?=\s|$))|%\s*r(?![^\s([/])|[^\s([/]+)(\s*(\([^)]*\)|\[[^\]]*\]|%(?=\s|$)(?!\s+r(\s|$))|\/\s*[^\s([]+))*|\S+/gi;
+  const words = f => f.join(' ').match(WORDS) || [];
+  // The columns `names` names, when a wavelength and F(R) or %R among them (n: how many).
+  function columnsOf(names, n){
+    const c = { wl: [], F: [], R: [] };
+    names.forEach((s, i)=>{ const k = kindOf(s); if (c[k]) c[k].push(i); });
+    if (!c.wl.length || !(c.F.length + c.R.length)) return null;
+    return { ...c, x: c.wl[0], y: Math.min(...c.F, ...c.R), ...(n ? { n } : {}) };
+  }
+  function drsHead(f, sep){
+    const c = sep === ' ' ? null : columnsOf(f);
+    if (c || sep[0] !== ' ') return c;
+    const w = words(f);
+    return columnsOf(w, w.length);
+  }
+  const NO_HEAD = 'no header naming its columns: the wavelength in nm, and F(R) or %R', NO_DATA = 'no line of data read under its header';
+  // Whether a line is two numbers (its first two fields not empty) under `sep`.
+  const twoNums = (l, sep)=>{ const v = splitFields(l, sep).filter(c=> c !== ''); return isNum(v[0]) && isNum(v[1]); };
+  function drsColumns(lines){
+    const isRow = (r, c)=> isNum(r[c.x]) && isNum(r[c.y]), d = lines.findIndex(l=> SEPS.some(s=> twoNums(l, s)));
+    let tb = readTable(lines, drsHead, isRow), h = d;
+    // A line naming them with no data under it is no header: read again from the one
+    // nearest above the first line of data.
+    if (!tb){ while (--h >= 0 && !SEPS.some(s=> drsHead(splitFields(lines[h], s), s))); if (h > 0) tb = readTable(lines.slice(h), drsHead, isRow); }
+    if (!tb) return { error: noColumns(lines, d) };
+    const c = tb.cols, many = [c.wl.length > 1 && `${c.wl.length} wavelength columns`,
+      c.F.length && c.R.length ? 'both F(R) and %R' : c.F.length > 1 ? `${c.F.length} F(R) columns` : c.R.length > 1 && `${c.R.length} %R columns`].filter(Boolean);
+    if (many.length) return { error: `which columns to read cannot be told: its header names ${many.join(' and ')}` };
+    const rows = tb.rows.map(r=> [r[c.x], r[c.y]]), x = [], y = [];
+    for (const r of rows){ const a = parseNum(r[0]), b = parseNum(r[1]); if (isFinite(a) && isFinite(b)){ x.push(a); y.push(b); } }
+    return { R: c.R.length > 0, t: { rows, x, y } };
+  }
+  /* Why no columns were found: the line nearest above the first line of data `d` (two
+     numbers) that names any column of the kinds read is the header, and says what it lacks,
+     its names read as the data's separator splits them (one under which that line is two
+     numbers) into two or more: of those, the one naming the most kinds, the first so; under
+     any other only when none does (a header written with ',' over data with ';', which
+     ';' leaves whole). Its names both kinds there: a header with no line of data read under
+     it (a ',' both the separator and the decimal mark, a blank cell under a run of spaces,
+     more names than the data have fields, the header with one separator and the data with
+     another). No such line: no header. */
+  function noColumns(lines, d){
+    const at = d < 0 ? SEPS : SEPS.filter(s=> twoNums(lines[d], s));
+    // A line's names under each separator in `ss` (under spaces its fields and its words, as
+    // drsHead reads them), `min` or more, the kinds each names: the one naming the most.
+    const named = (l, ss, min)=> ss.flatMap(s=>{ const f = splitFields(l, s); return s === '  ' ? [f, words(f)] : [s === ' ' ? words(f) : f]; })
+      .filter(ns=> ns.length >= min).map(ns=>{ const k = {}; for (const n of ns){ const t = kindOf(n); if (t && !k[t]) k[t] = n; } return { k, n: !!(k.wl || k.unit) + !!(k.F || k.R) }; })
+      .reduce((a, b)=> b.n > (a ? a.n : 0) ? b : a, null);
+    for (let i = (d < 0 ? lines.length : d) - 1; i >= 0; i--){
+      const { k } = named(lines[i], at, 2) || named(lines[i], SEPS, 1) || {};
+      if (!k) continue;
+      if (k.wl && (k.F || k.R)) return NO_DATA;
+      const u = k.unit && k.unit.length > 40 ? k.unit.slice(0, 39) + '…' : k.unit;
+      return 'its header names ' + [!k.wl && (u ? `the wavelength in another unit than nm (${u})` : 'no wavelength column in nm'), !k.F && !k.R && 'no F(R) or %R column'].filter(Boolean).join(' and ');
     }
-    for (let i = first - 1; i >= 0; i--){
-      const l = lines[i].replace(/"/g, '').trim(), hp = splitFields(lines[i], t.sep), two = hp.length >= 2;
-      const R = spaces ? R_LINE.test(l) : two && R_HEAD.test(hp[1]);
-      if (R || (spaces ? /wavelength.*nm.*\sf\s*\(r\)/i.test(l) : two && /wavelength.*nm/i.test(hp[0]) && /f\s*\(r\)/i.test(hp[1]))) return { R, std: false, head: true };
-      if (spaces ? WL_LINE.test(l) : WL_HEAD.test(hp[0])) break;
-    }
-    return { R: false, std: false, head: false };
+    return NO_HEAD;
   }
   /* The points of a spectrum that are physical values, the others left out and counted by
      why: a wavelength not above 0 (wl), a reflectance outside 0–100 % (r) or of 0, where
@@ -1178,7 +1247,7 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
       else if (F < 0) out('neg');
       else { wl.push(x); FR.push(F); }
     });
-    // (the rows readXY leaves out: a wavelength beside a number that is no finite one)
+    // (the rows x and y leave out: a wavelength beside a number that is no finite one)
     for (const r of t.rows) if (isFinite(parseNum(r[0])) && (isNum(r[1]) || /^[+-]?(nan|inf(inity)?)$/i.test(String(r[1] || '').trim())) && !isFinite(parseNum(r[1]))) out('inf');
     return { wl, FR, left };
   }
@@ -1188,11 +1257,13 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
     const ks = Object.keys(LEFT).filter(k=> left[k] > 0), n = ks.reduce((t, k)=> t + left[k], 0);
     return `${n} point${n > 1 ? 's' : ''} left out (${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')})`;
   }
-  /* What the alert says of a file: how a file of no standard format was read (drsReading),
+  /* What the alert says of a file: how a file of no standard format was read (drsColumns),
      and the points left out (to v501 the files of a non-standard format were named, no
      more). A file in the standard format has no word on how it was read: the file list's
      note says it (to v501 an R% file was said here, the Cary's own export as well; to v501
-     a header naming R% or F(R) anywhere above the data was a standard format). */
+     a header naming R% or F(R) anywhere above the data was a standard format). A file with
+     no header naming F(R) or %R is refused (from v510): only a project saved before holds
+     one, read as F(R), and says so as it did (none). */
   const WARNS = { R: 'not a standard format: its header names the reflectance in %, read as %R', F: 'not a standard format: its header names F(R), read as F(R)',
     none: 'no header naming the columns F(R) or R%: read as F(R)' };
   const warnOf = f => f.read === 'R%' ? 'R' : f.head ? 'F' : 'none';
@@ -1203,14 +1274,15 @@ import { textLines, readXY, splitFields, parseNum, isNum } from './textdata.js';
     return out;
   }
   /* The file list's note, right of the label (to v501 a column of its own left of it): how
-     the file's second column was read, %R (the reflectance in percent, converted to F(R)) or
-     F(R), its title saying it in full, and a format not standard. A project saved before the
-     R% reading holds none: F(R), as it was read. */
-  const READS = { R: ['%R', 'second column read as the reflectance in %, converted to F(R)'], F: ['F(R)', 'second column read as F(R)'] };
-  const NOT_STD = { R: '; not a standard format', F: '; not a standard format', none: ', with no header naming it' };
+     the file was read, %R (the reflectance in percent, converted to F(R)) or F(R), its title
+     saying it in full: the second column of the standard format; in any other, the column
+     its header names (to v509 the second column there too), and a format not standard. A
+     project saved before the R% reading holds none: F(R), as it was read. */
+  const READS = { R: ['%R', 'read as the reflectance in %, converted to F(R)'], F: ['F(R)', 'read as F(R)'] };
   function readNote(f){
-    const [t, title] = READS[f.read === 'R%' ? 'R' : 'F'];
-    return `<span title="${esc(title + (f.warn ? NOT_STD[warnOf(f)] : ''))}">${esc(t)}</span>`;
+    const [t, how] = READS[f.read === 'R%' ? 'R' : 'F'], w = f.warn && warnOf(f);
+    const title = !w ? `second column ${how}` : w === 'none' ? `second column ${how}, with no header naming it` : `the ${t} column its header names, ${how}; not a standard format`;
+    return `<span title="${esc(title)}">${esc(t)}</span>`;
   }
   kit.dropText(readDrs, had =>{
     warnDismissed = false;

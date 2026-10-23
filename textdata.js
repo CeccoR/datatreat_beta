@@ -12,11 +12,12 @@
      more first: a table aligned in columns): a field in double quotes is taken whole
      (RFC 4180: the separator inside it is text, "" a quote);
    - the separator of each file found from its lines: the one under which the most of
-     them read as the module expects (DRS two columns of numbers, GC the columns its
-     header names), on a tie the first of ';', tab, ',', spaces. A ',' is a decimal mark
-     wherever it is not the separator: '350,5;0,523' is two fields, and on ',' it would be
-     three, which two columns of numbers are not; a GC line wider than its header, a
-     number cut in two (0,5089,0,2011 under three names), is not read on ',' either. Under
+     them read as the module expects (DRS's standard format two columns of numbers, any
+     other DRS file and GC the columns its header names), on a tie the first of ';',
+     tab, ',', spaces. A ',' is a decimal mark wherever it is not the separator:
+     '350,5;0,523' is two fields, and on ',' it would be three, which two columns of
+     numbers are not; a GC line wider than its header, a number cut in two
+     (0,5089,0,2011 under three names), is not read on ',' either. Under
      spaces a GC line has all its header's fields (a blank cell leaves none);
    - numbers with either decimal mark: '.' only ever is one (a ',' beside it groups the
      thousands, 1,234.5), and a ',' is one in a number without a '.' (0,523).
@@ -99,12 +100,13 @@ export function bestSep(lines, fit){
 }
 
 /* Two columns of numbers, x and y, under whatever lines come before them (a title, a
-   header with units). A line is data when its first two fields that are not empty are
-   numbers; a separator under which a data line has a third is not the file's (three
-   columns). Numbers there are fields that are nothing else (isNum), so that a ',' that is
-   a decimal mark breaks the columns it is split on ('350,5 0,523' on ',': 350 | 5 0 | 523);
-   with no line of those under any separator, any field parseNum reads (to v489 the only
-   test). Each line gives its first two fields, as they stand (one empty: nothing).
+   header with units): how DRS reads its standard format. A line is data when its first
+   two fields that are not empty are numbers; a separator under which a data line has a
+   third is not the file's (three columns). Numbers there are fields that are nothing
+   else (isNum), so that a ',' that is a decimal mark breaks the columns it is split on
+   ('350,5 0,523' on ',': 350 | 5 0 | 523); with no line of those under any separator,
+   any field parseNum reads (to v489 the only test). Each line gives its first two
+   fields, as they stand (one empty: nothing).
    → { sep, rows, x, y } or null. */
 export function readXY(lines){
   const fit = num => rows =>{
@@ -128,25 +130,28 @@ export function readXY(lines){
 const width = r =>{ let n = r.length; while (n && r[n - 1] === '') n--; return n; };
 // A whole number, then digits: the halves of a number its decimal ',' cut in two.
 const cut = (a, b)=> /^[+-]?\d+$/.test(a) && /^\d+([eE][+-]?\d+)?$/.test(b || '');
-/* A table under a header the module knows: `head(fields)` gives the columns a line names
-   (null for any other line), `isRow(fields, cols)` whether a line under it is data. Under
-   each separator the first line `head` takes is the header, and the separator under which
-   the most lines below it are data is the file's. Not ',' when a data line is wider than
-   the header with a number cut in two: the ',' is the decimal mark too, and which fields
-   go together cannot be told ('0,0,2011' is 0,0 | 2011 or 0 | 0,2011), so the file is
-   not read (to v489 GC read the halves as values: 0,5089 gave 0 and the next gas 5089).
+/* A table under a header the module knows: `head(fields, sep)` gives the columns a line
+   names (null for any other line), `isRow(fields, cols)` whether a line under it is data.
+   Under each separator the first line `head` takes is the header, and the separator under
+   which the most lines below it are data is the file's. Not ',' when a data line is wider
+   than the header with a number cut in two: the ',' is the decimal mark too, and which
+   fields go together cannot be told ('0,0,2011' is 0,0 | 2011 or 0 | 0,2011), so the file
+   is not read (to v489 GC read the halves as values: 0,5089 gave 0 and the next gas 5089).
    A line wider than its header with no number cut (a column it does not name) reads as
    it did. Not a run of spaces when a data line has other than the header's fields: a
    cell left blank leaves none there, and the cells after it would slip into its column.
+   The header's fields are its columns, unless `head` says how many it names (cols.n: DRS,
+   whose names a run of single spaces splits, 'Wavelength (nm) R (%)' two columns in four
+   fields; GC gives none, and reads as it did to v509).
    → { sep, cols, rows (those lines) } or null. */
 export function readTable(lines, head, isRow){
   return bestSep(lines, (rows, sep)=>{
     for (let h = 0; h < rows.length; h++){
-      const cols = head(rows[h]);
+      const cols = head(rows[h], sep);
       if (!cols) continue;
-      const n = width(rows[h]), body = rows.slice(h + 1), data = body.filter(r=> isRow(r, cols));
+      const n = cols.n || width(rows[h]), body = rows.slice(h + 1), data = body.filter(r=> isRow(r, cols));
       if (sep === ',' && data.some(r=> width(r) > n && r.some((c, i)=> cut(c, r[i + 1])))) return null;
-      if (sep[0] === ' ' && data.some(r=> r.length !== rows[h].length)) return null;
+      if (sep[0] === ' ' && data.some(r=> r.length !== (cols.n || rows[h].length))) return null;
       return { score: data.length, cols, rows: body };
     }
     return null;
