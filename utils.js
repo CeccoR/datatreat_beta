@@ -947,6 +947,9 @@ function renderUnifiedFileList(containerId, files, callbacks, note, noteHead){
   // Per-file download of the original uploaded content, byte-for-byte. A file
   // keeps its original bytes in `rawBytes`, or a `rawFiles` list (e.g. EPR's
   // .dsc + .dta pair), or legacy decoded text in `raw` (older sessions).
+  // A part of a list with neither bytes nor text (its bytes not stored in this browser any
+  // more, v517) is not available, as a file of no bytes is: to v516 it went into the zip
+  // as an empty file, with no word.
   const originalsOf = f => {
     if (f.rawFiles && f.rawFiles.length)
       return f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text });
@@ -954,12 +957,13 @@ function renderUnifiedFileList(containerId, files, callbacks, note, noteHead){
     if (f.raw != null) return [{ name:f.name, text:f.raw }];
     return [];
   };
+  const lostOf = f => originalsOf(f).filter(o=> o.bytes == null && o.text == null).map(o=> o.name);
   wrap.querySelectorAll('.dl-file').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const f = files[+e.currentTarget.dataset.i];
       if (!f) return;
-      const orig = originalsOf(f);
-      if (!orig.length){ alert('The original file for “'+f.name+'” is not available.'); return; }
+      const orig = originalsOf(f), lost = lostOf(f);
+      if (!orig.length || lost.length){ alert('The original file for “'+(lost[0] || f.name)+'” is not available.'); return; }
       if (orig.length === 1){
         if (orig[0].bytes != null) downloadBytes(orig[0].name, orig[0].bytes);
         else downloadBlob(orig[0].name, orig[0].text);
@@ -969,7 +973,7 @@ function renderUnifiedFileList(containerId, files, callbacks, note, noteHead){
   // Download all originals as a single zip
   const dlAll = wrap.querySelector('.download-all');
   if (dlAll) dlAll.addEventListener('click', ()=>{
-    const entries = files.flatMap(originalsOf);
+    const entries = files.filter(f=> !lostOf(f).length).flatMap(originalsOf);
     if (!entries.length){ alert('No original files are available to download.'); return; }
     downloadZip('files.zip', entries);
   });

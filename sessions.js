@@ -8,11 +8,13 @@
    state until the next change.
 ========================================================= */
 import { MODULES, MODULE_LABELS, esc, moduleStateKey, getModuleState, restoreModuleState,
-         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab, onSectionChange } from './utils.js';
-import { allProjects, putProject, deleteProject, uid, encode, decode } from './db.js';
+         moduleHasData, onModuleChangeOnce, onModuleChange, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, goTab, onSectionChange,
+         moduleBusy } from './utils.js';
+import { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject, uid, encode, park, decode,
+         hydrate, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed } from './db.js';
 import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
          setTabDirty, setTabProject, onTabActivated, onTabLoaded, onCloseSave, initTabs,
-         persistTab, isRestoring, isLive, ensureLive, UNTITLED } from './tabs.js';
+         persistTab, persistAll, isRestoring, isLive, ensureLive, UNTITLED, notice, renderTabs } from './tabs.js';
 
 // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
 // (text over a right-pointing arrow) and the rounded X for delete.
@@ -102,11 +104,17 @@ function restoreSaveBtns(mod){
    as JSON, and its name. A change is unsaved only while the state or the name differ
    from these: an edit undone, or a value set back by hand, is not one. */
 const _savedKey = new Map();
+const _savedRead = new Map();   // tab id → its saved { state, title } read, the key not yet taken (takeSavedKey)
 const stateKey = mod => { try { return moduleStateKey(mod); } catch(e){ return null; } };
+// The changes made in each tab, counted (by tab id): a save tells by them what was changed
+// while it was written (markWritten).
+const _edits = new Map();
+const edits = t => t ? _edits.get(t.id) || 0 : 0;
 // After any change: unsaved if the tab was never saved, or now differs from what was.
 function recheckDirty(mod){
   const t = activeTab();
   if (!t || t.module !== mod) return;
+  _edits.set(t.id, edits(t) + 1);
   if (!t.projectId){ markDirty(mod); return; }
   const base = _savedKey.get(t.id);
   const same = !!base && base.title === (t.title || '') && base.key === stateKey(mod);
@@ -144,7 +152,17 @@ function markDirty(mod){
 /* ---- Save / Save as ----
    Save: writes the current project under the name in the field (renaming it if
    the field was edited); creates it if none is open yet. Save as: prompts for a
-   new name and always creates a NEW project, which becomes the open one. */
+   new name and always creates a NEW project, which becomes the open one.
+   The state is taken as park gives it (v517): the record holds its files' hashes, and
+   only the bytes the store lacks are written with it (to v516 every file's bytes went
+   into the record as base64, at each save). */
+// While an older DataTreat in another window holds back the database's upgrade nothing is
+// read or written yet: a save would wait unseen, and a second press save the project twice.
+async function saveHeld(){
+  if (!dbBlocked()) return false;
+  await confirmBanner('Projects cannot be saved yet: DataTreat is open in another window of an older version. Reload or close that window, then save again.', 'OK');
+  return true;
+}
 // Briefly flash a field red + shake (no browser dialog) to signal a missing name
 function flashInvalid(inp){
   if (!inp) return;
@@ -164,26 +182,71 @@ async function doSave(mod, asNew){
   const now = Date.now();
   const title = inp ? inp.value.trim() : '';
   if (!title){ flashInvalid(inp); return false; }
-  const state = encode(getModuleState(mod));
-  const all = await allProjects();
-  const cur = curProject();
-  if (cur){
-    const clash = all.find(s=> s.module===mod && s.id!==cur.id && s.title.toLowerCase()===title.toLowerCase());
-    if (clash && !await confirmBanner('Another ' + (MODULE_LABELS[mod]||mod) + ' project is named “' + clash.title + '”. Save under this name anyway?', 'Save')) return false;
-    const rec = all.find(s=> s.id===cur.id);
-    await putProject({ id: cur.id, module: mod, title, createdAt: rec ? rec.createdAt : now, state, updatedAt: now });
-    if (t) setTabProject(t.id, cur.id, title);
-  } else {
-    const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
+  if (await saveHeld()) return false;
+  // What is saved is what the tab holds now: its state, that state's key, its changes counted.
+  const state = park(getModuleState(mod)), key = stateKey(mod), n = edits(t);
+  return oneSave(t, key, title, async ()=>{
+    const all = await allProjects();
+    // (the tab's project as it is now: a save of it before this one may have made it)
+    const cur = t && t.projectId ? { id: t.projectId } : null;
     let id;
-    if (existing){
-      if (!await confirmBanner('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?', 'Overwrite')) return false;
-      id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
-    } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
-    if (t) setTabProject(t.id, id, title);
+    if (cur){
+      const clash = all.find(s=> s.module===mod && s.id!==cur.id && s.title.toLowerCase()===title.toLowerCase());
+      if (clash && !await confirmBanner('Another ' + (MODULE_LABELS[mod]||mod) + ' project is named “' + clash.title + '”. Save under this name anyway?', 'Save')) return false;
+      const rec = all.find(s=> s.id===cur.id);
+      id = cur.id; await putProject({ id, module: mod, title, createdAt: rec ? rec.createdAt : now, state, updatedAt: now });
+    } else {
+      const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
+      if (existing){
+        if (!await confirmBanner('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?', 'Overwrite')) return false;
+        id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
+      } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
+    }
+    // (a name typed meanwhile is the tab's, not set back to the one saved)
+    if (t){ setTabProject(t.id, id, edits(t) === n ? title : null); markWritten(t, mod, key, title, n); }
+    else markSaved(mod);
+    renderList();
+    return true;
+  });
+}
+/* One save at a time (v517). A save no longer holds the page while it is written, and may
+   wait a second or so on the database behind the autosave of files just dropped (eight big
+   SEM images' bytes): a second press of Save read the projects before the first was
+   written, found none of that name, and made a second project of it (to v516 too, pressed
+   within some 0.3 s of the drop). A save reads the projects once the one before is written;
+   a save of a tab asked while one of it waits takes that one's answer (one question), and
+   writes only what that one did not. */
+let _saveQ = Promise.resolve();
+const _saveOf = new Map();   // tab id → its save asked last and not done: { p, key, title }
+function oneSave(t, key, title, fn){
+  const was = t && _saveOf.get(t.id);
+  const p = _saveQ.then(async ()=>{
+    if (was){
+      const ok = await was.p.then(v=> v, ()=> null);
+      if (ok === false || (ok && was.key === key && was.title === title)) return ok;   // (declined, or written already)
+    }
+    return fn();
+  });
+  _saveQ = p.catch(()=>{});
+  if (t){
+    const me = { p, key, title };
+    _saveOf.set(t.id, me);
+    p.finally(()=>{ if (_saveOf.get(t.id) === me) _saveOf.delete(t.id); }).catch(()=>{});
   }
-  markSaved(mod); renderList();
-  return true;
+  return p;
+}
+/* A save written: the tab it was made for, on show or not, is saved as what was written
+   (its state's key and the name taken at the press); a change made since keeps it unsaved.
+   To v516 the tab on show at the end, as it was then, was marked saved, the page held
+   meanwhile, mostly: with the page answering (v517) another tab shown then was marked saved
+   with its changes, or an edit made then taken as saved, and closed with no question. */
+function markWritten(t, mod, key, title, n){
+  if (!tabById(t.id)) return;   // (closed meanwhile)
+  const same = edits(t) === n, shown = activeTab() === t;
+  if (same && shown){ markSaved(mod); return; }
+  _savedKey.set(t.id, { key, title });
+  if (same) setTabDirty(t.id, false);
+  else if (shown && isLive(t)) recheckDirty(mod);   // (an edit undone meanwhile is none)
 }
 
 /* ---- Project files (.datatreat) ----
@@ -191,7 +254,9 @@ async function doSave(mod, asNew){
    the SHA-256 of its module and state. The signature does not keep anyone from writing
    such a file (the app is open, its way of signing too): it tells a file DataTreat wrote
    and nobody changed from one that was edited, cut short, or written by something else.
-   Its bytes (a file's original, kept for its download) are base64, as in IndexedDB.
+   Its bytes (a file's original, kept for its download) are base64, as IndexedDB held them
+   to v516; a saved project's are read from where they are stored and put back in, so the
+   file is the one a project of v516 gave, byte for byte (exportProjectRecord).
    Up to v483 the export was a .json with no header, its bytes as arrays of numbers; such
    files still import, after a question. */
 const FILE_EXT = '.datatreat', FILE_FORMAT = 'datatreat-project', FILE_VERSION = 2;
@@ -250,20 +315,30 @@ function openSaveAsModal(mod){
   setTimeout(()=>{ inp.focus(); inp.select(); }, 0);
 }
 function closeSaveAsModal(){ document.getElementById('projSaveAsModal').style.display = 'none'; _saveAsMod = null; }
+// (a second press of OK, or Enter, while the copy is written does nothing: v517)
+let _saveAsBusy = false;
 async function commitSaveAs(){
-  const mod = _saveAsMod; if (!mod) return;
+  const mod = _saveAsMod; if (!mod || _saveAsBusy) return;
   const inp = document.getElementById('projSaveAsInput');
   const title = inp.value.trim();
   if (!title){ flashInvalid(inp); return; }
+  if (await saveHeld()) return;
   const now = Date.now();
-  const state = encode(getModuleState(mod));
-  const all = await allProjects();
-  const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
+  const state = park(getModuleState(mod));
+  _saveAsBusy = true;
   let id;
-  if (existing){
-    if (!await confirmBanner('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?', 'Overwrite')) return;
-    id = existing.id; await putProject({ ...existing, title, state, updatedAt: now });
-  } else { id = uid(); await putProject({ id, module: mod, title, state, createdAt: now, updatedAt: now }); }
+  try {
+    id = await oneSave(null, null, title, async ()=>{
+      const all = await allProjects();
+      const existing = all.find(s=> s.module===mod && s.title.toLowerCase()===title.toLowerCase());
+      if (existing){
+        if (!await confirmBanner('A ' + (MODULE_LABELS[mod]||mod) + ' project named “' + existing.title + '” already exists. Overwrite it?', 'Overwrite')) return null;
+        await putProject({ ...existing, title, state, updatedAt: now }); return existing.id;
+      }
+      const nid = uid(); await putProject({ id: nid, module: mod, title, state, createdAt: now, updatedAt: now }); return nid;
+    });
+  } finally { _saveAsBusy = false; }
+  if (!id) return;
   renderList();
   closeSaveAsModal();
   // Save as makes a copy: the tab we came from keeps its own project untouched,
@@ -277,13 +352,37 @@ async function commitSaveAs(){
    is skipped rather than focused (openTab handles that). */
 async function openProjects(recs){
   for (const r of recs){
+    if (tabByProject(r.id)) continue;   // (already open: nothing to read)
+    // The record as stored now, with its files' bytes, read together (v517: to v516 the
+    // list's copy, which held them, was opened as it was)
+    let got;
+    try { got = await readProject(r.id); }
+    catch(e){ notice('“' + r.title + '” could not be opened: its files could not be read from this browser\'s storage.'); continue; }
+    if (!got){ goneProject(r); continue; }
+    if (got.missing) notice(lostSay(got.rec.title, got.missing) + ' it opens without them.');
     // Background: the tab appears in the bar but you stay on the Projects list.
-    await openTab({ module: r.module, title: r.title, projectId: r.id, state: r.state, dirty: false, focus: false });
+    await openTab({ module: r.module, title: got.rec.title, projectId: r.id, state: got.state, dirty: false, focus: false });
   }
 }
+// A project of the list that another window has deleted since the list was drawn.
+function goneProject(r){
+  notice('“' + r.title + '” is no longer among your projects: it was deleted in another window.');
+  renderList();
+}
+const lostSay = (title, n)=> '“' + title + '”: ' + n + (n > 1 ? ' of its files are' : ' of its files is') + ' not stored in this browser any more;';
 
 /* ---- Export a saved project record / import a project file ---- */
-function exportProjectRecord(rec){ return downloadProject(rec); }
+// The record as stored now, its bytes read with it and put back where encode writes them:
+// the same file, signature included, as the project's export from its bar (to v516 the
+// record held them as such).
+async function exportProjectRecord(rec){
+  let got;
+  try { got = await exportedProject(rec.id); }
+  catch(e){ notice('“' + rec.title + '” could not be exported: its files could not be read from this browser\'s storage.'); return; }
+  if (!got){ goneProject(rec); return; }
+  if (got.missing) notice(lostSay(got.rec.title, got.missing) + ' the file holds them without their bytes.');
+  return downloadProject({ ...got.rec, state: got.state });
+}
 async function importProjectFile(file){
   let obj;
   try { obj = JSON.parse(await file.text()); }
@@ -295,8 +394,10 @@ async function importProjectFile(file){
   const doubts = await doubtsAbout(file, obj);
   if (doubts.length && !await confirmBanner('“' + file.name + '”: ' + doubts.join('; ') + '. Import it anyway?', 'Import anyway')) return;
   const now = Date.now();
+  // (its bytes to the store, the record holding their hashes: v517)
+  const [state] = await hydrate([obj.state], true);
   await putProject({ id: uid(), module: obj.module, title: String(obj.title||'').trim().slice(0, 200) || 'Imported project',
-                     state: obj.state, createdAt: +obj.createdAt || now, updatedAt: now });
+                     state, createdAt: +obj.createdAt || now, updatedAt: now });
   renderList();
 }
 
@@ -364,11 +465,18 @@ async function renderList(){
   updateBulkState();
 }
 function recById(id){ return _cache.find(s=> s.id === id); }
-function exportProjectCsv(rec){ runWithModuleState(rec.module, decode(rec.state), ()=> runCsvExport(rec.module)); }
+// (the record and its files' bytes read first, v517: to v516 the list's copy held them)
+async function exportProjectCsv(rec){
+  let got;
+  try { got = await readProject(rec.id); }
+  catch(e){ notice('“' + rec.title + '”: its files could not be read from this browser\'s storage.'); return; }
+  if (!got){ goneProject(rec); return; }
+  runWithModuleState(rec.module, decode(got.state), ()=> runCsvExport(rec.module));
+}
 async function renameProject(rec, t){
   t = (t||'').trim();
   if (!t || t === rec.title) return;
-  await putProject({ ...rec, title:t, updatedAt: Date.now() });
+  if (!await retitleProject(rec.id, t, Date.now())){ goneProject(rec); return; }
   // A renamed project that is open in a tab updates that tab's label (and the name
   // field, when it happens to be the active one).
   const open = tabByProject(rec.id);
@@ -631,17 +739,17 @@ onTabActivated(tab=>{
   projectBar.style.display = '';
   const inp = nameInput(mod);
   if (inp) inp.value = tab.title || '';
+  for (const id of _savedRead.keys()) if (id !== tab.id) _savedRead.delete(id);
   if (tab.projectId && !tab.dirty) markSaved(mod);
   else {
     restoreSaveBtns(mod); setSaveDirtyIcon(mod, !!tab.projectId && tab.dirty);
     // A tab that came back with unsaved changes (a reload): what was saved is the
     // project's record, read into the module and out again without touching it.
-    const rec = tab.projectId && !_savedKey.has(tab.id) && recById(tab.projectId);
-    if (rec && rec.state){
-      let key = null;
-      try { runWithModuleState(mod, decode(rec.state), ()=>{ key = stateKey(mod); }); } catch(e){}
-      if (key) _savedKey.set(tab.id, { key, title: rec.title || '' });
-    }
+    if (tab.projectId && !_savedKey.has(tab.id) && !_savedRead.has(tab.id)) readProject(tab.projectId).then(got=>{
+      if (!got || !got.rec.state || _savedKey.has(tab.id) || activeTab() !== tab) return;
+      _savedRead.set(tab.id, { state: got.state, title: got.rec.title || '' });
+      takeSavedKey(tab);
+    }).catch(()=>{});
   }
   refreshProjBar(mod);
   normalizeProjIcons(mod);
@@ -662,12 +770,34 @@ onSectionChange(tab=>{
 // changes are compared with.
 onTabLoaded(tab=>{
   if (tab.projectId && !tab.dirty) _savedKey.set(tab.id, { key: stateKey(tab.module), title: tab.title || '' });
+  else takeSavedKey(tab);
 });
+/* The saved record of a tab that came back with unsaved changes is read with its files'
+   bytes (v517: to v516 the list's copy held them, and the key was taken at once), and its
+   key taken only while that tab is live and no job runs in its module: else at its next
+   load. Until then a change is unsaved, as one made before the list was read. */
+function takeSavedKey(tab){
+  const r = _savedRead.get(tab.id);
+  if (!r) return;
+  if (_savedKey.has(tab.id) || !tabById(tab.id)){ _savedRead.delete(tab.id); return; }
+  if (!isLive(tab) || moduleBusy(tab.module)) return;
+  _savedRead.delete(tab.id);
+  let key = null;
+  try { runWithModuleState(tab.module, decode(r.state), ()=>{ key = stateKey(tab.module); }); } catch(e){}
+  if (key) _savedKey.set(tab.id, { key, title: r.title });
+}
 // Closing a tab may offer to save it first; the tab manager has no access to the
 // project store, so it calls back in here.
 onCloseSave(tab=> doSave(tab.module, false));
 
 initTabs();
+// The bytes no record holds any more, a while after the page loads (v517); what the
+// database says of other windows.
+sweepSoon(30000);
+// (the bar drawn meanwhile, its + included: tabs can be opened while the restore waits)
+onDbBlocked(()=>{ renderTabs(); notice('DataTreat is open in another window of an older version: reload or close that window for this one to read and save your projects.'); });
+onDbClosing(()=>{ try { persistAll(); } catch(e){} });
+onDbClosed(()=> notice('DataTreat was updated in another window: reload this one to go on saving your work.'));
 
 // Flush the active tab immediately when the page is hidden/unloaded (Chrome's
 // desktop⇄mobile switch reloads the page, tab close, refresh) so changes made in

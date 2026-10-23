@@ -14,7 +14,7 @@
 import { MODULES, MODULE_LABELS, goTab, getModuleState, restoreModuleState,
          getModuleHistory, setModuleHistory, confirmBanner, moduleHasData, X_SVG,
          onSectionChange, moduleBusy, stopModule } from './utils.js';
-import { allTabRecs, putTabRec, deleteTabRec, uid, encode, decode } from './db.js';
+import { allTabStates, putTabRec, deleteTabRec, uid, encode, park, decode } from './db.js';
 
 const MAX_TABS = 20;
 const UNTITLED = 'Untitled project';
@@ -27,7 +27,9 @@ MODULES.forEach(m=>{ try { DEFAULT_STATE[m] = encode(getModuleState(m)); } catch
 
 /* A tab: { id, module, title, projectId, dirty, state, hist }
    `state` / `hist` are only meaningful while the tab is NOT active — the active
-   tab's live state is the module itself. */
+   tab's live state is the module itself. `state` is park's form (db.js): its files'
+   bytes the module's own arrays, read back from the store before a tab is made of a
+   record (v517). */
 const TABS = [];
 let _activeId = null;      // the tab whose state is live in its module
 let _onFixed = true;       // a fixed section (home / projects / settings) is showing
@@ -57,7 +59,7 @@ function untitledName(module){
 function tabRec(t, order){
   return { id:t.id, module:t.module, title:t.title, projectId:t.projectId || null,
            dirty:!!t.dirty, order, active: t.id===_activeId,
-           state: t.id===_liveId ? encode(getModuleState(t.module)) : t.state,
+           state: t.id===_liveId ? park(getModuleState(t.module)) : t.state,
            updatedAt: Date.now() };
 }
 function persistTab(t){
@@ -83,7 +85,7 @@ const isLive = t => !!t && t.id === _liveId;
 function stashActive(){
   const t = activeTab();
   if (!t || t.id !== _liveId) return;
-  try { t.state = encode(getModuleState(t.module)); } catch(e){}
+  try { t.state = park(getModuleState(t.module)); } catch(e){}   // (to v516 encode: every file's bytes base64'd again)
   t.hist = getModuleHistory(t.module, true);   // (parked: a job's hold on it ends, utils.js)
 }
 // Load a tab's parked state into its module. restoreModuleState resets the undo
@@ -165,6 +167,13 @@ function showModuleLoader(){
   _loaderEl.classList.add('show');
 }
 function hideModuleLoader(){ if (_loaderEl) _loaderEl.classList.remove('show'); }
+
+// A banner that asks nothing, shown once none is on show: confirmBanner shows one at a
+// time, and a new one would answer a question asked (a delete, a close) with no.
+function notice(msg){
+  const go = ()=>{ if (document.querySelector('.pwa-confirm')) setTimeout(go, 400); else confirmBanner(msg, 'OK'); };
+  go();
+}
 
 // Fade the app in once its shell is assembled (see index.html head + style.css).
 function revealApp(){ document.documentElement.classList.remove('app-booting'); }
@@ -426,7 +435,8 @@ function moveTab(id, to){
 function isEmpty(t){
   if (t.id === _liveId) return !moduleHasData(t.module);
   if (!t.state) return true;
-  try { return JSON.stringify(t.state) === JSON.stringify(DEFAULT_STATE[t.module]); }
+  // (a parked state's bytes are arrays, which JSON would write a key a byte: none in a default)
+  try { return JSON.stringify(t.state, (k, x)=> x instanceof Uint8Array ? 0 : x) === JSON.stringify(DEFAULT_STATE[t.module]); }
   catch(e){ return false; }
 }
 
@@ -450,6 +460,7 @@ async function requestClose(id){
     if (t.id !== _activeId) activateTab(t.id);             // save acts on the live module:
     ensureLive();                                          // the tab's, loaded now
     if (!await _saveForClose(t)) return;                   // save aborted → keep the tab
+    if (t.dirty) return;   // (changed while it was written, v517: the change is kept, unsaved)
   }
   closeTab(id);
 }
@@ -465,16 +476,26 @@ function initHomeCards(){
 async function initTabs(){
   initBar();
   initHomeCards();
-  let recs;
-  try { recs = await allTabRecs(); } catch(e){ recs = []; }
-  recs = (recs || []).filter(r=> r && MODULES.includes(r.module))
-                     .sort((a,b)=> (a.order||0) - (b.order||0));
-  if (!recs.length){ renderTabs(); afterPaint(revealApp); return; }
+  // The records with their files' bytes, read together (v517); none at all should they
+  // not read: the records stay as they are, for the next load. A file whose bytes are not
+  // stored any more comes back without them (its module says so where they are needed).
+  let recs = [], states = [], missing = 0;
+  try { ({ recs, states, missing } = await allTabStates()); }
+  catch(e){ recs = []; notice('Your open tabs could not be read from this browser\'s storage: they are kept as they are for the next load.'); }
+  if (missing) notice(missing + (missing > 1 ? ' files' : ' file') + ' of your open tabs ' + (missing > 1 ? 'are' : 'is')
+    + ' not stored in this browser any more: ' + (missing > 1 ? 'they come' : 'it comes') + ' back without the original bytes.');
+  const made = recs.map((r, i)=> r && MODULES.includes(r.module) && { r, t: { id:r.id, module:r.module, title:r.title || UNTITLED,
+    projectId:r.projectId || null, dirty:!!r.dirty, state:states[i] || null, hist:null } })
+    .filter(x=> x && !tabById(x.r.id)).sort((a,b)=> (a.r.order||0) - (b.r.order||0));
+  if (!made.length){ renderTabs(); afterPaint(revealApp); return; }
+  // Tabs opened while the records were being read (an upgrade held back by a window of an
+  // older version, which can last): they stay as they are, the one on show live, and the
+  // tabs restored are put before them, parked. To v516 the restore took the module from
+  // the tab on show, whose work was then lost.
+  if (TABS.length){ TABS.unshift(...made.map(x=> x.t)); renderTabs(); persistAll(); afterPaint(revealApp); return; }
   _restoring = true;
-  recs.forEach(r=>{
-    TABS.push({ id:r.id, module:r.module, title:r.title || UNTITLED, projectId:r.projectId || null,
-                dirty:!!r.dirty, state:r.state || null, hist:null });
-  });
+  made.forEach(x=> TABS.push(x.t));
+  recs = made.map(x=> x.r);
   const wanted = recs.find(r=> r.active) || recs[0];
   _activeId = wanted.id;
   const at = tabById(_activeId);
@@ -494,4 +515,4 @@ async function initTabs(){
 export { TABS, MAX_TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,
          closeTab, requestClose, setTabTitle, setTabDirty, setTabProject, renderTabs,
          onTabActivated, onTabLoaded, onCloseSave, initTabs, persistTab, persistAll, isRestoring,
-         isLive, ensureLive, untitledName };
+         isLive, ensureLive, untitledName, notice };

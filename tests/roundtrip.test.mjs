@@ -1,4 +1,5 @@
-/* Projects keep their files' bytes: a saved project (IndexedDB, base64), the page reloaded,
+/* Projects keep their files' bytes: a saved project (IndexedDB: the record holds each file's
+   SHA-256, the bytes a store of their own, v517), the page reloaded,
    a .datatreat export (signed, base64) imported back, a record in the old format (bytes as
    an array of numbers, to v470) and a v473–v483 .json export (bytes as arrays, no header)
    all give each file back byte for byte from its download button. Files that are not a
@@ -6,6 +7,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { start, openModule, loadFiles, saveAs, tabLabels, download, idb, ready, settle, exportProject, signature,
   projectFile, importProject, openProject } from './helpers.mjs';
 
@@ -26,10 +28,14 @@ test('XRPD: saved, reloaded, exported, imported, old formats: the originals byte
     await openModule(page, 'xrd');
     await loadFiles(page, 'xrd', [s0, s1]);
     await saveAs(page, 'RT');
-    // IndexedDB: the bytes as base64, tagged.
+    // IndexedDB: the record holds the bytes' SHA-256 (in its state and its refs), the bytes
+    // themselves the 'bytes' store, under it.
     const [rec] = await idb(page);
-    assert.equal(rec.state.files[0].rawBytes.__t, 'u8');
-    assert.ok(Buffer.from(rec.state.files[0].rawBytes.v, 'base64').equals(fs.readFileSync(s0)), 'stored bytes');
+    const h0 = createHash('sha256').update(fs.readFileSync(s0)).digest('hex');
+    assert.deepEqual(rec.state.files[0].rawBytes, { __t: 'u8', h: h0 });
+    assert.ok(rec.refs.includes(h0));
+    const kept = await page.evaluate(h=> new Promise(res=>{ const r = indexedDB.open('datatreat'); r.onsuccess = ()=>{ const q = r.result.transaction('bytes').objectStore('bytes').get(h); q.onsuccess = ()=>{ res([...q.result]); r.result.close(); }; }; }), h0);
+    assert.ok(Buffer.from(kept).equals(fs.readFileSync(s0)), 'stored bytes');
     // Reloaded: the tab comes back saved, its file downloads whole.
     await page.reload(); await ready(page); await settle(page);
     assert.deepEqual(await tabLabels(page), ['XRPD · RT']);
@@ -58,7 +64,7 @@ test('XRPD: saved, reloaded, exported, imported, old formats: the originals byte
       const db = await new Promise(res=>{ const r = indexedDB.open('datatreat'); r.onsuccess = ()=> res(r.result); });
       await new Promise(res=>{ const t = db.transaction('sessions', 'readwrite'); t.objectStore('sessions').put(rec); t.oncomplete = res; });
       db.close();
-    }, { ...rec, id: 'oldfmt', title: 'Old format', state: asArrays(rec.state) });
+    }, { ...rec, id: 'oldfmt', title: 'Old format', refs: [], state: asArrays(ex.obj.state) });
     await page.click('#nav button[data-tab="home"]');
     await openProject(page, 'xrd', 'Old format');
     same((await dlFile(page, 'xrd', 0)).buf, s0, 'old-format record, s00');

@@ -178,16 +178,6 @@ was proposed; nothing here is in the code yet.
   `xrd-rv-model.js` and its markup in `xrd-rv-html.js`, both tested in Node, the card's
   wiring left in `xrd-rv.js` (2221 lines to 1412), behaviour byte for byte the same; the
   others when work takes us into them.
-- **Saving large projects: the files' bytes written at every change.** Autosave, a tab
-  switch and a save each encode the whole module state, every file's bytes included
-  (base64), and write it to IndexedDB on the main thread. With eight 2048² 16-bit SEM
-  images that is about 92 MB per write: the put alone takes about 550 ms, the largest
-  freeze left after v488, and a tab switch encodes the same again. The bytes never
-  change once a file is loaded. Proposed: keep them in a store of their own, keyed by
-  their hash and written once, the state holding only the key (as v485 already writes
-  bytes shared by several patterns once inside a state); a parked tab keeps them as they
-  are, not as base64; a .datatreat export puts them back in. Reading a project then
-  needs them fetched before the restore, which today is synchronous.
 - **The browser storage is shared with every page of the same origin.** On GitHub Pages
   the app lives at `ceccor.github.io/datatreat_beta/`, and every project published under
   `ceccor.github.io` is the same origin: any of them can read and write DataTreat's
