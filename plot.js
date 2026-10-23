@@ -97,7 +97,7 @@ function svgEl(tag, attrs){
 }
 /* A tick or bar label's text: as it is, or, given runs [[text, over], …] (their texts
    joined are the label's), each a tspan, those with `over` overlined — a negative Miller
-   index's bar (xrd-rv.js). Two overlined side by side are kept 1 px apart, each its own
+   index's bar (xrd-rv-model.js hklRuns). Two overlined side by side are kept 1 px apart, each its own
    bar. Before each overlined run its minus, in a tspan not displayed (no glyph, no
    advance), and the label whole as the text's aria-label: its text, an exported SVG's
    too, and a screen reader read 1-11, not 111. A label without runs is set as it always

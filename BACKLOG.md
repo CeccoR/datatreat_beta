@@ -174,7 +174,10 @@ was proposed; nothing here is in the code yet.
   one, and a closure holds on to whatever it once referenced (up to v473 a closed
   Scherrer card stayed in memory through its keyboard listener). Proposed: no rewrite;
   split a function when work takes us into it, its calculations moved out into
-  functions the tests can call.
+  functions the tests can call. Done for `createRietveld` in v513: its calculations in
+  `xrd-rv-model.js` and its markup in `xrd-rv-html.js`, both tested in Node, the card's
+  wiring left in `xrd-rv.js` (2221 lines to 1412), behaviour byte for byte the same; the
+  others when work takes us into them.
 - **Saving large projects: the files' bytes written at every change.** Autosave, a tab
   switch and a save each encode the whole module state, every file's bytes included
   (base64), and write it to IndexedDB on the main thread. With eight 2048² 16-bit SEM

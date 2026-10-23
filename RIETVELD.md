@@ -76,11 +76,13 @@ The document follows the code as of v425. Functions are named with their file, e
 | `xrd-broad.js` | 444 | Whole Powder Pattern Modelling (a line synthesised from its Fourier coefficients by FFT; the solids' common-volume functions; the log-normal average), Stephens' quartic invariants, the planar-fault table. |
 | `xrd-rietveld.worker.js` | 501 | Runs a refinement off the main thread; formats the result lines and the CSV rows. |
 | `xrd-widths.js` | 697 | Single-peak widths after the refinement; Williamson–Hall, order and prediction tests. |
-| `xrd-rv.js` | 1925 | The card: phases, options, runs (one at a time per instrument profile, stopped if their project is left), plots, results, state, exports. |
+| `xrd-rv.js` | 1412 | The card's wiring: phases, runs (one at a time per instrument profile, stopped if their project is left), the settings window, plots, results, state, exports. |
+| `xrd-rv-model.js` | 695 | The card's calculations, with no DOM: phases from CIFs, the settings made valid, the worker's payload, the result written, curves, ticks, sizes, CSVs, the state saved and read back (v513: taken out of `xrd-rv.js`). |
+| `xrd-rv-html.js` | 246 | The card's words and markup that need no page (v513: taken out of `xrd-rv.js`). |
 | `xrd-shape3d.js` | 1385 | The rotatable 3D view of a crystallite solid (2D canvas, no WebGL). |
 | `xrd-cell3d.js` | 236 | The rotatable 3D view of a phase's unit cell and its atoms, beside the phase list. |
 
-The engine modules (`xrd-data`, `xrd-cryst`, `xrd-sg`, `xrd-instr`, `xrd-math`, `xrd-broad`, `xrd-rietveld`, `xrd-widths`) are pure functions, with no DOM. The page, the worker and Node all import them, so they can be tested under Node (§14).
+The engine modules (`xrd-data`, `xrd-cryst`, `xrd-sg`, `xrd-instr`, `xrd-math`, `xrd-broad`, `xrd-rietveld`, `xrd-widths`) and the card's `xrd-rv-model` and `xrd-rv-html` are pure functions, with no DOM. The page, the worker and Node all import them, so they can be tested under Node (§14).
 
 ### 1.3 What happens on Refine
 
@@ -120,7 +122,7 @@ The standard's refinement produces the instrumental resolution function (*irf*):
   - A negative index has a bar over it wherever the text is rich: (11̄0), [22̄1̄], ⟨11̄0⟩ in the results and the settings' line by their title, the peak-widths table and the tests on the widths, the plots' labels (the Williamson–Hall points, the sizes by peak) and the 3D view's directions. Two negative indices side by side have a bar each, a little apart; when an index has two digits the three are spaced, (1 1̄ 11), so that no two read alike. In the settings' list of fault families (an `<option>` takes no markup) the bar is a combining overline, U+0305, after the digit, which Chromium draws over it.
   - Under a bar the minus is still in the text, hidden (`.hkl-sign` in HTML, a tspan not displayed in SVG, with the label whole as its `aria-label`): a copy of a result line or a table cell, a screen reader and the text of an exported SVG read (1-10), as up to v486.
   - Plain text keeps the minus `hklText` (`xrd-math.js`) writes, (1-10), (1 -1 11): the CSVs and the tooltips. So do the figure composer's category names (the sizes by peak, opened in it), which it draws as plain text.
-  - How: the worker and the widths write the minus; the card turns each negative index of a label into a run under a bar (`hklRuns`, `xrd-rv.js`): HTML spans with an overline, SVG tspans with one (`plot.js` takes the runs beside a tick or bar label's text), and the 3D view draws a short line over the digits. Up to v486 the minus was written three ways (−, -, a bar after the digit); v480–v483 wrote a minus everywhere.
+  - How: the worker and the widths write the minus; the card turns each negative index of a label into a run under a bar (`hklRuns`, `xrd-rv-model.js`): HTML spans with an overline, SVG tspans with one (`plot.js` takes the runs beside a tick or bar label's text), and the 3D view draws a short line over the digits. Up to v486 the minus was written three ways (−, -, a bar after the digit); v480–v483 wrote a minus everywhere.
 - **Esds** are written as 3.9151(8): the esd rounded to one significant digit (two when that digit is 1), the value rounded to the same last digit, and the esd in units of that digit (`fmtEsd` in `xrd-math.js`, for the worker and the card alike; a value with no esd is given to six significant digits). An esd that rounds up to the next leading digit keeps one digit (0.0096 gives 1.50(1)); one of 10 or more in the units rounds the value to its tens or hundreds (125 ± 314 gives 100(300)). An esd under 10⁻¹⁵ of the value, below what a double holds, gives the value alone (an esd under 10⁻¹⁰⁰ had thrown, and lost the whole summary).
 
 ## 2. Inputs: the pattern, the instrument, the phases
@@ -219,7 +221,7 @@ The XRPD module (`xrd.js`) reads each `.xrdml` file through `readXrdmlScans` (`x
 
 **What the model uses:** λ1, λ2, the ratio, the monochromators' polarisation K (`monoK`, the product of both sides'), and the radius. The card's instrument line shows each crystal and K. A file whose header cannot be read gives Cu Kα1/Kα2 at ratio 0.5, R = 240 mm and no monochromator ([Known issues](#16-known-issues)).
 
-### 2.3 Phases from CIF files (`xrd-cryst.js`, `prepPhase` in `xrd-rv.js`)
+### 2.3 Phases from CIF files (`xrd-cryst.js`, `prepPhase` in `xrd-rv-model.js`)
 
 **The file's text** is decoded from its bytes as the modules' text files are (`textdata.js` `decodeText`): UTF-8 with or without its mark, UTF-16 LE or BE by its mark or, without one, by the zero byte beside each character. Up to v493 it was read with `Blob.text()`, UTF-8 alone: a UTF-16 CIF without its mark read as no CIF ("no data_ block found").
 

@@ -1,6 +1,6 @@
 /* DataTreat service worker — cache-first offline app shell.
    Bump CACHE when any precached asset changes to force a refresh. */
-const CACHE = 'datatreat-v512';
+const CACHE = 'datatreat-v513';
 const ASSETS = [
   './',
   './index.html',
@@ -35,6 +35,8 @@ const ASSETS = [
   './tabs.js',
   './sessions.js',
   './xrd-rv.js',
+  './xrd-rv-model.js',
+  './xrd-rv-html.js',
   './xrd-data.js',
   './xrd-cryst.js',
   './xrd-instr.js',
