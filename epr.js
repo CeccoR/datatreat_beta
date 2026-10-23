@@ -1,4 +1,5 @@
-import { fmtNum, fmtData, setupDropzone, movingAverage, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumberInputs, esc } from './utils.js';
+import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumericInput, esc } from './utils.js';
+import { boxSmooth, meanStep, widthText, ptsNum, ptsText } from './smooth.js';
 import { Plot } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, num, numStr, finitePairs, cardList } from './modkit.js';
@@ -21,7 +22,7 @@ import { decodeText } from './textdata.js';
     refresh: afterFilesChange,
     // A label or a colour changed: the zoom kept, the data being the same.
     redraw: ()=> updateEpr(true),
-    snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), norm: a.norm, smooth: a.smooth })) }),
+    snapshot: ()=> ({ cards: cards().map(a=> ({ ...deck.saved(a), norm: a.norm, smoothW: a.smoothW })) }),
     // A file as a restore takes it (modkit RESTORED): its field and intensities, the points
     // where both are numbers, two at least (else it is left out).
     file: f =>{
@@ -32,7 +33,7 @@ import { decodeText } from './textdata.js';
     restore: s => deck.load(cardList(s.cards, KINDS) || [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }], readCard, a=>{
       const card = deck.cardOf(a);
       card.querySelector('#' + P(a) + 'Norm').value = a.norm;
-      card.querySelector('#' + P(a) + 'Smooth').value = a.smooth;
+      showW(a, card);
     }),
     redrawTab: ()=>{ if (files.length){ deck.fitNames(); updateEpr(true); } },
     // One CSV a card, named after it.
@@ -147,6 +148,8 @@ import { decodeText } from './textdata.js';
   function afterFilesChange(){
     kit.showFiles();
     document.getElementById('eprAnalyses').style.display = files.length ? 'block' : 'none';
+    // (each card's points at the spectra's steps, folded or not)
+    cards().forEach(a=> syncPts(a));
     updateEpr();
     kit.commit();
   }
@@ -154,8 +157,10 @@ import { decodeText } from './textdata.js';
   /* ---- The analysis cards (cards.js): each its own normalisation and smoothing of the
      same spectra, stacked on its own plot ---- */
   const KINDS = { spectra: 'Stacked Spectra' };
-  const EPR_INFO = `Spectra are stacked for visual comparison, each normalized to the largest peak-to-peak (global) or to its own (local), or left as they are (none: the stacking only spaces them). Adjust the smoothing window and normalization mode as needed. The field axis is each spectrum's field <b>rescaled to 9.5 GHz</b>, B·(9.5 GHz / ν) with ν the microwave frequency of its .DSC (MWFQ), so that spectra recorded at different frequencies line up by g; the CSV gives the field the same way (Bfield_mT_at_9.5GHz). The top axis reads <b>g = hν / (μ<sub>B</sub>·B)</b> at 9.5 GHz. A file without its frequency is shown on the field it was measured at, and then no g axis can be drawn. ${cardInfo(false, false)}`;
-  const DEF = { norm: 'global', smooth: 10 };
+  const EPR_INFO = `Spectra are stacked for visual comparison, each normalized to the largest peak-to-peak (global) or to its own (local), or left as they are (none: the stacking only spaces them). The <b>smoothing</b> takes at each point the mean of the line through the points over a window w wide (mT, on the field as plotted) centred on it, a box convolution, cut short at the ends; 0 is none. Being a width on the field axis, one setting smooths alike spectra recorded at different steps; its field shows beside it the points it spans at their steps (a range when the steps differ). The field axis is each spectrum's field <b>rescaled to 9.5 GHz</b>, B·(9.5 GHz / ν) with ν the microwave frequency of its .DSC (MWFQ), so that spectra recorded at different frequencies line up by g; the CSV gives the field the same way (Bfield_mT_at_9.5GHz). The top axis reads <b>g = hν / (μ<sub>B</sub>·B)</b> at 9.5 GHz. A file without its frequency is shown on the field it was measured at, and then no g axis can be drawn. ${cardInfo(false, false)}`;
+  // (the smoothing a width in mT, 0.2 about 10 points of a 1024-point, 20-mT sweep; to v510
+  // a number of points, `smooth`, 10: readCard converts it)
+  const DEF = { norm: 'global', smoothW: 0.2 };
   const P = a => 'epr' + a.id;
   const cardBody = a => `
         <div class="row" style="align-items:flex-start">
@@ -166,19 +171,51 @@ import { decodeText } from './textdata.js';
             <div class="txt-mini param-head">Parameters</div>
             <label class="txt-label" for="${P(a)}Norm">Normalization</label>
             <select id="${P(a)}Norm">${NORM_OPTIONS}</select>
-            <label class="txt-label" for="${P(a)}Smooth">Smoothing points</label>
-            <input type="number" id="${P(a)}Smooth" value="10" min="1">
+            <label class="txt-label" for="${P(a)}Smooth">Smoothing width (mT)</label>
+            <label class="wfield" title="The smoothing box's width, in mT on the plotted field (0: none); beside it, the points it spans at the spectra's steps"><input type="text" inputmode="decimal" id="${P(a)}Smooth" value="${DEF.smoothW}" autocomplete="off" aria-describedby="${P(a)}SmoothPts"><span class="wf-pts" id="${P(a)}SmoothPts"></span></label>
           </div>
         </div>`;
   // The card's fields show its record; a change is taken on confirm, not while typing
-  // (the normalisation a <select>, its change a deliberate pick; the smoothing a guarded number
-  // field, whose change only fires with a valid value).
+  // (the normalisation a <select>, its change a deliberate pick; the smoothing a guarded decimal
+  // field, whose change only fires with a value from 0; its points follow what is typed).
   function buildCard(a, card){
-    guardNumberInputs(card);
     const norm = card.querySelector('#' + P(a) + 'Norm'), sm = card.querySelector('#' + P(a) + 'Smooth');
-    norm.value = a.norm; sm.value = a.smooth;
+    guardNumericInput(sm, { min: 0, def: DEF.smoothW });
+    norm.value = a.norm; showW(a, card);
     norm.addEventListener('change', ()=>{ a.norm = normOf(norm.value); if (files.length){ drawCard(a); kit.commit(); } });
-    sm.addEventListener('change', ()=>{ a.smooth = Math.max(1, Math.round(+sm.value) || 1); if (files.length){ drawCard(a); kit.commit(); } });
+    sm.addEventListener('change', ()=>{
+      if (sm.value !== sm._shown) a.smoothW = Math.max(0, parseFloat(String(sm.value).replace(',', '.')) || 0);
+      showW(a, card);
+      if (files.length){ drawCard(a); kit.commit(); }
+    });
+    // (and as it is left: a value refused is set back with no input event)
+    ['input', 'blur'].forEach(t=> sm.addEventListener(t, ()=> syncPts(a, card)));
+  }
+  /* The width in its field to 4 significant digits, kept exact in the record (one converted
+     from points stays as it was: only a value typed replaces it), and its points. */
+  function showW(a, card = deck.cardOf(a)){
+    const sm = card && card.querySelector('#' + P(a) + 'Smooth');
+    if (!sm) return;
+    sm.value = sm._shown = widthText(a.smoothW);
+    syncPts(a, card);
+  }
+  /* What the width typed spans in points of the card's spectra, at each one's step, after
+     it in its field: one number, or the range when the steps differ (off at 0, nothing with
+     no spectrum or no value). */
+  function syncPts(a, card = deck.cardOf(a)){
+    const sm = card && card.querySelector('#' + P(a) + 'Smooth'), out = card && card.querySelector('#' + P(a) + 'SmoothPts');
+    if (!sm || !out) return;
+    // (the record's width, exact, while the field shows it unchanged)
+    const w = sm.value === sm._shown && Number.isFinite(a.smoothW) ? a.smoothW : parseFloat(String(sm.value).trim().replace(',', '.'));
+    const ps = files.map(f=> w/meanStep(f.b)).filter(p=> p >= 0 && isFinite(p));
+    let t = '', tip = '';
+    if (ps.length && ps.length === files.length){
+      const lo = Math.min(...ps), hi = Math.max(...ps);
+      t = !w ? 'off' : ptsNum(lo) === ptsNum(hi) ? ptsText(lo) : `≈ ${ptsNum(lo)}–${ptsNum(hi)} pts`;
+      tip = !w ? 'No smoothing' : files.map((f, k)=> `${f.label}: ${widthText(ps[k])} steps of ${widthText(meanStep(f.b))} mT`).join('\n');
+    }
+    if (out.textContent !== t) out.textContent = t;
+    if (out.title !== tip) out.title = tip;
   }
   function named(a){
     const card = deck.cardOf(a);
@@ -191,9 +228,18 @@ import { decodeText } from './textdata.js';
     wake: a=>{ if (files.length) drawCard(a, true); },
   });
   const cards = ()=> deck.records;
-  // A card's settings in the history: its normalization and smoothing (kit.snapshot), a
-  // whole number from 1 (a string in a project from before the cards; modkit RESTORED).
-  const readCard = s => ({ norm: normOf(s.norm), smooth: Math.round(num(numStr(s.smooth), DEF.smooth, v=> v >= 1)) });
+  /* A card's settings in the history: its normalization and smoothing width (kit.snapshot),
+     a number from 0, else the default. Up to v510 the smoothing was a number of points,
+     `smooth` (a whole number from 1, a string in a project from before the cards; modkit
+     RESTORED): it becomes N times the median step of the spectra, as it was on those at
+     that step (to rounding, for an even N; N = 1, none, is 0), the others smoothed by
+     the ratio of their steps; with no spectrum, or no such number, the default. */
+  const readCard = s =>{
+    const st = files.map(f=> meanStep(f.b)).sort((x, y)=> x - y), med = st[st.length >> 1];
+    const N = Math.round(num(numStr(s.smooth), NaN, v=> v >= 1));
+    const w = 'smoothW' in s ? num(s.smoothW, NaN, v=> v >= 0) : N === 1 ? 0 : N*med;
+    return { norm: normOf(s.norm), smoothW: Number.isFinite(w) ? w : DEF.smoothW };
+  };
 
   // Every card unfolded is drawn; a folded one is drawn as it comes back (wake).
   function updateEpr(preserveView){
@@ -201,9 +247,8 @@ import { decodeText } from './textdata.js';
     cards().forEach(a=>{ if (!deck.isFolded(a)) drawCard(a, preserveView); });
   }
   function drawCard(a, preserveView){
-    const N = a.smooth || 1;
     const norm = a.norm;
-    let Y = files.map(f=>movingAverage(f.a, N));
+    let Y = files.map(f=> boxSmooth(f.b, f.a, a.smoothW));
     // A fresh Plot is built each render, so grab the outgoing view first to keep the
     // current zoom on a resize / tab-switch redraw instead of snapping to full range.
     // (only on the same spectra and the same full range: modcharts setView)
@@ -238,16 +283,16 @@ import { decodeText } from './textdata.js';
     plot.drawAxes();
     // The composer gets the CSV's own "Smoothed_" column (smoothedOut): the same numbers
     // as the export, without the stacking offset.
-    const sms = files.map(f=>movingAverage(f.a, N));
+    const sms = files.map(f=> boxSmooth(f.b, f.a, a.smoothW));
     const out = smoothedOut(sms, norm);
     Y.forEach((y,k)=> plot.line(files[k].b, y, files[k].color, 1.3, undefined,
       { raw: { xs: files[k].b, ys: out[k] }, label: files[k].label, key: files[k].name }));
   }
 
-  /* The smoothed column: moving average (N pts), then the user's normalisation — the
-     background taken as the first point and divided by the peak-to-peak (local = own,
-     global = largest across samples), matching the on-screen divisor; none: the smoothed
-     trace as it is, background and all. */
+  /* The smoothed column: the box w wide (smooth.js; to v510 a moving average over N
+     points), then the user's normalisation — the background taken as the first point and
+     divided by the peak-to-peak (local = own, global = largest across samples), matching
+     the on-screen divisor; none: the smoothed trace as it is, background and all. */
   function smoothedOut(sms, norm){
     if (norm==='none') return sms;
     const ppks = sms.map(sm => (maxArr(sm)-minArr(sm)) || 1);
@@ -255,8 +300,7 @@ import { decodeText } from './textdata.js';
     return sms.map((sm, k)=>{ const bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP; return sm.map(v=>(v-bg)/div); });
   }
   function cardCsv(a){
-    const N = a.smooth || 1;
-    const sms = files.map(f=>movingAverage(f.a, N));
+    const sms = files.map(f=> boxSmooth(f.b, f.a, a.smoothW));
     const out = smoothedOut(sms, a.norm);
     // (as they are, intensities of any scale keep their digits, as the raw ones: fmtData)
     const fmt = a.norm==='none' ? fmtData : fmtNum;
@@ -268,7 +312,8 @@ import { decodeText } from './textdata.js';
       cols.push({h:(f.rescaled !== false ? 'Bfield_mT_at_9.5GHz_' : 'Bfield_mT_')+f.label, v:f.b.map(v=>fmtNum(v,6))});
       // Intensities of any scale keep their digits (fmtData): a tiny one is not 0.
       cols.push({h:'Raw_'+f.label,                   v:f.a.map(v=>fmtData(v,6))});
-      cols.push({h:`Smoothed_${f.label} (N=${N})`,   v:out[k].map(v=>fmt(v,6))});
+      // (the width in mT as its field shows it; to v510 the points, N=)
+      cols.push({h:`Smoothed_${f.label} (w=${widthText(a.smoothW)} mT)`,   v:out[k].map(v=>fmt(v,6))});
     });
     return wideCsv(cols);
   }

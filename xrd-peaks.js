@@ -1,14 +1,15 @@
 /* =========================================================
    XRPD — the peak analysis (Scherrer).
-   A panel of its own on some files: the raw pattern, its moving-average smoothing,
+   A panel of its own on some files: the raw pattern, its smoothing (smooth.js),
    the SNIP baseline and the peaks found on what is left, with their FWHM and, for
    the samples, the Scherrer crystallite size of each. Made for a card (the samples,
    several cards each with its own parameters) or for the instrumental standard (one
    file, its own parameters, and the Caglioti fit of its widths that corrects the
    samples' sizes for the instrument's).
 ========================================================= */
-import { esc, fmtNum, csvLine, linspace, interpLinear, movingAverage, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
+import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
+import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
 
 /* A view (a plot, a table, a chart, a legend) is drawn again only when what it is drawn
    from changed: each keeps the key of its inputs as last drawn, the objects among them by
@@ -57,13 +58,48 @@ function solveLinear(A, b){
   return z;
 }
 
-// SNIP baseline: iteratively clip peaks downward
-function computeBaseline(y, halfWin){
-  const n = y.length;
+/* SNIP baseline: each point clipped down to the mean of the curve k steps either side, k
+   from K = W / step (rounded, 1 at least) down to 1: W is the half-width in °2θ over which
+   a peak is cut away. Up to v510 it was K itself, in points (blWin): the same K at a step
+   twice as large clipped twice as wide. On an even grid the points k away, as then; on
+   one with points left out or listed positions (an uneven one), the line through the
+   points at x ± k·step. No pass past (n − 1)/2 steps has both sides within the pattern:
+   K stops there, which changes nothing. */
+function computeBaseline(x, y, W){
+  const n = y.length, step = meanStep(x);
+  const K = Math.min(Math.floor((n-1)/2), Math.max(1, Math.round(W/step) || 1));
   const z = Float64Array.from(y);
-  for (let w = halfWin; w >= 1; w--){
-    for (let i = w; i < n-w; i++){
-      const avg = (z[i-w] + z[i+w]) / 2;
+  let even = step > 0;
+  for (let i = 1; even && i < n; i++) even = Math.abs(x[i] - x[i-1] - step) <= 1e-6*step;
+  if (even){
+    for (let w = K; w >= 1; w--){
+      for (let i = w; i < n-w; i++){
+        const avg = (z[i-w] + z[i+w]) / 2;
+        if (avg < z[i]) z[i] = avg;
+      }
+    }
+    return Array.from(z);
+  }
+  /* The 2θ read once into an array of their own (x running up), the line read in place.
+     A pass starts at the first point whose left side is within the pattern, the cell of
+     its right side found from the last pass's (both move down as the distance shrinks),
+     and both sides' cells move up with the point: each pass costs as the even grid's, its
+     points, not its distance (a W of many steps on 20000 listed positions, seconds else). */
+  const s = x[n-1] < x[0] ? -1 : 1, u = Float64Array.from(x, v=> s*v), lo = u[0], hi = u[n-1];
+  let i0 = n - 1, kb0 = Math.max(0, n - 2);
+  for (let w = K; w >= 1; w--){
+    const d = w*step;
+    while (i0 > 0 && u[i0-1] - d >= lo) i0--;
+    while (kb0 > 0 && u[kb0] > u[i0] + d) kb0--;
+    let ka = 0, kb = kb0;
+    for (let i = i0; i < n; i++){
+      const a = u[i] - d, b = u[i] + d;
+      if (a < lo) continue;
+      if (b > hi) break;
+      while (ka < n-2 && u[ka+1] <= a) ka++;
+      while (kb < n-2 && u[kb+1] <= b) kb++;
+      const da = u[ka+1] - u[ka], db = u[kb+1] - u[kb];
+      const avg = ((da > 0 ? z[ka] + (z[ka+1] - z[ka])*(a - u[ka])/da : z[ka]) + (db > 0 ? z[kb] + (z[kb+1] - z[kb])*(b - u[kb])/db : z[kb])) / 2;
       if (avg < z[i]) z[i] = avg;
     }
   }
@@ -127,11 +163,11 @@ function computeFWHM(x, y, idx0){
 /* The counting uncertainty of computeFWHM's width. Each crossing is interpolated
    between two points of the smoothed, background-subtracted profile, and the half
    level is half the apex: the counts' Poisson variance (raw y·m, m from varMul),
-   carried through the moving average that smoothed them (the covariances of
+   carried through the box that smoothed them, w wide (the covariances of
    neighbouring smoothed points included) and through those three readings, gives
    the width's to first order. The SNIP background, smooth over many points, counts
    as exact. NaN where the width is, or a crossing is flat. */
-function fwhmSigma(x, y, idx0, yraw, N, varMul){
+function fwhmSigma(x, y, idx0, yraw, w, varMul){
   const idx = refineIdx(y, idx0, 3), half = y[idx] / 2;
   if (!(half > 0)) return NaN;
   let l = idx; while (l > 0 && y[l] > half) l--;
@@ -145,23 +181,16 @@ function fwhmSigma(x, y, idx0, yraw, N, varMul){
   add(l, dl*(1 - tl)/Dl); add(l+1, dl*tl/Dl);
   add(r-1, dr*(tr - 1)/Dr); add(r, -dr*tr/Dr);
   add(idx, 0.5*(dr/Dr - dl/Dl));
-  // The moving average's weights, as movingAverage takes them: N + 1 points with
-  // half-weight ends for an even N, cut short at the ends of the pattern.
-  N = Math.max(1, Math.round(N));
-  const n = yraw.length, h = Math.floor(N/2), even = N > 1 && N % 2 === 0;
-  const win = i =>{
-    const w = new Map(); let W = 0;
-    for (let k = Math.max(0, i-h); k <= Math.min(n-1, i+h); k++){ const v = even && (k === i-h || k === i+h) ? 0.5 : 1; w.set(k, v); W += v; }
-    return { w, W };
-  };
+  // The box's weights, as boxSmooth takes them, cut short at the ends of the pattern (to
+  // v510 the moving average's over N points: at w = N steps, for an even N, the same).
   const vy = k => Math.max(yraw[k], 0)*(varMul ? varMul[k] : 1);
-  const ks = [...g.keys()], wins = new Map(ks.map(k=> [k, win(k)]));
+  const ks = [...g.keys()], wins = new Map(ks.map(k=> [k, boxWeights(x, k, w)]));
   let v = 0;
   for (const i of ks) for (const j of ks){
     const a = wins.get(i), b = wins.get(j);
     let c = 0;
-    a.w.forEach((wi, k)=>{ const wj = b.w.get(k); if (wj) c += wi*wj*vy(k); });
-    v += g.get(i)*g.get(j)*c/(a.W*b.W);
+    a.forEach((wi, k)=>{ const wj = b.get(k); if (wj) c += wi*wj*vy(k); });
+    v += g.get(i)*g.get(j)*c;
   }
   return Math.sqrt(v);
 }
@@ -323,8 +352,14 @@ const LEGEND = `<div class="legend">
 const BL_TITLE = 'Subtract a SNIP baseline (the background) before the peak search and the FWHM; unticked, none: the pattern is taken as it is, from zero';
 const CHIP_TITLE = "Switch all / one: to one, every sample starts from the common value; back to all, the common value is the shown sample's";
 const chip = (p, k, mode)=> `<button type="button" class="mode-chip" id="${p}Mode${k}" title="${CHIP_TITLE}">${mode}</button>`;
+/* A width's field (the smoothing's, the SNIP's): its value in °2θ and, in the same box after
+   it, muted, what it spans in points of the pattern on show (syncHints). The box is a
+   label: a click on the points is one in the field. */
+const W_TITLE = { Smooth: "The smoothing box's width, in °2θ (0: none); beside it, the points it spans at the step of the pattern on show",
+  BlWin: "The SNIP baseline's half-width, in °2θ: each point is compared with the curve up to this far on either side; beside it, the points on each side at the step of the pattern on show" };
+const wField = (p, id, v)=> `<label class="pg-field wfield" title="${W_TITLE[id]}"><input type="text" inputmode="decimal" id="${p}${id}" value="${v}" autocomplete="off" aria-describedby="${p}${id}Pts"><span class="wf-pts" id="${p}${id}Pts"></span></label>`;
 
-export const PEAKS_INFO = `Per-sample view. Raw pattern (grey), moving-average smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of its two neighbours at decreasing distances, from the window width down to one point, so the peaks are cut away and the slowly varying background is left; its box unticked, there is none, and the pattern is read from zero as it is. Peaks are searched on the smoothed pattern with the baseline taken off: a peak must reach the minimum height and stand out by the minimum prominence (both in % of the highest), and two peaks closer than the minimum distance keep the taller. The FWHM is read where the profile crosses half its height, interpolated between points; the crystallite size is Scherrer's, D = Kλ / (β·cosθ). With an instrumental standard (<b>Instrumental standard…</b>), the instrument's width at each angle is taken off in quadrature, β² = β<sub>obs</sub>² − β<sub>instr</sub>², for the corrected size. <b>+ Add peak</b> places a peak by hand on the plot; the × in a row removes one. Use the <b>all / one</b> toggles to share a value across samples or set it per sample.`;
+export const PEAKS_INFO = `Per-sample view. Raw pattern (grey), smoothing (blue), SNIP baseline (orange) and detected peaks (green). The <b>smoothing</b> takes at each point the mean of the line through the points over a window w wide (°2θ) centred on it, a box convolution, cut short at the ends of the pattern; 0 is none. The <b>SNIP</b> (Statistics-sensitive Non-linear Iterative Peak-clipping) baseline iteratively clips each point downward toward the average of the curve on either side at decreasing distances, from the half-width W (°2θ) down to one step, so the peaks are cut away and the slowly varying background is left; its box unticked, there is none, and the pattern is read from zero as it is. Both are widths on the 2θ axis, so that one setting treats alike patterns measured at different steps; each field shows beside its value the points it spans at the step of the pattern on show. Peaks are searched on the smoothed pattern with the baseline taken off: a peak must reach the minimum height and stand out by the minimum prominence (both in % of the highest), and two peaks closer than the minimum distance keep the taller. The FWHM is read where the profile crosses half its height, interpolated between points; the crystallite size is Scherrer's, D = Kλ / (β·cosθ). With an instrumental standard (<b>Instrumental standard…</b>), the instrument's width at each angle is taken off in quadrature, β² = β<sub>obs</sub>² − β<sub>instr</sub>², for the corrected size. <b>+ Add peak</b> places a peak by hand on the plot; the × in a row removes one. Use the <b>all / one</b> toggles to share a value across samples or set it per sample.`;
 export const STD_INFO = `A measured standard (large, strain-free crystallites — LaB₆, Si…) characterises the instrumental broadening β<sub>instr</sub>(2θ). It is analysed here on its own, always normalised to its highest peak (= 1), with parameters of its own. Its peaks' FWHM are fitted with the Caglioti function, FWHM² = U·tan²θ + V·tanθ + W, which gives the instrument's width at any angle: the samples' corrected sizes take it off in quadrature. One file at a time: a file dropped replaces the one there.`;
 
 /* host: {
@@ -357,10 +392,10 @@ export function createPeakAnalysis(host, root, o){
           <div class="pside-col xrd-std-side">
             <div class="txt-mini param-head">Parameters</div>
             <div class="param-grid">
-              <label class="txt-label" for="${p}Smooth">Smoothing window (pts)</label>
-              <input type="number" class="pg-field" id="${p}Smooth" value="1" min="1">
-              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP window (pts)</label></div>
-              <input type="number" class="pg-field" id="${p}BlWin" value="150" min="1">
+              <label class="txt-label" for="${p}Smooth">Smoothing width (&#176;2&#952;)</label>
+              ${wField(p, 'Smooth', 0)}
+              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP half-width (&#176;2&#952;)</label></div>
+              ${wField(p, 'BlWin', 2)}
               <label class="txt-label" for="${p}PkHeight">Peak min. height (%)</label>
               <input type="text" inputmode="decimal" class="pg-field" id="${p}PkHeight" value="5">
               <label class="txt-label" for="${p}PkProm">Peak min. prominence (%)</label>
@@ -402,10 +437,10 @@ export function createPeakAnalysis(host, root, o){
             <div class="param-grid">
               <label class="txt-label" for="${p}Norm">Normalization</label>
               <select id="${p}Norm" class="pg-field">${NORM_OPTIONS}</select>
-              <div class="txt-label pg-title">Smoothing window (pts) ${chip(p, 'N', 'all')}</div>
-              <input type="number" class="pg-field" id="${p}Smooth" value="10" min="1">
-              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP window (pts)</label> ${chip(p, 'Bl', 'all')}</div>
-              <input type="number" class="pg-field" id="${p}BlWin" value="150" min="1">
+              <div class="txt-label pg-title">Smoothing width (&#176;2&#952;) ${chip(p, 'N', 'all')}</div>
+              ${wField(p, 'Smooth', 0.13)}
+              <div class="txt-label pg-title"><label class="pg-on" title="${BL_TITLE}"><input type="checkbox" id="${p}BlOn" checked> Baseline SNIP half-width (&#176;2&#952;)</label> ${chip(p, 'Bl', 'all')}</div>
+              ${wField(p, 'BlWin', 2)}
               <div class="txt-label pg-title">Peak min. height (%) ${chip(p, 'H', 'one')}</div>
               <input type="text" inputmode="decimal" class="pg-field" id="${p}PkHeight" value="5">
               <div class="txt-label pg-title">Peak min. prominence (%) ${chip(p, 'P', 'one')}</div>
@@ -428,6 +463,7 @@ export function createPeakAnalysis(host, root, o){
                 <input type="text" inputmode="decimal" class="lambda-val" id="${p}Lambda" value="1.540598" readonly title="Wavelength (Å)">
               </div>
             </div>
+            <div id="${p}StepNote"></div>
             <div class="xrd-pk-btns">
               <button class="btn plot-action-btn" id="${p}AddPeak" title="Add a peak by clicking on the plot">+ Add peak</button>
               <button class="btn plot-action-btn" id="${p}Std" aria-haspopup="dialog" title="The instrumental standard: its file, its peaks and the Caglioti fit that corrects the sizes for the instrument's width">Instrumental standard…</button>
@@ -480,43 +516,81 @@ export function createPeakAnalysis(host, root, o){
   let removedPeaks = []; // per file: array of removed peaks' detected 2θ positions
   const curIdx = ()=> std ? 0 : host.idx();
   // Per-field mode: 'shared' | 'per'. Defaults: peak-search fields per-sample, rest shared.
+  // (N is the smoothing's chip, blWin the baseline's: its width and its box.)
   const MODE_DEF = std ? { N:'shared', blWin:'shared', pkHeight:'shared', pkProm:'shared', pkDist:'shared', K:'shared', lambda:'shared' }
     : { N:'shared', blWin:'shared', pkHeight:'per', pkProm:'per', pkDist:'per', K:'shared', lambda:'shared' };
   const paramMode = { ...MODE_DEF };
-  // Shared param values (defaults); the standard's own start unsmoothed, and never
-  // share anything (one file), nor size anything (K, λ unused). blOn: the baseline's box.
-  const FIELD_DEF = { N:10, blWin:150, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598, blOn:true };
-  const SHARED_DEF = std ? { ...FIELD_DEF, N:1 } : FIELD_DEF;
+  /* Shared param values (defaults); the standard's own start unsmoothed, and never
+     share anything (one file), nor size anything (K, λ unused). blOn: the baseline's box.
+     smoothW, the smoothing's width, and snipW, the SNIP's half-width, are in °2θ: 0.13°
+     is 10 points at a step of 0.013°, 2° about 150 (to v510 numbers of points, N 10 and
+     blWin 150, whatever the step: restore converts them). */
+  const FIELD_DEF = { smoothW:0.13, snipW:2, pkHeight:5, pkProm:3, pkDist:0.3, K:0.9, lambda:1.540598, blOn:true };
+  const SHARED_DEF = std ? { ...FIELD_DEF, smoothW:0 } : FIELD_DEF;
   const shared = { ...SHARED_DEF };
   // Per-sample param overrides (indexed by file idx). blOn: the SNIP baseline subtracted
-  // (its box ticked, the default) or not; it goes with its window, under the window's
+  // (its box ticked, the default) or not; it goes with its width, under the width's
   // all / one (paramMode.blWin). Absent (projects before v463) is on.
-  let perParams = []; // array of {N, blWin, blOn, pkHeight, pkProm, pkDist, K, lambda}
+  let perParams = []; // array of {smoothW, snipW, blOn, pkHeight, pkProm, pkDist, K, lambda}
   // What the crystallite-size box plot is by: each sample's peaks ('sample'), or each
   // reflection the samples share, over the samples ('peak').
   let sizeBy = 'sample';
+  // The chips a project's conversion turned to one, its patterns' steps differing (restore),
+  // whose note shows under the fields until each is shared again or the note dismissed.
+  let stepNote = [];
+  // And, files being left out then, those chips' values in points as v510 shared them
+  // ({ N, blWin }): such a file taken back in has them at its own step, as v510 gave it
+  // the shared value under all (its own entry, held, not in use), until the chip is shared again.
+  let heldPts = {};
   let norm = 'global';
   // Selection/hover state of the peak table and plot.
   const panel = { sel:null, hov:null };
   let anaPlot = null;
 
   // input id ↔ stored field key
-  const FIELD_INPUT = std ? { N:'Smooth', blWin:'BlWin', pkHeight:'PkHeight', pkProm:'PkProm', pkDist:'PkDist' }
-    : { N:'Smooth', blWin:'BlWin', pkHeight:'PkHeight', pkProm:'PkProm', pkDist:'PkDist', K:'K', lambda:'Lambda' };
-  const FIELD_MIN   = { N:1, blWin:1, pkHeight:0, pkProm:0, pkDist:0, K:1e-6, lambda:1e-6 };
+  const FIELD_INPUT = std ? { smoothW:'Smooth', snipW:'BlWin', pkHeight:'PkHeight', pkProm:'PkProm', pkDist:'PkDist' }
+    : { smoothW:'Smooth', snipW:'BlWin', pkHeight:'PkHeight', pkProm:'PkProm', pkDist:'PkDist', K:'K', lambda:'Lambda' };
+  // (the SNIP's half-width above 0: one step at least, whatever is set)
+  const FIELD_MIN   = { smoothW:0, snipW:1e-6, pkHeight:0, pkProm:0, pkDist:0, K:1e-6, lambda:1e-6 };
+  // The widths, by the keys of the points they were up to v510; the chip each goes under.
+  const LEGACY = { smoothW:'N', snipW:'blWin' };
+  const modeOf = k => k === 'smoothW' ? 'N' : k === 'snipW' || k === 'blOn' ? 'blWin' : k;
 
   // Validation feedback (shake + auto-correct) for the decimal (type=text) fields;
   // the number fields are guarded as any of the page's. Wired before the fields' own
   // change handlers.
   guardNumberInputs(root);
-  [ ['PkHeight',0,5], ['PkProm',0,3], ['PkDist',0,0.3], ...(std ? [] : [['K',1e-6,0.9], ['Lambda',1e-6,1.540598]]) ]
+  [ ['Smooth',0,SHARED_DEF.smoothW], ['BlWin',1e-6,2], ['PkHeight',0,5], ['PkProm',0,3], ['PkDist',0,0.3], ...(std ? [] : [['K',1e-6,0.9], ['Lambda',1e-6,1.540598]]) ]
     .forEach(([id,min,def])=> guardNumericInput($$(id), { min, def }));
 
+  /* A state's settings as a restore takes them (a project read in may hold anything): a
+     value that is no number, or a width below its least, none (the default, or the shared
+     value), another below its least that least. Up to v510 the widths were points (N,
+     blWin), each pattern's at its own step: they become widths at that step, the mean as
+     the peak search takes it, so that each pattern is smoothed as it was (to rounding, for
+     an even N; an odd N's box edges fall mid-cell, a quarter step² wider in variance; the
+     end points count half; N = 1, none, is 0) and clipped as it was (K = the points). */
+  const objOf = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  const numOf = (q, k)=> !Number.isFinite(q[k]) ? undefined : k in LEGACY ? (q[k] >= FIELD_MIN[k] ? q[k] : undefined) : Math.max(FIELD_MIN[k], q[k]);
+  const fromPts = (k, v, st)=>{
+    if (!Number.isFinite(v)) return undefined;
+    const N = Math.max(1, k === 'smoothW' ? Math.round(v) : v);
+    return k === 'smoothW' && N === 1 ? 0 : st > 0 ? N*st : undefined;
+  };
+  // A sample's own settings, a project's to v510 in points at its pattern's step st (those
+  // of heldPts, pts, in place of its own: the SNIP's box too, v510's shared one, for an
+  // entry not converted yet).
+  function entryOf(q, st, pts = {}){
+    const o = {};
+    for (const k in FIELD_MIN){ const v = k in LEGACY && !(k in q) ? fromPts(k, Number.isFinite(pts[LEGACY[k]]) ? pts[LEGACY[k]] : q[LEGACY[k]], st) : numOf(q, k); if (v !== undefined) o[k] = v; }
+    o.blOn = !('snipW' in q) && Number.isFinite(pts.blWin) && typeof pts.blOn === 'boolean' ? pts.blOn : q.blOn !== false;
+    return o;
+  }
   // Get params for a specific file index (respects per-field shared/per mode)
   function getFileParams(i){
     const pp = perParams[i] || {};
-    const g = (k, m = k) => paramMode[m]==='shared' ? shared[k] : (pp[k] ?? shared[k]);
-    return { N:g('N'), blWin:g('blWin'), blOn:g('blOn', 'blWin') !== false, pkHeight:g('pkHeight'), pkProm:g('pkProm'), pkDist:g('pkDist'), K:g('K'), lambda:g('lambda') };
+    const g = k => paramMode[modeOf(k)]==='shared' ? shared[k] : (pp[k] ?? shared[k]);
+    return { smoothW:g('smoothW'), snipW:g('snipW'), blOn:g('blOn') !== false, pkHeight:g('pkHeight'), pkProm:g('pkProm'), pkDist:g('pkDist'), K:g('K'), lambda:g('lambda') };
   }
   // Parse a decimal field tolerant of comma separators; only fall back on a genuinely empty/invalid value
   function numField(id, def){
@@ -530,8 +604,11 @@ export function createPeakAnalysis(host, root, o){
   function readInputsToStore(){
     const k = curIdx(), own = m => paramMode[m]!=='shared' && files().length > 0;
     for (const key in FIELD_INPUT){
-      const v = Math.max(FIELD_MIN[key], numField(FIELD_INPUT[key], FIELD_DEF[key]));
-      if (!own(key)) shared[key] = v;
+      // (a width's field as written, to 4 significant digits, is the value stored, kept
+      // exact: only a value typed replaces it)
+      const el = $$(FIELD_INPUT[key]);
+      const v = key in LEGACY && el.value === el._shown ? el._exact : Math.max(FIELD_MIN[key], numField(FIELD_INPUT[key], FIELD_DEF[key]));
+      if (!own(modeOf(key))) shared[key] = v;
       else { if (!perParams[k]) perParams[k] = {}; perParams[k][key] = v; }
     }
     const on = $$('BlOn').checked;
@@ -541,11 +618,52 @@ export function createPeakAnalysis(host, root, o){
   // Push stored values for the sample on show into the input fields
   function writeStoreToInputs(){
     const pr = getFileParams(curIdx());
-    for (const key in FIELD_INPUT) $$(FIELD_INPUT[key]).value = pr[key];
-    // (disabled, not hidden: the window means nothing with no baseline)
+    for (const key in FIELD_INPUT){
+      const el = $$(FIELD_INPUT[key]);
+      if (key in LEGACY){ el.value = el._shown = widthText(pr[key]); el._exact = pr[key]; }
+      else el.value = pr[key];
+    }
+    // (disabled, not hidden: the width means nothing with no baseline)
     $$('BlOn').checked = pr.blOn; $$('BlWin').disabled = !pr.blOn;
     if (!std){ $$('Norm').value = norm; syncLambdaSelect(); }
+    syncHints();
+    syncStepNote();
   }
+  /* What each width spans in points of the pattern on show (the standard's: its file),
+     in its field after the value, from the value as it is typed: the smoothing's box over
+     the step (off at 0), the SNIP's passes on each side as computeBaseline rounds them.
+     Nothing with no file, or no value. */
+  function syncHints(){
+    const fs = files(), f = fs[Math.min(curIdx(), fs.length - 1)], st = f ? meanStep(f.x) : NaN;
+    for (const id of ['Smooth', 'BlWin']){
+      // (the width stored, exact, while the field shows it unchanged: one converted from
+      // points is that many steps, not its 4 digits' worth)
+      const el = $$(id), v = el.value === el._shown && Number.isFinite(el._exact) ? el._exact : parseFloat(String(el.value).trim().replace(',', '.')), out = $$(id + 'Pts');
+      let t = '', tip = '';
+      if (st > 0 && v >= 0 && isFinite(v)){
+        const at = ` at the step of ${f.label}, ${widthText(st)}°`;
+        if (id === 'Smooth'){ t = v ? ptsText(v/st) : 'off'; tip = v ? `${widthText(v/st)} steps${at}` : 'No smoothing'; }
+        else if (v > 0){ const K = Math.max(1, Math.round(v/st) || 1); t = `±${K} ${K === 1 ? 'pt' : 'pts'}`; tip = `${K} point${K === 1 ? '' : 's'} on each side${at}`; }
+      }
+      if (out.textContent !== t) out.textContent = t;
+      if (out.title !== tip) out.title = tip;
+    }
+  }
+  // (and as it is left: a value refused is set back with no input event)
+  for (const id of ['Smooth', 'BlWin']) ['input', 'blur'].forEach(t=> $$(id).addEventListener(t, syncHints));
+  // The note of a project to v510 whose patterns' steps differ, with its ×.
+  let stepNoteHtml = '';
+  function syncStepNote(){
+    const el = $$('StepNote');
+    if (!el) return;
+    const on = stepNote.filter(m=> paramMode[m] === 'per'), what = on.map(m=> m === 'N' ? 'smoothing' : 'SNIP half-width').join(' and ');
+    const t = on.length ? `<div class="alert warn">⚠ The patterns were measured at different steps: the ${what}, set in points up to v510, ${on.length > 1 ? 'are' : 'is'} kept as ${on.length > 1 ? 'they were' : 'it was'}, a width for each pattern (one). Set one width in all to treat them alike.<button class="alert-dismiss close-x" data-step-x title="Dismiss">${X_SVG(15)}</button></div>` : '';
+    if (t !== stepNoteHtml){ stepNoteHtml = t; el.innerHTML = t; }
+  }
+  if (!std) $$('StepNote').addEventListener('click', e=>{
+    if (!e.target.closest('[data-step-x]')) return;
+    stepNote = []; syncStepNote(); host.commit();
+  });
   // Keep the wavelength preset selector in step with the numeric λ value: pick the
   // matching source preset (else "Custom"), and lock the value field unless Custom.
   function syncLambdaSelect(){
@@ -560,14 +678,15 @@ export function createPeakAnalysis(host, root, o){
 
   /* A pattern's processing is kept while what it is made from is the same (its arrays
      never change: xrd.js), so that what is drawn from it is not drawn again: the smoothing
-     and the baseline by the intensities and their windows (k1), the peaks by those, the 2θ,
-     the variance factors, the peak search and the peaks added and removed by hand (k2).
+     and the baseline by the 2θ, the intensities and their widths (k1; to v510, in points,
+     not the 2θ), the peaks by those, the variance factors, the peak search and the peaks
+     added and removed by hand (k2).
      Up to v490 every edit made both anew for every pattern it touched or not (a shared
      field, a restore), and a peak-search field the smoothing and the baseline too. */
   function procKeys(i){
     const pr = getFileParams(i), f = files()[i];
-    const k1 = [idOf(f.y), pr.N, pr.blOn ? pr.blWin : 'off'].join('|');
-    return { k1, k2: [k1, idOf(f.x), idOf(f.varMul), pr.pkHeight, pr.pkProm, pr.pkDist, (manualPeaks[i]||[]).join(), (removedPeaks[i]||[]).join()].join('|') };
+    const k1 = [idOf(f.y), idOf(f.x), pr.smoothW, pr.blOn ? pr.snipW : 'off'].join('|');
+    return { k1, k2: [k1, idOf(f.varMul), pr.pkHeight, pr.pkProm, pr.pkDist, (manualPeaks[i]||[]).join(), (removedPeaks[i]||[]).join()].join('|') };
   }
   function reprocessOne(i, was = [processed[i]]){
     const { k1, k2 } = procKeys(i);
@@ -578,12 +697,12 @@ export function createPeakAnalysis(host, root, o){
     const x = f.x;
     const yraw       = f.y;
     const near = was.find(q=> q && q.k1 === k1);
-    const smoothed   = near ? near.smoothed : movingAverage(yraw, pr.N);   // display + detection
+    const smoothed   = near ? near.smoothed : boxSmooth(x, yraw, pr.smoothW);   // display + detection
     // SNIP baseline (estimate/fallback/standard); switched off, none: the pattern from zero
-    const snip       = near ? near.snip : pr.blOn ? computeBaseline(smoothed, pr.blWin) : new Array(smoothed.length).fill(0);
+    const snip       = near ? near.snip : pr.blOn ? computeBaseline(x, smoothed, pr.snipW) : new Array(smoothed.length).fill(0);
     /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
        profile — on the raw counts the noise stops it short — and the smoothing, a box
-       N points wide convolved into every peak, widens them in turn: the window is the
+       w wide convolved into every peak, widens them in turn: the width is the
        user's to keep small against the peak widths, the raw pattern drawn beside it. */
     const detSub     = near ? near.subtracted : smoothed.map((v,j)=>Math.max(0, v-snip[j]));
     const rawSub     = near ? near.rawSub : yraw.map((v,j)=>v-snip[j]);
@@ -611,7 +730,7 @@ export function createPeakAnalysis(host, root, o){
     peaks.forEach(pk=>{
       if (pk.removed){ pk.fwhm=NaN; pk.fwhmClassic=NaN; return; }
       pk.fwhmClassic=computeFWHM(x, detSub, pk.idx); pk.fwhm=pk.fwhmClassic;
-      pk.fwhmSig = fwhmSigma(x, detSub, pk.idx, yraw, pr.N, f.varMul);
+      pk.fwhmSig = fwhmSigma(x, detSub, pk.idx, yraw, pr.smoothW, f.varMul);
     });
     const subtracted = detSub;
     processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks, k1, k2};
@@ -1188,8 +1307,8 @@ export function createPeakAnalysis(host, root, o){
     $$('Mode' + tid).addEventListener('click', ()=>{
       const mode = paramMode[key]==='shared' ? 'per' : 'shared';
       // The value currently displayed on the graph for this field (the baseline's
-      // window with its box: one chip for both)
-      const keys = key==='blWin' ? ['blWin', 'blOn'] : [key];
+      // width with its box: one chip for both)
+      const keys = key==='blWin' ? ['snipW', 'blOn'] : key==='N' ? ['smoothW'] : [key];
       const cur = getFileParams(curIdx());
       paramMode[key] = mode;
       $$('Mode' + tid).textContent = mode==='shared' ? 'all' : 'one';
@@ -1201,6 +1320,9 @@ export function createPeakAnalysis(host, root, o){
         // changed on its own
         files().forEach((f, i)=>{ if (!perParams[i]) perParams[i] = {}; keys.forEach(k=>{ perParams[i][k] = cur[k]; }); });
       }
+      // (a width shared again: its note, if a project's conversion left one, goes, and the
+      // value in points it kept for the files left out)
+      if (mode==='shared'){ stepNote = stepNote.filter(m=> m !== key); delete heldPts[key]; if (key === 'blWin') delete heldPts.blOn; }
       writeStoreToInputs();
       if (files().length){
         if (!SIZE_ONLY.has(key)){
@@ -1242,7 +1364,7 @@ export function createPeakAnalysis(host, root, o){
         if (paramMode[key]==='shared') removedPeaks = removedPeaks.map(()=>[]);
         else removedPeaks[curIdx()] = [];
       }
-      if (paramMode[key]==='shared') reprocessAll(); else reprocessOne(curIdx());
+      if (paramMode[modeOf(key)]==='shared') reprocessAll(); else reprocessOne(curIdx());
       updateView(true);      // the analysis is live
       renderTable(); renderResults();
       if (host.changed) host.changed();
@@ -1408,8 +1530,9 @@ export function createPeakAnalysis(host, root, o){
       {h:'2Theta_'+f.label,                          v:f.x.map(x=>fmtNum(x,6))},
       {h:f.label,                                    v:pr.subtracted.map(v=>fmtNum(v/mx,6))},
       {h:'Raw_'+f.label,                             v:f.y.map(v=>fmtNum(v,6))},
-      {h:`Smoothed_${f.label} (N=${kp.N})`,          v:pr.smoothed.map(v=>fmtNum(v,6))},
-      {h:`SNIP_background_${f.label} (${kp.blOn ? 'win=' + kp.blWin : 'off'})`, v:pr.snip.map(v=>fmtNum(v,6))},
+      // (the widths in °2θ, as the fields show them; to v510 the points, N= and win=)
+      {h:`Smoothed_${f.label} (w=${widthText(kp.smoothW)}°)`,          v:pr.smoothed.map(v=>fmtNum(v,6))},
+      {h:`SNIP_background_${f.label} (${kp.blOn ? 'W=' + widthText(kp.snipW) + '°' : 'off'})`, v:pr.snip.map(v=>fmtNum(v,6))},
     ];
   }
   // Classic peak-search block: 2θ, rel. intensity, FWHM, crystallite size [, corrected].
@@ -1503,7 +1626,10 @@ export function createPeakAnalysis(host, root, o){
     res,
     // The per-sample arrays, for the file list to keep aligned with the included files.
     slots: key => std ? [] : [
-      { key: key + ':params', arr:perParams, make: v=> v ? {...v} : {...shared} },
+      // (a file left out keeps its entry as it was: one of a project to v510, in points,
+      // takes its widths at the file's step as it comes back, those v510 shared where the
+      // conversion turned the chip to one: heldPts)
+      { key: key + ':params', arr:perParams, make: (v, f)=> v ? entryOf(objOf(v), f && f.x ? meanStep(f.x) : NaN, heldPts) : {...shared} },
       { key: key + ':manual', arr:manualPeaks, make: v=> v ? v.slice() : [] },
       { key: key + ':removed', arr:removedPeaks, make: v=> v ? v.slice() : [] },
     ],
@@ -1542,7 +1668,8 @@ export function createPeakAnalysis(host, root, o){
     destroy(){ addPeak.off(); if (markHoverRAF){ cancelAnimationFrame(markHoverRAF); markHoverRAF = null; } },
     snapshot(){
       return { perParams: perParams.map(q=>({...q})), manualPeaks: manualPeaks.map(a=>a.slice()), removedPeaks: removedPeaks.map(a=>a.slice()),
-        shared: {...shared}, paramMode: {...paramMode}, sizeBy, norm };
+        shared: {...shared}, paramMode: {...paramMode}, sizeBy, norm, ...(stepNote.length ? { stepNote: stepNote.slice() } : {}),
+        ...(Object.keys(heldPts).length ? { heldPts: {...heldPts} } : {}) };
     },
     /* Every setting from the state, each set whether the state holds it or not: a value
        it has none of, or one that is no number (a project read in may hold anything), the
@@ -1550,24 +1677,46 @@ export function createPeakAnalysis(host, root, o){
        its baseline's box on unless the state says off. Up to v484 the shared values and
        the modes were merged over those in use: an undo past the box's untick, or a project
        without it, kept the box as it was left (the baseline off, the widths and sizes
-       changed), and a list holding something else than lists (a project read in) threw. */
+       changed), and a list holding something else than lists (a project read in) threw.
+       The widths of a project to v510, in points, are converted (fromPts). */
     restore(s){
-      const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+      const obj = objOf;
       s = obj(s);
-      const n = files().length;
+      const fs = files(), n = fs.length, st = fs.map(f=> meanStep(f.x));
+      // (and the steps of the files left out, which come back with their entries)
+      const stAll = st.concat(!std && host.allFiles ? host.allFiles().filter(f=> f.included === false).map(f=> meanStep(f.x)) : []);
       const arr = (a, make)=> Array.isArray(a) ? a.slice(0, n).concat(Array.from({ length: Math.max(0, n - a.length) }, make)) : Array.from({ length: n }, make);
-      const numOf = (q, k)=> Number.isFinite(q[k]) ? Math.max(FIELD_MIN[k], q[k]) : undefined;
       const sh = obj(s.shared), pm = std ? {} : obj(s.paramMode);
       for (const k in FIELD_MIN) shared[k] = numOf(sh, k) ?? SHARED_DEF[k];
       shared.blOn = sh.blOn !== false;
       for (const k in MODE_DEF) paramMode[k] = pm[k] === 'shared' || pm[k] === 'per' ? pm[k] : MODE_DEF[k];
-      perParams = arr(s.perParams, ()=> ({...shared})).map(q=>{
-        q = obj(q);
-        const o = {};
-        for (const k in FIELD_MIN){ const v = numOf(q, k); if (v !== undefined) o[k] = v; }
-        o.blOn = q.blOn !== false;
-        return o;
-      });
+      const hp = obj(s.heldPts);
+      heldPts = {};
+      for (const m of ['N', 'blWin']) if (Number.isFinite(hp[m])) heldPts[m] = hp[m];
+      if (Number.isFinite(heldPts.blWin) && typeof hp.blOn === 'boolean') heldPts.blOn = hp.blOn;
+      perParams = arr(s.perParams, ()=> ({})).map((q, i)=> entryOf(obj(q), st[i], heldPts));
+      stepNote = Array.isArray(s.stepNote) ? ['N', 'blWin'].filter(m=> s.stepNote.includes(m)) : [];
+      /* A shared value in points was as many points on every pattern, those left out as
+         they came back included: at one step (to 10⁻⁶), one width; at several, under all,
+         as many widths, so its chip turns to one, each pattern its own (the note says so),
+         a file left out its own as it comes back (heldPts); under one, each sample's own,
+         or this where it had none. The shared value, which a file added takes, at the
+         median step of those included. */
+      const same = stAll.length > 0 && stAll.every(v=> Math.abs(v - stAll[0]) <= 1e-6*stAll[0]);
+      const mid = q => q.slice().sort((a, b)=> a - b)[q.length >> 1];
+      const med = same ? stAll[0] : n ? mid(st) : stAll.length ? mid(stAll) : NaN;
+      for (const k in LEGACY){
+        const v = sh[LEGACY[k]], m = modeOf(k);
+        if (k in sh || !Number.isFinite(v)) continue;
+        if (paramMode[m] === 'shared' && stAll.length > 1 && !same){
+          paramMode[m] = 'per';
+          if (!stepNote.includes(m)) stepNote.push(m);
+          if (stAll.length > n){ heldPts[m] = v; if (k === 'snipW') heldPts.blOn = shared.blOn; }
+          perParams.forEach(o=>{ delete o[k]; if (k === 'snipW') o.blOn = shared.blOn; });
+        }
+        if (paramMode[m] === 'per') perParams.forEach((o, i)=>{ if (!(k in o)) o[k] = fromPts(k, v, st[i]) ?? SHARED_DEF[k]; });
+        shared[k] = fromPts(k, v, med) ?? SHARED_DEF[k];
+      }
       const posOf = a => Array.isArray(a) ? a.filter(Number.isFinite) : [];
       manualPeaks = arr(s.manualPeaks, ()=> []).map(posOf);
       removedPeaks = arr(s.removedPeaks, ()=> []).map(posOf);

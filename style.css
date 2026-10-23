@@ -3323,3 +3323,22 @@ button.an-add.is-drop { border-color: var(--accent); }
   .file-table input.label-input:focus { position: relative; z-index: 1; width: calc(100% * 5 / 3 + 22px / 3); }
   .file-table tr:has(input.label-input:focus) td.note-cell { visibility: hidden; }
 }
+
+/* A width's field (XRPD's smoothing and SNIP, EPR's smoothing: smooth.js): the value, and
+   after it in the same box, muted, on its baseline, what it spans in points of the data on
+   show. The value has room for 7 characters (a width to 4 significant digits from 0.01,
+   0.06502) and the points for theirs (±150 pts): a box too narrow for both, below 120 px (a
+   phone's, a narrow side column), takes the points on a line of their own under the value,
+   at the right, its value never cut. The box looks and lights as a field: its border on
+   focus as the date fields', red when a value is refused; dimmed with its value disabled. */
+.wfield { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; width: 100%; min-width: 0; padding: 0 8px 0 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel2); cursor: text; }
+.wfield > input[type="text"] { flex: 1 1 7ch; width: auto; min-width: 0; border: none; background: none; padding-left: 0; padding-right: 0; }
+.wfield > input[type="text"]:focus { outline: none; }
+.wfield:focus-within { border-color: var(--text); }
+.wfield:has(> .field-invalid) { border-color: var(--bad); }
+.wfield:has(> input:disabled) { opacity: 0.45; cursor: not-allowed; }
+/* (its margins even out on the value's line, which the value's padding sets; on a line of
+   its own they bring it up to the value and leave room below) */
+.wf-pts { flex: none; min-width: 4.4em; margin: -3px 0 6px auto; line-height: 1.2; text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* (empty, with no file to count on: no room taken, the box one line as its neighbours) */
+.wf-pts:empty { display: none; }
