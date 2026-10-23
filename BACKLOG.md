@@ -45,23 +45,13 @@ was proposed; nothing here is in the code yet.
   sample is not in it yet and it lies within √(w² + w̄²) of the reflection's mean
   position (w its FWHM, w̄ the reflection's mean FWHM), else it starts a new one. It
   is order-dependent and compares against the mean only, so two reflections closer
-  than about one FWHM can swap peaks. To be solved: e.g. an optimal assignment
-  (each sample's peaks to the reflections at minimum total distance in sigmas)
-  rather than the sweep.
-- **Free shape: the axes held on the lattice (found in v429; its case gone in v430).**
-  Two defects of the shape search, measured on 36D and 37D without texture and on
-  synthetic discs, with the Sr site held full. (1) A body held on the lattice goes to the
-  simplest direction within 10° of the free fit's axis, not the nearest: discs whose free
-  normal lies within 0–2° of [310] are reported as "⟨210⟩ (8°)", and the held box and
-  ellipsoid of 36D stay on [210], 2–10 in χ² above the same solids held on [310]. Taking
-  the nearest direction needs a preference for the simpler one when χ² is practically
-  equal (a synthetic [210] disc as a box would otherwise be held on [320], 0.6 lower).
-  (2) The held candidates are built only near the best free fit: frames on the low-index
-  directions (⟨100⟩, ⟨110⟩, ⟨111⟩) are never tried. v430 found what had sent those discs
-  to [310]: the Sr site of these samples scatters 0.63–0.74 of a full one, and with the
-  occupancy refined the disc's normal is ⟨110⟩ on all twelve samples, 0–3° off — the
-  lamellae the samples are made of. The two defects remain as rules, with no real case
-  that needs them now; worth doing only if another sample shows them.
+  than about one FWHM can swap peaks. (The Rietveld card's size by peak needs none of
+  this: its reflections are its hkl.) Proposed, for the Scherrer card: (1) an optimal
+  assignment that keeps the order in 2θ (peaks cannot cross): each sample's peaks
+  aligned to one list of reflections by dynamic programming, at the least total distance
+  in widths, a peak left unpaired at a cost, in place of the sweep; (2) with a CIF at
+  hand (the Rietveld card's phases), each peak given its calculated hkl, so that the
+  reflections are named, (110), (200)…, alike in every sample.
 - **Free shape: starts chosen from the peak widths, and the near-equivalent minima
   (prototype, v472).** Tried outside the app, in a copy of the engine that counts the
   pattern's evaluations, on 20 cases with the box and the Sr site refined: the twelve
@@ -143,8 +133,9 @@ was proposed; nothing here is in the code yet.
   0.0004 Å from the edge to Kα₁ (and to 1.60 Å), its density fixed at 0.4, 0.8 and 1.2 per
   Å: χ²_ν 4.37 → 4.17 at best (worse above), the first and last lines unchanged, and the
   2–4 % excess on the low side of the lines at 40–90° still there. Not the standard's
-  misfit; worth trying again with its density refined and the band's shape (the tube's
-  spectrum through the filter) once the rest fits.
+  misfit. Not the user's case: research, postponed. When taken up, as an option, worked
+  out on synthetic patterns (a known band added) with its density refined and the band's
+  shape (the tube's spectrum through the filter).
 - **The standard's profile: what else was tried (v432).** The user's LaB6 fitted at χ²_ν
   4.37 (FCJ), its (100) and (110) at 185 and 114 in their windows and its last line 15 %
   short at its top. v432 took it to 2.17 with the Soller model and a sin 2θ shift
@@ -163,8 +154,7 @@ was proposed; nothing here is in the code yet.
     active length): beside the Soller model 2.23 → 2.21, the term refined to 1.1·10⁻⁵ °²
     against the geometry's 1.3·10⁻⁵; real but too small to keep.
   What is left: the (100)'s window at χ²_ν 37, the last line's top 10 % short. Next to try:
-  the Sollers' opening refined (0.05 rad gave 2.06), the Ni continuum refined (above),
-  the shape of the Cu Kα lines on top of the Soller model.
+  the Ni continuum refined (above), the shape of the Cu Kα lines on top of the Soller model.
 - **Rietveld against MAUD (started in v426, on hold).** How far our engine and MAUD
   recover a known truth from synthetic patterns at equal model depth, with a third,
   neutral generator (the Debye scattering equation of atomistic crystallites), to
