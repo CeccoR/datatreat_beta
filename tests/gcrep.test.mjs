@@ -11,8 +11,8 @@
    - the time plots per file as before; the mean-rate bars one per sample, named after its
      head's label (the first included file's, the head left out), its height the mean of
      its included files' mean rates, each with its own parameters (a T of its own), its
-     error bar t(0.995, n − 1)·s/√n, worked out here by hand (t in closed form for 1 and 2
-     degrees of freedom), none for one file; a file left out, out of the mean and of n; the
+     error bar the files' standard deviation (n − 1), worked out here by hand, none for one
+     file (v512: t(0.995, n − 1)·s/√n); a file left out, out of the mean and of n; the
      figure composer keeps the error bars;
    - mean_rates.csv: as before with no replicates (the same bytes as the files' own before
      any link, a sample of one file left alone too); with them a row per sample, each gas's
@@ -66,12 +66,9 @@ const zip = async page =>{
   return Object.fromEntries(readZip(z.buf).map(e=> [e.name.replace(/^.* - /, ''), e.data.toString('utf8')]));
 };
 const rows = text => parseCsv(text.replace(/^﻿/, ''), ';');
-// The statistics by hand: the mean, the standard deviation (n − 1), the 99 % CI's half-width.
+// The statistics by hand: the mean, the standard deviation (n − 1).
 const mean = a => a.reduce((s, v)=> s + v, 0)/a.length;
 const sd = a =>{ const m = mean(a); return Math.sqrt(a.reduce((s, v)=> s + (v - m)**2, 0)/(a.length - 1)); };
-// Student's t at 0.995 in closed form: tan(π(p − ½)) for 1 degree of freedom, (2p − 1)/√(2p(1 − p)) for 2.
-const T995 = { 1: Math.tan(0.495*Math.PI), 2: 0.99/Math.sqrt(2*0.995*0.005) };
-const ci = a => T995[a.length - 1]*sd(a)/Math.sqrt(a.length);
 const near = (a, b, what, tol = 1e-9)=> assert.ok(Math.abs(a - b) <= tol*Math.abs(b), `${what}: ${a} for ${b}`);
 
 test('the Sample column: each file its own, a select of its own name and the heads\'; no chains; a group taken along; a head removed; a label renamed; undo and redo', async ()=>{
@@ -168,12 +165,11 @@ test('the Sample column: each file its own, a select of its own name and the hea
   } finally { await close(); }
 });
 
-test('the bars, one per sample: the mean of its files\' rates ± t(0.995, n − 1)·s/√n by hand; mean_rates.csv per sample, mean_rates_by_file.csv; the composer', async ()=>{
+test('the bars, one per sample: the mean of its files\' rates ± their standard deviation by hand; mean_rates.csv per sample, mean_rates_by_file.csv; the composer', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await open4(page);
     // t as the tables give it.
-    assert.deepEqual([T995[1].toFixed(4), T995[2].toFixed(4)], ['63.6567', '9.9248']);
     // Each file's rates, as drawn before any link, and the CSV as it was.
     const r = Object.fromEntries((await bars(page)).map(x=> [x.key, { h2: x.bars[H2] && x.bars[H2][0], o2: x.bars[O2] && x.bars[O2][0] }]));
     assert.equal(r['beta.csv'].o2, undefined, 'beta has no O₂');
@@ -189,19 +185,19 @@ test('the bars, one per sample: the mean of its files\' rates ± t(0.995, n − 
     const h2 = ['alpha.csv', 'beta.csv', 'gamma.csv'].map(k=> r[k].h2), o2 = ['alpha.csv', 'gamma.csv'].map(k=> r[k].o2);
     let b = await bars(page);
     assert.deepEqual(b.map(x=> x.name), ['alpha', 'delta']);
-    near(b[0].bars[H2][0], mean(h2), 'H₂ mean'); near(errOf(b[0], H2), ci(h2), 'H₂ ± (n = 3)', 1e-7);
-    near(b[0].bars[O2][0], mean(o2), 'O₂ mean'); near(errOf(b[0], O2), ci(o2), 'O₂ ± (n = 2)', 1e-7);
-    assert.deepEqual(b[0].texts, [`${mean(h2).toFixed(4)}±${ci(h2).toFixed(4)}`, `${mean(o2).toFixed(4)}±${ci(o2).toFixed(4)}`], 'the value labels');
+    near(b[0].bars[H2][0], mean(h2), 'H₂ mean'); near(errOf(b[0], H2), sd(h2), 'H₂ ± (n = 3)', 1e-7);
+    near(b[0].bars[O2][0], mean(o2), 'O₂ mean'); near(errOf(b[0], O2), sd(o2), 'O₂ ± (n = 2)', 1e-7);
+    assert.deepEqual(b[0].texts, [`${mean(h2).toFixed(4)}±${sd(h2).toFixed(4)}`, `${mean(o2).toFixed(4)}±${sd(o2).toFixed(4)}`], 'the value labels');
     assert.deepEqual([b[1].bars[H2][0], b[1].bars[O2][0], b[1].errs, b[1].texts], [r['delta.csv'].h2, r['delta.csv'].o2, [], [r['delta.csv'].h2.toFixed(4), r['delta.csv'].o2.toFixed(4)]], 'delta alone: its own rates, no error bar');
     // The CSVs: a row per sample, and the rows per file as mean_rates.csv was.
     let z = await zip(page);
     assert.equal(z['mean_rates_by_file.csv'], T0, 'mean_rates_by_file.csv: mean_rates.csv as it was');
     let m = rows(z['mean_rates.csv']);
-    assert.deepEqual(m[0], ['Sample', 'Mean H2 Production Rate (mmol g^-1 h^-1)', 'H2 ± (99% CI half-width, mmol g^-1 h^-1)', 'H2 n',
-      'Mean O2 Production Rate (mmol g^-1 h^-1)', 'O2 ± (99% CI half-width, mmol g^-1 h^-1)', 'O2 n', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
+    assert.deepEqual(m[0], ['Sample', 'Mean H2 Production Rate (mmol g^-1 h^-1)', 'H2 SD (mmol g^-1 h^-1)', 'H2 n',
+      'Mean O2 Production Rate (mmol g^-1 h^-1)', 'O2 SD (mmol g^-1 h^-1)', 'O2 n', 'Interval duration (h)', 'p (atm)', 'T (°C)']);
     const dur = rows(T0)[1][3];
     assert.deepEqual(m.slice(1), [
-      ['alpha', mean(h2).toFixed(6), ci(h2).toFixed(6), '3', mean(o2).toFixed(6), ci(o2).toFixed(6), '2', dur, '1', '25'],
+      ['alpha', mean(h2).toFixed(6), sd(h2).toFixed(6), '3', mean(o2).toFixed(6), sd(o2).toFixed(6), '2', dur, '1', '25'],
       ['delta', r['delta.csv'].h2.toFixed(6), '', '1', r['delta.csv'].o2.toFixed(6), '', '1', rows(T0)[4][3], '1', '25']]);
     // The composer: the bars with their error bars (a vertical line, a cap at each end).
     const whiskers = async ()=>{
@@ -221,10 +217,10 @@ test('the bars, one per sample: the mean of its files\' rates ± t(0.995, n − 
     await flip(page, 2);
     b = await bars(page);
     const h2b = h2.slice(0, 2);
-    near(b[0].bars[H2][0], mean(h2b), 'H₂ mean, gamma left out'); near(errOf(b[0], H2), ci(h2b), 'H₂ ± (n = 2)', 1e-7);
+    near(b[0].bars[H2][0], mean(h2b), 'H₂ mean, gamma left out'); near(errOf(b[0], H2), sd(h2b), 'H₂ ± (n = 2)', 1e-7);
     assert.deepEqual([b[0].bars[O2][0], errOf(b[0], O2)], [r['alpha.csv'].o2, null], 'O₂ of alpha alone, no error bar');
     m = rows((await zip(page))['mean_rates.csv']);
-    assert.deepEqual(m[1].slice(0, 7), ['alpha', mean(h2b).toFixed(6), ci(h2b).toFixed(6), '2', r['alpha.csv'].o2.toFixed(6), '', '1']);
+    assert.deepEqual(m[1].slice(0, 7), ['alpha', mean(h2b).toFixed(6), sd(h2b).toFixed(6), '2', r['alpha.csv'].o2.toFixed(6), '', '1']);
     // The head left out: named after beta, its first included file.
     await flip(page, 2); await flip(page, 0);
     b = await bars(page);
@@ -238,7 +234,7 @@ test('the bars, one per sample: the mean of its files\' rates ± t(0.995, n − 
     await page.fill('#tab-gc .gcCell[data-i="2"][data-f="t"]', '35'); await page.press('#tab-gc .gcCell[data-i="2"][data-f="t"]', 'Enter'); await settle(page);
     const g35 = r['gamma.csv'].h2*(25 + 273.15)/(35 + 273.15), h2d = [h2[0], h2[1], g35];
     b = await bars(page);
-    near(b[0].bars[H2][0], mean(h2d), 'H₂ mean, gamma at 35 °C', 1e-7); near(errOf(b[0], H2), ci(h2d), 'its ±', 1e-6);
+    near(b[0].bars[H2][0], mean(h2d), 'H₂ mean, gamma at 35 °C', 1e-7); near(errOf(b[0], H2), sd(h2d), 'its ±', 1e-6);
     z = await zip(page);
     m = rows(z['mean_rates.csv']);
     assert.deepEqual(m[1].slice(-3), [dur, '1', '25/25/35'], 'T differing: all of them joined');

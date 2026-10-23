@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, tinv, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, isArr, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
@@ -985,9 +985,10 @@ import { textLines, readTable, parseNum } from './textdata.js';
 
     /* The mean rates per sample (samplesOf), of each gas: the mean over the sample's files
        of each one's mean rate (costResults: worked out with its own m, Q, T, p, light-on
-       and interval), `n` the files with one, and its ± (`err`) the half-width of the 99 %
-       confidence interval of that mean, t(0.995, n − 1)·s/√n, s the files' standard
-       deviation (n − 1 under it); none for one file. To v511 a bar per file, with no ±. */
+       and interval), `n` the files with one, and its ± (`err`) the files' standard
+       deviation (n − 1 under it); none for one file. To v511 a bar per file, with no ±; in
+       v512 the ± was the half-width of the 99 % confidence interval of the mean,
+       t(0.995, n − 1)·s/√n. */
     function sampleRates(){
       return samplesOf().map(s=>{
         const rate = {}, err = {}, n = {};
@@ -996,7 +997,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
           n[g.key] = v.length;
           if (!v.length) continue;
           rate[g.key] = meanArr(v);
-          err[g.key] = v.length > 1 ? tinv(0.995, v.length - 1)*stdArr(v)/Math.sqrt(v.length) : NaN;
+          err[g.key] = v.length > 1 ? stdArr(v) : NaN;
         }
         return { ...s, rate, err, n };
       });
@@ -1081,7 +1082,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
       const sm = sampleRates();
       if (sm.some(s=> s.ks.length > 1)){
         const one = vs =>{ const w = vs.filter(v=> v !== ''); return w.every(v=> v === w[0]) ? (w[0] || '') : w.join('/'); };
-        let t4 = csvLine(['Sample', ...shown.flatMap(g=> [`Mean ${g.csv} ${LBL_RATE_CSV}`, `${g.csv} ± (99% CI half-width, mmol g^-1 h^-1)`, `${g.csv} n`]), ...tailHead]);
+        let t4 = csvLine(['Sample', ...shown.flatMap(g=> [`Mean ${g.csv} ${LBL_RATE_CSV}`, `${g.csv} SD (mmol g^-1 h^-1)`, `${g.csv} n`]), ...tailHead]);
         sm.forEach(s=>{
           const tails = s.ks.map(tail);
           t4 += csvLine([s.label, ...shown.flatMap(g=> [fmtNum(s.rate[g.key],6), fmtNum(s.err[g.key],6), String(s.n[g.key])]), ...tailHead.map((_, j)=> one(tails.map(t=> t[j])))]);
@@ -1186,7 +1187,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
   // What T and p are (their columns' titles, and the card's instructions).
   const T_TITLE = 'the temperature at which the flow Q is measured — for a mass-flow controller, the reference temperature of its standard units (often 0 °C or 20 °C: see its datasheet), not the temperature of its body';
   const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar: see its datasheet); for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
-  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, by that file's name (a label renamed changes nothing); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the half-width of the 99 % confidence interval of that mean, t(0.995, n−1)·s/√n (s the files' standard deviation, n of them; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
+  const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, by that file's name (a label renamed changes nothing); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
   const resList = document.getElementById('gcResList');
   const live = new Map();       // id → the card's analysis (gcCard)
   const placeRes = ()=> cards().forEach(a=>{ const c = live.get(a.id); if (c) resList.appendChild(c.res); });
