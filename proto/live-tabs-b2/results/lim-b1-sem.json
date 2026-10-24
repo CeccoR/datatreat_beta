@@ -1,0 +1,805 @@
+{
+ "tree": "b1",
+ "kind": "sem",
+ "policy": null,
+ "cap": 3300,
+ "started": "2026-10-24T16:43:29.151Z",
+ "rows": [
+  {
+   "N": 0,
+   "runs": false,
+   "buildMs": 0,
+   "peakBuild": {
+    "allPriv": 0,
+    "rendRss": 0,
+    "n": 0
+   },
+   "tabs": {
+    "S": 0,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 109.7,
+    "ab": 91.1,
+    "heapLimit": 4095.8,
+    "nodes": 13469,
+    "allPriv": 481.7,
+    "allPss": 589.8,
+    "rendRss": 450.3,
+    "rendPriv": 366.2,
+    "gpuPriv": 17,
+    "browserPriv": 85.1,
+    "workers": 1,
+    "nProc": 6
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 51.7,
+    "t0": 1792860232513.2998,
+    "t1": 1792860232565
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 71.5,
+     "max": 98.1,
+     "min": 62.8
+    },
+    "smooth": {
+     "n": 8,
+     "med": 157.5,
+     "max": 166.5,
+     "min": 142
+    },
+    "crop": {
+     "n": 8,
+     "med": 38.3,
+     "max": 60.5,
+     "min": 34.4
+    },
+    "fig": {
+     "n": 8,
+     "med": 31.5,
+     "max": 40.4,
+     "min": 21.2
+    },
+    "raw": {
+     "next": [
+      98.1,
+      84.7,
+      70.9,
+      74.3,
+      65.4,
+      72.1,
+      70.2,
+      62.8
+     ],
+     "smooth": [
+      158.1,
+      166.5,
+      164.1,
+      156.9,
+      149.7,
+      158.6,
+      142,
+      147.2
+     ],
+     "crop": [
+      46.1,
+      37.8,
+      42.7,
+      35.1,
+      38,
+      38.6,
+      34.4,
+      60.5
+     ],
+     "fig": [
+      30.9,
+      30.3,
+      21.2,
+      40.4,
+      35.2,
+      32.8,
+      31.4,
+      31.5
+     ]
+    },
+    "keysWithLongTask": 17,
+    "longMax": 155
+   },
+   "switches": [
+    {
+     "to": "X0",
+     "toWas": "frame",
+     "ms": 55.6,
+     "backWas": "frame",
+     "backMs": 59.5,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 583.4,
+    "rendRss": 563.3,
+    "n": 103
+   },
+   "load": [
+    1.73,
+    1.95,
+    1.9
+   ]
+  },
+  {
+   "N": 1,
+   "runs": false,
+   "buildMs": 2627,
+   "peakBuild": {
+    "allPriv": 947.9,
+    "rendRss": 873,
+    "n": 13
+   },
+   "tabs": {
+    "S": 1,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 200.2,
+    "ab": 180,
+    "heapLimit": 4095.8,
+    "nodes": 17657,
+    "allPriv": 757.5,
+    "allPss": 876.5,
+    "rendRss": 675.4,
+    "rendPriv": 580.3,
+    "gpuPriv": 17.2,
+    "browserPriv": 146.4,
+    "workers": 2,
+    "nProc": 6
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 49.3,
+    "t0": 1792860255794.7998,
+    "t1": 1792860255844.1
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 73.6,
+     "max": 113,
+     "min": 62.5
+    },
+    "smooth": {
+     "n": 8,
+     "med": 137,
+     "max": 149.7,
+     "min": 125.4
+    },
+    "crop": {
+     "n": 8,
+     "med": 39.1,
+     "max": 66.5,
+     "min": 33.1
+    },
+    "fig": {
+     "n": 8,
+     "med": 27.6,
+     "max": 37.2,
+     "min": 24.7
+    },
+    "raw": {
+     "next": [
+      113,
+      71.6,
+      100.7,
+      71.1,
+      71.1,
+      82.2,
+      75.6,
+      62.5
+     ],
+     "smooth": [
+      149.7,
+      145.9,
+      130.7,
+      135.9,
+      140.2,
+      127.8,
+      138,
+      125.4
+     ],
+     "crop": [
+      43.2,
+      66.5,
+      38.5,
+      39.7,
+      43.7,
+      37.9,
+      33.1,
+      37.3
+     ],
+     "fig": [
+      28.3,
+      37.2,
+      36.9,
+      28.9,
+      25.8,
+      24.7,
+      26.8,
+      25.5
+     ]
+    },
+    "keysWithLongTask": 17,
+    "longMax": 141
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 50.7,
+     "backWas": "frame",
+     "backMs": 84.5,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 909.6,
+    "rendRss": 812.5,
+    "n": 102
+   },
+   "load": [
+    1.67,
+    1.94,
+    1.9
+   ]
+  },
+  {
+   "N": 4,
+   "runs": false,
+   "buildMs": 8243,
+   "peakBuild": {
+    "allPriv": 1863.8,
+    "rendRss": 1599.2,
+    "n": 41
+   },
+   "tabs": {
+    "S": 4,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 478,
+    "ab": 442.5,
+    "heapLimit": 4095.8,
+    "nodes": 30210,
+    "allPriv": 1672.1,
+    "allPss": 1796.1,
+    "rendRss": 1417.6,
+    "rendPriv": 1317.5,
+    "gpuPriv": 16.7,
+    "browserPriv": 324.1,
+    "workers": 5,
+    "nProc": 6
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 63.4,
+    "t0": 1792860284858.7998,
+    "t1": 1792860284922.2
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 73.4,
+     "max": 105,
+     "min": 60.9
+    },
+    "smooth": {
+     "n": 8,
+     "med": 148,
+     "max": 166.6,
+     "min": 125.5
+    },
+    "crop": {
+     "n": 8,
+     "med": 40.8,
+     "max": 66.2,
+     "min": 34.6
+    },
+    "fig": {
+     "n": 8,
+     "med": 29.8,
+     "max": 46.9,
+     "min": 23.5
+    },
+    "raw": {
+     "next": [
+      105,
+      73.8,
+      78.1,
+      72.9,
+      87.7,
+      60.9,
+      64.3,
+      61.7
+     ],
+     "smooth": [
+      166.6,
+      152.1,
+      140,
+      158.9,
+      125.5,
+      135.8,
+      151.9,
+      144.1
+     ],
+     "crop": [
+      66.2,
+      38.4,
+      34.6,
+      41.2,
+      59.6,
+      40.3,
+      43.9,
+      36.2
+     ],
+     "fig": [
+      30.3,
+      29.3,
+      28.3,
+      33.4,
+      26.3,
+      46.9,
+      33.7,
+      23.5
+     ]
+    },
+    "keysWithLongTask": 16,
+    "longMax": 157
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 60.5,
+     "backWas": "frame",
+     "backMs": 66.4,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 71,
+     "backWas": "frame",
+     "backMs": 48.2,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 77.1,
+     "backWas": "frame",
+     "backMs": 54.8,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 1843,
+    "rendRss": 1600,
+    "n": 109
+   },
+   "load": [
+    1.13,
+    1.78,
+    1.85
+   ]
+  },
+  {
+   "N": 8,
+   "runs": false,
+   "buildMs": 13500,
+   "peakBuild": {
+    "allPriv": 2885.2,
+    "rendRss": 2389.3,
+    "n": 67
+   },
+   "tabs": {
+    "S": 8,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 847.5,
+    "ab": 792.4,
+    "heapLimit": 4095.8,
+    "nodes": 46966,
+    "allPriv": 2703.4,
+    "allPss": 2837.4,
+    "rendRss": 2215.9,
+    "rendPriv": 2105.8,
+    "gpuPriv": 16.9,
+    "browserPriv": 566.3,
+    "workers": 9,
+    "nProc": 6
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 62,
+    "t0": 1792860320522.7998,
+    "t1": 1792860320584.8
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 81.2,
+     "max": 98,
+     "min": 66.3
+    },
+    "smooth": {
+     "n": 8,
+     "med": 146,
+     "max": 163.4,
+     "min": 126.6
+    },
+    "crop": {
+     "n": 8,
+     "med": 41.6,
+     "max": 48.7,
+     "min": 35.3
+    },
+    "fig": {
+     "n": 8,
+     "med": 29.4,
+     "max": 39.8,
+     "min": 23.5
+    },
+    "raw": {
+     "next": [
+      98,
+      78.2,
+      97.2,
+      67.6,
+      82.1,
+      80.3,
+      84.6,
+      66.3
+     ],
+     "smooth": [
+      163.4,
+      142.1,
+      163.3,
+      135.7,
+      126.6,
+      136.4,
+      154.6,
+      149.9
+     ],
+     "crop": [
+      48.7,
+      40.3,
+      48.7,
+      39.3,
+      42.9,
+      35.3,
+      43.2,
+      37.9
+     ],
+     "fig": [
+      30.5,
+      24.2,
+      29.5,
+      39.8,
+      23.5,
+      29.3,
+      34.6,
+      24.9
+     ]
+    },
+    "keysWithLongTask": 16,
+    "longMax": 154
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 46.6,
+     "backWas": "frame",
+     "backMs": 67.3,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 68.6,
+     "backWas": "frame",
+     "backMs": 83.3,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 57.1,
+     "backWas": "frame",
+     "backMs": 62.9,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 2901.1,
+    "rendRss": 2424,
+    "n": 114
+   },
+   "load": [
+    0.82,
+    1.63,
+    1.79
+   ]
+  },
+  {
+   "N": 16,
+   "runs": false,
+   "buildMs": 35322,
+   "peakBuild": {
+    "allPriv": 5285.3,
+    "rendRss": 4320.6,
+    "n": 176
+   },
+   "tabs": {
+    "S": 16,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 1584.8,
+    "ab": 1492.4,
+    "heapLimit": 4095.8,
+    "nodes": 80462,
+    "allPriv": 5108.8,
+    "allPss": 5261.2,
+    "rendRss": 4152.7,
+    "rendPriv": 4024.1,
+    "gpuPriv": 17.5,
+    "browserPriv": 1051.4,
+    "workers": 17,
+    "nProc": 6
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 72.8,
+    "t0": 1792860379440.5999,
+    "t1": 1792860379513.4
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 87,
+     "max": 112.9,
+     "min": 61.8
+    },
+    "smooth": {
+     "n": 8,
+     "med": 170.9,
+     "max": 193.3,
+     "min": 151.9
+    },
+    "crop": {
+     "n": 8,
+     "med": 40.4,
+     "max": 91.4,
+     "min": 35.5
+    },
+    "fig": {
+     "n": 8,
+     "med": 28,
+     "max": 47.5,
+     "min": 25.4
+    },
+    "raw": {
+     "next": [
+      97.2,
+      112.9,
+      93,
+      66.3,
+      72.8,
+      98.9,
+      61.8,
+      81
+     ],
+     "smooth": [
+      193.3,
+      173.2,
+      153.3,
+      168.8,
+      179.1,
+      151.9,
+      152.5,
+      173
+     ],
+     "crop": [
+      74.9,
+      41.2,
+      39.5,
+      35.8,
+      70.9,
+      39.5,
+      35.5,
+      91.4
+     ],
+     "fig": [
+      25.4,
+      27.7,
+      31.6,
+      47.5,
+      28.3,
+      26,
+      26.6,
+      28.9
+     ]
+    },
+    "keysWithLongTask": 17,
+    "longMax": 180
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 93,
+     "backWas": "frame",
+     "backMs": 84.8,
+     "longTo": {
+      "n": 1,
+      "sum": 56,
+      "max": 56,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 59.9,
+     "backWas": "frame",
+     "backMs": 76.5,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "frame",
+     "ms": 66.9,
+     "backWas": "frame",
+     "backMs": 82.3,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 5312.1,
+    "rendRss": 4327.8,
+    "n": 134
+   },
+   "load": [
+    1.08,
+    1.55,
+    1.76
+   ]
+  }
+ ],
+ "errors": [],
+ "stopped": "after N = 16: 5108.8 MB of Private after a GC",
+ "ended": "2026-10-24T16:46:31.434Z"
+}

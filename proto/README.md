@@ -13,6 +13,7 @@ folders below.
 | folder | what | read first |
 |---|---|---|
 | `live-tabs/` | option b1: every tab an iframe running the app in an embedded mode, under a shell holding the tab bar. It is a setting, off by default | `live-tabs/README.md` |
+| `live-tabs-b2/` | option b2 as the user chose it, built whole (`b2.patch`, not applied), and, in `measure/lim-*` and `results/lim-*`, the assessment's own measurements of its limit: memory, work on show, switches and the background with 1–24 tabs of each kind, against today and b1 | `live-tabs-b2/README.md`; ASSESSMENT.md, "Option b2 built" |
 | `bg-runs/` | option A: a Rietveld refinement goes on when its tab is left, its results written into the parked tab and its history | `bg-runs/README.md` |
 | `workers/` | the pool: Refine all over several workers, one cap for the whole browser (Web Locks), for HEAD, b1 or A | `workers/README.md` |
 | `map/singletons/` | the inventory of what assumes one instance per module: `scan.mjs` (acorn AST scan) → `scan.json`, `probe.mjs` (runtime probe, listeners through CDP) → `probe.json`, `counts.sh` (greps of HEAD) → `counts.txt` | this page |

@@ -283,6 +283,255 @@ per tab, some 5–7 MB of RSS and 2 MB of heap (`live-tabs/results/memory-*-empt
 would share the same main thread and hold the same memory for what is open. Nothing measured
 makes the case for it over b1.
 
+## Option b2 built: the limit, measured
+
+After the assessment above the user chose b2, with a hybrid of his own: a tab not on show
+for X minutes sleeps (its instance let go, its state and its whole undo history parked, the
+tab kept in the bar) and wakes as it is shown; a busy tab never sleeps; beyond L live tabs
+not on show, or a memory budget, the one shown longest ago sleeps; one pool of Rietveld
+workers for the page, capped at cores − 1. It was built whole: `live-tabs-b2/b2.patch` (34
+files, +2908 −731, every module made per tab; `live-tabs-b2/README.md`), not applied. This
+section measures it with scripts of its own, independent of the builders'
+(`live-tabs-b2/measure/lim-*.mjs`), against today (v517) and b1, and draws from it the limit
+L, the policy and X. Every figure below is in `live-tabs-b2/results/lim-summary.json`, which
+`lim-summary.mjs` computes from each run's JSON
+(`live-tabs-b2/results/lim-<tree>-<kind>.json`, its console beside it as `.log`); those file
+names are the sources given below.
+
+**Method**, where it differs from the one above:
+
+- **Trees**: HEAD + b2.patch (b2); HEAD (today); HEAD + live-tabs.patch + pool.patch (b1,
+  every frame kept). In each copy MAX_TABS was raised from 20 to 32, so that 24 background
+  tabs fit beside the tabs worked in. One more copy of b2 has TRIM_MS 10⁹: no trim ("b2nt").
+- **Files of their own for every tab** (`lim-fx.mjs`). b2 keeps one array a SEM file
+  whichever tabs hold it, and reads an XRPD file once by its bytes, so the same files in
+  every tab would count one tab's data N times over as one. SEM: 8 images of 2048 × 2176 at
+  16 bits a tab, 8.5 MB a file. XRPD: the 12 scans, each with a comment naming its tab. DRS,
+  GC and EPR: the shared fixtures, 0.1 MB in all. The page fetches the files from its own
+  origin and drops them as a DragEvent; a file fetched, read and let go held nothing after a
+  GC (a check made while writing the scripts).
+- **Tabs**: X0 (XRPD, the 12 patterns and the CIF on card 2, refined) and S0 (SEM, 8 images)
+  to work in, then N in the background, one kind a run:
+  - `xrd`: XRPD refined, idle;
+  - `xrdrun`: XRPD refining, Refine all on the pool pressed again as each run ends, so that
+    N runs go on;
+  - `sem`: SEM;
+  - `mix`: SEM, XRPD and XRPD refining in turn, plus a DRS, a GC and an EPR tab.
+
+  N = 0, 1, 2, 4, 8, 12, 16, 24 (b2nt, today and b1: 0, 1, 4, 8, 16, 24). A run stops after
+  the first N past 3.3 GB. One browser a run; one run at a time, with nothing else on the
+  machine.
+- **b2's settings**: every tab kept awake (L 99 and X a day, set in the page), and before
+  each reading every hidden tab trimmed (tabs.js `sleepTick` 61 s ahead): the state of a tab
+  left more than a minute before. `-default` runs with the Settings' L 6 and X 10 min in
+  real time. At the end every hidden tab is put to sleep in one call, timed, and 4 are
+  woken.
+- **Memory**: two forced GCs, then a critical memory-pressure signal to the renderer, which
+  hands back the pages the GC freed. Unasked, it does so within seconds: XRPD tabs just put
+  to sleep read 211 MB, then 186 MB after the signal, and 183 MB 10 s later (a check made
+  while writing `lim-lib.mjs`, noted there). Then:
+  - Private (Private_Clean + Private_Dirty, smaps_rollup) summed over every Chromium
+    process: the browser, the renderer with its workers' threads, the GPU process, the
+    utilities;
+  - the renderer's RSS, the JS heap, the ArrayBuffers and the DOM nodes.
+
+  Peaks: the same sum every 200 ms, with no GC. A tab's cost is the least-squares slope over
+  N.
+- **Work on show**: real keys through CDP, timed from the key's own timestamp to two frames
+  after its handlers.
+  - In X0: → (next sample) and a smoothing width typed with Enter, 8 of each.
+  - In S0: the crop's X typed with Enter (a crop of 1024 px moved by 40 px), 8 times; then,
+    with the group's figure composer open, its gap typed with Enter, 8 times.
+
+  Medians.
+- **Switches**: real clicks, from the pointerdown's timestamp to two frames after the tab is
+  on show with its loader gone. Each is classed by what the tab was before: awake, trimmed,
+  asleep.
+- **The background's long tasks**: those during each N's measuring that overlap none of the
+  script's own actions (keys, clicks, GCs asked for), and those in 4 s with nothing typed.
+  `lim-bgjobs.mjs` measures three cases apart: a SEM reading left at once, three hidden
+  runs, and bursts of trims and sleeps in one call. A burst is what a page gets when the
+  browser has held its timers back.
+
+**Memory per tab in the background** (Private summed over every process, MB, the slope over
+N; the heap and DOM nodes beside it):
+
+| tab | b2 awake | b2 asleep | what its sleep gave back at N = 24, measured / b2's estimate (`bytes()`) | today, parked | b1, a frame | source |
+|---|---|---|---|---|---|---|
+| XRPD, 12 refined, idle | 8.7 trimmed (heap 2.1, 2729 nodes); 17.2 untrimmed (heap 6.9, 3355 nodes) | 4.3 | trimmed 4.2 / 1.3; untrimmed 13.3 / 6.1 | 7.8 | 23.5 | `lim-{b2,b2nt,head,b1}-xrd.json` |
+| XRPD refining on the pool | 26.6 (heap 7.5: busy, never trimmed), and 54 once for the pool's 3 workers | 13.2 (its runs' steps kept in its history) | 13.4 / 6.0 | – (asks to stop) | 41.7, each frame its own pool | `lim-{b2,b1}-xrdrun.json` |
+| SEM, 8 × 2048 × 2176, 16 bits | 113.8 trimmed, 118.7 untrimmed: 71.1 its files' bytes (ArrayBuffers), 42 in the browser process | 108.4 | trimmed 0.6 / 0.5; untrimmed 7.0 / 3.4 | 140.1 (heap 90.8: the base64) | 288 | `lim-{b2,b2nt,head,b1}-sem.json` |
+| the mix | 63.0 | 55.6 | 5.1 / 2.5 | 55.0 | 152.5 (N ≤ 16) | `lim-{b2,head,b1}-mix.json` |
+
+- **A SEM tab costs its files, awake or asleep.** Its bytes are 71 MB of the 114. The rest
+  is in the browser process, from what the app writes to IndexedDB since v517: it grows by
+  56–60 MB with each SEM tab, up to about 1 GB, and no further (b2: 991 MB at 16 tabs, 983
+  at 24). Today and b1 show the same, since both write the same
+  (`lim-{b2,head,b1}-sem.json`, `browserPriv`). Sleep gives none of it back: b2's 25 SEM
+  tabs put to sleep went from 2948 to 2933 MB.
+- **An XRPD tab costs little**: 8.7 MB trimmed, 17.2 MB untrimmed, 4.3 MB asleep. With 24 of
+  them hidden the page holds 71,673 DOM nodes trimmed, 86,838 untrimmed, and 5,678 once they
+  sleep (`lim-b2{,nt}-xrd.json`).
+- **b2's estimate is 2–3× low**, except for a trimmed SEM tab (each divided by the 25 tabs
+  that slept). It counts only what sleep gives back, never a tab's files.
+- **The pool's workers**: 3 warm idle workers take 54 MB; they end 60 s after their last job
+  (`lim-b2-xrdrun.json` against `lim-b2-xrd.json` at N = 0). In b1 each frame has a pool of
+  its own: 34–36 worker threads at N = 16–24.
+
+**Totals** (Private after the GC / its peak, MB; X0 and S0 plus N; N = 0 alone is 331–391 MB
+in b2, 498–534 today, 482–612 in b1, from the same files):
+
+| N in the background | 1 | 4 | 8 | 16 | 24 |
+|---|---|---|---|---|---|
+| b2, XRPD | 351 / 546 | 375 / 598 | 414 / 727 | 480 / 727 | 544 / 987 |
+| b2nt, XRPD (no trim) | 363 / 557 | 414 / 622 | 482 / 660 | 620 / 808 | 756 / 1008 |
+| b2, XRPD refining | 429 / 687 | 649 / 923 | 730 / 935 | 894 / 1278 | 1041 / 1510 |
+| b2, SEM | 467 / 660 | 847 / 1084 | 1372 / 1631 | 2379 / 2677 | **2948 / 3299** |
+| b2, mix | 490 / 698 | 723 / 1022 | 982 / 1250 | 1523 / 1810 | 1865 / 2248 |
+| b2, mix, default L 6, X 10 min | 485 / 679 | 740 / 997 | 978 / 1265 | 1519 / 1782 | 1829 / 2085 |
+| today, XRPD / SEM / mix | 556 / 689 / 726 | 577 / 1159 / 932 | 635 / 1777 / 1035 | 678 / 3009 / 1621 | 718 / **3801** / 1886 |
+| b1, XRPD / refining / SEM / mix | 584 / 698 / 758 / 858 | 650 / 873 / 1672 / 1414 | 746 / 1256 / 2703 / 1914 | 925 / 1411 / **5109** / **3113** | 1116 / 1614 / – / – |
+
+Sources: `lim-<tree>-<kind>.json`; the peaks of today and b1 are in the same files. b1's
+SEM run stopped past 3.3 GB at N = 16; its mix run lost its reading at N = 24 to an error of
+the script (the bar drawn again under a click), after 3.1 GB at N = 16 (`lim-b1-mix.log`).
+
+- **What gives first is memory, and only through SEM.** Nothing crashed, and no run failed.
+  b2's JS heap stayed under 200 MB of its 4096 MB limit; today's SEM run reached 2283 MB of
+  heap, its base64. In b2, 24 SEM tabs hold 2.95 GB after a GC and peak at 3.30 GB. Today
+  holds 3.80 GB (peak 4.04), b1 5.11 GB at 16 tabs.
+- **XRPD never comes near**: 24 tabs idle, 0.54 GB; 24 refining, 1.04 GB (peak 1.51).
+- **b2 with every tab awake holds what today holds with every tab parked.** For the mix at
+  N = 24 that is 1865 against 1886 MB. For SEM it is 22 % less (2948 against 3801), and in
+  both cases half of b1's or less.
+- **Asleep, after every hidden tab slept at N = 24**: 439 MB for XRPD, 707 MB for XRPD after
+  its runs (the runs' steps and memory not handed back), 2933 MB for SEM and 1723 MB for the
+  mix (`end.memAsleep` in the same files).
+
+**Work in the tab on show** (median ms: N = 0 / N = 24, the worst N in brackets; the ratio
+is the worst against N = 0):
+
+| in the background | → next sample | smoothing | SEM crop | SEM figure | worst ratio | source |
+|---|---|---|---|---|---|---|
+| b2, XRPD | 79 / 72 (79) | 171 / 140 (171) | 42 / 43 (50) | 29 / 32 (34) | 1.20 | `lim-b2-xrd.json` |
+| b2nt, XRPD | 75 / 75 (83) | 140 / 153 (153) | 48 / 48 (48) | 34 / 34 (35) | 1.11 | `lim-b2nt-xrd.json` |
+| b2, XRPD refining | 79 / 96 (106) | 153 / 194 (194) | 48 / 53 (61) | 28 / 32 (34) | 1.34 | `lim-b2-xrdrun.json` |
+| b2, SEM | 74 / 78 (85) | 153 / 168 (173) | 43 / 41 (50) | 32 / 30 (33) | 1.17 | `lim-b2-sem.json` |
+| b2, mix | 77 / 105 (105) | 141 / 197 (219) | 45 / 54 (68) | 33 / 29 (37) | **1.55** | `lim-b2-mix.json` |
+| b2, mix, default | 76 / 83 (104) | 153 / 188 (198) | 47 / 46 (60) | 36 / 32 (36) | 1.38 | `lim-b2-mix-default.json` |
+| today, XRPD / SEM / mix | 70–75 / 70–74 | 145–151 / 140–148 | 40–51 / 42–69 | 27–34 / 27–34 | 1.09 / **1.70** / 1.22 | `lim-head-*.json` |
+| b1, XRPD / SEM / mix | 72–74 / 77–93 (N ≤ 16) | 137–158 / 150–171 | 34–38 / 40–55 | 31–32 / 28–34 | 1.21 / 1.22 / **1.58** | `lim-b1-*.json` |
+| b1, XRPD refining | 67 / 130 (130) | 144 / 197 (200) | 42 / 68 (68) | 32 / 39 (39) | **1.95** | `lim-b1-xrdrun.json` |
+
+- **Tabs that only sit in the background cost the tab on show nothing**, however many: in
+  b2's XRPD and SEM runs, 24 tabs leave every median within 1.2× of N = 0.
+- **What slows it is refinements going on.** Three pool workers and the page share the 4
+  vCPUs. The tab on show then takes 1.3–1.4× in b2, and at its worst 1.55×: the smoothing at
+  219 against 141 ms, and the crop at 68 against 45 ms, in the mix at N = 4 and N = 12.
+- b1 reaches 1.95× with the same runs, its frames each having a pool.
+- Today slows its SEM crop 1.7× at 24 SEM tabs, when its heap holds 2.3 GB of base64.
+
+**Switches and wakes** (median ms, the largest in brackets):
+
+| to | b2 | b2nt | today | b1 | source |
+|---|---|---|---|---|---|
+| an XRPD tab left seconds before | 94 (186) | 109 (154) | 326 (377) | 78 (126) | `lim-*-xrd.json`, "back" |
+| an XRPD tab left over a minute before | 395 (494): trimmed | 111 (197) | 335 (367) | 77 (129) | the same, "to" |
+| a SEM tab left over a minute before | 103 (163): trimmed | 77 (97) | 865 (1012) | 64 (93) | `lim-*-sem.json` |
+| SEM from XRPD (S0 from X0) | 145–195; 239 by default | 124–126 | 194–775 | 52–65 | every `lim-*.json` |
+| an XRPD tab refining | 156 (218) | – | – | 106 (179) | `lim-{b2,b1}-xrdrun.json` |
+| an XRPD tab asleep, woken | 468–626 (a long task of 362–537 within it) | | – | – | `end.wakes`, `lim-b2-bgjobs.json` |
+| a SEM tab asleep, woken | 204–334 | | – | – | the same |
+
+- **Under 100 ms only back to a tab just left (94 ms) and between untrimmed SEM tabs
+  (77 ms).** Switches from one XRPD tab to another take 94–111 ms awake, and 395 ms once
+  trimmed. That is slower than today's 335 ms, the trim's cost: its plots are drawn again.
+  SEM from XRPD takes 124–239 ms. b1's frames switch in 52–78 ms (106 to a tab refining).
+- **Every wake is under 1 s**: 0.47–0.63 s for XRPD, 0.20–0.33 s for SEM.
+
+**The background's long tasks**:
+
+- **b2: none over 200 ms in any run.** The largest was 92 ms, with 24 SEM tabs; with nothing
+  typed, 72 ms. b1 had 3 over 200 ms (up to 275) with 16 tabs refining
+  (`lim-b1-xrdrun.json`).
+- **A SEM reading of 8 images left at once** takes 0.75–0.86 s hidden (1.18 s on show), with
+  no long task at all (6 readings).
+- **Three runs ending hidden**: 9.1–9.5 s, one long task of 53 ms; → in X0 meanwhile 74 ms
+  (max 113).
+- **Bursts in one call** (what a browser that held the timers back would give):
+  - 10 tabs trimmed in 2.7 ms;
+  - 25 XRPD tabs put to sleep in 128–138 ms, about 5 ms a tab;
+  - 28 tabs of the mix in 95 ms;
+  - 25 SEM tabs in 2–3 ms.
+
+  Sources: `lim-b2-bgjobs.json`; for the bursts of 25 and 28 tabs, `end.sleepAll` in
+  `lim-b2{,nt}-*.json`.
+
+**The limit within about 3 GB** (on this 16 GB machine; Private over every process, peak
+included):
+
+| tabs open, beyond X0 and S0 | the count that fits | what L changes |
+|---|---|---|
+| XRPD idle | about 265 trimmed, 135 untrimmed: the bar's 20 binds first | nothing that matters: sleep gives back 4–13 MB a tab |
+| XRPD refining | about 85 | the same; refining tabs never sleep |
+| SEM, 8 images of 2048 × 2176 | **about 21** (peak 3.0 GB; 24 after the GC) | nothing: asleep a tab keeps 108 of its 114 MB |
+| the mix | about 35 | 2 %: at N = 24, L 6 holds 1829 MB and every tab awake 1865 MB |
+
+These counts come from the slopes and totals above, against 3072 MB less a peak margin of
+350–450 MB (the peaks ran that far above the readings after a GC). Within the bar's 20 tabs,
+then, only SEM tabs reach 3 GB, and only with files larger than these or more of them. A SEM
+tab costs about 1.7× its files' size. Neither L nor X can change that, since sleep gives
+back none of it.
+
+**The policy, count or memory budget.**
+
+- **As built, the budget never acts.** It sums the estimated `bytes()` of the hidden awake
+  tabs against 1500 MB. With 29 tabs awake in the mix the estimate came to 69 MB. It counts
+  only what sleep would give back, 2–3× low for XRPD, and never a tab's files.
+- **The count L is what works as built.** With these tabs it changes the memory by 2 % and
+  decides only how often a return wakes a tab: 0.2–0.6 s instead of 0.1–0.4 s.
+- **The budget is the better policy once sleep gives a SEM tab's bytes back.** The builders
+  left that undone (about 2 days): IndexedDB holds the bytes by their SHA-256 already, and a
+  sleeping tab would read them back at its wake. A SEM tab weighs 114 MB and an XRPD tab
+  9–27, which a count cannot see. Its estimate must then count what each tab holds, files
+  included. Measured here, that is about 71 MB of a SEM tab's 114 within reach; the browser
+  process's part (up to about 1 GB) stays, as it does today.
+
+**X**: sleep gives back 4.2 MB of an idle trimmed XRPD tab (13.3 untrimmed), 13.4 MB of one
+after its runs and 0.6–7.0 MB of a SEM tab, so X hardly moves the memory. It costs a wake at
+the next return (0.47–0.63 s for XRPD, 0.20–0.33 s for SEM), always under 1 s. The trim
+moves more than X does:
+
+- XRPD: 8.5 MB a tab (17.2 → 8.7), for 0.28 s more at every return to a tab left over a
+  minute (395 against 111 ms);
+- SEM: 5 MB a tab, for 26 ms more (103 against 77 ms).
+
+**Recommendation.**
+
+1. **b2 meets the user's criteria on memory, on the background and on waking**:
+   - for the mix it holds today's memory with every tab awake, 22 % less for SEM, and less
+     than half of b1's;
+   - no long task over 200 ms comes from the background;
+   - every wake is under 1 s.
+2. **The work on show is within 1.5× except with refinements going on**: 1.55× at its worst,
+   on 4 vCPUs with three workers. Tabs merely open in the background cost it nothing.
+3. **It misses the 100 ms switch between XRPD tabs** (94–111 ms awake, 395 ms trimmed) and
+   between modules (124–239 ms). b1 does all of them in 52–78 ms.
+4. **Set the trim to X**, or let it go, for XRPD at least. This is one constant (tabs.js
+   `TRIM_MS`). It brings an XRPD tab left a while back to 0.11 s from 0.40 s, at 8.5 MB a
+   tab: 170 MB for 20 tabs, well within 3 GB.
+5. **Keep the count, L = 6, and X = 10 min as defaults.** Both are cheap and neither changes
+   the memory much; L is the user's lever on how often a return wakes a tab.
+6. **For memory, let a sleeping SEM tab's bytes go** (about 2 days), then make the memory
+   budget the default policy. Count the budget on what each tab holds, set it to about
+   2.5 GB of tabs (3 GB less the page itself, about 0.1 GB with no tab open, and a peak
+   margin of 0.45 GB), and refit `bytes()` to the numbers above (half a day). Until then,
+   the limit within 3 GB is the number of SEM tabs open, about 20 of 8 full-size images, and
+   Settings cannot move it.
+7. **Not measured**: a real Chrome or Edge window in the background, the user's own files
+   and refinements, and machines other than this one. Every number here is headless and
+   unthrottled. The GPU process held 17 MB throughout, with its canvases drawn in software.
+
 ## Option A: background runs
 
 **What was built.** `bg-runs/bg-runs.patch`:
