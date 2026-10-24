@@ -1,0 +1,16 @@
+TAP version 13
+# Subtest: live tabs: a refinement goes on in a tab not on show; keys, settings, projects, close, reload
+ok 1 - live tabs: a refinement goes on in a tab not on show; keys, settings, projects, close, reload
+  ---
+  duration_ms: 7463.142442
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7860.973864

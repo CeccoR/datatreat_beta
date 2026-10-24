@@ -1,0 +1,197 @@
+{
+ "checks": [
+  {
+   "name": "Ctrl+Z after a click on the tab bar undoes in the tab on show (focus moved into its frame)",
+   "ok": true,
+   "seen": {
+    "focusInShell": "IFRAME",
+    "smooth": "0.25"
+   }
+  },
+  {
+   "name": "Ctrl+Y redoes there too",
+   "ok": true,
+   "seen": "0.4"
+  },
+  {
+   "name": "Ctrl+Z with the focus in the shell (its header clicked) is forwarded to the tab on show",
+   "ok": true,
+   "seen": {
+    "focusInShell": "BODY",
+    "smooth": "0.25"
+   }
+  },
+  {
+   "name": "→ with the focus in the shell steps the sample in the tab on show",
+   "ok": true,
+   "seen": {
+    "curIdx": [
+     0,
+     1
+    ],
+    "label": null
+   }
+  },
+  {
+   "name": "a key reaches only the tab on show (the hidden DRS history untouched)",
+   "ok": true,
+   "seen": [
+    2,
+    2
+   ]
+  },
+  {
+   "name": "a file dropped on a tab frame's dropzone is read there",
+   "ok": true,
+   "seen": [
+    2,
+    3
+   ]
+  },
+  {
+   "name": "a download started in a frame (the project bar's CSV) reaches the browser",
+   "ok": true,
+   "seen": "tauc_export.zip"
+  },
+  {
+   "name": "the decimal separator set in Settings is the frames' at once",
+   "ok": true,
+   "seen": ","
+  },
+  {
+   "name": "the theme toggled in the shell is the frames' at once",
+   "ok": true,
+   "seen": {
+    "before": "dark",
+    "frame": "light",
+    "shell": "light"
+   }
+  },
+  {
+   "name": "a project saved in a frame is in the shell's Projects list",
+   "ok": true,
+   "seen": [
+    "Lim X"
+   ]
+  },
+  {
+   "name": "renamed in the list: the tab's label and its page's name field",
+   "ok": true,
+   "seen": {
+    "label": "XRPD · Lim X2",
+    "field": "Lim X2"
+   }
+  },
+  {
+   "name": "the tab's saved state mirrored in the shell (no \"*\")",
+   "ok": true,
+   "seen": "XRPD · Lim X2"
+  },
+  {
+   "name": "closing a hidden unsaved tab shows it and asks there (today: asked over the tab on show)",
+   "ok": true,
+   "seen": {
+    "on": "UV-Vis DRS · Untitled project*",
+    "asked": "Save “Untitled project” before closing?"
+   }
+  },
+  {
+   "name": "… \"Don't save\" closes it: the frame removed",
+   "ok": true,
+   "seen": 1
+  },
+  {
+   "name": "leaving a tab while it refines asks nothing; the bar marks it running",
+   "ok": true,
+   "seen": {
+    "banner": false,
+    "mark": "XRPD · Lim X2* ⟳"
+   }
+  },
+  {
+   "name": "its results written while hidden, the tab marked changed",
+   "ok": true,
+   "seen": {
+    "results": 12,
+    "label": "XRPD · Lim X2* ⟳"
+   }
+  },
+  {
+   "name": "undo and redo after the run hidden do as after the run on show (its own history: one step, back to the state it started from)",
+   "ok": true,
+   "seen": {
+    "shown": {
+     "banner": null,
+     "mark": null,
+     "resultsBefore": 0,
+     "indexBefore": 2,
+     "results": 12,
+     "label": "XRPD · Lim X2*",
+     "hist": {
+      "n": 4,
+      "index": 3
+     },
+     "histAfterUndo": {
+      "n": 4,
+      "index": 2
+     },
+     "resultsAfterUndo": 0,
+     "resultsAfterRedo": 12
+    },
+    "hidden": {
+     "banner": false,
+     "mark": "XRPD · Lim X2* ⟳",
+     "resultsBefore": 12,
+     "indexBefore": 3,
+     "results": 12,
+     "label": "XRPD · Lim X2* ⟳",
+     "hist": {
+      "n": 5,
+      "index": 4
+     },
+     "histAfterUndo": {
+      "n": 5,
+      "index": 3
+     },
+     "resultsAfterUndo": 12,
+     "resultsAfterRedo": 12
+    }
+   }
+  },
+  {
+   "name": "a window open in a frame (the XRPD standard) no longer keeps the tabs from switching (a change: today it covers the bar)",
+   "ok": true,
+   "seen": {
+    "modalOpen": true,
+    "switched": true
+   }
+  },
+  {
+   "name": "after a reload: the order the shell wrote, the state each frame wrote",
+   "ok": true,
+   "seen": {
+    "order0": [
+     "UV-Vis DRS · ",
+     "XRPD · "
+    ],
+    "order1": [
+     "UV-Vis DRS · ",
+     "XRPD · "
+    ],
+    "smooth": "0.35",
+    "results": 12
+   }
+  },
+  {
+   "name": "after a reload only the tab on show has a frame (lazy)",
+   "ok": true,
+   "seen": 1
+  },
+  {
+   "name": "one JS heap limit for all the tabs (same-origin frames share an isolate)",
+   "ok": true,
+   "seen": "4096 MB"
+  }
+ ],
+ "errors": []
+}

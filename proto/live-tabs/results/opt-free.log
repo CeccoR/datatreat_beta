@@ -1,0 +1,2 @@
+free {} {"knobs":{},"mem":{"heap":373.2,"rss":1021.1,"pss":968.9,"workers":4,"allPss":1139.3},"switchToSemMed":37.9,"switchToSem":[38.6,65,37.1,36,37.9],"errors":[],"load":[1.26,1.38,1.23]}
+free {"free":0} {"knobs":{"free":0},"mem":{"heap":373.2,"rss":737.3,"pss":684.5,"workers":4,"allPss":856.9},"switchToSemMed":101.7,"switchToSem":[86.6,87.2,101.7,107.5,116.8],"errors":[],"load":[1,1.31,1.21]}

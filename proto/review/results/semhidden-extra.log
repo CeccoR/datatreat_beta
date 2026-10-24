@@ -1,0 +1,8 @@
+read 0 wall 1511 ms; main thread busy 1237 ms; keys 109 91 114 63 | long {"n":5,"sum":396,"max":100}
+read 1 wall 1324 ms; main thread busy 899 ms; keys 129 69 102 65 | long {"n":6,"sum":472,"max":116}
+read 2 wall 1290 ms; main thread busy 853 ms; keys 66 64 108 76 | long {"n":4,"sum":271,"max":95}
+read 3 wall 1218 ms; main thread busy 855 ms; keys 114 99 66 64 | long {"n":6,"sum":438,"max":98}
+read 4 wall 1466 ms; main thread busy 1183 ms; keys 110 62 83 70 | long {"n":4,"sum":256,"max":74}
+read 5 wall 1329 ms; main thread busy 883 ms; keys 60 63 66 68 64 | long {"n":6,"sum":326,"max":57}
+alone, on show: wall 1475 main busy 801
+{"keys":{"n":25,"med":69,"p90":114,"max":129,"min":60},"over200":0,"over100":7,"n":25,"alone":{"wall":1475,"mainBusy":801}} errors []

@@ -217,3 +217,6 @@ was proposed; nothing here is in the code yet.
     several), at the price of a mixed model meanwhile.
   To take (a) when waiting on a refinement is what hurts; (b) as a longer rework, after
   the tests, if switch speed or background work in other modules come to matter.
+  Assessed after v517, nothing implemented: proto/ASSESSMENT.md (b as frames, b1, built
+  and measured beside (a) and a pool of Rietveld workers; each a patch under proto/ ready
+  to apply).

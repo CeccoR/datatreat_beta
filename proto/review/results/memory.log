@@ -1,0 +1,20 @@
+head none  heap 3, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 202, allPriv 107, nProc 6
+head xrd   heap 12, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 278, allPriv 178, nProc 6
+head xrd   heap 15, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 306, allPriv 204, nProc 6
+head sem   heap 107, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 643, allPriv 539, nProc 6
+head drs   heap 107, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 654, allPriv 546, nProc 6
+head gc    heap 107, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 613, allPriv 503, nProc 6
+head epr   heap 107, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 613, allPriv 506, nProc 6
+head sem   heap 198, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 672, allPriv 567, nProc 6
+head xrd   heap 200, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 712, allPriv 609, nProc 6
+errors []
+live none  heap 3, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 201, allPriv 107, nProc 6
+live xrd   heap 15, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 294, allPriv 194, nProc 6
+live xrd   heap 26, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 352, allPriv 251, nProc 6
+live sem   heap 119, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 701, allPriv 595, nProc 6
+live drs   heap 123, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 680, allPriv 573, nProc 6
+live gc    heap 126, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 695, allPriv 584, nProc 6
+live epr   heap 129, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 694, allPriv 586, nProc 6
+live sem   heap 222, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 959, allPriv 850, nProc 6
+live xrd   heap 234, rendRss undefined, rendPriv undefined, rendThreads undefined, gpuPriv 0, allPss 937, allPriv 832, nProc 6
+errors []

@@ -1,0 +1,12 @@
+import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+const BASE = process.env.BASE || 'http://127.0.0.1:8983';
+const browser = await chromium.launch({ args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'] });
+const page = await browser.newPage();
+page.on('pageerror', e=> console.log('pageerror', e.message));
+page.on('console', m=> { if (m.type() === 'error') console.log('console', m.text()); });
+await page.goto(BASE + '/bench/bench.html');
+await page.waitForFunction(()=> window.benchReady);
+const r = await page.evaluate(()=> window.bench({ k: 1 }));
+console.log('wall', r.wall.toFixed(0), 'longs', r.longs);
+r.jobs.forEach(j=> console.log(j.name, j.ms.toFixed(0), j.engineMs, j.nprog, j.resBytes, j.payBytes, j.rwp, j.a));
+await browser.close();

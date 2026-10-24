@@ -1,0 +1,149 @@
+## Refine all in the app, on k workers (pool.mjs; medians of 5, default settings)
+
+| k | wall | speed-up vs HEAD | first (cold) | CPU total | workers' CPU | main thread CPU | cores busy (workers) | main thread busy (CDP) | long tasks (ms, longest) | RSS idle after GC | worker heaps idle | RSS peak | identical / in order / progress |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 7.07 s | 1.02× | 7.83 s | 8.82 s | 6.49 s | 1.35 s | 0.92 | 1.4 s | 78 (90) | 185 MB | 2.1 MB | 309 MB | yes / yes / yes |
+| 2 | 4.13 s | 1.75× | 5.06 s | 9.37 s | 7.08 s | 1.02 s | 1.71 | 1.09 s | 0 (59) | 200 MB | 2, 2 MB | 368 MB | yes / yes / yes |
+| 3 | 2.92 s | 2.47× | 4.25 s | 8.65 s | 7.04 s | 0.79 s | 2.41 | 0.9 s | 0 (63) | 209 MB | 2, 2, 2 MB | 362 MB | yes / yes / yes |
+| 4 | 2.85 s | 2.54× | 4.19 s | 9.18 s | 7.15 s | 0.77 s | 2.51 | 0.88 s | 59 (59) | 217 MB | 2, 2, 2, 2 MB | 399 MB | yes / yes / yes |
+| HEAD (1) | 7.23 s | 1× | 7.20 s | 8.98 s | 6.72 s | 1.3 s | 0.93 | 1.37 s | 76 (81) | 184 MB | 2.1 MB | 299 MB | yes / yes / yes |
+
+Status lines seen (k = 3): ["","Refining sNN, sNN, sNN… (N of 12 done)","Refining sNN, sNN… (N of 12 done)","Refining sNN…"]
+
+## Working in the tab while its Refine all runs (interact.mjs; ms, median / p90 / max of 12)
+
+| tree, k | nothing runs: next | smoothing | its Refine all running: next | smoothing |
+| --- | --- | --- | --- | --- |
+| HEAD (1) | 62.6 / 78.5 / 99.8 | 123.8 / 133.6 / 136.8 | 69.5 / 96.1 / 114.9 | 130.4 / 188.2 / 209 |
+| pool, 1 | 63.4 / 68.9 / 72.4 | 122.3 / 140.1 / 170 | 52.5 / 94.1 / 96.4 | 125.5 / 165.4 / 165.7 |
+| pool, 2 | 61.7 / 64 / 76.3 | 124.5 / 133.2 / 133.9 | 65.2 / 101.5 / 102 | 124.2 / 139.3 / 175.6 |
+| pool, 3 | 63.8 / 68.5 / 69 | 117.4 / 133 / 137.4 | 70.9 / 98.2 / 118.1 | 153.6 / 191.9 / 229.7 |
+| pool, 4 | 64.7 / 70.7 / 110.9 | 122.3 / 132.2 / 138.4 | 67.1 / 93.4 / 113.7 | 178.8 / 195.5 / 207.1 |
+
+## Cancel, history, workers (safety.mjs, k = 3, 5 rounds)
+
+{"rounds":5,"cancelMsMed":38,"writtenAtCancel":[7,7,7,7,7],"gaps":[0,0,0,0,0],"allInOrder":true,"allIdentical":true,"nothingAfter":true,"histRight":true,"undoRight":true,"fullAfter":true,"poolAfterCancel":[{"alive":0,"idle":0,"waiting":0},{"alive":0,"idle":0,"waiting":0},{"alive":0,"idle":0,"waiting":0},{"alive":0,"idle":0,"waiting":0},{"alive":0,"idle":0,"waiting":0}],"errors":[]}
+per round: 7 written (gaps 0) cancel 58 ms, pool before {"alive":3,"idle":0,"waiting":0} after {"alive":0,"idle":0,"waiting":0}; 7 written (gaps 0) cancel 36 ms, pool before {"alive":3,"idle":0,"waiting":0} after {"alive":0,"idle":0,"waiting":0}; 7 written (gaps 0) cancel 33 ms, pool before {"alive":3,"idle":0,"waiting":0} after {"alive":0,"idle":0,"waiting":0}; 7 written (gaps 0) cancel 38 ms, pool before {"alive":3,"idle":0,"waiting":0} after {"alive":0,"idle":0,"waiting":0}; 7 written (gaps 0) cancel 46 ms, pool before {"alive":3,"idle":0,"waiting":0} after {"alive":0,"idle":0,"waiting":0}
+
+## Bench heavy, CPUs 0-3 (bench-heavy.json; medians of 5)
+
+| k | hardwareConcurrency | wall | speed-up | job (median) | CPU total | workers' CPU | cores busy | same as k=1, in order | main-thread probe med / p95 (idle) | long tasks | RSS: page / k idle / peak |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 4 | 54.22 s | 1× | 4462 ms | 57.48 s | 52.24 s | 0.96 | yes, yes | 9.4 / 13.5 (9.7) | 0 | 114 / 119 / 182 MB |
+| 2 | 4 | 28.38 s | 1.91× | 4797 ms | 57.91 s | 54.02 s | 1.9 | yes, yes | 9.5 / 14.3 (9.3) | 0 | 115 / 126 / 202 MB |
+| 3 | 4 | 20.24 s | 2.68× | 4859 ms | 58.64 s | 55.47 s | 2.74 | yes, yes | 9.7 / 15.5 (9.4) | 0 | 115 / 134 / 235 MB |
+| 4 | 4 | 16.36 s | 3.32× | 5189 ms | 58.44 s | 55.53 s | 3.4 | yes, yes | 9.8 / 14 (9.4) | 0 | 113 / 139 / 262 MB |
+
+## Bench default, CPUs 0-3 (bench-default-cpus4.json; medians of 5)
+
+| k | hardwareConcurrency | wall | speed-up | job (median) | CPU total | workers' CPU | cores busy | same as k=1, in order | main-thread probe med / p95 (idle) | long tasks | RSS: page / k idle / peak |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 4 | 7.16 s | 1× | 599 ms | 7.95 s | 6.74 s | 0.94 | yes, yes | 6.5 / 9.9 (6.8) | 2 | 104 / 117 / 174 MB |
+| 2 | 4 | 3.77 s | 1.9× | 572 ms | 8.48 s | 6.94 s | 1.84 | yes, yes | 6.7 / 15.7 (6.7) | 0 | 106 / 125 / 172 MB |
+| 3 | 4 | 3.00 s | 2.39× | 714 ms | 8.93 s | 7.45 s | 2.48 | yes, yes | 7.3 / 12.8 (6.4) | 0 | 105 / 132 / 201 MB |
+| 4 | 4 | 2.61 s | 2.75× | 804 ms | 8.85 s | 7.5 s | 2.88 | yes, yes | 6.6 / 11.3 (6.6) | 0 | 105 / 139 / 223 MB |
+| 5 | 4 | 2.76 s | 2.6× | 974 ms | 8.86 s | 7.41 s | 2.69 | yes, yes | 6.6 / 17.1 (6.7) | 0 | 105 / 145 / 237 MB |
+| 6 | 4 | 2.73 s | 2.62× | 1248 ms | 9.37 s | 7.65 s | 2.8 | yes, yes | 6.8 / 12.5 (6.5) | 0 | 105 / 151 / 252 MB |
+| 8 | 4 | 2.60 s | 2.76× | 1580 ms | 9.31 s | 7.79 s | 3 | yes, yes | 6.7 / 14.8 (6.2) | 0 | 104 / 161 / 281 MB |
+
+## Bench default, CPUs 0-2 (bench-default-cpus3.json; medians of 5)
+
+| k | hardwareConcurrency | wall | speed-up | job (median) | CPU total | workers' CPU | cores busy | same as k=1, in order | main-thread probe med / p95 (idle) | long tasks | RSS: page / k idle / peak |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 3 | 6.84 s | 1× | 578 ms | 7.49 s | 6.45 s | 0.94 | yes, yes | 7.4 / 11.1 (7.3) | 0 | 105 / 118 / 162 MB |
+| 2 | 3 | 4.18 s | 1.64× | 636 ms | 8.61 s | 7.28 s | 1.74 | yes, yes | 7.6 / 14.5 (7.7) | 0 | 105 / 126 / 185 MB |
+| 3 | 3 | 3.30 s | 2.07× | 777 ms | 8.67 s | 7.14 s | 2.16 | yes, yes | 7.5 / 11.6 (7.9) | 0 | 105 / 132 / 193 MB |
+| 4 | 3 | 3.26 s | 2.1× | 1035 ms | 8.82 s | 7.66 s | 2.35 | yes, yes | 7.5 / 12.1 (7.3) | 0 | 105 / 140 / 217 MB |
+
+## Bench default, CPUs 0-1 (bench-default-cpus2.json; medians of 5)
+
+| k | hardwareConcurrency | wall | speed-up | job (median) | CPU total | workers' CPU | cores busy | same as k=1, in order | main-thread probe med / p95 (idle) | long tasks | RSS: page / k idle / peak |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 2 | 6.78 s | 1× | 571 ms | 7.33 s | 6.37 s | 0.94 | yes, yes | 10.1 / 14.8 (10.1) | 0 | 104 / 118 / 157 MB |
+| 2 | 2 | 4.22 s | 1.61× | 671 ms | 7.79 s | 6.79 s | 1.61 | yes, yes | 10.1 / 14 (9.6) | 0 | 105 / 125 / 172 MB |
+| 3 | 2 | 4.32 s | 1.57× | 1057 ms | 8.06 s | 6.98 s | 1.62 | yes, yes | 9.7 / 13.7 (9.7) | 0 | 104 / 131 / 192 MB |
+
+## Bench default, CPUs 0 (bench-default-cpus1.json; medians of 5)
+
+| k | hardwareConcurrency | wall | speed-up | job (median) | CPU total | workers' CPU | cores busy | same as k=1, in order | main-thread probe med / p95 (idle) | long tasks | RSS: page / k idle / peak |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 6.95 s | 1× | 593 ms | 6.73 s | 5.97 s | 0.86 | yes, yes | 8.5 / 12.7 (9.2) | 0 | 106 / 119 / 155 MB |
+| 2 | 1 | 7.57 s | 0.92× | 1319 ms | 7.45 s | 6.49 s | 0.86 | yes, yes | 8.5 / 14.2 (8.7) | 0 | 104 / 124 / 172 MB |
+
+## Runs in several tabs at once (tabs.mjs; medians of 5 rounds)
+
+| tree | K tabs | each run | all (first click → last end) | starts spread | CPU total | main thread CPU | workers alive (most) | RSS peak | longest long task | identical, in order |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| bg | 1 | 7.48 s | 7.48 s | 0.00 s | 10.23 s | 1.17 s | 1 | 344 MB | 86 ms | yes, yes |
+| bg | 2 | 8.80 s | 9.86 s | 0.99 s | 22.22 s | 2.54 s | 2 | 422 MB | 220 ms | yes, yes |
+| bg | 3 | 9.99 s | 11.98 s | 2.09 s | 33.92 s | 3.72 s | 3 | 482 MB | 215 ms | yes, yes |
+| bgpool | 1 | 3.31 s | 3.31 s | 0.00 s | 9.76 s | 0.93 s | 3 | 530 MB | 100 ms | yes, yes |
+| bgpool | 2 | 5.30 s | 6.38 s | 1.04 s | 19.84 s | 2.34 s | 3 | 647 MB | 304 ms | yes, yes |
+| bgpool | 3 | 7.12 s | 9.25 s | 2.13 s | 28.56 s | 3.43 s | 3 | 677 MB | 233 ms | yes, yes |
+| live | 1 | 7.10 s | 7.10 s | 0.00 s | 7.73 s | 0.34 s | 3 | 375 MB | 91 ms | yes, yes |
+| live | 2 | 7.44 s | 7.47 s | 0.00 s | 16.52 s | 0.59 s | 3 | 439 MB | 54 ms | yes, yes |
+| live | 3 | 8.10 s | 8.31 s | 0.00 s | 24.4 s | 0.75 s | 3 | 529 MB | 70 ms | yes, yes |
+| livepool | 1 | 2.96 s | 2.96 s | 0.00 s | 8.71 s | 0.26 s | 9 | 604 MB | 0 ms | yes, yes |
+| livepool | 2 | 5.56 s | 5.84 s | 0.00 s | 16.89 s | 0.53 s | 9 | 594 MB | 62 ms | yes, yes |
+| livepool | 3 | 8.11 s | 8.69 s | 0.00 s | 25.43 s | 0.8 s | 9 | 709 MB | 64 ms | yes, yes |
+| livelocal | 1 | 3.08 s | 3.08 s | 0.00 s | 9.05 s | 0.22 s | 9 | 617 MB | 0 ms | yes, yes |
+| livelocal | 2 | 5.43 s | 5.49 s | 0.00 s | 19.88 s | 0.55 s | 9 | 610 MB | 71 ms | yes, yes |
+| livelocal | 3 | 7.47 s | 7.48 s | 0.01 s | 26.99 s | 0.86 s | 9 | 818 MB | 96 ms | yes, yes |
+
+## The standard and the samples (std.mjs; medians)
+
+| tree | case | the standard | the samples | in all | n |
+| --- | --- | --- | --- | --- | --- |
+| HEAD | cold | 0.74 s | 6.22 s | 6.94 s | 5 |
+| HEAD | warm | 0.63 s | 5.77 s | 6.47 s | 5 |
+| pool, 3 | cold | 0.74 s | 3.40 s | 4.15 s | 5 |
+| pool, 3 | coldWarmed | 0.79 s | 3.45 s | 4.22 s | 5 |
+| pool, 3 | warm | 0.68 s | 2.53 s | 3.22 s | 5 |
+| pool, 3, guard lifted | the standard (another file) refined while the samples run | 0.98 s | 2.88 s | 2.88 s | 5 |
+
+stale after "along": 12/12, 12/12, 12/12, 12/12, 12/12 ; profile changed: true, true, true, true, true ; note on the card: true, true, true, true, true
+
+## Extrapolation (simulate.mjs)
+
+Fitted on the grid (default settings, 12 points k > 1): c = 0.11 (each job's slowdown per other worker running), m = 0.09 core (the page's own threads; measured on the bench page at k = 1: 0.15), o = 44 ms. The jobs' slowdown, measured / model: 1:2 2.23/1.92, 2:2 1.18/1.16, 2:3 1.85/1.71, 3:2 1.1/1.11, 3:3 1.35/1.26, 3:4 1.79/1.66, 4:2 0.95/1.11, 4:3 1.19/1.22, 4:4 1.34/1.36, 4:5 1.63/1.69, 4:6 2.08/2.02, 4:8 2.64/2.69 (CPUs:k).
+
+| CPUs | k | measured | model (fitted on that n's k = 1) | error | model from 4 CPUs' jobs | error |
+|---|---|---|---|---|---|---|
+| 1 | 1 | 6.95 s | 6.95 s | 0 % | 7.80 s | 12.24 % |
+| 1 | 2 | 7.57 s | 6.92 s | -8.63 % | 7.75 s | 2.35 % |
+| 2 | 1 | 6.78 s | 6.78 s | 0 % | 7.16 s | 5.54 % |
+| 2 | 2 | 4.22 s | 4.08 s | -3.4 % | 4.32 s | 2.31 % |
+| 2 | 3 | 4.32 s | 4.20 s | -2.73 % | 4.46 s | 3.22 % |
+| 3 | 1 | 6.84 s | 6.84 s | 0 % | 7.16 s | 4.65 % |
+| 3 | 2 | 4.18 s | 3.88 s | -7.35 % | 4.13 s | -1.16 % |
+| 3 | 3 | 3.30 s | 3.01 s | -8.92 % | 3.28 s | -0.74 % |
+| 3 | 4 | 3.26 s | 3.11 s | -4.78 % | 3.28 s | 0.68 % |
+| 4 | 1 | 7.16 s | 7.16 s | 0 % | 7.16 s | 0 % |
+| 4 | 2 | 3.77 s | 4.13 s | 9.64 % | 4.13 s | 9.64 % |
+| 4 | 3 | 3.00 s | 3.18 s | 6.21 % | 3.18 s | 6.21 % |
+| 4 | 4 | 2.61 s | 2.69 s | 3.34 % | 2.69 s | 3.34 % |
+| 4 | 5 | 2.76 s | 3.12 s | 13.18 % | 3.12 s | 13.18 % |
+| 4 | 6 | 2.73 s | 2.92 s | 7.01 % | 2.92 s | 7.01 % |
+| 4 | 8 | 2.60 s | 3.39 s | 30.44 % | 3.39 s | 30.44 % |
+
+Default settings (12 jobs of 418–771 ms alone): one worker 7.16 s; c = 0.11.
+
+| cores n | cap n − 1 = lanes | rounds of 12 | wall, speed-up (c as fitted) | c = 0 (no contention) | lanes balanced (fewest for the same rounds) | cap n | cap n/2 |
+|---|---|---|---|---|---|---|---|
+| 2 | 1 | 12 | 7.16 s, 1× | 7.16 s, 1× | 1: 7.16 s | 4.32 s, 1.66× | 7.16 s, 1× |
+| 4 | 3 | 4 | 3.18 s, 2.25× | 2.62 s, 2.73× | 3: 3.18 s | 2.69 s, 2.66× | 4.13 s, 1.73× |
+| 8 | 7 | 2 | 2.29 s, 3.13× | 1.40 s, 5.13× | 6: 2.25 s | 2.27 s, 3.16× | 2.63 s, 2.72× |
+| 12 | 11 | 2 | 1.83 s, 3.92× | 0.89 s, 8.02× | 6: 2.25 s | 1.76 s, 4.07× | 2.25 s, 3.19× |
+| 16 | 12 | 1 | 1.75 s, 4.1× | 0.81 s, 8.79× | 12: 1.75 s | 1.75 s, 4.1× | 2.24 s, 3.19× |
+
+Heavy, its jobs' slowdown on 4 CPUs, measured / model with c = 0.05: k 2 1.08/1.05, k 3 1.09/1.1, k 4 1.16/1.18; the wall time, measured / model: k 1 54.22 s/54.22 s (0 %), k 2 28.38 s/28.54 s (0.59 %), k 3 20.24 s/20.28 s (0.19 %), k 4 16.36 s/16.77 s (2.54 %).
+
+Heavy settings (12 jobs of 3.8–5.2 s alone): one worker 54.22 s; c = 0.05.
+
+| cores n | cap n − 1 = lanes | rounds of 12 | wall, speed-up (c as fitted) | c = 0 (no contention) | lanes balanced (fewest for the same rounds) | cap n | cap n/2 |
+|---|---|---|---|---|---|---|---|
+| 2 | 1 | 12 | 54.22 s, 1× | 54.22 s, 1× | 1: 54.22 s | 29.84 s, 1.82× | 54.22 s, 1× |
+| 4 | 3 | 4 | 20.28 s, 2.67× | 18.41 s, 2.94× | 3: 20.28 s | 16.77 s, 3.23× | 28.54 s, 1.9× |
+| 8 | 7 | 2 | 12.32 s, 4.4× | 9.41 s, 5.76× | 6: 11.87 s | 12.85 s, 4.22× | 16.40 s, 3.31× |
+| 12 | 11 | 2 | 11.90 s, 4.56× | 7.84 s, 6.91× | 6: 11.87 s | 7.84 s, 6.91× | 11.87 s, 4.57× |
+| 16 | 12 | 1 | 7.78 s, 6.97× | 4.92 s, 11.01× | 12: 7.78 s | 7.78 s, 6.97× | 12.71 s, 4.27× |

@@ -1,0 +1,509 @@
+diff --git a/tests/README.md b/tests/README.md
+index 3e33b5e..7fc817c 100644
+--- a/tests/README.md
++++ b/tests/README.md
+@@ -55,6 +55,7 @@ exports) goes to `tests/out/`, which git ignores.
+ | `rvui.test.mjs` | The Rietveld card and the instrumental standard: with no refined standard, Refine and Refine all ask in a modal at the centre of the screen (its three answers; Escape, × and a click beside it answer neither; the primary focused, Tab kept inside, focus back on the button that asked); the standard's Settings show only the rows, start groups and Refinement settings that apply to it, none disabled for good, and the samples' keep every row; while the standard refines with its window closed, every card's Instrumental standard… shows it (a card added meanwhile, Home and back, another project opened and the tab shown again, the run going on meanwhile in the tab left, that card undone and redone, an undo stopped silently at the run's start, the window reopened) until the run ends or is stopped. |
+ | `undorun.test.mjs` | Undo and redo while a job runs, the workers' answers held so that it runs as long as the test needs. A Rietveld run: steps before it (a setting, a card folded, a label) and during it (a card unfolded, a label, a file's colour); Ctrl+Z undoes those taken during it and stops at its start, nothing undone below, nothing said (no banner, no window, no alert), the running card's panel as it was (Cancel, its progress, its rows locked, the Settings open and read only, not built again); Ctrl+Y goes back up; its result then comes in as a step of its own at its start: walking back undoes the steps taken during it (the result kept in each), then the result, then the steps before it, and forward again to the end. Refine all with steps taken between its patterns: every state holds the whole run or none of it, the patterns done kept in the card through an undo to its start. Cancelled with one pattern done: that is its step, a saved project marked unsaved by it and saved with it; cancelled before any: no step, the project still saved. The standard's run the same, its window's panel as it was; then *Refine the standard first*: the standard's step, then the sample's, the step taken meanwhile after them. A card closed during its run comes back by an undo with the pattern done; one switched to Scherrer during its run keeps it. The 80-state limit crossed during a run: undo down to the oldest state kept, the result then in every state, no step of its own. Two sample cards refining at once: the redo branch the later one set aside comes back with the earlier one's result. Two held from one state with a redo branch there: a result of either drops it, in either order. *Refine the standard first* stopped or failed before any result: the redo branch there comes back. While a sample waits for the standard's run, its rows, + CIF, Clear and Settings locked, a click on them no step; an undo during its run leaves the card's inputs as the state on show has them, its end no step of its own. The standard bearing a sample's name: Refine all ends in one step. SEM: Ctrl+Z during a reading undoes the step taken meanwhile and stops silently at its start; Ctrl+Y redoes it; the files land after it, one step, the list and the groups right. |
+ | `bgruns.test.mjs` | A Rietveld refinement going on in the tab left (backlog 23, option A), the workers' answers held: leaving its tab asks nothing; each result goes into the tab's parked state and its record in the database, the tab unsaved, a spinner on it; its end is one step in the parked history after the state it started from; shown again it is as a run ended on show (one undo, one redo). Shown again mid-run, its card takes the run back (Cancel, its progress, its rows locked) and Cancel there stops it as on show. Two tabs refining at once, a third on show: each its own results and step. The parked tab closed: asked, then stopped, its record gone; its project deleted from Projects: stopped. Its project exported from Projects mid-run: what is saved; closed with Save: saved with what was written so far. Reloaded mid-run: the results written come back, unsaved, nothing running. *Refine the standard first*, its tab left at once: both runs go on parked, the standard's step then the samples'. |
++| `rvpool.test.mjs` | The Rietveld workers' pool (backlog 23): Refine all on three workers at once gives the results of one, bit for bit, written in the patterns' order, one step; an answer out of order waits for those before it; Cancel writes the patterns done and not those under way (s01 done past s00 under way too); an error in one lane stops the patterns not started and writes those under way, not the failed one; two tabs refining at once on a cap of two make two workers in all, each tab its own results in order. The cap and the lanes are localStorage `datatreat-rv-workers` and `datatreat-rv-lanes`; `undorun` and `bgruns` take one lane, as their held answers assume, and `rietveld` for its Cancel during Refine all. |
+ | `xrdcards.test.mjs` | The analysis cards and the XRPD Scherrer card. + Add peak is left as its card is folded (by the arrow, clicked or by Enter: the button off, the guide gone, no peak placed), not by a move's folds, and as the standard's window closes (× or a click beside it). The baseline's box undone and redone step by step (the box, its window field and the state together, the live state the history step's), under all and one and in the standard's window; a select undone with the focus on it; Ctrl+Z with the focus still on the box just clicked. A card an undo or a redo brings back (closed by its ×, or added) is brought into view, its head on screen under the sticky bar, in XRPD, DRS, GC and EPR; a tab switched to and a project opened with a card more bring nothing into view. |
+ | `filelist.test.mjs` | The file list, the same in every module (DRS, XRPD, GC, EPR, SEM), at 1400, 800 and 375 px: grip and include box 26 px each, FILE, LABEL and a note with no header but GC's (SAMPLE, a select of the file's sample) at 3 : 3 : 2 of the width left, actions 58 px, measured cell by cell; the note right of the label, DRS's %R or F(R) (its title in full), GC's the file's own name, the others' empty; no sideways scroll, the label field inside its cell; on a phone the field, while typed in, laid over the note and short of the actions. |
+ | `gcp.test.mjs` | GC's pressure p of the flow: 1 atm by default (in a new card, for a new file, in a project saved before it), V_m = RT/p (a rate at 2 atm twice the one at 1 atm, at 1 atm 1.01325 times the one at 1 bar); its unit (atm, bar, kPa, mbar, Torr, psi) converting the values shown and written, never the pressure, switched round and back; either decimal mark, 0, below 0 or no number refused as m and Q are; all/one, a file added and one left out; the value and the unit as undo/redo steps; a malformed pressure restored at 1 atm; p in gc_info.csv after T and in mean_rates.csv before it; the parameter table at 1300 px and at 1000 px, nothing over its cell. |
+diff --git a/tests/bgruns.test.mjs b/tests/bgruns.test.mjs
+index 07e27b3..5bd2572 100644
+--- a/tests/bgruns.test.mjs
++++ b/tests/bgruns.test.mjs
+@@ -21,6 +21,8 @@ const P = '#xrdR2';
+ // job's of those held (the patterns' order), __release() every one and holds no more.
+ // Before any worker is made.
+ const holdWorkers = page => page.evaluate(()=>{
++  // (a run's patterns one at a time, as these tests take them: the pool's lanes, rvpool.test.mjs)
++  localStorage.setItem('datatreat-rv-lanes', '1');
+   const W = window.Worker; window.__held = []; window.__hold = false;
+   const wrap = fn => e=>{ if (window.__hold && e.data && e.data.type === 'result') window.__held.push(Object.assign(()=> fn(e), { k: e.data.id ?? e.data.seq ?? 0 })); else fn(e); };
+   window.Worker = class extends W {
+diff --git a/tests/rietveld.test.mjs b/tests/rietveld.test.mjs
+index 3997951..5a5948f 100644
+--- a/tests/rietveld.test.mjs
++++ b/tests/rietveld.test.mjs
+@@ -22,6 +22,8 @@ const label = page => page.textContent(P + 'Refine');
+ test('Rietveld: one pattern refined, then Refine all cancelled', async ()=>{
+   const { page, errors, close } = await env.page();
+   try {
++    // (a run's patterns one at a time: on the pool's lanes the two would be done before the Cancel)
++    await page.evaluate(()=> localStorage.setItem('datatreat-rv-lanes', '1'));
+     await openModule(page, 'xrd');
+     await loadFiles(page, 'xrd', env.fx.files.xrd.slice(0, 2));
+     await page.setInputFiles(P + 'CifInput', env.fx.cif);
+diff --git a/tests/rvpool.test.mjs b/tests/rvpool.test.mjs
+new file mode 100644
+index 0000000..f88d15a
+--- /dev/null
++++ b/tests/rvpool.test.mjs
+@@ -0,0 +1,167 @@
++/* The Rietveld workers' pool (backlog 23, bg-runs-pool.patch): Refine all runs its patterns
++   on several workers at once (its lanes), at most the cap's (localStorage
++   'datatreat-rv-workers', else the cores less one) for every run of the page, those of the
++   tabs left too. With three lanes the results are those of one, bit for bit, written in the
++   patterns' order, one step; answers out of order wait for those before them; Cancel writes
++   those done and not the ones under way; an error stops the patterns not started, those
++   under way written; two tabs refining at once on a cap of two make two workers, each tab
++   its own results in order. The workers' answers are held (window.__hold) and delivered by
++   their job's order, the pattern's (__nth). */
++import { test, before, after } from 'node:test';
++import assert from 'node:assert/strict';
++import { start, openModule, loadFiles, settle, until, undo, moduleState } from './helpers.mjs';
++
++let env;
++before(async ()=>{ env = await start(); });
++after(()=> env && env.close());
++
++const P = '#xrdR2';
++// The cap, the workers made counted, their results held while __hold; __nth(j) delivers the
++// held result of the j-th job among those held (0: the earliest); __fail makes the next
++// one delivered the worker's error. Before any worker is made.
++const pool = (page, cap)=> page.evaluate(cap=>{
++  localStorage.setItem('datatreat-rv-workers', String(cap));
++  const W = window.Worker; window.__held = []; window.__hold = false; window.__made = 0; window.__fail = false;
++  const wrap = fn => e=>{
++    if (!(e.data && e.data.type === 'result')) return fn(e);
++    const go = ()=> window.__fail ? (window.__fail = false, fn({ data: { ...e.data, type: 'error', message: 'failed for the test' } })) : fn(e);
++    if (window.__hold) window.__held.push(Object.assign(go, { k: e.data.id })); else go();
++  };
++  window.Worker = class extends W {
++    constructor(...a){ super(...a); window.__made++; }
++    addEventListener(t, fn, o){ if (t !== 'message') return super.addEventListener(t, fn, o); const g = wrap(fn); (this.__m || (this.__m = new Map())).set(fn, g); return super.addEventListener(t, g, o); }
++    removeEventListener(t, fn, o){ return super.removeEventListener(t, (t === 'message' && this.__m && this.__m.get(fn)) || fn, o); }
++  };
++  window.__nth = j =>{ const h = window.__held.slice().sort((a, b)=> a.k - b.k), f = h[j]; if (!f) return false; window.__held.splice(window.__held.indexOf(f), 1); f(); return true; };
++  window.__release = ()=>{ window.__hold = false; window.__held.splice(0).sort((a, b)=> a.k - b.k).forEach(f=> f()); };
++}, cap);
++const held = (page, n)=> until(()=> page.evaluate(n=> window.__held.length >= n, n), { timeout: 120000, what: n + ' answers held' });
++const press = async (page, sel)=>{ await page.waitForTimeout(650); await page.click(sel); };
++const running = page => page.waitForFunction(s=> document.querySelector(s).textContent === 'Cancel', P + 'Refine');
++const idle = page => page.waitForFunction(s=> document.querySelector(s).textContent === 'Refine', P + 'Refine', { timeout: 120000 });
++async function refineAll(page){
++  await press(page, P + 'RefineAll');
++  await page.waitForSelector('.confirm-modal');
++  await page.click('.confirm-modal .btn:not(.primary)');
++  await running(page);
++}
++async function xrdTab(page, n){
++  await openModule(page, 'xrd');
++  await loadFiles(page, 'xrd', env.fx.files.xrd.slice(0, n));
++  await page.setInputFiles(P + 'CifInput', env.fx.cif);
++  await page.waitForSelector(P + 'PhaseList input[data-on]');
++  await settle(page);
++}
++const results = async page => (((await moduleState(page, 'xrd')).cards.find(c=> c.id === 2) || {}).states?.rietveld?.results || {});
++const names = async page => Object.keys(await results(page));
++// (what the worker gave, its times left out)
++const strip = r => JSON.parse(JSON.stringify(r, (k, v)=> k === 'at' || k === 'ms' ? undefined : v));
++const steps = page => page.evaluate(async ()=>{ const u = await import('./utils.js'), h = u.getModuleHistory('xrd');
++  return { index: h.index, of: h.states.map(s=> Object.keys(((s.cards.find(c=> c.id === 2) || {}).states || {}).rietveld?.results || {}).length) }; });
++
++test('three lanes: the results those of one, bit for bit, in the patterns\' order, one step', async ()=>{
++  const one = await env.page(), three = await env.page();
++  try {
++    const got = {};
++    for (const [k, { page }] of [[1, one], [3, three]]){
++      await pool(page, k);
++      await xrdTab(page, 3);
++      const h0 = await steps(page);
++      await refineAll(page);
++      await idle(page);
++      await settle(page);
++      got[k] = { res: strip(await results(page)), made: await page.evaluate(()=> window.__made), h0, h: await steps(page) };
++    }
++    assert.equal(got[1].made, 1); assert.equal(got[3].made, 3);
++    assert.deepEqual(Object.keys(got[3].res), ['s00.xrdml', 's01.xrdml', 's02.xrdml'], 'in the patterns\' order');
++    assert.deepEqual(got[3].res, got[1].res, 'bit for bit');
++    assert.deepEqual(got[3].h.of, [...got[3].h0.of, 3], 'one step');
++    assert.deepEqual([one.errors, three.errors], [[], []]);
++  } finally { await one.close(); await three.close(); }
++});
++
++test('answers out of order wait for those before them; Cancel writes those done, not the ones under way', async ()=>{
++  const { page, errors, close } = await env.page();
++  try {
++    await pool(page, 3);
++    await xrdTab(page, 3);
++    await page.evaluate(()=>{ window.__hold = true; });
++    await refineAll(page);
++    await held(page, 3);
++    await page.evaluate(()=> window.__nth(1));       // s01's
++    await settle(page);
++    assert.deepEqual(await names(page), [], 's01 waits for s00');
++    await page.evaluate(()=> window.__nth(0));       // s00's: both written, in order
++    await until(async ()=> (await names(page)).length === 2, { what: 's00 and s01' });
++    assert.deepEqual(await names(page), ['s00.xrdml', 's01.xrdml']);
++    await press(page, P + 'Refine');                 // (Cancel: s02 under way)
++    await idle(page);
++    assert.match(await page.textContent(P + 'Status'), /Stopped after 2 of 3 patterns/);
++    await page.evaluate(()=> window.__release());
++    await settle(page);
++    assert.deepEqual(await names(page), ['s00.xrdml', 's01.xrdml'], 'nothing of s02\'s answer after');
++    await undo(page);
++    assert.deepEqual(await names(page), []);
++    await undo(page, true);
++    assert.deepEqual(await names(page), ['s00.xrdml', 's01.xrdml']);
++    // Cancel with s01 answered and s00 under way: s01 written past it.
++    await page.evaluate(()=>{ window.__hold = true; });
++    await press(page, P + 'RefineAll');
++    await page.waitForSelector('.confirm-modal');
++    await page.click('.confirm-modal .btn:not(.primary)');
++    await running(page);
++    await held(page, 3);
++    const before = await results(page);
++    await page.evaluate(()=> window.__nth(1));
++    await settle(page);
++    await press(page, P + 'Refine');
++    await idle(page);
++    assert.match(await page.textContent(P + 'Status'), /Stopped after 1 of 3 patterns/);
++    const after = await results(page);
++    assert.equal(after['s00.xrdml'].at, before['s00.xrdml'].at, 's00, under way, kept what it had');
++    assert.notEqual(after['s01.xrdml'].at, before['s01.xrdml'].at, 's01, done, written');
++    await page.evaluate(()=> window.__release());
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
++
++test('an error in one lane: the patterns not started stop, those under way are written, the failed one not', async ()=>{
++  const { page, errors, close } = await env.page();
++  try {
++    await pool(page, 2);
++    await xrdTab(page, 3);
++    await page.evaluate(()=>{ window.__hold = true; });
++    await refineAll(page);
++    await held(page, 2);                              // s00 and s01 (s02 not started: two lanes)
++    await page.evaluate(()=>{ window.__fail = true; window.__nth(0); });   // s00 fails
++    await page.evaluate(()=> window.__nth(0));       // s01's
++    await idle(page);
++    await settle(page);
++    assert.match(await page.textContent(P + 'Status'), /failed for the test/);
++    assert.deepEqual(await names(page), ['s01.xrdml'], 's01 written, s00 failed, s02 never started');
++    assert.equal(await page.evaluate(()=> window.__held.length), 0);
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
++
++test('two tabs refining at once on a cap of two: two workers for both; each its own results, in order', async ()=>{
++  const { page, errors, close } = await env.page();
++  try {
++    await pool(page, 2);
++    await page.evaluate(()=>{ window.__hold = true; });
++    await xrdTab(page, 3);
++    await refineAll(page);
++    await xrdTab(page, 2);
++    await refineAll(page);
++    await openModule(page, 'tauc');
++    // Deliver them all, the latest job first, as they come: written in order all the same.
++    for (let n = 0; n < 5; n++){ await held(page, 1); await page.evaluate(()=>{ const h = window.__held; window.__nth(h.length - 1); }); }
++    const tab = i => page.evaluate(async i=>{ const T = await import('./tabs.js'), t = T.TABS[i];
++      return { running: !!(t.jobs && t.jobs.length), res: Object.keys(t.state.cards.find(c=> c.id === 2).states.rietveld.results || {}) }; }, i);
++    await until(async ()=> !(await tab(0)).running && !(await tab(1)).running, { what: 'both runs\' end' });
++    assert.deepEqual((await tab(0)).res, ['s00.xrdml', 's01.xrdml', 's02.xrdml']);
++    assert.deepEqual((await tab(1)).res, ['s00.xrdml', 's01.xrdml']);
++    assert.equal(await page.evaluate(()=> window.__made), 2, 'two workers, for both runs');
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
+diff --git a/tests/undorun.test.mjs b/tests/undorun.test.mjs
+index 4c659ab..62119d0 100644
+--- a/tests/undorun.test.mjs
++++ b/tests/undorun.test.mjs
+@@ -34,17 +34,20 @@ const P = '#xrdR2', S = '#xrdStdR';
+    __release() every one and holds no more. With window.__fail the next refinement's result
+    comes as the worker's error. Before any worker is made. */
+ const holdWorkers = page => page.evaluate(()=>{
++  // (a run's patterns one at a time, as these tests take them: the pool's lanes, rvpool.test.mjs)
++  localStorage.setItem('datatreat-rv-lanes', '1');
+   const W = window.Worker; window.__held = []; window.__hold = false; window.__fail = false;
+   const wrap = fn => e=>{
+     if (window.__fail && e.data && e.data.type === 'result'){ window.__fail = false; return fn({ data: { ...e.data, type: 'error', message: 'failed for the test' } }); }
+-    if (window.__hold && e.data && (e.data.type === 'result' || e.data.seq != null)) window.__held.push(()=> fn(e)); else fn(e); };
++    if (window.__hold && e.data && (e.data.type === 'result' || e.data.seq != null)) window.__held.push(Object.assign(()=> fn(e), { k: e.data.id ?? e.data.seq ?? 0 })); else fn(e); };
+   window.Worker = class extends W {
+     addEventListener(t, fn, o){ if (t !== 'message') return super.addEventListener(t, fn, o); const g = wrap(fn); (this.__m || (this.__m = new Map())).set(fn, g); return super.addEventListener(t, g, o); }
+     removeEventListener(t, fn, o){ return super.removeEventListener(t, (t === 'message' && this.__m && this.__m.get(fn)) || fn, o); }
+     set onmessage(fn){ super.onmessage = fn && wrap(fn); }
+     get onmessage(){ return super.onmessage; }
+   };
+-  window.__one = ()=>{ const f = window.__held.shift(); if (f) f(); return !!f; };
++  // (the one held first by its job, the pattern's order: a Refine all's lanes answer in any order)
++  window.__one = ()=>{ const h = window.__held; if (!h.length) return false; let j = 0; h.forEach((f, i)=>{ if (f.k < h[j].k) j = i; }); h.splice(j, 1)[0](); return true; };
+   window.__release = ()=>{ window.__hold = false; window.__held.splice(0).forEach(f=> f()); };
+ });
+ const held = page => until(()=> page.evaluate(()=> window.__held.length), { timeout: 120000, what: 'the worker\'s answer' });
+diff --git a/xrd-rv.js b/xrd-rv.js
+index 30aebd7..7ed762c 100644
+--- a/xrd-rv.js
++++ b/xrd-rv.js
+@@ -85,45 +85,86 @@ export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement:
+ /* ---- The runs ----
+    A run is an object of its own, not its card's: the patterns it refines, the phases,
+    settings and profile it took as it started, the results it starts from (base), what it
+-   wrote, its hold on the history (mark), its worker. While a card shows it, it writes
+-   through that card's view (to: the results, the plot, the status, the progress); its tab
+-   left, the tab manager parks it with the tab (park: to writes each result into the tab's
+-   parked state, and its end into the parked history, tabs.js), the card free for the next
+-   project; the tab shown again, the card of its id takes it back (attach), progress and
+-   Cancel. Its worker goes with it. A sample's run that waits for the standard's ("Refine
+-   the standard first") waits as a run too (pre), so that it goes on parked as well. Up to
+-   backlog 23's prototype the run was the card's closure, and leaving its tab stopped it. */
++   wrote, its hold on the history (mark), its jobs in the pool's workers. While a card
++   shows it, it writes through that card's view (to: the results, the plot, the status,
++   the progress); its tab left, the tab manager parks it with the tab (park: to writes
++   each result into the tab's parked state, and its end into the parked history, tabs.js),
++   the card free for the next project; the tab shown again, the card of its id takes it
++   back (attach), progress and Cancel. A sample's run that waits for the standard's ("Refine the standard first") waits
++   as a run too (pre), so that it goes on parked as well. Up to backlog 23's prototype the
++   run was the card's closure, and leaving its tab stopped it. */
+ const newWorker = ()=> new Worker(new URL('./xrd-rietveld.worker.js', import.meta.url), { type: 'module' });
++/* ---- The workers: one pool for every run of the page (every card, the standard, every
++   tab's: backlog 23) ----
++   At most CAP workers, made as wanted, each running one pattern at a time: a Refine all
++   runs its patterns on as many at once (its lanes), and runs in several tabs share them, a
++   lane waiting its turn for a worker (in order). A worker free for IDLE_MS is terminated
++   (the engine's caches with it). The cap: the cores less one (the page's own thread), or
++   localStorage 'datatreat-rv-workers'; a run's lanes: the cap, or 'datatreat-rv-lanes'
++   (1: a run's patterns one after the other, as up to the prototype); read as the first run
++   starts. Up to backlog 23's prototype each card had a worker of its own, its patterns one
++   after the other, and nothing capped the workers of several cards. */
++const knob = k =>{ try { const v = parseInt(localStorage.getItem('datatreat-rv-' + k), 10); return v > 0 ? v : 0; } catch(e){ return 0; } };
++let CAP = 0, LANES = 0;
++const cap = ()=> CAP || (CAP = knob('workers') || Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
++const lanesMax = ()=> LANES || (LANES = Math.min(cap(), knob('lanes') || cap()));
++const IDLE_MS = 120000;
++const idleWs = [];         // { w, t (its timer) }, the last freed last
++const queue = [];          // lanes waiting for a worker (their resolve), in order
++let alive = 0;             // workers made and not terminated
++function getW(){
++  if (idleWs.length){ const e = idleWs.pop(); clearTimeout(e.t); return Promise.resolve(e.w); }
++  if (alive < cap()){ alive++; return Promise.resolve(newWorker()); }
++  return new Promise(r=> queue.push(r));
++}
++function putW(w){
++  const next = queue.shift();
++  if (next){ next(w); return; }
++  const e = { w, t: setTimeout(()=>{ const i = idleWs.indexOf(e); if (i >= 0){ idleWs.splice(i, 1); killW(w); } }, IDLE_MS) };
++  idleWs.push(e);
++}
++// (a worker stopped or failed: another made for the next lane waiting, if any)
++function killW(w){
++  try { w.terminate(); } catch(e){}
++  alive--;
++  const next = queue.shift();
++  if (next){ alive++; next(newWorker()); }
++}
+ let jobIds = 0;
+-// One pattern in the run's worker: resolves to the result, null when cancelled (halt).
+-function job(run, payload, onProgress){
+-  const w = run.w || (run.w = newWorker()), id = ++jobIds;
++// One pattern in a worker of the pool: resolves to the result, null when cancelled (halt).
++async function job(run, payload, onProgress){
++  const w = await getW();
++  if (run.stopped){ putW(w); return null; }
++  const id = ++jobIds;
+   return new Promise((resolve, reject)=>{
+-    const done = ()=>{ w.removeEventListener('message', onMsg); w.removeEventListener('error', onErr); run.cancelJob = null; };
++    // (once: an answer held up somewhere and heard after a cancel does not give the worker back)
++    let over = false;
++    const done = ()=>{ over = true; w.removeEventListener('message', onMsg); w.removeEventListener('error', onErr); run.jobs.delete(cancel); };
+     const onMsg = e =>{
+-      const d = e.data; if (!d || d.id !== id) return;
++      const d = e.data; if (over || !d || d.id !== id) return;
+       if (d.type === 'progress'){ onProgress(d.frac, d.stage); return; }
+-      done();
++      done(); putW(w);
+       if (d.type === 'result') resolve(d.res); else reject(new Error(d.message || 'Refinement failed'));
+     };
+-    const onErr = e =>{ done(); lose(run, w); reject(new Error(e.message || 'The refinement worker failed')); };
+-    run.cancelJob = ()=>{ done(); lose(run, w); resolve(null); };
++    const onErr = e =>{ if (over) return; done(); killW(w); reject(new Error(e.message || 'The refinement worker failed')); };
++    const cancel = ()=>{ done(); killW(w); resolve(null); };
++    run.jobs.add(cancel);
+     w.addEventListener('message', onMsg);
+     w.addEventListener('error', onErr);
+     w.postMessage({ id, ...payload });
+   });
+ }
+-// (a worker stopped or failed: no run nor card keeps it)
+-function lose(run, w){ try { w.terminate(); } catch(e){} if (run.w === w) run.w = null; if (run.to && run.to.lost) run.to.lost(w); }
+ const say = (run, t)=>{ run.said = t || ''; if (run.to) run.to.say(run.said); };
+ // (a sample's run waiting for the standard's: that run's progress, its tell)
+ function waitTell(run, frac, t){ run.wfrac = frac; run.said = `Refining the standard first: ${t}…`; if (run.to) run.to.wait(run); }
+-// Stopped: the pattern under way not written, nothing of its worker's answer after; the
+-// standard's run waited for, when this one's press started it, stopped with it.
++// Stopped: the patterns under way not written, nothing of their workers' answers after,
++// those done meanwhile written (flush); the standard's run waited for, when this one's
++// press started it, stopped with it.
+ function halt(run, commit){
+   if (run.over || run.stopped) return false;
+   run.stopped = true;
+-  if (run.cancelJob) run.cancelJob();
++  run.jobs.forEach(c=> c());
++  if (run.flush) run.flush(true);
+   if (run.waiting && run.pre && run.pre.own && run.pre.stop) run.pre.stop(commit);
+   return true;
+ }
+@@ -146,27 +187,54 @@ async function go(run){
+       }
+       run.irf = r.irf;
+     }
+-    for (let k = 0; k < run.n; k++){
+-      const f = run.todo[k], pay = payloadFor(f, run, run.base, run.isStd), from = pay.opts.start ? ' from its last result' : '';
+-      const ph = pay.list; delete pay.list;
+-      say(run, `Refining ${f.label}${from}…`);
+-      // (the stages say the rest: a start from the last result has its own)
+-      // (run.frac: how far the run is, for the standard's button on the samples' cards)
+-      const res = await job(run, pay, (frac, stage)=>{
+-        run.frac = (k + frac)/run.n;
+-        if (stage) run.said = `Refining ${f.label}: ${stage}…`;
+-        if (run.to) run.to.prog(run, !!stage);
+-        if (run.tell) run.tell(run.frac, stage ? `${f.label}: ${stage}` : f.label);
+-      });
+-      if (run.stopped) return { ok: false, why: 'stopped' };
+-      if (!res) break;
+-      // (a file taken away meanwhile: its result has no pattern to go with)
+-      if (run.to && !run.to.keep(f)) continue;
+-      const rec = resultRecord(res, ph, run.isStd, Date.now());
+-      run.wrote[f.name] = rec;
+-      run.done++;
+-      if (run.to) run.to.put(run, f, rec);
+-    }
++    /* Its lanes (lanesMax at most, one a pattern): each takes the next pattern, waits for a
++       worker of the pool, refines it there. The results are written in the patterns'
++       order (flush), each once those before it are, so that the results, the history and
++       the record are as a run of one lane makes them (a run stopped or failed: those done,
++       in order, past the ones under way). An error stops the patterns not started; those
++       under way end and are written. (run.frac: how far the run is, for the standard's
++       button on the samples' cards, and the tab's) */
++    const lanes = Math.min(run.n, lanesMax()), got = new Array(run.n), on = new Map();
++    let next = 0, flushed = 0, failed = null;
++    run.flush = all =>{
++      while (flushed < run.n && (got[flushed] !== undefined || (all && flushed < next))){
++        const d = got[flushed++];
++        // (a file taken away meanwhile: its result has no pattern to go with)
++        if (!d || (run.to && !run.to.keep(d.f))) continue;
++        run.wrote[d.f.name] = d.rec;
++        run.done++;
++        if (run.to) run.to.put(run, d.f, d.rec);
++      }
++    };
++    const busy = ()=>{ const fs = [...on.keys()].sort((a, b)=> a - b).map(k=> run.todo[k].label); return fs.length > 1 ? `Refining ${fs.join(', ')}…` : null; };
++    const lane = async ()=>{
++      while (!run.stopped && !failed && next < run.n){
++        const k = next++, f = run.todo[k];
++        let res, ph;
++        try {
++          const pay = payloadFor(f, run, run.base, run.isStd), from = pay.opts.start ? ' from its last result' : '';
++          ph = pay.list; delete pay.list;
++          on.set(k, 0);
++          say(run, busy() || `Refining ${f.label}${from}…`);
++          // (the stages say the rest: a start from the last result has its own)
++          res = await job(run, pay, (frac, stage)=>{
++            on.set(k, frac);
++            let sumf = 0; on.forEach(v=>{ sumf += v; });
++            run.frac = (run.done + (got.slice(flushed).filter(Boolean).length) + sumf)/run.n;
++            if (stage) run.said = busy() || `Refining ${f.label}: ${stage}…`;
++            if (run.to) run.to.prog(run, !!stage);
++            if (run.tell) run.tell(run.frac, stage ? `${f.label}: ${stage}` : f.label);
++          });
++        } catch(e){ on.delete(k); if (!run.stopped){ failed = failed || e; got[k] = null; run.flush(); } return; }
++        on.delete(k);
++        if (run.stopped || !res) return;
++        got[k] = { f, rec: resultRecord(res, ph, run.isStd, Date.now()) };
++        run.flush();
++      }
++    };
++    await Promise.all(Array.from({ length: lanes }, lane));
++    if (run.stopped) return { ok: false, why: 'stopped' };
++    if (failed) throw failed;
+     say(run, [run.fell.length && `From the CIF, no last result to start from: ${run.fell.join('; ')}.`,
+       run.bgFreed.length && `Scales and background refined, not held: the background's terms changed since the last result (${run.bgFreed.join(', ')}).`].filter(Boolean).join(' '));
+     return { ok: true, irf: run.isStd ? irfOf(run.todo[0], run.wrote) : null };
+@@ -181,16 +249,15 @@ async function go(run){
+ /* A run parked with its tab (tabs.js): each result written into the tab's parked state
+    (sink.write, a patch of it: xrd.js runPatch, by the run's own files), its end into the
+    tab's parked history (sink.end: the mark released with what it wrote, as a live run's
+-   end does), its progress on the tab (sink.progress). Its worker ends with it. */
++   end does), its progress on the tab (sink.progress). */
+ function parkRun(run, sink){
+   const finish = ()=>{
+     run.over = true;
+-    if (run.w){ try { run.w.terminate(); } catch(e){} run.w = null; }
+     const m = run.mark; run.mark = null;
+     sink.end(m, Object.keys(run.wrote).length ? run.patch(run.wrote) : null);
+   };
+   run.to = {
+-    say(){}, wait(){}, resume(){}, lost(){},
++    say(){}, wait(){}, resume(){},
+     prog(){ if (sink.progress) sink.progress(run); },
+     keep: ()=> true,
+     put(r, f, rec){ sink.write(run.patch({ [f.name]: rec })); },
+@@ -272,9 +339,7 @@ export function createRietveld(host, root, o){
+   const stdPhase = ()=> allPhases().find(q=> q.id === pick) || lab6;
+   const phasesFor = f => std ? [stdPhase()] : phases.filter(q=> !(f && q.off[f.name]));
+ 
+-  // ---- the runs: this card's worker, and its view of the run it shows (cur) ----
+-  let worker = null;
+-  const getWorker = ()=> worker || (worker = newWorker());
++  // ---- the runs: the card's view of the run it shows (cur) ----
+   const view = {
+     say: t => setStatus(t),
+     wait: run =>{ showProg(run.wfrac || 0); setStatus(run.said); },
+@@ -285,7 +350,6 @@ export function createRietveld(host, root, o){
+     put: (run, f, rec)=>{ results[f.name] = rec; if (f.name === (host.files()[curIdx()] || {}).name) draw(); },
+     end: run => endRun(run, true),
+     stop: (run, commit)=>{ if (cur === run) cancel(commit); },
+-    lost: w =>{ if (worker === w) worker = null; },
+   };
+ 
+   // The standard's card's own instrumental profile, from its file's result (irfOf).
+@@ -327,7 +391,7 @@ export function createRietveld(host, root, o){
+     const run = cur = { isStd: std, card: host.id == null ? null : host.id, todo, n: todo.length, done: 0, frac: 0,
+       ph: phases.map(copy), std: copy(stdPhase()), start: startFrom, hold: hold.slice(), fit: { ...fit }, irf: std || pre ? null : irf(),
+       fell: [], bgFreed: [], tell, pre: pre || null, waiting: !!pre, stopped: false, over: false, said: '',
+-      base: { ...results }, wrote: {}, mark: host.hold ? host.hold() : null, w: getWorker(), cancelJob: null, to: view,
++      base: { ...results }, wrote: {}, mark: host.hold ? host.hold() : null, jobs: new Set(), flush: null, to: view,
+       own: std ? { files: [], std: todo } : { files: todo, std: [] } };
+     run.patch = w => host.patch ? host.patch(w, run.own) : (s => s);
+     run.stop = commit =>{ if (!run.over && !run.stopped && run.to) run.to.stop(run, commit); };
+@@ -339,14 +403,11 @@ export function createRietveld(host, root, o){
+   }
+   // (the history let go before the run's own commit: the state on show then has the run's
+   // results, and the commit adds no step; one not committed here is the switch's or the
+-  // close's, which the change listeners hear) Its worker the card's again, unless the card
+-  // made another meanwhile (a run taken back from a parked tab).
++  // close's, which the change listeners hear)
+   function endRun(run, commit){
+     run.over = true;
+     if (cur === run){ cur = null; curP = null; busy = false; }
+     hideProg(); syncButtons(); draw();
+-    if (run.w && run.w !== worker){ if (!worker) worker = run.w; else { try { run.w.terminate(); } catch(e){} } }
+-    run.w = null;
+     const m = run.mark; run.mark = null;
+     // (the files' headers from the module's files, as the commit after takes them: those of
+     // a run taken back from a parked tab may have read more on its own)
+@@ -1317,7 +1378,6 @@ export function createRietveld(host, root, o){
+       const run = cur;
+       if (!run) return null;
+       cur = null; curP = null; busy = false;
+-      if (worker === run.w) worker = null;
+       run.to = null;
+       hideProg(); setStatus(''); syncButtons();
+       return run;
+@@ -1335,9 +1395,9 @@ export function createRietveld(host, root, o){
+        ends as the kind switch ends it (cancel(false): the card goes, its last state is the
+        history's), nothing drawn after, and its worker goes with the engine's caches. Up to
+        v483 a card closed mid-run kept refining unseen, drew its 3D views on the detached
+-       card when it ended, and every card that had refined left its worker alive. */
++       card when it ended, and every card that had refined left its worker alive (the pool's
++       end a while after, now). */
+     destroy(){ gone = true; cancel(false);
+-      if (worker){ try { worker.terminate(); } catch(e){} worker = null; }
+       closeSettings(); setModal.remove(); if (cellV) cellV.destroy(); solidViews.forEach(({ view })=> view.destroy()); solidViews = []; ac.abort(); },
+     // The card's state as saved (stateOf).
+     snapshot(){ return stateOf({ phases, std, lab6, pick, start: startFrom, hold, fit, nextId, sel, results, view: res ? { sizeBy, resNorm } : null }); },

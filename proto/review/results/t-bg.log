@@ -1,0 +1,70 @@
+TAP version 13
+# Subtest: left while it refines: nothing asked; its results go into the parked tab, the database, its history; shown again, one step
+ok 1 - left while it refines: nothing asked; its results go into the parked tab, the database, its history; shown again, one step
+  ---
+  duration_ms: 6047.894652
+  type: 'test'
+  ...
+# Subtest: shown again while it refines: its card takes it back (Cancel, progress, rows locked); Cancel there stops it as on show
+ok 2 - shown again while it refines: its card takes it back (Cancel, progress, rows locked); Cancel there stops it as on show
+  ---
+  duration_ms: 5148.581198
+  type: 'test'
+  ...
+# Subtest: two tabs refining at once, parked, a third on show: each its own results and its own step
+ok 3 - two tabs refining at once, parked, a third on show: each its own results and its own step
+  ---
+  duration_ms: 5873.700521
+  type: 'test'
+  ...
+# Subtest: the parked tab closed while it refines: asked, then stopped, nothing written after; its project deleted: stopped
+ok 4 - the parked tab closed while it refines: asked, then stopped, nothing written after; its project deleted: stopped
+  ---
+  duration_ms: 7118.883417
+  type: 'test'
+  ...
+# Subtest: its project exported from the list mid-run: what is saved; Save on closing: what was written so far
+ok 5 - its project exported from the list mid-run: what is saved; Save on closing: what was written so far
+  ---
+  duration_ms: 6018.669217
+  type: 'test'
+  ...
+# Subtest: reloaded while a parked tab refines: the results written so far come back, unsaved; nothing runs
+ok 6 - reloaded while a parked tab refines: the results written so far come back, unsaved; nothing runs
+  ---
+  duration_ms: 4380.65091
+  type: 'test'
+  ...
+# Subtest: Refine the standard first, its tab left at once: the standard's run then the samples' go on parked, a step each, in order
+ok 7 - Refine the standard first, its tab left at once: the standard's run then the samples' go on parked, a step each, in order
+  ---
+  duration_ms: 3398.076748
+  type: 'test'
+  ...
+# Subtest: A: the question about the standard is a centred modal: its three answers, Escape, ×, focus
+ok 8 - A: the question about the standard is a centred modal: its three answers, Escape, ×, focus
+  ---
+  duration_ms: 7940.463919
+  type: 'test'
+  ...
+# Subtest: B: the standard's Settings show only what applies to it; the samples' every row
+ok 9 - B: the standard's Settings show only what applies to it; the samples' every row
+  ---
+  duration_ms: 2644.198336
+  type: 'test'
+  ...
+# Subtest: C: the standard refining, its window closed: every card's Instrumental standard… says so until it ends
+ok 10 - C: the standard refining, its window closed: every card's Instrumental standard… says so until it ends
+  ---
+  duration_ms: 5509.605407
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 54922.351876

@@ -1,0 +1,105 @@
+{
+ "tree": "live",
+ "rows": [
+  {
+   "added": "none",
+   "heap": 2.926715850830078,
+   "rendRss": 128.57421875,
+   "rendPriv": 58.71875,
+   "rendThreads": 13,
+   "gpuPriv": 16.75,
+   "allPss": 202.0908203125,
+   "allPriv": 107.99609375,
+   "nProc": 6
+  },
+  {
+   "added": "xrd",
+   "heap": 14.933032989501953,
+   "rendRss": 212.40625,
+   "rendPriv": 134.1875,
+   "rendThreads": 14,
+   "gpuPriv": 16.984375,
+   "allPss": 287.546875,
+   "allPriv": 185.72265625,
+   "nProc": 6
+  },
+  {
+   "added": "xrd",
+   "heap": 26.354736328125,
+   "rendRss": 273.61328125,
+   "rendPriv": 195.54296875,
+   "rendThreads": 15,
+   "gpuPriv": 17.01953125,
+   "allPss": 350.12890625,
+   "allPriv": 248.44921875,
+   "nProc": 6
+  },
+  {
+   "added": "sem",
+   "heap": 119.40706253051758,
+   "rendRss": 513.9296875,
+   "rendPriv": 430.703125,
+   "rendThreads": 16,
+   "gpuPriv": 16.97265625,
+   "allPss": 651.064453125,
+   "allPriv": 544.26171875,
+   "nProc": 6
+  },
+  {
+   "added": "drs",
+   "heap": 122.83723068237305,
+   "rendRss": 499.02734375,
+   "rendPriv": 415.33984375,
+   "rendThreads": 16,
+   "gpuPriv": 16.984375,
+   "allPss": 637.04296875,
+   "allPriv": 529.75390625,
+   "nProc": 6
+  },
+  {
+   "added": "gc",
+   "heap": 126.05586242675781,
+   "rendRss": 510.08984375,
+   "rendPriv": 424.04296875,
+   "rendThreads": 16,
+   "gpuPriv": 16.98046875,
+   "allPss": 649.609375,
+   "allPriv": 539.9609375,
+   "nProc": 6
+  },
+  {
+   "added": "epr",
+   "heap": 129.15183639526367,
+   "rendRss": 514.140625,
+   "rendPriv": 428.16015625,
+   "rendThreads": 16,
+   "gpuPriv": 16.96484375,
+   "allPss": 653.0107421875,
+   "allPriv": 543.4296875,
+   "nProc": 6
+  },
+  {
+   "added": "sem",
+   "heap": 222.2445182800293,
+   "rendRss": 767.00390625,
+   "rendPriv": 681.97265625,
+   "rendThreads": 17,
+   "gpuPriv": 17.01953125,
+   "allPss": 906.7216796875,
+   "allPriv": 798.0859375,
+   "nProc": 6
+  },
+  {
+   "added": "xrd",
+   "heap": 233.74567031860352,
+   "rendRss": 819.23828125,
+   "rendPriv": 738.4921875,
+   "rendThreads": 18,
+   "gpuPriv": 16.56640625,
+   "allPss": 958.75,
+   "allPriv": 854.40625,
+   "nProc": 6
+  }
+ ],
+ "errors": []
+}

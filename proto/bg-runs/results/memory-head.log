@@ -1,0 +1,27 @@
+0 {"during":{"heap":15.3,"workers":0,"workerHeap":0,"rss":184},"peak":184,"after":{"heap":15.3,"workers":0,"rss":181,"hwm":266}}
+1 {"during":{"heap":16.1,"workers":1,"workerHeap":2.6,"rss":201},"peak":241,"after":{"heap":18.1,"workers":1,"rss":202,"hwm":266}}
+0 {"during":{"heap":18.3,"workers":1,"workerHeap":2,"rss":199},"peak":199,"after":{"heap":18.3,"workers":1,"rss":199,"hwm":266}}
+1 {"during":{"heap":17.5,"workers":1,"workerHeap":3.8,"rss":208},"peak":245,"after":{"heap":18.8,"workers":1,"rss":202,"hwm":266}}
+0 {"during":{"heap":18.8,"workers":1,"workerHeap":2,"rss":205},"peak":205,"after":{"heap":18.8,"workers":1,"rss":205,"hwm":266}}
+1 {"during":{"heap":17.8,"workers":1,"workerHeap":2.6,"rss":208},"peak":252,"after":{"heap":19.1,"workers":1,"rss":206,"hwm":271}}
+head {
+ "0": {
+  "rssDuring": 199,
+  "heapDuring": 18.3,
+  "workersDuring": 1,
+  "workerHeapDuring": 2,
+  "rssPeak": 199,
+  "rssAfter": 199,
+  "workersAfter": 1
+ },
+ "1": {
+  "rssDuring": 208,
+  "heapDuring": 17.5,
+  "workersDuring": 1,
+  "workerHeapDuring": 2.6,
+  "rssPeak": 245,
+  "rssAfter": 202,
+  "workersAfter": 1
+ }
+}
+errors []

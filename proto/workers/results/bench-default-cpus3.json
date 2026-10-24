@@ -1,0 +1,2809 @@
+{
+ "conf": "default",
+ "cpus": "0-2",
+ "runs": [
+  {
+   "k": 1,
+   "hc": 3,
+   "setup": {
+    "cfg": {
+     "cap": 1,
+     "lanes": 1,
+     "idle": 60000,
+     "shared": true
+    },
+    "irf": false
+   },
+   "warmupWall": 7418,
+   "wallMed": 6842,
+   "walls": [
+    7173,
+    6815,
+    6850,
+    6783,
+    6842
+   ],
+   "jobMsMed": 577.5,
+   "jobMs": {
+    "0": 749,
+    "1": 583,
+    "2": 543,
+    "3": 650,
+    "4": 661,
+    "5": 580,
+    "6": 473,
+    "7": 501,
+    "8": 590,
+    "9": 474,
+    "10": 708,
+    "11": 404
+   },
+   "cpuMed": 7.49,
+   "cpuWorkersMed": 6.45,
+   "cpuMainMed": 0.36,
+   "sameAsK1": true,
+   "inOrder": true,
+   "workMed": 7.4,
+   "workP95": 11.1,
+   "workMax": 27,
+   "frameP95": 19,
+   "idleWorkMed": 7.3,
+   "idleFrameP95": 23.3,
+   "longTasks": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "mem0": {
+    "heap": 2.72,
+    "workers": 0,
+    "workerHeaps": [],
+    "workerHeap": 0,
+    "rss": 105,
+    "hwm": 109
+   },
+   "memIdleK": {
+    "heap": 3.29,
+    "workers": 1,
+    "workerHeaps": [
+     2.01
+    ],
+    "workerHeap": 2.01,
+    "rss": 118,
+    "hwm": 159
+   },
+   "peak": {
+    "peak": 162,
+    "hwm": 166,
+    "threads": 1
+   },
+   "errors": [],
+   "reps": [
+    {
+     "wall": 7173,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 758,
+       "engineMs": 243,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 758,
+       "ms": 686,
+       "engineMs": 225,
+       "busy": 1
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 1445,
+       "ms": 543,
+       "engineMs": 208,
+       "busy": 1
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1988,
+       "ms": 650,
+       "engineMs": 199,
+       "busy": 1
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 2637,
+       "ms": 661,
+       "engineMs": 203,
+       "busy": 1
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 3298,
+       "ms": 611,
+       "engineMs": 255,
+       "busy": 1
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 3909,
+       "ms": 473,
+       "engineMs": 181,
+       "busy": 1
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 4382,
+       "ms": 562,
+       "engineMs": 271,
+       "busy": 1
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 4944,
+       "ms": 622,
+       "engineMs": 203,
+       "busy": 1
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 5566,
+       "ms": 474,
+       "engineMs": 229,
+       "busy": 1
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 6040,
+       "ms": 718,
+       "engineMs": 232,
+       "busy": 1
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 6758,
+       "ms": 415,
+       "engineMs": 213,
+       "busy": 1
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": {
+      "peak": 162,
+      "hwm": 166,
+      "threads": 1
+     },
+     "cpu": {
+      "total": 8.47,
+      "main": 0.36,
+      "workers": 6.8,
+      "threads": 1
+     },
+     "probe": {
+      "workMed": 7.3,
+      "workP95": 9.8,
+      "workMax": 11.4,
+      "frameMed": 16.7,
+      "frameP95": 17.2,
+      "n": 35
+     }
+    },
+    {
+     "wall": 6815,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 748,
+       "engineMs": 192,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 748,
+       "ms": 575,
+       "engineMs": 205,
+       "busy": 1
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 1324,
+       "ms": 459,
+       "engineMs": 172,
+       "busy": 1
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1784,
+       "ms": 644,
+       "engineMs": 206,
+       "busy": 1
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 2429,
+       "ms": 602,
+       "engineMs": 159,
+       "busy": 1
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 3031,
+       "ms": 558,
+       "engineMs": 199,
+       "busy": 1
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 3588,
+       "ms": 480,
+       "engineMs": 188,
+       "busy": 1
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 4068,
+       "ms": 547,
+       "engineMs": 239,
+       "busy": 1
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 4616,
+       "ms": 593,
+       "engineMs": 201,
+       "busy": 1
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 5209,
+       "ms": 508,
+       "engineMs": 257,
+       "busy": 1
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 5717,
+       "ms": 694,
+       "engineMs": 237,
+       "busy": 1
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 6410,
+       "ms": 404,
+       "engineMs": 207,
+       "busy": 1
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 7.49,
+      "main": 0.36,
+      "workers": 6.45,
+      "threads": 1
+     },
+     "probe": {
+      "workMed": 7.7,
+      "workP95": 11.1,
+      "workMax": 15.9,
+      "frameMed": 16.7,
+      "frameP95": 19,
+      "n": 34
+     }
+    },
+    {
+     "wall": 6850,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 662,
+       "engineMs": 187,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 662,
+       "ms": 569,
+       "engineMs": 202,
+       "busy": 1
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 1231,
+       "ms": 492,
+       "engineMs": 180,
+       "busy": 1
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1723,
+       "ms": 651,
+       "engineMs": 178,
+       "busy": 1
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 2375,
+       "ms": 719,
+       "engineMs": 217,
+       "busy": 1
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 3094,
+       "ms": 580,
+       "engineMs": 213,
+       "busy": 1
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 3674,
+       "ms": 502,
+       "engineMs": 193,
+       "busy": 1
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 4176,
+       "ms": 501,
+       "engineMs": 199,
+       "busy": 1
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 4677,
+       "ms": 590,
+       "engineMs": 191,
+       "busy": 1
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 5267,
+       "ms": 475,
+       "engineMs": 233,
+       "busy": 1
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 5742,
+       "ms": 708,
+       "engineMs": 208,
+       "busy": 1
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 6450,
+       "ms": 400,
+       "engineMs": 216,
+       "busy": 1
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 7.33,
+      "main": 0.37,
+      "workers": 6.46,
+      "threads": 1
+     },
+     "probe": {
+      "workMed": 7.2,
+      "workP95": 8.6,
+      "workMax": 8.7,
+      "frameMed": 16.7,
+      "frameP95": 17.3,
+      "n": 34
+     }
+    },
+    {
+     "wall": 6783,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 763,
+       "engineMs": 231,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 763,
+       "ms": 583,
+       "engineMs": 216,
+       "busy": 1
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 1346,
+       "ms": 603,
+       "engineMs": 187,
+       "busy": 1
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1949,
+       "ms": 767,
+       "engineMs": 204,
+       "busy": 1
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 2716,
+       "ms": 655,
+       "engineMs": 188,
+       "busy": 1
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 3371,
+       "ms": 532,
+       "engineMs": 213,
+       "busy": 1
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 3903,
+       "ms": 432,
+       "engineMs": 170,
+       "busy": 1
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 4334,
+       "ms": 400,
+       "engineMs": 164,
+       "busy": 1
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 4735,
+       "ms": 462,
+       "engineMs": 154,
+       "busy": 1
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 5197,
+       "ms": 461,
+       "engineMs": 178,
+       "busy": 1
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 5658,
+       "ms": 648,
+       "engineMs": 207,
+       "busy": 1
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 6306,
+       "ms": 478,
+       "engineMs": 239,
+       "busy": 1
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 7.7,
+      "main": 0.35,
+      "workers": 6.27,
+      "threads": 1
+     },
+     "probe": {
+      "workMed": 7.4,
+      "workP95": 12,
+      "workMax": 18.1,
+      "frameMed": 16.7,
+      "frameP95": 22.3,
+      "n": 33
+     }
+    },
+    {
+     "wall": 6842,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 749,
+       "engineMs": 201,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 749,
+       "ms": 632,
+       "engineMs": 220,
+       "busy": 1
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 1381,
+       "ms": 545,
+       "engineMs": 197,
+       "busy": 1
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1926,
+       "ms": 637,
+       "engineMs": 160,
+       "busy": 1
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 2563,
+       "ms": 730,
+       "engineMs": 210,
+       "busy": 1
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 3294,
+       "ms": 596,
+       "engineMs": 210,
+       "busy": 1
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 3890,
+       "ms": 391,
+       "engineMs": 149,
+       "busy": 1
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 4281,
+       "ms": 442,
+       "engineMs": 150,
+       "busy": 1
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 4722,
+       "ms": 569,
+       "engineMs": 190,
+       "busy": 1
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 5291,
+       "ms": 460,
+       "engineMs": 212,
+       "busy": 1
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 5751,
+       "ms": 722,
+       "engineMs": 210,
+       "busy": 1
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 6472,
+       "ms": 369,
+       "engineMs": 164,
+       "busy": 1
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 7.36,
+      "main": 0.36,
+      "workers": 6.43,
+      "threads": 1
+     },
+     "probe": {
+      "workMed": 7.5,
+      "workP95": 12.1,
+      "workMax": 27,
+      "frameMed": 16.7,
+      "frameP95": 20.5,
+      "n": 34
+     }
+    }
+   ]
+  },
+  {
+   "k": 2,
+   "hc": 3,
+   "setup": {
+    "cfg": {
+     "cap": 2,
+     "lanes": 2,
+     "idle": 60000,
+     "shared": true
+    },
+    "irf": false
+   },
+   "warmupWall": 4793,
+   "wallMed": 4183,
+   "walls": [
+    4183,
+    4352,
+    3809,
+    4255,
+    3866
+   ],
+   "jobMsMed": 636,
+   "jobMs": {
+    "0": 965,
+    "1": 830,
+    "2": 583,
+    "3": 724,
+    "4": 789,
+    "5": 644,
+    "6": 563,
+    "7": 507,
+    "8": 600,
+    "9": 498,
+    "10": 762,
+    "11": 486
+   },
+   "cpuMed": 8.61,
+   "cpuWorkersMed": 7.28,
+   "cpuMainMed": 0.23,
+   "sameAsK1": true,
+   "inOrder": true,
+   "workMed": 7.6,
+   "workP95": 14.5,
+   "workMax": 20.9,
+   "frameP95": 18.5,
+   "idleWorkMed": 7.7,
+   "idleFrameP95": 18.9,
+   "longTasks": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "mem0": {
+    "heap": 2.72,
+    "workers": 0,
+    "workerHeaps": [],
+    "workerHeap": 0,
+    "rss": 105,
+    "hwm": 111
+   },
+   "memIdleK": {
+    "heap": 3.28,
+    "workers": 2,
+    "workerHeaps": [
+     1.72,
+     1.7
+    ],
+    "workerHeap": 3.42,
+    "rss": 126,
+    "hwm": 178
+   },
+   "peak": {
+    "peak": 185,
+    "hwm": 186,
+    "threads": 2
+   },
+   "errors": [],
+   "reps": [
+    {
+     "wall": 4183,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 965,
+       "engineMs": 374,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 849,
+       "engineMs": 371,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 849,
+       "ms": 612,
+       "engineMs": 244,
+       "busy": 2
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 965,
+       "ms": 724,
+       "engineMs": 220,
+       "busy": 2
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 1460,
+       "ms": 789,
+       "engineMs": 218,
+       "busy": 2
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1689,
+       "ms": 742,
+       "engineMs": 287,
+       "busy": 2
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 2249,
+       "ms": 632,
+       "engineMs": 293,
+       "busy": 2
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 2431,
+       "ms": 507,
+       "engineMs": 212,
+       "busy": 2
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 2881,
+       "ms": 589,
+       "engineMs": 173,
+       "busy": 2
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2938,
+       "ms": 498,
+       "engineMs": 249,
+       "busy": 2
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 3436,
+       "ms": 747,
+       "engineMs": 227,
+       "busy": 2
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 3470,
+       "ms": 440,
+       "engineMs": 231,
+       "busy": 2
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": {
+      "peak": 185,
+      "hwm": 186,
+      "threads": 2
+     },
+     "cpu": {
+      "total": 8.89,
+      "main": 0.23,
+      "workers": 7.28,
+      "threads": 2
+     },
+     "probe": {
+      "workMed": 7.9,
+      "workP95": 17.5,
+      "workMax": 17.5,
+      "frameMed": 16.7,
+      "frameP95": 18.5,
+      "n": 20
+     }
+    },
+    {
+     "wall": 4352,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1091,
+       "engineMs": 307,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 1,
+       "ms": 926,
+       "engineMs": 305,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 927,
+       "ms": 556,
+       "engineMs": 206,
+       "busy": 2
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1091,
+       "ms": 689,
+       "engineMs": 193,
+       "busy": 2
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 1483,
+       "ms": 750,
+       "engineMs": 211,
+       "busy": 2
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1780,
+       "ms": 644,
+       "engineMs": 247,
+       "busy": 2
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 2233,
+       "ms": 535,
+       "engineMs": 198,
+       "busy": 2
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 2424,
+       "ms": 520,
+       "engineMs": 228,
+       "busy": 2
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 2768,
+       "ms": 747,
+       "engineMs": 221,
+       "busy": 2
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2943,
+       "ms": 616,
+       "engineMs": 330,
+       "busy": 2
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 3515,
+       "ms": 836,
+       "engineMs": 279,
+       "busy": 2
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 3559,
+       "ms": 554,
+       "engineMs": 313,
+       "busy": 2
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 9.36,
+      "main": 0.24,
+      "workers": 7.59,
+      "threads": 2
+     },
+     "probe": {
+      "workMed": 7.6,
+      "workP95": 12.2,
+      "workMax": 12.2,
+      "frameMed": 16.7,
+      "frameP95": 19.3,
+      "n": 21
+     }
+    },
+    {
+     "wall": 3809,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 844,
+       "engineMs": 226,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 744,
+       "engineMs": 259,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 744,
+       "ms": 558,
+       "engineMs": 226,
+       "busy": 2
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 844,
+       "ms": 734,
+       "engineMs": 185,
+       "busy": 2
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 1302,
+       "ms": 805,
+       "engineMs": 256,
+       "busy": 2
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1578,
+       "ms": 544,
+       "engineMs": 170,
+       "busy": 2
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 2107,
+       "ms": 563,
+       "engineMs": 237,
+       "busy": 2
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 2123,
+       "ms": 541,
+       "engineMs": 240,
+       "busy": 2
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 2664,
+       "ms": 600,
+       "engineMs": 181,
+       "busy": 2
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2671,
+       "ms": 407,
+       "engineMs": 197,
+       "busy": 2
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 3078,
+       "ms": 732,
+       "engineMs": 205,
+       "busy": 2
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 3264,
+       "ms": 439,
+       "engineMs": 225,
+       "busy": 2
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 7.94,
+      "main": 0.2,
+      "workers": 7.06,
+      "threads": 2
+     },
+     "probe": {
+      "workMed": 7.5,
+      "workP95": 11.8,
+      "workMax": 11.8,
+      "frameMed": 16.7,
+      "frameP95": 22.5,
+      "n": 19
+     }
+    },
+    {
+     "wall": 4255,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1034,
+       "engineMs": 228,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 1,
+       "ms": 830,
+       "engineMs": 234,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 831,
+       "ms": 583,
+       "engineMs": 223,
+       "busy": 2
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1034,
+       "ms": 640,
+       "engineMs": 144,
+       "busy": 2
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 1414,
+       "ms": 847,
+       "engineMs": 190,
+       "busy": 2
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1675,
+       "ms": 790,
+       "engineMs": 217,
+       "busy": 2
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 2261,
+       "ms": 594,
+       "engineMs": 262,
+       "busy": 2
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 2464,
+       "ms": 493,
+       "engineMs": 198,
+       "busy": 2
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 2855,
+       "ms": 686,
+       "engineMs": 232,
+       "busy": 2
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2957,
+       "ms": 536,
+       "engineMs": 256,
+       "busy": 2
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 3493,
+       "ms": 762,
+       "engineMs": 279,
+       "busy": 2
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 3540,
+       "ms": 488,
+       "engineMs": 246,
+       "busy": 2
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 8.61,
+      "main": 0.24,
+      "workers": 7.65,
+      "threads": 2
+     },
+     "probe": {
+      "workMed": 8,
+      "workP95": 14.5,
+      "workMax": 20.9,
+      "frameMed": 16.7,
+      "frameP95": 17.3,
+      "n": 21
+     }
+    },
+    {
+     "wall": 3866,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 847,
+       "engineMs": 229,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 721,
+       "engineMs": 236,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 721,
+       "ms": 586,
+       "engineMs": 200,
+       "busy": 2
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 847,
+       "ms": 887,
+       "engineMs": 259,
+       "busy": 2
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 1307,
+       "ms": 716,
+       "engineMs": 162,
+       "busy": 2
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1734,
+       "ms": 613,
+       "engineMs": 211,
+       "busy": 2
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 2023,
+       "ms": 546,
+       "engineMs": 201,
+       "busy": 2
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 2347,
+       "ms": 504,
+       "engineMs": 140,
+       "busy": 2
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 2569,
+       "ms": 486,
+       "engineMs": 167,
+       "busy": 2
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2851,
+       "ms": 470,
+       "engineMs": 194,
+       "busy": 2
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 3055,
+       "ms": 811,
+       "engineMs": 225,
+       "busy": 2
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 3321,
+       "ms": 486,
+       "engineMs": 227,
+       "busy": 2
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 8.14,
+      "main": 0.21,
+      "workers": 7.08,
+      "threads": 2
+     },
+     "probe": {
+      "workMed": 7.3,
+      "workP95": 17.3,
+      "workMax": 17.3,
+      "frameMed": 16.7,
+      "frameP95": 17.5,
+      "n": 19
+     }
+    }
+   ]
+  },
+  {
+   "k": 3,
+   "hc": 3,
+   "setup": {
+    "cfg": {
+     "cap": 3,
+     "lanes": 3,
+     "idle": 60000,
+     "shared": true
+    },
+    "irf": false
+   },
+   "warmupWall": 4063,
+   "wallMed": 3303,
+   "walls": [
+    3303,
+    3330,
+    3425,
+    3131,
+    3070
+   ],
+   "jobMsMed": 777,
+   "jobMs": {
+    "0": 1056,
+    "1": 915,
+    "2": 682,
+    "3": 926,
+    "4": 943,
+    "5": 825,
+    "6": 618,
+    "7": 596,
+    "8": 746,
+    "9": 627,
+    "10": 801,
+    "11": 439
+   },
+   "cpuMed": 8.67,
+   "cpuWorkersMed": 7.14,
+   "cpuMainMed": 0.19,
+   "sameAsK1": true,
+   "inOrder": true,
+   "workMed": 7.5,
+   "workP95": 11.6,
+   "workMax": 12.9,
+   "frameP95": 18.7,
+   "idleWorkMed": 7.9,
+   "idleFrameP95": 16.9,
+   "longTasks": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "mem0": {
+    "heap": 2.72,
+    "workers": 0,
+    "workerHeaps": [],
+    "workerHeap": 0,
+    "rss": 105,
+    "hwm": 110
+   },
+   "memIdleK": {
+    "heap": 3.28,
+    "workers": 3,
+    "workerHeaps": [
+     1.66,
+     1.67,
+     1.68
+    ],
+    "workerHeap": 5.01,
+    "rss": 132,
+    "hwm": 211
+   },
+   "peak": {
+    "peak": 193,
+    "hwm": 211,
+    "threads": 3
+   },
+   "errors": [],
+   "reps": [
+    {
+     "wall": 3303,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1154,
+       "engineMs": 431,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 915,
+       "engineMs": 394,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 0,
+       "ms": 913,
+       "engineMs": 430,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 913,
+       "ms": 929,
+       "engineMs": 304,
+       "busy": 3
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 915,
+       "ms": 947,
+       "engineMs": 372,
+       "busy": 3
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1154,
+       "ms": 840,
+       "engineMs": 295,
+       "busy": 3
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1843,
+       "ms": 610,
+       "engineMs": 346,
+       "busy": 3
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1862,
+       "ms": 577,
+       "engineMs": 285,
+       "busy": 3
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 1995,
+       "ms": 746,
+       "engineMs": 297,
+       "busy": 3
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2439,
+       "ms": 627,
+       "engineMs": 290,
+       "busy": 3
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2453,
+       "ms": 850,
+       "engineMs": 244,
+       "busy": 3
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2740,
+       "ms": 528,
+       "engineMs": 312,
+       "busy": 3
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": {
+      "peak": 193,
+      "hwm": 211,
+      "threads": 3
+     },
+     "cpu": {
+      "total": 9.04,
+      "main": 0.2,
+      "workers": 7.34,
+      "threads": 3
+     },
+     "probe": {
+      "workMed": 7.3,
+      "workP95": 12.9,
+      "workMax": 12.9,
+      "frameMed": 16.7,
+      "frameP95": 19.3,
+      "n": 16
+     }
+    },
+    {
+     "wall": 3330,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1079,
+       "engineMs": 335,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 1015,
+       "engineMs": 414,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 0,
+       "ms": 682,
+       "engineMs": 255,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 682,
+       "ms": 870,
+       "engineMs": 348,
+       "busy": 3
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 1015,
+       "ms": 844,
+       "engineMs": 234,
+       "busy": 3
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1079,
+       "ms": 774,
+       "engineMs": 223,
+       "busy": 3
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1552,
+       "ms": 618,
+       "engineMs": 256,
+       "busy": 3
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1853,
+       "ms": 612,
+       "engineMs": 263,
+       "busy": 3
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 1859,
+       "ms": 802,
+       "engineMs": 261,
+       "busy": 3
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2170,
+       "ms": 638,
+       "engineMs": 280,
+       "busy": 3
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2465,
+       "ms": 865,
+       "engineMs": 315,
+       "busy": 3
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2661,
+       "ms": 504,
+       "engineMs": 307,
+       "busy": 3
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 8.67,
+      "main": 0.19,
+      "workers": 7.11,
+      "threads": 3
+     },
+     "probe": {
+      "workMed": 7.5,
+      "workP95": 10.1,
+      "workMax": 10.1,
+      "frameMed": 16.7,
+      "frameP95": 18.1,
+      "n": 16
+     }
+    },
+    {
+     "wall": 3425,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 996,
+       "engineMs": 293,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 734,
+       "engineMs": 268,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 0,
+       "ms": 780,
+       "engineMs": 301,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 734,
+       "ms": 926,
+       "engineMs": 314,
+       "busy": 3
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 781,
+       "ms": 1308,
+       "engineMs": 399,
+       "busy": 3
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 996,
+       "ms": 992,
+       "engineMs": 328,
+       "busy": 3
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1661,
+       "ms": 746,
+       "engineMs": 315,
+       "busy": 3
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1988,
+       "ms": 637,
+       "engineMs": 222,
+       "busy": 3
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 2089,
+       "ms": 884,
+       "engineMs": 251,
+       "busy": 3
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2407,
+       "ms": 638,
+       "engineMs": 316,
+       "busy": 3
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2624,
+       "ms": 801,
+       "engineMs": 367,
+       "busy": 3
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2973,
+       "ms": 439,
+       "engineMs": 239,
+       "busy": 3
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 9.38,
+      "main": 0.22,
+      "workers": 7.77,
+      "threads": 3
+     },
+     "probe": {
+      "workMed": 9.5,
+      "workP95": 11.7,
+      "workMax": 11.7,
+      "frameMed": 16.7,
+      "frameP95": 17.9,
+      "n": 17
+     }
+    },
+    {
+     "wall": 3131,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1056,
+       "engineMs": 300,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 987,
+       "engineMs": 334,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 0,
+       "ms": 669,
+       "engineMs": 243,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 670,
+       "ms": 1033,
+       "engineMs": 310,
+       "busy": 3
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 987,
+       "ms": 913,
+       "engineMs": 247,
+       "busy": 3
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1056,
+       "ms": 696,
+       "engineMs": 274,
+       "busy": 3
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1702,
+       "ms": 642,
+       "engineMs": 196,
+       "busy": 3
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1752,
+       "ms": 511,
+       "engineMs": 204,
+       "busy": 3
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 1900,
+       "ms": 719,
+       "engineMs": 212,
+       "busy": 3
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2263,
+       "ms": 528,
+       "engineMs": 262,
+       "busy": 3
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2344,
+       "ms": 787,
+       "engineMs": 221,
+       "busy": 3
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2618,
+       "ms": 405,
+       "engineMs": 209,
+       "busy": 3
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 8.31,
+      "main": 0.17,
+      "workers": 7.12,
+      "threads": 3
+     },
+     "probe": {
+      "workMed": 7.4,
+      "workP95": 11.6,
+      "workMax": 11.6,
+      "frameMed": 16.7,
+      "frameP95": 18.7,
+      "n": 15
+     }
+    },
+    {
+     "wall": 3070,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 922,
+       "engineMs": 229,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 731,
+       "engineMs": 267,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 0,
+       "ms": 570,
+       "engineMs": 230,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 570,
+       "ms": 886,
+       "engineMs": 221,
+       "busy": 3
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 731,
+       "ms": 943,
+       "engineMs": 284,
+       "busy": 3
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 922,
+       "ms": 825,
+       "engineMs": 289,
+       "busy": 3
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1455,
+       "ms": 538,
+       "engineMs": 182,
+       "busy": 3
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1674,
+       "ms": 596,
+       "engineMs": 195,
+       "busy": 3
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 1748,
+       "ms": 693,
+       "engineMs": 187,
+       "busy": 3
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 1993,
+       "ms": 537,
+       "engineMs": 232,
+       "busy": 3
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2270,
+       "ms": 799,
+       "engineMs": 266,
+       "busy": 3
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2441,
+       "ms": 423,
+       "engineMs": 216,
+       "busy": 3
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 8.07,
+      "main": 0.18,
+      "workers": 7.14,
+      "threads": 3
+     },
+     "probe": {
+      "workMed": 7.5,
+      "workP95": 11.1,
+      "workMax": 11.1,
+      "frameMed": 16.7,
+      "frameP95": 20.4,
+      "n": 15
+     }
+    }
+   ]
+  },
+  {
+   "k": 4,
+   "hc": 3,
+   "setup": {
+    "cfg": {
+     "cap": 4,
+     "lanes": 4,
+     "idle": 60000,
+     "shared": true
+    },
+    "irf": false
+   },
+   "warmupWall": 4314,
+   "wallMed": 3262,
+   "walls": [
+    3712,
+    3407,
+    3262,
+    3037,
+    3147
+   ],
+   "jobMsMed": 1035,
+   "jobMs": {
+    "0": 1464,
+    "1": 1227,
+    "2": 964,
+    "3": 1107,
+    "4": 1200,
+    "5": 1069,
+    "6": 890,
+    "7": 974,
+    "8": 909,
+    "9": 774,
+    "10": 1018,
+    "11": 672
+   },
+   "cpuMed": 8.82,
+   "cpuWorkersMed": 7.66,
+   "cpuMainMed": 0.19,
+   "sameAsK1": true,
+   "inOrder": true,
+   "workMed": 7.5,
+   "workP95": 12.1,
+   "workMax": 13.6,
+   "frameP95": 21.6,
+   "idleWorkMed": 7.3,
+   "idleFrameP95": 16.9,
+   "longTasks": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "mem0": {
+    "heap": 2.72,
+    "workers": 0,
+    "workerHeaps": [],
+    "workerHeap": 0,
+    "rss": 105,
+    "hwm": 110
+   },
+   "memIdleK": {
+    "heap": 3.28,
+    "workers": 4,
+    "workerHeaps": [
+     1.65,
+     1.66,
+     1.67,
+     1.65
+    ],
+    "workerHeap": 6.62,
+    "rss": 140,
+    "hwm": 227
+   },
+   "peak": {
+    "peak": 217,
+    "hwm": 227,
+    "threads": 4
+   },
+   "errors": [],
+   "reps": [
+    {
+     "wall": 3712,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1613,
+       "engineMs": 611,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 1386,
+       "engineMs": 650,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 0,
+       "ms": 1179,
+       "engineMs": 507,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 0,
+       "ms": 1491,
+       "engineMs": 535,
+       "busy": 4
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 1180,
+       "ms": 1200,
+       "engineMs": 336,
+       "busy": 4
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1387,
+       "ms": 1253,
+       "engineMs": 491,
+       "busy": 4
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1492,
+       "ms": 989,
+       "engineMs": 347,
+       "busy": 4
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1613,
+       "ms": 1021,
+       "engineMs": 449,
+       "busy": 4
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 2380,
+       "ms": 909,
+       "engineMs": 518,
+       "busy": 4
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2481,
+       "ms": 767,
+       "engineMs": 397,
+       "busy": 4
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2635,
+       "ms": 1077,
+       "engineMs": 430,
+       "busy": 4
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2639,
+       "ms": 791,
+       "engineMs": 475,
+       "busy": 4
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": {
+      "peak": 217,
+      "hwm": 227,
+      "threads": 4
+     },
+     "cpu": {
+      "total": 9.84,
+      "main": 0.21,
+      "workers": 7.89,
+      "threads": 4
+     },
+     "probe": {
+      "workMed": 7.5,
+      "workP95": 12.1,
+      "workMax": 12.1,
+      "frameMed": 16.7,
+      "frameP95": 19.3,
+      "n": 18
+     }
+    },
+    {
+     "wall": 3407,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1464,
+       "engineMs": 501,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 1227,
+       "engineMs": 466,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 0,
+       "ms": 964,
+       "engineMs": 394,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 0,
+       "ms": 1470,
+       "engineMs": 532,
+       "busy": 4
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 964,
+       "ms": 1271,
+       "engineMs": 340,
+       "busy": 4
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1227,
+       "ms": 1190,
+       "engineMs": 335,
+       "busy": 4
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1464,
+       "ms": 890,
+       "engineMs": 298,
+       "busy": 4
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1471,
+       "ms": 876,
+       "engineMs": 309,
+       "busy": 4
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 2235,
+       "ms": 901,
+       "engineMs": 340,
+       "busy": 4
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2347,
+       "ms": 761,
+       "engineMs": 360,
+       "busy": 4
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2353,
+       "ms": 1054,
+       "engineMs": 458,
+       "busy": 4
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2417,
+       "ms": 672,
+       "engineMs": 374,
+       "busy": 4
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 9.14,
+      "main": 0.21,
+      "workers": 7.82,
+      "threads": 4
+     },
+     "probe": {
+      "workMed": 7.9,
+      "workP95": 12.4,
+      "workMax": 12.4,
+      "frameMed": 16.7,
+      "frameP95": 23.1,
+      "n": 17
+     }
+    },
+    {
+     "wall": 3262,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1560,
+       "engineMs": 393,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 1263,
+       "engineMs": 415,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 1,
+       "ms": 745,
+       "engineMs": 301,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1,
+       "ms": 1107,
+       "engineMs": 290,
+       "busy": 4
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 745,
+       "ms": 1159,
+       "engineMs": 343,
+       "busy": 4
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1108,
+       "ms": 1054,
+       "engineMs": 333,
+       "busy": 4
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1264,
+       "ms": 1064,
+       "engineMs": 400,
+       "busy": 4
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1560,
+       "ms": 983,
+       "engineMs": 326,
+       "busy": 4
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 1905,
+       "ms": 1049,
+       "engineMs": 432,
+       "busy": 4
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2161,
+       "ms": 797,
+       "engineMs": 379,
+       "busy": 4
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2328,
+       "ms": 934,
+       "engineMs": 310,
+       "busy": 4
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2543,
+       "ms": 560,
+       "engineMs": 329,
+       "busy": 4
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 8.82,
+      "main": 0.19,
+      "workers": 7.66,
+      "threads": 4
+     },
+     "probe": {
+      "workMed": 7.2,
+      "workP95": 8.6,
+      "workMax": 8.6,
+      "frameMed": 16.7,
+      "frameP95": 20,
+      "n": 16
+     }
+    },
+    {
+     "wall": 3037,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1162,
+       "engineMs": 383,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 0,
+       "ms": 923,
+       "engineMs": 434,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 0,
+       "ms": 925,
+       "engineMs": 277,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1,
+       "ms": 1067,
+       "engineMs": 339,
+       "busy": 4
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 923,
+       "ms": 1476,
+       "engineMs": 358,
+       "busy": 4
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 926,
+       "ms": 925,
+       "engineMs": 381,
+       "busy": 4
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1067,
+       "ms": 841,
+       "engineMs": 219,
+       "busy": 4
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1162,
+       "ms": 974,
+       "engineMs": 409,
+       "busy": 4
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 1851,
+       "ms": 877,
+       "engineMs": 340,
+       "busy": 4
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 1908,
+       "ms": 774,
+       "engineMs": 398,
+       "busy": 4
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2136,
+       "ms": 902,
+       "engineMs": 315,
+       "busy": 4
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2399,
+       "ms": 546,
+       "engineMs": 343,
+       "busy": 4
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 8.29,
+      "main": 0.19,
+      "workers": 7.04,
+      "threads": 4
+     },
+     "probe": {
+      "workMed": 7.3,
+      "workP95": 13.6,
+      "workMax": 13.6,
+      "frameMed": 16.7,
+      "frameP95": 21.6,
+      "n": 15
+     }
+    },
+    {
+     "wall": 3147,
+     "jobs": [
+      {
+       "name": "s00.xrdml",
+       "start": 0,
+       "ms": 1379,
+       "engineMs": 448,
+       "busy": 1
+      },
+      {
+       "name": "s01.xrdml",
+       "start": 1,
+       "ms": 1101,
+       "engineMs": 468,
+       "busy": 2
+      },
+      {
+       "name": "s02.xrdml",
+       "start": 1,
+       "ms": 1056,
+       "engineMs": 543,
+       "busy": 3
+      },
+      {
+       "name": "s03.xrdml",
+       "start": 1,
+       "ms": 1087,
+       "engineMs": 376,
+       "busy": 4
+      },
+      {
+       "name": "s04.xrdml",
+       "start": 1057,
+       "ms": 1072,
+       "engineMs": 386,
+       "busy": 4
+      },
+      {
+       "name": "s05.xrdml",
+       "start": 1088,
+       "ms": 1069,
+       "engineMs": 368,
+       "busy": 4
+      },
+      {
+       "name": "s06.xrdml",
+       "start": 1103,
+       "ms": 616,
+       "engineMs": 232,
+       "busy": 4
+      },
+      {
+       "name": "s07.xrdml",
+       "start": 1379,
+       "ms": 693,
+       "engineMs": 279,
+       "busy": 4
+      },
+      {
+       "name": "s08.xrdml",
+       "start": 1718,
+       "ms": 1075,
+       "engineMs": 407,
+       "busy": 4
+      },
+      {
+       "name": "s09.xrdml",
+       "start": 2072,
+       "ms": 847,
+       "engineMs": 508,
+       "busy": 4
+      },
+      {
+       "name": "s10.xrdml",
+       "start": 2129,
+       "ms": 1018,
+       "engineMs": 460,
+       "busy": 4
+      },
+      {
+       "name": "s11.xrdml",
+       "start": 2158,
+       "ms": 701,
+       "engineMs": 393,
+       "busy": 4
+      }
+     ],
+     "order": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ],
+     "longs": [],
+     "peak": null,
+     "cpu": {
+      "total": 8.62,
+      "main": 0.18,
+      "workers": 7.12,
+      "threads": 4
+     },
+     "probe": {
+      "workMed": 8,
+      "workP95": 12.1,
+      "workMax": 12.1,
+      "frameMed": 16.7,
+      "frameP95": 22.2,
+      "n": 15
+     }
+    }
+   ]
+  }
+ ],
+ "method": "see the head of bench.mjs",
+ "N": 621118,
+ "load": [
+  3.29,
+  2.53,
+  2.08
+ ],
+ "table": [
+  {
+   "k": 1,
+   "wall": 6842,
+   "speedup": 1,
+   "jobMs": 577.5,
+   "cpu": 7.49,
+   "cpuWorkers": 6.45,
+   "use": 0.94,
+   "same": true,
+   "inOrder": true,
+   "workMed": 7.4,
+   "workP95": 11.1,
+   "longTasks": 0,
+   "rssIdle": 118,
+   "rss0": 105,
+   "rssPeak": 162
+  },
+  {
+   "k": 2,
+   "wall": 4183,
+   "speedup": 1.64,
+   "jobMs": 636,
+   "cpu": 8.61,
+   "cpuWorkers": 7.28,
+   "use": 1.74,
+   "same": true,
+   "inOrder": true,
+   "workMed": 7.6,
+   "workP95": 14.5,
+   "longTasks": 0,
+   "rssIdle": 126,
+   "rss0": 105,
+   "rssPeak": 185
+  },
+  {
+   "k": 3,
+   "wall": 3303,
+   "speedup": 2.07,
+   "jobMs": 777,
+   "cpu": 8.67,
+   "cpuWorkers": 7.14,
+   "use": 2.16,
+   "same": true,
+   "inOrder": true,
+   "workMed": 7.5,
+   "workP95": 11.6,
+   "longTasks": 0,
+   "rssIdle": 132,
+   "rss0": 105,
+   "rssPeak": 193
+  },
+  {
+   "k": 4,
+   "wall": 3262,
+   "speedup": 2.1,
+   "jobMs": 1035,
+   "cpu": 8.82,
+   "cpuWorkers": 7.66,
+   "use": 2.35,
+   "same": true,
+   "inOrder": true,
+   "workMed": 7.5,
+   "workP95": 12.1,
+   "longTasks": 0,
+   "rssIdle": 140,
+   "rss0": 105,
+   "rssPeak": 217
+  }
+ ]
+}

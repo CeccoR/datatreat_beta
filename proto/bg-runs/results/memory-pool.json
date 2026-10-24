@@ -1,0 +1,237 @@
+{
+ "mode": "pool",
+ "sum": {
+  "0": {
+   "rssDuring": 207,
+   "heapDuring": 19.2,
+   "workersDuring": 3,
+   "workerHeapDuring": 6,
+   "rssPeak": 207,
+   "rssAfter": 206,
+   "workersAfter": 3
+  },
+  "1": {
+   "rssDuring": 253,
+   "heapDuring": 19.6,
+   "workersDuring": 3,
+   "workerHeapDuring": 6.4,
+   "rssPeak": 253,
+   "rssAfter": 213,
+   "workersAfter": 3
+  },
+  "2": {
+   "rssDuring": 254,
+   "heapDuring": 19.9,
+   "workersDuring": 3,
+   "workerHeapDuring": 7.8,
+   "rssPeak": 281,
+   "rssAfter": 201,
+   "workersAfter": 3
+  },
+  "3": {
+   "rssDuring": 256,
+   "heapDuring": 20.6,
+   "workersDuring": 3,
+   "workerHeapDuring": 7.2,
+   "rssPeak": 302,
+   "rssAfter": 203,
+   "workersAfter": 3
+  }
+ },
+ "raw": {
+  "0": [
+   {
+    "during": {
+     "heap": 15.3,
+     "workers": 0,
+     "workerHeap": 0,
+     "rss": 190
+    },
+    "peak": 190,
+    "after": {
+     "heap": 15.3,
+     "workers": 0,
+     "rss": 183,
+     "hwm": 266
+    }
+   },
+   {
+    "during": {
+     "heap": 19.2,
+     "workers": 3,
+     "workerHeap": 6,
+     "rss": 215
+    },
+    "peak": 215,
+    "after": {
+     "heap": 19.2,
+     "workers": 3,
+     "rss": 214,
+     "hwm": 407
+    }
+   },
+   {
+    "during": {
+     "heap": 20.6,
+     "workers": 3,
+     "workerHeap": 6.1,
+     "rss": 207
+    },
+    "peak": 207,
+    "after": {
+     "heap": 20.6,
+     "workers": 3,
+     "rss": 206,
+     "hwm": 435
+    }
+   }
+  ],
+  "1": [
+   {
+    "during": {
+     "heap": 15.9,
+     "workers": 3,
+     "workerHeap": 5,
+     "rss": 229
+    },
+    "peak": 230,
+    "after": {
+     "heap": 15.9,
+     "workers": 3,
+     "rss": 195,
+     "hwm": 319
+    }
+   },
+   {
+    "during": {
+     "heap": 19.6,
+     "workers": 3,
+     "workerHeap": 6.4,
+     "rss": 253
+    },
+    "peak": 253,
+    "after": {
+     "heap": 19.5,
+     "workers": 3,
+     "rss": 220,
+     "hwm": 407
+    }
+   },
+   {
+    "during": {
+     "heap": 20.8,
+     "workers": 3,
+     "workerHeap": 7.2,
+     "rss": 256
+    },
+    "peak": 258,
+    "after": {
+     "heap": 20.7,
+     "workers": 3,
+     "rss": 213,
+     "hwm": 435
+    }
+   }
+  ],
+  "2": [
+   {
+    "during": {
+     "heap": 18.6,
+     "workers": 3,
+     "workerHeap": 6.8,
+     "rss": 254
+    },
+    "peak": 294,
+    "after": {
+     "heap": 18.5,
+     "workers": 3,
+     "rss": 204,
+     "hwm": 346
+    }
+   },
+   {
+    "during": {
+     "heap": 19.9,
+     "workers": 3,
+     "workerHeap": 8.6,
+     "rss": 255
+    },
+    "peak": 274,
+    "after": {
+     "heap": 20,
+     "workers": 3,
+     "rss": 199,
+     "hwm": 407
+    }
+   },
+   {
+    "during": {
+     "heap": 21.1,
+     "workers": 3,
+     "workerHeap": 7.8,
+     "rss": 249
+    },
+    "peak": 281,
+    "after": {
+     "heap": 21.1,
+     "workers": 3,
+     "rss": 201,
+     "hwm": 435
+    }
+   }
+  ],
+  "3": [
+   {
+    "during": {
+     "heap": 19.2,
+     "workers": 3,
+     "workerHeap": 6.6,
+     "rss": 260
+    },
+    "peak": 300,
+    "after": {
+     "heap": 19.2,
+     "workers": 3,
+     "rss": 208,
+     "hwm": 407
+    }
+   },
+   {
+    "during": {
+     "heap": 20.6,
+     "workers": 3,
+     "workerHeap": 7.4,
+     "rss": 238
+    },
+    "peak": 310,
+    "after": {
+     "heap": 20.6,
+     "workers": 3,
+     "rss": 200,
+     "hwm": 435
+    }
+   },
+   {
+    "during": {
+     "heap": 21.7,
+     "workers": 3,
+     "workerHeap": 7.2,
+     "rss": 256
+    },
+    "peak": 302,
+    "after": {
+     "heap": 21.6,
+     "workers": 3,
+     "rss": 203,
+     "hwm": 456
+    }
+   }
+  ]
+ },
+ "load": [
+  2.34,
+  2.37,
+  2.04
+ ],
+ "errors": []
+}

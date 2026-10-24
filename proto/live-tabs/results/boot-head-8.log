@@ -1,0 +1,7 @@
+head 8 parked rep 0 tab on show 1005 ms  long tasks {"n":2,"ms":586,"max":432}
+head 8 parked rep 1 tab on show 915 ms  long tasks {"n":3,"ms":604,"max":405}
+head 8 parked rep 2 tab on show 909 ms  long tasks {"n":3,"ms":627,"max":412}
+head 8 parked rep 3 tab on show 927 ms  long tasks {"n":3,"ms":673,"max":440}
+head 8 parked rep 4 tab on show 911 ms  long tasks {"n":3,"ms":642,"max":421}
+head 8 parked {"shownMed":915.1,"shown":[1004.9,915.1,908.5,927.3,910.5],"allMed":null,"longMsMed":627,"longMaxMed":421,"mem":{"heap":196.8,"rss":382.6,"pss":329.1,"workers":0,"frames":0}}
+errors []

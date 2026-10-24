@@ -1,0 +1,16 @@
+left {"parked":{"n":12,"identical":true,"dirty":true,"star":true},"hist":{"before":3,"after":4,"oneStep":true},"record":{"n":12,"firstN":12,"readMs":95,"identical":true,"dirty":true,"msAfterEnd":179},"shown":true,"undo":0,"redo":true}
+pingpong {"identical":true,"n":12,"steps":2,"top":12}
+reload {"parkedAtReload":3,"recordAtReload":3,"back":3,"identical":true,"running":false,"dirty":true}
+left {"parked":{"n":12,"identical":true,"dirty":true,"star":true},"hist":{"before":1,"after":3,"oneStep":true},"record":{"n":12,"firstN":12,"readMs":66,"identical":true,"dirty":true,"msAfterEnd":159},"shown":true,"undo":0,"redo":true}
+pingpong {"identical":true,"n":12,"steps":2,"top":12}
+reload {"parkedAtReload":3,"recordAtReload":3,"back":3,"identical":true,"running":false,"dirty":true}
+left {"parked":{"n":12,"identical":true,"dirty":true,"star":true},"hist":{"before":1,"after":3,"oneStep":true},"record":{"n":12,"firstN":12,"readMs":72,"identical":true,"dirty":true,"msAfterEnd":157},"shown":true,"undo":0,"redo":true}
+pingpong {"identical":true,"n":12,"steps":2,"top":12}
+reload {"parkedAtReload":3,"recordAtReload":3,"back":3,"identical":true,"running":false,"dirty":true}
+left {"parked":{"n":12,"identical":true,"dirty":true,"star":true},"hist":{"before":1,"after":3,"oneStep":true},"record":{"n":12,"firstN":12,"readMs":71,"identical":true,"dirty":true,"msAfterEnd":198},"shown":true,"undo":0,"redo":true}
+pingpong {"identical":true,"n":12,"steps":2,"top":12}
+reload {"parkedAtReload":3,"recordAtReload":3,"back":3,"identical":true,"running":false,"dirty":true}
+left {"parked":{"n":12,"identical":true,"dirty":true,"star":true},"hist":{"before":1,"after":3,"oneStep":true},"record":{"n":12,"firstN":12,"readMs":72,"identical":true,"dirty":true,"msAfterEnd":171},"shown":true,"undo":0,"redo":true}
+pingpong {"identical":true,"n":12,"steps":2,"top":12}
+reload {"parkedAtReload":3,"recordAtReload":3,"back":3,"identical":true,"running":false,"dirty":true}
+errors []

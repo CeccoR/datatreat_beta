@@ -1,0 +1,176 @@
+{
+ "mode": "live",
+ "scenario": "sem",
+ "load0": [
+  1.33,
+  1.21,
+  0.95
+ ],
+ "boot": {
+  "heap": 2.9199905395507812,
+  "heapTotal": 3.53515625,
+  "workers": 0,
+  "workerHeap": 0,
+  "renderer": {
+   "rss": 128.66796875,
+   "pss": 83.4970703125,
+   "priv": 58.03125,
+   "hwm": 130.9609375
+  },
+  "renderers": 1,
+  "rendererRssAll": 128.66796875,
+  "allPss": 182.1337890625,
+  "allRss": 348.74609375,
+  "byType": {
+   "browser": 41,
+   "renderer": 83,
+   "GPU": 33,
+   "network.mojom.NetworkService": 25
+  },
+  "domNodes": 1474
+ },
+ "at": [
+  {
+   "n": 1,
+   "heap": 96.68063735961914,
+   "heapTotal": 97.54296875,
+   "workers": 1,
+   "workerHeap": 0.3431205749511719,
+   "renderer": {
+    "rss": 364.421875,
+    "pss": 314.3388671875,
+    "priv": 284.8671875,
+    "hwm": 528.63671875
+   },
+   "renderers": 1,
+   "rendererRssAll": 364.421875,
+   "allPss": 477.9853515625,
+   "allRss": 655.40625,
+   "byType": {
+    "browser": 103,
+    "renderer": 314,
+    "GPU": 37,
+    "network.mojom.NetworkService": 25
+   },
+   "domNodes": 3354
+  },
+  {
+   "n": 2,
+   "heap": 190.46842575073242,
+   "heapTotal": 191.55078125,
+   "workers": 2,
+   "workerHeap": 0.6861305236816406,
+   "renderer": {
+    "rss": 584.703125,
+    "pss": 532.9384765625,
+    "priv": 501.83984375,
+    "hwm": 750.0390625
+   },
+   "renderers": 1,
+   "rendererRssAll": 584.703125,
+   "allPss": 700.8525390625,
+   "allRss": 881.76171875,
+   "byType": {
+    "browser": 105,
+    "renderer": 533,
+    "GPU": 38,
+    "network.mojom.NetworkService": 25
+   },
+   "domNodes": 5233
+  },
+  {
+   "n": 4,
+   "heap": 375.9455032348633,
+   "heapTotal": 376.99609375,
+   "workers": 4,
+   "workerHeap": 1.3825340270996094,
+   "renderer": {
+    "rss": 1014.8828125,
+    "pss": 961.8583984375,
+    "priv": 929.5,
+    "hwm": 1236.328125
+   },
+   "renderers": 1,
+   "rendererRssAll": 1014.8828125,
+   "allPss": 1133.3251953125,
+   "allRss": 1316.7578125,
+   "byType": {
+    "browser": 105,
+    "renderer": 962,
+    "GPU": 41,
+    "network.mojom.NetworkService": 25
+   },
+   "domNodes": 8991
+  },
+  {
+   "n": 8,
+   "heap": 745.2238464355469,
+   "heapTotal": 746.81640625,
+   "workers": 8,
+   "workerHeap": 2.760395050048828,
+   "renderer": {
+    "rss": 1877.32421875,
+    "pss": 1821.8955078125,
+    "priv": 1787.16015625,
+    "hwm": 2181.50390625
+   },
+   "renderers": 1,
+   "rendererRssAll": 1877.32421875,
+   "allPss": 1998.4736328125,
+   "allRss": 2186.8125,
+   "byType": {
+    "browser": 107,
+    "renderer": 1822,
+    "GPU": 44,
+    "network.mojom.NetworkService": 26
+   },
+   "domNodes": 16507
+  }
+ ],
+ "openMs": [
+  1978,
+  2299,
+  2218,
+  3564,
+  3007,
+  3720,
+  3424,
+  3655
+ ],
+ "perTab": [
+  {
+   "n": 1,
+   "heapPerTab": 93.8,
+   "rssPerTab": 235.8,
+   "pssPerTab": 230.8,
+   "allPssPerTab": 295.9
+  },
+  {
+   "n": 2,
+   "heapPerTab": 93.8,
+   "rssPerTab": 228,
+   "pssPerTab": 224.7,
+   "allPssPerTab": 259.4
+  },
+  {
+   "n": 4,
+   "heapPerTab": 93.3,
+   "rssPerTab": 221.6,
+   "pssPerTab": 219.6,
+   "allPssPerTab": 237.8
+  },
+  {
+   "n": 8,
+   "heapPerTab": 92.8,
+   "rssPerTab": 218.6,
+   "pssPerTab": 217.3,
+   "allPssPerTab": 227
+  }
+ ],
+ "errors": [],
+ "load1": [
+  1.13,
+  1.18,
+  0.94
+ ]
+}

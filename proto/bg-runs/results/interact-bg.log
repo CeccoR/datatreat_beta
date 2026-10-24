@@ -1,0 +1,5 @@
+none next 64.8 75.4 109.9 smooth 117.8 135 136.3 restarts 0
+own next 66.5 111.5 141.4 smooth 123.1 151.3 152.4 restarts 2
+parked1 next 66.5 78.4 83.9 smooth 138.6 156.9 173.8 restarts 2
+parked2 next 76.9 99.6 114.3 smooth 137.5 178.1 199 restarts 3
+errors []

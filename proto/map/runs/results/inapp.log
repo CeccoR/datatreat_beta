@@ -1,0 +1,33 @@
+rep 0 wall 8052 result handling ms med/max 1.0 207.5 progress med/p95 0.10 0.70 long tasks 3 77,91,199 frame p95 19.4 hist {"n":4,"index":3}
+rep 1 wall 7275 result handling ms med/max 0.7 30.1 progress med/p95 0.10 0.70 long tasks 0  frame p95 18.9 hist {"n":5,"index":4}
+rep 2 wall 7195 result handling ms med/max 0.6 25.8 progress med/p95 0.10 0.70 long tasks 0  frame p95 19.2 hist {"n":6,"index":5}
+rep 3 wall 7262 result handling ms med/max 0.8 31.6 progress med/p95 0.10 0.40 long tasks 0  frame p95 19.4 hist {"n":7,"index":6}
+rep 4 wall 7315 result handling ms med/max 0.8 26.1 progress med/p95 0.10 1.20 long tasks 0  frame p95 19.1 hist {"n":8,"index":7}
+{
+ "wallFirst": 8052,
+ "wallWarmMed": 7268.5,
+ "resultHandlingMed": 0.8000000002793968,
+ "resultHandlingMax": 207.5,
+ "lastResultMed": 27.100000000093132,
+ "progressHandlingMed": 0.10000000009313226,
+ "longTasksPerRun": [
+  3,
+  0,
+  0,
+  0,
+  0
+ ],
+ "longTaskMsPerRun": [
+  367,
+  0,
+  0,
+  0,
+  0
+ ],
+ "load": [
+  2.08,
+  2.34,
+  1.62
+ ],
+ "errors": []
+}

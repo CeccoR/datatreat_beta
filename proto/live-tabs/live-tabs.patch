@@ -1,0 +1,914 @@
+diff --git a/boot-body.js b/boot-body.js
+index 03c6a96..334847d 100644
+--- a/boot-body.js
++++ b/boot-body.js
+@@ -5,6 +5,7 @@
+    instead of flashing Home first. Only the fixed sections are addressable; module
+    sections are reached through an open project tab. */
+ (function(){
++  if (document.documentElement.classList.contains('embed')) return;   // (a live tab's page: the shell has the hash)
+   try {
+     var t = location.hash.slice(1);
+     if (['home','projects','settings'].indexOf(t) < 0) return;
+@@ -30,7 +31,9 @@ function showPwaUpdate(worker){
+   };
+   document.getElementById('pwaUpdateDismiss').onclick = () => t.classList.remove('show');
+ }
+-if ('serviceWorker' in navigator) {
++// (a live tab's page leaves the worker to the shell: a reload of its own on an update would
++// end what runs in it, and the shell reloads them all)
++if ('serviceWorker' in navigator && !document.documentElement.classList.contains('embed')) {
+   let reloading = false;
+   navigator.serviceWorker.addEventListener('controllerchange', () => {
+     if (reloading) return; reloading = true; location.reload();
+diff --git a/boot-head.js b/boot-head.js
+index 0f2e73b..0c84d51 100644
+--- a/boot-head.js
++++ b/boot-head.js
+@@ -10,3 +10,17 @@
+   } catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
+   document.documentElement.classList.add('app-booting');
+ })();
++/* Live tabs (prototype): a tab is a page of its own, index.html?embed=<tab id>, in a frame of
++   the window's page (the shell: the bar, Home, Projects, Settings). Its class set before the
++   first paint, so neither shows what belongs to the other. On while 'datatreat-live-tabs' is
++   'on' in localStorage (Settings › Tabs); else the tabs of v517, one module each, parked in
++   turn. */
++(function(){
++  var root = document.documentElement;
++  if (/[?&]embed=/.test(location.search) && window.parent !== window) root.classList.add('embed');
++  else {
++    var on = false;
++    try { on = localStorage.getItem('datatreat-live-tabs') === 'on'; } catch(e){}
++    if (on) root.classList.add('live-shell');
++  }
++})();
+diff --git a/db.js b/db.js
+index 27d4831..f1ddeb5 100644
+--- a/db.js
++++ b/db.js
+@@ -137,8 +137,25 @@ function retitleProject(id, title, updatedAt){
+ 
+ /* ---- Open tabs ---- */
+ async function allTabRecs(){ return txRun(TABS_STORE, 'readonly', t=> reqP(t.objectStore(TABS_STORE).getAll())); }
+-const putTabRec = rec => putRec(TABS_STORE, rec);
++// (keep: the fields the record as stored keeps, read in the same transaction, and none
++// written when it is gone: live tabs, where a tab's page writes its state and the shell its
++// place in the bar)
++const putTabRec = (rec, keep) => putRec(TABS_STORE, rec, keep);
+ const deleteTabRec = id => deleteRec(TABS_STORE, id);
++/* Live tabs (prototype). A tab's record read alone, with the bytes it holds ({ rec, state,
++   missing }), or null when it is gone: what a tab's page restores. And some of a record's
++   own fields written, its state as stored, in one transaction (the shell's: the order, the
++   tab on show, a title given in the Projects list): false when it is gone. */
++async function readTabState(id){
++  const { recs: [rec], got, lost } = await readRecs(TABS_STORE, id);
++  return rec ? { rec, state: fill(rec.state || null, got), missing: lost } : null;
++}
++function patchTabRec(id, fields){
++  return queued(()=> txRun(TABS_STORE, 'readwrite', t=> new Promise(res=>{
++    const os = t.objectStore(TABS_STORE), q = os.get(id);
++    q.onsuccess = ()=>{ const r = q.result; if (r) os.put({ ...r, ...fields }); res(!!r); };
++  })));
++}
+ 
+ /* A record written with its state as stored (stored), in one transaction with the bytes
+    it holds that the store lacks, looked for there and then (a sweep, here or in another
+@@ -146,7 +163,7 @@ const deleteTabRec = id => deleteRec(TABS_STORE, id);
+    and a failure writes neither. The bytes go one file after the other, each from the
+    callback of the one before: a task each, not megabytes copied in one. */
+ const _wrote = new Map();   // store + id → the hashes this window last wrote in that record
+-function putRec(store, rec){
++function putRec(store, rec, keep){
+   return queued(async ()=>{
+     const s = await stored(rec.state);
+     await txRun([store, BYTES], 'readwrite', t=>{
+@@ -162,7 +179,10 @@ function putRec(store, rec){
+         };
+       };
+       next();
+-      t.objectStore(store).put({ ...rec, state: s.state, refs: s.refs });
++      const os = t.objectStore(store), out = { ...rec, state: s.state, refs: s.refs };
++      if (!keep) os.put(out);
++      // (a record gone, its tab closed meanwhile, is not made again)
++      else { const q = os.get(rec.id); q.onsuccess = ()=>{ const was = q.result; if (!was) return; keep.forEach(k=>{ if (k in was) out[k] = was[k]; }); os.put(out); }; }
+     });
+     // A file this record held and holds no more (removed, replaced; or not known, at its
+     // first write here): its bytes may be no record's now, swept a while after (to v516
+@@ -538,5 +558,5 @@ function expand(v, got){
+ }
+ 
+ export { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject,
+-         allTabRecs, allTabStates, putTabRec, deleteTabRec, uid, encode, decode, park, stored,
++         allTabRecs, allTabStates, readTabState, patchTabRec, putTabRec, deleteTabRec, uid, encode, decode, park, stored,
+          hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed };
+diff --git a/figure.js b/figure.js
+index 648ea10..aa7697b 100644
+--- a/figure.js
++++ b/figure.js
+@@ -1,6 +1,6 @@
+ import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
+ import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc } from './utils.js';
+-import { activeTab, TABS } from './tabs.js';
++import { activeTab, TABS, TAB_PAGE } from './tabs.js';
+ 
+ // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
+ // image mime types (and to save an already-built Blob for PNG).
+@@ -1794,8 +1794,12 @@ function rememberSettings(){
+     }
+   }
+   all[memKey()] = snap;
+-  const live = new Set(TABS.map(t=>t.id));
+-  for (const k of Object.keys(all)) if (!live.has(k.slice(0, k.indexOf('/')))) delete all[k];
++  // (a live tab's page knows its own tab alone: the others' memories are left to them, and
++  // its own forgotten as it closes, tabs.js)
++  if (!TAB_PAGE){
++    const live = new Set(TABS.map(t=>t.id));
++    for (const k of Object.keys(all)) if (!live.has(k.slice(0, k.indexOf('/')))) delete all[k];
++  }
+   try { localStorage.setItem(MEM_KEY, JSON.stringify(all)); } catch(e){}
+ }
+ function recallSettings(){
+diff --git a/index.html b/index.html
+index 43fbe34..b6999c6 100644
+--- a/index.html
++++ b/index.html
+@@ -162,6 +162,13 @@
+           <option value=";" selected>; (semicolon)</option>
+           <option value=",">, (comma)</option>
+         </select>
++        <h3 class="txt-head" style="margin:20px 0 6px">Tabs</h3>
++        <div class="instr-block">Live: every tab a page of its own, working while another is on show (a refinement goes on), switched at once; more memory, a tab opened in a few tenths of a second. A prototype. The app reloads on a change.</div>
++        <label class="txt-label" style="margin-top:0">Open tabs</label>
++        <select id="settingLiveTabs">
++          <option value="off" selected>One live at a time</option>
++          <option value="on">Each live (prototype)</option>
++        </select>
+         <h3 class="txt-head" style="margin:20px 0 6px">Keyboard shortcuts</h3>
+         <div class="shortcut-list">
+           <div><span><span class="kbd">&#8592;</span> <span class="kbd">&#8594;</span></span><span>Previous / next sample</span></div>
+diff --git a/sem.js b/sem.js
+index e6f92f1..d5e98f6 100644
+--- a/sem.js
++++ b/sem.js
+@@ -1,4 +1,4 @@
+-import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, flashFieldInvalid } from './utils.js';
++import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, registerTabSleep, flashFieldInvalid } from './utils.js';
+ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
+ 
+ /* =========================================================
+@@ -617,6 +617,18 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   }
+   const hist = registerHistory('sem', semSnapshot, semRestore);
+   registerTabRedraw('sem', ()=>{ if (files.length){ fitWork(); sizeGroups(); fitView(); drawEditor(); drawHist(); } });
++  // Live tabs (prototype): a tab not on show lets its decoded images go, all of them, as
++  // evict does those no longer listed (what their headers say kept): read again from their
++  // bytes as they are drawn, once it is shown. Not while files are read.
++  registerTabSleep('sem', {
++    hide(){
++      if (loading || !decoded.size) return false;
++      for (const [id, e] of decoded) infos.set(id, { ...e.r, pixels: null });
++      decoded.clear(); statsCache.clear(); lutCache.clear();
++      return true;
++    },
++    show(){ if (files.length){ fitWork(); sizeGroups(); fitView(); drawEditor(); drawHist(); } },
++  });
+ 
+   /* ---- Rendering ---- */
+   function renderAll(){
+diff --git a/sessions.js b/sessions.js
+index 4fb1645..514b680 100644
+--- a/sessions.js
++++ b/sessions.js
+@@ -14,7 +14,7 @@ import { allProjects, putProject, deleteProject, retitleProject, readProject, ex
+          hydrate, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed } from './db.js';
+ import { TABS, activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
+          setTabDirty, setTabProject, onTabActivated, onTabLoaded, onCloseSave, initTabs,
+-         persistTab, persistAll, isRestoring, isLive, ensureLive, UNTITLED, notice, renderTabs } from './tabs.js';
++         persistTab, persistAll, isRestoring, isLive, ensureLive, UNTITLED, notice, renderTabs, TAB_PAGE, SHELL } from './tabs.js';
+ 
+ // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
+ // (text over a right-pointing arrow) and the rounded X for delete.
+@@ -435,6 +435,8 @@ function updateBulkState(){
+   });
+ }
+ async function renderList(){
++  // (live tabs: the list is the shell's, drawn again when a tab's page has saved)
++  if (TAB_PAGE){ try { window.parent.postMessage({ dt: 'saved' }, location.origin); } catch(e){} return; }
+   _cache = (await allProjects()).sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+   const wrap = document.getElementById('sessListWrap');
+   if (!wrap) return;
+@@ -691,6 +693,7 @@ document.getElementById('sessListWrap').addEventListener('change', e=>{
+ 
+ document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
+ renderList();
++if (SHELL) window.addEventListener('message', e=>{ if (e.origin === location.origin && e.data && e.data.dt === 'saved') renderList(); });
+ 
+ /* ---- Tab wiring ---- */
+ MODULES.forEach(m=> onModuleChange(m, ()=>{
+@@ -792,12 +795,13 @@ onCloseSave(tab=> doSave(tab.module, false));
+ 
+ initTabs();
+ // The bytes no record holds any more, a while after the page loads (v517); what the
+-// database says of other windows.
+-sweepSoon(30000);
++// database says of other windows. (Live tabs: the shell sweeps and says it, each tab's page
++// writes out its own tab.)
++if (!TAB_PAGE) sweepSoon(30000);
+ // (the bar drawn meanwhile, its + included: tabs can be opened while the restore waits)
+-onDbBlocked(()=>{ renderTabs(); notice('DataTreat is open in another window of an older version: reload or close that window for this one to read and save your projects.'); });
++if (!TAB_PAGE) onDbBlocked(()=>{ renderTabs(); notice('DataTreat is open in another window of an older version: reload or close that window for this one to read and save your projects.'); });
+ onDbClosing(()=>{ try { persistAll(); } catch(e){} });
+-onDbClosed(()=> notice('DataTreat was updated in another window: reload this one to go on saving your work.'));
++if (!TAB_PAGE) onDbClosed(()=> notice('DataTreat was updated in another window: reload this one to go on saving your work.'));
+ 
+ // Flush the active tab immediately when the page is hidden/unloaded (Chrome's
+ // desktop⇄mobile switch reloads the page, tab close, refresh) so changes made in
+diff --git a/style.css b/style.css
+index ec770bc..bbea611 100644
+--- a/style.css
++++ b/style.css
+@@ -3352,3 +3352,19 @@ button.an-add.is-drop { border-color: var(--accent); }
+ .wf-pts { flex: none; min-width: 4.4em; margin: -3px 0 6px auto; line-height: 1.2; text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+ /* (empty, with no file to count on: no room taken, the box one line as its neighbours) */
+ .wf-pts:empty { display: none; }
++
++/* ---- Live tabs (prototype) ----
++   The shell (the window's page) shows a tab as a frame holding that tab's own page, below
++   its top bar; its own module sections and project bar never show. A tab's page (embed)
++   shows its project bar and module, without the header (the logo and the tabs) or the
++   footer. A tab not on show is a frame not displayed. */
++html.live-shell #projectBar { display: none !important; }
++html.live-shell main > section.tab:is(#tab-tauc, #tab-xrd, #tab-gc, #tab-epr, #tab-sem) { display: none !important; }
++html.live-shell.frames-on, html.live-shell.frames-on body { overflow: hidden; }
++.live-frames { position: fixed; left: 0; right: 0; bottom: 0; top: 0; z-index: 10; background: var(--bg); }
++.live-frames[hidden] { display: none; }
++.live-frames > iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
++.live-frames > iframe.off { display: none; }
++/* (measured against: hidden but laid out, its plots kept at their size) */
++.live-frames.off-visibility > iframe.off { display: block; visibility: hidden; }
++html.embed #topbar > header, html.embed footer { display: none !important; }
+diff --git a/tabs.js b/tabs.js
+index 7eb3489..397fdaa 100644
+--- a/tabs.js
++++ b/tabs.js
+@@ -10,11 +10,35 @@
+      serialize the outgoing tab → restore the incoming tab into its module.
+    The tab bar repaints first and the state loads on the next frame, so the click
+    feels immediate even when the restore takes a moment.
++
++   LIVE TABS (prototype, proto/live-tabs). Each tab a page of its own, live at once: the
++   window's page is the SHELL (the bar, Home, Projects, Settings; its own modules idle, for
++   the Projects list's CSV export), and each tab is index.html?embed=<tab id> in a frame of
++   it, a TAB PAGE: its own realm, module, history and workers, its record restored and
++   written by itself (its state; the shell writes the order and the tab on show alone). A
++   switch shows one frame and hides the others: nothing parks, nothing stops. The two talk
++   by postMessage, never by objects (an array of one realm fails another's instanceof).
++   A frame is made when its tab is first shown (lazy), and may be let go (hibernate: its
++   state written, the frame removed, made again when shown) beyond LIVE_MAX frames or
++   after LIVE_IDLE minutes not shown, never while a job runs in it.
+ ========================================================= */
+ import { MODULES, MODULE_LABELS, goTab, getModuleState, restoreModuleState,
+          getModuleHistory, setModuleHistory, confirmBanner, moduleHasData, X_SVG,
+-         onSectionChange, moduleBusy, stopModule } from './utils.js';
+-import { allTabStates, putTabRec, deleteTabRec, uid, encode, park, decode } from './db.js';
++         onSectionChange, moduleBusy, stopModule, tabSleep } from './utils.js';
++import { allTabStates, allTabRecs, readTabState, patchTabRec, putTabRec, deleteTabRec, uid, encode, park, decode } from './db.js';
++
++// This page is one tab's (its id), the shell, or neither (the tabs of v517: boot-head.js).
++const _root = document.documentElement;
++const TAB_PAGE = _root.classList.contains('embed') ? decodeURIComponent((/[?&]embed=([^&#]+)/.exec(location.search) || [])[1] || '') || null : null;
++const SHELL = !TAB_PAGE && _root.classList.contains('live-shell');
++// (prototype knobs, for the measurements: frames made all at once at startup; frames kept
++// at most; minutes a frame not shown is kept; hidden by visibility, laid out, not display)
++const _opt = k =>{ try { return localStorage.getItem('datatreat-live-' + k); } catch(e){ return null; } };
++const LIVE_EAGER = _opt('eager') === '1';
++const LIVE_MAX = +_opt('max') || Infinity;
++const LIVE_IDLE = +_opt('idle') || Infinity;
++const HIDE_BY_VISIBILITY = _opt('hide') === 'visibility';
++const FREE_AFTER = _opt('free') == null ? Infinity : +_opt('free');   // (seconds hidden before a module lets its caches go)
+ 
+ const MAX_TABS = 20;
+ const UNTITLED = 'Untitled project';
+@@ -62,13 +86,19 @@ function tabRec(t, order){
+            state: t.id===_liveId ? park(getModuleState(t.module)) : t.state,
+            updatedAt: Date.now() };
+ }
++// (live tabs: a tab's page writes its record, the order and the tab on show kept as the
++// shell wrote them, and none once it is closed; the shell writes those two alone, and the
++// name of a tab with no frame)
++const KEEP = ['order', 'active'];
++let _closed = false;
+ function persistTab(t){
+-  if (_restoring || !t) return;
+-  try { putTabRec(tabRec(t, tabIndex(t.id))).catch(()=>{}); } catch(e){}
++  if (_restoring || !t || _closed) return Promise.resolve();
++  if (SHELL) return patchTabRec(t.id, shellFields(t)).catch(()=>{});
++  try { return putTabRec(tabRec(t, tabIndex(t.id)), TAB_PAGE ? KEEP : undefined).catch(()=>{}); } catch(e){ return Promise.resolve(); }
+ }
+ function persistAll(){
+   if (_restoring) return;
+-  TABS.forEach(t=>{ try { putTabRec(tabRec(t, tabIndex(t.id))).catch(()=>{}); } catch(e){} });
++  TABS.forEach(t=> persistTab(t));
+ }
+ 
+ /* ---- State swap ---------------------------------------------------------- */
+@@ -115,6 +145,7 @@ function loadTab(t){
+ // the module still holds the tab before it. Up to v468 closing an inactive tab with
+ // "Save" saved the tab on show into the closed one's project.
+ function ensureLive(){
++  if (SHELL) return;   // (the shell's modules hold no tab)
+   const t = activeTab();
+   if (t && _liveId !== t.id) loadTab(t);
+ }
+@@ -148,7 +179,12 @@ function syncProjectBar(t){
+ // Deferring past one paint lets the fade start (opacity/transform animate on the
+ // compositor, so they keep running while the main thread does the restore), then the
+ // charts fill in a moment later instead of the click feeling stuck.
+-function afterPaint(fn){ requestAnimationFrame(()=> requestAnimationFrame(fn)); }
++function afterPaint(fn){
++  // (a tab's page made hidden, at a startup with every frame made: no frame may be painted
++  // there, and what waits on one waits until it is shown; a timer goes on all the same)
++  if (TAB_PAGE){ let done = false; const go = ()=>{ if (!done){ done = true; fn(); } }; requestAnimationFrame(()=> requestAnimationFrame(go)); setTimeout(go, 120); return; }
++  requestAnimationFrame(()=> requestAnimationFrame(fn));
++}
+ 
+ // Module loader: a themed overlay + spinner covering the content below the top bar
+ // while a tab's charts are (re)built on open / tab switch. Shown synchronously so it
+@@ -187,6 +223,7 @@ setTimeout(revealApp, 2500);
+    result has nowhere right to go. So before the live tab is left the user chooses: stop
+    the job, or stay. True when nothing runs, or it was stopped. */
+ async function mayLeaveLive(){
++  if (SHELL) return true;   // (live tabs: a switch leaves everything running)
+   const t = tabById(_liveId);
+   const running = t && moduleBusy(t.module);
+   if (!running) return true;
+@@ -203,6 +240,7 @@ async function switchTo(id){
+ // project that is already open is a no-op: it never steals focus.
+ async function openTab({ module, title, projectId, state, dirty, focus = true }){
+   if (!MODULES.includes(module)) return null;
++  if (TAB_PAGE) return adoptTab({ module, title, projectId, state, dirty, focus });
+   if (projectId){
+     const existing = tabByProject(projectId);
+     if (existing) return existing;   // already open → nothing happens
+@@ -216,6 +254,16 @@ async function openTab({ module, title, projectId, state, dirty, focus = true })
+   if (focus && !await mayLeaveLive()) focus = false;
+   const t = { id: uid(), module, title: title || untitledName(module),
+               projectId: projectId || null, dirty: !!dirty, state: state || null, hist: null };
++  if (SHELL){
++    // Its record first, its state in it: the tab's page reads it as it starts.
++    delete t.state; delete t.hist;
++    TABS.push(t);
++    try { await putTabRec({ id: t.id, module, title: t.title, projectId: t.projectId, dirty: t.dirty, order: TABS.length - 1,
++                            active: false, state: state || null, updatedAt: Date.now() }); }
++    catch(e){ TABS.splice(tabIndex(t.id), 1); notice('The tab could not be opened: this browser\'s storage could not be written.'); return null; }
++    if (focus) activateTab(t.id); else renderTabs();
++    return t;
++  }
+   TABS.push(t);
+   // focus:false opens the tab in the background — opening a project from the
+   // Projects list leaves you on that list.
+@@ -229,6 +277,15 @@ async function openTab({ module, title, projectId, state, dirty, focus = true })
+ function activateTab(id){
+   const t = tabById(id);
+   if (!t) return;
++  if (SHELL){
++    const was = _activeId;
++    _activeId = id;
++    renderTabs();
++    goTab(t.module);
++    showFrame(t);
++    if (was !== id) persistAll();
++    return;
++  }
+   // Already the live tab (we were just off on a fixed section) → only show it back.
+   if (_activeId === id){ goTab(t.module); return; }
+   stashActive();
+@@ -255,7 +312,16 @@ onSectionChange(tab=>{
+ function closeTab(id){
+   const i = tabIndex(id);
+   if (i < 0) return;
++  if (TAB_PAGE){
++    // The tab's page closes itself: its record, its composer memories, then the shell
++    // takes its frame away.
++    _closed = true;
++    deleteTabRec(id).catch(()=>{}).then(()=> toShell({ dt: 'closed' }));
++    forgetFigureMemory(id);
++    return;
++  }
+   const wasActive = TABS[i].id === _activeId;
++  if (SHELL) dropFrame(TABS[i]);
+   // Its job goes with it (a deleted project, a close the user agreed to).
+   if (id === _liveId && moduleBusy(TABS[i].module)) stopModule(TABS[i].module);
+   TABS.splice(i, 1);
+@@ -264,6 +330,7 @@ function closeTab(id){
+   _activeId = null;
+   const next = TABS[i-1] || TABS[i] || null;
+   if (!next){ renderTabs(); goTab('home'); persistAll(); return; }
++  if (SHELL){ activateTab(next.id); return; }
+   _activeId = next.id;
+   renderTabs();
+   goTab(next.module);
+@@ -273,19 +340,23 @@ function closeTab(id){
+ }
+ 
+ // Rename / dirty / project-association updates coming from sessions.js.
++// (live tabs: a tab's page tells the shell, which draws the bar; a name given in the shell
++// goes to the tab's page, or into the record of a tab with no frame)
+ function setTabTitle(id, title){
+   const t = tabById(id); if (!t) return;
+-  t.title = title; renderTabs(); persistTab(t);
++  t.title = title; renderTabs();
++  if (SHELL){ if (t.frame) toFrame(t, { dt: 'title', title }); else patchTabRec(t.id, { title }).catch(()=>{}); return; }
++  metaToShell(t); persistTab(t);
+ }
+ function setTabDirty(id, dirty){
+   const t = tabById(id); if (!t || t.dirty === !!dirty) return;
+-  t.dirty = !!dirty; renderTabs(); persistTab(t);
++  t.dirty = !!dirty; renderTabs(); metaToShell(t); persistTab(t);
+ }
+ function setTabProject(id, projectId, title){
+   const t = tabById(id); if (!t) return;
+   t.projectId = projectId || null;
+   if (title != null) t.title = title;
+-  renderTabs(); persistTab(t);
++  renderTabs(); metaToShell(t); persistTab(t);
+ }
+ 
+ /* ---- Rendering ------------------------------------------------------------
+@@ -294,6 +365,7 @@ function setTabProject(id, projectId, title){
+    opacity, reaches full opacity on tab hover and lights up on its own hover
+    (all in CSS). The native title attribute carries the full label. */
+ function renderTabs(){
++  if (TAB_PAGE) return;   // (the bar is the shell's)
+   const bar = document.getElementById('tabBar');
+   if (!bar) return;
+   bar.innerHTML = '';
+@@ -319,6 +391,9 @@ function renderTabs(){
+       star.className = 'ptab-star'; star.textContent = '*';
+       label.appendChild(star);
+     }
++    // (live tabs: a job running in it, shown or not; a frame let go, to be made again)
++    if (SHELL && t.busy){ const b = document.createElement('span'); b.className = 'ptab-star'; b.textContent = ' ⟳'; b.title = t.busy; label.appendChild(b); }
++    if (SHELL) el.dataset.frame = t.frame ? (t.ready ? 'live' : 'starting') : 'none';
+     const x = document.createElement('button');
+     x.type = 'button'; x.className = 'ptab-x';
+     x.setAttribute('aria-label', 'Close ' + t.title);
+@@ -447,6 +522,14 @@ function onCloseSave(fn){ _saveForClose = fn; }
+ async function requestClose(id){
+   const t = tabById(id);
+   if (!t) return;
++  if (SHELL){
++    // Its page asks, on show (its banners are its own): a saved, unchanged tab with no
++    // frame closes at once, as nothing runs there.
++    if (!t.frame && t.projectId && !t.dirty){ closeTab(id); return; }
++    if (_activeId !== id || !t.frame) activateTab(id);
++    toFrame(t, { dt: 'close?' });
++    return;
++  }
+   // Closing the live tab leaves it: a job running there stops only if the user says so.
+   if (t.id === _liveId && !await mayLeaveLive()) return;
+   // Nothing to lose: an empty file list (whatever the name says) or a saved project
+@@ -473,9 +556,23 @@ function initHomeCards(){
+ }
+ 
+ /* ---- Startup restore ------------------------------------------------------ */
++// Settings › Tabs (live tabs, prototype): the choice kept, the app loaded again with it (each
++// tab's page writes out its tab as it goes).
++(function initLiveSetting(){
++  const sel = document.getElementById('settingLiveTabs');
++  if (!sel || TAB_PAGE) return;
++  sel.value = SHELL ? 'on' : 'off';
++  sel.addEventListener('change', ()=>{
++    try { localStorage.setItem('datatreat-live-tabs', sel.value); } catch(e){}
++    if (!SHELL) persistAll();
++    setTimeout(()=> location.reload(), 300);
++  });
++})();
+ async function initTabs(){
++  if (TAB_PAGE) return initTabPage();
+   initBar();
+   initHomeCards();
++  if (SHELL) return initShell();
+   // The records with their files' bytes, read together (v517); none at all should they
+   // not read: the records stay as they are, for the next load. A file whose bytes are not
+   // stored any more comes back without them (its module says so where they are needed).
+@@ -512,7 +609,227 @@ async function initTabs(){
+   });
+ }
+ 
++/* =========================================================
++   LIVE TABS (prototype): the shell's frames, and a tab page's side
++========================================================= */
++const SAME = location.origin;
++// (a frame's composer memories: figure.js keys them by tab id; a tab's page knows its own
++// tab alone, so its own are forgotten as it closes, the others' left)
++function forgetFigureMemory(id){
++  try {
++    const all = JSON.parse(localStorage.getItem('dt-figure-memory')) || {};
++    let n = 0; for (const k of Object.keys(all)) if (k.startsWith(id + '/')){ delete all[k]; n++; }
++    if (n) localStorage.setItem('dt-figure-memory', JSON.stringify(all));
++  } catch(e){}
++}
++
++/* ---- Tab page ---- */
++function toShell(msg){ if (TAB_PAGE && window.parent !== window) window.parent.postMessage({ ...msg, tab: TAB_PAGE }, SAME); }
++function metaToShell(t){ if (TAB_PAGE) toShell({ dt: 'meta', title: t.title, dirty: !!t.dirty, projectId: t.projectId || null }); }
++// A tab opened from a tab's page (Save as, New project in its bar): its record written
++// here, its state in it, then the shell makes its frame.
++async function adoptTab({ module, title, projectId, state, dirty, focus = true }){
++  const t = { id: uid(), module, title: title || UNTITLED, projectId: projectId || null, dirty: !!dirty };
++  try { await putTabRec({ ...t, order: 1e6, active: false, state: state || null, updatedAt: Date.now() }); }
++  catch(e){ notice('The tab could not be opened: this browser\'s storage could not be written.'); return null; }
++  toShell({ dt: 'adopt', id: t.id, module, title: t.title, projectId: t.projectId, dirty: t.dirty, focus });
++  return t;
++}
++async function initTabPage(){
++  window.addEventListener('message', onShellMessage);
++  let got = null;
++  try { got = await readTabState(TAB_PAGE); } catch(e){}
++  if (!got || !MODULES.includes(got.rec.module)){ revealApp(); toShell({ dt: 'gone' }); return; }
++  if (got.missing) notice(got.missing + (got.missing > 1 ? ' files' : ' file') + ' of this tab ' + (got.missing > 1 ? 'are' : 'is')
++    + ' not stored in this browser any more: ' + (got.missing > 1 ? 'they come' : 'it comes') + ' back without the original bytes.');
++  const r = got.rec;
++  const t = { id: r.id, module: r.module, title: r.title || UNTITLED, projectId: r.projectId || null, dirty: !!r.dirty, state: got.state, hist: null };
++  TABS.push(t);
++  _restoring = true; _onFixed = false; _activeId = t.id;
++  goTab(t.module);
++  syncProjectBar(t);
++  showModuleLoader();
++  afterPaint(()=>{
++    revealApp();
++    loadTabIfActive(t); _restoring = false;
++    toShell({ dt: 'ready', module: t.module });
++    watchBusy(t);
++  });
++}
++// The shell's tab mark for a job running here (a Rietveld refinement), and what it asks
++// before letting the frame go; a look a second.
++function watchBusy(t){
++  let was = null;
++  const look = ()=>{ const b = moduleBusy(t.module) || null; if (b !== was){ was = b; toShell({ dt: 'busy', busy: b }); } };
++  setInterval(look, 1000); look();
++}
++let _slept = false, _sleepTimer = 0;
++async function onShellMessage(e){
++  if (e.origin !== SAME || e.source !== window.parent) return;
++  const m = e.data || {}, t = activeTab();
++  if (!t) return;
++  if (m.dt === 'shown'){
++    // Nothing to draw again: a frame not displayed keeps its size, and draws what comes
++    // meanwhile at it (Chromium runs its frames, timers and workers all the same); a window
++    // resized meanwhile gives it a resize as it is shown, which redraws (plot.js). What the
++    // module let go while hidden (FREE_AFTER) it takes back.
++    clearTimeout(_sleepTimer); _sleepTimer = 0;
++    if (_slept){ _slept = false; tabSleep(t.module, false); }
++  } else if (m.dt === 'hidden'){
++    if (FREE_AFTER < Infinity && !_slept && !_sleepTimer) _sleepTimer = setTimeout(()=>{ _sleepTimer = 0; _slept = tabSleep(t.module, true); }, FREE_AFTER*1000);
++  } else if (m.dt === 'title'){
++    t.title = m.title; persistTab(t);
++    const inp = document.querySelector('.project-name-input'); if (inp) inp.value = m.title;
++  } else if (m.dt === 'close?'){
++    await requestClose(t.id);
++    if (!_closed) toShell({ dt: 'kept' });
++  } else if (m.dt === 'flush'){
++    // Let go (hibernate): not while a job runs; else its state written, then the frame goes.
++    if (moduleBusy(t.module)){ toShell({ dt: 'flushed', ok: false }); return; }
++    await persistTab(t);
++    toShell({ dt: 'flushed', ok: true });
++  } else if (m.dt === 'key'){
++    // A key pressed in the shell while this tab is on show (its bar clicked last): Ctrl+Z/Y, ←/→.
++    document.dispatchEvent(new KeyboardEvent('keydown', { key: m.key, code: m.code, ctrlKey: m.ctrlKey, metaKey: m.metaKey, shiftKey: m.shiftKey, altKey: m.altKey, bubbles: true, cancelable: true }));
++  }
++}
++
++/* ---- Shell ---- */
++let _box = null;
++function shellFields(t){ return { order: tabIndex(t.id), active: t.id === _activeId }; }
++function framesBox(){
++  if (_box) return _box;
++  _box = document.createElement('div');
++  _box.className = 'live-frames' + (HIDE_BY_VISIBILITY ? ' off-visibility' : '');
++  _box.hidden = true;
++  document.body.appendChild(_box);
++  const place = ()=>{ const tb = document.getElementById('topbar'); _box.style.top = (tb ? Math.max(0, Math.round(tb.getBoundingClientRect().bottom)) : 0) + 'px'; };
++  place();
++  try { new ResizeObserver(place).observe(document.getElementById('topbar')); } catch(e){ window.addEventListener('resize', place); }
++  return _box;
++}
++function makeFrame(t){
++  const f = document.createElement('iframe');
++  f.className = 'off';
++  f.title = (MODULE_LABELS[t.module] || t.module) + ' · ' + (t.title || UNTITLED);
++  f.src = 'index.html?embed=' + encodeURIComponent(t.id);
++  t.frame = f; t.ready = false; t.queue = []; t.madeAt = performance.now();
++  framesBox().appendChild(f);
++  return f;
++}
++function dropFrame(t){
++  if (!t.frame) return;
++  t.frame.remove();
++  t.frame = null; t.ready = false; t.queue = []; t.busy = null;
++}
++function toFrame(t, msg){
++  if (!t.frame) return;
++  if (!t.ready){ t.queue.push(msg); return; }
++  try { t.frame.contentWindow.postMessage(msg, SAME); } catch(e){}
++}
++function showFrame(t){
++  const box = framesBox();
++  if (!t.frame) makeFrame(t);
++  TABS.forEach(x=>{
++    if (!x.frame) return;
++    const off = x !== t;
++    if (off && !x.frame.classList.contains('off')) toFrame(x, { dt: 'hidden' });
++    x.frame.classList.toggle('off', off);
++  });
++  box.hidden = false; _root.classList.add('frames-on');
++  t.shownAt = Date.now();
++  toFrame(t, { dt: 'shown' });
++  focusFrame(t);
++  keepWithin();
++}
++function focusFrame(t){
++  if (!t.ready) return;   // (once ready, onFrameMessage)
++  try { t.frame.contentWindow.focus(); } catch(e){}
++}
++// Let go of frames beyond LIVE_MAX, the ones shown longest ago first, and of those not shown
++// for LIVE_IDLE minutes: never the one on show, nor one where a job runs.
++function keepWithin(){
++  const live = TABS.filter(t=> t.frame && t.id !== _activeId && !t.busy && t.ready).sort((a, b)=> (a.shownAt || 0) - (b.shownAt || 0));
++  let over = TABS.filter(t=> t.frame).length - LIVE_MAX;
++  for (const t of live){
++    if (over > 0){ hibernate(t); over--; continue; }
++    if (Date.now() - (t.shownAt || 0) > LIVE_IDLE*60000) hibernate(t);
++  }
++}
++const _flushing = new Map();   // tab id → resolve of its hibernation
++function hibernate(t){
++  if (!t.frame || _flushing.has(t.id)) return Promise.resolve(false);
++  return new Promise(res=>{
++    _flushing.set(t.id, ok=>{ _flushing.delete(t.id); if (ok && t.id !== _activeId){ dropFrame(t); renderTabs(); } res(!!ok); });
++    toFrame(t, { dt: 'flush' });
++  });
++}
++function onFrameMessage(e){
++  if (e.origin !== SAME) return;
++  const t = TABS.find(x=> x.frame && x.frame.contentWindow === e.source);
++  if (!t) return;
++  const m = e.data || {};
++  if (m.dt === 'ready'){
++    t.ready = true; t.readyAt = performance.now();
++    const q = t.queue; t.queue = [];
++    q.forEach(x=> toFrame(t, x));
++    if (t.id === _activeId) focusFrame(t);
++    renderTabs();
++  } else if (m.dt === 'meta'){
++    t.title = m.title; t.dirty = !!m.dirty; t.projectId = m.projectId || null;
++    renderTabs();
++  } else if (m.dt === 'busy'){
++    t.busy = m.busy || null; renderTabs();
++  } else if (m.dt === 'adopt'){
++    if (!MODULES.includes(m.module) || tabById(m.id)) return;
++    const n = { id: m.id, module: m.module, title: m.title || untitledName(m.module), projectId: m.projectId || null, dirty: !!m.dirty };
++    if (TABS.length >= MAX_TABS){ deleteTabRec(n.id).catch(()=>{}); confirmBanner('You already have '+MAX_TABS+' tabs open. Close one before opening another.', 'OK'); return; }
++    TABS.splice(tabIndex(t.id) + 1, 0, n);
++    if (m.focus !== false) activateTab(n.id); else { renderTabs(); persistAll(); }
++  } else if (m.dt === 'closed' || m.dt === 'gone'){
++    closeTab(t.id);
++  } else if (m.dt === 'flushed'){
++    const f = _flushing.get(t.id); if (f) f(m.ok);
++  }
++}
++// Keys pressed in the shell while a tab is on show go to its page (after a click on the bar
++// the shell has the focus): undo, redo, the samples' ← / →; the shell's own modules idle.
++function forwardKeys(e){
++  if (!_box || _box.hidden) return;
++  const t = activeTab(); if (!t || !t.frame) return;
++  const k = (e.key || '').toLowerCase();
++  const undoRedo = (e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y');
++  const arrow = (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.ctrlKey && !e.metaKey && !e.altKey;
++  if (!undoRedo && !arrow) return;
++  const el = document.activeElement, tag = el && el.tagName;
++  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
++  e.preventDefault(); e.stopImmediatePropagation();
++  toFrame(t, { dt: 'key', key: e.key, code: e.code, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey });
++}
++async function initShell(){
++  window.addEventListener('message', onFrameMessage);
++  window.addEventListener('keydown', forwardKeys, true);
++  onSectionChange(tab=>{
++    if (MODULES.includes(tab)) return;
++    if (_box){ _box.hidden = true; _root.classList.remove('frames-on'); }
++  });
++  if (LIVE_IDLE < Infinity) setInterval(keepWithin, 30000);
++  // The records alone: each tab's page reads its own state, with its bytes.
++  let recs = [];
++  try { recs = await allTabRecs(); }
++  catch(e){ notice('Your open tabs could not be read from this browser\'s storage: they are kept as they are for the next load.'); }
++  const made = recs.filter(r=> r && MODULES.includes(r.module) && !tabById(r.id)).sort((a,b)=> (a.order||0) - (b.order||0))
++    .map(r=> ({ r, t: { id: r.id, module: r.module, title: r.title || UNTITLED, projectId: r.projectId || null, dirty: !!r.dirty } }));
++  if (!made.length){ renderTabs(); afterPaint(revealApp); return; }
++  if (TABS.length){ TABS.unshift(...made.map(x=> x.t)); renderTabs(); persistAll(); afterPaint(revealApp); return; }
++  made.forEach(x=> TABS.push(x.t));
++  const wanted = (made.find(x=> x.r.active) || made[0]).t;
++  activateTab(wanted.id);
++  if (LIVE_EAGER) TABS.forEach(t=>{ if (!t.frame) makeFrame(t); });
++  afterPaint(revealApp);
++}
++
+ export { TABS, MAX_TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,
+          closeTab, requestClose, setTabTitle, setTabDirty, setTabProject, renderTabs,
+          onTabActivated, onTabLoaded, onCloseSave, initTabs, persistTab, persistAll, isRestoring,
+-         isLive, ensureLive, untitledName, notice };
++         isLive, ensureLive, untitledName, notice, TAB_PAGE, SHELL, hibernate, keepWithin };
+diff --git a/tests/livetabs.test.mjs b/tests/livetabs.test.mjs
+new file mode 100644
+index 0000000..99cfeb2
+--- /dev/null
++++ b/tests/livetabs.test.mjs
+@@ -0,0 +1,114 @@
++/* Live tabs (prototype, proto/live-tabs): each tab a page of its own in a frame of the shell,
++   switched on by localStorage 'datatreat-live-tabs' = 'on'. A refinement goes on in a tab not
++   on show, with no question, its results and its history there on return; the keys reach the
++   tab on show; Settings and the theme reach every tab; a tab saved is in the Projects list,
++   renamed there in its page; a hidden tab with unsaved work closed from the bar is shown and
++   asks there; a reload gives the tabs back in their order, each with its own work, the tab on
++   show alone made. */
++import { test, before, after } from 'node:test';
++import assert from 'node:assert/strict';
++import { start, settle, until } from './helpers.mjs';
++
++let env;
++before(async ()=>{ env = await start(); });
++after(()=> env && env.close());
++
++// The app with live tabs on; the frame of tab i (index.html?embed=<id>) once restored.
++async function liveApp(){
++  const ctx = await env.browser.newContext({ viewport: { width: 1400, height: 900 }, timezoneId: 'UTC', locale: 'en-US', colorScheme: 'dark', serviceWorkers: 'block', acceptDownloads: true });
++  await ctx.addInitScript(()=>{ try { localStorage.setItem('datatreat-live-tabs', 'on'); } catch(e){} });
++  const page = await ctx.newPage();
++  const errors = [];
++  page.on('pageerror', e=> errors.push('pageerror: ' + e.message));
++  page.on('dialog', d=> d.dismiss());
++  await page.goto(env.base + '/index.html');
++  await page.waitForFunction(()=> !document.documentElement.classList.contains('app-booting') && document.querySelector('#tabBar .ptab-add'));
++  return { ctx, page, errors, close: ()=> ctx.close() };
++}
++async function frame(page, i){
++  const id = await page.locator('#tabBar .ptab').nth(i).getAttribute('data-id');
++  const h = await page.waitForSelector(`.live-frames iframe[src*="embed=${id}"]`, { state: 'attached' });
++  const f = await h.contentFrame();
++  await f.waitForFunction(()=> !document.documentElement.classList.contains('app-booting') && !document.querySelector('.module-loader.show'));
++  await settle(f);
++  return f;
++}
++async function newTab(page, mod){
++  const n = await page.locator('#tabBar .ptab').count();
++  await page.click('#nav button[data-tab="home"]');
++  await page.click(`.home-card[data-go="${mod}"]`);
++  await page.waitForFunction(n=> document.querySelectorAll('#tabBar .ptab').length > n, n);
++  return frame(page, n);
++}
++const show = async (page, i)=>{ await page.locator('#tabBar .ptab').nth(i).locator('.ptab-label').click(); return frame(page, i); };
++const results = f => f.evaluate(async ()=>{ const u = await import('./utils.js'); const c = u.getModuleState('xrd').cards.find(c=> c.id === 2); return Object.keys(c.states.rietveld.results || {}).length; });
++
++test('live tabs: a refinement goes on in a tab not on show; keys, settings, projects, close, reload', async ()=>{
++  const { page, errors, close } = await liveApp();
++  try {
++    assert.ok(await page.evaluate(()=> document.documentElement.classList.contains('live-shell')));
++    // XRPD, two patterns and the CIF; a DRS tab beside it
++    let fx = await newTab(page, 'xrd');
++    await fx.setInputFiles('#xrdFiles', env.fx.files.xrd.slice(0, 2));
++    await fx.waitForFunction(()=> document.querySelectorAll('#xrdFileTableWrap tr.file-row').length === 2 && !document.querySelector('.dz-loading'));
++    await fx.setInputFiles('#xrdR2CifInput', env.fx.cif);
++    await fx.waitForSelector('#xrdR2PhaseList input[data-on]');
++    const fd = await newTab(page, 'tauc');
++    await fd.setInputFiles('#taucFiles', env.fx.files.tauc.slice(0, 1));
++    await fd.waitForFunction(()=> document.querySelectorAll('#taucFileTableWrap tr.file-row').length === 1);
++    // Refine all, then the DRS tab shown: no question, the run goes on, marked in the bar
++    fx = await show(page, 0);
++    await fx.waitForTimeout(700);
++    await fx.click('#xrdR2RefineAll');
++    await fx.waitForSelector('.confirm-modal');
++    await fx.click('.confirm-modal .btn:not(.primary)');
++    await fx.waitForFunction(()=> document.querySelector('#xrdR2Refine').textContent === 'Cancel');
++    await page.locator('#tabBar .ptab').nth(1).locator('.ptab-label').click();
++    await until(async ()=> /⟳/.test(await page.locator('#tabBar .ptab').nth(0).textContent()), { what: 'the running mark' });
++    assert.equal(await page.evaluate(()=> !!document.querySelector('.pwa-confirm.show')), false, 'asked nothing');
++    await fx.waitForFunction(()=> document.querySelector('#xrdR2Refine').textContent === 'Refine', null, { timeout: 180000 });
++    assert.equal(await results(fx), 2, 'both patterns refined while hidden');
++    // back: undo takes the run back, from a key pressed after a click on the bar
++    await show(page, 0);
++    await page.keyboard.press('Control+z');
++    await until(async ()=> (await results(fx)) === 0, { what: 'the run undone' });
++    await page.keyboard.press('Control+y');
++    await until(async ()=> (await results(fx)) === 2, { what: 'the run redone' });
++    // Settings and the theme, set in the shell, are the tabs' at once
++    await page.click('#nav button[data-tab="settings"]');
++    await page.selectOption('#settingDecimal', ',');
++    await until(async ()=> (await fd.evaluate(async ()=> (await import('./utils.js')).settings.decimal)) === ',', { what: 'the separator in the DRS tab' });
++    await page.selectOption('#settingDecimal', '.');
++    const th = await page.evaluate(()=> document.documentElement.getAttribute('data-theme'));
++    await page.click('#themeToggle');
++    await until(async ()=> (await fx.evaluate(()=> document.documentElement.getAttribute('data-theme'))) !== th, { what: 'the theme in the XRPD tab' });
++    // Saved in its page, listed in the shell; renamed there, its tab and field follow
++    fx = await show(page, 0);
++    await fx.fill('.project-name-input', 'Live one');
++    await fx.click('.proj-save');
++    await fx.waitForSelector('.proj-save.is-saved');
++    await page.click('#nav button[data-tab="projects"]');
++    await page.waitForSelector('#sessListWrap input.proj-rename[value="Live one"]');
++    const inp = page.locator('#sessListWrap input.proj-rename[value="Live one"]');
++    await inp.fill('Live two'); await inp.press('Enter');
++    await until(async ()=> (await fx.inputValue('.project-name-input')) === 'Live two', { what: 'the name in the tab' });
++    assert.match(await page.locator('#tabBar .ptab').nth(0).textContent(), /Live two$/);
++    // Reload: the tabs in their order, the one on show alone made, each with its work
++    await show(page, 0);
++    await page.waitForTimeout(500);
++    await page.reload();
++    await page.waitForFunction(()=> !document.documentElement.classList.contains('app-booting') && document.querySelector('#tabBar .ptab'));
++    assert.deepEqual(await page.locator('#tabBar .ptab .ptab-tech').allTextContents(), ['XRPD · ', 'UV-Vis DRS · ']);
++    fx = await frame(page, 0);
++    assert.equal(await page.locator('.live-frames iframe').count(), 1, 'the tab on show alone made');
++    assert.equal(await results(fx), 2);
++    // The DRS tab, unsaved, closed while hidden: shown, asked there; "Don't save" closes it
++    await page.locator('#tabBar .ptab').nth(1).locator('.ptab-x').click();
++    const f2 = await frame(page, 1);
++    await f2.waitForSelector('.pwa-confirm.show');
++    assert.match(await f2.textContent('.pwa-confirm.show span'), /Save .* before closing/);
++    await f2.click('.pwa-confirm.show .btn:not(.primary)');
++    await page.waitForFunction(()=> document.querySelectorAll('#tabBar .ptab').length === 1 && document.querySelectorAll('.live-frames iframe').length === 1);
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
+diff --git a/utils.js b/utils.js
+index 4b37a24..ca3fd54 100644
+--- a/utils.js
++++ b/utils.js
+@@ -561,16 +561,20 @@ const palettePickerUI = new PalettePickerUI();
+ const SETTINGS_KEY = 'datatreat-settings';
+ const settings = { decimal: '.', field: ';', plotFmt: 'png' };
+ // Settings (image format + CSV decimal/field) persist across sessions, like the theme.
+-try {
+-  const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+-  if (saved && typeof saved === 'object') Object.assign(settings, saved);
+-} catch(e){}
+-// Only the values the selects offer: the decimal separator goes into every number fmtNum
+-// writes, which the modules put into markup as it is.
+-if (settings.decimal !== ',') settings.decimal = '.';
+-if (![';', ',', '\t'].includes(settings.field)) settings.field = ';';
+-if (!['png', 'svg', 'jpeg', 'webp'].includes(settings.plotFmt)) settings.plotFmt = 'png';
+-if (settings.decimal === ',' && settings.field === ',') settings.field = ';'; // guard invalid combo
++// (read again when another page of the app changes them: live tabs, each a page of its own)
++function readSettings(){
++  try {
++    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
++    if (saved && typeof saved === 'object') Object.assign(settings, saved);
++  } catch(e){}
++  // Only the values the selects offer: the decimal separator goes into every number fmtNum
++  // writes, which the modules put into markup as it is.
++  if (settings.decimal !== ',') settings.decimal = '.';
++  if (![';', ',', '\t'].includes(settings.field)) settings.field = ';';
++  if (!['png', 'svg', 'jpeg', 'webp'].includes(settings.plotFmt)) settings.plotFmt = 'png';
++  if (settings.decimal === ',' && settings.field === ',') settings.field = ';'; // guard invalid combo
++}
++readSettings();
+ function saveSettings(){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){} }
+ 
+ function fmtNum(v, decimals){
+@@ -620,6 +624,15 @@ function csvLine(vals){ return csvJoin(vals) + '\n'; }
+   decSel.addEventListener('change', validate);
+   fldSel.addEventListener('change', validate);
+   fmtSel.addEventListener('change', ()=>{ settings.plotFmt = fmtSel.value; saveSettings(); });
++  // Live tabs (prototype): what another page of the app (the shell, a tab's) set is taken
++  // here too — the settings, the theme, the recent colours — through the storage event,
++  // which every other same-origin page gets. To v517 one page read them once.
++  window.addEventListener('storage', e=>{
++    if (e.storageArea !== localStorage) return;
++    if (e.key === SETTINGS_KEY){ readSettings(); decSel.value = settings.decimal; fldSel.value = settings.field; fmtSel.value = settings.plotFmt; }
++    else if (e.key === THEME_KEY) applyTheme(e.newValue || (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'), false);
++    else if (e.key === CP_RECENT_KEY) _cpRecent = null;
++  });
+ })();
+ 
+ function downloadBlob(filename, text){
+@@ -1263,6 +1276,11 @@ const _busy = {};
+ function registerBusy(mod, o){ _busy[mod] = o; }
+ function moduleBusy(mod){ const o = _busy[mod]; try { return (o && o.busy()) || null; } catch(e){ return null; } }
+ function stopModule(mod){ const o = _busy[mod]; if (o){ try { o.stop(); } catch(e){} } }
++/* Live tabs (prototype): what a module lets go while its tab's page is not on show, and
++   takes back as it is shown: { hide() → true when it let anything go, show() }. */
++const _sleep = {};
++function registerTabSleep(mod, o){ _sleep[mod] = o; }
++function tabSleep(mod, hide){ const o = _sleep[mod]; if (!o) return false; try { return hide ? !!o.hide() : (o.show(), true); } catch(e){ return false; } }
+ 
+ /* =========================================================
+    UNDO / REDO — per-module snapshot stacks (command pattern)
+@@ -2333,5 +2351,5 @@ normalizeNavIcons();
+ window.addEventListener('load', normalizeNavIcons);
+ 
+ export {
+-  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar
++  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, registerTabSleep, tabSleep, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+ };

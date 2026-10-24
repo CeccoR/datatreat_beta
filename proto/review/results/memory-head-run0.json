@@ -1,0 +1,78 @@
+{
+ "tree": "head",
+ "rows": [
+  {
+   "added": "none",
+   "heap": 2.9161834716796875,
+   "gpuPriv": 0,
+   "allPss": 201.7080078125,
+   "allPriv": 107.0390625,
+   "nProc": 6
+  },
+  {
+   "added": "xrd",
+   "heap": 12.475116729736328,
+   "gpuPriv": 0,
+   "allPss": 278.1396484375,
+   "allPriv": 177.55859375,
+   "nProc": 6
+  },
+  {
+   "added": "xrd",
+   "heap": 15.019386291503906,
+   "gpuPriv": 0,
+   "allPss": 305.8896484375,
+   "allPriv": 204.21484375,
+   "nProc": 6
+  },
+  {
+   "added": "sem",
+   "heap": 106.71744918823242,
+   "gpuPriv": 0,
+   "allPss": 642.9365234375,
+   "allPriv": 538.94140625,
+   "nProc": 6
+  },
+  {
+   "added": "drs",
+   "heap": 107.10519027709961,
+   "gpuPriv": 0,
+   "allPss": 653.728515625,
+   "allPriv": 546.1640625,
+   "nProc": 6
+  },
+  {
+   "added": "gc",
+   "heap": 107.31344604492188,
+   "gpuPriv": 0,
+   "allPss": 613.369140625,
+   "allPriv": 503.0625,
+   "nProc": 6
+  },
+  {
+   "added": "epr",
+   "heap": 107.45936584472656,
+   "gpuPriv": 0,
+   "allPss": 613.1904296875,
+   "allPriv": 505.515625,
+   "nProc": 6
+  },
+  {
+   "added": "sem",
+   "heap": 198.2103042602539,
+   "gpuPriv": 0,
+   "allPss": 672.0029296875,
+   "allPriv": 567.2734375,
+   "nProc": 6
+  },
+  {
+   "added": "xrd",
+   "heap": 199.90011978149414,
+   "gpuPriv": 0,
+   "allPss": 711.6318359375,
+   "allPriv": 609.46875,
+   "nProc": 6
+  }
+ ],
+ "errors": []
+}

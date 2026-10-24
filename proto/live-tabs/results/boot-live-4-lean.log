@@ -1,0 +1,13 @@
+live 4 lazy rep 0 tab on show 888 ms  long tasks {"n":1,"ms":502,"max":502}
+live 4 lazy rep 1 tab on show 854 ms  long tasks {"n":1,"ms":457,"max":457}
+live 4 lazy rep 2 tab on show 708 ms  long tasks {"n":1,"ms":403,"max":403}
+live 4 lazy rep 3 tab on show 778 ms  long tasks {"n":1,"ms":434,"max":434}
+live 4 lazy rep 4 tab on show 733 ms  long tasks {"n":1,"ms":404,"max":404}
+live 4 lazy {"shownMed":778,"shown":[888,853.9,707.8,778,733.4],"allMed":null,"longMsMed":434,"longMaxMed":434,"mem":{"heap":14.7,"rss":203.1,"pss":150.2,"workers":0,"frames":1}}
+live 4 eager rep 0 tab on show 1782 ms all frames 1877 long tasks {"n":6,"ms":1447,"max":567}
+live 4 eager rep 1 tab on show 1886 ms all frames 1997 long tasks {"n":5,"ms":1286,"max":655}
+live 4 eager rep 2 tab on show 1788 ms all frames 1889 long tasks {"n":3,"ms":1185,"max":609}
+live 4 eager rep 3 tab on show 1766 ms all frames 1890 long tasks {"n":4,"ms":1212,"max":633}
+live 4 eager rep 4 tab on show 1723 ms all frames 1825 long tasks {"n":3,"ms":1162,"max":605}
+live 4 eager {"shownMed":1781.7,"shown":[1781.7,1885.5,1788.1,1765.7,1723.2],"allMed":1889.1,"longMsMed":1212,"longMaxMed":609,"mem":{"heap":108,"rss":405.1,"pss":352.1,"workers":0,"frames":4}}
+errors []

@@ -1,0 +1,41 @@
+{
+ "what": "max",
+ "runs": [
+  {
+   "knobs": {},
+   "frames": 8,
+   "mem": {
+    "heap": 212.6,
+    "rss": 679.4,
+    "pss": 626,
+    "workers": 4,
+    "allPss": 798.5
+   },
+   "errors": [],
+   "load": [
+    1.19,
+    1.33,
+    1.21
+   ]
+  },
+  {
+   "knobs": {
+    "max": 3
+   },
+   "frames": 3,
+   "mem": {
+    "heap": 107.8,
+    "rss": 426.5,
+    "pss": 374.1,
+    "workers": 2,
+    "allPss": 545
+   },
+   "errors": [],
+   "load": [
+    1.12,
+    1.29,
+    1.2
+   ]
+  }
+ ]
+}

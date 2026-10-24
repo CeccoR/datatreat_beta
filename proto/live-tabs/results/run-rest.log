@@ -1,0 +1,20 @@
+== opencold-head: node opencold.mjs head 5
+   exit 0
+== opencold-live: node opencold.mjs live 5
+   exit 0
+== memory-live-empty-lean: node memory.mjs live empty
+   exit 0
+== memory-live-xrd-lean: node memory.mjs live xrd 1,2,4
+   exit 0
+== open-live-lean: node open.mjs live 5
+   exit 0
+== opencold-live-lean: node opencold.mjs live 5
+   exit 0
+== limits: node limits.mjs
+   exit 0
+== sw: node sw.mjs
+   exit 0
+== memory-head-sem-ceiling: node memory.mjs head sem 8,12,16,20
+   exit 0
+== memory-live-sem-ceiling: node memory.mjs live sem 8,12,16,20
+   exit 0
