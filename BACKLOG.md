@@ -185,6 +185,13 @@ was proposed; nothing here is in the code yet.
   presets). Nothing in the app can wall them apart. Proposed: serve DataTreat from an
   origin of its own (a custom domain for the Pages site, or a dedicated host), and until
   then publish nothing else under `ceccor.github.io` that runs untrusted code.
+- **Number arrays as typed arrays.** The patterns, spectra and curves are plain arrays of
+  numbers. Chromium stores a frozen one at 16 bytes an element against 8 (measured with
+  the b2 prototype, proto/live-tabs-b2/NOTES-drs.md), which is why b2 shares them through
+  a registry instead of freezing them. `Float64Array` would hold them at 8 bytes,
+  contiguous, and hand them to the workers without conversion. Against: map, filter and
+  slice return typed arrays, JSON writes them as objects, so the code that builds them
+  and every saved format would change. To take only if memory comes to need it.
 - **Tabs that work while they are not on show.** Only one tab is live: each technique's
   module exists once, bound to the page's fixed ids, and a tab is a project that takes
   its module in turn (tabs.js parks the state it leaves and restores the one it shows).
