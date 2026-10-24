@@ -1,0 +1,291 @@
+# b2: every tab truly independent, in one page (backlog 23)
+
+The user's decision after the item 23 assessment, built whole: option b2 with the user's
+hybrid and the page's pool of Rietveld workers. **Every module is made per tab**: XRPD, SEM,
+DRS, GC and EPR each have one live instance per open tab (its own elements, state, undo
+history and view) in one page, and none is left on v517's single instance. It is one patch,
+`b2.patch`, kept here and not applied: no app file of v517 (b93ed5c) was changed. The user
+decides after seeing it.
+
+## What b2 does
+
+- **A switch only shows and hides.** The tab's instance is put into the page and the one
+  shown before is taken out, in the same task; nothing is restored. Between two loaded tabs
+  of one module it takes 45–116 ms where v517 takes 110–460 ms (below).
+- **A job in a tab left goes on.** A Rietveld refinement (on the pool) or a SEM reading runs
+  on in its own instance while another tab is shown, writes its results into its own
+  history as one step and its own record, and marks its own tab unsaved ("*"). Leaving such
+  a tab asks nothing; closing it asks first ("… is running in “T”: closing this tab stops
+  it").
+- **Trim.** A tab hidden 60 s lets go of what it draws again when shown: XRPD its plots,
+  the patterns' processing and the Rietveld curves; SEM its thumbnails, cards and panes
+  (and, at once when hidden, the editor's full-size image). DRS, GC and EPR have no trim:
+  measured, their plots are 0.2–0.6 MB and would cost a redraw at every show.
+- **Sleep and wake, the user's hybrid.** A tab not shown for X minutes (10 by default,
+  Settings) sleeps: its instance is destroyed, its state and its whole undo history are
+  parked as tabs.js parks a tab in v517, and it stays in the bar. Shown again it wakes: a
+  new instance, the parked state restored, the history put back, every step of it undoable.
+- **A busy tab never sleeps.** Its time hidden counts from its job's end.
+- **The limit.** Beyond L tabs awake and not on show (6 by default), or beyond a memory
+  budget over the instances' estimated bytes, the tab not shown for longest sleeps (LRU).
+  Opening a tab is never refused for this; the bar's limit of 20 tabs is v517's.
+- **One pool of Rietveld workers for the whole browser,** capped at cores − 1 (Web Locks),
+  as `proto/workers/pool.patch`: Refine all and the runs of hidden tabs go on it, and the
+  workers and their engine's caches belong to the pool, kept 60 s idle.
+- **A reload** wakes only the tab on show; the others wake as they are shown. Histories do
+  not survive a reload, as in v517.
+- **The ids belong to the instance on show.** Its section and its layer (windows, menus) are
+  in the page with v517's ids, so index.html, the CSS, the delegated handlers and the 183
+  tests of v517 find them as before. A hidden instance is out of the page and finds its own
+  elements within its section (every lookup root-scoped), so a hidden refinement or reading
+  updates its own DOM. Why taking out rather than swapping ids, measured: `API.md` §3.
+
+## Settings
+
+**Settings › Tabs in the background** (index.html; saved with the other settings; a change
+applies at once):
+
+| field | default | range | what |
+|---|---|---|---|
+| Sleep after (minutes not on show) | 10 | 0.1–1440 | X: a tab hidden this long sleeps; a busy one counts from its job's end |
+| Limit the tabs awake in the background by | Number of tabs | Number of tabs, Memory | the kind of limit |
+| Tabs awake, not on show, at most | 6 | 0–19 | L, with "Number of tabs" |
+| Their memory at most (MB, estimated from their data) | 1500 | 100–16000 | the budget, with "Memory": the sum of the hidden awake instances' `bytes()` |
+
+Constants not in Settings:
+
+- the trim's delay, 60 s (tabs.js `TRIM_MS`);
+- the pool: cores − 1 workers, kept 60 s idle (xrd-rv-pool.js; localStorage knobs
+  `datatreat-rv-workers`, `-lanes`, `-shared`, `-idle`, for tests and measurements);
+- SEM: the reading worker ends 20 s after its last answer; decoded copies of 8-bit images
+  are kept up to 32 MB (`DEC_BUDGET`); the editor's pixels are let go 2 s after their last
+  use.
+
+## Applying
+
+```sh
+git apply --check proto/live-tabs-b2/b2.patch && git apply proto/live-tabs-b2/b2.patch
+npm test                       # 202 tests, about 11 min
+```
+
+`b2.patch` is a git diff against HEAD (9f2a12e; app files b93ed5c): 34 files, +2908 −731.
+`git apply --check` is clean on the main tree's HEAD (checked there, read-only), and a fresh
+git-archive copy of HEAD with it applied is identical, file by file, to the tree every check
+below ran on. `git apply -R` takes it out.
+
+On release the app's own rules still apply: `sw.js` says "Bump CACHE when any precached
+asset changes" (`datatreat-v517` → the new version), and the footer's version, README.md and
+BACKLOG.md go with it. The patch leaves them to the release.
+
+## What is here
+
+| file | what |
+|---|---|
+| `b2.patch` | **The whole of b2**, to apply: the five stage patches below and the integration (below: the cross-module test, a fix of `releasePlot`, two rows of tests/README.md and its test count) |
+| `core.patch`, `xrd.patch`, `sem.patch`, `drs.patch`, `gc-epr.patch` | The same changes by stage, for reading: the core against HEAD, each module against HEAD + core. Applied in that order they give b2.patch less the integration |
+| `API.md` | How a module is made per tab, with XRPD as the worked example |
+| `NOTES-core.md`, `NOTES-sem.md`, `NOTES-drs.md`, `NOTES-gc-epr.md` | Each stage's notes: what changed, each memory cut with its numbers, its tests |
+| `measure/` | One script per measurement or check, `lib.mjs` shared; `session.mjs`, `upgrade.mjs` and `trim-nodes.mjs` are this stage's |
+| `results/` | Each measurement's JSON and the whole suite's logs |
+
+## What changed
+
+| file | lines | what |
+|---|---|---|
+| utils.js | +210 −68 | every registry by the instance's key (history, redraw, busy, CSV, has-data, the section on show); a module's name stands for its instance on show; `registerModule`, `makeInstance`, `attachInstance`, `detachInstance`, `dropKey`, `withState`, `onAnyChange`, `busyChanged`; the undo keys act on the tab on show; the drop zone and file list take elements; the Settings' values |
+| tabs.js | +276 −59 | live instances per tab: show, hide, trim, sleep, wake; the busy exemption; the LRU by number or by memory; Settings › Tabs in the background; `sleepTick` and `tabsNow` for the tests |
+| sessions.js | +104 −84 | autosave, the unsaved mark and Save per tab, shown or not; a hidden tab closed with Save saved as it is; Projects' CSVs through a throwaway instance |
+| db.js | +9 −3 | `park` and `decode` share frozen arrays of numbers instead of copying them |
+| cards.js, modkit.js | +18 −9, +19 −10 | the deck's menu in the instance's layer, `deck.destroy()`; `moduleKit(mod, { root, key, layer })`, `kit.destroy()` |
+| plot.js, figure.js | +26 −5, +3 −2 | downloads find their svg from the button; `releasePlot`, which lets the Plot's elements go; the composer's memory keyed by the tab that owns the plot |
+| index.html, style.css, sw.js | +13, +3, +1 | the Settings rows; `.inst-layer`; xrd-rv-pool.js precached |
+| xrd-rv-pool.js | +183 (new) | the pool (proto/workers) |
+| xrd.js, xrd-peaks.js, xrd-rv.js | +96 −26, +20 −4, +79 −61 | XRPD a factory, its trim; Refine all on the pool |
+| sem.js, sem-read.js, sem-read.worker.js, sem-figure.js | +406 −242, +59 −40, +11 −6, +8 −4 | SEM a factory; its files' bytes kept as bytes (not base64), a 16-bit image a view of them; what is made of a file shared by all tabs; one reading worker; its trim |
+| tauc.js, gc.js, epr.js | +110 −36, +68 −16, +80 −15 | DRS, GC and EPR factories through the kit; DRS's energies and EPR's spectra shared by file |
+| tests/ | 5 new files, 6 changed | `b2xrd`, `b2sem`, `b2drs`, `b2gcepr`, `b2cross` (two tabs of a module, and every module together), `rvpool`; the steps of `rvui` C and `tabs` that checked v517's question on leaving a busy tab; SEM's stored form in `bytestore`; the table in tests/README.md |
+
+## Tests and checks
+
+All on HEAD + b2.patch, headless Chromium (Playwright 1.56), 4 vCPUs:
+
+- **The whole suite, `DT_ROOT=<tree> npm test`: 202 of 202 pass** (v517's 183, the pool's 4,
+  the modules' 12, the cross-module 3), in 11 min 4 s, on a fresh git-archive copy of HEAD
+  with b2.patch applied (`results/suite-b2.log`). The five stage patches applied as
+  delivered passed 199 of 199 here too (10 min 40 s), as the GC/EPR stage had found
+  (`results/suite-all-patches.log`).
+- **`tests/b2cross.test.mjs`, every module together** (3 tests, about 40 s):
+  1. Ten tabs, two of each module, each with its own files and a label of its own: at the
+     default limit the three opened first asleep; each shown in turn with its own files and
+     whole history, each wake putting the tab not shown for longest to sleep (the LRU); an
+     undo in each undoing its own step only, a redo in each; all hidden 11 minutes asleep
+     (`sleepTick`), their sections collected (WeakRefs emptied after a forced GC), each
+     woken as it was.
+  2. A Refine all on the pool in an XRPD tab left at once for SEM, its results held: SEM's
+     files read, labels changed, undone and redone, a DRS tab worked in; the XRPD tab awake
+     11 minutes on while busy, the DRS tab asleep; at the run's end its step in its own
+     history, its record and its "*", SEM's history untouched; the run's step undone in its
+     tab; the DRS tab woken as it was.
+  3. A saved project of each module edited: a hidden tab closed with Save saved as it is,
+     not shown; a reload, the tab on show awake and the others asleep, each with its edit;
+     a project reopened from Projects; **Projects' CSVs of each module**, made by a
+     throwaway instance, byte for byte its project bar's. No page error and no CSP violation
+     in any.
+- **From v517 to b2 in one browser** (`measure/upgrade.mjs` → `results/upgrade.json`): one
+  tab of each module made, refined and saved in v517, a label left unsaved; the same origin
+  then served by b2 and reloaded. 23 of 23 checks pass: the same tabs, the one on show awake
+  and the others asleep, each with its edit (SEM's v517 base64 read, its thumbnails drawn;
+  XRPD's v517 results there), a step and its undo in each, and Projects' CSVs of each made
+  by b2 from v517's records byte for byte those v517's project bar gave.
+- **The heavy modules together** (`measure/session.mjs`, below): a refinement of 12
+  patterns run hidden on the pool while SEM tabs of 8 full-size images are worked in gives
+  results identical to the same refined on show.
+- **Lint** (`eslint` with the scratchpad's config) on every changed .js file: no finding
+  that v517's same file has not. What is left is v517's own (`crypto`, `Option`, `screen`
+  missing from the config's globals; six unused names); sessions.js has five warnings
+  fewer. The new and changed tests lint clean with Node's globals added.
+- **CSP** (`script-src 'self'; object-src 'none'; base-uri 'self'`): no violation in any of
+  the 202 tests (helpers.mjs records them in every page; the b2 tests assert none), nor in
+  the scratchpad's `e2e/csp.mjs` (the Rietveld worker, the composer, an alert).
+- **The payload fuzz** (the scratchpad's `e2e/fuzz.mjs`, run on a copy that writes into its
+  own folder and also counts what was drawn): a markup payload in every string (A), every
+  number too (B) and the files' names (F), for every module: **0 elements injected** in the
+  Projects list and in the module, with the files listed and plotted (DRS 2 rows and 37
+  paths, XRPD 2 and 18, GC 2 and 18, EPR 1 and 4, SEM 3 and 8), no page error.
+
+## The heavy modules together, measured
+
+`measure/session.mjs` → `results/session.json`. One session of ten tabs, two of each
+module: DRS, GC and EPR with the fixtures of `proto/live-tabs/fixtures`; XRPD X1 and X2 with
+the 12 patterns and the SrTiO3 CIF, refined; SEM A and B with 8 images each of 2048 × 2176
+at 16 bits (8.5 MB a file, 16 different files; MB are 2^20 bytes in all these numbers).
+Headless Chromium, 4 vCPUs, one tree at a time, nothing else running. Memory after forced
+GCs (CDP), SEM A on show; times in the page from the click to two frames after the loader
+is gone (lib.mjs `timedShow`).
+
+| | v517 | b2 |
+|---|---|---|
+| Refine all, 12 patterns | X1 9.8 s, X2 8.7 s, on show (its card's one worker) | X1 5.2 s on show; X2 5.7 s hidden while SEM is worked in (the pool, 3 workers) |
+| X2's results | — | identical to X1's (refined on show), times left out |
+| SEM B then A shown (8 images each) | 304 ms (max 378) | 70 ms (max 88) idle; 90 ms (max 139) during X2's hidden run |
+| SEM A's next image | 31.2 ms | 31.4 ms idle; 42.6 ms (max 60) during the run |
+| X1, SEM B, DRS 1 shown from SEM A | 281, 307, 146 ms | each woken from sleep: 535, 180, 144 ms |
+| memory: JS heap + ArrayBuffers | 198.5 + 145.0 = **343.5 MB**, every other tab parked | every tab awake 18.5 + 163.0 = **181.5 MB**; at the default limit 181.3; trimmed 173.3; asleep 9.3 + 162.9 = **172.2 MB** |
+| DOM nodes | 8018 | 14508 awake, 12140 at the limit, 11015 trimmed, 2870 asleep |
+| renderer RSS | 683 MB (589 in an earlier run) | awake 453, trimmed 418, asleep 408 MB |
+
+Medians: 10–12 shows and 5 presses each way (`switchAB`, `next`), 3 wakes. RSS drifts by tens
+of MB between runs (memory freed is not all handed back to the system: the earlier run, its
+pool workers by mistake kept alive, gave b2 487, 461 and 443 MB); the heap and the
+ArrayBuffers are exact, and were the same in both runs.
+
+- **Half v517's memory, before any sleep.** v517 keeps each SEM file as base64 in the heap
+  (91 MB a tab of 8) beside its decoded copies; b2 keeps its bytes once, a 16-bit image a
+  view of them.
+- **What a session asleep holds is SEM's files.** Of the 172 MB, the 16 files' bytes are
+  136 MB; the rest is the page itself (a blank page is 2.9 MB of heap and 3.3 MB of
+  ArrayBuffers) and the ten tabs' parked states and histories.
+- **A hidden refinement costs the tab on show little.** The 4 vCPUs are shared by the 3
+  workers and the page: SEM's switch takes 20 ms more while the run goes on, and the run
+  takes up to 0.5 s longer than X1's on show with nothing else to do (two runs).
+- **XRPD's wake is the slow one** (0.5 s, against v517's 0.3 s switch): profiled, its
+  Rietveld curves (131 ms) and its patterns' processing (67 ms) are made again, which sleep
+  let go. SEM, DRS, GC and EPR wake in about v517's switch or less.
+
+## The modules, one by one
+
+Times are medians from each stage's notes, in the same way; memory after forced GCs.
+
+| module | per tab | trim | job in the background | memory, beyond the conversion | switch, b2 / v517 | woken |
+|---|---|---|---|---|---|---|
+| XRPD | xrd.js, xrd-peaks.js, xrd-rv.js | plots, processing, curves (−4.7 MB heap a tab of 12 refined) | Refine all, on the pool | parked states share the patterns' arrays (1.5 MB a tab of 12); a fourth array a pattern nothing read, gone (0.5 MB a Scherrer card of 12); the files read cached by their bytes | 93–116 / 312 ms | 485 ms (NOTES-core) |
+| SEM | sem.js, sem-read.js, its worker, sem-figure.js | thumbnails, cards, panes; the editor's image at once | the reading | bytes, not base64, a 16-bit image a view of them: a tab of 8 images 72.5 MB above a blank page against 179; one array a file across tabs; the figure's PNGs not kept (−58 MB after an export); one worker, ended 20 s idle | 82 / 112 ms | 226 ms (NOTES-sem) |
+| DRS | tauc.js | none (0.6 MB, 0.25 s to redraw) | none | energies made once per wavelength array, not kept in states (a state's JSON −41%); a woken tab takes its history's arrays | 45 / 462 ms | 327 ms (NOTES-drs) |
+| GC | gc.js | none (0.2 MB) | none | a hidden tab draws nothing, a saved project's CSVs in 8 ms against 83 | 46 / 161 ms | 145 ms (NOTES-gc-epr) |
+| EPR | epr.js | none (0.4 MB) | none | a woken tab takes its history's spectra | 46 / 129 ms | 123 ms (NOTES-gc-epr) |
+
+What a hidden awake tab holds beyond its sleeping form (each module's `bytes()` is fitted to
+it): an XRPD tab of 12 refined 5.2 MB of heap and 3345 DOM nodes; a SEM tab of 8 images
+3.5 MB once hidden; DRS, GC and EPR tabs of 10 files 0.2–0.8 MB and 600–2800 nodes.
+
+## Fixed in the integration
+
+The five stage patches applied in order without a conflict (the files they share, xrd-rv.js
+and tests/README.md, in different places; index.html and style.css only in the core), and
+every check above passed on them as they were. One defect the GC/EPR and DRS stages had
+found in the core, and measured, was fixed:
+
+- **`releasePlot` let no element go.** A plot's tool buttons keep its Plot until the plot is
+  drawn anew, and the Plot kept the groups taken out of the svg, with every element drawn in
+  them. It now drops them too (plot.js, 3 lines). XRPD's trim, the only caller, gives back
+  626 DOM nodes more of an XRPD tab of 12 refined (7231 → 6605) and 5.7 MB more of RSS (its
+  trim 7.2 → 12.9 MB; 3 runs each, `measure/trim-nodes.mjs` → `results/trim-nodes.json`).
+  In the session above, trimmed: 11015 nodes against 11999 before the fix.
+
+And the tests: `tests/b2cross.test.mjs` (above), and the rows of `b2drs` and `b2cross` in
+tests/README.md, whose count of tests is now 202 (the DRS stage had left its row out, so that
+the stage patches would apply one after another).
+
+## Behaviour changes for the user
+
+- Leaving a tab whose job runs asks nothing; the job goes on. Closing it asks.
+- A tab shown after sleeping takes 0.12–0.54 s: XRPD's (0.49–0.54 s) is slower than v517's
+  switch (0.31 s), since its Rietveld curves (131 ms of it, profiled) and its patterns'
+  processing (67 ms) are made again; SEM's, DRS's, GC's and EPR's are faster than v517's
+  switch. After a 60 s trim an XRPD tab shows in 0.41 s, a SEM tab in 0.11 s.
+- **A SEM project file written by b2 cannot be opened by v517**: its files are kept as bytes,
+  not base64. v517's records and project files open in b2 (checked above). DRS's projects
+  no longer hold the energies; v517 makes them again from the wavelengths (checked by the
+  DRS stage: the same E_g and E_U).
+- The figure composer opens over the tab on show only, as in v517.
+
+## What is left, and the effort to production
+
+**To release b2 as it is: about 2 days.**
+
+1. A review of the patch by the maintainer, and the release's chores (the version, sw.js's
+   CACHE, README.md, BACKLOG.md): 1 day.
+2. A check in a real Chrome or Edge on the user's machine, with his files: a window left in
+   the background (timers held back: sleep and trim come late, never early; Memory Saver
+   discards the whole page, as in v517), real Tescan TIFFs (the zero-copy view needs the
+   image's strips in one run at an even offset, as Tescan writes them; synthetic files
+   only were measured), his own refinements: 0.5–1 day.
+
+**Memory still to be had, by what it gives** (each measured where said):
+
+1. **The bytes of a sleeping SEM tab** stay in memory: in the session above, 136 MB of the
+   172 MB the page holds with every tab asleep. IndexedDB already holds them by their
+   SHA-256. Letting them go at sleep and reading them back at wake needs
+   an asynchronous wake in tabs.js, db.js reading bytes by hash, and every reader of a
+   file's bytes (the CSVs from Projects, a project's export, Save, the composer) waiting for
+   them: about 2 days.
+2. **Frozen arrays of numbers take twice the memory** in Chromium (16 bytes an element
+   against 8; NOTES-drs.md). XRPD freezes its patterns' arrays (v517), and db.js shares
+   frozen arrays: 1.5 MB more per XRPD tab of 12 patterns, all the time. A registry of the
+   arrays never changed in place (a WeakSet) would let db.js and utils.js `stateKey` share
+   them unfrozen, and DRS's and EPR's parked states would stop copying theirs (0.16–0.19 MB
+   a sleeping tab of 10 files): 0.5 day.
+3. **A trim keeps the section's own elements** (cards, tables, file lists, legends): an
+   XRPD tab of 12 refined and trimmed still holds 2708 DOM nodes more than asleep, and the
+   renderer's RSS falls by a further 32 MB when it sleeps (3 runs,
+   `results/trim-nodes.json`). Letting them go at the trim would mean making the section
+   again at the show, as a wake does (0.5 s against 0.4 s). The Settings' minutes already
+   choose that trade: a shorter sleep gives this memory back sooner.
+
+**Time still to be had:** an XRPD tab's wake (0.5 s) would come down to about its trim's
+show by keeping its Rietveld curves by result at module level, at their memory: 0.5 day.
+
+**Not handled, as in v517:** two windows of the app each have their own tabs (they share
+the pool's cap); the composer is the tab on show's.
+
+With the memory and time items, about 5 days in all.
+
+## Method, trees, housekeeping
+
+- Trees in the scratchpad: `b2int/head` (HEAD), `b2int/t` (HEAD + the five patches, then the
+  integration: a local git the patch was made from), `b2int/final2` (a fresh copy of HEAD
+  with b2.patch applied, where the final suite ran), `b2int/final` (the same before the
+  releasePlot fix: trim-nodes' "without"). Servers on ports 8996, 8997 (b2) and 8998
+  (HEAD), stopped by their PIDs.
+- No file of the main tree outside `proto/live-tabs-b2/` was edited, and no git command that
+  changes state was run there.

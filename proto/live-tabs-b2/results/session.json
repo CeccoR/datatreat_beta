@@ -1,0 +1,178 @@
+{
+ "method": "measure/session.mjs: headless Chromium, 4 vCPUs, one tree at a time, forced GCs before each memory reading",
+ "b2": {
+  "tree": "b2",
+  "refineShownMs": 5212,
+  "semDuringRun": {
+   "switchAB": {
+    "med": 89.6,
+    "max": 138.8,
+    "n": 12
+   },
+   "next": {
+    "med": 42.6,
+    "max": 59.5,
+    "n": 5
+   }
+  },
+  "refineHiddenMs": 5701,
+  "sameResults": true,
+  "semIdle": {
+   "switchAB": {
+    "med": 69.7,
+    "max": 87.6,
+    "n": 10
+   },
+   "next": {
+    "med": 31.4,
+    "max": 33.8,
+    "n": 5
+   }
+  },
+  "tabs": [
+   "tauc",
+   "gc",
+   "epr",
+   "tauc",
+   "gc",
+   "epr",
+   "xrd",
+   "sem",
+   "sem",
+   "xrd"
+  ],
+  "mem": {
+   "allAwake": {
+    "heap": 18.5,
+    "nodes": 14508,
+    "listeners": 2078,
+    "rss": 453.3,
+    "ab": 163,
+    "gpu": 0,
+    "workers": 1
+   },
+   "limit6": {
+    "heap": 18.3,
+    "nodes": 12140,
+    "listeners": 1746,
+    "rss": 451.9,
+    "ab": 163,
+    "gpu": 0,
+    "workers": 1
+   },
+   "trimmed": {
+    "heap": 10.4,
+    "nodes": 11015,
+    "listeners": 1689,
+    "rss": 418.1,
+    "ab": 162.9,
+    "gpu": 0,
+    "workers": 1
+   },
+   "asleep": {
+    "heap": 9.3,
+    "nodes": 2870,
+    "listeners": 304,
+    "rss": 407.8,
+    "ab": 162.9,
+    "gpu": 0,
+    "workers": 1
+   }
+  },
+  "awakeAtLimit": 7,
+  "bytes": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   37072928,
+   0,
+   0
+  ],
+  "shows": {
+   "x1": {
+    "med": 534.6,
+    "all": [
+     534.6,
+     581.5,
+     493.6
+    ]
+   },
+   "semB": {
+    "med": 180.2,
+    "all": [
+     203.6,
+     175.6,
+     180.2
+    ]
+   },
+   "drs1": {
+    "med": 143.5,
+    "all": [
+     143.5,
+     129.6,
+     144.7
+    ]
+   }
+  },
+  "errors": []
+ },
+ "head": {
+  "tree": "head",
+  "refineShownMs": 9772,
+  "refineShownMs2": 8722,
+  "semIdle": {
+   "switchAB": {
+    "med": 304,
+    "max": 378.2,
+    "n": 10
+   },
+   "next": {
+    "med": 31.2,
+    "max": 35.4,
+    "n": 5
+   }
+  },
+  "mem": {
+   "parked": {
+    "heap": 198.5,
+    "nodes": 8018,
+    "listeners": 1144,
+    "rss": 683.2,
+    "ab": 145,
+    "gpu": 0,
+    "workers": 2
+   }
+  },
+  "shows": {
+   "x1": {
+    "med": 280.6,
+    "all": [
+     409.7,
+     280.6,
+     256.5
+    ]
+   },
+   "semB": {
+    "med": 306.8,
+    "all": [
+     306.8,
+     307.9,
+     294.2
+    ]
+   },
+   "drs1": {
+    "med": 146.3,
+    "all": [
+     176.2,
+     146.3,
+     142.7
+    ]
+   }
+  },
+  "errors": []
+ }
+}

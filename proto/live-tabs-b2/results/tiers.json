@@ -1,0 +1,145 @@
+{
+ "memory": {
+  "awake": {
+   "heap": 12.4,
+   "nodes": 7212,
+   "listeners": 1035,
+   "rss": 219.5
+  },
+  "trimmed": {
+   "heap": 7.7,
+   "nodes": 7212,
+   "listeners": 1035,
+   "rss": 196.5
+  },
+  "asleep": {
+   "heap": 7.5,
+   "nodes": 3867,
+   "listeners": 525,
+   "rss": 176.3
+  }
+ },
+ "show": {
+  "awake": {
+   "ms": 82.3,
+   "longMs": 0,
+   "max": 93.9,
+   "all": [
+    {
+     "ms": 85.6,
+     "longTasks": 0,
+     "longMs": 0
+    },
+    {
+     "ms": 75.9,
+     "longTasks": 0,
+     "longMs": 0
+    },
+    {
+     "ms": 71.5,
+     "longTasks": 0,
+     "longMs": 0
+    },
+    {
+     "ms": 82.3,
+     "longTasks": 0,
+     "longMs": 0
+    },
+    {
+     "ms": 79,
+     "longTasks": 0,
+     "longMs": 0
+    },
+    {
+     "ms": 93.9,
+     "longTasks": 0,
+     "longMs": 0
+    },
+    {
+     "ms": 83.8,
+     "longTasks": 0,
+     "longMs": 0
+    }
+   ]
+  },
+  "trimmed": {
+   "ms": 409.3,
+   "longMs": 353,
+   "max": 461.3,
+   "all": [
+    {
+     "ms": 427.3,
+     "longTasks": 2,
+     "longMs": 382
+    },
+    {
+     "ms": 360.3,
+     "longTasks": 2,
+     "longMs": 313
+    },
+    {
+     "ms": 451.7,
+     "longTasks": 2,
+     "longMs": 403
+    },
+    {
+     "ms": 395.9,
+     "longTasks": 2,
+     "longMs": 353
+    },
+    {
+     "ms": 409.3,
+     "longTasks": 2,
+     "longMs": 344
+    },
+    {
+     "ms": 461.3,
+     "longTasks": 2,
+     "longMs": 388
+    },
+    {
+     "ms": 406.5,
+     "longTasks": 2,
+     "longMs": 350
+    }
+   ]
+  },
+  "asleep": {
+   "ms": 485.4,
+   "longMs": 387,
+   "max": 544.9,
+   "all": [
+    {
+     "ms": 544.9,
+     "longTasks": 1,
+     "longMs": 437
+    },
+    {
+     "ms": 485.4,
+     "longTasks": 1,
+     "longMs": 389
+    },
+    {
+     "ms": 486.2,
+     "longTasks": 1,
+     "longMs": 387
+    },
+    {
+     "ms": 454.3,
+     "longTasks": 1,
+     "longMs": 356
+    },
+    {
+     "ms": 439,
+     "longTasks": 1,
+     "longMs": 353
+    }
+   ]
+  }
+ },
+ "toB": {
+  "ms": 60.9,
+  "max": 90.2
+ },
+ "errors": []
+}
