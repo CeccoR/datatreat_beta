@@ -13,8 +13,13 @@
      RSS and Private, the GPU process's Private; the workers alive are the renderer's
      threads named DedicatedWorker (the pool's, SEM's reader). Peaks: the same Private sum and
      renderer RSS sampled every 200 ms with no GC.
+   - The context: off the record (browser.newContext), unless LIM_PROFILE=disk: a profile on
+     disk (launchPersistentContext, a new directory each run), as a real browser has. Off
+     the record IndexedDB is kept in the browser process's memory, up to the origin's quota
+     of some 980 MB, past which writes fail (idb-mem.mjs, results/idb-mem.json).
    - Long tasks from a PerformanceObserver in every realm, by absolute time. */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
@@ -75,13 +80,21 @@ function procSum(){
 }
 
 export async function launch(tree, { knobs = {} } = {}){
-  const b1 = tree === 'b1';
-  const browser = await chromium.launch({ args: ['--enable-precise-memory-info'] });
-  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, serviceWorkers: 'block', timezoneId: 'UTC', locale: 'en-US', colorScheme: 'dark' });
+  const b1 = tree === 'b1', args = ['--enable-precise-memory-info'];
+  const opts = { viewport: { width: 1400, height: 900 }, serviceWorkers: 'block', timezoneId: 'UTC', locale: 'en-US', colorScheme: 'dark' };
+  let browser, ctx;
+  if (process.env.LIM_PROFILE === 'disk'){
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lim-profile-'));
+    ctx = await chromium.launchPersistentContext(dir, { args, ...opts });
+    browser = { close: async ()=>{ await ctx.close(); fs.rmSync(dir, { recursive: true, force: true }); } };
+  } else {
+    browser = await chromium.launch({ args });
+    ctx = await browser.newContext(opts);
+  }
   await ctx.addInitScript(INIT);
   const ls = { ...(b1 ? { 'datatreat-live-tabs': 'on' } : {}), ...knobs };
   await ctx.addInitScript(o=>{ try { for (const [k, v] of Object.entries(o)) localStorage.setItem(k, v); } catch(e){} }, ls);
-  const page = await ctx.newPage();
+  const page = ctx.pages()[0] || await ctx.newPage();
   const errors = [];
   page.on('pageerror', e=> errors.push('pageerror: ' + e.message));
   page.on('crash', ()=> errors.push('CRASH'));

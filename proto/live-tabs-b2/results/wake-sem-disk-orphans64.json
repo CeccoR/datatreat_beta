@@ -1,0 +1,758 @@
+{
+ "profile": "disk",
+ "T": 20,
+ "wakes": [
+  {
+   "tab": 1,
+   "ms": 388.6,
+   "long": {
+    "n": 1,
+    "sum": 79,
+    "max": 79,
+    "over200": 0
+   },
+   "top": [
+    [
+     "q.onsuccess db.js:437",
+     118.3
+    ],
+    [
+     "levelsRow sem.js:384",
+     18.5
+    ],
+    [
+     "(garbage collector) :0",
+     15.4
+    ],
+    [
+     "putImageData :0",
+     12.7
+    ],
+    [
+     "makeLut sem.js:352",
+     10.3
+    ],
+    [
+     "fitWork sem.js:1345",
+     6.7
+    ],
+    [
+     "getBBox :0",
+     4.6
+    ],
+    [
+     "drawHist sem.js:1560",
+     3.4
+    ],
+    [
+     "toCanvas sem.js:368",
+     3.1
+    ],
+    [
+     "renderTabs tabs.js:540",
+     2.3
+    ],
+    [
+     "setTransform :0",
+     2.3
+    ],
+    [
+     "inFigure sem.js:1167",
+     2.1
+    ]
+   ],
+   "program": 213.8
+  },
+  {
+   "tab": 2,
+   "loadMs": {
+    "ms": 212,
+    "lost": 0
+   },
+   "ms": 330.4,
+   "long": {
+    "n": 1,
+    "sum": 65,
+    "max": 65,
+    "over200": 0
+   }
+  },
+  {
+   "tab": 3,
+   "ms": 416.8,
+   "long": {
+    "n": 1,
+    "sum": 78,
+    "max": 78,
+    "over200": 0
+   },
+   "top": [
+    [
+     "q.onsuccess db.js:437",
+     124
+    ],
+    [
+     "(garbage collector) :0",
+     22.3
+    ],
+    [
+     "putImageData :0",
+     16.1
+    ],
+    [
+     "levelsRow sem.js:384",
+     15.5
+    ],
+    [
+     "makeLut sem.js:352",
+     13
+    ],
+    [
+     "fitWork sem.js:1345",
+     6.3
+    ],
+    [
+     "renderUnifiedFileList utils.js:863",
+     4.2
+    ],
+    [
+     "getBBox :0",
+     4
+    ],
+    [
+     "toCanvas sem.js:368",
+     2.7
+    ],
+    [
+     "getBoundingClientRect :0",
+     2.4
+    ],
+    [
+     "renderTabs tabs.js:540",
+     2.3
+    ],
+    [
+     "fitGroupName sem.js:1267",
+     1.8
+    ]
+   ],
+   "program": 179.6
+  },
+  {
+   "tab": 4,
+   "loadMs": {
+    "ms": 167,
+    "lost": 0
+   },
+   "ms": 379.7,
+   "long": {
+    "n": 1,
+    "sum": 70,
+    "max": 70,
+    "over200": 0
+   }
+  },
+  {
+   "tab": 5,
+   "ms": 417.8,
+   "long": {
+    "n": 1,
+    "sum": 85,
+    "max": 85,
+    "over200": 0
+   },
+   "top": [
+    [
+     "q.onsuccess db.js:437",
+     130.2
+    ],
+    [
+     "levelsRow sem.js:384",
+     23
+    ],
+    [
+     "putImageData :0",
+     22
+    ],
+    [
+     "(garbage collector) :0",
+     19.3
+    ],
+    [
+     "makeLut sem.js:352",
+     11.3
+    ],
+    [
+     "fitWork sem.js:1345",
+     4.3
+    ],
+    [
+     "lru sem.js:162",
+     3.4
+    ],
+    [
+     "$ sem.js:232",
+     3
+    ],
+    [
+     "querySelector :0",
+     2.8
+    ],
+    [
+     "toCanvas sem.js:368",
+     2.2
+    ],
+    [
+     "renderTabs tabs.js:540",
+     2.1
+    ],
+    [
+     "getBBox :0",
+     2
+    ]
+   ],
+   "program": 175.8
+  },
+  {
+   "tab": 6,
+   "loadMs": {
+    "ms": 198,
+    "lost": 0
+   },
+   "ms": 388.2,
+   "long": {
+    "n": 1,
+    "sum": 78,
+    "max": 78,
+    "over200": 0
+   }
+  },
+  {
+   "tab": 7,
+   "ms": 367.7,
+   "long": {
+    "n": 1,
+    "sum": 62,
+    "max": 62,
+    "over200": 0
+   },
+   "top": [
+    [
+     "q.onsuccess db.js:437",
+     120
+    ],
+    [
+     "(garbage collector) :0",
+     22.3
+    ],
+    [
+     "levelsRow sem.js:384",
+     14.9
+    ],
+    [
+     "putImageData :0",
+     13.5
+    ],
+    [
+     "makeLut sem.js:352",
+     9.3
+    ],
+    [
+     "fitWork sem.js:1345",
+     5.3
+    ],
+    [
+     "getBBox :0",
+     5.2
+    ],
+    [
+     "paneSize sem.js:881",
+     2.4
+    ],
+    [
+     "toCanvas sem.js:368",
+     2.1
+    ],
+    [
+     "querySelector :0",
+     1.8
+    ],
+    [
+     "renderTabs tabs.js:540",
+     1.8
+    ],
+    [
+     "levelAt sem.js:298",
+     1.7
+    ]
+   ],
+   "program": 166.8
+  },
+  {
+   "tab": 8,
+   "loadMs": {
+    "ms": 189,
+    "lost": 0
+   },
+   "ms": 383.4,
+   "long": {
+    "n": 1,
+    "sum": 99,
+    "max": 99,
+    "over200": 0
+   }
+  },
+  {
+   "tab": 9,
+   "ms": 867.6,
+   "long": {
+    "n": 1,
+    "sum": 551,
+    "max": 551,
+    "over200": 1
+   },
+   "top": [
+    [
+     "rowSums sem-read.js:305",
+     215.7
+    ],
+    [
+     "q.onsuccess db.js:437",
+     124.7
+    ],
+    [
+     "resampleRow sem-read.js:332",
+     97.5
+    ],
+    [
+     "histRow sem-read.js:304",
+     68.1
+    ],
+    [
+     "reducedCopy sem-read.js:271",
+     55.5
+    ],
+    [
+     "(garbage collector) :0",
+     21.9
+    ],
+    [
+     "putImageData :0",
+     16.9
+    ],
+    [
+     "resample sem-read.js:315",
+     16.3
+    ],
+    [
+     "levelsRow sem.js:384",
+     14.9
+    ],
+    [
+     "drawHist sem.js:1560",
+     12.3
+    ],
+    [
+     "makeLut sem.js:352",
+     11.6
+    ],
+    [
+     "fitWork sem.js:1345",
+     6.6
+    ]
+   ],
+   "program": 169.1
+  },
+  {
+   "tab": 10,
+   "loadMs": {
+    "ms": 216,
+    "lost": 0
+   },
+   "ms": 668,
+   "long": {
+    "n": 1,
+    "sum": 368,
+    "max": 368,
+    "over200": 1
+   }
+  },
+  {
+   "tab": 11,
+   "ms": 810.3,
+   "long": {
+    "n": 1,
+    "sum": 477,
+    "max": 477,
+    "over200": 1
+   },
+   "top": [
+    [
+     "rowSums sem-read.js:305",
+     179.1
+    ],
+    [
+     "q.onsuccess db.js:437",
+     140.6
+    ],
+    [
+     "resampleRow sem-read.js:332",
+     82.8
+    ],
+    [
+     "histRow sem-read.js:304",
+     51
+    ],
+    [
+     "reducedCopy sem-read.js:271",
+     46.2
+    ],
+    [
+     "levelsRow sem.js:384",
+     29.8
+    ],
+    [
+     "(garbage collector) :0",
+     24
+    ],
+    [
+     "putImageData :0",
+     17
+    ],
+    [
+     "resample sem-read.js:315",
+     11.4
+    ],
+    [
+     "makeLut sem.js:352",
+     10.8
+    ],
+    [
+     "fitWork sem.js:1345",
+     6.8
+    ],
+    [
+     "paneSize sem.js:881",
+     5.5
+    ]
+   ],
+   "program": 166.8
+  },
+  {
+   "tab": 12,
+   "loadMs": {
+    "ms": 216,
+    "lost": 0
+   },
+   "ms": 827.7,
+   "long": {
+    "n": 1,
+    "sum": 519,
+    "max": 519,
+    "over200": 1
+   }
+  },
+  {
+   "tab": 13,
+   "ms": 820.2,
+   "long": {
+    "n": 2,
+    "sum": 561,
+    "max": 496,
+    "over200": 1
+   },
+   "top": [
+    [
+     "rowSums sem-read.js:305",
+     198.1
+    ],
+    [
+     "q.onsuccess db.js:437",
+     120.8
+    ],
+    [
+     "resampleRow sem-read.js:332",
+     93.2
+    ],
+    [
+     "reducedCopy sem-read.js:271",
+     50.7
+    ],
+    [
+     "(garbage collector) :0",
+     47
+    ],
+    [
+     "histRow sem-read.js:304",
+     45.5
+    ],
+    [
+     "putImageData :0",
+     16
+    ],
+    [
+     "levelsRow sem.js:384",
+     15.2
+    ],
+    [
+     "resample sem-read.js:315",
+     13.5
+    ],
+    [
+     "makeLut sem.js:352",
+     13.2
+    ],
+    [
+     "fitWork sem.js:1345",
+     7.3
+    ],
+    [
+     "setTransform :0",
+     5.3
+    ]
+   ],
+   "program": 169.5
+  },
+  {
+   "tab": 14,
+   "loadMs": {
+    "ms": 193,
+    "lost": 0
+   },
+   "ms": 699.2,
+   "long": {
+    "n": 1,
+    "sum": 434,
+    "max": 434,
+    "over200": 1
+   }
+  },
+  {
+   "tab": 15,
+   "ms": 833.7,
+   "long": {
+    "n": 1,
+    "sum": 498,
+    "max": 498,
+    "over200": 1
+   },
+   "top": [
+    [
+     "rowSums sem-read.js:305",
+     194.9
+    ],
+    [
+     "q.onsuccess db.js:437",
+     131.4
+    ],
+    [
+     "resampleRow sem-read.js:332",
+     95.5
+    ],
+    [
+     "reducedCopy sem-read.js:271",
+     52.2
+    ],
+    [
+     "histRow sem-read.js:304",
+     45.4
+    ],
+    [
+     "(garbage collector) :0",
+     38
+    ],
+    [
+     "putImageData :0",
+     16.6
+    ],
+    [
+     "levelsRow sem.js:384",
+     15.6
+    ],
+    [
+     "makeLut sem.js:352",
+     13.6
+    ],
+    [
+     "resample sem-read.js:315",
+     12.2
+    ],
+    [
+     "uniformRun sem-read.js:189",
+     5.3
+    ],
+    [
+     "fitWork sem.js:1345",
+     5.2
+    ]
+   ],
+   "program": 180
+  },
+  {
+   "tab": 16,
+   "loadMs": {
+    "ms": 212,
+    "lost": 0
+   },
+   "ms": 790.1,
+   "long": {
+    "n": 1,
+    "sum": 484,
+    "max": 484,
+    "over200": 1
+   }
+  },
+  {
+   "tab": 17,
+   "ms": 819.8,
+   "long": {
+    "n": 1,
+    "sum": 520,
+    "max": 520,
+    "over200": 1
+   },
+   "top": [
+    [
+     "rowSums sem-read.js:305",
+     213.2
+    ],
+    [
+     "q.onsuccess db.js:437",
+     108.5
+    ],
+    [
+     "resampleRow sem-read.js:332",
+     86.2
+    ],
+    [
+     "reducedCopy sem-read.js:271",
+     61.5
+    ],
+    [
+     "histRow sem-read.js:304",
+     50.2
+    ],
+    [
+     "(garbage collector) :0",
+     29.4
+    ],
+    [
+     "toCanvas sem.js:368",
+     17.5
+    ],
+    [
+     "putImageData :0",
+     17
+    ],
+    [
+     "makeLut sem.js:352",
+     15.1
+    ],
+    [
+     "fitWork sem.js:1345",
+     11.8
+    ],
+    [
+     "resample sem-read.js:315",
+     8.9
+    ],
+    [
+     "paneSize sem.js:881",
+     5.4
+    ]
+   ],
+   "program": 162.6
+  },
+  {
+   "tab": 18,
+   "loadMs": {
+    "ms": 213,
+    "lost": 0
+   },
+   "ms": 765.6,
+   "long": {
+    "n": 2,
+    "sum": 473,
+    "max": 418,
+    "over200": 1
+   }
+  },
+  {
+   "tab": 19,
+   "ms": 926.2,
+   "long": {
+    "n": 3,
+    "sum": 604,
+    "max": 488,
+    "over200": 1
+   },
+   "top": [
+    [
+     "q.onsuccess db.js:437",
+     232.4
+    ],
+    [
+     "rowSums sem-read.js:305",
+     188.7
+    ],
+    [
+     "resampleRow sem-read.js:332",
+     90.1
+    ],
+    [
+     "reducedCopy sem-read.js:271",
+     55.5
+    ],
+    [
+     "histRow sem-read.js:304",
+     49.2
+    ],
+    [
+     "(garbage collector) :0",
+     41.8
+    ],
+    [
+     "putImageData :0",
+     16.4
+    ],
+    [
+     "toCanvas sem.js:368",
+     14.9
+    ],
+    [
+     "makeLut sem.js:352",
+     12.7
+    ],
+    [
+     "resample sem-read.js:315",
+     9.7
+    ],
+    [
+     "fitWork sem.js:1345",
+     9.1
+    ],
+    [
+     "sizeGroups sem.js:1316",
+     5.7
+    ]
+   ],
+   "program": 219
+  },
+  {
+   "tab": 20,
+   "loadMs": {
+    "ms": 520,
+    "lost": 0
+   },
+   "ms": 669.6,
+   "long": {
+    "n": 1,
+    "sum": 390,
+    "max": 390,
+    "over200": 1
+   }
+  }
+ ],
+ "allLight": true,
+ "errors": []
+}

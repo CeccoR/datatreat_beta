@@ -1,5 +1,9 @@
 # SEM made per tab (b2): sem.patch
 
+(b2v2, `NOTES-v2.md`: the trim these notes describe is gone from every module, and a
+sleeping SEM tab now lets go of its files' bytes. These notes record the first version as it
+was built and measured.)
+
 `sem.patch` makes SEM (sem.js, sem-read.js, sem-read.worker.js, sem-figure.js) a factory as
 `API.md` says: one live instance per SEM tab that is awake, in one page. It is a git diff
 against HEAD + `core.patch`; `git apply --check` is clean there, and on HEAD + core +

@@ -16,6 +16,7 @@
    The pool's workers end 1 s after their last job (datatreat-rv-idle) except where runs go on.
    At each N, X0 on show:
    1. memory after a forced GC (lim-lib mem), b2's tabsNow (awake, trimmed, busy, bytes());
+      (b2v2 has no trim: every hidden tab awake as it was left)
       peaks sampled while the tabs were made and while measured;
    2. 4 s idle: the long tasks (whatever the background tabs do);
    3. work: 8 × → (next sample) and 8 smoothing widths in X0, alternately; S0 shown (timed);
@@ -187,6 +188,11 @@ if (awakePolicy && !env.errors.includes('CRASH')){
   end.sleepAll = await page.evaluate(async ms=>{ const T = await import('./tabs.js'), t0 = performance.now(); T.sleepTick(Date.now() + ms); return performance.now() - t0; }, 1441*MIN);
   end.sleepAll = { ms: L.r1(end.sleepAll), tabs: n0 - (await tabsNow()).filter(t=> t.awake).length };
   await L.sleep(1500);
+  // (b2.patch of b2v2: a SEM tab asleep lets go of its files' bytes once its record is
+  // written: waited for, 60 s at most; those that did, of the SEM tabs asleep, counted)
+  const light = ()=> page.evaluate(async ()=>{ const T = await import('./tabs.js'), D = await import('./db.js'), s = T.TABS.filter(t=> !t.inst && t.module === 'sem');
+    return { light: D.unread ? s.filter(t=> D.unread(t.state)).length : null, asleep: s.length }; });
+  for (const t1 = Date.now() + 60000; ; await L.sleep(500)){ end.semAsleep = await light(); if (end.semAsleep.light == null || end.semAsleep.light === end.semAsleep.asleep || Date.now() > t1) break; }
   end.memAsleep = await env.mem();
   end.wakes = [];
   for (const b of [bg[bg.length - 1], bg[Math.floor(bg.length/2)], bg[0], bg[1]].filter(Boolean).filter((b, j, a)=> a.indexOf(b) === j)){
@@ -196,7 +202,7 @@ if (awakePolicy && !env.errors.includes('CRASH')){
   }
   end.memAfterWakes = await env.mem();
   out.end = end;
-  log('sleep all', JSON.stringify(end.sleepAll), '| asleep Private', end.memAsleep.allPriv, 'rend RSS', end.memAsleep.rendRss, 'heap', end.memAsleep.heap, 'ab', end.memAsleep.ab, 'browser', end.memAsleep.browserPriv, '| wakes', end.wakes.map(w=> `${w.kind} ${w.was} ${w.ms} (long ${w.long.max})`).join(', '));
+  log('sleep all', JSON.stringify(end.sleepAll), '| SEM asleep without their bytes', JSON.stringify(end.semAsleep), '| asleep Private', end.memAsleep.allPriv, 'rend RSS', end.memAsleep.rendRss, 'heap', end.memAsleep.heap, 'ab', end.memAsleep.ab, 'browser', end.memAsleep.browserPriv, '| wakes', end.wakes.map(w=> `${w.kind} ${w.was} ${w.ms} (long ${w.long.max})`).join(', '));
 }
 out.ended = new Date().toISOString();
 log('saved', L.save(`lim-${tree}${TAG}-${kind}${b2 && policy !== 'awake' ? '-' + policy : ''}.json`, out), 'errors', env.errors.length);

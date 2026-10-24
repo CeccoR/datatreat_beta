@@ -1,0 +1,49 @@
+✔ ten tabs, two of each module: each its own files and undo across switches; beyond the limit the one not shown for longest asleep; all asleep past the minutes, let go, woken with their histories (20064.666437ms)
+✔ a refinement on the pool in an XRPD tab left, while a SEM and a DRS tab are worked in: each history its own, the run's step and record its tab's (9812.101051ms)
+✔ a saved project of each module: a hidden tab closed with Save, saved as it is; a reload, the others asleep until shown; reopened; Projects' CSVs those of the project bar (8598.210837ms)
+✔ two SEM tabs awake at once: each its own files, view and undo; a file in both one array, one worker for both (2494.038251ms)
+✔ a reading goes on in a tab left: nothing asked, its files in its own list as one step, its record and its "*"; awake till its end, its time hidden counted from then (1599.213673ms)
+✔ hidden: the editor's image let go at once and nothing else till it sleeps; asleep past Settings' minutes, woken with its whole history (2776.72131ms)
+✔ asleep, its files' bytes let go once the store holds them, one a tab awake holds kept; woken from the store as it was, history, thumbnails and editor; an undo bringing back a file only its history held (3488.002918ms)
+✔ a wake reading its files: one read for two wakes asked, left or closed meanwhile given up, no key reaching another tab; files no longer stored lost and said, the rest as it was (4571.733671ms)
+✔ a tab asleep without its bytes: Projects' CSV of its project; closed hidden with Save, saved with its files, reopened from Projects; a reload, the tab not on show back without its bytes, read as it wakes (5379.015794ms)
+✔ two XRPD tabs awake at once: each its own files, view and undo; a switch to one awake only shows it (2674.963267ms)
+✔ a refinement goes on in a tab left, on the pool: the results of one refined on show, its history's step, its record, its "*" (11405.239875ms)
+✔ asleep past Settings' minutes, a busy tab not until its job's end, the one hidden longest beyond the tabs awake allowed; woken with its whole history (4957.918664ms)
+✔ the LRU: beyond two tabs awake hidden, the one not shown for longest sleeps, a woken one counting from its show (2317.613829ms)
+✔ a hidden tab saved as it is closed, reopened from Projects; a reload: the tab on show awake, the others woken as shown (3717.852976ms)
+✔ park keeps the bytes and the text holders as they are, the rest as encode; decode gives them back (139.024324ms)
+✔ stored: hashes in the record, the ids of shared bytes, texts by their bytes, a text not canonical inline (6.599988ms)
+✔ stored without WebCrypto is encode's form; without WeakRef it still works (2.0571ms)
+✔ a reference that reaches decode unread is null and said; a project file's references are no bytes (1.002867ms)
+✔ saved: records small, holding hashes, each file's bytes once; back byte for byte after a reload, a switch, an open, an import; the list's export the bar's (9940.226822ms)
+✔ a database of v516 (version 3): upgraded with its records untouched, read as they are, written anew at their next write (3982.461946ms)
+✔ the sweep: the bytes no record holds go, those a record or another page's tab holds stay or come back (5095.635322ms)
+✔ one transaction: a bytes put that fails writes no record (209.820952ms)
+✔ bytes missing or unreadable: the other files and tabs back, said so; XRPD and SEM without them; the list's export says it (3318.552805ms)
+✔ an EPR pair whose .DTA bytes are not stored: its download says so, not a zip with an empty file (1437.947501ms)
+✔ no WebCrypto (a page over plain http): records hold the bytes as before, nothing in the bytes store, all back after a reload (2967.901154ms)
+✔ a newer version opened in another window: this one writes out its last edit, lets go at once, and says to reload (856.549839ms)
+✔ the upgrade held back by an older window: said; a tab opened meanwhile keeps its work when the restored tabs come (4359.575687ms)
+✔ no hashing again: a GC, a switch there and back, a reload; the record written at once (1743.125529ms)
+✔ a rename from the list writes the title alone, and brings back no project another page deleted; a connection lost is opened again (2458.977791ms)
+✔ a save waiting on the database: a second press makes no second project and asks nothing twice; Save as pressed twice makes one copy (4363.14318ms)
+✔ what changes while a save waits stays unsaved: another tab shown then, an edit, a name typed; a close that saves keeps a tab changed meanwhile (5699.677985ms)
+✔ XRPD: saved, reloaded, exported, imported, old formats: the originals byte for byte (7211.598357ms)
+✔ SEM: a saved project gives its TIFFs back byte for byte after a reload (1257.898225ms)
+✔ import: not a project refused; changed after signing, or newer, asked (2429.157888ms)
+✔ groups: by scale, an excluded image left out of its group and of its name (1418.673925ms)
+✔ a renamed label shows everywhere, and its undo too (871.951986ms)
+✔ crop: a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step (3066.89169ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 148992.701263
+
+real	2m29.034s
+user	0m37.864s
+sys	0m8.310s

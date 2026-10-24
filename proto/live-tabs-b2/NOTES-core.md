@@ -1,5 +1,9 @@
 # The core and XRPD made per tab (b2): core.patch, xrd.patch
 
+(b2v2, `NOTES-v2.md`: the trim these notes describe is gone from every module, and a
+sleeping SEM tab now lets go of its files' bytes. These notes record the first version as it
+was built and measured.)
+
 The notes of b2's first stage: the shell, the registries, the sessions, the kit, cards,
 plots and the workers' pool (`core.patch`), and XRPD made per tab on it (`xrd.patch`).
 `README.md` is the whole of b2; `API.md` says how a module is made per tab, with XRPD as the

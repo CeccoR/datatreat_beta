@@ -5,7 +5,9 @@ tab, in one page. XRPD is the worked example: `xrd.patch` converts it on top of
 `core.patch`. It was written so that SEM, DRS, GC and EPR could be converted from it alone,
 and they were (`sem.patch`, `drs.patch`, `gc-epr.patch`; their notes are NOTES-*.md): every
 module is now made per tab, and `b2.patch` holds the whole. §12 is the plan those stages
-followed. `README.md` holds the state of b2 and its measurements.
+followed. `README.md` holds the state of b2 and its measurements; `NOTES-v2.md` the later
+changes in `b2.patch` (no trim; a sleeping SEM tab without its files' bytes), which this
+page describes as they now are.
 
 ## 1. What the shell does
 
@@ -19,18 +21,22 @@ works differently:
 - **A switch only shows and hides.** The instance's section and layer go into the page and
   the previous instance of the same module comes out, in the same task. Nothing is
   restored, and a job in a tab left goes on.
-- **Trim.** After `TRIM_MS` hidden (60 s) the shell calls the instance's `trim()`. The
-  instance lets go of what it can make again when it is shown (`show()`).
+- **Hidden, as it was left.** A hidden instance keeps all it has until its tab sleeps; it
+  may let go at once of what it remakes in under ~50 ms as it is shown (SEM's editor image,
+  §9). (The first version of b2 also had a trim, 60 s hidden; b2v2 took it out.)
 - **Sleep.** After `settings.sleepMin` minutes hidden (10 by default; Settings › Tabs in
   the background) the tab sleeps:
   - its state is parked (db.js `park`) and its whole undo history with it;
   - its instance is destroyed;
-  - the tab stays in the bar.
+  - the tab stays in the bar;
+  - a module registered with `dropBytes` (SEM) lets go of its files' bytes too, once the
+    store holds them, and reads them back as it wakes (§9).
 - **Wake.** A tab shown again while asleep wakes: a new instance is made, put in the page,
   given the parked state (`restoreModuleState`) and then the parked history
-  (`setModuleHistory`).
-- **Busy tabs never sleep.** A busy tab (`moduleBusy(key)`) is never trimmed or put to
-  sleep. Its time hidden counts from the end of its job.
+  (`setModuleHistory`). One whose files' bytes were let go reads them first, the loader on
+  show (§9); every other wakes at once, as in the first version.
+- **Busy tabs never sleep.** A busy tab (`moduleBusy(key)`) is never put to sleep. Its
+  time hidden counts from the end of its job.
 - **The limit.** Beyond `settings.liveMax` tabs awake and not on show (6), the one hidden
   longest that is not busy sleeps. With `settings.livePolicy = 'memory'` the limit is
   `settings.liveMB` instead (1500), the sum of their `bytes()`. Opening a tab is never
@@ -38,7 +44,9 @@ works differently:
 - **Persistence.** A tab's record is written from its live instance while it is awake
   (`park(getModuleState(key))`), otherwise from its parked state. This goes through v517's
   queue and the store of bytes by hash.
-- **Reload.** After a reload only the tab on show is woken; the others wake when shown.
+- **Reload.** After a reload only the tab on show is woken; the others wake when shown. A
+  tab of a `dropBytes` module not on show comes back holding its files' references only,
+  read as it wakes.
 
 A module not converted keeps v517's path unchanged: its one instance, its tabs parked when
 left, a question before leaving a tab whose job runs. Both kinds of module work side by
@@ -48,7 +56,7 @@ side.
 
 A module is made per tab when:
 
-1. its file calls `registerModule(mod, create)` (utils.js) instead of running an IIFE at load;
+1. its file calls `registerModule(mod, create, opts)` (utils.js) instead of running an IIFE at load;
 2. `create(ctx)` builds everything in `ctx.root` and `ctx.layer`, and finds its elements there,
    never in the document (§3);
 3. every registry call takes `ctx.key`, not the module's name (§4);
@@ -58,7 +66,7 @@ A module is made per tab when:
 6. a job that may run while its tab is hidden says when it starts and ends (`busyChanged(key)`),
    holds and releases the history as v509's jobs do, and writes only into its own instance (§7);
 7. `inst.destroy()` lets go of everything that would outlive it (§8);
-8. optionally `inst.trim()`, `inst.show()` and `inst.bytes()` (§9);
+8. optionally `inst.bytes()`, and `opts.dropBytes` for a module whose files are large (§9);
 9. caches keyed by data (file bytes, frozen arrays) live at module level, shared by the
    instances (§10);
 10. its tests still pass, and a test drives two of its tabs at once (§12).
@@ -67,7 +75,7 @@ A module is made per tab when:
 
 ```js
 // utils.js
-registerModule(mod, create)        // at the module file's load
+registerModule(mod, create, opts)  // at the module file's load; opts: { dropBytes } (§9)
 makeInstance(mod, key, spare)      // the shell's; spare: a tab's (may take index.html's section)
 attachInstance(inst) / detachInstance(inst)
 create(ctx) → inst
@@ -78,7 +86,7 @@ create(ctx) → inst
             so that the page's ids exist as in v517 before any tab of the module is opened)
     layer   a <div class="inst-layer"> (display: contents) for what it lays over the page
     shown() true while it is the instance on show (its section in the page and active)
-  inst = { destroy(), show?(), trim?(), bytes?() }   // the shell adds key, mod, root, layer
+  inst = { destroy(), bytes?() }   // the shell adds key, mod, root, layer
 ```
 
 **The ids belong to the instance on show.** The section and layer of the instance on show
@@ -249,26 +257,16 @@ retains that instance. Measure with files dropped through a `DragEvent`, as
 `waitForSelector` returns one (helpers.mjs `openModule`), and so does a `waitForFunction`
 whose predicate returns an element; return a boolean instead (NOTES-drs.md).
 
-## 9. trim, show, bytes
+## 9. What a hidden or sleeping tab lets go; bytes()
 
-- **`trim()`.** It runs after the tab has been hidden `TRIM_MS` (60 s), once, and never on a
-  busy tab. The instance lets go of what it can make again: derived arrays, its plots
-  (plot.js `releasePlot(svg)` empties the svg and drops its Plot and the arrays it keeps).
-- **`show()`.** It runs when the instance comes into the page. It remakes what `trim`
-  dropped. The redraw that follows draws the plots.
-- **The rule.** Drop at hide what can be remade in under ~50 ms. XRPD has none. Remaking its
-  12 patterns' processing took 67–86 ms and the redraw 120–240 ms (timed in the page while
-  this was decided). So XRPD drops them at `TRIM_MS`, not at hide:
-
-  | XRPD tab, 12 patterns refined, hidden | JS heap | renderer RSS | shown again |
-  |---|---|---|---|
-  | awake | 12.4 MB | 220 MB | 82 ms |
-  | trimmed | 7.7 MB | 197 MB | 409 ms |
-  | asleep | 7.5 MB | 176 MB | 485 ms (woken) |
-
-  Source: `results/tiers.json`. The numbers are the whole page's, with a blank XRPD tab on
-  show; shown-again times are medians of 7 (5 for a wake). v517's switch between two such
-  tabs takes 312 ms (`results/switch.json`).
+- **At hide, only what is remade in under ~50 ms.** SEM lets go of its editor's image at
+  full size (17 MB of canvas and pixels for 2048², remade in 25–29 ms as it is shown).
+  XRPD has nothing so cheap: remaking its 12 patterns' processing took 67–86 ms and the
+  redraw 120–240 ms (timed in the page while this was decided). Nothing else is let go
+  before the tab sleeps. (The first version of b2 had a trim at `TRIM_MS`, 60 s hidden:
+  XRPD let go of its plots, processing and curves, SEM of its thumbnails and cards, and the
+  next show drew them again, 0.41 s for XRPD against 0.08; `results/tiers.json`. b2v2 took
+  it out, `inst.trim()`, `inst.show()` and plot.js `releasePlot` with it: NOTES-v2.md.)
 - **Nothing kept twice, nothing kept for nothing.**
   - xrd-peaks kept a fourth array per pattern (the raw pattern less the baseline) that
     nothing read. It is gone.
@@ -276,13 +274,50 @@ whose predicate returns an element; return a boolean instead (NOTES-drs.md).
     parked XRPD state holds the same pattern arrays as its history.
   - xrd.js's cache of files read (`reread`) is per module, keyed by the file's bytes, so a
     tab woken reads nothing again and its patterns are the same arrays.
+- **A sleep without the files' bytes: `registerModule(mod, create, { dropBytes: true })`.**
+  For a module whose files are most of what a tab holds (SEM: 71 MB a tab of 8 images of
+  2048 × 2176 at 16 bits), the shell lets go of them when the tab sleeps, and reads them
+  back from IndexedDB, where the bytes store holds them by their SHA-256 (v517), as it
+  wakes (tabs.js `lighten`, `wakeLater`):
+  - **At sleep**, the tab's record is written with its state, and with the hashes of its
+    history's files beside its own (db.js `putRec`'s `also`: their bytes stored where the
+    store lacks them, the record holding them from the sweep). Once that write is done, and
+    only then, every array of bytes whose hash the page took is replaced, in the parked
+    state and in the parked history, by `{__t:'u8', h}` (db.js `unload`: one object for
+    one array, an id where it is met more than once, a class's objects copied as such, so
+    that SEM's RawRef keeps its JSON and the history its comparisons). A file not hashed
+    (no WebCrypto) keeps its bytes, and a write that fails lets go of none.
+  - **Nothing else may hold them.** What a module keeps by file must keep no bytes, or keep
+    them weakly, or only for its tabs awake: SEM's `raws` are WeakRefs, `imgs` hold headers,
+    reduced copies and card levels, `full` only the images of the tab on show and of a
+    reading, and what was made of a file let go stays for the files let go last, 32 MB at
+    most, so that a tab woken draws its thumbnails without making them again.
+  - **At wake**, the parked state and history are read back together (db.js `load`: an
+    array the page still holds of a hash, another tab's, is taken, the rest read from the
+    store in one transaction) and the tab then wakes as any other. Meanwhile the loader is
+    on and the module has no instance in the page (utils.js `vacate`: its name stands for
+    the key woken, so that the undo and arrow keys reach no other tab). One read a tab,
+    whatever wakes ask for it; given up if the tab is left, closed or woken otherwise
+    meanwhile. Bytes the store no longer has (cleared, evicted) come back as none, said in
+    a banner, and the module shows its files without them as it does after a reload (SEM:
+    out of the list, said in its alerts).
+  - **Who waits.** `tabs.js ensureLive()` returns the wake's promise: Save, Save as, the
+    exports, the CSVs, Delete and a close that saves await it. A tab asleep saved as it is
+    closed stores its references, the bytes being in the store. Projects' CSVs and exports
+    read the saved record with its bytes (db.js `readProject`), as before.
+  - **Only there.** `wakeTab` takes the asynchronous path only for a module registered with
+    `dropBytes` whose parked state or history holds references to read (db.js `unread`);
+    every other wake, every other module's included, is the synchronous one of the first
+    version, unchanged. After a reload, the records of a `dropBytes` module's tabs not on
+    show are read without their bytes (db.js `allTabStates(lazy)`).
 - **`bytes()`.** It estimates what sleeping would give back: the instance's elements and the
   data it derived and drew. It excludes its files and results, which the parked state and
-  the history keep. The memory policy sums it over the hidden awake tabs. Calibrate it with
-  `measure/bytes.mjs`. XRPD's:
+  the history keep (a `dropBytes` module's files too: its sleep gives them back as well,
+  which the estimate does not count). The memory policy sums it over the hidden awake tabs.
+  Calibrate it with `measure/bytes.mjs`. XRPD's:
 
   ```js
-  (1 << 20) + 2048*files + (trimmed ? 5*refinedPoints : 48*points*scherrerCards + 37*refinedPoints)
+  (1 << 20) + 2048*files + 48*points*scherrerCards + 37*refinedPoints
   ```
 
   Measured awake over asleep (`results/bytes.json`):
@@ -292,7 +327,6 @@ whose predicate returns an element; return a boolean instead (NOTES-drs.md).
   | blank | 0.1 MB | 1456 | 1.0 MB |
   | 12 patterns | 3.2 MB | 2535 | 4.0 MB |
   | 12 patterns refined | 5.2 MB | 3345 | 6.3 MB |
-  | the same, trimmed | 0.3 MB | 3345 | 1.3 MB |
 
 ## 10. Module-level and instance-level
 
@@ -327,22 +361,19 @@ unchanged.
 - The cards' host gets `hidden: … || !shown()`, `unseen`, `layer` and `placed`.
 - `createDeck({ …, layer })`.
 - `reread` moves to module level.
-- The returned instance has `destroy`, `trim`, `show` and `bytes`.
+- The returned instance has `destroy` and `bytes` (the first version also `trim` and `show`).
 
 **xrd-rv.js**
 
 - `draw()` returns while `host.unseen()`.
 - The settings window goes to `host.layer`.
 - A sample waiting for the standard's run checks `host.placed()`, not `root.isConnected`.
-- `trim(plots)` drops the curves kept and the plots.
 - Its Escape key acts only while its window is in the page.
 
 **xrd-peaks.js**
 
-- `trim(plots)` and `again()` let the processing go and remake it.
-- `again()` also runs before `instrModel()` and `csvEntries()`, so a trimmed instance answers
-  right.
-- The unread fourth array is dropped.
+- The unread fourth array is dropped. (The first version's `trim(plots)` and `again()`, which
+  let the processing go and remade it, went with the trim.)
 
 **Tests**
 
@@ -358,6 +389,9 @@ unchanged.
   is the behaviour b2 is for.
 
 ## 12. Converting the other modules
+
+(The plan the stages followed, as it was written: what they did is in their notes, and b2v2
+has no trim, §9.)
 
 | module | lookups in the page (`map/singletons/counts.txt`) | where |
 |---|---|---|
