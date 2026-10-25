@@ -2667,8 +2667,8 @@ html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gut
   z-index: 50;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease;
 }
+/* (on and off at once: to v520 it faded in over 0.15 s, the page under it seen meanwhile) */
 .module-loader.show { opacity: 1; pointer-events: auto; }
 .module-loader-spin {
   width: 26px; height: 26px;

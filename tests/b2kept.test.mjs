@@ -195,9 +195,12 @@ test('DRS woken: every fit kept, a Tauc and an Urbach card, not made again; gold
     await settle(page);
     assert.deepEqual(diff(m5.made, (await made(page)).made), [], 'drawn again at its width: nothing made again');
     await switchTab(page, 1);
+    // (the same width: under the loader as well, every switch is (v521); nothing made again)
+    const m5b = await made(page);
     await page.locator('#tabBar .ptab').nth(0).locator('.ptab-label').click();
-    assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), false, 'the same width: shown at once');
+    assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), true, 'the same width: the loader on first');
     await settle(page);
+    assert.deepEqual(diff(m5b.made, (await made(page)).made), [], 'the same width: nothing made again');
     // Left for Settings, the window changed there, another tab shown, then this one: it was
     // drawn at the width it was left for Settings at, so under the loader (b2v3: the width
     // taken as the other tab was shown, at which it was never drawn: shown at once, drawn

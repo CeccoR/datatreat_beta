@@ -1366,7 +1366,10 @@ function goTab(tab, fromHash){
     // a tab to draw again at another width is shown under the loader, tabs.js showLater).
     // (by the instance shown then: one let go meanwhile has none; one woken, drawn, shows
     // the rest of what it showed: shownAgain)
-    requestAnimationFrame(()=> requestAnimationFrame(()=>{ const f = _tabRedraw[k]; if (f) try { f(); } catch(e){} shownAgain(k); }));
+    // (only if it is still the one on show: one taken out of the page meanwhile, another tab of
+    // its module woken in its place, would draw at no width; to v520 a wake put in the page
+    // after this call drew the instance it replaced so, to be drawn whole again when shown)
+    requestAnimationFrame(()=> requestAnimationFrame(()=>{ if (shownKey() !== k) return; const f = _tabRedraw[k]; if (f) try { f(); } catch(e){} shownAgain(k); }));
   }
   if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
   // Only the fixed sections are addressable: a module section is shown by activating

@@ -272,7 +272,7 @@ const redrawn = t => !!t.inst && (t.changed || (t.view != null && t.view !== vie
 onAnyChange(k =>{ const t = tabById(k); if (t && t.inst && (t.id !== _activeId || _onFixed)) t.changed = true; });
 function showLater(t, done){
   const n = _toFixed;
-  renderTabs();
+  renderTabs(); markOn(t);
   syncProjectBar(t);
   showModuleLoader();
   afterPaint(()=>{
@@ -586,9 +586,9 @@ async function openTab({ module, title, projectId, state, dirty, focus = true })
   return t;
 }
 
-// Repaint the bar first (so the click reads as instant), then swap the state in
-// on the next frame — the restore plus redraw can take a beat on large projects. A tab
-// awake (its instance, or its module holding it) is only shown: nothing to restore.
+// The bar and the loader first (so the click reads as instant), then the tab put in the
+// page, woken where it sleeps, a paint later; shown once drawn. A tab awake (its
+// instance) is only put in the page: nothing to restore.
 function activateTab(id){
   const t = tabById(id);
   if (!t) return;
@@ -596,7 +596,7 @@ function activateTab(id){
   // (its wake reading its files' bytes still: under the loader, which its end takes away;
   // one to draw again, under the loader; a wake given up, its files not read: read again).
   if (_activeId === id){
-    if (redrawn(t)) return showLater(t);
+    if (redrawn(t) || (_onFixed && t.inst)) return showLater(t);
     showTab(t);
     if (t.waking) showModuleLoader();
     else if (!isLive(t)){ showModuleLoader(); afterPaint(()=> loadTabIfActive(t)); }
@@ -611,22 +611,26 @@ function activateTab(id){
   // step comes next (to b2v3 the step wrote it with the tab shown's, and where it was
   // superseded never: two records on show, a reload showing the first).
   afterPaint(()=> persistTab(was));
-  if (isLive(t)){
-    const kept = ()=>{ persistMoved(); keepLimits(); };
-    if (redrawn(t)) return showLater(t, kept);
-    hideModuleLoader();
-    showTab(t);
-    renderTabs();
-    syncProjectBar(t);
-    kept();
-    return;
-  }
-  // (an instance of its module in the page stays, under the loader, until it is woken)
-  renderTabs();
-  goTab(t.module);
+  // Every switch: the tab marked on and the loader on at the press, the tab put in the page
+  // once they are painted, the loader off once it is drawn (the user: "al click della tab
+  // cambiala istantaneamente e metti il caricamento; quando è caricata, mostrala"; to v520
+  // an awake tab was put in the page at the press, the bar and the tab on screen together
+  // 55-75 ms after it, the browser laying out the section meanwhile).
+  if (isLive(t)) return showLater(t, ()=>{ persistMoved(); keepLimits(); });
+  // (asleep: its module put on show and the tab woken a paint after the press, unless Home,
+  // Projects or Settings are chosen meanwhile: woken then when shown from there)
+  const n = _toFixed;
+  renderTabs(); markOn(t);
   syncProjectBar(t);                    // project bar is cheap + data-independent: build it now
   showModuleLoader();                   // mask the chart build until it's ready
-  afterPaint(()=> loadTabIfActive(t));  // heavy restore after paint, skipped if superseded
+  afterPaint(()=>{ if (t.id !== _activeId || n !== _toFixed) return; goTab(t.module); loadTabIfActive(t); });
+}
+/* The tab chosen marked on in the bar, and Home, Projects and Settings off, at the press
+   (renderTabs marks none while a fixed section is on show, as it still is till the tab's
+   module is put on show a paint later). */
+function markOn(t){
+  document.querySelectorAll('#tabBar .ptab').forEach(el=>{ const on = el.dataset.id === t.id; el.classList.toggle('is-on', on); el.setAttribute('aria-selected', on ? 'true' : 'false'); });
+  document.querySelectorAll('#nav button.is-on').forEach(b=>{ b.classList.remove('is-on'); if (b.hasAttribute('role')) b.setAttribute('aria-selected', 'false'); });
 }
 
 // Home / Projects / Settings belong to no tab, so none is highlighted while one of
