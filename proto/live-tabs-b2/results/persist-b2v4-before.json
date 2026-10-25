@@ -1,0 +1,24 @@
+{
+ "base": "http://127.0.0.1:8991",
+ "tab": "XRPD, 12 patterns of 5384 points, every plot zoomed",
+ "persistTabMs": 0.2,
+ "shownOfMs": null,
+ "showsJsonChars": 0,
+ "runs": [
+  0.1,
+  0.1,
+  0.1,
+  0.2,
+  0.3,
+  0.2,
+  0.2,
+  0.1,
+  0.2,
+  0.2,
+  0.2,
+  0.1,
+  0.2,
+  0.1,
+  0.3
+ ]
+}

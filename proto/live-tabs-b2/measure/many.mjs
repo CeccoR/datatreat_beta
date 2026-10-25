@@ -4,11 +4,13 @@
    - open: a new blank tab, from the click on Home's card to two frames after its loader;
    - switch: to a tab awake and to a tab asleep (woken), the same;
    - bar: renderTabs alone (the strip drawn again: every switch and every change of a tab);
-   - close: a hidden tab closed (closeTab: its record deleted and every tab's written again,
-     persistAll), the page's thread in it, and until every write is in the store;
+   - close: a hidden tab closed (closeTab: its record deleted, and to b2v4 every tab's
+     written again, persistAll), the page's thread in it, until every write is in the store,
+     and the records written (puts into the tabs' store, counted in the page);
    - reload: from the reload to the shell revealed and the tab on show loaded;
    - the page's long tasks over 50 ms during the close and the reload.
-   Medians of 5 (switches, bar, close: 3). BASE (default http://127.0.0.1:8990).
+   Medians of 5 (switches, bar, close: 3). BASE (default http://127.0.0.1:8990); OUT, the
+   results' file (default many.json).
    node many.mjs → results/many.json */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,7 +22,12 @@ const BASE = process.env.BASE || 'http://127.0.0.1:8990';
 const XRD12 = Array.from({ length: 12 }, (_, i)=> path.join(FX, 'xrd', 's' + String(i).padStart(2, '0') + '.xrdml'));
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'many-profile-'));
 const ctx = await chromium.launchPersistentContext(dir, { viewport: { width: 1400, height: 900 }, serviceWorkers: 'block' });
-await ctx.addInitScript(()=>{ window.__lt = []; try { new PerformanceObserver(l=> l.getEntries().forEach(e=> window.__lt.push([e.startTime, e.duration]))).observe({ type: 'longtask', buffered: true }); } catch(e){} });
+await ctx.addInitScript(()=>{
+  window.__lt = []; try { new PerformanceObserver(l=> l.getEntries().forEach(e=> window.__lt.push([e.startTime, e.duration]))).observe({ type: 'longtask', buffered: true }); } catch(e){}
+  // (the records written into the tabs' store)
+  window.__puts = 0; const put = IDBObjectStore.prototype.put;
+  IDBObjectStore.prototype.put = function(){ if (this.name === 'tabs') window.__puts++; return put.apply(this, arguments); };
+});
 const page = ctx.pages()[0] || await ctx.newPage();
 const errors = [];
 page.on('pageerror', e=> errors.push(e.message));
@@ -44,7 +51,7 @@ const out = { base: BASE, files: '12 XRDML patterns of 5384 points a tab, the sa
 let n = 0;
 for (const N of [20, 60]){
   while (n < N){ await addTab(); await page.setInputFiles('#xrdFiles', XRD12); await page.waitForFunction(()=> document.querySelectorAll('#xrdFileTableWrap tr.file-row').length === 12); await ready(); n++; }
-  const r = { open: [], switchAwake: [], switchAsleep: [], bar: [], close: [], closeAll: [], closeLong: [], reload: null, reloadLong: [] };
+  const r = { open: [], switchAwake: [], switchAsleep: [], bar: [], close: [], closeAll: [], closeLong: [], closePuts: [], reload: null, reloadLong: [] };
   for (let k = 0; k < 5; k++){ r.open.push(await addTab()); n++; }
   for (let k = 0; k < 3; k++){
     r.switchAwake.push(await timed(tabSel(n - 2))); r.switchAwake.push(await timed(tabSel(n - 1)));
@@ -53,14 +60,16 @@ for (const N of [20, 60]){
   }
   // A hidden tab closed: its own thread time, and until the writes are in (the queue's next sweep).
   for (let k = 0; k < 3; k++){
-    const [a, b, t0, t1] = await page.evaluate(async ()=>{
-      const T = await import('./tabs.js'), db = await import('./db.js'), t0 = performance.now();
+    const [a, b, t0, t1, puts] = await page.evaluate(async ()=>{
+      const T = await import('./tabs.js'), db = await import('./db.js');
+      await db.sweep();
+      const p0 = window.__puts, t0 = performance.now();
       T.closeTab(T.TABS[1].id);
       const a = performance.now() - t0;
       await db.sweep();
-      return [a, performance.now() - t0, t0, performance.now()];
+      return [a, performance.now() - t0, t0, performance.now(), window.__puts - p0];
     });
-    r.close.push(a); r.closeAll.push(b); r.closeLong.push(...await lt(t0, t1)); n--;
+    r.close.push(a); r.closeAll.push(b); r.closeLong.push(...await lt(t0, t1)); r.closePuts.push(puts); n--;
   }
   await page.waitForTimeout(500);
   const w0 = Date.now();
@@ -70,10 +79,11 @@ for (const N of [20, 60]){
   r.reloadLong = await page.evaluate(()=> window.__lt.map(([, d])=> Math.round(d)).filter(d=> d > 50));
   const t = await page.evaluate(async ()=> (await import('./tabs.js')).tabsNow());
   out.at[N] = { tabs: t.length, awake: t.filter(x=> x.awake).length, open: r1(med(r.open)), switchAwake: r1(med(r.switchAwake)), switchAsleep: r1(med(r.switchAsleep)),
-    bar: r1(med(r.bar)), closeThread: r1(med(r.close)), closeAll: r1(med(r.closeAll)), closeLongMax: Math.max(0, ...r.closeLong), reload: r.reload, reloadLongMax: Math.max(0, ...r.reloadLong) };
+    bar: r1(med(r.bar)), closeThread: r1(med(r.close)), closeAll: r1(med(r.closeAll)), closeLongMax: Math.max(0, ...r.closeLong), closePuts: r.closePuts,
+    closeRuns: { thread: r.close.map(r1), all: r.closeAll.map(r1) }, reload: r.reload, reloadLongMax: Math.max(0, ...r.reloadLong) };
   console.log(N, JSON.stringify(out.at[N]));
   // (the tabs opened for the opens, then closed down again, the count at N + 2 kept as it is)
 }
 out.errors = errors;
-console.log(save('many.json', out));
+console.log(save(process.env.OUT || 'many.json', out));
 await ctx.close(); fs.rmSync(dir, { recursive: true, force: true });

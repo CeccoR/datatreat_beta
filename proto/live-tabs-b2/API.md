@@ -35,9 +35,10 @@ works differently:
     store holds them, and reads them back as it wakes (§9).
 - **Wake.** A tab shown again while asleep wakes: a new instance is made, put in the page,
   given the parked state (`restoreModuleState`) and then the parked history
-  (`setModuleHistory`). One whose files' bytes were let go reads them first, the loader on
-  show (§9); every other wakes at once, as in the first version. What its module worked out
-  of its data before it slept is kept (§10): the wake draws it, not works it out again.
+  (`setModuleHistory`), what it showed given to it before (`inst.showNext`, below). One whose
+  files' bytes were let go reads them first, the loader on show (§9); every other wakes at
+  once, as in the first version. What its module worked out of its data before it slept is
+  kept (§10): the wake draws it, not works it out again.
 - **The loader, before any step that may take a while** (b2v3). A wake, a new tab, a
   project opened, a reload: the loader is put on, a frame drawn, then the work, the loader
   off once it is drawn (tabs.js `activateTab`, `loadTabIfActive`). A tab awake shown again
@@ -68,7 +69,21 @@ works differently:
   awake not on show, or a memory budget over each instance's `bytes()`; both are gone.)
 - **Persistence.** A tab's record is written from its live instance while it is awake
   (`park(getModuleState(key))`), otherwise from its parked state. This goes through v517's
-  queue and the store of bytes by hash.
+  queue and the store of bytes by hash. A record is written when what it holds changed, and
+  only then (b2v4): its state (the autosave), its name and mark, its being on show, its
+  place, its view. Its `order` is a number of its own rising along the bar (to b2v4 its
+  index): a close leaves a gap, a new tab takes one past the last, a move one between its
+  neighbours', so a close, a move or a reload write no other tab's record (tabs.js
+  `persistMoved`, from what each record holds, `t.rec`).
+- **The view** (b2v4). What a tab shows beside its state, no part of its history nor of a
+  saved project, comes back with it, woken or reloaded: the shell keeps for every module its
+  plots' zooms (by their svg's id, on the range they were taken on), its instructions shown
+  and its lists' scroll (utils.js `shownOf`), and the module gives its own (`inst.shows()`,
+  §3). It is parked as the tab sleeps, written in the tab's record (`shows`) 5 s after it
+  changes or with any write of the record, kept in the window's sessionStorage as the page
+  goes, and given to the instance that wakes the tab before its restore (`inst.showNext`,
+  `showAgain`): a zoom put back as its plot is first drawn on the same range, the rest once
+  the instance is drawn on show.
 - **Reload.** After a reload only the tab on show is woken; the others wake when shown. A
   tab of a `dropBytes` module not on show comes back holding its files' references only,
   read as it wakes.
@@ -98,7 +113,12 @@ A module is made per tab when:
 10. caches keyed by data (file bytes, arrays fixed) live at module level, shared by the
    instances; what it works out of its data and parameters, and draws again on a redraw, a
    wake or an undo, it keeps there by the data (utils.js `keeper`, §10);
-11. its tests still pass, and a test drives two of its tabs at once (§12).
+11. its tests still pass, and a test drives two of its tabs at once (§12);
+12. what it shows that no state of it holds and the shell does not keep for it (its plots'
+   zooms, instructions and lists' scroll the shell keeps: §1), it gives as `inst.shows()`
+   and takes back as `inst.showNext(v)` before its restore (§3): the sample on show, a
+   canvas's zoom, a row picked; never a step of its history, never compared by a save
+   (b2v4), and a test sees it through a sleep and a reload (`b2view`).
 
 ## 3. The instance, its section, its ids
 
@@ -116,7 +136,14 @@ create(ctx) → inst
     layer   a <div class="inst-layer"> (display: contents) for what it lays over the page
     shown() true while it is the instance on show (its section in the page and active: one
             made for withState, out of the page, never is, and draws nothing)
-  inst = { destroy() }             // the shell adds key, mod, root, layer
+  inst = { destroy(), shows?(), showNext?(v) }   // the shell adds key, mod, root, layer
+    shows()     what it shows beside its state, as JSON (b2v4), or null: DRS's sample on show
+                (by its file's name), XRPD's pattern (by its name) and its cards' peaks picked
+                and crystallites' turns, SEM's image (by its id) and its editor's zoom; read at
+                every record write and sleep (what a state holds too, the pattern and the
+                image, a step writes no record of: the view does, 5 s after)
+    showNext(v) v, what it gave, before its restore (a wake, a reload): its restore shows it
+                where it still fits (the same file, image or card), else as before
 ```
 
 **The ids belong to the instance on show.** The section and layer of the instance on show

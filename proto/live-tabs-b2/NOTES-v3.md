@@ -574,6 +574,147 @@ show and its label on. It fails on the patch of §8 (`['tab-settings']`) and pas
 line. `b2kept`, `b2cap` and `tabs`: 10 of 10. Lint: utils.js its findings before (`screen`),
 `b2kept` none. The changes: utils.js +3 −1, `b2kept` +12.
 
+## 10. b2v4: the storage kept, every tab's view kept, a close writing only what changed
+
+Round 4, the user's three decisions, in `b2.patch` (one git diff against HEAD ee7bc51, the
+app's files v517's). Nothing else changed.
+
+**1. The storage asked to be kept.** db.js `keepStorage`, as the module loads (once a page
+load, before the first read): `navigator.storage.persisted()`, and only where it is false
+`persist()`; nothing said either way (Chrome and Edge grant or refuse it by their own
+measures, asking nothing), a browser without the API (a page not on https or localhost)
+left as it is, no throw. Without it a browser short of disk may evict the origin's
+IndexedDB: the projects, the tabs' records and a SEM tab asleep's only copy of its files.
+Test: `b2store` 1 (the API stood in for: asked once a load and again once at a reload,
+`persist` only where not kept; no banner; without the API a tab, its files, a reload as
+ever, no error).
+
+**2. Every tab shows, woken or reloaded, what it showed** ("vista ripristinata, no passi di
+annulla o scheda modificata", for every module). Found by a probe that took the DOM of the
+tab on show (every element's visibility, class, value, scroll, text, every plot's range,
+SEM's editor's pixels) before a sleep, after the wake and after a reload, and listed what
+differed, on the patch before this round (`old`) and after:
+
+| module | what it shows | to b2v4, woken / reloaded | b2v4 |
+|---|---|---|---|
+| all | each plot's zoom or pan (cards', Results', XRPD's Williamson–Hall and standard's) | full range / full range | kept: `zoom` |
+| all | the instructions shown (the module's, each card's) | shut / shut | kept: `instr` |
+| all | a list scrolled in the tab (SEM's images, a SEM group's row of images, XRPD's lists, a table on a narrow screen) | at its top / at its top | kept: `scroll` |
+| DRS | the sample on show (every card's) | the first / the first | kept: `own` (by its file's name) |
+| XRPD | the pattern on show | kept / the one its record held: a step writes nothing, so the one before till the next change | kept: `own` too (by its name), over the record's state |
+| XRPD | a peak picked in a Scherrer card's table, in a Rietveld card's table of widths | none / none | kept: `own`, by card |
+| XRPD | a crystallite's solid turned (Rietveld card) | home view / home view | kept: `own`, by card |
+| SEM | the image on show | kept / the one its record held, the same way | kept: `own` too (by its id), over the record's state |
+| SEM | the editor zoomed or panned | fitted / fitted (and at every show and resize, awake too) | kept: `own`, by the image's id, as the pane's size changes too |
+| all | cards folded, chips, the phase on show, crops, settings | kept: their states' | as before |
+
+Not kept, and why: the page's scroll is the window's, shared by every tab, awake ones too
+(v517 the same); a tool armed (Pan, Zoom area, + Add peak) is a mode of the pointer, not
+what is shown; a window or a menu open is modal (no tab is left with one), and a reload
+closes it as in v517. XRPD's pattern and SEM's image on show stay in their states as v517
+has them (a step is no step of the history and no change unsaved, a project saved reopens on
+it, an undo goes back to the one of its step) and are in the view too, which a step does
+write: found by a second probe, a step and a reload 6 s after showed the one before, in both.
+
+One mechanism for all (API.md §1, §3): what an instance shows beside its state is utils.js
+`shownOf(inst)` (its plots' zooms by their svg's id, with the range they were taken on; its
+instructions shown; its lists' scroll, by their class and place, as they last moved) and its
+module's own `inst.shows()`. tabs.js parks it as the tab sleeps (`t.shows`), writes it in the
+tab's record (`shows`, beside `state`), and gives it to the instance that wakes it, before its
+restore (`inst.showNext`, `showAgain`): a zoom is put back as its plot is first drawn on the
+same range (plot.js `setRange` → `zoomAgain`; on other data, dropped), the instructions and
+the scroll once the instance is drawn on show (`shownAgain`, in goTab's redraw). It is never
+in the history nor in a saved project, and no save compares it: no step, no "*". A change
+(a zoom, a sample stepped, a peak picked, a list scrolled: a pointer let go, a key, the wheel,
+a scroll) is looked at 5 s after (as the autosave's trailing write) and the record written if
+it differs; meanwhile every write of the record takes it, and the page going (a reload)
+keeps it at once in the window's sessionStorage, which the next load takes over the record
+and writes (an IndexedDB write is not done before the page is: it waits on its files'
+hashes). Saved projects and project files hold no view: their formats are v517's as before.
+A record's write takes 0.5 ms of the page's thread where it took 0.2 (an XRPD tab of 12
+patterns, every plot zoomed, median of 15 in `measure/persist.mjs`, the clock's steps 0.1 ms;
+`shownOf` under 0.1 ms; the view 332 characters of JSON; `results/persist-b2v4*.json`).
+
+Tests: `b2view` 1–4 (DRS; XRPD with a refinement; GC and EPR; SEM of 12 images), each
+module's project saved first: the view changed (a sample or pattern or image stepped, plots
+zoomed, instructions shown, peaks picked, the editor zoomed and panned, the lists scrolled),
+no step of the history and no "*"; the same view, the same history and no "*" after a sleep
+and a wake, a reload with the tab on show, and a reload with another on show then a switch;
+DRS's record holding it 5 s after, a step back reloaded at once kept; XRPD's pattern stepped
+alone written with its record 5 s after and shown after a reload, SEM's image stepped and
+reloaded at once the same; a crystallite's turn put
+in an XRPD record (none of the fixtures' results keeps a free shape to turn by hand) given to
+its card through a reload and a sleep; SEM's zoom kept at a show and at a resize, Fit fitting
+it. On `old` all four fail: DRS's record holds no view; XRPD, GC and EPR woken lose their
+zooms, instructions and picks; SEM's editor is fitted again at the next show.
+
+**3. A close writes only what changed.** Each record's `order` is a number of its own that
+rises along the bar (v517 and b2v3 wrote each tab's index, so a close or a move rewrote every
+record): a tab opened takes one past the last, a close leaves a gap (which sorts as before),
+a move takes a number between its new neighbours' (all numbered again only when none is left
+between them, some 50 moves into one gap; those changed written). tabs.js keeps what each
+record holds of its place and of its being on show (`t.rec`, and of its view `t.recShows`)
+and writes only those that differ (`persistMoved`, in place of `persistAll`):
+
+| step | records written, b2v3 | b2v4 |
+|---|---|---|
+| a hidden tab closed | every other tab's | none (its own deleted) |
+| the tab on show closed | every other tab's | the one now on show |
+| a move | every tab's | the tab moved |
+| a reload's restore | none, or every tab's where the wake waited (SEM's bytes, a saved record) | those whose place or being on show it changed, or whose view the window kept as it went |
+| tabs opened while the records were read | every tab's | those renumbered after the restored ones |
+| the database closing for another window's upgrade | every tab's | the trailing autosaves, and those moved or whose view changed |
+| open, switch, the cap's sleeps | the tab opened or shown, the tab left; none (SEM: its own) | the same |
+
+No schema change (DB_VER stays 4): `order` was already in every record. Records of v517 and
+of every b2 before (orders 0, 1, 2…) read as before, nothing written at their load
+(`b2store` 3). A v517 page reads these as it does today: it sorts by `order` (gaps, halves and
+negative numbers sort right), takes the one record on show, and leaves `shows` aside; what it
+loses is the views (it writes its records without them). Two windows on one database, as
+today, each write their own tabs' records; now fewer, so a reload may find orders of both,
+two of one number (the second numbered past the first, and written) or two records on show
+(the one written last taken, where v517 took the first by order): every tab back, in an order
+each window's last moves made, no worse than the last writer's whole order of today.
+
+Measured (`measure/many.mjs`, now counting the records written: `results/many-b2v4-before.json`
+on `old`, `many-b2v4.json` on this tree; a profile on disk, headless, the machine otherwise
+idle; XRPD tabs of the 12 patterns of 5384 points; medians of 3 closes of a hidden tab, each
+after the store's queue was drained; two runs on `old`, three on this tree, the last on the
+final tree; the files the last runs', the ranges all of them):
+
+| tabs open | the page's thread, before → after | till every write is in the store | records written | longest task |
+|---|---|---|---|---|
+| 23–25 | 4.5–5.3 → 3.1–3.7 ms | 513–537 → 9–11 ms | 22–24 → 0 | none over 50 ms, all |
+| 63–65 | 8.6–11.0 → 6.8–7.9 ms | 1421–1590 → 16–19 ms | 62–64 → 0 | 51 ms in one run → none over 50 |
+
+The rest within the runs' spread (one sample a run): a reload of 62 tabs 1149–1227 →
+925–1341 ms, its longest task 69–78 → 62–84 ms (none of it this round's: a reload writes
+fewer records); a new tab 93–110 → 92–99 ms; a switch at 62 tabs to a tab awake 51–60 →
+51–58 ms, to one asleep 193–276 → 193–242 ms. Tests: `b2store` 2
+(five GC tabs: a hidden tab closed writes no record, the tab on show closed the one now on show
+alone, a move the tab moved alone, a reload none, a switch the two tabs; the bar and the tab on
+show the same across the gaps, a move to the front and reloads), 3 (v517's records; two
+windows' two on show and two of one order: the one written last on show, the two that changed
+written alone). On `old` all three fail (1: never asked; 2: the hidden tab's close wrote the 4
+others; 3: the first on show taken).
+
+**The tests.** **The whole suite, `DT_ROOT=<tree> npm test`: 221 of 221 pass** in 14 min 24 s
+(`results/suite-b2v4.log`), on a fresh git-archive copy of HEAD (ee7bc51) with the new
+`b2.patch` (identical, file by file, to the work tree and to a second copy made from the
+delivered patch). Before it, on the work tree, the tests of what changed and every b2 test
+(`b2view`, `b2store`, `tabs`, `b2xrd`, `b2sem`, `b2drs`, `b2gcepr`, `b2cross`, `b2cap`,
+`b2fixed`, `b2kept`, `db`, `bytestore`, `roundtrip`, `sem`): 63 of 64
+(`results/tests-b2v4.log`), the 64th, `b2sem` 5, on its own assumption that the first tab's
+record has `order` 0 once the tab before it is closed: it finds that record by the tab's id
+now; then, XRPD's pattern and SEM's image put in the view too, the tests touching them
+(`b2view`, `b2xrd`, `b2sem`, `sem`, `b2kept`, `b2cross`, `undorun`, `xrdcards`, `b2store`):
+41 of 41 (the same log). The seven new tests on `old`: 7 of 7 fail, each where it should
+(`results/tests-b2v4-old.log`). Lint: every changed app file exactly its findings before
+(tabs.js reads `sessionStorage` through `window`, which the config knows); `b2view`,
+`b2store`, `measure/many.mjs` and `measure/persist.mjs` none. Changed besides: `b2kept`'s
+comments on a woken DRS tab's sample, tests/README.md's two rows and its count (221). The
+round's own changes: 15 files, +798 −53.
+
 ## Tests
 
 ### The review's fixes
@@ -700,6 +841,12 @@ xrd-rv-model.js exactly part B's findings (compared line for line), `b2sem`, `b2
 
 ## The patch
 
+b2v4's (§10): one git diff against HEAD (ee7bc51, which committed b2v3's last; the app's files
+b93ed5c), 41 files, +5087 −937, sha256 da153713…; the round's own changes 15 files, +798 −53.
+`git apply --check` is clean on a fresh git-archive of HEAD, and the tree it gives is
+identical, file by file, to the one the whole suite ran on. b2v3's last (94eb334d…) is in git
+at ee7bc51.
+
 `b2.patch`, after the final check (§8): one git diff against HEAD (2f49d4a, which committed
 the review's; the app's files b93ed5c), 39 files, +4314 −921, sha256 97e036c7…. `git apply
 --check` is clean on a fresh git-archive of HEAD, and the tree it gives is identical, file
@@ -767,9 +914,9 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
   awake DRS tab, an undo in XRPD; §5), as in b2v2: under the brief's 100 ms.
 - Part B: **what a module draws** is not kept beyond its instance: a woken tab draws its
   plots anew (most of its wake now: 154 ms for XRPD).
-- **A close with many tabs** writes every record again (1.27 s at 60 heavy tabs, no long
-  task; since the review at the close itself, not after the tab it lands on is shown). Writing only the record whose `active` changed would need the records' `order` to
-  survive gaps; not done.
+- **A close with many tabs** wrote every record again (1.27 s at 60 heavy tabs, no long
+  task): done in b2v4 (§10), each record's `order` a number of its own that survives gaps;
+  a close writes no other tab's record.
 - **A reload of many tabs** reads every tab's state with its bytes, the tabs not on show too
   (0.79 s at 60 XRPD tabs of 12 patterns). Reading those lazily, as SEM's tabs asleep are,
   would make it the tab on show's alone; not asked.
@@ -808,6 +955,14 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
   2f49d4a with its patch, served on 8991), `w` (the same in a local git, the fixes made there,
   served on 8990; the tests ran there), `pk` (the patch made there), `fresh` (a git-archive of
   HEAD with the new patch: identical to `w`), `scripts/` (`fixed.mjs`, `behind.mjs`).
+- b2v4 (§10): in the scratchpad's `b2v4/`: `old` (a git-archive of HEAD ee7bc51 with its
+  patch, served on 8991: the "before" of every measurement and the new tests' failures),
+  `build` (the same in a local git, the changes made there, served on 8990), `pk2` (HEAD in a
+  local git with `build`'s files over it: the patch made there), `fresh2` (a git-archive of
+  HEAD with the new patch: the whole suite; `pk` and `fresh` the same for the patch before
+  XRPD's pattern and SEM's image went into the view, whose whole suite passed too, 221 of 221
+  in 14 min 26 s), `probe` (the DOM probe of what a wake and a reload reset, `lost.mjs` and
+  `fp.mjs`, run on `old` and `build`; `stepreload.mjs`, the step and the reload).
 - My servers on 8990 and 8991 are stopped by their PIDs, found by the port.
 - No file of the main tree outside `proto/live-tabs-b2/` was edited, and no git command that
   changes state was run there.
