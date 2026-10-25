@@ -5,7 +5,8 @@ Round 3, in `b2.patch` (one git diff against HEAD, the app's files those of v517
 one thing found on the way and needed by the second: a reload reads the tabs' records one a
 task (§2). **Part B** (§4–§6): two more (4a, 4-loader), measured against b2v2, then the
 limit under the new policy, and the whole suite. **The review** (§7): its findings on parts A
-and B, each reproduced, fixed at its root and tested.
+and B, each reproduced, fixed at its root and tested; **the final check** (§8): three more, the
+same way.
 
 1. **No memory budget.** The policy, its MB, their Settings rows, every module's `bytes()`
    and what only they used are gone. The rules left: the count of tabs awake, and the
@@ -492,6 +493,67 @@ machine otherwise idle.
 Left as it was: a crop typed on the tab on show makes its group's cards in its own task, with
 no loader, as any edit on show does (Not done, below).
 
+## 8. The final check's three
+
+The check of §7's fixes left three issues of low severity, each with a script. Each
+reproduced first on a fresh git-archive of HEAD (2f49d4a) with its patch (94b5bd99…) by that
+script, fixed at its root, and given a check in the b2 tests that fails on that tree and
+passes on this one (the same test files run with `DT_ROOT` on each). Logs:
+`results/tests-b2v3d.log` (the scripts' outputs on both trees, the new checks failing on the
+old one, the tests below).
+
+1. **A tab chosen and left again before its show took the window of that moment as the one
+   it was drawn at** (tabs.js `hideTab`). §7's fix 4 kept the width only for a tab left for
+   a fixed section; the cause was wider: `hideTab` took the window of the moment for any tab
+   left, also one not on show since it was last left. X (XRPD, 12 refined) left at 1400,
+   chosen at 1180 (its show two frames on, `showLater`), and another tab chosen within those
+   frames: X took 1180, at which it was never drawn, and shown later at 1180 it was not
+   `redrawn`: at once, every plot drawn in one task of 128 ms, no loader. Now a width is
+   taken only from a tab on show till then: `showTab` sets `view` to null and every leave
+   takes it, so `hideTab` and `onSectionChange` take it only where `view == null`; any other
+   keeps the one it was drawn at. A tab woken behind a fixed section (a wake whose read
+   ended there, `wakeLater`; a wake asked from there, below) is drawn at no width, `view`
+   '', so shown from there it goes under the loader too (it took null: the same gap). Every
+   path that shows a tab goes through `showTab` (a switch, `showLater`, a wake, a new tab, a
+   reload's, a close's landing), and only `redrawn` reads `view`: nothing else took the width
+   `hideTab` wrote. `superseded.mjs` (a profile on disk): X's view 1180 → 1400, the loader off
+   → on, its tasks (68, 117 ms) under it. Test: `b2cap` 3, after the two clicks within a
+   switch's frames, the first tab shown: the loader on first.
+2. **Home, Projects or Settings clicked within a switch's frames was lost** (tabs.js
+   `showLater`; `loadTabIfActive` the same). The step deferred two frames checked only that
+   its tab was still the active one, which a fixed section does not change: it showed the
+   tab (an awake one at another width), or woke and showed it (one asleep: the same probe
+   found it), its module back over the section, no nav button on. Now it gives way to a
+   fixed section put on show since it began: `showLater` counts them (`_toFixed`, from
+   `onSectionChange`) and does not show the tab, its record and the limits as before (its
+   `done`); `loadTabIfActive` does not wake it (its module was put on show as it began, so
+   `_onFixed` says one came since). The tab stays as it was, its width the one it was drawn
+   at (1., above), asleep if it was; shown from the section, under the loader, drawn or woken
+   then. A wake asked from a fixed section (`ensureLive`, a close's Save) wakes the tab
+   behind it (`loadTab` gives `_onFixed` to `wakeTab`, as `wakeLater` does), no longer over
+   it. `quick2.mjs` (the clicks in one task) and `fixed.mjs` (the switch let through first,
+   as two clicks are; an awake tab and an asleep one): the GC section on show → Settings, the
+   tab shown from there under the loader. Test: `b2kept` 2, DRS, awake at another width and
+   then asleep: chosen, Settings clicked before its show (asserted), Settings alone on show,
+   the tab as it was; shown from Settings, the loader on first, nothing made again.
+3. **A file read again dropped what was kept of it** (sem.js `remember`). §7's fix 7 keeps a
+   file's card levels for its last 4 crops; a reading of the same file (in another tab, or
+   after its removal) put a new entry in its place, its cards the default crop's alone and
+   its reduced copy the reading's, so that the next redo or wake in the first tab made the
+   others again (one card a file, 10–15 ms a card of 2048²). Now `remember` adds to the
+   entry kept: its cards kept, the reading's added under its key (the last used, 4 at most),
+   its reduced copy kept where it has one. `cards.mjs` (re-read, then redo): 1 card made →
+   none. Test: `b2kept` 3, after the crop's undo, redo and undo, the same three files read
+   in a new SEM tab, back, redone: no card made.
+
+The tests of what changed and the b2 ones named by the check, `b2cap`, `b2kept`, `b2sem`,
+`b2xrd`, `b2cross`, `tabs`, `sem`: **27 of 27 pass** (3 min 10 s), no page error and no CSP
+violation where they assert it; the new checks fail on the old tree, each where it should
+(`b2cap` 3 on the loader, `b2kept` 2 on Settings on show, `b2kept` 3 on the card made). The
+whole suite was not run again: nothing outside tabs.js and sem.js changed. Lint: tabs.js and
+sem.js exactly their findings before (sem.js's `screen`), `b2cap` and `b2kept` none. The
+changes: 5 files, +79 −20 (tabs.js, sem.js; `b2cap`, `b2kept`, tests/README.md's two rows).
+
 ## Tests
 
 ### The review's fixes
@@ -618,7 +680,13 @@ xrd-rv-model.js exactly part B's findings (compared line for line), `b2sem`, `b2
 
 ## The patch
 
-`b2.patch`, after the review: one git diff against HEAD (a44b222, which committed part B; the
+`b2.patch`, after the final check (§8): one git diff against HEAD (2f49d4a, which committed
+the review's; the app's files b93ed5c), 39 files, +4314 −921, sha256 97e036c7…. `git apply
+--check` is clean on a fresh git-archive of HEAD, and the tree it gives is identical, file
+by file, to the one the tests of §8 ran on. The review's patch (94b5bd99…) is in git at
+2f49d4a.
+
+The review's, as it was: one git diff against HEAD (a44b222, which committed part B; the
 app's files b93ed5c), 39 files, +4254 −920, sha256 94b5bd99…. The review's own changes are 9
 files, +251 −63 (db.js, sem.js, sessions.js, tabs.js, xrd-rv-model.js; `b2sem`, `b2kept`,
 `b2cap`, tests/README.md). `git apply --check` is clean on a fresh git-archive of HEAD, and
@@ -663,6 +731,9 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
   lost them); a project written to a file shows the loader; an undo or redo of a SEM crop
   takes its cards as made; a SEM tab woken holds its history's files once (at most 0.32 MB
   more a file for its card levels of 4 crops, awake or asleep).
+- The final check (§8): **Home, Projects or Settings clicked just after a tab stays on show**
+  (the tab came back over it); a tab chosen and left again at once, or woken behind one of
+  them, shows under the loader at its next show; a SEM file read again keeps its crops' cards.
 
 ## Not done, and what is left
 
@@ -713,6 +784,10 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
   `lim-fx.mjs` writes `ten/` (the DRS, GC and EPR files of kept.mjs and loader.mjs); results
   `kept.json`/`.log`, `loader-b2v2.json`/`.log`, `loader-b2v3.json`/`.log`,
   `lim-b2v3-mix-cap.json`/`.log`, `lim-b2v3-sem-cap.json`/`.log`, `suite-b2v3b.log`.
+- The final check (§8): in the scratchpad's `b2v3/final/`: `v3c` (a git-archive of HEAD
+  2f49d4a with its patch, served on 8991), `w` (the same in a local git, the fixes made there,
+  served on 8990; the tests ran there), `pk` (the patch made there), `fresh` (a git-archive of
+  HEAD with the new patch: identical to `w`), `scripts/` (`fixed.mjs`, `behind.mjs`).
 - My servers on 8990 and 8991 are stopped by their PIDs, found by the port.
 - No file of the main tree outside `proto/live-tabs-b2/` was edited, and no git command that
   changes state was run there.

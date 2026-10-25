@@ -16,8 +16,8 @@ at most 20 awake** (Settings), the one shown least lately put to sleep beyond th
 fixed, not frozen**, shared by a tab's states, its parked state and its history without a
 copy; **what is worked out is kept, not worked out again** (a tab woken, an undo, a redraw
 take it as made); and **the loader over every step that may take a while**, before the work
-and off after; then the fixes of its review (`NOTES-v3.md` §7). Where this page gives
-measurements of the first version, it says so.
+and off after; then the fixes of its review (`NOTES-v3.md` §7) and of its final check
+(§8). Where this page gives measurements of the first version, it says so.
 
 ## What b2 does
 
@@ -102,14 +102,15 @@ git apply --check proto/live-tabs-b2/b2.patch && git apply proto/live-tabs-b2/b2
 npm test                       # 214 tests, about 13 min
 ```
 
-`b2.patch` is a git diff against HEAD (app files b93ed5c): 39 files, +4254 −920 (sha256
-94b5bd99…), b2v2's and b2v3's changes included (`NOTES-v2.md`, `NOTES-v3.md`, its parts A
-and B and its review's fixes). `git apply --check` is clean on a fresh git-archive of the
-main tree's HEAD (a44b222), and the copy it gives is identical, file by file, to the tree the
-whole suite ran on. b2v3 part B's (+4047 −901, sha256 d54978fe…) is in git at a44b222, part
-A's (+3497 −784, sha256 9f996260…) at 49beb52, b2v2's (+3292
-−756, db7ae22b…) at 0ddc38e, the first version's (+2908 −731, 45006d96…) at fabb05b. `git
-apply -R` takes it out.
+`b2.patch` is a git diff against HEAD (app files b93ed5c): 39 files, +4314 −921 (sha256
+97e036c7…), b2v2's and b2v3's changes included (`NOTES-v2.md`, `NOTES-v3.md`, its parts A
+and B, its review's fixes and its final check's). `git apply --check` is clean on a fresh
+git-archive of the main tree's HEAD (2f49d4a), and the copy it gives is identical, file by
+file, to the tree the tests of the final check ran on. The review's (+4254 −920, sha256
+94b5bd99…; the whole suite ran on it) is in git at 2f49d4a, b2v3 part B's (+4047 −901,
+sha256 d54978fe…) at a44b222, part A's (+3497 −784, sha256 9f996260…) at 49beb52, b2v2's
+(+3292 −756, db7ae22b…) at 0ddc38e, the first version's (+2908 −731, 45006d96…) at
+fabb05b. `git apply -R` takes it out.
 
 On release the app's own rules still apply: `sw.js` says "Bump CACHE when any precached
 asset changes" (`datatreat-v517` → the new version), and the footer's version, README.md and
@@ -124,7 +125,7 @@ BACKLOG.md go with it. The patch leaves them to the release.
 | `API.md` | How a module is made per tab, with XRPD as the worked example |
 | `NOTES-core.md`, `NOTES-sem.md`, `NOTES-drs.md`, `NOTES-gc-epr.md` | Each stage's notes: what changed, each memory cut with its numbers, its tests (the first version: its trim included) |
 | `NOTES-v2.md` | **b2v2**: the trim taken out; a sleeping SEM tab's bytes let go and read back as it wakes; what held ~42 MB a SEM tab in the browser process; tests and numbers |
-| `NOTES-v3.md` | **b2v3**: part A, the memory budget taken out; any number of tabs open, a cap on those awake, the strip and the restore at 60 tabs; arrays fixed, not frozen, and the bytes it saves. Part B, what is worked out kept (what, by what key, what it costs, the wakes against b2v2); the loader over every long task of the paths between tabs; the limit under the cap (45 tabs of the mix, 32 of SEM); the whole suite. The review's findings (§7), each fixed and tested |
+| `NOTES-v3.md` | **b2v3**: part A, the memory budget taken out; any number of tabs open, a cap on those awake, the strip and the restore at 60 tabs; arrays fixed, not frozen, and the bytes it saves. Part B, what is worked out kept (what, by what key, what it costs, the wakes against b2v2); the loader over every long task of the paths between tabs; the limit under the cap (45 tabs of the mix, 32 of SEM); the whole suite. The review's findings (§7), each fixed and tested; the final check's three (§8) |
 | `measure/` | One script per measurement or check, `lib.mjs` shared; `session.mjs`, `upgrade.mjs` and `trim-nodes.mjs` are the integration's; `lim-*.mjs` the assessment's; `idb-mem.mjs` and `wake-sem.mjs` b2v2's; `fixed.mjs` and `many.mjs` b2v3's, `kept.mjs`, `loader.mjs` and lim-series's `cap` policy its part B's (`lim-fx.mjs` writes their `ten/` files), `review3/` its review's. The earlier scripts read the settings and `bytes()` of the versions they measured (`liveMax`, `livePolicy`), which b2v3 has not |
 | `results/` | Each measurement's JSON and the suite's logs |
 
@@ -133,7 +134,7 @@ BACKLOG.md go with it. The patch leaves them to the release.
 | file | lines | what |
 |---|---|---|
 | utils.js | +283 −74 | every registry by the instance's key (history, redraw, busy, CSV, has-data, the section on show); a module's name stands for its instance on show; `registerModule` (its `asleep`), `makeInstance` (shown only in the page), `attachInstance`, `detachInstance`, `dropKey`, `withState`, `onAnyChange`, `busyChanged`, `dropsBytes`, `asleep`, `vacate`; the undo keys act on the tab on show; the drop zone and file list take elements; the Settings' values (`sleepMin`, `awakeMax`); `stateKey` takes an array fixed by its hash, `fixed` given to the modules; what is worked out kept, `keeper`, `kept`, `objId`, `exactKey` |
-| tabs.js | +430 −76 | live instances per tab: show, hide, sleep, wake; the busy exemption; no limit on the tabs open, at most `awakeMax` awake, the one shown least lately asleep beyond (`seenAt`); the wheel along the strip; Settings › Tabs in the background; `sleepTick` and `tabsNow` for the tests; a sleeping SEM tab's bytes let go and read back (`lighten`, `wakeLater`), its records read without them after a reload; a tab awake to draw again shown under the loader (`redrawn`, `showLater`); a load waits for its saved key (`loaded`); its module told which tabs sleep holding what (`held`); a wake whose read fails given up, the tab asleep as it was; the records whose `active` changed written at the switch; a step that is no tab's under the loader (`underLoader`) |
+| tabs.js | +446 −77 | live instances per tab: show, hide, sleep, wake; the busy exemption; no limit on the tabs open, at most `awakeMax` awake, the one shown least lately asleep beyond (`seenAt`); the wheel along the strip; Settings › Tabs in the background; `sleepTick` and `tabsNow` for the tests; a sleeping SEM tab's bytes let go and read back (`lighten`, `wakeLater`), its records read without them after a reload; a tab awake to draw again shown under the loader (`redrawn`, `showLater`); a load waits for its saved key (`loaded`); its module told which tabs sleep holding what (`held`); a wake whose read fails given up, the tab asleep as it was; the records whose `active` changed written at the switch; a step that is no tab's under the loader (`underLoader`); a tab's width taken only as it is left from show (`view`), a show or wake deferred giving way to Home, Projects or Settings chosen meanwhile |
 | sessions.js | +134 −99 | autosave, the unsaved mark and Save per tab, shown or not; a hidden tab closed with Save saved as it is; Projects' CSVs through a throwaway instance; Save, exports and Delete wait for a wake reading its bytes; a reloaded project's saved key from a throwaway instance, its load waiting for it; a project written to a file under the loader |
 | db.js | +130 −25 | arrays fixed (`fixed`, `isFixed`: a WeakSet), which `park` and `decode` share instead of copying them; `unload`, `load`, `unread`; `putRec`'s `also` (a history's files held with a record); the records read without their bytes (`allTabStates(lazy)`), and by a cursor, one a task; `fill` one result for one object met |
 | cards.js, modkit.js | +18 −9, +19 −10 | the deck's menu in the instance's layer, `deck.destroy()`; `moduleKit(mod, { root, key, layer })`, `kit.destroy()` |
@@ -141,11 +142,20 @@ BACKLOG.md go with it. The patch leaves them to the release.
 | index.html, style.css, sw.js | +6, +3, +1 | the Settings rows; `.inst-layer`; xrd-rv-pool.js precached |
 | xrd-rv-pool.js | +183 (new) | the pool (proto/workers) |
 | xrd.js, xrd-peaks.js, xrd-rv.js, xrd-rv-model.js | +76 −34, +33 −26, +109 −88, +10 −13 | XRPD a factory; Refine all on the pool; its patterns' arrays and its results' lists fixed, not frozen; its processing, instrumental model, Rietveld curves, differences, nets and ticks kept by the pattern (`curveInputs`, `sameInputs` gone with it) |
-| sem.js, sem-read.js, sem-read.worker.js, sem-figure.js | +442 −245, +59 −40, +11 −6, +8 −4 | SEM a factory; its files' bytes kept as bytes (not base64), a 16-bit image a view of them; what is made of a file shared by all tabs, and kept while a tab awake or asleep holds it; one reading worker; its tabs asleep without their bytes (`dropBytes`), a history woken holding the files' own RawRefs (`adopt`); a file's card levels for its last 4 crops |
+| sem.js, sem-read.js, sem-read.worker.js, sem-figure.js | +446 −245, +59 −40, +11 −6, +8 −4 | SEM a factory; its files' bytes kept as bytes (not base64), a 16-bit image a view of them; what is made of a file shared by all tabs, and kept while a tab awake or asleep holds it; one reading worker; its tabs asleep without their bytes (`dropBytes`), a history woken holding the files' own RawRefs (`adopt`); a file's card levels for its last 4 crops, kept when the file is read again |
 | tauc.js, gc.js, epr.js | +153 −56, +113 −49, +84 −18 | DRS, GC and EPR factories through the kit; DRS's energies and EPR's spectra shared by file; their spectra and GC's gases fixed; DRS's curves and fits, GC's tables and EPR's smoothing kept by the data |
 | tests/ | 8 new files, 7 changed | `b2xrd`, `b2sem`, `b2drs`, `b2gcepr`, `b2cross` (two tabs of a module, and every module together), `rvpool`, `b2cap` (the cap on the tabs awake, 40 tabs), `b2fixed` (arrays fixed), `b2kept` (what is worked out kept, counted across wakes, its plots golden and its CSVs byte for byte); the steps of `rvui` C and `tabs` that checked v517's question on leaving a busy tab; SEM's stored form in `bytestore`; helpers.mjs freezing every array fixed; the table in tests/README.md |
 
 ## Tests and checks
+
+**b2v3's final check** (`NOTES-v3.md` §8): three issues, each reproduced on the review's
+tree by the check's script, fixed and given a check that fails there: `b2cap` 3 (a tab chosen
+and left within a switch's frames, shown after under the loader), `b2kept` 2 (Settings
+clicked within a switch's frames stays on show, the tab awake or asleep), `b2kept` 3 (a SEM
+file read again in another tab, its crop's cards kept). The b2 tests named by the check and
+those of what changed (`b2cap`, `b2kept`, `b2sem`, `b2xrd`, `b2cross`, `tabs`, `sem`): 27
+of 27 (`results/tests-b2v3d.log`); only tabs.js and sem.js changed, the whole suite not run
+again. Lint: those two files only their findings before.
 
 **b2v3's review** (`NOTES-v3.md` §7): eight findings, each reproduced on part B's tree, fixed
 and tested (each new check fails there). **The whole suite, `DT_ROOT=<tree> npm test`: 213 of
@@ -346,6 +356,8 @@ the stage patches would apply one after another); 205 with b2v2's three in `b2se
   another width of the window (left for another tab or for Home, Projects or Settings),
   after a reload till a changed project's saved key is taken, and over a project written to
   a file; a tab awake shown as it was left still shows at once.
+- Home, Projects or Settings clicked just after a tab stays on show (b2v3's final check: the
+  tab came back over it two frames on).
 - A SEM tab whose files cannot be read from the browser's storage as it wakes stays asleep,
   Home on show and a banner saying so; shown again it reads them again (b2v3's review: to it
   the tab woke without them and lost them).

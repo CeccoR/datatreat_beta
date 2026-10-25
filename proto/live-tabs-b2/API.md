@@ -44,7 +44,11 @@ works differently:
   draws only what changed while hidden: nothing, shown at the width it was left at and
   unchanged (at once); all its plots at another width of the window, or its results where a
   job ended meanwhile: then under the loader too (`redrawn`, `showLater`); the width it was
-  drawn at is the one it was left at, for another tab or for Home, Projects or Settings. A
+  drawn at is the one it was left at, for another tab or for Home, Projects or Settings,
+  taken only from a tab on show till then (`view` null): one chosen and left again before
+  its show keeps its own, one woken behind a fixed section has none (''). A show or wake
+  deferred two frames gives way to Home, Projects or Settings chosen meanwhile: the tab
+  stays as it was, shown from there under the loader (b2v3's final check). A
   project changed and reloaded keeps the loader on till its saved record is read and its
   key taken (sessions.js `onTabLoaded` gives the promise, tabs.js `loaded` waits for it). A
   step that is no tab's, a project written to a file (its bar's, Projects'), goes through
@@ -396,7 +400,7 @@ Keep at **module level**, shared by instances:
   | | `drs-reflectance`, `drs-log` | its F(R) | the Results' R % and log F(R) |
   | GC | `gc-tables` (8) | its first gas's readings | a sample's tables (times, readings, flows, their integral), by its dates, readings, light-on, injection delay and flow parameters |
   | EPR | `epr-smoothed` (8) | its intensities | a spectrum smoothed, by its field and the width |
-  | SEM | (`imgs`) | its file's id | its header, reduced copy and card levels (by the part of the image and the size, the last 4), while a tab awake or asleep holds the file (§9) |
+  | SEM | (`imgs`) | its file's id | its header, reduced copy and card levels (by the part of the image and the size, the last 4; a file read again adds to them), while a tab awake or asleep holds the file (§9) |
 
   Not kept: what is drawn (a plot's paths, the DOM: a tab asleep has none; awake it keeps
   them), the transforms made as a plot is drawn (a normalisation, an offset), and a few
