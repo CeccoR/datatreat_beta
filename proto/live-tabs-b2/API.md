@@ -5,9 +5,10 @@ tab, in one page. XRPD is the worked example: `xrd.patch` converts it on top of
 `core.patch`. It was written so that SEM, DRS, GC and EPR could be converted from it alone,
 and they were (`sem.patch`, `drs.patch`, `gc-epr.patch`; their notes are NOTES-*.md): every
 module is now made per tab, and `b2.patch` holds the whole. §12 is the plan those stages
-followed. `README.md` holds the state of b2 and its measurements; `NOTES-v2.md` the later
-changes in `b2.patch` (no trim; a sleeping SEM tab without its files' bytes), which this
-page describes as they now are.
+followed. `README.md` holds the state of b2 and its measurements; `NOTES-v2.md` and
+`NOTES-v3.md` the later changes in `b2.patch` (no trim; a sleeping SEM tab without its files'
+bytes; no memory budget; any number of tabs open, a cap on those awake; arrays fixed, not
+frozen), which this page describes as they now are.
 
 ## 1. What the shell does
 
@@ -37,10 +38,14 @@ works differently:
   show (§9); every other wakes at once, as in the first version.
 - **Busy tabs never sleep.** A busy tab (`moduleBusy(key)`) is never put to sleep. Its
   time hidden counts from the end of its job.
-- **The limit.** Beyond `settings.liveMax` tabs awake and not on show (6), the one hidden
-  longest that is not busy sleeps. With `settings.livePolicy = 'memory'` the limit is
-  `settings.liveMB` instead (1500), the sum of their `bytes()`. Opening a tab is never
-  refused for this. MAX_TABS (20 in the bar) is unchanged.
+- **The cap.** Any number of tabs may be open (b2v3: v517 and b2v2 refused a 21st). At most
+  `settings.awakeMax` tabs are awake (20 by default; Settings › Tabs in the background), the
+  one on show among them; beyond, those shown least lately (`seenAt`) that are not busy
+  sleep, whenever they were opened, so a tab opened first but shown often stays awake. The
+  cap is kept at every switch (before the tab shown wakes and after), at each job's end and
+  at each change of the setting: tabs busy stay awake over it, the excess put to sleep as
+  their jobs end. A tab opened in the background (Projects) is asleep. (To b2v2: L tabs
+  awake not on show, or a memory budget over each instance's `bytes()`; both are gone.)
 - **Persistence.** A tab's record is written from its live instance while it is awake
   (`park(getModuleState(key))`), otherwise from its parked state. This goes through v517's
   queue and the store of bytes by hash.
@@ -66,10 +71,13 @@ A module is made per tab when:
 6. a job that may run while its tab is hidden says when it starts and ends (`busyChanged(key)`),
    holds and releases the history as v509's jobs do, and writes only into its own instance (§7);
 7. `inst.destroy()` lets go of everything that would outlive it (§8);
-8. optionally `inst.bytes()`, and `opts.dropBytes` for a module whose files are large (§9);
-9. caches keyed by data (file bytes, frozen arrays) live at module level, shared by the
+8. optionally `opts.dropBytes`, for a module whose files are large (§9);
+9. the arrays of numbers it makes and never changes in place (a file's data) are fixed
+   (`fixed(a)`, utils.js from db.js: shared by the states, a state parked and the history's
+   key, not copied, not frozen; §9), and nothing writes into them;
+10. caches keyed by data (file bytes, arrays fixed) live at module level, shared by the
    instances (§10);
-10. its tests still pass, and a test drives two of its tabs at once (§12).
+11. its tests still pass, and a test drives two of its tabs at once (§12).
 
 ## 3. The instance, its section, its ids
 
@@ -86,7 +94,7 @@ create(ctx) → inst
             so that the page's ids exist as in v517 before any tab of the module is opened)
     layer   a <div class="inst-layer"> (display: contents) for what it lays over the page
     shown() true while it is the instance on show (its section in the page and active)
-  inst = { destroy(), bytes?() }   // the shell adds key, mod, root, layer
+  inst = { destroy() }             // the shell adds key, mod, root, layer
 ```
 
 **The ids belong to the instance on show.** The section and layer of the instance on show
@@ -257,7 +265,7 @@ retains that instance. Measure with files dropped through a `DragEvent`, as
 `waitForSelector` returns one (helpers.mjs `openModule`), and so does a `waitForFunction`
 whose predicate returns an element; return a boolean instead (NOTES-drs.md).
 
-## 9. What a hidden or sleeping tab lets go; bytes()
+## 9. What a hidden or sleeping tab lets go; arrays fixed
 
 - **At hide, only what is remade in under ~50 ms.** SEM lets go of its editor's image at
   full size (17 MB of canvas and pixels for 2048², remade in 25–29 ms as it is shown).
@@ -270,8 +278,19 @@ whose predicate returns an element; return a boolean instead (NOTES-drs.md).
 - **Nothing kept twice, nothing kept for nothing.**
   - xrd-peaks kept a fourth array per pattern (the raw pattern less the baseline) that
     nothing read. It is gone.
-  - db.js `park` and `decode` now share frozen arrays of numbers instead of copying them, so a
-    parked XRPD state holds the same pattern arrays as its history.
+  - **Arrays fixed** (b2v3): an array of numbers (or of anything but objects) a module makes
+    and never changes in place is fixed, `fixed(a)` (db.js, a WeakSet; utils.js gives it to
+    the modules). db.js `park` and `decode` give a fixed array back as it is, not a copy, and
+    utils.js `stateKey` takes it by a hash kept for it (`numsKey`), so a tab's parked state,
+    its history and its instance hold one array, and the history's key of a state does not
+    write its numbers out. Fixed: XRPD's patterns (2θ, intensities, variance factors, where
+    a file is read or restored) and its results' lists (xrd-rv-model.js `frozen`, whose
+    objects stay frozen), DRS's and EPR's spectra (`keepSpectrum`), GC's gases (`readGc`,
+    its restore). To b2v2 XRPD froze its arrays for this, which in Chromium holds a double in
+    16 bytes, not 8 (NOTES-drs.md), and DRS's, GC's and EPR's were copied into every state
+    parked. Nothing may write into a fixed array: the tests freeze each as it is fixed
+    (`window.__freezeFixed`, set by helpers.mjs), so that a write throws there; the app does
+    not. Measured in `NOTES-v3.md`.
   - xrd.js's cache of files read (`reread`) is per module, keyed by the file's bytes, so a
     tab woken reads nothing again and its patterns are the same arrays.
 - **A sleep without the files' bytes: `registerModule(mod, create, { dropBytes: true })`.**
@@ -310,30 +329,19 @@ whose predicate returns an element; return a boolean instead (NOTES-drs.md).
     every other wake, every other module's included, is the synchronous one of the first
     version, unchanged. After a reload, the records of a `dropBytes` module's tabs not on
     show are read without their bytes (db.js `allTabStates(lazy)`).
-- **`bytes()`.** It estimates what sleeping would give back: the instance's elements and the
-  data it derived and drew. It excludes its files and results, which the parked state and
-  the history keep (a `dropBytes` module's files too: its sleep gives them back as well,
-  which the estimate does not count). The memory policy sums it over the hidden awake tabs.
-  Calibrate it with `measure/bytes.mjs`. XRPD's:
-
-  ```js
-  (1 << 20) + 2048*files + 48*points*scherrerCards + 37*refinedPoints
-  ```
-
-  Measured awake over asleep (`results/bytes.json`):
-
-  | XRPD tab | JS heap | DOM nodes | estimate |
-  |---|---|---|---|
-  | blank | 0.1 MB | 1456 | 1.0 MB |
-  | 12 patterns | 3.2 MB | 2535 | 4.0 MB |
-  | 12 patterns refined | 5.2 MB | 3345 | 6.3 MB |
+- **No `bytes()`** (b2v3): the instances' estimates of what sleep gives back went with the
+  memory budget, their only reader. What a hidden awake XRPD tab holds beyond its sleeping
+  form was measured for them (`results/bytes.json`: blank 0.1 MB of heap and 1456 DOM
+  nodes, 12 patterns 3.2 MB and 2535, refined 5.2 MB and 3345).
 
 ## 10. Module-level and instance-level
 
 Keep at **module level**, shared by instances:
 
 - pure functions and constants;
-- caches keyed by data identity, as `WeakMap`s (XRPD's `reread` by bytes, xrd-peaks' `idOf`);
+- caches keyed by data identity, as `WeakMap`s (XRPD's `reread` by bytes, xrd-peaks' `idOf`,
+  DRS's and EPR's `spectra` by bytes);
+- the registry of arrays fixed (db.js), page-wide;
 - pools (workers).
 
 Keep **inside `create`**: everything per project, including what v517 kept in the IIFE:
@@ -361,7 +369,8 @@ unchanged.
 - The cards' host gets `hidden: … || !shown()`, `unseen`, `layer` and `placed`.
 - `createDeck({ …, layer })`.
 - `reread` moves to module level.
-- The returned instance has `destroy` and `bytes` (the first version also `trim` and `show`).
+- Its patterns' arrays are fixed (`fixedArrs`, b2v3), not frozen.
+- The returned instance has `destroy` (the first version also `trim`, `show` and `bytes`).
 
 **xrd-rv.js**
 
@@ -381,8 +390,8 @@ unchanged.
   - two XRPD tabs awake, each with its own files, view and undo;
   - a refinement in a tab left: on the pool, its results bit for bit those of one refined on
     show, its step, its record, its "*";
-  - sleep after the minutes set in Settings, the busy exemption, the limit by number and by
-    memory, a wake with the whole history;
+  - sleep after the minutes set in Settings, the busy exemption, the cap on the tabs awake,
+    a wake with the whole history (b2v2 also the limit by memory);
   - the LRU;
   - a hidden tab saved as it is closed, reopened from Projects, and a reload.
 - `tests/rvui.test.mjs`: one step adapted. Leaving a refining XRPD tab no longer asks; this
@@ -390,8 +399,8 @@ unchanged.
 
 ## 12. Converting the other modules
 
-(The plan the stages followed, as it was written: what they did is in their notes, and b2v2
-has no trim, §9.)
+(The plan the stages followed, as it was written: what they did is in their notes; b2v2 has
+no trim, b2v3 no `bytes()`, §9.)
 
 | module | lookups in the page (`map/singletons/counts.txt`) | where |
 |---|---|---|

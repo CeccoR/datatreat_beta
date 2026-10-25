@@ -68,7 +68,7 @@ index 7423f90..1ecd528 100644
    };
  }
 diff --git a/db.js b/db.js
-index 27d4831..f7be1e8 100644
+index 27d4831..954a3eb 100644
 --- a/db.js
 +++ b/db.js
 @@ -16,7 +16,8 @@
@@ -111,45 +111,51 @@ index 27d4831..f7be1e8 100644
      await txRun([store, BYTES], 'readwrite', t=>{
        const bs = t.objectStore(BYTES), todo = [...s.put];
        const next = ()=>{
-@@ -235,7 +243,11 @@ const fromB64Fast = t => Uint8Array.fromBase64 ? Uint8Array.fromBase64(t) : from
+@@ -235,7 +243,24 @@ const fromB64Fast = t => Uint8Array.fromBase64 ? Uint8Array.fromBase64(t) : from
     park is encode for a state kept in the page (a tab parked, a state about to be stored):
     the bytes stay the module's own array, and SEM's RawRef (a file's bytes as base64)
     itself, wherever they are, neither copied nor encoded; decode gives them back as they
 -   are. To v516 a parked tab held them as base64, copied at each switch. */
-+   are. To v516 a parked tab held them as base64, copied at each switch. A frozen array of
-+   no object (an XRPD pattern's 2θ, intensities and variance factors, which nothing
-+   changes) is the module's own too, in park's form and back from decode: to v517 a tab
++   are. To v516 a parked tab held them as base64, copied at each switch. An array fixed
++   (below) is the module's own too, in park's form and back from decode: to v517 a tab
 +   parked held a copy of each, beside its history's, which shares them (b2: a tab asleep
 +   keeps both). */
++/* Arrays of numbers (or of anything but objects) that nothing changes once made, fixed by
++   the module that makes them: XRPD's patterns (2θ, intensities, variance factors) and its
++   results' lists, DRS's and EPR's spectra, GC's gases. park and decode take one as it is,
++   shared, not copied, and utils.js stateKey by a hash kept for it (numsKey). To b2v2 such
++   arrays were frozen (XRPD's; DRS's and EPR's were copied into every state parked), which
++   in Chromium holds each double in 16 bytes, not 8 (NOTES-drs.md). No module writes into
++   one; the tests have each frozen as it is fixed (window.__freezeFixed), so that a write
++   throws. */
++const _fixed = new WeakSet();
++function fixed(a){
++  if (Array.isArray(a) && !_fixed.has(a)){ _fixed.add(a); if (globalThis.__freezeFixed) Object.freeze(a); }
++  return a;
++}
++const isFixed = a => _fixed.has(a);
  function walk(v, keep){
    const met = new Map();   // a Uint8Array → its encoded form
    let ids = 0;
-@@ -249,12 +261,14 @@ function walk(v, keep){
+@@ -249,7 +274,7 @@ function walk(v, keep){
      }
      if (keep && isText(x)) return x;
      if (ArrayBuffer.isView(x)) return Array.from(x);
 -    if (Array.isArray(x)) return x.map(enc);
-+    if (Array.isArray(x)) return keep && frozenOwn(x) ? x : x.map(enc);
++    if (Array.isArray(x)) return keep && isFixed(x) ? x : x.map(enc);
      if (x && typeof x === 'object'){ const o = {}; for (const k in x) o[k] = enc(x[k]); return o; }
      return x;
    };
-   return enc(v);
- }
-+// (a frozen array of numbers, or of anything but objects: one park and decode share)
-+const frozenOwn = x => Object.isFrozen(x) && !x.some(isObj);
- const encode = v => walk(v, false);
- const park = v => walk(v, true);
- const bytesOf = t=>{ try { return fromB64(t); } catch(e){ return new Uint8Array(0); } };
-@@ -273,7 +287,7 @@ function decode(v){
+@@ -273,7 +298,7 @@ function decode(v){
    };
    const dec = x=>{
      if (x instanceof Uint8Array) return x;   // (park's: the array itself)
 -    if (Array.isArray(x)) return x.map(dec);
-+    if (Array.isArray(x)) return frozenOwn(x) ? x : x.map(dec);
++    if (Array.isArray(x)) return isFixed(x) ? x : x.map(dec);
      if (x && typeof x === 'object'){
        if (isText(x) && Object.getPrototypeOf(x) !== Object.prototype) return x;   // (park's: SEM's RawRef itself)
        if (x.__t === 'date') return new Date(x.v);
-@@ -305,6 +319,7 @@ function decode(v){
+@@ -305,6 +330,7 @@ function decode(v){
     compares the whole text. One file a task. */
  const _hash = new WeakMap();   // a Uint8Array or a text holder → its hash (false: kept inline)
  const _texts = new Map();      // a hash → WeakRef of a text holder of those bytes
@@ -157,7 +163,7 @@ index 27d4831..f7be1e8 100644
  const isObj = x => x !== null && typeof x === 'object';
  // (a text holder: an object of an id and a b64 string alone, as SEM's RawRef and its copies)
  const isText = x => !!x && typeof x === 'object' && typeof x.b64 === 'string' && !Array.isArray(x)
-@@ -316,9 +331,15 @@ const nextTask = ()=> new Promise(r=>{
+@@ -316,9 +342,15 @@ const nextTask = ()=> new Promise(r=>{
    if (typeof MessageChannel !== 'function') return setTimeout(r, 0);
    const c = new MessageChannel(); c.port1.onmessage = ()=>{ c.port1.close(); r(); }; c.port2.postMessage(0);
  });
@@ -175,7 +181,7 @@ index 27d4831..f7be1e8 100644
  }
  function textHash(s){
    for (const [k, r] of _texts){ const o = r.deref(); if (!o){ _texts.delete(k); continue; } if (o.b64 === s) return k; }
-@@ -335,7 +356,7 @@ async function hashOf(x){
+@@ -335,7 +367,7 @@ async function hashOf(x){
        if (text){ b = fromB64Fast(x.b64); if (toB64(b) !== x.b64) b = null; }
        if (b){ await nextTask(); h = hex(await globalThis.crypto.subtle.digest('SHA-256', b)); }
      }
@@ -184,26 +190,31 @@ index 27d4831..f7be1e8 100644
    } catch(e){ h = false; }
    if (_hash.has(x)) return _hash.get(x);
    _hash.set(x, h);
-@@ -431,14 +452,15 @@ function refsIn(v, set = new Set()){
+@@ -431,14 +463,18 @@ function refsIn(v, set = new Set()){
  }
  // The records of a store (all, or the one of an id) with the bytes they hold, read in one
  // transaction: a record and its bytes as they were written together, whatever another
 -// window writes or sweeps meanwhile.
 -function readRecs(store, id){
 +// window writes or sweeps meanwhile. lazy(rec): a record whose bytes are not read (b2: a
-+// tab that comes back asleep, its bytes read as it wakes).
++// tab that comes back asleep, its bytes read as it wakes). All of them by a cursor, each
++// record read in a task of its own (b2v3: with any number of tabs open, getAll read 60 XRPD
++// tabs' records in one task of 0.47 s).
 +function readRecs(store, id, lazy){
    const out = { recs: [], hs: new Set(), got: new Map(), lost: 0 };   // (lost: the files whose bytes could not be read)
    return txRun([store, BYTES], 'readonly', t=>{
-     const q = id == null ? t.objectStore(store).getAll() : t.objectStore(store).get(id);
+-    const q = id == null ? t.objectStore(store).getAll() : t.objectStore(store).get(id);
++    const q = id == null ? t.objectStore(store).openCursor() : t.objectStore(store).get(id);
      q.onsuccess = ()=>{
-       out.recs = (id == null ? q.result || [] : [q.result]).filter(Boolean);
+-      out.recs = (id == null ? q.result || [] : [q.result]).filter(Boolean);
 -      out.recs.forEach(r=> refsIn(r.state, out.hs));
-+      out.recs.forEach(r=>{ if (!(lazy && lazy(r))) refsIn(r.state, out.hs); });
++      const r = id == null ? q.result && q.result.value : q.result;
++      if (r){ out.recs.push(r); if (!(lazy && lazy(r))) refsIn(r.state, out.hs); }
++      if (id == null && q.result){ q.result.continue(); return; }
        getBytes(t.objectStore(BYTES), out.hs, out.got);
      };
    }).then(()=>{ out.hs.forEach(h=>{ if (!out.got.get(h)) out.lost++; }); return out; });
-@@ -456,10 +478,11 @@ async function hydrate(states, fromFile){
+@@ -456,10 +492,11 @@ async function hydrate(states, fromFile){
    return states.map(s=> fill(s, got));
  }
  // Every open tab's record, with its state as park gives it ({ recs, states, missing: the
@@ -219,7 +230,7 @@ index 27d4831..f7be1e8 100644
  }
  // A saved project's record, its state as park gives it ({ rec, state, missing }), or null
  // when it is gone.
-@@ -487,7 +510,7 @@ function fill(v, got){
+@@ -487,7 +524,7 @@ function fill(v, got){
      const b = got.get(h);
      if (!b) return null;
      const c = used.has(h) ? b.slice() : b;
@@ -228,7 +239,7 @@ index 27d4831..f7be1e8 100644
      return c;
    };
    const one = x => typeof x.h === 'string' ? arr(x.h) : bytesOf(x.v);
-@@ -503,7 +526,7 @@ function fill(v, got){
+@@ -503,7 +540,7 @@ function fill(v, got){
        return byId.get(x.ref);
      }
      if (isRef(x)) return null;   // ({__t:'b64'} out of a text holder)
@@ -237,7 +248,7 @@ index 27d4831..f7be1e8 100644
      for (const k in x) o[k] = go(x[k]);
      // a text holder as stored (SEM's RawRef): its text back, known by its hash
      if (x.b64 && typeof x.b64 === 'object' && x.b64.__t === 'b64' && typeof x.b64.h === 'string'){
-@@ -537,6 +560,65 @@ function expand(v, got){
+@@ -537,6 +574,65 @@ function expand(v, got){
    return go(v);
  }
  
@@ -303,18 +314,18 @@ index 27d4831..f7be1e8 100644
  export { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject,
           allTabRecs, allTabStates, putTabRec, deleteTabRec, uid, encode, decode, park, stored,
 -         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed };
-+         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed, unload, load, unread, refsIn };
++         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed, unload, load, unread, refsIn, fixed, isFixed };
 diff --git a/epr.js b/epr.js
-index b267b08..8da523d 100644
+index b267b08..5117a8f 100644
 --- a/epr.js
 +++ b/epr.js
 @@ -1,4 +1,4 @@
 -import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumericInput, esc } from './utils.js';
-+import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumericInput, esc, registerModule } from './utils.js';
++import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumericInput, esc, registerModule, fixed } from './utils.js';
  import { boxSmooth, meanStep, widthText, ptsNum, ptsText } from './smooth.js';
  import { Plot } from './plot.js';
  import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-@@ -8,26 +8,59 @@ import { decodeText } from './textdata.js';
+@@ -8,26 +8,62 @@ import { decodeText } from './textdata.js';
  
  /* =========================================================
     EPR MODULE
@@ -329,15 +340,18 @@ index b267b08..8da523d 100644
 +   key). It has no job that runs on while hidden. API.md says how a module is made so.
  ========================================================= */
 -(function(){
-+/* A spectrum's field and intensities kept by its .DTA's bytes (the file as it came, the
-+   same array in a tab's states, its parked state and its record: db.js park, decode): a
-+   tab woken, which reads its state back as copies, takes the arrays its history holds
-+   again, the same values, rather than keeping both. */
++/* A spectrum's field and intensities, which nothing changes once read: fixed (db.js), the
++   same arrays in a tab's states and its parked state (to b2v2 a parked state held a copy).
++   Kept by its .DTA's bytes (the file as it came, the same array in its states and its
++   record): a tab of a record read back (a reload, a project opened), which holds copies,
++   takes the arrays another state holds of that file, the same values, rather than keeping
++   both. */
 +const spectra = new WeakMap();
 +const sameArr = (a, b)=> a === b || (a.length === b.length && a.every((v, i)=> Object.is(v, b[i])));
 +const dtaOf = f =>{ const r = Array.isArray(f.rawFiles) && f.rawFiles.find(r=> r && /\.dta$/i.test(r.name)); return r && r.bytes instanceof Uint8Array ? r.bytes : null; };
 +function keepSpectrum(f){
 +  const k = dtaOf(f);
++  fixed(f.b); fixed(f.a);
 +  if (!k) return f;
 +  const s = spectra.get(k);
 +  if (s && sameArr(s.b, f.b) && sameArr(s.a, f.a)){ f.b = s.b; f.a = s.a; }
@@ -379,7 +393,7 @@ index b267b08..8da523d 100644
      },
      // A project from before the cards had one analysis, its settings at the top level.
      restore: s => deck.load(cardList(s.cards, KINDS) || [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }], readCard, a=>{
-@@ -35,7 +68,15 @@ import { decodeText } from './textdata.js';
+@@ -35,7 +71,15 @@ import { decodeText } from './textdata.js';
        card.querySelector('#' + P(a) + 'Norm').value = a.norm;
        showW(a, card);
      }),
@@ -396,7 +410,7 @@ index b267b08..8da523d 100644
      // One CSV a card, named after it.
      csv: ()=> files.length ? cards().map(a=> ({ name: `${fileSafe(a.name)} - epr_spectra.csv`, text: cardCsv(a) })) : [],
    });
-@@ -110,7 +151,7 @@ import { decodeText } from './textdata.js';
+@@ -110,7 +154,7 @@ import { decodeText } from './textdata.js';
                           { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
    }
  
@@ -405,7 +419,7 @@ index b267b08..8da523d 100644
      const existingStems = new Set(allFiles.map(f=>f.name));
      const invalidFiles = [];
      const alreadyLoaded = [];
-@@ -133,7 +174,7 @@ import { decodeText } from './textdata.js';
+@@ -133,7 +177,7 @@ import { decodeText } from './textdata.js';
        if (pair.dta && pair.dsc){
          let result;
          try { result = await processPair(stem, pair.dta, pair.dsc); } catch(e){ result = { error: String(e && e.message || e) }; }
@@ -414,7 +428,7 @@ index b267b08..8da523d 100644
          else { invalidFiles.push(`${stem} (${result.error})`); }
        } else {
          unpaired.push((pair.dta || pair.dsc).name);
-@@ -147,7 +188,7 @@ import { decodeText } from './textdata.js';
+@@ -147,7 +191,7 @@ import { decodeText } from './textdata.js';
  
    function afterFilesChange(){
      kit.showFiles();
@@ -423,7 +437,7 @@ index b267b08..8da523d 100644
      // (each card's points at the spectra's steps, folded or not)
      cards().forEach(a=> syncPts(a));
      updateEpr();
-@@ -241,26 +282,31 @@ import { decodeText } from './textdata.js';
+@@ -241,26 +285,31 @@ import { decodeText } from './textdata.js';
      return { norm: normOf(s.norm), smoothW: Number.isFinite(w) ? w : DEF.smoothW };
    };
  
@@ -459,7 +473,7 @@ index b267b08..8da523d 100644
      const n = Y.length;
      const allB = files.flatMap(f=>f.b);
      // (none: the spectra as they are, each centred in a slot as tall as the largest
-@@ -320,5 +366,24 @@ import { decodeText } from './textdata.js';
+@@ -320,5 +369,16 @@ import { decodeText } from './textdata.js';
  
    // A new project starts with one card.
    deck.start(['spectra']);
@@ -473,14 +487,6 @@ index b267b08..8da523d 100644
 +    // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
 +    // menu and its listeners. Its section and layer are the shell's to take out.
 +    destroy(){ kit.destroy(); },
-+    /* What its tab's sleep gives back, estimated (bytes), for the tabs' limit by memory
-+       (tabs.js): its elements and its plots, not its files' arrays, which its parked state
-+       and its history keep. Measured, 5 tabs awake and hidden over 5 asleep (NOTES-gc-epr.md):
-+       blank none (183 nodes); spectra of 1024 points, one card, 10 of them 0.4 MB of heap
-+       and 1.1 MB of the renderer's RSS, with two cards 0.56 and 2.0. So: 128 kB, and with
-+       spectra 0.5 MB a card and 48 bytes a point a card (its curves' paths and the arrays
-+       its plot keeps). */
-+    bytes(){ let pts = 0; files.forEach(f=>{ pts += f.b.length; }); return (1 << 17) + (files.length ? cards().length*((1 << 19) + 48*pts) : 0); },
 +  };
 +}
 +registerModule('epr', createEpr);
@@ -508,16 +514,16 @@ index 648ea10..fb4ddea 100644
    try { const o = JSON.parse(localStorage.getItem(MEM_KEY)); return (o && typeof o === 'object') ? o : {}; }
    catch(e){ return {}; }
 diff --git a/gc.js b/gc.js
-index 8492ab7..a6a5227 100644
+index 8492ab7..19ec084 100644
 --- a/gc.js
 +++ b/gc.js
 @@ -1,4 +1,4 @@
 -import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc } from './utils.js';
-+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule } from './utils.js';
++import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, fixed } from './utils.js';
  import { Plot, svgEl } from './plot.js';
  import { cardInfo, fileSafe, nameDownloads } from './cards.js';
  import { moduleKit, wideCsv, isObj, isArr, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
-@@ -7,8 +7,25 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -7,17 +7,37 @@ import { textLines, readTable, parseNum } from './textdata.js';
  
  /* =========================================================
     GC MODULE
@@ -544,9 +550,13 @@ index 8492ab7..a6a5227 100644
    /* The module (modkit.js): every file loaded, in list order, {name, label,
       injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has), emptyRows, and
       dayMonth: true, badDates: n where they apply (readGc), and sample, the file it is a
-@@ -17,7 +34,8 @@ import { textLines, readTable, parseNum } from './textdata.js';
+      replicate of, where it is one (REPLICATES)}, and the included ones, which the analysis
+      sees, `files`, with which the per-sample arrays each card keeps are aligned; the
       alerts under the drop zone, the dates read day first or left out and the empty cells
-      skipped among them; each card's settings in the history. */
+-     skipped among them; each card's settings in the history. */
++     skipped among them; each card's settings in the history. A gas's values, which
++     nothing changes once read, are fixed (db.js: the same array in a tab's states and its
++     parked state; to b2v2 a parked state held a copy). */
    const kit = moduleKit('gc', {
 -    alerts: p =>{ document.getElementById('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + p.upload; },
 +    root, key, layer,
@@ -554,7 +564,23 @@ index 8492ab7..a6a5227 100644
      dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)) },
      // Every card's per-sample arrays. An excluded file holds its own values; one with none
      // (never so far, or in a card added since) gets the upload defaults.
-@@ -54,7 +72,16 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -41,11 +61,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
+     file: f =>{
+       if (!isArr(f.injDates) || !isObj(f.gas)) return null;
+       const n = f.injDates.length, ks = Object.keys(f.gas), emptyRows = num(f.emptyRows, 0, v=> v >= 0);
+-      if (n && ks.length && f.injDates.every(d=> dateOf(d) === d) && ks.every(k=> GASES.some(g=> g.key === k) && Array.isArray(f.gas[k]) && f.gas[k].length === n))
++      if (n && ks.length && f.injDates.every(d=> dateOf(d) === d) && ks.every(k=> GASES.some(g=> g.key === k) && Array.isArray(f.gas[k]) && f.gas[k].length === n)){
++        ks.forEach(k=> fixed(f.gas[k]));
+         return emptyRows === f.emptyRows ? f : { ...f, emptyRows };
++      }
+       const at = [], injDates = [], gas = {};
+       Array.from(f.injDates).forEach((d, i)=>{ const v = dateOf(d); if (v){ at.push(i); injDates.push(v); } });
+-      for (const g of GASES){ const a = f.gas[g.key]; if (isArr(a)) gas[g.key] = at.map(i=> Number.isFinite(a[i]) ? a[i] : NaN); }
++      for (const g of GASES){ const a = f.gas[g.key]; if (isArr(a)) gas[g.key] = fixed(at.map(i=> Number.isFinite(a[i]) ? a[i] : NaN)); }
+       return injDates.length && Object.keys(gas).length ? { ...f, injDates, gas, emptyRows } : null;
+     },
+     // A project from before the cards had one analysis, its settings at the top level. A
+@@ -54,7 +76,16 @@ import { textLines, readTable, parseNum } from './textdata.js';
      // samples as they should be (relink): a project from before them, each file its own.
      restore: (s, gone)=>{ relink(); deck.load(cardList(s.cards, KINDS) || [{ ...s, id: 1, type: 'rate' }],
        src=> ({ init: { ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, without(src[k], gone)])) } }), a=>{ live.get(a.id).restore(a.init); delete a.init; }); },
@@ -572,7 +598,15 @@ index 8492ab7..a6a5227 100644
      csv: ()=> cards().flatMap(a=> live.get(a.id).exportEntries(fileSafe(a.name))),
    });
    const { all: allFiles, files } = kit;
-@@ -302,12 +329,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -289,6 +320,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
+        apply: any other file's record is as it was.) */
+     const rest = rows.length - lost;
+     if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` } : null;
++    for (const k in gas) fixed(gas[k]);
+     return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }) };
+   }
+   kit.dropText(readGc, ()=> afterFilesChange());
+@@ -302,12 +334,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
    }
  
    // (The alerts are drawn with the list, kit.showFiles: the empty-cell alert follows the files.)
@@ -588,7 +622,7 @@ index 8492ab7..a6a5227 100644
      kit.commit();
    }
  
-@@ -427,8 +456,10 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -427,8 +461,10 @@ import { textLines, readTable, parseNum } from './textdata.js';
          <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>${gasPlot(P(a) + 'SvgBar', 'r', { cls: 'plot-wide', csv: 'mean_rates.csv', name: 'GC_results.svg', legend: P(a) + 'BarLegend' })}
          <div id="${P(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
  
@@ -600,7 +634,7 @@ index 8492ab7..a6a5227 100644
      // The card's section of the Results, kept in card order under the Results' list.
      const res = document.createElement('div');
      res.className = 'res-an';
-@@ -565,7 +596,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -565,7 +601,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
        });
        html += `</tbody></table></div>`;
        wrap.innerHTML = html;
@@ -609,7 +643,7 @@ index 8492ab7..a6a5227 100644
  
        const delayIn = wrap.querySelector('.gcDelay'), delayBox = wrap.querySelector('.gcDelayAuto');
        guardNumericInput(delayIn, { min:0 });
-@@ -744,13 +775,15 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -744,13 +780,15 @@ import { textLines, readTable, parseNum } from './textdata.js';
          return {t, gas, name:f.name, label:f.label, color:f.color};
        });
      }
@@ -626,7 +660,7 @@ index 8492ab7..a6a5227 100644
      }
  
      /* The gas selector, rendered into the card and its Results section and driving one
-@@ -924,13 +957,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -924,13 +962,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
      const hasResults = ()=> costResults.some(c=> GASES.some(g=>isFinite(c.rate[g.key])));
      function updateRegression(){
        computeRates();
@@ -643,7 +677,7 @@ index 8492ab7..a6a5227 100644
      }
  
      // The interval of sample k as far as a gas's data reach: [start, end] within the first
-@@ -1117,7 +1150,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -1117,7 +1155,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
        clear(){ [ms,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
        unselect(){ gcSel = gcHov = null; },
        // (a file's sample changed: the bars alone are per sample)
@@ -652,7 +686,7 @@ index 8492ab7..a6a5227 100644
        renderTable: renderGcParamTable,
        compute: computeAndRenderGc,
        // A folded card draws nothing; its Results section is drawn all the same.
-@@ -1126,7 +1159,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -1126,7 +1164,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
          computeTables(); renderGasSel(); computeRates();
          res.style.display = hasResults() ? '' : 'none';
          syncResults();
@@ -661,7 +695,7 @@ index 8492ab7..a6a5227 100644
          $('ResLegend').innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
        },
        hasResults: ()=> res.style.display !== 'none',
-@@ -1188,13 +1221,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -1188,13 +1226,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
    const T_TITLE = 'the temperature at which the flow Q is measured — for a mass-flow controller, the reference temperature of its standard units (often 0 °C or 20 °C: see its datasheet), not the temperature of its body';
    const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar: see its datasheet); for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
    const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, by that file's name (a label renamed changes nothing); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
@@ -677,7 +711,7 @@ index 8492ab7..a6a5227 100644
      cards().forEach(a=>{ const c = live.get(a.id); if (c) c.res.classList.toggle('is-first', a === on[0]); });
    }
    function named(a){
-@@ -1225,4 +1258,23 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -1225,4 +1263,16 @@ import { textLines, readTable, parseNum } from './textdata.js';
  
    // A new project starts with one card.
    deck.start(['rate']);
@@ -692,37 +726,23 @@ index 8492ab7..a6a5227 100644
 +    // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
 +    // menu and its listeners. Its section and layer are the shell's to take out.
 +    destroy(){ kit.destroy(); },
-+    /* What its tab's sleep gives back, estimated (bytes), for the tabs' limit by memory
-+       (tabs.js): its elements and its plots, not its files' arrays, which its parked state
-+       and its history keep. Measured, the renderer's RSS of 5 tabs awake and hidden over 5
-+       asleep (NOTES-gc-epr.md): blank none (246 nodes); exports of 72 injections, H2 and
-+       O2, one card, 3 of them 1.1 MB, 10 2.3 MB; 10 and two cards 4.2. So: 64 kB, and with
-+       files 0.57 MB a card and 0.17 MB a file a card. */
-+    bytes(){ return (1 << 16) + (files.length ? cards().length*(600e3 + 175e3*files.length) : 0); },
 +  };
 +}
 +registerModule('gc', createGc);
 diff --git a/index.html b/index.html
-index 43fbe34..2006bca 100644
+index 43fbe34..dbfd376 100644
 --- a/index.html
 +++ b/index.html
-@@ -162,6 +162,19 @@
+@@ -162,6 +162,12 @@
            <option value=";" selected>; (semicolon)</option>
            <option value=",">, (comma)</option>
          </select>
 +        <h3 class="txt-head" style="margin:20px 0 6px">Tabs in the background</h3>
-+        <div class="instr-block">A tab you leave keeps working, a refinement going on, and comes back at once. Left alone for the minutes set here, it sleeps: its state and its whole undo history are kept, and it wakes when you show it again, in about the time a project takes to open. A tab still working never sleeps. Beyond the limit, the tab not shown for longest sleeps first.</div>
++        <div class="instr-block">A tab you leave keeps working, a refinement going on, and comes back at once. Left alone for the minutes set here, it sleeps: its state and its whole undo history are kept, and it wakes when you show it again, in about the time a project takes to open. A tab still working never sleeps. Any number of tabs can be open; beyond the tabs awake set here, the one you showed least lately sleeps first.</div>
 +        <label class="txt-label" style="margin-top:0" for="settingSleepMin">Sleep after (minutes not on show)</label>
 +        <input type="number" id="settingSleepMin" min="0.1" max="1440" step="0.1" value="10">
-+        <label class="txt-label" style="margin-top:14px" for="settingLivePolicy">Limit the tabs awake in the background by</label>
-+        <select id="settingLivePolicy">
-+          <option value="count" selected>Number of tabs</option>
-+          <option value="memory">Memory</option>
-+        </select>
-+        <div class="set-row"><label class="txt-label" style="margin-top:14px" for="settingLiveMax">Tabs awake, not on show, at most</label>
-+        <input type="number" id="settingLiveMax" min="0" max="19" step="1" value="6"></div>
-+        <div class="set-row" hidden><label class="txt-label" style="margin-top:14px" for="settingLiveMB">Their memory at most (MB, estimated from their data)</label>
-+        <input type="number" id="settingLiveMB" min="100" max="16000" step="100" value="1500"></div>
++        <label class="txt-label" style="margin-top:14px" for="settingAwakeMax">Tabs awake at most, the one on show among them</label>
++        <input type="number" id="settingAwakeMax" min="1" max="1000" step="1" value="20">
          <h3 class="txt-head" style="margin:20px 0 6px">Keyboard shortcuts</h3>
          <div class="shortcut-list">
            <div><span><span class="kbd">&#8592;</span> <span class="kbd">&#8594;</span></span><span>Previous / next sample</span></div>
@@ -1078,7 +1098,7 @@ index ee1b170..c0152a0 100644
      self.postMessage(err instanceof SemReadError ? { seq, error: err.message } : { seq, fault: String(err && err.message || err), kind: err && err.name });
    }
 diff --git a/sem.js b/sem.js
-index e6f92f1..84db809 100644
+index e6f92f1..e423c95 100644
 --- a/sem.js
 +++ b/sem.js
 @@ -1,4 +1,4 @@
@@ -2062,7 +2082,7 @@ index e6f92f1..84db809 100644
        // The curve as applied: the levels a linear normalisation takes to black and white
        // (none for the histogram's), and brightness, contrast and gamma with the image's
        // correction in them.
-@@ -1516,4 +1651,44 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1516,4 +1651,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      });
      return [{ name: 'sem_images.csv', text: t }];
    });
@@ -2092,18 +2112,6 @@ index e6f92f1..84db809 100644
 +      if (figApi && figApi.open){ try { figApi.close(); } catch(e){} }
 +      insts.delete(me);
 +      scheduleEvict();
-+    },
-+    /* What its sleep gives back, estimated (bytes; tabs.js: the limit by memory): its
-+       elements and what it drew (canvases, 4 bytes a pixel; the editor's image, and its
-+       pixels while kept), not its files' bytes, which sleep lets go of too once the store
-+       holds them (tabs.js lighten), nor what the module keeps by file. Measured
-+       (results/sem.json, 8 images of 2048²): hidden awake over asleep, 2.1–2.6 MB of RSS
-+       and 929 nodes; estimated 3.5 MB. */
-+    bytes(){
-+      let n = 1 << 19;
-+      for (const m of [thumbs, cardsCv]) for (const { cv } of m.values()) n += 4*cv.width*cv.height;
-+      if (off) n += 4*off.width*off.height*(off._img ? 2 : 1);
-+      return n + 4*canvas.width*canvas.height;
 +    },
 +  };
 +}
@@ -2522,10 +2530,10 @@ index 982d8d5..046f0bc 100644
    './xrd-cryst.js',
    './xrd-instr.js',
 diff --git a/tabs.js b/tabs.js
-index 7eb3489..dec6ff7 100644
+index 7eb3489..4c1d815 100644
 --- a/tabs.js
 +++ b/tabs.js
-@@ -4,34 +4,63 @@
+@@ -4,34 +4,64 @@
     style. A tab is a project, and its technique is just the page it shows, so any
     number of projects can be open at once, several on the same technique.
  
@@ -2541,11 +2549,11 @@ index 7eb3489..dec6ff7 100644
 +   in the tab (as a module's one instance parks a tab, below), the tab staying in the
 +   bar; shown again it WAKES, a new instance made of what was parked. Till then a tab
 +   hidden stays as it was left. A tab busy (a job going on) never sleeps: its time hidden
-+   is counted from the job's end. Beyond settings.liveMax tabs awake and not on show (or,
-+   by settings.livePolicy 'memory', past settings.liveMB of their estimated memory) the
-+   one hidden longest sleeps. A tab of SEM (utils.js dropsBytes) asleep lets go of its
-+   files' bytes too, which the store holds by their hashes: read back as it wakes, the
-+   loader on show meanwhile (lighten, wakeLater).
++   is counted from the job's end. Any number of tabs may be open (to b2v2 at most 20); at
++   most settings.awakeMax are awake, the one on show among them: beyond, the one shown
++   least lately sleeps, whenever it was opened. A tab of SEM (utils.js dropsBytes) asleep
++   lets go of its files' bytes too, which the store holds by their hashes: read back as it
++   wakes, the loader on show meanwhile (lighten, wakeLater).
 +
 +   A module NOT made per tab keeps its ONE instance, bound to the page's fixed ids, and
 +   only the tab of it that is live holds it. Every other tab parks its module state and
@@ -2562,7 +2570,7 @@ index 7eb3489..dec6ff7 100644
 +         detachInstance, dropKey, settings, saveSettings, onBusyChange, dropsBytes, vacate } from './utils.js';
 +import { allTabStates, putTabRec, deleteTabRec, uid, encode, park, decode, unload, load, unread, refsIn } from './db.js';
  
- const MAX_TABS = 20;
+-const MAX_TABS = 20;
  const UNTITLED = 'Untitled project';
  
  /* Pristine module states, captured before anything is loaded. A brand-new tab
@@ -2588,21 +2596,23 @@ index 7eb3489..dec6ff7 100644
 -   tab's live state is the module itself. `state` is park's form (db.js): its files'
 -   bytes the module's own arrays, read back from the store before a tab is made of a
 -   record (v517). */
-+/* A tab: { id, module, title, projectId, dirty, state, hist, inst, hidAt }
++/* A tab: { id, module, title, projectId, dirty, state, hist, inst, hidAt, seenAt }
 +   `state` / `hist` are only meaningful while the tab is NOT live — a live tab's state is
 +   its instance's (`inst`, a module made per tab) or its module's (one not). `state` is
 +   park's form (db.js): its files' bytes the module's own arrays, read back from the store
 +   before a tab is made of a record (v517), or, a tab asleep of a module that lets go of
 +   them (SEM), references to them by hash, read as it wakes (lighten). `hidAt`: when an
-+   awake tab was last left (its time hidden, for its sleep), 0 while it is on show;
-+   `waking`, the read of a wake going on ({ st, h, p }: wakeLater). */
++   awake tab was last left (its time hidden, for its sleep; a busy one's moved on to its
++   job's end), 0 while it is on show; `seenAt`: when it was last on show (the tabs awake
++   past the limit, the least lately first); `waking`, the read of a wake going on ({ st,
++   h, p }: wakeLater). */
  const TABS = [];
 -let _activeId = null;      // the tab whose state is live in its module
 +let _activeId = null;      // the tab on show (or that a fixed section came over)
  let _onFixed = true;       // a fixed section (home / projects / settings) is showing
  let _restoring = false;    // true while replaying persisted tabs at startup
  
-@@ -40,6 +69,22 @@ const activeTab = ()=> tabById(_activeId);
+@@ -40,6 +70,22 @@ const activeTab = ()=> tabById(_activeId);
  const tabIndex = id => TABS.findIndex(t=> t.id === id);
  const tabByProject = pid => (pid ? TABS.find(t=> t.projectId === pid) || null : null);
  const isRestoring = ()=> _restoring;
@@ -2625,7 +2635,7 @@ index 7eb3489..dec6ff7 100644
  
  /* ---- Naming ---------------------------------------------------------------
     New tabs are called "Untitled project", numbered per technique so three new GC
-@@ -53,46 +98,60 @@ function untitledName(module){
+@@ -53,46 +99,60 @@ function untitledName(module){
  
  /* ---- Persistence ----------------------------------------------------------
     Every open tab is stored, saved or not: on the next load the app comes back
@@ -2701,7 +2711,7 @@ index 7eb3489..dec6ff7 100644
    const st = t.state || DEFAULT_STATE[t.module];
    let hist = t.hist;
    try { if (st != null) restoreModuleState(t.module, decode(st)); }
-@@ -102,30 +161,195 @@ function loadTab(t){
+@@ -102,30 +162,194 @@ function loadTab(t){
      // its restore had got, partly the tab before's data.
      hist = null;
      try { restoreModuleState(t.module, decode(DEFAULT_STATE[t.module])); } catch(e2){}
@@ -2728,9 +2738,9 @@ index 7eb3489..dec6ff7 100644
 +  // (stay: put in the page, a fixed section left on show: a wake done meanwhile)
 +  if (!stay) goTab(t.module);
 +}
-+// The tab left: its time hidden counted from now.
++// The tab left: its time hidden counted from now, and its last show now.
 +function hideTab(t){
-+  if (t && t.inst) t.hidAt = Date.now();
++  if (t && t.inst) t.hidAt = t.seenAt = Date.now();
 +}
 +/* A tab woken: an instance made for it, put in the page and shown (it is the active
 +   tab), then its parked state restored into it and its whole history put back; the
@@ -2829,20 +2839,16 @@ index 7eb3489..dec6ff7 100644
 +  }, ()=>{});
 +  return true;
 +}
-+/* The rules, at each switch, each job's end, each change of the settings and at the next
-+   time a tab is due: a tab hidden past settings.sleepMin sleeps (a busy one's time counted
-+   from now: from its job's end, at the latest); then, beyond the limit (liveMax tabs awake
-+   and not on show, or liveMB of their estimated memory), the one hidden longest that is
-+   not busy, until none is over. A tab is never refused for them: one busy stays awake past
-+   the limit. `now` given: the time it is taken to be (the tests'). */
++/* The rules, at each switch (before the tab shown wakes, and after), each job's end, each
++   change of the settings and at the next time a tab is due: a tab hidden past
++   settings.sleepMin sleeps (a busy one's time counted from now: from its job's end, at the
++   latest); then, beyond settings.awakeMax tabs awake, the one on show among them (counted
++   while it wakes), those shown least lately that are not busy, until none is over: one
++   opened first but shown often stays awake. A tab is never refused for them: tabs busy stay
++   awake past the limit, the excess put to sleep as their jobs end. `now` given: the time it
++   is taken to be (the tests'). */
 +let _timer = 0;
 +const hiddenAwake = ()=> TABS.filter(t=> t.inst && t.id !== _activeId);
-+const bytesOf = t =>{ try { return Math.max(0, +(t.inst.bytes ? t.inst.bytes() : 0) || 0); } catch(e){ return 0; } };
-+function overLimit(){
-+  const h = hiddenAwake();
-+  if (settings.livePolicy === 'memory') return h.reduce((a, t)=> a + bytesOf(t), 0) > settings.liveMB*1048576;
-+  return h.length > settings.liveMax;
-+}
 +function keepLimits(now = Date.now()){
 +  clearTimeout(_timer); _timer = 0;
 +  const X = settings.sleepMin*60000;
@@ -2850,9 +2856,10 @@ index 7eb3489..dec6ff7 100644
 +    if (moduleBusy(t.id)) t.hidAt = Math.max(t.hidAt, now);
 +    else if (now - t.hidAt >= X) sleepTab(t);
 +  });
-+  while (overLimit()){
-+    const c = hiddenAwake().filter(t=> !moduleBusy(t.id)).sort((a, b)=> a.hidAt - b.hidAt)[0];
-+    if (!c || !sleepTab(c)) break;
++  let over = hiddenAwake().length - (settings.awakeMax - (activeTab() ? 1 : 0));
++  for (const t of hiddenAwake().filter(t=> !moduleBusy(t.id)).sort((a, b)=> a.seenAt - b.seenAt)){
++    if (over <= 0) break;
++    if (sleepTab(t)) over--;
 +  }
 +  const due = hiddenAwake().filter(t=> !moduleBusy(t.id)).map(t=> t.hidAt + X);
 +  if (due.length){
@@ -2869,9 +2876,9 @@ index 7eb3489..dec6ff7 100644
 +  if (!_restoring) keepLimits();
 +});
 +// What the shell holds now, for the tests and the measurements: each tab's module, whether
-+// it is awake, on show, busy, its time hidden and its estimated bytes.
++// it is awake, on show, busy, its time hidden and its last show.
 +const tabsNow = ()=> TABS.map(t=> ({ id: t.id, module: t.module, title: t.title, awake: isLive(t), shown: t.id === _activeId,
-+  busy: !!moduleBusy(keyOf(t)), hidAt: t.hidAt || 0, bytes: t.inst ? bytesOf(t) : 0, history: !!t.hist }));
++  busy: !!moduleBusy(keyOf(t)), hidAt: t.hidAt || 0, seenAt: t.seenAt || 0, history: !!t.hist }));
 +
  // Whatever reads the active tab's module (a save, an export, a close that saves) calls
  // this first: a switch loads the tab a frame or two after the click, and read in between
@@ -2892,6 +2899,8 @@ index 7eb3489..dec6ff7 100644
 -  persistAll();
 -  // Charts finish drawing a frame after the restore; drop the loader once they have.
 -  requestAnimationFrame(()=> requestAnimationFrame(hideModuleLoader));
++  // (the tabs awake past the limit with this one put to sleep before it wakes, not after)
++  keepLimits();
 +  const p = loadTab(t);
 +  const done = ()=>{
 +    // (the records whose `active` changed: to v517 every tab's, rewritten at each switch)
@@ -2928,7 +2937,7 @@ index 7eb3489..dec6ff7 100644
    if (!running) return true;
    if (!await confirmBanner(running + ' is running in “' + (t.title || UNTITLED) + '”: leaving this tab stops it.', 'Stop it and leave')) return false;
    stopModule(t.module);
-@@ -196,7 +422,7 @@ async function mayLeaveLive(){
+@@ -196,48 +422,60 @@ async function mayLeaveLive(){
  }
  // A tab chosen in the bar: shown at once, unless leaving the live one would stop a job.
  async function switchTo(id){
@@ -2937,12 +2946,25 @@ index 7eb3489..dec6ff7 100644
    activateTab(id);
  }
  // Open a project (or a blank technique) in a NEW tab and focus it. Opening a
-@@ -215,29 +441,43 @@ async function openTab({ module, title, projectId, state, dirty, focus = true })
+ // project that is already open is a no-op: it never steals focus.
++// Any number may be open (to b2v2 a 21st was refused): only the tabs awake are limited
++// (keepLimits), and one opened in the background is asleep.
+ async function openTab({ module, title, projectId, state, dirty, focus = true }){
+   if (!MODULES.includes(module)) return null;
+   if (projectId){
+     const existing = tabByProject(projectId);
+     if (existing) return existing;   // already open → nothing happens
+   }
+-  if (TABS.length >= MAX_TABS){
+-    await confirmBanner('You already have '+MAX_TABS+' tabs open. Close one before opening another.', 'OK');
+-    return null;
+-  }
+   // Shown at once only if leaving the live tab stops nothing (or the user stops it);
    // otherwise it opens beside it, as from the Projects list.
    if (focus && !await mayLeaveLive()) focus = false;
    const t = { id: uid(), module, title: title || untitledName(module),
 -              projectId: projectId || null, dirty: !!dirty, state: state || null, hist: null };
-+              projectId: projectId || null, dirty: !!dirty, state: state || null, hist: null, inst: null, hidAt: 0 };
++              projectId: projectId || null, dirty: !!dirty, state: state || null, hist: null, inst: null, hidAt: 0, seenAt: 0 };
    TABS.push(t);
    // focus:false opens the tab in the background — opening a project from the
 -  // Projects list leaves you on that list.
@@ -2988,7 +3010,7 @@ index 7eb3489..dec6ff7 100644
  }
  
  // Home / Projects / Settings belong to no tab, so none is highlighted while one of
-@@ -255,16 +495,20 @@ onSectionChange(tab=>{
+@@ -255,16 +493,20 @@ onSectionChange(tab=>{
  function closeTab(id){
    const i = tabIndex(id);
    if (i < 0) return;
@@ -3013,7 +3035,23 @@ index 7eb3489..dec6ff7 100644
    renderTabs();
    goTab(next.module);
    syncProjectBar(next);
-@@ -429,26 +673,31 @@ function moveTab(id, to){
+@@ -358,6 +600,15 @@ function initBar(){
+     if (_dragMoved){ _dragMoved = false; return; }
+     switchTo(el.dataset.id);
+   });
++  // Tabs past the strip's width scroll in it, its scrollbar hidden: the wheel scrolls it
++  // sideways too (a mouse had no way along it; a trackpad's sideways swipe is the
++  // browser's own), and at its end the page as before.
++  bar.addEventListener('wheel', e=>{
++    if (e.ctrlKey || bar.scrollWidth <= bar.clientWidth || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
++    const was = bar.scrollLeft;
++    bar.scrollLeft += e.deltaY*(e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? bar.clientWidth : 1);
++    if (bar.scrollLeft !== was) e.preventDefault();
++  }, { passive: false });
+   initDrag(bar);
+ }
+ 
+@@ -429,26 +680,31 @@ function moveTab(id, to){
    persistAll();
  }
  
@@ -3051,7 +3089,7 @@ index 7eb3489..dec6ff7 100644
    // Nothing to lose: an empty file list (whatever the name says) or a saved project
    // with no pending change closes straight away.
    if (isEmpty(t) || (t.projectId && !t.dirty)){ closeTab(id); return; }
-@@ -456,9 +705,7 @@ async function requestClose(id){
+@@ -456,9 +712,7 @@ async function requestClose(id){
    if (res === false) return;                               // cancel
    if (res === true){
      if (!_saveForClose) return;
@@ -3062,7 +3100,7 @@ index 7eb3489..dec6ff7 100644
      if (!await _saveForClose(t)) return;                   // save aborted → keep the tab
      if (t.dirty) return;   // (changed while it was written, v517: the change is kept, unsaved)
    }
-@@ -480,12 +727,14 @@ async function initTabs(){
+@@ -480,12 +734,14 @@ async function initTabs(){
    // not read: the records stay as they are, for the next load. A file whose bytes are not
    // stored any more comes back without them (its module says so where they are needed).
    let recs = [], states = [], missing = 0;
@@ -3075,57 +3113,51 @@ index 7eb3489..dec6ff7 100644
      + ' not stored in this browser any more: ' + (missing > 1 ? 'they come' : 'it comes') + ' back without the original bytes.');
    const made = recs.map((r, i)=> r && MODULES.includes(r.module) && { r, t: { id:r.id, module:r.module, title:r.title || UNTITLED,
 -    projectId:r.projectId || null, dirty:!!r.dirty, state:states[i] || null, hist:null } })
-+    projectId:r.projectId || null, dirty:!!r.dirty, state:states[i] || null, hist:null, inst:null, hidAt:0 } })
++    projectId:r.projectId || null, dirty:!!r.dirty, state:states[i] || null, hist:null, inst:null, hidAt:0, seenAt:0 } })
      .filter(x=> x && !tabById(x.r.id)).sort((a,b)=> (a.r.order||0) - (b.r.order||0));
    if (!made.length){ renderTabs(); afterPaint(revealApp); return; }
    // Tabs opened while the records were being read (an upgrade held back by a window of an
-@@ -512,7 +761,34 @@ async function initTabs(){
+@@ -512,7 +768,27 @@ async function initTabs(){
    });
  }
  
+-export { TABS, MAX_TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,
 +/* ---- Settings › Tabs in the background ---------------------------------------
-+   The minutes a tab is left awake hidden, and the limit of those awake: a number of tabs
-+   or the memory their data take (estimated, each instance's bytes()). A change applies at
-+   once. */
++   The minutes a tab is left awake hidden, and the number of tabs awake at most, the one on
++   show among them. A change applies at once. */
 +(function initTabSettings(){
 +  const $ = id => document.getElementById(id);
-+  const min = $('settingSleepMin'), pol = $('settingLivePolicy'), max = $('settingLiveMax'), mb = $('settingLiveMB');
-+  if (!min || !pol || !max || !mb) return;
-+  const show = ()=>{
-+    min.value = settings.sleepMin; pol.value = settings.livePolicy; max.value = settings.liveMax; mb.value = settings.liveMB;
-+    max.closest('.set-row').hidden = settings.livePolicy !== 'count';
-+    mb.closest('.set-row').hidden = settings.livePolicy !== 'memory';
-+  };
++  const min = $('settingSleepMin'), max = $('settingAwakeMax');
++  if (!min || !max) return;
++  const show = ()=>{ min.value = settings.sleepMin; max.value = settings.awakeMax; };
 +  const num = (el, lo, hi, int)=>{ const v = parseFloat(String(el.value).replace(',', '.')); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, int ? Math.round(v) : v)) : null; };
 +  const apply = ()=>{
-+    const a = num(min, 0.1, 1440), b = num(max, 0, 19, true), c = num(mb, 100, 16000, true);
++    const a = num(min, 0.1, 1440), b = num(max, 1, 1000, true);
 +    if (a != null) settings.sleepMin = a;
-+    if (b != null) settings.liveMax = b;
-+    if (c != null) settings.liveMB = c;
-+    settings.livePolicy = pol.value === 'memory' ? 'memory' : 'count';
++    if (b != null) settings.awakeMax = b;
 +    saveSettings(); show(); keepLimits();
 +  };
-+  [min, pol, max, mb].forEach(el=> el.addEventListener('change', apply));
++  [min, max].forEach(el=> el.addEventListener('change', apply));
 +  show();
 +})();
 +
- export { TABS, MAX_TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,
++export { TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,
           closeTab, requestClose, setTabTitle, setTabDirty, setTabProject, renderTabs,
           onTabActivated, onTabLoaded, onCloseSave, initTabs, persistTab, persistAll, isRestoring,
 -         isLive, ensureLive, untitledName, notice };
 +         isLive, ensureLive, untitledName, notice, keyOf, tabOfKey, tabOf, stateOf, isEmpty,
 +         keepLimits as sleepTick, sleepTab, tabsNow };
 diff --git a/tauc.js b/tauc.js
-index cac13e5..7b6403a 100644
+index cac13e5..a2aec23 100644
 --- a/tauc.js
 +++ b/tauc.js
 @@ -1,4 +1,4 @@
 -import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc } from './utils.js';
-+import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc, registerModule } from './utils.js';
++import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc, registerModule, fixed } from './utils.js';
  import { boxSmooth, boxSlope, widthText, ptsNum, ptsText } from './smooth.js';
  import { Plot } from './plot.js';
  import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-@@ -8,8 +8,50 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -8,8 +8,52 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
  
  /* =========================================================
     TAUC MODULE
@@ -3152,14 +3184,16 @@ index cac13e5..7b6403a 100644
 +const energies = new WeakMap();
 +const hvOf = wl =>{ let e = energies.get(wl); if (!e) energies.set(wl, e = wl.map(x=> HC/x)); return e; };
 +const withHv = f =>{ if (Array.isArray(f.wl)) Object.defineProperty(f, 'hv', { value: hvOf(f.wl), writable: true, configurable: true, enumerable: false }); return f; };
-+/* A file's spectrum kept by its bytes (the file as it came, the same array in a tab's
-+   states, its parked state and its record: db.js park, decode): a tab woken, which reads
-+   its state back as copies, takes the arrays its history holds again, the same values,
-+   rather than keeping both. */
++/* A file's spectrum, which nothing changes once read: fixed (db.js), the same arrays in a
++   tab's states and its parked state (to b2v2 a parked state held a copy). Kept by its
++   bytes (the file as it came, the same array in its states and its record): a tab of a
++   record read back (a reload, a project opened), which holds copies, takes the arrays
++   another state holds of that file, the same values, rather than keeping both. */
 +const spectra = new WeakMap();
 +const sameArr = (a, b)=> a === b || (a.length === b.length && a.every((v, i)=> Object.is(v, b[i])));
 +function keepSpectrum(f){
 +  const b = f.rawBytes;
++  fixed(f.wl); fixed(f.FR);
 +  if (!(b instanceof Uint8Array)) return f;
 +  const s = spectra.get(b);
 +  if (s && sameArr(s.wl, f.wl) && sameArr(s.FR, f.FR)){ f.wl = s.wl; f.FR = s.FR; }
@@ -3177,7 +3211,7 @@ index cac13e5..7b6403a 100644
    /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
       warn, read, head, left, hv[]} (each on its own native axis), and the included ones,
       which the analysis sees, `files`, with which every per-sample list the cards keep is
-@@ -18,10 +60,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -18,10 +62,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       files were read (fileNotes: a format not standard, points left out; until dismissed);
       every card in the history. */
    const kit = moduleKit('tauc', {
@@ -3190,7 +3224,7 @@ index cac13e5..7b6403a 100644
      },
      dismiss: { warn: ()=>{ warnDismissed = true; } },
      slots,
-@@ -43,21 +86,27 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -43,21 +88,27 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      }) }),
      /* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
         with both a finite number and a wavelength above 0 (none: left out); how it was read,
@@ -3224,7 +3258,7 @@ index cac13e5..7b6403a 100644
        renderResView();
      },
      csv: exportTaucZip,
-@@ -365,9 +414,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -365,9 +416,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    // defaults and the least it took.
    const OLD = { w:'N', w2:'N2', W:'M', W2:'M2' }, OLD_DEF = { N:1, N2:20, M:25, M2:100 }, OLD_MIN = { w: 1, w2: 1, W: 2, W2: 2 };
    const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
@@ -3237,7 +3271,7 @@ index cac13e5..7b6403a 100644
      const P = {
        // ---- all/one analysis mode (single toggle) ----
        // 'shared': every sample uses one common parameter set AND one common set of
-@@ -632,8 +682,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -632,8 +684,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      }
      P.syncModeButton = ()=>{ const c = $('ModeAll'); if (c) c.textContent = P.mode==='shared' ? 'all' : 'one'; };
  
@@ -3249,7 +3283,7 @@ index cac13e5..7b6403a 100644
        plot = new Plot($('Svg'), {xlabel:'hν (eV)', ylabelSvg: spec.yLabel(P.params(currIndex)), xTickStep:0.5, noYTickLabels:true});
        plot.attachTools(plot.svg.closest('.plot-wrap'));
        // A spec whose lines are each sample's own has no common set to start.
-@@ -647,7 +699,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -647,7 +701,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      P.shownIndex = ()=> shown;
  
      P.update = preserveView =>{
@@ -3258,7 +3292,7 @@ index cac13e5..7b6403a 100644
        shown = currIndex;
        vlines = P.vlinesFor(currIndex);   // point at the current sample's interval lines
        const p = P.params(currIndex);
-@@ -1191,7 +1243,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1191,7 +1245,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    function buildPanel(a, card, prev){
      const was = live.get(a.id);
      if (prev && was) a.states[prev] = was.panel.snapshot();
@@ -3267,7 +3301,7 @@ index cac13e5..7b6403a 100644
      if (a.states[a.type]) panel.restore(a.states[a.type]);
      else panel.fit();
      live.set(a.id, { panel, res: was ? was.res : null, resPlots: was ? was.resPlots : null });
-@@ -1301,10 +1353,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1301,10 +1355,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      const taucs = cards().filter(a=> a.type === 'tauc');
      cards().forEach(u=>{
        if (u.type !== 'urbach' || !live.has(u.id)) return;
@@ -3280,7 +3314,7 @@ index cac13e5..7b6403a 100644
      });
    }
  
-@@ -1583,6 +1635,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1583,6 +1637,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    }
    kit.dropText(readDrs, had =>{
      warnDismissed = false;
@@ -3288,7 +3322,7 @@ index cac13e5..7b6403a 100644
      afterFilesChange();
      // Once, when the first data lands: propose optimal interval-line positions. The
      // Tauc cards go first: the Urbach ones are placed on their regions.
-@@ -1601,18 +1654,16 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1601,18 +1656,16 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    function afterFilesChange(){
      kit.showFiles();
      if (files.length) setupAnalysis();
@@ -3311,7 +3345,7 @@ index cac13e5..7b6403a 100644
      // Every panel fitted to the files before any is drawn: an Urbach card's band is
      // read off its reference, which may sit below it.
      livePanels().forEach(p=> p.fit());
-@@ -1624,6 +1675,9 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1624,6 +1677,9 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      cards().forEach(see);
      deck.refreshNames();
      renderResView();
@@ -3321,7 +3355,7 @@ index cac13e5..7b6403a 100644
    }
  
    // Union of all files' ranges (for shared overlay axes)
-@@ -1633,7 +1687,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1633,7 +1689,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    /* ---- Results: F(R) and R (%) against λ side by side, F(R) against hν on a log axis
       under them across the card (2φ : 1), then each card's pair of charts under its name,
       in card order. To v497 the top was a pair, F(R) against λ and the log plot. ---- */
@@ -3330,7 +3364,7 @@ index cac13e5..7b6403a 100644
    function resHtml(a){
      const p = 'an' + a.id, t = a.type === 'tauc';
      return `
-@@ -1678,14 +1732,14 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1678,14 +1734,14 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    const placeRes = ()=> cards().forEach(a=>{ const e = live.get(a.id); if (e && e.res) resList.appendChild(e.res); });
  
    function renderResView(){
@@ -3348,7 +3382,7 @@ index cac13e5..7b6403a 100644
      let ymax0=-Infinity;
      files.forEach((f,k)=>{ ymax0=Math.max(ymax0,maxArr(f.FR)); });
      const [wl0, wl1] = unionWl();
-@@ -1706,11 +1760,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1706,11 +1762,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    // R (%) against λ, every sample's, on 0–100 %, all R can be.
    function renderReflView(){
      if (!resPlotR){
@@ -3362,7 +3396,7 @@ index cac13e5..7b6403a 100644
      const [wl0, wl1] = unionWl();
      p.setRange(wl0, wl1, 0, 100);
      p.drawAxes();
-@@ -1723,11 +1777,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1723,11 +1779,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      if (!resPlotLog){
        // A wider left margin than the default 55: powers of ten are wider tick labels
        // than numbers, and in an export (type ×1.6) they reached the axis title.
@@ -3376,7 +3410,7 @@ index cac13e5..7b6403a 100644
      const logs = files.map(f=> f.FR.map(v=> v > 0 ? Math.log10(v) : NaN));
      let lo = Infinity, hi = -Infinity;
      logs.forEach(a=> a.forEach(v=>{ if (isFinite(v)){ lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
-@@ -1739,15 +1793,17 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1739,15 +1795,17 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      // then be switched off like any other.
      files.forEach((f,k)=> p.line(f.hv, logs[k], f.color, 1.3, undefined, { label: f.label, key: f.name, raw: { xs: f.hv, ys: f.FR } }));
    }
@@ -3396,7 +3430,7 @@ index cac13e5..7b6403a 100644
      e.resPlots = e.resPlots || {};
      if (!e.resPlots[which] || e.resPlots[which].svg !== svg){
        e.resPlots[which] = new Plot(svg, opts);
-@@ -1758,7 +1814,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1758,7 +1816,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
  
    // A Tauc card's pair: every sample's Tauc curve with its two fits, and the gaps.
    function drawTaucRes(a){
@@ -3405,7 +3439,7 @@ index cac13e5..7b6403a 100644
      const fits = files.map((f,k)=> P.analyze(k));
      // Effective exponent per file; when uniform, show it on the shared Tauc axis,
      // otherwise fall back to a generic "a" (samples may use different exponents).
-@@ -1816,7 +1872,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1816,7 +1874,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    // under it, each with its own axes; and E_U beside them as the gaps are, plain,
    // subtracted or both, as its chips say.
    function drawUrbachRes(a){
@@ -3414,7 +3448,7 @@ index cac13e5..7b6403a 100644
      const fits = files.map((f,k)=> P.analyze(k));
      const curves = files.map((f,k)=> ({
        p: smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), f.hv, P.params(k).w),
-@@ -1914,7 +1970,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1914,7 +1972,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       {name, color, vals[], errs[]}, `chips` the plot's chip row, which the value labels
       keep clear of. Only positive values are drawn; with none the chart is hidden. */
    function resBars(a, shown, chips, yLabel, digits){
@@ -3423,7 +3457,7 @@ index cac13e5..7b6403a 100644
      svg.style.display = wrap.style.display = '';
      if (valueBars(svg, { cats: files, series: shown, ok: v=> isFinite(v) && v > 0, digits, yLabel, chips, legend })) return;
      svg.style.display = wrap.style.display = 'none';
-@@ -2064,4 +2120,22 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -2064,4 +2122,15 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    });
    // A new project starts with one Tauc card.
    deck.start(['tauc']);
@@ -3437,18 +3471,11 @@ index cac13e5..7b6403a 100644
 +    // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
 +    // menu and its listeners. Its section and layer are the shell's to take out.
 +    destroy(){ kit.destroy(); },
-+    /* What its tab's sleep gives back, estimated (bytes), for the tabs' limit by memory
-+       (tabs.js): its elements and its plots, not its files' arrays, which its parked state
-+       and its history keep. Measured, the renderer's RSS of 5 tabs awake and hidden over 5
-+       asleep (NOTES-drs.md): blank none (427 elements); 10 spectra of 1201 points and a
-+       Tauc card 4.2 MB, with an Urbach card too 5.3; 3 of them and both cards 3.9. So:
-+       128 kB, and with files 1 MB a card and one more, and 180 bytes a point included. */
-+    bytes(){ let pts = 0; files.forEach(f=>{ pts += f.wl.length; }); return (1 << 17) + (files.length ? (1 + cards().length)*(1 << 20) + 180*pts : 0); },
 +  };
 +}
 +registerModule('tauc', createTauc);
 diff --git a/tests/README.md b/tests/README.md
-index b6198b0..89e763b 100644
+index b6198b0..202cd56 100644
 --- a/tests/README.md
 +++ b/tests/README.md
 @@ -24,7 +24,7 @@ node --test tests/csv.test.mjs     # one file
@@ -3456,11 +3483,11 @@ index b6198b0..89e763b 100644
  ```
  
 -A full run takes about 10 min (183 tests, on the machine they were written on). Each
-+A full run takes about 11 min (205 tests, on the machine they were written on). Each
++A full run takes about 12 min (209 tests, on the machine they were written on). Each
  file opens its own server and browser; each test its own browser context, so IndexedDB,
  localStorage and the open tabs start empty every time.
  
-@@ -45,15 +45,20 @@ exports) goes to `tests/out/`, which git ignores.
+@@ -45,15 +45,22 @@ exports) goes to `tests/out/`, which git ignores.
  |---|---|
  | `smoke.test.mjs` | Each module opens in a tab and loads its fixtures with no page error (an app file answering 404 is one) and no Content-Security-Policy violation; all five open at once, each tab showing its own files; under the CSP, the theme set before the first paint, the Rietveld worker loading and answering, an alert's dismiss button working with no inline handler. |
  | `escape.test.mjs` | Nothing from outside becomes markup. Per module, a payload that would make an `<i data-x>` goes into the file names (F), into every string of the exported project imported back (A), and also in place of every lone number (B); no such element may appear, in the module or in the Projects list. Page errors fail F and A; under B they are reported (a project of nonsense numbers may not draw), not failed on, but for DRS, GC and EPR, which must open it and draw it with no page error. |
@@ -3468,7 +3495,7 @@ index b6198b0..89e763b 100644
 +| `tabs.test.mjs` | Closing an inactive tab with unsaved changes and answering Save saves that tab's project, not the one on show (the v468 bug); the unsaved marker after a switch, an edit, its undo, a reload, a value set back by hand; a running job (a busy guard registered by hand, holding no mark of the history): Ctrl+Z undoes nothing and says nothing; its GC tab left, nothing asked, the job goes on and the tab stays awake past Settings' minutes (b2); closing it asks, "Stop it and close" stops it; a new project opens on show, nothing asked. |
 +| `b2gcepr.test.mjs` | GC and EPR made per tab (b2), each: two tabs awake at once, each its own files, parameter, results (GC's mean-rate bars, EPR's plot) and undo history, a switch to one awake only showing it (its own section, its plot not drawn again), undo and redo in one leaving the other's steps alone; a tab asleep past Settings' minutes (tabs.js `sleepTick`), its section collected, woken with its state, results and whole history, undone to the empty start and redone. |
 +| `b2drs.test.mjs` | DRS made per tab (b2): two DRS tabs awake at once, each its own files, cards, exponent, E_g and undo, a switch to one awake only showing it (its plot not drawn again); a tab asleep past Settings' minutes, its section collected, woken with its state, its Urbach card and its whole history, undone to the empty start and redone. |
-+| `b2cross.test.mjs` | Every module made per tab (b2), together in one page: ten tabs, two of each module, each its own files and undo across switches; beyond Settings' limit the tab not shown for longest asleep (the LRU), woken as shown with its whole history; every tab hidden past the minutes asleep, its section collected, woken. A refinement on the workers' pool in an XRPD tab left while a SEM and a DRS tab are worked in: each history its own, the run's step and record its tab's. A saved project of each module: a hidden tab closed with Save saved as it is, a reload (the others asleep until shown, their edits kept), reopened from Projects, Projects' CSVs the same as the project bar's. |
++| `b2cross.test.mjs` | Every module made per tab (b2), together in one page: ten tabs, two of each module, each its own files and undo across switches; beyond Settings' tabs awake the tab not shown for longest asleep (the LRU), woken as shown with its whole history; every tab hidden past the minutes asleep, its section collected, woken. A refinement on the workers' pool in an XRPD tab left while a SEM and a DRS tab are worked in: each history its own, the run's step and record its tab's. A saved project of each module: a hidden tab closed with Save saved as it is, a reload (the others asleep until shown, their edits kept), reopened from Projects, Projects' CSVs the same as the project bar's. |
  | `roundtrip.test.mjs` | Files come back byte for byte: an XRPD project saved (IndexedDB: the record holds each file's SHA-256, the bytes a store of their own, from v517), reloaded, exported as a signed `.datatreat` (its SHA-256 signature checked), imported back, a v473–v483 `.json` export (bytes as arrays), a record in the old format (to v470); SEM TIFFs after a reload. Import refuses what is not a project and asks about a file changed after signing or written by a newer version. |
  | `rietveld.test.mjs` | A Rietveld refinement of one synthetic pattern with the SrTiO₃ CIF, no standard: asked first, in a modal, the cell found again (a = 3.905 Å within 0.002), Rwp sensible, the module busy meanwhile; Refine all on two patterns cancelled: stopped, nothing written after, not busy. |
  | `cardsanim.test.mjs` | The analysis cards animated by the history's steps, in XRPD, DRS, GC and EPR. A fold or unfold made by an undo or a redo slides like the arrow's (same duration, easing and keyframes; the panel is drawn before it slides open and not redrawn while it does; XRPD's + Add peak is turned off when a redo folds its card). A card an undo or a redo brings back grows from nothing, drawn first. One it takes away shrinks as a copy that no card selector finds, then goes. A card brought back below the window grows while the page scrolls down to it. Several cards in one step animate together. A step taken during another's animation (a fold taken over, a card taken away while growing, brought back while its copy shrinks, a burst of keys) ends in the exact state. Undoing a move or a kind switch animates nothing, and a box keeps the focus through an undo. A tab switch, a project opened, a CSV export's state, the start, or reduced motion animate nothing, and such a load ends a step's animations at once. |
@@ -3479,21 +3506,173 @@ index b6198b0..89e763b 100644
 +| `rvui.test.mjs` | The Rietveld card and the instrumental standard: with no refined standard, Refine and Refine all ask in a modal at the centre of the screen (its three answers; Escape, × and a click beside it answer neither; the primary focused, Tab kept inside, focus back on the button that asked); the standard's Settings show only the rows, start groups and Refinement settings that apply to it, none disabled for good, and the samples' keep every row; while the standard refines with its window closed, every card's Instrumental standard… shows it (a card added meanwhile, Home and back, another project opened and the XRPD tab shown again, nothing asked (b2), that card undone and redone, an undo stopped silently at the run's start, the window reopened) until the run ends or is stopped. |
  | `undorun.test.mjs` | Undo and redo while a job runs, the workers' answers held so that it runs as long as the test needs. A Rietveld run: steps before it (a setting, a card folded, a label) and during it (a card unfolded, a label, a file's colour); Ctrl+Z undoes those taken during it and stops at its start, nothing undone below, nothing said (no banner, no window, no alert), the running card's panel as it was (Cancel, its progress, its rows locked, the Settings open and read only, not built again); Ctrl+Y goes back up; its result then comes in as a step of its own at its start: walking back undoes the steps taken during it (the result kept in each), then the result, then the steps before it, and forward again to the end. Refine all with steps taken between its patterns: every state holds the whole run or none of it, the patterns done kept in the card through an undo to its start. Cancelled with one pattern done: that is its step, a saved project marked unsaved by it and saved with it; cancelled before any: no step, the project still saved. The standard's run the same, its window's panel as it was; then *Refine the standard first*: the standard's step, then the sample's, the step taken meanwhile after them. A card closed during its run comes back by an undo with the pattern done; one switched to Scherrer during its run keeps it. The 80-state limit crossed during a run: undo down to the oldest state kept, the result then in every state, no step of its own. Two sample cards refining at once: the redo branch the later one set aside comes back with the earlier one's result. Two held from one state with a redo branch there: a result of either drops it, in either order. *Refine the standard first* stopped or failed before any result: the redo branch there comes back. While a sample waits for the standard's run, its rows, + CIF, Clear and Settings locked, a click on them no step; an undo during its run leaves the card's inputs as the state on show has them, its end no step of its own. The standard bearing a sample's name: Refine all ends in one step. SEM: Ctrl+Z during a reading undoes the step taken meanwhile and stops silently at its start; Ctrl+Y redoes it; the files land after it, one step, the list and the groups right. |
 +| `rvpool.test.mjs` | The Rietveld workers' pool (xrd-rv-pool.js, backlog 23): Refine all on three workers at once gives the results of one, bit for bit, written in the patterns' order, one step; the status names the patterns under way; an answer out of order waits for those before it; Cancel writes the patterns done and not those under way (s01 done past s00 under way too); an error in one lane stops the patterns not started and writes those under way, not the failed one; two windows of the app on a cap of two run two jobs at once in all (Web Locks), the slot freed going to the job that waited longest, each window its own results in order. The cap and the lanes are localStorage `datatreat-rv-workers` and `datatreat-rv-lanes`; `undorun` and `rietveld` take one lane, as their held answers and their Cancel assume. |
-+| `b2xrd.test.mjs` | XRPD made per tab (b2): two XRPD tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a refinement going on in a tab left, on the workers' pool, its results bit for bit those of one refined on show, its history's step, its record and its "*"; a tab hidden past Settings' minutes asleep (tabs.js `sleepTick`), one busy not until its job's end, the one hidden longest asleep beyond the tabs awake allowed (by number, by memory), woken with its whole history; the LRU; a hidden tab saved as it is closed, reopened from Projects; a reload, the tab on show awake, the others woken as shown. |
++| `b2xrd.test.mjs` | XRPD made per tab (b2): two XRPD tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a refinement going on in a tab left, on the workers' pool, its results bit for bit those of one refined on show, its history's step, its record and its "*"; a tab hidden past Settings' minutes asleep (tabs.js `sleepTick`), one busy not until its job's end, the one shown least lately asleep beyond the tabs awake allowed, woken with its whole history; the LRU; a hidden tab saved as it is closed, reopened from Projects; a reload, the tab on show awake, the others woken as shown. |
++| `b2cap.test.mjs` | The tabs awake capped (b2v3): 40 tabs opened, none refused, 20 awake (Settings' default), the one on show among them; one opened first but shown often staying awake, those asleep all shown less lately than those awake; the strip scrolling, the tab on show scrolled into it wherever it is, the wheel scrolling it sideways, a 41st tab in view; a reload, every tab back, the one on show awake. A refining XRPD tab, shown least lately, awake past the cap, the next ones asleep in its place; Settings' number changed, applied at once (5; 1, the busy tab over it till its run ends, then asleep); 25 projects opened at once from Projects, all of them, asleep. |
++| `b2fixed.test.mjs` | Arrays fixed (db.js `fixed`, b2v3): `park` and `decode` give a fixed array back as it is and copy one not fixed, `encode` writes both out (in Node); a tab of XRPD, DRS, GC and EPR asleep holding its history's arrays, none frozen, woken with the same; `stateKey` taking a fixed array by its hash; with the tests' freezing on, a fixed array frozen. |
  | `xrdcards.test.mjs` | The analysis cards and the XRPD Scherrer card. + Add peak is left as its card is folded (by the arrow, clicked or by Enter: the button off, the guide gone, no peak placed), not by a move's folds, and as the standard's window closes (× or a click beside it). The baseline's box undone and redone step by step (the box, its window field and the state together, the live state the history step's), under all and one and in the standard's window; a select undone with the focus on it; Ctrl+Z with the focus still on the box just clicked. A card an undo or a redo brings back (closed by its ×, or added) is brought into view, its head on screen under the sticky bar, in XRPD, DRS, GC and EPR; a tab switched to and a project opened with a card more bring nothing into view. |
  | `filelist.test.mjs` | The file list, the same in every module (DRS, XRPD, GC, EPR, SEM), at 1400, 800 and 375 px: grip and include box 26 px each, FILE, LABEL and a note with no header but GC's (SAMPLE, a select of the file's sample) at 3 : 3 : 2 of the width left, actions 58 px, measured cell by cell; the note right of the label, DRS's %R or F(R) (its title in full), GC's the file's own name, the others' empty; no sideways scroll, the label field inside its cell; on a phone the field, while typed in, laid over the note and short of the actions. |
  | `gcp.test.mjs` | GC's pressure p of the flow: 1 atm by default (in a new card, for a new file, in a project saved before it), V_m = RT/p (a rate at 2 atm twice the one at 1 atm, at 1 atm 1.01325 times the one at 1 bar); its unit (atm, bar, kPa, mbar, Torr, psi) converting the values shown and written, never the pressure, switched round and back; either decimal mark, 0, below 0 or no number refused as m and Q are; all/one, a file added and one left out; the value and the unit as undo/redo steps; a malformed pressure restored at 1 atm; p in gc_info.csv after T and in mean_rates.csv before it; the parameter table at 1300 px and at 1000 px, nothing over its cell. |
-@@ -75,6 +80,7 @@ exports) goes to `tests/out/`, which git ignores.
+@@ -75,6 +82,7 @@ exports) goes to `tests/out/`, which git ignores.
  | `modules.test.mjs` | DRS, GC and EPR. A card unfolded keeps its zoom on the same files and full range, and draws the full range after a file was removed or left out while it was folded, at the width it is laid out at (EPR, GC); a label changed while folded keeps the zoom (GC). DRS: the sample on show followed through a removal before it and a move, the nearest when it is removed itself; a label changed is the card's caption at once, and its undo. GC: an interval bound flipped back to "all" that would end an interval before it starts refused, with the words a value typed is refused with; the flow's temperature T (25 °C, all/one, in `gc_info.csv` and `mean_rates.csv`), the rates at 0 °C over those at 25 °C by 298.15/273.15, a state with no T at 0 °C with its rates as they were, a file added at 25 °C. EPR: a `.DSC` of one point or none refused with why; flat spectra drawn under the global normalisation. DRS: the standard format is the Cary 5000's layout alone, the name on line 1, then `Wavelength (nm)` and `%R` or `F(R)` on line 2 (any separator, decimal mark, case or quotes), the data from line 3: `%R` so, under `;` with `,` decimals and in quotes, loads with no alert; `R%`, `%R` on line 1 or 3, `R %`, `Reflectance (%)`, a JASCO `YUNITS,%R` above `XYDATA` are read as F(R) = (1 − R)²/2R, back to the fixture's F(R), and said ('not a standard format: its header names the reflectance in %'), as is F(R) named elsewhere than on line 2; a file with no header read as F(R) and said, as is one whose columns' header names neither under a line naming R% (`Operator,R%` above `Wavelength (nm),KM`); the points that are no physical value (R outside 0–100 %, R = 0, F(R) < 0, NaN, past the doubles) left out and counted; a file with none left refused with why; the raw file downloaded as it came. DRS, the Cary 5000's own `%R` export (its layout: the name above the header, trailing commas, CRLF, 800 down to 200 nm, the instrument's footer) beside a standard F(R) export, with no alert, and a file of no standard format, with its warning: the file list's note, right of the label with no header, says `%R` or `F(R)` (its title in full; `F(R)` for a project with no reading kept); F(R) the conversion of the values written; the Results' top, F(R) and R (%) against λ side by side and the log plot under them at 2φ : 1; the R (%) plot giving the values back (and, for an F(R) file, R whose F(R) is the file's), its CSV `reflectance_R.csv` too, a file left out of both; its figure composer opening. Malformed projects: every value of a DRS, GC and EPR state put in as `null`, a string, an object in turn, restored as a project is opened: no throw, no page error; a file with nothing to show left out, said, its per-sample settings with it. |
  | `db.test.mjs` | The form a module state takes in IndexedDB and in a project file (`db.js`), in Node: bytes as base64, a byte array held in several places written once and read back as one array, dates and other typed arrays, the older forms (bytes as arrays, a dangling reference). |
  | `sem.test.mjs` | SEM groups by scale, an excluded image deciding nothing about its group's name or the scope selector; a renamed label shown in the navigation, thumbnails, groups and Reference, and undone; in the crop editor a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step. |
-+| `b2sem.test.mjs` | SEM made per tab (b2): two SEM tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a file in both tabs one array of bytes, one reading worker for both; a reading going on in a tab left, nothing asked, its files landing in its own list as one step, its record and its "*", its tab awake past Settings' minutes till the reading's end and asleep that long after, woken drawn; a tab hidden letting go of the editor's image at once and of nothing else till it sleeps (tabs.js `sleepTick`); asleep, woken with its whole history. A tab asleep letting go of its files' bytes once the store holds them (not while the tabs' records are being written; WeakRefs emptied by a GC; a file a tab awake holds kept), its record holding its history's files from the sweep; woken from the store with its state, history, thumbnails, cards, editor and figure, a file read back byte for byte, a tab awake's file not read again, an undo bringing back a file only its history held; one read for two wakes asked, a wake left or closed meanwhile given up (the tab asleep as it was), no key reaching another tab under the loader; a file no longer stored lost and said, the rest as it was, an undo too; Projects' CSV of its project the bar's; closed hidden with Save, saved with its files, reopened from Projects; a reload, the tab not on show back without its bytes, read as it wakes. |
++| `b2sem.test.mjs` | SEM made per tab (b2): two SEM tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a file in both tabs one array of bytes, one reading worker for both; a reading going on in a tab left, nothing asked, its files landing in its own list as one step, its record and its "*", its tab awake past Settings' minutes till the reading's end and asleep that long after, woken drawn; a tab hidden letting go of the editor's image at once (made again as it is shown) and of nothing else till it sleeps (tabs.js `sleepTick`); asleep, woken with its whole history. A tab asleep letting go of its files' bytes once the store holds them (not while the tabs' records are being written; WeakRefs emptied by a GC; a file a tab awake holds kept), its record holding its history's files from the sweep; woken from the store with its state, history, thumbnails, cards, editor and figure, a file read back byte for byte, a tab awake's file not read again, an undo bringing back a file only its history held; one read for two wakes asked, a wake left or closed meanwhile given up (the tab asleep as it was), no key reaching another tab under the loader; a file no longer stored lost and said, the rest as it was, an undo too; Projects' CSV of its project the bar's; closed hidden with Save, saved with its files, reopened from Projects; a reload, the tab not on show back without its bytes, read as it wakes. |
  
  ## Fixtures
  
+@@ -101,7 +109,8 @@ markup a mismatch leaves in `tests/out/plots/` opens in a browser).
+ 
+ `helpers.mjs` has what the tests share: `start()` (server, browser, fixtures) and
+ `env.page()` (the app in a fresh context, its page errors, failed loads of its own files
+-and CSP violations collected);
++and CSP violations collected, and every array a module fixes frozen, `window.__freezeFixed`,
++so that a write into one is a page error);
+ `openModule`, `loadFiles`, `poke` (every card unfolded and stepped), `switchTab`, `saveAs`,
+ `undo`; `moduleState`, `history`, `idb` (the app's own state and stores); `banner`,
+ `answer` (the confirm banners); `download`, `exportProject`, `importProject`,
+diff --git a/tests/b2cap.test.mjs b/tests/b2cap.test.mjs
+new file mode 100644
+index 0000000..bf20920
+--- /dev/null
++++ b/tests/b2cap.test.mjs
+@@ -0,0 +1,134 @@
++/* The tabs awake, capped (b2v3): any number of tabs open, none refused (to b2v2 a 21st was);
++   at most Settings' number awake (20 by default), the one on show among them, the one
++   shown least lately put to sleep beyond it, whenever it was opened: one opened first but
++   shown often stays awake. 40 tabs: 20 awake, the bar scrolling, the tab on show scrolled
++   into it, the wheel along it; a reload, all back, the one on show awake. A busy tab stays
++   awake past the cap, the one shown least lately among the others sleeping in its place;
++   all the others busy or asleep, the count over the cap until its job ends, the excess then
++   asleep. Settings' number changed: applied at once. Projects' Open selected, 25 at once:
++   all opened, asleep. The workers' answers held where a run must go on (window.__hold). */
++import { test, before, after } from 'node:test';
++import assert from 'node:assert/strict';
++import { start, openModule, loadFiles, switchTab, settle, until, banner, ready, MODS } from './helpers.mjs';
++
++let env;
++before(async ()=>{ env = await start(); });
++after(()=> env && env.close());
++
++const tabs = page => page.evaluate(async ()=> (await import('./tabs.js')).tabsNow());
++const awakeAt = async page => (await tabs(page)).flatMap((t, i)=> t.awake ? [i] : []);
++// (the tabs asleep, each shown last before every hidden one awake was: the LRU)
++const lru = async page =>{ const t = (await tabs(page)).filter(x=> !x.shown), a = t.filter(x=> x.awake), s = t.filter(x=> !x.awake && x.seenAt);
++  return !a.length || !s.length || Math.max(...s.map(x=> x.seenAt)) <= Math.min(...a.map(x=> x.seenAt)); };
++// The tab on show within the strip's box.
++const inView = page => page.evaluate(()=>{ const b = document.getElementById('tabBar').getBoundingClientRect(), r = document.querySelector('#tabBar .ptab.is-on').getBoundingClientRect();
++  return r.left >= b.left - 1 && r.right <= b.right + 1; });
++const holdWorkers = page => page.evaluate(()=>{
++  const W = window.Worker; window.__held = []; window.__hold = false;
++  const wrap = fn => e=>{ if (window.__hold && e.data && e.data.type === 'result') window.__held.push(()=> fn(e)); else fn(e); };
++  window.Worker = class extends W {
++    addEventListener(t, fn, o){ if (t !== 'message') return super.addEventListener(t, fn, o); const g = wrap(fn); (this.__m || (this.__m = new Map())).set(fn, g); return super.addEventListener(t, g, o); }
++    removeEventListener(t, fn, o){ return super.removeEventListener(t, (t === 'message' && this.__m && this.__m.get(fn)) || fn, o); }
++  };
++  window.__release = ()=>{ window.__hold = false; window.__held.splice(0).forEach(f=> f()); };
++});
++async function setAwake(page, n){
++  await page.click('#nav button[data-tab="settings"]');
++  await page.fill('#settingAwakeMax', String(n)); await page.press('#settingAwakeMax', 'Enter');
++  await settle(page);
++}
++
++test('40 tabs: none refused, 20 awake, the one shown least lately asleep beyond them, one shown often staying awake; the bar scrolls, the tab on show in view; a reload', async ()=>{
++  const { page, errors, csp, close } = await env.page();
++  try {
++    for (let i = 0; i < 40; i++) await openModule(page, MODS[i % 5]);
++    assert.equal(await banner(page), null, 'nothing refused');
++    assert.equal((await tabs(page)).length, 40);
++    assert.deepEqual(await awakeAt(page), Array.from({ length: 20 }, (_, i)=> 20 + i), 'the 20 shown last awake, the one on show among them');
++    // The first tab shown often: awake throughout, whatever else is woken.
++    for (let i = 1; i <= 10; i++){
++      await switchTab(page, 0);
++      await switchTab(page, i);
++      const a = await awakeAt(page);
++      assert.ok(a.includes(0) && a.includes(i) && a.length === 20, `step ${i}: ${a}`);
++      assert.ok(await lru(page), `step ${i}: those asleep shown less lately than those awake`);
++    }
++    // The strip: wider than its box; the tab on show scrolled into it, wherever it is.
++    assert.ok(await page.evaluate(()=>{ const b = document.getElementById('tabBar'); return b.scrollWidth > 3*b.clientWidth; }));
++    await page.evaluate(async ()=>{ const T = await import('./tabs.js'); T.activateTab(T.TABS[39].id); });
++    await settle(page);
++    assert.ok(await inView(page), 'the last tab in view');
++    await page.evaluate(async ()=>{ const T = await import('./tabs.js'); T.activateTab(T.TABS[0].id); });
++    await settle(page);
++    assert.ok(await inView(page), 'the first tab in view');
++    // The wheel scrolls it sideways; a new tab, at its end, is scrolled into view.
++    const box = await page.locator('#tabBar').boundingBox();
++    await page.mouse.move(box.x + box.width/2, box.y + box.height/2);
++    const x0 = await page.evaluate(()=> document.getElementById('tabBar').scrollLeft);
++    await page.mouse.wheel(0, 400);
++    await until(async ()=> (await page.evaluate(()=> document.getElementById('tabBar').scrollLeft)) > x0, { what: 'the strip scrolled by the wheel' });
++    await page.evaluate(()=>{ document.getElementById('tabBar').scrollLeft = 0; });
++    await openModule(page, 'gc');
++    assert.ok(await inView(page), 'the 41st tab in view');
++    assert.equal((await awakeAt(page)).length, 20);
++    // A reload: every tab back, the one on show awake.
++    await page.reload(); await ready(page); await settle(page);
++    const t = await tabs(page);
++    assert.equal(t.length, 41);
++    assert.deepEqual(t.flatMap((x, i)=> x.awake ? [i] : []), [40]);
++    assert.ok(await inView(page), 'the tab on show in view after the reload');
++    assert.deepEqual(errors, []);
++    assert.deepEqual(await csp(), []);
++  } finally { await close(); }
++});
++
++test('a busy tab awake past the cap, the excess asleep at its job\'s end; Settings\' number applied at once; Projects\' Open selected: 25 opened, asleep', async ()=>{
++  const { page, errors, csp, close } = await env.page();
++  try {
++    // 25 saved GC projects, blank, put in the store; the list read at the reload.
++    await openModule(page, 'gc');
++    await page.evaluate(async ()=>{
++      const u = await import('./utils.js'), db = await import('./db.js'), st = db.park(u.getModuleState('gc')), at = Date.now();
++      for (let i = 0; i < 25; i++) await db.putProject({ id: 'p' + i, module: 'gc', title: 'P' + i, state: st, createdAt: at, updatedAt: at });
++    });
++    await page.reload(); await ready(page); await settle(page);
++    await holdWorkers(page);
++    // Tab 1: XRPD refining, its results held; then 20 tabs more, shown in turn.
++    await openModule(page, 'xrd'); await loadFiles(page, 'xrd', env.fx.files.xrd.slice(0, 2));
++    await page.setInputFiles('#xrdR2CifInput', env.fx.cif);
++    await page.waitForSelector('#xrdR2PhaseList input[data-on]');
++    await settle(page);
++    await page.evaluate(()=>{ window.__hold = true; });
++    await page.waitForTimeout(650); await page.click('#xrdR2RefineAll');
++    await page.waitForSelector('.confirm-modal'); await page.click('.confirm-modal .btn:not(.primary)');
++    await page.waitForFunction(()=> document.querySelector('#xrdR2Refine').textContent === 'Cancel');
++    for (let i = 0; i < 20; i++) await openModule(page, MODS[i % 5]);
++    assert.equal((await tabs(page))[1].busy, true);
++    // Tab 1, shown least lately, busy: awake; tab 0 and tab 2, the next least lately, asleep.
++    let a = await awakeAt(page);
++    assert.equal(a.length, 20);
++    assert.ok(a.includes(1) && !a.includes(0) && !a.includes(2), String(a));
++    // Settings: 5 awake, at once.
++    await setAwake(page, 5);
++    assert.deepEqual(await awakeAt(page), [1, 18, 19, 20, 21]);
++    // 1: the tab on show alone, but the busy one stays awake, over the cap, till its job ends.
++    await setAwake(page, 1);
++    assert.deepEqual(await awakeAt(page), [1, 21]);
++    await page.evaluate(()=> window.__release());
++    await until(async ()=> !(await tabs(page))[1].busy, { timeout: 120000, what: 'the run\'s end' });
++    await until(async ()=> (await awakeAt(page)).join() === '21', { what: 'the excess asleep at the job\'s end' });
++    // Projects: all 25 opened at once from the list, in the background, asleep; none refused.
++    await setAwake(page, 20);
++    await page.click('#nav button[data-tab="projects"]');
++    for (const c of await page.locator('#sessListWrap .sess-check').all()) await c.click();
++    await page.click('#sessOpenSelected');
++    await until(async ()=> (await tabs(page)).length === 47, { what: '25 tabs more' });
++    assert.equal(await banner(page), null, 'nothing refused');
++    assert.ok(await page.locator('#tab-projects.active').count(), 'still on the list');
++    assert.deepEqual(await awakeAt(page), [21], 'the projects opened asleep');
++    await switchTab(page, 46);
++    assert.deepEqual(await awakeAt(page), [21, 46]);
++    assert.deepEqual(errors, []);
++    assert.deepEqual(await csp(), []);
++  } finally { await close(); }
++});
 diff --git a/tests/b2cross.test.mjs b/tests/b2cross.test.mjs
 new file mode 100644
-index 0000000..1223d59
+index 0000000..fa3baa9
 --- /dev/null
 +++ b/tests/b2cross.test.mjs
 @@ -0,0 +1,210 @@
@@ -3563,7 +3742,7 @@ index 0000000..1223d59
 +test('ten tabs, two of each module: each its own files and undo across switches; beyond the limit the one not shown for longest asleep; all asleep past the minutes, let go, woken with their histories', async ()=>{
 +  const { page, errors, csp, close } = await env.page();
 +  try {
-+    await page.evaluate(async ()=>{ const u = await import('./utils.js'); Object.assign(u.settings, { sleepMin: 10, livePolicy: 'count', liveMax: 6 }); });
++    await page.evaluate(async ()=>{ const u = await import('./utils.js'); Object.assign(u.settings, { sleepMin: 10, awakeMax: 7 }); });
 +    const fx = env.fx.files, T = [];
 +    for (const k of [0, 1]) for (const mod of MODS){
 +      await newTab(page, mod);
@@ -3572,7 +3751,7 @@ index 0000000..1223d59
 +      await relabel(page, mod, 0, mine);
 +      T.push({ mod, plain, mine: [mine, ...plain.slice(1)], h: await history(page, mod) });
 +    }
-+    // Ten tabs, six awake hidden allowed: the three opened first asleep.
++    // Ten tabs, seven awake allowed (the one on show among them): the three opened first asleep.
 +    assert.deepEqual(await awake(page), [false, false, false, true, true, true, true, true, true, true]);
 +    assert.equal(await page.locator('section.tab[id^="tab-"]:is(#tab-tauc,#tab-xrd,#tab-gc,#tab-epr,#tab-sem)').count(), 5, 'one section of each module in the page');
 +    // Each shown in turn: its own files and history; each woken wakes one, the one not shown for longest asleep.
@@ -3709,7 +3888,7 @@ index 0000000..1223d59
 +});
 diff --git a/tests/b2drs.test.mjs b/tests/b2drs.test.mjs
 new file mode 100644
-index 0000000..6ae8ec7
+index 0000000..eae0cc2
 --- /dev/null
 +++ b/tests/b2drs.test.mjs
 @@ -0,0 +1,132 @@
@@ -3801,7 +3980,7 @@ index 0000000..6ae8ec7
 +test('a DRS tab asleep past Settings\' minutes, its instance let go; woken with its cards and its whole history', async ()=>{
 +  const { page, errors, close } = await env.page();
 +  try {
-+    await page.evaluate(async ()=>{ const u = await import('./utils.js'); Object.assign(u.settings, { sleepMin: 10, livePolicy: 'count', liveMax: 6 }); });
++    await page.evaluate(async ()=>{ const u = await import('./utils.js'); Object.assign(u.settings, { sleepMin: 10, awakeMax: 7 }); });
 +    await newTab(page); await drop(page, env.fx.files.tauc);
 +    await relabel(page, 0, 'x');
 +    await exponent(page, '2');
@@ -3845,9 +4024,87 @@ index 0000000..6ae8ec7
 +    assert.deepEqual(errors, []);
 +  } finally { await close(); }
 +});
+diff --git a/tests/b2fixed.test.mjs b/tests/b2fixed.test.mjs
+new file mode 100644
+index 0000000..f6cc1c1
+--- /dev/null
++++ b/tests/b2fixed.test.mjs
+@@ -0,0 +1,72 @@
++/* Arrays fixed (db.js fixed, b2v3): an array a module makes and never changes, marked so,
++   shared by park and decode, not copied, and not frozen (to b2v2 XRPD's were frozen, which
++   holds a double in twice the memory, and DRS's, GC's and EPR's were copied into every
++   state parked). In Node: park and decode give a fixed array back as it is and copy one
++   not fixed; encode writes both out alike. In the page, the tests' freezing of each fixed
++   array off (window.__freezeFixed): a tab of XRPD, DRS, GC and EPR asleep, its parked
++   state holding its history's arrays, none frozen; woken, its instance's the same arrays;
++   the history's key of a state (stateKey) taking a fixed array by its hash. With the
++   freezing on, as in every other test, a fixed array is frozen, so that a write throws. */
++import { test, before, after } from 'node:test';
++import assert from 'node:assert/strict';
++import { start, openModule, loadFiles, settle, ready } from './helpers.mjs';
++
++const db = await import('../db.js');
++
++test('park and decode share a fixed array and copy one not fixed; encode writes both out', ()=>{
++  const x = db.fixed([1.5, 2.5, 3.5]), y = [4.5, 5.5], s = { files: [{ x, y, n: 'a' }], d: new Date(0) };
++  const p = db.park(s), back = db.decode(p);
++  assert.equal(p.files[0].x, x, 'parked: the fixed array itself');
++  assert.notEqual(p.files[0].y, y, 'parked: a copy of one not fixed');
++  assert.deepEqual(p.files[0].y, y);
++  assert.equal(back.files[0].x, x, 'decoded: the fixed array itself');
++  assert.notEqual(back.files[0].y, p.files[0].y);
++  assert.ok(db.isFixed(x) && !db.isFixed(y) && !Object.isFrozen(x), 'fixed, not frozen');
++  assert.equal(db.fixed(x), x);
++  assert.deepEqual(JSON.parse(JSON.stringify(db.encode(s))).files[0], { x: [1.5, 2.5, 3.5], y: [4.5, 5.5], n: 'a' });
++});
++
++let env;
++before(async ()=>{ env = await start(); });
++after(()=> env && env.close());
++
++const FILES = ()=> ({ xrd: env.fx.files.xrd, tauc: env.fx.files.tauc, gc: env.fx.files.gc, epr: env.fx.files.epr });
++
++test('a tab of each module asleep holds its history\'s arrays, not frozen; woken, the same; stateKey by hash; a write into a fixed array throws where the tests freeze them', async ()=>{
++  const { page, errors, csp, close } = await env.page();
++  try {
++    await page.addInitScript(()=>{ window.__freezeFixed = false; });
++    await page.reload(); await ready(page);
++    for (const [mod, files] of Object.entries(FILES())){ await openModule(page, mod); await loadFiles(page, mod, files); }
++    await openModule(page, 'gc');
++    const arrays = ()=> page.evaluate(async ()=>{
++      const T = await import('./tabs.js'), u = await import('./utils.js'), db = await import('./db.js');
++      const nums = (v, out = [])=>{ if (Array.isArray(v) && db.isFixed(v)) out.push(v); else if (v && typeof v === 'object' && !ArrayBuffer.isView(v)) for (const k in v) nums(v[k], out); return out; };
++      window.__a = window.__a || {};
++      return T.TABS.slice(0, 4).map(t=>{
++        if (t.inst){ const a = nums(u.getModuleState(t.id)); const was = window.__a[t.id]; window.__a[t.id] = a;
++          return { mod: t.module, awake: true, n: a.length, same: !!was && a.length === was.length && a.every(x=> was.includes(x)), frozen: a.filter(Object.isFrozen).length }; }
++        const p = nums(t.state), h = new Set(t.hist.states.flatMap(s=> nums(s)));
++        window.__a[t.id] = p;
++        return { mod: t.module, awake: false, n: p.length, shared: p.filter(x=> h.has(x)).length, frozen: p.filter(Object.isFrozen).length };
++      });
++    });
++    await page.evaluate(async ()=> (await import('./tabs.js')).sleepTick(Date.now() + 11*60e3));
++    const asleep = await arrays();
++    // (XRPD: 2θ and intensities of 3 patterns; DRS: λ and F(R) of 2; GC: H₂ of 2 and O₂ of 1; EPR: field and intensities of 2)
++    assert.deepEqual(asleep.map(t=> [t.mod, t.awake, t.n, t.shared, t.frozen]),
++      [['xrd', false, 6, 6, 0], ['tauc', false, 4, 4, 0], ['gc', false, 3, 3, 0], ['epr', false, 4, 4, 0]]);
++    for (let i = 0; i < 4; i++){ await page.locator('#tabBar .ptab').nth(i).locator('.ptab-label').click(); await settle(page); }
++    const woken = await arrays();
++    assert.deepEqual(woken.map(t=> [t.mod, t.awake, t.n, t.same, t.frozen]),
++      [['xrd', true, 6, true, 0], ['tauc', true, 4, true, 0], ['gc', true, 3, true, 0], ['epr', true, 4, true, 0]], 'woken: the arrays it slept with');
++    assert.ok(await page.evaluate(async ()=>{ const u = await import('./utils.js'); return /^\{"x":"nums:3:/.test(u.stateKey({ x: u.fixed([1, 2, 3]) })); }));
++    // With the tests' freezing on, a fixed array is frozen: a write into it, in the app's
++    // modules (strict), throws.
++    await page.addInitScript(()=>{ window.__freezeFixed = true; });
++    await page.reload(); await ready(page);
++    assert.ok(await page.evaluate(async ()=> Object.isFrozen((await import('./db.js')).fixed([1, 2]))));
++    assert.deepEqual(errors, []);
++    assert.deepEqual(await csp(), []);
++  } finally { await close(); }
++});
 diff --git a/tests/b2gcepr.test.mjs b/tests/b2gcepr.test.mjs
 new file mode 100644
-index 0000000..ea7de39
+index 0000000..726e357
 --- /dev/null
 +++ b/tests/b2gcepr.test.mjs
 @@ -0,0 +1,128 @@
@@ -3914,7 +4171,7 @@ index 0000000..ea7de39
 +for (const [mod, M] of Object.entries(MODS)) test(`${mod.toUpperCase()}: two tabs awake at once, each its own files, parameters, results and undo; one asleep past Settings' minutes, let go, woken with its whole history`, async ()=>{
 +  const { page, errors, close } = await env.page();
 +  try {
-+    await page.evaluate(async ()=>{ const u = await import('./utils.js'); Object.assign(u.settings, { sleepMin: 10, livePolicy: 'count', liveMax: 6 }); });
++    await page.evaluate(async ()=>{ const u = await import('./utils.js'); Object.assign(u.settings, { sleepMin: 10, awakeMax: 7 }); });
 +    const fx = env.fx.files, value = ()=> page.inputValue(M.field);
 +    // Tab A: its files, its parameter and a label.
 +    await newTab(page, mod); await drop(page, mod, M.a(fx), M.rows);
@@ -3981,17 +4238,18 @@ index 0000000..ea7de39
 +});
 diff --git a/tests/b2sem.test.mjs b/tests/b2sem.test.mjs
 new file mode 100644
-index 0000000..ee85e4d
+index 0000000..f38ad8a
 --- /dev/null
 +++ b/tests/b2sem.test.mjs
-@@ -0,0 +1,402 @@
+@@ -0,0 +1,405 @@
 +/* SEM made per tab (b2): each SEM tab an instance of its own, awake while it is shown or
 +   was lately, in one page. Two tabs awake at once, each its own files, view and undo
 +   history, a switch to one awake only showing it (the same section, nothing restored); a
 +   file in both one array of bytes, and one reading worker for both; a reading going on in
 +   a tab left, nothing asked, its files landing in its own list as one step, its record
 +   and its "*", its tab awake till then and its time hidden counted from its end; a tab
-+   hidden letting go of the editor's image at once and of nothing else till it sleeps;
++   hidden letting go of the editor's image at once (made again as it is shown) and of
++   nothing else till it sleeps;
 +   asleep past Settings' minutes, woken with its whole history. A tab asleep lets go of its
 +   files' bytes once the store holds them (WeakRefs emptied by a GC; a file shared with a
 +   tab awake kept; not while the tabs' records are being written), its record holding its
@@ -4168,19 +4426,21 @@ index 0000000..ee85e4d
 +    for (const v of ['x', 'y']) await relabel(page, 0, v);
 +    const hA = await history(page, 'sem');
 +    await thumbs(page, 3);
-+    const shownBytes = (await tabs(page))[0].bytes;
-+    // Hidden: the editor's image (256 × 256 px: its canvas, 0.25 MB, and its pixels while
-+    // kept, 2 s after it was made) let go.
-+    await openModule(page, 'sem');
-+    const hid = (await tabs(page))[0];
-+    assert.ok(shownBytes - hid.bytes >= 4*256*256, `${shownBytes} → ${hid.bytes}`);
++    // (its thumbnails' and cards' canvases marked: the same elements when it is shown again)
++    await page.evaluate(()=> document.querySelectorAll('#semThumbs .sem-thumb canvas, #semGroups .sem-gimg canvas').forEach(c=>{ c.dataset.mark = '1'; }));
 +    // Hidden 9 minutes: as it was left, its thumbnails and cards drawn (no trim).
++    await openModule(page, 'sem');
 +    await tick(page, 9*MIN);
-+    assert.equal((await tabs(page))[0].bytes, hid.bytes, 'nothing more let go');
 +    assert.deepEqual(await page.evaluate(async ()=>{ const r = (await import('./tabs.js')).TABS[0].inst.root;
-+      return [r.querySelectorAll('#semThumbs .sem-thumb canvas').length, r.querySelectorAll('#semGroups .sem-gimg canvas').length]; }), [3, 3]);
++      return [r.querySelectorAll('#semThumbs .sem-thumb canvas[data-mark]').length, r.querySelectorAll('#semGroups .sem-gimg canvas[data-mark]').length]; }), [3, 3]);
++    // Shown: its editor's image (256 px wide: its canvas, and its pixels while kept), let go
++    // as it was hidden, made again (the canvases made counted); its thumbnails and cards not.
++    await page.evaluate(()=>{ const make = document.createElement.bind(document); window.__canvases = [];
++      document.createElement = (t, o)=>{ const e = make(t, o); if (/^canvas$/i.test(t)) window.__canvases.push(e); return e; }; });
 +    await switchTab(page, 0);
 +    await thumbs(page, 3);
++    assert.ok(await page.evaluate(()=> window.__canvases.some(c=> c.width === 256)), 'its editor\'s image made again');
++    assert.equal(await page.locator('#semThumbs .sem-thumb canvas[data-mark], #semGroups .sem-gimg canvas[data-mark]').count(), 6, 'its thumbnails and cards as they were');
 +    assert.ok(await page.evaluate(()=> document.querySelector('#semCropCanvas').width > 0), 'its editor drawn again');
 +    assert.deepEqual(await labels(page), ['y', 'B', 'C']);
 +    // Asleep after the minutes set, its history parked with it.
@@ -4389,18 +4649,18 @@ index 0000000..ee85e4d
 +});
 diff --git a/tests/b2xrd.test.mjs b/tests/b2xrd.test.mjs
 new file mode 100644
-index 0000000..086f0d5
+index 0000000..56d5b52
 --- /dev/null
 +++ b/tests/b2xrd.test.mjs
-@@ -0,0 +1,222 @@
+@@ -0,0 +1,216 @@
 +/* XRPD made per tab (b2): each XRPD tab an instance of its own, awake while it is shown or
 +   was lately, in one page. Two tabs awake at once, each its own files, view and undo
 +   history, a switch to one awake only showing it (the same section, nothing restored, no
 +   loader); a refinement going on in a tab left, on the workers' pool, its results those of
 +   one refined on show, written into its history and its record, its tab marked unsaved; a
 +   tab hidden past Settings' minutes asleep (tabs.js sleepTick: the time taken to be later),
-+   one busy not until its job's end, the one hidden longest asleep beyond the tabs awake
-+   allowed (by number, or by memory), woken with its whole history; a hidden tab saved as
++   one busy not until its job's end, the one shown least lately asleep beyond the tabs
++   awake allowed, woken with its whole history; a hidden tab saved as
 +   it is closed, reopened from Projects; a reload, the tab on show awake and the others
 +   asleep until shown. The workers' answers held where a run must go on (window.__hold). */
 +import { test, before, after } from 'node:test';
@@ -4514,15 +4774,14 @@ index 0000000..086f0d5
 +  } finally { await close(); }
 +});
 +
-+test('asleep past Settings\' minutes, a busy tab not until its job\'s end, the one hidden longest beyond the tabs awake allowed; woken with its whole history', async ()=>{
++test('asleep past Settings\' minutes, a busy tab not until its job\'s end, the one shown least lately beyond the tabs awake allowed; woken with its whole history', async ()=>{
 +  const { page, errors, close } = await env.page();
 +  try {
 +    await holdWorkers(page);
-+    // Settings › Tabs in the background: 10 minutes, one tab awake not on show.
++    // Settings › Tabs in the background: 10 minutes, two tabs awake, the one on show among them.
 +    await page.click('#nav button[data-tab="settings"]');
 +    await page.fill('#settingSleepMin', '10'); await page.press('#settingSleepMin', 'Enter');
-+    await page.selectOption('#settingLivePolicy', 'count');
-+    await page.fill('#settingLiveMax', '1'); await page.press('#settingLiveMax', 'Enter');
++    await page.fill('#settingAwakeMax', '2'); await page.press('#settingAwakeMax', 'Enter');
 +    await settle(page);
 +    // A: two patterns, three steps of labels.
 +    await openModule(page, 'xrd'); await loadFiles(page, 'xrd', env.fx.files.xrd.slice(0, 2));
@@ -4532,7 +4791,7 @@ index 0000000..086f0d5
 +    await xrdTab(page, 1);
 +    await page.evaluate(()=>{ window.__hold = true; });
 +    await refineAll(page);
-+    // C on show: two hidden, one allowed awake: A, hidden longest, sleeps; B refines on.
++    // C on show: two hidden, two allowed awake: A, shown least lately, sleeps; B refines on.
 +    await openModule(page, 'xrd');
 +    assert.deepEqual(await awake(page), [false, true, true]);
 +    assert.equal((await tabs(page))[0].history, true, 'A\'s history parked with it');
@@ -4555,7 +4814,7 @@ index 0000000..086f0d5
 +    assert.deepEqual(await labels(page), [], 'down to the empty start');
 +    for (let i = 0; i < 4; i++) await undo(page, true);
 +    assert.deepEqual(await labels(page), ['z', 's01'], 'and up again');
-+    // (one awake hidden allowed: C, hidden, stays; B woken, C, hidden longest, sleeps)
++    // (two awake allowed: C, hidden, stays; B woken, C, shown least lately, sleeps)
 +    assert.deepEqual(await awake(page), [true, false, true]);
 +    // B woken with its run's results and the run's step.
 +    await switchTab(page, 1);
@@ -4563,19 +4822,14 @@ index 0000000..086f0d5
 +    assert.deepEqual(Object.keys(await results(page)), ['s00.xrdml']);
 +    await undo(page);
 +    assert.deepEqual(Object.keys(await results(page)), [], 'the run\'s step undone');
-+    // By memory: past the MB allowed (its estimate, tabs.js bytes) the tab hidden sleeps.
-+    await page.evaluate(async ()=>{ const u = await import('./utils.js'); u.settings.livePolicy = 'memory'; u.settings.liveMB = 1; });
-+    await switchTab(page, 0);
-+    await tick(page, 0);
-+    assert.deepEqual(await awake(page), [true, false, false], 'B, over the memory allowed, asleep');
 +    assert.deepEqual(errors, []);
 +  } finally { await close(); }
 +});
 +
-+test('the LRU: beyond two tabs awake hidden, the one not shown for longest sleeps, a woken one counting from its show', async ()=>{
++test('the LRU: beyond three tabs awake, the one not shown for longest sleeps, a woken one counting from its show', async ()=>{
 +  const { page, errors, close } = await env.page();
 +  try {
-+    await page.evaluate(async ()=>{ const u = await import('./utils.js'); u.settings.livePolicy = 'count'; u.settings.liveMax = 2; });
++    await page.evaluate(async ()=>{ const u = await import('./utils.js'); u.settings.awakeMax = 3; });
 +    for (let i = 0; i < 4; i++){ await openModule(page, 'xrd'); await loadFiles(page, 'xrd', env.fx.files.xrd.slice(i % 3, i % 3 + 1)); }
 +    assert.deepEqual(await awake(page), [false, true, true, true]);
 +    await switchTab(page, 0);
@@ -4638,6 +4892,20 @@ index 4903c45..8f765de 100644
      assert.deepEqual(errors, []);
    } finally { await close(); }
  });
+diff --git a/tests/helpers.mjs b/tests/helpers.mjs
+index 42271bb..d1af41a 100644
+--- a/tests/helpers.mjs
++++ b/tests/helpers.mjs
+@@ -81,6 +81,9 @@ export async function openApp(browser, base, { viewport = { width: 1400, height:
+   await page.addInitScript(()=>{
+     // The same ids and choices on every run: a seeded Math.random.
+     let x = 12345; Math.random = ()=>{ x = (x*1103515245 + 12345) % 2147483648; return x/2147483648; };
++    // Every array a module fixes (db.js fixed: shared by the states, never changed) frozen
++    // too, so that a write into one throws, a page error.
++    window.__freezeFixed = true;
+     window.__csp = [];
+     document.addEventListener('securitypolicyviolation', e=> window.__csp.push(e.violatedDirective + ' ' + e.blockedURI + ' ' + (e.sourceFile || '') + ':' + (e.lineNumber || '')));
+     window.addEventListener('unhandledrejection', e=> console.error('unhandledrejection: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
 diff --git a/tests/rietveld.test.mjs b/tests/rietveld.test.mjs
 index 3997951..5a5948f 100644
 --- a/tests/rietveld.test.mjs
@@ -4999,37 +5267,42 @@ index 4c659ab..057aa84 100644
    const wrap = fn => e=>{
      if (window.__fail && e.data && e.data.type === 'result'){ window.__fail = false; return fn({ data: { ...e.data, type: 'error', message: 'failed for the test' } }); }
 diff --git a/utils.js b/utils.js
-index 4b37a24..6f7a9a3 100644
+index 4b37a24..f06e0c9 100644
 --- a/utils.js
 +++ b/utils.js
-@@ -559,7 +559,12 @@ const palettePickerUI = new PalettePickerUI();
+@@ -1,6 +1,7 @@
+ /* =========================================================
+    GENERIC UTILITIES
+ ========================================================= */
++import { fixed, isFixed } from './db.js';
+ const COLORS = [
+   '#3aa0ff','#ff7a59','#5fcf6a','#d050ff','#ffcc4d','#ff5050','#4dd0e1','#c0ca33','#9575cd','#f06292',
+   '#ff9800','#00bcd4','#8bc34a','#e91e63','#00897b','#ff5722','#1565c0','#f9a825','#6a1b9a','#558b2f',
+@@ -559,7 +560,11 @@ const palettePickerUI = new PalettePickerUI();
     SETTINGS
  ========================================================= */
  const SETTINGS_KEY = 'datatreat-settings';
 -const settings = { decimal: '.', field: ';', plotFmt: 'png' };
 +/* The tabs in the background (tabs.js): a tab not on show sleeps after sleepMin minutes
-+   (its instance let go, its state and whole history kept); beyond liveMax tabs awake and
-+   not on show (livePolicy 'count'), or past liveMB of their estimated memory ('memory'),
-+   the one hidden longest sleeps. */
-+const TAB_DEF = { sleepMin: 10, liveMax: 6, livePolicy: 'count', liveMB: 1500 };
++   (its instance let go, its state and whole history kept); beyond awakeMax tabs awake, the
++   one on show among them, the one shown least lately sleeps. */
++const TAB_DEF = { sleepMin: 10, awakeMax: 20 };
 +const settings = { decimal: '.', field: ';', plotFmt: 'png', ...TAB_DEF };
  // Settings (image format + CSV decimal/field) persist across sessions, like the theme.
  try {
    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-@@ -571,6 +576,12 @@ if (settings.decimal !== ',') settings.decimal = '.';
+@@ -571,6 +576,10 @@ if (settings.decimal !== ',') settings.decimal = '.';
  if (![';', ',', '\t'].includes(settings.field)) settings.field = ';';
  if (!['png', 'svg', 'jpeg', 'webp'].includes(settings.plotFmt)) settings.plotFmt = 'png';
  if (settings.decimal === ',' && settings.field === ',') settings.field = ';'; // guard invalid combo
-+// (the tabs' numbers in their ranges: minutes 0.1–1440, tabs 0–19, MB 100–16000)
++// (the tabs' numbers in their ranges: minutes 0.1–1440, tabs 1–1000)
 +const inRange = (v, lo, hi, d)=> Number.isFinite(+v) && +v >= lo && +v <= hi ? +v : d;
 +settings.sleepMin = inRange(settings.sleepMin, 0.1, 1440, TAB_DEF.sleepMin);
-+settings.liveMax = Math.round(inRange(settings.liveMax, 0, 19, TAB_DEF.liveMax));
-+settings.liveMB = Math.round(inRange(settings.liveMB, 100, 16000, TAB_DEF.liveMB));
-+if (settings.livePolicy !== 'memory') settings.livePolicy = 'count';
++settings.awakeMax = Math.round(inRange(settings.awakeMax, 1, 1000, TAB_DEF.awakeMax));
  function saveSettings(){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){} }
  
  function fmtNum(v, decimals){
-@@ -734,9 +745,12 @@ function makeDownloadLink(container, filename, text, label){
+@@ -734,9 +743,12 @@ function makeDownloadLink(container, filename, text, label){
  /* =========================================================
     SHARED FILE DROPZONE
  ========================================================= */
@@ -5045,7 +5318,7 @@ index 4b37a24..6f7a9a3 100644
    if (!dz || !input) return;
  
    // Show a "Loading…" state on the dropzone while onFiles (async parsing) runs,
-@@ -846,8 +860,8 @@ const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size
+@@ -846,8 +858,8 @@ const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size
  // Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
  const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
  
@@ -5056,7 +5329,7 @@ index 4b37a24..6f7a9a3 100644
    if (!wrap) return;
    if (!files.length){ wrap.innerHTML=''; return; }
  
-@@ -1198,17 +1212,128 @@ requestAnimationFrame(()=>{
+@@ -1198,17 +1210,128 @@ requestAnimationFrame(()=>{
    const maxW = Math.max(0, ...btns.map(b=> b.getBoundingClientRect().width));
    if (maxW) btns.forEach(b=> b.style.width = Math.ceil(maxW) + 'px');
  });
@@ -5188,7 +5461,7 @@ index 4b37a24..6f7a9a3 100644
  }
  const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','projects','settings'];
  // The sections that keep a URL hash. Module sections are reached through an open
-@@ -1224,15 +1349,18 @@ function goTab(tab, fromHash){
+@@ -1224,15 +1347,18 @@ function goTab(tab, fromHash){
      b.classList.toggle('is-on', on);
      if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
    });
@@ -5210,7 +5483,7 @@ index 4b37a24..6f7a9a3 100644
    }
    if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
    // Only the fixed sections are addressable: a module section is shown by activating
-@@ -1258,11 +1386,16 @@ function onSectionChange(fn){ _sectionHooks.push(fn); }
+@@ -1258,11 +1384,16 @@ function onSectionChange(fn){ _sectionHooks.push(fn); }
     undo and redo go as ever; a busy module whose job holds none has neither do anything,
     silently. Up to v471 a switch left the job running, and its result went into whichever
     project the module held when it ended; up to v508 undo and redo waited for the job to
@@ -5231,7 +5504,34 @@ index 4b37a24..6f7a9a3 100644
  
  /* =========================================================
     UNDO / REDO — per-module snapshot stacks (command pattern)
-@@ -1342,8 +1475,9 @@ class UndoStack {
+@@ -1287,11 +1418,12 @@ function bytesKey(b){
+   }
+   return k;
+ }
+-/* A frozen array of numbers (an XRPD pattern's 2θ, intensities and variance factors,
+-   frozen where the file is read: nothing changes them after) is written so too, once per
+-   array: its length and two hashes of its numbers as JSON has them (one not finite is
+-   null, −0 is 0); one holding anything else is written out. Written out, 12 patterns'
+-   arrays took 25 of the 26 ms of the key every XRPD edit takes (to v490). */
++/* An array fixed (db.js: an XRPD pattern's 2θ, intensities and variance factors, fixed
++   where the file is read, a spectrum's: nothing changes them after; to b2v2 frozen) is
++   written so too, once per array: its length and two hashes of its numbers as JSON has
++   them (one not finite is null, −0 is 0); one holding anything else is written out.
++   Written out, 12 patterns' arrays took 25 of the 26 ms of the key every XRPD edit takes
++   (to v490). */
+ const _numsKey = new WeakMap(), _f64 = new Float64Array(1), _u32 = new Uint32Array(_f64.buffer);
+ function numsKey(a){
+   let k = _numsKey.get(a);
+@@ -1310,7 +1442,7 @@ function numsKey(a){
+   }
+   return k;
+ }
+-const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && Object.isFrozen(x) ? numsKey(x) || x : x);
++const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && isFixed(x) ? numsKey(x) || x : x);
+ class UndoStack {
+   constructor(snapshot, restore, limit=80){
+     this._snap = snapshot; this._restore = restore; this._limit = limit;
+@@ -1342,8 +1474,9 @@ class UndoStack {
          const cbs = this._onceListeners; this._onceListeners = [];
          cbs.forEach(cb=>{ try { cb(); } catch(e){} });
        }
@@ -5242,7 +5542,7 @@ index 4b37a24..6f7a9a3 100644
      } finally { this._liveKey = null; }
    }
    onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
-@@ -1355,7 +1489,7 @@ class UndoStack {
+@@ -1355,7 +1488,7 @@ class UndoStack {
      this.index = i; this._key = null; this._busy = true; try { this._restore(this.states[i], true); } finally { this._busy = false; }
      this._hear();
    }
@@ -5251,7 +5551,7 @@ index 4b37a24..6f7a9a3 100644
    // (no undo below the state the latest job holding the history started from)
    performUndo(){ if (this.index <= Math.max(0, ...this._marks.map(m=> m.i))) return false; this._apply(this.index - 1); return true; }
    performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
-@@ -1430,9 +1564,15 @@ class UndoStack {
+@@ -1430,9 +1563,15 @@ class UndoStack {
  const _histories = {};
  function registerHistory(key, snapshot, restore){
    const st = new UndoStack(snapshot, restore);
@@ -5267,7 +5567,7 @@ index 4b37a24..6f7a9a3 100644
  document.addEventListener('keydown', e=>{
    if (!(e.ctrlKey || e.metaKey)) return;
    const k = e.key.toLowerCase();
-@@ -1444,14 +1584,15 @@ document.addEventListener('keydown', e=>{
+@@ -1444,14 +1583,15 @@ document.addEventListener('keydown', e=>{
    // (up to v499 a box just ticked, which keeps the focus, held Ctrl+Z off until it lost it).
    const el = document.activeElement, tag = el && el.tagName;
    if (tag==='TEXTAREA' || (el && el.isContentEditable) || (tag==='INPUT' && !/^(checkbox|radio|range|color|file|button|submit|reset|image)$/.test(el.type))) return;
@@ -5285,7 +5585,7 @@ index 4b37a24..6f7a9a3 100644
    const did = isUndo ? st.performUndo() : st.performRedo();
    if (did || held) e.preventDefault();
  });
-@@ -1486,16 +1627,18 @@ document.addEventListener('keydown', e=>{
+@@ -1486,16 +1626,18 @@ document.addEventListener('keydown', e=>{
  // it (the open-tab bar carries the unsaved "*" instead); the flag still drives the
  // project bar's button visibility.
  const _hasData = {};
@@ -5308,7 +5608,7 @@ index 4b37a24..6f7a9a3 100644
    const show = has || named;
    document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"], '
      + '.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
-@@ -1597,20 +1740,20 @@ function normalizeProjIcons(mod){
+@@ -1597,20 +1739,20 @@ function normalizeProjIcons(mod){
     {name,text} CSV entries. The group button zips them all; per-plot/table buttons
     pick a subset by name. */
  const _csvExport = {};
@@ -5337,7 +5637,7 @@ index 4b37a24..6f7a9a3 100644
  }
  // The project CSV icon, reused on every per-view download button.
  const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
-@@ -1645,7 +1788,7 @@ document.addEventListener('click', e=>{
+@@ -1645,7 +1787,7 @@ document.addEventListener('click', e=>{
  });
  // Does a module currently hold loaded data? Reported by the modules themselves
  // through setTabLoaded (it used to be read off the nav button's data dot).
@@ -5346,7 +5646,7 @@ index 4b37a24..6f7a9a3 100644
  
  /* =========================================================
     THEME — light / dark, remembered, defaulting to the OS preference.
-@@ -1705,62 +1848,64 @@ function applyTheme(theme, persist){
+@@ -1705,62 +1847,64 @@ function applyTheme(theme, persist){
     undo snapshot()/restore() as the canonical serialize/deserialize. */
  const MODULES = ['tauc','xrd','gc','epr','sem'];
  const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM' };
@@ -5437,7 +5737,7 @@ index 4b37a24..6f7a9a3 100644
    if (!st) return;
    const backup = st._snap();
    st._busy = true;
-@@ -2314,16 +2459,25 @@ function barChipYmax(chips, svg, bars, g){
+@@ -2314,16 +2458,25 @@ function barChipYmax(chips, svg, bars, g){
      btn.className = 'instr-info';
      btn.setAttribute('aria-label', 'Toggle instructions');
      btn.innerHTML = INFO_SVG;
@@ -5471,14 +5771,14 @@ index 4b37a24..6f7a9a3 100644
    });
  })();
  
-@@ -2333,5 +2487,7 @@ normalizeNavIcons();
+@@ -2333,5 +2486,7 @@ normalizeNavIcons();
  window.addEventListener('load', normalizeNavIcons);
  
  export {
 -  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 +  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar,
 +  saveSettings, TAB_DEF, registerModule, isFactory, makeInstance, attachInstance, detachInstance, dropKey, shownKey, withState, modOfKey, onAnyChange, onBusyChange, busyChanged,
-+  dropsBytes, vacate
++  dropsBytes, vacate, fixed
  };
 diff --git a/xrd-peaks.js b/xrd-peaks.js
 index 61f5431..254a01f 100644
@@ -5502,6 +5802,33 @@ index 61f5431..254a01f 100644
    }
    function reprocessAll(){
      const was = processed;
+diff --git a/xrd-rv-model.js b/xrd-rv-model.js
+index 76667d1..dd72856 100644
+--- a/xrd-rv-model.js
++++ b/xrd-rv-model.js
+@@ -9,6 +9,7 @@ import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metri
+ import { readXrdmlInstrumentText } from './xrd-instr.js';
+ import { buildModel, calc, fitSettings, phaseSites, bgInvOn, shapeNamed } from './xrd-rietveld.js';
+ import { spaceGroupName, spaceGroupSymbol } from './xrd-sg.js';
++import { fixed, isFixed } from './db.js';
+ 
+ const PHASE_COLORS = ['#d4a72c', '#c77dff', '#ff8a65', '#7cc4ff', '#e05f8a', '#9ccc65'];
+ 
+@@ -81,9 +82,12 @@ function prepOf(text, fileName){
+ // v426 re-expressed supercells and orthohexagonal cells) does not belong to the phase now.
+ const cellKey = c => [c.a, c.b, c.c, c.alpha, c.beta, c.gamma].map(v=> +(+v).toFixed(6)).join();
+ /* A result is never changed once written (a new one replaces it): frozen, deep, it is shared
+-   by the undo states it is in and by the curves drawn from it. (A typed array cannot be
+-   frozen; a result holds none.) */
++   by the undo states it is in and by the curves drawn from it; its lists of numbers or
++   names fixed instead (db.js: shared by a state parked; a double frozen takes twice the
++   memory). (A typed array cannot be frozen; a result holds none.) */
++const isObj = x => x !== null && typeof x === 'object';
+ function frozen(v){
++  if (Array.isArray(v) && (isFixed(v) || !v.some(isObj))) return fixed(v);
+   if (v && typeof v === 'object' && !ArrayBuffer.isView(v) && !Object.isFrozen(v)){ Object.freeze(v); for (const k in v) frozen(v[k]); }
+   return v;
+ }
 diff --git a/xrd-rv-pool.js b/xrd-rv-pool.js
 new file mode 100644
 index 0000000..997db42
@@ -5902,12 +6229,12 @@ index 4b16049..50c7a0a 100644
      // The card's state as saved (stateOf).
      snapshot(){ return stateOf({ phases, std, lab6, pick, start: startFrom, hold, fit, nextId, sel, results, view: res ? { sizeBy, resNorm } : null }); },
 diff --git a/xrd.js b/xrd.js
-index d920496..7c40c23 100644
+index d920496..d38a22b 100644
 --- a/xrd.js
 +++ b/xrd.js
 @@ -1,4 +1,4 @@
 -import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, X_SVG } from './utils.js';
-+import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, X_SVG } from './utils.js';
++import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, fixed, X_SVG } from './utils.js';
  import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
  import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
  import { readXrdmlScans, decodeXml } from './xrd-instr.js';
@@ -5938,8 +6265,25 @@ index d920496..7c40c23 100644
    // Every file loaded, in list order; the analysis sees the included ones, `files`, and
    // the per-file arrays the cards keep are aligned with those.
    let allFiles = []; // {name, label, x[], y[], color}
-@@ -44,15 +61,15 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
-   const scanArrays = sc => sc.arrs || (sc.arrs = frozenArrs(ascending({ x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) })));
+@@ -34,25 +51,26 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+   const ascending = f => f.x.length > 1 && f.x[0] > f.x[f.x.length-1]
+     ? { ...f, x: f.x.slice().reverse(), y: f.y.slice().reverse(), ...(f.varMul ? { varMul: f.varMul.slice().reverse() } : {}) } : f;
+   /* A pattern's 2θ, intensities and variance factors never change once read (a file read
+-     again gives new ones): frozen, so that the undo history's key of a state (stateKey)
+-     takes each once, by a hash kept for it, and a view drawn from them is not drawn again
+-     for a state that holds the same (to v490 every edit wrote them out, 25 ms with 12
++     again gives new ones): fixed (db.js; to b2v2 frozen, which holds a double in twice the
++     memory), so that the undo history's key of a state (stateKey) takes each once, by a
++     hash kept for it, a state parked shares them, and a view drawn from them is not drawn
++     again for a state that holds the same (to v490 every edit wrote them out, 25 ms with 12
+      patterns, and every restore, an undo too, copied them anew, each view drawn again).
+      A scan's arrays are made so once, 2θ ascending, and shared by the pattern loaded and
+-     every restore of it; a file's of a project with no bytes are frozen where restored. */
+-  const frozenArrs = f => { ['x', 'y', 'varMul'].forEach(k=>{ if (Array.isArray(f[k])) Object.freeze(f[k]); }); return f; };
+-  const scanArrays = sc => sc.arrs || (sc.arrs = frozenArrs(ascending({ x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) })));
++     every restore of it; a file's of a project with no bytes are fixed where restored. */
++  const fixedArrs = f => { ['x', 'y', 'varMul'].forEach(k=> fixed(f[k])); return f; };
++  const scanArrays = sc => sc.arrs || (sc.arrs = fixedArrs(ascending({ x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) })));
  
    // Delegated click handling for dynamically generated alert dismiss buttons.
 -  document.getElementById('tab-xrd').addEventListener('click', (e)=>{
@@ -5957,7 +6301,7 @@ index d920496..7c40c23 100644
    }
  
    /* A file read (readXrdmlScans, xrd-instr.js): 2θ, the intensities on the unattenuated
-@@ -137,7 +154,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -137,7 +155,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      };
    }
  
@@ -5966,7 +6310,7 @@ index d920496..7c40c23 100644
      // (by the patterns' names: a file of several scans is tested scan by scan, below)
      const existing = new Set(allFiles.map(f=> f.name));
      const alreadyLoaded = [];
-@@ -182,10 +199,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -182,10 +200,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
  
    function afterFilesChange(){
      files = includedOf(allFiles);
@@ -5980,7 +6324,7 @@ index d920496..7c40c23 100644
      syncResults();
      eachCard(e=> e.inst.refresh());
      hist.commit(); // baseline + file add/remove/reorder/palette
-@@ -224,7 +241,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -224,7 +242,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
          <div class="xrd-std-body"></div>
        </div>
      </div>`;
@@ -5989,7 +6333,7 @@ index d920496..7c40c23 100644
      const box = m.querySelector('.xrd-std-box'), info0 = m.querySelector('.instr-info'), instr = m.querySelector('.xrd-std-instr');
      info0.addEventListener('click', ()=>{
        const open = instr.style.display === 'none';
-@@ -235,7 +252,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -235,7 +253,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      m.addEventListener('click', e=>{ if (e.target === m) closeStd(); });
      m.querySelector('.xrd-std-x').onclick = ()=> closeStd();
      m.querySelector('.xrd-std-file').addEventListener('click', e=>{ if (e.target.closest('[data-std-del]')) setStd(null); });
@@ -5998,7 +6342,7 @@ index d920496..7c40c23 100644
        // One file: of several dropped, the first; it replaces the one loaded. One pattern:
        // of a file of several scans, the first that can be read.
        const f = fl[0];
-@@ -278,7 +295,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -278,7 +296,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      stdRv.refresh();
      // Every card takes the standard's correction (or loses it).
      eachCard((e, a)=> a.type === 'scherrer' ? e.inst.sizesChanged() : e.inst.redraw());
@@ -6007,7 +6351,7 @@ index d920496..7c40c23 100644
      hist.commit();
    }
    function openStd(which){
-@@ -300,19 +317,20 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -300,19 +318,20 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      openModal = null;
      document.removeEventListener('keydown', onStdKey);
    }
@@ -6031,7 +6375,7 @@ index d920496..7c40c23 100644
      blocked: ()=> rvCards().some(i=> i.running()) ? 'A sample refinement is running: the standard can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
      onBusy: ()=> syncRv(), ...holder(null),
      // (its run's progress on every Rietveld card's Instrumental standard…)
-@@ -354,8 +372,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -354,8 +373,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      rvCards().forEach(i=> i.sync());
      stdRv.sync();
      parked.forEach((e, id)=>{ if (!e.inst.active()){ parked.delete(id); e.inst.destroy(); if (e.inst.res) e.inst.res.remove(); } });
@@ -6043,7 +6387,7 @@ index d920496..7c40c23 100644
      busy: ()=> rvCards().some(i=> i.running()) ? 'A Rietveld refinement' : stdRv.running() ? 'The standard\'s refinement' : null,
      // (the samples first: one waiting for the standard's run stops with it)
      stop: ()=>{ rvCards().forEach(i=> i.cancel()); stdRv.cancel(); },
-@@ -399,7 +419,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -399,7 +420,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      // kept; up to v477 it went on unseen, its results lost)
      if (prev && was){ if (was.inst.cancel) was.inst.cancel(false); a.states[prev] = was.inst.snapshot(); if (was.inst.destroy) was.inst.destroy(); if (was.inst.res) was.inst.res.remove(); }
      const host = { files: ()=> files, allFiles: ()=> allFiles, idx: ()=> curIdx, step, commit: ()=> hist.commit(),
@@ -6055,7 +6399,7 @@ index d920496..7c40c23 100644
        openStd: ()=> openStd(a.type === 'rietveld' ? 'rv' : 'peaks'),
        stdLoaded: ()=> !!stdFile, refineStd: tell=> stdRv.run(tell), stopStd: commit=> stdRv.cancel(commit), stdRun: ()=> stdRv.progress(),
        blocked: ()=> stdRv.running() ? 'The standard is being refined: the samples can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
-@@ -423,13 +446,13 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -423,13 +447,13 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      if (e.inst.res) e.inst.res.remove();
      syncResults();
    }
@@ -6071,7 +6415,7 @@ index d920496..7c40c23 100644
      on.forEach((a, i)=> live.get(a.id).inst.res.classList.toggle('is-first', i === 0));
    }
    function named(a){
-@@ -439,7 +462,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -439,7 +463,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      if (e.inst.res) e.inst.res.querySelector('.res-an-title').textContent = a.name;
    }
    deck = createDeck({
@@ -6080,7 +6424,7 @@ index d920496..7c40c23 100644
      kinds: KINDS, info: t=> (t === 'scherrer' ? PEAKS_INFO : RV_INFO) + ' ' + cardInfo(true, true),
      body: ()=> '<div class="xrd-card"></div>', make: ()=> ({ states: {} }),
      build: buildCard, drop: dropCard, autoName: a=> KINDS[a.type], named,
-@@ -480,8 +503,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -480,13 +504,12 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
       used as it was, with a note where its lowest point is exactly 0. The readings are kept
       by their bytes, so an undo does not read a file again. A pattern is its scan of the
       file (f.scan; the first, none given), so a file of several gives its scans again, in
@@ -6090,7 +6434,22 @@ index d920496..7c40c23 100644
    function readAgain(f){
      const b = f.rawBytes;
      if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')){
-@@ -604,9 +626,9 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+       let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
+-      return { f: frozenArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
++      return { f: fixedArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
+     }
+     let all = reread.get(b);
+     if (!all){
+@@ -497,7 +520,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+       reread.set(b, all);
+     }
+     const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
+-    if (sc.error) return { f: frozenArrs(ascending({ ...f })), note: null };
++    if (sc.error) return { f: fixedArrs(ascending({ ...f })), note: null };
+     const { varMul: _, ...rest } = f, a = scanArrays(sc);
+     const g = { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };
+     const old = ascending({ ...f }), n = g.y.length;
+@@ -604,9 +627,9 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      if (notes.length) xrdNoteAlerts = buildAlertsHtml([], notes, 'Restored, with a caveat:', '', 'xrd-dismiss-notes');
      rebuildXrdAlerts();
    }
@@ -6102,7 +6461,7 @@ index d920496..7c40c23 100644
      deck.fitNames();
      if (files.length) eachCard((e, a)=>{ if (!deck.isFolded(a)) e.inst.redraw(); });
      if (openModal === peaksModal) stdPeaks.redraw();
-@@ -620,8 +642,46 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
+@@ -620,8 +643,27 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      out.push(...stdPeaks.csvEntries(''), ...stdRv.csvEntries('standard - '));
      return out;
    }
@@ -6112,23 +6471,6 @@ index d920496..7c40c23 100644
    // A new project starts with a Scherrer card and a Rietveld one.
    deck.start(['scherrer', 'rietveld']);
 -})();
-+
-+  /* What it holds that its tab's sleep gives back, estimated (bytes), for the tabs' limit
-+     by memory (tabs.js): not its files' arrays nor its results, which its parked state and
-+     its history keep, but its elements, and what it draws from and drew. Measured, awake
-+     and hidden over asleep (results/bytes.json): blank, 0.1 MB of heap and 1370 elements;
-+     12 patterns of 5384 points, 3.1 MB and 2459; those refined, 5.1 MB and 3266. So: 1 MB,
-+     2 kB a file, and a point of a pattern 48 bytes a Scherrer card, 32 more refined. */
-+  function bytesNow(){
-+    let pts = 0, done = 0, scherrer = 0;
-+    files.forEach(f=>{ pts += f.x.length; });
-+    cards().forEach(a=>{
-+      if (a.type === 'scherrer'){ scherrer++; return; }
-+      const st = live.get(a.id) ? live.get(a.id).inst.snapshot() : null;
-+      if (st && st.results) files.forEach(f=>{ if (st.results[f.name]) done += f.x.length; });
-+    });
-+    return (1 << 20) + 2048*allFiles.length + 48*pts*scherrer + 37*done;
-+  }
 +
 +  /* ---- The instance (tabs.js) ---- */
 +  return {
@@ -6146,8 +6488,6 @@ index d920496..7c40c23 100644
 +      [stdPeaks, stdRv].forEach(i=>{ try { i.destroy(); } catch(e){} });
 +      deck.destroy();
 +    },
-+    // Its data's memory, estimated (tabs.js: the limit by memory): see bytesNow.
-+    bytes: ()=> bytesNow(),
 +  };
 +}
 +registerModule('xrd', createXrd);
