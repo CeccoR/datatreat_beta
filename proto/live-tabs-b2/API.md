@@ -8,7 +8,8 @@ module is now made per tab, and `b2.patch` holds the whole. §12 is the plan tho
 followed. `README.md` holds the state of b2 and its measurements; `NOTES-v2.md` and
 `NOTES-v3.md` the later changes in `b2.patch` (no trim; a sleeping SEM tab without its files'
 bytes; no memory budget; any number of tabs open, a cap on those awake; arrays fixed, not
-frozen), which this page describes as they now are.
+frozen; what is worked out kept, not worked out again; the loader over every step that may
+take a while), which this page describes as they now are.
 
 ## 1. What the shell does
 
@@ -35,7 +36,16 @@ works differently:
 - **Wake.** A tab shown again while asleep wakes: a new instance is made, put in the page,
   given the parked state (`restoreModuleState`) and then the parked history
   (`setModuleHistory`). One whose files' bytes were let go reads them first, the loader on
-  show (§9); every other wakes at once, as in the first version.
+  show (§9); every other wakes at once, as in the first version. What its module worked out
+  of its data before it slept is kept (§10): the wake draws it, not works it out again.
+- **The loader, before any step that may take a while** (b2v3). A wake, a new tab, a
+  project opened, a reload: the loader is put on, a frame drawn, then the work, the loader
+  off once it is drawn (tabs.js `activateTab`, `loadTabIfActive`). A tab awake shown again
+  draws only what changed while hidden: nothing, shown at the width it was left at and
+  unchanged (at once); all its plots at another width of the window, or its results where a
+  job ended meanwhile: then under the loader too (`redrawn`, `showLater`). A project changed
+  and reloaded keeps the loader on till its saved record is read and its key taken
+  (sessions.js `onTabLoaded` gives the promise, tabs.js `loaded` waits for it).
 - **Busy tabs never sleep.** A busy tab (`moduleBusy(key)`) is never put to sleep. Its
   time hidden counts from the end of its job.
 - **The cap.** Any number of tabs may be open (b2v3: v517 and b2v2 refused a 21st). At most
@@ -76,7 +86,8 @@ A module is made per tab when:
    (`fixed(a)`, utils.js from db.js: shared by the states, a state parked and the history's
    key, not copied, not frozen; §9), and nothing writes into them;
 10. caches keyed by data (file bytes, arrays fixed) live at module level, shared by the
-   instances (§10);
+   instances; what it works out of its data and parameters, and draws again on a redraw, a
+   wake or an undo, it keeps there by the data (utils.js `keeper`, §10);
 11. its tests still pass, and a test drives two of its tabs at once (§12).
 
 ## 3. The instance, its section, its ids
@@ -93,7 +104,8 @@ create(ctx) → inst
             tab's instance takes index.html's own, which stays in the page until then, hidden,
             so that the page's ids exist as in v517 before any tab of the module is opened)
     layer   a <div class="inst-layer"> (display: contents) for what it lays over the page
-    shown() true while it is the instance on show (its section in the page and active)
+    shown() true while it is the instance on show (its section in the page and active: one
+            made for withState, out of the page, never is, and draws nothing)
   inst = { destroy() }             // the shell adds key, mod, root, layer
 ```
 
@@ -309,8 +321,13 @@ whose predicate returns an element; return a boolean instead (NOTES-drs.md).
   - **Nothing else may hold them.** What a module keeps by file must keep no bytes, or keep
     them weakly, or only for its tabs awake: SEM's `raws` are WeakRefs, `imgs` hold headers,
     reduced copies and card levels, `full` only the images of the tab on show and of a
-    reading, and what was made of a file let go stays for the files let go last, 32 MB at
-    most, so that a tab woken draws its thumbnails without making them again.
+    reading. What was made of a file let go stays while a tab asleep holds the file, so that
+    the tab woken draws its thumbnails and cards without making them again: tabs.js tells
+    the module, `registerModule(mod, create, { asleep })`, `asleep(key, v)` with the parked
+    state and history's states as a tab sleeps (or is restored or opened asleep) and
+    `asleep(key, null)` as it wakes or is closed; SEM keeps the ids they name (b2v3; to b2v3
+    the files let go last, 32 MB at most, which some 3.4 MB a tab of 8 images 2048² asleep
+    outgrew past 9 such tabs).
   - **At wake**, the parked state and history are read back together (db.js `load`: an
     array the page still holds of a hash, another tab's, is taken, the rest read from the
     store in one transaction) and the tab then wakes as any other. Meanwhile the loader is
@@ -341,6 +358,34 @@ Keep at **module level**, shared by instances:
 - pure functions and constants;
 - caches keyed by data identity, as `WeakMap`s (XRPD's `reread` by bytes, xrd-peaks' `idOf`,
   DRS's and EPR's `spectra` by bytes);
+- **what is worked out of the data** (b2v3, the user's "what has been computed is kept, not
+  computed again"): utils.js `keeper(name, n)` gives `kept(data, key, make)`, which keeps
+  `make()`'s result by `data`, an array fixed (a `WeakMap`: while a state on show, a tab
+  asleep's parked state or a history holds the array, the result is there), under `key`,
+  every other input exactly (`exactKey`: JSON with a NaN, an infinity and a −0 its own;
+  `objId`: an object by its identity), the last `n` keys an array. An array not fixed keeps
+  nothing. A tab woken, an undo to a state worked out before, a redraw and the CSVs take the
+  result as it was made: the same object, so the same plots and CSVs byte for byte. Nothing
+  may write into a result kept (the tests freeze each, as they freeze arrays fixed).
+  `kept.made` and `kept.taken` count them by name. Kept now:
+
+  | module | name | by | what |
+  |---|---|---|---|
+  | XRPD | `xrd-smoothing`, `xrd-peaks` (8 a pattern) | its intensities | a pattern's smoothing, SNIP baseline and the curve less it, by the widths; its peaks with their FWHMs, by those, the peak search and the peaks added and removed (xrd-peaks.js `procKept`) |
+  | | `modelOf` (a `WeakMap`) | the standard's processing | its instrumental model, the Caglioti fit |
+  | | `xrd-curves`, `xrd-difference`, `xrd-net` | its intensities | a refined pattern's calculated, background and ticks, its difference and its net pattern, by its 2θ, variance factors, instrument, all the curves take from the result, the phases (structure, colour) and the role (xrd-rv.js `curveKey`) |
+  | | `xrd-ticks` | its intensities | a pattern not refined: its phases' reflections |
+  | DRS | `drs-curve` (8), `drs-slope` | its F(R) | a card's curve as read and smoothed, its derivative |
+  | | `drs-fits` (8) | its F(R) | every fit of a sample and what the card makes of them, by the card's kind, parameters and lines, an Urbach card's by its reference's key too |
+  | | `drs-reflectance`, `drs-log` | its F(R) | the Results' R % and log F(R) |
+  | GC | `gc-tables` (8) | its first gas's readings | a sample's tables (times, readings, flows, their integral), by its dates, readings, light-on, injection delay and flow parameters |
+  | EPR | `epr-smoothed` (8) | its intensities | a spectrum smoothed, by its field and the width |
+  | SEM | (`imgs`) | its file's id | its header, reduced copy and card levels, while a tab awake or asleep holds the file (§9) |
+
+  Not kept: what is drawn (a plot's paths, the DOM: a tab asleep has none; awake it keeps
+  them), the transforms made as a plot is drawn (a normalisation, an offset), and a few
+  formulas over kept results (a Scherrer size from a kept FWHM). Nor in the records: a tab
+  reloaded works its results out again as it wakes (§1).
 - the registry of arrays fixed (db.js), page-wide;
 - pools (workers).
 

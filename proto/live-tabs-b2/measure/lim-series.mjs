@@ -12,7 +12,10 @@
    - mix: SEM, XRPD, XRPD refining in turn; and a DRS, a GC and an EPR tab made with X0, S0.
    Policy (b2): awake, every tab kept awake (liveMax 99, sleepMin 1440, in the page) and, before
    each reading, every hidden tab trimmed (tabs.js sleepTick 61 s on: the state of any tab
-   hidden over a minute); default, the Settings' defaults (6 awake hidden, 10 min) in real time.
+   hidden over a minute); default, the Settings' defaults (6 awake hidden, 10 min) in real time;
+   cap (b2v3), at most LIM_AWAKE tabs awake (20 by default, awakeMax), the one shown least
+   lately asleep beyond, a busy one never, and none put to sleep by its minutes (sleepMin
+   1440): any number of tabs open, as b2v3 has it (b2v2 refused a 21st).
    The pool's workers end 1 s after their last job (datatreat-rv-idle) except where runs go on.
    At each N, X0 on show:
    1. memory after a forced GC (lim-lib mem), b2's tabsNow (awake, trimmed, busy, bytes());
@@ -40,8 +43,9 @@ const runs = (kind === 'xrdrun' || kind === 'mix') && tree !== 'head';
 const SEQ = { xrd: ['X'], xrdrun: ['R'], sem: ['S'], mix: ['S', 'X', 'R'] }[kind];
 if (!SEQ) throw new Error('kind?');
 const env = await L.launch(tree, { knobs: runs ? {} : { 'datatreat-rv-idle': '1' } });
-const page = env.page, b2 = tree === 'b2', awakePolicy = b2 && policy === 'awake';
+const page = env.page, b2 = tree === 'b2', awakePolicy = b2 && policy === 'awake', capPolicy = b2 && policy === 'cap';
 if (awakePolicy) await L.setLimits(env, { liveMax: 99, sleepMin: 1440 });
+if (capPolicy) await L.setLimits(env, { awakeMax: +(process.env.LIM_AWAKE || 20), sleepMin: 1440 });
 const out = { tree, kind, policy: b2 ? policy : null, cap: CAP, started: new Date().toISOString(), rows: [], errors: env.errors };
 const log = (...a)=> console.log(`[${tree}${TAG} ${kind}${b2 ? ' ' + policy : ''}]`, ...a);
 const MIN = 60000;
@@ -163,8 +167,11 @@ for (const N of NS){
   row.mem = await F(()=> env.mem());
   if (b2){
     const tn = await tabsNow();
-    row.shell = { awake: tn.filter(t=> t.awake).length, asleep: tn.filter(t=> !t.awake).length, trimmed: tn.filter(t=> t.trimmed).length, busy: tn.filter(t=> t.busy).length,
-      bytesHiddenAwakeMB: L.r1(tn.filter(t=> t.awake && !t.shown).reduce((a, t)=> a + t.bytes, 0)/1048576), bytes: tn.map(t=> [t.module, t.awake ? (t.trimmed ? 'trimmed' : 'awake') : 'asleep', L.r1(t.bytes/1048576)]) };
+    // (b2v3 has neither a trim nor bytes(): the tabs awake and asleep by module)
+    row.shell = capPolicy ? { awake: tn.filter(t=> t.awake).length, asleep: tn.filter(t=> !t.awake).length, busy: tn.filter(t=> t.busy).length,
+      byModule: tn.reduce((o, t)=>{ const k = t.module + (t.awake ? ' awake' : ' asleep'); o[k] = (o[k] || 0) + 1; return o; }, {}) }
+      : { awake: tn.filter(t=> t.awake).length, asleep: tn.filter(t=> !t.awake).length, trimmed: tn.filter(t=> t.trimmed).length, busy: tn.filter(t=> t.busy).length,
+        bytesHiddenAwakeMB: L.r1(tn.filter(t=> t.awake && !t.shown).reduce((a, t)=> a + t.bytes, 0)/1048576), bytes: tn.map(t=> [t.module, t.awake ? (t.trimmed ? 'trimmed' : 'awake') : 'asleep', L.r1(t.bytes/1048576)]) };
   }
   const t0 = await L.now(env); await L.sleep(4000); row.idle = await L.longTasks(env, t0, await L.now(env));
   await work(row);
@@ -176,11 +183,12 @@ for (const N of NS){
     '| peak', row.peak.allPriv, '| next', row.work.next && row.work.next.med, 'smooth', row.work.smooth && row.work.smooth.med, 'crop', row.work.crop && row.work.crop.med, 'fig', row.work.fig && row.work.fig.med,
     '| long(keys)', row.work.longMax, 'idle', JSON.stringify(row.idle), 'bg', JSON.stringify(row.background), '| sw', row.switches.map(x=> `${x.toWas} ${x.ms}/${x.backWas} ${x.backMs}`).join(', '), row.shell ? '| shell ' + JSON.stringify({ ...row.shell, bytes: undefined }) : '');
   L.save(`lim-${tree}${TAG}-${kind}${b2 && policy !== 'awake' ? '-' + policy : ''}.json`, out);
+  if (env.errors.length) log('errors so far', JSON.stringify(env.errors.slice(-3)));
   if (row.mem.allPriv > CAP || Math.max(row.peak.allPriv, row.peakBuild.allPriv) > CAP + 700 || env.errors.includes('CRASH')){ out.stopped = `after N = ${N}: ${row.mem.allPriv} MB of Private after a GC`; log('stop:', out.stopped); break; }
 }
 
 // b2: every hidden tab put to sleep at once (the runs let end first), then 4 woken.
-if (awakePolicy && !env.errors.includes('CRASH')){
+if ((awakePolicy || capPolicy) && !env.errors.includes('CRASH')){
   const end = {};
   for (const tEnd = Date.now() + 15*MIN; await busyNow() && Date.now() < tEnd;) await L.sleep(500);
   await show(X0);

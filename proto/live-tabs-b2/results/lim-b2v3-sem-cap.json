@@ -1,0 +1,1638 @@
+{
+ "tree": "b2",
+ "kind": "sem",
+ "policy": "cap",
+ "cap": 3300,
+ "started": "2026-10-25T01:34:55.716Z",
+ "rows": [
+  {
+   "N": 0,
+   "runs": false,
+   "buildMs": 0,
+   "peakBuild": {
+    "allPriv": 0,
+    "rendRss": 0,
+    "n": 0
+   },
+   "tabs": {
+    "S": 0,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 13.5,
+    "ab": 76.1,
+    "heapLimit": 4095.8,
+    "nodes": 6284,
+    "allPriv": 264.7,
+    "allPss": 373.1,
+    "rendRss": 299.4,
+    "rendPriv": 215,
+    "gpuPriv": 16.7,
+    "browserPriv": 21.9,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 2,
+    "asleep": 0,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 1
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 124.3,
+    "t0": 1792892116499.3,
+    "t1": 1792892116623.6
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 63.4,
+     "max": 67.5,
+     "min": 50.1
+    },
+    "smooth": {
+     "n": 8,
+     "med": 68.6,
+     "max": 147.8,
+     "min": 54.7
+    },
+    "crop": {
+     "n": 8,
+     "med": 41.1,
+     "max": 43.7,
+     "min": 36.1
+    },
+    "fig": {
+     "n": 8,
+     "med": 30.1,
+     "max": 35.7,
+     "min": 18.2
+    },
+    "raw": {
+     "next": [
+      67.5,
+      67.4,
+      50.1,
+      62.3,
+      52.9,
+      66.1,
+      64.5,
+      57.8
+     ],
+     "smooth": [
+      147.8,
+      54.7,
+      78.9,
+      66.7,
+      65.2,
+      74.4,
+      65.8,
+      70.5
+     ],
+     "crop": [
+      43.1,
+      43.7,
+      36.1,
+      38,
+      39,
+      38.2,
+      43.3,
+      43.3
+     ],
+     "fig": [
+      30.8,
+      29.3,
+      34.3,
+      26.1,
+      22.5,
+      31.2,
+      18.2,
+      35.7
+     ]
+    },
+    "keysWithLongTask": 13,
+    "longMax": 139
+   },
+   "switches": [
+    {
+     "to": "X0",
+     "toWas": "awake",
+     "ms": 68.9,
+     "backWas": "awake",
+     "backMs": 126.1,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 436.2,
+    "rendRss": 457.8,
+    "n": 98
+   },
+   "load": [
+    2.12,
+    2.31,
+    1.46
+   ]
+  },
+  {
+   "N": 1,
+   "runs": false,
+   "buildMs": 1819,
+   "peakBuild": {
+    "allPriv": 521.1,
+    "rendRss": 538.4,
+    "n": 9
+   },
+   "tabs": {
+    "S": 1,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 14.9,
+    "ab": 149,
+    "heapLimit": 4095.8,
+    "nodes": 7238,
+    "allPriv": 336.3,
+    "allPss": 454.5,
+    "rendRss": 379.8,
+    "rendPriv": 285.3,
+    "gpuPriv": 17.9,
+    "browserPriv": 22.1,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 3,
+    "asleep": 0,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 2
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 101.6,
+    "t0": 1792892138056.4,
+    "t1": 1792892138158
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 53.2,
+     "max": 62.8,
+     "min": 40.6
+    },
+    "smooth": {
+     "n": 8,
+     "med": 75.6,
+     "max": 93.6,
+     "min": 63.6
+    },
+    "crop": {
+     "n": 8,
+     "med": 43.5,
+     "max": 52.9,
+     "min": 38
+    },
+    "fig": {
+     "n": 8,
+     "med": 30.7,
+     "max": 36.2,
+     "min": 20.2
+    },
+    "raw": {
+     "next": [
+      62.8,
+      54.3,
+      58.4,
+      53.3,
+      40.6,
+      52.8,
+      53,
+      46.7
+     ],
+     "smooth": [
+      93.6,
+      73.6,
+      70.4,
+      79.3,
+      67.3,
+      63.6,
+      80,
+      77.5
+     ],
+     "crop": [
+      50,
+      43.1,
+      49,
+      43.4,
+      43.6,
+      52.9,
+      38,
+      38.6
+     ],
+     "fig": [
+      29.8,
+      25.4,
+      26.8,
+      33.6,
+      31.5,
+      31.6,
+      20.2,
+      36.2
+     ]
+    },
+    "keysWithLongTask": 10,
+    "longMax": 84
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 84.8,
+     "backWas": "awake",
+     "backMs": 57.6,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 566.7,
+    "rendRss": 566.8,
+    "n": 96
+   },
+   "load": [
+    1.66,
+    2.2,
+    1.44
+   ]
+  },
+  {
+   "N": 2,
+   "runs": false,
+   "buildMs": 1758,
+   "peakBuild": {
+    "allPriv": 595.9,
+    "rendRss": 618.2,
+    "n": 8
+   },
+   "tabs": {
+    "S": 2,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 15.3,
+    "ab": 220.5,
+    "heapLimit": 4095.8,
+    "nodes": 8183,
+    "allPriv": 424.9,
+    "allPss": 548.9,
+    "rendRss": 471.4,
+    "rendPriv": 371,
+    "gpuPriv": 20.5,
+    "browserPriv": 22.3,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 4,
+    "asleep": 0,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 3
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 87.7,
+    "t0": 1792892159157.3,
+    "t1": 1792892159245
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 53.7,
+     "max": 61.7,
+     "min": 42.1
+    },
+    "smooth": {
+     "n": 8,
+     "med": 65.6,
+     "max": 117.4,
+     "min": 55.5
+    },
+    "crop": {
+     "n": 8,
+     "med": 38.8,
+     "max": 84.3,
+     "min": 31.7
+    },
+    "fig": {
+     "n": 8,
+     "med": 32.9,
+     "max": 38.7,
+     "min": 20.8
+    },
+    "raw": {
+     "next": [
+      55.3,
+      55.7,
+      51.4,
+      42.1,
+      44.1,
+      57,
+      61.7,
+      52.1
+     ],
+     "smooth": [
+      117.4,
+      55.5,
+      70.1,
+      73.5,
+      58.9,
+      60.5,
+      61,
+      71.3
+     ],
+     "crop": [
+      84.3,
+      37.6,
+      51,
+      38.6,
+      36,
+      39.5,
+      39,
+      31.7
+     ],
+     "fig": [
+      33,
+      33.1,
+      32.7,
+      30.5,
+      38.7,
+      29.2,
+      20.8,
+      35.3
+     ]
+    },
+    "keysWithLongTask": 9,
+    "longMax": 105
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 77.2,
+     "backWas": "awake",
+     "backMs": 64.6,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 62.3,
+     "backWas": "awake",
+     "backMs": 56.4,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 653.1,
+    "rendRss": 644.1,
+    "n": 98
+   },
+   "load": [
+    1.4,
+    2.1,
+    1.42
+   ]
+  },
+  {
+   "N": 4,
+   "runs": false,
+   "buildMs": 3678,
+   "peakBuild": {
+    "allPriv": 726.6,
+    "rendRss": 759,
+    "n": 18
+   },
+   "tabs": {
+    "S": 4,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 15.6,
+    "ab": 363.5,
+    "heapLimit": 4095.8,
+    "nodes": 10097,
+    "allPriv": 564.7,
+    "allPss": 696.7,
+    "rendRss": 623.3,
+    "rendPriv": 515,
+    "gpuPriv": 16.7,
+    "browserPriv": 22.3,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 6,
+    "asleep": 0,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 5
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 96.6,
+    "t0": 1792892182570.2,
+    "t1": 1792892182666.8
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 55.4,
+     "max": 63,
+     "min": 43.4
+    },
+    "smooth": {
+     "n": 8,
+     "med": 70.5,
+     "max": 94,
+     "min": 64.1
+    },
+    "crop": {
+     "n": 8,
+     "med": 38.1,
+     "max": 52.1,
+     "min": 34.4
+    },
+    "fig": {
+     "n": 8,
+     "med": 32.9,
+     "max": 39.8,
+     "min": 24.9
+    },
+    "raw": {
+     "next": [
+      55.6,
+      55.1,
+      56.2,
+      63,
+      52.6,
+      43.4,
+      51.9,
+      59
+     ],
+     "smooth": [
+      94,
+      81.7,
+      66.6,
+      64.1,
+      68.4,
+      70.7,
+      87,
+      70.3
+     ],
+     "crop": [
+      38.2,
+      49,
+      52.1,
+      40.5,
+      34.4,
+      36.6,
+      35.9,
+      38
+     ],
+     "fig": [
+      31.8,
+      26.3,
+      32.2,
+      34,
+      24.9,
+      39.8,
+      33.6,
+      36.7
+     ]
+    },
+    "keysWithLongTask": 9,
+    "longMax": 85
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 77.6,
+     "backWas": "awake",
+     "backMs": 51.1,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 60.4,
+     "backWas": "awake",
+     "backMs": 61.7,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 85.8,
+     "backWas": "awake",
+     "backMs": 66.3,
+     "longTo": {
+      "n": 1,
+      "sum": 53,
+      "max": 53,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 788.2,
+    "rendRss": 817.6,
+    "n": 100
+   },
+   "load": [
+    1.39,
+    2.05,
+    1.42
+   ]
+  },
+  {
+   "N": 8,
+   "runs": false,
+   "buildMs": 7349,
+   "peakBuild": {
+    "allPriv": 1044.2,
+    "rendRss": 1079.4,
+    "n": 36
+   },
+   "tabs": {
+    "S": 8,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 16,
+    "ab": 647.7,
+    "heapLimit": 4095.8,
+    "nodes": 13909,
+    "allPriv": 876.5,
+    "allPss": 1026.2,
+    "rendRss": 952.4,
+    "rendPriv": 826.5,
+    "gpuPriv": 16.9,
+    "browserPriv": 22.4,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 10,
+    "asleep": 0,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 9
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 110.6,
+    "t0": 1792892210141,
+    "t1": 1792892210251.6
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 56.9,
+     "max": 78.8,
+     "min": 49.5
+    },
+    "smooth": {
+     "n": 8,
+     "med": 71.6,
+     "max": 91,
+     "min": 64.4
+    },
+    "crop": {
+     "n": 8,
+     "med": 43.8,
+     "max": 62,
+     "min": 34.8
+    },
+    "fig": {
+     "n": 8,
+     "med": 30.9,
+     "max": 40.6,
+     "min": 25.2
+    },
+    "raw": {
+     "next": [
+      69.7,
+      57.5,
+      78.8,
+      68.4,
+      49.5,
+      52.4,
+      56.3,
+      53.6
+     ],
+     "smooth": [
+      91,
+      83.3,
+      64.7,
+      73.6,
+      66.4,
+      71.7,
+      64.4,
+      71.5
+     ],
+     "crop": [
+      49.1,
+      47.7,
+      62,
+      47.3,
+      40.3,
+      35.8,
+      34.8,
+      39.4
+     ],
+     "fig": [
+      26.2,
+      40.6,
+      36.3,
+      31.3,
+      30.5,
+      30,
+      25.2,
+      35.2
+     ]
+    },
+    "keysWithLongTask": 11,
+    "longMax": 82
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 87.4,
+     "backWas": "awake",
+     "backMs": 66.4,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 59.1,
+     "backWas": "awake",
+     "backMs": 68.9,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 81.4,
+     "backWas": "awake",
+     "backMs": 68.3,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 1105.3,
+    "rendRss": 1114.4,
+    "n": 102
+   },
+   "load": [
+    1.51,
+    2.02,
+    1.44
+   ]
+  },
+  {
+   "N": 12,
+   "runs": false,
+   "buildMs": 7795,
+   "peakBuild": {
+    "allPriv": 1346.2,
+    "rendRss": 1396.9,
+    "n": 38
+   },
+   "tabs": {
+    "S": 12,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 16.4,
+    "ab": 931.7,
+    "heapLimit": 4095.8,
+    "nodes": 17713,
+    "allPriv": 1193.1,
+    "allPss": 1360.3,
+    "rendRss": 1284.7,
+    "rendPriv": 1141.2,
+    "gpuPriv": 17.6,
+    "browserPriv": 23.7,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 14,
+    "asleep": 0,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 13
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 101.7,
+    "t0": 1792892238687.3,
+    "t1": 1792892238789
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 58.3,
+     "max": 63.7,
+     "min": 49.4
+    },
+    "smooth": {
+     "n": 8,
+     "med": 75.1,
+     "max": 116.2,
+     "min": 67.5
+    },
+    "crop": {
+     "n": 8,
+     "med": 41.4,
+     "max": 55.9,
+     "min": 37
+    },
+    "fig": {
+     "n": 8,
+     "med": 30.5,
+     "max": 37.2,
+     "min": 21.4
+    },
+    "raw": {
+     "next": [
+      59,
+      63.7,
+      57.2,
+      53.4,
+      49.4,
+      57.6,
+      62.3,
+      62
+     ],
+     "smooth": [
+      116.2,
+      67.5,
+      72.7,
+      72.5,
+      82.4,
+      72.7,
+      77.5,
+      105.5
+     ],
+     "crop": [
+      55.9,
+      47,
+      43.3,
+      41.7,
+      37,
+      37.9,
+      37.7,
+      41
+     ],
+     "fig": [
+      30.3,
+      29.5,
+      34.3,
+      30.7,
+      37.2,
+      21.5,
+      21.4,
+      31.9
+     ]
+    },
+    "keysWithLongTask": 12,
+    "longMax": 99
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 75.3,
+     "backWas": "awake",
+     "backMs": 103.2,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 90.6,
+     "backWas": "awake",
+     "backMs": 61.3,
+     "longTo": {
+      "n": 1,
+      "sum": 51,
+      "max": 51,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 63.1,
+     "backWas": "awake",
+     "backMs": 61.3,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 1414.5,
+    "rendRss": 1498.4,
+    "n": 103
+   },
+   "load": [
+    1.33,
+    1.94,
+    1.42
+   ]
+  },
+  {
+   "N": 16,
+   "runs": false,
+   "buildMs": 9575,
+   "peakBuild": {
+    "allPriv": 1668.2,
+    "rendRss": 1736.3,
+    "n": 47
+   },
+   "tabs": {
+    "S": 16,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 16.8,
+    "ab": 1215.6,
+    "heapLimit": 4095.8,
+    "nodes": 21533,
+    "allPriv": 1507,
+    "allPss": 1690.8,
+    "rendRss": 1615,
+    "rendPriv": 1454.9,
+    "gpuPriv": 17.6,
+    "browserPriv": 23.8,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 18,
+    "asleep": 0,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 17
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 79.6,
+    "t0": 1792892269080.4,
+    "t1": 1792892269160
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 58.2,
+     "max": 63.3,
+     "min": 50
+    },
+    "smooth": {
+     "n": 8,
+     "med": 69.6,
+     "max": 112.5,
+     "min": 56.4
+    },
+    "crop": {
+     "n": 8,
+     "med": 44,
+     "max": 54.7,
+     "min": 38.1
+    },
+    "fig": {
+     "n": 8,
+     "med": 30.6,
+     "max": 38.8,
+     "min": 21.6
+    },
+    "raw": {
+     "next": [
+      62,
+      58.5,
+      63.3,
+      57.8,
+      51.9,
+      59.5,
+      51.3,
+      50
+     ],
+     "smooth": [
+      112.5,
+      67,
+      72.8,
+      69.1,
+      56.4,
+      68.7,
+      103.2,
+      70
+     ],
+     "crop": [
+      54.2,
+      52.2,
+      54.7,
+      45.8,
+      39.2,
+      38.7,
+      38.1,
+      42.2
+     ],
+     "fig": [
+      30.1,
+      31.1,
+      23.6,
+      35.2,
+      21.6,
+      38.8,
+      24.9,
+      35.1
+     ]
+    },
+    "keysWithLongTask": 9,
+    "longMax": 103
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 147.2,
+     "backWas": "awake",
+     "backMs": 76,
+     "longTo": {
+      "n": 1,
+      "sum": 76,
+      "max": 76,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 71.7,
+     "backWas": "awake",
+     "backMs": 67.8,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 66.4,
+     "backWas": "awake",
+     "backMs": 76.2,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 1738.9,
+    "rendRss": 1807.6,
+    "n": 105
+   },
+   "load": [
+    1.36,
+    1.87,
+    1.42
+   ]
+  },
+  {
+   "N": 24,
+   "runs": false,
+   "buildMs": 19180,
+   "peakBuild": {
+    "allPriv": 1922.8,
+    "rendRss": 1966.5,
+    "n": 95
+   },
+   "tabs": {
+    "S": 24,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 17.2,
+    "ab": 1375.5,
+    "heapLimit": 4095.8,
+    "nodes": 23517,
+    "allPriv": 1702.4,
+    "allPss": 1881.3,
+    "rendRss": 1804.2,
+    "rendPriv": 1649.1,
+    "gpuPriv": 17.7,
+    "browserPriv": 25,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 20,
+    "asleep": 6,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 19,
+     "sem asleep": 6
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 82.2,
+    "t0": 1792892309414.2,
+    "t1": 1792892309496.4
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 58.5,
+     "max": 73.2,
+     "min": 50.3
+    },
+    "smooth": {
+     "n": 8,
+     "med": 78.9,
+     "max": 119.2,
+     "min": 52.7
+    },
+    "crop": {
+     "n": 8,
+     "med": 51.2,
+     "max": 68.8,
+     "min": 33.2
+    },
+    "fig": {
+     "n": 8,
+     "med": 28.7,
+     "max": 40.5,
+     "min": 21.1
+    },
+    "raw": {
+     "next": [
+      65.6,
+      59.1,
+      51,
+      61.5,
+      51.4,
+      73.2,
+      50.3,
+      57.8
+     ],
+     "smooth": [
+      119.2,
+      81.1,
+      88.8,
+      76.7,
+      65.4,
+      75.5,
+      90.1,
+      52.7
+     ],
+     "crop": [
+      51.2,
+      51.2,
+      49.7,
+      39,
+      51.3,
+      68.8,
+      33.2,
+      56.1
+     ],
+     "fig": [
+      34.1,
+      21.1,
+      32.4,
+      21.1,
+      40.5,
+      22.4,
+      32.7,
+      25
+     ]
+    },
+    "keysWithLongTask": 11,
+    "longMax": 95
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 78.6,
+     "backWas": "awake",
+     "backMs": 75.3,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 81.9,
+     "backWas": "awake",
+     "backMs": 65.9,
+     "longTo": {
+      "n": 1,
+      "sum": 55,
+      "max": 55,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 79.4,
+     "backWas": "awake",
+     "backMs": 74.8,
+     "longTo": {
+      "n": 1,
+      "sum": 53,
+      "max": 53,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 1934,
+    "rendRss": 2000.2,
+    "n": 105
+   },
+   "load": [
+    1.68,
+    1.9,
+    1.45
+   ]
+  },
+  {
+   "N": 30,
+   "runs": false,
+   "buildMs": 18182,
+   "peakBuild": {
+    "allPriv": 1956.2,
+    "rendRss": 2002,
+    "n": 90
+   },
+   "tabs": {
+    "S": 30,
+    "X": 0,
+    "R": 0
+   },
+   "busyAtReading": 0,
+   "mem": {
+    "heap": 17.5,
+    "ab": 1393.5,
+    "heapLimit": 4095.8,
+    "nodes": 23587,
+    "allPriv": 1723.7,
+    "allPss": 1903.9,
+    "rendRss": 1825.2,
+    "rendPriv": 1668.6,
+    "gpuPriv": 17.9,
+    "browserPriv": 26.4,
+    "workers": 1,
+    "nProc": 6
+   },
+   "shell": {
+    "awake": 20,
+    "asleep": 12,
+    "busy": 0,
+    "byModule": {
+     "xrd awake": 1,
+     "sem awake": 19,
+     "sem asleep": 12
+    }
+   },
+   "idle": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0
+   },
+   "switchToS0": {
+    "ms": 118.5,
+    "t0": 1792892348724.5,
+    "t1": 1792892348843
+   },
+   "work": {
+    "next": {
+     "n": 8,
+     "med": 57.3,
+     "max": 66.9,
+     "min": 50.5
+    },
+    "smooth": {
+     "n": 8,
+     "med": 75.6,
+     "max": 107.4,
+     "min": 57.8
+    },
+    "crop": {
+     "n": 8,
+     "med": 45.2,
+     "max": 55.8,
+     "min": 35.1
+    },
+    "fig": {
+     "n": 8,
+     "med": 31,
+     "max": 35.6,
+     "min": 21.5
+    },
+    "raw": {
+     "next": [
+      66.9,
+      61.3,
+      50.5,
+      52.9,
+      54.3,
+      55.6,
+      61.9,
+      58.9
+     ],
+     "smooth": [
+      107.4,
+      65.1,
+      79,
+      79.5,
+      93.3,
+      57.8,
+      72.2,
+      59.1
+     ],
+     "crop": [
+      48.7,
+      55.8,
+      50.8,
+      37.3,
+      40.2,
+      35.1,
+      44.7,
+      45.7
+     ],
+     "fig": [
+      31.6,
+      33.4,
+      34.2,
+      30.3,
+      35.6,
+      23.5,
+      25,
+      21.5
+     ]
+    },
+    "keysWithLongTask": 11,
+    "longMax": 85
+   },
+   "switches": [
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 98.4,
+     "backWas": "awake",
+     "backMs": 58.6,
+     "longTo": {
+      "n": 1,
+      "sum": 59,
+      "max": 59,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 58.1,
+     "backWas": "awake",
+     "backMs": 95.5,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    },
+    {
+     "to": "S",
+     "toWas": "awake",
+     "ms": 81.8,
+     "backWas": "awake",
+     "backMs": 92.1,
+     "longTo": {
+      "n": 0,
+      "sum": 0,
+      "max": 0,
+      "over200": 0
+     }
+    }
+   ],
+   "background": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "peak": {
+    "allPriv": 1955.8,
+    "rendRss": 2024.1,
+    "n": 105
+   },
+   "load": [
+    1.88,
+    1.94,
+    1.48
+   ]
+  }
+ ],
+ "errors": [],
+ "end": {
+  "sleepAll": {
+   "ms": 3.6,
+   "tabs": 19
+  },
+  "semAsleep": {
+   "light": 31,
+   "asleep": 31
+  },
+  "memAsleep": {
+   "heap": 17,
+   "ab": 101.4,
+   "heapLimit": 4095.8,
+   "nodes": 5735,
+   "allPriv": 294.7,
+   "allPss": 412.4,
+   "rendRss": 332.8,
+   "rendPriv": 238.9,
+   "gpuPriv": 23.2,
+   "browserPriv": 22,
+   "workers": 0,
+   "nProc": 6
+  },
+  "wakes": [
+   {
+    "kind": "S",
+    "was": "asleep",
+    "ms": 404.8,
+    "long": {
+     "n": 1,
+     "sum": 93,
+     "max": 93,
+     "over200": 0
+    },
+    "backMs": 65.7
+   },
+   {
+    "kind": "S",
+    "was": "asleep",
+    "ms": 419.4,
+    "long": {
+     "n": 2,
+     "sum": 148,
+     "max": 93,
+     "over200": 0
+    },
+    "backMs": 51
+   },
+   {
+    "kind": "S",
+    "was": "asleep",
+    "ms": 414.6,
+    "long": {
+     "n": 1,
+     "sum": 81,
+     "max": 81,
+     "over200": 0
+    },
+    "backMs": 77.6
+   },
+   {
+    "kind": "S",
+    "was": "asleep",
+    "ms": 408.1,
+    "long": {
+     "n": 1,
+     "sum": 90,
+     "max": 90,
+     "over200": 0
+    },
+    "backMs": 85.6
+   }
+  ],
+  "memAfterWakes": {
+   "heap": 17.1,
+   "ab": 373.4,
+   "heapLimit": 4095.8,
+   "nodes": 9484,
+   "allPriv": 600.9,
+   "allPss": 719.6,
+   "rendRss": 645.7,
+   "rendPriv": 550.7,
+   "gpuPriv": 17.3,
+   "browserPriv": 22.3,
+   "workers": 0,
+   "nProc": 6
+  }
+ },
+ "ended": "2026-10-25T01:39:24.492Z"
+}

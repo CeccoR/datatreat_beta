@@ -316,16 +316,16 @@ index 27d4831..954a3eb 100644
 -         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed };
 +         hydrate, sweep, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed, unload, load, unread, refsIn, fixed, isFixed };
 diff --git a/epr.js b/epr.js
-index b267b08..5117a8f 100644
+index b267b08..acdc428 100644
 --- a/epr.js
 +++ b/epr.js
 @@ -1,4 +1,4 @@
 -import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumericInput, esc } from './utils.js';
-+import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumericInput, esc, registerModule, fixed } from './utils.js';
++import { fmtNum, fmtData, setupDropzone, maxArr, minArr, NORM_OPTIONS, normOf, buildAlertsHtml, nextColor, guardNumericInput, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
  import { boxSmooth, meanStep, widthText, ptsNum, ptsText } from './smooth.js';
  import { Plot } from './plot.js';
  import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-@@ -8,26 +8,62 @@ import { decodeText } from './textdata.js';
+@@ -8,26 +8,68 @@ import { decodeText } from './textdata.js';
  
  /* =========================================================
     EPR MODULE
@@ -358,6 +358,12 @@ index b267b08..5117a8f 100644
 +  else spectra.set(k, { b: f.b, a: f.a });
 +  return f;
 +}
++/* A spectrum smoothed over a card's width, kept by its intensities (utils.js keeper: while
++   a state, a tab asleep or a history holds the spectrum) under its field and the width: a
++   tab woken, an undo, a redraw and the CSVs take it as made (to b2v3 every drawing made it
++   twice a spectrum, and the CSVs again). */
++const smoothKept = keeper('epr-smoothed', 8);
++const smoothedOf = (f, w)=> smoothKept(f.a, exactKey([objId(f.b), w]), ()=> boxSmooth(f.b, f.a, w));
 +// An EPR tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 +function createEpr({ key, root, layer, shown }){
 +  const $ = id => root.querySelector('#' + id);
@@ -393,7 +399,7 @@ index b267b08..5117a8f 100644
      },
      // A project from before the cards had one analysis, its settings at the top level.
      restore: s => deck.load(cardList(s.cards, KINDS) || [{ id: 1, type: 'spectra', norm: s.norm, smooth: s.smooth }], readCard, a=>{
-@@ -35,7 +71,15 @@ import { decodeText } from './textdata.js';
+@@ -35,7 +77,15 @@ import { decodeText } from './textdata.js';
        card.querySelector('#' + P(a) + 'Norm').value = a.norm;
        showW(a, card);
      }),
@@ -410,7 +416,7 @@ index b267b08..5117a8f 100644
      // One CSV a card, named after it.
      csv: ()=> files.length ? cards().map(a=> ({ name: `${fileSafe(a.name)} - epr_spectra.csv`, text: cardCsv(a) })) : [],
    });
-@@ -110,7 +154,7 @@ import { decodeText } from './textdata.js';
+@@ -110,7 +160,7 @@ import { decodeText } from './textdata.js';
                           { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
    }
  
@@ -419,7 +425,7 @@ index b267b08..5117a8f 100644
      const existingStems = new Set(allFiles.map(f=>f.name));
      const invalidFiles = [];
      const alreadyLoaded = [];
-@@ -133,7 +177,7 @@ import { decodeText } from './textdata.js';
+@@ -133,7 +183,7 @@ import { decodeText } from './textdata.js';
        if (pair.dta && pair.dsc){
          let result;
          try { result = await processPair(stem, pair.dta, pair.dsc); } catch(e){ result = { error: String(e && e.message || e) }; }
@@ -428,7 +434,7 @@ index b267b08..5117a8f 100644
          else { invalidFiles.push(`${stem} (${result.error})`); }
        } else {
          unpaired.push((pair.dta || pair.dsc).name);
-@@ -147,7 +191,7 @@ import { decodeText } from './textdata.js';
+@@ -147,7 +197,7 @@ import { decodeText } from './textdata.js';
  
    function afterFilesChange(){
      kit.showFiles();
@@ -437,7 +443,7 @@ index b267b08..5117a8f 100644
      // (each card's points at the spectra's steps, folded or not)
      cards().forEach(a=> syncPts(a));
      updateEpr();
-@@ -241,26 +285,31 @@ import { decodeText } from './textdata.js';
+@@ -241,26 +291,31 @@ import { decodeText } from './textdata.js';
      return { norm: normOf(s.norm), smoothW: Number.isFinite(w) ? w : DEF.smoothW };
    };
  
@@ -454,7 +460,8 @@ index b267b08..5117a8f 100644
 +    if (!drawable()) return;
 +    const card = deck.cardOf(a), svg = card.querySelector('#' + P(a) + 'Svg');
      const norm = a.norm;
-     let Y = files.map(f=> boxSmooth(f.b, f.a, a.smoothW));
+-    let Y = files.map(f=> boxSmooth(f.b, f.a, a.smoothW));
++    let Y = files.map(f=> smoothedOf(f, a.smoothW));
      // A fresh Plot is built each render, so grab the outgoing view first to keep the
      // current zoom on a resize / tab-switch redraw instead of snapping to full range.
      // (only on the same spectra and the same full range: modcharts setView)
@@ -473,7 +480,25 @@ index b267b08..5117a8f 100644
      const n = Y.length;
      const allB = files.flatMap(f=>f.b);
      // (none: the spectra as they are, each centred in a slot as tall as the largest
-@@ -320,5 +369,16 @@ import { decodeText } from './textdata.js';
+@@ -283,7 +338,7 @@ import { decodeText } from './textdata.js';
+     plot.drawAxes();
+     // The composer gets the CSV's own "Smoothed_" column (smoothedOut): the same numbers
+     // as the export, without the stacking offset.
+-    const sms = files.map(f=> boxSmooth(f.b, f.a, a.smoothW));
++    const sms = files.map(f=> smoothedOf(f, a.smoothW));
+     const out = smoothedOut(sms, norm);
+     Y.forEach((y,k)=> plot.line(files[k].b, y, files[k].color, 1.3, undefined,
+       { raw: { xs: files[k].b, ys: out[k] }, label: files[k].label, key: files[k].name }));
+@@ -300,7 +355,7 @@ import { decodeText } from './textdata.js';
+     return sms.map((sm, k)=>{ const bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP; return sm.map(v=>(v-bg)/div); });
+   }
+   function cardCsv(a){
+-    const sms = files.map(f=> boxSmooth(f.b, f.a, a.smoothW));
++    const sms = files.map(f=> smoothedOf(f, a.smoothW));
+     const out = smoothedOut(sms, a.norm);
+     // (as they are, intensities of any scale keep their digits, as the raw ones: fmtData)
+     const fmt = a.norm==='none' ? fmtData : fmtNum;
+@@ -320,5 +375,16 @@ import { decodeText } from './textdata.js';
  
    // A new project starts with one card.
    deck.start(['spectra']);
@@ -514,16 +539,16 @@ index 648ea10..fb4ddea 100644
    try { const o = JSON.parse(localStorage.getItem(MEM_KEY)); return (o && typeof o === 'object') ? o : {}; }
    catch(e){ return {}; }
 diff --git a/gc.js b/gc.js
-index 8492ab7..19ec084 100644
+index 8492ab7..539f5be 100644
 --- a/gc.js
 +++ b/gc.js
 @@ -1,4 +1,4 @@
 -import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc } from './utils.js';
-+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, fixed } from './utils.js';
++import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
  import { Plot, svgEl } from './plot.js';
  import { cardInfo, fileSafe, nameDownloads } from './cards.js';
  import { moduleKit, wideCsv, isObj, isArr, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
-@@ -7,17 +7,37 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -7,17 +7,45 @@ import { textLines, readTable, parseNum } from './textdata.js';
  
  /* =========================================================
     GC MODULE
@@ -539,6 +564,14 @@ index 8492ab7..19ec084 100644
 +   job that runs on while hidden. API.md says how a module is made so.
  ========================================================= */
 -(function(){
++/* A sample's tables (computeTables: each gas's times, readings, flows and their integral),
++   kept by its first gas's readings (utils.js keeper: while a state, a tab asleep or a
++   history holds the file) under all they are made from: the injections' dates, the gases'
++   readings, the light-on instant, the injection delay and the flow's rate, temperature,
++   pressure and the mass. A tab woken, an undo, a redraw and the CSVs take them as made (to
++   b2v3 every redraw made them again). The integral from the interval's start (FmInt) is
++   the card's own, made at each change of the interval: it lies on a copy. */
++const tablesKept = keeper('gc-tables', 8);
 +// A GC tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 +function createGc({ key, root, layer, shown }){
 +  const $ = id => root.querySelector('#' + id);
@@ -564,7 +597,7 @@ index 8492ab7..19ec084 100644
      dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)) },
      // Every card's per-sample arrays. An excluded file holds its own values; one with none
      // (never so far, or in a card added since) gets the upload defaults.
-@@ -41,11 +61,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -41,11 +69,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
      file: f =>{
        if (!isArr(f.injDates) || !isObj(f.gas)) return null;
        const n = f.injDates.length, ks = Object.keys(f.gas), emptyRows = num(f.emptyRows, 0, v=> v >= 0);
@@ -580,7 +613,7 @@ index 8492ab7..19ec084 100644
        return injDates.length && Object.keys(gas).length ? { ...f, injDates, gas, emptyRows } : null;
      },
      // A project from before the cards had one analysis, its settings at the top level. A
-@@ -54,7 +76,16 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -54,7 +84,16 @@ import { textLines, readTable, parseNum } from './textdata.js';
      // samples as they should be (relink): a project from before them, each file its own.
      restore: (s, gone)=>{ relink(); deck.load(cardList(s.cards, KINDS) || [{ ...s, id: 1, type: 'rate' }],
        src=> ({ init: { ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, without(src[k], gone)])) } }), a=>{ live.get(a.id).restore(a.init); delete a.init; }); },
@@ -598,7 +631,7 @@ index 8492ab7..19ec084 100644
      csv: ()=> cards().flatMap(a=> live.get(a.id).exportEntries(fileSafe(a.name))),
    });
    const { all: allFiles, files } = kit;
-@@ -289,6 +320,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -289,6 +328,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
         apply: any other file's record is as it was.) */
      const rest = rows.length - lost;
      if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` } : null;
@@ -606,7 +639,7 @@ index 8492ab7..19ec084 100644
      return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }) };
    }
    kit.dropText(readGc, ()=> afterFilesChange());
-@@ -302,12 +334,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -302,12 +342,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
    }
  
    // (The alerts are drawn with the list, kit.showFiles: the empty-cell alert follows the files.)
@@ -622,7 +655,7 @@ index 8492ab7..19ec084 100644
      kit.commit();
    }
  
-@@ -427,8 +461,10 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -427,8 +469,10 @@ import { textLines, readTable, parseNum } from './textdata.js';
          <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>${gasPlot(P(a) + 'SvgBar', 'r', { cls: 'plot-wide', csv: 'mean_rates.csv', name: 'GC_results.svg', legend: P(a) + 'BarLegend' })}
          <div id="${P(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
  
@@ -634,7 +667,7 @@ index 8492ab7..19ec084 100644
      // The card's section of the Results, kept in card order under the Results' list.
      const res = document.createElement('div');
      res.className = 'res-an';
-@@ -565,7 +601,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -565,7 +609,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
        });
        html += `</tbody></table></div>`;
        wrap.innerHTML = html;
@@ -643,10 +676,78 @@ index 8492ab7..19ec084 100644
  
        const delayIn = wrap.querySelector('.gcDelay'), delayBox = wrap.querySelector('.gcDelayAuto');
        guardNumericInput(delayIn, { min:0 });
-@@ -744,13 +780,15 @@ import { textLines, readTable, parseNum } from './textdata.js';
-         return {t, gas, name:f.name, label:f.label, color:f.color};
+@@ -712,45 +756,53 @@ import { textLines, readTable, parseNum } from './textdata.js';
+     // folded (nothing in it is drawn), whose Results section is still kept up to date.
+     function computeTables(){
+       dataTables = files.map((f,h)=>{
+-        const lightOn = lightOnDates[h];
+-        const hours = d => (d - lightOn)/3600000;
+-        // The injections in time order; `t`, the sample's times (the light-on instant
+-        // among them), spans the plot's x-range.
+-        const rows = f.injDates.map((d,i)=> ({ d: injectedAt(d), i })).sort((a,b)=>a.d-b.d);
+-        const t = [...rows.map(r=> r.d), lightOn].sort((a,b)=>a-b).map(hours);
+-        // Total molar flow: mL/min -> L/h -> mol/h at the molar volume of the flow's T and p.
+-        const F = qOf(h)/1000*60/molarVolume(tOf(h), pOf(h));
+-        const gas = {};
+-        for (const k in f.gas){
+-          /* Each gas on its own times: the injections it has a value for, with the
+-             light-on instant inserted as an extra point carrying its last reading before
+-             it (zero if the run starts after it). An empty cell is left out of this gas
+-             alone, so its rate, production and mean come from the injections it has; to
+-             v474 it was read as 0 %, which pulled them all down. */
+-          const pts = rows.filter(r=> !noValue(f.gas[k][r.i])).map(r=> ({ d: r.d, v: f.gas[k][r.i] }));
+-          if (!pts.length) continue;
+-          let idxBefore = -1;
+-          for (let i=0;i<pts.length;i++) if (pts[i].d < lightOn) idxBefore = i;
+-          pts.push({ d: lightOn, v: idxBefore<0 ? 0 : pts[idxBefore].v });
+-          pts.sort((a,b)=>a.d-b.d);
+-          const tHours = pts.map(p=> hours(p.d));
+-          const pct = pts.map(p=> p.v);
+-          const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
+-          const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
+-          // From the first injection on; FmInt, from the interval's start (updateRegression).
+-          const cum = cumtrapz(tHours, flowM);
+-          gas[k] = { t: tHours, pct, flow, Fm: flowM, cum, FmInt: cum };
+-        }
+-        return {t, gas, name:f.name, label:f.label, color:f.color};
++        const ks = Object.keys(f.gas), lightOn = lightOnDates[h];
++        const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(f.gas[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), mOf(h)]);
++        const made = tablesKept(ks.length ? f.gas[ks[0]] : null, key, ()=> tablesOf(f, h, lightOn)), gas = {};
++        for (const k in made.gas) gas[k] = { ...made.gas[k], FmInt: made.gas[k].cum };
++        return {t: made.t, gas, name:f.name, label:f.label, color:f.color};
        });
      }
++    function tablesOf(f, h, lightOn){
++      const hours = d => (d - lightOn)/3600000;
++      // The injections in time order; `t`, the sample's times (the light-on instant
++      // among them), spans the plot's x-range.
++      const rows = f.injDates.map((d,i)=> ({ d: injectedAt(d), i })).sort((a,b)=>a.d-b.d);
++      const t = [...rows.map(r=> r.d), lightOn].sort((a,b)=>a-b).map(hours);
++      // Total molar flow: mL/min -> L/h -> mol/h at the molar volume of the flow's T and p.
++      const F = qOf(h)/1000*60/molarVolume(tOf(h), pOf(h));
++      const gas = {};
++      for (const k in f.gas){
++        /* Each gas on its own times: the injections it has a value for, with the
++           light-on instant inserted as an extra point carrying its last reading before
++           it (zero if the run starts after it). An empty cell is left out of this gas
++           alone, so its rate, production and mean come from the injections it has; to
++           v474 it was read as 0 %, which pulled them all down. */
++        const pts = rows.filter(r=> !noValue(f.gas[k][r.i])).map(r=> ({ d: r.d, v: f.gas[k][r.i] }));
++        if (!pts.length) continue;
++        let idxBefore = -1;
++        for (let i=0;i<pts.length;i++) if (pts[i].d < lightOn) idxBefore = i;
++        pts.push({ d: lightOn, v: idxBefore<0 ? 0 : pts[idxBefore].v });
++        pts.sort((a,b)=>a.d-b.d);
++        const tHours = pts.map(p=> hours(p.d));
++        const pct = pts.map(p=> p.v);
++        const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
++        const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
++        // From the first injection on; FmInt, from the interval's start (updateRegression).
++        const cum = cumtrapz(tHours, flowM);
++        gas[k] = { t: tHours, pct, flow, Fm: flowM, cum };
++      }
++      return {t, gas};
++    }
 +    // (its tab not on show: the tables and the rates worked out, the CSVs' and the Results'
 +    // own, and nothing drawn: drawn whole as it is shown)
      function computeAndRenderGc(preserveView){
@@ -660,7 +761,7 @@ index 8492ab7..19ec084 100644
      }
  
      /* The gas selector, rendered into the card and its Results section and driving one
-@@ -924,13 +962,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -924,13 +976,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
      const hasResults = ()=> costResults.some(c=> GASES.some(g=>isFinite(c.rate[g.key])));
      function updateRegression(){
        computeRates();
@@ -677,7 +778,7 @@ index 8492ab7..19ec084 100644
      }
  
      // The interval of sample k as far as a gas's data reach: [start, end] within the first
-@@ -1117,7 +1155,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -1117,7 +1169,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
        clear(){ [ms,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
        unselect(){ gcSel = gcHov = null; },
        // (a file's sample changed: the bars alone are per sample)
@@ -686,7 +787,7 @@ index 8492ab7..19ec084 100644
        renderTable: renderGcParamTable,
        compute: computeAndRenderGc,
        // A folded card draws nothing; its Results section is drawn all the same.
-@@ -1126,7 +1164,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -1126,7 +1178,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
          computeTables(); renderGasSel(); computeRates();
          res.style.display = hasResults() ? '' : 'none';
          syncResults();
@@ -695,7 +796,7 @@ index 8492ab7..19ec084 100644
          $('ResLegend').innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
        },
        hasResults: ()=> res.style.display !== 'none',
-@@ -1188,13 +1226,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -1188,13 +1240,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
    const T_TITLE = 'the temperature at which the flow Q is measured — for a mass-flow controller, the reference temperature of its standard units (often 0 °C or 20 °C: see its datasheet), not the temperature of its body';
    const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar: see its datasheet); for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
    const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, by that file's name (a label renamed changes nothing); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
@@ -711,7 +812,7 @@ index 8492ab7..19ec084 100644
      cards().forEach(a=>{ const c = live.get(a.id); if (c) c.res.classList.toggle('is-first', a === on[0]); });
    }
    function named(a){
-@@ -1225,4 +1263,16 @@ import { textLines, readTable, parseNum } from './textdata.js';
+@@ -1225,4 +1277,16 @@ import { textLines, readTable, parseNum } from './textdata.js';
  
    // A new project starts with one card.
    deck.start(['rate']);
@@ -1098,16 +1199,16 @@ index ee1b170..c0152a0 100644
      self.postMessage(err instanceof SemReadError ? { seq, error: err.message } : { seq, fault: String(err && err.message || err), kind: err && err.name });
    }
 diff --git a/sem.js b/sem.js
-index e6f92f1..e423c95 100644
+index e6f92f1..d1d573c 100644
 --- a/sem.js
 +++ b/sem.js
 @@ -1,4 +1,4 @@
 -import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, flashFieldInvalid } from './utils.js';
-+import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid } from './utils.js';
++import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept } from './utils.js';
  import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
  
  /* =========================================================
-@@ -7,18 +7,236 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -7,18 +7,248 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
     a rectangle in the original's pixels, inside the image (the info bar is never in
     it); the image itself is never changed.
  
@@ -1159,27 +1260,40 @@ index e6f92f1..e423c95 100644
 +   history's, woken: a copy of the one it held, db.js load) is the one kept where none
 +   is. Its last RawRef gone (gone), its image at full size goes; what else it is made into
 +   (imgs: its header, reduced copy and card, no bytes, some 0.15 MB an image of 2048²)
-+   stays, for the files so let go last, ORPHAN_BYTES at most: a tab asleep's (its bytes let
-+   go, tabs.js lighten), which, woken, draws its thumbnails and cards from them without
-+   making them again (measure/wake-sem.mjs, 20 tabs of 8 images 2048 × 2176: woken in
-+   0.30–0.56 s, the longest task 56–118 ms; where they were made again, 0.67–0.93 s and
-+   368–551 ms). Its statistics and curves go with them, if their caches still hold them. */
++   stays while a tab asleep holds the file (heldAsleep: its state or history names it, its
++   bytes let go, tabs.js lighten), which, woken, draws its thumbnails and cards from them
++   without making them again (measure/wake-sem.mjs, 20 tabs of 8 images 2048 × 2176: woken
++   in 0.30–0.56 s, the longest task 56–118 ms; where they were made again, 0.67–0.93 s and
++   368–551 ms), and goes with the last tab asleep that holds it (woken, its RawRef holds it
++   again; closed). To b2v3 it stayed for the files let go last, 32 MB at most: past some
++   26 tabs asleep of 8 such images, the first put to sleep made theirs again. Its
++   statistics and curves go with them, if their caches still hold them. */
 +const raws = new Map();   // id → WeakRef of the RawRef of its bytes
-+const ORPHAN_BYTES = 32*2**20, orphans = new Set();   // (the files let go, oldest first)
-+const madeSize = e => e ? (e.small ? e.small.px.byteLength : 0) + (e.card ? e.card.px.byteLength : 0) : 0;
++const alive = id =>{ const w = raws.get(id); return !!(w && w.deref()); };
++// The files of each tab asleep, by its key (registerModule's asleep, from tabs.js): the ids
++// of every RawRef (or its copy, its bytes a reference) its state and history hold.
++const asleepIds = new Map();
++const heldAsleep = id =>{ for (const s of asleepIds.values()) if (s.has(id)) return true; return false; };
++function idsIn(v, out = new Set(), seen = new Set()){
++  if (!v || typeof v !== 'object' || ArrayBuffer.isView(v) || seen.has(v)) return out;
++  seen.add(v);
++  if (typeof v.id === 'string' && 'bytes' in v) out.add(v.id);
++  else for (const k in v) idsIn(v[k], out, seen);
++  return out;
++}
++function madeGone(id){
++  imgs.delete(id);
++  for (const m of [statsCache, lutCache]) for (const k of [...m.keys()]) if (k.startsWith(id + '|')) m.delete(k);
++}
++function asleepHolds(key, v){
++  const was = asleepIds.get(key);
++  if (v) asleepIds.set(key, idsIn(v)); else asleepIds.delete(key);
++  if (was) for (const id of was) if (!alive(id) && !heldAsleep(id)) madeGone(id);
++}
 +const gone = typeof FinalizationRegistry === 'function' ? new FinalizationRegistry(id =>{
-+  const w = raws.get(id);
-+  if (w && w.deref()) return;   // (made again since)
++  if (alive(id)) return;   // (made again since)
 +  raws.delete(id); full.delete(id);
-+  orphans.delete(id); orphans.add(id);
-+  let n = 0;
-+  for (const o of orphans) n += madeSize(imgs.get(o));
-+  for (const o of orphans){
-+    if (n <= ORPHAN_BYTES) break;
-+    n -= madeSize(imgs.get(o));
-+    orphans.delete(o); imgs.delete(o);
-+    for (const m of [statsCache, lutCache]) for (const k of [...m.keys()]) if (k.startsWith(o + '|')) m.delete(k);
-+  }
++  if (!heldAsleep(id)) madeGone(id);
 +}) : null;
 +function sameBytes(a, b){
 +  if (a === b) return true;
@@ -1193,7 +1307,7 @@ index e6f92f1..e423c95 100644
 +  const w = raws.get(id), had = w && w.deref();
 +  if (had && (had === r0 || sameBytes(had.bytes, bytes))) return had;
 +  const r = r0 instanceof RawRef && r0.id === id && r0.bytes === bytes ? r0 : new RawRef(id, bytes);
-+  if (typeof WeakRef === 'function' && !had){ raws.set(id, new WeakRef(r)); orphans.delete(id); if (gone) gone.register(r, id); }
++  if (typeof WeakRef === 'function' && !had){ raws.set(id, new WeakRef(r)); if (gone) gone.register(r, id); }
 +  return r;
 +}
 +
@@ -1201,9 +1315,9 @@ index e6f92f1..e423c95 100644
 +   imgs: id → { r (readTescanTiff's header: its numbers and warning, no pixels), small
 +   (sem-read.js reducedCopy, some 160 px across, for the thumbnails), card (its group
 +   card's levels last made, sem-read.js cardLevels) }, null where its bytes do not read:
-+   some 0.15 MB an image of 2048², kept while the file is held and a while after (gone;
-+   the last 512 at most), so that a tab woken draws its thumbnails without reading its
-+   images whole.
++   some 0.15 MB an image of 2048², kept while the file is held, by a tab awake or asleep
++   (gone), so that a tab woken draws its thumbnails without reading its images whole (to
++   b2v3 the last 512 at most).
 +   full: id → { px (its levels at full size), size (bytes beyond its file's: none for a
 +   view of them), used }. For a file of 16 bits in this machine's order (Tescan's) the
 +   levels are a view of its bytes, made at once and costing nothing (sem-read.js view);
@@ -1225,7 +1339,6 @@ index e6f92f1..e423c95 100644
 +    try { r = f.raw.bytes ? readTescanTiff(f.raw.bytes, f.name, { head: true }) : null; } catch(err){ r = null; }
 +    e = r && { r, small: null, card: null };
 +    imgs.set(id, e);
-+    if (imgs.size > 512) imgs.delete(imgs.keys().next().value);
 +  }
 +  return e;
 +}
@@ -1247,7 +1360,7 @@ index e6f92f1..e423c95 100644
 +function decoded(f){ const r = info(f), px = r && pixelsOf(f); return px ? { ...r, pixels: px } : null; }
 +function smallOf(f){
 +  const e = imgOf(f);
-+  if (e && !e.small){ const d = decoded(f); if (d) e.small = reducedCopy(d); }
++  if (e && !e.small){ const d = decoded(f); if (d){ e.small = reducedCopy(d); kept.made['sem-reduced'] = (kept.made['sem-reduced'] || 0) + 1; } }
 +  return e && e.small;
 +}
 +// A file read: what the reading made of it, kept.
@@ -1355,7 +1468,7 @@ index e6f92f1..e423c95 100644
    const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
    // On the page: d significant digits, the point as a point (fmtNum, with the CSV's
    // decimal separator and fixed decimals, is for the export).
-@@ -27,12 +245,9 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -27,12 +257,9 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    const MIN_CROP = 64;
    // The crop's width:height when locked.
    const ASPECTS = { '1:1': 1, '4:3': 4/3, '3:2': 3/2, free: null };
@@ -1371,7 +1484,7 @@ index e6f92f1..e423c95 100644
  
    /* ---- State ----
       allFiles: every image in list order, { name (the file's), label (the sample's,
-@@ -49,79 +264,11 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -49,79 +276,11 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // Each group's figure settings (sem-figure.js), by the group's id; a group has none
    // until its figure is first opened.
    let figures = {};
@@ -1456,7 +1569,7 @@ index e6f92f1..e423c95 100644
  
    /* ---- Intensity ----
       Each image's grey levels go through one curve, a table of its 65536 levels:
-@@ -153,21 +300,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -153,21 +312,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // An image that is the reference of settings in use (all groups', or a group's own)
    // that use one (marked ◎ on its thumbnail).
    const isRef = f => [intensity, ...Object.values(groupInt)].some(I=> usesRef(I) && refFile(I) === f);
@@ -1479,7 +1592,7 @@ index e6f92f1..e423c95 100644
    // The level below which a share q of the crop's pixels lie.
    function levelAt(st, q){
      const t = q*st.n; let acc = 0;
-@@ -206,8 +339,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -206,8 +351,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    /* The whole curve of an image, as the 8-bit grey of each of its levels: made once for
       what it is made from (lutKey: its crop's statistics, the reference's, the settings,
       its correction) and kept, the last ones made (to v487 made three or four times an
@@ -1490,7 +1603,7 @@ index e6f92f1..e423c95 100644
    function lutKey(f){
      const I = intOf(f), a = f.adj || ADJ_DEF, c = f.crop, rf = usesRef(I) ? refFile(I) : null;
      return `${f.raw.id}|${I.mode === 'none' ? '' : `${c.x},${c.y},${c.w},${c.h}`}|${I.mode}|${I.mode === 'percentile' ? `${I.pLo},${I.pHi}` : ''}|`
-@@ -215,12 +348,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -215,12 +360,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    }
    function lutOf(f){
      const key = lutKey(f);
@@ -1505,7 +1618,7 @@ index e6f92f1..e423c95 100644
      return lut;
    }
    function makeLut(f){
-@@ -323,7 +456,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -323,7 +468,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      if (now.bad || now.dup.length || now.warn.length) alertsOf.set(line, now);
      if (alertsOf.size > 32) alertsOf.delete(alertsOf.keys().next().value);
    }
@@ -1514,7 +1627,7 @@ index e6f92f1..e423c95 100644
      const btn = e.target.closest('[data-action]');
      if (!btn) return;
      if (btn.dataset.action === 'sem-dismiss-invalid'){ setAlerts({ bad: null }); rebuildAlerts(); }
-@@ -334,7 +467,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -334,7 +479,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      const here = new Set(allFiles.map(f=> f.raw.id)), A = alerts();
      const dup = A.dup.filter(a=> here.has(a.id)), warn = A.warn.filter(a=> here.has(a.id));
      const bad = A.bad && (A.bad.ids.length ? A.bad.ids.some(id=> here.has(id)) : !here.size);
@@ -1523,7 +1636,7 @@ index e6f92f1..e423c95 100644
        + (dup.length ? buildAlertsHtml([], dup.map(a=> a.html), 'Already loaded:', '', 'sem-dismiss-upload') : '')
        + (warn.length ? buildAlertsHtml([], warn.map(a=> a.html), 'Loaded, but check:', '', 'sem-dismiss-warn') : '');
    }
-@@ -345,72 +478,40 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -345,72 +490,40 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    }
  
    /* ---- Loading ----
@@ -1618,7 +1731,7 @@ index e6f92f1..e423c95 100644
      return drained(queue);
    });
    async function loadFiles(list){
-@@ -422,18 +523,19 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -422,18 +535,19 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
          // A .hdr beside its .tif says what the TIFF carries already.
          if (ext === 'hdr') continue;
          if (ext !== 'tif' && ext !== 'tiff'){ bad.push(`${esc(file.name)} — not a TIFF`); continue; }
@@ -1641,7 +1754,7 @@ index e6f92f1..e423c95 100644
        }
      } finally { if (loading === job) loading = null; hist.release(mark); }
      // The files read join the list as it is now, one step (an undo meanwhile may have put
-@@ -445,8 +547,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -445,8 +559,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    }
  
    /* ---- File list ---- */
@@ -1652,7 +1765,7 @@ index e6f92f1..e423c95 100644
    function fileCallbacks(){
      return {
        onRemove(i){ const f = allFiles[i]; removeFileAt(allFiles, i, []); if (f) dropAlertsOf(f.raw.id); afterFilesChange(); },
-@@ -472,13 +574,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -472,13 +586,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    function filesChanged(){
      files = includedOf(allFiles);
      cur = Math.min(cur, Math.max(0, files.length - 1));
@@ -1673,7 +1786,7 @@ index e6f92f1..e423c95 100644
      scheduleEvict();
    }
  
-@@ -495,8 +600,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -495,8 +612,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
       saved key). What it holds is taken as the module would have made it, whatever the
       project says (a project file edited by hand or damaged): to v487 a crop, an index or a
       setting that was not a number went in as it was, and the views drew NaN.
@@ -1686,7 +1799,7 @@ index e6f92f1..e423c95 100644
         crop whole pixels inside the image, at least MIN_CROP a side, else the default
         one; its ratio one of the locks; its correction within the fields' ranges; its
         Default boxes ticked only where the crop and correction are the defaults;
-@@ -535,11 +642,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -535,11 +654,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      for (const f0 of Array.isArray(s.files) ? s.files : []){
        if (!isObj(f0)) continue;
        const name = str(f0.name, 'image'), raw0 = f0.raw;
@@ -1706,7 +1819,7 @@ index e6f92f1..e423c95 100644
        const r = info(f);
        if (!r){ lost.push(name); continue; }
        seen.add(id);
-@@ -603,6 +715,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -603,6 +727,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      renderQueued = true;
      queueMicrotask(()=>{
        renderQueued = false;
@@ -1715,7 +1828,7 @@ index e6f92f1..e423c95 100644
        const top = hist.states[hist.index], L = top && lineOf.get(top);
        if (L != null && L !== line){
          const bad = alerts().bad;
-@@ -615,12 +729,22 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -615,12 +741,22 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
        if (figApi && figApi.open) figApi.refresh();
      });
    }
@@ -1740,7 +1853,7 @@ index e6f92f1..e423c95 100644
      renderNav(); renderInfo(); renderFields(); fitWork(); renderThumbs();
      loadEditorImage(); fitView(); drawEditor();
      renderIntensity(); renderGroups();
-@@ -629,19 +753,20 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -629,19 +765,20 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // view of the images drawn again, each image's only where what it is drawn from has
    // changed (thumbOf, cardOf, loadEditorImage).
    function refreshLevels(){
@@ -1767,7 +1880,7 @@ index e6f92f1..e423c95 100644
      // Pixels made square (sem-read.js squarePixels): the image as it is now, and as acquired.
      const rows = [
        ['Image', `${r.width} × ${r.imageH} px${q ? `, ${q.width} × ${q.imageH} px as acquired` : ''}${r.strip ? ` (info bar of ${r.strip} rows left out)` : ''}`],
-@@ -664,10 +789,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -664,10 +801,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      const f = files[cur], e = f && info(f);
      if (!e) return;
      const c = f.crop;
@@ -1781,7 +1894,7 @@ index e6f92f1..e423c95 100644
      renderInfo();
    }
    // Every included image with its crop drawn on it; a press shows it in the editor, its
-@@ -676,23 +801,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -676,23 +813,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // An image's thumbnail: its reduced copy through its curve, its crop drawn on it.
    // Drawn again only when its curve or its crop has changed (to v487 every one of them
    // at every edit); the same canvas otherwise, put in the new row.
@@ -1815,7 +1928,7 @@ index e6f92f1..e423c95 100644
        const wrap = document.createElement('div');
        wrap.className = 'sem-thumb-wrap';
        const b = document.createElement('button');
-@@ -716,7 +843,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -716,7 +855,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
        box.appendChild(wrap);
      });
    }
@@ -1824,7 +1937,7 @@ index e6f92f1..e423c95 100644
      const ln = e.target.closest('.sem-link');
      if (ln){ setLinked(files[+ln.dataset.link], !files[+ln.dataset.link].linked); return; }
      const b = e.target.closest('.sem-thumb'); if (!b) return;
-@@ -727,8 +854,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -727,8 +866,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      cur = (i + files.length) % files.length;
      renderAll();
    }
@@ -1835,7 +1948,7 @@ index e6f92f1..e423c95 100644
  
    /* ---- The crop editor ----
       The image drawn into a canvas with the view (scale s in CSS px a pixel, and the
-@@ -737,19 +864,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -737,19 +876,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
       wheel zooms about the pointer, a double click outside the crop fits the image. */
    const view = { s: 1, ox: 0, oy: 0 };
    // The current image at full size through its curve, made again when the image or its
@@ -1867,7 +1980,7 @@ index e6f92f1..e423c95 100644
    // The pane's size: as wide as its column, as tall as the image at that width, at
    // most 70 % of the window's height.
    function paneSize(){
-@@ -864,14 +997,14 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -864,14 +1009,14 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    let tool = null, drag = null, zoomBox = null;
    function setTool(t){
      tool = t;
@@ -1887,7 +2000,7 @@ index e6f92f1..e423c95 100644
    host.addEventListener('pointerdown', e=>{
      if (e.button !== 0 || !files.length) return;
      const b = canvas.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
-@@ -955,7 +1088,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -955,7 +1100,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
  
    /* ---- Fields ---- */
    ['X', 'Y', 'W', 'H'].forEach(K=>{
@@ -1896,7 +2009,7 @@ index e6f92f1..e423c95 100644
      el.addEventListener('keydown', e=>{ if (e.key === 'Enter') el.blur(); });
      el.addEventListener('change', ()=>{
        const f = files[cur]; if (!f) return;
-@@ -973,7 +1106,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -973,7 +1118,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      });
    });
    // A new ratio keeps the crop's width and middle where it can, else its height.
@@ -1905,7 +2018,7 @@ index e6f92f1..e423c95 100644
      const f = files[cur]; if (!f) return;
      const r = info(f), ar = ASPECTS[e.target.value], c = f.crop;
      f.aspect = e.target.value;
-@@ -988,7 +1121,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -988,7 +1133,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    });
    // Default: the whole image less its bar, its fields locked; unticked, the fields open
    // on it.
@@ -1914,7 +2027,7 @@ index e6f92f1..e423c95 100644
      const f = files[cur]; if (!f) return;
      f.cropDef = e.target.checked;
      if (f.cropDef){ const r = info(f); f.crop = defaultCrop(r); f.aspect = aspectOf(f.crop.w, f.crop.h); f.clamped = false; }
-@@ -1009,7 +1142,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1009,7 +1154,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // Link all: the images the selector chose, around the crop of the one in the editor
    // (it leads); all of them linked already, it unlinks them.
    const scopeFiles = ()=>{ const sc = scopeOf(); return files.filter(f=> sc === 'all' || (groupOf(f) && groupOf(f).id === sc)); };
@@ -1923,7 +2036,7 @@ index e6f92f1..e423c95 100644
      const f = files[cur], fs = scopeFiles(); if (!f || !fs.length) return;
      if (fs.every(g=> g.linked)) fs.forEach(g=>{ g.linked = false; g.clamped = false; });
      else {
-@@ -1022,7 +1155,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1022,7 +1167,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      hist.commit();
    });
    function renderLinkAll(){
@@ -1932,7 +2045,7 @@ index e6f92f1..e423c95 100644
      b.textContent = fs.length && fs.every(g=> g.linked) ? 'Unlink all' : 'Link all';
    }
  
-@@ -1112,30 +1245,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1112,30 +1257,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // An image as the figure will take it, through its curve, at the figure's pixels or
    // brought down to `fit` px across.
    function outCanvas(f, fit){
@@ -1956,7 +2069,7 @@ index e6f92f1..e423c95 100644
 +    const o = outOf(f), e = o && imgOf(f);
      if (!e) return null;
 -    const C = e.card, L = C && C.pk === cardKey(o.c, o.w, o.h).pk ? C : cardLevels(e.r, o.c, o.w, o.h), key = `${L.pk}|${lutKey(f)}`;
-+    if (!(e.card && e.card.pk === cardKey(o.c, o.w, o.h).pk)){ const d = decoded(f); if (!d) return null; e.card = cardLevels(d, o.c, o.w, o.h); }
++    if (!(e.card && e.card.pk === cardKey(o.c, o.w, o.h).pk)){ const d = decoded(f); if (!d) return null; e.card = cardLevels(d, o.c, o.w, o.h); kept.made['sem-card'] = (kept.made['sem-card'] || 0) + 1; }
 +    const L = e.card, key = `${L.pk}|${lutKey(f)}`, C = cardsCv.get(f.raw.id);
      if (C && C.key === key) return C.cv;
 -    e.card = { ...L, key, cv: toCanvas(L.px, L.w, 0, 0, L.w, L.h, lutOf(f)) };
@@ -1974,7 +2087,7 @@ index e6f92f1..e423c95 100644
    function fitGroupName(el){
      // Its room: the head's width less the scale and the figure's button beside it.
      const acts = el.parentElement.querySelector('.sem-group-acts'), cs = getComputedStyle(el);
-@@ -1146,7 +1281,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1146,7 +1293,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      el.style.width = Math.min(nameCtx.measureText(el.value || el.placeholder).width + 24, room + 10) + 'px';
    }
    function renderGroups(){
@@ -1984,7 +2097,7 @@ index e6f92f1..e423c95 100644
      if (!box || !files.length) return;
      box.innerHTML = groups.map(g=>{
        const mem = g.members.map(byId).filter(m=> m && inFigure(m));
-@@ -1185,7 +1321,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1185,7 +1333,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // must not change the height.
    let groupFull = null;
    function sizeGroups(){
@@ -1993,7 +2106,7 @@ index e6f92f1..e423c95 100644
      if (!g || !box.clientWidth) return;
      const main = document.querySelector('main'), mcs = getComputedStyle(main);
      const pad = parseFloat(mcs.paddingLeft) + parseFloat(mcs.paddingRight);
-@@ -1209,12 +1345,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1209,12 +1357,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      strip.querySelector('.sem-page-prev').hidden = !(more > 1 && row.scrollLeft > 1);
      strip.querySelector('.sem-page-next').hidden = !(more > 1 && row.scrollLeft < more - 1);
    }
@@ -2008,7 +2121,7 @@ index e6f92f1..e423c95 100644
      if (!work || !work.offsetWidth) return;
      const was = work.classList.contains('sem-stacked');
      work.classList.remove('sem-stacked');
-@@ -1223,7 +1359,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1223,7 +1371,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      // The editor and the histogram are sized to their column: redrawn when it changes.
      if (cut !== was && files.length){ fitView(); drawEditor(); drawHist(); }
    }
@@ -2017,7 +2130,7 @@ index e6f92f1..e423c95 100644
    groupsBox.addEventListener('input', e=>{ if (e.target.classList.contains('sem-group-name')) fitGroupName(e.target); });
    groupsBox.addEventListener('change', e=>{
      const t = e.target;
-@@ -1263,7 +1399,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1263,7 +1411,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      groupsChanged();
    }
    // + Group: an empty group, to drag images into.
@@ -2026,7 +2139,7 @@ index e6f92f1..e423c95 100644
      groups.push({ id: newGroupId(), name: 'New group', named: false, mode: 'common', members: [], keep: true });
      groupsChanged();
    });
-@@ -1291,7 +1427,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1291,7 +1439,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
        if (moved < 5) return;
        const pic = gdrag.card.querySelector('canvas'), g = document.createElement('canvas');
        g.width = pic.width; g.height = pic.height; g.getContext('2d').drawImage(pic, 0, 0);
@@ -2035,7 +2148,7 @@ index e6f92f1..e423c95 100644
        gdrag.ghost = g; gdrag.card.classList.add('is-dragged');
      }
      gdrag.ghost.style.left = e.clientX + 'px'; gdrag.ghost.style.top = e.clientY + 'px';
-@@ -1323,7 +1459,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1323,7 +1471,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    groupsBox.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.classList.contains('sem-group-name')) e.target.blur(); });
    // Reset: the groups made again from the pixel sizes. A group made again with the same
    // images keeps its figure and its intensity.
@@ -2044,7 +2157,7 @@ index e6f92f1..e423c95 100644
      const key = g => g.members.slice().sort().join('|');
      const oldFig = new Map(groups.map(g=> [key(g), figures[g.id]])), oldInt = new Map(groups.map(g=> [key(g), groupInt[g.id]]));
      groups = [];
-@@ -1368,7 +1504,6 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1368,7 +1516,6 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    }
  
    /* ---- Intensity (the Crop and intensity card) ---- */
@@ -2052,7 +2165,7 @@ index e6f92f1..e423c95 100644
    // The fields, with the range each takes; a value outside it is refused (the field
    // shakes and shows the last good one).
    const INT_FIELDS = { semPLo: ['pLo', 0, 49.9], semPHi: ['pHi', 50.1, 100], semB: ['b', -100, 100], semC: ['c', 0.05, 20], semG: ['g', 0.05, 20] };
-@@ -1430,8 +1565,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1430,8 +1577,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // The crop's histogram (256 bins, heights as the square root of the counts), the
    // curve over it (level → grey), and where a linear normalisation puts black and white.
    function drawHist(){
@@ -2063,7 +2176,7 @@ index e6f92f1..e423c95 100644
      const dpr = window.devicePixelRatio || 1, w = box.clientWidth, h = box.clientHeight;
      cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
      const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-@@ -1493,15 +1628,15 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1493,15 +1640,15 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    });
  
    /* ---- CSV: each image's metadata and crop ---- */
@@ -2082,7 +2195,7 @@ index e6f92f1..e423c95 100644
        // The curve as applied: the levels a linear normalisation takes to black and white
        // (none for the histogram's), and brightness, contrast and gamma with the image's
        // correction in them.
-@@ -1516,4 +1651,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1516,4 +1663,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      });
      return [{ name: 'sem_images.csv', text: t }];
    });
@@ -2115,9 +2228,9 @@ index e6f92f1..e423c95 100644
 +    },
 +  };
 +}
-+registerModule('sem', createSem, { dropBytes: true });
++registerModule('sem', createSem, { dropBytes: true, asleep: asleepHolds });
 diff --git a/sessions.js b/sessions.js
-index 4fb1645..d118f3c 100644
+index 4fb1645..58f3ad9 100644
 --- a/sessions.js
 +++ b/sessions.js
 @@ -7,14 +7,15 @@
@@ -2129,7 +2242,7 @@ index 4fb1645..d118f3c 100644
 -         moduleBusy } from './utils.js';
 -import { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject, uid, encode, park, decode,
 +import { MODULES, MODULE_LABELS, esc, moduleStateKey, getModuleState,
-+         moduleHasData, runCsvExport, runWithModuleState, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, onSectionChange,
++         moduleHasData, runCsvExport, X_SVG, confirmBanner, normalizeProjIcons, refreshProjBar, onSectionChange,
 +         moduleBusy, onAnyChange, withState } from './utils.js';
 +import { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject, uid, encode, decode,
           hydrate, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed } from './db.js';
@@ -2453,7 +2566,7 @@ index 4fb1645..d118f3c 100644
  
  /* ---- The single project bar ----
     One bar serves every module: only one tab is live, so its selectors (name field,
-@@ -740,7 +759,7 @@ onTabActivated(tab=>{
+@@ -740,16 +759,20 @@ onTabActivated(tab=>{
    const inp = nameInput(mod);
    if (inp) inp.value = tab.title || '';
    for (const id of _savedRead.keys()) if (id !== tab.id) _savedRead.delete(id);
@@ -2462,16 +2575,50 @@ index 4fb1645..d118f3c 100644
    else {
      restoreSaveBtns(mod); setSaveDirtyIcon(mod, !!tab.projectId && tab.dirty);
      // A tab that came back with unsaved changes (a reload): what was saved is the
-@@ -769,7 +788,7 @@ onSectionChange(tab=>{
+-    // project's record, read into the module and out again without touching it.
+-    if (tab.projectId && !_savedKey.has(tab.id) && !_savedRead.has(tab.id)) readProject(tab.projectId).then(got=>{
+-      if (!got || !got.rec.state || _savedKey.has(tab.id) || activeTab() !== tab) return;
+-      _savedRead.set(tab.id, { state: got.state, title: got.rec.title || '' });
+-      takeSavedKey(tab);
+-    }).catch(()=>{});
++    // project's record, read into the module and out again without touching it (the read
++    // going on, _savedReading: the tab's load waits for it under the loader, onTabLoaded).
++    if (tab.projectId && !_savedKey.has(tab.id) && !_savedRead.has(tab.id) && !_savedReading.has(tab.id)){
++      const p = readProject(tab.projectId).then(got=>{
++        if (!got || !got.rec.state || _savedKey.has(tab.id) || activeTab() !== tab) return;
++        _savedRead.set(tab.id, { state: got.state, title: got.rec.title || '' });
++        takeSavedKey(tab);
++      }).catch(()=>{}).finally(()=> _savedReading.delete(tab.id));
++      _savedReading.set(tab.id, p);
++    }
+   }
+   refreshProjBar(mod);
+   normalizeProjIcons(mod);
+@@ -767,28 +790,34 @@ onSectionChange(tab=>{
+   }
+ });
  // A saved, unchanged tab is what was saved: once its state is live, that is what later
- // changes are compared with.
+-// changes are compared with.
++// changes are compared with. One changed whose saved record is being read: the read, which
++// its load waits for, the loader on (tabs.js), so that its key is taken there.
++const _savedReading = new Map();   // tab id → the read of its saved record going on
  onTabLoaded(tab=>{
 -  if (tab.projectId && !tab.dirty) _savedKey.set(tab.id, { key: stateKey(tab.module), title: tab.title || '' });
+-  else takeSavedKey(tab);
 +  if (tab.projectId && !tab.dirty) _savedKey.set(tab.id, { key: stateKey(tab), title: tab.title || '' });
-   else takeSavedKey(tab);
++  else { takeSavedKey(tab); return _savedReading.get(tab.id); }
  });
  /* The saved record of a tab that came back with unsaved changes is read with its files'
-@@ -780,15 +799,15 @@ function takeSavedKey(tab){
+    bytes (v517: to v516 the list's copy held them, and the key was taken at once), and its
+-   key taken only while that tab is live and no job runs in its module: else at its next
+-   load. Until then a change is unsaved, as one made before the list was read. */
++   key taken once that tab is live and no job runs in its module: else at its next load.
++   Until then a change is unsaved, as one made before the list was read. The key is a
++   state's as its module gives it back: of a module made per tab, read out of an instance
++   of its own, which draws nothing (utils.js withState; to b2v3 the tab's own, which drew
++   the saved state and its own again after a reload, 0.47 s for an XRPD tab of 12 refined
++   patterns, the loader gone); of one that is not, its one instance's, as in v517. */
+ function takeSavedKey(tab){
    const r = _savedRead.get(tab.id);
    if (!r) return;
    if (_savedKey.has(tab.id) || !tabById(tab.id)){ _savedRead.delete(tab.id); return; }
@@ -2480,7 +2627,7 @@ index 4fb1645..d118f3c 100644
    _savedRead.delete(tab.id);
    let key = null;
 -  try { runWithModuleState(tab.module, decode(r.state), ()=>{ key = stateKey(tab.module); }); } catch(e){}
-+  try { runWithModuleState(keyOf(tab), decode(r.state), ()=>{ key = stateKey(tab); }); } catch(e){}
++  try { key = withState(tab.module, decode(r.state), k=> moduleStateKey(k)); } catch(e){}
    if (key) _savedKey.set(tab.id, { key, title: r.title });
  }
  // Closing a tab may offer to save it first; the tab manager has no access to the
@@ -2490,7 +2637,7 @@ index 4fb1645..d118f3c 100644
  
  initTabs();
  // The bytes no record holds any more, a while after the page loads (v517); what the
-@@ -803,7 +822,11 @@ onDbClosed(()=> notice('DataTreat was updated in another window: reload this one
+@@ -803,7 +832,11 @@ onDbClosed(()=> notice('DataTreat was updated in another window: reload this one
  // desktop⇄mobile switch reloads the page, tab close, refresh) so changes made in
  // the last few seconds aren't lost to the debounce. Best-effort: visibilitychange
  // (hidden) fires early enough for IndexedDB to commit; pagehide is the backstop.
@@ -2530,10 +2677,10 @@ index 982d8d5..046f0bc 100644
    './xrd-cryst.js',
    './xrd-instr.js',
 diff --git a/tabs.js b/tabs.js
-index 7eb3489..4c1d815 100644
+index 7eb3489..eaf344d 100644
 --- a/tabs.js
 +++ b/tabs.js
-@@ -4,34 +4,64 @@
+@@ -4,34 +4,65 @@
     style. A tab is a project, and its technique is just the page it shows, so any
     number of projects can be open at once, several on the same technique.
  
@@ -2567,7 +2714,7 @@ index 7eb3489..4c1d815 100644
 -         onSectionChange, moduleBusy, stopModule } from './utils.js';
 -import { allTabStates, putTabRec, deleteTabRec, uid, encode, park, decode } from './db.js';
 +         onSectionChange, moduleBusy, stopModule, isFactory, makeInstance, attachInstance,
-+         detachInstance, dropKey, settings, saveSettings, onBusyChange, dropsBytes, vacate } from './utils.js';
++         detachInstance, dropKey, settings, saveSettings, onBusyChange, onAnyChange, dropsBytes, asleep, vacate } from './utils.js';
 +import { allTabStates, putTabRec, deleteTabRec, uid, encode, park, decode, unload, load, unread, refsIn } from './db.js';
  
 -const MAX_TABS = 20;
@@ -2596,7 +2743,7 @@ index 7eb3489..4c1d815 100644
 -   tab's live state is the module itself. `state` is park's form (db.js): its files'
 -   bytes the module's own arrays, read back from the store before a tab is made of a
 -   record (v517). */
-+/* A tab: { id, module, title, projectId, dirty, state, hist, inst, hidAt, seenAt }
++/* A tab: { id, module, title, projectId, dirty, state, hist, inst, hidAt, seenAt, view, changed }
 +   `state` / `hist` are only meaningful while the tab is NOT live — a live tab's state is
 +   its instance's (`inst`, a module made per tab) or its module's (one not). `state` is
 +   park's form (db.js): its files' bytes the module's own arrays, read back from the store
@@ -2605,14 +2752,15 @@ index 7eb3489..4c1d815 100644
 +   awake tab was last left (its time hidden, for its sleep; a busy one's moved on to its
 +   job's end), 0 while it is on show; `seenAt`: when it was last on show (the tabs awake
 +   past the limit, the least lately first); `waking`, the read of a wake going on ({ st,
-+   h, p }: wakeLater). */
++   h, p }: wakeLater); `view`, the window it was left at, and `changed`, its history changed
++   since (a job's results): an awake tab to draw again as it is shown (redrawn). */
  const TABS = [];
 -let _activeId = null;      // the tab whose state is live in its module
 +let _activeId = null;      // the tab on show (or that a fixed section came over)
  let _onFixed = true;       // a fixed section (home / projects / settings) is showing
  let _restoring = false;    // true while replaying persisted tabs at startup
  
-@@ -40,6 +70,22 @@ const activeTab = ()=> tabById(_activeId);
+@@ -40,6 +71,22 @@ const activeTab = ()=> tabById(_activeId);
  const tabIndex = id => TABS.findIndex(t=> t.id === id);
  const tabByProject = pid => (pid ? TABS.find(t=> t.projectId === pid) || null : null);
  const isRestoring = ()=> _restoring;
@@ -2635,7 +2783,7 @@ index 7eb3489..4c1d815 100644
  
  /* ---- Naming ---------------------------------------------------------------
     New tabs are called "Untitled project", numbered per technique so three new GC
-@@ -53,46 +99,60 @@ function untitledName(module){
+@@ -53,46 +100,60 @@ function untitledName(module){
  
  /* ---- Persistence ----------------------------------------------------------
     Every open tab is stored, saved or not: on the next load the app comes back
@@ -2711,7 +2859,7 @@ index 7eb3489..4c1d815 100644
    const st = t.state || DEFAULT_STATE[t.module];
    let hist = t.hist;
    try { if (st != null) restoreModuleState(t.module, decode(st)); }
-@@ -102,30 +162,194 @@ function loadTab(t){
+@@ -102,30 +163,230 @@ function loadTab(t){
      // its restore had got, partly the tab before's data.
      hist = null;
      try { restoreModuleState(t.module, decode(DEFAULT_STATE[t.module])); } catch(e2){}
@@ -2734,13 +2882,36 @@ index 7eb3489..4c1d815 100644
 +  if (t.inst){
 +    attachInstance(t.inst);
 +    t.hidAt = 0;
++    t.view = null; t.changed = false;
 +  }
 +  // (stay: put in the page, a fixed section left on show: a wake done meanwhile)
 +  if (!stay) goTab(t.module);
 +}
-+// The tab left: its time hidden counted from now, and its last show now.
++// The tab left: its time hidden counted from now, and its last show now; the window it was
++// left at.
 +function hideTab(t){
-+  if (t && t.inst) t.hidAt = t.seenAt = Date.now();
++  if (t && t.inst){ t.hidAt = t.seenAt = Date.now(); t.view = viewNow(); }
++}
++/* An awake tab shown again draws what changed while it was hidden (its redraw, two frames
++   after its show: utils.js goTab): nothing, shown at the size it was left at and unchanged
++   (its draw keys: a few ms); all its plots at another size of the window or zoom (an XRPD
++   tab of 12 refined patterns 0.15 s, a DRS tab of 10 spectra 0.13 s in two tasks), and its
++   results where a job ended meanwhile. So shown: the loader on and a frame drawn first, as
++   for a wake, then the tab, the loader off once it is drawn (b2v3: to b2v3 the page froze
++   meanwhile, the tab on show). Its plots follow the window's width, not its height. */
++const viewNow = ()=> innerWidth + '@' + devicePixelRatio;
++const redrawn = t => !!t.inst && (t.changed || (t.view != null && t.view !== viewNow()));
++onAnyChange(k =>{ const t = tabById(k); if (t && t.inst && (t.id !== _activeId || _onFixed)) t.changed = true; });
++function showLater(t, done){
++  renderTabs();
++  syncProjectBar(t);
++  showModuleLoader();
++  afterPaint(()=>{
++    if (t.id !== _activeId || !t.inst) return;   // (superseded: the newer step has its own)
++    showTab(t);
++    if (done) done();
++    afterPaint(()=> afterPaint(()=>{ if (t.id === _activeId && !t.waking) hideModuleLoader(); }));
++  });
 +}
 +/* A tab woken: an instance made for it, put in the page and shown (it is the active
 +   tab), then its parked state restored into it and its whole history put back; the
@@ -2770,7 +2941,15 @@ index 7eb3489..4c1d815 100644
 +  }
 +  if (hist) setModuleHistory(key, hist);
 +  t.state = null; t.hist = null;
-+  if (_onLoaded){ try { _onLoaded(t); } catch(e){} }
++  asleep(mod, key, null);
++  return loaded(t);
++}
++// sessions.js told a tab is live (what it was saved as); a promise where that is read still
++// (a project changed and reloaded: its saved record), the load's loader on till then.
++function loaded(t){
++  let p;
++  if (_onLoaded){ try { p = _onLoaded(t); } catch(e){} }
++  return p && typeof p.then === 'function' ? p : undefined;
 +}
 +/* A tab asleep whose files' bytes were let go wakes once they are read back (db.js load:
 +   an array another tab holds of them, else the store's), the loader on show meanwhile and
@@ -2791,11 +2970,12 @@ index 7eb3489..4c1d815 100644
 +    if (t.waking === w) t.waking = null;
 +    if (t.inst || t.state !== st || t.hist !== h || t.id !== _activeId || !tabById(t.id)){ back(); return; }
 +    t.state = s; t.hist = h && { ...h, states };
-+    wakeTab(t, _onFixed);
++    const p = wakeTab(t, _onFixed);
 +    const n = failed ? 0 : [...refsIn(st)].filter(x=> lost.has(x)).length, name = '“' + (t.title || UNTITLED) + '”: ';
 +    if (failed) notice(name + 'its files could not be read from this browser\'s storage: it comes back without them.');
 +    else if (n) notice(name + n + (n > 1 ? ' of its files are' : ' of its files is') + ' not stored in this browser any more: it comes back without '
 +      + (n > 1 ? 'them.' : 'it.'));
++    return p;
 +  });
 +}
 +// Its instance let go (a tab closed, one put to sleep), its registries with it.
@@ -2816,9 +2996,13 @@ index 7eb3489..4c1d815 100644
 +  t.state = st;
 +  t.hist = getModuleHistory(t.id, true);
 +  dropInst(t);
++  held(t);
 +  lighten(t);
 +  return true;
 +}
++// A tab asleep's state and history, told to its module (utils.js asleep: SEM keeps what it
++// made of the files they hold).
++const held = t => asleep(t.module, t.id, [t.state, t.hist && t.hist.states]);
 +/* A tab asleep of a module whose tabs asleep let go of their files' bytes (utils.js
 +   dropsBytes: SEM): its record written, holding with its state's the hashes of its
 +   history's files (their bytes put in the store where it lacks them: db.js putRec's
@@ -2915,7 +3099,7 @@ index 7eb3489..4c1d815 100644
  }
  
  /* ---- Project bar sync -----------------------------------------------------
-@@ -182,13 +406,15 @@ window.addEventListener('load', ()=> setTimeout(revealApp, 0));
+@@ -182,13 +443,15 @@ window.addEventListener('load', ()=> setTimeout(revealApp, 0));
  setTimeout(revealApp, 2500);
  
  /* ---- Open / activate / close --------------------------------------------- */
@@ -2937,7 +3121,7 @@ index 7eb3489..4c1d815 100644
    if (!running) return true;
    if (!await confirmBanner(running + ' is running in “' + (t.title || UNTITLED) + '”: leaving this tab stops it.', 'Stop it and leave')) return false;
    stopModule(t.module);
-@@ -196,48 +422,60 @@ async function mayLeaveLive(){
+@@ -196,48 +459,62 @@ async function mayLeaveLive(){
  }
  // A tab chosen in the bar: shown at once, unless leaving the live one would stop a job.
  async function switchTo(id){
@@ -2971,7 +3155,7 @@ index 7eb3489..4c1d815 100644
 +  // Projects list leaves you on that list. (asleep, a module made per tab: woken shown)
    if (focus) activateTab(t.id);
 -  else { renderTabs(); persistTab(t); }
-+  else { renderTabs(); if (!lighten(t)) persistTab(t); }
++  else { renderTabs(); held(t); if (!lighten(t)) persistTab(t); }
    return t;
  }
  
@@ -2985,19 +3169,21 @@ index 7eb3489..4c1d815 100644
 -  // Already the live tab (we were just off on a fixed section) → only show it back.
 -  if (_activeId === id){ goTab(t.module); return; }
 +  // Already the active tab (we were just off on a fixed section) → only show it back
-+  // (its wake reading its files' bytes still: under the loader, which its end takes away).
-+  if (_activeId === id){ showTab(t); if (t.waking) showModuleLoader(); return; }
++  // (its wake reading its files' bytes still: under the loader, which its end takes away;
++  // one to draw again, under the loader).
++  if (_activeId === id){ if (redrawn(t)) return showLater(t); showTab(t); if (t.waking) showModuleLoader(); return; }
 +  const was = activeTab();
    stashActive();
 +  hideTab(was);
    _activeId = id;
 +  if (isLive(t)){
++    const kept = ()=>{ persistTab(was); persistTab(t); keepLimits(); };
++    if (redrawn(t)) return showLater(t, kept);
 +    hideModuleLoader();
 +    showTab(t);
 +    renderTabs();
 +    syncProjectBar(t);
-+    persistTab(was); persistTab(t);
-+    keepLimits();
++    kept();
 +    return;
 +  }
 +  // (an instance of its module in the page stays, under the loader, until it is woken)
@@ -3010,7 +3196,16 @@ index 7eb3489..4c1d815 100644
  }
  
  // Home / Projects / Settings belong to no tab, so none is highlighted while one of
-@@ -255,16 +493,20 @@ onSectionChange(tab=>{
+@@ -245,6 +522,8 @@ function activateTab(id){
+ onSectionChange(tab=>{
+   const fixed = !MODULES.includes(tab);
+   if (fixed) hideModuleLoader();   // never leave the loader hanging over a fixed section
++  // (the tab on show left for it: the window it was left at)
++  if (fixed && !_onFixed){ const a = activeTab(); if (a && a.inst) a.view = viewNow(); }
+   if (_onFixed === fixed) return;
+   _onFixed = fixed;
+   renderTabs();
+@@ -255,16 +534,22 @@ onSectionChange(tab=>{
  function closeTab(id){
    const i = tabIndex(id);
    if (i < 0) return;
@@ -3022,6 +3217,7 @@ index 7eb3489..4c1d815 100644
    TABS.splice(i, 1);
    deleteTabRec(id).catch(()=>{});
 -  if (!wasActive){ renderTabs(); persistAll(); return; }
++  asleep(t.module, t.id, null);
 +  if (!wasActive){ dropInst(t); renderTabs(); persistAll(); keepLimits(); return; }
    _activeId = null;
    const next = TABS[i-1] || TABS[i] || null;
@@ -3030,12 +3226,13 @@ index 7eb3489..4c1d815 100644
    _activeId = next.id;
 +  // (one awake: shown before the closed one's instance goes, the page's scroll kept; the
 +  // loader of a wake the closed one was waiting on taken away)
++  if (isLive(next) && redrawn(next)){ dropInst(t); showLater(next, ()=>{ persistAll(); keepLimits(); }); return; }
 +  if (isLive(next)){ hideModuleLoader(); showTab(next); dropInst(t); renderTabs(); syncProjectBar(next); persistAll(); keepLimits(); return; }
 +  dropInst(t);
    renderTabs();
    goTab(next.module);
    syncProjectBar(next);
-@@ -358,6 +600,15 @@ function initBar(){
+@@ -358,6 +643,15 @@ function initBar(){
      if (_dragMoved){ _dragMoved = false; return; }
      switchTo(el.dataset.id);
    });
@@ -3051,7 +3248,7 @@ index 7eb3489..4c1d815 100644
    initDrag(bar);
  }
  
-@@ -429,26 +680,31 @@ function moveTab(id, to){
+@@ -429,26 +723,31 @@ function moveTab(id, to){
    persistAll();
  }
  
@@ -3089,7 +3286,7 @@ index 7eb3489..4c1d815 100644
    // Nothing to lose: an empty file list (whatever the name says) or a saved project
    // with no pending change closes straight away.
    if (isEmpty(t) || (t.projectId && !t.dirty)){ closeTab(id); return; }
-@@ -456,9 +712,7 @@ async function requestClose(id){
+@@ -456,9 +755,7 @@ async function requestClose(id){
    if (res === false) return;                               // cancel
    if (res === true){
      if (!_saveForClose) return;
@@ -3100,7 +3297,7 @@ index 7eb3489..4c1d815 100644
      if (!await _saveForClose(t)) return;                   // save aborted → keep the tab
      if (t.dirty) return;   // (changed while it was written, v517: the change is kept, unsaved)
    }
-@@ -480,12 +734,14 @@ async function initTabs(){
+@@ -480,21 +777,23 @@ async function initTabs(){
    // not read: the records stay as they are, for the next load. A file whose bytes are not
    // stored any more comes back without them (its module says so where they are needed).
    let recs = [], states = [], missing = 0;
@@ -3117,7 +3314,18 @@ index 7eb3489..4c1d815 100644
      .filter(x=> x && !tabById(x.r.id)).sort((a,b)=> (a.r.order||0) - (b.r.order||0));
    if (!made.length){ renderTabs(); afterPaint(revealApp); return; }
    // Tabs opened while the records were being read (an upgrade held back by a window of an
-@@ -512,7 +768,27 @@ async function initTabs(){
+   // older version, which can last): they stay as they are, the one on show live, and the
+   // tabs restored are put before them, parked. To v516 the restore took the module from
+   // the tab on show, whose work was then lost.
+-  if (TABS.length){ TABS.unshift(...made.map(x=> x.t)); renderTabs(); persistAll(); afterPaint(revealApp); return; }
++  if (TABS.length){ TABS.unshift(...made.map(x=> x.t)); made.forEach(x=> held(x.t)); renderTabs(); persistAll(); afterPaint(revealApp); return; }
+   _restoring = true;
+-  made.forEach(x=> TABS.push(x.t));
++  made.forEach(x=>{ TABS.push(x.t); held(x.t); });
+   recs = made.map(x=> x.r);
+   const wanted = recs.find(r=> r.active) || recs[0];
+   _activeId = wanted.id;
+@@ -512,7 +811,27 @@ async function initTabs(){
    });
  }
  
@@ -3148,16 +3356,16 @@ index 7eb3489..4c1d815 100644
 +         isLive, ensureLive, untitledName, notice, keyOf, tabOfKey, tabOf, stateOf, isEmpty,
 +         keepLimits as sleepTick, sleepTab, tabsNow };
 diff --git a/tauc.js b/tauc.js
-index cac13e5..a2aec23 100644
+index cac13e5..1e215db 100644
 --- a/tauc.js
 +++ b/tauc.js
 @@ -1,4 +1,4 @@
 -import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc } from './utils.js';
-+import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc, registerModule, fixed } from './utils.js';
++import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
  import { boxSmooth, boxSlope, widthText, ptsNum, ptsText } from './smooth.js';
  import { Plot } from './plot.js';
  import { cardInfo, fileSafe, nameDownloads } from './cards.js';
-@@ -8,8 +8,52 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -8,8 +8,64 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
  
  /* =========================================================
     TAUC MODULE
@@ -3200,6 +3408,18 @@ index cac13e5..a2aec23 100644
 +  else spectra.set(b, { wl: f.wl, FR: f.FR });
 +  return f;
 +}
++/* What an analysis works out of a spectrum, kept by its F(R) (utils.js keeper: while a
++   state, a tab asleep or a history holds the spectrum), each under all it is made from: a
++   card's curve as read and smoothed (its kind, the wavelengths, the exponent and the width)
++   and its derivative (and that width), every fit of a sample and what the card makes of
++   them (fitsKept: its kind, its parameters, its lines, and an Urbach card's reference
++   Tauc card's own key for the sample), and the Results' reflectance and log F(R). A tab
++   woken, an undo, a redraw, the Results and the CSVs take them as made (to b2v3 every
++   redraw made every fit again, three times a sample where an Urbach card read its
++   reference: a DRS tab of 10 spectra, 0.17 s of its wake). A fit moved by a line dragged
++   is made, not kept, till the line is let go. */
++const curveKept = keeper('drs-curve', 8), slopeKept = keeper('drs-slope'), fitsKept = keeper('drs-fits', 8),
++  reflKept = keeper('drs-reflectance', 1), logKept = keeper('drs-log', 1);
 +// A DRS tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 +function createTauc({ key, root, layer, shown }){
 +  const $ = id => root.querySelector('#' + id);
@@ -3211,7 +3431,7 @@ index cac13e5..a2aec23 100644
    /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
       warn, read, head, left, hv[]} (each on its own native axis), and the included ones,
       which the analysis sees, `files`, with which every per-sample list the cards keep is
-@@ -18,10 +62,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -18,10 +74,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       files were read (fileNotes: a format not standard, points left out; until dismissed);
       every card in the history. */
    const kit = moduleKit('tauc', {
@@ -3224,7 +3444,7 @@ index cac13e5..a2aec23 100644
      },
      dismiss: { warn: ()=>{ warnDismissed = true; } },
      slots,
-@@ -43,21 +88,27 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -43,21 +100,27 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      }) }),
      /* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
         with both a finite number and a wavelength above 0 (none: left out); how it was read,
@@ -3258,7 +3478,7 @@ index cac13e5..a2aec23 100644
        renderResView();
      },
      csv: exportTaucZip,
-@@ -365,9 +416,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -365,9 +428,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    // defaults and the least it took.
    const OLD = { w:'N', w2:'N2', W:'M', W2:'M2' }, OLD_DEF = { N:1, N2:20, M:25, M2:100 }, OLD_MIN = { w: 1, w2: 1, W: 2, W2: 2 };
    const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
@@ -3271,7 +3491,58 @@ index cac13e5..a2aec23 100644
      const P = {
        // ---- all/one analysis mode (single toggle) ----
        // 'shared': every sample uses one common parameter set AND one common set of
-@@ -632,8 +684,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -386,14 +450,21 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     let shown = -1;           // the sample the plot last drew
+     let drawn = null;         // what the plot last drew: { i, ok (the points with a value), fits }
+ 
+-    // The curve and the derivatives the panel works from, for sample i.
++    // The curve and the derivatives the panel works from, for sample i (kept: curveKept,
++    // slopeKept; the exponent is no Urbach curve's, its parameters none).
++    function curveOf(i, p){
++      const f = files[i], hv = f.hv;
++      return curveKept(f.FR, exactKey([spec.kind, objId(f.wl), p.a, p.w]), ()=>{
++        const Yraw = f.FR.map((v,k)=> spec.curve(v, hv[k], p));
++        return { Yraw, Ys: smoothY(Yraw, hv, p.w) };
++      });
++    }
+     function curves(i, p){
+-      const hv = files[i].hv;
+-      const Yraw = files[i].FR.map((v,k)=> spec.curve(v, hv[k], p));
+-      const Ys  = smoothY(Yraw, hv, p.w);
+-      const dYs = slopeOf(Ys, hv, p.w2);                            // Y'
++      const f = files[i], hv = f.hv, { Yraw, Ys } = curveOf(i, p);
++      const dYs = slopeKept(f.FR, exactKey([spec.kind, objId(f.wl), p.a, p.w, p.w2]), ()=> slopeOf(Ys, hv, p.w2));   // Y'
+       return { hv, Yraw, Ys, dYs };
+     }
++    P.curve = k => curveOf(k, P.params(k));
+ 
+     /* What a parameter can be, and an interval-line set: as the fields take them (the
+        exponent above 0, a smoothing width 0 or more, a regression window above 0), and
+@@ -438,11 +509,19 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+         pp.vlines = spec.ownLines && isFinite(P.sharedVlines.v1) ? {...P.sharedVlines} : defaultVlinesFor(i);
+       return pp.vlines;
+     };
+-    // Every fit of sample k, and what the spec makes of them.
++    // Every fit of sample k, and what the spec makes of them (kept: fitsKept, under keyOf;
++    // made, not kept, while a line is dragged).
++    P.keyOf = k =>{
++      const p = P.params(k), vl = P.vlinesFor(k);
++      return exactKey([spec.kind, objId(files[k].wl), keys.map(x=> p[x]), lineKeys.map(x=> vl[x]), spec.refKey ? spec.refKey(k) : null]);
++    };
+     P.analyze = k =>{
+-      const p = P.params(k), vl = P.vlinesFor(k), c = curves(k, p);
+-      const fits = windows.map(w=> scanRegr(c.hv, c.Ys, p[w.W], vl[w.lo], vl[w.hi], c.Yraw));
+-      return { ...spec.results(fits, p, k, vl), fits };
++      const fit = ()=>{
++        const p = P.params(k), vl = P.vlinesFor(k), c = curveOf(k, p), hv = files[k].hv;
++        const fits = windows.map(w=> scanRegr(hv, c.Ys, p[w.W], vl[w.lo], vl[w.hi], c.Yraw));
++        return { ...spec.results(fits, p, k, vl), fits };
++      };
++      return dragging ? fit() : fitsKept(files[k].FR, P.keyOf(k), fit);
+     };
+ 
+     /* ---- Projects saved up to v514: the widths were numbers of points ----
+@@ -632,8 +711,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      }
      P.syncModeButton = ()=>{ const c = $('ModeAll'); if (c) c.textContent = P.mode==='shared' ? 'all' : 'one'; };
  
@@ -3283,7 +3554,7 @@ index cac13e5..a2aec23 100644
        plot = new Plot($('Svg'), {xlabel:'hν (eV)', ylabelSvg: spec.yLabel(P.params(currIndex)), xTickStep:0.5, noYTickLabels:true});
        plot.attachTools(plot.svg.closest('.plot-wrap'));
        // A spec whose lines are each sample's own has no common set to start.
-@@ -647,7 +701,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -647,7 +728,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      P.shownIndex = ()=> shown;
  
      P.update = preserveView =>{
@@ -3292,7 +3563,52 @@ index cac13e5..a2aec23 100644
        shown = currIndex;
        vlines = P.vlinesFor(currIndex);   // point at the current sample's interval lines
        const p = P.params(currIndex);
-@@ -1191,7 +1245,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -677,9 +758,9 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+          in it holding 3 points with a value over half its width (counted all, to v478, an
+          interval of F(R) ≤ 0 had no fit and the card no word why; to v514, fewer points
+          than the window's M). */
+-      const fits = [], small = [];
++      const fits = [], small = [], res = P.analyze(currIndex);
+       windows.forEach((w, wi)=>{
+-        const reg = scanRegr(hv, c.Ys, p[w.W], vlines[w.lo], vlines[w.hi], c.Yraw);
++        const reg = res.fits[wi];
+         fits.push(reg);
+         $(w.stats[0]).textContent = isFinite(reg.NRMSE) ? reg.NRMSE.toFixed(4) : '-';
+         $(w.stats[1]).textContent = isFinite(reg.R2) ? reg.R2.toFixed(4) : '-';
+@@ -696,7 +777,6 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+       $('Alert').innerHTML = small.length ? `<div class="alert warn">⚠ Interval too small: ${small.join('; ')}.</div>` : '';
+       drawn = { i: currIndex, ok: c.Ys.map(v=> isFinite(v)), fits };
+       syncPts();
+-      const res = P.analyze(currIndex);
+       if (spec.extra) spec.extra(plot, res, hv, nm);
+       spec.show($, res);
+ 
+@@ -896,6 +976,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+ 
+   function taucSpec(a){
+     return {
++      kind: 'tauc',
+       prefix: 'an' + a.id,
+       keys: ['a','w','w2','W','W2'],
+       defaults: TAUC_DEF,
+@@ -1001,6 +1082,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   }
+   function urbachSpec(a){
+     return {
++      kind: 'urbach',
+       prefix: 'an' + a.id,
+       keys: ['w','w2','W'],
+       defaults: URB_DEF,
+@@ -1026,6 +1108,8 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+         return { v1: (w[0] + w[1]) / 2 - 1, v2: w[0] };
+       },
+       results: (f, p, k, vl)=> ({ ...urbachEu(f[0]), regs: f[0], sub: urbachSub(a, k, p, vl) }),
++      // (the subtracted fit is made from the reference's for the sample: its key)
++      refKey: k =>{ const T = refPanel(a); return T ? T.keyOf(k) : null; },
+       // The tail with the Tauc baseline taken out, on the same plot, drawn as the plain
+       // traces are but in colours of its own (URB_SUB_COLORS): its smoothed curve solid,
+       // its fit solid and thick in its window, dashed and thin beyond.
+@@ -1191,7 +1275,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    function buildPanel(a, card, prev){
      const was = live.get(a.id);
      if (prev && was) a.states[prev] = was.panel.snapshot();
@@ -3301,7 +3617,7 @@ index cac13e5..a2aec23 100644
      if (a.states[a.type]) panel.restore(a.states[a.type]);
      else panel.fit();
      live.set(a.id, { panel, res: was ? was.res : null, resPlots: was ? was.resPlots : null });
-@@ -1301,10 +1355,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1301,10 +1385,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      const taucs = cards().filter(a=> a.type === 'tauc');
      cards().forEach(u=>{
        if (u.type !== 'urbach' || !live.has(u.id)) return;
@@ -3314,7 +3630,7 @@ index cac13e5..a2aec23 100644
      });
    }
  
-@@ -1583,6 +1637,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1583,6 +1667,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    }
    kit.dropText(readDrs, had =>{
      warnDismissed = false;
@@ -3322,7 +3638,7 @@ index cac13e5..a2aec23 100644
      afterFilesChange();
      // Once, when the first data lands: propose optimal interval-line positions. The
      // Tauc cards go first: the Urbach ones are placed on their regions.
-@@ -1601,18 +1656,16 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1601,18 +1686,16 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    function afterFilesChange(){
      kit.showFiles();
      if (files.length) setupAnalysis();
@@ -3345,7 +3661,7 @@ index cac13e5..a2aec23 100644
      // Every panel fitted to the files before any is drawn: an Urbach card's band is
      // read off its reference, which may sit below it.
      livePanels().forEach(p=> p.fit());
-@@ -1624,6 +1677,9 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1624,6 +1707,9 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      cards().forEach(see);
      deck.refreshNames();
      renderResView();
@@ -3355,7 +3671,7 @@ index cac13e5..a2aec23 100644
    }
  
    // Union of all files' ranges (for shared overlay axes)
-@@ -1633,7 +1689,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1633,7 +1719,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    /* ---- Results: F(R) and R (%) against λ side by side, F(R) against hν on a log axis
       under them across the card (2φ : 1), then each card's pair of charts under its name,
       in card order. To v497 the top was a pair, F(R) against λ and the log plot. ---- */
@@ -3364,7 +3680,7 @@ index cac13e5..a2aec23 100644
    function resHtml(a){
      const p = 'an' + a.id, t = a.type === 'tauc';
      return `
-@@ -1678,14 +1734,14 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1678,14 +1764,14 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    const placeRes = ()=> cards().forEach(a=>{ const e = live.get(a.id); if (e && e.res) resList.appendChild(e.res); });
  
    function renderResView(){
@@ -3382,7 +3698,7 @@ index cac13e5..a2aec23 100644
      let ymax0=-Infinity;
      files.forEach((f,k)=>{ ymax0=Math.max(ymax0,maxArr(f.FR)); });
      const [wl0, wl1] = unionWl();
-@@ -1706,11 +1762,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1706,15 +1792,15 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    // R (%) against λ, every sample's, on 0–100 %, all R can be.
    function renderReflView(){
      if (!resPlotR){
@@ -3396,7 +3712,12 @@ index cac13e5..a2aec23 100644
      const [wl0, wl1] = unionWl();
      p.setRange(wl0, wl1, 0, 100);
      p.drawAxes();
-@@ -1723,11 +1779,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+-    files.forEach(f=> p.line(f.wl, f.FR.map(reflOf), f.color, 1.3, undefined, { label: f.label, key: f.name }));
++    files.forEach(f=> p.line(f.wl, reflKept(f.FR, '', ()=> f.FR.map(reflOf)), f.color, 1.3, undefined, { label: f.label, key: f.name }));
+   }
+   // F(R) against hν on a log y-axis: the absorption edge and the tail below it, over
+   // the decades they span, on the energy axis the analyses work on. The plot draws
+@@ -1723,12 +1809,12 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      if (!resPlotLog){
        // A wider left margin than the default 55: powers of ten are wider tick labels
        // than numbers, and in an export (type ×1.6) they reached the axis title.
@@ -3406,11 +3727,13 @@ index cac13e5..a2aec23 100644
      }
      const p = resPlotLog; p.clearData();
 -    document.getElementById('taucResLegendLog').innerHTML = swatchLegend(files);
+-    const logs = files.map(f=> f.FR.map(v=> v > 0 ? Math.log10(v) : NaN));
 +    $('taucResLegendLog').innerHTML = swatchLegend(files);
-     const logs = files.map(f=> f.FR.map(v=> v > 0 ? Math.log10(v) : NaN));
++    const logs = files.map(f=> logKept(f.FR, '', ()=> f.FR.map(v=> v > 0 ? Math.log10(v) : NaN)));
      let lo = Infinity, hi = -Infinity;
      logs.forEach(a=> a.forEach(v=>{ if (isFinite(v)){ lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
-@@ -1739,15 +1795,17 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     if (!isFinite(lo)){ lo = -1; hi = 0; }
+@@ -1739,15 +1825,17 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
      // then be switched off like any other.
      files.forEach((f,k)=> p.line(f.hv, logs[k], f.color, 1.3, undefined, { label: f.label, key: f.name, raw: { xs: f.hv, ys: f.FR } }));
    }
@@ -3430,7 +3753,7 @@ index cac13e5..a2aec23 100644
      e.resPlots = e.resPlots || {};
      if (!e.resPlots[which] || e.resPlots[which].svg !== svg){
        e.resPlots[which] = new Plot(svg, opts);
-@@ -1758,7 +1816,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1758,7 +1846,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
  
    // A Tauc card's pair: every sample's Tauc curve with its two fits, and the gaps.
    function drawTaucRes(a){
@@ -3439,16 +3762,35 @@ index cac13e5..a2aec23 100644
      const fits = files.map((f,k)=> P.analyze(k));
      // Effective exponent per file; when uniform, show it on the shared Tauc axis,
      // otherwise fall back to a generic "a" (samples may use different exponents).
-@@ -1816,7 +1874,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -1770,11 +1858,8 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     plot1.clearData();
+     plot1.ylabelSvg = `[F(R)·hν]${sup(aLabel)} (a. u.)`;
+     $('RL1').innerHTML = swatchLegend(files);
+-    const Ys_all = files.map((f,k)=>{
+-      const fp = P.params(k);
+-      const Yraw = f.FR.map((v,i)=>Math.pow(v*f.hv[i], fp.a));
+-      return smoothY(Yraw, f.hv, fp.w);
+-    });
++    // (the card's own curves, kept: the same numbers)
++    const Ys_all = files.map((f,k)=> P.curve(k).Ys);
+     const ymax1 = Math.max(...Ys_all.map(maxArr));
+     const [hv0, hv1] = unionHv();
+     plot1.setRange(hv0, hv1, 0, ymax1);
+@@ -1816,10 +1901,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    // under it, each with its own axes; and E_U beside them as the gaps are, plain,
    // subtracted or both, as its chips say.
    function drawUrbachRes(a){
 -    const P = panelOf(a), p = 'an' + a.id, $ = id => document.getElementById(p + id);
 +    const P = panelOf(a), $ = id => resEl(a, id);
      const fits = files.map((f,k)=> P.analyze(k));
++    // (the card's own curves, kept: the same numbers)
      const curves = files.map((f,k)=> ({
-       p: smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), f.hv, P.params(k).w),
-@@ -1914,7 +1972,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+-      p: smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), f.hv, P.params(k).w),
++      p: P.curve(k).Ys,
+       s: fits[k].sub ? fits[k].sub.Ys : null,
+     }));
+     const vals = { p: fits.map(r=> r.Eu*1000), s: fits.map(r=> r.sub ? r.sub.Eu*1000 : NaN) };
+@@ -1914,7 +2000,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
       {name, color, vals[], errs[]}, `chips` the plot's chip row, which the value labels
       keep clear of. Only positive values are drawn; with none the chart is hidden. */
    function resBars(a, shown, chips, yLabel, digits){
@@ -3457,7 +3799,7 @@ index cac13e5..a2aec23 100644
      svg.style.display = wrap.style.display = '';
      if (valueBars(svg, { cats: files, series: shown, ok: v=> isFinite(v) && v > 0, digits, yLabel, chips, legend })) return;
      svg.style.display = wrap.style.display = 'none';
-@@ -2064,4 +2122,15 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+@@ -2064,4 +2150,15 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    });
    // A new project starts with one Tauc card.
    deck.start(['tauc']);
@@ -3475,7 +3817,7 @@ index cac13e5..a2aec23 100644
 +}
 +registerModule('tauc', createTauc);
 diff --git a/tests/README.md b/tests/README.md
-index b6198b0..202cd56 100644
+index b6198b0..18bc76b 100644
 --- a/tests/README.md
 +++ b/tests/README.md
 @@ -24,7 +24,7 @@ node --test tests/csv.test.mjs     # one file
@@ -3483,11 +3825,11 @@ index b6198b0..202cd56 100644
  ```
  
 -A full run takes about 10 min (183 tests, on the machine they were written on). Each
-+A full run takes about 12 min (209 tests, on the machine they were written on). Each
++A full run takes about 12 min (212 tests, on the machine they were written on). Each
  file opens its own server and browser; each test its own browser context, so IndexedDB,
  localStorage and the open tabs start empty every time.
  
-@@ -45,15 +45,22 @@ exports) goes to `tests/out/`, which git ignores.
+@@ -45,15 +45,23 @@ exports) goes to `tests/out/`, which git ignores.
  |---|---|
  | `smoke.test.mjs` | Each module opens in a tab and loads its fixtures with no page error (an app file answering 404 is one) and no Content-Security-Policy violation; all five open at once, each tab showing its own files; under the CSP, the theme set before the first paint, the Rietveld worker loading and answering, an alert's dismiss button working with no inline handler. |
  | `escape.test.mjs` | Nothing from outside becomes markup. Per module, a payload that would make an `<i data-x>` goes into the file names (F), into every string of the exported project imported back (A), and also in place of every lone number (B); no such element may appear, in the module or in the Projects list. Page errors fail F and A; under B they are reported (a project of nonsense numbers may not draw), not failed on, but for DRS, GC and EPR, which must open it and draw it with no page error. |
@@ -3509,10 +3851,11 @@ index b6198b0..202cd56 100644
 +| `b2xrd.test.mjs` | XRPD made per tab (b2): two XRPD tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a refinement going on in a tab left, on the workers' pool, its results bit for bit those of one refined on show, its history's step, its record and its "*"; a tab hidden past Settings' minutes asleep (tabs.js `sleepTick`), one busy not until its job's end, the one shown least lately asleep beyond the tabs awake allowed, woken with its whole history; the LRU; a hidden tab saved as it is closed, reopened from Projects; a reload, the tab on show awake, the others woken as shown. |
 +| `b2cap.test.mjs` | The tabs awake capped (b2v3): 40 tabs opened, none refused, 20 awake (Settings' default), the one on show among them; one opened first but shown often staying awake, those asleep all shown less lately than those awake; the strip scrolling, the tab on show scrolled into it wherever it is, the wheel scrolling it sideways, a 41st tab in view; a reload, every tab back, the one on show awake. A refining XRPD tab, shown least lately, awake past the cap, the next ones asleep in its place; Settings' number changed, applied at once (5; 1, the busy tab over it till its run ends, then asleep); 25 projects opened at once from Projects, all of them, asleep. |
 +| `b2fixed.test.mjs` | Arrays fixed (db.js `fixed`, b2v3): `park` and `decode` give a fixed array back as it is and copy one not fixed, `encode` writes both out (in Node); a tab of XRPD, DRS, GC and EPR asleep holding its history's arrays, none frozen, woken with the same; `stateKey` taking a fixed array by its hash; with the tests' freezing on, a fixed array frozen. |
++| `b2kept.test.mjs` | What is worked out, kept (b2v3): a tab woken from sleep makes none of it again (utils.js `kept.made`, counted across the wake) — XRPD's processing and Rietveld curves, DRS's fits (a Tauc and an Urbach card), GC's tables, EPR's smoothing, SEM's thumbnails and cards (its bytes let go and collected) — its plots the golden hashes of a first drawing and the same as before it slept, its CSVs byte for byte; a parameter changed (XRPD: a pattern refined again with another background degree; DRS: the exponent) makes its results again, and undo and redo take them as kept; a woken tab, and an awake one shown at another width of the window, under the loader, one at the width it was left at at once. |
  | `xrdcards.test.mjs` | The analysis cards and the XRPD Scherrer card. + Add peak is left as its card is folded (by the arrow, clicked or by Enter: the button off, the guide gone, no peak placed), not by a move's folds, and as the standard's window closes (× or a click beside it). The baseline's box undone and redone step by step (the box, its window field and the state together, the live state the history step's), under all and one and in the standard's window; a select undone with the focus on it; Ctrl+Z with the focus still on the box just clicked. A card an undo or a redo brings back (closed by its ×, or added) is brought into view, its head on screen under the sticky bar, in XRPD, DRS, GC and EPR; a tab switched to and a project opened with a card more bring nothing into view. |
  | `filelist.test.mjs` | The file list, the same in every module (DRS, XRPD, GC, EPR, SEM), at 1400, 800 and 375 px: grip and include box 26 px each, FILE, LABEL and a note with no header but GC's (SAMPLE, a select of the file's sample) at 3 : 3 : 2 of the width left, actions 58 px, measured cell by cell; the note right of the label, DRS's %R or F(R) (its title in full), GC's the file's own name, the others' empty; no sideways scroll, the label field inside its cell; on a phone the field, while typed in, laid over the note and short of the actions. |
  | `gcp.test.mjs` | GC's pressure p of the flow: 1 atm by default (in a new card, for a new file, in a project saved before it), V_m = RT/p (a rate at 2 atm twice the one at 1 atm, at 1 atm 1.01325 times the one at 1 bar); its unit (atm, bar, kPa, mbar, Torr, psi) converting the values shown and written, never the pressure, switched round and back; either decimal mark, 0, below 0 or no number refused as m and Q are; all/one, a file added and one left out; the value and the unit as undo/redo steps; a malformed pressure restored at 1 atm; p in gc_info.csv after T and in mean_rates.csv before it; the parameter table at 1300 px and at 1000 px, nothing over its cell. |
-@@ -75,6 +82,7 @@ exports) goes to `tests/out/`, which git ignores.
+@@ -75,6 +83,7 @@ exports) goes to `tests/out/`, which git ignores.
  | `modules.test.mjs` | DRS, GC and EPR. A card unfolded keeps its zoom on the same files and full range, and draws the full range after a file was removed or left out while it was folded, at the width it is laid out at (EPR, GC); a label changed while folded keeps the zoom (GC). DRS: the sample on show followed through a removal before it and a move, the nearest when it is removed itself; a label changed is the card's caption at once, and its undo. GC: an interval bound flipped back to "all" that would end an interval before it starts refused, with the words a value typed is refused with; the flow's temperature T (25 °C, all/one, in `gc_info.csv` and `mean_rates.csv`), the rates at 0 °C over those at 25 °C by 298.15/273.15, a state with no T at 0 °C with its rates as they were, a file added at 25 °C. EPR: a `.DSC` of one point or none refused with why; flat spectra drawn under the global normalisation. DRS: the standard format is the Cary 5000's layout alone, the name on line 1, then `Wavelength (nm)` and `%R` or `F(R)` on line 2 (any separator, decimal mark, case or quotes), the data from line 3: `%R` so, under `;` with `,` decimals and in quotes, loads with no alert; `R%`, `%R` on line 1 or 3, `R %`, `Reflectance (%)`, a JASCO `YUNITS,%R` above `XYDATA` are read as F(R) = (1 − R)²/2R, back to the fixture's F(R), and said ('not a standard format: its header names the reflectance in %'), as is F(R) named elsewhere than on line 2; a file with no header read as F(R) and said, as is one whose columns' header names neither under a line naming R% (`Operator,R%` above `Wavelength (nm),KM`); the points that are no physical value (R outside 0–100 %, R = 0, F(R) < 0, NaN, past the doubles) left out and counted; a file with none left refused with why; the raw file downloaded as it came. DRS, the Cary 5000's own `%R` export (its layout: the name above the header, trailing commas, CRLF, 800 down to 200 nm, the instrument's footer) beside a standard F(R) export, with no alert, and a file of no standard format, with its warning: the file list's note, right of the label with no header, says `%R` or `F(R)` (its title in full; `F(R)` for a project with no reading kept); F(R) the conversion of the values written; the Results' top, F(R) and R (%) against λ side by side and the log plot under them at 2φ : 1; the R (%) plot giving the values back (and, for an F(R) file, R whose F(R) is the file's), its CSV `reflectance_R.csv` too, a file left out of both; its figure composer opening. Malformed projects: every value of a DRS, GC and EPR state put in as `null`, a string, an object in turn, restored as a project is opened: no throw, no page error; a file with nothing to show left out, said, its per-sample settings with it. |
  | `db.test.mjs` | The form a module state takes in IndexedDB and in a project file (`db.js`), in Node: bytes as base64, a byte array held in several places written once and read back as one array, dates and other typed arrays, the older forms (bytes as arrays, a dangling reference). |
  | `sem.test.mjs` | SEM groups by scale, an excluded image deciding nothing about its group's name or the scope selector; a renamed label shown in the navigation, thumbnails, groups and Reference, and undone; in the crop editor a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step. |
@@ -3520,7 +3863,7 @@ index b6198b0..202cd56 100644
  
  ## Fixtures
  
-@@ -101,7 +109,8 @@ markup a mismatch leaves in `tests/out/plots/` opens in a browser).
+@@ -101,7 +110,8 @@ markup a mismatch leaves in `tests/out/plots/` opens in a browser).
  
  `helpers.mjs` has what the tests share: `start()` (server, browser, fixtures) and
  `env.page()` (the app in a fresh context, its page errors, failed loads of its own files
@@ -4234,6 +4577,259 @@ index 0000000..726e357
 +    assert.deepEqual(await moduleState(page, mod), A.state, 'and up again');
 +    M.same(await M.shows(page), A.shows);
 +    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
+diff --git a/tests/b2kept.test.mjs b/tests/b2kept.test.mjs
+new file mode 100644
+index 0000000..62e269a
+--- /dev/null
++++ b/tests/b2kept.test.mjs
+@@ -0,0 +1,247 @@
++/* What is worked out, kept (b2v3): a tab woken from sleep, an undo, a redraw take what was
++   worked out before (utils.js keeper: by the data's array and every other input), and make
++   none of it again. Counted (utils.js kept.made: the results made, by name) across each
++   wake; the plots drawn from what was kept, against the golden hashes the plots' test takes
++   of a first drawing (plots.test.mjs: the same files and steps) and against the same tab's
++   own before it slept; its CSVs byte for byte. A parameter changed makes its results again,
++   and an undo back to it takes them as kept. XRPD (its patterns' processing, its Rietveld
++   curves), DRS (every fit, a Tauc and an Urbach card), GC and EPR (their tables and
++   smoothing), SEM (its thumbnails and cards, kept while the tab is asleep, its bytes let
++   go). The tab woken shows under the loader; one awake shown at another width of the
++   window, too (b2v3's loader). */
++import { test, before, after } from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import { start, openModule, loadFiles, switchTab, settle, undo, poke, plotSvgs, golden, download, readZip } from './helpers.mjs';
++
++let env;
++before(async ()=>{ env = await start(); });
++after(()=> env && env.close());
++
++const MIN = 60000;
++const tabs = page => page.evaluate(async ()=> (await import('./tabs.js')).tabsNow());
++const tick = (page, ms)=> page.evaluate(async ms=> (await import('./tabs.js')).sleepTick(Date.now() + ms), ms);
++const made = page => page.evaluate(async ()=> JSON.parse(JSON.stringify((await import('./utils.js')).kept)));
++/* Every plot drawn again at a settled layout: the window narrowed and widened back (a plot
++   drawn as its section is put in the page, a wake's, can differ in its last digit, as the
++   plots' test says of a first drawing; one drawn again at the same size is kept as it is). */
++async function redraw(page){
++  for (const width of [1380, 1400]){ await page.setViewportSize({ width, height: 900 }); await page.waitForTimeout(400); await settle(page); }
++}
++const csvs = async page => readZip((await download(page, ()=> page.click('.proj-csv'))).buf).map(e=> [e.name, e.data.toString('utf8')]);
++// Tab i put to sleep from tab j (11 minutes hidden), then shown: woken, the loader on.
++async function sleepWake(page, i, j){
++  await switchTab(page, j);
++  await tick(page, 11*MIN);
++  assert.equal((await tabs(page))[i].awake, false, 'asleep');
++  await page.locator('#tabBar .ptab').nth(i).locator('.ptab-label').click();
++  assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), true, 'the loader on as it wakes');
++  await settle(page);
++  assert.equal((await tabs(page))[i].awake, true, 'awake');
++}
++const P = '#xrdR2';
++const press = async (page, sel)=>{ await page.waitForTimeout(650); await page.click(sel); };
++async function refine(page, sel){
++  await press(page, sel);
++  await page.waitForSelector('.confirm-modal');
++  await page.click('.confirm-modal .btn:not(.primary)');
++  await page.waitForFunction(s=> document.querySelector(s).textContent === 'Cancel', P + 'Refine');
++  await page.waitForFunction(s=> document.querySelector(s).textContent === 'Refine', P + 'Refine', { timeout: 120000, polling: 100 });
++  await settle(page);
++}
++const diff = (a, b)=> Object.keys(b).filter(k=> (a[k] || 0) !== b[k]);
++// The DRS cards on sample k (a tab woken shows the first: the sample on show is no part of
++// DRS's state, as in v517, b2v2), stepped by the first card's arrow.
++async function toSample(page, k){
++  for (let n = 0; n < 4 && !(await page.textContent('#an1Idx')).startsWith(k + 1 + '/'); n++){ await page.click('#tab-tauc .an-card .an-next'); await settle(page); }
++}
++/* Files dropped (a DragEvent), no element handle kept: setInputFiles keeps a hold on the
++   input it filled, and so on its instance, whose files a tab asleep would then never let go
++   (b2drs.test.mjs). */
++async function drop(page, mod, files){
++  const list = files.map(f=> [path.basename(f), fs.readFileSync(f).toString('base64')]);
++  await page.evaluate(([mod, list])=>{
++    const dt = new DataTransfer();
++    for (const [name, b64] of list) dt.items.add(new File([Uint8Array.from(atob(b64), c=> c.charCodeAt(0))], name));
++    document.querySelector('#' + mod + 'Dropzone').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
++  }, [mod, list]);
++  await page.waitForFunction(n=> document.querySelectorAll('#semThumbs .sem-thumb canvas').length >= n && !document.querySelector('.dz-loading'), files.length, { timeout: 20000 });
++  await settle(page);
++}
++
++test('XRPD woken: its processing and Rietveld curves kept, not made again; its plots golden and as before, its CSVs byte for byte; a setting changed made again, undone taken', async ()=>{
++  const { page, errors, csp, close } = await env.page();
++  try {
++    // The plots' test's XRPD: three patterns, every card stepped once
++    await openModule(page, 'xrd');
++    await loadFiles(page, 'xrd', env.fx.files.xrd);
++    await poke(page);
++    await page.evaluate(()=> document.fonts.ready);
++    await redraw(page);
++    assert.deepEqual(golden('xrd', await plotSvgs(page, 'xrd')), [], 'drawn first: the golden hashes');
++    await openModule(page, 'gc');
++    const m0 = await made(page);
++    assert.ok(m0.made['xrd-smoothing'] >= 3 && m0.made['xrd-peaks'] >= 3, 'its patterns processed once each at least');
++    await sleepWake(page, 0, 1);
++    await redraw(page);
++    const m1 = await made(page);
++    assert.deepEqual(diff(m0.made, m1.made), [], 'woken: nothing made again');
++    assert.ok(m1.taken['xrd-peaks'] > (m0.taken['xrd-peaks'] || 0), 'its processing taken as kept');
++    assert.deepEqual(golden('xrd', await plotSvgs(page, 'xrd')), [], 'woken: the golden hashes, from what was kept');
++
++    // Refined: the curves made as drawn, kept across a sleep
++    await page.setInputFiles(P + 'CifInput', env.fx.cif);
++    await page.waitForSelector(P + 'PhaseList input[data-on]');
++    await settle(page);
++    await refine(page, P + 'RefineAll');
++    await redraw(page);
++    const plots0 = await plotSvgs(page, 'xrd'), csv0 = await csvs(page), m2 = await made(page);
++    assert.ok(m2.made['xrd-curves'] >= 3 && m2.made['xrd-net'] >= 3 && m2.made['xrd-difference'] >= 1, 'the curves made, each pattern\'s');
++    await sleepWake(page, 0, 1);
++    await redraw(page);
++    const m3 = await made(page);
++    assert.deepEqual(diff(m2.made, m3.made), [], 'woken: no curve, processing or peak made again');
++    assert.ok(m3.taken['xrd-curves'] > (m2.taken['xrd-curves'] || 0) && m3.taken['xrd-net'] > (m2.taken['xrd-net'] || 0), 'the curves taken as kept');
++    assert.deepEqual(await plotSvgs(page, 'xrd'), plots0, 'every plot as before it slept');
++    assert.deepEqual(await csvs(page), csv0, 'every CSV byte for byte');
++    // A redraw at another width: drawn again, nothing made again
++    await page.setViewportSize({ width: 1180, height: 900 }); await page.waitForTimeout(400); await settle(page);
++    await page.setViewportSize({ width: 1400, height: 900 }); await page.waitForTimeout(400); await settle(page);
++    assert.deepEqual(diff(m3.made, (await made(page)).made), [], 'resized: nothing made again');
++
++    // The shown pattern refined again with another background degree: its curves made again
++    await page.click(P + 'Settings');
++    await page.fill('[data-fit="bgDegree"]', '8'); await page.press('[data-fit="bgDegree"]', 'Enter');
++    await page.keyboard.press('Escape'); await settle(page);
++    const m4 = await made(page);
++    await refine(page, P + 'Refine');
++    await redraw(page);
++    const m5 = await made(page), plots1 = await plotSvgs(page, 'xrd');
++    assert.ok(m5.made['xrd-curves'] > m4.made['xrd-curves'], 'a new result: its curves made');
++    assert.notDeepEqual(plots1, plots0, 'drawn from the new result');
++    // Undone: the result before, its curves kept; redone: the new one's, kept too
++    await undo(page);
++    await redraw(page);
++    assert.deepEqual(await plotSvgs(page, 'xrd'), plots0, 'undone: the plots as before');
++    await undo(page, true);
++    await redraw(page);
++    assert.deepEqual(await plotSvgs(page, 'xrd'), plots1, 'redone: the new result\'s');
++    const m6 = await made(page);
++    assert.deepEqual(diff(m5.made, m6.made), [], 'undo and redo: nothing made again');
++    assert.ok(m6.taken['xrd-curves'] > m5.taken['xrd-curves'], 'taken as kept');
++    assert.deepEqual(errors, []);
++    assert.deepEqual(await csp(), []);
++  } finally { await close(); }
++});
++
++test('DRS woken: every fit kept, a Tauc and an Urbach card, not made again; golden, as before, its CSVs byte for byte; a parameter changed made again, undone taken; a width changed under the loader', async ()=>{
++  const { page, errors, csp, close } = await env.page();
++  try {
++    await openModule(page, 'tauc');
++    await loadFiles(page, 'tauc', env.fx.files.tauc);
++    await poke(page);
++    await page.evaluate(()=> document.fonts.ready);
++    await redraw(page);
++    assert.deepEqual(golden('tauc', await plotSvgs(page, 'tauc')), [], 'drawn first: the golden hashes');
++    await openModule(page, 'gc');
++    const m0 = await made(page);
++    assert.ok(m0.made['drs-fits'] >= 2, 'each sample fitted');
++    await sleepWake(page, 0, 1);
++    await toSample(page, 1);
++    await redraw(page);
++    const m1 = await made(page);
++    assert.deepEqual(diff(m0.made, m1.made), [], 'woken: no fit or curve made again');
++    assert.ok(m1.taken['drs-fits'] > (m0.taken['drs-fits'] || 0), 'the fits taken as kept');
++    assert.deepEqual(golden('tauc', await plotSvgs(page, 'tauc')), [], 'woken: the golden hashes, from what was kept');
++
++    // An Urbach card on the Tauc one: its fits, the subtracted ones from the reference's
++    await page.click('#taucAddAn'); await page.click('.an-menu:not([hidden]) [data-kind="urbach"]'); await settle(page);
++    // (each sample shown on it: a tab woken shows the first again)
++    await toSample(page, 0); await toSample(page, 1);
++    await redraw(page);
++    const plots0 = await plotSvgs(page, 'tauc'), csv0 = await csvs(page), m2 = await made(page);
++    await sleepWake(page, 0, 1);
++    await toSample(page, 1);
++    await redraw(page);
++    const m3 = await made(page);
++    assert.deepEqual(diff(m2.made, m3.made), [], 'woken: nothing made again');
++    assert.deepEqual(await plotSvgs(page, 'tauc'), plots0, 'every plot as before it slept');
++    assert.deepEqual(await csvs(page), csv0, 'every CSV byte for byte');
++
++    // The Tauc card's exponent: its fits made again, and the Urbach card's subtracted ones
++    await page.selectOption('#an1A', '2'); await settle(page);
++    await redraw(page);
++    const m4 = await made(page), plots1 = await plotSvgs(page, 'tauc');
++    assert.ok(m4.made['drs-fits'] >= m3.made['drs-fits'] + 4, 'both cards\' fits made again, each sample\'s');
++    assert.notDeepEqual(plots1, plots0);
++    await undo(page);
++    await redraw(page);
++    assert.deepEqual(await plotSvgs(page, 'tauc'), plots0, 'undone: as before');
++    assert.deepEqual(await csvs(page), csv0, 'undone: its CSVs byte for byte');
++    await undo(page, true);
++    await redraw(page);
++    assert.deepEqual(await plotSvgs(page, 'tauc'), plots1, 'redone');
++    assert.deepEqual(diff(m4.made, (await made(page)).made), [], 'undo and redo: nothing made again');
++
++    // Awake, shown at another width: under the loader, its fits not made again; at the
++    // width it was left at, at once
++    await switchTab(page, 1);
++    await page.setViewportSize({ width: 1180, height: 900 }); await page.waitForTimeout(400);
++    const m5 = await made(page);
++    await page.locator('#tabBar .ptab').nth(0).locator('.ptab-label').click();
++    assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), true, 'another width: the loader on first');
++    await settle(page);
++    assert.deepEqual(diff(m5.made, (await made(page)).made), [], 'drawn again at its width: nothing made again');
++    await switchTab(page, 1);
++    await page.locator('#tabBar .ptab').nth(0).locator('.ptab-label').click();
++    assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), false, 'the same width: shown at once');
++    await settle(page);
++    assert.deepEqual(errors, []);
++    assert.deepEqual(await csp(), []);
++  } finally { await close(); }
++});
++
++test('GC, EPR and SEM woken: their tables, smoothing, thumbnails and cards kept, not made again; GC\'s and EPR\'s plots golden, their CSVs byte for byte', async ()=>{
++  const { page, ctx, errors, csp, close } = await env.page();
++  try {
++    for (const mod of ['gc', 'epr']){
++      await openModule(page, mod);
++      await loadFiles(page, mod, env.fx.files[mod]);
++      await poke(page);
++      await page.evaluate(()=> document.fonts.ready);
++      await redraw(page);
++      assert.deepEqual(golden(mod, await plotSvgs(page, mod)), [], `${mod}: the golden hashes`);
++    }
++    const csvG = (await switchTab(page, 0), await csvs(page)), csvE = (await switchTab(page, 1), await csvs(page));
++    await page.click('#nav button[data-tab="home"]'); await page.click('.home-card[data-go="sem"]');
++    await page.waitForFunction(()=> !!document.querySelector('#tab-sem.active')); await settle(page);
++    await drop(page, 'sem', env.fx.files.sem);
++    const m0 = await made(page);
++    assert.ok(m0.made['gc-tables'] >= 2 && m0.made['epr-smoothed'] >= 2, 'each made once');
++    for (const [i, mod, csv] of [[0, 'gc', csvG], [1, 'epr', csvE]]){
++      await sleepWake(page, i, 2);
++      await redraw(page);
++      assert.deepEqual(golden(mod, await plotSvgs(page, mod)), [], `${mod} woken: the golden hashes`);
++      assert.deepEqual(await csvs(page), csv, `${mod} woken: its CSVs byte for byte`);
++    }
++    // SEM asleep: its bytes let go once its record is written, its files' arrays collected
++    // (a forced GC: WeakRefs to them emptied), what they were made into kept for it
++    await page.evaluate(async ()=>{ const T = await import('./tabs.js'), u = await import('./utils.js');
++      window.__T = T; window.__D = await import('./db.js'); window.__w = u.getModuleState(T.TABS[2].id).files.map(f=> new WeakRef(f.raw.bytes)); });
++    await switchTab(page, 0);
++    await tick(page, 11*MIN);
++    await page.waitForFunction(()=>{ const t = window.__T.TABS[2]; return !t.inst && window.__D.unread(t.state); }, null, { timeout: 20000 });
++    const cdp = await ctx.newCDPSession(page);
++    for (let k = 0; k < 3; k++){ await cdp.send('HeapProfiler.collectGarbage'); await page.waitForTimeout(200); }
++    assert.deepEqual(await page.evaluate(()=> window.__w.map(w=> !!w.deref())), [false, false, false], 'its files\' bytes let go');
++    await page.locator('#tabBar .ptab').nth(2).locator('.ptab-label').click();
++    await settle(page);
++    await page.waitForFunction(()=> document.querySelectorAll('#semThumbs .sem-thumb canvas').length >= 3, null, { timeout: 20000 });
++    await settle(page);
++    const m1 = await made(page);
++    assert.deepEqual(diff(m0.made, m1.made), [], 'woken: no table, smoothing, thumbnail or card made again');
++    assert.deepEqual(errors, []);
++    assert.deepEqual(await csp(), []);
 +  } finally { await close(); }
 +});
 diff --git a/tests/b2sem.test.mjs b/tests/b2sem.test.mjs
@@ -5267,7 +5863,7 @@ index 4c659ab..057aa84 100644
    const wrap = fn => e=>{
      if (window.__fail && e.data && e.data.type === 'result'){ window.__fail = false; return fn({ data: { ...e.data, type: 'error', message: 'failed for the test' } }); }
 diff --git a/utils.js b/utils.js
-index 4b37a24..f06e0c9 100644
+index 4b37a24..380aae4 100644
 --- a/utils.js
 +++ b/utils.js
 @@ -1,6 +1,7 @@
@@ -5329,7 +5925,7 @@ index 4b37a24..f06e0c9 100644
    if (!wrap) return;
    if (!files.length){ wrap.innerHTML=''; return; }
  
-@@ -1198,17 +1210,128 @@ requestAnimationFrame(()=>{
+@@ -1198,17 +1210,135 @@ requestAnimationFrame(()=>{
    const maxW = Math.max(0, ...btns.map(b=> b.getBoundingClientRect().width));
    if (maxW) btns.forEach(b=> b.style.width = Math.ceil(maxW) + 'px');
  });
@@ -5348,7 +5944,7 @@ index 4b37a24..f06e0c9 100644
 +   the others' out of it, held by the instances, which find their elements in their own
 +   section (root-scoped), never in the document.
 +========================================================= */
-+const _made = {};      // mod → { make, tpl: a copy of index.html's section, at: where a section goes, spare: the section itself until an instance takes it, on: the instance in the page, dropBytes }
++const _made = {};      // mod → { make, tpl: a copy of index.html's section, at: where a section goes, spare: the section itself until an instance takes it, on: the instance in the page, dropBytes, asleep }
 +const _shown = {};     // mod → the key of its instance on show, or shown last
 +const _modOf = {};     // key → its module
 +const K = k => (k != null && Object.prototype.hasOwnProperty.call(_shown, k) && _shown[k]) || k;
@@ -5360,15 +5956,19 @@ index 4b37a24..f06e0c9 100644
 +   page while it is), shown() (it is the instance on show) }. Until a tab's instance takes
 +   it, the section stays in the page as it is (hidden, its ids the page's, as up to v517);
 +   a copy of it as it loads is the others' template. opts.dropBytes: its tabs asleep let go
-+   of their files' bytes, read back from the store as they wake (tabs.js lighten: SEM). */
++   of their files' bytes, read back from the store as they wake (tabs.js lighten: SEM).
++   opts.asleep(key, v): the tab of that key is asleep holding v (its parked state and its
++   history's states), or, v null, no longer (woken, closed), for a module that keeps what it
++   made of a file while a tab asleep holds the file (SEM; tabs.js says it: asleep). */
 +function registerModule(mod, make, opts){
 +  const spare = document.getElementById('tab-' + mod), at = document.createComment('tab-' + mod);
 +  spare.before(at);
 +  const tpl = spare.cloneNode(true);
 +  tpl.classList.remove('active');
-+  _made[mod] = { make, tpl, at, spare, on: null, dropBytes: !!(opts && opts.dropBytes) };
++  _made[mod] = { make, tpl, at, spare, on: null, dropBytes: !!(opts && opts.dropBytes), asleep: opts && opts.asleep || null };
 +}
 +const dropsBytes = mod => isFactory(mod) && _made[mod].dropBytes;
++function asleep(mod, key, v){ const m = isFactory(mod) && _made[mod]; if (m && m.asleep){ try { m.asleep(key, v); } catch(e){} } }
 +// An instance of a module made per tab; its key, the tab's id. A tab's (spare): the page's
 +// section, while no instance has taken it; else, and for one read out of no tab (withState),
 +// a copy, out of the page.
@@ -5380,7 +5980,10 @@ index 4b37a24..f06e0c9 100644
 +  const layer = document.createElement('div');
 +  layer.className = 'inst-layer';
 +  _modOf[key] = mod;
-+  const inst = m.make({ key, mod, root, layer, shown: ()=> shownKey() === key });
++  // (on show: its module's in the page, on show; one read out of no tab (withState), out of
++  // the page, draws nothing, its name standing for it or not)
++  let inst = null;
++  inst = m.make({ key, mod, root, layer, shown: ()=> shownKey() === key && !!inst && m.on === inst });
 +  // (its history's baseline, the state it starts with: a new tab's first change undone
 +  // goes back to it, as a module's one instance restored to its default)
 +  const st = _histories[key];
@@ -5461,7 +6064,7 @@ index 4b37a24..f06e0c9 100644
  }
  const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','projects','settings'];
  // The sections that keep a URL hash. Module sections are reached through an open
-@@ -1224,15 +1347,18 @@ function goTab(tab, fromHash){
+@@ -1224,15 +1354,18 @@ function goTab(tab, fromHash){
      b.classList.toggle('is-on', on);
      if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
    });
@@ -5483,7 +6086,7 @@ index 4b37a24..f06e0c9 100644
    }
    if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
    // Only the fixed sections are addressable: a module section is shown by activating
-@@ -1258,11 +1384,16 @@ function onSectionChange(fn){ _sectionHooks.push(fn); }
+@@ -1258,11 +1391,16 @@ function onSectionChange(fn){ _sectionHooks.push(fn); }
     undo and redo go as ever; a busy module whose job holds none has neither do anything,
     silently. Up to v471 a switch left the job running, and its result went into whichever
     project the module held when it ended; up to v508 undo and redo waited for the job to
@@ -5504,7 +6107,7 @@ index 4b37a24..f06e0c9 100644
  
  /* =========================================================
     UNDO / REDO — per-module snapshot stacks (command pattern)
-@@ -1287,11 +1418,12 @@ function bytesKey(b){
+@@ -1287,11 +1425,12 @@ function bytesKey(b){
    }
    return k;
  }
@@ -5522,16 +6125,63 @@ index 4b37a24..f06e0c9 100644
  const _numsKey = new WeakMap(), _f64 = new Float64Array(1), _u32 = new Uint32Array(_f64.buffer);
  function numsKey(a){
    let k = _numsKey.get(a);
-@@ -1310,7 +1442,7 @@ function numsKey(a){
+@@ -1310,7 +1449,54 @@ function numsKey(a){
    }
    return k;
  }
 -const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && Object.isFrozen(x) ? numsKey(x) || x : x);
 +const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && isFixed(x) ? numsKey(x) || x : x);
++/* ---- What is worked out, kept (b2v3) ----
++   A result a module works out from data that never change (an array fixed, db.js: a
++   pattern's intensities, a spectrum) and from its own inputs (widths, parameters, a result
++   refined) is kept by that array (keeper's WeakMap): while a state on show, a tab asleep's
++   parked state or a history holds the array, it holds its results too, and a tab woken, an
++   undo to a state worked out before, a redraw or an export takes them as they were, not made
++   again (to b2v3 an instance kept the last ones it drew, and a tab woken made them all again:
++   an XRPD tab of 12 refined patterns 0.2 s, a DRS tab of 10 spectra 0.17 s). The key holds
++   every other input, exactly (exactKey, below); an array keeps the results of its
++   last `n` keys. An array not fixed keeps none: its results are made each time. What is kept
++   is shared: nothing writes into it (the tests freeze it, as they freeze the arrays fixed).
++   kept.made and kept.taken count, by name, the results made and those taken (tests,
++   measurements; SEM counts its files' reduced copies and cards made, sem.js). In a key an object is a number of its own (objId: the same object, the
++   same number), a value as JSON writes it but for numbers JSON has none for (exactKey: a
++   NaN, an infinity, a −0). */
++const kept = { made: {}, taken: {} };
++const _ids = new WeakMap();
++let _nid = 0;
++const objId = o => o == null || typeof o !== 'object' ? String(o) : _ids.get(o) || (_ids.set(o, ++_nid), _nid);
++const exactKey = v => JSON.stringify(v, (k, x)=> typeof x === 'number' && (!Number.isFinite(x) || Object.is(x, -0)) ? '#' + (Object.is(x, -0) ? '-0' : x) : x);
++function freezeDeep(v){
++  if (!v || typeof v !== 'object' || ArrayBuffer.isView(v) || Object.isFrozen(v)) return v;
++  Object.freeze(v);
++  for (const k in v) freezeDeep(v[k]);
++  return v;
++}
++function keeper(name, n = 4){
++  const by = new WeakMap();
++  return (data, key, make)=>{
++    const keep = isFixed(data);
++    let m = keep ? by.get(data) : null;
++    if (m && m.has(key)){
++      const v = m.get(key);
++      m.delete(key); m.set(key, v);
++      kept.taken[name] = (kept.taken[name] || 0) + 1;
++      return v;
++    }
++    const v = make();
++    kept.made[name] = (kept.made[name] || 0) + 1;
++    if (keep){
++      if (!m) by.set(data, m = new Map());
++      m.set(key, globalThis.__freezeFixed ? freezeDeep(v) : v);
++      if (m.size > n) m.delete(m.keys().next().value);
++    }
++    return v;
++  };
++}
  class UndoStack {
    constructor(snapshot, restore, limit=80){
      this._snap = snapshot; this._restore = restore; this._limit = limit;
-@@ -1342,8 +1474,9 @@ class UndoStack {
+@@ -1342,8 +1528,9 @@ class UndoStack {
          const cbs = this._onceListeners; this._onceListeners = [];
          cbs.forEach(cb=>{ try { cb(); } catch(e){} });
        }
@@ -5542,7 +6192,7 @@ index 4b37a24..f06e0c9 100644
      } finally { this._liveKey = null; }
    }
    onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
-@@ -1355,7 +1488,7 @@ class UndoStack {
+@@ -1355,7 +1542,7 @@ class UndoStack {
      this.index = i; this._key = null; this._busy = true; try { this._restore(this.states[i], true); } finally { this._busy = false; }
      this._hear();
    }
@@ -5551,7 +6201,7 @@ index 4b37a24..f06e0c9 100644
    // (no undo below the state the latest job holding the history started from)
    performUndo(){ if (this.index <= Math.max(0, ...this._marks.map(m=> m.i))) return false; this._apply(this.index - 1); return true; }
    performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
-@@ -1430,9 +1563,15 @@ class UndoStack {
+@@ -1430,9 +1617,15 @@ class UndoStack {
  const _histories = {};
  function registerHistory(key, snapshot, restore){
    const st = new UndoStack(snapshot, restore);
@@ -5567,7 +6217,7 @@ index 4b37a24..f06e0c9 100644
  document.addEventListener('keydown', e=>{
    if (!(e.ctrlKey || e.metaKey)) return;
    const k = e.key.toLowerCase();
-@@ -1444,14 +1583,15 @@ document.addEventListener('keydown', e=>{
+@@ -1444,14 +1637,15 @@ document.addEventListener('keydown', e=>{
    // (up to v499 a box just ticked, which keeps the focus, held Ctrl+Z off until it lost it).
    const el = document.activeElement, tag = el && el.tagName;
    if (tag==='TEXTAREA' || (el && el.isContentEditable) || (tag==='INPUT' && !/^(checkbox|radio|range|color|file|button|submit|reset|image)$/.test(el.type))) return;
@@ -5585,7 +6235,7 @@ index 4b37a24..f06e0c9 100644
    const did = isUndo ? st.performUndo() : st.performRedo();
    if (did || held) e.preventDefault();
  });
-@@ -1486,16 +1626,18 @@ document.addEventListener('keydown', e=>{
+@@ -1486,16 +1680,18 @@ document.addEventListener('keydown', e=>{
  // it (the open-tab bar carries the unsaved "*" instead); the flag still drives the
  // project bar's button visibility.
  const _hasData = {};
@@ -5608,7 +6258,7 @@ index 4b37a24..f06e0c9 100644
    const show = has || named;
    document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"], '
      + '.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
-@@ -1597,20 +1739,20 @@ function normalizeProjIcons(mod){
+@@ -1597,20 +1793,20 @@ function normalizeProjIcons(mod){
     {name,text} CSV entries. The group button zips them all; per-plot/table buttons
     pick a subset by name. */
  const _csvExport = {};
@@ -5637,7 +6287,7 @@ index 4b37a24..f06e0c9 100644
  }
  // The project CSV icon, reused on every per-view download button.
  const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
-@@ -1645,7 +1787,7 @@ document.addEventListener('click', e=>{
+@@ -1645,7 +1841,7 @@ document.addEventListener('click', e=>{
  });
  // Does a module currently hold loaded data? Reported by the modules themselves
  // through setTabLoaded (it used to be read off the nav button's data dot).
@@ -5646,7 +6296,7 @@ index 4b37a24..f06e0c9 100644
  
  /* =========================================================
     THEME — light / dark, remembered, defaulting to the OS preference.
-@@ -1705,62 +1847,64 @@ function applyTheme(theme, persist){
+@@ -1705,62 +1901,64 @@ function applyTheme(theme, persist){
     undo snapshot()/restore() as the canonical serialize/deserialize. */
  const MODULES = ['tauc','xrd','gc','epr','sem'];
  const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM' };
@@ -5737,7 +6387,7 @@ index 4b37a24..f06e0c9 100644
    if (!st) return;
    const backup = st._snap();
    st._busy = true;
-@@ -2314,16 +2458,25 @@ function barChipYmax(chips, svg, bars, g){
+@@ -2314,16 +2512,25 @@ function barChipYmax(chips, svg, bars, g){
      btn.className = 'instr-info';
      btn.setAttribute('aria-label', 'Toggle instructions');
      btn.innerHTML = INFO_SVG;
@@ -5771,37 +6421,121 @@ index 4b37a24..f06e0c9 100644
    });
  })();
  
-@@ -2333,5 +2486,7 @@ normalizeNavIcons();
+@@ -2333,5 +2540,7 @@ normalizeNavIcons();
  window.addEventListener('load', normalizeNavIcons);
  
  export {
 -  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar
 +  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar,
-+  saveSettings, TAB_DEF, registerModule, isFactory, makeInstance, attachInstance, detachInstance, dropKey, shownKey, withState, modOfKey, onAnyChange, onBusyChange, busyChanged,
-+  dropsBytes, vacate, fixed
++  saveSettings, TAB_DEF, registerModule, isFactory, makeInstance, attachInstance, detachInstance, dropKey, shownKey, withState, modOfKey, onAnyChange, onBusyChange, busyChanged, keeper, kept, objId, exactKey,
++  dropsBytes, asleep, vacate, fixed
  };
 diff --git a/xrd-peaks.js b/xrd-peaks.js
-index 61f5431..254a01f 100644
+index 61f5431..2cce50f 100644
 --- a/xrd-peaks.js
 +++ b/xrd-peaks.js
-@@ -712,7 +712,7 @@ export function createPeakAnalysis(host, root, o){
-        w wide convolved into every peak, widens them in turn: the width is the
-        user's to keep small against the peak widths, the raw pattern drawn beside it. */
-     const detSub     = near ? near.subtracted : smoothed.map((v,j)=>Math.max(0, v-snip[j]));
+@@ -7,7 +7,7 @@
+    file, its own parameters, and the Caglioti fit of its widths that corrects the
+    samples' sizes for the instrument's).
+ ========================================================= */
+-import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
++import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper } from './utils.js';
+ import { svgEl, Plot, axisReadout } from './plot.js';
+ import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
+ 
+@@ -25,6 +25,13 @@ const idOf = o => o == null ? '-' : typeof o !== 'object' && typeof o !== 'funct
+ const sizeOf = el => { if (!el) return '-'; const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
+ // (a plot at the range it was drawn with: not zoomed nor panned)
+ const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin === P._origYmin && P.ymax === P._origYmax;
++/* A pattern's processing (reprocessOne), kept by its intensities (utils.js keeper): its
++   smoothing and baseline by their widths (k1), its peaks by those and the peak search and
++   the peaks added and removed by hand (k2); and the standard's instrumental model by its
++   processing (modelOf). A tab woken, an undo to widths used before, a card made again
++   take them as made (to b2v3 a card kept its own, and a tab woken made all again: 67 ms
++   for 12 patterns). */
++const smoothKept = keeper('xrd-smoothing'), procKept = keeper('xrd-peaks', 8), modelOf = new WeakMap();
+ 
+ // Index of the grid point nearest to a 2θ, by bisection: an axis need not be even (a scan
+ // with points left out, xrd-instr.js, or listed positions). Up to v484 it was taken as
+@@ -695,24 +702,25 @@ export function createPeakAnalysis(host, root, o){
+     const k1 = [idOf(f.y), idOf(f.x), pr.smoothW, pr.blOn ? pr.snipW : 'off'].join('|');
+     return { k1, k2: [k1, idOf(f.varMul), pr.pkHeight, pr.pkProm, pr.pkDist, (manualPeaks[i]||[]).join(), (removedPeaks[i]||[]).join()].join('|') };
+   }
+-  function reprocessOne(i, was = [processed[i]]){
+-    const { k1, k2 } = procKeys(i);
+-    const same = was.find(q=> q && q.k2 === k2);
+-    if (same){ processed[i] = same; return; }
++  function reprocessOne(i){
++    const { k1, k2 } = procKeys(i), f = files()[i];
++    processed[i] = procKept(f.y, k2, ()=> processOf(i, f, k1, k2));
++  }
++  function processOf(i, f, k1, k2){
+     const pr = getFileParams(i);
+-    const f = files()[i];
+     const x = f.x;
+     const yraw       = f.y;
+-    const near = was.find(q=> q && q.k1 === k1);
+-    const smoothed   = near ? near.smoothed : boxSmooth(x, yraw, pr.smoothW);   // display + detection
+-    // SNIP baseline (estimate/fallback/standard); switched off, none: the pattern from zero
+-    const snip       = near ? near.snip : pr.blOn ? computeBaseline(x, smoothed, pr.snipW) : new Array(smoothed.length).fill(0);
+-    /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
+-       profile — on the raw counts the noise stops it short — and the smoothing, a box
+-       w wide convolved into every peak, widens them in turn: the width is the
+-       user's to keep small against the peak widths, the raw pattern drawn beside it. */
+-    const detSub     = near ? near.subtracted : smoothed.map((v,j)=>Math.max(0, v-snip[j]));
 -    const rawSub     = near ? near.rawSub : yraw.map((v,j)=>v-snip[j]);
++    const { smoothed, snip, detSub } = smoothKept(yraw, k1, ()=>{
++      const smoothed = boxSmooth(x, yraw, pr.smoothW);   // display + detection
++      // SNIP baseline (estimate/fallback/standard); switched off, none: the pattern from zero
++      const snip = pr.blOn ? computeBaseline(x, smoothed, pr.snipW) : new Array(smoothed.length).fill(0);
++      /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
++         profile — on the raw counts the noise stops it short — and the smoothing, a box
++         w wide convolved into every peak, widens them in turn: the width is the
++         user's to keep small against the peak widths, the raw pattern drawn beside it. */
++      return { smoothed, snip, detSub: smoothed.map((v,j)=>Math.max(0, v-snip[j])) };
++    });
 +    // (to b2 also the raw pattern less the baseline, a fourth array a pattern that nothing read)
      // Peak detection on the smoothed, SNIP-subtracted profile (robust to noise)
      const peaks      = findPeaks(x, detSub, pr.pkHeight, pr.pkProm, pr.pkDist);
      // Re-inject manually added peaks (survive param changes, cleared on reset); one with
-@@ -740,7 +740,7 @@ export function createPeakAnalysis(host, root, o){
+@@ -740,28 +748,27 @@ export function createPeakAnalysis(host, root, o){
        pk.fwhmSig = fwhmSigma(x, detSub, pk.idx, yraw, pr.smoothW, f.varMul);
      });
      const subtracted = detSub;
 -    processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks, k1, k2};
-+    processed[i]     = {smoothed, baseline:snip, snip, subtracted, peaks, k1, k2};
++    return {smoothed, baseline:snip, snip, subtracted, peaks, k1, k2};
    }
    function reprocessAll(){
-     const was = processed;
+-    const was = processed;
+     processed = [];
+-    for (let i=0; i<files().length; i++) reprocessOne(i, was);
++    for (let i=0; i<files().length; i++) reprocessOne(i);
+   }
+ 
+   // The standard's peaks the instrumental width is taken from, in 2θ order, and the
+-  // Caglioti fit to them (null with fewer than 3). Null with no file. Kept while the
+-  // standard's processing is the same object: one object, which the samples' views take
+-  // among their inputs (up to v490 made anew for each size read, a fit each time).
+-  let modelKept = null;
++  // Caglioti fit to them (null with fewer than 3). Null with no file. Kept by the
++  // standard's processing (modelOf): one object, which the samples' views take among their
++  // inputs (up to v490 made anew for each size read, a fit each time).
+   function instrModel(){
+     if (!std || !files().length || !processed[0]) return null;
+-    if (modelKept && modelKept.pr === processed[0]) return modelKept.m;
++    let m = modelOf.get(processed[0]);
++    if (m) return m;
+     const pts = processed[0].peaks
+       .filter(pk=>!pk.removed && isFinite(pk.fwhm))
+       .map(pk=>({x:pk.pos, th:(pk.pos/2)*Math.PI/180, b:pk.fwhm, s:pk.fwhmSig}))
+       .sort((a,b)=>a.x-b.x);
+-    modelKept = { pr: processed[0], m: { pts, fit: fitCaglioti(pts) } };
+-    return modelKept.m;
++    modelOf.set(processed[0], m = { pts, fit: fitCaglioti(pts) });
++    return m;
+   }
+   // The samples' correction, from the standard's model (host.instr).
+   const model = ()=> std ? null : host.instr();
 diff --git a/xrd-rv-model.js b/xrd-rv-model.js
 index 76667d1..dd72856 100644
 --- a/xrd-rv-model.js
@@ -6019,18 +6753,67 @@ index 0000000..997db42
 +    stop(){ if (stopped) return; stopped = true; jobs.forEach(j=> j.cancel()); jobs.clear(); on.clear(); flush(true); } };
 +}
 diff --git a/xrd-rv.js b/xrd-rv.js
-index 4b16049..50c7a0a 100644
+index 4b16049..6c4c76e 100644
 --- a/xrd-rv.js
 +++ b/xrd-rv.js
-@@ -19,6 +19,7 @@ import { PHASE_COLORS, prepPhase, prepOf, cellKey, defSettings, stdSettings, lis
-   SIZE_KINDS, hklShow, plotRuns, instrOf, LAB6_ID, irfOf, sameIrf, payloadFor, resultRecord, resultPhases, curvesFrom, curveInputs, sameInputs, scanRange, tickRows, groupTicks,
+@@ -3,12 +3,12 @@
+    The phases come from CIFs (the standard's LaB6 is built in); the refinement runs in
+    a module worker (xrd-rietveld.worker.js) on xrd-rietveld.js, and its result is kept
+    per pattern, by file name, so moving, leaving out or reloading files never puts it
+-   on another pattern. The curves are not kept: they are recomputed from the refined
+-   parameters, which takes milliseconds.
++   on another pattern. The curves drawn from it are kept by the pattern (curvesKept), made
++   again from the refined parameters only where what they are made from changed.
+    The calculations, which touch no page, are xrd-rv-model.js's; the words and markup that
+    need no page, xrd-rv-html.js's.
+ ========================================================= */
+-import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal } from './utils.js';
++import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper } from './utils.js';
+ import { fileSafe } from './cards.js';
+ import { Plot } from './plot.js';
+ import { decodeText } from './textdata.js';
+@@ -16,9 +16,10 @@ import { fitSettings } from './xrd-rietveld.js';
+ import { shapeView } from './xrd-shape3d.js';
+ import { cellView } from './xrd-cell3d.js';
+ import { PHASE_COLORS, prepPhase, prepOf, cellKey, defSettings, stdSettings, listOf, depOf, MODE, HOLD_KEYS, HOLD_DEFAULT, FIT_DEF, FIT, fitTxt, readFit, cleanFit,
+-  SIZE_KINDS, hklShow, plotRuns, instrOf, LAB6_ID, irfOf, sameIrf, payloadFor, resultRecord, resultPhases, curvesFrom, curveInputs, sameInputs, scanRange, tickRows, groupTicks,
++  SIZE_KINDS, hklShow, plotRuns, instrOf, LAB6_ID, irfOf, sameIrf, payloadFor, resultRecord, resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
    sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf } from './xrd-rv-model.js';
  import { esc, barIdx, solidCaption, instrLine, group, warnNote, fitLineHtml, phaseRowsHtml, cellDetailsHtml, settingsBodyHtml, widthsTableHtml, testsHtml } from './xrd-rv-html.js';
 +import { lanes } from './xrd-rv-pool.js';
  
  // The instrumental standard: NIST SRM 660c LaB6, Pm-3m, a = 4.156826 Å at 22.5 °C
  // (certificate). B on 6f (x, ½, ½), x = 0.1992 (Eliseev et al., Acta Cryst. C42 (1986)
-@@ -106,6 +107,12 @@ export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement:
+@@ -74,6 +75,28 @@ const resKey = r => !r ? '-' : Number.isFinite(r.at) ? 'at' + r.at : 'r' + idOf(
+ const sizeOf = el => { if (!el) return '-'; const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
+ // (a plot at the range it was drawn with: not zoomed nor panned)
+ const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin === P._origYmin && P.ymax === P._origYmax;
++/* A refined pattern's curves (the calculated, its background and the reflections' ticks),
++   its difference (observed less calculated, under the plot) and its net pattern (observed
++   less background, the Results' stacked plot), kept by its intensities (utils.js keeper:
++   while a state, a tab asleep or a history holds the pattern) under all they are made
++   from: the 2θ and variance factors (the same arrays: fixed, xrd.js), the instrument, all
++   the curves take from the result (exactly: a NaN is not a null, nor −0 0; a result read
++   back by an undo is a copy, the same), each phase's structure (its prep, one object for
++   one CIF text: prepOf; the standard's LaB6, one for the page) and colour, and the role.
++   A tab woken, an undo, a redraw or the CSVs take them as drawn before: to b2v3 a card kept
++   the last pattern drawn and the Results' last 64, and a tab woken made all again (an XRPD
++   tab of 12 refined patterns, 115 ms of its wake). */
++const curvesKept = keeper('xrd-curves'), diffKept = keeper('xrd-difference'), netKept = keeper('xrd-net');
++// (and a pattern not refined, its phases' reflections where its cells put them: tickRows,
++// by the 2θ, the instrument and the phases)
++const ticksKept = keeper('xrd-ticks');
++const curveKey = (f, r, list, std) => exactJson([idOf(f.x), idOf(f.varMul), instrOf(f), [r.params, r.models, r.textures, r.fit, r.phases, r.cells],
++  list.map(q=> [q.id, idOf(q.prep), q.color]), !!std]);
++// The standard's LaB6 as read, one for every card (its curves' key holds it by identity).
++let lab6Prep = null;
++const LAB6_PREP = ()=> lab6Prep || (lab6Prep = Object.assign(prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)'),
++  // (written in P1 here only to be short: nothing to report)
++  { name: 'LaB₆ (NIST SRM 660c)', notes: [] }));
+ 
+ const DL_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>';
+ const CSV_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
+@@ -106,6 +129,12 @@ export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement:
       onProgress()   the run here went on (the standard: the samples' Instrumental standard…)
       changed()      the standard's result changed (the standard): the samples' notes follow
       hidden()       the card is folded: nothing is drawn
@@ -6043,7 +6826,18 @@ index 4b16049..50c7a0a 100644
     }
     o: { prefix, standard } */
  export function createRietveld(host, root, o){
-@@ -153,43 +160,20 @@ export function createRietveld(host, root, o){
+@@ -142,9 +171,7 @@ export function createRietveld(host, root, o){
+   const ac = new AbortController();
+   // The standard's: the built-in LaB6, its own colour apart from the CIF phases'; the
+   // phase its refinement uses (pick).
+-  const lab6 = { id: LAB6_ID, cif: LAB6_CIF, file: '', color: '#4cc9a0', ...stdSettings(), prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)'), off: {} };
+-  lab6.prep.name = 'LaB₆ (NIST SRM 660c)';
+-  lab6.prep.notes = [];      // written in P1 here only to be short: nothing to report
++  const lab6 = { id: LAB6_ID, cif: LAB6_CIF, file: '', color: '#4cc9a0', ...stdSettings(), prep: LAB6_PREP(), off: {} };
+   let pick = 0;
+   const allPhases = ()=> std ? [lab6, ...phases] : phases;
+   const curIdx = ()=> std ? 0 : Math.min(host.idx(), Math.max(0, host.files().length - 1));
+@@ -153,43 +180,20 @@ export function createRietveld(host, root, o){
    const stdPhase = ()=> allPhases().find(q=> q.id === pick) || lab6;
    const phasesFor = f => std ? [stdPhase()] : phases.filter(q=> !(f && q.off[f.name]));
  
@@ -6096,7 +6890,7 @@ index 4b16049..50c7a0a 100644
       It holds the history from its start (holdHist; a sample's from its wait for the
       standard's run, press): the steps taken meanwhile are undone and redone around it, and
       as it ends, however it ends, the patterns written go into the states saved meanwhile
-@@ -215,25 +199,49 @@ export function createRietveld(host, root, o){
+@@ -215,25 +219,49 @@ export function createRietveld(host, root, o){
        fell: [], bgFreed: [], n: todo.length, done: 0, tell };
      if (host.onBusy) host.onBusy();
      try {
@@ -6165,7 +6959,7 @@ index 4b16049..50c7a0a 100644
        setStatus([run.fell.length && `From the CIF, no last result to start from: ${run.fell.join('; ')}.`,
          run.bgFreed.length && `Scales and background refined, not held: the background's terms changed since the last result (${run.bgFreed.join(', ')}).`].filter(Boolean).join(' '));
        return { ok: true };
-@@ -274,7 +282,8 @@ export function createRietveld(host, root, o){
+@@ -274,7 +302,8 @@ export function createRietveld(host, root, o){
      }
      const run = cur;
      if (!run) return;
@@ -6175,7 +6969,7 @@ index 4b16049..50c7a0a 100644
      endRun(commit);
      setStatus(run.n > 1 ? `Stopped after ${run.done} of ${run.n} patterns: the others keep what they had.` : `Stopped: ${std ? 'the standard' : 'the pattern'} keeps what it had.`);
    }
-@@ -319,7 +328,7 @@ export function createRietveld(host, root, o){
+@@ -319,7 +348,7 @@ export function createRietveld(host, root, o){
      setStatus('Refining the instrumental standard first…'); syncButtons();
      const r = await sr.done;
      // (stopped from here, or by the tab manager: cancel said so)
@@ -6184,7 +6978,30 @@ index 4b16049..50c7a0a 100644
      waiting = null; hideProg(); syncButtons();
      if (!r.ok || !irf()){ releaseHist(); setStatus(r.ok ? 'The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.'
        : r.why === 'stopped' ? 'The standard\'s refinement was stopped: nothing refined.' : `The standard's refinement failed (${String(r.why).replace(/\.$/, '')}): nothing refined.`); return; }
-@@ -347,7 +356,7 @@ export function createRietveld(host, root, o){
+@@ -328,17 +357,13 @@ export function createRietveld(host, root, o){
+ 
+   // ---- the plot: observed, calculated, the background, the difference under them,
+   // and a row of ticks per phase between the two ----
++  // (kept: curvesKept, above. Up to v486 a redraw built and calculated the model twice,
++  // and an undo or a tab switch again for every refined pattern in the Results: 1.5–2.5 s
++  // for twelve)
+   function curvesOf(f, r){
+-    const list = resultPhases(r, allPhases(), phasesFor(f)), inp = curveInputs(f, r, list);
+-    if (!(curveKept && sameInputs(curveKept.inp, inp))) curveKept = { inp, c: curvesFrom(f, r, list, std) };
+-    return { c: curveKept.c, list };
++    const list = resultPhases(r, allPhases(), phasesFor(f)), key = curveKey(f, r, list, std);
++    return { c: curvesKept(f.y, key, ()=>{ const { yc, bg, ticks } = curvesFrom(f, r, list, std); return { yc, bg, ticks }; }), list, key };
+   }
+-  /* Curves kept while what they are built from is the same (curveInputs, sameInputs): the
+-     last drawn (curveKept), and each pattern's observed less its background for the Results
+-     (netKept). Up to v486 a redraw built and calculated the model twice (draw, then
+-     renderResults for its phases), and an undo or a tab switch, whose results come back as
+-     new objects, again for every refined pattern in the Results: 1.5–2.5 s for twelve. */
+-  let curveKept = null;
+   /* The pattern's plot as last drawn (plotKey): the pattern, its instrument, its result,
+      the phases (each one's structure, colour and tick on it, the standard's chosen) and
+      the plot's size. The same again, it stays as it is (kept in view, as preserve keeps
+@@ -347,7 +372,7 @@ export function createRietveld(host, root, o){
    let plotKey = '', instrTxt = '';
    const setText = (id, t)=>{ const el = $(id); if (el.textContent !== t) el.textContent = t; };
    function draw(preserve){
@@ -6193,7 +7010,48 @@ index 4b16049..50c7a0a 100644
      const fs = host.files();
      syncButtons();
      renderPhases();
-@@ -953,7 +962,7 @@ export function createRietveld(host, root, o){
+@@ -386,16 +411,17 @@ export function createRietveld(host, root, o){
+     const prev = preserve && plot ? { xmin: plot.xmin, xmax: plot.xmax } : null;
+     plot = new Plot(svg, { xlabel: '2θ (°)', ylabel: 'Intensity (counts)' });
+     plot.attachTools(svg.closest('.plot-wrap'));
+-    let c = null, used = phasesFor(f);
+-    if (r && r.params){ try { const cv = curvesOf(f, r); c = cv.c; used = cv.list; } catch(e){ c = null; } }
++    let c = null, used = phasesFor(f), key = '';
++    if (r && r.params){ try { const cv = curvesOf(f, r); c = cv.c; used = cv.list; key = cv.key; } catch(e){ c = null; } }
+     const ys = f.y, lo = Math.min(...ys), hi = Math.max(...ys), A = (hi - lo) || 1;
+-    const groups = c ? groupTicks(c.ticks, used) : tickRows(f, phasesFor(f));
++    const groups = c ? groupTicks(c.ticks, used)
++      : ticksKept(f.y, exactJson([idOf(f.x), instrOf(f), used.map(q=> [q.id, idOf(q.prep), q.color])]), ()=> tickRows(f, used));
+     const rowH = 0.045*A, rowGap = 0.02*A;
+     const tickTop = lo - rowGap, tickBottom = tickTop - groups.length*(rowH + rowGap);
+     let diff = null, off = 0;
+     const [xa, xb] = scanRange(f);
+     if (c){
+-      diff = ys.map((v, i)=> v - c.yc[i]);
++      diff = diffKept(ys, key, ()=> ys.map((v, i)=> v - c.yc[i]));
+       const dHi = Math.max(...diff), dLo = Math.min(...diff);
+       off = tickBottom - rowGap - dHi;
+       plot.setRange(xa, xb, off + dLo - 0.03*A, hi + 0.05*A);
+@@ -428,16 +454,10 @@ export function createRietveld(host, root, o){
+      across the samples). Each drawn again only when what it shows changes. ---- */
+   // resNorm: the stacked patterns' normalisation (Settings…, Results), as the Scherrer card's.
+   let sizeBy = 'sample', resNorm = 'global';
+-  // A pattern's observed less its refined background, or null (curveKept's rule; the last 64).
+-  const netKept = new Map();
++  // A pattern's observed less its refined background, or null (kept: netKept).
+   function netOf(f, r){
+     let list; try { list = resultPhases(r, allPhases(), phasesFor(f)); } catch(e){ return null; }
+-    const inp = curveInputs(f, r, list), k = netKept.get(f.name);
+-    if (k && sameInputs(k.inp, inp)) return k.y;
+-    let v = null; try { const c = curvesFrom(f, r, list, std); v = Array.from(f.y, (y, i)=> y - c.bg[i]); } catch(e){}
+-    netKept.delete(f.name); netKept.set(f.name, { inp, y: v });
+-    if (netKept.size > 64) netKept.delete(netKept.keys().next().value);
+-    return v;
++    return netKept(f.y, curveKey(f, r, list, std), ()=>{ try { const { c } = curvesOf(f, r); return Array.from(f.y, (y, i)=> y - c.bg[i]); } catch(e){ return null; } });
+   }
+   const refinedFiles = ()=> host.files().filter(f=> results[f.name] && results[f.name].params);
+   const phaseColor = name => (allPhases().find(q=> q.prep.name === name) || {}).color || '#888';
+@@ -953,7 +973,7 @@ export function createRietveld(host, root, o){
        <div class="rvs-body"></div>
        <button class="btn primary" type="button" data-done style="width:100%;margin-top:16px">Done</button>
      </div>`;
@@ -6202,7 +7060,7 @@ index 4b16049..50c7a0a 100644
    const setBody = setModal.querySelector('.rvs-body');
    let setKey = '', rebuilding = false;
    let fitNote = null;        // the Refinement section's note, when an entry was not taken
-@@ -978,7 +987,8 @@ export function createRietveld(host, root, o){
+@@ -978,7 +998,8 @@ export function createRietveld(host, root, o){
      document.removeEventListener('keydown', onSetKey, true);
      if (inBox && !$('Settings').disabled) $('Settings').focus();
    }
@@ -6212,7 +7070,7 @@ index 4b16049..50c7a0a 100644
    // Built again only when the phases on show change (one added or removed by an undo);
    // otherwise the inputs are set in place, keeping the focus.
    function renderSettings(){
-@@ -1223,11 +1233,11 @@ export function createRietveld(host, root, o){
+@@ -1223,11 +1244,11 @@ export function createRietveld(host, root, o){
      },
      /* The card closed (or turned into another kind, set aside then dropped): a run going on
         ends as the kind switch ends it (cancel(false): the card goes, its last state is the
