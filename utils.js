@@ -1362,8 +1362,8 @@ function goTab(tab, fromHash){
   const k = MODULES.includes(tab) ? K(tab) : null;
   if (k && _tabRedraw[k]){
     _needsRedraw[k] = false;
-    // Double rAF: let the tab-fade paint its first frame before the (potentially
-    // heavy) redraw runs, so switching to a loaded tab doesn't freeze the animation.
+    // Double rAF: the tab painted first, then the redraw (a few ms when nothing changed;
+    // a tab to draw again at another width is shown under the loader, tabs.js showLater).
     // (by the instance shown then: one let go meanwhile has none; one woken, drawn, shows
     // the rest of what it showed: shownAgain)
     requestAnimationFrame(()=> requestAnimationFrame(()=>{ const f = _tabRedraw[k]; if (f) try { f(); } catch(e){} shownAgain(k); }));

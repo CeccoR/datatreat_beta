@@ -499,15 +499,10 @@ main {
 }
 .tab.active {
   display: block;
-  animation: tab-fade 0.25s ease;
 }
 /* An instance's layer (a module made per tab, b2): its windows and menus, in the page
    while the instance is; a box of no box of its own. */
 .inst-layer { display: contents; }
-@keyframes tab-fade {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 /* Cross-fade colours during a light/dark toggle (scoped to .theme-anim so it only
    runs on the switch, keeping normal hover/press feedback instant). Only the three
    cheap colour properties animate; icons follow via `color` (they use currentColor),
@@ -528,7 +523,6 @@ main {
   ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tab.active { animation: none; }
   :root.theme-anim, :root.theme-anim * { transition: none !important; }
 }
 /* Keyboard-shortcut reference (Settings) */

@@ -495,12 +495,10 @@ function syncProjectBar(t){
 }
 
 // Run fn only after the browser has painted at least one frame. A tab switch
-// toggles .tab.active (starting the 0.25s tab-fade) and then must restore the
-// module's state — a heavy, synchronous recompute + redraw on large projects. In a
-// single rAF that work runs *before* the fade's first paint and freezes the switch.
-// Deferring past one paint lets the fade start (opacity/transform animate on the
-// compositor, so they keep running while the main thread does the restore), then the
-// charts fill in a moment later instead of the click feeling stuck.
+// toggles .tab.active (shown at once: to v518 a 0.25 s fade, the tab whole only a third
+// of a second after the click) and may then have heavy work: a wake, a redraw at a new
+// width. In a single rAF that work runs *before* the first paint and freezes the click;
+// past one paint the tab, or the loader over it, is on screen first.
 function afterPaint(fn){ requestAnimationFrame(()=> requestAnimationFrame(fn)); }
 
 // Module loader: a themed overlay + spinner covering the content below the top bar
@@ -608,10 +606,11 @@ function activateTab(id){
   stashActive();
   hideTab(was);
   _activeId = id;
-  // The record of the tab left, at once (its `active` changed): a step superseded within its
-  // frames writes nothing after (to b2v3 the step wrote it with the tab shown's, and where it
-  // was superseded never: two records on show, a reload showing the first).
-  persistTab(was);
+  // The record of the tab left (its `active` changed), once the tab chosen is painted (to
+  // v518 at the click: ~20 ms of the press before the tab was on screen); written whatever
+  // step comes next (to b2v3 the step wrote it with the tab shown's, and where it was
+  // superseded never: two records on show, a reload showing the first).
+  afterPaint(()=> persistTab(was));
   if (isLive(t)){
     const kept = ()=>{ persistMoved(); keepLimits(); };
     if (redrawn(t)) return showLater(t, kept);
