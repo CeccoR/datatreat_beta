@@ -606,7 +606,11 @@ differed, on the patch before this round (`old`) and after:
 | XRPD | a crystallite's solid turned (Rietveld card) | home view / home view | kept: `own`, by card |
 | SEM | the image on show | kept / the one its record held, the same way | kept: `own` too (by its id), over the record's state |
 | SEM | the editor zoomed or panned | fitted / fitted (and at every show and resize, awake too) | kept: `own`, by the image's id, as the pane's size changes too |
-| all | cards folded, chips, the phase on show, crops, settings | kept: their states' | as before |
+| XRPD | a Rietveld card's phase on show (a click on its row), the standard's window's alike | kept / the one its record held, as the pattern (review) | kept: `own` too (by its id and name), over the record's state |
+| XRPD | a phase's unit cell turned (a card's, the standard's window's) | home view / home view (review) | kept: `own`, by the cell's key, put back at its next drawing |
+| XRPD | the standard's two windows' instructions shown | shut / shut | kept: `instr`, by the window's id |
+| GC | a sample picked in a card's table or on its plot (intervals one per sample), its interval highlighted | none / none (review) | kept: `own`, by card, by its file's name |
+| all | cards folded, chips, crops, settings | kept: their states' | as before |
 
 Not kept, and why: the page's scroll is the window's, shared by every tab, awake ones too
 (v517 the same); a tool armed (Pan, Zoom area, + Add peak) is a mode of the pointer, not
@@ -635,7 +639,8 @@ A record's write takes 0.5 ms of the page's thread where it took 0.2 (an XRPD ta
 patterns, every plot zoomed, median of 15 in `measure/persist.mjs`, the clock's steps 0.1 ms;
 `shownOf` under 0.1 ms; the view 332 characters of JSON; `results/persist-b2v4*.json`).
 
-Tests: `b2view` 1–4 (DRS; XRPD with a refinement; GC and EPR; SEM of 12 images), each
+Tests: `b2view` 1, 2, 4 and 5 (DRS; XRPD with a refinement; GC and EPR; SEM of 12 images;
+3 is the review's, below), each
 module's project saved first: the view changed (a sample or pattern or image stepped, plots
 zoomed, instructions shown, peaks picked, the editor zoomed and panned, the lists scrolled),
 no step of the history and no "*"; the same view, the same history and no "*" after a sleep
@@ -669,8 +674,19 @@ and writes only those that differ (`persistMoved`, in place of `persistAll`):
 No schema change (DB_VER stays 4): `order` was already in every record. Records of v517 and
 of every b2 before (orders 0, 1, 2…) read as before, nothing written at their load
 (`b2store` 3). A v517 page reads these as it does today: it sorts by `order` (gaps, halves and
-negative numbers sort right), takes the one record on show, and leaves `shows` aside; what it
-loses is the views (it writes its records without them). Two windows on one database, as
+negative numbers sort right), takes the one record on show, and leaves `shows` aside. What it
+loses (the review's first finding): the views (it writes its records without them), and, for
+a tab whose number is no longer its index (a tab moved to the front, −1; moved between two, a
+half; any after a gap a close left), its place in the bar should v517 write that tab's record
+alone (an autosave, a rename, a save, the unsaved mark) before its first switch, close or
+move writes them all: it writes its index as `order`, which may tie with another record's
+number or pass it, and both v517 and b2 then sort the two by their ids (the order they were
+opened), not by the bar. Reproduced (the reviewers' `s4.mjs`, one origin serving both trees):
+E A B D (E moved to the front, C closed), E renamed in v517, reloaded: A Ex B D, in v517 and
+then in b2; with D renamed instead (its number its index) nothing moved. Every tab and its
+work stay, the tab on show stays; v517's next switch, close or move writes the order whole
+again. No code keeps writes of one record and v517's index both: said here, in the README's
+behaviour changes and in the report. Two windows on one database, as
 today, each write their own tabs' records; now fewer, so a reload may find orders of both,
 two of one number (the second numbered past the first, and written) or two records on show
 (the one written last taken, where v517 took the first by order): every tab back, in an order
@@ -714,6 +730,93 @@ now; then, XRPD's pattern and SEM's image put in the view too, the tests touchin
 `b2store`, `measure/many.mjs` and `measure/persist.mjs` none. Changed besides: `b2kept`'s
 comments on a woken DRS tab's sample, tests/README.md's two rows and its count (221). The
 round's own changes: 15 files, +798 −53.
+
+**The review of b2v4: six findings**, each reproduced on a fresh git-archive of HEAD with the
+patch above (`refix/build` before its changes) by the reviewers' own scripts, then fixed at
+its root, or said where no code can. The user's rule for this round stands over them: what
+was done for DRS holds for every module (the view back, no step of the history, no "*").
+
+1. *A v517 page loses more than the views* (records): true, as reproduced (`s4.mjs`, §10's 3.,
+   above). No code change: v517 writes its index into the one record it writes, and
+   writes of one record are the point of 3. Said exactly above, in the README's behaviour
+   changes and in the report. Run again on the final tree it gave A Ex B D in v517 and then
+   A B Ex D in b2: v517's reload had written Ex's record again with its index, 1, B's
+   number, which the order they were opened then put after B.
+2. *SEM's files read by v517 as none* (records; since b2v2): true (`s10.mjs`, `s11.mjs`): a
+   SEM tab written by b2 showed 0 images in v517 ("its stored bytes no longer read as a
+   Tescan TIFF"), whose next switch wrote the tab's record with 0 refs, its bytes swept: the
+   tab empty when b2 came back, unsaid; a SEM project saved by b2, opened from v517's
+   Projects, the same. Fixed at its root, the form: db.js writes a file's bytes held with its
+   id alone (`isRaw`: SEM's RawRef, park's copy, unload's with a reference) as v517 wrote its
+   own, `{ id, b64 }`: in a record and a project saved its b64 `{__t:'b64', h}`, under the
+   same SHA-256 the array is stored by (nothing stored twice, nothing to convert: v517's
+   hash of a text holder is its bytes'), in a project file the base64; `fill` gives a stored
+   text holder back as `{ id, bytes }`, the array known by its hash (to b2v4 as base64 text,
+   which `semRestore` read into bytes again: v517's records now cost no base64 either);
+   sem.js's `idsIn` takes the form as a record holds it (a tab come back asleep). After it:
+   v517 shows the 2 images of b2's SEM tab, its switch writes them with 2 refs, b2 shows
+   them again; the project opens in v517 with its 2 images and no alert; a project file
+   written by b2 is v517's form (the README's "cannot be opened by v517" is gone).
+   `bytestore`'s two assertions changed for b2v2 are v517's again, as written for v517.
+   Test: `b2store` 4 (a SEM tab's record, awake, asleep with its bytes let go and then moved
+   so that its record is written from what it holds asleep, and woken; the project saved;
+   the project file's base64 byte for byte; a reload giving the images back byte for byte);
+   on the patch before it fails at its first record (`['id', 'bytes']`), and `bytestore`'s
+   two v517 assertions fail there too.
+3. *A Rietveld card's phase on show lost at a reload* (view): true (`xrdphase3.mjs`: phase 1
+   clicked, 6 s on the record still held 2, a reload showed 2). The card's `sel` is in its
+   state (an undo goes back to its step's, a project saved reopens on it, v517) and a click
+   on a row is no change, as XRPD's pattern stepped: so, as for the pattern, the card's
+   `shows()` gives the phase (by its id, with its name as a check) and `showNext` puts it
+   over the restored state where that phase is still there; the standard's window's
+   Rietveld alike, through xrd.js's `shows`/`showNext` (`std`, with its Scherrer's peak
+   picked, which no view held either). After it: the record holds phase 1 5 s after the
+   click, and a reload shows it.
+4. *GC's sample picked lost at a wake and a reload* (view): true (`gcsel.mjs`: rows `01` and
+   2 lines highlighted → `00` and 0, woken or reloaded). Each GC card's `shows()` gives the
+   sample picked (`gcSel`) by its file's name, only while the intervals are one per sample;
+   gc.js's instance gathers them by card id and its restore gives them back after the
+   deck's load, as xrd.js does. After it: `01` and 2 lines through both.
+5. *The unit cell's 3D turn lost at a wake and a reload* (view): true (`xrdcell.mjs`: the
+   canvas back at its home view). xrd-cell3d.js's `cellView` gets `getView()` (its rotation,
+   null at the home view) and `setView(v)` (a rotation only, as xrd-shape3d's), and the
+   Rietveld card's `shows()` the turn by the cell's key (`cellKeyShown`: the phase, its cell,
+   its CIF, its name), put back at the cell's next drawing on that key only, kept meanwhile
+   (a card folded, the standard's window shut); a double click home again drops it. After it:
+   the turned canvas, pixel for pixel, through a sleep and a reload, a card's and the
+   standard's window's. Looking for what else a window of its own keeps: the standard's two
+   windows' instructions shown were lost the same way (their button has no `data-instr`, and
+   `shownOf` read the section only): `shownOf` now takes a window's in the tab's layer by the
+   window's id, `shownAgain` opens it again.
+6. *The instructions' comment* (utils.js `initInstrCollapse`): true; reworded (each starts
+   closed as the page loads; a tab woken or reloaded opens again those it showed).
+
+Tests: `b2view` 4 has GC's sample picked (its intervals' starts made one per sample before
+the save) through its round trip; `b2view` 3, new, the phases on show and the cells turned,
+a card's and the standard's window's, with that window's instructions shown, its record
+holding them 5 s after, through a sleep and a wake and two reloads, no step, no "*", a
+double click putting the card's cell home dropping its turn; `b2store` 4, new, above. On the
+patch before: `b2view` 3, 4 and `b2store` 4 fail, and `bytestore`'s "saved…" and "bytes
+missing…" with v517's assertions (`results/tests-b2v4r-old.log`). The tests of what changed
+and every b2 test (`b2view`, `b2store`, `b2xrd`, `b2sem`, `b2drs`, `b2gcepr`, `b2cross`,
+`b2cap`, `b2fixed`, `b2kept`, `tabs`, `db`, `bytestore`, `roundtrip`, `sem`, `rvcif`, `gcp`,
+`gcrep`, `modules`, `xrdcards`, `undorun`, `drsread`): **109 of 109** in 9 min 24 s
+(`results/tests-b2v4r.log`). **The whole suite, `DT_ROOT=<tree> npm test`: 223 of 223 pass**
+in 15 min 4 s (`results/suite-b2v4r.log`), on a fresh git-archive copy of HEAD (189490a,
+which committed the round before the review; the app's files b93ed5c) with the new
+`b2.patch`, identical file by file to the work tree and to a second copy made from the
+delivered patch. Lint: db.js, gc.js, sem.js, utils.js, xrd.js, xrd-rv.js and xrd-cell3d.js
+exactly their findings before (sem.js and utils.js v517's `screen` and `fitIcon`, compared
+line for line); `b2view`, `b2store`, `bytestore` none. The changes: 11 files, +261 −46
+(db.js +25 −5, gc.js +19 −1, sem.js +6 −3, utils.js +15 −8, xrd.js +14 −6, xrd-rv.js +19 −4,
+xrd-cell3d.js +20; `b2view` +86 −11, `b2store` +52 −2, `bytestore` +2 −3, tests/README.md +3
+−3). The patch: one git diff against HEAD, 41 files (xrd-cell3d.js in it now, `bytestore`
+out of it), +5308 −943, sha256 da352a23…; b2v4's first (+5087 −937, da153713…) is in git at
+189490a. What a record's write costs (`measure/persist.mjs`, as above, both trees served
+from one server): `persistTab` 0.5 → 0.4 ms of the page's thread, median of 15, the clock's
+steps 0.1 ms (no change within them), `shownOf` 0.1 → 0.0 ms, the view 332 → 392 characters
+of JSON (the standard's phase on show, LaB₆, now in every XRPD tab's view;
+`results/persist-b2v4r*.json`).
 
 ## Tests
 
@@ -841,6 +944,11 @@ xrd-rv-model.js exactly part B's findings (compared line for line), `b2sem`, `b2
 
 ## The patch
 
+b2v4's review (§10, its last part): one git diff against HEAD (189490a; the app's files
+b93ed5c), 41 files, +5308 −943, sha256 da352a23…; its own changes 11 files, +261 −46. `git
+apply --check` is clean on a fresh git-archive of HEAD, and the tree it gives is identical,
+file by file, to the one the whole suite ran on. b2v4's first (da153713…) is in git at 189490a.
+
 b2v4's (§10): one git diff against HEAD (ee7bc51, which committed b2v3's last; the app's files
 b93ed5c), 41 files, +5087 −937, sha256 da153713…; the round's own changes 15 files, +798 −53.
 `git apply --check` is clean on a fresh git-archive of HEAD, and the tree it gives is
@@ -901,6 +1009,9 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
 - The final check (§8): **Home, Projects or Settings clicked just after a tab stays on show**
   (the tab came back over it); a tab chosen and left again at once, or woken behind one of
   them, shows under the loader at its next show; a SEM file read again keeps its crops' cards.
+- b2v4 and its review (§10): a tab woken or reloaded shows what it showed, XRPD's phases on
+  show and unit cells turned and GC's samples picked among it; a close writes no other
+  record; SEM's files are stored and written as v517 stores them, so v517 reads them.
 
 ## Not done, and what is left
 
@@ -924,6 +1035,10 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
 - **An edit on the tab on show** gets no loader (a crop typed: its group's cards made in its
   task; a width typed in XRPD the first time: its processing), as in v517.
 - Measured headless on this machine, synthetic and fixture files; not in a real Chrome.
+- b2v4's review: **a v517 page on b2's records** (an old window, the app rolled back) loses
+  the views, and may put a tab moved in b2 (or opened after a close) elsewhere in the bar,
+  should it write that tab's record alone before it writes them all (§10); no code keeps
+  both writes of one record and v517's index. Its SEM tabs and projects it now reads.
 
 ## Method, trees, housekeeping
 
@@ -964,5 +1079,15 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
   in 14 min 26 s), `probe` (the DOM probe of what a wake and a reload reset, `lost.mjs` and
   `fp.mjs`, run on `old` and `build`; `stepreload.mjs`, the step and the reload).
 - My servers on 8990 and 8991 are stopped by their PIDs, found by the port.
+- b2v4's review (§10): in the scratchpad's `b2v4/refix/`: `build` (a git-archive of HEAD
+  189490a with its patch, the fixes made there; the tests of what changed ran there), `old`
+  (the same without the fixes, the new tests copied in: their failures), `pk` (HEAD in a
+  local git with `build`'s files over it: the patch made there), `fresh` (a git-archive of
+  HEAD with the new patch: the whole suite), `check` (the same from the delivered file:
+  identical), `probe` (the reviewers' view probes, `xrdphase3.mjs`, `gcsel.mjs`,
+  `xrdcell.mjs`, run before and after), `records` (the reviewers' `s4.mjs`, `s10.mjs`,
+  `s11.mjs` with a server on 8990 serving `new` (`build`), `old` and `v517` (a git-archive of
+  HEAD: v517's app) under one origin, so that they share IndexedDB; `persist.mjs` ran there
+  too). That server is stopped by its PID, found by the port.
 - No file of the main tree outside `proto/live-tabs-b2/` was edited, and no git command that
   changes state was run there.

@@ -78,8 +78,8 @@ works differently:
 - **The view** (b2v4). What a tab shows beside its state, no part of its history nor of a
   saved project, comes back with it, woken or reloaded: the shell keeps for every module its
   plots' zooms (by their svg's id, on the range they were taken on), its instructions shown
-  and its lists' scroll (utils.js `shownOf`), and the module gives its own (`inst.shows()`,
-  §3). It is parked as the tab sleeps, written in the tab's record (`shows`) 5 s after it
+  (a window's in its layer too, by the window's id: XRPD's standard's) and its lists' scroll
+  (utils.js `shownOf`), and the module gives its own (`inst.shows()`, §3). It is parked as the tab sleeps, written in the tab's record (`shows`) 5 s after it
   changes or with any write of the record, kept in the window's sessionStorage as the page
   goes, and given to the instance that wakes the tab before its restore (`inst.showNext`,
   `showAgain`): a zoom put back as its plot is first drawn on the same range, the rest once
@@ -117,8 +117,10 @@ A module is made per tab when:
 12. what it shows that no state of it holds and the shell does not keep for it (its plots'
    zooms, instructions and lists' scroll the shell keeps: §1), it gives as `inst.shows()`
    and takes back as `inst.showNext(v)` before its restore (§3): the sample on show, a
-   canvas's zoom, a row picked; never a step of its history, never compared by a save
-   (b2v4), and a test sees it through a sleep and a reload (`b2view`).
+   canvas's zoom or a 3D view's turn, a row picked; and alike what its state holds but a
+   click changes without a step (XRPD's pattern and phase on show, SEM's image), which no
+   record write follows; never a step of its history, never compared by a save (b2v4), and
+   a test sees it through a sleep and a reload (`b2view`).
 
 ## 3. The instance, its section, its ids
 
@@ -138,10 +140,12 @@ create(ctx) → inst
             made for withState, out of the page, never is, and draws nothing)
   inst = { destroy(), shows?(), showNext?(v) }   // the shell adds key, mod, root, layer
     shows()     what it shows beside its state, as JSON (b2v4), or null: DRS's sample on show
-                (by its file's name), XRPD's pattern (by its name) and its cards' peaks picked
-                and crystallites' turns, SEM's image (by its id) and its editor's zoom; read at
-                every record write and sleep (what a state holds too, the pattern and the
-                image, a step writes no record of: the view does, 5 s after)
+                (by its file's name), XRPD's pattern (by its name), its cards' peaks picked,
+                crystallites' turns, phase on show (by its id and name) and cell's turn (by
+                the cell's key), the standard's window's alike (`std`), SEM's image (by its
+                id) and its editor's zoom, GC's cards' samples picked (by the file's name);
+                read at every record write and sleep (what a state holds too, the pattern,
+                the phase and the image, a click writes no record of: the view does, 5 s after)
     showNext(v) v, what it gave, before its restore (a wake, a reload): its restore shows it
                 where it still fits (the same file, image or card), else as before
 ```
@@ -384,6 +388,14 @@ whose predicate returns an element; return a boolean instead (NOTES-drs.md).
     record as they were, Home on show, a banner saying so; its next show reads again (to
     the review it woke without its files, and its record, written then, lost them for
     good).
+  - **Its form in the store.** A file's bytes held with its id alone (`{ id, bytes }`: SEM's
+    RawRef, park's copy of it, unload's with `{__t:'u8', h}`) are written as v517 wrote its
+    own, `{ id, b64 }` (db.js `isRaw`): `{__t:'b64', h}` in a record and a project saved,
+    under the same SHA-256 (nothing stored twice), the base64 in a project file; db.js
+    `fill` gives them back as `{ id, bytes }`. So a v517 page (an old window, or the app
+    rolled back) reads b2's SEM tabs, projects and files as its own (b2v4 review: to it the
+    form was `{ id, bytes }`, which v517 read as no file, and its next switch wrote the tab's
+    record without them).
   - **Who waits.** `tabs.js ensureLive()` returns the wake's promise: Save, Save as, the
     exports, the CSVs, Delete and a close that saves await it. A tab asleep saved as it is
     closed stores its references, the bytes being in the store. Projects' CSVs and exports
