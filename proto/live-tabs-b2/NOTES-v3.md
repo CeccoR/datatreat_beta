@@ -554,6 +554,26 @@ whole suite was not run again: nothing outside tabs.js and sem.js changed. Lint:
 sem.js exactly their findings before (sem.js's `screen`), `b2cap` and `b2kept` none. The
 changes: 5 files, +79 −20 (tabs.js, sem.js; `b2cap`, `b2kept`, tests/README.md's two rows).
 
+## 9. The hash's own echo
+
+The check of §8 found one more case, made by §8's own fix: from Home, Settings (or
+Projects) clicked and then a tab whose show is deferred (awake and left at another width:
+showLater), before the browser's hashchange for Settings has run. goTab sets the hash, and
+the app's hashchange listener (utils.js) ran goTab again for the section already on show:
+nothing on screen, but onSectionChange counted it as a fixed section chosen anew, so
+showLater gave up the tab's show and the click was lost (Settings stayed on show). Real
+input reaches it: two clicks queued behind a long task are dispatched before the
+hashchange task.
+
+The fix, one line in utils.js: the listener leaves a section already on show alone (`t !==
+_activeTab`). Back and Forward to another section, a deep link and a deliberate click on
+Settings or Home are unchanged (a Back/Forward/deep-link probe gives the same sections on
+v517, on the patch before this line and after it). Test: `b2kept` 2 ends with the case
+(Home; the window narrowed; Settings and then the DRS tab clicked in one task): the tab on
+show and its label on. It fails on the patch of §8 (`['tab-settings']`) and passes with the
+line. `b2kept`, `b2cap` and `tabs`: 10 of 10. Lint: utils.js its findings before (`screen`),
+`b2kept` none. The changes: utils.js +3 −1, `b2kept` +12.
+
 ## Tests
 
 ### The review's fixes

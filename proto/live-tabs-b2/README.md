@@ -102,11 +102,12 @@ git apply --check proto/live-tabs-b2/b2.patch && git apply proto/live-tabs-b2/b2
 npm test                       # 214 tests, about 13 min
 ```
 
-`b2.patch` is a git diff against HEAD (app files b93ed5c): 39 files, +4314 −921 (sha256
-97e036c7…), b2v2's and b2v3's changes included (`NOTES-v2.md`, `NOTES-v3.md`, its parts A
-and B, its review's fixes and its final check's). `git apply --check` is clean on a fresh
-git-archive of the main tree's HEAD (2f49d4a), and the copy it gives is identical, file by
-file, to the tree the tests of the final check ran on. The review's (+4254 −920, sha256
+`b2.patch` is a git diff against HEAD (app files b93ed5c): 39 files, +4327 −922 (sha256
+94eb334d…), b2v2's and b2v3's changes included (`NOTES-v2.md`, `NOTES-v3.md`, its parts A
+and B, its review's fixes, its final check's and the hash's echo, §9). `git apply --check`
+is clean on a fresh git-archive of the main tree's HEAD (bda296f), and the copy it gives is
+identical, file by file, to the tree the last tests ran on. The final check's (+4314 −921,
+sha256 97e036c7…) is in git at bda296f. The review's (+4254 −920, sha256
 94b5bd99…; the whole suite ran on it) is in git at 2f49d4a, b2v3 part B's (+4047 −901,
 sha256 d54978fe…) at a44b222, part A's (+3497 −784, sha256 9f996260…) at 49beb52, b2v2's
 (+3292 −756, db7ae22b…) at 0ddc38e, the first version's (+2908 −731, 45006d96…) at
@@ -125,7 +126,7 @@ BACKLOG.md go with it. The patch leaves them to the release.
 | `API.md` | How a module is made per tab, with XRPD as the worked example |
 | `NOTES-core.md`, `NOTES-sem.md`, `NOTES-drs.md`, `NOTES-gc-epr.md` | Each stage's notes: what changed, each memory cut with its numbers, its tests (the first version: its trim included) |
 | `NOTES-v2.md` | **b2v2**: the trim taken out; a sleeping SEM tab's bytes let go and read back as it wakes; what held ~42 MB a SEM tab in the browser process; tests and numbers |
-| `NOTES-v3.md` | **b2v3**: part A, the memory budget taken out; any number of tabs open, a cap on those awake, the strip and the restore at 60 tabs; arrays fixed, not frozen, and the bytes it saves. Part B, what is worked out kept (what, by what key, what it costs, the wakes against b2v2); the loader over every long task of the paths between tabs; the limit under the cap (45 tabs of the mix, 32 of SEM); the whole suite. The review's findings (§7), each fixed and tested; the final check's three (§8) |
+| `NOTES-v3.md` | **b2v3**: part A, the memory budget taken out; any number of tabs open, a cap on those awake, the strip and the restore at 60 tabs; arrays fixed, not frozen, and the bytes it saves. Part B, what is worked out kept (what, by what key, what it costs, the wakes against b2v2); the loader over every long task of the paths between tabs; the limit under the cap (45 tabs of the mix, 32 of SEM); the whole suite. The review's findings (§7), each fixed and tested; the final check's three (§8); the hash's echo (§9) |
 | `measure/` | One script per measurement or check, `lib.mjs` shared; `session.mjs`, `upgrade.mjs` and `trim-nodes.mjs` are the integration's; `lim-*.mjs` the assessment's; `idb-mem.mjs` and `wake-sem.mjs` b2v2's; `fixed.mjs` and `many.mjs` b2v3's, `kept.mjs`, `loader.mjs` and lim-series's `cap` policy its part B's (`lim-fx.mjs` writes their `ten/` files), `review3/` its review's. The earlier scripts read the settings and `bytes()` of the versions they measured (`liveMax`, `livePolicy`), which b2v3 has not |
 | `results/` | Each measurement's JSON and the suite's logs |
 

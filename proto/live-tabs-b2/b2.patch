@@ -4730,10 +4730,10 @@ index 0000000..726e357
 +});
 diff --git a/tests/b2kept.test.mjs b/tests/b2kept.test.mjs
 new file mode 100644
-index 0000000..eef9623
+index 0000000..19bc207
 --- /dev/null
 +++ b/tests/b2kept.test.mjs
-@@ -0,0 +1,345 @@
+@@ -0,0 +1,355 @@
 +/* What is worked out, kept (b2v3): a tab woken from sleep, an undo, a redraw take what was
 +   worked out before (utils.js keeper: by the data's array and every other input), and make
 +   none of it again. Counted (utils.js kept.made: the results made, by name) across each
@@ -4968,6 +4968,16 @@ index 0000000..eef9623
 +      assert.deepEqual(await page.evaluate(()=> [...document.querySelectorAll('.tab.active')].map(e=> e.id)), ['tab-tauc'], 'the tab on show');
 +      assert.deepEqual(diff(m6.made, (await made(page)).made), [], 'nothing made again');
 +    }
++    // From Home, Settings and then the tab clicked before Settings' own hashchange: that
++    // echo finds Settings on show already and leaves the tab's deferred show alone (b2v3d:
++    // the echo counted as a fixed section chosen anew, the tab's show given up, the click lost)
++    await page.click('#nav button[data-tab="home"]'); await settle(page);
++    await page.setViewportSize({ width: 1180, height: 900 }); await page.waitForTimeout(400);
++    await page.evaluate(()=>{ document.querySelector('#nav button[data-tab="settings"]').click();
++      document.querySelectorAll('#tabBar .ptab')[0].querySelector('.ptab-label').click(); });
++    await page.waitForTimeout(800); await settle(page);
++    assert.deepEqual(await page.evaluate(()=> [...document.querySelectorAll('.tab.active')].map(e=> e.id)), ['tab-tauc'], 'the tab clicked after Settings is on show');
++    assert.equal(await page.evaluate(()=> document.querySelectorAll('#tabBar .ptab')[0].classList.contains('is-on')), true, 'its label on');
 +    assert.deepEqual(errors, []);
 +    assert.deepEqual(await csp(), []);
 +  } finally { await close(); }
@@ -6149,7 +6159,7 @@ index 4c659ab..057aa84 100644
    const wrap = fn => e=>{
      if (window.__fail && e.data && e.data.type === 'result'){ window.__fail = false; return fn({ data: { ...e.data, type: 'error', message: 'failed for the test' } }); }
 diff --git a/utils.js b/utils.js
-index 4b37a24..380aae4 100644
+index 4b37a24..5196939 100644
 --- a/utils.js
 +++ b/utils.js
 @@ -1,6 +1,7 @@
@@ -6673,7 +6683,20 @@ index 4b37a24..380aae4 100644
    if (!st) return;
    const backup = st._snap();
    st._busy = true;
-@@ -2314,16 +2512,25 @@ function barChipYmax(chips, svg, bars, g){
+@@ -1830,9 +2028,11 @@ function updateNarrowLayout(){
+ updateNarrowLayout();
+ window.addEventListener('resize', updateNarrowLayout);
+ // Deep-link support: honour the initial hash and react to hash changes / back-forward
++// (a section already on show is left alone: the echo of goTab's own hash would count as one
++// chosen anew and give up a tab's show chosen since, tabs.js showLater)
+ window.addEventListener('hashchange', ()=>{
+   const t = location.hash.slice(1);
+-  if (HASH_TABS.includes(t)) goTab(t, true);
++  if (HASH_TABS.includes(t) && t !== _activeTab) goTab(t, true);
+ });
+ (function initHashRoute(){
+   const t = location.hash.slice(1);
+@@ -2314,16 +2514,25 @@ function barChipYmax(chips, svg, bars, g){
      btn.className = 'instr-info';
      btn.setAttribute('aria-label', 'Toggle instructions');
      btn.innerHTML = INFO_SVG;
@@ -6707,7 +6730,7 @@ index 4b37a24..380aae4 100644
    });
  })();
  
-@@ -2333,5 +2540,7 @@ normalizeNavIcons();
+@@ -2333,5 +2542,7 @@ normalizeNavIcons();
  window.addEventListener('load', normalizeNavIcons);
  
  export {
