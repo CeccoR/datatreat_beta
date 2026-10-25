@@ -1,0 +1,1380 @@
+{
+ "sum": {
+  "1 shown": {
+   "n": 5,
+   "eachMed": 7075,
+   "wallMed": 7075,
+   "mainRunSMed": 1.269,
+   "longMaxMed": 58,
+   "rssPeakMed": 445,
+   "allIdentical": true
+  },
+  "1 parked": {
+   "n": 5,
+   "eachMed": 6929,
+   "wallMed": 6929,
+   "mainRunSMed": 0.602,
+   "longMaxMed": 0,
+   "rssPeakMed": 437,
+   "allIdentical": true
+  },
+  "1 two": {
+   "n": 5,
+   "eachMed": 12189,
+   "wallMed": 14024,
+   "mainRunSMed": 1.125,
+   "longMaxMed": 0,
+   "rssPeakMed": 445,
+   "allIdentical": true
+  },
+  "2 shown": {
+   "n": 5,
+   "eachMed": 3916,
+   "wallMed": 3916,
+   "mainRunSMed": 1.001,
+   "longMaxMed": 0,
+   "rssPeakMed": 548,
+   "allIdentical": true
+  },
+  "2 parked": {
+   "n": 5,
+   "eachMed": 3904,
+   "wallMed": 3904,
+   "mainRunSMed": 0.555,
+   "longMaxMed": 0,
+   "rssPeakMed": 541,
+   "allIdentical": true
+  },
+  "2 two": {
+   "n": 5,
+   "eachMed": 6181.5,
+   "wallMed": 7970,
+   "mainRunSMed": 0.898,
+   "longMaxMed": 0,
+   "rssPeakMed": 550,
+   "allIdentical": true
+  },
+  "3 shown": {
+   "n": 5,
+   "eachMed": 3179,
+   "wallMed": 3179,
+   "mainRunSMed": 0.935,
+   "longMaxMed": 0,
+   "rssPeakMed": 548,
+   "allIdentical": true
+  },
+  "3 parked": {
+   "n": 5,
+   "eachMed": 3077,
+   "wallMed": 3077,
+   "mainRunSMed": 0.527,
+   "longMaxMed": 0,
+   "rssPeakMed": 527,
+   "allIdentical": true
+  },
+  "3 two": {
+   "n": 5,
+   "eachMed": 4286,
+   "wallMed": 6289,
+   "mainRunSMed": 0.886,
+   "longMaxMed": 0,
+   "rssPeakMed": 636,
+   "allIdentical": true
+  },
+  "4 shown": {
+   "n": 5,
+   "eachMed": 2878,
+   "wallMed": 2878,
+   "mainRunSMed": 0.822,
+   "longMaxMed": 0,
+   "rssPeakMed": 587,
+   "allIdentical": true
+  },
+  "4 parked": {
+   "n": 5,
+   "eachMed": 2818,
+   "wallMed": 2818,
+   "mainRunSMed": 0.485,
+   "longMaxMed": 0,
+   "rssPeakMed": 577,
+   "allIdentical": true
+  },
+  "4 two": {
+   "n": 5,
+   "eachMed": 4015,
+   "wallMed": 5680,
+   "mainRunSMed": 0.722,
+   "longMaxMed": 0,
+   "rssPeakMed": 594,
+   "allIdentical": true
+  }
+ },
+ "raw": {
+  "1 shown": [
+   {
+    "each": [
+     6873
+    ],
+    "wall": 6873,
+    "mainRunS": 1.171,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 382,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     7075
+    ],
+    "wall": 7075,
+    "mainRunS": 1.266,
+    "long": {
+     "n": 1,
+     "ms": 58,
+     "max": 58
+    },
+    "rssPeak": 450,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     6802
+    ],
+    "wall": 6802,
+    "mainRunS": 1.286,
+    "long": {
+     "n": 2,
+     "ms": 126,
+     "max": 72
+    },
+    "rssPeak": 445,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     7123
+    ],
+    "wall": 7123,
+    "mainRunS": 1.285,
+    "long": {
+     "n": 1,
+     "ms": 55,
+     "max": 55
+    },
+    "rssPeak": 444,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     7264
+    ],
+    "wall": 7264,
+    "mainRunS": 1.269,
+    "long": {
+     "n": 2,
+     "ms": 125,
+     "max": 72
+    },
+    "rssPeak": 447,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ],
+  "1 parked": [
+   {
+    "each": [
+     6664
+    ],
+    "wall": 6664,
+    "mainRunS": 0.529,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 386,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     6686
+    ],
+    "wall": 6686,
+    "mainRunS": 0.602,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 440,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     6929
+    ],
+    "wall": 6929,
+    "mainRunS": 0.59,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 437,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     7514
+    ],
+    "wall": 7514,
+    "mainRunS": 0.715,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 455,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     7067
+    ],
+    "wall": 7067,
+    "mainRunS": 0.768,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 437,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ],
+  "1 two": [
+   {
+    "each": [
+     12569,
+     12732
+    ],
+    "wall": 13800,
+    "mainRunS": 1.168,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 438,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     12383,
+     12126
+    ],
+    "wall": 14024,
+    "mainRunS": 1.125,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 445,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     11888,
+     11563
+    ],
+    "wall": 13442,
+    "mainRunS": 1.085,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 445,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     12462,
+     12220
+    ],
+    "wall": 14116,
+    "mainRunS": 1.119,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 446,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     11954,
+     12158
+    ],
+    "wall": 14086,
+    "mainRunS": 1.191,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 366,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   }
+  ],
+  "1 workers": {
+   "heap": 20.15932846069336,
+   "workers": 1,
+   "workerHeap": 2.1100730895996094,
+   "rss": 199.18359375,
+   "hwm": 457.24609375
+  },
+  "1 errors": [],
+  "2 shown": [
+   {
+    "each": [
+     3853
+    ],
+    "wall": 3853,
+    "mainRunS": 1.001,
+    "long": {
+     "n": 1,
+     "ms": 52,
+     "max": 52
+    },
+    "rssPeak": 339,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3916
+    ],
+    "wall": 3916,
+    "mainRunS": 1.069,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 479,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     4260
+    ],
+    "wall": 4260,
+    "mainRunS": 0.992,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 558,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3788
+    ],
+    "wall": 3788,
+    "mainRunS": 0.944,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 548,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     4109
+    ],
+    "wall": 4109,
+    "mainRunS": 1.045,
+    "long": {
+     "n": 1,
+     "ms": 51,
+     "max": 51
+    },
+    "rssPeak": 557,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ],
+  "2 parked": [
+   {
+    "each": [
+     4143
+    ],
+    "wall": 4143,
+    "mainRunS": 0.656,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 385,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3620
+    ],
+    "wall": 3620,
+    "mainRunS": 0.451,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 472,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     4235
+    ],
+    "wall": 4235,
+    "mainRunS": 0.586,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 541,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3904
+    ],
+    "wall": 3904,
+    "mainRunS": 0.523,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 541,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3847
+    ],
+    "wall": 3847,
+    "mainRunS": 0.555,
+    "long": {
+     "n": 1,
+     "ms": 98,
+     "max": 98
+    },
+    "rssPeak": 548,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ],
+  "2 two": [
+   {
+    "each": [
+     6656,
+     6756
+    ],
+    "wall": 7865,
+    "mainRunS": 1.058,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 449,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     6155,
+     5672
+    ],
+    "wall": 7648,
+    "mainRunS": 0.797,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 542,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     6208,
+     6071
+    ],
+    "wall": 8113,
+    "mainRunS": 0.962,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 555,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     6258,
+     6046
+    ],
+    "wall": 8020,
+    "mainRunS": 0.845,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 550,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     6579,
+     6020
+    ],
+    "wall": 7970,
+    "mainRunS": 0.898,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 557,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   }
+  ],
+  "2 workers": {
+   "heap": 20.144683837890625,
+   "workers": 2,
+   "workerHeap": 4.172245025634766,
+   "rss": 208.13671875,
+   "hwm": 561.16015625
+  },
+  "2 errors": [],
+  "3 shown": [
+   {
+    "each": [
+     3327
+    ],
+    "wall": 3327,
+    "mainRunS": 0.979,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 411,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2872
+    ],
+    "wall": 2872,
+    "mainRunS": 0.795,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 537,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3179
+    ],
+    "wall": 3179,
+    "mainRunS": 0.935,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 548,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3317
+    ],
+    "wall": 3317,
+    "mainRunS": 0.971,
+    "long": {
+     "n": 1,
+     "ms": 58,
+     "max": 58
+    },
+    "rssPeak": 643,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2918
+    ],
+    "wall": 2918,
+    "mainRunS": 0.852,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 645,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ],
+  "3 parked": [
+   {
+    "each": [
+     3077
+    ],
+    "wall": 3077,
+    "mainRunS": 0.527,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 450,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2954
+    ],
+    "wall": 2954,
+    "mainRunS": 0.438,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 523,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2982
+    ],
+    "wall": 2982,
+    "mainRunS": 0.43,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 527,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3768
+    ],
+    "wall": 3768,
+    "mainRunS": 0.644,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 636,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     3117
+    ],
+    "wall": 3117,
+    "mainRunS": 0.598,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 637,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ],
+  "3 two": [
+   {
+    "each": [
+     5023,
+     5108
+    ],
+    "wall": 6289,
+    "mainRunS": 0.899,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 524,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     3947,
+     3940
+    ],
+    "wall": 5905,
+    "mainRunS": 0.772,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 543,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     4092,
+     4060
+    ],
+    "wall": 6032,
+    "mainRunS": 0.705,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 636,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     4358,
+     4214
+    ],
+    "wall": 6323,
+    "mainRunS": 0.886,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 651,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     5690,
+     4859
+    ],
+    "wall": 6855,
+    "mainRunS": 0.989,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 641,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   }
+  ],
+  "3 workers": {
+   "heap": 20.140567779541016,
+   "workers": 3,
+   "workerHeap": 6.201023101806641,
+   "rss": 215.77734375,
+   "hwm": 652.4453125
+  },
+  "3 errors": [],
+  "4 shown": [
+   {
+    "each": [
+     4081
+    ],
+    "wall": 4081,
+    "mainRunS": 1.325,
+    "long": {
+     "n": 1,
+     "ms": 61,
+     "max": 61
+    },
+    "rssPeak": 456,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2840
+    ],
+    "wall": 2840,
+    "mainRunS": 0.822,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 569,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2461
+    ],
+    "wall": 2461,
+    "mainRunS": 0.725,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 587,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2878
+    ],
+    "wall": 2878,
+    "mainRunS": 0.894,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 588,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2918
+    ],
+    "wall": 2918,
+    "mainRunS": 0.793,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 734,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ],
+  "4 parked": [
+   {
+    "each": [
+     3159
+    ],
+    "wall": 3159,
+    "mainRunS": 0.554,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 472,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2816
+    ],
+    "wall": 2816,
+    "mainRunS": 0.485,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 576,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2459
+    ],
+    "wall": 2459,
+    "mainRunS": 0.379,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 577,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2959
+    ],
+    "wall": 2959,
+    "mainRunS": 0.497,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 615,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     2818
+    ],
+    "wall": 2818,
+    "mainRunS": 0.455,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 733,
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ],
+  "4 two": [
+   {
+    "each": [
+     4830,
+     4591
+    ],
+    "wall": 5680,
+    "mainRunS": 0.977,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 506,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     3065,
+     3698
+    ],
+    "wall": 5702,
+    "mainRunS": 0.65,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 594,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     4275,
+     3534
+    ],
+    "wall": 5592,
+    "mainRunS": 0.742,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 580,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     4208,
+     3318
+    ],
+    "wall": 5443,
+    "mainRunS": 0.722,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 721,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   },
+   {
+    "each": [
+     4270,
+     3822
+    ],
+    "wall": 5958,
+    "mainRunS": 0.713,
+    "long": {
+     "n": 0,
+     "ms": 0,
+     "max": 0
+    },
+    "rssPeak": 731,
+    "results": [
+     12,
+     12
+    ],
+    "identical": [
+     true,
+     true
+    ]
+   }
+  ],
+  "4 workers": {
+   "heap": 20.13538360595703,
+   "workers": 4,
+   "workerHeap": 8.247005462646484,
+   "rss": 221.03125,
+   "hwm": 739.79296875
+  },
+  "4 errors": []
+ },
+ "ref": {
+  "n": 12,
+  "hash": "12jul3tbxrlu6",
+  "len": 153031
+ },
+ "load": [
+  3.31,
+  2.55,
+  2.16
+ ]
+}

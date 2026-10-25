@@ -1,0 +1,75 @@
+## Switching (click → tab painted, ms: median (p90); long tasks, median ms)
+| transition | today | prototype |
+|---|---|---|
+| idle A→B | 284 (291); 196 | 288 (303); 194 |
+| idle B→SEM | 141 (155); 0 | 133 (146); 0 |
+| idle SEM→A | 321 (366); 220 | 301 (367); 203 |
+| idle A→DRS | 169 (171); 65 | 183 (188); 73 |
+| idle DRS→GC | 154 (170); 62 | 164 (188); 63 |
+| idle GC→A | 169 (182); 60 | 155 (163); 56 |
+| running: A→B (A left mid-run) | – (asks to stop it) | 304 (335); 204 |
+| running: B→SEM (A parked, refining) | – (asks to stop it) | 140 (163); 0 |
+| running: SEM→A (A shown, its run taken back) | – (asks to stop it) | 315 (389); 206 |
+runs: [[2,6,"Cancel",7,12],[2,5,"Cancel",7,12],[2,6,"Cancel",8,12],[2,6,"Cancel",7,12],[2,6,"Cancel",8,12],[2,6,"Cancel",8,12],[2,5,"Cancel",7,12]]
+
+## A refinement where it runs (Refine all, 12 patterns; medians of 5)
+| tree | case | each run, ms | wall, ms | main thread during the runs, s | IndexedDB puts: n / ms / largest | long tasks, largest | RSS peak, MB | identical |
+|---|---|---|---|---|---|---|---|---|
+| head | shown | 6892 | 6892 | 1.247 | 2 / 16 / 8.6 | 57 | 636 | true |
+| bg | shown | 7522 | 7522 | 1.406 | 2 / 14 / 7.4 | 62 | 704 | true |
+| bg | parked-xrd | 6892 | 6892 | 0.889 | 18 / 125 / 11.3 | 0 | 699 | true |
+| bg | parked-sem | 7232 | 7232 | 0.978 | 18 / 128 / 11.2 | 0 | 706 | true |
+| bg | two | 8140 | 9649 | 1.163 | 35 / 253 / 16.6 | 0 | 717 | true |
+| bg | three | 8622 | 12445 | 1.52 | 52 / 367 / 15.6 | 0 | 759 | true |
+| pool | shown | 3056 | 3056 | 0.871 | 0 / 0 / 0 | 0 | 1051 | true |
+| pool | parked-xrd | 3089 | 3089 | 0.611 | 16 / 107 / 12.9 | 0 | 1060 | true |
+| pool | parked-sem | 3221 | 3221 | 0.765 | 16 / 111 / 12 | 0 | 1071 | true |
+| pool | two | 4055 | 5996 | 0.774 | 34 / 237 / 15.4 | 0 | 1084 | true |
+| pool | three | 5145 | 8873 | 1.021 | 52 / 386 / 22.7 | 0 | 1095 | true |
+
+## Working in the tab on show (ms: median / p90 / max of 12)
+| tree | while | next sample | smoothing |
+|---|---|---|---|
+| head | none | 66 / 75 / 77 | 123 / 138 / 140 |
+| head | own | 61 / 113 / 133 | 121 / 151 / 172 |
+| bg | none | 65 / 75 / 110 | 118 / 135 / 136 |
+| bg | own | 67 / 112 / 141 | 123 / 151 / 152 |
+| bg | parked1 | 67 / 78 / 84 | 139 / 157 / 174 |
+| bg | parked2 | 77 / 100 / 114 | 138 / 178 / 199 |
+| pool | none | 70 / 81 / 83 | 124 / 134 / 135 |
+| pool | own | 72 / 103 / 107 | 134 / 183 / 197 |
+| pool | parked1 | 73 / 93 / 105 | 144 / 178 / 192 |
+| pool | parked2 | 78 / 103 / 108 | 144 / 171 / 186 |
+
+## Memory (medians of 3; MB)
+| tree | runs | RSS during (after GC) | RSS peak | page heap | workers / their heap | RSS after, workers alive |
+|---|---|---|---|---|---|---|
+| head | 0 | 199 | 199 | 18.3 | 1 / 2.0 | 199, 1 |
+| head | 1 | 208 | 245 | 17.5 | 1 / 2.6 | 202, 1 |
+| bg | 0 | 213 | 213 | 19.1 | 0 / 0.0 | 212, 0 |
+| bg | 1 | 217 | 236 | 19.4 | 1 / 1.9 | 206, 0 |
+| bg | 2 | 235 | 266 | 19.7 | 2 / 4.3 | 211, 0 |
+| bg | 3 | 260 | 284 | 20.3 | 3 / 6.3 | 214, 0 |
+| pool | 0 | 207 | 207 | 19.2 | 3 / 6.0 | 206, 3 |
+| pool | 1 | 253 | 253 | 19.6 | 3 / 6.4 | 213, 3 |
+| pool | 2 | 254 | 281 | 19.9 | 3 / 7.8 | 201, 3 |
+| pool | 3 | 256 | 302 | 20.6 | 3 / 7.2 | 203, 3 |
+
+## Data safety (bg, 5 rounds)
+left: 5/5 all right; record: first read found 12,12,12,12,12 ; read took 95,66,72,71,72 ms; found 179,159,157,198,171 ms after the end
+back and forth: 5/5 identical; steps 2,2,2,2,2
+reload: 3→3→3*, 3→3→3*, 3→3→3*, 3→3→3*, 3→3→3*
+
+## Data safety (pool, 5 rounds)
+left: 5/5 all right; record: first read found 12,12,12,12,12 ; read took 81,97,93,76,76 ms; found 206,210,185,175,161 ms after the end
+back and forth: 5/5 identical; steps 2,2,2,2,2
+reload: 3→3→3*, 3→3→3*, 3→3→3*, 3→3→3*, 3→3→3*
+
+## The pool: Refine all on k workers (medians of 5)
+| k | on show, ms | parked, ms | two tabs at once: each / wall, ms | main thread on show, s | RSS peak on show, MB | identical |
+|---|---|---|---|---|---|---|
+| 1 | 7075 | 6929 | 12189 / 14024 | 1.269 | 445 | true |
+| 2 | 3916 | 3904 | 6182 / 7970 | 1.001 | 548 | true |
+| 3 | 3179 | 3077 | 4286 / 6289 | 0.935 | 548 | true |
+| 4 | 2878 | 2818 | 4015 / 5680 | 0.822 | 587 | true |
+

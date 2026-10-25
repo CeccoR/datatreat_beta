@@ -1,0 +1,180 @@
+{
+ "method": "JS heap after two forced GCs, the tab hidden awake / asleep, less the page with it closed; a profile on disk; medians of 3",
+ "trees": {
+  "v2": "http://127.0.0.1:8991",
+  "v3": "http://127.0.0.1:8990"
+ },
+ "files": {
+  "xrd": "12 XRDML patterns of 5384 points",
+  "tauc": "10 Cary 5000 exports of 1201 points",
+  "epr": "10 spectra of 1024 points"
+ },
+ "xrd": {
+  "v2": {
+   "awakeMB": 4.57,
+   "asleepMB": 1.406,
+   "runsAwakeMB": [
+    4.575,
+    4.57,
+    4.554
+   ],
+   "runsAsleepMB": [
+    1.406,
+    1.401,
+    1.408
+   ],
+   "arraysAwake": {
+    "arrays": 24,
+    "elements": 129216,
+    "frozen": 24
+   },
+   "arraysAsleep": {
+    "arrays": 24,
+    "elements": 129216,
+    "frozen": 24
+   },
+   "errors": []
+  },
+  "v3": {
+   "awakeMB": 4.369,
+   "asleepMB": 1.224,
+   "runsAwakeMB": [
+    4.393,
+    4.369,
+    4.369
+   ],
+   "runsAsleepMB": [
+    1.226,
+    1.224,
+    1.224
+   ],
+   "arraysAwake": {
+    "arrays": 24,
+    "elements": 129216,
+    "frozen": 0
+   },
+   "arraysAsleep": {
+    "arrays": 24,
+    "elements": 129216,
+    "frozen": 0
+   },
+   "errors": []
+  },
+  "savedMB": {
+   "awake": 0.201,
+   "asleep": 0.182
+  }
+ },
+ "tauc": {
+  "v2": {
+   "awakeMB": 1.06,
+   "asleepMB": 0.464,
+   "runsAwakeMB": [
+    1.06,
+    1.06,
+    1.06
+   ],
+   "runsAsleepMB": [
+    0.464,
+    0.464,
+    0.464
+   ],
+   "arraysAwake": {
+    "arrays": 20,
+    "elements": 24020,
+    "frozen": 0
+   },
+   "arraysAsleep": {
+    "arrays": 40,
+    "elements": 48040,
+    "frozen": 0
+   },
+   "errors": []
+  },
+  "v3": {
+   "awakeMB": 0.766,
+   "asleepMB": 0.28,
+   "runsAwakeMB": [
+    0.761,
+    0.777,
+    0.766
+   ],
+   "runsAsleepMB": [
+    0.281,
+    0.28,
+    0.28
+   ],
+   "arraysAwake": {
+    "arrays": 20,
+    "elements": 24020,
+    "frozen": 0
+   },
+   "arraysAsleep": {
+    "arrays": 20,
+    "elements": 24020,
+    "frozen": 0
+   },
+   "errors": []
+  },
+  "savedMB": {
+   "awake": 0.294,
+   "asleep": 0.184
+  }
+ },
+ "epr": {
+  "v2": {
+   "awakeMB": 0.723,
+   "asleepMB": 0.332,
+   "runsAwakeMB": [
+    0.723,
+    0.716,
+    0.723
+   ],
+   "runsAsleepMB": [
+    0.332,
+    0.332,
+    0.332
+   ],
+   "arraysAwake": {
+    "arrays": 20,
+    "elements": 20480,
+    "frozen": 0
+   },
+   "arraysAsleep": {
+    "arrays": 40,
+    "elements": 40960,
+    "frozen": 0
+   },
+   "errors": []
+  },
+  "v3": {
+   "awakeMB": 0.35,
+   "asleepMB": 0.177,
+   "runsAwakeMB": [
+    0.351,
+    0.35,
+    0.35
+   ],
+   "runsAsleepMB": [
+    0.177,
+    0.177,
+    0.177
+   ],
+   "arraysAwake": {
+    "arrays": 20,
+    "elements": 20480,
+    "frozen": 0
+   },
+   "arraysAsleep": {
+    "arrays": 20,
+    "elements": 20480,
+    "frozen": 0
+   },
+   "errors": []
+  },
+  "savedMB": {
+   "awake": 0.373,
+   "asleep": 0.155
+  }
+ }
+}

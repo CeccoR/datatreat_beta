@@ -1,0 +1,83 @@
+{
+ "kase": "pool4-show",
+ "time": {
+  "n": 5,
+  "med": 3035,
+  "p90": 3114,
+  "max": 3114,
+  "min": 2763
+ },
+ "hashes": [
+  "0e098f762ba8cae5"
+ ],
+ "n": [
+  12,
+  12,
+  12,
+  12,
+  12
+ ],
+ "runs": [
+  {
+   "ms": 2906.5,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    3.06,
+    1.54,
+    1.33
+   ]
+  },
+  {
+   "ms": 3034.599853515625,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    3.21,
+    1.6,
+    1.35
+   ]
+  },
+  {
+   "ms": 3113.300048828125,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    3.36,
+    1.65,
+    1.37
+   ]
+  },
+  {
+   "ms": 3114,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    3.49,
+    1.71,
+    1.39
+   ]
+  },
+  {
+   "ms": 2762.5,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    3.69,
+    1.78,
+    1.41
+   ]
+  }
+ ],
+ "errors": []
+}

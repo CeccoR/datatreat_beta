@@ -1,6 +1,6 @@
 /* DataTreat service worker — cache-first offline app shell.
    Bump CACHE when any precached asset changes to force a refresh. */
-const CACHE = 'datatreat-v296';
+const CACHE = 'datatreat-v521';
 const ASSETS = [
   './',
   './index.html',
@@ -13,18 +13,43 @@ const ASSETS = [
   './icon-maskable-512.png',
   './apple-touch-icon.png',
   './manifest.webmanifest',
+  './boot-head.js',
+  './boot-body.js',
   './utils.js',
+  './textdata.js',
+  './smooth.js',
+  './modkit.js',
+  './modcharts.js',
+  './cards.js',
   './plot.js',
   './figure.js',
   './tauc.js',
   './xrd.js',
   './epr.js',
   './gc.js',
+  './sem.js',
+  './sem-read.js',
+  './sem-read.worker.js',
+  './sem-figure.js',
   './db.js',
   './tabs.js',
   './sessions.js',
-  './xrd-fit-core.js',
-  './xrd-fit.worker.js'
+  './xrd-rv.js',
+  './xrd-rv-model.js',
+  './xrd-rv-html.js',
+  './xrd-rv-pool.js',
+  './xrd-data.js',
+  './xrd-cryst.js',
+  './xrd-instr.js',
+  './xrd-math.js',
+  './xrd-rietveld.js',
+  './xrd-broad.js',
+  './xrd-rietveld.worker.js',
+  './xrd-widths.js',
+  './xrd-shape3d.js',
+  './xrd-peaks.js',
+  './xrd-sg.js',
+  './xrd-cell3d.js'
 ];
 
 self.addEventListener('install', (e)=>{

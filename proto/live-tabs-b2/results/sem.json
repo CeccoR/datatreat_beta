@@ -1,0 +1,371 @@
+{
+ "tiers": {
+  "core": {
+   "blank": {
+    "heap": 2.9,
+    "nodes": 3670,
+    "listeners": 505,
+    "rss": 129.8,
+    "ab": 3.3,
+    "gpu": 0
+   },
+   "loadMs": 1230.2,
+   "after1s": {
+    "heap": 94.4,
+    "nodes": 4241,
+    "listeners": 617,
+    "rss": 404.8,
+    "ab": 116.3,
+    "gpu": 0
+   },
+   "after3s": {
+    "heap": 94.3,
+    "nodes": 4241,
+    "listeners": 605,
+    "rss": 404.7,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "shown": {
+    "heap": 94.3,
+    "nodes": 4241,
+    "listeners": 605,
+    "rss": 345,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "hidden": {
+    "heap": 94.4,
+    "nodes": 3986,
+    "listeners": 521,
+    "rss": 357.2,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "showHidden": {
+    "ms": 111.6,
+    "max": 128,
+    "longMs": 0
+   },
+   "errors": []
+  },
+  "b2": {
+   "blank": {
+    "heap": 2.9,
+    "nodes": 4075,
+    "listeners": 440,
+    "rss": 130.1,
+    "ab": 3.3,
+    "gpu": 0
+   },
+   "loadMs": 845.5,
+   "after1s": {
+    "heap": 4,
+    "nodes": 4647,
+    "listeners": 624,
+    "rss": 270.4,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "after3s": {
+    "heap": 3.9,
+    "nodes": 4647,
+    "listeners": 605,
+    "rss": 254.2,
+    "ab": 74.8,
+    "gpu": 0
+   },
+   "shown": {
+    "heap": 3.9,
+    "nodes": 4647,
+    "listeners": 603,
+    "rss": 238.4,
+    "ab": 74.8,
+    "gpu": 0
+   },
+   "bytesShown": 20295712,
+   "hidden": {
+    "heap": 4,
+    "nodes": 5065,
+    "listeners": 668,
+    "rss": 233.2,
+    "ab": 74.8,
+    "gpu": 0
+   },
+   "showHidden": {
+    "ms": 81.9,
+    "max": 114.2,
+    "longMs": 0
+   },
+   "bytesHidden": 3518496,
+   "trimmed": {
+    "heap": 4,
+    "nodes": 4927,
+    "listeners": 667,
+    "rss": 228.9,
+    "ab": 74.8,
+    "gpu": 0
+   },
+   "bytesTrimmed": 524288,
+   "showTrimmed": {
+    "ms": 107.9,
+    "max": 113.3,
+    "longMs": 78
+   },
+   "asleep": {
+    "heap": 4,
+    "nodes": 4136,
+    "listeners": 518,
+    "rss": 231.1,
+    "ab": 74.8,
+    "gpu": 0
+   },
+   "collected": true,
+   "showAsleep": {
+    "ms": 226.4,
+    "max": 244.6,
+    "longMs": 94
+   },
+   "errors": []
+  }
+ },
+ "twice": {
+  "core": {
+   "oneAndBlank": {
+    "heap": 94.4,
+    "nodes": 3986,
+    "listeners": 521,
+    "rss": 394.4,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "loadAgainMs": 1094.8,
+   "twice": {
+    "heap": 185.2,
+    "nodes": 4253,
+    "listeners": 605,
+    "rss": 442.5,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "errors": []
+  },
+  "b2": {
+   "oneAndBlank": {
+    "heap": 4,
+    "nodes": 5065,
+    "listeners": 670,
+    "rss": 238.7,
+    "ab": 74.8,
+    "gpu": 0
+   },
+   "loadAgainMs": 813.9,
+   "twice": {
+    "heap": 4,
+    "nodes": 5599,
+    "listeners": 753,
+    "rss": 252.2,
+    "ab": 74.8,
+    "gpu": 0
+   },
+   "errors": []
+  }
+ },
+ "figure": {
+  "core": {
+   "shown": {
+    "heap": 94.3,
+    "nodes": 4241,
+    "listeners": 605,
+    "rss": 370.5,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "open": {
+    "heap": 94.7,
+    "nodes": 5043,
+    "listeners": 658,
+    "rss": 417.8,
+    "ab": 94.3,
+    "gpu": 0
+   },
+   "svgBytes": 60799975,
+   "afterExport": {
+    "heap": 94.6,
+    "nodes": 5048,
+    "listeners": 658,
+    "rss": 528.4,
+    "ab": 152.3,
+    "gpu": 0
+   },
+   "closed": {
+    "heap": 94.6,
+    "nodes": 5047,
+    "listeners": 652,
+    "rss": 531.4,
+    "ab": 91.3,
+    "gpu": 0
+   },
+   "errors": []
+  },
+  "b2": {
+   "shown": {
+    "heap": 3.9,
+    "nodes": 4647,
+    "listeners": 603,
+    "rss": 240.6,
+    "ab": 74.8,
+    "gpu": 0
+   },
+   "open": {
+    "heap": 4.1,
+    "nodes": 5449,
+    "listeners": 656,
+    "rss": 283.8,
+    "ab": 78.3,
+    "gpu": 0
+   },
+   "svgBytes": 60799975,
+   "afterExport": {
+    "heap": 4,
+    "nodes": 5454,
+    "listeners": 656,
+    "rss": 394.6,
+    "ab": 78.4,
+    "gpu": 0
+   },
+   "closed": {
+    "heap": 4,
+    "nodes": 5453,
+    "listeners": 650,
+    "rss": 397.8,
+    "ab": 75.3,
+    "gpu": 0
+   },
+   "errors": []
+  }
+ },
+ "worker": {
+  "core": {
+   "workers3s": 1,
+   "heap": 0.3,
+   "ab": 0,
+   "total": 1.3,
+   "rss3s": 349.6,
+   "workers22s": 1,
+   "rss22s": 345.7,
+   "errors": []
+  },
+  "b2": {
+   "workers3s": 1,
+   "heap": 0.4,
+   "ab": 0,
+   "total": 1.3,
+   "rss3s": 241.8,
+   "workers22s": 0,
+   "rss22s": 237,
+   "errors": []
+  }
+ },
+ "bits8": {
+  "core": {
+   "loadMs": 920.7,
+   "shown": {
+    "heap": 49.2,
+    "nodes": 4241,
+    "listeners": 605,
+    "rss": 348.1,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "hidden": {
+    "heap": 49.3,
+    "nodes": 3986,
+    "listeners": 521,
+    "rss": 359.8,
+    "ab": 90.8,
+    "gpu": 0
+   },
+   "errors": []
+  },
+  "b2": {
+   "loadMs": 1007.4,
+   "shown": {
+    "heap": 3.9,
+    "nodes": 4647,
+    "listeners": 603,
+    "rss": 230.7,
+    "ab": 66.3,
+    "gpu": 0
+   },
+   "hidden": {
+    "heap": 4,
+    "nodes": 5065,
+    "listeners": 668,
+    "rss": 200.1,
+    "ab": 40.8,
+    "gpu": 0
+   },
+   "errors": []
+  }
+ },
+ "prim": {
+  "core": {
+   "b16": {
+    "size": 8913222,
+    "hash": 12.8,
+    "head": 0.1,
+    "toB64": 5.7,
+    "fromB64": 9.2,
+    "copy": 6.2,
+    "reduced": 8.5,
+    "stats": 35.9,
+    "card": 12.7,
+    "editorKept": 8.8,
+    "editorNewPixels": 19.2,
+    "editorNewCanvas": 25.4
+   },
+   "b8": {
+    "size": 4456774,
+    "hash": 6.5,
+    "head": 0,
+    "toB64": 2.7,
+    "fromB64": 4.3,
+    "copy": 10.9,
+    "reduced": 5.9,
+    "stats": 30.9,
+    "card": 12.5,
+    "editorKept": 9,
+    "editorNewPixels": 15.8,
+    "editorNewCanvas": 24.3
+   }
+  },
+  "b2": {
+   "b16": {
+    "size": 8913222,
+    "hash": 14,
+    "head": 0.1,
+    "copy": 6,
+    "view": 0,
+    "reduced": 5.6,
+    "stats": 33.5,
+    "card": 12.4,
+    "editorKept": 9,
+    "editorNewPixels": 19,
+    "editorNewCanvas": 28.8
+   },
+   "b8": {
+    "size": 4456774,
+    "hash": 6.5,
+    "head": 0.1,
+    "copy": 15.4,
+    "reduced": 5.7,
+    "stats": 32.6,
+    "card": 13.2,
+    "editorKept": 10.6,
+    "editorNewPixels": 16.3,
+    "editorNewCanvas": 24
+   }
+  }
+ }
+}

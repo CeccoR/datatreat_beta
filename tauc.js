@@ -1,328 +1,212 @@
-import { fmtNum, csvLine, downloadZip, setupDropzone, renderUnifiedFileList, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, nextColor, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, truncTiltLabel, barLabelFit, barPlotXPad } from './utils.js';
+import { fmtNum, csvLine, includedOf, linspace, movingAverage, gradientArr, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumberInputs, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
+import { boxSmooth } from './smooth.js';
 import { Plot } from './plot.js';
+import { cardInfo, fileSafe, nameDownloads } from './cards.js';
+import { moduleKit, wideCsv, isObj, num, ownKey, without, cardList, finitePairs } from './modkit.js';
+import { plotWrap, swatchLegend, viewOf, setView, chipRow, toggleChip, valueBars } from './modcharts.js';
+import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from './textdata.js';
 
 /* =========================================================
    TAUC MODULE
-========================================================= */
-(function(){
-  let files = []; // {name,label,wl[],FR[],hv[]}  (each on its own native axis)
-  let currIndex=0;
-  let plot;
-  let vlines = {};            // active interval lines (points at the current sample's set)
-  let bestRegsAll = [];
-  let resPlot0=null, resPlot1=null;   // reused summary-plot instances (created once)
-  let _dragging=false;                // true while an interval line is being dragged
 
-  // ---- all/one analysis mode (single global toggle) ----
-  // 'shared': every sample uses one common parameter set AND one common set of
-  //           interval lines. 'per': each sample is fully independent — its own
-  //           exponent, smoothing/regression windows and interval-line positions.
-  let   taucMode = 'shared';                             // 'shared' | 'per'
-  const taucShared = { a:0.5, N:1, N2:20, M:25, M2:100 }; // common params (shared mode)
-  let   sharedVlines = {};                               // common interval lines (shared mode)
-  let   taucPer = [];                                    // per sample: {a,N,N2,M,M2,vlines:{v1..v4}}
+   MADE PER TAB (b2): createTauc is the module's factory (utils.js registerModule), each
+   open DRS tab that is awake an instance of its own, made of its copy of index.html's
+   section (root) and a layer (the kinds' menu). Its elements are found in root, a card's
+   in its card and a Results section's in it, never in the page: its ids are the page's
+   only while it is on show. Its registries go by its key, the tab's id (moduleKit). It
+   draws only on show: hidden (a state read out for its CSVs, a tab restored while another
+   is on show) it draws nothing, and its redraw draws all as it is shown; a tab shown again
+   with nothing changed and at the same width draws nothing (its draw key). It has no job
+   that runs on while hidden. API.md says how a module is made so.
+========================================================= */
+/* Energies are hν = hc/λ, hc in eV·nm to the digits a third decimal of E_g needs: 1240 put
+   every energy 0.013% high. A spectrum's energies are made once for its array of
+   wavelengths and kept by it (`energies`), for every instance and every state that holds
+   it, and its file's record has them as no field of its own (withHv): a state of the
+   history, a tab asleep and a project saved hold the wavelengths only (to b2 they were made
+   again, a new array, at every change of the file list and every undo, and every state
+   kept its own, a project saved too). */
+const HC = 1239.842;
+const energies = new WeakMap();
+const hvOf = wl =>{ let e = energies.get(wl); if (!e) energies.set(wl, e = wl.map(x=> HC/x)); return e; };
+const withHv = f =>{ if (Array.isArray(f.wl)) Object.defineProperty(f, 'hv', { value: hvOf(f.wl), writable: true, configurable: true, enumerable: false }); return f; };
+/* A file's spectrum, which nothing changes once read: fixed (db.js), the same arrays in a
+   tab's states and its parked state (to b2v2 a parked state held a copy). Kept by its
+   bytes (the file as it came, the same array in its states and its record): a tab of a
+   record read back (a reload, a project opened), which holds copies, takes the arrays
+   another state holds of that file, the same values, rather than keeping both. */
+const spectra = new WeakMap();
+const sameArr = (a, b)=> a === b || (a.length === b.length && a.every((v, i)=> Object.is(v, b[i])));
+function keepSpectrum(f){
+  const b = f.rawBytes;
+  fixed(f.wl); fixed(f.FR);
+  if (!(b instanceof Uint8Array)) return f;
+  const s = spectra.get(b);
+  if (s && sameArr(s.wl, f.wl) && sameArr(s.FR, f.FR)){ f.wl = s.wl; f.FR = s.FR; }
+  else spectra.set(b, { wl: f.wl, FR: f.FR });
+  return f;
+}
+/* What an analysis works out of a spectrum, kept by its F(R) (utils.js keeper: while a
+   state, a tab asleep or a history holds the spectrum), each under all it is made from: a
+   card's curve as read and smoothed (its kind, the wavelengths, the exponent and the
+   smoothing's points) and its derivative (and its points), every fit of a sample and what the card makes of
+   them (fitsKept: its kind, its parameters, its lines, and an Urbach card's reference
+   Tauc card's own key for the sample), and the Results' reflectance and log F(R). A tab
+   woken, an undo, a redraw, the Results and the CSVs take them as made (to b2v3 every
+   redraw made every fit again, three times a sample where an Urbach card read its
+   reference: a DRS tab of 10 spectra, 0.17 s of its wake). A fit moved by a line dragged
+   is made, not kept, till the line is let go. */
+const curveKept = keeper('drs-curve', 8), slopeKept = keeper('drs-slope'), fitsKept = keeper('drs-fits', 8),
+  reflKept = keeper('drs-reflectance', 1), logKept = keeper('drs-log', 1);
+// A DRS tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
+function createTauc({ key, root, layer, shown }){
+  const $ = id => root.querySelector('#' + id);
+  /* Hidden, nothing is drawn (API.md §6): `drawable()` says whether to draw, and when not
+     marks the instance to be drawn whole as it is shown (stale). `drawnAt`: the width it was
+     last drawn whole at, its draw key (redrawTab). */
+  let stale = false, drawnAt = '';
+  const drawable = ()=> shown() || !(stale = true);
+  /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
+     warn, read, head, left, hv[]} (each on its own native axis), and the included ones,
+     which the analysis sees, `files`, with which every per-sample list the cards keep is
+     aligned; in the file list, the note right of each label, how the file was read, %R
+     or F(R) (readNote); the alerts under the drop zone, among them what to verify of how
+     files were read (fileNotes: a format not standard, points left out; until dismissed);
+     every card in the history. */
+  const kit = moduleKit('tauc', {
+    root, key, layer,
+    note: readNote,
+    alerts: p =>{
+      const notes = warnDismissed ? [] : allFiles.map(f=> [f, fileNotes(f)]).filter(([, n])=> n.length).map(([f, n])=> esc(`${f.name}: ${n.join('; ')}`));
+      $('taucAlerts').innerHTML = p.invalid + buildAlertsHtml([], notes, 'Verify how these files were read:', '', 'tauc-dismiss-warn') + p.upload;
+    },
+    dismiss: { warn: ()=>{ warnDismissed = true; } },
+    slots,
+    /* The cards stay on the sample they showed when another is removed, moved, left out or
+       taken in (`files` holds the ones included before); the one on show removed or left
+       out, on the one now in its place (the last, it was the last: setupAnalysis). To v494
+       a removal or a move kept the index, and the cards showed another sample. */
+    listed: op =>{ if (op !== 'palette' && op !== 'clear') stayOn(files[currIndex]); },
+    refresh: afterFilesChange,
+    // A label changed: the cards' captions and plots name the sample anew, as the Results do
+    // (to v494 the caption kept the old label until the sample was stepped).
+    redraw: what =>{ if (what === 'label') quietly(()=> livePanels().forEach(p=>{ if (p.hasPlot()) p.update(true); })); renderResView(); },
+    cleared: ()=>{ livePanels().forEach(p=> p.clear()); eachKeptState(s=>{ s.per = []; s.sharedVlines = {}; }); warnDismissed = false; },
+    snapshot: ()=> ({ analyses: cards().map(a=>{
+      const states = {};
+      Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) states[k] = clone(s); });
+      states[a.type] = panelOf(a).snapshot();
+      return { ...deck.saved(a), ref: a.ref, refAuto: a.refAuto, egSel: a.egSel.slice(), urbSel: { b: a.urbSel.b.slice() }, states };
+    }) }),
+    /* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
+       with both a finite number and a wavelength above 0 (none: left out); how it was read,
+       and the points left out at its load, as its notes say them. Its energies made from
+       its wavelengths (withHv: a project to b2 holds them too, not read). */
+    file: f =>{
+      const p = finitePairs(f.wl, f.FR, x=> x > 0);
+      if (!p || !p[0].length) return null;
+      const { read, head, left, hv: _hv, ...g } = f, n = isObj(left) ? Object.keys(LEFT).filter(k=> num(left[k], 0) > 0) : [];
+      return withHv(keepSpectrum({ ...g, wl: p[0], FR: p[1], warn: f.warn === true, ...(read === 'R%' ? { read } : {}), ...(head === true && f.warn === true && read !== 'R%' ? { head } : {}),
+        ...(n.length ? { left: Object.fromEntries(n.map(k=> [k, left[k]])) } : {}) }));
+    },
+    // The notes are the restored files' own, shown again.
+    restore: (s, gone)=>{
+      warnDismissed = false;
+      // (a wake's or a reload's: the sample its tab showed, by its file's name, else its place)
+      if (toShow){ const k = files.findIndex(f=> f.name === toShow.name); currIndex = k >= 0 ? k : num(toShow.sample, 0, Number.isInteger); toShow = null; }
+      loadAnalyses(cardList(s.analyses, KINDS) || legacyAnalyses(s), gone);
+    },
+    /* Re-fit at the current size, keeping the zoom; a card not drawn while its tab was not
+       on show drawn now. Nothing changed since it was all drawn (nothing left undrawn while
+       hidden, the same width): nothing to draw, a tab shown again as it was left. */
+    redrawTab: ()=>{
+      const at = String(root.clientWidth);
+      if (!stale && at === drawnAt) return;
+      stale = false; drawnAt = at;
+      if (!files.length) return;
+      deck.fitNames();
+      quietly(()=> cards().forEach(a=>{ const P = panelOf(a); if (P && !isFolded(a)){ if (P.hasPlot()) P.update(true); else { P.writeStoreToInputs(); P.initPlot(); } } }));
+      renderResView();
+    },
+    csv: exportTaucZip,
+  });
+  const { all: allFiles, files } = kit;
+  let warnDismissed = false;
+  let currIndex=0;                    // the sample every analysis card shows
+  // (the sample a tab woken or reloaded showed: its next restore shows it, inst.showNext)
+  let toShow = null;
+  let resPlot0=null, resPlotR=null, resPlotLog=null; // the Results' top plots (created once)
+  // How Eg is read off the Tauc plot; each Tauc analysis picks which its bar chart shows.
+  const EG_METHODS = [
+    // Named E_g in plain text: a legend's sub run sits badly beside its swatch.
+    { key: 'x', label: 'x-axis',   name: 'E_g (x-axis)',   color: '#3aa0ff' },
+    { key: 'b', label: 'baseline', name: 'E_g (baseline)', color: '#ff7a59' },
+  ];
+
+  /* The two ways E_U is read, told apart as GC's gases are: from ln F(R) as it is, and
+     with the reference Tauc card's baseline taken out of F(R) first (urbachSub). Lines
+     keep the sample's colour, the subtracted ones long-dashed (their fits dotted); bars
+     take the pair's two colours. Each Urbach card shows one, the other or both, in its line plot and in its
+     bar chart separately. */
+  // Three line patterns, none used twice: the plain fits dashed (as every fit in the
+  // Results is), the subtracted curves long-dashed, their fits dotted.
+  const URB_METHODS = [
+    { key: 'p', label: 'plain',      name: 'E_U',              color: '#3aa0ff' },
+    { key: 's', label: 'subtracted', name: 'E_U (subtracted)', color: '#ff7a59' },
+  ];
+  const URB_ALL = ()=> ({ b: URB_METHODS.map(m=> m.key) });
 
   const clampN = v => Math.max(1, Math.round(v));
   const clampM = v => Math.max(2, Math.round(v));
+  // Two-sided 99% confidence: the 99.5% quantile of Student's t, the factor every
+  // error reported here (Eg, E_U) is multiplied by.
+  const T_Q = 0.995;
 
-  // Default interval-line positions from a sample's own energy range
-  function defaultVlinesFor(i){
-    const hv = files[i].hv, lo = minArr(hv), hi = maxArr(hv), d = hi - lo;
-    return { v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d };
+  /* A curve with points that have no value (F(R) < 0 under a fractional exponent, F(R) ≤ 0
+     under the logarithm) is smoothed and differentiated over the points that have one,
+     as though the others had not been measured: those stay without a value, and every
+     other point is averaged with its nearest neighbours that have one. Run over every
+     point (to v478), the moving average spread each missing point to N/2 neighbours on
+     either side, the derivative's to N2/2 more, the second derivative's as far again:
+     10 points of F(R) < 0 left 279 of 551 values of Y'' without one, which the
+     suggestion took for curvature, and no fit window could hold a point the spread had
+     reached. `fn(y, x)` runs on the points with a finite y (or those `has(i)` keeps) and
+     their x; a curve with none left out goes through it as it is. */
+  function onFinite(y, x, fn, has = i=> isFinite(y[i])){
+    const ok = []; for (let i=0;i<y.length;i++) if (has(i)) ok.push(i);
+    if (ok.length === y.length) return fn(y, x);
+    const r = fn(ok.map(i=> y[i]), x && ok.map(i=> x[i])), out = new Array(y.length).fill(NaN);
+    ok.forEach((i, j)=> out[i] = r[j]);
+    return out;
   }
-
-  // ---- Auto-suggested interval-line positions ----
-  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
-  // linear/constant background has zero curvature, so it cancels). The "zero zones"
-  // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
-  // ε = 10%·max|Y''|. The region bounds are found from each spectrum end inward: the
-  // first start of a sustained run of CONT points with |Y''| >= ε (interpolated).
-  const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
-  const SUGG_CONT   = 25;     // required consecutive points above ε
-  function derivEdge(i){
-    const fp = getFileParams(i), hv = files[i].hv, fr = files[i].FR, n = hv.length;
-    if (n < 7) return null;
-    const Yraw = fr.map((v,k)=>Math.pow(v*hv[k], fp.a));
-    const Ys  = movingAverage(Yraw, fp.N);
-    const dYs = movingAverage(gradientArr(Ys, hv), fp.N2);        // Y'
-    const d2  = movingAverage(gradientArr(dYs, hv), fp.N2);       // Y''
-    const margin = Math.min(Math.max(2, Math.round(n*0.02)), Math.floor(n/2)-1);
-    // energy-ascending order of indices, so we can scan by energy regardless of layout
-    const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
-    const A = d2.reduce((m,v)=>Math.max(m, Math.abs(v)), 0) || 1;
-    const eps = SUGG_THRESH * A;
-    const ax = j => Math.abs(d2[ord[j]]);
-    const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
-    const inR = j => j>=margin && j<n-margin;
-    // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
-    const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
-    let v1=hv[ord[margin]], v2=hv[ord[n-1-margin]];
-    for (let j=margin;j<n-margin;j++){ if (runGE(j,+1)){ v1 = j>margin?cross(j-1,j):hv[ord[j]]; break; } }
-    for (let j=n-1-margin;j>=margin;j--){ if (runGE(j,-1)){ v2 = j<n-1-margin?cross(j+1,j):hv[ord[j]]; break; } }
-    return { v1, v2 };
-  }
-  function suggestOne(i){
-    const e = derivEdge(i);
-    if (!e) return null;
-    const hv = files[i].hv, n = hv.length;
-    const lo = Math.min(hv[0], hv[n-1]), hi = Math.max(hv[0], hv[n-1]);
-    const clamp = x => Math.max(lo, Math.min(hi, x));
-    // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span).
-    return { v1: clamp(e.v1), v2: clamp(e.v2), v3: clamp(e.v1-0.85), v4: clamp(e.v1-0.1) };
-  }
-  // Shared (all-mode) suggestion: linear region [max(v1), min(v2)] over all samples
-  // (widest common linear window), baseline computed once from max(v1).
-  function suggestShared(){
-    const ss = files.map((f,i)=>suggestOne(i)).filter(Boolean);
-    if (!ss.length) return null;
-    const maxV1 = Math.max(...ss.map(s=>s.v1)), minV2 = Math.min(...ss.map(s=>s.v2));
-    let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
-    const clamp = x => Math.max(lo, Math.min(hi, x));
-    return { v1: clamp(maxV1), v2: clamp(minV2), v3: clamp(maxV1-0.85), v4: clamp(maxV1-0.1) };
-  }
-  // Apply suggestions to the whole workspace (used once on first upload).
-  function autoSuggestAll(){
-    if (!files.length) return;
-    if (taucMode==='per'){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!taucPer[i]) taucPer[i]={}; taucPer[i].vlines = s; } }); }
-    else { const s = suggestShared(); if (s) sharedVlines = s; }
-  }
-  // The interval-line set used for sample i (shared object, or the sample's own)
-  function vlinesFor(i){
-    if (taucMode==='shared') return sharedVlines;
-    let pp = taucPer[i]; if (!pp) pp = taucPer[i] = {};
-    if (!pp.vlines || !isFinite(pp.vlines.v1)) pp.vlines = defaultVlinesFor(i);
-    return pp.vlines;
-  }
-  // Resolve the effective params for a given file index
-  function getFileParams(i){
-    const s = taucShared;
-    const src = (taucMode==='per') ? (taucPer[i] || {}) : s;
-    return {
-      a:  (src.a  ?? s.a),
-      N:  clampN(src.N  ?? s.N),
-      N2: clampN(src.N2 ?? s.N2),
-      M:  clampM(src.M  ?? s.M),
-      M2: clampM(src.M2 ?? s.M2),
-    };
-  }
-  function curParams(){ return getFileParams(currIndex); }
-
-  // Read the input fields into the active store (shared, or the current sample)
-  function readInputsToStore(){
-    const vals = {
-      a:  parseFloat(document.getElementById('taucA').value),
-      N:  clampN(+document.getElementById('taucN').value  || 1),
-      N2: clampN(+document.getElementById('taucN2').value || 1),
-      M:  clampM(+document.getElementById('taucM').value  || 2),
-      M2: clampM(+document.getElementById('taucM2').value || 2),
-    };
-    if (!isFinite(vals.a)) delete vals.a;
-    if (taucMode==='shared') Object.assign(taucShared, vals);
-    else { const pp = taucPer[currIndex] || (taucPer[currIndex]={}); Object.assign(pp, vals); }
-  }
-  // Push the current sample's stored params into the input fields
-  function writeStoreToInputs(){
-    const p = getFileParams(currIndex);
-    document.getElementById('taucA').value  = p.a;
-    document.getElementById('taucN').value  = p.N;
-    document.getElementById('taucN2').value = p.N2;
-    document.getElementById('taucM').value  = p.M;
-    document.getElementById('taucM2').value = p.M2;
-    document.getElementById('taucNExp').textContent = p.a;
-  }
-  function syncTaucModeButtons(){
-    const c = document.getElementById('taucModeAll');
-    if (c) c.textContent = taucMode==='shared' ? 'all' : 'one';
-  }
-
-  // per-upload invalid names (files that were skipped); persists until all files are removed
-  let invalidUploadNames = [];
-  let taucUploadAlerts = '';
-  let taucWarnDismissed = false;
-
-  // Delegated click handling for dynamically generated alert dismiss buttons.
-  document.getElementById('tab-tauc').addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-action]');
-    if (!btn || !document.getElementById('tab-tauc').contains(btn)) return;
-    switch (btn.dataset.action){
-      case 'tauc-dismiss-invalid': invalidUploadNames=[]; rebuildTaucAlerts(); break;
-      case 'tauc-dismiss-warn':    taucWarnDismissed=true; rebuildTaucAlerts(); break;
-      case 'tauc-dismiss-upload':  taucUploadAlerts=''; rebuildTaucAlerts(); break;
-    }
-  });
-
-  function rebuildTaucAlerts(){
-    const warnNames = taucWarnDismissed ? [] : files.filter(f=>f.warn).map(f=>f.name);
-    document.getElementById('taucAlerts').innerHTML =
-      buildAlertsHtml(invalidUploadNames, warnNames, undefined, 'tauc-dismiss-invalid', 'tauc-dismiss-warn') + taucUploadAlerts;
-  }
-
-  function fileCallbacks(){
-    return {
-      onRemove(i){
-        files.splice(i,1);
-        taucPer.splice(i,1);            // keep per-sample params aligned with files
-        if (!files.length) invalidUploadNames = [];
-        rebuildTaucAlerts();
-        afterFilesChange();
-      },
-      onReorder(from, to){ [files,taucPer].forEach(a=>{ const [x]=a.splice(from,1); a.splice(to,0,x); }); rebuildTaucAlerts(); afterFilesChange(); },
-      onLabelChange(i, v){ files[i].label=v; updateTaucResults(); hist.commit(); },
-      onColorChange(i, v){ files[i].color=v; updateTaucResults(); hist.commit(); },
-      onPaletteChange(colors){ files.forEach((f,i)=>{ f.color=colors[i%colors.length]; }); afterFilesChange(); },
-      onRemoveAll(){ files.length=0; taucPer=[]; invalidUploadNames=[]; taucUploadAlerts=''; taucWarnDismissed=false; sharedVlines={}; rebuildTaucAlerts(); afterFilesChange(); },
-    };
-  }
-
-  /* ---- Undo/redo: snapshot the reversible state (file order/labels/colors,
-     the draggable line positions and the analysis parameters). Raw spectra
-     arrays are shared by reference; only metadata is cloned. ---- */
-  const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
-  function taucSnapshot(){
-    return {
-      files: files.map(f=>({...f})),
-      mode: taucMode,
-      shared: {...taucShared},
-      sharedVlines: {...sharedVlines},
-      per: taucPer.map(clonePer),
-    };
-  }
-  function taucRestore(s){
-    files = s.files.map(f=>({...f}));
-    taucMode = (typeof s.mode==='string') ? s.mode : 'shared';   // older snapshots stored a per-field object
-    if (s.shared) Object.assign(taucShared, s.shared);
-    sharedVlines = s.sharedVlines ? {...s.sharedVlines} : (s.vlines ? {...s.vlines} : {});
-    taucPer = s.per ? s.per.map(clonePer) : files.map(()=>({}));
-    // Backward compatibility with pre-all/one snapshots (params stored by input id)
-    if (s.params){
-      taucShared.a  = parseFloat(s.params.taucA);
-      taucShared.N  = +s.params.taucN;  taucShared.N2 = +s.params.taucN2;
-      taucShared.M  = +s.params.taucM;  taucShared.M2 = +s.params.taucM2;
-    }
-    if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
-    syncTaucModeButtons();
-    afterFilesChange();
-    // Rebuild alerts for THIS tab's files: transient upload feedback (invalid /
-    // already-loaded) belongs to the upload action, not the project, so clear it;
-    // the non-standard-format warning is re-derived from the restored files' .warn
-    // flags. Without this a restored/switched tab shows no alerts (or inherits the
-    // previous tab's).
-    invalidUploadNames = []; taucUploadAlerts = ''; taucWarnDismissed = false;
-    rebuildTaucAlerts();
-  }
-  const hist = registerHistory('tauc', taucSnapshot, taucRestore);
-  // Redraw on tab-visible/resize: re-fit at the current size, keeping the zoom.
-  registerTabRedraw('tauc', ()=>{ if (plot && files.length) updateTaucView(true); });
-
-  setupDropzone('taucDropzone', 'taucFiles', async (fileList)=>{
-    const hadFiles = files.length > 0;   // auto-suggest only on the first upload
-    const existing = new Set(files.map(f=>f.name));
-    const newInvalid = [];
-    const alreadyLoaded = [];
-    for (const f of fileList){
-      if (existing.has(f.name)){ alreadyLoaded.push(f.name); continue; }
-      existing.add(f.name);
-      // f.text() auto-detects encoding (incl. UTF-16 via BOM); rawBytes keeps the
-      // original bytes for byte-exact re-download.
-      const rawBytes = new Uint8Array(await f.arrayBuffer());
-      const text = await f.text();
-      const rawLines = text.split(/\r?\n/).filter(l=>l.trim().length);
-      if (!rawLines.length){ newInvalid.push(f.name); continue; }
-
-      // Detect delimiter
-      const sample = rawLines[0] + (rawLines[1]||'');
-      const delim = sample.includes(';') ? ';' : sample.includes('\t') ? '\t' : ',';
-
-      // Validate: all data rows must have exactly 2 non-empty columns
-      let tooManyColumns = false, parsedCount = 0;
-      for (const line of rawLines){
-        const parts = line.split(delim).map(s=>s.trim());
-        const nonEmpty = parts.filter(s=>s!=='');
-        const a = parseFloat(nonEmpty[0]||''), b = parseFloat((nonEmpty[1]||'').replace(',','.'));
-        if (isFinite(a) && isFinite(b)){
-          parsedCount++;
-          if (nonEmpty.length > 2){ tooManyColumns = true; break; }
-        }
-      }
-      if (tooManyColumns || parsedCount === 0){ newInvalid.push(f.name); continue; }
-
-      // Check standard header on second line
-      const hp = (rawLines[1]||'').split(delim).map(s=>s.trim());
-      const warn = !(hp.length >= 2 && /wavelength.*nm/i.test(hp[0]) && /f\s*\(r\)/i.test(hp[1]));
-
-      // Parse data
-      let wl=[], fr=[];
-      for (const line of rawLines){
-        const parts = line.split(delim).map(s=>s.trim());
-        if (parts.length<2) continue;
-        const a = parseFloat(parts[0].replace(',','.'));
-        const b = parseFloat(parts[1].replace(',','.'));
-        if (isFinite(a) && isFinite(b)){ wl.push(a); fr.push(b); }
-      }
-      if (wl.length){ files.push({name:f.name, label:f.name.replace(/\.[^.]+$/,''), wl, FR:fr, warn, color:nextColor(files), rawBytes}); taucPer.push({}); }
-    }
-    invalidUploadNames = newInvalid;
-    taucWarnDismissed = false;
-    taucUploadAlerts = alreadyLoaded.length ? buildAlertsHtml([], alreadyLoaded, 'Already loaded file(s):', '', 'tauc-dismiss-upload') : '';
-    rebuildTaucAlerts();
-    afterFilesChange();
-    // Once, when the first data lands: propose optimal interval-line positions.
-    if (!hadFiles && files.length){ autoSuggestAll(); writeStoreToInputs(); updateTaucView(); hist.commit(); }
-  });
-
-  function afterFilesChange(){
-    setTabLoaded('tauc', files.length);
-    renderUnifiedFileList('taucFileTableWrap', files, fileCallbacks());
-    if (files.length) setupAnalysis();
-    else {
-      document.getElementById('taucWorkspace').style.display='none';
-      document.getElementById('taucResults').style.display='none';
-    }
-    hist.commit(); // baseline + file add/remove/reorder/palette
-  }
-
-  // Energy axis is just 1240/λ — each file stays on its own native grid
-  function setupAnalysis(){
-    files.forEach(f=>{ f.hv = f.wl.map(wl=>1240/wl); });
-    if (currIndex >= files.length) currIndex = files.length-1;
-    bestRegsAll = files.map(()=>null);
-    if (currIndex < 0) currIndex = 0;
-    if (taucPer.length !== files.length) taucPer = files.map((_,i)=>taucPer[i] || {});
-    writeStoreToInputs();      // reflect the current sample's params in the inputs
-    syncTaucModeButtons();
-    document.getElementById('taucWorkspace').style.display='block';
-    document.getElementById('taucResults').style.display='block';
-    initTaucPlot();
-  }
-
-  // Union of all files' ranges (for shared overlay axes)
-  function unionWl(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.wl)); hi=Math.max(hi,maxArr(f.wl)); }); return [lo,hi]; }
-  function unionHv(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); }); return [lo,hi]; }
-
-  function initTaucPlot(){
-    plot = new Plot(document.getElementById('taucSvg'), {xlabel:'hν (eV)', ylabelSvg:'[F(R)·hν]<tspan baseline-shift="super" font-size="8">a</tspan>', xTickStep:0.5, noYTickLabels:true});
-    plot.attachTools(plot.svg.closest('.plot-wrap'));
-    const [hvMin, hvMax] = unionHv();
-    if (!isFinite(sharedVlines.v1)){
-      sharedVlines.v1 = hvMin + 0.6*(hvMax-hvMin);
-      sharedVlines.v2 = hvMin + 0.8*(hvMax-hvMin);
-      sharedVlines.v3 = hvMin + 0.2*(hvMax-hvMin);
-      sharedVlines.v4 = hvMin + 0.4*(hvMax-hvMin);
-    }
-    updateTaucView();
-  }
-
+  /* The smoothing and the derivative are numbers of points, N and N2: the curve's centred
+     moving average over N points, and that over N2 of its central differences (to v520 again:
+     v515 to v519 made them widths in eV, smooth.js boxSmooth and boxSlope). */
+  const smoothY = (y, N)=> onFinite(y, null, v=> movingAverage(v, N));
+  // dy/dx smoothed over N points.
+  const slopeOf = (y, x, N)=> onFinite(y, x, (v, e)=> movingAverage(gradientArr(v, e), N));
 
   // Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
   // minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
   // by the y-range makes the criterion robust — it locks onto the steep linear edge
   // instead of a flat low-value stretch that merely has a small absolute RMSE.
-  function scanRegr(hv, frArr, a, N, M, x1, x2){
-    const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], a));
-    const Ys = movingAverage(Yraw, N);
+  // `Ys` is the curve as analysed: already smoothed. The window is chosen on it, where
+  // noise does not pick it, and the line fitted to `Yraw`, the data themselves, inside
+  // it: fitted to smoothed values its residuals are averaged together, no longer
+  // independent, and every error came out too small (a "99%" interval held the truth
+  // 72% of the time at N = 5, 37% at N = 15). `n` is how many points it was fitted on.
+  // A window is M points that have a value: one without (F(R) at or below zero, see
+  // onFinite) is left out, and the window reaches past it. One holding such a point was
+  // passed over (to v478), so a few of F(R) < 0 through the baseline region left it no
+  // window to fit. With `strict` it still is, and only a point whose energy has no value
+  // is left out: the subtracted Urbach curve gives none to those of F(R) ≤ 0, which the
+  // plain curve leaves out, so a point there without a value is one where the Tauc
+  // baseline lies above F(R), which the card reports. (v515 to v519 slid a window of a
+  // width in eV; to v520 M points again, as to v514.)
+  function scanRegr(hv, Ys, M, x1, x2, Yraw, strict){
     const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
     const idxSel = [];
-    for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi) idxSel.push(i);
+    for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi && (strict || isFinite(Ys[i]))) idxSel.push(i);
     let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,NRMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
     if (idxSel.length < M) return best;
     let bestScore = Infinity;
@@ -337,358 +221,1620 @@ import { Plot } from './plot.js';
       const score = nrmse / r.R2;
       if (score < bestScore){
         bestScore = score;
-        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB};
+        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB, n:M};
       }
+    }
+    if (!Yraw || Yraw === Ys || !best.bestIdx.length) return best;
+    const idx = best.bestIdx.filter(i=> isFinite(Yraw[i]));
+    if (idx.length < 3) return {...best, slope:NaN, intercept:NaN, R2:NaN, NRMSE:Infinity, varM:NaN, varB:NaN, covMB:NaN, n:idx.length};
+    const yr = idx.map(i=> Yraw[i]), r = fitLinear(idx.map(i=> hv[i]), yr), range = Math.max(...yr) - Math.min(...yr);
+    return {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE: range > 0 ? r.rmse/range : Infinity,
+            bestIdx:best.bestIdx, varM:r.varM, varB:r.varB, covMB:r.covMB, n:idx.length};
+  }
+
+  /* ---- v515's window choice, for the projects saved by v515 to v519 (makePanel toPoints) ----
+     Their regression windows were widths in eV: a window W wide slid through the interval
+     (from each of its points every point up to W above it, while its end was in it, a point
+     within 10⁻⁹ eV of the end in it), fitted where it held 3 points with a value spread over
+     half its width at least, the one with the least NRMSE/R² on the curve smoothed by a box
+     w wide (smooth.js boxSmooth) chosen. Its points, `bestIdx` of v515's scanRegr, are what
+     the width spanned there: kept here to convert those projects, and for nothing else. */
+  function scanW(hv, Ys, W, x1, x2){
+    const lo = Math.min(x1, x2), hi = Math.max(x1, x2), TOL = 1e-9, sel = [];
+    for (let i = 0; i < hv.length; i++) if (hv[i] >= lo && hv[i] <= hi && isFinite(Ys[i])) sel.push(i);
+    sel.sort((a, b)=> hv[a] - hv[b]);
+    const E = sel.map(i=> hv[i]);
+    let best = [], bs = Infinity;
+    for (let s = 0, e = 0; s < E.length && E[s] + W <= hi + TOL; s++){
+      if (e < s) e = s;
+      while (e + 1 < E.length && E[e+1] <= E[s] + W + TOL) e++;
+      if (e - s < 2 || E[e] - E[s] < W/2 - TOL) continue;
+      // (in the points' own order, as v515 fitted them)
+      const b = sel.slice(s, e+1);
+      if (b[0] > b[b.length-1]) b.reverse();
+      const yb = b.map(i=> Ys[i]), r = fitLinear(b.map(i=> hv[i]), yb), range = Math.max(...yb) - Math.min(...yb);
+      const score = (range > 0 ? r.rmse/range : Infinity)/r.R2;
+      if (score < bs){ bs = score; best = b; }
     }
     return best;
   }
 
-
-  function analyzeOneFile(hv, frArr, a,N,M,x1,x2,M2,x3,x4){
-    const regs = scanRegr(hv, frArr, a, N, M, x1, x2);
-    const regs2 = scanRegr(hv, frArr, a, N, M2, x3, x4);
+  /* Eg from the two Tauc fits: where the Tauc line crosses the x-axis, and where it
+     crosses the baseline. Each error is the fit's own (co)variances carried through
+     the formula, every term scaled by the t factor of the fit it comes from. */
+  function taucEg(regs, regs2, M, M2){
     let Eg=NaN, EgErr=NaN, EgInt=NaN, EgIntErr=NaN;
     if ([regs.slope,regs.intercept,regs2.slope,regs2.intercept].every(isFinite)){
       const xInt = (regs2.intercept - regs.intercept)/(regs.slope - regs2.slope);
       const dxdb1 = -1/(regs.slope-regs2.slope), dxdb2 = 1/(regs.slope-regs2.slope);
-      const dxdm1 = (regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
+      // x = (b2 − b1)/(m1 − m2), so ∂x/∂m1 = −(b2 − b1)/(m1 − m2)² = −∂x/∂m2. With the
+      // sign the other way the slope–intercept covariances, strongly negative this far
+      // from hν = 0, added to the variance instead of taking from it.
+      const dxdm1 = -(regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
       const dxdm2 = -dxdm1;
-      const t1 = tinv(0.995, M-2), t2 = tinv(0.995, M2-2);
+      const t1 = tinv(T_Q, (regs.n || M)-2), t2 = tinv(T_Q, (regs2.n || M2)-2);
       const varX = dxdb1*dxdb1*regs.varB*t1*t1 + dxdb2*dxdb2*regs2.varB*t2*t2 +
                    dxdm1*dxdm1*regs.varM*t1*t1 + dxdm2*dxdm2*regs2.varM*t2*t2 +
                    2*dxdb1*dxdm1*regs.covMB*t1*t1 + 2*dxdb2*dxdm2*regs2.covMB*t2*t2;
       EgInt = xInt;
       EgIntErr = varX>0 ? Math.sqrt(varX) : NaN;
     }
-    if (regs.slope !== 0 && isFinite(regs.slope)){
-      Eg = -regs.intercept/regs.slope;
-      if ([regs.varM,regs.varB,regs.covMB].every(isFinite)){
-        const varEg = (regs.intercept**2/regs.slope**4)*regs.varM + (1/regs.slope**2)*regs.varB - 2*(regs.intercept/regs.slope**3)*regs.covMB;
-        EgErr = varEg>=0 ? Math.sqrt(varEg)*tinv(0.995, M-2) : NaN;
-      }
-    }
-    return {Eg,EgErr,EgInt,EgIntErr,regs,regs2};
+    ({ x: Eg, err: EgErr } = xCross(regs, M));
+    return {Eg,EgErr,EgInt,EgIntErr};
+  }
+  // Where a fitted line crosses y = 0, −b/m, and its error: the slope and intercept
+  // variances and their covariance carried through, times the fit's t factor.
+  function xCross(r, M){
+    if (!(r.slope !== 0 && isFinite(r.slope))) return { x: NaN, err: NaN };
+    const x = -r.intercept/r.slope;
+    if (![r.varM, r.varB, r.covMB].every(isFinite)) return { x, err: NaN };
+    const v = (r.intercept**2/r.slope**4)*r.varM + (1/r.slope**2)*r.varB - 2*(r.intercept/r.slope**3)*r.covMB;
+    return { x, err: v >= 0 ? Math.sqrt(v)*tinv(T_Q, (r.n || M)-2) : NaN };
+  }
+  // The inverse of a fit's slope, and its error σ_m/m² times the fit's t factor.
+  function invSlope(r, M){
+    const m = r.slope;
+    if (!isFinite(m) || m === 0) return { v: NaN, err: NaN };
+    return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, (r.n || M)-2) : NaN };
+  }
+  // The Urbach energy is the inverse of the tail's slope in ln F(R) against hν.
+  function urbachEu(regs, M){ const s = invSlope(regs, M); return { Eu: s.v, EuErr: s.err }; }
+
+  const fmtE = (v, e, unit, k = 3, scale = 1)=> !isFinite(v) ? '-'
+    : isFinite(e) ? `${(v*scale).toFixed(k)} ± ${(e*scale).toFixed(k)} ${unit}` : `${(v*scale).toFixed(k)} ${unit}`;
+
+  // ---- Auto-suggested Tauc interval lines ----
+  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
+  // linear/constant background has zero curvature, so it cancels). The "zero zones"
+  // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
+  // ε = 10%·max|Y''|. The outer 10% of the energy range on each side is skimmed off
+  // first: the tails are where the spectrum is noisiest and the moving averages are
+  // one-sided, so neither ε nor the bounds are taken from them. The region bounds are
+  // found from each end of what is kept inward: the first start of a sustained run of
+  // CONT points with |Y''| >= ε (interpolated). (v515 to v519 asked for a run half the
+  // derivative's width in eV; to v520 CONT points again.)
+  const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
+  const SUGG_CONT   = 25;     // required consecutive points above ε
+  const SUGG_TAIL   = 0.10;   // fraction of the energy range skimmed off each end
+  // Read over the points that have a slope (onFinite): one without has no curvature.
+  // A non-finite |Y''| left (a repeated energy) counts as none: it made ε an absolute 0.1
+  // (Math.max with NaN is NaN) and stood "above ε" in every run (to v478).
+  function curvatureEdge(c, p){
+    const ok = []; for (let i=0;i<c.hv.length;i++) if (isFinite(c.dYs[i])) ok.push(i);
+    const hv = ok.map(i=> c.hv[i]), n = hv.length;
+    if (n < 7) return null;
+    const d2  = movingAverage(gradientArr(ok.map(i=> c.dYs[i]), hv), p.N2);      // Y''
+    // energy-ascending order of indices, so we can scan by energy regardless of layout
+    const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
+    const eLo = hv[ord[0]], eHi = hv[ord[n-1]], cut = SUGG_TAIL * (eHi - eLo);
+    let a = 0, b = n-1;                                           // kept span, energy order
+    while (a < n && hv[ord[a]] < eLo + cut) a++;
+    while (b >= 0 && hv[ord[b]] > eHi - cut) b--;
+    if (b - a < 2) return null;
+    const ax = j =>{ const v = Math.abs(d2[ord[j]]); return isFinite(v) ? v : 0; };
+    let A = 0; for (let j=a;j<=b;j++) A = Math.max(A, ax(j));
+    const eps = SUGG_THRESH * (A || 1);
+    const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
+    const inR = j => j>=a && j<=b;
+    // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
+    const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
+    let v1=hv[ord[a]], v2=hv[ord[b]];
+    for (let j=a;j<=b;j++){ if (runGE(j,+1)){ v1 = j>a?cross(j-1,j):hv[ord[j]]; break; } }
+    for (let j=b;j>=a;j--){ if (runGE(j,-1)){ v2 = j<b?cross(j+1,j):hv[ord[j]]; break; } }
+    return { v1, v2 };
   }
 
-  function processAll(){
-    bestRegsAll = files.map((f,k)=>{
-      const fp = getFileParams(k), vl = vlinesFor(k);
-      const r = analyzeOneFile(f.hv, f.FR, fp.a, fp.N, fp.M, vl.v1, vl.v2, fp.M2, vl.v3, vl.v4);
-      return {label:f.label, ...r};
+  /* =========================================================
+     ANALYSIS PANEL
+     One card: the current sample's curve against hν, the interval lines that pick
+     the regions to fit, the parameters beside it and what the fits give. Built from
+     one recipe for every kind of analysis — Tauc on [F(R)hν]^a with a Tauc region
+     and a baseline, Urbach on ln F(R) with one region — which the spec passed in
+     describes. Each card keeps its own parameters, lines and all/one mode; its
+     elements are its prefix plus the same suffixes (an1Svg, an2Svg, ...). A card
+     folded out of sight (`hidden`) is not drawn: it is brought up to date when it
+     is unfolded.
+  ========================================================= */
+  /* The fields of the parameters, by key: the exponent, A, and the numbers of points, N,
+     the curve's smoothing, N2, the derivative's, M and M2, the regression windows (the
+     spec's windows say which is whose), to v514 and from v520 again. v515 to v519 kept
+     widths in eV in their place, w, w2, W and W2 (EV: makePanel toPoints); LEAST, the
+     fewest points each takes. */
+  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
+  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM };
+  const EV = { N:'w', N2:'w2', M:'W', M2:'W2' }, LEAST = { N: 1, N2: 1, M: 2, M2: 2 };
+  const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
+  // (its elements found in its card, `card`, whether or not the card is in the page)
+  function makePanel(spec, card){
+    const { prefix, keys, windows } = spec;
+    const $ = id => card.querySelector('#' + prefix + id);
+    const P = {
+      // ---- all/one analysis mode (single toggle) ----
+      // 'shared': every sample uses one common parameter set AND one common set of
+      //           interval lines. 'per': each sample is fully independent — its own
+      //           parameters and interval-line positions.
+      mode: 'shared',
+      shared: { ...spec.defaults },                   // common params (shared mode)
+      sharedVlines: {},                               // common interval lines (shared mode)
+      per: [],                                        // per sample: {params..., vlines:{v1..}}
+      suggested: false,                               // lines placed by a suggestion yet
+    };
+    let plot = null;
+    let vlines = {};          // active interval lines (points at the current sample's set)
+    let dragging = false;     // true while an interval line is being dragged
+    let throttle = null;
+    let shown = -1;           // the sample the plot last drew
+
+    // The curve and the derivatives the panel works from, for sample i (kept: curveKept,
+    // slopeKept; the exponent is no Urbach curve's, its parameters none).
+    function curveOf(i, p){
+      const f = files[i], hv = f.hv;
+      return curveKept(f.FR, exactKey([spec.kind, objId(f.wl), p.a, p.N]), ()=>{
+        const Yraw = f.FR.map((v,k)=> spec.curve(v, hv[k], p));
+        return { Yraw, Ys: smoothY(Yraw, p.N) };
+      });
+    }
+    function curves(i, p){
+      const f = files[i], hv = f.hv, { Yraw, Ys } = curveOf(i, p);
+      const dYs = slopeKept(f.FR, exactKey([spec.kind, objId(f.wl), p.a, p.N, p.N2]), ()=> slopeOf(Ys, hv, p.N2));   // Y'
+      return { hv, Yraw, Ys, dYs };
+    }
+    P.curve = k => curveOf(k, P.params(k));
+
+    /* What a parameter can be, and an interval-line set: as the fields take them (the
+       exponent above 0, a smoothing window 1 or more, a regression window 2 or more), and
+       every line of the spec's windows a number. A sample's own value that is none (a
+       project read in may hold anything: modkit RESTORED) gives way to the common one, a
+       line set to the default lines (to v494 a value that was no number made the fits NaN,
+       an entry that was no object threw as the lines were put in it). */
+    const PARAM_OK = { a: v=> v > 0, N: v=> v >= 1, N2: v=> v >= 1, M: v=> v >= 2, M2: v=> v >= 2 };
+    const okParam = (k, v)=> Number.isFinite(v) && PARAM_OK[k](v);
+    const lineKeys = windows.flatMap(w=> [w.lo, w.hi]);
+    const okLines = l => isObj(l) && lineKeys.every(k=> Number.isFinite(l[k]));
+    const paramsIn = o =>{ const out = {}; if (isObj(o)) for (const k of keys) if (okParam(k, o[k])) out[k] = o[k]; return out; };
+    const linesIn = l => okLines(l) ? Object.fromEntries(lineKeys.map(k=> [k, l[k]])) : {};
+    // (a sample's own widths in eV, v515 to v519, as points at its spectrum in one mode:
+    // toPoints; `evSh` the common ones its state held)
+    const perIn = (p, i, evSh)=>{
+      const o = paramsIn(p);
+      if (isObj(p) && okLines(p.vlines)) o.vlines = linesIn(p.vlines);
+      const ev = evIn(p);
+      if (P.mode === 'per' && files[i] && Object.keys(ev).length) Object.assign(o, ownPoints(ev, o, files[i], evSh));
+      return o;
+    };
+    // Resolve the effective params for a given file index
+    P.params = i =>{
+      const s = P.shared;
+      const src = (P.mode==='per') ? (P.per[i] || {}) : s;
+      const out = {};
+      for (const k of keys) out[k] = CLAMP[k](okParam(k, src[k]) ? src[k] : s[k]);
+      return out;
+    };
+    const defaultVlinesFor = i =>{
+      const hv = files[i].hv, lo = minArr(hv), d = maxArr(hv) - lo;
+      return spec.defaultLines(lo, d);
+    };
+    // The interval-line set used for sample i (shared object, or the sample's own)
+    // A spec with `ownLines` keeps every sample's lines its own whatever the mode, which
+    // then decides the parameters alone; a sample with none yet starts from the common
+    // set an older project kept, if there is one.
+    P.vlinesFor = i =>{
+      if (P.mode==='shared' && !spec.ownLines) return P.sharedVlines;
+      let pp = P.per[i]; if (!isObj(pp)) pp = P.per[i] = {};
+      if (!okLines(pp.vlines))
+        pp.vlines = spec.ownLines && isFinite(P.sharedVlines.v1) ? {...P.sharedVlines} : defaultVlinesFor(i);
+      return pp.vlines;
+    };
+    // Every fit of sample k, and what the spec makes of them (kept: fitsKept, under keyOf;
+    // made, not kept, while a line is dragged).
+    P.keyOf = k =>{
+      const p = P.params(k), vl = P.vlinesFor(k);
+      return exactKey([spec.kind, objId(files[k].wl), keys.map(x=> p[x]), lineKeys.map(x=> vl[x]), spec.refKey ? spec.refKey(k) : null]);
+    };
+    P.analyze = k =>{
+      const fit = ()=>{
+        const p = P.params(k), vl = P.vlinesFor(k), c = curveOf(k, p), hv = files[k].hv;
+        const fits = windows.map(w=> scanRegr(hv, c.Ys, p[w.M], vl[w.lo], vl[w.hi], c.Yraw));
+        return { ...spec.results(fits, p, k, vl), fits };
+      };
+      return dragging ? fit() : fitsKept(files[k].FR, P.keyOf(k), fit);
+    };
+
+    /* ---- Projects and tabs saved by v515 to v519: widths in eV ----
+       They held the smoothing, the derivative's smoothing and the regression windows as
+       widths in eV, w, w2, W and W2, in place of N, N2, M and M2 (EV): told apart by that, as
+       v515 told v514's. Each becomes the points it spanned where it acted. Equal to v515's
+       default for it (spec.evDefaults: Tauc 0, 0.15, 0.2 and 0.5 eV, Urbach 0, 0.15 and
+       0.15 eV), v514's default (spec.defaults). Any other, on each sample (spanned): a
+       regression window, the points of the window v515 chose there (scanW, on the curve as
+       v515 smoothed it, between the sample's lines); a smoothing, and a window with none
+       chosen, the width over the energy step at the middle of the spectrum (the middle
+       point's, in energy order, to its two neighbours). In all mode the common value is the
+       median over the samples (of those with a window chosen, if any), in one mode each
+       sample's own at its spectrum; rounded, at least LEAST; with no sample to count on,
+       the default. The form kept after is v514's, points. */
+    // The widths in eV an object holds in place of its points, by the points' keys.
+    const evOk = (K, v)=> Number.isFinite(v) && (K[0] === 'M' ? v > 0 : v >= 0);
+    const evIn = o =>{ const out = {}; if (isObj(o)) for (const K of keys) if (K in EV && !(K in o) && evOk(K, o[EV[K]])) out[K] = o[EV[K]]; return out; };
+    // The widths in eV a sample was analysed with: its own, else the common ones, else
+    // v515's defaults; and the exponent a.
+    const evSettings = (sh, own, a)=>{ const e = { ...spec.evDefaults, a }; for (const K in sh) e[EV[K]] = sh[K]; for (const K in own) e[EV[K]] = own[K]; return e; };
+    // What each width of `e` spanned in points of the spectrum f between the lines vl (none:
+    // the default ones on its span), and `got`, the windows for which v515 chose one.
+    function spanned(f, e, vl){
+      const hv = hvOf(f.wl), out = { got: {} };
+      if (!okLines(vl)){ const lo = minArr(hv); vl = spec.defaultLines(lo, maxArr(hv) - lo); }
+      const E = hv.filter(Number.isFinite).sort((x, y)=> x - y), m = E.length >> 1, lo = Math.max(0, m-1), hi = Math.min(E.length-1, m+1);
+      const st = hi > lo ? (E[hi] - E[lo])/(hi - lo) : NaN;
+      for (const K of keys) if (K in EV) out[K] = e[EV[K]]/st;
+      const Yraw = f.FR.map((v, k)=> spec.curve(v, hv[k], e)), Ys = onFinite(Yraw, hv, (v, x)=> boxSmooth(x, v, e.w));
+      windows.forEach(w=>{ const n = scanW(hv, Ys, e[EV[w.M]], vl[w.lo], vl[w.hi]).length; if (n){ out[w.M] = n; out.got[w.M] = true; } });
+      return out;
+    }
+    // The widths of `ev` as points: v515's default, v514's; else the median of what each
+    // spanned on the samples `at()` counts it on, rounded, at least LEAST.
+    function toPoints(ev, at){
+      const out = {}, c = Object.keys(ev).some(K=> ev[K] !== spec.evDefaults[EV[K]]) ? at() : [];
+      for (const K in ev){
+        if (ev[K] === spec.evDefaults[EV[K]]){ out[K] = spec.defaults[K]; continue; }
+        const v = c.filter(o=> isFinite(o[K])), got = v.filter(o=> o.got[K]), x = (got.length ? got : v).map(o=> o[K]);
+        out[K] = x.length ? Math.max(LEAST[K], Math.round(median(x))) : spec.defaults[K];
+      }
+      return out;
+    }
+    // The lines sample i is read between (none made yet: those its card would make).
+    const linesOf = i =>{
+      if (P.mode === 'shared' && !spec.ownLines){ if (okLines(P.sharedVlines)) return P.sharedVlines; const [lo, hi] = unionHv(); return spec.defaultLines(lo, hi - lo); }
+      return isObj(P.per[i]) && okLines(P.per[i].vlines) ? P.per[i].vlines : spec.ownLines && okLines(P.sharedVlines) ? P.sharedVlines : null;
+    };
+    // A sample's own widths `ev` as points at its spectrum f (those it lacks, the common
+    // ones `evSh`), with its exponent and lines in `o`.
+    const ownPoints = (ev, o, f, evSh)=> toPoints(ev, ()=> [spanned(f, evSettings(evSh, ev, okParam('a', o.a) ? o.a : P.shared.a),
+      okLines(o.vlines) ? o.vlines : spec.ownLines && okLines(P.sharedVlines) ? P.sharedVlines : null)]);
+    /* A file taken back in (the file list's slot): the entry it left with; one saved by v515
+       to v519, its widths in eV, as points at its spectrum in one mode, dropped in all mode
+       (where the common ones are used). */
+    P.back = (v, f)=>{
+      const o = v ? {...v, vlines: v.vlines ? {...v.vlines} : undefined} : {}, ev = evIn(v);
+      Object.values(EV).forEach(k=>{ delete o[k]; });
+      if (P.mode === 'per' && f && Array.isArray(f.wl) && Object.keys(ev).length) Object.assign(o, ownPoints(ev, o, f, {}));
+      return o;
+    };
+
+    // ---- Auto-suggested interval-line positions ----
+    // Where the lines go is the spec's to say: `suggest` places them for one sample,
+    // `combine` makes one set for every sample out of theirs (all mode). Either is
+    // kept inside the energy range it applies to.
+    const clampTo = (lo, hi)=> l =>{ const o = {}; for (const k in l) o[k] = Math.max(lo, Math.min(hi, l[k])); return o; };
+    function suggestOne(i){
+      const p = P.params(i), l = spec.suggest(i, p, ()=> curves(i, p));
+      if (!l) return null;
+      const hv = files[i].hv, n = hv.length;
+      return clampTo(Math.min(hv[0], hv[n-1]), Math.max(hv[0], hv[n-1]))(l);
+    }
+    function suggestShared(){
+      const ss = files.map((f,i)=>suggestOne(i)).filter(Boolean);
+      if (!ss.length) return null;
+      let lo=Infinity, hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); });
+      return clampTo(lo, hi)(spec.combine(ss));
+    }
+    // Apply suggestions to the whole workspace: every sample, whatever the mode; the
+    // mode only decides whether they share one set of lines or each keep its own.
+    P.autoSuggestAll = ()=>{
+      if (!files.length) return;
+      P.suggested = true;
+      if (P.mode==='per' || spec.ownLines){ files.forEach((f,i)=>{ const s=suggestOne(i); if (s){ if(!P.per[i]) P.per[i]={}; P.per[i].vlines = s; } }); }
+      else { const s = suggestShared(); if (s) P.sharedVlines = s; }
+    };
+    // A setting that reshapes the curve (`suggestOn`) places the lines again where it
+    // applies: for every sample in all mode, for the one on show in one mode.
+    function resuggestEdited(){
+      if (P.mode === 'per') P.suggestAt(currIndex);
+      else P.autoSuggestAll();
+    }
+    // One sample's own lines placed again by the suggestion.
+    P.suggestAt = i =>{ const s = suggestOne(i); if (s){ if (!P.per[i]) P.per[i] = {}; P.per[i].vlines = s; } };
+
+    // Read the input fields into the active store (shared, or the current sample)
+    function readInputsToStore(){
+      const vals = {};
+      for (const k of keys){
+        const raw = $(FIELD[k]).value;
+        if (k === 'a'){ const v = parseFloat(raw); if (isFinite(v)) vals.a = v; }
+        else vals[k] = CLAMP[k](+raw || 0);
+      }
+      if (P.mode==='shared') Object.assign(P.shared, vals);
+      else { const pp = P.per[currIndex] || (P.per[currIndex]={}); Object.assign(pp, vals); }
+    }
+    // Push the current sample's stored params into the input fields
+    P.writeStoreToInputs = ()=>{
+      const p = P.params(currIndex);
+      for (const k of keys) $(FIELD[k]).value = p[k];
+      if ($('NExp')) $('NExp').textContent = spec.fmtA(p.a);
+    };
+    P.syncModeButton = ()=>{ const c = $('ModeAll'); if (c) c.textContent = P.mode==='shared' ? 'all' : 'one'; };
+
+    // (a card folded, or its tab not on show: not drawn, brought up to date as it is shown)
+    const off = ()=> (spec.hidden && spec.hidden()) || !drawable();
+    P.initPlot = ()=>{
+      if (off()){ plot = null; return; }
+      plot = new Plot($('Svg'), {xlabel:'hν (eV)', ylabelSvg: spec.yLabel(P.params(currIndex)), xTickStep:0.5, noYTickLabels:true});
+      plot.attachTools(plot.svg.closest('.plot-wrap'));
+      // A spec whose lines are each sample's own has no common set to start.
+      if (!spec.ownLines && !isFinite(P.sharedVlines.v1)){
+        const [lo, hi] = unionHv();
+        P.sharedVlines = spec.defaultLines(lo, hi - lo);
+      }
+      P.update();
+    };
+    P.hasPlot = ()=> !!plot;
+    P.shownIndex = ()=> shown;
+
+    P.update = preserveView =>{
+      if (!plot || !files.length || off()) return;
+      shown = currIndex;
+      vlines = P.vlinesFor(currIndex);   // point at the current sample's interval lines
+      const p = P.params(currIndex);
+      const c = curves(currIndex, p), hv = c.hv;
+      $('CurrentLabel').textContent = files[currIndex].label;
+      $('Idx').textContent = (currIndex+1)+'/'+files.length;
+
+      // Capture current zoom so it can be kept across redraws (the full range
+      // set below stays as the "home" reset target)
+      const prev = preserveView ? viewOf(plot) : null;
+      const rLo = spec.zeroFloor ? 0 : minArr(c.Yraw), rHi = maxArr(c.Yraw), pad = spec.zeroFloor ? 0 : 0.05*(rHi - rLo);
+      plot.setRange(minArr(hv), maxArr(hv), rLo - pad, spec.zeroFloor ? rHi*1.05 : rHi + pad);
+      setView(plot, prev, files[currIndex].name);
+      plot.clearData();
+      plot.ylabelSvg = spec.yLabel(p) + ' (a. u.)';
+      plot.drawAxes();
+      if (spec.bands) spec.bands(currIndex).forEach(b=> plot.vband(b.x0, b.x1, b.color, b.opacity));
+      // Named for the figure composer: this plot has no legend, so without these the
+      // traces would reach it as "Series 1..n". Keyed by role, not by sample: the plot
+      // shows one sample at a time, and a trace keeps its looks from one to the next.
+      const nm = files[currIndex].label;
+      curveTraces(c).forEach(t=>
+        plot.line(hv, t.ys, t.color, t.width, undefined, { label: `${nm} ${t.name}`, key: t.key }));
+
+      const res = P.analyze(currIndex);
+      let tooSmall = false;
+      windows.forEach((w, wi)=>{
+        const lo = Math.min(vlines[w.lo], vlines[w.hi]), hi = Math.max(vlines[w.lo], vlines[w.hi]);
+        // Only the points with a value, as scanRegr takes them: counted all (to v478), an
+        // interval of F(R) ≤ 0 had no fit and the card no word why.
+        const sel = hv.filter((v, i)=> v>=lo && v<=hi && isFinite(c.Ys[i])).length;
+        const reg = sel >= p[w.M] ? res.fits[wi] : null;
+        $(w.stats[0]).textContent = reg && isFinite(reg.NRMSE) ? reg.NRMSE.toFixed(4) : '-';
+        $(w.stats[1]).textContent = reg && isFinite(reg.R2) ? reg.R2.toFixed(4) : '-';
+        if (!reg){ tooSmall = true; return; }
+        if (reg.bestIdx.length){
+          const xb = reg.bestIdx.map(i=>hv[i]);
+          plot.line(xb, xb.map(x=>reg.slope*x+reg.intercept), w.color, 2.2, undefined, { label: `${nm} ${w.name}`, key: w.key });
+          const xExt = linspace(minArr(hv), maxArr(hv), 100);
+          plot.line(xExt, xExt.map(x=>reg.slope*x+reg.intercept), w.color, 1, '5,4',
+                    { label: `${nm} ${w.name}, extended`, key: w.key + ' line' });
+        }
+      });
+      $('Alert').innerHTML = tooSmall ? '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>' : '';
+      if (spec.extra) spec.extra(plot, res, hv, nm);
+      spec.show($, res);
+
+      // While dragging a line: live-update only the interactive plot (below); the
+      // summary plots refresh once, on release. onDrag sets dragging, onRelease clears it.
+      const onDrag = k => v=>{ vlines[k]=v; dragging=true; throttledUpdate(); };
+      const onRelease = k => v=>{ vlines[k]=v; dragging=false; P.update(true); kit.commit(); };
+      windows.forEach(w=>{
+        plot.vline(vlines[w.lo], w.color, true, onDrag(w.lo), onRelease(w.lo));
+        plot.vline(vlines[w.hi], w.color, true, onDrag(w.hi), onRelease(w.hi));
+      });
+
+      if (!dragging && spec.onSettled) spec.onSettled();   // skip the heavy summaries mid-drag
+    };
+    // The curve as read, smoothed, and its derivative. The derivative is drawn rescaled
+    // onto the curve's own span, from the floor the curve is drawn from: zero for
+    // Tauc, its own minimum for a log.
+    function curveTraces(c){
+      const yLo = spec.zeroFloor ? 0 : minArr(c.Ys), yHi = maxArr(c.Ys);
+      const onSpan = (arr, lo, hi)=> arr.map(v=> (hi-lo)>0 ? yLo + (v-lo)/(hi-lo)*(yHi-yLo) : v);
+      // The grey XRPD draws its raw pattern in: white vanished on the light theme and on
+      // the white of every exported image.
+      return [
+        { ys: c.Yraw, color: '#6a7585', width: 1,   name: 'raw',        key: 'raw' },
+        { ys: c.Ys,   color: '#3aa0ff', width: 1.4, name: 'smoothed',   key: 'smoothed' },
+        { ys: onSpan(c.dYs, minArr(c.dYs), maxArr(c.dYs)), color: '#5fcf6a', width: 1, name: 'derivative', key: 'derivative' },
+      ];
+    }
+    function throttledUpdate(){
+      if (throttle) return;
+      throttle = requestAnimationFrame(()=>{ throttle=null; P.update(true); });
+    }
+
+    // Per-sample slots follow the file list (added, removed, moved, left out: see slots()).
+    P.clear = ()=>{ P.per = []; P.sharedVlines = {}; };
+    P.fit = ()=>{ if (P.per.length !== files.length) P.per = files.map((_,i)=> P.per[i] || {}); };
+
+    const clonePer = p => ({...p, vlines: p && p.vlines ? {...p.vlines} : undefined});
+    P.snapshot = ()=>({ mode: P.mode, shared: {...P.shared}, sharedVlines: {...P.sharedVlines}, per: P.per.map(clonePer), suggested: P.suggested });
+    // (each value as paramsIn, linesIn and perIn take it: a project read in may hold
+    // anything; the widths in eV of one saved by v515 to v519 as points: toPoints)
+    P.restore = s0 =>{
+      const s = isObj(s0) ? s0 : {}, evSh = evIn(s.shared);
+      P.mode = s.mode === 'per' ? 'per' : 'shared';   // older snapshots stored a per-field object
+      P.shared = { ...spec.defaults, ...paramsIn(s.shared) };
+      P.sharedVlines = linesIn(s.sharedVlines || s.vlines);
+      P.per = Array.isArray(s.per) ? s.per.map((q, i)=> perIn(q, i, evSh)) : files.map(()=>({}));
+      // Snapshots from before the flag had their lines suggested whenever they had any.
+      P.suggested = s.suggested != null ? !!s.suggested : isFinite(P.sharedVlines.v1);
+      // Backward compatibility with pre-all/one snapshots (params stored by input id,
+      // passed on keyed by the field's suffix: the cards' ids are not the ones they had).
+      if (isObj(s.params)){
+        for (const k of keys){ const v = s.params[FIELD[k]], x = k === 'a' ? parseFloat(v) : +v; if (v != null && okParam(k, x)) P.shared[k] = x; }
+      }
+      if (Object.keys(evSh).length) Object.assign(P.shared, toPoints(evSh, ()=> files.map((f, i)=> spanned(f, evSettings(evSh, {}, P.shared.a), linesOf(i)))));
+      P.fit();
+      P.syncModeButton();
+    };
+
+    // Param updates apply on confirm (blur / Enter), not while typing. The exponent is
+    // a <select>, so its change already is a deliberate choice; the numeric fields are
+    // guarded (invalid input shakes + reverts) by guardNumberInputs, and their change
+    // fires only once a valid value is committed. Changing the exponent rescales the
+    // y-axis, so it does a full reset; the smoothing/window fields keep the zoom.
+    keys.forEach(k=>{
+      const el = $(FIELD[k]);
+      el.addEventListener('change', ()=>{
+        readInputsToStore();  // route the edit to shared or this sample's slot
+        if (k === 'a' && $('NExp')) $('NExp').textContent = spec.fmtA(parseFloat(el.value));
+        if (spec.suggestOn && spec.suggestOn.includes(k) && files.length) resuggestEdited();
+        if (plot) P.update(k !== 'a');
+        if (spec.onParams) spec.onParams();
+        if (files.length) kit.commit();
+      });
     });
-  }
 
-  function updateTaucView(preserveView){
-    if (!plot || !files.length) return;
-    vlines = vlinesFor(currIndex);   // point at the current sample's interval lines
-    const p = curParams();
-    const hv = files[currIndex].hv, frArr = files[currIndex].FR;
-    document.getElementById('taucCurrentLabel').textContent = files[currIndex].label;
-    document.getElementById('taucIdx').textContent = (currIndex+1)+'/'+files.length;
-
-    const Yraw = frArr.map((v,i)=>Math.pow(v*hv[i], p.a));
-    const Ys = movingAverage(Yraw, p.N);
-    let dY = gradientArr(Ys, hv);
-    const dYsRaw = movingAverage(dY, p.N2);
-    const dmin = minArr(dYsRaw), dmax = maxArr(dYsRaw), ymax = maxArr(Ys);
-    const normD = v => (dmax-dmin)>0 ? (v-dmin)/(dmax-dmin)*ymax : v;
-    const dYs = dYsRaw.map(normD);
-
-    // Capture current zoom so it can be kept across redraws (the full range
-    // set below stays as the "home" reset target)
-    const prev = (preserveView && isFinite(plot.xmin)) ? {xmin:plot.xmin, xmax:plot.xmax, ymin:plot.ymin, ymax:plot.ymax} : null;
-    plot.setRange(minArr(hv), maxArr(hv), 0, maxArr(Yraw)*1.05);
-    if (prev){ plot.xmin=prev.xmin; plot.xmax=prev.xmax; plot.ymin=prev.ymin; plot.ymax=prev.ymax; }
-    plot.clearData();
-    plot.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${p.a}</tspan> (a. u.)`;
-    plot.drawAxes();
-    // Named for the figure composer: this plot has no legend, so without these the
-    // traces would reach it as "Series 1..n".
-    const nm = files[currIndex].label;
-    plot.line(hv, Yraw, '#ffffff', 1,   undefined, { label: `${nm} raw` });
-    plot.line(hv, Ys,  '#3aa0ff', 1.4,  undefined, { label: `${nm} smoothed` });
-    plot.line(hv, dYs, '#5fcf6a', 1,    undefined, { label: `${nm} derivative` });
-
-    const lo1=Math.min(vlines.v1,vlines.v2), hi1=Math.max(vlines.v1,vlines.v2);
-    const lo2=Math.min(vlines.v3,vlines.v4), hi2=Math.max(vlines.v3,vlines.v4);
-    const sel1 = hv.filter(v=>v>=lo1&&v<=hi1).length;
-    const sel2 = hv.filter(v=>v>=lo2&&v<=hi2).length;
-    const alertDiv = document.getElementById('taucAlert');
-    alertDiv.innerHTML='';
-
-    if (sel1>=p.M){
-      const regs = scanRegr(hv, frArr, p.a, p.N, p.M, vlines.v1, vlines.v2);
-      document.getElementById('taucRMSE1').textContent = isFinite(regs.NRMSE)? regs.NRMSE.toFixed(4): '-';
-      document.getElementById('taucR21').textContent = isFinite(regs.R2)? regs.R2.toFixed(4): '-';
-      if (regs.bestIdx.length){
-        const xb = regs.bestIdx.map(i=>hv[i]);
-        const yb = xb.map(x=>regs.slope*x+regs.intercept);
-        plot.line(xb, yb, '#ff5050', 2.2, undefined, { label: `${nm} regression 1` });
-        const xExt = linspace(minArr(hv), maxArr(hv), 100);
-        plot.line(xExt, xExt.map(x=>regs.slope*x+regs.intercept), '#ff5050', 1, '5,4',
-                  { label: `${nm} baseline 1` });
-      }
-    } else {
-      document.getElementById('taucRMSE1').textContent='-'; document.getElementById('taucR21').textContent='-';
-      alertDiv.innerHTML = '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>';
-    }
-    if (sel2>=p.M2){
-      const regs2 = scanRegr(hv, frArr, p.a, p.N, p.M2, vlines.v3, vlines.v4);
-      document.getElementById('taucRMSE2').textContent = isFinite(regs2.NRMSE)? regs2.NRMSE.toFixed(4): '-';
-      document.getElementById('taucR22').textContent = isFinite(regs2.R2)? regs2.R2.toFixed(4): '-';
-      if (regs2.bestIdx.length){
-        const xb = regs2.bestIdx.map(i=>hv[i]);
-        const yb = xb.map(x=>regs2.slope*x+regs2.intercept);
-        plot.line(xb, yb, '#d050ff', 2.2, undefined, { label: `${nm} regression 2` });
-        const xExt = linspace(minArr(hv), maxArr(hv), 100);
-        plot.line(xExt, xExt.map(x=>regs2.slope*x+regs2.intercept), '#d050ff', 1, '5,4',
-                  { label: `${nm} baseline 2` });
-      }
-    } else {
-      document.getElementById('taucRMSE2').textContent='-'; document.getElementById('taucR22').textContent='-';
-      if (!alertDiv.innerHTML) alertDiv.innerHTML = '<div class="alert warn">⚠ Interval too small: too few points for the regression!</div>';
-    }
-
-    const res = analyzeOneFile(hv, frArr, p.a, p.N, p.M, vlines.v1, vlines.v2, p.M2, vlines.v3, vlines.v4);
-    document.getElementById('taucEg').textContent = isFinite(res.Eg) ? (isFinite(res.EgErr) ? `${res.Eg.toFixed(3)} ± ${res.EgErr.toFixed(3)} eV` : `${res.Eg.toFixed(3)} eV`) : '-';
-    document.getElementById('taucEgInt').textContent = isFinite(res.EgInt) ? (isFinite(res.EgIntErr) ? `${res.EgInt.toFixed(3)} ± ${res.EgIntErr.toFixed(3)} eV` : `${res.EgInt.toFixed(3)} eV`) : '-';
-
-    // While dragging a line: live-update only the interactive plot (below); the
-    // summary plots refresh once, on release. onDrag sets _dragging, onRelease clears it.
-    const onDrag = k => v=>{ vlines[k]=v; _dragging=true; throttledUpdate(); };
-    const onRelease = k => v=>{ vlines[k]=v; _dragging=false; updateTaucView(true); hist.commit(); };
-    plot.vline(vlines.v1, '#ff5050', true, onDrag('v1'), onRelease('v1'));
-    plot.vline(vlines.v2, '#ff5050', true, onDrag('v2'), onRelease('v2'));
-    plot.vline(vlines.v3, '#d050ff', true, onDrag('v3'), onRelease('v3'));
-    plot.vline(vlines.v4, '#d050ff', true, onDrag('v4'), onRelease('v4'));
-
-    if (!_dragging) updateTaucResults();   // skip the heavy summaries mid-drag
-  }
-
-  function updateTaucResults(){
-    if (!files.length) return;
-    processAll();
-    renderResView();
-  }
-
-  let throttle=null;
-  function throttledUpdate(){
-    if (throttle) return;
-    throttle = requestAnimationFrame(()=>{ throttle=null; updateTaucView(true); });
-  }
-
-  // Param updates apply on confirm (blur / Enter), not while typing. taucA is a
-  // <select>, so its change already is a deliberate choice; the numeric fields are
-  // guarded (invalid input shakes + reverts) by guardNumberInputs, and their change
-  // fires only once a valid value is committed. Changing the exponent rescales the
-  // y-axis, so it does a full reset; the smoothing/window fields keep the zoom.
-  ['taucA','taucN','taucN2','taucM','taucM2'].forEach(id=>{
-    const el = document.getElementById(id);
-    el.addEventListener('change', ()=>{
-      readInputsToStore();  // route the edit to shared or this sample's slot
-      if (id==='taucA') document.getElementById('taucNExp').textContent = el.value;
-      if (plot) updateTaucView(id!=='taucA');
-      if (files.length) hist.commit();
-    });
-  });
-
-  // Single all/one toggle: 'all' = one common param set + shared interval lines;
-  // 'one' = every sample fully independent (params AND interval-line positions).
-  document.getElementById('taucModeAll').addEventListener('click', ()=>{
-    {
-      const mode = taucMode==='shared' ? 'per' : 'shared';
-      taucMode = mode;
+    // Single all/one toggle: 'all' = one common param set + shared interval lines;
+    // 'one' = every sample fully independent (params AND interval-line positions).
+    // Across the switch nothing jumps: to 'one', every sample starts from the common
+    // values and lines, each then changed on its own; to 'all', the common set becomes
+    // the one of the sample on show.
+    $('ModeAll').addEventListener('click', ()=>{
+      const mode = P.mode==='shared' ? 'per' : 'shared';
+      const seen = files.length ? P.params(currIndex) : null, seenLines = files.length && !spec.ownLines ? { ...P.vlinesFor(currIndex) } : null;
+      P.mode = mode;
       if (mode==='per'){
-        // Each sample becomes independent: params inherit the current shared values,
-        // interval lines are re-proposed per sample.
         files.forEach((f,i)=>{
-          const pp = taucPer[i] || (taucPer[i]={});
-          ['a','N','N2','M','M2'].forEach(k=>{ if (pp[k]==null) pp[k]=taucShared[k]; });
-          const s = suggestOne(i);
-          pp.vlines = s ? {v1:s.v1,v2:s.v2,v3:s.v3,v4:s.v4} : (pp.vlines || defaultVlinesFor(i));
+          const pp = P.per[i] || (P.per[i]={});
+          keys.forEach(k=>{ pp[k] = P.shared[k]; });
+          if (!spec.ownLines) pp.vlines = { ...P.sharedVlines };
         });
-      } else {
-        // Back to a single shared set: re-propose the common lines.
-        const s = suggestShared();
-        if (s) sharedVlines = s;
+      } else if (seen){
+        keys.forEach(k=>{ P.shared[k] = seen[k]; });
+        if (seenLines) P.sharedVlines = seenLines;
       }
-      syncTaucModeButtons();
-      writeStoreToInputs();
-      if (files.length){ if (plot) updateTaucView(); hist.commit(); }
+      P.syncModeButton();
+      P.writeStoreToInputs();
+      if (spec.onParams) spec.onParams();
+      if (files.length){ if (plot) P.update(); kit.commit(); }
+    });
+
+    $('Prev').onclick = ()=>{ if (files.length) showSample((currIndex-1+files.length)%files.length); };
+    $('Next').onclick = ()=>{ if (files.length) showSample((currIndex+1)%files.length); };
+
+    // Re-propose interval-line positions on demand, for every sample.
+    $('Suggest').onclick = ()=>{
+      if (!files.length) return;
+      P.autoSuggestAll();
+      P.update(); kit.commit();
+    };
+    return P;
+  }
+
+  const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
+  /* The Tauc exponents, as [F(R)·hν]^a: the transition each stands for (`name`, the
+     card's automatic name), and how it is written where it shows (the select, the
+     axes); a fraction as such. */
+  const EXPONENTS = [
+    { a: 0.5, label: '0.5', gap: 'Indirect', name: 'allowed indirect' },
+    { a: 2,   label: '2',   gap: 'Direct',   name: 'allowed direct' },
+    { a: 2/3, label: '2/3', gap: 'Direct',   name: 'forbidden direct',   forbidden: true },
+    { a: 1/3, label: '1/3', gap: 'Indirect', name: 'forbidden indirect', forbidden: true },
+  ];
+  const expOf = a => EXPONENTS.find(e=> Math.abs(e.a - a) < 1e-9);
+  const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
+  const URBACH_COLOR = '#ff7f0e';
+  // On the Urbach card, the tail with the Tauc baseline subtracted, in colours of its
+  // own: the curve, and its fit (solid in its window, dashed beyond), as the plain ones
+  // are drawn.
+  const URB_SUB_COLORS = { curve: '#b46cff', fit: '#00acc1' };
+  const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
+  /* The defaults, in points (v514's, and from v520 again): no smoothing, the derivative's
+     over 20, the Tauc region's window 25, the baseline's 100, the Urbach region's 25. v515
+     to v519's in eV, for the states they saved (makePanel toPoints): 0, 0.15, 0.2 and 0.5;
+     the Urbach card's 0, 0.15 and 0.15. */
+  const TAUC_DEF = { a:0.5, N:1, N2:20, M:25, M2:100 }, URB_DEF = { N:1, N2:20, M:25 };
+  const TAUC_EV = { w:0, w2:0.15, W:0.2, W2:0.5 }, URB_EV = { w:0, w2:0.15, W:0.15 };
+
+  /* =========================================================
+     ANALYSIS CARDS
+     The workspace is a list of analysis cards, each a Tauc plot or an Urbach energy
+     analysis, in the order the user put them; every card adds its pair of charts to
+     the Results, in the same order. A card is an analysis record (below) and a panel
+     built on its own DOM. It keeps the settings of both kinds, so switching it back
+     and forth loses nothing. An Urbach card is read against a Tauc one, its
+     reference: by default the nearest Tauc card above it, or one chosen by hand, or
+     none.
+  ========================================================= */
+  // As the menus list them; the card titles set them in capitals.
+  const KINDS = { tauc: 'Tauc Plot', urbach: 'Urbach Energy' };
+  let deck = null;            // the cards (cards.js): the records, in card order, and their cards
+  const cards = ()=> deck ? deck.records : [];
+  const live = new Map();     // id → { panel, res, resPlots, seen }
+  // While set, a settling panel leaves the Results alone: whoever set it redraws
+  // them once, rather than once per card.
+  let quiet = false;
+  const quietly = fn =>{ const was = quiet; quiet = true; try { fn(); } finally { quiet = was; } };
+
+  // A record's own fields, beside the deck's: `ref` is the Tauc reference's id, picked
+  // by the default rule while `refAuto` is on. `states` keeps the settings of the kind
+  // not on show.
+  const newFields = ()=> ({ ref: null, refAuto: true, egSel: EG_METHODS.map(m=>m.key), urbSel: URB_ALL(), states: {} });
+  const byId = id => deck.byId(id);
+  const panelOf = a => a && live.has(a.id) ? live.get(a.id).panel : null;
+  const refPanel = a =>{ const r = byId(a.ref); return r && r.type === 'tauc' ? panelOf(r) : null; };
+  const livePanels = ()=> cards().map(panelOf).filter(Boolean);
+  const isFolded = a => deck.isFolded(a);
+
+  // A sample's Tauc linear region in eV: the window its Tauc fit settled on.
+  function taucWindow(tp, i){
+    if (!tp) return null;
+    const idx = tp.analyze(i).regs.bestIdx;
+    if (!idx || !idx.length) return null;
+    const xs = idx.map(k=> files[i].hv[k]);
+    return [Math.min(...xs), Math.max(...xs)];
+  }
+  // Where Urbach lines rest with nothing to go by: a quarter and three quarters in.
+  const restLines = (lo, d)=> ({ v1: lo + 0.25*d, v2: lo + 0.75*d });
+
+  function taucSpec(a){
+    return {
+      kind: 'tauc',
+      prefix: 'an' + a.id,
+      keys: ['a','N','N2','M','M2'],
+      defaults: TAUC_DEF, evDefaults: TAUC_EV,
+      curve: (fr, hv, p)=> Math.pow(fr*hv, p.a),
+      // The exponent changes the curve the edge is found on, so the lines follow it.
+      suggestOn: ['a'],
+      yLabel: p => `[F(R)·hν]${sup(fmtA(p.a))}`,
+      fmtA,
+      zeroFloor: true,
+      windows: [
+        { lo:'v1', hi:'v2', M:'M',  color: TAUC_COLORS.regs,  name:'Tauc region', key:'regs',  stats:['RMSE1','R21'] },
+        { lo:'v3', hi:'v4', M:'M2', color: TAUC_COLORS.regs2, name:'baseline',    key:'regs2', stats:['RMSE2','R22'] },
+      ],
+      defaultLines: (lo, d)=> ({ v1: lo+0.6*d, v2: lo+0.8*d, v3: lo+0.2*d, v4: lo+0.4*d }),
+      // Real bars use the OUTSIDE bounds (the whole non-zero-curvature span); the
+      // baseline is placed just below where the edge starts.
+      suggest: (i, p, curves)=>{ const e = curvatureEdge(curves(), p); return e && { v1: e.v1, v2: e.v2, v3: e.v1-0.85, v4: e.v1-0.1 }; },
+      // Linear region [min(v1), max(v2)] over all samples, so every sample's edge lies
+      // inside it (the window scan then finds each one's linear part); baseline computed
+      // once from min(v1), below every edge.
+      combine: ss =>{ const v1 = Math.min(...ss.map(s=>s.v1)), v2 = Math.max(...ss.map(s=>s.v2)); return { v1, v2, v3: v1-0.85, v4: v1-0.1 }; },
+      results: (f, p)=> ({ ...taucEg(f[0], f[1], p.M, p.M2), regs: f[0], regs2: f[1] }),
+      show: ($, r)=>{ $('Eg').textContent = fmtE(r.Eg, r.EgErr, 'eV'); $('EgInt').textContent = fmtE(r.EgInt, r.EgIntErr, 'eV'); },
+      hidden: ()=> isFolded(a),
+      // The automatic name carries the exponent.
+      onParams: ()=> deck.refreshNames(),
+      // The Urbach cards read against this one follow its linear region once a change
+      // settles (a line released, a parameter confirmed), not while a line is dragged.
+      onSettled: ()=>{
+        if (quiet) return;
+        renderAnalysisRes(a);
+        follow(a);
+        followers(a).forEach(refreshCard);
+      },
+    };
+  }
+  /* The Urbach tail with the reference Tauc card's baseline taken out. That baseline is
+     a line in the Tauc plot, Y_b = m·hν + b in [F(R)·hν]^a, so in F(R) it is
+     F_b = Y_b^(1/a) / hν where Y_b > 0, and nothing where it is not. It is subtracted in
+     F(R), where absorptions add up, and what is left goes through the card's own
+     treatment: ln (nothing where F(R) − F_b ≤ 0), smoothing over N, the window scan
+     between the same lines, the line fitted to the unsmoothed values. Null with no
+     reference, or no baseline fit in it. */
+  function urbachSub(a, k, p, vl){
+    const T = refPanel(a);
+    if (!T || !files[k]) return null;
+    const r = T.analyze(k).regs2, ta = T.params(k).a;
+    if (!(isFinite(r.slope) && isFinite(r.intercept) && ta > 0)) return null;
+    const hv = files[k].hv, FR = files[k].FR;
+    const Fb = hv.map(e=>{ const y = r.slope*e + r.intercept; return y > 0 ? Math.pow(y, 1/ta)/e : 0; });
+    const Yraw = FR.map((v, i)=> v - Fb[i] > 0 ? Math.log(v - Fb[i]) : NaN);
+    // The points of F(R) ≤ 0 are left out, as in the plain curve, of the smoothing and the
+    // scan: without a logarithm in either, they are no sign of the baseline. Counted with
+    // those where it lies above F(R) (to v478), they blocked every window holding one,
+    // and the card blamed the baseline for them. Those where it does stay in, as they
+    // were: there the curve was measured and has no value, nor has an average holding one.
+    const Ys = onFinite(Yraw, null, v=> movingAverage(v, p.N), i=> FR[i] > 0);
+    const regs = scanRegr(hv.map((e, i)=> FR[i] > 0 ? e : NaN), Ys, p.M, vl.v1, vl.v2, Yraw, true);
+    // How many points of F(R) > 0 between the lines lost their logarithm (F(R) ≤ F_b):
+    // with too many there is no window to fit, and the card says why (and, with `neg`
+    // of F(R) ≤ 0 there too, that its count is of the others).
+    const lo = Math.min(vl.v1, vl.v2), hi = Math.max(vl.v1, vl.v2);
+    let inside = 0, lost = 0, neg = 0;
+    hv.forEach((e, i)=>{ if (e >= lo && e <= hi){ if (!(FR[i] > 0)) neg++; else { inside++; if (!isFinite(Yraw[i])) lost++; } } });
+    // The baseline is to blame only where the region holds a window to fit: with fewer
+    // points of F(R) > 0 than M the plain fit fails too, and the card says so already.
+    const blocked = !isFinite(regs.slope) && lost > 0 && inside >= p.M;
+    // E_U's error: the fit's own and the Tauc baseline's carried through the subtraction,
+    // independent, so added in quadrature (each already times its own t factor).
+    const fit = urbachEu(regs, p.M), m = regs.slope;
+    const EuErrBase = subBaselineSlopeErr(regs, Yraw, r, ta, hv, FR, T.params(k).M2)/(m*m);
+    return { Fb, Yraw, Ys, regs, inside, lost, neg, blocked, Eu: fit.Eu, EuErr: Math.hypot(fit.EuErr, EuErrBase), EuErrFit: fit.EuErr, EuErrBase };
+  }
+  /* What the Tauc baseline's own uncertainty adds to the subtracted slope s. With the
+     window and its points held, s = Σ w_i·ln(F_i − F_b,i), w_i = (hν_i − mean)/S_xx, is a
+     function of the baseline's slope and intercept through F_b = Y_b^(1/a)/hν,
+     Y_b = m_b·hν + b_b, so
+       J_m = ∂s/∂m_b = −Σ w_i·hν_i·F_b'(Y_i)/(F_i − F_b,i),  J_b = ∂s/∂b_b = −Σ w_i·F_b'(Y_i)/(F_i − F_b,i),
+     F_b'(Y) = (1/a)·Y^(1/a − 1)/hν where Y > 0 (F_b is nothing, and so is its change,
+     where it is not), and
+       Var_b(s) = J Σ_b Jᵀ = J_m² σ²_m + J_b² σ²_b + 2 J_m J_b σ_mb,
+     Σ_b the baseline fit's covariance. Its square root is returned times that fit's t
+     factor (99%, n_b − 2), as each fit's term is in E_g (baseline). The derivatives are
+     exact (no step to take), and finite wherever the window's points have a logarithm. */
+  function subBaselineSlopeErr(regs, Yraw, rb, ta, hv, FR, Mb){
+    if (!isFinite(regs.slope) || !regs.bestIdx || ![rb.varM, rb.varB, rb.covMB].every(isFinite)) return NaN;
+    // The fit's own points: those of its window with a logarithm (scanRegr).
+    const idx = regs.bestIdx.filter(i=> isFinite(Yraw[i]));
+    if (idx.length < 3) return NaN;
+    const mx = idx.reduce((t, i)=> t + hv[i], 0)/idx.length;
+    const sxx = idx.reduce((t, i)=> t + (hv[i] - mx)**2, 0);
+    let Jm = 0, Jb = 0;
+    idx.forEach(i=>{
+      const e = hv[i], y = rb.slope*e + rb.intercept;
+      if (!(y > 0)) return;
+      const dF = Math.pow(y, 1/ta - 1)/(ta*e), d = FR[i] - Math.pow(y, 1/ta)/e, w = (e - mx)/sxx;
+      Jm -= w*e*dF/d; Jb -= w*dF/d;
+    });
+    const v = Jm*Jm*rb.varM + Jb*Jb*rb.varB + 2*Jm*Jb*rb.covMB;
+    if (!isFinite(v)) return NaN;
+    return Math.sqrt(Math.max(0, v))*tinv(T_Q, (rb.n || Mb) - 2);
+  }
+  function urbachSpec(a){
+    return {
+      kind: 'urbach',
+      prefix: 'an' + a.id,
+      keys: ['N','N2','M'],
+      defaults: URB_DEF, evDefaults: URB_EV,
+      curve: fr => fr > 0 ? Math.log(fr) : NaN,
+      yLabel: ()=> 'ln[F(R)]',
+      zeroFloor: false,
+      windows: [
+        { lo:'v1', hi:'v2', M:'M', color: URBACH_COLOR, name:'Urbach region', key:'regs', stats:['RMSE1','R21'] },
+      ],
+      defaultLines: restLines,
+      /* The region is placed under the sample's Tauc linear region in the reference
+         (the band on this plot): the window scan inside it then finds the tail's
+         straightest stretch by itself. With no reference, or no region in it, the
+         lines go back to rest. Each sample's tail sits where its own edge is, so its
+         lines are its own in either mode, and all/one is about the parameters only. */
+      ownLines: true,
+      // The tail is below the edge: from 1 eV under the middle of the reference's Tauc
+      // linear region up to where that region starts. Centred on it, half the region
+      // lay above E_g, and the scan could lock onto the edge itself.
+      suggest: i =>{
+        const w = taucWindow(refPanel(a), i);
+        if (!w){ const hv = files[i].hv, lo = minArr(hv); return restLines(lo, maxArr(hv) - lo); }
+        return { v1: (w[0] + w[1]) / 2 - 1, v2: w[0] };
+      },
+      results: (f, p, k, vl)=> ({ ...urbachEu(f[0], p.M), regs: f[0], sub: urbachSub(a, k, p, vl) }),
+      // (the subtracted fit is made from the reference's for the sample: its key)
+      refKey: k =>{ const T = refPanel(a); return T ? T.keyOf(k) : null; },
+      // The tail with the Tauc baseline taken out, on the same plot, drawn as the plain
+      // traces are but in colours of its own (URB_SUB_COLORS): its smoothed curve solid,
+      // its fit solid and thick in its window, dashed and thin beyond.
+      extra: (plot, r, hv, nm)=>{
+        const sb = r.sub;
+        if (!sb) return;
+        plot.line(hv, sb.Ys, URB_SUB_COLORS.curve, 1.4, undefined, { label: `${nm} smoothed, subtracted`, key: 'smoothed subtracted' });
+        const g = sb.regs;
+        if (!g.bestIdx.length || !isFinite(g.slope)) return;
+        const xb = g.bestIdx.map(i=> hv[i]);
+        plot.line(xb, xb.map(x=> g.slope*x + g.intercept), URB_SUB_COLORS.fit, 2.2, undefined, { label: `${nm} Urbach region, subtracted`, key: 'regs subtracted' });
+        const xExt = linspace(minArr(hv), maxArr(hv), 100);
+        plot.line(xExt, xExt.map(x=> g.slope*x + g.intercept), URB_SUB_COLORS.fit, 1, '5,4', { label: `${nm} Urbach region, subtracted, extended`, key: 'regs subtracted line' });
+      },
+      show: ($, r)=>{
+        $('Eu').textContent = fmtE(r.Eu, r.EuErr, 'meV', 1, 1000);
+        const sb = r.sub, g = sb && sb.regs;
+        $('RMSE1s').textContent = g && isFinite(g.NRMSE) ? g.NRMSE.toFixed(4) : '-';
+        $('R21s').textContent = g && isFinite(g.R2) ? g.R2.toFixed(4) : '-';
+        $('EuS').textContent = sb ? fmtE(sb.Eu, sb.EuErr, 'meV', 1, 1000) : '-';
+        $('EuS').parentElement.title = sb && isFinite(sb.EuErrBase)
+          ? `± ${(sb.EuErrFit*1000).toFixed(1)} meV from the fit, ± ${(sb.EuErrBase*1000).toFixed(1)} meV from the Tauc baseline, in quadrature` : '';
+        $('LegSub').style.display = sb ? '' : 'none';
+        $('LegSubFit').style.display = g && isFinite(g.slope) ? '' : 'none';
+        if (sb && sb.blocked) $('Alert').insertAdjacentHTML('beforeend',
+          `<div class="alert warn">⚠ No subtracted fit: the Tauc baseline lies above F(R) at ${sb.lost} of the ${sb.inside} points between the lines${sb.neg ? ' with F(R) > 0' : ''}, where F(R) − F<sub>b</sub> has no logarithm.</div>`);
+      },
+      hidden: ()=> isFolded(a),
+      onSettled: ()=>{ if (!quiet) renderAnalysisRes(a); },
+      // The reference's linear region for the sample, shaded in the Tauc region's red
+      // behind the curves: the tail is read against where the edge is, and below it.
+      bands: i =>{
+        const w = taucWindow(refPanel(a), i);
+        return w ? [{ x0: w[0], x1: w[1], color: TAUC_COLORS.regs, opacity: 0.18 }] : [];
+      },
+    };
+  }
+
+  const SPECS = { tauc: taucSpec, urbach: urbachSpec };
+
+  // Every card shows the same sample, so stepping in one steps them all. The Results
+  // do not depend on which sample is on show.
+  function showSample(k){
+    currIndex = k;
+    quietly(()=> livePanels().forEach(p=>{ p.writeStoreToInputs(); p.update(); }));
+  }
+
+  /* ---- Card markup ---- */
+  const CARD_INFO = cardInfo(true, true);
+  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. Where F(R) &lt; 0, [F(R)·hν]<sup>a</sup> has no value for a = 0.5, 2/3 or 1/3: those points are left out, as though not measured, of the smoothing, the derivatives, the suggestion and the fits. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
+  const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, each with its own axes: the plain curves and fits above, the subtracted ones under them (empty, and saying why, when there is nothing to subtract); the chips on the E<sub>U</sub> chart show the plain E<sub>U</sub>, the subtracted one or both. ${CARD_INFO}`;
+
+
+  const navRow = p => `
+          <div class="plot-nav-row">
+            <div class="plot-nav-left">
+              <button class="btn nav-arrow an-prev" id="${p}Prev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
+              <span id="${p}Idx" class="pill nav-count" style="margin:0">1/1</span>
+              <button class="btn nav-arrow an-next" id="${p}Next" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
+              <span class="txt-caption" id="${p}CurrentLabel">—</span>
+            </div>
+          </div>`;
+  // At the foot of the parameter column, after what it holds.
+  const suggestBtn = (p, title)=> `
+            <button class="btn plot-action-btn" id="${p}Suggest" title="${title}">&#10022; Suggest intervals</button>`;
+  // A plot's box (modcharts.js). The download names follow the analysis name (named); a
+  // CSV is offered only where there is one to give.
+  const box = (id, legend, csv, extra, cls)=> plotWrap(id, { legend, mod: 'tauc', csv: csv ? '-' : '', extra, cls });
+  // An item [colour, text, attributes, key class]: 'mk-ldash' (long dashes) or 'mk-dots'
+  // draws its key in that pattern.
+  const legend = (id, items)=> `<div class="legend" id="${id}">${items.map(([c, t, x, d])=> `<span${x || ''}>${d ? `<i class="${d}" style="color:${c}"></i>` : `<i style="background:${c}"></i>`}${t}</span>`).join('')}</div>`;
+
+  function taucBody(p){
+    return `
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            ${navRow(p)}
+            ${box(p + 'Svg', p + 'Legend', true)}
+            ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff5050', 'Tauc linear region'], ['#d050ff', 'baseline']])}
+          </div>
+          <div class="col mw280" style="align-self:flex-start">
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines). Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
+            <div class="param-grid">
+              <label class="txt-label" for="${p}A">Tauc exponent</label>
+              <select id="${p}A" class="pg-field an-exp">
+                ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label} (${e.name})</option>`).join('')}
+              </select>
+              <label class="txt-label" for="${p}N">[F(R)hν]<sup id="${p}NExp">0.5</sup> smoothing window</label>
+              <input type="number" class="pg-field" id="${p}N" value="1" min="1">
+              <label class="txt-label" for="${p}N2">Derivative smoothing window</label>
+              <input type="number" class="pg-field" id="${p}N2" value="20" min="1">
+              <label class="txt-label" for="${p}M">Tauc linear region regression window</label>
+              <input type="number" class="pg-field" id="${p}M" value="25" min="2">
+              <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
+              <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
+              <label class="txt-label" for="${p}M2">Baseline regression window</label>
+              <input type="number" class="pg-field" id="${p}M2" value="100" min="2">
+              <div class="pg-stat">NRMSE: <b id="${p}RMSE2">-</b></div>
+              <div class="pg-stat">R²: <b id="${p}R22">-</b></div>
+              <div class="pg-result">
+                <div class="pg-stat">E<sub>g</sub> (x-axis): <b id="${p}Eg">-</b></div>
+                <div class="pg-stat">E<sub>g</sub> (baseline): <b id="${p}EgInt">-</b></div>
+              </div>
+            </div>
+            <div id="${p}Alert"></div>${suggestBtn(p, 'Propose optimal Tauc-region and baseline intervals from the absorption edge')}
+          </div>
+        </div>`;
+  }
+  function urbachBody(p){
+    return `
+        <div class="row" style="align-items:flex-start">
+          <div class="col mw520" style="flex:2">
+            ${navRow(p)}
+            ${box(p + 'Svg', p + 'Legend', false)}
+            ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff7f0e', 'Urbach region'],
+              [URB_SUB_COLORS.curve, 'smoothed, Tauc baseline subtracted', ` id="${p}LegSub"`], [URB_SUB_COLORS.fit, 'Urbach region, subtracted', ` id="${p}LegSubFit"`],
+              ['rgba(255,80,80,0.35)', 'Tauc linear region', ` id="${p}LegBand"`]])}
+          </div>
+          <div class="col mw280" style="align-self:flex-start">
+            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own. Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
+            <div class="param-grid">
+              <label class="txt-label" for="${p}Ref">Tauc reference</label>
+              <select id="${p}Ref" class="pg-field an-ref" title="The Tauc analysis whose linear region the Urbach region is placed on"></select>
+              <label class="txt-label" for="${p}N">ln[F(R)] smoothing window</label>
+              <input type="number" class="pg-field" id="${p}N" value="1" min="1">
+              <label class="txt-label" for="${p}N2">Derivative smoothing window</label>
+              <input type="number" class="pg-field" id="${p}N2" value="20" min="1">
+              <label class="txt-label" for="${p}M">Urbach linear region regression window</label>
+              <input type="number" class="pg-field" id="${p}M" value="25" min="2">
+              <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
+              <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
+              <div class="pg-stat pg-gap" title="The fit with the reference Tauc card's baseline taken out of F(R)">NRMSE (subtracted): <b id="${p}RMSE1s">-</b></div>
+              <div class="pg-stat" title="The fit with the reference Tauc card's baseline taken out of F(R)">R² (subtracted): <b id="${p}R21s">-</b></div>
+              <div class="pg-result">
+                <div class="pg-stat">E<sub>U</sub>: <b id="${p}Eu">-</b></div>
+                <div class="pg-stat">E<sub>U</sub> (subtracted): <b id="${p}EuS">-</b></div>
+              </div>
+            </div>
+            <div id="${p}Alert"></div>${suggestBtn(p, "Place the Urbach region from 1 eV below the middle of the reference's Tauc linear region to where that region starts (with no reference: at 25% and 75% of the span)")}
+          </div>
+        </div>`;
+  }
+  const cardBody = a => ({ tauc: taucBody, urbach: urbachBody }[a.type])('an' + a.id);
+  const cardInfoOf = t => ({ tauc: TAUC_INFO, urbach: URBACH_INFO }[t]);
+
+  /* ---- Cards: the panel on each (the deck builds, folds and moves the cards) ---- */
+  // The card is in the page: the panel finds its elements there by id. Number fields are
+  // guarded before the panel listens to them, so an invalid entry never reaches it. On a
+  // kind switch (prev, the kind left) that kind's settings are kept for a switch back.
+  function buildPanel(a, card, prev){
+    const was = live.get(a.id);
+    if (prev && was) a.states[prev] = was.panel.snapshot();
+    guardNumberInputs(card);
+    const panel = makePanel(SPECS[a.type](a), card);
+    if (a.states[a.type]) panel.restore(a.states[a.type]);
+    else panel.fit();
+    live.set(a.id, { panel, res: was ? was.res : null, resPlots: was ? was.resPlots : null });
+    const ref = card.querySelector('.an-ref');
+    if (ref) ref.addEventListener('change', ()=> chooseRef(a, ref.value));
+  }
+  function dropPanel(a){
+    const e = live.get(a.id);
+    if (!e) return;
+    if (e.res) e.res.remove();
+    live.delete(a.id);
+  }
+  // A card out of sight was not drawn: bring it up to date as it comes back, with
+  // the zoom it had if it is still on the same sample.
+  function wake(a){
+    const P = panelOf(a);
+    if (!files.length || !P) return;
+    P.writeStoreToInputs();
+    quietly(()=> P.hasPlot() ? P.update(P.shownIndex() === currIndex) : P.initPlot());
+  }
+
+  /* ---- References and names ---- */
+  // Point every Urbach card at its reference: one chosen by hand while it is still a
+  // Tauc analysis, else the nearest Tauc card above it, else none. Returns the cards
+  // whose reference changed.
+  function fixRefs(){
+    let above = null;
+    const changed = [];
+    cards().forEach(a=>{
+      if (a.type === 'tauc'){ above = a; return; }
+      if (!a.refAuto && a.ref != null && !(byId(a.ref) && byId(a.ref).type === 'tauc')) a.refAuto = true;
+      const ref = a.refAuto ? (above ? above.id : null) : a.ref;
+      if (ref !== a.ref){ a.ref = ref; changed.push(a); }
+    });
+    return changed;
+  }
+  /* The Urbach region follows its reference: a sample whose Tauc linear region moves
+     (a line released, parameters, Suggest, all/one) gets its Urbach lines placed on it
+     again, and a new reference re-centres them all. Lines moved by hand stay until
+     then. What each Tauc card's regions were is kept by file name, and taken afresh
+     (`see`) whenever a state is loaded rather than edited, so loading moves nothing. */
+  const followers = a => cards().filter(u=> u.type === 'urbach' && u.ref === a.id && live.has(u.id));
+  function regionsSeen(a){ const e = live.get(a.id); return e.seen || (e.seen = new Map()); }
+  const regionKey = (a, i)=>{ const w = taucWindow(panelOf(a), i); return w ? w.join() : ''; };
+  function see(a){
+    if (a.type !== 'tauc' || !files.length) return;
+    const seen = regionsSeen(a);
+    files.forEach((f, i)=> seen.set(f.name, regionKey(a, i)));
+  }
+  // Re-centre the followers on the samples whose region moved.
+  function follow(a){
+    const seen = regionsSeen(a), moved = [];
+    files.forEach((f, i)=>{
+      const k = regionKey(a, i), was = seen.get(f.name);
+      seen.set(f.name, k);
+      if (was !== undefined && was !== k && k) moved.push(i);
+    });
+    if (moved.length) followers(a).forEach(u=> moved.forEach(i=> panelOf(u).suggestAt(i)));
+  }
+  // A card's view and its Results, after something outside it changed its data.
+  function refreshCard(u){
+    const U = panelOf(u);
+    if (U.hasPlot() && !isFolded(u)) U.update(true);
+    else renderAnalysisRes(u);
+  }
+  // An Urbach card given a new reference: placed on it (None leaves the lines be).
+  function syncRefView(u){
+    if (!files.length) return;
+    if (refPanel(u)) panelOf(u).autoSuggestAll();
+    refreshCard(u);
+  }
+  // What follows any change to the list of cards: references, names, Results order.
+  function afterCardsChange(){
+    const changed = fixRefs();
+    deck.refreshNames();
+    placeRes();
+    changed.forEach(syncRefView);
+  }
+
+  function autoName(a){
+    if (a.type === 'tauc'){
+      const P = panelOf(a);
+      if (!P) return 'Tauc';
+      const as = files.length ? files.map((f, i)=> P.params(i).a) : [P.params(0).a];
+      // The transition the exponent stands for; mixed exponents (one mode) have none.
+      const ex = as.every(v=> v === as[0]) && expOf(as[0]);
+      return ex ? `Tauc: ${ex.name}` : 'Tauc';
+    }
+    const r = byId(a.ref);
+    return r ? `Urbach · ${r.name}` : 'Urbach';
+  }
+  // The downloads follow the card's name, and so does its section of the Results.
+  function named(a){
+    const card = deck.cardOf(a), e = live.get(a.id);
+    if (!card || !e) return;
+    const n = fileSafe(a.name), t = a.type === 'tauc';
+    nameDownloads(card.querySelector('.plot-wrap'), `${n} - sample.svg`, t ? `${n} - analysis_info.csv` : '');
+    if (e.res && e.res.dataset.kind === a.type){
+      e.res.querySelector('.res-an-title').textContent = a.name;
+      const w = e.res.querySelectorAll('.plot-wrap');
+      nameDownloads(w[0], `${n} - ${t ? 'Tauc' : 'Urbach'}_plot.svg`, `${n} - ${t ? 'tauc' : 'urbach'}_plot.csv`);
+      if (!t) nameDownloads(w[1], `${n} - Urbach_subtracted_plot.svg`, `${n} - urbach_plot.csv`);
+      nameDownloads(w[w.length - 1], `${n} - ${t ? 'Eg' : 'Eu'}_bar_chart.svg`, `${n} - ${t ? 'Eg' : 'Eu'}.csv`);
+    }
+  }
+  function syncRefSelects(){
+    const taucs = cards().filter(a=> a.type === 'tauc');
+    cards().forEach(u=>{
+      if (u.type !== 'urbach' || !live.has(u.id)) return;
+      const p = 'an' + u.id, card = deck.cardOf(u), sel = card.querySelector('#' + p + 'Ref');
+      sel.replaceChildren(new Option('None', ''), ...taucs.map(t=> new Option(t.name, String(t.id))));
+      sel.value = u.ref != null ? String(u.ref) : '';
+      card.querySelector('#' + p + 'LegBand').style.display = refPanel(u) ? '' : 'none';
+    });
+  }
+
+  /* ---- Adding, closing, switching, choosing the reference ---- */
+  // Bring a card's panel up to the files on show: inputs, plot, its Results.
+  function startPanel(a){
+    const P = panelOf(a);
+    P.fit(); P.writeStoreToInputs(); P.syncModeButton();
+    quietly(()=> P.initPlot());
+    see(a);
+    renderAnalysisRes(a);
+  }
+  // A card just added: placed on the files there are.
+  function added(a){
+    if (files.length){ panelOf(a).autoSuggestAll(); startPanel(a); }
+  }
+  // A card turned into the other kind, with that kind's settings if it has had them;
+  // its first time as that kind, the lines are suggested.
+  function switched(a){
+    if (files.length){ const P = panelOf(a); P.fit(); if (!P.suggested) P.autoSuggestAll(); startPanel(a); }
+    // A card that becomes a Tauc one may become the reference of Urbach cards below it
+    // (fixRefs): it had no lines yet when they were placed on it, so they are
+    // placed again now that it has (its region, its baseline to subtract).
+    if (files.length && a.type === 'tauc') followers(a).forEach(syncRefView);
+  }
+  // A reference chosen by hand stays, wherever the cards are moved, while it is a Tauc card.
+  function chooseRef(a, v){
+    a.refAuto = false;
+    a.ref = v === '' ? null : +v;
+    afterCardsChange();
+    syncRefView(a);
+    kit.commit();
+  }
+
+  // Per-sample lists follow the file list: the panels', and the ones each card keeps
+  // for the kind it is not showing.
+  function eachKeptState(fn){
+    cards().forEach(a=> Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s) fn(s); }));
+  }
+  // The same lists, each named by its card and kind, for the file list to keep
+  // aligned with the included files. A file brought back in gets the parameters and
+  // lines it left with, in each card that was there then; in a card added since, it
+  // starts from the card's defaults, as a file uploaded into it does. (A panel's own
+  // entry of a project of v515 to v519, in eV, is converted as it comes back: P.back; one
+  // of a kind not on show, when that kind is restored.)
+  const copyPer = p => p ? {...p, vlines: p.vlines ? {...p.vlines} : undefined} : {};
+  function slots(){
+    const out = [];
+    cards().forEach(a=>{
+      Object.entries(a.states).forEach(([k, s])=>{ if (k !== a.type && s && s.per) out.push({ key: a.id + ':' + k, arr: s.per, make: copyPer }); });
+      const P = panelOf(a);
+      if (P) out.push({ key: a.id + ':' + a.type, arr: P.per, make: P.back });
+    });
+    return out;
+  }
+  // The cards stay on the sample they showed when another is removed, moved, left out or
+  // taken in (kit.listed).
+  function stayOn(f){ const k = includedOf(allFiles).indexOf(f); if (k >= 0) currIndex = k; }
+
+  /* ---- Undo/redo (kit.snapshot): every analysis card, its kind, name, fold, reference,
+     and the line positions and parameters of both its kinds, beside the files' records
+     (their spectra shared by reference). ---- */
+  const clone = o => JSON.parse(JSON.stringify(o));
+  // Projects from before the analysis cards had one Tauc analysis, kept at the top
+  // level, and an Urbach one beside it: the Tauc card comes first, and the Urbach one,
+  // if it was on, follows it, read against it.
+  function legacyAnalyses(s){
+    const params = s.params ? Object.fromEntries(Object.entries(s.params)
+      .filter(([k])=> /^tauc(?!U)/.test(k)).map(([k, v])=> [k.slice(4), v])) : undefined;
+    const list = [{ id: 1, type: 'tauc', egSel: s.egSel,
+      states: { tauc: { mode: s.mode, shared: s.shared, sharedVlines: s.sharedVlines, vlines: s.vlines, per: s.per, suggested: s.suggested, params } } }];
+    if (s.urbachOn === true) list.push({ id: 2, type: 'urbach', states: { urbach: s.urbach || {} } });
+    return list;
+  }
+  /* A card's own fields as a state holds them, each as it should be (modkit RESTORED): the
+     settings of a kind the module has, each an object, its per-sample list an array (the
+     file list keeps a kind's not on show aligned too: slots) without the entries of the
+     files the restore left out (`gone`). */
+  function readAnalysis(s, gone){
+    const eg = Array.isArray(s.egSel) ? s.egSel.filter(k=> EG_METHODS.some(m=> m.key === k)) : [];
+    // Projects from before the subtraction show both, as a new card does.
+    const us = sec =>{ const v = s.urbSel && Array.isArray(s.urbSel[sec]) ? s.urbSel[sec].filter(k=> URB_METHODS.some(m=> m.key === k)) : []; return v.length ? v : URB_METHODS.map(m=> m.key); };
+    return {
+      ref: Number.isInteger(s.ref) ? s.ref : null, refAuto: s.refAuto !== false,
+      egSel: eg.length ? eg : EG_METHODS.map(m=>m.key), urbSel: { b: us('b') },
+      states: Object.fromEntries(Object.entries(clone(isObj(s.states) ? s.states : {})).filter(([k, v])=> ownKey(KINDS, k) && isObj(v))
+        .map(([k, v])=> [k, { ...v, per: Array.isArray(v.per) ? without(v.per, gone) : [] }])),
+    };
+  }
+  // A card of a kind there is no more (the debug defect band, taken out) is left out
+  // (deck.load), as are the settings a card kept for one (readAnalysis). A card kept
+  // has its panel restored in place.
+  const loadAnalyses = (list, gone)=> deck.load(list, s=> readAnalysis(s, gone), a=> panelOf(a).restore(a.states[a.type] || {}));
+
+  /* A spectrum (textdata.js: its encoding, separator, decimal mark and quotes found from
+     the file), read in this order (from v510; the other formats as GC reads its own):
+     - the standard format (drsStandard): its first two columns, the wavelength (nm) and
+       %R or F(R) as its header says, read with no word, as to v509;
+     - any other file: the columns its header names (drsColumns), read with a warning;
+     - columns not named, or not one way only: the file is not loaded, and the alert says
+       why (the error).
+     The points that are no physical value are left out (drsPoints). The file itself is
+     kept as it came (rawBytes), for its download; a project keeps what was read, and opens
+     as it was. One with no point left is not loaded, and the alert says so (one whose rows
+     all had an empty cell went without a word, to v494). To v509 every file was read from
+     its first two columns, the second as a header above it said: F(R) with no header (two
+     bare columns of numbers), %R under a line naming it (a JASCO export's YUNITS,%R), and
+     a row with an empty cell between its numbers (350,,0.5) left out, without a word. */
+  function readDrs(text){
+    const lines = textLines(text), t = readXY(lines), std = t && drsStandard(lines, t), c = std || drsColumns(lines);
+    if (c.error) return { error: c.error };
+    const { wl, FR, left } = drsPoints(c.t, c.R);
+    if (!wl.length) return { error: Object.keys(left).length ? `no point with a physical value: ${leftText(left)}` : NO_DATA };
+    return { wl, FR, warn: !std, ...(c.R ? { read: 'R%' } : std ? {} : { head: true }), ...(Object.keys(left).length ? { left } : {}) };
+  }
+  /* The standard format, the Cary 5000's export, as the user's own files are: the sample's
+     name on the first line, the columns' header on the second, "Wavelength (nm)" then "%R"
+     (the reflectance in percent, R = value/100 and F(R) = (1 − R)²/2R) or "F(R)", nothing
+     else in either (a unit after F(R), "(a.u.)" say, makes it another format), any case,
+     any separators after them, and the data from the third, two columns of numbers
+     (readXY), under whatever separator and decimal mark the reader finds (lines as it
+     counts them: a blank one is none). Its rows are read from their first two fields: a
+     row with an empty cell between its numbers (350,,0.5) gives 350 and nothing, and is
+     left out, as to v509; the Cary writes none (each row is "wavelength,%R,"). Under a run
+     of spaces, which may split the names too, the header is read whole, its quotes
+     dropped. The one place that decides the standard (to v501 any header naming R% or
+     F(R), on any line above the data, was standard, with no word).
+     → { R: whether the column is %R, t: the two columns (readXY) } or null */
+  const STD_WL = /^wavelength\s*\(\s*nm\s*\)$/i, STD_R = /^%\s*r$/i, STD_F = /^f\s*\(\s*r\s*\)$/i;
+  const STD_LINE = /^wavelength\s*\(\s*nm\s*\)\s+(\S.*)$/i;
+  function drsStandard(lines, t){
+    if (t.rows.findIndex(r=> isFinite(parseNum(r[0])) && isFinite(parseNum(r[1]))) !== 2) return null;
+    let h = null;
+    if (t.sep[0] === ' '){ const m = STD_LINE.exec(lines[1].replace(/"/g, '').trim()); h = m && m[1].trim(); }
+    else { const f = splitFields(lines[1], t.sep); while (f.length && f[f.length - 1] === '') f.pop(); h = f.length === 2 && STD_WL.test(f[0]) ? f[1] : null; }
+    return h && (STD_R.test(h) || STD_F.test(h)) ? { R: STD_R.test(h), t } : null;
+  }
+  /* Any other file: its columns found by their names in its header, as GC finds its own
+     (textdata.js readTable): the header the first line naming a wavelength column and one
+     of F(R) or %R, the data the lines under it, the separator the one under which most
+     lines are data (both those columns numbers), each column read by its place in the
+     header, so that an empty cell in another column shifts nothing (350,,50 under
+     "Wavelength,,%R" is 350 and 50). A first such line with no data under it (a title
+     whose words under spaces name them, "Kubelka-Munk F(R) vs wavelength") is no header:
+     the one nearest above the first line of data is, as drsReading read up from the data
+     to v509. The names, any case:
+       the wavelength in nm: Wavelength, λ or nm, with or without its unit, "(nm)", "[nm]",
+         "/nm", "nm", "in nm", ", nm", "_nm", "nm." ("Wavelength nm."); a wavelength in
+         another unit, Å, µm, eV, cm⁻¹… ("(eV)", "in eV"), is not read: said;
+       F(R): F(R) anywhere in the name ("F(R) (a.u.)");
+       the reflectance in percent: R%, %R, R %, % R, R (%), R [%], Reflectance (%)…
+     Other columns are not read. Under a run of single spaces, which splits names too, the
+     header's names are its words, each with the unit after it ('Wavelength (nm) R (%)':
+     two; 'Wavelength nm % R': two, as drsReading read such a line whole to v509); under
+     runs of two or more, its fields, else its words so.
+     Columns named one way only, a wavelength and one of F(R) or %R: read, the second as it
+     is named. Two wavelength columns, both F(R) and %R, two of either (a Cary export of
+     several samples side by side), no such header: not read, and the error says why (to
+     v509 those with two columns of numbers were read, as F(R) when no header named it; the
+     others were refused with no reason).
+     → { R: whether the column is %R, t: { rows: each line's two cells, x, y } } or { error } */
+  const R_HEAD = /^(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))$/i, F_HEAD = /f\s*\(r\)/i;
+  const WL_HEAD = /^((wavelength|λ)([\s,_]*(in\s+)?(\(\s*nm\.?\s*\)|\[\s*nm\.?\s*\]|\/\s*nm\.?|nm\.?))?|nm\.?)$/i, WL_UNIT = /^(wavelength|λ)([\s,_]*(in\s+)?(\(.*\)|\[.*\]|\/.*)|,?\s+in\s+\S.*)$/i;
+  const kindOf = s => WL_HEAD.test(s) ? 'wl' : F_HEAD.test(s) ? 'F' : R_HEAD.test(s) ? 'R' : WL_UNIT.test(s) ? 'unit' : '';
+  /* A line's words, each with what follows it in brackets, a lone '%' or '/unit': "% R" one
+     word, its '%' not the word's before it; "Wavelength nm", "Wavelength in eV" one word. */
+  const WORDS = /((wavelength|λ),?\s+(in\s+[^\s([/]+|nm\.?(?=\s|$))|%\s*r(?![^\s([/])|[^\s([/]+)(\s*(\([^)]*\)|\[[^\]]*\]|%(?=\s|$)(?!\s+r(\s|$))|\/\s*[^\s([]+))*|\S+/gi;
+  const words = f => f.join(' ').match(WORDS) || [];
+  // The columns `names` names, when a wavelength and F(R) or %R among them (n: how many).
+  function columnsOf(names, n){
+    const c = { wl: [], F: [], R: [] };
+    names.forEach((s, i)=>{ const k = kindOf(s); if (c[k]) c[k].push(i); });
+    if (!c.wl.length || !(c.F.length + c.R.length)) return null;
+    return { ...c, x: c.wl[0], y: Math.min(...c.F, ...c.R), ...(n ? { n } : {}) };
+  }
+  function drsHead(f, sep){
+    const c = sep === ' ' ? null : columnsOf(f);
+    if (c || sep[0] !== ' ') return c;
+    const w = words(f);
+    return columnsOf(w, w.length);
+  }
+  const NO_HEAD = 'no header naming its columns: the wavelength in nm, and F(R) or %R', NO_DATA = 'no line of data read under its header';
+  // Whether a line is two numbers (its first two fields not empty) under `sep`.
+  const twoNums = (l, sep)=>{ const v = splitFields(l, sep).filter(c=> c !== ''); return isNum(v[0]) && isNum(v[1]); };
+  function drsColumns(lines){
+    const isRow = (r, c)=> isNum(r[c.x]) && isNum(r[c.y]), d = lines.findIndex(l=> SEPS.some(s=> twoNums(l, s)));
+    let tb = readTable(lines, drsHead, isRow), h = d;
+    // A line naming them with no data under it is no header: read again from the one
+    // nearest above the first line of data.
+    if (!tb){ while (--h >= 0 && !SEPS.some(s=> drsHead(splitFields(lines[h], s), s))); if (h > 0) tb = readTable(lines.slice(h), drsHead, isRow); }
+    if (!tb) return { error: noColumns(lines, d) };
+    const c = tb.cols, many = [c.wl.length > 1 && `${c.wl.length} wavelength columns`,
+      c.F.length && c.R.length ? 'both F(R) and %R' : c.F.length > 1 ? `${c.F.length} F(R) columns` : c.R.length > 1 && `${c.R.length} %R columns`].filter(Boolean);
+    if (many.length) return { error: `which columns to read cannot be told: its header names ${many.join(' and ')}` };
+    const rows = tb.rows.map(r=> [r[c.x], r[c.y]]), x = [], y = [];
+    for (const r of rows){ const a = parseNum(r[0]), b = parseNum(r[1]); if (isFinite(a) && isFinite(b)){ x.push(a); y.push(b); } }
+    return { R: c.R.length > 0, t: { rows, x, y } };
+  }
+  /* Why no columns were found: the line nearest above the first line of data `d` (two
+     numbers) that names any column of the kinds read is the header, and says what it lacks,
+     its names read as the data's separator splits them (one under which that line is two
+     numbers) into two or more: of those, the one naming the most kinds, the first so; under
+     any other only when none does (a header written with ',' over data with ';', which
+     ';' leaves whole). Its names both kinds there: a header with no line of data read under
+     it (a ',' both the separator and the decimal mark, a blank cell under a run of spaces,
+     more names than the data have fields, the header with one separator and the data with
+     another). No such line: no header. */
+  function noColumns(lines, d){
+    const at = d < 0 ? SEPS : SEPS.filter(s=> twoNums(lines[d], s));
+    // A line's names under each separator in `ss` (under spaces its fields and its words, as
+    // drsHead reads them), `min` or more, the kinds each names: the one naming the most.
+    const named = (l, ss, min)=> ss.flatMap(s=>{ const f = splitFields(l, s); return s === '  ' ? [f, words(f)] : [s === ' ' ? words(f) : f]; })
+      .filter(ns=> ns.length >= min).map(ns=>{ const k = {}; for (const n of ns){ const t = kindOf(n); if (t && !k[t]) k[t] = n; } return { k, n: !!(k.wl || k.unit) + !!(k.F || k.R) }; })
+      .reduce((a, b)=> b.n > (a ? a.n : 0) ? b : a, null);
+    for (let i = (d < 0 ? lines.length : d) - 1; i >= 0; i--){
+      const { k } = named(lines[i], at, 2) || named(lines[i], SEPS, 1) || {};
+      if (!k) continue;
+      if (k.wl && (k.F || k.R)) return NO_DATA;
+      const u = k.unit && k.unit.length > 40 ? k.unit.slice(0, 39) + '…' : k.unit;
+      return 'its header names ' + [!k.wl && (u ? `the wavelength in another unit than nm (${u})` : 'no wavelength column in nm'), !k.F && !k.R && 'no F(R) or %R column'].filter(Boolean).join(' and ');
+    }
+    return NO_HEAD;
+  }
+  /* The points of a spectrum that are physical values, the others left out and counted by
+     why: a wavelength not above 0 (wl), a reflectance outside 0–100 % (r) or of 0, where
+     F(R) is ∞ (zero), F(R) below 0 (neg), a value that is no finite number (inf: a NaN or
+     an Inf written in the file, a number past the doubles' range). To v494 they were kept,
+     and the analysis left out of each curve it made the values it could not take (F(R) ≤ 0
+     under a logarithm). */
+  function drsPoints(t, R){
+    const wl = [], FR = [], left = {}, out = k =>{ left[k] = (left[k] || 0) + 1; };
+    t.x.forEach((x, i)=>{
+      const v = t.y[i], F = R ? (1 - v/100)**2/(2*v/100) : v;
+      if (!(x > 0)) out('wl');
+      else if (R && !(v >= 0 && v <= 100)) out('r');
+      else if (!isFinite(F)) out(R ? 'zero' : 'inf');
+      else if (F < 0) out('neg');
+      else { wl.push(x); FR.push(F); }
+    });
+    // (the rows x and y leave out: a wavelength beside a number that is no finite one)
+    for (const r of t.rows) if (isFinite(parseNum(r[0])) && (isNum(r[1]) || /^[+-]?(nan|inf(inity)?)$/i.test(String(r[1] || '').trim())) && !isFinite(parseNum(r[1]))) out('inf');
+    return { wl, FR, left };
+  }
+  // The points left out, said: how many, and why.
+  const LEFT = { wl: 'a wavelength not above 0', r: 'R outside 0–100 %', zero: 'R = 0 %, where F(R) is infinite', neg: 'F(R) < 0', inf: 'a value that is no finite number' };
+  function leftText(left){
+    const ks = Object.keys(LEFT).filter(k=> left[k] > 0), n = ks.reduce((t, k)=> t + left[k], 0);
+    return `${n} point${n > 1 ? 's' : ''} left out (${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')})`;
+  }
+  /* What the alert says of a file: how a file of no standard format was read (drsColumns),
+     and the points left out (to v501 the files of a non-standard format were named, no
+     more). A file in the standard format has no word on how it was read: the file list's
+     note says it (to v501 an R% file was said here, the Cary's own export as well; to v501
+     a header naming R% or F(R) anywhere above the data was a standard format). A file with
+     no header naming F(R) or %R is refused (from v510): only a project saved before holds
+     one, read as F(R), and says so as it did (none). */
+  const WARNS = { R: 'not a standard format: its header names the reflectance in %, read as %R', F: 'not a standard format: its header names F(R), read as F(R)',
+    none: 'no header naming the columns F(R) or R%: read as F(R)' };
+  const warnOf = f => f.read === 'R%' ? 'R' : f.head ? 'F' : 'none';
+  function fileNotes(f){
+    const out = [];
+    if (f.warn) out.push(WARNS[warnOf(f)]);
+    if (f.left && Object.keys(LEFT).some(k=> f.left[k] > 0)) out.push(leftText(f.left));
+    return out;
+  }
+  /* The file list's note, right of the label (to v501 a column of its own left of it): how
+     the file was read, %R (the reflectance in percent, converted to F(R)) or F(R), its title
+     saying it in full: the second column of the standard format; in any other, the column
+     its header names (to v509 the second column there too), and a format not standard. A
+     project saved before the R% reading holds none: F(R), as it was read. */
+  const READS = { R: ['%R', 'read as the reflectance in %, converted to F(R)'], F: ['F(R)', 'read as F(R)'] };
+  function readNote(f){
+    const [t, how] = READS[f.read === 'R%' ? 'R' : 'F'], w = f.warn && warnOf(f);
+    const title = !w ? `second column ${how}` : w === 'none' ? `second column ${how}, with no header naming it` : `the ${t} column its header names, ${how}; not a standard format`;
+    return `<span title="${esc(title)}">${esc(t)}</span>`;
+  }
+  kit.dropText(readDrs, had =>{
+    warnDismissed = false;
+    allFiles.slice(had).forEach(keepSpectrum);
+    afterFilesChange();
+    // Once, when the first data lands: propose optimal interval-line positions. The
+    // Tauc cards go first: the Urbach ones are placed on their regions.
+    if (!had && files.length){
+      quietly(()=> ['tauc', 'urbach'].forEach(t=> cards().filter(a=> a.type === t).forEach(a=>{
+        const P = panelOf(a); P.autoSuggestAll(); P.writeStoreToInputs(); P.update();
+      })));
+      cards().forEach(see);
+      deck.refreshNames();
+      renderResView();
+      kit.commit();
     }
   });
 
-  document.getElementById('taucPrev').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex-1+files.length)%files.length; writeStoreToInputs(); updateTaucView(); };
-  document.getElementById('taucNext').onclick = ()=>{ if (!files.length) return; currIndex=(currIndex+1)%files.length; writeStoreToInputs(); updateTaucView(); };
+  const SHOWN = ['taucAnalyses','taucResults'];
+  function afterFilesChange(){
+    kit.showFiles();
+    if (files.length) setupAnalysis();
+    else { SHOWN.forEach(id=> $(id).style.display='none'); deck.refreshNames(); }
+    kit.commit(); // baseline + file add/remove/reorder/palette
+  }
 
-  // Re-propose interval-line positions on demand: current sample in one-mode,
-  // the shared set in all-mode.
-  document.getElementById('taucSuggest').onclick = ()=>{
-    if (!files.length) return;
-    if (taucMode==='per'){ const s=suggestOne(currIndex); if (s){ if(!taucPer[currIndex]) taucPer[currIndex]={}; taucPer[currIndex].vlines=s; } }
-    else { const s=suggestShared(); if (s) sharedVlines=s; }
-    updateTaucView(); hist.commit();
-  };
+  // Energy axis is hc/λ (HC, hvOf) — each file stays on its own native grid.
+  function setupAnalysis(){
+    allFiles.forEach(withHv);
+    if (currIndex >= files.length) currIndex = files.length-1;
+    if (currIndex < 0) currIndex = 0;
+    SHOWN.forEach(id=> $(id).style.display='block');
+    // Every panel fitted to the files before any is drawn: an Urbach card's band is
+    // read off its reference, which may sit below it.
+    livePanels().forEach(p=> p.fit());
+    quietly(()=> livePanels().forEach(p=>{
+      p.writeStoreToInputs();      // reflect the current sample's params in the inputs
+      p.syncModeButton();
+      p.initPlot();
+    }));
+    cards().forEach(see);
+    deck.refreshNames();
+    renderResView();
+    // (all drawn, on show: its draw key, the width it was drawn at; a card folded is drawn
+    // as it is unfolded, deck wake)
+    if (shown()){ stale = false; drawnAt = String(root.clientWidth); }
+  }
+
+  // Union of all files' ranges (for shared overlay axes)
+  function unionWl(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.wl)); hi=Math.max(hi,maxArr(f.wl)); }); return [lo,hi]; }
+  function unionHv(){ let lo=Infinity,hi=-Infinity; files.forEach(f=>{ lo=Math.min(lo,minArr(f.hv)); hi=Math.max(hi,maxArr(f.hv)); }); return [lo,hi]; }
+
+  /* ---- Results: F(R) and R (%) against λ side by side, F(R) against hν on a log axis
+     under them across the card (2φ : 1), then each card's pair of charts under its name,
+     in card order. To v497 the top was a pair, F(R) against λ and the log plot. ---- */
+  const resList = $('taucResList');
+  function resHtml(a){
+    const p = 'an' + a.id, t = a.type === 'tauc';
+    return `
+        <h4 class="res-an-title"></h4>
+        <div class="row res-row">
+          <div class="col${t ? '' : ' plot-pair-col'}">${t ? `
+            <p class="txt-caption">Tauc Plot</p>
+            ${box(p + 'R1', p + 'RL1', true)}` : `
+            <p class="txt-caption">Urbach Plot: plain</p>
+            ${box(p + 'R1', p + 'RL1', true, '', 'plot-pair')}
+            <p class="txt-caption">Urbach Plot: subtracted</p>
+            ${box(p + 'R3', p + 'RL1', true, '', 'plot-pair')}
+            <p id="${p}RS" class="txt-meta" hidden></p>`}
+            <div id="${p}RL1" class="legend"></div>
+          </div>
+          <div class="col">
+            <p class="txt-caption" id="${p}BarTitle">${t ? 'Energy Band Gap' : 'Urbach Energy'}</p>
+            ${box(p + 'R2', p + 'RL2', true, `\n              <span class="plot-chips" id="${p}${t ? 'EgSel' : 'UrbSelB'}"></span>`)}
+            <div id="${p}RL2" class="legend"></div>
+            <div id="${p}RA" class="bar-alert"></div>
+          </div>
+        </div>`;
+  }
+  // A card's section of the Results, made for its kind (again, if the kind changed).
+  // Named before anything is drawn in it: the plots' CSV buttons are built from the
+  // names their download buttons carry.
+  function ensureRes(a){
+    const e = live.get(a.id);
+    if (e.res && e.res.dataset.kind === a.type) return e.res;
+    if (e.res) e.res.remove();
+    const sec = document.createElement('div');
+    sec.className = 'res-an';
+    sec.dataset.an = a.id;
+    sec.dataset.kind = a.type;
+    sec.innerHTML = resHtml(a);
+    e.res = sec;
+    e.resPlots = null;
+    placeRes();
+    named(a);
+    return sec;
+  }
+  const placeRes = ()=> cards().forEach(a=>{ const e = live.get(a.id); if (e && e.res) resList.appendChild(e.res); });
 
   function renderResView(){
-    // Effective exponent per file; when uniform, show it on the shared Tauc axis,
-    // otherwise fall back to a generic "a" (samples may use different exponents).
-    const aVals = files.map((f,k)=>getFileParams(k).a);
-    const aUniform = aVals.every(v=>v===aVals[0]);
-    const aLabel = aUniform ? aVals[0] : 'a';
+    if (!files.length || !drawable()) return;
     // Plot 0: F(R) vs λ — reuse one Plot instance (create + attach tools once).
     if (!resPlot0){
-      resPlot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a. u.)', xTickStep:50, noYTickLabels:true});
+      resPlot0 = new Plot($('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a. u.)', xTickStep:50, noYTickLabels:true});
       resPlot0.attachTools(resPlot0.svg.closest('.plot-wrap'));
     }
     const plot0 = resPlot0; plot0.clearData();
-    const leg0 = document.getElementById('taucResLegend0'); leg0.innerHTML='';
+    $('taucResLegend0').innerHTML = swatchLegend(files);
     let ymax0=-Infinity;
     files.forEach((f,k)=>{ ymax0=Math.max(ymax0,maxArr(f.FR)); });
     const [wl0, wl1] = unionWl();
     plot0.setRange(wl0, wl1, 0, ymax0);
     plot0.drawAxes();
-    files.forEach((f,k)=>{
-      plot0.line(f.wl, f.FR, f.color, 1.3, undefined, { label: f.label });
-      const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg0.appendChild(s);
-    });
-
-    // Plot 1: Tauc + regressions — reused instance; its y-label depends on the exponent.
-    if (!resPlot1){
-      resPlot1 = new Plot(document.getElementById('taucResSvg1'), {xlabel:'Energy (eV)', xTickStep:0.5, noYTickLabels:true});
-      resPlot1.attachTools(resPlot1.svg.closest('.plot-wrap'));
+    files.forEach(f=> plot0.line(f.wl, f.FR, f.color, 1.3, undefined, { label: f.label, key: f.name }));
+    renderReflView();
+    renderLogView();
+    cards().forEach(renderAnalysisRes);
+  }
+  /* The reflectance in percent from F(R), whatever the file's second column was read as:
+     the exact inverse of F = (1 − R)²/2R, R = 1 + F − √(F² + 2F), written as
+     1/(1 + F + √(F² + 2F)), the same number without the two near-equal terms that cancel
+     where F is large. For a file read as R% it gives its own values back, to round-off.
+     F(R) < 0 (a project from before the points that are no physical value were left out
+     may hold it) has none. */
+  const reflOf = F => F >= 0 ? 100/(1 + F + Math.sqrt(F*F + 2*F)) : NaN;
+  // R (%) against λ, every sample's, on 0–100 %, all R can be.
+  function renderReflView(){
+    if (!resPlotR){
+      resPlotR = new Plot($('taucResSvgR'), {xlabel:'Wavelength (nm)', ylabel:'R (%)', xTickStep:50});
+      resPlotR.attachTools(resPlotR.svg.closest('.plot-wrap'));
     }
-    const plot1 = resPlot1; plot1.clearData();
-    plot1.ylabelSvg = `[F(R)·hν]<tspan baseline-shift="super" font-size="8">${aLabel}</tspan> (a. u.)`;
-    const leg1 = document.getElementById('taucResLegend1'); leg1.innerHTML='';
-    const Ys_all = files.map((f,k)=>{
-      const fp = getFileParams(k);
-      const Yraw = f.FR.map((v,i)=>Math.pow(v*f.hv[i], fp.a));
-      return movingAverage(Yraw, fp.N);
-    });
+    const p = resPlotR; p.clearData();
+    $('taucResLegendR').innerHTML = swatchLegend(files);
+    const [wl0, wl1] = unionWl();
+    p.setRange(wl0, wl1, 0, 100);
+    p.drawAxes();
+    files.forEach(f=> p.line(f.wl, reflKept(f.FR, '', ()=> f.FR.map(reflOf)), f.color, 1.3, undefined, { label: f.label, key: f.name }));
+  }
+  // F(R) against hν on a log y-axis: the absorption edge and the tail below it, over
+  // the decades they span, on the energy axis the analyses work on. The plot draws
+  // log10 F(R); a point with F(R) ≤ 0 has none and is left out.
+  function renderLogView(){
+    if (!resPlotLog){
+      // A wider left margin than the default 55: powers of ten are wider tick labels
+      // than numbers, and in an export (type ×1.6) they reached the axis title.
+      resPlotLog = new Plot($('taucResSvgLog'), {xlabel:'Energy (eV)', ylabel:'F(R) (a. u.)', xTickStep:0.5, yLog:true, margin:{l:66,r:20,t:15,b:40}});
+      resPlotLog.attachTools(resPlotLog.svg.closest('.plot-wrap'));
+    }
+    const p = resPlotLog; p.clearData();
+    $('taucResLegendLog').innerHTML = swatchLegend(files);
+    const logs = files.map(f=> logKept(f.FR, '', ()=> f.FR.map(v=> v > 0 ? Math.log10(v) : NaN)));
+    let lo = Infinity, hi = -Infinity;
+    logs.forEach(a=> a.forEach(v=>{ if (isFinite(v)){ lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
+    if (!isFinite(lo)){ lo = -1; hi = 0; }
+    const pad = 0.04 * Math.max(hi - lo, 0.1), [hv0, hv1] = unionHv();
+    p.setRange(hv0, hv1, lo - pad, hi + pad);
+    p.drawAxes();
+    // The composer takes F(R) itself and draws it on a log axis of its own, which can
+    // then be switched off like any other.
+    files.forEach((f,k)=> p.line(f.hv, logs[k], f.color, 1.3, undefined, { label: f.label, key: f.name, raw: { xs: f.hv, ys: f.FR } }));
+  }
+  // (an element of a card's section of the Results, found in it)
+  const resEl = (a, id)=> live.get(a.id).res.querySelector('#an' + a.id + id);
+  function renderAnalysisRes(a){
+    if (!files.length || !live.has(a.id) || !drawable()) return;
+    ensureRes(a);
+    if (a.type === 'tauc') drawTaucRes(a); else drawUrbachRes(a);
+  }
+  // A plot of the section's (reused while the section lasts): R1, and an Urbach
+  // card's subtracted one, R3.
+  function resPlotOf(a, opts, which = 'R1'){
+    const e = live.get(a.id), svg = resEl(a, which);
+    e.resPlots = e.resPlots || {};
+    if (!e.resPlots[which] || e.resPlots[which].svg !== svg){
+      e.resPlots[which] = new Plot(svg, opts);
+      e.resPlots[which].attachTools(svg.closest('.plot-wrap'));
+    }
+    return e.resPlots[which];
+  }
+
+  // A Tauc card's pair: every sample's Tauc curve with its two fits, and the gaps.
+  function drawTaucRes(a){
+    const P = panelOf(a), $ = id => resEl(a, id);
+    const fits = files.map((f,k)=> P.analyze(k));
+    // Effective exponent per file; when uniform, show it on the shared Tauc axis,
+    // otherwise fall back to a generic "a" (samples may use different exponents).
+    const aVals = files.map((f,k)=> P.params(k).a);
+    const aUniform = aVals.every(v=>v===aVals[0]);
+    const aLabel = aUniform ? fmtA(aVals[0]) : 'a';
+
+    const plot1 = resPlotOf(a, {xlabel:'Energy (eV)', xTickStep:0.5, noYTickLabels:true});
+    plot1.clearData();
+    plot1.ylabelSvg = `[F(R)·hν]${sup(aLabel)} (a. u.)`;
+    $('RL1').innerHTML = swatchLegend(files);
+    // (the card's own curves, kept: the same numbers)
+    const Ys_all = files.map((f,k)=> P.curve(k).Ys);
     const ymax1 = Math.max(...Ys_all.map(maxArr));
     const [hv0, hv1] = unionHv();
     plot1.setRange(hv0, hv1, 0, ymax1);
     plot1.drawAxes();
     files.forEach((f,k)=>{
-      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: f.label });
-      const r = bestRegsAll[k];
-      // regs fits the flat interval below the edge (the baseline), regs2 the steep
-      // edge itself (the Tauc region) — their intercepts cross at Eg.
-      if (r && isFinite(r.regs.slope)){
+      plot1.line(f.hv, Ys_all[k], f.color, 1.1, undefined, { label: f.label, key: f.name });
+      const r = fits[k];
+      // regs fits the steep edge between the red lines (the Tauc region: its x-axis
+      // intercept is Eg), regs2 the flat stretch between the magenta ones (the
+      // baseline: where the two cross is Eg from the baseline).
+      if (isFinite(r.regs.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs.slope*x+r.regs.intercept), f.color, 1, '5,4',
-                   { label: `${f.label} baseline` });
+                   { label: `${f.label} Tauc`, key: `${f.name}/regs line` });
       }
-      if (r && isFinite(r.regs2.slope)){
+      if (isFinite(r.regs2.slope)){
         const xExt = linspace(hv0, hv1, 100);
         plot1.line(xExt, xExt.map(x=>r.regs2.slope*x+r.regs2.intercept), f.color, 1, '2,3',
-                   { label: `${f.label} Tauc` });
+                   { label: `${f.label} baseline`, key: `${f.name}/regs2 line` });
       }
-      const s=document.createElement('span'); s.innerHTML=`<i style="background:${f.color}"></i>${f.label}`; leg1.appendChild(s);
     });
 
-    // Plot 2: Eg bar chart. With mixed exponents (per-sample mode) there is no single
-    // Direct/Indirect qualifier, so drop it from the title and axis label.
-    const egLabel = aUniform ? (aVals[0]===2 ? 'Direct' : 'Indirect') : '';
-    const barTitleEl = document.getElementById('taucBarTitle');
-    if (barTitleEl) barTitleEl.textContent = (egLabel ? egLabel+' ' : '') + 'Energy Band Gap';
-    const leg2 = document.getElementById('taucResLegend2'); leg2.innerHTML='';
-    const barAlertX = document.getElementById('taucBarAlertX'); barAlertX.innerHTML='';
-    const barAlertB = document.getElementById('taucBarAlertB'); barAlertB.innerHTML='';
-    const egs = bestRegsAll.map(r=>r.Eg), egErrs = bestRegsAll.map(r=>r.EgErr);
-    const egInts = bestRegsAll.map(r=>r.EgInt), egIntErrs = bestRegsAll.map(r=>r.EgIntErr);
-    const n = files.length;
-    // Negative Eg → one alert per plot (x-axis / baseline), placed under its own
-    // chart and listing the affected samples one per line. Live-computed → no X.
-    const negX = [], negB = [];
-    for (let k=0;k<n;k++){
-      if (isFinite(egs[k]) && egs[k]<0) negX.push(files[k].label);
-      if (isFinite(egInts[k]) && egInts[k]<0) negB.push(files[k].label);
-    }
-    const negWarnHtml = (label, list)=> list.length
-      ? `<div class="alert warn">⚠ Negative E<sub>g</sub> (${label}) for:<br>${list.join('<br>')}</div>` : '';
-    barAlertX.innerHTML = negWarnHtml('x-axis', negX);
-    barAlertB.innerHTML = negWarnHtml('baseline', negB);
-    const posVals = egs.concat(egInts).filter(v=>isFinite(v)&&v>0);
-    const noChart = !posVals.length;
-    const barSvg  = document.getElementById('taucResSvg2');   // Eg (x-axis)
-    const barSvg3 = document.getElementById('taucResSvg3');   // Eg (baseline)
-    const barWrap  = barSvg.closest('.plot-wrap');
-    const barWrap3 = barSvg3.closest('.plot-wrap');
-    if (noChart){
-      barSvg.style.display='none'; barWrap.style.display='none';
-      barSvg3.style.display='none'; barWrap3.style.display='none';
-      leg2.innerHTML='';
-    } else {
-      barSvg.style.display='';  barWrap.style.display='';
-      barSvg3.style.display=''; barWrap3.style.display='';
-      const fmtLab = (v,e)=> isFinite(e) ? `${v.toFixed(3)}±${e.toFixed(3)}` : v.toFixed(3);
-      const topOf = (v,e)=> v + (isFinite(e)?e:0);
-      // The two twin plots share one y-scale so their bars are directly comparable.
-      let maxValW = 0, maxTop = 0;
-      const mctxShared = document.createElement('canvas').getContext('2d');
-      mctxShared.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-      for (let k=0;k<n;k++){
-        if (isFinite(egs[k])&&egs[k]>0){ maxValW = Math.max(maxValW, mctxShared.measureText(fmtLab(egs[k],egErrs[k])).width); maxTop = Math.max(maxTop, topOf(egs[k],egErrs[k])); }
-        if (isFinite(egInts[k])&&egInts[k]>0){ maxValW = Math.max(maxValW, mctxShared.measureText(fmtLab(egInts[k],egIntErrs[k])).width); maxTop = Math.max(maxTop, topOf(egInts[k],egIntErrs[k])); }
-      }
-      const yLabel = `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`;
-      // Draws one series (a single centred bar per sample) into `svg`.
-      const drawEgBars = (svg, vals, errs, color, name)=>{
-        const mctx = document.createElement('canvas').getContext('2d');
-        mctx.font = "10px 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
-        const brect = svg.getBoundingClientRect();
-        const svgW = brect.width || 640, svgH = brect.height || 640;
-        // Narrow screens and many samples get steeper, shorter labels — see barLabelFit.
-        const fit = barLabelFit(mctx, Math.max(60, svgW - 75), files.length);
-        const barLabels = files.map(f=>truncTiltLabel(mctx, f.label, fit.cap));
-        const labelWs = barLabels.map(l=>mctx.measureText(l).width);
-        let maxLbl = 0; labelWs.forEach(w=>{ maxLbl = Math.max(maxLbl, w); });
-        const bottom = Math.min(Math.round(svgH*0.5), Math.round(26 + maxLbl*fit.sin));
-        const mTop = 15, gap = 6;
-        const plotH = svgH - mTop - bottom;
-        const reserve = gap + maxValW + 6;               // px needed above the tallest bar
-        const frac = plotH > reserve ? (1 - reserve/plotH) : 0.5;
-        const ymax = Math.max(Math.max(...posVals)*1.3, maxTop/frac);
-        const plot = new Plot(svg, {xlabel:'', ylabelSvg:yLabel, noXTickLabels:true, noXGrid:true, yGrid:true, margin:{l:55,r:20,t:mTop,b:bottom}});
-        // Widen the x-range symmetrically only when a label would cross x=0.
-        const xpad = barPlotXPad(labelWs, n, svgW-75, fit.rot);
-        plot.setRange(-xpad, n+1+xpad, 0, ymax||1);
-        plot.drawAxes();
-        // Bars are capped at 16px half-width but shrink to fit the per-sample
-        // spacing so many samples don't overlap. Computed once here (fixed px →
-        // stays constant on zoom).
-        const hw = Math.min(16, (plot.px(1)-plot.px(0))*0.3);
-        for (let k=0;k<n;k++){
-          const xc = k+1;
-          if (isFinite(vals[k])&&vals[k]>0){
-            drawBar(plot,xc,vals[k],color,hw,0,name);
-            if (isFinite(errs[k])) drawErrBar(plot,xc,vals[k],errs[k],0);
-            plot.barLabel(xc, topOf(vals[k],errs[k]), fmtLab(vals[k],errs[k]), {gap,dx:0});
-          }
-          plot.tickLabel(xc, barLabels[k], fit.rot);
-        }
-        plot.attachTools(svg.closest('.plot-wrap'));
-      };
-      drawEgBars(barSvg,  egs,    egErrs,    '#3aa0ff', 'Eg (x-axis)');
-      drawEgBars(barSvg3, egInts, egIntErrs, '#ff7a59', 'Eg (baseline)');
-      leg2.innerHTML=`<span><i class="mk-box" style="background:#3aa0ff"></i>Eg (x-axis)</span><span><i class="mk-box" style="background:#ff7a59"></i>Eg (baseline)</span>`;
-    }
+    // The Eg bar chart. With mixed exponents (per-sample mode) there is no single
+    // Direct/Indirect qualifier, so drop it from the title and axis label. A forbidden
+    // transition says so in the title only: the axis has no room for it on a phone.
+    const ex = aUniform ? expOf(aVals[0]) : null, egLabel = ex ? ex.gap : '';
+    $('BarTitle').textContent = (egLabel ? (ex.forbidden ? 'Forbidden ' : '') + egLabel + ' ' : '') + 'Energy Band Gap';
+    // The two ways Eg is read, as GC's gases are: a chip each, never both off.
+    $('EgSel').innerHTML = chipRow(EG_METHODS, a.egSel, { cls: 'plot-chip', data: m=> `data-eg="${m.key}"`, name: m=> m.name });
+    const vals = { x: fits.map(r=>r.Eg),    b: fits.map(r=>r.EgInt) };
+    const errs = { x: fits.map(r=>r.EgErr), b: fits.map(r=>r.EgIntErr) };
+    const shown = EG_METHODS.filter(m=> a.egSel.includes(m.key)).map(m=> ({ ...m, vals: vals[m.key], errs: errs[m.key] }));
+    $('RA').innerHTML = shown.map(m=> negWarnHtml(m.vals, `E<sub>g</sub> (${m.label})`)).join('');
+    resBars(a, shown, $('EgSel'), `${egLabel ? egLabel+' ' : ''}Band Gap E<tspan baseline-shift="sub" font-size="8">g</tspan> (eV)`, 3);
   }
-  // `name` names the series the bar belongs to, the way the legend under the chart
-  // does, so the figure composer sees one series of bars rather than nameless ones.
-  function drawBar(plot, xc, val, color, hw, dx, name){ plot.barPx(xc, 0, val, color, hw, dx, { label: name }); }
-  function drawErrBar(plot, xc, val, err, dx){ plot.errbar(xc, val, err, dx); }
 
-  // Assemble a "wide" CSV: each column is {h:header, v:[values]}, padded to the
-  // longest so every sample keeps its own independent columns (no shared axis).
-  function wideCsv(cols){
-    const maxLen = Math.max(0, ...cols.map(c=>c.v.length));
-    let t = csvLine(cols.map(c=>c.h));
-    for (let i=0;i<maxLen;i++) t += csvLine(cols.map(c=> i<c.v.length ? c.v[i] : ''));
-    return t;
+  // An Urbach card's Results: every sample's ln F(R) with its Urbach fit, drawn as the
+  // Tauc plot is, plain on one plot and with the Tauc baseline subtracted on another
+  // under it, each with its own axes; and E_U beside them as the gaps are, plain,
+  // subtracted or both, as its chips say.
+  function drawUrbachRes(a){
+    const P = panelOf(a), $ = id => resEl(a, id);
+    const fits = files.map((f,k)=> P.analyze(k));
+    // (the card's own curves, kept: the same numbers)
+    const curves = files.map((f,k)=> ({
+      p: P.curve(k).Ys,
+      s: fits[k].sub ? fits[k].sub.Ys : null,
+    }));
+    const vals = { p: fits.map(r=> r.Eu*1000), s: fits.map(r=> r.sub ? r.sub.Eu*1000 : NaN) };
+    const errs = { p: fits.map(r=> r.EuErr*1000), s: fits.map(r=> r.sub ? r.sub.EuErr*1000 : NaN) };
+    // Any value at all, of either sign: a negative E_U is flagged under the chart.
+    const canB = { p: true, s: vals.s.some(isFinite) };
+    // Why the subtracted series may be missing, for its chip's tooltip and under its plot.
+    const why = !refPanel(a) ? 'No Tauc reference: nothing to subtract'
+      : fits.every(r=> !r.sub) ? "The Tauc reference's baseline has no fit: nothing to subtract"
+      : 'No subtracted fit for any sample: the Tauc baseline lies above F(R) in the Urbach region (the card says where)';
+    // E_U's chips, GC's gas chips over again: a series the data cannot give (no
+    // reference: nothing subtracted) is there but disabled, and never are both off.
+    $('UrbSelB').innerHTML = chipRow(URB_METHODS, urbOn(a, canB), { cls: 'plot-chip', data: m=> `data-urb="${m.key}"`, can: m=> canB[m.key], why: ()=> why });
+    const showB = URB_METHODS.filter(m=> urbOn(a, canB).includes(m.key));
+
+    const [hv0, hv1] = unionHv(), xExt = linspace(hv0, hv1, 100);
+    /* One of the two plots: each sample's curve, and its Urbach fit dashed over the
+       whole span. The plain curves are ranged in full; a subtracted curve runs down
+       without end where F(R) − F_b goes to zero, below the tail, so those are ranged
+       from each one's Urbach region up, the bottom at their 5th percentile there. */
+    const drawOne = (which, key, ylabelSvg, fitOf, tag)=>{
+      const plot = resPlotOf(a, {xlabel:'Energy (eV)', ylabelSvg, xTickStep:0.5, noYTickLabels:true}, which);
+      plot.clearData();
+      let yLo = Infinity, yHi = -Infinity;
+      curves.forEach((c, k)=>{
+        const ys = c[key]; if (!ys) return;
+        const from = key === 'p' ? -Infinity : Math.min(P.vlinesFor(k).v1, P.vlinesFor(k).v2);
+        const v = ys.filter((y, i)=> isFinite(y) && files[k].hv[i] >= from).sort((x, y)=> x - y);
+        if (!v.length) return;
+        yLo = Math.min(yLo, key === 'p' ? v[0] : v[Math.floor(0.05*(v.length - 1))]);
+        yHi = Math.max(yHi, v[v.length - 1]);
+      });
+      if (!(yLo < yHi)){ yLo = 0; yHi = 1; }
+      const pad = 0.05*(yHi - yLo);
+      plot.setRange(hv0, hv1, yLo - pad, yHi + pad);
+      plot.drawAxes();
+      files.forEach((f,k)=>{
+        const ys = curves[k][key];
+        if (!ys) return;
+        plot.line(f.hv, ys, f.color, 1.1, undefined, { label: f.label, key: f.name + tag });
+        const r = fitOf(k);
+        if (r && isFinite(r.slope))
+          plot.line(xExt, xExt.map(x=>r.slope*x+r.intercept), f.color, 1, '5,4',
+                    { label: `${f.label} Urbach`, key: `${f.name}${tag}/regs line` });
+      });
+    };
+    drawOne('R1', 'p', 'ln[F(R)] (a. u.)', k=> fits[k].regs, '');
+    drawOne('R3', 's', 'ln[F(R) − F<tspan baseline-shift="sub" font-size="8">b</tspan>] (a. u.)', k=> fits[k].sub && fits[k].sub.regs, '/sub');
+    // With no subtracted curve at all, the plot under the plain one says why it is empty.
+    const noSub = !curves.some(c=> c.s && c.s.some(isFinite));
+    $('RS').textContent = noSub ? why + '.' : ''; $('RS').hidden = !noSub;
+    $('RL1').innerHTML = swatchLegend(files);
+
+    // The E_U bar chart, in meV as the Urbach card shows it: the plain and the
+    // subtracted E_U side by side in each sample's slot, as the gaps' two are.
+    const shown = showB.map(m=> ({ ...m, vals: vals[m.key], errs: errs[m.key] }));
+    $('RA').innerHTML = shown.map(m=> negWarnHtml(m.vals, m.key === 'p' ? 'E<sub>U</sub>' : 'E<sub>U</sub> (subtracted)')).join('');
+    resBars(a, shown, $('UrbSelB'), 'Urbach Energy E<tspan baseline-shift="sub" font-size="8">U</tspan> (meV)', 1);
   }
+  // The series E_U's chart shows: those chosen that the data can give, else the plain one.
+  // The choice itself is kept, so a series that comes back is shown again.
+  function urbOn(a, can){
+    const eff = a.urbSel.b.filter(k=> can[k]);
+    return eff.length ? eff : ['p'];
+  }
+  /* A chip of a card's chart clicked (E_g's two, E_U's two): its card's choice switched, a
+     click never leaving the chart with nothing (toggleChip; what is on show is what the
+     chips show), each card its own. */
+  const CHIPS = { eg: [EG_METHODS, a=> a.egSel, (a, v)=>{ a.egSel = v; }], urb: [URB_METHODS, a=> a.urbSel.b, (a, v)=>{ a.urbSel.b = v; }] };
+  resList.addEventListener('click', e=>{
+    const b = e.target.closest('.plot-chip'), sec = b && b.closest('.res-an');
+    const a = sec && byId(+sec.dataset.an), kind = b && ('eg' in b.dataset ? 'eg' : 'urb');
+    if (!a || b.disabled) return;
+    const [opts, get, set] = CHIPS[kind];
+    const on = [...b.parentElement.querySelectorAll('.plot-chip.is-on')].map(x=> x.dataset[kind]);
+    const sel = toggleChip(opts.map(m=> m.key), get(a), on, b.dataset[kind]);
+    if (!sel) return;
+    set(a, sel);
+    renderAnalysisRes(a);
+    kit.commit();
+  });
+
+  // Negative values → one alert per series on show, under its chart, listing the
+  // affected samples one per line. Live-computed → no X.
+  function negWarnHtml(vals, what){
+    const list = files.filter((f,k)=> isFinite(vals[k]) && vals[k] < 0).map(f=>esc(f.label));
+    return list.length ? `<div class="alert warn">⚠ Negative ${what} for:<br>${list.join('<br>')}</div>` : '';
+  }
+
+  /* A card's chart of a value per sample ± its error (R2), as GC's mean rates are drawn
+     (modcharts.js valueBars): `shown` the series side by side in each sample's slot,
+     {name, color, vals[], errs[]}, `chips` the plot's chip row, which the value labels
+     keep clear of. Only positive values are drawn; with none the chart is hidden. */
+  function resBars(a, shown, chips, yLabel, digits){
+    const svg = resEl(a, 'R2'), wrap = svg.closest('.plot-wrap'), legend = resEl(a, 'RL2');
+    svg.style.display = wrap.style.display = '';
+    if (valueBars(svg, { cats: files, series: shown, ok: v=> isFinite(v) && v > 0, digits, yLabel, chips, legend })) return;
+    svg.style.display = wrap.style.display = 'none';
+    legend.innerHTML = '';
+  }
+  // The reflectance once, then each card's files, prefixed with its name.
   function exportTaucZip(){
     if (!files.length) return [];
     const entries = [];
@@ -701,38 +1847,70 @@ import { Plot } from './plot.js';
       });
       entries.push({name:'reflectance_FR.csv', text:wideCsv(cols)});
     }
+    // reflectance_R.csv — (wavelength, R in %) per sample: the Reflectance plot's data
+    // (a point with no R, empty)
+    {
+      const cols=[];
+      files.forEach(f=>{
+        cols.push({h:'wavelength_nm_'+f.label, v:f.wl.map(x=>fmtNum(x,6))});
+        cols.push({h:'R_percent_'+f.label,     v:f.FR.map(x=>fmtNum(reflOf(x),6))});
+      });
+      entries.push({name:'reflectance_R.csv', text:wideCsv(cols)});
+    }
+    // FR_vs_energy.csv — (energy, F(R)) per sample: the log-scale plot's data, as values
+    {
+      const cols=[];
+      files.forEach(f=>{
+        cols.push({h:'energy_eV_'+f.label, v:f.hv.map(x=>fmtNum(x,6))});
+        cols.push({h:f.label,              v:f.FR.map(x=>fmtNum(x,6))});
+      });
+      entries.push({name:'FR_vs_energy.csv', text:wideCsv(cols)});
+    }
+    cards().forEach(a=>{
+      const P = panelOf(a);
+      if (!P) return;
+      const n = fileSafe(a.name), fits = files.map((f,k)=> P.analyze(k));
+      if (a.type === 'tauc') entries.push(...taucCsvs(n, P, fits));
+      else entries.push(...urbachCsvs(n, P, fits));
+    });
+    return entries;
+  }
+  function taucCsvs(n, P, fits){
+    const entries = [];
     // tauc_plot.csv — per sample: energy, [F(R)·hν]^a, linear-region regression,
     // baseline regression (both evaluated on the sample's own energy grid)
     {
       const cols=[];
       files.forEach((f,k)=>{
-        const r = bestRegsAll[k];
+        const r = fits[k];
         cols.push({h:'energy_eV_'+f.label,       v:f.hv.map(x=>fmtNum(x,6))});
-        cols.push({h:f.label,                    v:f.hv.map((hv,i)=>fmtNum(Math.pow(f.FR[i]*hv, getFileParams(k).a),6))});
-        cols.push({h:f.label+'_reg_linear',      v:f.hv.map(hv=> (r&&r.regs)  ? fmtNum(r.regs.slope*hv  + r.regs.intercept, 6)  : '')});
-        cols.push({h:f.label+'_reg_baseline',    v:f.hv.map(hv=> (r&&r.regs2) ? fmtNum(r.regs2.slope*hv + r.regs2.intercept, 6) : '')});
+        // The curve as plotted and fitted: smoothed with the card's window.
+        const fp = P.params(k), Ys = smoothY(f.FR.map((v,i)=> Math.pow(v*f.hv[i], fp.a)), fp.N);
+        cols.push({h:f.label,                    v:Ys.map(v=> fmtNum(v,6))});
+        cols.push({h:f.label+'_reg_linear',      v:f.hv.map(hv=> fmtNum(r.regs.slope*hv  + r.regs.intercept, 6))});
+        cols.push({h:f.label+'_reg_baseline',    v:f.hv.map(hv=> fmtNum(r.regs2.slope*hv + r.regs2.intercept, 6))});
       });
-      entries.push({name:'tauc_plot.csv', text:wideCsv(cols)});
+      entries.push({name:`${n} - tauc_plot.csv`, text:wideCsv(cols)});
     }
     // Eg.csv — bar-plot-like summary (one row per sample), both Eg estimates + errors
     {
       let t = csvLine(['Sample','Eg','Eg_err','Eg_baseline','Eg_baseline_err']);
       files.forEach((f,k)=>{
-        const r = bestRegsAll[k];
-        t += csvLine([f.label,
-          r?fmtNum(r.Eg,6):'', r?fmtNum(r.EgErr,6):'', r?fmtNum(r.EgInt,6):'', r?fmtNum(r.EgIntErr,6):'']);
+        const r = fits[k];
+        t += csvLine([f.label, fmtNum(r.Eg,6), fmtNum(r.EgErr,6), fmtNum(r.EgInt,6), fmtNum(r.EgIntErr,6)]);
       });
-      entries.push({name:'Eg.csv', text:t});
+      entries.push({name:`${n} - Eg.csv`, text:t});
     }
-    // tauc_regression.csv — per-sample regression settings & results (the info that
+    // analysis_info.csv — per-sample regression settings & results (the info that
     // is otherwise only readable off the Analysis plot). Endpoints are in eV, taken
-    // from the best-fit window; R²/NRMSE are the fit-quality metrics for each line.
+    // from the best-fit window; R²/NRMSE are the fit-quality metrics for each line. (v515
+    // to v519 gave widths in eV and the points fitted; to v520 the points again.)
     {
       let t = csvLine(['Sample','Tauc Exponent','Smoothing points',
         'Tauc regression points','Tauc start (eV)','Tauc end (eV)','Tauc R^2','Tauc NRMSE',
         'Baseline regression points','Baseline start (eV)','Baseline end (eV)','Baseline R^2','Baseline NRMSE']);
       files.forEach((f,k)=>{
-        const fp = getFileParams(k), r = bestRegsAll[k] || {};
+        const fp = P.params(k), r = fits[k];
         const span = (reg) => {
           const idx = reg && reg.bestIdx;
           if (!idx || !idx.length) return ['',''];
@@ -741,15 +1919,81 @@ import { Plot } from './plot.js';
           return [fmtNum(lo,6), fmtNum(hi,6)];
         };
         const [ts,te] = span(r.regs), [bs,be] = span(r.regs2);
-        t += csvLine([f.label, fp.a, fp.N, fp.M, ts, te,
-          r.regs&&isFinite(r.regs.R2)?fmtNum(r.regs.R2,6):'', r.regs&&isFinite(r.regs.NRMSE)?fmtNum(r.regs.NRMSE,6):'',
+        t += csvLine([f.label, +fp.a.toFixed(6), fp.N, fp.M, ts, te,
+          isFinite(r.regs.R2)?fmtNum(r.regs.R2,6):'', isFinite(r.regs.NRMSE)?fmtNum(r.regs.NRMSE,6):'',
           fp.M2, bs, be,
-          r.regs2&&isFinite(r.regs2.R2)?fmtNum(r.regs2.R2,6):'', r.regs2&&isFinite(r.regs2.NRMSE)?fmtNum(r.regs2.NRMSE,6):'']);
+          isFinite(r.regs2.R2)?fmtNum(r.regs2.R2,6):'', isFinite(r.regs2.NRMSE)?fmtNum(r.regs2.NRMSE,6):'']);
       });
-      entries.push({name:'analysis_info.csv', text:t});
+      entries.push({name:`${n} - analysis_info.csv`, text:t});
     }
     return entries;
   }
-  registerCsvExport('tauc', exportTaucZip);
-})();
+  function urbachCsvs(n, P, fits){
+    const entries = [];
+    // urbach_plot.csv — per sample: energy, ln F(R) and the Urbach regression, on the
+    // sample's own grid (F(R) ≤ 0 has no logarithm: left empty)
+    {
+      const cols=[];
+      files.forEach((f,k)=>{
+        const r = fits[k].regs;
+        cols.push({h:'energy_eV_'+f.label,  v:f.hv.map(x=>fmtNum(x,6))});
+        // As plotted and fitted: smoothed with the card's window.
+        const Ys = smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), P.params(k).N);
+        cols.push({h:f.label,               v:Ys.map(v=> isFinite(v) ? fmtNum(v,6) : '')});
+        cols.push({h:f.label+'_reg_urbach', v:f.hv.map(hv=> isFinite(r.slope) ? fmtNum(r.slope*hv + r.intercept, 6) : '')});
+        // With the reference Tauc card's baseline taken out of F(R) (empty with none).
+        const sb = fits[k].sub, g = sb && sb.regs;
+        cols.push({h:f.label+'_subtracted',            v:f.hv.map((_, i)=> sb && isFinite(sb.Ys[i]) ? fmtNum(sb.Ys[i],6) : '')});
+        cols.push({h:f.label+'_reg_urbach_subtracted', v:f.hv.map(hv=> g && isFinite(g.slope) ? fmtNum(g.slope*hv + g.intercept, 6) : '')});
+      });
+      entries.push({name:`${n} - urbach_plot.csv`, text:wideCsv(cols)});
+    }
+    // Eu.csv — bar-plot-like summary, E_U and its error in meV as the chart shows them
+    {
+      // The subtracted E_U's error, then its two parts: the fit's and the Tauc baseline's.
+      let t = csvLine(['Sample','Eu_meV','Eu_err_meV','Eu_subtracted_meV','Eu_subtracted_err_meV','Eu_subtracted_err_fit_meV','Eu_subtracted_err_baseline_meV']);
+      const meV = v => isFinite(v) ? fmtNum(v*1000,6) : '';
+      files.forEach((f,k)=>{
+        const r = fits[k], sb = r.sub || {};
+        t += csvLine([f.label, meV(r.Eu), meV(r.EuErr), meV(sb.Eu), meV(sb.EuErr), meV(sb.EuErrFit), meV(sb.EuErrBase)]);
+      });
+      entries.push({name:`${n} - Eu.csv`, text:t});
+    }
+    return entries;
+  }
 
+  /* The cards (cards.js). What follows a change to their list: the references first
+     (an Urbach card's automatic name carries its reference's), then the names, then
+     the Results in card order and the Urbach cards given a new reference placed on it.
+     A state loaded keeps the references it has and moves no lines. */
+  let refsMoved = [];
+  deck = kit.deck({
+    kinds: KINDS, info: cardInfoOf, body: cardBody, make: newFields,
+    build: buildPanel, drop: dropPanel, autoName, named, afterNames: syncRefSelects,
+    before: ()=>{ refsMoved = fixRefs(); },
+    changed: ()=>{ placeRes(); refsMoved.forEach(syncRefView); },
+    loaded: placeRes,
+    added, switched, wake,
+  });
+  // A new project starts with one Tauc card.
+  deck.start(['tauc']);
+
+  /* ---- The instance (tabs.js) ----
+     Its tab, hidden, keeps its plots until it sleeps: they are all it could let go and draw
+     again, 0.6 MB of heap for 10 spectra and two cards, and drawing them again takes 0.25 s
+     (the analyses made again for every sample; NOTES-drs.md). */
+  return {
+    // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
+    // menu and its listeners. Its section and layer are the shell's to take out.
+    destroy(){ kit.destroy(); },
+    /* What it shows beside its state (utils.js shownOf, tabs.js: kept as its tab sleeps and
+       in its record, b2v4): the sample every card shows, by its file's name and its place
+       among the included; none, the first. To b2v4 a tab woken or reloaded showed the first:
+       the sample is no part of the state, so that stepping it is no step of the history and
+       no change unsaved (as in v517). */
+    shows: ()=> currIndex > 0 && files[currIndex] ? { sample: currIndex, name: files[currIndex].name } : null,
+    // (shown by its next restore: a wake's, a reload's)
+    showNext: v =>{ toShow = isObj(v) ? v : null; },
+  };
+}
+registerModule('tauc', createTauc);

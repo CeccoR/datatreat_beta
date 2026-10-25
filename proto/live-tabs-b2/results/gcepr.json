@@ -1,0 +1,337 @@
+{
+ "fixture": {
+  "gc": "10 GC exports of 72 injections (H2 and O2), one card",
+  "epr": "10 EPR pairs of 1024 points, one card"
+ },
+ "gc": {
+  "b2": {
+   "awake": {
+    "heap": 4.5,
+    "nodes": 6538,
+    "listeners": 901,
+    "rss": 157
+   },
+   "released": {
+    "heap": 4.4,
+    "nodes": 6539,
+    "listeners": 901,
+    "rss": 158.6
+   },
+   "asleep": {
+    "heap": 4.3,
+    "nodes": 3709,
+    "listeners": 493,
+    "rss": 155.5
+   },
+   "estimateMB": 2.3,
+   "switchAwake": 45.6,
+   "showAfterResize": 84.4,
+   "wake": 144.6,
+   "record": 30,
+   "withState": 8.4,
+   "samples": {
+    "sw": [
+     49.9,
+     44.9,
+     47.7,
+     43.3,
+     45.5,
+     43.4,
+     45.7,
+     45.5,
+     45.7,
+     45.5,
+     48.9,
+     41.2,
+     45.7,
+     46.4
+    ],
+    "rd": [
+     88.9,
+     97.8,
+     71.2,
+     88.4,
+     72.8,
+     77.3,
+     84.4
+    ],
+    "wk": [
+     150.7,
+     144.6,
+     142.9,
+     141.1,
+     208.4
+    ]
+   },
+   "errors": []
+  },
+  "v517": {
+   "parked": {
+    "heap": 4.5,
+    "nodes": 4296,
+    "listeners": 559,
+    "rss": 156.4
+   },
+   "switchToLoaded": 160.9,
+   "switchToBlank": 127.9,
+   "record": 30,
+   "withState": 82.6,
+   "samples": {
+    "sw": [
+     176.2,
+     127.9,
+     160.7,
+     112.2,
+     160.9,
+     111.8,
+     163.3,
+     127.1,
+     146.1,
+     159.3,
+     144.2,
+     128.6,
+     161.8,
+     129
+    ]
+   },
+   "errors": []
+  },
+  "perTab": {
+   "blank": {
+    "heapMB": 0.02,
+    "nodes": 248,
+    "rssMB": 0.1,
+    "estimateMB": 0.063,
+    "awake": [
+     6,
+     1
+    ],
+    "errors": []
+   },
+   "3 files": {
+    "heapMB": 0.08,
+    "nodes": 1309,
+    "rssMB": 2.2,
+    "estimateMB": 1.135,
+    "awake": [
+     6,
+     1
+    ],
+    "errors": []
+   },
+   "10 files": {
+    "heapMB": 0.2,
+    "nodes": 2830,
+    "rssMB": 2.7,
+    "estimateMB": 2.3040000000000003,
+    "awake": [
+     6,
+     1
+    ],
+    "errors": []
+   },
+   "10 files, 2 cards": {
+    "heapMB": 0.38,
+    "nodes": 4576,
+    "rssMB": 4.5,
+    "estimateMB": 4.545,
+    "awake": [
+     6,
+     1
+    ],
+    "errors": []
+   }
+  }
+ },
+ "epr": {
+  "b2": {
+   "awake": {
+    "heap": 4.7,
+    "nodes": 4292,
+    "listeners": 646,
+    "rss": 154.6
+   },
+   "released": {
+    "heap": 4.6,
+    "nodes": 4292,
+    "listeners": 646,
+    "rss": 154.7
+   },
+   "asleep": {
+    "heap": 4.3,
+    "nodes": 3648,
+    "listeners": 496,
+    "rss": 152.7
+   },
+   "estimateMB": 1.1,
+   "switchAwake": 45.85,
+   "showAfterResize": 44.9,
+   "wake": 122.9,
+   "record": 376,
+   "withState": 5,
+   "samples": {
+    "sw": [
+     35.6,
+     46.4,
+     42.7,
+     44.5,
+     62,
+     43.5,
+     46.1,
+     46,
+     45.7,
+     46.9,
+     39.6,
+     46.6,
+     45.4,
+     46
+    ],
+    "rd": [
+     49.3,
+     42.3,
+     46.5,
+     41,
+     44.9,
+     45.8,
+     43.4
+    ],
+    "wk": [
+     124.6,
+     122.9,
+     125.9,
+     110.1,
+     108.3
+    ]
+   },
+   "errors": []
+  },
+  "v517": {
+   "parked": {
+    "heap": 4.5,
+    "nodes": 3771,
+    "listeners": 526,
+    "rss": 153.6
+   },
+   "switchToLoaded": 128.9,
+   "switchToBlank": 111.3,
+   "record": 376,
+   "withState": 29.2,
+   "samples": {
+    "sw": [
+     127.3,
+     110.3,
+     129,
+     112.7,
+     131.3,
+     109.5,
+     128.9,
+     112.4,
+     129.5,
+     110.4,
+     111.8,
+     112.8,
+     127.6,
+     111.3
+    ]
+   },
+   "errors": []
+  },
+  "perTab": {
+   "blank": {
+    "heapMB": 0.02,
+    "nodes": 184,
+    "rssMB": -0.2,
+    "estimateMB": 0.125,
+    "awake": [
+     6,
+     1
+    ],
+    "errors": []
+   },
+   "3 files": {
+    "heapMB": 0.12,
+    "nodes": 405,
+    "rssMB": 0.5,
+    "estimateMB": 0.7659999999999999,
+    "awake": [
+     6,
+     1
+    ],
+    "errors": []
+   },
+   "10 files": {
+    "heapMB": 0.4,
+    "nodes": 643,
+    "rssMB": 1,
+    "estimateMB": 1.094,
+    "awake": [
+     6,
+     1
+    ],
+    "errors": []
+   },
+   "10 files, 2 cards": {
+    "heapMB": 0.56,
+    "nodes": 902,
+    "rssMB": 2,
+    "estimateMB": 2.063,
+    "awake": [
+     6,
+     1
+    ],
+    "errors": []
+   }
+  }
+ },
+ "keep": {
+  "kept": {
+   "heapMB": 4.3,
+   "rssMB": 156.1,
+   "runs": [
+    {
+     "heap": 4.3,
+     "rss": 153.4,
+     "sameArrays": true,
+     "errors": []
+    },
+    {
+     "heap": 4.3,
+     "rss": 157.1,
+     "sameArrays": true,
+     "errors": []
+    },
+    {
+     "heap": 4.3,
+     "rss": 156.1,
+     "sameArrays": true,
+     "errors": []
+    }
+   ]
+  },
+  "notKept": {
+   "heapMB": 4.5,
+   "rssMB": 156.2,
+   "runs": [
+    {
+     "heap": 4.5,
+     "rss": 154,
+     "sameArrays": false,
+     "errors": []
+    },
+    {
+     "heap": 4.5,
+     "rss": 156.2,
+     "sameArrays": false,
+     "errors": []
+    },
+    {
+     "heap": 4.5,
+     "rss": 157.1,
+     "sameArrays": false,
+     "errors": []
+    }
+   ]
+  },
+  "computedMB": 0.156
+ }
+}

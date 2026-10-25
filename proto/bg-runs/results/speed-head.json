@@ -1,0 +1,183 @@
+{
+ "mode": "head",
+ "sum": {
+  "shown": {
+   "n": 5,
+   "eachMed": 6892,
+   "wallMed": 6892,
+   "mainSMed": 1.531,
+   "mainRunSMed": 1.247,
+   "runSMed": 6.86,
+   "longMsMed": 112,
+   "longMaxMed": 57,
+   "putsNMed": 2,
+   "putsMsMed": 16.2,
+   "putMaxMed": 8.6,
+   "rssPeakMed": 636,
+   "allIdentical": true,
+   "results": [
+    12
+   ]
+  }
+ },
+ "raw": {
+  "shown": [
+   {
+    "each": [
+     6620
+    ],
+    "wall": 6620,
+    "mainS": 1.478,
+    "mainRunS": 1.157,
+    "runS": 6.59,
+    "long": {
+     "n": 1,
+     "ms": 53,
+     "max": 53
+    },
+    "puts": {
+     "n": 2,
+     "ms": 16.2,
+     "max": 8.6
+    },
+    "rss": {
+     "peak": 632,
+     "hwm": 637
+    },
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     7192
+    ],
+    "wall": 7192,
+    "mainS": 1.671,
+    "mainRunS": 1.409,
+    "runS": 7.17,
+    "long": {
+     "n": 2,
+     "ms": 115,
+     "max": 61
+    },
+    "puts": {
+     "n": 2,
+     "ms": 17.1,
+     "max": 8.8
+    },
+    "rss": {
+     "peak": 636,
+     "hwm": 638
+    },
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     6892
+    ],
+    "wall": 6892,
+    "mainS": 1.471,
+    "mainRunS": 1.212,
+    "runS": 6.86,
+    "long": {
+     "n": 1,
+     "ms": 52,
+     "max": 52
+    },
+    "puts": {
+     "n": 2,
+     "ms": 14.2,
+     "max": 7.1
+    },
+    "rss": {
+     "peak": 629,
+     "hwm": 638
+    },
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     7133
+    ],
+    "wall": 7133,
+    "mainS": 1.689,
+    "mainRunS": 1.399,
+    "runS": 7.08,
+    "long": {
+     "n": 2,
+     "ms": 125,
+     "max": 64
+    },
+    "puts": {
+     "n": 2,
+     "ms": 17.4,
+     "max": 10.4
+    },
+    "rss": {
+     "peak": 646,
+     "hwm": 648
+    },
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   },
+   {
+    "each": [
+     6777
+    ],
+    "wall": 6777,
+    "mainS": 1.531,
+    "mainRunS": 1.247,
+    "runS": 6.73,
+    "long": {
+     "n": 2,
+     "ms": 112,
+     "max": 57
+    },
+    "puts": {
+     "n": 2,
+     "ms": 15.2,
+     "max": 7.6
+    },
+    "rss": {
+     "peak": 644,
+     "hwm": 651
+    },
+    "results": [
+     12
+    ],
+    "identical": [
+     true
+    ]
+   }
+  ]
+ },
+ "ref": {
+  "n": 12,
+  "hash": "12jul3tbxrlu6",
+  "len": 153031
+ },
+ "load": [
+  0.68,
+  1.09,
+  1.15
+ ],
+ "errors": []
+}

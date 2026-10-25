@@ -1,0 +1,1208 @@
+TAP version 13
+# Subtest: two DRS tabs awake at once: each its own files, cards and undo; a switch to one awake only shows it, its plots not drawn again
+ok 1 - two DRS tabs awake at once: each its own files, cards and undo; a switch to one awake only shows it, its plots not drawn again
+  ---
+  duration_ms: 2821.165803
+  type: 'test'
+  ...
+# Subtest: a DRS tab asleep past Settings' minutes, its instance let go; woken with its cards and its whole history
+ok 2 - a DRS tab asleep past Settings' minutes, its instance let go; woken with its cards and its whole history
+  ---
+  duration_ms: 3869.144104
+  type: 'test'
+  ...
+# Subtest: GC: two tabs awake at once, each its own files, parameters, results and undo; one asleep past Settings' minutes, let go, woken with its whole history
+ok 3 - GC: two tabs awake at once, each its own files, parameters, results and undo; one asleep past Settings' minutes, let go, woken with its whole history
+  ---
+  duration_ms: 3809.622711
+  type: 'test'
+  ...
+# Subtest: EPR: two tabs awake at once, each its own files, parameters, results and undo; one asleep past Settings' minutes, let go, woken with its whole history
+ok 4 - EPR: two tabs awake at once, each its own files, parameters, results and undo; one asleep past Settings' minutes, let go, woken with its whole history
+  ---
+  duration_ms: 4345.394992
+  type: 'test'
+  ...
+# Subtest: two SEM tabs awake at once: each its own files, view and undo; a file in both one array, one worker for both
+ok 5 - two SEM tabs awake at once: each its own files, view and undo; a file in both one array, one worker for both
+  ---
+  duration_ms: 2543.157103
+  type: 'test'
+  ...
+# Subtest: a reading goes on in a tab left: nothing asked, its files in its own list as one step, its record and its "*"; awake till its end, its time hidden counted from then
+ok 6 - a reading goes on in a tab left: nothing asked, its files in its own list as one step, its record and its "*"; awake till its end, its time hidden counted from then
+  ---
+  duration_ms: 1620.718624
+  type: 'test'
+  ...
+# Subtest: hidden: the editor's image let go at once, what it drew at its trim, drawn again on show; asleep past Settings' minutes, woken with its whole history
+ok 7 - hidden: the editor's image let go at once, what it drew at its trim, drawn again on show; asleep past Settings' minutes, woken with its whole history
+  ---
+  duration_ms: 2320.769203
+  type: 'test'
+  ...
+# Subtest: two XRPD tabs awake at once: each its own files, view and undo; a switch to one awake only shows it
+ok 8 - two XRPD tabs awake at once: each its own files, view and undo; a switch to one awake only shows it
+  ---
+  duration_ms: 2747.025797
+  type: 'test'
+  ...
+# Subtest: a refinement goes on in a tab left, on the pool: the results of one refined on show, its history's step, its record, its "*"
+ok 9 - a refinement goes on in a tab left, on the pool: the results of one refined on show, its history's step, its record, its "*"
+  ---
+  duration_ms: 12268.478108
+  type: 'test'
+  ...
+# Subtest: asleep past Settings' minutes, a busy tab not until its job's end, the one hidden longest beyond the tabs awake allowed; woken with its whole history
+ok 10 - asleep past Settings' minutes, a busy tab not until its job's end, the one hidden longest beyond the tabs awake allowed; woken with its whole history
+  ---
+  duration_ms: 5580.002926
+  type: 'test'
+  ...
+# Subtest: the LRU: beyond two tabs awake hidden, the one not shown for longest sleeps, a woken one counting from its show
+ok 11 - the LRU: beyond two tabs awake hidden, the one not shown for longest sleeps, a woken one counting from its show
+  ---
+  duration_ms: 3201.288114
+  type: 'test'
+  ...
+# Subtest: a hidden tab saved as it is closed, reopened from Projects; a reload: the tab on show awake, the others woken as shown
+ok 12 - a hidden tab saved as it is closed, reopened from Projects; a reload: the tab on show awake, the others woken as shown
+  ---
+  duration_ms: 3635.586257
+  type: 'test'
+  ...
+# Subtest: park keeps the bytes and the text holders as they are, the rest as encode; decode gives them back
+ok 13 - park keeps the bytes and the text holders as they are, the rest as encode; decode gives them back
+  ---
+  duration_ms: 174.833719
+  type: 'test'
+  ...
+# Subtest: stored: hashes in the record, the ids of shared bytes, texts by their bytes, a text not canonical inline
+ok 14 - stored: hashes in the record, the ids of shared bytes, texts by their bytes, a text not canonical inline
+  ---
+  duration_ms: 8.435648
+  type: 'test'
+  ...
+# Subtest: stored without WebCrypto is encode's form; without WeakRef it still works
+ok 15 - stored without WebCrypto is encode's form; without WeakRef it still works
+  ---
+  duration_ms: 2.443262
+  type: 'test'
+  ...
+# Subtest: a reference that reaches decode unread is null and said; a project file's references are no bytes
+ok 16 - a reference that reaches decode unread is null and said; a project file's references are no bytes
+  ---
+  duration_ms: 0.67781
+  type: 'test'
+  ...
+# Subtest: saved: records small, holding hashes, each file's bytes once; back byte for byte after a reload, a switch, an open, an import; the list's export the bar's
+ok 17 - saved: records small, holding hashes, each file's bytes once; back byte for byte after a reload, a switch, an open, an import; the list's export the bar's
+  ---
+  duration_ms: 10200.496044
+  type: 'test'
+  ...
+# Subtest: a database of v516 (version 3): upgraded with its records untouched, read as they are, written anew at their next write
+ok 18 - a database of v516 (version 3): upgraded with its records untouched, read as they are, written anew at their next write
+  ---
+  duration_ms: 4572.257742
+  type: 'test'
+  ...
+# Subtest: the sweep: the bytes no record holds go, those a record or another page's tab holds stay or come back
+ok 19 - the sweep: the bytes no record holds go, those a record or another page's tab holds stay or come back
+  ---
+  duration_ms: 6123.820359
+  type: 'test'
+  ...
+# Subtest: one transaction: a bytes put that fails writes no record
+ok 20 - one transaction: a bytes put that fails writes no record
+  ---
+  duration_ms: 207.319703
+  type: 'test'
+  ...
+# Subtest: bytes missing or unreadable: the other files and tabs back, said so; XRPD and SEM without them; the list's export says it
+ok 21 - bytes missing or unreadable: the other files and tabs back, said so; XRPD and SEM without them; the list's export says it
+  ---
+  duration_ms: 3453.171449
+  type: 'test'
+  ...
+# Subtest: an EPR pair whose .DTA bytes are not stored: its download says so, not a zip with an empty file
+ok 22 - an EPR pair whose .DTA bytes are not stored: its download says so, not a zip with an empty file
+  ---
+  duration_ms: 1542.00491
+  type: 'test'
+  ...
+# Subtest: no WebCrypto (a page over plain http): records hold the bytes as before, nothing in the bytes store, all back after a reload
+ok 23 - no WebCrypto (a page over plain http): records hold the bytes as before, nothing in the bytes store, all back after a reload
+  ---
+  duration_ms: 3199.457383
+  type: 'test'
+  ...
+# Subtest: a newer version opened in another window: this one writes out its last edit, lets go at once, and says to reload
+ok 24 - a newer version opened in another window: this one writes out its last edit, lets go at once, and says to reload
+  ---
+  duration_ms: 891.674896
+  type: 'test'
+  ...
+# Subtest: the upgrade held back by an older window: said; a tab opened meanwhile keeps its work when the restored tabs come
+ok 25 - the upgrade held back by an older window: said; a tab opened meanwhile keeps its work when the restored tabs come
+  ---
+  duration_ms: 4635.701158
+  type: 'test'
+  ...
+# Subtest: no hashing again: a GC, a switch there and back, a reload; the record written at once
+ok 26 - no hashing again: a GC, a switch there and back, a reload; the record written at once
+  ---
+  duration_ms: 1782.271496
+  type: 'test'
+  ...
+# Subtest: a rename from the list writes the title alone, and brings back no project another page deleted; a connection lost is opened again
+ok 27 - a rename from the list writes the title alone, and brings back no project another page deleted; a connection lost is opened again
+  ---
+  duration_ms: 2782.661296
+  type: 'test'
+  ...
+# Subtest: a save waiting on the database: a second press makes no second project and asks nothing twice; Save as pressed twice makes one copy
+ok 28 - a save waiting on the database: a second press makes no second project and asks nothing twice; Save as pressed twice makes one copy
+  ---
+  duration_ms: 4587.040326
+  type: 'test'
+  ...
+# Subtest: what changes while a save waits stays unsaved: another tab shown then, an edit, a name typed; a close that saves keeps a tab changed meanwhile
+ok 29 - what changes while a save waits stays unsaved: another tab shown then, an edit, a name typed; a close that saves keeps a tab changed meanwhile
+  ---
+  duration_ms: 6031.652839
+  type: 'test'
+  ...
+# Subtest: (1) a fold an undo or a redo makes slides as the arrow's (XRPD, DRS, GC, EPR)
+ok 30 - (1) a fold an undo or a redo makes slides as the arrow's (XRPD, DRS, GC, EPR)
+  ---
+  duration_ms: 16758.828393
+  type: 'test'
+  ...
+# Subtest: (2) a card an undo or a redo brings back grows, one it takes away shrinks (XRPD, DRS, GC, EPR)
+ok 31 - (2) a card an undo or a redo brings back grows, one it takes away shrinks (XRPD, DRS, GC, EPR)
+  ---
+  duration_ms: 25236.010176
+  type: 'test'
+  ...
+# Subtest: (4) several cards in a step together; steps taken during an animation; a move undone, a kind switched back
+ok 32 - (4) several cards in a step together; steps taken during an animation; a move undone, a kind switched back
+  ---
+  duration_ms: 25803.62717
+  type: 'test'
+  ...
+# Subtest: (4) a card still growing folded or unfolded by the next step or by its arrow: it goes on from where it had got to (XRPD, DRS, GC, EPR)
+ok 33 - (4) a card still growing folded or unfolded by the next step or by its arrow: it goes on from where it had got to (XRPD, DRS, GC, EPR)
+  ---
+  duration_ms: 41483.675048
+  type: 'test'
+  ...
+# Subtest: (3) nothing animated by a tab switch, a project opened, a CSV export's state, the start; nor with the motion reduced
+ok 34 - (3) nothing animated by a tab switch, a project opened, a CSV export's state, the start; nor with the motion reduced
+  ---
+  duration_ms: 14713.00869
+  type: 'test'
+  ...
+# Subtest: A: a samples' card: each phase's CIF downloaded, as read, under its file's name
+ok 35 - A: a samples' card: each phase's CIF downloaded, as read, under its file's name
+  ---
+  duration_ms: 1403.825829
+  type: 'test'
+  ...
+# Subtest: B: the standard's window: the built-in LaB6's CIF, and a CIF added there
+ok 36 - B: the standard's window: the built-in LaB6's CIF, and a CIF added there
+  ---
+  duration_ms: 1158.674336
+  type: 'test'
+  ...
+# Subtest: C: while a run goes on, the CIF is downloaded all the same, with no step of the history
+ok 37 - C: while a run goes on, the CIF is downloaded all the same, with no step of the history
+  ---
+  duration_ms: 1810.597781
+  type: 'test'
+  ...
+# Subtest: D: a list under 155 px leaves out the space group: the × stays in the row, the formula has room
+ok 38 - D: a list under 155 px leaves out the space group: the × stays in the row, the formula has room
+  ---
+  duration_ms: 1718.758364
+  type: 'test'
+  ...
+# Subtest: plots composer: opens, exports SVG and PNG, refuses a second, closes on Escape
+ok 39 - plots composer: opens, exports SVG and PNG, refuses a second, closes on Escape
+  ---
+  duration_ms: 1235.817819
+  type: 'test'
+  ...
+# Subtest: SEM composer: opens on a group, exports SVG and PNG, refuses a second, closes on Escape
+ok 40 - SEM composer: opens on a group, exports SVG and PNG, refuses a second, closes on Escape
+  ---
+  duration_ms: 1791.142763
+  type: 'test'
+  ...
+# Subtest: tauc: the CSV zip parses, under ';' and ','
+ok 41 - tauc: the CSV zip parses, under ';' and ','
+  ---
+  duration_ms: 1272.015632
+  type: 'test'
+  ...
+# Subtest: xrd: the CSV zip parses, under ';' and ','
+ok 42 - xrd: the CSV zip parses, under ';' and ','
+  ---
+  duration_ms: 1322.011445
+  type: 'test'
+  ...
+# Subtest: gc: the CSV zip parses, under ';' and ','
+ok 43 - gc: the CSV zip parses, under ';' and ','
+  ---
+  duration_ms: 942.363396
+  type: 'test'
+  ...
+# Subtest: epr: the CSV zip parses, under ';' and ','
+ok 44 - epr: the CSV zip parses, under ';' and ','
+  ---
+  duration_ms: 941.015415
+  type: 'test'
+  ...
+# Subtest: sem: the CSV zip parses, under ';' and ','
+ok 45 - sem: the CSV zip parses, under ';' and ','
+  ---
+  duration_ms: 1044.243414
+  type: 'test'
+  ...
+# Subtest: the Projects list exports the same CSVs as the project bar
+ok 46 - the Projects list exports the same CSVs as the project bar
+  ---
+  duration_ms: 1101.628341
+  type: 'test'
+  ...
+# Subtest: bytes held in several places are written once and come back as one array
+ok 47 - bytes held in several places are written once and come back as one array
+  ---
+  duration_ms: 15.046943
+  type: 'test'
+  ...
+# Subtest: a reference met before its bytes still finds them
+ok 48 - a reference met before its bytes still finds them
+  ---
+  duration_ms: 0.41267
+  type: 'test'
+  ...
+# Subtest: dates, other typed arrays and plain values
+ok 49 - dates, other typed arrays and plain values
+  ---
+  duration_ms: 0.22371
+  type: 'test'
+  ...
+# Subtest: the older forms decode: v471–v484 bytes, arrays of numbers, a dangling reference
+ok 50 - the older forms decode: v471–v484 bytes, arrays of numbers, a dangling reference
+  ---
+  duration_ms: 0.407064
+  type: 'test'
+  ...
+# Subtest: the standard format: its first two columns, read with no word
+ok 51 - the standard format: its first two columns, read with no word
+  ---
+  duration_ms: 1426.651972
+  type: 'test'
+  ...
+# Subtest: any other format: said, and read from the columns its header names
+ok 52 - any other format: said, and read from the columns its header names
+  ---
+  duration_ms: 2700.356943
+  type: 'test'
+  ...
+# Subtest: no columns found, or not one way only: refused, and why said, escaped
+ok 53 - no columns found, or not one way only: refused, and why said, escaped
+  ---
+  duration_ms: 867.819788
+  type: 'test'
+  ...
+# Subtest: a project saved before, holding a file read with no header: opened as it was
+ok 54 - a project saved before, holding a file read with no header: opened as it was
+  ---
+  duration_ms: 967.261736
+  type: 'test'
+  ...
+# Subtest: readTable: the header function given the separator, the header as wide as it says
+ok 55 - readTable: the header function given the separator, the header as wide as it says
+  ---
+  duration_ms: 1.509172
+  type: 'test'
+  ...
+# Subtest: tauc: payload in file names, in an imported project's strings and numbers
+ok 56 - tauc: payload in file names, in an imported project's strings and numbers
+  ---
+  duration_ms: 4907.471138
+  type: 'test'
+  ...
+# Subtest: xrd: payload in file names, in an imported project's strings and numbers
+ok 57 - xrd: payload in file names, in an imported project's strings and numbers
+  ---
+  duration_ms: 5294.375683
+  type: 'test'
+  ...
+# Subtest: gc: payload in file names, in an imported project's strings and numbers
+ok 58 - gc: payload in file names, in an imported project's strings and numbers
+  ---
+  duration_ms: 2452.815654
+  type: 'test'
+  ...
+# Subtest: epr: payload in file names, in an imported project's strings and numbers
+ok 59 - epr: payload in file names, in an imported project's strings and numbers
+  ---
+  duration_ms: 2513.219801
+  type: 'test'
+  ...
+# Subtest: sem: payload in file names, in an imported project's strings and numbers
+ok 60 - sem: payload in file names, in an imported project's strings and numbers
+  ---
+  duration_ms: 2553.166066
+  type: 'test'
+  ...
+# Subtest: the file list at 1400 px: FILE, LABEL and the note at 3 : 3 : 2 in every module, the note right of the label
+ok 61 - the file list at 1400 px: FILE, LABEL and the note at 3 : 3 : 2 in every module, the note right of the label
+  ---
+  duration_ms: 3880.195029
+  type: 'test'
+  ...
+# Subtest: the file list at 800 px: FILE, LABEL and the note at 3 : 3 : 2 in every module, the note right of the label
+ok 62 - the file list at 800 px: FILE, LABEL and the note at 3 : 3 : 2 in every module, the note right of the label
+  ---
+  duration_ms: 3449.007026
+  type: 'test'
+  ...
+# Subtest: the file list at 375 px: FILE, LABEL and the note at 3 : 3 : 2 in every module, the note right of the label
+ok 63 - the file list at 375 px: FILE, LABEL and the note at 3 : 3 : 2 in every module, the note right of the label
+  ---
+  duration_ms: 3445.571976
+  type: 'test'
+  ...
+# Subtest: DRS at 320 px: the note says %R or F(R), whole, its title in full; the label field typed in widens over the note, hidden meanwhile
+ok 64 - DRS at 320 px: the note says %R or F(R), whole, its title in full; the label field typed in widens over the note, hidden meanwhile
+  ---
+  duration_ms: 1034.767838
+  type: 'test'
+  ...
+# Subtest: DRS at 375 px: the note says %R or F(R), whole, its title in full; the label field typed in widens over the note, hidden meanwhile
+ok 65 - DRS at 375 px: the note says %R or F(R), whole, its title in full; the label field typed in widens over the note, hidden meanwhile
+  ---
+  duration_ms: 1110.255162
+  type: 'test'
+  ...
+# Subtest: dates that do not exist left out and said, a day/month file found and said, month/day files as before
+ok 66 - dates that do not exist left out and said, a day/month file found and said, month/day files as before
+  ---
+  duration_ms: 987.121717
+  type: 'test'
+  ...
+# Subtest: the dates alert: dismissed for the files on show, through undo and redo; said for a file dropped since
+ok 67 - the dates alert: dismissed for the files on show, through undo and redo; said for a file dropped since
+  ---
+  duration_ms: 1226.627328
+  type: 'test'
+  ...
+# Subtest: a project reopened says it again; one edited by hand puts only true and a whole count in it
+ok 68 - a project reopened says it again; one edited by hand puts only true and a whole count in it
+  ---
+  duration_ms: 1022.047977
+  type: 'test'
+  ...
+# Subtest: p: 1 atm by default, V_m = RT/p, its unit converting what is shown and written, not the pressure
+ok 69 - p: 1 atm by default, V_m = RT/p, its unit converting what is shown and written, not the pressure
+  ---
+  duration_ms: 2396.326027
+  type: 'test'
+  ...
+# Subtest: p: all/one, files added and left out, undo and redo, a project saved before it
+ok 70 - p: all/one, files added and left out, undo and redo, a project saved before it
+  ---
+  duration_ms: 3549.696022
+  type: 'test'
+  ...
+# Subtest: p: the table at 1300 px and at 1000 px, the least width it is laid out for
+ok 71 - p: the table at 1300 px and at 1000 px, the least width it is laid out for
+  ---
+  duration_ms: 691.826117
+  type: 'test'
+  ...
+# Subtest: the Sample column: each file its own, a select of its own name and the heads'; no chains; a group taken along; a head removed; a label renamed; undo and redo
+ok 72 - the Sample column: each file its own, a select of its own name and the heads'; no chains; a group taken along; a head removed; a label renamed; undo and redo
+  ---
+  duration_ms: 3339.513612
+  type: 'test'
+  ...
+# Subtest: the bars, one per sample: the mean of its files' rates ± their standard deviation by hand; mean_rates.csv per sample, mean_rates_by_file.csv; the composer
+ok 73 - the bars, one per sample: the mean of its files' rates ± their standard deviation by hand; mean_rates.csv per sample, mean_rates_by_file.csv; the composer
+  ---
+  duration_ms: 2793.618949
+  type: 'test'
+  ...
+# Subtest: projects: the links saved and opened; an old project each file its own; one edited by hand
+ok 74 - projects: the links saved and opened; an old project each file its own; one edited by hand
+  ---
+  duration_ms: 3091.31619
+  type: 'test'
+  ...
+# Subtest: a phone (375 px): the select in its cell, as tall as the label field; nothing scrolls sideways
+ok 75 - a phone (375 px): the select in its cell, as tall as the label field; nothing scrolls sideways
+  ---
+  duration_ms: 658.575481
+  type: 'test'
+  ...
+# Subtest: 28: a card unfolded keeps its zoom on the same data only, drawn at its size (EPR, GC)
+ok 76 - 28: a card unfolded keeps its zoom on the same data only, drawn at its size (EPR, GC)
+  ---
+  duration_ms: 6283.059875
+  type: 'test'
+  ...
+# Subtest: 29: DRS follows the sample on show through a removal and a move; a label is the caption at once
+ok 77 - 29: DRS follows the sample on show through a removal and a move; a label is the caption at once
+  ---
+  duration_ms: 1943.00409
+  type: 'test'
+  ...
+# Subtest: 30c: GC refuses an interval bound back to "all" that would end an interval before it starts
+ok 78 - 30c: GC refuses an interval bound back to "all" that would end an interval before it starts
+  ---
+  duration_ms: 2262.797584
+  type: 'test'
+  ...
+# Subtest: 30e: EPR refuses a .DSC of fewer than two points, saying why; flat spectra are drawn
+ok 79 - 30e: EPR refuses a .DSC of fewer than two points, saying why; flat spectra are drawn
+  ---
+  duration_ms: 1323.844902
+  type: 'test'
+  ...
+# Subtest: 37: GC takes the flow at its temperature, 25 °C by default, 0 °C in a project saved before
+ok 80 - 37: GC takes the flow at its temperature, 25 °C by default, 0 °C in a project saved before
+  ---
+  duration_ms: 1367.753091
+  type: 'test'
+  ...
+# Subtest: 38, 39: DRS reads R% by its header; only the Cary layout is standard, any other file said with how it was read, or refused; non-physical points left out
+ok 81 - 38, 39: DRS reads R% by its header; only the Cary layout is standard, any other file said with how it was read, or refused; non-physical points left out
+  ---
+  duration_ms: 2264.507741
+  type: 'test'
+  ...
+# Subtest: DRS: a Cary %R export loads with no alert, the file list says how each file was read, R (%) is plotted
+ok 82 - DRS: a Cary %R export loads with no alert, the file list says how each file was read, R (%) is plotted
+  ---
+  duration_ms: 1698.678355
+  type: 'test'
+  ...
+# Subtest: 22: tauc restores a malformed project without a throw or a page error
+ok 83 - 22: tauc restores a malformed project without a throw or a page error
+  ---
+  duration_ms: 14177.876754
+  type: 'test'
+  ...
+# Subtest: 22: gc restores a malformed project without a throw or a page error
+ok 84 - 22: gc restores a malformed project without a throw or a page error
+  ---
+  duration_ms: 6753.826851
+  type: 'test'
+  ...
+# Subtest: 22: epr restores a malformed project without a throw or a page error
+ok 85 - 22: epr restores a malformed project without a throw or a page error
+  ---
+  duration_ms: 3926.884217
+  type: 'test'
+  ...
+# Subtest: 22: a file left out by the restore takes its per-sample settings with it (GC)
+ok 86 - 22: a file left out by the restore takes its per-sample settings with it (GC)
+  ---
+  duration_ms: 923.934957
+  type: 'test'
+  ...
+# Subtest: 320 px: Home, Projects and Settings fit; the brand its mark, the tiles one under the other
+ok 87 - 320 px: Home, Projects and Settings fit; the brand its mark, the tiles one under the other
+  ---
+  duration_ms: 1729.073955
+  type: 'test'
+  ...
+# Subtest: 320 px: tauc with its fixtures, every card unfolded, nothing past the window
+ok 88 - 320 px: tauc with its fixtures, every card unfolded, nothing past the window
+  ---
+  duration_ms: 916.336356
+  type: 'test'
+  ...
+# Subtest: 320 px: xrd with its fixtures, every card unfolded, nothing past the window
+ok 89 - 320 px: xrd with its fixtures, every card unfolded, nothing past the window
+  ---
+  duration_ms: 1136.758427
+  type: 'test'
+  ...
+# Subtest: 320 px: gc with its fixtures, every card unfolded, nothing past the window
+ok 90 - 320 px: gc with its fixtures, every card unfolded, nothing past the window
+  ---
+  duration_ms: 802.43252
+  type: 'test'
+  ...
+# Subtest: 320 px: epr with its fixtures, every card unfolded, nothing past the window
+ok 91 - 320 px: epr with its fixtures, every card unfolded, nothing past the window
+  ---
+  duration_ms: 761.147935
+  type: 'test'
+  ...
+# Subtest: 320 px: sem with its fixtures, every card unfolded, nothing past the window
+ok 92 - 320 px: sem with its fixtures, every card unfolded, nothing past the window
+  ---
+  duration_ms: 831.717886
+  type: 'test'
+  ...
+# Subtest: 320 px, three tabs open: the strip about a tab wide, scrolling inside itself; each tab and the + reached
+ok 93 - 320 px, three tabs open: the strip about a tab wide, scrolling inside itself; each tab and the + reached
+  ---
+  duration_ms: 1760.994014
+  type: 'test'
+  ...
+# Subtest: 340 px: the top bar with the brand's mark alone, nothing past the window
+ok 94 - 340 px: the top bar with the brand's mark alone, nothing past the window
+  ---
+  duration_ms: 1206.66157
+  type: 'test'
+  ...
+# Subtest: 360 px: the top bar with the brand's mark alone, nothing past the window
+ok 95 - 360 px: the top bar with the brand's mark alone, nothing past the window
+  ---
+  duration_ms: 1165.415123
+  type: 'test'
+  ...
+# Subtest: 390 px: the top bar with the brand's mark alone, nothing past the window
+ok 96 - 390 px: the top bar with the brand's mark alone, nothing past the window
+  ---
+  duration_ms: 1216.796725
+  type: 'test'
+  ...
+# Subtest: 479 px: the top bar with the brand's mark alone, nothing past the window
+ok 97 - 479 px: the top bar with the brand's mark alone, nothing past the window
+  ---
+  duration_ms: 872.116021
+  type: 'test'
+  ...
+# Subtest: 480 px: the top bar and the home as before, nothing past the window
+ok 98 - 480 px: the top bar and the home as before, nothing past the window
+  ---
+  duration_ms: 1245.174
+  type: 'test'
+  ...
+# Subtest: 768 px: the top bar and the home as before, nothing past the window
+ok 99 - 768 px: the top bar and the home as before, nothing past the window
+  ---
+  duration_ms: 798.367157
+  type: 'test'
+  ...
+# Subtest: 1400 px: the top bar and the home as before, nothing past the window
+ok 100 - 1400 px: the top bar and the home as before, nothing past the window
+  ---
+  duration_ms: 1156.363631
+  type: 'test'
+  ...
+# Subtest: tauc: plots match their golden hashes
+ok 101 - tauc: plots match their golden hashes
+  ---
+  duration_ms: 1748.622966
+  type: 'test'
+  ...
+# Subtest: xrd: plots match their golden hashes
+ok 102 - xrd: plots match their golden hashes
+  ---
+  duration_ms: 1824.544818
+  type: 'test'
+  ...
+# Subtest: gc: plots match their golden hashes
+ok 103 - gc: plots match their golden hashes
+  ---
+  duration_ms: 1347.66738
+  type: 'test'
+  ...
+# Subtest: epr: plots match their golden hashes
+ok 104 - epr: plots match their golden hashes
+  ---
+  duration_ms: 1335.218004
+  type: 'test'
+  ...
+# Subtest: Rietveld: one pattern refined, then Refine all cancelled
+ok 105 - Rietveld: one pattern refined, then Refine all cancelled
+  ---
+  duration_ms: 5301.545018
+  type: 'test'
+  ...
+# Subtest: XRPD: saved, reloaded, exported, imported, old formats: the originals byte for byte
+ok 106 - XRPD: saved, reloaded, exported, imported, old formats: the originals byte for byte
+  ---
+  duration_ms: 7617.499252
+  type: 'test'
+  ...
+# Subtest: SEM: a saved project gives its TIFFs back byte for byte after a reload
+ok 107 - SEM: a saved project gives its TIFFs back byte for byte after a reload
+  ---
+  duration_ms: 1320.798993
+  type: 'test'
+  ...
+# Subtest: import: not a project refused; changed after signing, or newer, asked
+ok 108 - import: not a project refused; changed after signing, or newer, asked
+  ---
+  duration_ms: 2557.811675
+  type: 'test'
+  ...
+# Subtest: A: the Structure box is empty where there is no phase, and the right phase otherwise
+ok 109 - A: the Structure box is empty where there is no phase, and the right phase otherwise
+  ---
+  duration_ms: 4546.782418
+  type: 'test'
+  ...
+# Subtest: B: the drop zone with no phase, + CIF from the first, CIFs dropped on the box
+ok 110 - B: the drop zone with no phase, + CIF from the first, CIFs dropped on the box
+  ---
+  duration_ms: 3481.505242
+  type: 'test'
+  ...
+# Subtest: C: while a run goes on, the zones are disabled and a drop is refused
+ok 111 - C: while a run goes on, the zones are disabled and a drop is refused
+  ---
+  duration_ms: 3559.263225
+  type: 'test'
+  ...
+# Subtest: A: a sample refining: its rows' × and tick locked at once, the download not; stopped, at once as before
+ok 112 - A: a sample refining: its rows' × and tick locked at once, the download not; stopped, at once as before
+  ---
+  duration_ms: 5589.236127
+  type: 'test'
+  ...
+# Subtest: B: a run that fails, and one that ends: the rows as before at once
+ok 113 - B: a run that fails, and one that ends: the rows as before at once
+  ---
+  duration_ms: 4319.685885
+  type: 'test'
+  ...
+# Subtest: C: the standard's window locks its rows while the standard refines, not while a sample does
+ok 114 - C: the standard's window locks its rows while the standard refines, not while a sample does
+  ---
+  duration_ms: 3937.927609
+  type: 'test'
+  ...
+# Subtest: a phase from its CIF: SrTiO3, the built-in LaB6; one read kept for the same text and name, the last 32
+ok 115 - a phase from its CIF: SrTiO3, the built-in LaB6; one read kept for the same text and name, the last 32
+  ---
+  duration_ms: 190.295603
+  type: 'test'
+  ...
+# Subtest: the settings made valid, a v428 project's migrated, the engine's options from them
+ok 116 - the settings made valid, a v428 project's migrated, the engine's options from them
+  ---
+  duration_ms: 8.776371
+  type: 'test'
+  ...
+# Subtest: the Refinement settings: their ranges, an entry read with either mark, the settings cleaned in FITS' order
+ok 117 - the Refinement settings: their ranges, an entry read with either mark, the settings cleaned in FITS' order
+  ---
+  duration_ms: 18.229223
+  type: 'test'
+  ...
+# Subtest: the worker's payload: from the CIF, from the last result, each reason a result cannot be started from
+ok 118 - the worker's payload: from the CIF, from the last result, each reason a result cannot be started from
+  ---
+  duration_ms: 101.555566
+  type: 'test'
+  ...
+# Subtest: the instrument read once from the file's own bytes; a result written; the profile taken from it
+ok 119 - the instrument read once from the file's own bytes; a result written; the profile taken from it
+  ---
+  duration_ms: 24.021456
+  type: 'test'
+  ...
+# Subtest: the state saved and read back: a v428 sample's, the standard's with a CIF phase, a malformed one
+ok 120 - the state saved and read back: a v428 sample's, the standard's with a CIF phase, a malformed one
+  ---
+  duration_ms: 5.631391
+  type: 'test'
+  ...
+# Subtest: the sizes charted, by sample (each phase its kinds) and by peak (a column a reflection)
+ok 121 - the sizes charted, by sample (each phase its kinds) and by peak (a column a reflection)
+  ---
+  duration_ms: 1.641612
+  type: 'test'
+  ...
+# Subtest: the CSVs: the curves, a row per pattern and quantity (the stale profile, the settings used), the peak widths
+ok 122 - the CSVs: the curves, a row per pattern and quantity (the stale profile, the settings used), the peak widths
+  ---
+  duration_ms: 1.455495
+  type: 'test'
+  ...
+# Subtest: the words: indices barred, formulae, what a phase is refined with, the instrument, the solids; names from a CIF escaped
+ok 123 - the words: indices barred, formulae, what a phase is refined with, the instrument, the solids; names from a CIF escaped
+  ---
+  duration_ms: 12.028104
+  type: 'test'
+  ...
+# Subtest: three lanes: the results those of one, bit for bit, in the patterns' order, one step
+ok 124 - three lanes: the results those of one, bit for bit, in the patterns' order, one step
+  ---
+  duration_ms: 7412.962788
+  type: 'test'
+  ...
+# Subtest: answers out of order wait for those before them; Cancel writes those done, not the ones under way
+ok 125 - answers out of order wait for those before them; Cancel writes those done, not the ones under way
+  ---
+  duration_ms: 6804.867913
+  type: 'test'
+  ...
+# Subtest: an error in one lane: the patterns not started stop, those under way are written, the failed one not
+ok 126 - an error in one lane: the patterns not started stop, those under way are written, the failed one not
+  ---
+  duration_ms: 2682.67311
+  type: 'test'
+  ...
+# Subtest: two windows on a cap of two: two jobs at once in all, the slot freed to the job waiting longest; each its own results
+ok 127 - two windows on a cap of two: two jobs at once in all, the slot freed to the job waiting longest; each its own results
+  ---
+  duration_ms: 6707.253757
+  type: 'test'
+  ...
+# Subtest: a Rietveld card closed: nothing of it stays
+ok 128 - a Rietveld card closed: nothing of it stays
+  ---
+  duration_ms: 1174.20846
+  type: 'test'
+  ...
+# Subtest: a Rietveld card switched to Scherrer: nothing of it stays
+ok 129 - a Rietveld card switched to Scherrer: nothing of it stays
+  ---
+  duration_ms: 1005.924665
+  type: 'test'
+  ...
+# Subtest: A: the question about the standard is a centred modal: its three answers, Escape, ×, focus
+ok 130 - A: the question about the standard is a centred modal: its three answers, Escape, ×, focus
+  ---
+  duration_ms: 7845.103251
+  type: 'test'
+  ...
+# Subtest: B: the standard's Settings show only what applies to it; the samples' every row
+ok 131 - B: the standard's Settings show only what applies to it; the samples' every row
+  ---
+  duration_ms: 2367.796332
+  type: 'test'
+  ...
+# Subtest: C: the standard refining, its window closed: every card's Instrumental standard… says so until it ends
+ok 132 - C: the standard refining, its window closed: every card's Instrumental standard… says so until it ends
+  ---
+  duration_ms: 4139.786024
+  type: 'test'
+  ...
+# Subtest: groups: by scale, an excluded image left out of its group and of its name
+ok 133 - groups: by scale, an excluded image left out of its group and of its name
+  ---
+  duration_ms: 1381.456947
+  type: 'test'
+  ...
+# Subtest: a renamed label shows everywhere, and its undo too
+ok 134 - a renamed label shows everywhere, and its undo too
+  ---
+  duration_ms: 816.916677
+  type: 'test'
+  ...
+# Subtest: crop: a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step
+ok 135 - crop: a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step
+  ---
+  duration_ms: 3748.37042
+  type: 'test'
+  ...
+# Subtest: tauc: opens and loads its fixtures, no page error, no CSP violation
+ok 136 - tauc: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 990.503719
+  type: 'test'
+  ...
+# Subtest: xrd: opens and loads its fixtures, no page error, no CSP violation
+ok 137 - xrd: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 999.740516
+  type: 'test'
+  ...
+# Subtest: gc: opens and loads its fixtures, no page error, no CSP violation
+ok 138 - gc: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 675.324174
+  type: 'test'
+  ...
+# Subtest: epr: opens and loads its fixtures, no page error, no CSP violation
+ok 139 - epr: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 636.332541
+  type: 'test'
+  ...
+# Subtest: sem: opens and loads its fixtures, no page error, no CSP violation
+ok 140 - sem: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 668.428616
+  type: 'test'
+  ...
+# Subtest: every module in its own tab at once; Home and back
+ok 141 - every module in its own tab at once; Home and back
+  ---
+  duration_ms: 3521.548951
+  type: 'test'
+  ...
+# Subtest: under the CSP: theme before paint, the Rietveld worker, an alert dismissed
+ok 142 - under the CSP: theme before paint, the Rietveld worker, an alert dismissed
+  ---
+  duration_ms: 329.823991
+  type: 'test'
+  ...
+# Subtest: an even N: the moving average of N + 1 points, half-weight ends, at w = N steps (to rounding); the ends cut short
+ok 143 - an even N: the moving average of N + 1 points, half-weight ends, at w = N steps (to rounding); the ends cut short
+  ---
+  duration_ms: 14.069946
+  type: 'test'
+  ...
+# Subtest: an odd N: the box edges mid-cell, weights (1/8, 7/8, 1, …, 1, 7/8, 1/8)/N
+ok 144 - an odd N: the box edges mid-cell, weights (1/8, 7/8, 1, …, 1, 7/8, 1/8)/N
+  ---
+  duration_ms: 4.976256
+  type: 'test'
+  ...
+# Subtest: any spacing: the mean of the line over [x − w/2, x + w/2] cut to the data, on uneven x
+ok 145 - any spacing: the mean of the line over [x − w/2, x + w/2] cut to the data, on uneven x
+  ---
+  duration_ms: 57.182923
+  type: 'test'
+  ...
+# Subtest: x running down: the same smoothing, point for point; two points at one x weigh nothing
+ok 146 - x running down: the same smoothing, point for point; two points at one x weigh nothing
+  ---
+  duration_ms: 0.470199
+  type: 'test'
+  ...
+# Subtest: w = 0 (or below, or no number): the data as they are, in an array of their own
+ok 147 - w = 0 (or below, or no number): the data as they are, in an array of their own
+  ---
+  duration_ms: 1.219423
+  type: 'test'
+  ...
+# Subtest: the weights (fwhmSigma's): summing to 1, giving boxSmooth's value, and the moving average's for an even N
+ok 148 - the weights (fwhmSigma's): summing to 1, giving boxSmooth's value, and the moving average's for an even N
+  ---
+  duration_ms: 4.335932
+  type: 'test'
+  ...
+# Subtest: the slope: a moving average of gradientArr over an odd N, the secant at w = N steps; narrower, the central difference
+ok 149 - the slope: a moving average of gradientArr over an odd N, the secant at w = N steps; narrower, the central difference
+  ---
+  duration_ms: 6.928347
+  type: 'test'
+  ...
+# Subtest: the step and the field's texts
+ok 150 - the step and the field's texts
+  ---
+  duration_ms: 0.312895
+  type: 'test'
+  ...
+# Subtest: a value that is no number: left out of the line, the others smoothed as without it, itself as it is
+ok 151 - a value that is no number: left out of the line, the others smoothed as without it, itself as it is
+  ---
+  duration_ms: 0.945177
+  type: 'test'
+  ...
+# Subtest: the SNIP by a half-width: on an uneven grid the line at x ± k·step, as defined, the 2θ read once, at the even grid's cost
+ok 152 - the SNIP by a half-width: on an uneven grid the line at x ± k·step, as defined, the 2θ read once, at the even grid's cost
+  ---
+  duration_ms: 693.850268
+  type: 'test'
+  ...
+# Subtest: closing an inactive tab with unsaved changes, answering Save, saves that tab
+ok 153 - closing an inactive tab with unsaved changes, answering Save, saves that tab
+  ---
+  duration_ms: 1976.818314
+  type: 'test'
+  ...
+# Subtest: the unsaved marker: an edit after a switch marks it, its undo clears it, a reload keeps it clear
+ok 154 - the unsaved marker: an edit after a switch marks it, its undo clears it, a reload keeps it clear
+  ---
+  duration_ms: 2297.699968
+  type: 'test'
+  ...
+# Subtest: a running job: undo does nothing, its tab left goes on and stays awake (b2), closing it asks, Stop it and close stops it
+ok 155 - a running job: undo does nothing, its tab left goes on and stays awake (b2), closing it asks, Stop it and close stops it
+  ---
+  duration_ms: 3167.314757
+  type: 'test'
+  ...
+# Subtest: encodings: UTF-8 with or without its mark, UTF-16 LE and BE by the mark or by the NULs
+ok 156 - encodings: UTF-8 with or without its mark, UTF-16 LE and BE by the mark or by the NULs
+  ---
+  duration_ms: 1.732852
+  type: 'test'
+  ...
+# Subtest: lines and fields: line ends, blank lines, quotes, runs of spaces, a trailing separator
+ok 157 - lines and fields: line ends, blank lines, quotes, runs of spaces, a trailing separator
+  ---
+  duration_ms: 1.291966
+  type: 'test'
+  ...
+# Subtest: numbers: either decimal mark, "." only ever one, what follows a number not read
+ok 158 - numbers: either decimal mark, "." only ever one, what follows a number not read
+  ---
+  duration_ms: 0.44918
+  type: 'test'
+  ...
+# Subtest: DRS: two columns of numbers read the same in every dialect
+ok 159 - DRS: two columns of numbers read the same in every dialect
+  ---
+  duration_ms: 42.145061
+  type: 'test'
+  ...
+# Subtest: DRS: a ',' is a decimal mark where another separator splits the fields, or splitting on it breaks the columns
+ok 160 - DRS: a ',' is a decimal mark where another separator splits the fields, or splitting on it breaks the columns
+  ---
+  duration_ms: 0.634909
+  type: 'test'
+  ...
+# Subtest: GC: the columns its header names, read the same in every dialect
+ok 161 - GC: the columns its header names, read the same in every dialect
+  ---
+  duration_ms: 5.855206
+  type: 'test'
+  ...
+# Subtest: GC: ',' as both separator and decimal mark is not read; a column the header does not name reads as before
+ok 162 - GC: ',' as both separator and decimal mark is not read; a column the header does not name reads as before
+  ---
+  duration_ms: 0.687319
+  type: 'test'
+  ...
+# Subtest: DRS: every encoding and dialect loads to the numbers of the fixture
+ok 163 - DRS: every encoding and dialect loads to the numbers of the fixture
+  ---
+  duration_ms: 2347.272663
+  type: 'test'
+  ...
+# Subtest: GC: every encoding and dialect loads to the numbers of the fixture, quoted decimals too
+ok 164 - GC: every encoding and dialect loads to the numbers of the fixture, quoted decimals too
+  ---
+  duration_ms: 813.237395
+  type: 'test'
+  ...
+# Subtest: a name already loaded is said and not loaded again; dismissed, the alert goes
+ok 165 - a name already loaded is said and not loaded again; dismissed, the alert goes
+  ---
+  duration_ms: 756.007256
+  type: 'test'
+  ...
+# Subtest: a run: undo goes down to its start, silently, the panel as it was; its results a step of their own there
+ok 166 - a run: undo goes down to its start, silently, the panel as it was; its results a step of their own there
+  ---
+  duration_ms: 5089.146939
+  type: 'test'
+  ...
+# Subtest: Refine all with steps between its patterns: no state holds a part of its results; the live ones kept through an undo
+ok 167 - Refine all with steps between its patterns: no state holds a part of its results; the live ones kept through an undo
+  ---
+  duration_ms: 4533.453436
+  type: 'test'
+  ...
+# Subtest: a run cancelled: one pattern done is its step, the saved project marked unsaved; none done, no step
+ok 168 - a run cancelled: one pattern done is its step, the saved project marked unsaved; none done, no step
+  ---
+  duration_ms: 5550.630334
+  type: 'test'
+  ...
+# Subtest: the standard's run: undo stops at its start, its window's panel as it was; then Refine the standard first, a step each in order
+ok 169 - the standard's run: undo stops at its start, its window's panel as it was; then Refine the standard first, a step each in order
+  ---
+  duration_ms: 7303.054349
+  type: 'test'
+  ...
+# Subtest: a card closed during its run comes back by an undo with the patterns done; one switched keeps them
+ok 170 - a card closed during its run comes back by an undo with the patterns done; one switched keeps them
+  ---
+  duration_ms: 5474.663008
+  type: 'test'
+  ...
+# Subtest: the 80-state limit crossed during a run: undo to the oldest state kept, the results in every state
+ok 171 - the 80-state limit crossed during a run: undo to the oldest state kept, the results in every state
+  ---
+  duration_ms: 5936.215767
+  type: 'test'
+  ...
+# Subtest: two sample cards refining at once: the redo branch the later one set aside takes the earlier one's result
+ok 172 - two sample cards refining at once: the redo branch the later one set aside takes the earlier one's result
+  ---
+  duration_ms: 4946.31901
+  type: 'test'
+  ...
+# Subtest: two sample cards held from one state, a redo branch there: a result of either drops it, in either order
+ok 173 - two sample cards held from one state, a redo branch there: a result of either drops it, in either order
+  ---
+  duration_ms: 10545.419686
+  type: 'test'
+  ...
+# Subtest: Refine the standard first stopped or failed before any result: the redo branch there comes back
+ok 174 - Refine the standard first stopped or failed before any result: the redo branch there comes back
+  ---
+  duration_ms: 4601.546952
+  type: 'test'
+  ...
+# Subtest: a sample waiting for the standard's run: what its run takes locked from its Refine; an undo during its run leaves the card and the state on show alike
+ok 175 - a sample waiting for the standard's run: what its run takes locked from its Refine; an undo during its run leaves the card and the state on show alike
+  ---
+  duration_ms: 3504.084722
+  type: 'test'
+  ...
+# Subtest: the standard bearing a sample's name: a run ends in one step
+ok 176 - the standard bearing a sample's name: a run ends in one step
+  ---
+  duration_ms: 3721.773832
+  type: 'test'
+  ...
+# Subtest: SEM: Ctrl+Z during a reading stops silently at its start; the files land, one step, the list and the groups right
+ok 177 - SEM: Ctrl+Z during a reading stops silently at its start; the files land, one step, the list and the groups right
+  ---
+  duration_ms: 1470.691056
+  type: 'test'
+  ...
+# Subtest: DRS: the widths in eV, each field showing the points it spans for the sample on show, as typed
+ok 178 - DRS: the widths in eV, each field showing the points it spans for the sample on show, as typed
+  ---
+  duration_ms: 2461.82093
+  type: 'test'
+  ...
+# Subtest: DRS: one width treats alike a spectrum at 0.5, 1 and 2 nm; the suggestion finds a sharp edge at 1 nm; analysis_info in eV
+ok 179 - DRS: one width treats alike a spectrum at 0.5, 1 and 2 nm; the suggestion finds a sharp edge at 1 nm; analysis_info in eV
+  ---
+  duration_ms: 1703.279648
+  type: 'test'
+  ...
+# Subtest: DRS: a project saved up to v514 opens with its points as widths at its spectra, its E_g as v514 gave it
+ok 180 - DRS: a project saved up to v514 opens with its points as widths at its spectra, its E_g as v514 gave it
+  ---
+  duration_ms: 2590.606381
+  type: 'test'
+  ...
+# Subtest: DRS: v514's points converted where else they come from: none, no number, before the cards, a file left out, the other kind's
+ok 181 - DRS: v514's points converted where else they come from: none, no number, before the cards, a file left out, the other kind's
+  ---
+  duration_ms: 2620.971167
+  type: 'test'
+  ...
+# Subtest: DRS: with no derivative smoothing, typed or converted from N2 = 1, the suggestion gives the whole span, as v514 at N2 = 1
+ok 182 - DRS: with no derivative smoothing, typed or converted from N2 = 1, the suggestion gives the whole span, as v514 at N2 = 1
+  ---
+  duration_ms: 1730.415337
+  type: 'test'
+  ...
+# Subtest: DRS: a window beside a gap in the data is passed over; an interval with no window to fit is said why from what the scan found
+ok 183 - DRS: a window beside a gap in the data is passed over; an interval with no window to fit is said why from what the scan found
+  ---
+  duration_ms: 1247.288306
+  type: 'test'
+  ...
+# Subtest: DRS: a v514 project whose smoothing as a width would make the scan take another window than v514 did opens with a narrower one
+ok 184 - DRS: a v514 project whose smoothing as a width would make the scan take another window than v514 did opens with a narrower one
+  ---
+  duration_ms: 883.837037
+  type: 'test'
+  ...
+# Subtest: XRPD: the widths in °2θ, each field showing its points at the step of the pattern on show, as typed
+ok 185 - XRPD: the widths in °2θ, each field showing its points at the step of the pattern on show, as typed
+  ---
+  duration_ms: 2496.996467
+  type: 'test'
+  ...
+# Subtest: XRPD: the standard's widths at its own file's step; the CSV headers give the widths
+ok 186 - XRPD: the standard's widths at its own file's step; the CSV headers give the widths
+  ---
+  duration_ms: 1833.361464
+  type: 'test'
+  ...
+# Subtest: XRPD: a project to v510 at one step opens with its points as widths, and v510's results
+ok 187 - XRPD: a project to v510 at one step opens with its points as widths, and v510's results
+  ---
+  duration_ms: 2104.103554
+  type: 'test'
+  ...
+# Subtest: XRPD: a project to v510 at different steps: those chips to one, a width each, v510's results, and a note
+ok 188 - XRPD: a project to v510 at different steps: those chips to one, a width each, v510's results, and a note
+  ---
+  duration_ms: 2202.916372
+  type: 'test'
+  ...
+# Subtest: XRPD: points per sample, N = 1, values that are no number, a file left out and a Rietveld card's Scherrer settings, converted
+ok 189 - XRPD: points per sample, N = 1, values that are no number, a file left out and a Rietveld card's Scherrer settings, converted
+  ---
+  duration_ms: 3116.79096
+  type: 'test'
+  ...
+# Subtest: XRPD: a file left out of a project to v510 comes back with v510's shared baseline box
+ok 190 - XRPD: a file left out of a project to v510 comes back with v510's shared baseline box
+  ---
+  duration_ms: 2801.737453
+  type: 'test'
+  ...
+# Subtest: XRPD: files left out of a project to v510 come back with the points v510 gave them, at their own steps
+ok 191 - XRPD: files left out of a project to v510 come back with the points v510 gave them, at their own steps
+  ---
+  duration_ms: 5711.157565
+  type: 'test'
+  ...
+# Subtest: EPR: the smoothing width in mT, its points (a range at different steps), the CSV header, and projects to v510
+ok 192 - EPR: the smoothing width in mT, its points (a range at different steps), the CSV header, and projects to v510
+  ---
+  duration_ms: 2581.76852
+  type: 'test'
+  ...
+# Subtest: EPR: a value that is no number in a spectrum: the others smoothed without it, as the project reopened has them
+ok 193 - EPR: a value that is no number in a spectrum: the others smoothed without it, as the project reopened has them
+  ---
+  duration_ms: 1225.960639
+  type: 'test'
+  ...
+# Subtest: the fields at 320 px, in both themes, and in a narrow side column: the points inside the field, muted, the value whole, nothing past the edge
+ok 194 - the fields at 320 px, in both themes, and in a narrow side column: the points inside the field, muted, the value whole, nothing past the edge
+  ---
+  duration_ms: 3702.642479
+  type: 'test'
+  ...
+# Subtest: 4b: + Add peak is left as its card folds, and as the standard's window closes
+ok 195 - 4b: + Add peak is left as its card folds, and as the standard's window closes
+  ---
+  duration_ms: 5702.482302
+  type: 'test'
+  ...
+# Subtest: 5b: the baseline box undone and redone, step by step, in all / one and in the standard's window
+ok 196 - 5b: the baseline box undone and redone, step by step, in all / one and in the standard's window
+  ---
+  duration_ms: 3429.476818
+  type: 'test'
+  ...
+# Subtest: 5b: Ctrl+Z at once, the focus still on the box just clicked
+ok 197 - 5b: Ctrl+Z at once, the focus still on the box just clicked
+  ---
+  duration_ms: 1290.131494
+  type: 'test'
+  ...
+# Subtest: N1: a card an undo or a redo brings back comes into view (XRPD, DRS, GC, EPR)
+ok 198 - N1: a card an undo or a redo brings back comes into view (XRPD, DRS, GC, EPR)
+  ---
+  duration_ms: 21855.257278
+  type: 'test'
+  ...
+# Subtest: N1: a tab switched to, or a project opened, that has a card more brings nothing into view
+ok 199 - N1: a tab switched to, or a project opened, that has a card more brings nothing into view
+  ---
+  duration_ms: 4286.633269
+  type: 'test'
+  ...
+1..199
+# tests 199
+# suites 0
+# pass 199
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 626867.95373
+
+real	10m26.907s
+user	2m0.457s
+sys	0m28.612s

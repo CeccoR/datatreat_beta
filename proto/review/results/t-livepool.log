@@ -1,0 +1,49 @@
+TAP version 13
+# Subtest: live tabs: a refinement goes on in a tab not on show; keys, settings, projects, close, reload
+not ok 1 - live tabs: a refinement goes on in a tab not on show; keys, settings, projects, close, reload
+  ---
+  duration_ms: 18010.581272
+  type: 'test'
+  location: '/tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/b14/review/trees/livepool/tests/livetabs.test.mjs:46:1'
+  failureType: 'testCodeFailure'
+  error: 'timed out waiting for the running mark'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    until (file:///tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/b14/review/trees/livepool/tests/helpers.mjs:109:42)
+    async TestContext.<anonymous> (file:///tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/b14/review/trees/livepool/tests/livetabs.test.mjs:67:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: three lanes: the results those of one, bit for bit, in the patterns' order, one step
+ok 2 - three lanes: the results those of one, bit for bit, in the patterns' order, one step
+  ---
+  duration_ms: 6931.796508
+  type: 'test'
+  ...
+# Subtest: answers out of order wait for those before them; Cancel writes those done, not the ones under way
+ok 3 - answers out of order wait for those before them; Cancel writes those done, not the ones under way
+  ---
+  duration_ms: 6911.606073
+  type: 'test'
+  ...
+# Subtest: an error in one lane: the patterns not started stop, those under way are written, the failed one not
+ok 4 - an error in one lane: the patterns not started stop, those under way are written, the failed one not
+  ---
+  duration_ms: 2617.611472
+  type: 'test'
+  ...
+# Subtest: two windows on a cap of two: two jobs at once in all, the slot freed to the job waiting longest; each its own results
+ok 5 - two windows on a cap of two: two jobs at once in all, the slot freed to the job waiting longest; each its own results
+  ---
+  duration_ms: 6597.371078
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 4
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 41744.269105

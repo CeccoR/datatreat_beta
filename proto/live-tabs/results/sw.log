@@ -1,0 +1,4 @@
+ok   the shell controlled by the service worker — null
+ok   a tab's frame is controlled by the same worker (loaded through it) — {"controlled":true,"regs":1,"embed":true}
+ok   offline: the shell and a new tab's frame come from the cache — {"frame":true}
+errors []

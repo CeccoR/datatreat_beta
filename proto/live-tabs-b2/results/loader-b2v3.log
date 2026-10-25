@@ -1,0 +1,33 @@
+switch {"to":"X","ms":80.4} | long 
+switch {"to":"D","ms":100.9} | long 69!
+switch {"to":"G","ms":51.8} | long 
+switch {"to":"E","ms":45.4} | long 
+switch {"to":"S","ms":98.9} | long 
+switch {"to":"X","ms":60.9} | long 
+switch {"to":"D","ms":82.4} | long 60!
+switch {"to":"G","ms":47.7} | long 
+switch {"to":"E","ms":46.6} | long 
+switch {"to":"S","ms":89} | long 
+resize {"to":"X","ms":313.7} | long 145
+resize {"to":"D","ms":264.8} | long 72 92
+resize {"to":"G","ms":163.6} | long 
+resize {"to":"E","ms":146.7} | long 
+resize {"to":"S","ms":186.8} | long 52
+resize {"to":"D","ms":232.4} | long 111
+ran {"to":"X","ms":198.4} | long 
+wake {"to":"X","ms":271,"was":"asleep"} | long 167
+wake {"to":"D","ms":251.2,"was":"asleep"} | long 167
+wake {"to":"G","ms":153.3,"was":"asleep"} | long 76
+wake {"to":"E","ms":108.3,"was":"asleep"} | long 
+wake {"to":"S","ms":87,"was":"awake"} | long 
+new {"module":"xrd","ms":474} | long 
+new {"module":"tauc","ms":460} | long 
+new {"module":"gc","ms":596} | long 
+new {"module":"epr","ms":561} | long 
+new {"module":"sem","ms":612} | long 52
+project {"ms":550,"what":"opened from Projects, then shown"} | long 429
+undo {"ms":273} | long 62! 68!
+reload {"ms":781,"tabs":10} | long 
+reload (from navigation) 514
+{"switch":{"steps":10,"over100":0,"uncovered":0,"longest":69,"longestUncovered":69},"resize":{"steps":6,"over100":2,"uncovered":0,"longest":145,"longestUncovered":0},"ran":{"steps":1,"over100":0,"uncovered":0,"longest":0,"longestUncovered":0},"wake":{"steps":5,"over100":2,"uncovered":0,"longest":167,"longestUncovered":0},"new":{"steps":5,"over100":0,"uncovered":0,"longest":52,"longestUncovered":0},"project":{"steps":1,"over100":1,"uncovered":0,"longest":429,"longestUncovered":0},"undo":{"steps":1,"over100":0,"uncovered":0,"longest":68,"longestUncovered":68},"reload":{"steps":1,"over100":1,"uncovered":0,"longest":514,"longestUncovered":0}}
+/home/user/datatreat_beta/proto/live-tabs-b2/results/loader-b2v3.json

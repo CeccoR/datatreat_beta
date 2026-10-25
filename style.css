@@ -468,6 +468,23 @@ button.btn.icon-save {
 }
 .home-action-btn:hover { border-color: var(--accent); }
 .home-action-btn:hover .home-action-icon svg { color: var(--accent); }
+/* A window under 480 px (a phone held upright). The brand keeps its mark, its name clipped
+   (still read out); the bar's side padding and the nav's gaps tighten, so the tab strip
+   gets the window less 209 px (111 at 320, 131 at 340, 181 at 390, 270 at 479: a tab
+   asks 120 at least) and its tabs scroll inside it. To v504 under 340 px the row, 26 px
+   wider than the window, ran past it (the gear at 330 of 320, the page scrolling
+   sideways); to v507 the rule held only under 340, and from 340 to about 465 the strip,
+   beside the brand's name in full, was narrower than a tab (0 px at 340, 44 at 390, 74 at
+   420). From 480 px up the bar is as it was (its strip 134 px at 480). */
+@media (max-width: 479px) {
+  header { padding: 6px 10px; }
+  header h1 { width: 23px; flex-shrink: 0; margin-right: 0; overflow: hidden; }
+  #nav { gap: 6px; }
+}
+/* The home's two tiles wrap, one under the other, where they do not fit side by side: under
+   358 px (to v506 only under 340, and from 340 to 357 the Settings tile ran over its card's
+   edge by up to a pixel). */
+@media (max-width: 357px) { .home-actions { flex-wrap: wrap; flex-shrink: 1; } }
 .settings-tab.active {
   display: block;
   padding-top: 40px;
@@ -482,12 +499,10 @@ main {
 }
 .tab.active {
   display: block;
-  animation: tab-fade 0.25s ease;
 }
-@keyframes tab-fade {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+/* An instance's layer (a module made per tab, b2): its windows and menus, in the page
+   while the instance is; a box of no box of its own. */
+.inst-layer { display: contents; }
 /* Cross-fade colours during a light/dark toggle (scoped to .theme-anim so it only
    runs on the switch, keeping normal hover/press feedback instant). Only the three
    cheap colour properties animate; icons follow via `color` (they use currentColor),
@@ -508,7 +523,6 @@ main {
   ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tab.active { animation: none; }
   :root.theme-anim, :root.theme-anim * { transition: none !important; }
 }
 /* Keyboard-shortcut reference (Settings) */
@@ -589,6 +603,14 @@ main {
 :root.narrow-layout .mw260,
 :root.narrow-layout .mw220,
 :root.narrow-layout .mw200 { min-width: 100%; }
+/* Two plots side by side, each a caption, its plot and its legend, whose captions may
+   wrap to different heights (a long one beside a short one, on a narrower window):
+   the captions share one grid row, so the plots under them start level. Stacked, the
+   columns are the usual ones. */
+.row.cap-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 0; align-items: start; }
+.row.cap-row > .col { display: grid; grid-row: span 3; grid-template-rows: subgrid; min-width: 0; }
+:root.narrow-layout .row.cap-row { display: flex; }
+:root.narrow-layout .row.cap-row > .col { display: block; min-width: 100%; }
 /* ===== Text style tokens — the single source of text styling. Every text element
    carries one of these classes explicitly (no bare-tag aliases); see also
    .txt-mini / .txt-caption / .txt-meta below. ===== */
@@ -636,18 +658,25 @@ input[type="file"] {
   font-size: 13px;
   color: var(--muted);
 }
+/* Every checkbox is the same native box in the accent: filled with it when checked, the
+   tick black or white as the theme's accent needs. Set once here, so a checkbox added
+   anywhere (a modal, the Projects table) cannot fall back to the browser's blue. */
+input[type="checkbox"] { accent-color: var(--accent); }
 
-/* GC gas chips: ALL/ONE chips laid over the plot's own data area, top right. Dimmed
-   until pointed at, so they stay out of the way of the data they sit on; the group
-   lights as a whole, since hovering one chip is hovering the set it belongs to. */
-.gc-gas-sel {
-  /* Clear of the toolbar column and the plot's own right margin, so the chips
-     land inside the data area rather than on the frame or the buttons. */
-  position: absolute; top: 21px; right: 56px; z-index: 2;
+/* Series chips — GC's gases, Tauc's two Eg methods — laid over the plot's own data
+   area, top right. Dimmed until pointed at, so they stay out of the way of the data
+   they sit on; the group lights as a whole, since hovering one chip is hovering the
+   set it belongs to. .plot-chips/.plot-chip are the same thing under a name that
+   does not say GC. */
+.gc-gas-sel, .plot-chips {
+  /* Clear of the toolbar and the plot's own margins, so the chips land inside the
+     data area rather than on the frame or the buttons: below the toolbar row (26px
+     and its gap), inside the plot's right margin. */
+  position: absolute; top: calc(26px + var(--tb-gap) + 21px); right: 22px; z-index: 2;
   display: inline-flex; gap: 4px;
   opacity: 0.5; transition: opacity 0.18s;
 }
-.gc-gas-sel:hover { opacity: 1; }
+.gc-gas-sel:hover, .plot-chips:hover { opacity: 1; }
 /* Real sub, in the chip's own font: the Unicode subscript two has no glyph in Inter
    and fell back to another face, so H2 and O2 did not read as a pair. */
 .gc-gas-chip sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
@@ -655,11 +684,13 @@ input[type="file"] {
    --on-accent text, lightening on hover and darkening on press. The tokens are the
    ones .btn.primary uses, so the pair stays in step and each theme gets the text
    colour it needs on top of its own accent. */
-.gc-gas-chip.is-on         { background: var(--accent);        border-color: var(--accent);        color: var(--on-accent); }
-.gc-gas-chip.is-on:hover   { background: var(--accent-hover);  border-color: var(--accent-hover);  color: var(--on-accent); }
-.gc-gas-chip.is-on:active  { background: var(--accent-active); border-color: var(--accent-active); color: var(--on-accent); }
-.gc-gas-chip:disabled { opacity: 0.35; cursor: default; }
-.gc-gas-chip:disabled:hover { color: var(--muted); }
+.gc-gas-chip.is-on,        .plot-chip.is-on,        .rvs-chip.is-on        { background: var(--accent);        border-color: var(--accent);        color: var(--on-accent); }
+.gc-gas-chip.is-on:hover,  .plot-chip.is-on:hover,  .rvs-chip.is-on:hover  { background: var(--accent-hover);  border-color: var(--accent-hover);  color: var(--on-accent); }
+.gc-gas-chip.is-on:active, .plot-chip.is-on:active, .rvs-chip.is-on:active { background: var(--accent-active); border-color: var(--accent-active); color: var(--on-accent); }
+.gc-gas-chip:disabled, .plot-chip:disabled, .rvs-chip:disabled { opacity: 0.35; cursor: default; }
+.gc-gas-chip:disabled:hover, .plot-chip:disabled:hover, .rvs-chip:disabled:hover { color: var(--muted); }
+/* "x-axis" and "baseline" are names, not labels to shout: lower case as written. */
+.mode-chip.plot-chip { text-transform: none; }
 
 /* ===== Custom date-time field (segmented text + calendar button) ===== */
 .dt-field {
@@ -814,9 +845,11 @@ td input {
   width: 90px;
   padding: 3px 5px;
 }
+/* The file list's label field fills its cell, and no more: at least 120px wide (to v501),
+   on a phone it ran over the columns right of it. */
 td input.label-input {
   width: 100%;
-  min-width: 120px;
+  min-width: 0;
 }
 /* Sample counter (e.g. "3/12"): styled like the all/one mode-chip — small, muted,
    rounded — so it and the nav arrows read as one control group. */
@@ -833,6 +866,9 @@ td input.label-input {
   color: var(--muted);
   margin-right: 6px;
 }
+/* A sample counter beside the nav arrows is as wide as "000/000" from the start, so it
+   keeps its size while stepping through samples and the › arrow stays under the pointer. */
+.pill.nav-count { min-width: calc(7ch + 18px); }
 /* Meta token: small secondary text (intro lines, empty-state notes, dropzone hints) */
 .txt-meta {
   font-size: 12px;
@@ -860,15 +896,31 @@ svg.plot {
   border: 1px solid var(--line);
   touch-action: none;
 }
-/* Exception (GC): full-width strip plots stacked one above the other, so a single
-   golden-ratio box would be far too tall. Twice the golden ratio (1 : 2φ) keeps the
-   pair roughly as tall as one standard plot. */
+/* Exception (GC's mean-rate chart): a full-width strip plot, where a single
+   golden-ratio box would be far too tall. Twice the golden ratio (1 : 2φ) keeps it
+   roughly as tall as a standard plot in a half-width column. */
 svg.plot.plot-wide { aspect-ratio: 3.236; }
 /* Once the columns stack to full width the floor is pointless — and keeping it would
    make every plot overflow and scroll horizontally on the narrowest screens. */
 :root.narrow-layout svg.plot { min-width: 0; }
 /* Same threshold: a 1 : 2φ strip gets unreadably short once the layout narrows. */
 :root.narrow-layout svg.plot.plot-wide { aspect-ratio: 1.618; }
+/* GC's Analysis rate plot is there to place the interval on the run, not to read values
+   off: half a standard plot's height across the whole card (4φ : 1), and the same height
+   once the layout narrows and the card is a column's width (2φ : 1). */
+svg.plot.plot-strip { aspect-ratio: 6.472; }
+:root.narrow-layout svg.plot.plot-strip { aspect-ratio: 3.236; }
+/* An Urbach card's two Results plots, plain over subtracted, share the room of one
+   standard plot (φ : 1) of their column, so the upper one starts level with the E_U
+   chart beside them and the lower one ends level with it; the two are alike, each
+   half that room less what lies between them. That is the second one's caption line,
+   22px, and --pair-sep above it, so its toolbar, pulled up onto the caption, keeps
+   clear of the plot above (26px buttons + 2px gap, 12px clear). Stacked on a narrow
+   screen, each is a standard plot: half of one would leave no room for the data. */
+.plot-pair-col { container-type: inline-size; --pair-sep: 18px; }
+.plot-pair-col > .plot-wrap + .txt-caption { margin-top: var(--pair-sep); }
+svg.plot.plot-pair { aspect-ratio: auto; height: calc((100cqw / 1.618 - 22px - var(--pair-sep)) / 2); }
+:root.narrow-layout svg.plot.plot-pair { aspect-ratio: 1.618; height: auto; }
 .legend {
   font-size: 12px;
   margin-top: 6px;
@@ -1097,8 +1149,19 @@ footer a:hover {
 }
 .drag-handle:active { cursor: grabbing; }
 .grip-icon { width: 15px; height: 15px; display: block; }
+/* Include box (second column): a file unticked stays in the list, dimmed, and out of
+   the analysis. Only its name, label and note dim: the box, the grip and the actions keep
+   working as they look. */
+.incl-cell { text-align: center; padding-left: 0 !important; padding-right: 0 !important; }
+.incl-cell input[type="checkbox"] { width: auto; margin: 0; vertical-align: middle; cursor: pointer; }
+.file-row.is-excluded td.fname,
+.file-row.is-excluded .file-label,
+.file-row.is-excluded td.note-cell { opacity: 0.4; }
+.file-none { margin: 8px 0 0; }
 .file-row.dragging { opacity: 0.45; }
-.file-row.drag-over td { box-shadow: inset 0 2px 0 var(--accent); } /* drop indicator */
+/* Drop indicator: the gap the dragged row would land in — over a row, or under the last. */
+.file-row.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
+.file-row.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
 /* Bare remove / remove-all buttons: just the ✕ glyph, no border/background */
 .del-bare {
   background: none;
@@ -1194,6 +1257,45 @@ button.palette-pick-btn.cp-anchored { border-color: var(--white); }
 }
 .pp-swatches { display: flex; gap: 2px; flex: 1; }
 .pp-swatch { flex: 1; height: 14px; border-radius: 2px; }
+/* Deleting a palette of one's own. */
+.pp-del {
+  border: none; background: none; color: var(--muted); cursor: pointer;
+  font-size: 11px; padding: 0 2px; flex: 0 0 auto;
+}
+.pp-del:hover { color: var(--danger, #e05252); }
+/* How a palette is spread, offered where a palette is chosen rather than beside it. */
+.pp-scope {
+  display: flex; gap: 14px; align-items: center;
+  border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px;
+}
+.pp-check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.pp-check input { width: auto; margin: 0; }
+/* A texture palette is the same popup with tiles where the colours are: one row per
+   set, the tiles in the order the set hands them out. */
+.pp-tex { flex: 1; height: 14px; display: flex; }
+.pp-tex .fig-fill-sw { width: 100%; height: 14px; }
+/* Keeping the colours in use now as a palette of one's own. */
+/* Name above, button under it: the popup is 244px wide and the two side by side left
+   the button hanging over its edge. */
+.pp-save {
+  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
+  border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px;
+}
+.pp-save input[type="text"] { width: 100%; font-size: 11px; padding: 4px 6px; box-sizing: border-box; }
+.pp-save .btn { width: 100%; font-size: 11px; padding: 5px 8px; white-space: nowrap; }
+.pp-hint { margin: 6px 0 0; font-size: 10px; color: var(--muted); }
+/* The one thing the all-series row offers in the name column: the project's names
+   back. It fills that column, so it is as wide as the name fields under it. */
+.fig-restore {
+  flex: 1; min-width: 40px; height: var(--fig-field-h); padding: 0 8px;
+  font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Reads from the left edge, like the names in the fields under it, and sits on the
+     row's middle line: a button with a set height leaves its label where the line box
+     falls, which is a shade high at this size. */
+  display: flex; align-items: center; justify-content: flex-start;
+  text-align: left; line-height: 1;
+}
+.fig-restore:disabled { opacity: 0.45; cursor: default; }
 
 button.color-swatch {
   width: 14px;
@@ -1303,6 +1405,8 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
   text-transform: uppercase;
 }
 .cp-rgb { margin-bottom: 10px; }
+/* The same colour said the other way, under a rule so the two sets read as two. */
+.cp-hsl { margin-bottom: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
 .cp-rgb-row {
   display: flex;
   align-items: center;
@@ -1379,36 +1483,165 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
   text-transform: uppercase; color: var(--muted);
 }
 .cp-recent { padding-top: 5px; }
-.cp-recent-empty { font-size: 11px; color: var(--muted); }
+.cp-recent-empty { font-size: 11px; color: var(--muted); grid-column: 1 / -1; white-space: nowrap; }
 
-/* ===== Plot wrapper with side download button ===== */
+/* ===== Plot wrapper: the plot under its toolbar =====
+   The toolbar is a row above the plot at its right (built by Plot.attachTools as a
+   column of buttons, turned sideways here, its first button rightmost), and the plot
+   takes the whole width. --tb-gap is the space between the row and the plot. */
 .plot-wrap {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--tb-gap);
+  --tb-gap: 4px;
   overflow-x: auto;   /* if the plot hits its min-width floor, scroll here — not the page */
   position: relative; /* anchors controls laid over the plot (the GC gas chips) */
 }
+/* Where a line stands above the plot — its caption, the sample nav — the toolbar
+   shares that line, at its right, and the plot keeps the place under it it had
+   without a toolbar: the wrap is pulled up by the row's height less the room it
+   finds there. A caption keeps its text clear of the buttons (wrapping before
+   them on a narrow plot). */
+/* Pulled up over that line, the wrap's own empty box must not take its clicks (the
+   sample arrows, the caption): only what it holds answers the pointer. */
+.plot-wrap { pointer-events: none; }
+.plot-wrap > * { pointer-events: auto; }
+/* Only a wrap with a toolbar (or the download button it is built from) is pulled up:
+   a plot without one keeps its place under the line. */
+.plot-wrap > .plot-dl-btn { order: -1; align-self: flex-end; }
+.txt-caption + .plot-wrap:has(> .plot-btn-col, > .plot-dl-btn) { margin-top: -28px; --tb-gap: 2px; }
+.txt-caption:has(+ .plot-wrap) { padding-right: 214px; }
+.plot-nav-row + .plot-wrap:has(> .plot-btn-col, > .plot-dl-btn),
+.plot-nav-row + * > .plot-wrap:first-child:has(> .plot-btn-col, > .plot-dl-btn) { margin-top: -34px; --tb-gap: 8px; }
+/* On a narrow screen the sample nav fills its line: the toolbar takes its own. */
+:root.narrow-layout .plot-nav-row + .plot-wrap:has(> .plot-btn-col, > .plot-dl-btn),
+:root.narrow-layout .plot-nav-row + * > .plot-wrap:first-child:has(> .plot-btn-col, > .plot-dl-btn) { margin-top: 0; --tb-gap: 4px; }
 /* While a pan/zoom tool is armed, block text selection across the whole plot */
 .plot-wrap.tool-armed, .plot-wrap.tool-armed * {
   user-select: none;
   -webkit-user-select: none;
 }
 .plot-wrap .plot {
-  flex: 1;
-  width: auto;
+  flex: none;
+  width: 100%;
   /* min-width (460px floor) comes from svg.plot so the plot never shrinks to tiny */
 }
-/* Under-plot alert (e.g. negative Eg): span the plot's own width, i.e. the plot-wrap
-   minus its toolbar column (26px button + 8px gap = 34px), so it sits under the chart
-   and not under the download button. */
-.bar-alert { margin-right: 34px; }
+/* Results rows under a full-width plot: a pair of standard plots side by side, set off
+   from what is above by the space a caption used to have. */
+.res-row { margin-top: 18px; align-items: flex-start; }
+/* A card's pair in the Tauc Results: set off by a rule, under the card's name. */
+.res-an { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
+.res-an-title { margin: 0; font-size: 13px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.res-an > .res-row { margin-top: 10px; }
+/* A Results card of the cards' sections alone: the first one on show needs no rule above it. */
+.res-list > .res-an.is-first { border-top: 0; margin-top: 0; padding-top: 0; }
+
+/* ===== Tauc analysis cards =====
+   Head: the grip, the title with the kind chosen in place and the info icon, then
+   close and fold at the right. The name field sits under it and stays when the card
+   is folded; the body (instructions and workspace) folds away. */
+.an-head { display: flex; align-items: center; gap: 8px; }
+.an-head > h3.an-title {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.4em; row-gap: 2px;
+}
+/* The kind and its info icon wrap as one, under "Analysis:" on a narrow card. */
+.an-kind { display: inline-flex; align-items: center; white-space: nowrap; }
+.an-title .instr-info { margin-left: 4px; }
+/* The kind reads as the title it is part of: its type, case and colour, with a small
+   chevron drawn in currentColor saying it can be changed; lit while its menu is open. */
+button.an-type {
+  position: relative; background: transparent; border: none; border-radius: 6px;
+  padding: 1px 17px 1px 0; cursor: pointer;
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+}
+button.an-type::after {
+  content: ''; position: absolute; right: 3px; top: 50%;
+  width: 5px; height: 5px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: translateY(-75%) rotate(45deg); pointer-events: none;
+}
+button.an-type:hover, button.an-type.cp-anchored { color: var(--accent); }
+button.an-type:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Bare icons, as a table row's: muted, lit on hover, close in the delete red. */
+.an-ic {
+  background: none; border: none; padding: 2px; border-radius: 6px;
+  color: var(--muted); cursor: pointer; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color 0.12s;
+}
+.an-ic svg { display: block; }
+.an-ic:hover { color: var(--accent); }
+.an-ic.an-close:hover { color: var(--bad); }
+/* The glyphs sit inset in their boxes: pulled out, the grip's lines start on the
+   card's content edge, as the name field under them does, and the open chevron ends
+   on the right one. */
+.an-grip { cursor: grab; touch-action: none; margin-left: -6px; }
+.an-fold { margin-right: -6px; }
+.an-acts { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 0 auto; }
+.an-fold svg { transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1); }   /* as the fold (cards.js FOLD_MS) */
+/* The name behaves as the project name does, in the card's own type: plain text at
+   rest, its field shown on hover and while editing, as wide as the name (tauc.js
+   fitName). Pulled out by its inset (border 1 + padding 9), the name at rest starts
+   on the content edge, under the grip's lines. */
+input[type="text"].an-name {
+  display: block; width: 160px; max-width: calc(100% + 10px); margin: 10px 0 0 -10px;
+  background: transparent; border-color: transparent;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;   /* blurred and too long: "…" */
+  transition: border-color 0.15s, background 0.15s;
+}
+input[type="text"].an-name:placeholder-shown,
+input[type="text"].an-name:hover { border-color: var(--line); background: var(--panel2); }
+input[type="text"].an-name:focus { border-color: var(--accent); background: var(--panel2); outline: none; }
+.an-name:focus::placeholder { color: transparent; }
+/* The body's gap under the name is its own, so it folds away with it. */
+.an-body::before { content: ''; display: block; height: 12px; }
+.an-body > .an-instr { margin: 0 0 12px; }
+/* The exponent's labels carry their transition: never narrower than the longest, so
+   none is cut on a phone; the column of fields widens with it, the labels give way. */
+select.an-exp { min-width: max-content; }
+.an-card.is-folded .an-fold svg { transform: rotate(-90deg); }
+.an-card.is-folded .an-title .instr-info { display: none; }
+.an-card.is-folded:not(.an-anim) > .an-body { display: none; }
+.an-card.an-anim > .an-body { overflow: hidden; }
+/* The card being moved floats over the others. */
+.an-card.an-moving { position: relative; z-index: 5; border-color: var(--accent); box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+body.an-dragging, body.an-dragging * { cursor: grabbing !important; user-select: none; }
+/* "+": the file dropzone's look under the cards, a full-width dashed box lit on hover
+   and while its menu is open, the sign in the type, colour and conduct of its "Drag
+   here your files" (the text colour, unchanged on hover: only the border lights);
+   32 px high, so it reads as an add bar, not a second dropzone. */
+.an-add-bar { margin: 0 0 16px; }
+button.an-add {
+  display: block; width: 100%; height: 32px; padding: 0;
+  border: 2px dashed var(--line); border-radius: 12px; background: var(--panel2);
+  /* The grey of the plots' tick labels, theme by theme. */
+  color: var(--plot-tick); font-family: inherit; font-size: 14px; font-weight: 400; line-height: 1; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+button.an-add:hover, button.an-add.cp-anchored { border-color: var(--accent); }
+button.an-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.an-menu {
+  position: fixed; z-index: 9999; min-width: 180px;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.65);
+}
+.an-menu[hidden] { display: none; }
+.an-menu button {
+  background: none; border: none; border-radius: 7px; padding: 8px 12px;
+  color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.an-menu button:hover { background: var(--panel2); color: var(--accent); }
+.an-menu button.is-current { color: var(--accent); }
 .bar-alert .alert { margin-bottom: 0; }
 .plot-btn-col {
   display: flex;
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
+  order: -1;                    /* above the plot, at its right */
+  align-self: flex-end;
   opacity: 0.5;                 /* dimmed by default, full on hovering the plot */
   transition: opacity 0.18s;
 }
@@ -1417,7 +1650,7 @@ button.color-swatch.cp-anchored { border-color: var(--white); }
 }
 .plot-tool-btns {
   display: flex;
-  flex-direction: column;
+  flex-direction: row-reverse;  /* the first built (the composer) rightmost */
   gap: 4px;
 }
 /* Plot toolbar buttons match the project-bar icon buttons exactly (same 26px box,
@@ -1583,15 +1816,15 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 }
 .std-select.ghost { color: var(--muted); }
 
-/* ===== Plot header row: sample nav on the left, a corner action button whose
-   right edge lines up with the plot's right edge (padding-right = toolbar col:
-   26px button + 8px gap). The button is 1/3 of the plot width. ===== */
+/* ===== Plot header row: the sample nav on the left; the plot's toolbar takes its
+   right (.plot-wrap). It keeps the 30px it had when it held the action button, so
+   the plot below stays where it was. ===== */
 .plot-nav-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  padding-right: 34px;
+  min-height: 30px;
 }
 .plot-nav-left {
   display: flex;
@@ -1600,11 +1833,14 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   flex: 1 1 auto;
   min-width: 0;
 }
-.plot-corner-btn {
-  flex: 0 0 33.333%;
-  min-width: 0;
-  height: 30px;                /* match the sample-nav arrows so the row aligns */
-  display: inline-flex;
+/* A plot's action (Suggest intervals, Add peak) at the foot of the parameter column
+   beside it, after what the column holds, as wide as it; a tenth taller than the
+   30px the corner button had. */
+.plot-action-btn {
+  width: 100%;
+  margin-top: 12px;
+  height: 33px;
+  display: flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
@@ -1658,6 +1894,14 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   gap: 6px;
 }
 .param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
+/* A setting switched on or off by a box at the start of its title (the Scherrer
+   baseline), the box in the title's text so that they wrap together; its value's field
+   beside it disabled when off. */
+.pg-title > label.pg-on { cursor: pointer; min-width: 0; }
+.pg-title > label.pg-on > input { width: auto; margin: 0 4px 0 0; vertical-align: -2px; cursor: pointer; }
+.param-grid > .pg-field:disabled { opacity: 0.45; cursor: not-allowed; }
+/* A plot's legend entry for a curve switched off (no baseline): struck through, dimmed. */
+.legend .lg-bl.is-off { text-decoration: line-through; opacity: .5; }
 /* Wavelength cell: split the field column into a source preset selector (left) and
    the numeric value (right, read-only unless the preset is "Custom"). */
 .lambda-field { display: flex; gap: 6px; align-items: center; }
@@ -1677,6 +1921,291 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 }
 .param-grid > .pg-stat b { color: var(--accent); }   /* value keeps the accent */
 .param-grid > .pg-stat.pg-gap { margin-top: 6px; }
+/* What the fits give (Eg, E_U): a line further down than the statistics above it,
+   in a box like the plots' and tables', across the whole column. */
+.param-grid > .pg-result, .xrd-cag > .pg-result {
+  grid-column: 1 / -1;
+  margin-top: 24px;
+  display: grid; row-gap: 9px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px;
+}
+.pg-result > .pg-stat { font-size: 13px; color: var(--text); }
+.pg-result > .pg-stat b { color: var(--accent); }
+/* The standard's Caglioti fit (xrd.js renderCaglioti): the formula and the notes in
+   the muted grey, so the values are what the eye lands on. */
+.pg-result > .cag-formula { color: var(--muted); }
+.pg-result > .cag-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.cag-alert:not(:empty) { margin-top: 12px; }
+/* ===== XRPD Rietveld card ===== */
+/* The phases from CIFs, one row each: a colour key, the name and what was read from
+   the file, its remove ×. */
+.rv-phase { display: flex; align-items: flex-start; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); }
+.rv-phase:first-child { border-top: none; }
+.rv-phase .rv-key { flex: none; width: 12px; height: 12px; border-radius: 3px; margin-top: 3px; }
+.rv-phase .rv-main { flex: 1; min-width: 0; font-size: 13px; line-height: 1.5; }
+.rv-phase .rv-main b { color: var(--text); }
+.rv-phase .rv-sub { color: var(--muted); font-size: 12px; }
+.rv-phase .rv-del { flex: none; }
+/* The side column's buttons, rows of equal widths: Refine, Refine all; Settings…, Clear,
+   Clear all (three in the column's 280 px: the side padding narrowed so that "Settings…"
+   keeps to one line). */
+.rv-btns { display: flex; gap: 8px; }
+.rv-btns > .btn { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* (a label wider than its half of the row is cut with an ellipsis: to v506 'Instrumental
+   standard…' ran half a pixel past a 320-px window) */
+/* Instrumental standard… while the standard refines (xrd-rv.js syncStd): a spinner before
+   its label, the drop zones' (dz-spin), and the run's progress in a bar along its foot, in
+   the accent of the card's own (.rv-prog); the label cut with an ellipsis where the two
+   do not fit. */
+.rv-btns > .btn.rv-std-run { position: relative; overflow: hidden; text-overflow: ellipsis; }
+.rv-std-run::before {
+  content: ''; display: inline-block; box-sizing: border-box; width: 12px; height: 12px;
+  margin-right: 7px; vertical-align: -2px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--accent); animation: dz-spin 0.7s linear infinite;
+}
+.rv-std-run::after {
+  content: ''; position: absolute; left: 0; bottom: 0; height: 3px;
+  width: calc(var(--rv-std-prog, 0) * 100%); background: var(--accent); transition: width .08s linear;
+}
+/* The settings modal (xrd-rv.js renderSettings): a section per phase, a row per fitting
+   mode — checkbox, label, depth — 23 px high, in columns that line up across the
+   sections (one grid template for all); then the Start section, its hold boxes two to a
+   row in the same columns. */
+.modal-box.rvs-box { width: min(460px, 94vw); --rvs-cols: 13px 164px minmax(0, 1fr); }
+.rvs-box:focus { outline: none; }
+.rvs-sec { border-top: 1px solid var(--line); padding: 10px 0 8px; }
+.rvs-sec:first-child { border-top: none; }
+.rvs-head { display: flex; align-items: center; gap: 8px; height: 23px; min-width: 0; font-size: 13px; }
+.rvs-head b { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rvs-head .rv-key { flex: none; width: 12px; height: 12px; border-radius: 3px; }
+.rvs-head .txt-meta { margin-left: auto; flex: none; }
+.rvs-row { display: grid; grid-template-columns: var(--rvs-cols); column-gap: 8px; align-items: center; height: 23px; margin-top: 4px; font-size: 13px; }
+.rvs-row input[type="checkbox"] { width: 13px; height: 13px; margin: 0; cursor: pointer; }
+.modal-box .rvs-row label { display: block; margin: 0; min-width: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.rvs-row select { height: 23px; min-width: 0; padding: 1px 4px; font-size: 12px; }
+.rvs-row input:disabled, .modal-box .rvs-row input:disabled + label, .rvs-row select:disabled { cursor: not-allowed; }
+.rvs-row select:disabled { opacity: .45; }
+/* A mode that does not apply (the standard's broadening, WPPM with the size off), and the
+   hold boxes while the start is the CIF: their labels greyed too. */
+.modal-box .rvs-row.is-na label, .modal-box .rvs-hold.is-off label { color: var(--muted); opacity: .6; }
+.rvs-hold2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rvs-chips { display: flex; align-items: center; gap: 6px; height: 23px; margin-top: 4px; }
+.rvs-note { margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+/* The Refinement section, in the same columns: a field under the depths with its range
+   beside it (.rvs-row input[type="text"] outweighs the global rule); the 1/2θ term's value
+   under the checkboxes, "automatic" under the depths; Defaults in the head; the note in
+   the warning colour when an entry was not taken. */
+.rvs-cell { display: flex; align-items: center; gap: 8px; min-width: 0; height: 23px; }
+.rvs-row input[type="text"] { flex: none; width: 72px; height: 23px; padding: 1px 6px; font-size: 12px; }
+.rvs-range { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rvs-head button.btn.rvs-def { margin-left: auto; flex: none; padding: 2px 10px; font-size: 12px; }
+.rvs-note.is-warn { color: var(--warn); }
+/* While a run goes on the settings are shown, read only: said under the title. */
+.rvs-busy { margin: 0 0 6px; font-size: 12px; color: var(--warn); }
+/* A phone: the box takes the screen less a margin, with less padding, so that the depth
+   column keeps room for its text. */
+@media (max-width: 480px){ .modal-box.rvs-box { padding: 16px 14px; --rvs-cols: 13px 158px minmax(0, 1fr); } }
+/* The peak widths under the pattern: the table (as the Analysis card's), the
+   Williamson–Hall plot and the tests' box. */
+.rv-widths { margin-top: 16px; }
+.rv-pk .rv-key-sm { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+/* hkl on one line: a coincident pair (300 + 221) not wrapped under its key. */
+.rv-pk td:nth-child(2) { white-space: nowrap; }
+/* A peak the tests leave out (overlapped, weak, at an end, not broadened): dimmed, its
+   number struck. */
+.peak-row.rv-pk-out { opacity: .5; }
+.peak-row.rv-pk-out td:first-child { text-decoration: line-through; }
+/* The refined solid under the results: a box like the peak table's. */
+.rv-solid { margin-top: 12px; padding: 10px 12px 12px; }
+/* ===== A plot with a column beside it that spans the plot exactly (.pside): the
+   Rietveld card's pattern with its phases and their structure; the standard's peaks
+   with their parameters and the Caglioti fit. A grid: the nav over the plot, the
+   legend under it; the side column spans the plot's row, so it starts level with the
+   plot's top and its last line ends level with the plot's bottom (a box in it takes
+   the height the rest leaves, flex 1 1 0, so the column never makes the row taller).
+   Stacked on a narrow screen: the side under the plot, at its own height. */
+.pside { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: auto auto auto;
+  column-gap: 16px; align-items: start; }
+.pside > .pside-nav { grid-column: 1; grid-row: 1; }
+.pside > .pside-plot { grid-column: 1; grid-row: 2; min-width: 0; }
+.pside > .pside-under { grid-column: 1; grid-row: 3; min-width: 0; }
+.pside > .pside-col { grid-column: 2; grid-row: 2; align-self: stretch; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+:root.narrow-layout .pside { display: block; }
+/* (the standard's windows: a nav with nothing in it, its line given to the toolbar alone) */
+:root.narrow-layout .pside-nav:not(:has(.plot-nav-left > *)) { display: none; }
+:root.narrow-layout .pside > .pside-col { margin-top: 12px; }
+/* The Rietveld card's side: the phases and the structure, then the buttons. */
+.rv-side > .rv-boxes { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.rv-side > .rv-status:empty { display: none; }
+.rv-side > .rv-prog { margin-top: 0; }
+.rv-side > .rv-btns > .btn { height: 33px; }
+:root.narrow-layout .rv-side > .rv-boxes { flex: none; min-height: 300px; }
+/* The standard's Scherrer side: the parameters at the top; the Caglioti fit, its alert
+   and + Add peak at the foot, the button's bottom on the plot's. A fit taller than the
+   room left scrolls in its place. */
+/* (gap 0 over .pside-col's 8 px, which had been left in by a weaker selector: 28 px
+   between the fit and the button, which the fit's box paid for by scrolling; now 8) */
+.pside > .pside-col.xrd-std-side { gap: 0; }
+.xrd-std-side > .param-head { margin-top: 0; }
+.xrd-std-side > .xrd-cag { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding-top: 10px; }
+.xrd-std-side > .cag-alert:not(:empty) { margin-top: 8px; }
+.xrd-std-side > .plot-action-btn { margin-top: 8px; }
+.xrd-cag > .pg-result { margin-top: auto; flex: 0 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; row-gap: 6px; }
+:root.narrow-layout .xrd-std-side > .xrd-cag { flex: none; }
+/* The phases' list and the structure: boxes like the peak table's, scrolling inside. */
+.rv-boxes > .peak-box { margin-top: 0; padding: 10px 10px 10px; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+.rv-boxes .peak-box-head { flex: none; margin-bottom: 6px; min-width: 0; }
+.rv-ciflist { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.rv-cif { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 4px; border-radius: 6px; cursor: pointer; font-size: 13px; min-width: 0; }
+.rv-cif:hover { background: var(--panel); }
+.rv-cif.is-sel { background: var(--panel); box-shadow: inset 0 0 0 1px var(--accent); }
+.rv-cif input { flex: none; width: 13px; height: 13px; margin: 0; cursor: pointer; accent-color: var(--accent); }
+.rv-cif .rv-key { flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.rv-cif .rv-cif-f { flex: 1 1 auto; min-width: 0; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-cif .rv-cif-sg { flex: none; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.rv-cif .rv-del { flex: none; background: none; border: none; color: var(--muted); padding: 2px 3px; cursor: pointer; line-height: 1; display: inline-flex; }
+.rv-cif .rv-del:hover:not(:disabled) { color: var(--bad); }
+.rv-cif .rv-del:disabled { opacity: .3; cursor: default; }
+/* A row's × and tick while a run goes on (.is-locked, xrd-rv.js lockRows): dimmed, the × as
+   when disabled (no hover colour: it has none so), the tick (the standard's choice), only
+   aria-disabled, to .6 in its accent, so that a ticked or chosen phase reads as such (the
+   browser's disabled look draws ticked and not in one grey), the pointer 'not-allowed' over
+   them, as over the CIF drop zones then. To v505 they looked enabled, the tick's pointer a
+   hand even disabled. The built-in LaB6's ×, never locked, keeps the arrow. */
+.rv-cif .rv-del.is-locked, .rv-cif input.is-locked { cursor: not-allowed; }
+.rv-cif input.is-locked { opacity: .6; }
+/* Its CIF's download, left of the ×: the file list's (.dl-bare, lit by the accent), padded
+   as the × and as near it as the file list's pair (8 px between the glyphs, not the row's gap). */
+.rv-cif .rv-dl { flex: none; padding: 2px 3px; margin-right: -5px; }
+/* A list too narrow for a row with it leaves out the space group, which the Structure box
+   gives: under 155 px (a phone, a window under about 1180 px), where the button and the
+   widest common symbols (P4₂/mnm, P6₃/mmc: under 152 px; Pm-3m under 140) push the × out of
+   the row. Wider, the space group stays and the formula has what is left (to v502 the space
+   group shown at any width, the × out of the row on a phone with those symbols). */
+.rv-ciflist { container-type: inline-size; }
+@container (max-width: 155px) { .rv-cif .rv-cif-sg { display: none; } }
+.rv-cellbox .rv-cell-name { margin-left: auto; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The cell in a square as wide as its box (or as the height left), at the top; the
+   details under it, scrolling when they are more than the box holds. */
+.rv-cell { flex: none; display: flex; justify-content: center; }
+.cell3d-canvas { display: block; touch-action: none; cursor: grab; border-radius: 6px; -webkit-tap-highlight-color: transparent; }
+.cell3d-canvas.is-grabbing { cursor: grabbing; }
+.cell3d-canvas:focus { outline: none; }
+.cell3d-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rv-cell-info { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-top: 6px; font-size: 12px; line-height: 1.55; color: var(--text); }
+.rv-cell-info span { color: var(--muted); }
+.rv-cell-info .rv-ci-name { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.rv-cell-info .rv-ci-els { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
+.rv-cell-info .rv-ci-els span { color: var(--text); display: inline-flex; align-items: center; gap: 4px; }
+.rv-cell-info .rv-ci-els i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); }
+.rv-cell-info .rv-ci-file { color: var(--muted); overflow-wrap: anywhere; }
+/* What reading the CIF found (its own cell, operations it lacked, B made equal). */
+.rv-cell-info .rv-ci-note { color: var(--muted); font-size: 12px; line-height: 1.45; margin-top: 2px; }
+/* The refinement's results across the card, flowing down and across as many columns as
+   fit (the fit, the specimen or the instrument, each phase, a long one over several);
+   notes and warnings across them all, under. By the title, what it was refined with: a
+   line a phase, muted (not refined yet, what Refine will refine: in italics). */
+.rv-fit { margin-top: 12px; }
+.rv-fit > .rv-fit-head { flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 2px; }
+.rv-fit-set { display: flex; flex-wrap: wrap; column-gap: 14px; row-gap: 2px; min-width: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.rv-fit-set.is-next { font-style: italic; }
+.rv-fit-set .rv-key-sm { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }
+.rv-fit-grid .rv-note.rv-warn { color: var(--warn); }
+.rv-fit-grid { columns: 230px; column-gap: 24px; }
+.rv-fit-grid > .rv-wide { column-span: all; margin-top: 6px; }
+.rv-group { display: block; margin-bottom: 10px; }
+.rv-group > * { break-inside: avoid; margin-bottom: 5px; }
+.rv-group > .txt-mini { break-after: avoid; }
+.rv-group > .pg-stat { font-size: 13px; color: var(--text); }
+.rv-group > .pg-stat b { color: var(--accent); }
+.rv-group > .txt-mini.rv-phase-name { text-transform: none; letter-spacing: .02em; }
+.rv-fit-grid .rv-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+/* A negative Miller index: a bar over its digits (xrd-rv.js hklRuns); a bar right after
+   another a little apart, each index its own (1̄1̄0 is two). Its minus is in the text,
+   hidden (.hkl-sign), so that a copy or a screen reader reads (1-10). */
+.hkl-bar { text-decoration: overline; text-decoration-thickness: 1px; }
+.hkl-bar2 { margin-left: .1em; }
+.hkl-sign { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* The Williamson–Hall plot, the tests on the widths and the crystallites' shape in one
+   row: a grid whose middle row is the plot's alone (its caption over it, its legend
+   under), the two boxes spanning it exactly — as tall as the plot, sized as if empty
+   (contain: size) so that they never make the row taller, their text scrolling inside.
+   The columns 1.618 : 1.2 : 1 make the shape's box square: the plot is 1.618 times as
+   wide as it is tall. Stacked on a narrow screen: the boxes at their own height. */
+.rv-wrow { display: grid; grid-template-columns: minmax(0, 1.618fr) minmax(0, 1.2fr) minmax(0, 1fr); grid-template-rows: auto auto auto; column-gap: 16px; align-items: start; }
+.rv-wrow > .txt-caption { grid-column: 1; grid-row: 1; margin: 0 0 6px; }
+.rv-wrow > .plot-wrap { grid-column: 1; grid-row: 2; min-width: 0; }
+.rv-wrow > .plot-wrap svg.plot { min-width: 0; }
+.rv-wrow > .legend { grid-column: 1; grid-row: 3; }
+.rv-wrow > .peak-box { grid-row: 2; align-self: stretch; margin-top: 0; min-width: 0; min-height: 0; contain: size; display: flex; flex-direction: column; overflow: hidden; }
+.rv-wrow > .rv-tests { grid-column: 2; padding: 10px 12px; }
+.rv-wrow > .rv-solids { grid-column: 3; padding: 10px 8px; }
+.rv-wrow > .peak-box > .peak-box-head { flex: none; margin-bottom: 6px; }
+.rv-tests-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; display: grid; align-content: start; row-gap: 6px; }
+.rv-tests-body > .pg-stat { font-size: 13px; color: var(--text); }
+.rv-tests-body > .pg-stat b { color: var(--accent); }
+.rv-tests-body > .pg-stat .txt-meta { font-size: 12px; margin-left: 4px; }
+.rv-tests-body > .pg-stat.rv-sub { margin-top: 4px; }
+.rv-tests-body > .txt-mini { margin-top: 4px; }
+/* Phase names are formulae more often than not: upper case would turn Co into CO. */
+.rv-tests-body > .txt-mini.rv-phase-name { text-transform: none; letter-spacing: .02em; }
+.rv-tests-body > .rv-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.rv-solids > .rv-solid { margin: 0; padding: 0; }
+.rv-solids > .rv-solid + .rv-solid { margin-top: 10px; }
+:root.narrow-layout .rv-wrow { display: block; }
+:root.narrow-layout .rv-wrow > .peak-box { contain: none; margin-top: 16px; }
+:root.narrow-layout .rv-wrow > .rv-tests { max-height: 360px; }
+/* The peak widths' table at the card's foot, across it; the note under it: the
+   instrument's width not taken off. */
+.rv-widths > .rv-wtable { margin-top: 16px; }
+.rv-wtable .rv-note { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+/* The Scherrer card's two actions under its parameters, side by side. */
+.xrd-pk-btns { display: flex; gap: 8px; }
+.xrd-pk-btns > .plot-action-btn { flex: 1 1 0; min-width: 0; }
+/* ===== XRPD instrumental standard: a window of its own, as wide as a card. Its head
+   is a banner, as the figure composer's: it stays at the top, with the ×, while what
+   is under it scrolls. ===== */
+.xrd-std-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  width: min(1320px, 96vw); max-height: 94vh; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+.xrd-std-box:focus { outline: none; }
+.xrd-std-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px 18px; border-bottom: 1px solid var(--line); }
+.xrd-std-head > h3 { flex: 1 1 auto; margin: 0; display: flex; align-items: center; gap: 4px; }
+.xrd-std-head .an-ic { margin-right: -4px; }
+.xrd-std-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 14px 18px 18px; }
+.xrd-std-instr { margin: 0 0 12px; }
+.xrd-std-scroll > .dropzone { padding-top: 14px; padding-bottom: 14px; }
+.xrd-std-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; padding: 8px 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+/* The file's whole name: wrapped, if long, rather than cut. */
+.xrd-std-row .xrd-std-name { flex: 1 1 auto; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
+.xrd-std-row .peak-del { background: none; border: none; color: var(--muted); padding: 2px 4px; cursor: pointer; display: inline-flex; }
+.xrd-std-row .peak-del:hover { color: var(--bad); }
+.xrd-std-body { margin-top: 12px; }
+@media (max-width: 600px){ .xrd-std-box { width: 100vw; max-height: 100vh; border-radius: 0; } .xrd-std-head { padding: 10px 10px 10px 12px; } .xrd-std-scroll { padding: 12px 12px 14px; } }
+/* XRPD — the crystallites' shape in 3D (xrd-shape3d.js). The view sizes its canvas
+   itself (square, 200–320 px, the container's width); these rules only centre it,
+   own the drag (no page scroll or zoom under a finger) and style the caption. */
+.shape3d { margin: 0 auto; }
+.shape3d-canvas {
+  display: block; margin: 0 auto;
+  touch-action: none; cursor: grab;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+.shape3d-canvas.is-grabbing { cursor: grabbing; }
+.shape3d-canvas:focus { outline: none; }
+.shape3d-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shape3d-cap {
+  margin: 4px auto 0; text-align: center;
+  font-size: 12px; line-height: 1.35; color: var(--muted);
+}
+.rv-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
+.rv-prog { height: 6px; margin-top: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.rv-prog > div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
 /* Remove top margin on first label in parameter panels */
 .col > label:first-child,
 .col > label:first-of-type {
@@ -1721,7 +2250,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 
 /* The "interval too small" alert sits at the end of the Parameters column;
    give it a clear break from the stats above it. */
-#taucAlert:not(:empty) { margin-top: 16px; }
+#taucAlert:not(:empty), #taucUAlert:not(:empty) { margin-top: 16px; }
 
 /* ===== Tauc Eg summary table ===== */
 #taucEgTableWrap { overflow: hidden; }
@@ -1776,40 +2305,61 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   font-size: 15px;
   line-height: 1;
 }
-#xrdPeakTableWrap table, #xrdFitTableWrap table, #xrdStdPeakTableWrap table { width: 100%; }
-#xrdPeakTableWrap .peak-row, #xrdFitTableWrap .peak-row, #xrdStdPeakTableWrap .peak-row { transition: background 0.1s; cursor: pointer; }
-#xrdPeakTableWrap .peak-row:hover, #xrdFitTableWrap .peak-row:hover, #xrdStdPeakTableWrap .peak-row:hover { background: var(--panel); }
+.xrd-peak-wrap table, table { width: 100%; }
+/* A peak table wider than the screen scrolls sideways inside its box, not the page. */
+.peak-scroll { overflow-x: auto; }
+.xrd-peak-wrap .peak-row, .peak-row { transition: background 0.1s; cursor: pointer; }
+.xrd-peak-wrap .peak-row:hover, .peak-row:hover { background: var(--panel); }
 /* Manually added peaks: neutral grey tint (order matters: before hovering/selected) */
-#xrdPeakTableWrap .peak-row.manual-peak, #xrdFitTableWrap .peak-row.manual-peak, #xrdStdPeakTableWrap .peak-row.manual-peak { background: rgba(160, 170, 185, 0.14); }
-#xrdPeakTableWrap .peak-row.manual-peak:hover, #xrdFitTableWrap .peak-row.manual-peak:hover, #xrdStdPeakTableWrap .peak-row.manual-peak:hover { background: rgba(160, 170, 185, 0.22); }
+.xrd-peak-wrap .peak-row.manual-peak, .peak-row.manual-peak { background: rgba(160, 170, 185, 0.14); }
+.xrd-peak-wrap .peak-row.manual-peak:hover, .peak-row.manual-peak:hover { background: rgba(160, 170, 185, 0.22); }
 /* Temporary hover link (row↔peak): green, coherent with the hovered peak colour */
-#xrdPeakTableWrap .peak-row.hovering, #xrdFitTableWrap .peak-row.hovering, #xrdStdPeakTableWrap .peak-row.hovering,
-#xrdPeakTableWrap .peak-row.manual-peak.hovering, #xrdFitTableWrap .peak-row.manual-peak.hovering, #xrdStdPeakTableWrap .peak-row.manual-peak.hovering { background: rgba(95, 207, 106, 0.20); }
+.xrd-peak-wrap .peak-row.hovering, .peak-row.hovering,
+.xrd-peak-wrap .peak-row.manual-peak.hovering, .peak-row.manual-peak.hovering { background: rgba(95, 207, 106, 0.20); }
 /* Persistent selection: keep the normal background, add a uniform white outline.
    Applied per-cell (top+bottom on every cell, left on the first, right on the last)
    so the rectangle is even all around with no internal lines. */
-#xrdPeakTableWrap .peak-row.selected td, #xrdFitTableWrap .peak-row.selected td, #xrdStdPeakTableWrap .peak-row.selected td { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset); }
-#xrdPeakTableWrap .peak-row.selected td:first-child, #xrdFitTableWrap .peak-row.selected td:first-child, #xrdStdPeakTableWrap .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset 2px 0 0 var(--sel-inset); }
-#xrdPeakTableWrap .peak-row.selected td:last-child, #xrdFitTableWrap .peak-row.selected td:last-child, #xrdStdPeakTableWrap .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
+.xrd-peak-wrap .peak-row.selected td, .peak-row.selected td { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset); }
+.xrd-peak-wrap .peak-row.selected td:first-child, .peak-row.selected td:first-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset 2px 0 0 var(--sel-inset); }
+.xrd-peak-wrap .peak-row.selected td:last-child, .peak-row.selected td:last-child { box-shadow: inset 0 2px 0 var(--sel-inset), inset 0 -2px 0 var(--sel-inset), inset -2px 0 0 var(--sel-inset); }
 
 /* ===== GC parameter table: grouped headers, all/one toggle, row↔plot interaction ===== */
-.gc-param-table { min-width: 860px; }   /* scrolls in its overflow-x wrapper below this */
+.gc-param-table { min-width: 1000px; }  /* scrolls in its overflow-x wrapper below this (860 to v500, before p) */
 /* On mobile the table already scrolls, so extra width is free room for the columns
-   (860 → 1200). Kept right after the base rule so it wins (equal specificity). */
+   (1000 → 1200). Kept right after the base rule so it wins (equal specificity). */
 @media (max-width: 600px) { .gc-param-table { min-width: 1200px; } }
-#gcParamTableWrap .gc-grp { text-align: left; }
-#gcParamTableWrap .gc-toggle { margin-left: 8px; vertical-align: middle; position: relative; top: -1px; }
-#gcParamTableWrap .gc-all-row { background: rgba(160, 170, 185, 0.08); }
-#gcParamTableWrap .gc-all-row .fname { color: var(--muted); }
-#gcParamTableWrap input[disabled] { opacity: .35; }
-#gcParamTableWrap input[readonly] { opacity: .6; cursor: default; }
-#gcParamTableWrap .gc-row { transition: background .1s; }
-#gcParamTableWrap .gc-row.hovering { background: rgba(95, 207, 106, 0.20); }
+/* Headers sit at the bottom left of their cells, on their fields: th and td share
+   their 8 px padding, so a header starts where its field does; a field's name is on its
+   left edge and its all/one pill on its right. The pill shares the name's baseline,
+   its ALL then centred on the name's capitals (a box centred on the line box sat
+   below them). The interval's group line runs over its two fields only. */
+.gc-param-wrap thead th { vertical-align: bottom; }
+.gc-param-wrap .gc-th { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+/* The pill's ALL, capitals with no descender, sat 1.5 px above its box's middle
+   (the line box keeps room under them): 1.5 px more padding on top and none below
+   centres it, and with its baseline on the name's, the box on the name's capitals.
+   Its overhang under the baseline is let out of the header's height, or the name
+   would sit higher than the names without a pill. */
+.gc-param-wrap .gc-toggle { flex: 0 0 auto; padding-top: 2.5px; padding-bottom: 0; margin-bottom: -3px; }
+.gc-param-wrap th.gc-grp { text-align: left; border-bottom: 0; padding-bottom: 0; }
+.gc-param-wrap .gc-grp-in { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.gc-param-wrap .gc-all-row { background: rgba(160, 170, 185, 0.08); }
+.gc-param-wrap .gc-all-row .fname { color: var(--muted); }
+.gc-param-wrap input[disabled] { opacity: .35; }
+.gc-param-wrap input[readonly] { opacity: .6; cursor: default; }
+/* The injection delay's row sits a step above the table, on its columns. Locked by
+   Auto its value is still the one in force, so it reads like the read-only echoes,
+   not like a cell that does not apply. */
+.gc-param-wrap .gc-delay { margin-bottom: 8px; }
+.gc-param-wrap .gc-delay td { border-bottom: 0; }
+.gc-param-wrap .gc-delay input[disabled] { opacity: .6; cursor: default; }
+.gc-param-wrap .gc-row { transition: background .1s; }
+.gc-param-wrap .gc-row.hovering { background: rgba(95, 207, 106, 0.20); }
 /* Single outline on the row draws one clean rectangle; a per-cell box-shadow
    (as the XRD peak table uses) leaves white seams at every cell boundary because
    each cell clips its own shadow — very visible in dark theme on these wide rows. */
-#gcParamTableWrap .gc-row.selected td { box-shadow: none; }
-#gcParamTableWrap .gc-row.selected { outline: 2px solid var(--sel-inset); outline-offset: -2px; }
+.gc-param-wrap .gc-row.selected td { box-shadow: none; }
+.gc-param-wrap .gc-row.selected { outline: 2px solid var(--sel-inset); outline-offset: -2px; }
 /* Mean ± std crystallite-size summary under the analysis peak table */
 .size-summary {
   margin-top: 12px;
@@ -1823,8 +2373,7 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 .size-summary .ss-n { color: var(--muted); font-size: 12px; }
 
 /* ✕ delete button — bare glyph, no border/background; padding keeps a clickable hitbox */
-#xrdPeakTableWrap .peak-row .peak-del,
-#xrdStdPeakTableWrap .peak-row .peak-del {
+.xrd-peak-wrap .peak-row .peak-del {
   background: none;
   border: none;
   color: var(--muted);
@@ -1842,29 +2391,43 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   top: -0.5px;
   transition: color 0.1s;
 }
-/* Delete X → bad on hover. Needs the same id scope as the base rule above: the
-   shared .is-danger:hover (a plain class rule) is out-specified by that id and
-   would otherwise never win here. */
-#xrdPeakTableWrap .peak-row .peak-del:hover:not(:disabled),
-#xrdStdPeakTableWrap .peak-row .peak-del:hover:not(:disabled) { color: var(--bad); }
+/* Delete X → bad on hover. Needs the same scope as the base rule above: the shared
+   .is-danger:hover (a plain class rule) is out-specified by it and would otherwise
+   never win here. */
+.xrd-peak-wrap .peak-row .peak-del:hover:not(:disabled) { color: var(--bad); }
 /* +Add peak armed state is handled by the shared button.btn.is-on rule. */
 
-/* ===== XRD fit hyperparameters modal ===== */
+/* ===== Modal windows ===== */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 1000;
   background: rgba(0,0,0,0.55);
   display: flex; align-items: center; justify-content: center;
 }
+/* While a modal is open (a .modal-backdrop on the page and not display: none — the
+   figure composers, the calendar, the Rietveld settings, the XRPD standard's windows,
+   the projects' Save as and New), the page behind it does not scroll: the wheel and
+   the touch scroll the modal only. A page long enough to have a scrollbar keeps its
+   gutter, so it keeps its width under the modal (no reflow, no plot redrawn). */
+html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gutter: stable; }
 .modal-box {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  padding: 20px 22px; width: min(420px, 92vw); max-height: 90vh; overflow: auto;
+  padding: 20px 22px; width: min(420px, 92vw); max-height: 90vh; overflow: auto; overscroll-behavior: contain;
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
 }
 .modal-box label { display: block; margin-top: 12px; }
+/* A question in a window (utils.js confirmModal): its title and × in a row, as the XRPD
+   standard's window's head; the message; the answers at the foot, the primary last, as
+   Save as… has them. They share the width equally, so they sit centred whatever their
+   labels (to v495 at the right, each as wide as its label), and wrap one under the other
+   on a phone. */
+.modal-box.confirm-box { width: min(520px, 92vw); }
+.confirm-head { display: flex; align-items: flex-start; gap: 8px; }
+.confirm-head > h3 { flex: 1 1 auto; margin: 0; }
+.confirm-head > .confirm-x { margin: -2px -6px 0 auto; }
+.confirm-msg { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--text); }
+.confirm-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.confirm-btns > .btn { flex: 1 1 180px; }
 
-/* ===== XRD fit progress bar ===== */
-#xrdFitProgWrap { height:6px; background:var(--panel2); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
-#xrdFitProgBar { height:100%; width:0; background:var(--accent); transition:width .08s linear; }
 
 
 /* ===== "Data loaded" dot on nav tabs — subtle dot after the name, inheriting the
@@ -2030,6 +2593,11 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
     currentColor 0 5px, transparent 5px 9px);
   background-color: transparent !important;
 }
+/* Long dashes and dots, for series drawn '10,4' and '2,3' (Urbach's subtracted curves
+   and fits). */
+.legend i.mk-ldash, .legend i.mk-dots { background-color: transparent !important; width: 20px; }
+.legend i.mk-ldash { background-image: repeating-linear-gradient(to right, currentColor 0 9px, transparent 9px 13px); }
+.legend i.mk-dots { background-image: repeating-linear-gradient(to right, currentColor 0 2px, transparent 2px 5px); }
 
 /* ===== Dropzone loading state ===== */
 .dropzone { position: relative; }
@@ -2063,6 +2631,29 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 }
 @keyframes dz-spin { to { transform: rotate(360deg); } }
 
+/* ===== The Rietveld card's CIF drop zones =====
+   The Phases box takes CIFs in. With no phase, a drop zone in the list's place: the app's
+   own (.dropzone, .dz-icon, .dz-title, .txt-meta), scaled to the box and filling it. With
+   one, + CIF, a zone of one line at the box's foot, of the same look (dashed border lit by
+   the accent on hover, its sign in the accent). The whole box lights while files are
+   dragged over it, its zone as a .dropzone.dragover; while a run goes on the zones are
+   disabled as a button is (aria-disabled). */
+.rv-cifs > .rv-cifdz[hidden] { display: none; }
+.rv-cifs > .rv-cifdz { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 14px 10px; border-radius: 10px; overflow: hidden; }
+.rv-cifdz .dz-icon { font-size: 22px; margin-bottom: 6px; }
+.rv-cifdz .dz-title { font-size: 13px; line-height: 1.35; }
+/* (one line, a second on a box too narrow for it) */
+.rv-cifs > .rv-cifdz-mini { flex: none; display: block; margin-top: 6px; padding: 5px 8px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; line-height: 16px; color: var(--text); }
+.rv-cifdz-mini .rv-cifdz-plus { color: var(--accent); font-size: 15px; }
+.rv-cifdz:focus { outline: none; }
+.rv-cifdz:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rv-cifs.dragover { border-color: var(--accent); }
+.rv-cifs.dragover > .rv-cifdz { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.rv-cifdz[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+.rv-cifdz[aria-disabled="true"]:hover { border-color: var(--line); }
+
 /* Module loader: covers the content area (everything below the project bar) with the
    themed backdrop + a spinner while a tab's charts are (re)built on open / tab switch,
    so the plots don't visibly assemble. Not used on resize. */
@@ -2076,8 +2667,8 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   z-index: 50;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease;
 }
+/* (on and off at once: to v520 it faded in over 0.15 s, the page under it seen meanwhile) */
 .module-loader.show { opacity: 1; pointer-events: auto; }
 .module-loader-spin {
   width: 26px; height: 26px;
@@ -2118,10 +2709,26 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
   display: flex; flex-direction: column;
   width: 100%; height: 100%; overflow: hidden;
 }
+/* It takes the focus while open (keys stay in it), with no ring round the whole box. */
+.fig-box:focus { outline: none; }
 .fig-head {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0;
 }
+/* A section's title with a button at its right (the SEM figure's Images: Restore). */
+.sem-fig-sechead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sem-fig-sechead h4 { margin-bottom: 0; }
+.sem-fig-sechead + * { margin-top: 8px; }
+.fig-controls .color-swatch:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Room to scroll the last settings up to the middle of the panel, so that a picker
+   opened from one of them can follow it there (utils.js composerTop) rather than stay
+   pinned to the foot. */
+.fig-controls::after { content: ''; display: block; height: 40vh; }
+/* The close cross at the head's top right, in every composer. */
+.fig-head .fig-x { margin-left: auto; }
+/* A setting that means nothing while another is off: in place, greyed (figure.js dep). */
+.fig-dep[data-off="1"] { opacity: 0.5; }
+.fig-dep[data-off="1"] input, .fig-dep[data-off="1"] select, .fig-dep[data-off="1"] button, .fig-dep[data-off="1"] label { cursor: not-allowed; }
 .fig-x {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 15px; line-height: 1; padding: 4px 6px; transition: color 0.14s;
@@ -2152,6 +2759,10 @@ h1:has(> .instr-info), h2:has(> .instr-info), h3:has(> .instr-info) {
 .fig-row > span { flex: 0 0 118px; color: var(--muted); }
 .fig-row input, .fig-row select { flex: 1; min-width: 0; }
 .fig-row .btn-sm { flex: 0 0 auto; }
+/* An "Auto" box at the end of a field's row: the field gives up the room it takes, on
+   a phone too, where a row's field otherwise claims a line of its own. */
+.fig-row .fig-rowcheck { flex: 0 0 auto; margin: 0; }
+.fig-row:has(.fig-rowcheck) > input { flex: 1 1 0; min-width: 0; }
 /* Axis-title editor: the field, a thin toolbar under it, and a character tray. */
 .fig-titlefield { margin-bottom: 8px; }
 .fig-titlefield .fig-row { margin-bottom: 4px; }
@@ -2214,14 +2825,26 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 /* Every control on a series row stands the same height, so the row reads as one
    line rather than a row of boxes of four different sizes. */
 .fig-serie { --fig-field-h: 23px; }
-.fig-serie select { flex: 0 0 74px; width: 74px; max-width: 74px; padding: 1px 2px; }
-.fig-serie input[data-num] { width: 42px; padding: 3px 4px; text-align: center; }
+.fig-serie select { flex: 0 0 74px; width: 74px; max-width: 74px; padding: 1px 4px; }
+.fig-serie input[data-num] { width: 42px; padding: 1px 4px; text-align: left; }
+.fig-serie select, .fig-serie input[data-num] { font-size: 12px; }
 .fig-serie select,
 .fig-serie input[data-num],
 .fig-serie input.fig-slabel { height: var(--fig-field-h); }
 .fig-serie .color-swatch,
+.fig-serie .palette-pick-btn,
 .fig-serie .fig-cbox-i { height: var(--fig-field-h); }
-.fig-serie .color-swatch { width: var(--fig-field-h); margin: 0; }
+/* Every button on a series row is rounded like the fields it stands beside — the
+   7px of an input, not the 3px a swatch takes where it is a small square. */
+.fig-serie .color-swatch,
+.fig-serie .palette-pick-btn,
+.fig-serie .fig-cbox-i,
+.fig-serie .fig-restore,
+.fig-dgroup-h .color-swatch { border-radius: 7px; }
+/* The palette button stands in the colour column, so it is the size of the swatches
+   below it rather than the 14px it takes where it heads a table. */
+.fig-serie .color-swatch,
+.fig-serie .palette-pick-btn { width: var(--fig-field-h); margin: 0; flex: 0 0 var(--fig-field-h); }
 .fig-serie .fig-cbox-i { width: var(--fig-field-h); }
 .fig-serie .fig-grip { height: var(--fig-field-h); }
 .fig-grip {
@@ -2231,26 +2854,22 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-grip svg { width: 11px; height: 11px; }
 
 .fig-serie.dragging { opacity: 0.45; }
-/* The "all series" row: same shape as a series row, visually set apart. */
-.fig-serie-all {
-  border-bottom: 1px solid var(--line); padding-bottom: 7px; margin-bottom: 8px;
-}
-.fig-serie-all select, .fig-serie-all input[data-num] { font-size: 10px; }
+/* The "all series" row: the same row, one step above the panels it governs. */
+.fig-serie-all { margin-bottom: 8px; }
 /* Column names over the series list, built to the same measurements as a row so
    every field sits under the name of what it is. */
 /* Indented by what a panel group's border and padding add, so the captions and the
-   all-series row stand over the columns of the rows inside the groups. */
-.fig-allhead { margin-bottom: 4px; padding-left: 9px; }
+   all-series row stand over the columns of the rows inside the groups. Captions are
+   left-aligned, like the text of the fields they name. */
 .fig-serie-caps, .fig-serie-all { padding: 0 9px; }
 .fig-serie-caps { margin-bottom: 4px; }
 .fig-cap {
   font-size: 9px; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--muted); display: flex; align-items: center; justify-content: center;
+  color: var(--muted); display: flex; align-items: center; justify-content: flex-start;
   overflow: hidden; white-space: nowrap;
 }
-.fig-cap svg { width: 11px; height: 11px; }
 .fig-cap-box { flex: 0 0 23px; }
-.fig-cap-name { flex: 1; min-width: 40px; justify-content: flex-start; }
+.fig-cap-name { flex: 1; min-width: 40px; }
 .fig-cap-num { flex: 0 0 42px; }
 .fig-cap-sel { flex: 0 0 74px; }
 /* Some series drawn and some not: neither a tick nor an empty box. */
@@ -2259,12 +2878,17 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 }
 .fig-grip-off { visibility: hidden; }
 /* Where the dragged series would land: a bar in the gap between two rows, midway
-   between them, rather than a line along the edge of one of them. */
+   between them, rather than a line along the edge of one of them — over the row it
+   would go before, or under the last of its group. */
 .fig-serie { position: relative; }
-.fig-serie.drag-over::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: -4px;
+.fig-serie.drop-before::before, .fig-serie.drop-after::after {
+  content: ''; position: absolute; left: 0; right: 0;
   height: 2px; border-radius: 1px; background: var(--accent);
 }
+.fig-serie.drop-before::before { top: -4px; }
+/* A full panel takes a dropped image by swapping: the image it swaps with is ringed. */
+.fig-serie.drop-swap { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
+.fig-serie.drop-after::after { bottom: -4px; }
 /* The Range section: X and Y side by side, each column the same ladder of controls
    so the two can be read across as well as down. */
 .fig-rangecols { display: flex; gap: 10px; }
@@ -2276,7 +2900,6 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-rangecol .fig-row { flex-wrap: wrap; gap: 2px 6px; }
 .fig-rangecol .fig-row > span { flex: 1 0 100%; }
 .fig-rangecol .fig-row input, .fig-rangecol .fig-row select { flex: 1 1 auto; width: 100%; }
-.fig-rangecol .fig-check { font-size: 11px; align-items: flex-start; }
 
 /* Sub-heading inside a section, for grouping related rows. */
 .fig-subhead {
@@ -2300,29 +2923,97 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-group-empty { margin: 2px 0 0; }
 
 /* Colour groups inside a bar series, with the bars that belong to each. */
-.fig-divs { margin: -2px 0 8px 26px; padding-left: 8px; border-left: 1px solid var(--line); }
+/* Indented so a division's × sits in the column of the series' legend toggle and its
+   colour and fill buttons stand under the series' palette and fill buttons. */
+.fig-divs { margin: -2px 0 8px 36px; }
+/* Removing a division — the same square as the toggles it lines up with. */
+/* Removing a division is a bare x, the file list's own glyph, with no box of its own;
+   the whole field-sized square still takes the click. A series with one division has
+   nothing to remove, and gets an empty, inert gap of the same size instead, so its
+   colour and name stay in the column every other division uses. */
+.fig-divx, .fig-divx-gap {
+  flex: 0 0 var(--fig-field-h, 23px); width: var(--fig-field-h, 23px); height: var(--fig-field-h, 23px);
+}
+.fig-divx {
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  border: none; background: none; color: var(--muted); cursor: pointer;
+}
+.fig-divx:hover { color: var(--accent); }
 .fig-dgroup { border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; margin-bottom: 5px; }
 .fig-dgroup-h { display: flex; align-items: center; gap: 5px; }
-.fig-dgroup-h .fig-slabel { flex: 1; min-width: 40px; font-size: 11px; padding: 3px 5px; }
-.fig-dbars { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-.fig-barchip {
-  border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px;
-  font-size: 10px; color: var(--muted); background: var(--panel2);
-  cursor: grab; touch-action: none; user-select: none;
+.fig-dgroup-h .fig-slabel { flex: 1; min-width: 40px; font-size: 12px; padding: 1px 5px; height: 23px; }
+/* The division's swatch matches its name field, as the series swatches match theirs. */
+/* No margin of its own: the row's gap does the spacing, and the extra 5px would push
+   the division's fill button out from under the series' one. */
+.fig-dgroup-h .color-swatch { width: 23px; height: 23px; flex: 0 0 23px; margin: 0; }
+/* How a bar series is filled: a button showing the fill itself, and the panel it
+   opens — textures, the colour they are drawn in, and how much shows through. */
+/* Same square as a colour swatch, and the same manners: a quiet border at rest so the
+   two read as one size, the light one on hover and while its panel is open. */
+.fig-fill {
+  flex: 0 0 var(--fig-field-h, 23px); width: var(--fig-field-h, 23px); height: var(--fig-field-h, 23px);
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  border: 1.5px solid rgba(138,143,152,0.55); border-radius: 7px; background: none;
+  cursor: pointer; overflow: hidden;
 }
-.fig-barchip.dragging { opacity: 0.45; }
-.fig-divx, .fig-divadd { flex: 0 0 auto; font-size: 10px; padding: 3px 6px; }
+.fig-fill:hover, .fig-fill.cp-anchored { border-color: var(--white); }
+.fig-fill-sw { flex: 0 0 auto; display: block; width: 100%; height: 100%; }
+/* The texture palette button stands in the fill column and is sized by the palette
+   button rules it shares, but it shows textures, so the colour wheel is taken off. */
+.fig-texpal {
+  background: none; display: flex; align-items: center; justify-content: center;
+  padding: 0; overflow: hidden;
+}
+.fig-texpal svg { display: block; width: 100%; height: 100%; }
+.fig-fillpop {
+  position: fixed; z-index: 1200; width: 150px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+}
+.fig-fillgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+/* The two ways round, under the textures they apply to. */
+.fig-fillinv {
+  display: flex; gap: 5px; justify-content: center;
+  border-top: 1px solid var(--line); margin-top: 7px; padding-top: 7px;
+}
+.fig-filltile {
+  padding: 2px; line-height: 0; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--panel2);
+}
+.fig-filltile.is-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+
+/* The samples of a bar series: one row each, named where it stands, dragged by its
+   handle. Built like a series row so the two read as the same kind of list. */
+.fig-dbars { display: flex; flex-direction: column; gap: 4px; margin-top: 5px; }
+/* The sample rows hang under the name column — under the Restore button and the
+   series names — with the handle just outside it. */
+/* The right inset matches what the width and texture columns take out of a series
+   row, so a sample's name box is the very size of the Restore button above it. */
+.fig-barrow { display: flex; align-items: center; gap: 5px; padding: 0 38px 0 68px; }
+.fig-dgroup-h { padding-right: 38px; }
+.fig-barrow .fig-grip { flex: 0 0 11px; height: 23px; }
+.fig-barrow .fig-slabel { flex: 1; min-width: 40px; font-size: 12px; padding: 1px 5px; height: 23px; }
+.fig-barrow.dragging { opacity: 0.45; }
+.fig-divadd { flex: 0 0 auto; font-size: 10px; padding: 3px 6px; margin-left: 28px; }
 
 /* The nine placings of the plot area, in a little grid under the button. */
 .fig-align svg { display: block; }
+/* Open, the button is outlined and drawn in the accent — held, so it says "open"
+   rather than "hovered", on either theme (the swatches' white border would not). */
+button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--accent); }
 .fig-alignpop {
   position: fixed; z-index: 1200;
   display: grid; grid-template-columns: repeat(3, auto); gap: 4px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 6px; box-shadow: 0 10px 28px rgba(0,0,0,0.45);
 }
-.fig-alignpop button { padding: 4px; line-height: 0; }
-.fig-alignpop button.is-on { border-color: var(--accent); color: var(--accent); }
+/* Square cells: button.btn.btn-sm would give each its text padding and make them
+   wide. The one in force is an ordinary .is-on button, its icon in --on-accent. */
+.fig-alignpop button.btn.btn-sm {
+  width: 28px; height: 28px; padding: 0; line-height: 0;
+  display: grid; place-items: center;
+}
 .fig-row input[disabled] { opacity: 0.6; cursor: not-allowed; }
 /* Section header that carries controls of its own (the Series palette picker). */
 .fig-sechead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -2340,6 +3031,9 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
 .fig-axrow > b { color: var(--muted); font-weight: 500; }
 .fig-axrow input[type="checkbox"] { justify-self: center; margin: 0; }
 .fig-axrow select { padding: 3px 2px; min-width: 0; }
+/* The option under the matrix is about the whole of it, not its last row: a blank
+   line sets it apart from "top", on top of the rows' own 5 px (which it collapses with). */
+.fig-axrow + .fig-check { margin-top: calc(5px + 1.2em); }
 /* Preset controls live in the footer, grouped and set off from the export buttons. */
 .fig-presets {
   display: flex; align-items: center; gap: 5px;
@@ -2357,6 +3051,8 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   display: flex; align-items: center; gap: 8px;
   padding: 10px 16px; border-top: 1px solid var(--line); flex-shrink: 0;
 }
+/* Why an export failed (a PNG too large for the browser, say), beside the readout. */
+.fig-msg { color: var(--bad); }
 @media (max-width: 900px) {
   /* Stacked: the preview keeps a guaranteed share of the height instead of being
      squeezed to nothing by the controls' own content, which is what `flex: 1 1 auto`
@@ -2370,11 +3066,22 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
    series row well before phone widths — these wrap from the point it stops fitting. */
 @media (max-width: 1100px) {
   .fig-serie, .fig-panel { flex-wrap: wrap; row-gap: 6px; }
-  .fig-slabel { flex: 1 1 100px; }
-  .fig-serie select { max-width: none; flex: 1 1 auto; }
+  /* Wrapped rows share the line by these bases rather than by their contents: a
+     select holding "dashed" would otherwise take more of the line than one holding
+     "—", and the name field of a series would end up a different width from the
+     button above it. */
+  input.fig-slabel { flex: 1 1 100px; min-width: 0; }
+  .fig-serie select { max-width: none; flex: 1 1 64px; min-width: 0; width: auto; }
+  /* The fill button is a swatch, not a field: it keeps its square whatever the width. */
+  .fig-fill { flex: 0 0 var(--fig-field-h, 23px); width: var(--fig-field-h, 23px); }
   .fig-panel label { flex: 0 0 auto; }
   .fig-ptitle { flex: 1 1 100%; }
   .fig-cap-name { flex: 1 1 60px; }
+  /* Once the rows wrap, the fixed columns are gone and the captions would stand over
+     whatever happened to land under them, so they step aside. The button takes the
+     name field's share of the line instead of a share of its own. */
+  .fig-serie-caps { display: none; }
+  .fig-restore { flex: 1 1 100px; min-width: 0; }
 }
 
 /* ---- Phones -------------------------------------------------------------- */
@@ -2382,7 +3089,6 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   .fig-backdrop { padding: 6px; }
   .fig-box { border-radius: 8px; }
   .fig-head { padding: 8px 10px; gap: 8px; }
-  .fig-head .txt-meta { display: none; }        /* the strapline is desktop-only */
   .fig-controls { padding: 4px 10px 14px; }
 
   /* Label above field: a 118px label column leaves nothing for the input here. */
@@ -2398,6 +3104,7 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
      export buttons sat off-screen. It wraps now, readout first, actions after. */
   .fig-foot { flex-wrap: wrap; padding: 8px 10px; gap: 6px; }
   .fig-foot .fig-dim { flex: 1 0 100%; font-size: 10px; }
+  .fig-foot .fig-msg { flex: 1 0 100%; font-size: 11px; }
   .fig-foot > span[style] { display: none; }     /* the desktop spacer */
   .fig-presets { flex: 1 1 100%; border-right: none; padding-right: 0; margin-right: 0; flex-wrap: wrap; }
   .fig-presets select { flex: 1 1 90px; max-width: none; }
@@ -2421,3 +3128,224 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   .fig-head { padding: 6px 10px; }
   .fig-foot { padding: 6px 10px; }
 }
+
+/* ===== SEM: crop and intensity =====
+   Three columns: the images' thumbnails over the image's details and the image with
+   the histogram of its crop under it (three eighths each), then the settings (a
+   quarter). The navigator sits over the image; the thumbnails and the settings start at
+   the image's top edge. The thumbnails' column is laid out inside a box that fills its
+   cell (absolutely), so that it takes the row's height and never sets it; the
+   thumbnails scroll in theirs. One column on a phone. */
+.sem-work { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 3fr) minmax(0, 2fr); grid-template-rows: auto auto; column-gap: 20px; align-items: stretch; }
+.sem-work-nav { grid-column: 2; grid-row: 1; }
+.sem-col-view { grid-column: 2; grid-row: 2; }
+.sem-col-imgs { grid-column: 1; grid-row: 2; position: relative; min-height: 0; }
+.sem-col-set { grid-column: 3; grid-row: 2; }
+.sem-col-in { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px; }
+.sem-box { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; min-height: 0; }
+.sem-box-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.sem-box-head select { width: auto; flex: 1 1 90px; min-width: 0; padding-top: 4px; padding-bottom: 4px; }
+.sem-thumbs-box { flex: 1 1 0; overflow-y: auto; }
+.sem-info-box { flex: 0 0 auto; }
+/* Settings in rows of two or three fields, each with its name above it. */
+.sem-set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 8px; }
+.sem-set-head:first-child { margin-top: 0; }
+.sem-set-head .sem-check { margin: 0; }
+.sem-fr { display: grid; gap: 8px; margin-bottom: 8px; }
+.sem-fr2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sem-fr3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sem-fr .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* One column: the image on top, the thumbnails in the middle, the settings under
+   them. Taken on a phone, and wherever the columns would cut a field's name short
+   (sem.js fitWork sets .sem-stacked). */
+@media (max-width: 760px) {
+  .sem-work { grid-template-columns: minmax(0, 1fr); }
+  .sem-work-nav, .sem-col-view, .sem-col-imgs, .sem-col-set { grid-column: 1; grid-row: auto; }
+  .sem-col-imgs { margin-top: 16px; }
+  .sem-col-set { margin-top: 16px; }
+  .sem-col-in { position: static; }
+  .sem-thumbs-box { flex: 0 0 auto; max-height: 300px; }
+}
+.sem-work.sem-stacked { grid-template-columns: minmax(0, 1fr); }
+.sem-work.sem-stacked > .sem-work-nav, .sem-work.sem-stacked > .sem-col-view, .sem-work.sem-stacked > .sem-col-imgs, .sem-work.sem-stacked > .sem-col-set { grid-column: 1; grid-row: auto; }
+.sem-work.sem-stacked > .sem-col-imgs, .sem-work.sem-stacked > .sem-col-set { margin-top: 16px; }
+.sem-work.sem-stacked .sem-col-in { position: static; }
+.sem-work.sem-stacked .sem-thumbs-box { flex: 0 0 auto; max-height: 300px; }
+
+/* The editor: the image and its crop drawn in one canvas filling the pane (sem.js
+   sets the pane's height from the image's proportions); touch-action none so a drag
+   on a phone moves the frame rather than the page. */
+.sem-crop-view {
+  position: relative; width: 100%; height: 320px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  overflow: hidden; touch-action: none; user-select: none;
+}
+.sem-crop-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sem-crop-um { margin: 8px 0 10px; }
+.sem-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer; font-size: 13px; }
+.sem-crop-note { margin-top: 10px; }
+.sem-crop-btns { display: flex; gap: 8px; margin-top: 12px; }
+.sem-crop-btns .btn { flex: 1; }
+.sem-info-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.sem-info-row:last-child { border-bottom: 0; }
+.sem-info-row > span:last-child { text-align: right; }
+/* Every image with its crop; the one in the editor outlined in the accent. Its chain,
+   over its corner, links its crop to the other linked images' (lit when linked). */
+/* As many thumbnails a row as fit at 90 px or more, stretched to fill the row: a
+   whole number of them, no strip left over, each between 90 and under 2 × 90 + 8 px
+   (100 px before, fixed). Under 90 px the labels and the particles stop reading. */
+.sem-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+.sem-thumb-wrap { position: relative; }
+.sem-thumb {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; padding: 5px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); cursor: pointer;
+  font: inherit; transition: border-color 0.14s, color 0.14s;
+}
+.sem-thumb:hover { color: var(--text); }
+.sem-thumb.is-on { border-color: var(--accent); color: var(--text); }
+.sem-thumb canvas { display: block; width: 100%; height: auto; border-radius: 4px; }
+.sem-thumb-cap { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.sem-link {
+  position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,0.35); border-radius: 50%; background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.75);
+  cursor: pointer; transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+button.sem-link:hover { color: #fff; border-color: #fff; }
+/* Not among the images the selector chose: dimmed, still a click away. */
+.sem-thumb-wrap.is-out { opacity: 0.4; }
+.sem-thumb-wrap.is-out:hover { opacity: 0.8; }
+button.sem-link.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* The list's colour palette means nothing for images. */
+#semFileTableWrap .palette-pick-btn { display: none; }
+.modal-box label.sem-copy-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer; }
+.sem-copy-row .txt-meta { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.sem-copy-all { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+
+/* ===== SEM: intensity ===== */
+.sem-hist canvas { display: block; width: 100%; height: 100%; }
+.sem-hist { width: 100%; height: 120px; margin-top: 10px; }
+.sem-bcg { display: flex; gap: 8px; }
+.sem-bcg > div { flex: 1; min-width: 0; }
+/* A field that the settings do not use stays in place, greyed. */
+#semWorkspace input:disabled, #semWorkspace select:disabled, #semWorkspace .btn:disabled { opacity: 0.45; cursor: default; }
+#semWorkspace .sem-check:has(input:disabled) { opacity: 0.45; cursor: default; }
+
+/* ===== SEM: groups and scale =====
+   A group is a box 4φ wide to 1 high at full screen, and keeps that height whatever
+   the window (sem.js sizeGroups sets --sem-group-h, and --sem-img, the images' side:
+   what the height leaves under the head and over the names). Its name is at the top
+   left, on the same line its scale (two radio buttons, one or the other) and its
+   figure at the right; then its images across the box in one row. Wider than the box, the row pages (sem.js
+   pageArrows): an arrow at an end where there is more, boxed and as tall as the
+   images, the scrollbar hidden; snapping lands a page on an image's edge. The arrows
+   stand outside the row, never over an image: their room is kept at both ends even
+   where an arrow is not needed (hidden, not removed), so the row never shifts. */
+.sem-crop-group { margin-top: 10px; }
+.sem-group {
+  display: flex; flex-direction: column; gap: 8px; height: var(--sem-group-h, auto); box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; margin-bottom: 12px; background: var(--panel2);
+}
+/* The name as the project's: plain text at rest, its field shown on hover and while
+   edited, as wide as the name (sem.js fitGroupName); pulled out by its inset so that
+   the name at rest starts on the box's content edge. */
+input[type="text"].sem-group-name {
+  display: block; width: 160px; max-width: calc(100% + 10px); margin-left: -10px;
+  font-weight: 600; background: transparent; border-color: transparent;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+input[type="text"].sem-group-name:hover { border-color: var(--line); background: var(--panel); }
+input[type="text"].sem-group-name:focus { border-color: var(--accent); background: var(--panel); outline: none; }
+.sem-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.sem-group-acts { display: flex; align-items: center; gap: 16px; flex: 0 0 auto; }
+.sem-group-acts .sem-group-fig { white-space: nowrap; }
+.sem-scale { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.sem-radio { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.sem-radio input[type="radio"] { width: auto; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.sem-strip { display: flex; align-items: flex-start; gap: 6px; }
+.sem-group-imgs {
+  flex: 1 1 0; min-width: 0;
+  display: flex; align-items: flex-start; gap: 12px; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; scroll-snap-type: x mandatory;
+}
+.sem-group-imgs::-webkit-scrollbar { display: none; }
+.sem-gimg { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; width: var(--sem-img, 112px); scroll-snap-align: start; }
+.sem-gimg-pic { height: var(--sem-img, 112px); display: flex; align-items: center; }
+.sem-gimg-pic canvas { display: block; max-width: var(--sem-img, 112px); max-height: var(--sem-img, 112px); width: auto; height: auto; border-radius: 4px; }
+.sem-gimg .sem-thumb-cap { max-width: var(--sem-img, 112px); }
+button.sem-page {
+  flex: 0 0 15px; width: 15px; height: var(--sem-img, 112px); padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text);
+  font: inherit; font-size: 16px; line-height: 1; cursor: pointer; transition: border-color 0.15s;
+}
+button.sem-page:hover { border-color: var(--accent); }
+button.sem-page[hidden] { display: flex; visibility: hidden; }
+.sem-group-hint { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.sem-group.is-empty { border-style: dashed; }
+.sem-add-bar { margin: 0; }
+button.an-add.is-drop { border-color: var(--accent); }
+/* A phone: the name and the figure's button on the first line, the scale under them
+   (the three do not fit one line). */
+@media (max-width: 600px) {
+  .sem-group-head { flex-wrap: wrap; }
+  .sem-group-acts { display: contents; }
+  .sem-group-head .sem-group-name { order: 1; }
+  .sem-group-head .sem-group-fig { order: 2; }
+  .sem-group-head .sem-scale { order: 3; flex: 1 0 100%; }
+}
+/* An image dragged between groups. A finger may scroll the page over the images;
+   held still, it drags one (sem.js). */
+.sem-gimg { cursor: grab; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.sem-gimg.is-held .sem-gimg-pic canvas { box-shadow: 0 0 0 2px var(--accent); }
+.sem-gimg.is-dragged { opacity: 0.4; }
+.sem-group.is-drop { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.sem-drag-ghost { position: fixed; z-index: 1000; width: 72px; height: auto; pointer-events: none; transform: translate(-50%, -50%); border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); opacity: 0.9; }
+
+/* The file list's note, right of the label in a column with no header but GC's (SAMPLE, a
+   select of the sample the file is) (DRS: how its second column was read; empty in the
+   other modules): muted, small, one line cut short
+   with an ellipsis. To v501 a 40px column left of the label, centred, DRS's alone. */
+.file-row td.note-cell { color: var(--muted); font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A phone: FILE and LABEL with half the cells' side padding, the note with a
+   quarter (so that "F(R)" shows whole down to 320px), the label field with less of its own,
+   and the field, while typed in, laid over the note beside it, so that a label of a dozen
+   characters shows whole: its cell's width, then the note's column (2/3 of the label's,
+   the cell's and its padding), less that column's right padding. The note under it is
+   hidden meanwhile: an excluded file's field, dimmed, let it show through what is typed. */
+@media (max-width: 600px) {
+  .file-table :is(th, td):nth-child(n+3):nth-last-child(n+3) { padding-left: 4px; padding-right: 4px; }
+  .file-table .note-cell { padding-left: 2px; padding-right: 2px; }
+  .file-table input.label-input { padding-left: 6px; padding-right: 6px; }
+  .file-table input.label-input:focus { position: relative; z-index: 1; width: calc(100% * 5 / 3 + 22px / 3); }
+  .file-table tr:has(input.label-input:focus) td.note-cell { visibility: hidden; }
+}
+/* GC's Sample column (gc.js REPLICATES): its select fills the note's cell, as tall as the
+   label field beside it, in the field's type. A phone: the header cut short with an
+   ellipsis as the file names are (its title whole), the select with the least padding,
+   in smaller type, its name cut at its arrow (its list shows them whole). */
+.file-table th.note-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row td.note-cell select.file-sample { width: 100%; min-width: 0; padding-top: 6px; padding-bottom: 6px; cursor: pointer; }
+@media (max-width: 600px) {
+  .file-row td.note-cell select.file-sample { padding: 7.5px 0 7.5px 3px; font-size: 11px; }
+}
+
+/* A width's field (XRPD's smoothing and SNIP, EPR's smoothing: smooth.js): the value, and
+   after it in the same box, muted, on its baseline, what it spans in points of the data on
+   show. The value has room for 7 characters (a width to 4 significant digits from 0.01,
+   0.06502) and the points for theirs (±150 pts): a box too narrow for both, below 120 px (a
+   phone's, a narrow side column), takes the points on a line of their own under the value,
+   at the right, its value never cut. The box looks and lights as a field: its border on
+   focus as the date fields', red when a value is refused; dimmed with its value disabled. */
+.wfield { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; width: 100%; min-width: 0; padding: 0 8px 0 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel2); cursor: text; }
+.wfield > input[type="text"] { flex: 1 1 7ch; width: auto; min-width: 0; border: none; background: none; padding-left: 0; padding-right: 0; }
+.wfield > input[type="text"]:focus { outline: none; }
+.wfield:focus-within { border-color: var(--text); }
+.wfield:has(> .field-invalid) { border-color: var(--bad); }
+.wfield:has(> input:disabled) { opacity: 0.45; cursor: not-allowed; }
+/* (its margins even out on the value's line, which the value's padding sets; on a line of
+   its own they bring it up to the value and leave room below) */
+.wf-pts { flex: none; min-width: 4.4em; margin: -3px 0 6px auto; line-height: 1.2; text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* (empty, with no file to count on: no room taken, the box one line as its neighbours) */
+.wf-pts:empty { display: none; }

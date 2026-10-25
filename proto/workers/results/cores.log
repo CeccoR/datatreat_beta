@@ -1,0 +1,128 @@
+default 0 k 1 rep 0 wall 8424 cpu 7.89 work med/p95 8.7 12.7 longs 0 peak rss 155
+default 0 k 1 rep 1 wall 6545 cpu 6.34 work med/p95 8.3 12.3 longs 0 
+default 0 k 1 rep 2 wall 7650 cpu 7.37 work med/p95 8.9 14.2 longs 0 
+default 0 k 1 rep 3 wall 6950 cpu 6.73 work med/p95 8.5 12.6 longs 0 
+default 0 k 1 rep 4 wall 6832 cpu 6.68 work med/p95 8.3 12.7 longs 0 
+{"k":1,"hc":1,"wallMed":6950,"jobMsMed":592.5,"cpuMed":6.73,"sameAsK1":true,"inOrder":true,"workMed":8.5,"workP95":12.7,"idleWorkMed":9.2,"workerHeapsIdle":[2],"rssIdleK":119,"rss0":106,"peak":{"peak":155,"hwm":158,"threads":1}}
+default 0 k 2 rep 0 wall 8614 cpu 8.01 work med/p95 8.7 14.3 longs 0 peak rss 172
+default 0 k 2 rep 1 wall 7449 cpu 7.23 work med/p95 7 14.1 longs 0 
+default 0 k 2 rep 2 wall 8041 cpu 7.62 work med/p95 8.8 17.8 longs 0 
+default 0 k 2 rep 3 wall 7489 cpu 7.3 work med/p95 8.5 14.2 longs 0 
+default 0 k 2 rep 4 wall 7568 cpu 7.45 work med/p95 8.5 9.8 longs 0 
+{"k":2,"hc":1,"wallMed":7568,"jobMsMed":1318.5,"cpuMed":7.45,"sameAsK1":true,"inOrder":true,"workMed":8.5,"workP95":14.2,"idleWorkMed":8.7,"workerHeapsIdle":[1.72,1.7],"rssIdleK":124,"rss0":104,"peak":{"peak":172,"hwm":189,"threads":2}}
+┌─────────┬───┬──────┬─────────┬────────┬──────┬────────────┬──────┬──────┬─────────┬─────────┬─────────┬───────────┬─────────┬──────┬─────────┐
+│ (index) │ k │ wall │ speedup │ jobMs  │ cpu  │ cpuWorkers │ use  │ same │ inOrder │ workMed │ workP95 │ longTasks │ rssIdle │ rss0 │ rssPeak │
+├─────────┼───┼──────┼─────────┼────────┼──────┼────────────┼──────┼──────┼─────────┼─────────┼─────────┼───────────┼─────────┼──────┼─────────┤
+│ 0       │ 1 │ 6950 │ 1       │ 592.5  │ 6.73 │ 5.97       │ 0.86 │ true │ true    │ 8.5     │ 12.7    │ 0         │ 119     │ 106  │ 155     │
+│ 1       │ 2 │ 7568 │ 0.92    │ 1318.5 │ 7.45 │ 6.49       │ 0.86 │ true │ true    │ 8.5     │ 14.2    │ 0         │ 124     │ 104  │ 172     │
+└─────────┴───┴──────┴─────────┴────────┴──────┴────────────┴──────┴──────┴─────────┴─────────┴─────────┴───────────┴─────────┴──────┴─────────┘
+default 0-1 k 1 rep 0 wall 7140 cpu 8.28 work med/p95 10.2 15.2 longs 0 peak rss 157
+default 0-1 k 1 rep 1 wall 6644 cpu 7.2 work med/p95 10.1 16.4 longs 0 
+default 0-1 k 1 rep 2 wall 6617 cpu 7.33 work med/p95 10.1 14.8 longs 0 
+default 0-1 k 1 rep 3 wall 6784 cpu 7.33 work med/p95 10 14.2 longs 0 
+default 0-1 k 1 rep 4 wall 6841 cpu 7.42 work med/p95 9.8 14.2 longs 0 
+{"k":1,"hc":2,"wallMed":6784,"jobMsMed":570.5,"cpuMed":7.33,"sameAsK1":true,"inOrder":true,"workMed":10.1,"workP95":14.8,"idleWorkMed":10.1,"workerHeapsIdle":[2],"rssIdleK":118,"rss0":104,"peak":{"peak":157,"hwm":161,"threads":1}}
+default 0-1 k 2 rep 0 wall 4564 cpu 8.63 work med/p95 10.6 14.4 longs 0 peak rss 172
+default 0-1 k 2 rep 1 wall 4458 cpu 8.33 work med/p95 10.3 13.6 longs 0 
+default 0-1 k 2 rep 2 wall 4221 cpu 7.79 work med/p95 10.1 14 longs 0 
+default 0-1 k 2 rep 3 wall 4056 cpu 7.51 work med/p95 9.7 15.9 longs 0 
+default 0-1 k 2 rep 4 wall 3952 cpu 7.49 work med/p95 10 14 longs 0 
+{"k":2,"hc":2,"wallMed":4221,"jobMsMed":671,"cpuMed":7.79,"sameAsK1":true,"inOrder":true,"workMed":10.1,"workP95":14,"idleWorkMed":9.6,"workerHeapsIdle":[1.71,1.69],"rssIdleK":125,"rss0":105,"peak":{"peak":172,"hwm":182,"threads":2}}
+default 0-1 k 3 rep 0 wall 4984 cpu 9.28 work med/p95 9.7 13.6 longs 0 peak rss 192
+default 0-1 k 3 rep 1 wall 4574 cpu 8.5 work med/p95 9.7 13.3 longs 0 
+default 0-1 k 3 rep 2 wall 4104 cpu 7.74 work med/p95 9.5 13.7 longs 0 
+default 0-1 k 3 rep 3 wall 4295 cpu 8.06 work med/p95 9.8 15.2 longs 0 
+default 0-1 k 3 rep 4 wall 4319 cpu 7.97 work med/p95 9.9 14.1 longs 0 
+{"k":3,"hc":2,"wallMed":4319,"jobMsMed":1056.5,"cpuMed":8.06,"sameAsK1":true,"inOrder":true,"workMed":9.7,"workP95":13.7,"idleWorkMed":9.7,"workerHeapsIdle":[1.66,1.68,1.67],"rssIdleK":131,"rss0":104,"peak":{"peak":192,"hwm":202,"threads":3}}
+┌─────────┬───┬──────┬─────────┬────────┬──────┬────────────┬──────┬──────┬─────────┬─────────┬─────────┬───────────┬─────────┬──────┬─────────┐
+│ (index) │ k │ wall │ speedup │ jobMs  │ cpu  │ cpuWorkers │ use  │ same │ inOrder │ workMed │ workP95 │ longTasks │ rssIdle │ rss0 │ rssPeak │
+├─────────┼───┼──────┼─────────┼────────┼──────┼────────────┼──────┼──────┼─────────┼─────────┼─────────┼───────────┼─────────┼──────┼─────────┤
+│ 0       │ 1 │ 6784 │ 1       │ 570.5  │ 7.33 │ 6.37       │ 0.94 │ true │ true    │ 10.1    │ 14.8    │ 0         │ 118     │ 104  │ 157     │
+│ 1       │ 2 │ 4221 │ 1.61    │ 671    │ 7.79 │ 6.79       │ 1.61 │ true │ true    │ 10.1    │ 14      │ 0         │ 125     │ 105  │ 172     │
+│ 2       │ 3 │ 4319 │ 1.57    │ 1056.5 │ 8.06 │ 6.98       │ 1.62 │ true │ true    │ 9.7     │ 13.7    │ 0         │ 131     │ 104  │ 192     │
+└─────────┴───┴──────┴─────────┴────────┴──────┴────────────┴──────┴──────┴─────────┴─────────┴─────────┴───────────┴─────────┴──────┴─────────┘
+default 0-2 k 1 rep 0 wall 7173 cpu 8.47 work med/p95 7.3 9.8 longs 0 peak rss 162
+default 0-2 k 1 rep 1 wall 6815 cpu 7.49 work med/p95 7.7 11.1 longs 0 
+default 0-2 k 1 rep 2 wall 6850 cpu 7.33 work med/p95 7.2 8.6 longs 0 
+default 0-2 k 1 rep 3 wall 6783 cpu 7.7 work med/p95 7.4 12 longs 0 
+default 0-2 k 1 rep 4 wall 6842 cpu 7.36 work med/p95 7.5 12.1 longs 0 
+{"k":1,"hc":3,"wallMed":6842,"jobMsMed":577.5,"cpuMed":7.49,"sameAsK1":true,"inOrder":true,"workMed":7.4,"workP95":11.1,"idleWorkMed":7.3,"workerHeapsIdle":[2.01],"rssIdleK":118,"rss0":105,"peak":{"peak":162,"hwm":166,"threads":1}}
+default 0-2 k 2 rep 0 wall 4183 cpu 8.89 work med/p95 7.9 17.5 longs 0 peak rss 185
+default 0-2 k 2 rep 1 wall 4352 cpu 9.36 work med/p95 7.6 12.2 longs 0 
+default 0-2 k 2 rep 2 wall 3809 cpu 7.94 work med/p95 7.5 11.8 longs 0 
+default 0-2 k 2 rep 3 wall 4255 cpu 8.61 work med/p95 8 14.5 longs 0 
+default 0-2 k 2 rep 4 wall 3866 cpu 8.14 work med/p95 7.3 17.3 longs 0 
+{"k":2,"hc":3,"wallMed":4183,"jobMsMed":636,"cpuMed":8.61,"sameAsK1":true,"inOrder":true,"workMed":7.6,"workP95":14.5,"idleWorkMed":7.7,"workerHeapsIdle":[1.72,1.7],"rssIdleK":126,"rss0":105,"peak":{"peak":185,"hwm":186,"threads":2}}
+default 0-2 k 3 rep 0 wall 3303 cpu 9.04 work med/p95 7.3 12.9 longs 0 peak rss 193
+default 0-2 k 3 rep 1 wall 3330 cpu 8.67 work med/p95 7.5 10.1 longs 0 
+default 0-2 k 3 rep 2 wall 3425 cpu 9.38 work med/p95 9.5 11.7 longs 0 
+default 0-2 k 3 rep 3 wall 3131 cpu 8.31 work med/p95 7.4 11.6 longs 0 
+default 0-2 k 3 rep 4 wall 3070 cpu 8.07 work med/p95 7.5 11.1 longs 0 
+{"k":3,"hc":3,"wallMed":3303,"jobMsMed":777,"cpuMed":8.67,"sameAsK1":true,"inOrder":true,"workMed":7.5,"workP95":11.6,"idleWorkMed":7.9,"workerHeapsIdle":[1.66,1.67,1.68],"rssIdleK":132,"rss0":105,"peak":{"peak":193,"hwm":211,"threads":3}}
+default 0-2 k 4 rep 0 wall 3712 cpu 9.84 work med/p95 7.5 12.1 longs 0 peak rss 217
+default 0-2 k 4 rep 1 wall 3407 cpu 9.14 work med/p95 7.9 12.4 longs 0 
+default 0-2 k 4 rep 2 wall 3262 cpu 8.82 work med/p95 7.2 8.6 longs 0 
+default 0-2 k 4 rep 3 wall 3037 cpu 8.29 work med/p95 7.3 13.6 longs 0 
+default 0-2 k 4 rep 4 wall 3147 cpu 8.62 work med/p95 8 12.1 longs 0 
+{"k":4,"hc":3,"wallMed":3262,"jobMsMed":1035,"cpuMed":8.82,"sameAsK1":true,"inOrder":true,"workMed":7.5,"workP95":12.1,"idleWorkMed":7.3,"workerHeapsIdle":[1.65,1.66,1.67,1.65],"rssIdleK":140,"rss0":105,"peak":{"peak":217,"hwm":227,"threads":4}}
+┌─────────┬───┬──────┬─────────┬───────┬──────┬────────────┬──────┬──────┬─────────┬─────────┬─────────┬───────────┬─────────┬──────┬─────────┐
+│ (index) │ k │ wall │ speedup │ jobMs │ cpu  │ cpuWorkers │ use  │ same │ inOrder │ workMed │ workP95 │ longTasks │ rssIdle │ rss0 │ rssPeak │
+├─────────┼───┼──────┼─────────┼───────┼──────┼────────────┼──────┼──────┼─────────┼─────────┼─────────┼───────────┼─────────┼──────┼─────────┤
+│ 0       │ 1 │ 6842 │ 1       │ 577.5 │ 7.49 │ 6.45       │ 0.94 │ true │ true    │ 7.4     │ 11.1    │ 0         │ 118     │ 105  │ 162     │
+│ 1       │ 2 │ 4183 │ 1.64    │ 636   │ 8.61 │ 7.28       │ 1.74 │ true │ true    │ 7.6     │ 14.5    │ 0         │ 126     │ 105  │ 185     │
+│ 2       │ 3 │ 3303 │ 2.07    │ 777   │ 8.67 │ 7.14       │ 2.16 │ true │ true    │ 7.5     │ 11.6    │ 0         │ 132     │ 105  │ 193     │
+│ 3       │ 4 │ 3262 │ 2.1     │ 1035  │ 8.82 │ 7.66       │ 2.35 │ true │ true    │ 7.5     │ 12.1    │ 0         │ 140     │ 105  │ 217     │
+└─────────┴───┴──────┴─────────┴───────┴──────┴────────────┴──────┴──────┴─────────┴─────────┴─────────┴───────────┴─────────┴──────┴─────────┘
+default 0-3 k 1 rep 0 wall 7433 cpu 8.7 work med/p95 6.6 9.2 longs 0 peak rss 174
+default 0-3 k 1 rep 1 wall 7160 cpu 7.95 work med/p95 6.5 9.9 longs 0 
+default 0-3 k 1 rep 2 wall 6899 cpu 7.65 work med/p95 6.4 8.2 longs 0 
+default 0-3 k 1 rep 3 wall 6758 cpu 7.22 work med/p95 6.5 10.5 longs 0 
+default 0-3 k 1 rep 4 wall 7264 cpu 7.99 work med/p95 6.6 14 longs 2 
+{"k":1,"hc":4,"wallMed":7160,"jobMsMed":599,"cpuMed":7.95,"sameAsK1":true,"inOrder":true,"workMed":6.5,"workP95":9.9,"idleWorkMed":6.8,"workerHeapsIdle":[2],"rssIdleK":117,"rss0":104,"peak":{"peak":174,"hwm":178,"threads":1}}
+default 0-3 k 2 rep 0 wall 3950 cpu 8.63 work med/p95 6.7 20.6 longs 0 peak rss 172
+default 0-3 k 2 rep 1 wall 3771 cpu 8.48 work med/p95 6.6 15.7 longs 0 
+default 0-3 k 2 rep 2 wall 3353 cpu 7.04 work med/p95 6.7 17 longs 0 
+default 0-3 k 2 rep 3 wall 3722 cpu 7.76 work med/p95 6.5 15.4 longs 0 
+default 0-3 k 2 rep 4 wall 4007 cpu 8.91 work med/p95 6.8 12.6 longs 0 
+{"k":2,"hc":4,"wallMed":3771,"jobMsMed":571.5,"cpuMed":8.48,"sameAsK1":true,"inOrder":true,"workMed":6.7,"workP95":15.7,"idleWorkMed":6.7,"workerHeapsIdle":[1.69,1.7],"rssIdleK":125,"rss0":106,"peak":{"peak":172,"hwm":184,"threads":2}}
+default 0-3 k 3 rep 0 wall 3053 cpu 9.11 work med/p95 7.3 12.8 longs 0 peak rss 201
+default 0-3 k 3 rep 1 wall 2968 cpu 8.93 work med/p95 7.3 13.4 longs 0 
+default 0-3 k 3 rep 2 wall 3093 cpu 9 work med/p95 6.8 10.8 longs 0 
+default 0-3 k 3 rep 3 wall 2905 cpu 8.55 work med/p95 7.8 11 longs 0 
+default 0-3 k 3 rep 4 wall 2998 cpu 8.33 work med/p95 6.8 15.2 longs 0 
+{"k":3,"hc":4,"wallMed":2998,"jobMsMed":713.5,"cpuMed":8.93,"sameAsK1":true,"inOrder":true,"workMed":7.3,"workP95":12.8,"idleWorkMed":6.4,"workerHeapsIdle":[1.65,1.67,1.68],"rssIdleK":132,"rss0":105,"peak":{"peak":201,"hwm":211,"threads":3}}
+default 0-3 k 4 rep 0 wall 2926 cpu 10.34 work med/p95 6.6 10.8 longs 0 peak rss 223
+default 0-3 k 4 rep 1 wall 2606 cpu 8.85 work med/p95 6.6 11.3 longs 0 
+default 0-3 k 4 rep 2 wall 2446 cpu 8.06 work med/p95 7 12.1 longs 0 
+default 0-3 k 4 rep 3 wall 2698 cpu 9.05 work med/p95 6.7 11.7 longs 0 
+default 0-3 k 4 rep 4 wall 2564 cpu 8.81 work med/p95 6.4 8.2 longs 0 
+{"k":4,"hc":4,"wallMed":2606,"jobMsMed":804,"cpuMed":8.85,"sameAsK1":true,"inOrder":true,"workMed":6.6,"workP95":11.3,"idleWorkMed":6.6,"workerHeapsIdle":[1.65,1.67,1.66,1.63],"rssIdleK":139,"rss0":105,"peak":{"peak":223,"hwm":229,"threads":4}}
+default 0-3 k 5 rep 0 wall 3042 cpu 9.77 work med/p95 6.5 17.1 longs 0 peak rss 237
+default 0-3 k 5 rep 1 wall 2821 cpu 9.19 work med/p95 6.7 18.5 longs 0 
+default 0-3 k 5 rep 2 wall 2625 cpu 8.52 work med/p95 6.6 27.1 longs 0 
+default 0-3 k 5 rep 3 wall 2636 cpu 8.33 work med/p95 6.6 9.4 longs 0 
+default 0-3 k 5 rep 4 wall 2759 cpu 8.86 work med/p95 6.9 10.6 longs 0 
+{"k":5,"hc":4,"wallMed":2759,"jobMsMed":974,"cpuMed":8.86,"sameAsK1":true,"inOrder":true,"workMed":6.6,"workP95":17.1,"idleWorkMed":6.7,"workerHeapsIdle":[1.63,1.68,1.67,1.61,1.61],"rssIdleK":145,"rss0":105,"peak":{"peak":237,"hwm":252,"threads":5}}
+default 0-3 k 6 rep 0 wall 3169 cpu 11.03 work med/p95 6.8 14.4 longs 0 peak rss 252
+default 0-3 k 6 rep 1 wall 2977 cpu 10.24 work med/p95 7 20.3 longs 0 
+default 0-3 k 6 rep 2 wall 2666 cpu 9.37 work med/p95 6.9 12.5 longs 0 
+default 0-3 k 6 rep 3 wall 2569 cpu 9.02 work med/p95 6.5 10.4 longs 0 
+default 0-3 k 6 rep 4 wall 2730 cpu 9.03 work med/p95 6.4 11.7 longs 0 
+{"k":6,"hc":4,"wallMed":2730,"jobMsMed":1248,"cpuMed":9.37,"sameAsK1":true,"inOrder":true,"workMed":6.8,"workP95":12.5,"idleWorkMed":6.5,"workerHeapsIdle":[1.63,1.63,1.64,1.61,1.63,1.62],"rssIdleK":151,"rss0":105,"peak":{"peak":252,"hwm":273,"threads":6}}
+default 0-3 k 8 rep 0 wall 3456 cpu 11.98 work med/p95 7 16.5 longs 0 peak rss 281
+default 0-3 k 8 rep 1 wall 3026 cpu 10.37 work med/p95 6.8 10.4 longs 0 
+default 0-3 k 8 rep 2 wall 2597 cpu 9.31 work med/p95 6.7 17.7 longs 0 
+default 0-3 k 8 rep 3 wall 2547 cpu 9.03 work med/p95 6.6 14.3 longs 0 
+default 0-3 k 8 rep 4 wall 2520 cpu 8.7 work med/p95 6.6 14.8 longs 0 
+{"k":8,"hc":4,"wallMed":2597,"jobMsMed":1580,"cpuMed":9.31,"sameAsK1":true,"inOrder":true,"workMed":6.7,"workP95":14.8,"idleWorkMed":6.2,"workerHeapsIdle":[1.54,1.63,1.64,1.52,1.53,1.52,1.63,1.62],"rssIdleK":161,"rss0":104,"peak":{"peak":281,"hwm":288,"threads":8}}
+┌─────────┬───┬──────┬─────────┬───────┬──────┬────────────┬──────┬──────┬─────────┬─────────┬─────────┬───────────┬─────────┬──────┬─────────┐
+│ (index) │ k │ wall │ speedup │ jobMs │ cpu  │ cpuWorkers │ use  │ same │ inOrder │ workMed │ workP95 │ longTasks │ rssIdle │ rss0 │ rssPeak │
+├─────────┼───┼──────┼─────────┼───────┼──────┼────────────┼──────┼──────┼─────────┼─────────┼─────────┼───────────┼─────────┼──────┼─────────┤
+│ 0       │ 1 │ 7160 │ 1       │ 599   │ 7.95 │ 6.74       │ 0.94 │ true │ true    │ 6.5     │ 9.9     │ 2         │ 117     │ 104  │ 174     │
+│ 1       │ 2 │ 3771 │ 1.9     │ 571.5 │ 8.48 │ 6.94       │ 1.84 │ true │ true    │ 6.7     │ 15.7    │ 0         │ 125     │ 106  │ 172     │
+│ 2       │ 3 │ 2998 │ 2.39    │ 713.5 │ 8.93 │ 7.45       │ 2.48 │ true │ true    │ 7.3     │ 12.8    │ 0         │ 132     │ 105  │ 201     │
+│ 3       │ 4 │ 2606 │ 2.75    │ 804   │ 8.85 │ 7.5        │ 2.88 │ true │ true    │ 6.6     │ 11.3    │ 0         │ 139     │ 105  │ 223     │
+│ 4       │ 5 │ 2759 │ 2.6     │ 974   │ 8.86 │ 7.41       │ 2.69 │ true │ true    │ 6.6     │ 17.1    │ 0         │ 145     │ 105  │ 237     │
+│ 5       │ 6 │ 2730 │ 2.62    │ 1248  │ 9.37 │ 7.65       │ 2.8  │ true │ true    │ 6.8     │ 12.5    │ 0         │ 151     │ 105  │ 252     │
+│ 6       │ 8 │ 2597 │ 2.76    │ 1580  │ 9.31 │ 7.79       │ 3    │ true │ true    │ 6.7     │ 14.8    │ 0         │ 161     │ 104  │ 281     │
+└─────────┴───┴──────┴─────────┴───────┴──────┴────────────┴──────┴──────┴─────────┴─────────┴─────────┴───────────┴─────────┴──────┴─────────┘

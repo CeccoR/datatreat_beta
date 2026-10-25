@@ -1,0 +1,83 @@
+{
+ "kase": "bg-show",
+ "time": {
+  "n": 5,
+  "med": 7172,
+  "p90": 7579,
+  "max": 7579,
+  "min": 6919
+ },
+ "hashes": [
+  "0e098f762ba8cae5"
+ ],
+ "n": [
+  12,
+  12,
+  12,
+  12,
+  12
+ ],
+ "runs": [
+  {
+   "ms": 7172.39990234375,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.22,
+    0.94,
+    1.15
+   ]
+  },
+  {
+   "ms": 7006.5,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.21,
+    0.94,
+    1.15
+   ]
+  },
+  {
+   "ms": 7326.39990234375,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.18,
+    0.95,
+    1.15
+   ]
+  },
+  {
+   "ms": 7579,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.15,
+    0.95,
+    1.15
+   ]
+  },
+  {
+   "ms": 6918.800048828125,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.29,
+    0.98,
+    1.16
+   ]
+  }
+ ],
+ "errors": []
+}

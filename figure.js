@@ -1,6 +1,6 @@
-import { svgEl, niceTicks, fmtTick } from './plot.js';
-import { colorPickerUI, palettePickerUI, CP_PALETTES } from './utils.js';
-import { activeTab, TABS } from './tabs.js';
+import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
+import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc } from './utils.js';
+import { tabOf, TABS } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
 // image mime types (and to save an already-built Blob for PNG).
@@ -31,6 +31,12 @@ function saveBlob(filename, data, mime){
    off, the numbers along a shared border belong to the panel that owns that edge and
    describe that panel alone. Leave a gap in the grid, or turn the numbers on for the
    side you want, when each panel needs its own scale spelled out.
+
+   Two kinds of figure, one composer: the plots' (plotKind, below) and the SEM images'
+   (sem-figure.js). The composer is the modal, the preview with its zoom and pan, the
+   footer with the exports and a status line, the field kit and the rows dragged by
+   their handles; a kind gives the model, its drawing and its controls (openComposer).
+   One composer is open at a time, of either kind.
 ========================================================= */
 
 const PX_MM = 96 / 25.4;      // CSS px per mm at the nominal 96 dpi
@@ -49,6 +55,21 @@ const FONTS = {
 const fontStack = () => (FONTS[F && F.font && F.font.family] || FONTS.Inter).stack;
 
 const DASHES = { 'none': 'no line', '': 'solid', '5,4': 'dashed', '2,3': 'dotted', '8,3,2,3': 'dash-dot' };
+
+/* How a bar is filled. Colour says which division a bar belongs to; texture says
+   which series it is, so the two can be read at once — and a figure printed in grey
+   still tells its series apart. Each is drawn as an SVG pattern in the colour of the
+   bar, so it exports and rasterises with everything else. */
+const TEXTURES = {
+  solid:   'solid',
+  dots:    'dots',
+  fwd:     'diagonal /',
+  back:    'diagonal \\',
+  cross:   'crosshatch ×',
+  grid:    'grid +',
+  horiz:   'horizontal lines',
+  vert:    'vertical lines',
+};
 // Point symbols. `-o` is an outline, `-f` is filled; the label carries the glyph so
 // the dropdown reads as the shape it draws.
 const MARKERS = {
@@ -81,9 +102,11 @@ function markerShape(kind, cx, cy, r, color, width){
   return ['polygon', { points: pts.join(' '), ...paint }];
 }
 
-let F = null;                 // the figure model
-let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, presetBar = null;
+let F = null;                 // the figure model (the plots')
+let K = null;                 // the kind of figure the composer is open on (openComposer)
+let backdrop = null, previewSvg = null, controlsEl = null, dimEl = null, msgEl = null, presetBar = null;
 let lastInner = { w: 0, h: 0 };   // drawing area of the last pass, in mm
+let lastCatRot = 30;              // X label tilt the last pass drew, for its locked field
 let view = { z: 1, x: 0, y: 0 };  // preview zoom and pan, on top of the fit scale
 let srcPlot = null, srcOpts = null;   // what the composer was opened on, for Reset
 
@@ -98,15 +121,23 @@ function seriesFromPlot(plot, legendEl){
   const stored = plot._stored || [];
   const out = [];
   const cats = stored.filter(e=> e.type === 'ticklabel')
-                     .map(e=>({ x: e.xv, text: e.text, rot: e.rot || 0 }));
+                     // The whole name, not the one the axis had room for; its runs where
+                     // some are overlined (a negative Miller index's bar, catRuns).
+                     .map(e=>({ x: e.xv, text: e.full || e.text, rot: e.rot || 0, key: e.key || e.full || e.text,
+                                ...(e.fullRuns ? { runs: e.fullRuns } : {}) }));
 
   stored.forEach((e, i)=>{
     if (e.type !== 'line' && e.type !== 'points') return;
     if (!e.xs || !e.ys || !e.xs.length) return;
+    const label = e.label || labels[out.length] || ('Series ' + (out.length + 1));
     out.push({
       id: 's' + i,
       kind: 'curve',
-      label: e.label || labels[out.length] || ('Series ' + (out.length + 1)),
+      // Which series this is, however it is named: what remembered settings are
+      // matched back to (applySettings). The plot says so where the name can change.
+      key: e.key || label,
+      given: label,
+      label,
       panel: 0,
       color: e.color || '#3aa0ff',
       width: e.width || 1.5,
@@ -122,15 +153,23 @@ function seriesFromPlot(plot, legendEl){
   });
 
   // Bars: one series per colour, in the order the colours first appear. Error bars
-  // are matched back to their bar by centre and pixel offset.
+  // are matched back to their bar by centre and pixel offset. A box plot comes in as
+  // bars of a kind (`boxes`), its height the mean and its error the ± the plot gave it:
+  // placed, coloured, textured and divided as bars are, and drawn as boxes.
   const groups = new Map();
   for (const e of stored){
-    if (e.type !== 'bar' && e.type !== 'barpx') continue;
+    if (e.type !== 'bar' && e.type !== 'barpx' && e.type !== 'box') continue;
     const color = e.color || '#3aa0ff';
     // Grouped by the name the plot gave the bar when it has one, else by colour.
     const gk = e.label || color;
-    if (!groups.has(gk)) groups.set(gk, { color, name: e.label, xs: [], ys: [], errs: [], keys: [] });
+    if (!groups.has(gk)) groups.set(gk, { color, name: e.label, xs: [], ys: [], errs: [], keys: [], boxes: null });
     const g = groups.get(gk);
+    if (e.type === 'box'){
+      g.boxes = g.boxes || [];
+      g.boxes[g.xs.length] = { q1: e.q1, med: e.med, q3: e.q3, lo: e.lo, hi: e.hi, mean: e.mean, out: e.out.slice() };
+      g.xs.push(e.xc); g.ys.push(e.mean); g.errs.push(isFinite(e.err) ? e.err : 0); g.keys.push(null);
+      continue;
+    }
     g.xs.push(e.type === 'barpx' ? e.xc : (e.x0 + e.x1) / 2);
     g.ys.push(e.type === 'barpx' ? e.y1 : e.y1);
     g.errs.push(0);
@@ -142,16 +181,22 @@ function seriesFromPlot(plot, legendEl){
     let gi = 0;
     for (const g of groups.values()){
       g.keys.forEach((k, j)=>{ if (k != null && errs.has(k)) g.errs[j] = errs.get(k); });
+      const label = g.name || labels[out.length] || ('Bars ' + (gi + 1));
       out.push({
         id: 'b' + gi,
         kind: 'bar',
-        label: g.name || labels[out.length] || ('Bars ' + (gi + 1)),
+        key: label,
+        given: label,
+        label,
         panel: 0,
         color: g.color,
         width: 0.8,                 // bar width as a fraction of the category slot
         dash: '', marker: 'none',
+        // Bars are told apart by their fill, not by a line style or a symbol.
+        texture: 'solid', texInv: false,
         show: true, inLegend: true,
         xs: g.xs, ys: g.ys, errs: g.errs,
+        ...(g.boxes ? { boxes: g.boxes } : {}),
       });
       gi++;
     }
@@ -192,12 +237,14 @@ function richParts(str){
 const RICH_SCALE = 0.72;   // size of a raised/lowered run, relative to the body
 
 // Draws `str` as one <text> with a tspan per run. `at` carries x/y/anchor/transform.
+// A lowered run drops by a set fraction of `px`, as the page's plots do: "sub" would
+// leave it hanging as far below the line as "super" raises the other above it.
 function richText(add, str, at, px, ink){
   const el = add('text', { ...at, 'font-size': px, fill: ink });
   for (const p of richParts(str)){
     if (!p.t) continue;
     const sp = svgEl('tspan', p.r
-      ? { 'baseline-shift': p.r, 'font-size': (px * RICH_SCALE).toFixed(2) }
+      ? { 'baseline-shift': p.r === 'sub' ? (-SUB_DROP * px).toFixed(2) : p.r, 'font-size': (px * RICH_SCALE).toFixed(2) }
       : {});
     sp.textContent = p.t;
     el.appendChild(sp);
@@ -264,6 +311,10 @@ function buildModel(plot, opts){
     font: { family: 'Inter', tick: 8, axis: 9, legend: 8, title: 9 },   // sizes in points
     xlabel: strip(plot.xlabel) || '',
     ylabel: strip(plot.ylabel) || strip(plot.ylabelSvg) || '',
+    /* Log scales, one per axis, switched freely. A page plot drawn on a log y-axis
+       opens its figure on one; the series always carry the data themselves. */
+    xLog: false,
+    yLog: !!(plot._opts && plot._opts.yLog),
     // Always the whole data set, whatever the page plot is zoomed to.
     xAuto: true, xmin: 0, xmax: 1,
     yAuto: true, ymin: 0, ymax: 1,
@@ -299,9 +350,28 @@ function buildModel(plot, opts){
     palette: CP_PALETTES[0].colors.slice(),
     palScope: 'panel',                  // 'series' = one run of colours across all
                                         // series; 'panel' = every panel restarts it
+    /* On a bar chart a colour tells divisions apart, so the palette runs inside each
+       series. Turned off, a bar takes one colour like any other series and its
+       divisions follow it — which is what a chart with no divisions wants. */
+    palByDiv: true,
+    /* The same three settings for textures, kept apart from the colours': a figure
+       that runs its colours across divisions wants one texture per series, which is
+       the pair that makes both readable at once — so that is where it starts, "Both
+       ways" dealt series by series within each panel: solid, then its pale shade. */
+    texPalette: TEX_PALETTES[0].tex.slice(),
+    texScope: 'panel',
+    texByDiv: false,
     panels: [ newPanel(0, 0) ],
     series,
     cats,                               // category labels of a bar chart, if any
+    /* A category name changed here, kept by the category's own x so every bar series
+       standing on it reads the same name — it is one sample, drawn several times. */
+    catNames: {},
+    /* How far the X tick labels are tilted. Starts where the plot had them — a bar
+       chart tilts its sample names to fit, a numeric axis writes them straight — and
+       from there it is one setting for the whole figure. */
+    catRot: (cats && cats.length && cats[0].rot) || 0,
+    catRotAuto: true,
     name: (opts && opts.name) || 'figure',
   };
 }
@@ -310,8 +380,6 @@ function buildModel(plot, opts){
    field is showing, so nothing has to be zeroed to mean "pick one for me". */
 const stepX = ()=> F.xStepAuto ? 0 : F.xStep;
 const stepY = ()=> F.yStepAuto ? 0 : F.yStep;
-const minorsX = ()=> F.minorXAuto ? 4 : F.minorX;
-const minorsY = ()=> F.minorYAuto ? 4 : F.minorY;
 
 // Major ticks for a range: a fixed step when the user set one, else a nice default.
 function majorTicks(lo, hi, step){
@@ -326,31 +394,109 @@ function majorTicks(lo, hi, step){
   return out;
 }
 
+/* ---- Log scales -------------------------------------------------------------
+   On a log axis the figure works in the log10 of the data: ranges, ticks and the
+   placing of everything are linear there, and only the series are carried over
+   (TX/TY). A category axis has no scale to change, so a bar chart's X stays linear. */
+const xLog = ()=> !!F.xLog && !(F.cats && F.cats.length);
+const yLog = ()=> !!F.yLog;
+const isLog = ax => ax === 'x' ? xLog() : yLog();
+const lg = v => v > 0 ? Math.log10(v) : NaN;
+const TX = v => xLog() ? lg(v) : v;
+const TY = v => yLog() ? lg(v) : v;
+const pow10 = t => +Math.pow(10, t).toPrecision(12);
+
+/* The major ticks of an axis. On a log one they are the whole decades in view, every
+   step-th one when a step is set (in decades). Under two decades in view there are
+   too few of those, and the ticks fall on the 1, 2 and 5 of each decade instead, or
+   failing three of those on nice values of the data, as a linear axis would pick
+   them. `dec` marks the decade kind, whose labels are powers of ten, not numbers. */
+function axisTicks(ax, lo, hi){
+  const step = ax === 'x' ? stepX() : stepY();
+  if (!isLog(ax)) return majorTicks(lo, hi, step);
+  const k = Math.max(1, Math.round(step) || 1), dec = [];
+  for (let n = Math.ceil(lo - 1e-9); n <= hi + 1e-9; n++) if (n % k === 0) dec.push(n);
+  if (dec.length >= 2){ dec.dec = true; return dec; }
+  const out = [];
+  for (let n = Math.floor(lo); n <= Math.ceil(hi); n++)
+    for (const m of [1, 2, 5]){ const t = Math.log10(m) + n; if (t >= lo - 1e-9 && t <= hi + 1e-9) out.push(t); }
+  if (out.length >= 3) return out;
+  return niceTicks(Math.pow(10, lo), Math.pow(10, hi), 4).map(lg).filter(t=> t >= lo && t <= hi);
+}
+// How many minor ticks each major interval gets. Automatic on a log axis: a decade
+// apart, the 2…9 of the decade; several decades apart, the decades in between.
+function minorsOf(ax, majors){
+  const auto = ax === 'x' ? F.minorXAuto : F.minorYAuto;
+  if (!auto) return ax === 'x' ? F.minorX : F.minorY;
+  if (!isLog(ax) || !majors.dec) return 4;
+  const k = majors.length > 1 ? majors[1] - majors[0] : 1;
+  return k > 1 ? k - 1 : 8;
+}
+/* The minor ticks of an axis. On a log one, the n minors of an interval stand where
+   they would on a linear scale — at equal steps of the value from one major to the
+   next — and so crowd towards its top end: with n = 8 over a decade they are 2…9. */
+function axisMinors(ax, majors, lo, hi){
+  const n = Math.max(0, Math.round(minorsOf(ax, majors)));
+  if (!isLog(ax)) return minorTicks(majors, lo, hi, n);
+  if (majors.length < 2 || !n) return [];
+  // Automatic over several decades: the decades themselves.
+  const auto = ax === 'x' ? F.minorXAuto : F.minorYAuto;
+  const at = (a, b, j)=> majors.dec && auto && b - a > 1 ? a + j
+    : Math.log10(Math.pow(10, a) + j * (Math.pow(10, b) - Math.pow(10, a)) / (n + 1));
+  const ends = [majors[0] - (majors[1] - majors[0]), ...majors,
+                majors[majors.length-1] + (majors[majors.length-1] - majors[majors.length-2])];
+  const out = [];
+  for (let i = 0; i + 1 < ends.length; i++)
+    for (let j = 1; j <= n; j++){ const t = at(ends[i], ends[i+1], j); if (t >= lo && t <= hi) out.push(t); }
+  return out;
+}
+// A tick's label: its number, or on a log axis's decades a 10 and its raised exponent.
+const SUP_K = 0.72;
+function tickParts(ax, t, majors){
+  if (!isLog(ax)) return { base: fmtTick(t) };
+  if (majors && majors.dec) return { base: '10', sup: t < 0 ? '\u2212' + (-t) : String(t) };
+  return { base: fmtTick(pow10(t)) };
+}
+const tickW = (ax, t, majors, f)=>{ const p = tickParts(ax, t, majors); return textW(p.base, f) + (p.sup ? textW(p.sup, f * SUP_K) : 0); };
+// The bounds as the Range fields show and take them: on a log axis, the data's own
+// values rather than their logarithms (a bound ≤ 0 has none).
+const shownOf = (ax, v)=> isLog(ax) ? Math.pow(10, v) : v;
+const takenOf = (ax, v)=> isLog(ax) ? (v > 0 ? Math.log10(v) : null) : v;
+
 /* ---- Geometry -------------------------------------------------------------- */
 
-// Data extent of the series drawn in `panelIdxs`, or null when there's no data.
+// Data extent of the series drawn in `panelIdxs`, or null when there's no data. On a
+// log axis it is the extent of the logarithms, which is what that axis is ranged in.
 function extentOf(panelIdxs){
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, any = false;
   for (const s of F.series){
     if (!s.show || !panelIdxs.includes(s.panel)) continue;
     for (let i = 0; i < s.xs.length; i++){
-      const x = s.xs[i], y = s.ys[i];
+      const x = TX(s.xs[i]), y = TY(s.ys[i]);
       if (!isFinite(x) || !isFinite(y)) continue;
-      // Error bars are part of the mark, so they must fit inside the range too.
+      // Error bars are part of the mark, so they must fit inside the range too — but a
+      // whisker running down to a value a log axis cannot show cannot stretch it.
       const e = (s.errs && isFinite(s.errs[i]) && s.errs[i] > 0) ? s.errs[i] : 0;
+      let lo = TY(s.ys[i] - e), hi = TY(s.ys[i] + e);
+      // A box reaches from its lowest to its highest value shown, outliers included.
+      const b = s.boxes && s.boxes[i];
+      if (b){ lo = TY(Math.min(b.lo, ...b.out)); hi = TY(Math.max(b.hi, ...b.out)); }
       any = true;
       if (x < x0) x0 = x; if (x > x1) x1 = x;
-      if (y - e < y0) y0 = y - e; if (y + e > y1) y1 = y + e;
+      if (isFinite(lo) && lo < y0) y0 = lo; if (y < y0) y0 = y;
+      if (isFinite(hi) && hi > y1) y1 = hi; if (y > y1) y1 = y;
     }
   }
   if (!any) return null;
   // Bars stand on a zero baseline and need half a category slot of air either side.
+  // A log axis has no zero: its bars rise from the foot of whatever range is shown.
   const bars = F.series.some(s=> s.show && s.kind === 'bar' && panelIdxs.includes(s.panel));
-  if (bars){ x0 -= 0.7; x1 += 0.7; y0 = Math.min(0, y0); }
+  if (bars){ x0 -= 0.7; x1 += 0.7; if (!yLog()) y0 = Math.min(0, y0); }
   if (x1 === x0){ x0 -= 0.5; x1 += 0.5; }
   if (y1 === y0){ y0 -= 0.5; y1 += 0.5; }
   const pad = (y1 - y0) * 0.05;
-  return { x0, x1, y0: bars ? y0 : y0 - pad, y1: y1 + pad };
+  // (So there the shortest bar keeps the padding under it, or it would have no height.)
+  return { x0, x1, y0: bars && !yLog() ? y0 : y0 - pad, y1: y1 + pad };
 }
 
 // True when nothing sits immediately beyond `side` of panel `i` — i.e. there is
@@ -417,7 +563,12 @@ function computeRanges(){
 
 // Legend key: a filled box for bars, a stroked line for curves.
 function legendMark(add, s, xa, xb, y){
-  if (s.kind === 'bar'){ add('rect', { x:xa, y:y-3, width:xb-xa, height:6, fill:s.color }); return; }
+  // A bar's key is a swatch of the very fill the bars carry, texture and all.
+  if (s.kind === 'bar'){
+    add('rect', { x:xa, y:y-3, width:xb-xa, height:6,
+                  fill:barFill(add, s.color, s.texture, s.texInv) });
+    return;
+  }
   if (s.dash !== 'none'){
     const e = add('line', { x1:xa, x2:xb, y1:y, y2:y, stroke:s.color, 'stroke-width':s.width });
     if (s.dash) e.setAttribute('stroke-dasharray', s.dash);
@@ -436,9 +587,30 @@ function textW(txt, px, weight){
   return measCtx.measureText(String(txt)).width;
 }
 
+/* The pale companion of a colour: the same hue mixed towards white, which is what a
+   texture is drawn on — or in, the other way round. Being a colour rather than a thin
+   veil, it holds up over a grid line or a neighbouring bar. */
+function rgbOf(c){
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c || '').trim());
+  if (m){
+    const h = m[1].length === 3 ? m[1].replace(/./g, ch=> ch + ch) : m[1];
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+  }
+  const rgb = /rgba?\(([^)]+)\)/i.exec(String(c || ''));
+  if (rgb){ const p = rgb[1].split(',').map(Number); return [p[0]||0, p[1]||0, p[2]||0]; }
+  return [136, 136, 136];
+}
+function lightShade(color, amount){
+  const k = amount == null ? 0.68 : amount;
+  const [r, g, b] = rgbOf(color);
+  const mix = v => Math.round(v + (255 - v) * k);
+  return '#' + [mix(r), mix(g), mix(b)].map(v=> v.toString(16).padStart(2, '0')).join('');
+}
+
 /* Black or white, whichever a reader can see against `bg` — the usual relative
-   luminance, with the threshold where the two contrast ratios cross. */
-function contrastInk(bg){
+   luminance, with the threshold where the two contrast ratios cross. The SEM figure's
+   outline takes it too. */
+export function contrastInk(bg){
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(bg || '').trim());
   let r = 255, g = 255, b = 255;
   if (m){
@@ -460,6 +632,8 @@ function contrastInk(bg){
 function drawFigure(svg, ink, paper, extra){
   // One chosen colour for every line and letter the figure draws around the data.
   if (F.inkColor) ink = F.inkColor;
+  patSeen = new Map();
+  patDefs = null;
   const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('width', W); svg.setAttribute('height', H);
@@ -468,6 +642,9 @@ function drawFigure(svg, ink, paper, extra){
   // Stated on the root rather than inherited, so the preview and the exported file
   // render in the same face instead of each falling back to its own default.
   svg.setAttribute('font-family', fontStack());
+  // Patterns live in one defs block at the head of the figure, before anything that
+  // might reference them.
+  patDefs = add('defs', {});
   add('rect', { x:0, y:0, width:W, height:H, fill: paper });
 
   const fTick = F.font.tick * PT_PX, fAxis = F.font.axis * PT_PX;
@@ -478,73 +655,120 @@ function drawFigure(svg, ink, paper, extra){
   // below, and (for a global legend) a strip under that.
   let maxYNum = 0;
   F.panels.forEach((p, i)=>{
-    for (const t of majorTicks(yOf[i][0], yOf[i][1], stepY())) maxYNum = Math.max(maxYNum, textW(fmtTick(t), fTick));
+    const ts = axisTicks('y', yOf[i][0], yOf[i][1]);
+    for (const t of ts) maxYNum = Math.max(maxYNum, tickW('y', t, ts, fTick));
   });
-  // How far the X labels stick out sideways and downwards. A number is centred on
-  // its tick, so the outermost ones overhang the frame by half their width; tilted
-  // category names hang below the axis and lean past its left end.
-  let halfX = 0, catDrop = 0, catLean = 0;
-  F.panels.forEach((p, i)=>{
-    for (const t of majorTicks(xOf[i][0], xOf[i][1], stepX())) halfX = Math.max(halfX, textW(fmtTick(t), fTick) / 2);
-  });
-  if (F.cats && F.cats.length){
-    for (const cat of F.cats){
-      const w = textW(cat.text, fTick), rad = (cat.rot || 0) * Math.PI / 180;
-      catDrop = Math.max(catDrop, w * Math.sin(rad) + fTick * Math.cos(rad));
-      catLean = Math.max(catLean, cat.rot ? w * Math.cos(rad) : w / 2);
+  // The category names, measured once: whole, as the figure always draws them.
+  const catWs = (F.cats || []).map(cat=> catW(cat.x, fTick));
+  // Margins and placing for a given tilt of the X labels. `lean` reserves room for
+  // names that hang past their panel's left side.
+  const layoutFor = (xRot, lean)=>{
+    // How far the X labels stick out sideways and downwards. A number is centred on
+    // its tick, so the outermost ones overhang the frame by half their width; tilted
+    // category names hang below the axis and lean past its left end.
+    let halfX = 0, catDrop = 0, catLean = 0;
+    const xRad = xRot * Math.PI / 180;
+    // A category axis draws its names, never numbers: those take no room of their own.
+    if (!catWs.length) F.panels.forEach((p, i)=>{
+      const ts = axisTicks('x', xOf[i][0], xOf[i][1]);
+      for (const t of ts){
+        const w = tickW('x', t, ts, fTick);
+        halfX = Math.max(halfX, xRot ? w * Math.cos(xRad) : w / 2);
+        if (xRot) catDrop = Math.max(catDrop, w * Math.sin(xRad) + fTick * Math.cos(xRad));
+      }
+    });
+    if (F.cats && F.cats.length){
+      F.cats.forEach((cat, k)=>{
+        const w = catWs[k], rad = xRad;
+        catDrop = Math.max(catDrop, w * Math.sin(rad) + fTick * Math.cos(rad));
+        catLean = Math.max(catLean, xRot ? w * Math.cos(rad) : w / 2);
+      });
+      // Names tilted to stay inside their panel need no margin to lean into.
+      if (lean) halfX = Math.max(halfX, catLean);
     }
-    halfX = Math.max(halfX, catLean);
-  }
-  const xDrop = F.cats && F.cats.length ? Math.max(fTick * 1.7, catDrop + fTick * 0.6) : fTick * 1.7;
+    const xDrop = (F.cats && F.cats.length) || xRot
+      ? Math.max(fTick * 1.7, catDrop + fTick * 0.6) : fTick * 1.7;
 
-  // Only reserve room on a side that some panel actually decorates.
-  const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
-  const room = (side, vert) =>
-    (anySide(side, 'labels') ? (vert ? maxYNum + 8 : xDrop) : 0) +
-    (anySide(side, 'title') && (vert ? F.ylabel : F.xlabel) ? fAxis * 1.5 : 0);
-  // Whatever the sides ask for, never less than the overhang of the outermost X
-  // label — that is what used to spill outside the figure.
-  const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
-  const legendItems = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false)).length;
-  const legendRows = (F.legendMode === 'global' && legendItems)
-    ? Math.ceil(legendItems / Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, legendItems))) : 0;
-  const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
-  let mL = Math.max(10 + room('left', true), sideX) + extra.L;
-  let mR = Math.max(10 + room('right', true), sideX) + extra.R;
-  let mT = 10 + room('top', false) + (F.legendPlace === 'top' ? legendH : 0) + extra.T;
-  let mB = 10 + room('bottom', false) + (F.legendPlace === 'top' ? 0 : legendH) + extra.B;
-  // Margins never eat more than this much of the page. Without the cap, a request
-  // that cannot fit (a title longer than the figure) would grow them past the page
-  // and push the panels off it; with it, the figure stays sane and the text clips.
-  const capW = W * 0.62, capH = H * 0.62;
-  if (mL + mR > capW){ const k = capW / (mL + mR); mL *= k; mR *= k; }
-  if (mT + mB > capH){ const k = capH / (mT + mB); mT *= k; mB *= k; }
+    // Only reserve room on a side that some panel actually decorates.
+    const anySide = (side, what) => F.panels.some(p => (p.axes || (p.axes = newAxes()))[side][what]);
+    const room = (side, vert) =>
+      (anySide(side, 'labels') ? (vert ? maxYNum + 8 : xDrop) : 0) +
+      (anySide(side, 'title') && (vert ? F.ylabel : F.xlabel) ? fAxis * 1.5 : 0);
+    // Whatever the sides ask for, never less than the overhang of the outermost X
+    // label — that is what used to spill outside the figure.
+    const sideX = (anySide('bottom', 'labels') || anySide('top', 'labels')) ? halfX + 2 : 0;
+    const legendItems = legendEntries(F.series.filter(s=> s.show && s.inLegend !== false)).length;
+    const legendRows = (F.legendMode === 'global' && legendItems)
+      ? Math.ceil(legendItems / Math.max(1, Math.min(Math.round(F.legendCols) || 1e9, legendItems))) : 0;
+    const legendH = legendRows ? legendRows * fLeg * 1.35 + F.legendGap + 4 : 0;
+    let mL = Math.max(10 + room('left', true), sideX) + extra.L;
+    let mR = Math.max(10 + room('right', true), sideX) + extra.R;
+    let mT = 10 + room('top', false) + (F.legendPlace === 'top' ? legendH : 0) + extra.T;
+    let mB = 10 + room('bottom', false) + (F.legendPlace === 'top' ? 0 : legendH) + extra.B;
+    // Margins never eat more than this much of the page. Without the cap, a request
+    // that cannot fit (a title longer than the figure) would grow them past the page
+    // and push the panels off it; with it, the figure stays sane and the text clips.
+    const capW = W * 0.62, capH = H * 0.62;
+    if (mL + mR > capW){ const k = capW / (mL + mR); mL *= k; mR *= k; }
+    if (mT + mB > capH){ const k = capH / (mT + mB); mT *= k; mB *= k; }
 
-  let innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
-  if (!F.plotAuto){
-    // Room is still kept for the outward tick marks on the far sides, so a plot area
-    // asked bigger than the page can hold stops short of the edge instead of on it.
-    innerW = Math.min(Math.max(20, F.plotW * PX_MM), W - mL - 8);
-    innerH = Math.min(Math.max(20, F.plotH * PX_MM), H - mT - 8);
-  }
+    let innerW = Math.max(20, W - mL - mR), innerH = Math.max(20, H - mT - mB);
+    // Set by hand, the plot area is the size asked, whatever the page: one larger than
+    // the page runs off it, which is seen at once (no limit hides the mistake).
+    if (!F.plotAuto){
+      innerW = Math.max(20, F.plotW * PX_MM);
+      innerH = Math.max(20, F.plotH * PX_MM);
+    }
+    /* A plot area other than the space the margins leave is placed in it by `align`,
+       centred unless asked otherwise: to spare where it is smaller, over the edges
+       where it is larger. */
+    const AL = { t:0, l:0, c:0.5, b:1, r:1 };
+    const av = String(F.align || 'cc');
+    const fy = AL[av[0]] !== undefined ? AL[av[0]] : 0.5;
+    const fx = AL[av[1]] !== undefined ? AL[av[1]] : 0.5;
+    const oX = mL + ((W - mL - mR) - innerW) * fx;
+    const oY = mT + ((H - mT - mB) - innerH) * fy;
+    const cw = innerW / F.cols, ch = innerH / F.rows;
+    return { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch };
+  };
+  // Tilt chosen automatically: the least, from 30° to 90° in 5° steps, at which every
+  // panel's names stay between its sides and clear of one another; failing that 90°.
+  // It is chosen on the X axis as it stands: kept inside, the names ask nothing of the
+  // side margins, so no angle tried moves the panels it is tried against, and only a
+  // change of range or layout changes the tilt.
+  const namesIn = (L, rot) => F.panels.every((p, pi)=>{
+    const ax = p.axes || (p.axes = newAxes()), fr = sideFree(pi);
+    const drawn = ['bottom', 'top'].some(sd => ax[sd].labels && (fr[sd] || !F.innerClean));
+    if (!drawn) return true;
+    const px0 = L.oX + p.c * L.cw, pw = Math.max(4, p.cs * L.cw), [x0, x1] = xOf[pi] || [0, 1];
+    const inRange = F.cats.map(c=> c.x >= x0 && c.x <= x1);
+    const qs = F.cats.map(c=> px0 + (c.x - x0) / (x1 - x0 || 1) * pw);
+    return tiltFits(catWs.map((w, k)=> inRange[k] ? w : 0), qs, px0, px0 + pw, fTick * 1.2, rot);
+  });
+  let lay;
+  if (F.catRotAuto && catWs.length){
+    const here = layoutFor(30, false);
+    let rot = 90;
+    for (let r = 30; r <= 90; r += 5) if (namesIn(here, r)){ rot = r; break; }
+    lay = layoutFor(rot, false);
+  } else lay = layoutFor(Math.max(0, Math.min(90, F.catRot || 0)), true);
+  lastCatRot = lay.xRot;
+  const { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch } = lay;
   lastInner = { w: +(innerW / PX_MM).toFixed(2), h: +(innerH / PX_MM).toFixed(2) };
-  /* A plot area smaller than the space the margins leave has that space to spare,
-     and `align` says where in it the area sits — centred unless asked otherwise. */
-  const AL = { t:0, l:0, c:0.5, b:1, r:1 };
-  const av = String(F.align || 'cc');
-  const fy = AL[av[0]] !== undefined ? AL[av[0]] : 0.5;
-  const fx = AL[av[1]] !== undefined ? AL[av[1]] : 0.5;
-  const oX = mL + Math.max(0, (W - mL - mR) - innerW) * fx;
-  const oY = mT + Math.max(0, (H - mT - mB) - innerH) * fy;
-  const cw = innerW / F.cols, ch = innerH / F.rows;
 
   F.panels.forEach((p, pi)=>{
     const px0 = oX + p.c * cw, py0 = oY + p.r * ch;
     const pw = Math.max(4, p.cs * cw), ph = Math.max(4, p.rs * ch);
     const [x0, x1] = xOf[pi] || [0, 1];
     const [y0, y1] = yOf[pi] || [0, 1];
-    const X = v => px0 + (v - x0) / (x1 - x0 || 1) * pw;
-    const Y = v => py0 + ph - (v - y0) / (y1 - y0 || 1) * ph;
+    // XT/YT place a value of the axis itself — a tick, a bound — and X/Y a value of
+    // the data, which on a log axis is first taken to its logarithm.
+    const XT = v => px0 + (v - x0) / (x1 - x0 || 1) * pw;
+    const YT = v => py0 + ph - (v - y0) / (y1 - y0 || 1) * ph;
+    const X = v => XT(TX(v)), Y = v => YT(TY(v));
+    // A data value a log axis has no place for (≤ 0) is drawn past the panel's foot,
+    // where the clip cuts it: a whisker or a bar running down to it ends there.
+    const Yc = v =>{ const q = Y(v); return isFinite(q) ? q : py0 + ph + 2; };
 
     const clipId = 'fclip' + pi;
     const defs = add('defs', {});
@@ -554,18 +778,18 @@ function drawFigure(svg, ink, paper, extra){
 
     // Grid, under everything. Built from the same ticks the axes use, so it always
     // lines up with the numbers whatever the tick step is.
-    const gx = majorTicks(x0, x1, stepX()), gy = majorTicks(y0, y1, stepY());
+    const gx = axisTicks('x', x0, x1), gy = axisTicks('y', y0, y1);
     if (F.grid.x || F.grid.y){
       const gg = add('g', { 'clip-path': `url(#${clipId})` });
       const rule = (a, minor)=> add('line', { ...a, stroke:ink, 'stroke-width': minor ? 0.3 : 0.5,
                                               'stroke-dasharray':F.grid.dash, opacity: minor ? 0.28 : 0.45 }, gg);
       if (F.grid.x){
-        for (const t of gx) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph });
-        if (F.grid.minor) for (const t of minorTicks(gx, x0, x1, minorsX())) rule({ x1:X(t), x2:X(t), y1:py0, y2:py0+ph }, true);
+        for (const t of gx) rule({ x1:XT(t), x2:XT(t), y1:py0, y2:py0+ph });
+        if (F.grid.minor) for (const t of axisMinors('x', gx, x0, x1)) rule({ x1:XT(t), x2:XT(t), y1:py0, y2:py0+ph }, true);
       }
       if (F.grid.y){
-        for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) });
-        if (F.grid.minor) for (const t of minorTicks(gy, y0, y1, minorsY())) rule({ x1:px0, x2:px0+pw, y1:Y(t), y2:Y(t) }, true);
+        for (const t of gy) rule({ x1:px0, x2:px0+pw, y1:YT(t), y2:YT(t) });
+        if (F.grid.minor) for (const t of axisMinors('y', gy, y0, y1)) rule({ x1:px0, x2:px0+pw, y1:YT(t), y2:YT(t) }, true);
       }
     }
 
@@ -630,25 +854,58 @@ function drawFigure(svg, ink, paper, extra){
       }
       add('text', at, g).textContent = txt;
     };
+    /* One box of a box plot, in its bar's slot and fill: the box from the first to the
+       third quartile, the median across it, whiskers to the furthest values within
+       1.5 IQR with caps, each value beyond a circle, the mean a cross. Its value label
+       is the mean ± what the plot gave, above whatever of it reaches highest. */
+    const drawBox = (s, j, b, cx, wPx)=>{
+      const st = { stroke:ink, 'stroke-width':0.8 }, hw = wPx/2, cap = Math.min(4, hw/2);
+      const yq1 = Yc(b.q1), yq3 = Yc(b.q3), ylo = Yc(b.lo), yhi = Yc(b.hi), ym = Yc(b.med);
+      add('line', { x1:cx, x2:cx, y1:ylo, y2:yq1, ...st }, g);
+      add('line', { x1:cx, x2:cx, y1:yq3, y2:yhi, ...st }, g);
+      add('line', { x1:cx-cap, x2:cx+cap, y1:ylo, y2:ylo, ...st }, g);
+      add('line', { x1:cx-cap, x2:cx+cap, y1:yhi, y2:yhi, ...st }, g);
+      const d = divOfBar(s, j), color = divColor(s, d);
+      add('rect', { x:(cx - hw).toFixed(2), y:Math.min(yq1, yq3).toFixed(2), width:wPx.toFixed(2), height:Math.abs(yq1 - yq3).toFixed(2),
+                    fill:barFill(add, color, divTexture(s, d), divInv(s, d)), ...st }, g);
+      add('line', { x1:cx-hw, x2:cx+hw, y1:ym, y2:ym, stroke:ink, 'stroke-width':1.4 }, g);
+      if (isFinite(b.mean)){
+        const r = Math.min(2.5, hw*0.4), yv = Yc(b.mean);
+        add('line', { x1:cx-r, x2:cx+r, y1:yv-r, y2:yv+r, ...st }, g);
+        add('line', { x1:cx-r, x2:cx+r, y1:yv+r, y2:yv-r, ...st }, g);
+      }
+      for (const v of b.out) add('circle', { cx, cy:Yc(v), r:Math.max(1, Math.min(2, hw/3)), fill:'none', ...st }, g);
+      if (wantsLabels()){
+        const top = Math.min(yhi, ...b.out.map(Yc)), bot = Math.max(ylo, ...b.out.map(Yc));
+        valueLabel(s, j, cx, Yc(b.mean), top, bot,
+                   { color, top: Math.min(Math.max(Math.min(yq1, yq3), py0), py0 + ph), bottom: Math.min(Math.max(Math.max(yq1, yq3), py0), py0 + ph) });
+      }
+    };
     // Bars of different series sharing a category sit side by side inside the slot.
     const barSeries = F.series.filter(s=> s.show && s.kind === 'bar' && s.panel === pi);
     for (const s of F.series){
       if (!s.show || s.panel !== pi) continue;
       if (s.kind === 'bar'){
         const nb = barSeries.length, bi = barSeries.indexOf(s);
-        const slot = Math.abs(X(1) - X(0));           // one category, in px
+        const slot = Math.abs(XT(1) - XT(0));         // one category, in px
         const wPx = Math.max(1, slot * s.width / nb);
         const off = (bi - (nb - 1) / 2) * wPx;
-        const zero = Y(Math.max(y0, Math.min(y1, 0)));
+        // On a log axis there is no zero to stand on: bars rise from the panel's foot.
+        const zero = YT(yLog() ? y0 : Math.max(y0, Math.min(y1, 0)));
         s.xs.forEach((xv, j)=>{
           const yv = s.ys[j];
           if (!isFinite(xv) || !isFinite(yv)) return;
           const cx = X(xv) + off, yy = Y(yv);
+          if (!isFinite(yy)) return;
+          const bx = s.boxes && s.boxes[j];
+          if (bx){ drawBox(s, j, bx, cx, wPx); return; }
           add('rect', { x:(cx - wPx/2).toFixed(2), y:Math.min(yy, zero).toFixed(2),
-                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2), fill:divColor(s, divOfBar(s, j)) }, g);
+                        width:wPx.toFixed(2), height:Math.abs(zero - yy).toFixed(2),
+                        fill:barFill(add, divColor(s, divOfBar(s, j)),
+                                     divTexture(s, divOfBar(s, j)), divInv(s, divOfBar(s, j))) }, g);
           const err = s.errs && s.errs[j];
           if (isFinite(err) && err > 0){
-            const yA = Y(yv - err), yB = Y(yv + err), cap = Math.min(4, wPx / 3);
+            const yA = Yc(yv - err), yB = Yc(yv + err), cap = Math.min(4, wPx / 3);
             const st = { stroke:ink, 'stroke-width':0.8 };
             add('line', { x1:cx, x2:cx, y1:yA, y2:yB, ...st }, g);
             add('line', { x1:cx-cap, x2:cx+cap, y1:yA, y2:yA, ...st }, g);
@@ -661,7 +918,7 @@ function drawFigure(svg, ink, paper, extra){
             // past the top of the range is centred on the part that shows.
             const bTop = Math.min(Math.max(Math.min(yy, zero), py0), py0 + ph);
             const bBot = Math.min(Math.max(Math.max(yy, zero), py0), py0 + ph);
-            valueLabel(s, j, cx, yy, Math.min(Y(yv + e), zero), Math.max(Y(yv - e), zero),
+            valueLabel(s, j, cx, yy, Math.min(Yc(yv + e), zero), Math.max(Yc(yv - e), zero),
                        { color: divColor(s, divOfBar(s, j)), top: bTop, bottom: bBot });
           }
         });
@@ -670,25 +927,27 @@ function drawFigure(svg, ink, paper, extra){
       if (s.marker !== 'none'){
         const r = Math.max(0.9, s.width * 1.3);
         for (let i = 0; i < s.xs.length; i++){
-          if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
-          const [tag, at] = markerShape(s.marker, +X(s.xs[i]).toFixed(2), +Y(s.ys[i]).toFixed(2), r, s.color, s.width);
+          const qx = X(s.xs[i]), qy = Y(s.ys[i]);
+          if (!isFinite(qx) || !isFinite(qy)) continue;
+          const [tag, at] = markerShape(s.marker, +qx.toFixed(2), +qy.toFixed(2), r, s.color, s.width);
           add(tag, at, g);
         }
       }
       if (s.dash !== 'none'){
         let d = '';
         for (let i = 0; i < s.xs.length; i++){
-          if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
-          d += (d === '' ? 'M' : 'L') + X(s.xs[i]).toFixed(2) + ',' + Y(s.ys[i]).toFixed(2) + ' ';
+          const qx = X(s.xs[i]), qy = Y(s.ys[i]);
+          if (!isFinite(qx) || !isFinite(qy)) continue;
+          d += (d === '' ? 'M' : 'L') + qx.toFixed(2) + ',' + qy.toFixed(2) + ' ';
         }
         const path = add('path', { d, fill:'none', stroke:s.color, 'stroke-width':s.width }, g);
         if (s.dash) path.setAttribute('stroke-dasharray', s.dash);
       }
       if (wantsLabels()){
         for (let i = 0; i < s.xs.length; i++){
-          if (!isFinite(s.xs[i]) || !isFinite(s.ys[i])) continue;
-          const yy = Y(s.ys[i]);
-          valueLabel(s, i, X(s.xs[i]), yy, yy, yy);
+          const qx = X(s.xs[i]), yy = Y(s.ys[i]);
+          if (!isFinite(qx) || !isFinite(yy)) continue;
+          valueLabel(s, i, qx, yy, yy, yy);
         }
       }
     }
@@ -713,10 +972,11 @@ function drawFigure(svg, ink, paper, extra){
         const qw = Math.max(4, q.cs * cw), qh = Math.max(4, q.rs * ch);
         if (vert){
           const [a, z] = yOf[k] || [0, 1];
-          for (const t of majorTicks(a, z, stepY())) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
+          for (const t of axisTicks('y', a, z)) marks.push(qy0 + qh - (t - a) / (z - a || 1) * qh);
         } else {
           const [a, z] = xOf[k] || [0, 1];
-          for (const t of majorTicks(a, z, stepX())) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: textW(fmtTick(t), fTick) / 2 });
+          const ts = axisTicks('x', a, z);
+          for (const t of ts) marks.push({ q: qx0 + (t - a) / (z - a || 1) * qw, w: tickW('x', t, ts, fTick) / 2 });
         }
       });
       return marks;
@@ -761,10 +1021,10 @@ function drawFigure(svg, ink, paper, extra){
                           : { x1:pos, x2:pos, y1:g0.base+from, y2:g0.base+to };
         add('line', { ...e, stroke:ink, 'stroke-width':0.8 });
       };
-      const proj = g0.vert ? Y : X;
+      const proj = g0.vert ? YT : XT;
       const majors = g0.vert ? yMaj : xMaj;
       if (a.major) majors.forEach(t=> mark(proj(t), TICK_MAJ));
-      if (a.minor) minorTicks(majors, ...(g0.vert ? [y0, y1, minorsY()] : [x0, x1, minorsX()])).forEach(t=> mark(proj(t), TICK_MIN));
+      if (a.minor) (g0.vert ? axisMinors('y', majors, y0, y1) : axisMinors('x', majors, x0, x1)).forEach(t=> mark(proj(t), TICK_MIN));
 
       // Numbers and title only where there is room outside the panel; a side that
       // touches a neighbour can carry tick marks but nothing that would overlap it —
@@ -773,18 +1033,21 @@ function drawFigure(svg, ink, paper, extra){
 
       if (a.labels && cats && !g0.vert){
         for (const c of cats){
-          const q = X(c.x), rot = c.rot || 0;
+          const q = XT(c.x), rot = xRot;
           const at = side === 'bottom' ? { x:q, y:g0.base + fTick*1.15 } : { x:q, y:g0.base - fTick*0.5 };
           const el = add('text', { ...at, 'font-size':fTick, fill:ink,
                                    'text-anchor': rot ? 'end' : 'middle' });
-          if (rot) el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
-          el.textContent = c.text;
+          // Tilted, it turns about the middle of its last character, as on the page.
+          if (rot){ el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`); el.setAttribute('dy', TILT_DY); }
+          const runs = catRuns(c.x);
+          if (runs) catLabel(el, c.x, runs, fTick); else el.textContent = catText(c.x);
         }
         continue;
       }
       if (a.labels){
         for (const t of majors){
-          const q = proj(t), txt = fmtTick(t);
+          const parts = tickParts(g0.vert ? 'y' : 'x', t, majors);
+          const q = proj(t), txt = parts.base;
           let at;
           if (g0.vert){
             const hh = fTick * 0.55;
@@ -795,13 +1058,26 @@ function drawFigure(svg, ink, paper, extra){
               ? { x:g0.base-5, y:q+fTick*0.36, 'text-anchor':'end' }
               : { x:g0.base+5, y:q+fTick*0.36, 'text-anchor':'start' };
           } else {
-            const hw = textW(txt, fTick) / 2;
+            const hw = tickW('x', t, majors, fTick) / 2;
             const clash = m => Math.abs(m.q - q) < m.w + hw + 2;
             if (q - hw < px0 + 1 && !free.left && neighbourMarks(side, 'left', false).some(clash)) continue;
             if (q + hw > px0 + pw - 1 && !free.right && neighbourMarks(side, 'right', false).some(clash)) continue;
             at = { x:q, y: side === 'bottom' ? g0.base+fTick*1.25 : g0.base-fTick*0.5, 'text-anchor':'middle' };
           }
-          add('text', { ...at, 'font-size':fTick, fill:ink }).textContent = txt;
+          const el = add('text', { ...at, 'font-size':fTick, fill:ink });
+          // Numbers tilt with the category names, around the point they label.
+          const rot = g0.vert ? 0 : xRot;
+          if (rot){
+            el.setAttribute('text-anchor', 'end');
+            el.setAttribute('transform', `rotate(-${rot} ${at.x} ${at.y})`);
+            el.setAttribute('dy', TILT_DY);
+          }
+          el.textContent = txt;
+          if (parts.sup){
+            const sp = svgEl('tspan', { 'baseline-shift':'super', 'font-size': +(fTick * SUP_K).toFixed(2) });
+            sp.textContent = parts.sup;
+            el.appendChild(sp);
+          }
         }
       }
 
@@ -851,21 +1127,25 @@ function drawFigure(svg, ink, paper, extra){
   });
 
   // Shared titles: one per side for the whole grid, centred on the inner area and
-  // sitting in the outer margin. A side gets one when any panel asked for it.
+  // sitting in the outer margin. A side gets one when any panel asked for it. The
+  // margin is measured from the plot, not the page: with the plot set by hand (it may
+  // run off the page) the titles go with it, as the tick numbers do; with auto margins
+  // the two are the same.
   {
     const want = side => F.panels.some(p=> (p.axes || (p.axes = newAxes()))[side].title);
     const shX = F.titleModeX === 'shared', shY = F.titleModeY === 'shared';
     const cx = oX + innerW / 2, cy = oY + innerH / 2;
+    const outL = oX - mL, outR = oX + innerW + mR, outT = oY - mT, outB = oY + innerH + mB;
     if (shX && F.xlabel && want('bottom'))
-      richText(add, F.xlabel, { x:cx, y:H - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'text-anchor':'middle' }, fAxis, ink);
+      richText(add, F.xlabel, { x:cx, y:outB - (F.legendPlace === 'top' ? 0 : legendH) - 4, 'text-anchor':'middle' }, fAxis, ink);
     if (shX && F.xlabel && want('top'))
-      richText(add, F.xlabel, { x:cx, y:fAxis, 'text-anchor':'middle' }, fAxis, ink);
+      richText(add, F.xlabel, { x:cx, y:outT + fAxis, 'text-anchor':'middle' }, fAxis, ink);
     if (shY && F.ylabel && want('left'))
-      richText(add, F.ylabel, { x:fAxis*1.1, y:cy, 'text-anchor':'middle',
-                                transform:`rotate(-90 ${fAxis*1.1} ${cy})` }, fAxis, ink);
+      richText(add, F.ylabel, { x:outL + fAxis*1.1, y:cy, 'text-anchor':'middle',
+                                transform:`rotate(-90 ${outL + fAxis*1.1} ${cy})` }, fAxis, ink);
     if (shY && F.ylabel && want('right'))
-      richText(add, F.ylabel, { x:W - fAxis*1.1, y:cy, 'text-anchor':'middle',
-                                transform:`rotate(90 ${W - fAxis*1.1} ${cy})` }, fAxis, ink);
+      richText(add, F.ylabel, { x:outR - fAxis*1.1, y:cy, 'text-anchor':'middle',
+                                transform:`rotate(90 ${outR - fAxis*1.1} ${cy})` }, fAxis, ink);
   }
 
   // Global legend: a strip above or below the panels, in one row or N columns.
@@ -890,7 +1170,7 @@ function drawFigure(svg, ink, paper, extra){
                : F.legendAlign === 'right' ? oX + innerW - total
                : oX + Math.max(0, (innerW - total) / 2);
       const yTop = F.legendPlace === 'top' ? oY - F.legendGap - rows * rowH
-                                           : oY + innerH + (H - oY - innerH - rows * rowH) / 2;
+                                           : oY + innerH + (mB - rows * rowH) / 2;
       if (F.legendFrame){
         const pad = 4;
         legendFrameRect(add, x0-pad, yTop-pad, total+pad*2, rows*rowH+pad*2, ink, paper);
@@ -905,6 +1185,44 @@ function drawFigure(svg, ink, paper, extra){
       });
     }
   }
+}
+
+/* A bar's fill: its colour plainly, or that colour drawn as a pattern when the series
+   carries a texture. One pattern per colour-and-texture pair is put in the figure's
+   defs and referenced from there, so a hundred bars of one series cost one definition.
+   Patterns are part of the document, so they survive export and rasterising. */
+let patDefs = null, patSeen = null;
+function barFill(add, color, texture, inv){
+  // A plain bar has the two ways round as well: the colour, or the pale shade the
+  // textures are drawn over — so a series can be told apart by weight alone.
+  if (!texture || !TEXTURES[texture] || texture === 'solid')
+    return inv ? lightShade(color) : color;
+  const key = texture + color + (inv ? '!' : '');
+  if (!patSeen) return color;
+  if (!patSeen.has(key)){
+    const id = 'ftex' + patSeen.size;
+    patSeen.set(key, id);
+    const P = 6;                               // pattern tile, in figure px
+    const pat = svgEl('pattern', { id, width:P, height:P, patternUnits:'userSpaceOnUse' });
+    const put = (tag, at)=> pat.appendChild(svgEl(tag, at));
+    // The tile is painted on the bar's own colour, so the texture reads as that colour
+    // lightened rather than as a second hue laid over white.
+    /* Two ways round, both in the one colour: the marks in it over its pale shade, or
+       its pale shade over the colour. Which reads better depends on the colour, so it
+       is a choice rather than a rule. */
+    const pale = lightShade(color);
+    const ground = inv ? color : pale;
+    const markCol = inv ? pale : color;
+    put('rect', { x:0, y:0, width:P, height:P, fill:ground });
+    const line = (x1,y1,x2,y2)=> put('line', { x1, y1, x2, y2, stroke:markCol, 'stroke-width':1.4, 'stroke-linecap':'square' });
+    if (texture === 'dots') put('circle', { cx:P/2, cy:P/2, r:1.5, fill:markCol });
+    if (texture === 'fwd'  || texture === 'cross'){ line(-1,P+1,P+1,-1); line(P-1,P+1,P+1,P-1); line(-1,1,1,-1); }
+    if (texture === 'back' || texture === 'cross'){ line(-1,-1,P+1,P+1); line(-1,P-1,1,P+1); line(P-1,-1,P+1,1); }
+    if (texture === 'horiz' || texture === 'grid') line(0,P/2,P,P/2);
+    if (texture === 'vert'  || texture === 'grid') line(P/2,0,P/2,P);
+    if (patDefs) patDefs.appendChild(pat);
+  }
+  return `url(#${patSeen.get(key)})`;
 }
 
 /* The box behind a legend. Its outline and how much of the page it hides are set
@@ -963,15 +1281,25 @@ function renderInto(svg, ink, paper){
     worst = now;
     extra = { L:extra.L + o.L, R:extra.R + o.R, T:extra.T + o.T, B:extra.B + o.B };
   }
+  // The locked tilt field shows the tilt this drawing settled on.
+  const rotField = controlsEl && controlsEl.querySelector('[data-autorot]');
+  if (rotField) rotField.value = lastCatRot;
 }
 
-// Physical size and pixel count of the export, shown in the footer. Driven by the
-// redraw rather than by input events: numeric fields commit on 'change', and hanging
-// this off the events meant the line reported the value from before the last commit.
-function updateDim(){
-  if (!dimEl || !F) return;
-  dimEl.textContent = `${F.wmm}×${F.hmm} mm (plot ${lastInner.w}×${lastInner.h}) · `
+// Physical size and pixel count of the export, shown in the footer (the plots' line).
+// Driven by the redraw rather than by input events: numeric fields commit on 'change',
+// and hanging this off the events meant the line reported the value from before the
+// last commit.
+const plotDimText = ()=> `${F.wmm}×${F.hmm} mm (plot ${lastInner.w}×${lastInner.h}) · `
     + `${Math.round(F.wmm / 25.4 * F.dpi)}×${Math.round(F.hmm / 25.4 * F.dpi)} px @ ${F.dpi} dpi`;
+/* The kind's line, and, while the page is one an export found too large for a PNG at
+   this dpi (pngLim), the most it takes. */
+let shownSize = { W: 0, H: 0 };   // the page of the last preview, mm
+let pngLim = null;                // { W, H, dpi }: the largest dpi a PNG of that page could be made at, 0 none
+function updateDim(){
+  if (!dimEl || !K) return;
+  const { W, H } = shownSize, over = pngLim && pngLim.W === W && pngLim.H === H && K.dpi() > pngLim.dpi;
+  dimEl.textContent = K.dimText() + (over ? ' · too large for a PNG here' + (pngLim.dpi ? `: at most ${pngLim.dpi} dpi` : '') : '');
 }
 
 /* The preview is a fixed-size drawing scaled to fit its pane; this puts a zoom and a
@@ -1023,17 +1351,30 @@ function wirePreviewView(){
   host.addEventListener('dblclick', resetView);   // back to fit
 }
 
+/* The kind draws its figure at its real size; it is fitted inside the preview pane
+   without distorting it. Nothing to draw once the composer is closed, which a frame
+   asked for at opening may find. */
 function renderPreview(){
-  renderInto(previewSvg, '#1a2327', '#ffffff');
-  // Fit the real-size figure inside the preview pane without distorting it.
+  if (!backdrop) return;
+  const { W, H } = K.draw(previewSvg, false);
   const host = previewSvg.parentElement;
   const availW = host.clientWidth - 24, availH = host.clientHeight - 24;
-  const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
-  const k = Math.min(availW / W, availH / H, 1);
-  previewSvg.style.width = (W * k) + 'px';
-  previewSvg.style.height = (H * k) + 'px';
+  const w = W * PX_MM, h = H * PX_MM;
+  const k = Math.min(availW / w, availH / h, 1);
+  previewSvg.style.width = (w * k) + 'px';
+  previewSvg.style.height = (h * k) + 'px';
   applyView();
+  shownSize = { W, H };
   updateDim();
+  say('');
+  if (K.afterRender) K.afterRender();
+}
+
+/* The footer's status line: why an export failed, until the next export or redraw. */
+function say(msg){
+  if (!msgEl) return;
+  msgEl.textContent = msg || '';
+  msgEl.hidden = !msg;
 }
 
 /* ---- Export ---------------------------------------------------------------- */
@@ -1056,88 +1397,193 @@ async function interFontCss(){
   return _interCss;
 }
 
-async function figureSvgString(){
-  const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  tmp.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  renderInto(tmp, '#000000', '#ffffff');
-  const face = FONTS[F.font.family] || FONTS.Inter;
-  if (face.embed){
+/* What an export needs is taken at the click, before anything waits: the kind, its
+   file name, dpi, paper and page, and the drawing (draw, called before the first
+   wait). A composer closed while its file is being made still saves it: the file was
+   read from the model after a wait, so closing it then threw and saved nothing (to
+   v480). An edit not yet gone back to its module goes first (flush). */
+function exportJob(){
+  const k = K;
+  if (k.flush) k.flush();
+  say('');
+  const { W, H } = k.size();
+  return { k, W, H, file: k.file(), dpi: k.dpi(), paper: k.paper(), embed: !!(FONTS[k.font()] || FONTS.Inter).embed,
+    draw(){
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      k.draw(svg, true);
+      return svg;
+    } };
+}
+// An error the composer words itself (shown), and where an export that failed says so:
+// in the composer it came from, if still open, never in silence.
+const failure = msg => Object.assign(new Error(msg), { shown: true });
+function exportFailed(k, e, what){
+  const msg = e && e.shown ? e.message : `${what} could not be made: ${(e && e.message) || e}`;
+  if (k && K === k) say(msg); else console.error(msg, e);
+}
+
+// The drawing as a standalone file: Inter embedded, the size in millimetres.
+async function svgString(job, svg){
+  if (job.embed){
     const css = await interFontCss();
     if (css){
       const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
       style.textContent = css;
-      tmp.insertBefore(style, tmp.firstChild);
+      svg.insertBefore(style, svg.firstChild);
     }
   }
   // Physical size so the file lands at the right scale in Word/Illustrator/LaTeX.
-  tmp.setAttribute('width', F.wmm + 'mm');
-  tmp.setAttribute('height', F.hmm + 'mm');
-  return new XMLSerializer().serializeToString(tmp);
+  svg.setAttribute('width', job.W + 'mm');
+  svg.setAttribute('height', job.H + 'mm');
+  return new XMLSerializer().serializeToString(svg);
 }
 
 async function exportSVG(){
-  saveBlob(F.name + '.svg', await figureSvgString(), 'image/svg+xml');
+  const k = K;
+  try {
+    const job = exportJob(), svg = job.draw();
+    saveBlob(job.file + '.svg', await svgString(job, svg), 'image/svg+xml');
+  } catch(e){ exportFailed(k, e, 'The SVG'); }
 }
 
-// The figure rasterised at the chosen dpi, as a PNG blob — saved to a file or handed
-// to the clipboard, which wants the very same bytes.
-async function figurePngBlob(){
-  const str = await figureSvgString();
-  const W = F.wmm * PX_MM, H = F.hmm * PX_MM;
-  const scale = F.dpi / 96;                       // px at the requested dpi
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(W * scale); canvas.height = Math.round(H * scale);
-  const ctx = canvas.getContext('2d');
-  return new Promise((resolve, reject)=>{
+/* The canvas sizes browsers make, [longest side, area] in px: Chromium's (measured: a
+   side of 65535 and 2²⁸ px in all; past either a canvas draws nothing and gives no PNG,
+   with no error), Firefox's, Safari's and iOS's (their published limits), then smaller
+   ones, for a device short of memory. */
+const CANVAS_LIMITS = [[65535, 2**28], [32767, 472907776], [4194303, 2**28], [4194303, 2**24],
+  [16384, 2**26], [8192, 2**24], [4096, 2**24]];
+const pxOf = (W, H, dpi)=> [Math.round(W / 25.4 * dpi), Math.round(H / 25.4 * dpi)];
+/* A w × h canvas, where this browser makes one: a pixel drawn in its far corner reads
+   back. Null where it does not (Chromium past its limits draws nothing, Safari gives
+   no context, Firefox may throw), its memory given back at once. */
+function canvasOf(w, h){
+  const cv = document.createElement('canvas');
+  try {
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    if (ctx){
+      ctx.fillStyle = '#000000'; ctx.fillRect(w - 1, h - 1, 1, 1);
+      if (ctx.getImageData(w - 1, h - 1, 1, 1).data[3] === 255) return cv;
+    }
+  } catch(e){}
+  cv.width = cv.height = 0;
+  return null;
+}
+/* The largest dpi under `dpi` at which this browser makes the canvas of a W × H mm
+   page: what each size of CANVAS_LIMITS allows, tried largest first; the first canvas
+   made (given back at once) says it. 0: none. */
+function maxDpi(W, H, dpi){
+  const wi = W / 25.4, hi = H / 25.4, cands = new Set();
+  for (const [side, area] of CANVAS_LIMITS){
+    let d = Math.floor(Math.min(side / wi, side / hi, Math.sqrt(area / (wi * hi))));
+    // The rounded sizes have to fit too.
+    const fits = d =>{ const [w, h] = pxOf(W, H, d); return w <= side && h <= side && w * h <= area; };
+    while (d > 0 && !fits(d)) d--;
+    if (d > 0 && d < dpi) cands.add(d);
+  }
+  for (const d of [...cands].sort((a, b)=> b - a)){
+    const cv = canvasOf(...pxOf(W, H, d));
+    if (cv){ cv.width = cv.height = 0; return d; }
+  }
+  return 0;
+}
+/* The figure rasterised at the chosen dpi, as a PNG blob — saved to a file or handed
+   to the clipboard, which wants the very same bytes — on the kind's paper (the SEM
+   figure's background; white for the plots). The canvas comes first: a page too large
+   for this browser at that dpi says so, with the most it takes, before anything is
+   drawn; it gave no file and no word, nor did a drawing that would not load or a PNG
+   the browser would not make (to v480). Through a blob URL: the SEM figure holds its
+   images at full size, too long a string for a data URL. */
+async function pngBlob(job){
+  const [w, h] = pxOf(job.W, job.H, job.dpi);
+  const cv = canvasOf(w, h);
+  if (!cv){
+    const d = maxDpi(job.W, job.H, job.dpi);
+    pngLim = { W: job.W, H: job.H, dpi: d };
+    if (K === job.k) updateDim();
+    throw failure(`Too large for a PNG in this browser: ${w} × ${h} px. `
+      + (d ? `At most ${d} dpi for this page.` : 'No dpi makes a PNG of this page here.'));
+  }
+  // Made after all (memory given back since): the page's limit is not known any more.
+  if (pngLim && pngLim.W === job.W && pngLim.H === job.H && job.dpi > pngLim.dpi){ pngLim = null; if (K === job.k) updateDim(); }
+  const str = await svgString(job, job.draw());
+  const url = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+  let blob = null;
+  try {
     const img = new Image();
-    img.onload = ()=>{
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(b=> b ? resolve(b) : reject(new Error('no blob')), 'image/png');
-    };
-    img.onerror = ()=> reject(new Error('render failed'));
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str);
-  });
+    await new Promise((res, rej)=>{ img.onload = res; img.onerror = ()=> rej(failure('The figure could not be drawn into a PNG.')); img.src = url; });
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = job.paper; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    blob = await new Promise(res=> cv.toBlob(res, 'image/png'));
+  } finally { URL.revokeObjectURL(url); cv.width = cv.height = 0; }
+  if (!blob) throw failure(`The browser could not make the PNG (${w} × ${h} px): try a lower dpi.`);
+  return blob;
 }
 
 async function exportPNG(){
-  saveBlob(F.name + '.png', await figurePngBlob());
+  const k = K;
+  try {
+    const job = exportJob();
+    saveBlob(job.file + '.png', await pngBlob(job));
+  } catch(e){ exportFailed(k, e, 'The PNG'); }
 }
 
 /* Safari only honours a clipboard write made in the same turn as the click, so the
    item is handed the promise of the blob rather than the blob itself where that is
-   supported; elsewhere the plain await is fine. */
+   supported; elsewhere the write fails and is made again with the same blob, awaited:
+   the figure is drawn once (twice, to v480), and a PNG that could not be made says
+   why rather than only "Copy failed". */
 async function copyPNG(btn){
   if (!(navigator.clipboard && window.ClipboardItem && navigator.clipboard.write)) return;
   const done = txt => { btn.textContent = txt; setTimeout(()=>{ btn.textContent = 'Copy PNG'; }, 1200); };
+  const k = K;
+  let p;
+  try { p = pngBlob(exportJob()); } catch(e){ exportFailed(k, e, 'The PNG'); done('Copy failed'); return; }
+  p.catch(()=>{});   // awaited below where it matters: never an unhandled rejection
   try {
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': figurePngBlob() })]);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': p })]);
     done('Copied');
   } catch(e){
+    let blob;
+    try { blob = await p; } catch(e2){ exportFailed(k, e2, 'The PNG'); done('Copy failed'); return; }
     try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': await figurePngBlob() })]);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       done('Copied');
-    } catch(e2){ done('Copy failed'); }
+    } catch(e3){ done('Copy failed'); }
   }
 }
 
 /* ---- Controls -------------------------------------------------------------- */
 
-const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 /* Numeric fields are plain text boxes, not <input type="number">: Chrome renders a
    number input's value with the BROWSER's decimal separator whatever lang says, and
    a figure has to read with a point. Typing a comma is still accepted — it is
    translated on commit — and `data-num` marks the field as commit-on-change, so a
-   value only takes effect once confirmed instead of on every keystroke. */
-const numField = (attrs, value, min, max)=>
-  `<input type="text" inputmode="decimal" data-num="1" data-min="${min}" data-max="${max}" ${attrs} value="${value}">`;
-const num = (label, key, min, max)=>
-  `<label class="fig-row"><span>${label}</span>${numField(`data-k="${key}"`, F[key], min, max)}</label>`;
+   value only takes effect once confirmed instead of on every keystroke.
+   The field kit serves both kinds. A control names its setting by a data attribute,
+   `at`: k by default (the plots' F[key]; g, dl, f their grid, data labels and font; p a
+   dotted path into the SEM figure's settings), and shows the value the open kind gives
+   for it (K.val). `off`: disabled, kept in place. */
+const valOf = (at, key)=> K.val(at || 'k', key);
+const numField = (attrs, value, min, max, off)=>
+  `<input type="text" inputmode="decimal" data-num="1" data-min="${esc(min)}" data-max="${esc(max)}" ${attrs} value="${esc(value)}"${off ? ' disabled' : ''}>`;
+const num = (label, key, min, max, at, off)=>
+  `<label class="fig-row"><span>${label}</span>${numField(`data-${at || 'k'}="${key}"`, valOf(at, key), min, max, off)}</label>`;
+/* A field's number, inside its range. Outside it, or not a number, the field shakes
+   red and goes back to the last value it took (flashFieldInvalid), as everywhere in
+   the app: a value is refused, never quietly changed. A range may follow another
+   setting (data-max-k: a key of F). */
 const readNum = t=>{
   const v = parseFloat(String(t.value).replace(',', '.'));
-  if (!isFinite(v)) return null;
-  const lo = parseFloat(t.dataset.min), hi = parseFloat(t.dataset.max);
-  return Math.min(isFinite(hi) ? hi : Infinity, Math.max(isFinite(lo) ? lo : -Infinity, v));
+  const lo = parseFloat(t.dataset.min), hi = t.dataset.maxK ? F[t.dataset.maxK] : parseFloat(t.dataset.max);
+  if (!isFinite(v) || (isFinite(lo) && v < lo) || (isFinite(hi) && v > hi)){
+    flashFieldInvalid(t);
+    t.value = t.defaultValue;
+    return null;
+  }
+  return v;
 };
 
 // Panel whose axes the "Panel axes" section edits. The sentinel 'all' edits every
@@ -1146,7 +1592,7 @@ const readNum = t=>{
    shared by reference — they never change, and copying them per keystroke would
    cost far more than the whole rest of the model. */
 let undoStack = [], redoStack = [], undoTimer = null;
-const SHARED = ['xs', 'ys', 'errs'];
+const SHARED = ['xs', 'ys', 'errs', 'boxes'];
 function snapshot(){
   const clone = v => JSON.parse(JSON.stringify(v));
   return {
@@ -1168,22 +1614,43 @@ function applySnapshot(snap){
 // Coalesce a burst of edits (dragging a slider, typing in a field) into one step.
 function pushUndo(){
   clearTimeout(undoTimer);
-  undoTimer = setTimeout(()=>{
-    if (!F) return;          // the modal was closed inside the coalescing window
-    undoStack.push(snapshot());
-    if (undoStack.length > 60) undoStack.shift();
-    redoStack.length = 0;
-  }, 250);
+  undoTimer = setTimeout(recordUndo, 250);
+}
+// Two snapshots of one figure: the same settings over the same data arrays.
+const json = v => JSON.stringify(v);
+const sameSnap = (a, b)=> !!a && !!b && json(a.scalars) === json(b.scalars) && a.series.length === b.series.length
+  && a.series.every((e, i)=> e.keep.every((v, j)=> v === b.series[i].keep[j]) && json(e.rest) === json(b.series[i].rest));
+/* An edit that leaves the figure as it is is no step: a number committed with Enter
+   fires 'change' once more on blur, past the coalescing window, and that repeat was a
+   second copy of the step, so the first Ctrl+Z seemed to do nothing (to v485). It
+   leaves the redo as it is too. One that redoes by hand the step just undone takes it
+   back from the redo, so the steps undone after it can still be redone. */
+function recordUndo(){
+  undoTimer = null;
+  if (!F) return;            // the modal was closed inside the coalescing window
+  const snap = snapshot();
+  if (sameSnap(snap, undoStack[undoStack.length - 1])) return;
+  if (sameSnap(snap, redoStack[redoStack.length - 1])) undoStack.push(redoStack.pop());
+  else { undoStack.push(snap); redoStack.length = 0; }
+  if (undoStack.length > 60) undoStack.shift();
+}
+/* An edit still inside its coalescing window is an edit all the same: recorded before
+   undo, so undo takes back that one and not the step before it with it, and before
+   redo, which it makes void like any new edit. Dropping it would lose it for good. */
+function flushUndo(){
+  if (undoTimer === null) return;
+  clearTimeout(undoTimer);
+  recordUndo();
 }
 function undo(){
-  clearTimeout(undoTimer);
+  flushUndo();
   if (undoStack.length < 2) return;          // the first entry is the opening state
   redoStack.push(undoStack.pop());
   applySnapshot(undoStack[undoStack.length - 1]);
   refresh(true);
 }
 function redo(){
-  clearTimeout(undoTimer);
+  flushUndo();
   const snap = redoStack.pop();
   if (!snap) return;
   undoStack.push(snap);
@@ -1203,13 +1670,37 @@ function loadPresets(){
 function savePresets(o){ try { localStorage.setItem(PRESET_KEY, JSON.stringify(o)); } catch(e){} }
 function settingsSnapshot(){
   const snap = snapshot();
-  snap.series = snap.series.map(e=>({ keep: [], rest: e.rest }));
+  // No data, but where each bar stood and which sample stood there: that is what lets
+  // the divisions and the typed sample names follow their samples (applySettings).
+  snap.series = snap.series.map((e, i)=> F.series[i].kind === 'bar'
+    ? { keep: [], rest: e.rest, bx: F.series[i].xs.slice() }
+    : { keep: [], rest: e.rest });
+  snap.cats = F.cats.map(c=>({ x: c.x, key: c.key }));
+  snap.ownDivNames = true;      // see applySettings
   return snap;
 }
-/* Applies settings without touching the data: scalars wholesale, per-series looks
-   positionally. A plot with more series than the source keeps its own for the rest.
-   `kind`, `id`, `label` and the data are never copied — they say what a series IS,
-   not how it looks. Letting a preset made on line plots turn a bar series into a
+/* Which saved entry each entry of the plot is, by key: a series or a sample keeps its
+   settings wherever it now stands, and one new to the plot gets none, whatever was
+   added, removed or renamed around it. Only when no key matches at all — a preset
+   made on another plot, or settings saved before keys were kept — do the entries pair
+   up by position, as a template would; `gone` ones (see rememberSettings) never do.
+   Gives the saved index for each entry of `now`, or -1. */
+function pairUp(saved, now, gone){
+  const used = saved.map(()=> false);
+  const out = now.map(k=>{
+    const j = k == null ? -1 : saved.findIndex((t, n)=> !used[n] && t === k);
+    if (j >= 0) used[j] = true;
+    return j;
+  });
+  if (out.some(j=> j >= 0)) return out;
+  const spare = saved.map((_, n)=> n).filter(n=> !(gone && gone[n]));
+  return now.map((_, i)=> i < spare.length ? spare[i] : -1);
+}
+/* Applies settings without touching the data: scalars wholesale, per-series looks to
+   the series they were made for (pairUp), in the order they were left in; a series new
+   to the plot keeps its own looks and the place the plot gives it.
+   `kind`, `id`, `key`, `label` and the data are never copied — they say what a series
+   IS, not how it looks. Letting a preset made on line plots turn a bar series into a
    curve would erase the bars, and carrying names over would show the sample labels
    of whatever plot the settings came from; the names always come from the project's
    own legend, so renaming a sample there shows up here at once.
@@ -1217,22 +1708,51 @@ function settingsSnapshot(){
    A name typed into the composer is the exception: it is a choice about this figure,
    not about the project, so it is kept in `rename` — which is not identity — and put
    back over the label when the settings are applied again. */
-const IDENTITY = ['kind', 'id', 'label', 'xs', 'ys', 'errs'];
-/* `name` says which plot the figure IS, not how it looks: it is the key the per-plot
-   memory is filed under. A preset carrying its origin's name over would make the plot
-   save its settings under the other plot's name and find nothing on reopening. */
+const IDENTITY = ['kind', 'id', 'key', 'given', 'label', 'xs', 'ys', 'errs', 'boxes'];
+/* `name` is the file this figure is exported as. It belongs to this figure alone, like
+   a series' data: a preset made on another plot carrying it over would export this
+   one under the other's file name. The per-plot memory, which is about this figure,
+   does bring it back (recallSettings). */
 const SCALAR_IDENTITY = ['name'];
 function applySettings(snap){
   if (!snap) return;
   const scalars = JSON.parse(JSON.stringify(snap.scalars));
   for (const k of SCALAR_IDENTITY) delete scalars[k];
+  // Sample names and divisions are held by the sample's x, so they move with it.
+  const moveX = new Map();
+  if (snap.cats){
+    pairUp(snap.cats.map(c=> c.key), F.cats.map(c=> c.key))
+      .forEach((j, i)=>{ if (j >= 0) moveX.set(snap.cats[j].x, F.cats[i].x); });
+    const names = {};
+    for (const x in scalars.catNames || {}) if (moveX.has(+x)) names[moveX.get(+x)] = scalars.catNames[x];
+    scalars.catNames = names;
+  }
   Object.assign(F, scalars);
+  const saved = snap.series || [];
+  const key = r => (r && r.key != null) ? r.kind + '\n' + r.key : null;
+  const pair = pairUp(saved.map(e=> key(e.rest)), F.series.map(key), saved.map(e=> !!e.gone));
   F.series.forEach((s, i)=>{
-    const rest = snap.series[i] && snap.series[i].rest;
+    const e = saved[pair[i]], rest = e && e.rest;
     if (!rest) return;
     for (const k in rest) if (!IDENTITY.includes(k)) s[k] = rest[k];
+    if (rest.divOf && e.bx && snap.cats){
+      const div = new Map();
+      e.bx.forEach((x, j)=>{ if (moveX.has(x)) div.set(moveX.get(x), rest.divOf[j]); });
+      s.divOf = s.xs.map(x=> div.get(x) || 0);
+    }
     if (s.rename) s.label = s.rename;
   });
+  // Settings from before v328, when an unnamed first division showed the series'
+  // name, typed-over one included: it is given that name, so the legend reads as it
+  // did when the settings were saved.
+  if (!snap.ownDivNames) F.series.forEach(s=>{
+    if (s.kind !== 'bar' || !s.rename || (divsOf(s)[0] && divsOf(s)[0].name)) return;
+    s.divs = divsOf(s).slice();
+    s.divs[0] = { ...s.divs[0], name: s.rename };
+  });
+  const slots = F.series.map((_, i)=> i).filter(i=> pair[i] >= 0);
+  const order = slots.slice().sort((a, b)=> pair[a] - pair[b]).map(i=> F.series[i]);
+  slots.forEach((i, n)=>{ F.series[i] = order[n]; });
   clampPanels();
 }
 
@@ -1241,9 +1761,14 @@ function applySettings(snap){
    project — never share a memory; tab ids are themselves persisted, so the key still
    points at the same plot after a reload. Kept in localStorage rather than in memory
    for exactly that reason, and pruned of tabs that no longer exist so it cannot grow
-   without bound. Reset is the way out of a memory you no longer want. */
+   without bound. Reset is the way out of a memory you no longer want.
+
+   The plot is named by the page (srcOpts), never by the "File name" field: that one
+   is yours to edit, and a key that followed it would file the settings under the new
+   name on closing and look for them under the page's on reopening. */
 const MEM_KEY = 'dt-figure-memory';
-const memKey = name => ((activeTab() || {}).id || 'none') + '/' + name;
+// (the tab is the one whose instance holds the plot, on show or not: tabs.js tabOf)
+const memKey = ()=> ((tabOf(srcPlot && srcPlot.svg) || {}).id || 'none') + '/' + ((srcOpts && srcOpts.name) || 'figure');
 function loadMemory(){
   try { const o = JSON.parse(localStorage.getItem(MEM_KEY)); return (o && typeof o === 'object') ? o : {}; }
   catch(e){ return {}; }
@@ -1255,14 +1780,29 @@ function rememberSettings(){
   // Which preset the figure was left on, so reopening it says so instead of coming
   // back with the settings of a preset and no sign of which one.
   snap.preset = presetSel;
-  all[memKey(F.name)] = snap;
+  /* A series the plot is not drawing right now — a gas switched off, a sample taken
+     out — keeps its settings for when it is back, in the place it had among the
+     others. It is found again by key only: it is not the series of any other sample. */
+  const prev = all[memKey()];
+  if (prev && prev.series){
+    const same = (a, b)=> a.rest.key === b.rest.key && a.rest.kind === b.rest.kind;
+    let at = 0;
+    for (const e of prev.series){
+      if (!e.rest || e.rest.key == null) continue;
+      const k = snap.series.findIndex(m=> same(m, e));
+      if (k >= 0){ at = k + 1; continue; }
+      snap.series.splice(at++, 0, { ...e, gone: true });
+    }
+  }
+  all[memKey()] = snap;
   const live = new Set(TABS.map(t=>t.id));
   for (const k of Object.keys(all)) if (!live.has(k.slice(0, k.indexOf('/')))) delete all[k];
   try { localStorage.setItem(MEM_KEY, JSON.stringify(all)); } catch(e){}
 }
 function recallSettings(){
-  const snap = loadMemory()[memKey(F.name)];
+  const snap = loadMemory()[memKey()];
   applySettings(snap);
+  if (snap && typeof snap.scalars.name === 'string') F.name = snap.scalars.name;
   // Only if that preset is still around: one deleted meanwhile names nothing.
   presetSel = (snap && snap.preset && loadPresets()[snap.preset]) ? snap.preset : '';
 }
@@ -1275,28 +1815,37 @@ function panelOptions(sel){
   return F.panels.map((p,i)=>`<option value="${i}"${i===sel?' selected':''}>P${i+1}</option>`).join('');
 }
 
-/* The divisions of one bar series: each one a titled group, with the bars that
-   belong to it listed inside. A bar changes division by being dragged from one group
-   to another — the same gesture that moves a series between panels. */
+/* The divisions of one bar series, and the samples under them. Every sample is listed
+   whatever the divisions do — one per row, named where it stands, and dragged by its
+   handle into the division it belongs to. A bar chart has no other list of its samples,
+   so this one is always on show rather than appearing once a series is divided. */
 function divisionsHtml(s, i){
   const divs = divsOf(s);
+  const barRow = j => `
+    <div class="fig-barrow" data-bar="${i}:${j}">
+      <span class="fig-grip" title="Drag into another division">${GRIP}</span>
+      <input type="text" data-bark="${i}:${j}" value="${esc(catText(s.xs[j]))}" class="fig-slabel"
+             title="The sample's name, on the axis and in every series">
+    </div>`;
   const many = divs.length > 1;
   const group = (d, k)=>`
     <div class="fig-dgroup" data-dg="${i}:${k}">
       <div class="fig-dgroup-h">
-        <button class="color-swatch" data-dsw="${i}:${k}" data-color="${divColor(s,k)}" style="background:${divColor(s,k)}" title="Pick the colour of this division"></button>
+        ${many
+          ? `<button type="button" class="fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${X_SVG(13)}</button>`
+          : '<span class="fig-divx-gap"></span>'}
+        <button class="color-swatch" data-dsw="${i}:${k}" data-color="${esc(divColor(s,k))}" style="background:${esc(divColor(s,k))}" title="Pick the colour of this division"></button>
+        <button type="button" class="fig-fill" data-fill="${i}:${k}" title="How this division's bars are filled">${fillPreview(divTexture(s,k), divInv(s,k))}</button>
         <input type="text" data-dk="${i}:${k}" value="${esc(divName(s,k))}" class="fig-slabel" title="Name shown in the legend">
-        ${k ? `<button type="button" class="btn btn-sm fig-divx" data-deldiv="${i}:${k}" title="Remove this division">${'\u00d7'}</button>` : ''}
       </div>
-      ${many ? `<div class="fig-dbars">${
-        s.xs.map((_, j)=> divOfBar(s, j) === k
-          ? `<span class="fig-barchip" data-bar="${i}:${j}" title="Drag into another division">${esc(barName(s, j))}</span>` : '').join('')
-        || '<span class="txt-meta">drag bars here</span>'}</div>` : ''}
+      <div class="fig-dbars">${
+        s.xs.map((_, j)=> divOfBar(s, j) === k ? barRow(j) : '').join('')
+        || '<span class="txt-meta">drag samples here</span>'}</div>
     </div>`;
   return `<div class="fig-divs">
     ${divs.map(group).join('')}
     ${divs.length < s.xs.length
-      ? `<button type="button" class="btn btn-sm fig-divadd" data-adddiv="${i}" title="Another colour group inside this series">+ division</button>`
+      ? `<button type="button" class="btn btn-sm fig-divadd" data-adddiv="${i}" title="Another colour group inside this series">+ Division</button>`
       : ''}
   </div>`;
 }
@@ -1310,24 +1859,47 @@ const figToggle = (attrs, on, icon, title)=>
 
 const GRIP = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
 
-const chk = (label, key, obj)=>
-  `<label class="fig-check"><input type="checkbox" data-${obj||'k'}="${key}"${(obj==='g'?F.grid[key]:obj==='dl'?F.dataLabels[key]:F[key])?' checked':''}> ${label}</label>`;
-const sel = (label, key, opts, cur, attr)=>
-  `<label class="fig-row"><span>${label}</span><select data-${attr||'k'}="${key}">${
-    opts.map(([v,t])=>`<option value="${v}"${String(cur)===String(v)?' selected':''}>${t}</option>`).join('')}</select></label>`;
+/* Settings that mean something only while another is on: kept in place, disabled while
+   it is off (applyDeps), never taken away, so that nothing moves under the pointer. */
+const dep = (off, html)=> `<div class="fig-dep" data-off="${off ? 1 : 0}">${html}</div>`;
+function applyDeps(){
+  if (!controlsEl) return;
+  controlsEl.querySelectorAll('.fig-dep').forEach(d=>{
+    const off = d.dataset.off === '1';
+    d.querySelectorAll('input, select, button').forEach(el=>{ el.disabled = off; });
+  });
+}
+const chk = (label, key, at, title, off)=>
+  `<label class="fig-check"${title ? ` title="${esc(title)}"` : ''}><input type="checkbox" data-${at||'k'}="${key}"${valOf(at, key)?' checked':''}${off ? ' disabled' : ''}> ${label}</label>`;
+// cur: the option shown, the setting's own value where null.
+const sel = (label, key, opts, cur, at, off)=>
+  `<label class="fig-row"><span>${label}</span><select data-${at||'k'}="${key}"${off ? ' disabled' : ''}>${
+    opts.map(([v,t])=>`<option value="${v}"${String(cur ?? valOf(at, key))===String(v)?' selected':''}>${t}</option>`).join('')}</select></label>`;
 
 /* A number the figure works out for itself until you say otherwise: while the
-   automatic switch is on the field shows what was chosen and cannot be typed in. */
-const autoNum = (label, key, autoKey, min, max, autoVal)=>
-  `<label class="fig-row"><span>${label}</span>${F[autoKey]
-    ? `<input type="text" value="${autoVal}" disabled title="Chosen automatically">`
-    : numField(`data-k="${key}"`, F[key], min, max)}</label>`;
+   automatic switch is on the field shows what was chosen and cannot be typed in. It
+   shows autoVal, or, without one, what the drawing fills in (data-auto: the SEM
+   figure's afterRender). */
+const autoNum = (label, key, autoKey, min, max, autoVal, at)=>
+  `<label class="fig-row"><span>${label}</span>${valOf(at, autoKey)
+    ? (autoVal == null ? `<input type="text" data-auto="${key}" disabled title="Chosen automatically">`
+                       : `<input type="text" value="${autoVal}" disabled title="Chosen automatically">`)
+    : numField(`data-${at||'k'}="${key}"`, valOf(at, key), min, max)}</label>`;
 
+// How many minors each major interval automatically gets, for that field to show.
+function autoMinorsOf(axis){
+  const { xOf, yOf } = computeRanges();
+  const i = Math.min(Math.max(0, F.rangePanel | 0), F.panels.length - 1);
+  const [a, z] = ((axis === 'x' ? xOf : yOf)[i]) || [0, 1];
+  return minorsOf(axis, axisTicks(axis, a, z));
+}
 // The interval the automatic ticks are actually landing on, for that field to show.
 function autoStepOf(axis){
   const { xOf, yOf } = computeRanges();
   const i = Math.min(Math.max(0, F.rangePanel | 0), F.panels.length - 1);
   const [a, z] = ((axis === 'x' ? xOf : yOf)[i]) || [0, 1];
+  // A log axis steps a decade at a time.
+  if (isLog(axis)) return 1;
   const t = majorTicks(a, z, 0);
   return t.length > 1 ? +(t[1] - t[0]).toPrecision(6) : '';
 }
@@ -1360,11 +1932,12 @@ function rangeColHtml(axis){
   const bound = end => shared
     ? (X ? (end ? F.xmax : F.xmin) : (end ? F.ymax : F.ymin))
     : (man ? man[end] : live[end]);
+  const shown = v => +(+shownOf(axis, v)).toPrecision(6);
   const field = end => auto
-    ? `<input type="text" value="${+(+live[end]).toPrecision(6)}" disabled title="Chosen automatically">`
+    ? `<input type="text" value="${shown(live[end])}" disabled title="Chosen automatically">`
     : (shared
-        ? numField(`data-k="${X ? (end ? 'xmax' : 'xmin') : (end ? 'ymax' : 'ymin')}"`, +(+bound(end)).toPrecision(6), -1e12, 1e12)
-        : numField(`data-man="${X ? 'xMan' : 'yMan'}" data-end="${end}"`, +(+bound(end)).toPrecision(6), -1e12, 1e12));
+        ? numField(`data-k="${X ? (end ? 'xmax' : 'xmin') : (end ? 'ymax' : 'ymin')}"`, shown(bound(end)), -1e12, 1e12)
+        : numField(`data-man="${X ? 'xMan' : 'yMan'}" data-end="${end}"`, shown(bound(end)), -1e12, 1e12));
   return `<div class="fig-rangecol">
     <div class="fig-rangehead">${A} axes</div>
     <label class="fig-check"><input type="checkbox" data-k="${X ? 'shareX' : 'shareY'}"${shared ? ' checked' : ''}> Share across all panels</label>
@@ -1396,17 +1969,301 @@ function ALIGN_ICON(code){
     <rect x="${h}" y="${v}" width="3" height="3" fill="currentColor"/></svg>`;
 }
 
+/* A little square showing exactly what a bar of this series looks like: its colour,
+   its texture and its opacity, drawn with the same tile the figure uses. */
+function texturePaint(texture, color, inv){
+  const P = 6;
+  const mark = inv ? lightShade(color) : color;
+  const line = (x1,y1,x2,y2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${mark}" stroke-width="1.4" stroke-linecap="square"/>`;
+  let marks = '';
+  if (texture === 'dots') marks = `<circle cx="${P/2}" cy="${P/2}" r="1.5" fill="${mark}"/>`;
+  if (texture === 'fwd'  || texture === 'cross') marks += line(-1,P+1,P+1,-1) + line(P-1,P+1,P+1,P-1) + line(-1,1,1,-1);
+  if (texture === 'back' || texture === 'cross') marks += line(-1,-1,P+1,P+1) + line(-1,P-1,1,P+1) + line(P-1,-1,P+1,1);
+  if (texture === 'horiz' || texture === 'grid') marks += line(0,P/2,P,P/2);
+  if (texture === 'vert'  || texture === 'grid') marks += line(P/2,0,P/2,P);
+  return { marks, ground: texture === 'solid' ? (inv ? lightShade(color) : color)
+                                              : (inv ? color : lightShade(color)) };
+}
+/* Always drawn in one neutral grey, whatever the bars are coloured: the button and
+   the tiles say which texture, and colour is said by the swatch beside them. */
+const TEX_NEUTRAL = '#8a8f98';
+/* `r` is the corner: the buttons round theirs like the fields they stand beside, a
+   palette row keeps its tiles nearly square like the colour swatches above them. */
+function fillPreview(tex, inv, size, r){
+  const { marks, ground } = texturePaint(tex || 'solid', TEX_NEUTRAL, inv);
+  const px = size || 17, id = 'tp' + Math.random().toString(36).slice(2, 8);
+  return `<svg class="fig-fill-sw" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-hidden="true">
+    <defs><pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect width="6" height="6" fill="${ground}"/>${marks}</pattern></defs>
+    <rect x="0.5" y="0.5" width="${px-1}" height="${px-1}" rx="${r == null ? 5 : r}" fill="url(#${id})" stroke="rgba(128,128,128,0.45)"/>
+  </svg>`;
+}
+
+/* An ordered set of textures, handed out the way a colour palette hands out colours.
+   An entry is a texture name, with '!' for the way round that cuts the texture out of
+   the colour instead of laying it on a pale ground — the same spelling the fill
+   patterns are keyed by. A set shorter than the data repeats, as a palette does. */
+// The first is the one a new figure starts with (buildModel).
+const TEX_PALETTES = [
+  { name: 'Both ways',tex: ['solid','solid!','fwd','fwd!','back','back!','dots','dots!'] },
+  { name: 'Classic',  tex: ['solid','fwd','dots','cross','horiz','back','grid','vert'] },
+  { name: 'Hatching', tex: ['fwd','back','cross','grid','horiz','vert'] },
+  { name: 'Lines',    tex: ['horiz','vert','grid','fwd','back','cross'] },
+];
+const texName = e => String(e || 'solid').replace('!', '');
+const texInvOf = e => String(e || '').endsWith('!');
+const texEntry = (tex, inv)=> (tex || 'solid') + (inv ? '!' : '');
+
+const USER_TEXPAL_KEY = 'dt-user-tex-palettes';
+function userTexPalettes(){
+  try { const a = JSON.parse(localStorage.getItem(USER_TEXPAL_KEY)); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+function saveUserTexPalettes(list){
+  try { localStorage.setItem(USER_TEXPAL_KEY, JSON.stringify(list)); } catch(e){}
+}
+
+/* The texture palette picker: the colour palette picker's twin, tiles instead of
+   swatches. Same popup, same rows, same way of saving what is in use — so the two
+   buttons that sit side by side on the all-series row behave alike. */
+const texPalettePicker = {
+  el: null, anchor: null, onPick: null, opts: null,
+  _list(){ return TEX_PALETTES.concat(userTexPalettes()); },
+  open(anchor, onPick, opts){
+    const again = this.anchor === anchor && this.el;
+    this.close();
+    if (again) return;
+    this.anchor = anchor; this.onPick = onPick; this.opts = opts || {};
+    anchor.classList.add('cp-anchored');
+    const el = document.createElement('div');
+    el.className = 'pp-popup pp-texpop';
+    document.body.appendChild(el);
+    this.el = el;
+    this._render();
+    this._reposition();
+    this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+    setTimeout(()=>{
+      this._away = ev=>{
+        if (!this.el) return;
+        // The button holds an icon, which is what a press on it usually lands on.
+        if (this.el.contains(ev.target) || this.anchor.contains(ev.target)) return;
+        this.close();
+      };
+      document.addEventListener('pointerdown', this._away);
+    }, 0);
+  },
+  _render(){
+    const rows = this._list().map((p, i)=>{
+      const tiles = Array.from({ length: 8 }, (_, k)=>{
+        const e = p.tex[k % p.tex.length];
+        return `<span class="pp-tex">${fillPreview(texName(e), texInvOf(e), 14, 2)}</span>`;
+      }).join('');
+      const own = i >= TEX_PALETTES.length;
+      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${esc(p.name)}</span>
+        <div class="pp-swatches">${tiles}</div>
+        ${own ? `<button type="button" class="pp-del" data-del="${i - TEX_PALETTES.length}" title="Delete this palette">&#10005;</button>` : ''}</div>`;
+    }).join('');
+    const scope = this.opts.scope ? `
+      <div class="pp-scope">
+        <label class="pp-check"><input type="checkbox" class="pp-panel"${
+          this.opts.scope === 'panel' ? ' checked' : ''}><span>by panel</span></label>
+        <label class="pp-check"><input type="checkbox" class="pp-bydiv"${
+          this.opts.byDiv ? ' checked' : ''}><span>by division</span></label>
+      </div>` : '';
+    this.el.innerHTML = `${rows}${scope}
+      <div class="pp-save">
+        <input type="text" class="pp-save-name" placeholder="palette name" spellcheck="false">
+        <button type="button" class="btn btn-sm primary pp-save-btn">Save palette</button>
+      </div>
+      <p class="pp-hint">Saves the textures in use now. A palette shorter than the data repeats.</p>`;
+    this._wire();
+  },
+  _wire(){
+    this.el.querySelectorAll('.pp-row').forEach(row=>{
+      row.addEventListener('click', e=>{
+        if (e.target.closest('.pp-del')) return;
+        const p = this._list()[+row.dataset.idx];
+        if (p && this.onPick) this.onPick(p.tex.slice());
+        this.close();
+      });
+    });
+    this.el.querySelectorAll('.pp-del').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        const list = userTexPalettes();
+        list.splice(+btn.dataset.del, 1);
+        saveUserTexPalettes(list);
+        this._render(); this._reposition();
+      });
+    });
+    const scopeBox = this.el.querySelector('.pp-panel');
+    if (scopeBox) scopeBox.addEventListener('change', ()=>{
+      this.opts.scope = scopeBox.checked ? 'panel' : 'series';
+      if (this.opts.onScope) this.opts.onScope(this.opts.scope);
+    });
+    const divBox = this.el.querySelector('.pp-bydiv');
+    if (divBox) divBox.addEventListener('change', ()=>{
+      this.opts.byDiv = divBox.checked;
+      if (this.opts.onByDiv) this.opts.onByDiv(divBox.checked);
+    });
+    const nameIn = this.el.querySelector('.pp-save-name');
+    this.el.querySelector('.pp-save-btn').addEventListener('click', ()=>{
+      const used = (this.opts.textures ? this.opts.textures() : []).filter(Boolean);
+      if (!used.length) return;
+      const seen = new Set(), uniq = [];
+      for (const t of used) if (!seen.has(t)){ seen.add(t); uniq.push(t); }
+      const list = userTexPalettes();
+      const name = (nameIn.value || '').trim() || `Textures ${list.length + 1}`;
+      const at = list.findIndex(p=> p.name === name);
+      if (at >= 0) list[at] = { name, tex: uniq }; else list.push({ name, tex: uniq });
+      saveUserTexPalettes(list);
+      nameIn.value = '';
+      this._render(); this._reposition();
+    });
+  },
+  /* The sidebar was rebuilt under the popup — a scope change does that — so it is
+     pointed at the button that took the old one's place and stays put. */
+  reanchor(btn){
+    if (!btn || !this.el) return;
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
+    this.anchor = btn;
+    btn.classList.add('cp-anchored');
+    this._reposition();
+  },
+  _reposition(){
+    if (!this.el || !this.anchor) return;
+    const b = this.anchor.getBoundingClientRect();
+    const w = this.el.offsetWidth || 244, h = this.el.offsetHeight || 260;
+    let left = b.right + 10, top = b.top - 4;
+    if (left + w > window.innerWidth - 8) left = b.left - w - 10;
+    if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+    this.el.style.left = Math.max(8, left) + 'px';
+    this.el.style.top = Math.max(8, top) + 'px';
+  },
+  close(){
+    if (this._away) document.removeEventListener('pointerdown', this._away);
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
+    this._away = this._onScroll = null;
+    if (this.el) this.el.remove();
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
+    this.el = null; this.anchor = null; this.onPick = null; this.opts = null;
+  },
+};
+
+/* The button the texture palette hangs from: four textures in one square, the way the
+   colour palette button shows four colours. */
+function texPalIcon(){
+  const tiles = ['fwd','dots','cross','horiz'];
+  return `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${
+    tiles.map((t, i)=>{
+      const { marks, ground } = texturePaint(t, TEX_NEUTRAL, false);
+      const id = 'tpi' + Math.random().toString(36).slice(2, 8);
+      const x = (i % 2) * 8, y = Math.floor(i / 2) * 8;
+      return `<defs><pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="${ground}"/>${marks}</pattern></defs>
+      <rect x="${x}" y="${y}" width="8" height="8" fill="url(#${id})"/>`;
+    }).join('')}</svg>`;
+}
+
+/* Which texture a series' or a division's bars carry, and which way round it is drawn
+   — dark on a pale ground, or cut out of a solid one. Nothing about colour: that is
+   the swatch beside this button. Opens under its button and behaves like the colour
+   picker, and every change reaches the figure at once. */
+const fillPicker = {
+  el: null, anchor: null, state: null, onChange: null,
+  open(anchor, state, onChange){
+    // Clicking the button it is already hanging from closes it, as the colour picker does.
+    const again = this.anchor === anchor;
+    this.close();
+    if (again) return;
+    this.anchor = anchor; this.onChange = onChange;
+    anchor.classList.add('cp-anchored');     // holds the button's border while open
+    this.state = { texture: state.texture || 'solid', inv: !!state.inv };
+    const el = document.createElement('div');
+    el.className = 'fig-fillpop';
+    document.body.appendChild(el);
+    this.el = el;
+    this._render();
+    this._reposition();
+    this._onScroll = ()=> this._reposition();
+    window.addEventListener('scroll', this._onScroll, true);
+    window.addEventListener('resize', this._onScroll);
+    setTimeout(()=>{
+      this._away = ev=>{
+        if (!this.el) return;
+        if (this.el.contains(ev.target) || ev.target === anchor || ev.target.closest('.fig-fill')) return;
+        this.close();
+      };
+      document.addEventListener('pointerdown', this._away);
+    }, 0);
+  },
+  _render(){
+    const st = this.state;
+    this.el.innerHTML = `
+      <div class="fig-fillgrid">
+        ${Object.entries(TEXTURES).map(([v,n])=>
+          `<button type="button" class="fig-filltile${st.texture === v ? ' is-on' : ''}" data-tex="${v}" title="${n}">
+             ${fillPreview(v, st.inv, 20)}</button>`).join('')}
+      </div>
+      <div class="fig-fillinv">
+        ${(st.texture === 'solid'
+            ? [[false,'the colour itself'],[true,'its pale shade']]
+            : [[false,'texture on a pale ground'],[true,'texture cut out of the colour']]).map(([v,t])=>
+          `<button type="button" class="fig-filltile${st.inv === v ? ' is-on' : ''}" data-inv="${v}" title="${t}">
+             ${fillPreview(st.texture, v, 20)}</button>`).join('')}
+      </div>`;
+    this.el.querySelectorAll('[data-tex]').forEach(b=> b.addEventListener('click', ()=>{
+      this.state.texture = b.dataset.tex;
+      this._render(); this._emit();
+    }));
+    this.el.querySelectorAll('[data-inv]').forEach(b=> b.addEventListener('click', ()=>{
+      this.state.inv = b.dataset.inv === 'true';
+      this._render(); this._emit();
+    }));
+  },
+  _emit(){ if (this.onChange) this.onChange({ ...this.state }); },
+  _reposition(){
+    if (!this.el || !this.anchor) return;
+    const b = this.anchor.getBoundingClientRect();
+    const w = this.el.offsetWidth || 150, h = this.el.offsetHeight || 120;
+    this.el.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, b.left)) + 'px';
+    this.el.style.top = Math.max(6, Math.min(window.innerHeight - h - 6, b.bottom + 4)) + 'px';
+  },
+  close(){
+    if (this._away) document.removeEventListener('pointerdown', this._away);
+    if (this._onScroll){
+      window.removeEventListener('scroll', this._onScroll, true);
+      window.removeEventListener('resize', this._onScroll);
+    }
+    this._away = this._onScroll = null;
+    if (this.el) this.el.remove();
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
+    this.el = null; this.anchor = null; this.onChange = null; this.state = null;
+  },
+};
+
 /* Same manners as the colour picker: a small panel under the button it came from,
    closing on the next click elsewhere and following the button as the page scrolls. */
 const alignPicker = {
   el: null, anchor: null, onPick: null,
-  open(anchor, onPick){
+  open(anchor, onPick, cur){
+    // Toggles and holds its button lit while open, like every other picker here.
+    // cur: the alignment lit (the plots' figure's, unless another composer gives its own).
+    const lit = cur ?? (F && F.align);
+    const again = this.anchor === anchor;
     this.close();
+    if (again) return;
     this.anchor = anchor; this.onPick = onPick;
+    anchor.classList.add('cp-anchored');
     const el = document.createElement('div');
     el.className = 'fig-alignpop';
     el.innerHTML = ALIGN_CELLS.map(c=>
-      `<button type="button" class="btn btn-sm${c === F.align ? ' is-on' : ''}" data-al="${c}" title="${ALIGN_NAMES[c]}">${ALIGN_ICON(c)}</button>`).join('');
+      `<button type="button" class="btn btn-sm${c === lit ? ' is-on' : ''}" data-al="${c}" title="${ALIGN_NAMES[c]}">${ALIGN_ICON(c)}</button>`).join('');
     document.body.appendChild(el);
     this.el = el;
     el.addEventListener('click', e=>{
@@ -1422,7 +2279,7 @@ const alignPicker = {
     window.addEventListener('scroll', this._onScroll, true);
     window.addEventListener('resize', this._onScroll);
     setTimeout(()=>{
-      this._away = ev=>{ if (this.el && !this.el.contains(ev.target) && ev.target !== anchor) this.close(); };
+      this._away = ev=>{ if (this.el && !this.el.contains(ev.target) && !anchor.contains(ev.target)) this.close(); };
       document.addEventListener('pointerdown', this._away);
     }, 0);
   },
@@ -1440,6 +2297,7 @@ const alignPicker = {
     }
     this._away = this._onScroll = null;
     if (this.el) this.el.remove();
+    if (this.anchor) this.anchor.classList.remove('cp-anchored');
     this.el = null; this.anchor = null; this.onPick = null;
   },
 };
@@ -1452,7 +2310,7 @@ function manNum(label, bag, end){
   const r = computeRanges();
   const auto = bag === 'xMan' ? (r.xOf[i] || [0,1]) : (r.yOf[i] || [0,1]);
   const v = cur ? cur[end] : auto[end];
-  return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+v).toPrecision(6), -1e12, 1e12)}</label>`;
+  return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+shownOf(bag === 'yMan' ? 'y' : 'x', v)).toPrecision(6), -1e12, 1e12)}</label>`;
 }
 
 /* Axis-title editor: an ordinary text field over the ^{}/_{} notation, plus the two
@@ -1530,6 +2388,10 @@ function titleField(label, key){
   </div>`;
 }
 
+/* A figure of bars only. There is no line to style and no symbol to pick, and the
+   series list says different things there, so it is asked before the list is built. */
+const barMode = ()=> F.series.length > 0 && F.series.every(s=> s.kind === 'bar');
+
 /* What every series says for one property, or null when they disagree — which is
    what the "all series" row shows: a value only where there is one to show, and a
    dash where the series differ, so the row reports as well as sets. */
@@ -1547,36 +2409,40 @@ function allSeriesHtml(){
   const dash = commonOf(s=> s.dash);
   const marker = commonOf(s=> s.marker);
   const DASH_MIX = dash === null, MARK_MIX = marker === null;
+  const bars = barMode();
   return `
-    <div class="fig-subhead fig-allhead">All series</div>
     <div class="fig-serie fig-serie-caps">
       <span class="fig-grip fig-grip-off"></span>
-      <span class="fig-cap fig-cap-box" title="Draw it">${ICON_DRAW}</span>
-      <span class="fig-cap fig-cap-box" title="List it in the legend">${ICON_LEGEND}</span>
-      <span class="fig-cap fig-cap-box">col</span>
+      <span class="fig-cap fig-cap-box"></span>
+      <span class="fig-cap fig-cap-box"></span>
+      <span class="fig-cap fig-cap-box"></span>
+      ${bars ? '<span class="fig-cap fig-cap-box"></span>' : ''}
       <span class="fig-cap fig-cap-name">name</span>
       <span class="fig-cap fig-cap-num">width</span>
-      <span class="fig-cap fig-cap-sel">line</span>
-      <span class="fig-cap fig-cap-sel">symbol</span>
+      ${bars ? '' : '<span class="fig-cap fig-cap-sel">line</span><span class="fig-cap fig-cap-sel">symbol</span>'}
     </div>
     <div class="fig-serie fig-serie-all">
       <span class="fig-grip fig-grip-off"></span>
       ${figToggle('data-all="show"', F.series.every(s=>s.show), ICON_DRAW, 'Draw all / draw none')}
       ${figToggle('data-all="inLegend"', F.series.every(s=>s.inLegend!==false), ICON_LEGEND, 'List all in the legend / none')}
-      <span class="fig-cap fig-cap-box"></span>
-      <span class="fig-cap fig-cap-name"></span>
+      <button class="palette-pick-btn fig-pal" type="button" title="Apply a colour palette to every series"></button>
+      ${bars ? `<button class="palette-pick-btn fig-texpal" type="button" data-texpal
+                        title="Apply a texture palette to every series">${texPalIcon()}</button>` : ''}
+      <button type="button" class="btn btn-sm primary fig-restore" data-restore
+              title="Drop the names typed here and take the project's own again">Restore</button>
       <input type="text" inputmode="decimal" data-num="1" data-all="width" data-min="0.1" data-max="6"
-             value="${w === null ? '' : w}" placeholder="—" title="Line / bar width for every series">
-      <select data-all="dash" title="Line style for every series">
-        ${DASH_MIX ? '<option value="" selected>—</option>' : ''}
-        ${Object.entries(DASHES).map(([v,n])=>
-          `<option value="${v||'solid'}"${!DASH_MIX && dash === v ? ' selected' : ''}>${n}</option>`).join('')}
-      </select>
-      <select data-all="marker" title="Symbol for every series">
-        ${MARK_MIX ? '<option value="" selected>—</option>' : ''}
-        ${Object.entries(MARKERS).map(([v,n])=>
-          `<option value="${v}"${!MARK_MIX && marker === v ? ' selected' : ''}>${n}</option>`).join('')}
-      </select>
+             value="${w === null ? '' : esc(w)}" placeholder="—" title="Line / bar width for every series">
+      ${bars ? '' : `
+        <select data-all="dash" title="Line style for every series">
+          ${DASH_MIX ? '<option value="" selected>—</option>' : ''}
+          ${Object.entries(DASHES).map(([v,n])=>
+            `<option value="${v||'solid'}"${!DASH_MIX && dash === v ? ' selected' : ''}>${n}</option>`).join('')}
+        </select>
+        <select data-all="marker" title="Symbol for every series">
+          ${MARK_MIX ? '<option value="" selected>—</option>' : ''}
+          ${Object.entries(MARKERS).map(([v,n])=>
+            `<option value="${v}"${!MARK_MIX && marker === v ? ' selected' : ''}>${n}</option>`).join('')}
+        </select>`}
     </div>`;
 }
 
@@ -1589,11 +2455,17 @@ function serieRowHtml(s, i){
       <span class="fig-grip" title="Drag to reorder, or into another panel">${GRIP}</span>
       ${figToggle(`data-sk="show" data-s="${i}"`, s.show, ICON_DRAW, 'Draw this series')}
       ${figToggle(`data-sk="inLegend" data-s="${i}"`, s.inLegend !== false, ICON_LEGEND, 'List it in the legend')}
-      <button class="color-swatch" data-sw="${i}" data-color="${s.color}" style="background:${s.color}" title="Pick color"></button>
+      ${s.kind === 'bar'
+        ? `${F.palByDiv
+             ? `<button class="palette-pick-btn fig-spal" type="button" data-spal="${i}" title="Apply a colour palette to this series' divisions"></button>`
+             : `<button class="color-swatch" data-sw="${i}" data-color="${esc(s.color)}" style="background:${esc(s.color)}" title="Pick the colour of this series and its divisions"></button>`}
+           ${F.texByDiv
+             ? `<button class="palette-pick-btn fig-texpal" type="button" data-stexpal="${i}" title="Apply a texture palette to this series' divisions">${texPalIcon()}</button>`
+             : `<button type="button" class="fig-fill" data-fill="${i}" title="How this series' bars are filled">${fillPreview(s.texture, s.texInv)}</button>`}`
+        : `<button class="color-swatch" data-sw="${i}" data-color="${esc(s.color)}" style="background:${esc(s.color)}" title="Pick color"></button>`}
       <input type="text" data-sk="label" data-s="${i}" value="${esc(s.label)}" class="fig-slabel">
       ${s.kind === 'bar'
-        ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}
-           <span class="fig-kind">bars</span>`
+        ? `${numField(`data-sk="width" data-s="${i}" title="Bar width (fraction of the category slot)"`, s.width, 0.1, 1)}`
         : `${numField(`data-sk="width" data-s="${i}" title="Line width"`, s.width, 0.2, 6)}
            <select data-sk="dash" data-s="${i}" title="Line style">
              ${Object.entries(DASHES).map(([v,n])=>`<option value="${v}"${s.dash===v?' selected':''}>${n}</option>`).join('')}
@@ -1620,10 +2492,12 @@ function controlsHtml(){
   return `
   <section class="fig-sec"><h4>Figure</h4>
     ${num('Width (mm)','wmm',5,2000)}${num('Height (mm)','hmm',5,2000)}${num('Export DPI','dpi',1,20000)}
-    ${chk('Plot area fills what the margins leave','plotAuto')}
-    ${F.plotAuto ? '' : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}
-      <label class="fig-row"><span>Where the plot area sits</span>
-        <button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot area inside the margins">${ALIGN_ICON(F.align)}</button></label>`}
+    ${chk('Auto margins','plotAuto')}
+    ${dep(F.plotAuto, `${F.plotAuto
+        ? `<label class="fig-row"><span>Plot width (mm)</span><input type="text" data-auto-plot="w" value="${lastInner.w}" title="Chosen by the auto margins"></label><label class="fig-row"><span>Plot height (mm)</span><input type="text" data-auto-plot="h" value="${lastInner.h}" title="Chosen by the auto margins"></label>`
+        : `${num('Plot width (mm)','plotW',5,2000)}${num('Plot height (mm)','plotH',5,2000)}`}
+      <label class="fig-row"><span>Alignment</span>
+        <button class="btn btn-sm fig-align" type="button" data-align-btn title="Align the plot area inside the margins">${ALIGN_ICON(F.align)}</button></label>`)}
     <label class="fig-row"><span>File name</span><input type="text" data-k="name" value="${esc(F.name)}"></label>
   </section>
 
@@ -1648,11 +2522,6 @@ function controlsHtml(){
   <section class="fig-sec">
     <div class="fig-sechead">
       <h4>Series</h4>
-      <button class="palette-pick-btn fig-pal" type="button" title="Apply color palette"></button>
-      <select data-k="palScope" title="How a palette is spread">
-        <option value="series"${F.palScope==='series'?' selected':''}>palette by series</option>
-        <option value="panel"${F.palScope==='panel'?' selected':''}>palette by panel</option>
-      </select>
     </div>
     <div class="fig-series">
       ${F.series.length ? allSeriesHtml() : ''}
@@ -1666,17 +2535,20 @@ function controlsHtml(){
     ${titleField('Y title', 'ylabel')}
     ${sel('X title placing','titleModeX',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeX)}
     ${sel('Y title placing','titleModeY',[['per-panel','one per panel'],['shared','shared by all panels']],F.titleModeY)}
+    <div class="fig-subhead">Scale</div>
+    ${F.cats && F.cats.length ? '' : chk('X logarithmic','xLog')}
+    ${chk('Y logarithmic','yLog')}
     <div class="fig-subhead">Range</div>
     <div class="fig-rangecols">${rangeColHtml('x')}${rangeColHtml('y')}</div>
     <div class="fig-subhead">Ticks</div>
     ${chk('X major step chosen automatically','xStepAuto')}
-    ${autoNum('X major step','xStep','xStepAuto',0,1e9, autoStepOf('x'))}
+    ${autoNum(xLog() ? 'X decades per major' : 'X major step','xStep','xStepAuto',0,1e9, autoStepOf('x'))}
     ${chk('Y major step chosen automatically','yStepAuto')}
-    ${autoNum('Y major step','yStep','yStepAuto',0,1e9, autoStepOf('y'))}
+    ${autoNum(yLog() ? 'Y decades per major' : 'Y major step','yStep','yStepAuto',0,1e9, autoStepOf('y'))}
     ${chk('X minors per major chosen automatically','minorXAuto')}
-    ${autoNum('X minors per major','minorX','minorXAuto',0,20, 4)}
+    ${autoNum('X minors per major','minorX','minorXAuto',0,20, autoMinorsOf('x'))}
     ${chk('Y minors per major chosen automatically','minorYAuto')}
-    ${autoNum('Y minors per major','minorY','minorYAuto',0,20, 4)}
+    ${autoNum('Y minors per major','minorY','minorYAuto',0,20, autoMinorsOf('y'))}
     <div class="fig-subhead">Grid</div>
     ${chk('Vertical lines (X ticks)','x','g')}
     ${chk('Horizontal lines (Y ticks)','y','g')}
@@ -1706,14 +2578,14 @@ function controlsHtml(){
 
   <section class="fig-sec"><h4>Data labels</h4>
     ${chk('Show a value on every data point','on','dl')}
-    ${!DL.on ? '' : `
+    ${dep(!DL.on, `
       ${sel('Position','pos',[['above','above the mark'],['inside','inside, at the top'],['center','centred'],['below','below the mark']],DL.pos,'dl')}
       <label class="fig-row"><span>Rotation (&deg;)</span>${numField('data-dl="rot"', DL.rot, 0, 90)}</label>
       <label class="fig-row"><span>Distance (px)</span>${numField('data-dl="off"', DL.off, -100, 100)}</label>
       <label class="fig-row"><span>Decimals</span>${numField('data-dl="dec"', DL.dec, 0, 6)}</label>
       <label class="fig-row"><span>Size (pt)</span>${numField('data-dl="size"', DL.size, 3, 24)}</label>
       ${chk('Colour each label for contrast with what is behind it','autoInk','dl')}
-      <p class="txt-meta">Bars keep the text the source plot formatted (value &plusmn; error); everything else shows its Y value.</p>`}
+      <p class="txt-meta">Bars keep the text the source plot formatted (value &plusmn; error); everything else shows its Y value.</p>`)}
   </section>
 
   <section class="fig-sec"><h4>Legend &amp; type</h4>
@@ -1725,12 +2597,16 @@ function controlsHtml(){
       ${sel('Alignment','legendAlign',[['left','left'],['center','centred'],['right','right']],F.legendAlign)}
       ${num('Columns (0 = one row)','legendCols',0,12)}` : ''}
     ${F.legendMode === 'none' ? '' : `${num('Distance (px)','legendGap',0,40)}${chk('Draw a frame behind it','legendFrame')}
-      ${F.legendFrame ? `${chk('Outline around the frame','legendFrameLine')}
-        ${num('Frame background opacity (0–1)','legendFrameAlpha',0,1)}` : ''}`}
+      ${dep(!F.legendFrame, `${chk('Outline around the frame','legendFrameLine')}
+        ${num('Frame background opacity (0–1)','legendFrameAlpha',0,1)}`)}`}
     <div class="fig-subhead">Type</div>
     ${sel('Font','family', Object.entries(FONTS).map(([k,v])=>[k, v.label]), F.font.family, 'f')}
-    <label class="fig-row"><span>Colour of every line and letter</span>
-      <button class="color-swatch" data-inksw data-color="${F.inkColor}" style="background:${F.inkColor}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></label>
+    <div class="fig-row"><span>Colour of every line and letter</span>
+      <button class="color-swatch" data-inksw data-color="${esc(F.inkColor)}" style="background:${esc(F.inkColor)}" title="Frame, ticks, numbers, titles, legend — everything but the data"></button></div>
+    <div class="fig-row"><span>X tick labels tilt (&deg;)</span>${F.catRotAuto
+      ? `<input type="text" value="${lastCatRot}" data-autorot disabled title="Chosen automatically: the least that keeps the names inside their panel and apart">`
+      : numField('data-k="catRot"', F.catRot, 0, 90)}
+      <label class="fig-check fig-rowcheck" title="Tilt chosen automatically: the least that keeps the names inside their panel and apart"><input type="checkbox" data-k="catRotAuto"${F.catRotAuto ? ' checked' : ''}> Auto</label></div>
     <div class="fig-subhead">Font sizes (pt)</div>
     <label class="fig-row"><span>Tick numbers</span>${numField('data-f="tick"', F.font.tick, 4, 24)}</label>
     <label class="fig-row"><span>Axis titles</span>${numField('data-f="axis"', F.font.axis, 4, 24)}</label>
@@ -1789,6 +2665,43 @@ function samePositionSeries(i){
   return F.series.filter((_, k)=> posOf[k] === posOf[i]);
 }
 
+// A category's name: the one typed into the composer, else the one the plot came with.
+function catText(x){
+  const own = F.catNames && F.catNames[x];
+  if (own != null && own !== '') return own;
+  const cat = F.cats && F.cats.find(c=> c.x === x);
+  return cat ? cat.text : '';
+}
+/* The plot's name of a category in runs, [[text, over], …], where some are overlined (a
+   negative Miller index's bar: the size by peak, xrd-rv.js), or null: a name typed into
+   the composer, plain text there, and any other is drawn as text. Up to v493 the bar was
+   lost here, the minus drawn. */
+function catRuns(x){
+  const own = F.catNames && F.catNames[x];
+  if (own != null && own !== '') return null;
+  const cat = F.cats && F.cats.find(c=> c.x === x);
+  return cat && Array.isArray(cat.runs) && cat.runs.some(r=> r[1]) ? cat.runs : null;
+}
+// Two overlined runs side by side kept a tenth of the font apart, each its own bar.
+const barGap = (runs, i, px)=> i && runs[i - 1][1] ? px / 10 : 0;
+// A category's width as drawn: its runs' text (each minus hidden) and the gaps between bars.
+function catW(x, px){
+  const r = catRuns(x);
+  return r ? textW(r.map(q=> q[0]).join(''), px) + r.reduce((s, q, i)=> s + (q[1] ? barGap(r, i, px) : 0), 0) : textW(catText(x), px);
+}
+/* A category drawn in runs, as plot.js labelText draws a tick label: each overlined run a
+   tspan after its minus in one not displayed (no glyph, no advance), the name whole as the
+   text's aria-label, so the file's text still reads 1-11. */
+function catLabel(el, x, runs, px){
+  el.setAttribute('aria-label', catText(x));
+  runs.forEach(([s, over], i)=>{
+    if (over){ const m = svgEl('tspan', { display: 'none' }); m.textContent = '-'; el.appendChild(m); }
+    const g = barGap(runs, i, px);
+    const t = svgEl('tspan', over ? { 'text-decoration': 'overline', ...(g ? { dx: g } : {}) } : {});
+    t.textContent = s; el.appendChild(t);
+  });
+}
+
 /* The name of one bar: the category it stands on, failing that its place in the series.
    Where several bar series share those categories — raw against corrected, H2 against
    O2 — the category alone would name two different bars the same, so the series it
@@ -1796,8 +2709,9 @@ function samePositionSeries(i){
 function barName(s, j){
   const cat = F.cats && F.cats.find(c=> c.x === s.xs[j]);
   if (!cat) return `${s.label} ${j + 1}`;
+  const txt = catText(s.xs[j]);
   const many = F.series.some(t=> t.kind === 'bar' && t.id !== s.id);
-  return many ? `${cat.text} ${s.label}` : cat.text;
+  return many ? `${txt} ${s.label}` : txt;
 }
 
 /* Divisions: colour groups inside one bar series. A bar chart draws one quantity per
@@ -1810,12 +2724,19 @@ function barName(s, j){
    parts series of their own.
 
    Every bar series has at least one division, and that first one follows the series'
-   own name and colour until it is given ones of its own — so a plot nobody has divided
-   behaves exactly as before and a palette still reaches it, while a series and its
-   first division can still be named apart where that reads better. */
+   own colour until it is given one of its own — so a plot nobody has divided behaves
+   exactly as before and a palette still reaches it. Its name is its own from the
+   start: the one the page gives the series, the way a new division starts from the
+   series' name when it is made. Renaming the series afterwards leaves it alone, and
+   renaming it leaves the series alone. */
 const divsOf = s => (s.divs && s.divs.length) ? s.divs : [{}];
-const divName = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].name) || s.label;
+const divName = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].name) || (k === 0 && s.given) || s.label;
 const divColor = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].color) || s.color;
+const divTexture = (s, k)=> (divsOf(s)[k] && divsOf(s)[k].texture) || s.texture || 'solid';
+const divInv = (s, k)=>{
+  const d = divsOf(s)[k];
+  return (d && d.texInv != null) ? d.texInv : !!s.texInv;
+};
 const divOfBar = (s, j)=> Math.min(Math.max((s.divOf && s.divOf[j]) || 0, 0), divsOf(s).length - 1);
 
 // A new division takes an even share of the bars, the way a new panel takes an even
@@ -1836,17 +2757,33 @@ function addDiv(i){
   const pool = F.palette || CP_PALETTES[0].colors;
   const k = divsOf(s).length;
   s.divs = divsOf(s).slice();
+  // Where colour tells series apart rather than divisions, a new division starts in
+  // the series' own colour instead of taking one of its own.
   s.divs.push({ name: `${s.label} ${k + 1}`,
-                color: pool.find(c=> !taken.has(c)) || pool[k % pool.length] });
+                color: F.palByDiv ? (pool.find(c=> !taken.has(c)) || pool[k % pool.length]) : null });
   spreadDivs(s);
   return true;
 }
 
+/* Any division can be removed once there is more than one, the first included — the
+   one after it then leads, keeping the name and colour it was given. Bars in the
+   division that goes fall to the first; the rest keep the division they were in. */
 function delDiv(i, k){
   const s = F.series[i];
-  if (!s || k === 0 || !s.divs || k >= s.divs.length) return false;
-  s.divs.splice(k, 1);
-  spreadDivs(s);
+  const divs = divsOf(s);
+  if (!s || divs.length < 2 || k >= divs.length) return false;
+  const keep = divs.slice();
+  const gone = keep.splice(k, 1)[0];
+  // The first division shows the series' own name and colour when it has none of its
+  // own, so a division promoted to first is given what it was already showing.
+  if (k === 0 && keep[0] && !keep[0].color) keep[0] = { ...keep[0], color: divColor(s, 1) };
+  if (k === 0 && keep[0] && !keep[0].name) keep[0] = { ...keep[0], name: divName(s, 1) };
+  void gone;
+  s.divOf = s.xs.map((_, j)=>{
+    const d = divOfBar(s, j);
+    return d === k ? 0 : (d > k ? d - 1 : d);
+  });
+  s.divs = keep;
   return true;
 }
 
@@ -1857,29 +2794,93 @@ function legendEntries(list){
   const out = [];
   for (const s of list){
     if (s.kind === 'bar')
-      divsOf(s).forEach((_, k)=> out.push({ ...s, color: divColor(s, k), label: divName(s, k) }));
+      divsOf(s).forEach((_, k)=> out.push({ ...s, color: divColor(s, k), label: divName(s, k),
+                                            texture: divTexture(s, k), texInv: divInv(s, k) }));
     else out.push(s);
   }
   return out;
 }
 
-// Spread a palette over the series. 'series' scope walks every series once, so no
-// two share a colour; 'panel' scope restarts the palette inside each panel, so the
-// same colours repeat panel by panel — useful when panels compare like with like.
+/* Hand a set out over a list of series, one item each: 'series' scope walks them all
+   once, so no two share an item; 'panel' scope starts the set again inside each panel,
+   so the same run repeats panel by panel — useful when panels compare like with like. */
+function spreadByScope(list, scope, put){
+  if (scope === 'panel'){
+    const seen = new Map();
+    list.forEach(s=>{
+      const n = seen.get(s.panel) || 0;
+      put(s, n);
+      seen.set(s.panel, n + 1);
+    });
+  } else list.forEach((s, i)=> put(s, i));
+}
+
+// A division with no colour of its own draws in the series' — which is what "one
+// colour per series" means once the divisions are there. Same for its texture.
+const clearDivColors = s=>{ if (s.divs) s.divs = s.divs.map(d=> ({ ...d, color: null })); };
+const clearDivTex = s=>{ if (s.divs) s.divs = s.divs.map(d=> ({ ...d, texture: null, texInv: null })); };
+
+/* Spread a palette over the figure. A bar series read by division takes the whole run
+   across its divisions — the series itself is told apart by its texture — and every
+   bar series takes the same run, so one palette colours like with like. Read by
+   series instead, a bar is dealt one colour like any line and its divisions follow. */
 function applyPalette(colors){
   colors = colors || F.palette;
   if (!colors || !colors.length) return;
   F.palette = colors.slice();
-  if (F.palScope === 'panel'){
-    const seen = new Map();
-    F.series.forEach(s=>{
-      const k = seen.get(s.panel) || 0;
-      s.color = colors[k % colors.length];
-      seen.set(s.panel, k + 1);
-    });
-  } else {
-    F.series.forEach((s, i)=>{ s.color = colors[i % colors.length]; });
-  }
+  const byDiv = s=> s.kind === 'bar' && F.palByDiv;
+  spreadByScope(F.series.filter(s=> !byDiv(s)), F.palScope, (s, n)=>{
+    s.color = colors[n % colors.length];
+    if (s.kind === 'bar') clearDivColors(s);
+  });
+  F.series.filter(byDiv).forEach(s=> paletteOnSeries(s, colors));
+}
+
+// The same spread over one series' divisions, for the palette button on its own row.
+function paletteOnSeries(s, colors){
+  if (!colors || !colors.length) return;
+  s.color = colors[0];
+  if (s.divs && s.divs.length)
+    s.divs = s.divs.map((d, k)=> k === 0 ? { ...d, color: null } : { ...d, color: colors[k % colors.length] });
+}
+
+// The same two ways for textures, on the bar series alone: nothing else is filled.
+function applyTexPalette(tex){
+  tex = tex || F.texPalette;
+  if (!tex || !tex.length) return;
+  F.texPalette = tex.slice();
+  const bars = F.series.filter(s=> s.kind === 'bar');
+  if (F.texByDiv) bars.forEach(s=> texPaletteOnSeries(s, tex));
+  else spreadByScope(bars, F.texScope, (s, n)=>{
+    const e = tex[n % tex.length];
+    s.texture = texName(e); s.texInv = texInvOf(e);
+    clearDivTex(s);
+  });
+}
+
+/* Any change to what the palettes are dealt over — a division added or removed, a
+   sample moved into another, a series moved or a panel added — deals the palettes in
+   force out again, colours and textures both, exactly as if they had just been
+   applied. A palette overridden by hand is null and is left alone, and with it
+   whatever was picked. */
+function redealPalettes(){ applyPalette(); applyTexPalette(); }
+
+function texPaletteOnSeries(s, tex){
+  if (!tex || !tex.length) return;
+  s.texture = texName(tex[0]); s.texInv = texInvOf(tex[0]);
+  if (s.divs && s.divs.length)
+    s.divs = s.divs.map((d, k)=> k === 0
+      ? { ...d, texture: null, texInv: null }
+      : { ...d, texture: texName(tex[k % tex.length]), texInv: texInvOf(tex[k % tex.length]) });
+}
+
+// Every texture the figure is wearing, in the order it hands them out — what "save
+// palette" keeps, read from the divisions or the series as the setting says.
+function texturesInUse(){
+  const bars = F.series.filter(s=> s.kind === 'bar');
+  return F.texByDiv
+    ? (bars[0] ? divsOf(bars[0]).map((_, k)=> texEntry(divTexture(bars[0], k), divInv(bars[0], k))) : [])
+    : bars.map(s=> texEntry(s.texture, s.texInv));
 }
 
 /* True while the sidebar is being replaced. Throwing away a focused field makes the
@@ -1887,14 +2888,32 @@ function applyPalette(colors){
    superseded — applying that would quietly undo whatever caused the rebuild (loading
    a preset, say). Those events are ignored. */
 let rebuilding = false;
+// The sidebar drawn again from the open kind's model, then wired where it needs it
+// (the rows' handles: afterRebuild).
+function rebuildControls(){
+  rebuilding = true;
+  try { controlsEl.innerHTML = K.controlsHtml(); } finally { rebuilding = false; }
+  if (K.afterRebuild) K.afterRebuild();
+}
+
+/* The names this plot's project gives, back over the ones typed into the composer —
+   the first division's included, since that is the series' name said twice. Anything
+   a series does not get from the project, like the name of a second division, is left
+   alone: there is nothing to put back. */
+function restoreNames(){
+  if (!srcPlot) return;
+  const fresh = seriesFromPlot(srcPlot, srcOpts && srcOpts.legendEl).series;
+  F.series.forEach((s, i)=>{
+    const src = fresh.find(t=> t.id === s.id) || fresh[i];
+    if (src) s.label = src.label;
+    delete s.rename;
+    if (s.divs && s.divs[0]) s.divs[0] = { ...s.divs[0], name: '' };
+  });
+}
 
 function refresh(rebuild){
   clampPanels();
-  if (rebuild){
-    rebuilding = true;
-    try { controlsEl.innerHTML = controlsHtml(); } finally { rebuilding = false; }
-    wireSeriesDrag();
-  }
+  if (rebuild) rebuildControls();
   markMixedToggles();
   renderPreview();
 }
@@ -1904,6 +2923,7 @@ function refresh(rebuild){
    A field the pointer is typing in is left alone. "Neither on nor off" can only be
    said to the DOM: there is no markup for an indeterminate checkbox. */
 function markMixedToggles(){
+  applyDeps();
   if (!controlsEl || !F.series.length) return;
   const el = sel => controlsEl.querySelector('.fig-serie-all ' + sel);
   const box = (sel, get)=>{
@@ -1929,87 +2949,157 @@ function markMixedToggles(){
       }
     } else e.value = value === null ? '' : value;
   };
+  /* Always in its place, live only when there is something to put back — so the row
+     keeps its shape and the button says whether any name has been typed over. Typing
+     one does not rebuild the sidebar, which would take the caret away mid-word, so it
+     is enabled and disabled from here with the rest of what this row reports. */
+  const restore = controlsEl.querySelector('[data-restore]');
+  if (restore) restore.disabled =
+    !F.series.some(s=> s.rename || (s.divs && s.divs[0] && s.divs[0].name));
+
+  // Swatches show a colour the popup may have just changed; they are redrawn in place
+  // for the same reason the fill button is.
+  syncSwatches();
+
   field('input[data-all="width"]', commonOf(s=> s.width));
   field('select[data-all="dash"]', commonOf(s=> s.dash), '—');
   field('select[data-all="marker"]', commonOf(s=> s.marker), '—');
 }
 
-// Drag-to-reorder over the series rows, same grip-and-drop feel as the file list:
-// press the handle, move over the row you want the series to land on, release.
-function wireSeriesDrag(){
-  const rows = [...controlsEl.querySelectorAll('.fig-serie')];
+/* Every colour square in the sidebar, brought back to the colour it stands for. A pick
+   from the colour picker redraws through here, never by rebuilding the sidebar: the
+   picker hangs from its swatch, and a rebuilt one would leave it following a button
+   that is no longer on the page — unlit, deaf to a second click, and thrown to the
+   corner by the next scroll. */
+function syncSwatches(){
+  if (!controlsEl) return;
+  const ink = controlsEl.querySelector('.color-swatch[data-inksw]');
+  if (ink){ ink.dataset.color = F.inkColor; ink.style.background = F.inkColor; }
+  controlsEl.querySelectorAll('.color-swatch[data-dsw]').forEach(b=>{
+    const [i, k] = b.dataset.dsw.split(':').map(Number);
+    const s = F.series[i]; if (!s) return;
+    const c = divColor(s, k);
+    b.dataset.color = c; b.style.background = c;
+  });
+  controlsEl.querySelectorAll('.color-swatch[data-sw]').forEach(b=>{
+    const s = F.series[+b.dataset.sw]; if (!s) return;
+    b.dataset.color = s.color; b.style.background = s.color;
+  });
+  controlsEl.querySelectorAll('.fig-fill').forEach(b=>{
+    const [i, k] = b.dataset.fill.split(':').map(Number);
+    const s = F.series[i]; if (!s) return;
+    const tex = k == null ? (s.texture || 'solid') : divTexture(s, k);
+    const inv = k == null ? !!s.texInv : divInv(s, k);
+    const sw = b.querySelector('.fig-fill-sw');
+    if (sw) sw.outerHTML = fillPreview(tex, inv);
+  });
+}
+
+/* Drag-to-reorder over rows listed in groups (.fig-group): the plots' series by panel,
+   the SEM figure's images by panel. As in the file list: press the handle and move to
+   the gap the row should land in, in its own group or another's. The gap lit (dropGap,
+   in the group under the pointer) is where it goes: before the row the bar is over, or
+   after the last row of the group; into an empty group, at its end. The two gaps beside
+   the dragged row, in its own group, would leave it where it is: they never light, and
+   a drop there does nothing. (The bar used to be under the row the pointer was on, and
+   the series took that row's place: dragged up it landed over that row, the gap over
+   the dragged row itself lit, and the top of a group could not be reached.) Another
+   group is lit as a whole too: the row changes group. Into a group swapIn says is full
+   (the SEM figure's panel), a row swaps with the one it is dropped on, which lights.
+   onDrop(row, { gp, gRows, g, swap }) moves it. */
+function wireRowDrag(rowSel, { swapIn, onDrop }){
+  const rows = [...controlsEl.querySelectorAll(rowSel)];
   const groups = [...controlsEl.querySelectorAll('.fig-group')];
-  const at = (sel, list) => (x, y)=> list.find(el=>{
+  const groupAt = (x, y)=> groups.find(el=>{
     const b = el.getBoundingClientRect();
     return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right;
   }) || null;
-  const rowAt = y => rows.find(r=>{ const b = r.getBoundingClientRect(); return y >= b.top && y <= b.bottom; }) || null;
-  const groupAt = at('.fig-group', groups);
-  let from = null;
+  let from = null;   // the row being dragged
+  // The group and the gap in it the row would land in, null where it would not move.
+  const target = e =>{
+    const gp = groupAt(e.clientX, e.clientY);
+    if (!gp) return null;
+    const gRows = [...gp.querySelectorAll(rowSel)];
+    const g = dropGap(gRows, e.clientY), self = gRows.indexOf(from);
+    if (self >= 0 && (g === self || g === self + 1)) return null;
+    const swap = self < 0 && swapIn && swapIn(gp, gRows) ? gRows[Math.min(g, gRows.length - 1)] : null;
+    return { gp, gRows, g, swap, into: self < 0 };
+  };
+  const clear = ()=>{
+    rows.forEach(r=> r.classList.remove('drop-before', 'drop-after', 'drop-swap'));
+    groups.forEach(g=> g.classList.remove('drag-into'));
+  };
   rows.forEach(row=>{
     const handle = row.querySelector('.fig-grip');
     if (!handle) return;
     handle.addEventListener('pointerdown', e=>{
       e.preventDefault();
-      from = +row.dataset.s;
+      from = row;
       row.classList.add('dragging');
       try { handle.setPointerCapture(e.pointerId); } catch(_){}
     });
     handle.addEventListener('pointermove', e=>{
       if (from == null) return;
-      const t = rowAt(e.clientY), gp = groupAt(e.clientX, e.clientY);
-      rows.forEach(r=> r.classList.toggle('drag-over', r === t && +r.dataset.s !== from));
-      groups.forEach(g=> g.classList.toggle('drag-into', g === gp));
+      clear();
+      const t = target(e);
+      if (!t) return;
+      if (t.into) t.gp.classList.add('drag-into');
+      if (t.swap){ t.swap.classList.add('drop-swap'); return; }
+      if (t.g < t.gRows.length) t.gRows[t.g].classList.add('drop-before');
+      else if (t.gRows.length) t.gRows[t.gRows.length - 1].classList.add('drop-after');
     });
     const finish = e=>{
       if (from == null) return;
-      const t = rowAt(e.clientY), gp = groupAt(e.clientX, e.clientY);
-      const f = from; from = null;
-      rows.forEach(r=> r.classList.remove('drag-over', 'dragging'));
-      groups.forEach(g=> g.classList.remove('drag-into'));
-      const moved = F.series[f];
-      if (!moved) return;
-      // Dropped on a row: take its place. Dropped anywhere else in a group: join that
-      // panel at the end. Either way the panel is the group the pointer ended over.
-      const panel = gp ? +gp.dataset.pg : moved.panel;
-      const to = t ? +t.dataset.s : null;
-      if (panel === moved.panel && (to == null || to === f)) return;
-      moved.panel = panel;
-      if (to != null && to !== f){
-        F.series.splice(f, 1);
-        F.series.splice(to, 0, moved);
-      }
-      applyPalette();
-      pushUndo(); refresh(true);
+      const t = target(e), moved = from;
+      from = null;
+      clear(); rows.forEach(r=> r.classList.remove('dragging'));
+      if (t) onDrop(moved, t);
     };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', ()=>{
       from = null;
-      rows.forEach(r=> r.classList.remove('drag-over','dragging'));
-      groups.forEach(g=> g.classList.remove('drag-into'));
+      clear(); rows.forEach(r=> r.classList.remove('dragging'));
     });
   });
+}
+// The plots' series, into the panel of the group they are dropped in.
+function wireSeriesDrag(){
+  wireRowDrag('.fig-serie[data-s]', { onDrop(row, t){
+    const f = +row.dataset.s, moved = F.series[f];
+    if (!moved) return;
+    // Before the series of the row the gap is over; after the group's last one; or,
+    // in an empty group, at the end.
+    const before = t.g < t.gRows.length ? F.series[+t.gRows[t.g].dataset.s] : null;
+    const after = !before && t.gRows.length ? F.series[+t.gRows[t.gRows.length - 1].dataset.s] : null;
+    F.series.splice(f, 1);
+    const at = before ? F.series.indexOf(before) : after ? F.series.indexOf(after) + 1 : F.series.length;
+    F.series.splice(at, 0, moved);
+    moved.panel = +t.gp.dataset.pg;
+    redealPalettes();
+    pushUndo(); refresh(true);
+  } });
   wireBarDrag();
 }
 
-// The same gesture for the bars of a divided series: pick a chip up, drop it in the
-// division it belongs to.
+// The same gesture for the samples of a bar series: pick a row up by its handle and
+// drop it in the division it belongs to.
 function wireBarDrag(){
-  const chips = [...controlsEl.querySelectorAll('.fig-barchip')];
+  const chips = [...controlsEl.querySelectorAll('.fig-barrow')];
   const groups = [...controlsEl.querySelectorAll('.fig-dgroup')];
   const groupAt = (x, y)=> groups.find(el=>{
     const b = el.getBoundingClientRect();
     return y >= b.top && y <= b.bottom && x >= b.left && x <= b.right;
   }) || null;
   chips.forEach(chip=>{
+    const handle = chip.querySelector('.fig-grip') || chip;
     let dragging = false;
-    chip.addEventListener('pointerdown', e=>{
+    handle.addEventListener('pointerdown', e=>{
       e.preventDefault();
       dragging = true;
       chip.classList.add('dragging');
-      try { chip.setPointerCapture(e.pointerId); } catch(_){}
+      try { handle.setPointerCapture(e.pointerId); } catch(_){}
     });
-    chip.addEventListener('pointermove', e=>{
+    handle.addEventListener('pointermove', e=>{
       if (!dragging) return;
       const gp = groupAt(e.clientX, e.clientY);
       groups.forEach(g=> g.classList.toggle('drag-into', g === gp));
@@ -2027,10 +3117,11 @@ function wireBarDrag(){
       if (!s || gi !== i || divOfBar(s, j) === k) return;
       s.divOf = s.xs.map((_, n)=> divOfBar(s, n));
       s.divOf[j] = k;
+      redealPalettes();
       pushUndo(); refresh(true);
     };
-    chip.addEventListener('pointerup', finish);
-    chip.addEventListener('pointercancel', ()=>{
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', ()=>{
       dragging = false;
       chip.classList.remove('dragging');
       groups.forEach(g=> g.classList.remove('drag-into'));
@@ -2048,7 +3139,7 @@ function resetFigure(){
   if (!srcPlot) return;
   F = buildModel(srcPlot, srcOpts);
   axSel = 'all'; presetSel = '';
-  applyPalette();
+  redealPalettes();
   resetView();
   pushUndo();
   refresh(true);
@@ -2102,10 +3193,26 @@ function wirePresetBar(){
 
 /* Settings that change the shape of the sidebar itself. */
 const SHOWS_MORE = new Set(['xAuto','yAuto','shareX','shareY','legendMode','legendFrame',
-  'xStepAuto','yStepAuto','minorXAuto','minorYAuto']);
+  'xStepAuto','yStepAuto','minorXAuto','minorYAuto','catRotAuto','xLog','yLog']);
+
+/* A manual range is held in the axis's own terms — the logarithms, on a log axis — so
+   switching the scale carries it across: the same bounds, the other way of placing
+   them. One a log axis cannot take (≤ 0) gives way to the automatic range. */
+function relogRanges(ax, on){
+  const conv = v => on ? (v > 0 ? Math.log10(v) : NaN) : Math.pow(10, v);
+  const pair = r => r && r.map(conv).every(isFinite) ? r.map(conv) : null;
+  const g = pair([F[ax + 'min'], F[ax + 'max']]);
+  if (g) [F[ax + 'min'], F[ax + 'max']] = g; else F[ax + 'Auto'] = true;
+  const man = F[ax + 'Man'];
+  for (const k of Object.keys(man)){
+    const r = pair(man[k]);
+    if (r) man[k] = r;
+    else { delete man[k]; if (F.panels[k]) F.panels[k][ax + 'Auto'] = true; }
+  }
+}
 
 function wireControls(){
-  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','legendFrameAlpha','plotW','plotH']);
+  const numKeys = new Set(['wmm','hmm','dpi','rows','cols','xmin','xmax','ymin','ymax','xStep','yStep','minorX','minorY','legendCols','legendGap','legendFrameAlpha','plotW','plotH','catRot']);
   const dlNum = new Set(['rot','off','dec','size']);
 
   /* Routes one control to the model and says whether the sidebar has to be rebuilt.
@@ -2126,12 +3233,25 @@ function wireControls(){
       // the model's placeholder 0..1, so the bounds are read while auto still holds.
       if (k === 'plotAuto' && !t.checked){ F.plotW = lastInner.w; F.plotH = lastInner.h; rebuild = true; }
       if (k === 'plotAuto' && t.checked) rebuild = true;
+      // Off, the tilt opens on the one the figure was drawn with.
+      if (k === 'catRotAuto' && !t.checked) F.catRot = lastCatRot;
+      // ...and the minors on as many as are drawn, which on a log axis is not 4.
+      if ((k === 'minorXAuto' || k === 'minorYAuto') && !t.checked)
+        F[k === 'minorXAuto' ? 'minorX' : 'minorY'] = autoMinorsOf(k === 'minorXAuto' ? 'x' : 'y');
+      if (k === 'xLog' || k === 'yLog') relogRanges(k[0], t.checked);
       if ((k === 'xAuto' || k === 'yAuto') && !t.checked){
         const r = computeRanges(), i = (k === 'xAuto' ? F.xPanel : F.yPanel) | 0;
         if (k === 'xAuto'){ const [a, z] = r.xOf[i] || r.xOf[0] || [0, 1]; F.xmin = a; F.xmax = z; }
         else { const [a, z] = r.yOf[i] || r.yOf[0] || [0, 1]; F.ymin = a; F.ymax = z; }
       }
-      if (numKeys.has(k)){ const v = readNum(t); if (v === null) return null; F[k] = v; }
+      if (numKeys.has(k)){
+        let v = readNum(t); if (v === null) return null;
+        if (/^[xy]m(in|ax)$/.test(k)){
+          v = takenOf(k[0], v);
+          if (v === null){ flashFieldInvalid(t); t.value = +shownOf(k[0], F[k]).toPrecision(6); return null; }
+        }
+        F[k] = v;
+      }
       else F[k] = t.type === 'checkbox' ? t.checked : t.value;
       if (k === 'rows' || k === 'cols'){ F[k] = Math.max(1, Math.round(F[k] || 1)); rebuild = true; }
       // Keys that decide which controls are on show have to redraw the sidebar, not
@@ -2173,7 +3293,9 @@ function wireControls(){
       const i = rangeRoot(selP, bag === 'xMan' ? 'shareXWith' : 'shareYWith');
       const r = computeRanges();
       const cur = F[bag][i] || (bag === 'xMan' ? (r.xOf[i] || [0,1]).slice() : (r.yOf[i] || [0,1]).slice());
-      const v = readNum(t); if (v === null) return null;
+      let v = readNum(t); if (v === null) return null;
+      v = takenOf(bag[0], v);
+      if (v === null){ flashFieldInvalid(t); t.value = +shownOf(bag[0], cur[+t.dataset.end]).toPrecision(6); return null; }
       cur[+t.dataset.end] = v;
       F[bag][i] = cur;
     } else if (t.dataset.all){
@@ -2214,11 +3336,16 @@ function wireControls(){
           rebuild = true;   // reject: re-render the controls so the field snaps back
         }
       }
+    } else if (t.dataset.bark){
+      const [i, j] = t.dataset.bark.split(':').map(Number);
+      const s = F.series[i]; if (!s) return null;
+      // Held by the category, so every series standing on that sample reads it.
+      F.catNames = { ...F.catNames, [s.xs[j]]: t.value };
     } else if (t.dataset.dk){
       const [i, k] = t.dataset.dk.split(':').map(Number);
       const s = F.series[i]; if (!s) return null;
-      // Every division holds its own name, the first one included: until it is typed
-      // in it shows the series' name, and from then on the two are free to differ.
+      // Every division holds its own name, the first one included; the series' name
+      // is another thing (divName).
       s.divs = divsOf(s).slice();
       s.divs[k] = { ...s.divs[k], name: t.value };
     } else if (t.dataset.share){
@@ -2237,28 +3364,18 @@ function wireControls(){
     return rebuild;
   };
 
-  /* The first division's box shows the series' name for as long as it has none of
-     its own, so renaming the series shows there at once. Done by hand rather than by
-     rebuilding the sidebar, which would take the caret out of the field mid-word. */
-  const mirrorName = (i, v)=>{
-    const s = F.series[i];
-    if (!s || (s.divs && s.divs[0] && s.divs[0].name)) return;
-    const el = controlsEl.querySelector(`[data-dk="${i}:0"]`);
-    if (el && el.value !== v) el.value = v;
-  };
-
+  /* Not while the composer closes either: the focused field, thrown away with it, fires
+     one last 'change' (after Enter, the value it committed, once more) when the model
+     is already let go, and writing into it threw (to v485). */
   const run = t=>{
-    if (rebuilding || !t.isConnected) return;
+    if (rebuilding || !F || !t.isConnected) return;
     const rebuild = applyControl(t);
     if (rebuild === null) return;
-    // While the first division is still borrowing the series' name, its box follows
-    // what is typed in the series row. Once it has a name of its own it keeps it.
-    if (t.dataset.sk === 'label') mirrorName(+t.dataset.s, t.value);
     // Echo the committed value back with a decimal point, so a comma typed by hand
     // is accepted but never left standing in the field.
     if (t.dataset.num && !rebuild){
-      const v = readNum(t);
-      if (v !== null) t.value = String(v);
+      const v = parseFloat(String(t.value).replace(',', '.'));
+      if (isFinite(v)){ t.value = String(v); t.defaultValue = t.value; }   // the value to go back to
     }
     pushUndo();
     refresh(rebuild);
@@ -2295,6 +3412,11 @@ function wireControls(){
       else insertAt(null, rb.dataset.richAct);
       return;
     }
+    if (e.target.closest('[data-restore]')){
+      restoreNames();
+      pushUndo(); refresh(true);
+      return;
+    }
     const alignB = e.target.closest('[data-align-btn]');
     if (alignB){
       alignPicker.open(alignB, code=>{ F.align = code; pushUndo(); refresh(true); });
@@ -2302,7 +3424,52 @@ function wireControls(){
     }
     const inkB = e.target.closest('.color-swatch[data-inksw]');
     if (inkB){
-      colorPickerUI.open(inkB, F.inkColor, color=>{ F.inkColor = color; pushUndo(); refresh(true); });
+      colorPickerUI.open(inkB, F.inkColor, color=>{ F.inkColor = color; pushUndo(); refresh(false); });
+      return;
+    }
+    const fillB = e.target.closest('[data-fill]');
+    if (fillB){
+      const [si, dk] = fillB.dataset.fill.split(':').map(Number);
+      const s0 = F.series[si];
+      if (!s0) return;
+      const cur = dk == null
+        ? { texture: s0.texture || 'solid', inv: !!s0.texInv }
+        : { texture: divTexture(s0, dk), inv: divInv(s0, dk) };
+      fillPicker.open(fillB, cur, st=>{
+        if (dk == null){
+          s0.texture = st.texture; s0.texInv = st.inv;
+          clearDivTex(s0);
+          F.texPalette = null;    // picked by hand: stop re-spreading a set over it
+        } else {
+          s0.divs = divsOf(s0).slice();
+          s0.divs[dk] = { ...s0.divs[dk], texture: st.texture, texInv: st.inv };
+        }
+        pushUndo();
+        refresh(false);
+        // The buttons carry a picture of the fill, so they are redrawn where they
+        // stand rather than by rebuilding the row out from under the open panel.
+        syncSwatches();
+      });
+      return;
+    }
+    const spal = e.target.closest('[data-spal]');
+    if (spal){
+      const s = F.series[+spal.dataset.spal]; if (!s) return;
+      palettePickerUI.open(spal, colors=>{
+        paletteOnSeries(s, colors);
+        F.palette = null;     // one series coloured by hand: stop re-spreading over it
+        pushUndo(); refresh(true);
+      }, { colors: ()=> divsOf(s).map((_, k)=> divColor(s, k)) });
+      return;
+    }
+    const stexpal = e.target.closest('[data-stexpal]');
+    if (stexpal){
+      const s = F.series[+stexpal.dataset.stexpal]; if (!s) return;
+      texPalettePicker.open(stexpal, tex=>{
+        texPaletteOnSeries(s, tex);
+        F.texPalette = null;  // one series textured by hand: stop re-spreading over it
+        pushUndo(); refresh(true);
+      }, { textures: ()=> divsOf(s).map((_, k)=> texEntry(divTexture(s, k), divInv(s, k))) });
       return;
     }
     const dsw = e.target.closest('.color-swatch[data-dsw]');
@@ -2315,7 +3482,7 @@ function wireControls(){
         if (k === 0) s.color = color;
         else { s.divs = divsOf(s).slice(); s.divs[k] = { ...s.divs[k], color }; }
         F.palette = null;
-        pushUndo(); refresh(true);
+        pushUndo(); refresh(false);
       });
       return;
     }
@@ -2326,14 +3493,59 @@ function wireControls(){
         // Under "palette by panel" the panels are meant to read alike, so a colour is
         // a property of a position within a panel, not of one series: every series
         // holding that position in its own panel takes the new colour too.
-        for (const t of samePositionSeries(i)) t.color = color;
+        for (const t of samePositionSeries(i)){
+          t.color = color;
+          // A bar reaches this swatch only where colour says series rather than
+          // division, so its divisions take the colour with it.
+          if (t.kind === 'bar') clearDivColors(t);
+        }
         F.palette = null;         // hand-picked: stop re-applying a palette over it
-        pushUndo(); refresh(true);
+        pushUndo(); refresh(false);
       });
       return;
     }
     if (e.target.closest('.fig-pal')){
-      palettePickerUI.open(e.target.closest('.fig-pal'), colors=>{ applyPalette(colors); pushUndo(); refresh(true); });
+      palettePickerUI.open(e.target.closest('.fig-pal'),
+        colors=>{ applyPalette(colors); pushUndo(); refresh(true); },
+        {
+          // Only the composer spreads a palette two ways, so only it offers the choice.
+          scope: F.palScope,
+          onScope: v=>{
+            F.palScope = v; applyPalette(); pushUndo(); refresh(true);
+            palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
+          },
+          // Divisions are a bar chart's affair, so the choice is offered there only.
+          byDiv: barMode() ? F.palByDiv : null,
+          onByDiv: v=>{
+            F.palByDiv = v;
+            // Off, the divisions have no colours of their own — with or without a
+            // palette to spread, which is what makes the switch show at once.
+            if (!v) F.series.forEach(s=>{ if (s.kind === 'bar') clearDivColors(s); });
+            applyPalette(); pushUndo(); refresh(true);
+            palettePickerUI.reanchor(controlsEl.querySelector('.fig-pal'));
+          },
+          colors: ()=> F.series.flatMap(s=> s.kind === 'bar' && F.palByDiv
+            ? divsOf(s).map((_, k)=> divColor(s, k)) : [s.color]),
+        });
+      return;
+    }
+    const texpalB = e.target.closest('[data-texpal]');
+    if (texpalB){
+      texPalettePicker.open(texpalB, tex=>{ applyTexPalette(tex); pushUndo(); refresh(true); }, {
+        scope: F.texScope,
+        onScope: v=>{
+          F.texScope = v; applyTexPalette(); pushUndo(); refresh(true);
+          texPalettePicker.reanchor(controlsEl.querySelector('[data-texpal]'));
+        },
+        byDiv: F.texByDiv,
+        onByDiv: v=>{
+          F.texByDiv = v;
+          if (!v) F.series.forEach(s=>{ if (s.kind === 'bar') clearDivTex(s); });
+          applyTexPalette(); pushUndo(); refresh(true);
+          texPalettePicker.reanchor(controlsEl.querySelector('[data-texpal]'));
+        },
+        textures: texturesInUse,
+      });
       return;
     }
     const divB = e.target.closest('[data-adddiv], [data-deldiv]');
@@ -2342,6 +3554,7 @@ function wireControls(){
         ? addDiv(+divB.dataset.adddiv)
         : delDiv(...divB.dataset.deldiv.split(':').map(Number));
       if (!done) return;
+      redealPalettes();
       pushUndo(); refresh(true);
       return;
     }
@@ -2356,14 +3569,14 @@ function wireControls(){
       if (!spot){ F.rows += 1; spot = [F.rows-1, 0]; }
       F.panels.push(newPanel(spot[0], spot[1]));
       distributeSeries();
-      applyPalette();
+      redealPalettes();
       pushUndo(); refresh(true);
     } else if (delB){
       const i = +delB.dataset.delPanel;
       if (F.panels.length <= 1) return;
       F.panels.splice(i, 1);
       F.series.forEach(s=>{ if (s.panel === i) s.panel = 0; else if (s.panel > i) s.panel--; });
-      applyPalette();
+      redealPalettes();
       pushUndo(); refresh(true);
     }
   });
@@ -2371,93 +3584,209 @@ function wireControls(){
 
 /* ---- Modal ----------------------------------------------------------------- */
 
-export function openFigureEditor(plot, opts){
-  if (!plot) return;
-  srcPlot = plot; srcOpts = opts || {};
-  F = buildModel(plot, srcOpts);
-  axSel = 'all'; presetSel = '';
-  recallSettings();
-  applyPalette();
-  undoStack = [snapshot()]; redoStack = [];
-  if (!F.series.length){ /* still open — the user may only want axes/labels */ }
+// For the SEM figure (sem-figure.js), the composer's other kind: the page, the fonts,
+// the composer itself and its parts.
+export { FONTS, PX_MM, PT_PX, alignPicker, ALIGN_ICON, GRIP, controlsEl, rebuilding, renderPreview, rebuildControls,
+  numField, num, chk, sel, autoNum, readNum, wireRowDrag };
 
-  backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop fig-backdrop';
-  // Force an English locale inside the modal: number inputs then use a decimal
-  // point everywhere, whatever the browser's locale would otherwise render.
-  backdrop.lang = 'en';
-  backdrop.innerHTML = `
-    <div class="fig-box">
+/* The composer, on one kind of figure. A kind is a plain object of hooks:
+     open()                takes its model and state (called once the composer is its own)
+     size()                the page { W, H } in mm; draw(svg, forExport) draws it, giving the same
+     dimText()             the footer's line; afterRender() fills what the drawing chose
+     controlsHtml()        the sidebar; val(at, key) a control's value (the field kit)
+     afterRebuild()        after each sidebar; wire() once, on the sidebar's box
+     mounted()             once the modal is up
+     undo(), redo()        a history of its own, which then takes Ctrl+Z / Ctrl+Y (the
+                           plots'); without, the keys go to the page's (the SEM figure's
+                           settings are its module's)
+     flush()               an edit still on its way to the module, sent now (also when
+                           the page is hidden or left)
+     reset()               Reset; refresh() the module's state changed under it (an undo)
+     closing()             before the modal goes
+     dpi(), file(), paper(), font()   the export's dpi, file name, paper and FONTS key
+     svgClass, footHtml, titles { svg, png, copy }   its markup
+   Gives { open, refresh, close } for it, or null while a composer is open: one at a
+   time, of either kind. Two opened at once (a double click before the code had
+   loaded, or Enter on the button still focused under the modal) left the first with
+   no way to close (to v480); the focus now goes into the modal, and back on closing. */
+let lastFocus = null;
+export function openComposer(kind){
+  if (K) return null;
+  K = kind;
+  try {
+    lastFocus = document.activeElement;
+    K.open();
+    backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop fig-backdrop';
+    // Force an English locale inside the modal: number inputs then use a decimal
+    // point everywhere, whatever the browser's locale would otherwise render.
+    backdrop.lang = 'en';
+    const T = K.titles;
+    backdrop.innerHTML = `
+    <div class="fig-box" tabindex="-1">
       <div class="fig-head">
         <h3 class="txt-head" style="margin:0">Figure composer</h3>
-        <span class="txt-meta">Export only — the plot on the page is never changed.</span>
         <button class="fig-x close-x" type="button" aria-label="Close">✕</button>
       </div>
       <div class="fig-body">
-        <div class="fig-preview"><svg class="fig-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <div class="fig-preview"><svg class="fig-svg${K.svgClass ? ' ' + K.svgClass : ''}" xmlns="http://www.w3.org/2000/svg"></svg></div>
         <div class="fig-controls"></div>
       </div>
       <div class="fig-foot">
         <span class="txt-meta fig-dim"></span>
+        <span class="txt-meta fig-msg" role="status" hidden></span>
         <span style="flex:1"></span>
-        <button class="btn btn-sm fig-reset" type="button" data-fig-reset title="Back to the defaults, as if this plot's composer had just been opened">Reset</button>
+        ${K.footHtml}
+        <button class="btn btn-sm" type="button" data-fig-svg title="${esc(T.svg)}">Export SVG</button>
+        <button class="btn btn-sm" type="button" data-fig-png title="${esc(T.png)}">Export PNG</button>
+        <button class="btn primary" type="button" data-fig-copy title="${esc(T.copy)}">Copy PNG</button>
+      </div>
+    </div>`;
+    document.body.appendChild(backdrop);
+    previewSvg = backdrop.querySelector('.fig-svg');
+    controlsEl = backdrop.querySelector('.fig-controls');
+    dimEl = backdrop.querySelector('.fig-dim');
+    msgEl = backdrop.querySelector('.fig-msg');
+    rebuildControls();
+    K.wire();
+    wirePreviewView();
+    resetView();
+    if (K.mounted) K.mounted();
+    document.addEventListener('keydown', onKeyFirst, true);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('visibilitychange', onHide, true);
+    for (const t of ['beforeunload', 'pagehide']) window.addEventListener(t, onHide);
+    window.addEventListener('resize', renderPreview);
+    backdrop.querySelector('.fig-x').addEventListener('click', closeComposer);
+    backdrop.addEventListener('click', e=>{ if (e.target === backdrop) closeComposer(); });
+    backdrop.querySelector('[data-fig-reset]').addEventListener('click', ()=> K.reset());
+    backdrop.querySelector('[data-fig-svg]').addEventListener('click', exportSVG);
+    backdrop.querySelector('[data-fig-png]').addEventListener('click', exportPNG);
+    const copyBtn = backdrop.querySelector('[data-fig-copy]');
+    // Without clipboard images there is nothing the button could do, so PNG export
+    // takes its place as the main action rather than leaving a button that fails.
+    if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write)
+      copyBtn.addEventListener('click', ()=> copyPNG(copyBtn));
+    else { copyBtn.remove(); backdrop.querySelector('[data-fig-png]').classList.replace('btn-sm', 'primary'); }
+    backdrop.querySelector('.fig-box').focus({ preventScroll: true });
+    requestAnimationFrame(renderPreview);
+  } catch(e){
+    try { closeComposer(); } catch(_){}
+    throw e;
+  }
+  return {
+    get open(){ return K === kind; },
+    refresh(){ if (K === kind && K.refresh) K.refresh(); },
+    close(){ if (K === kind) closeComposer(); },
+  };
+}
+
+/* Closing: the kind's last edit sent and its state let go, every popup the composer
+   can open with it (left behind they would float over the page, still writing into a
+   figure that is gone), the focus back where it was. Whatever throws on the way, the
+   composer is free again after. */
+export function closeComposer(){
+  if (!K) return;
+  const k = K;
+  try {
+    if (k.flush) k.flush();
+    if (k.closing) k.closing();
+  } finally {
+    document.removeEventListener('keydown', onKeyFirst, true);
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('visibilitychange', onHide, true);
+    for (const t of ['beforeunload', 'pagehide']) window.removeEventListener(t, onHide);
+    window.removeEventListener('resize', renderPreview);
+    for (const p of [charPicker, alignPicker, fillPicker, texPalettePicker, colorPickerUI, palettePickerUI]){ try { p.close(); } catch(_){} }
+    if (backdrop) backdrop.remove();
+    K = null; backdrop = previewSvg = controlsEl = dimEl = msgEl = null;
+    const f = lastFocus; lastFocus = null;
+    if (f && f.isConnected && f.focus) f.focus({ preventScroll: true });
+  }
+}
+// Escape closes the composer; a popup of its own that Escape closes first (the
+// character map) keeps it from here.
+function onKey(e){ if (e.key === 'Escape') closeComposer(); }
+/* The page hidden or left: the kind's last edit sent before the page saves its tab
+   (sessions.js, on visibilitychange and pagehide). An edit held back for a moment (a
+   drag in the SEM figure's colour picker) would be missing from that save, and lost.
+   A phone putting the app away: visibilitychange, here in the capture phase, so first.
+   A reload or a closed tab: beforeunload, which comes before pagehide (whose listeners
+   on the window run in the order they were added, the page's first). pagehide as the
+   last resort. Nothing is asked: no prompt. */
+function onHide(e){ if (K && K.flush && (e.type !== 'visibilitychange' || document.visibilityState === 'hidden')) K.flush(); }
+/* Before the page's keys (utils.js), in the capture phase. Ctrl+Z / Ctrl+Y undo the
+   plots' figure in its own history, and stop there: they undid the module behind it
+   as well (to v480). A kind without a history of its own (the SEM figure, whose
+   settings are its module's) leaves them to the page, its last edit sent first so
+   that it is the one undone. ← and →, out of a field, stay in the composer: they
+   stepped the image or the sample behind it (to v480). */
+function onKeyFirst(e){
+  const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (mod && (key === 'z' || key === 'y')){
+    if (!K.undo){ if (K.flush) K.flush(); return; }
+    e.preventDefault(); e.stopPropagation();
+    (key === 'y' || e.shiftKey) ? K.redo() : K.undo();
+    return;
+  }
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !mod && !e.altKey){
+    const el = document.activeElement, tag = el && el.tagName;
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && !(el && el.isContentEditable)) e.stopPropagation();
+  }
+}
+
+/* The plots' kind: a snapshot of the plot the composer was opened on, with its own
+   undo, presets and per-plot memory. Its state is taken in open(), never before: a
+   composer refused (another one open) leaves the open one's plot, memory key and Reset
+   as they were. */
+function plotKind(plot, opts){
+  return {
+    open(){
+      srcPlot = plot; srcOpts = opts || {};
+      F = buildModel(plot, srcOpts);
+      axSel = 'all'; presetSel = '';
+      recallSettings();
+      redealPalettes();
+      undoStack = [snapshot()]; redoStack = [];
+    },
+    size: ()=> ({ W: F.wmm, H: F.hmm }),
+    draw(svg, forExport){ renderInto(svg, forExport ? '#000000' : '#1a2327', '#ffffff'); return { W: F.wmm, H: F.hmm }; },
+    dimText: plotDimText,
+    // The plot's size, while the margins choose it, shown as they chose it.
+    afterRender(){ if (controlsEl && F.plotAuto) controlsEl.querySelectorAll('[data-auto-plot]').forEach(el=>{ el.value = lastInner[el.dataset.autoPlot]; }); },
+    controlsHtml,
+    val: (at, key)=> at === 'g' ? F.grid[key] : at === 'dl' ? F.dataLabels[key] : at === 'f' ? F.font[key] : F[key],
+    afterRebuild: wireSeriesDrag,
+    wire: wireControls,
+    mounted(){
+      markMixedToggles();
+      presetBar = backdrop.querySelector('.fig-presets');
+      wirePresetBar();
+      renderPresetBar();
+    },
+    undo, redo,
+    reset: resetFigure,
+    closing(){
+      clearTimeout(undoTimer); undoTimer = null;   // nothing left to record once the model is gone
+      rememberSettings();
+      F = null; presetBar = null; srcPlot = null; srcOpts = null;
+    },
+    dpi: ()=> F.dpi, file: ()=> F.name, paper: ()=> '#ffffff', font: ()=> F.font.family,
+    svgClass: '',
+    footHtml: `<button class="btn btn-sm fig-reset" type="button" data-fig-reset title="Back to the defaults, as if this plot's composer had just been opened">Reset</button>
         <div class="fig-presets">
           <select data-preset="load" title="Apply a saved preset"></select>
           <button class="btn btn-sm" type="button" data-preset="save" title="Save these settings into the selected preset">Save</button>
           <input type="text" data-preset="name" placeholder="new preset name">
           <button class="btn btn-sm" type="button" data-preset="saveas" title="Save these settings as a new preset">Save as</button>
           <button class="btn is-danger btn-sm" type="button" data-preset="del" title="Delete the selected preset">&#10005;</button>
-        </div>
-        <button class="btn btn-sm" type="button" data-fig-svg title="Save the figure as a vector file">Export SVG</button>
-        <button class="btn btn-sm" type="button" data-fig-png title="Save the figure as an image file">Export PNG</button>
-        <button class="btn primary" type="button" data-fig-copy title="Copy the figure to the clipboard, ready to paste">Copy PNG</button>
-      </div>
-    </div>`;
-  document.body.appendChild(backdrop);
-  previewSvg = backdrop.querySelector('.fig-svg');
-  controlsEl = backdrop.querySelector('.fig-controls');
-  presetBar = backdrop.querySelector('.fig-presets');
-  controlsEl.innerHTML = controlsHtml();
-  wireControls();
-  wireSeriesDrag();
-  wirePreviewView();
-  resetView();
-  wirePresetBar();
-  renderPresetBar();
-
-  const close = ()=>{
-    clearTimeout(undoTimer);   // nothing left to record once the model is gone
-    rememberSettings();
-    window.removeEventListener('resize', onResize);
-    charPicker.close();
-    alignPicker.close();
-    document.removeEventListener('keydown', onKey);
-    backdrop.remove(); backdrop = null; F = null; dimEl = null; presetBar = null;
-    srcPlot = null; srcOpts = null;
+        </div>`,
+    titles: { svg: 'Save the figure as a vector file', png: 'Save the figure as an image file', copy: 'Copy the figure to the clipboard, ready to paste' },
   };
-  const onKey = e => {
-    if (e.key === 'Escape'){ close(); return; }
-    const z = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z';
-    const y = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y';
-    if (!z && !y) return;
-    e.preventDefault(); e.stopPropagation();
-    (y || e.shiftKey) ? redo() : undo();
-  };
-  const onResize = ()=> renderPreview();
-  backdrop.querySelector('.fig-x').addEventListener('click', close);
-  backdrop.addEventListener('click', e=>{ if (e.target === backdrop) close(); });
-  document.addEventListener('keydown', onKey);
-  window.addEventListener('resize', onResize);
-  backdrop.querySelector('[data-fig-reset]').addEventListener('click', resetFigure);
-  backdrop.querySelector('[data-fig-svg]').addEventListener('click', exportSVG);
-  backdrop.querySelector('[data-fig-png]').addEventListener('click', exportPNG);
-  const copyBtn = backdrop.querySelector('[data-fig-copy]');
-  // Without clipboard images there is nothing the button could do, so PNG export
-  // takes its place as the main action rather than leaving a button that fails.
-  if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write)
-    copyBtn.addEventListener('click', ()=> copyPNG(copyBtn));
-  else { copyBtn.remove(); backdrop.querySelector('[data-fig-png]').classList.replace('btn-sm', 'primary'); }
-
-  dimEl = backdrop.querySelector('.fig-dim');
-  requestAnimationFrame(renderPreview);
+}
+// The plots' composer, on the plot whose toolbar opened it: { open, refresh, close },
+// or null while a composer is open.
+export function openFigureEditor(plot, opts){
+  if (!plot) return null;
+  return openComposer(plotKind(plot, opts));
 }

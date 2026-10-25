@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: left while it refines: nothing asked; its results go into the parked tab, the database, its history; shown again, one step
+ok 1 - left while it refines: nothing asked; its results go into the parked tab, the database, its history; shown again, one step
+  ---
+  duration_ms: 5851.925283
+  type: 'test'
+  ...
+# Subtest: shown again while it refines: its card takes it back (Cancel, progress, rows locked); Cancel there stops it as on show
+ok 2 - shown again while it refines: its card takes it back (Cancel, progress, rows locked); Cancel there stops it as on show
+  ---
+  duration_ms: 5009.036885
+  type: 'test'
+  ...
+# Subtest: two tabs refining at once, parked, a third on show: each its own results and its own step
+ok 3 - two tabs refining at once, parked, a third on show: each its own results and its own step
+  ---
+  duration_ms: 5770.895153
+  type: 'test'
+  ...
+# Subtest: the parked tab closed while it refines: asked, then stopped, nothing written after; its project deleted: stopped
+ok 4 - the parked tab closed while it refines: asked, then stopped, nothing written after; its project deleted: stopped
+  ---
+  duration_ms: 6824.046821
+  type: 'test'
+  ...
+# Subtest: its project exported from the list mid-run: what is saved; Save on closing: what was written so far
+ok 5 - its project exported from the list mid-run: what is saved; Save on closing: what was written so far
+  ---
+  duration_ms: 5632.68028
+  type: 'test'
+  ...
+# Subtest: reloaded while a parked tab refines: the results written so far come back, unsaved; nothing runs
+ok 6 - reloaded while a parked tab refines: the results written so far come back, unsaved; nothing runs
+  ---
+  duration_ms: 4619.048264
+  type: 'test'
+  ...
+# Subtest: Refine the standard first, its tab left at once: the standard's run then the samples' go on parked, a step each, in order
+ok 7 - Refine the standard first, its tab left at once: the standard's run then the samples' go on parked, a step each, in order
+  ---
+  duration_ms: 3364.353478
+  type: 'test'
+  ...
+# Subtest: three lanes: the results those of one, bit for bit, in the patterns' order, one step
+ok 8 - three lanes: the results those of one, bit for bit, in the patterns' order, one step
+  ---
+  duration_ms: 6865.88975
+  type: 'test'
+  ...
+# Subtest: answers out of order wait for those before them; Cancel writes those done, not the ones under way
+ok 9 - answers out of order wait for those before them; Cancel writes those done, not the ones under way
+  ---
+  duration_ms: 6576.664572
+  type: 'test'
+  ...
+# Subtest: an error in one lane: the patterns not started stop, those under way are written, the failed one not
+ok 10 - an error in one lane: the patterns not started stop, those under way are written, the failed one not
+  ---
+  duration_ms: 2664.784352
+  type: 'test'
+  ...
+# Subtest: two windows on a cap of two: two jobs at once in all, the slot freed to the job waiting longest; each its own results
+ok 11 - two windows on a cap of two: two jobs at once in all, the slot freed to the job waiting longest; each its own results
+  ---
+  duration_ms: 6538.983515
+  type: 'test'
+  ...
+# Subtest: two tabs refining at once, parked (option A), on a cap of two: two workers for both; each its own results, in order
+ok 12 - two tabs refining at once, parked (option A), on a cap of two: two workers for both; each its own results, in order
+  ---
+  duration_ms: 5005.995332
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 65487.580874

@@ -1,0 +1,211 @@
+# b2v3's final check (NOTES-v3.md §8): its three issues fixed in tabs.js and sem.js, a check for each.
+# Trees: 'v3c', a git-archive of HEAD 2f49d4a with its b2.patch (94b5bd99...), served on 8991; 'w', the same with the fixes
+# (the new b2.patch, 97e036c7...), served on 8990. Headless Chromium, the machine otherwise idle.
+
+## The repro scripts (the check's, scratchpad b2v3/check/r3/scripts; fixed.mjs and behind.mjs mine, b2v3/final/scripts)
+superseded.mjs (lim-lib, LIM_PROFILE=disk; X an XRPD tab of 12 refined, left at 1400; at 1180, X then H clicked in one task; X shown):
+  v3c: X.view 1180@1, loaderShown false, long tasks ["128!"] (! not under the loader), errors []
+  w: X.view 1400@1, loaderShown true, long tasks ["68","117"] (! not under the loader), errors []
+quick2.mjs (two GC tabs, at 1200 T1 then Settings clicked in one task; the sections on show 800 ms later):
+  v3c: {"sections":["tab-gc"]}
+  w:   {"sections":["tab-settings"]}
+fixed.mjs (the same, the switch's microtask let through before Settings is clicked; A: T1 awake, left at 1400; B: T1 asleep):
+  v3c A: {"pending":true,"after":{"sections":["tab-gc"],"awake":[true,true],"view":null},"loaderOnShow":false}
+  v3c B: {"pending":true,"after":{"sections":["tab-gc"],"awake":[true,true],"view":null},"loaderOnShow":false}
+  w   A: {"pending":true,"after":{"sections":["tab-settings"],"awake":[true,true],"view":"1400@1"},"loaderOnShow":true,"shown":{"sections":["tab-gc"],"view":null}}
+  w   B: {"pending":true,"after":{"sections":["tab-settings"],"awake":[true,false],"view":"1400@1"},"loaderOnShow":true,"shown":{"sections":["tab-gc"],"awake":[true,true],"view":null}}
+behind.mjs (w only: T1 asleep chosen, Settings within the frames, then ensureLive from Settings, as a close's Save):
+  w: {"chosen":{"sections":["tab-settings"],"awake":[true,false]},"woken":{"sections":["tab-settings"],"awake":[true,true],"view":""},"loaderOnShow":true,"shown":{"sections":["tab-gc"],"view":null}}
+cards.mjs 1 (SEM, crop 128 made and undone twice; a.tif read again in a new tab; back, redone twice; the cards made by the redo):
+  v3c: {"reread":true,"cropMade":2,"undoMade":0,"showMade":0,"redoMade":1} errors []
+  w:   {"reread":true,"cropMade":2,"undoMade":0,"showMade":0,"redoMade":0} errors []
+
+## The new checks, w's test files run on v3c (DT_ROOT=v3c; b2cap 3, b2kept 2 and 3): each fails where it should
+not ok 1 - two tabs chosen within a switch's frames: the record of the tab left first no longer on show, a reload showing the last chosen; the first shown under the loader
+    T1 shown: the loader on first
+    false !== true
+not ok 2 - DRS woken: every fit kept, a Tauc and an Urbach card, not made again; golden, as before, its CSVs byte for byte; a parameter changed made again, undone taken; a width changed under the loader
+    Settings stays on show
+not ok 3 - GC, EPR and SEM woken: their tables, smoothing, thumbnails and cards kept, not made again; GC's and EPR's plots golden, their CSVs byte for byte
+    read again in another tab, then redone: no card made again
+# tests 3
+# pass 0
+# fail 3
+
+## w: DT_ROOT=w node --test --test-concurrency=1 tests/{b2cap,b2kept,b2sem,b2xrd,b2cross,tabs,sem}.test.mjs
+TAP version 13
+# Subtest: 40 tabs: none refused, 20 awake, the one shown least lately asleep beyond them, one shown often staying awake; the bar scrolls, the tab on show in view; a reload
+ok 1 - 40 tabs: none refused, 20 awake, the one shown least lately asleep beyond them, one shown often staying awake; the bar scrolls, the tab on show in view; a reload
+  ---
+  duration_ms: 25761.227307
+  type: 'test'
+  ...
+# Subtest: a busy tab awake past the cap, the excess asleep at its job's end; Settings' number applied at once; Projects' Open selected: 25 opened, asleep
+ok 2 - a busy tab awake past the cap, the excess asleep at its job's end; Settings' number applied at once; Projects' Open selected: 25 opened, asleep
+  ---
+  duration_ms: 15919.655426
+  type: 'test'
+  ...
+# Subtest: two tabs chosen within a switch's frames: the record of the tab left first no longer on show, a reload showing the last chosen; the first shown under the loader
+ok 3 - two tabs chosen within a switch's frames: the record of the tab left first no longer on show, a reload showing the last chosen; the first shown under the loader
+  ---
+  duration_ms: 2742.571778
+  type: 'test'
+  ...
+# Subtest: ten tabs, two of each module: each its own files and undo across switches; beyond the limit the one not shown for longest asleep; all asleep past the minutes, let go, woken with their histories
+ok 4 - ten tabs, two of each module: each its own files and undo across switches; beyond the limit the one not shown for longest asleep; all asleep past the minutes, let go, woken with their histories
+  ---
+  duration_ms: 18947.039456
+  type: 'test'
+  ...
+# Subtest: a refinement on the pool in an XRPD tab left, while a SEM and a DRS tab are worked in: each history its own, the run's step and record its tab's
+ok 5 - a refinement on the pool in an XRPD tab left, while a SEM and a DRS tab are worked in: each history its own, the run's step and record its tab's
+  ---
+  duration_ms: 9833.949794
+  type: 'test'
+  ...
+# Subtest: a saved project of each module: a hidden tab closed with Save, saved as it is; a reload, the others asleep until shown; reopened; Projects' CSVs those of the project bar
+ok 6 - a saved project of each module: a hidden tab closed with Save, saved as it is; a reload, the others asleep until shown; reopened; Projects' CSVs those of the project bar
+  ---
+  duration_ms: 8093.547749
+  type: 'test'
+  ...
+# Subtest: XRPD woken: its processing and Rietveld curves kept, not made again; its plots golden and as before, its CSVs byte for byte; a setting changed made again, undone taken
+ok 7 - XRPD woken: its processing and Rietveld curves kept, not made again; its plots golden and as before, its CSVs byte for byte; a setting changed made again, undone taken
+  ---
+  duration_ms: 14494.68429
+  type: 'test'
+  ...
+# Subtest: DRS woken: every fit kept, a Tauc and an Urbach card, not made again; golden, as before, its CSVs byte for byte; a parameter changed made again, undone taken; a width changed under the loader
+ok 8 - DRS woken: every fit kept, a Tauc and an Urbach card, not made again; golden, as before, its CSVs byte for byte; a parameter changed made again, undone taken; a width changed under the loader
+  ---
+  duration_ms: 16514.836311
+  type: 'test'
+  ...
+# Subtest: GC, EPR and SEM woken: their tables, smoothing, thumbnails and cards kept, not made again; GC's and EPR's plots golden, their CSVs byte for byte
+ok 9 - GC, EPR and SEM woken: their tables, smoothing, thumbnails and cards kept, not made again; GC's and EPR's plots golden, their CSVs byte for byte
+  ---
+  duration_ms: 9397.41172
+  type: 'test'
+  ...
+# Subtest: a project written to a file, from its bar and from Projects: under the loader, a frame drawn first
+ok 10 - a project written to a file, from its bar and from Projects: under the loader, a frame drawn first
+  ---
+  duration_ms: 5231.809975
+  type: 'test'
+  ...
+# Subtest: two SEM tabs awake at once: each its own files, view and undo; a file in both one array, one worker for both
+ok 11 - two SEM tabs awake at once: each its own files, view and undo; a file in both one array, one worker for both
+  ---
+  duration_ms: 2508.603912
+  type: 'test'
+  ...
+# Subtest: a reading goes on in a tab left: nothing asked, its files in its own list as one step, its record and its "*"; awake till its end, its time hidden counted from then
+ok 12 - a reading goes on in a tab left: nothing asked, its files in its own list as one step, its record and its "*"; awake till its end, its time hidden counted from then
+  ---
+  duration_ms: 1626.840313
+  type: 'test'
+  ...
+# Subtest: hidden: the editor's image let go at once and nothing else till it sleeps; asleep past Settings' minutes, woken with its whole history
+ok 13 - hidden: the editor's image let go at once and nothing else till it sleeps; asleep past Settings' minutes, woken with its whole history
+  ---
+  duration_ms: 2764.569949
+  type: 'test'
+  ...
+# Subtest: asleep, its files' bytes let go once the store holds them, one a tab awake holds kept; woken from the store as it was, history, thumbnails and editor; an undo bringing back a file only its history held
+ok 14 - asleep, its files' bytes let go once the store holds them, one a tab awake holds kept; woken from the store as it was, history, thumbnails and editor; an undo bringing back a file only its history held
+  ---
+  duration_ms: 3405.557215
+  type: 'test'
+  ...
+# Subtest: a wake reading its files: one read for two wakes asked, left or closed meanwhile given up, no key reaching another tab; files no longer stored lost and said, the rest as it was
+ok 15 - a wake reading its files: one read for two wakes asked, left or closed meanwhile given up, no key reaching another tab; files no longer stored lost and said, the rest as it was
+  ---
+  duration_ms: 5401.401916
+  type: 'test'
+  ...
+# Subtest: a tab asleep without its bytes: Projects' CSV of its project; closed hidden with Save, saved with its files, reopened from Projects; a reload, the tab not on show back without its bytes, read as it wakes
+ok 16 - a tab asleep without its bytes: Projects' CSV of its project; closed hidden with Save, saved with its files, reopened from Projects; a reload, the tab not on show back without its bytes, read as it wakes
+  ---
+  duration_ms: 5780.694643
+  type: 'test'
+  ...
+# Subtest: two XRPD tabs awake at once: each its own files, view and undo; a switch to one awake only shows it
+ok 17 - two XRPD tabs awake at once: each its own files, view and undo; a switch to one awake only shows it
+  ---
+  duration_ms: 2591.355997
+  type: 'test'
+  ...
+# Subtest: a refinement goes on in a tab left, on the pool: the results of one refined on show, its history's step, its record, its "*"
+ok 18 - a refinement goes on in a tab left, on the pool: the results of one refined on show, its history's step, its record, its "*"
+  ---
+  duration_ms: 11614.86434
+  type: 'test'
+  ...
+# Subtest: asleep past Settings' minutes, a busy tab not until its job's end, the one shown least lately beyond the tabs awake allowed; woken with its whole history
+ok 19 - asleep past Settings' minutes, a busy tab not until its job's end, the one shown least lately beyond the tabs awake allowed; woken with its whole history
+  ---
+  duration_ms: 5150.104964
+  type: 'test'
+  ...
+# Subtest: the LRU: beyond three tabs awake, the one not shown for longest sleeps, a woken one counting from its show
+ok 20 - the LRU: beyond three tabs awake, the one not shown for longest sleeps, a woken one counting from its show
+  ---
+  duration_ms: 2860.184432
+  type: 'test'
+  ...
+# Subtest: a hidden tab saved as it is closed, reopened from Projects; a reload: the tab on show awake, the others woken as shown
+ok 21 - a hidden tab saved as it is closed, reopened from Projects; a reload: the tab on show awake, the others woken as shown
+  ---
+  duration_ms: 3436.912105
+  type: 'test'
+  ...
+# Subtest: groups: by scale, an excluded image left out of its group and of its name
+ok 22 - groups: by scale, an excluded image left out of its group and of its name
+  ---
+  duration_ms: 1489.030396
+  type: 'test'
+  ...
+# Subtest: a renamed label shows everywhere, and its undo too
+ok 23 - a renamed label shows everywhere, and its undo too
+  ---
+  duration_ms: 856.196046
+  type: 'test'
+  ...
+# Subtest: crop: a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step
+ok 24 - crop: a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step
+  ---
+  duration_ms: 3051.697966
+  type: 'test'
+  ...
+# Subtest: closing an inactive tab with unsaved changes, answering Save, saves that tab
+ok 25 - closing an inactive tab with unsaved changes, answering Save, saves that tab
+  ---
+  duration_ms: 2396.170407
+  type: 'test'
+  ...
+# Subtest: the unsaved marker: an edit after a switch marks it, its undo clears it, a reload keeps it clear
+ok 26 - the unsaved marker: an edit after a switch marks it, its undo clears it, a reload keeps it clear
+  ---
+  duration_ms: 2317.54257
+  type: 'test'
+  ...
+# Subtest: a running job: undo does nothing, its tab left goes on and stays awake (b2), closing it asks, Stop it and close stops it
+ok 27 - a running job: undo does nothing, its tab left goes on and stays awake (b2), closing it asks, Stop it and close stops it
+  ---
+  duration_ms: 3188.811967
+  type: 'test'
+  ...
+1..27
+# tests 27
+# suites 0
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 189986.697687
+
+real	3m10.027s
+user	0m33.178s
+sys	0m8.474s

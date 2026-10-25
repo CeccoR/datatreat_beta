@@ -1,0 +1,83 @@
+{
+ "kase": "bg-parked",
+ "time": {
+  "n": 5,
+  "med": 7603,
+  "p90": 7918,
+  "max": 7918,
+  "min": 7090
+ },
+ "hashes": [
+  "0e098f762ba8cae5"
+ ],
+ "n": [
+  12,
+  12,
+  12,
+  12,
+  12
+ ],
+ "runs": [
+  {
+   "ms": 7089.60009765625,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.33,
+    1.02,
+    1.16
+   ]
+  },
+  {
+   "ms": 7629.699951171875,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.28,
+    1.01,
+    1.16
+   ]
+  },
+  {
+   "ms": 7917.5,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.24,
+    1.01,
+    1.16
+   ]
+  },
+  {
+   "ms": 7602.89990234375,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.28,
+    1.03,
+    1.16
+   ]
+  },
+  {
+   "ms": 7432.199951171875,
+   "n": 12,
+   "order": "s00.xrdml,s01.xrdml,s02.xrdml,s03.xrdml,s04.xrdml,s05.xrdml,s06.xrdml,s07.xrdml,s08.xrdml,s09.xrdml,s10.xrdml,s11.xrdml",
+   "hash": "0e098f762ba8cae5",
+   "len": 153031,
+   "load": [
+    1.26,
+    1.03,
+    1.16
+   ]
+  }
+ ],
+ "errors": []
+}

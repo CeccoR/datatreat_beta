@@ -1,0 +1,182 @@
+head none next 62.6 78.5 99.8 smooth 123.8 133.6 136.8 restarts 0
+head run next 69.5 96.1 114.9 smooth 130.4 188.2 209 restarts 2
+1 none next 63.4 68.9 72.4 smooth 122.3 140.1 170 restarts 0
+1 run next 52.5 94.1 96.4 smooth 125.5 165.4 165.7 restarts 2
+2 none next 61.7 64 76.3 smooth 124.5 133.2 133.9 restarts 0
+2 run next 65.2 101.5 102 smooth 124.2 139.3 175.6 restarts 4
+3 none next 63.8 68.5 69 smooth 117.4 133 137.4 restarts 0
+3 run next 70.9 98.2 118.1 smooth 153.6 191.9 229.7 restarts 5
+4 none next 64.7 70.7 110.9 smooth 122.3 132.2 138.4 restarts 0
+4 run next 67.1 93.4 113.7 smooth 178.8 195.5 207.1 restarts 5
+{
+ "head none": {
+  "next": {
+   "n": 12,
+   "med": 62.6,
+   "p90": 78.5,
+   "max": 99.8,
+   "longMed": 55.5
+  },
+  "smooth": {
+   "n": 12,
+   "med": 123.8,
+   "p90": 133.6,
+   "max": 136.8,
+   "longMed": 115
+  },
+  "restarts": 0
+ },
+ "head run": {
+  "next": {
+   "n": 12,
+   "med": 69.5,
+   "p90": 96.1,
+   "max": 114.9,
+   "longMed": 61
+  },
+  "smooth": {
+   "n": 12,
+   "med": 130.4,
+   "p90": 188.2,
+   "max": 209,
+   "longMed": 120
+  },
+  "restarts": 2
+ },
+ "1 none": {
+  "next": {
+   "n": 12,
+   "med": 63.4,
+   "p90": 68.9,
+   "max": 72.4,
+   "longMed": 55
+  },
+  "smooth": {
+   "n": 12,
+   "med": 122.3,
+   "p90": 140.1,
+   "max": 170,
+   "longMed": 112
+  },
+  "restarts": 0
+ },
+ "1 run": {
+  "next": {
+   "n": 12,
+   "med": 52.5,
+   "p90": 94.1,
+   "max": 96.4,
+   "longMed": 0
+  },
+  "smooth": {
+   "n": 12,
+   "med": 125.5,
+   "p90": 165.4,
+   "max": 165.7,
+   "longMed": 112.5
+  },
+  "restarts": 2
+ },
+ "2 none": {
+  "next": {
+   "n": 12,
+   "med": 61.7,
+   "p90": 64,
+   "max": 76.3,
+   "longMed": 54.5
+  },
+  "smooth": {
+   "n": 12,
+   "med": 124.5,
+   "p90": 133.2,
+   "max": 133.9,
+   "longMed": 115.5
+  },
+  "restarts": 0
+ },
+ "2 run": {
+  "next": {
+   "n": 12,
+   "med": 65.2,
+   "p90": 101.5,
+   "max": 102,
+   "longMed": 50
+  },
+  "smooth": {
+   "n": 12,
+   "med": 124.2,
+   "p90": 139.3,
+   "max": 175.6,
+   "longMed": 113.5
+  },
+  "restarts": 4
+ },
+ "3 none": {
+  "next": {
+   "n": 12,
+   "med": 63.8,
+   "p90": 68.5,
+   "max": 69,
+   "longMed": 56
+  },
+  "smooth": {
+   "n": 12,
+   "med": 117.4,
+   "p90": 133,
+   "max": 137.4,
+   "longMed": 107.5
+  },
+  "restarts": 0
+ },
+ "3 run": {
+  "next": {
+   "n": 12,
+   "med": 70.9,
+   "p90": 98.2,
+   "max": 118.1,
+   "longMed": 60.5
+  },
+  "smooth": {
+   "n": 12,
+   "med": 153.6,
+   "p90": 191.9,
+   "max": 229.7,
+   "longMed": 142
+  },
+  "restarts": 5
+ },
+ "4 none": {
+  "next": {
+   "n": 12,
+   "med": 64.7,
+   "p90": 70.7,
+   "max": 110.9,
+   "longMed": 57.5
+  },
+  "smooth": {
+   "n": 12,
+   "med": 122.3,
+   "p90": 132.2,
+   "max": 138.4,
+   "longMed": 112.5
+  },
+  "restarts": 0
+ },
+ "4 run": {
+  "next": {
+   "n": 12,
+   "med": 67.1,
+   "p90": 93.4,
+   "max": 113.7,
+   "longMed": 28
+  },
+  "smooth": {
+   "n": 12,
+   "med": 178.8,
+   "p90": 195.5,
+   "max": 207.1,
+   "longMed": 165.5
+  },
+  "restarts": 5
+ }
+}

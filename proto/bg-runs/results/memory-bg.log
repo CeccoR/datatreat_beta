@@ -1,0 +1,51 @@
+0 {"during":{"heap":15.3,"workers":0,"workerHeap":0,"rss":185},"peak":185,"after":{"heap":15.3,"workers":0,"rss":184,"hwm":268}}
+1 {"during":{"heap":15.7,"workers":1,"workerHeap":2.1,"rss":201},"peak":230,"after":{"heap":15.8,"workers":0,"rss":200,"hwm":268}}
+2 {"during":{"heap":18.3,"workers":2,"workerHeap":4.9,"rss":236},"peak":270,"after":{"heap":18.5,"workers":0,"rss":221,"hwm":333}}
+3 {"during":{"heap":18.8,"workers":3,"workerHeap":6.3,"rss":258},"peak":305,"after":{"heap":19.1,"workers":0,"rss":234,"hwm":387}}
+0 {"during":{"heap":19.1,"workers":0,"workerHeap":0,"rss":236},"peak":236,"after":{"heap":19.1,"workers":0,"rss":235,"hwm":387}}
+1 {"during":{"heap":19.4,"workers":1,"workerHeap":1.9,"rss":222},"peak":236,"after":{"heap":19.5,"workers":0,"rss":206,"hwm":387}}
+2 {"during":{"heap":19.7,"workers":2,"workerHeap":4.3,"rss":229},"peak":262,"after":{"heap":19.9,"workers":0,"rss":206,"hwm":387}}
+3 {"during":{"heap":20.3,"workers":3,"workerHeap":6.4,"rss":270},"peak":282,"after":{"heap":20.5,"workers":0,"rss":212,"hwm":424}}
+0 {"during":{"heap":20.5,"workers":0,"workerHeap":0,"rss":213},"peak":213,"after":{"heap":20.5,"workers":0,"rss":212,"hwm":424}}
+1 {"during":{"heap":20.6,"workers":1,"workerHeap":1.9,"rss":217},"peak":239,"after":{"heap":20.7,"workers":0,"rss":206,"hwm":424}}
+2 {"during":{"heap":20.9,"workers":2,"workerHeap":3.7,"rss":235},"peak":266,"after":{"heap":21.1,"workers":0,"rss":211,"hwm":424}}
+3 {"during":{"heap":21.3,"workers":3,"workerHeap":6.3,"rss":260},"peak":284,"after":{"heap":21.6,"workers":0,"rss":214,"hwm":424}}
+bg {
+ "0": {
+  "rssDuring": 213,
+  "heapDuring": 19.1,
+  "workersDuring": 0,
+  "workerHeapDuring": 0,
+  "rssPeak": 213,
+  "rssAfter": 212,
+  "workersAfter": 0
+ },
+ "1": {
+  "rssDuring": 217,
+  "heapDuring": 19.4,
+  "workersDuring": 1,
+  "workerHeapDuring": 1.9,
+  "rssPeak": 236,
+  "rssAfter": 206,
+  "workersAfter": 0
+ },
+ "2": {
+  "rssDuring": 235,
+  "heapDuring": 19.7,
+  "workersDuring": 2,
+  "workerHeapDuring": 4.3,
+  "rssPeak": 266,
+  "rssAfter": 211,
+  "workersAfter": 0
+ },
+ "3": {
+  "rssDuring": 260,
+  "heapDuring": 20.3,
+  "workersDuring": 3,
+  "workerHeapDuring": 6.3,
+  "rssPeak": 284,
+  "rssAfter": 214,
+  "workersAfter": 0
+ }
+}
+errors []

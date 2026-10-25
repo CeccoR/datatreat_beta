@@ -1,0 +1,22 @@
+ok   Ctrl+Z after a click on the tab bar undoes in the tab on show (focus moved into its frame) — {"focusInShell":"IFRAME","smooth":"0.25"}
+ok   Ctrl+Y redoes there too — 0.4
+ok   Ctrl+Z with the focus in the shell (its header clicked) is forwarded to the tab on show — {"focusInShell":"BODY","smooth":"0.25"}
+ok   → with the focus in the shell steps the sample in the tab on show — {"curIdx":[0,1],"label":null}
+ok   a key reaches only the tab on show (the hidden DRS history untouched) — [2,2]
+ok   a file dropped on a tab frame's dropzone is read there — [2,3]
+ok   a download started in a frame (the project bar's CSV) reaches the browser — tauc_export.zip
+ok   the decimal separator set in Settings is the frames' at once — ,
+ok   the theme toggled in the shell is the frames' at once — {"before":"dark","frame":"light","shell":"light"}
+ok   a project saved in a frame is in the shell's Projects list — ["Lim X"]
+ok   renamed in the list: the tab's label and its page's name field — {"label":"XRPD · Lim X2","field":"Lim X2"}
+ok   the tab's saved state mirrored in the shell (no "*") — XRPD · Lim X2
+ok   closing a hidden unsaved tab shows it and asks there (today: asked over the tab on show) — {"on":"UV-Vis DRS · Untitled project*","asked":"Save “Untitled project” before closing?"}
+ok   … "Don't save" closes it: the frame removed — 1
+ok   leaving a tab while it refines asks nothing; the bar marks it running — {"banner":false,"mark":"XRPD · Lim X2* ⟳"}
+ok   its results written while hidden, the tab marked changed — {"results":12,"label":"XRPD · Lim X2* ⟳"}
+ok   undo and redo after the run hidden do as after the run on show (its own history: one step, back to the state it started from) — {"shown":{"banner":null,"mark":null,"resultsBefore":0,"indexBefore":2,"results":12,"label":"XRPD · Lim X2*","hist":{"n":4,"index":3},"histAfterUndo":{"n":4,"index":2},"resultsAfterUndo":0,"resultsAfterRedo":12},"hidden":{"banner":false,"mark":"XRPD · Lim X2* ⟳","resultsBefore":12,"indexBefore":3,"results":12,"label":"XRPD · Lim X2* ⟳","hist":{"n":5,"index":4},"histAfterUndo":{"n":5,"index":3},"resultsAfterUndo":12,"resultsAfterRedo":12}}
+ok   a window open in a frame (the XRPD standard) no longer keeps the tabs from switching (a change: today it covers the bar) — {"modalOpen":true,"switched":true}
+ok   after a reload: the order the shell wrote, the state each frame wrote — {"order0":["UV-Vis DRS · ","XRPD · "],"order1":["UV-Vis DRS · ","XRPD · "],"smooth":"0.35","results":12}
+ok   after a reload only the tab on show has a frame (lazy) — 1
+ok   one JS heap limit for all the tabs (same-origin frames share an isolate) — 4096 MB
+errors []

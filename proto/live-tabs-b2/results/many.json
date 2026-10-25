@@ -1,0 +1,33 @@
+{
+ "base": "http://127.0.0.1:8990",
+ "files": "12 XRDML patterns of 5384 points a tab, the same files in every tab",
+ "at": {
+  "20": {
+   "tabs": 22,
+   "awake": 1,
+   "open": 94.2,
+   "switchAwake": 29.4,
+   "switchAsleep": 201.3,
+   "bar": 2.9,
+   "closeThread": 4.9,
+   "closeAll": 470.4,
+   "closeLongMax": 0,
+   "reload": 470,
+   "reloadLongMax": 78
+  },
+  "60": {
+   "tabs": 62,
+   "awake": 1,
+   "open": 94.8,
+   "switchAwake": 43.8,
+   "switchAsleep": 227.6,
+   "bar": 7.5,
+   "closeThread": 7.6,
+   "closeAll": 1270.4,
+   "closeLongMax": 0,
+   "reload": 792,
+   "reloadLongMax": 76
+  }
+ },
+ "errors": []
+}

@@ -1,0 +1,7 @@
+head empty boot {"heap":2.9109458923339844,"heapTotal":3.53515625,"workers":0,"workerHeap":0,"renderer":{"rss":127.96875,"pss":83,"priv":57.79296875,"hwm":130.44921875},"renderers":1,"rendererRssAll":127.96875,"allPss":181.39453125,"allRss":347.2109375,"byType":{"browser":40,"renderer":83,"GPU":33,"network.mojom.NetworkService":25},"domNodes":1463}
+head empty N 1 heap 3.9 workers 0 0 renderer rss/pss 136.5 89.4 all pss 190.2 dom 1530
+head empty N 2 heap 3.9 workers 0 0 renderer rss/pss 138.8 91.3 all pss 193.3 dom 1539
+head empty N 4 heap 4 workers 0 0 renderer rss/pss 141.5 93.2 all pss 195.5 dom 1554
+head empty N 8 heap 4.1 workers 0 0 renderer rss/pss 142.7 94.7 all pss 196.8 dom 1586
+[{"n":1,"heapPerTab":0.9,"rssPerTab":8.5,"pssPerTab":6.4,"allPssPerTab":8.8},{"n":2,"heapPerTab":0.5,"rssPerTab":5.4,"pssPerTab":4.1,"allPssPerTab":5.9},{"n":4,"heapPerTab":0.3,"rssPerTab":3.4,"pssPerTab":2.5,"allPssPerTab":3.5},{"n":8,"heapPerTab":0.2,"rssPerTab":1.8,"pssPerTab":1.5,"allPssPerTab":1.9}]
+errors []

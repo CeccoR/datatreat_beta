@@ -1,0 +1,11 @@
+live blank xrd 169.2 ms; long tasks med 0
+live blank tauc 169.1 ms; long tasks med 0
+live blank gc 155.3 ms; long tasks med 0
+live blank epr 184.2 ms; long tasks med 0
+live blank sem 169.4 ms; long tasks med 0
+live saved xrd 636.4 ms; long tasks med 431
+live saved sem 1047.7 ms; long tasks med 746
+rewake mem {"before":{"heap":109.4,"rss":438.2,"pss":385.3,"workers":2},"after":{"heap":8.3,"rss":193.3,"pss":141.2,"workers":0}}
+rewake xrd 661.8
+rewake sem 1047.9
+errors []

@@ -1,0 +1,1448 @@
+diff --git a/sem-figure.js b/sem-figure.js
+index cea9448..9ae3c2e 100644
+--- a/sem-figure.js
++++ b/sem-figure.js
+@@ -138,7 +138,7 @@ const letterOf = (k, style) => { const c = String.fromCharCode(97 + (k % 26)) +
+    opens, let go when it closes. */
+ let host = null, F = null, lastL = null;
+ let lastPlot = { w: 0, h: 0 };   // the plot of the last drawing (mm), for its locked fields
+-const urls = new Map();   // id|full → { key, url }: an image's PNG, made once while it does not change
++const urls = new Map();   // id → { key, url }: an image's PNG for the preview, made once while it does not change
+ let saveTimer = null;     // an edit not yet gone back to the module (commit)
+ 
+ // The images in panel order: the saved order, then any image not in it, in the file
+@@ -169,12 +169,16 @@ function gridOf(n){
+   const cols = Math.max(1, F.cols), rows = Math.max(1, F.rows), bCols = Math.max(1, F.bCols);
+   return { cols, rows, bCols, bRows: Math.max(F.bRows, Math.ceil(n/(rows*cols*bCols))) };
+ }
++/* An image's PNG: the preview's (520 px across) kept while it does not change; the
++   export's, at the figure's pixels, made for that export and not kept (to b2 kept till
++   the composer closed: a PNG of each image at full size, some 3 MB of text for 2048²). */
+ function urlOf(m, full){
+-  const k = m.id + (full ? '|full' : '|prev'), c = urls.get(k);
++  if (full){ const cv = m.canvas(0); return cv ? cv.toDataURL('image/png') : ''; }
++  const c = urls.get(m.id);
+   if (c && c.key === m.key) return c.url;
+-  const cv = m.canvas(full ? 0 : 520);
++  const cv = m.canvas(520);
+   const url = cv ? cv.toDataURL('image/png') : '';
+-  urls.set(k, { key: m.key, url });
++  urls.set(m.id, { key: m.key, url });
+   return url;
+ }
+ 
+diff --git a/sem-read.js b/sem-read.js
+index a271bd3..ba4a1f0 100644
+--- a/sem-read.js
++++ b/sem-read.js
+@@ -16,8 +16,8 @@
+ 
+    Pixels taller or wider than they are long (PixelSizeY and PixelSizeX more than
+    0.1 % apart) are brought to square ones (squarePixels). Also here, what the module
+-   (sem.js) and its worker (sem-read.worker.js) both do with a file: its id, its
+-   base64, the reduced copy and a crop's statistics (readFile).
++   (sem.js) and its worker (sem-read.worker.js) both do with a file: its id, the reduced
++   copy and a crop's statistics (readFile).
+ ========================================================= */
+ 
+ const TESCAN_TAG = 50431;
+@@ -63,17 +63,22 @@ const sizeText = n => n < 1e3 ? `${n} bytes` : n < 1e6 ? `${+(n/1e3).toPrecision
+ const LIMIT_TEXT = `${MAX_SIDE} px a side, 268 million px in all`;
+ const LITTLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+ 
+-/* readTescanTiff(bytes: Uint8Array, fileName, { head }) → {
++/* readTescanTiff(bytes: Uint8Array, fileName, { head, view }) → {
+      width, height (the frame), imageH (the image's rows), strip (the bar's rows),
+      bits, pixels (Uint16Array, width × height, row by row, the frame's grey levels
+-     scaled to 16 bits; the image alone where its pixels were made square), meta:
++     scaled to 16 bits; the image alone where its pixels were made square), view (the
++     pixels are the file's own bytes, not a copy: opts.view), meta:
+      { main, sem } (strings), and the numbers read from it: name, pixelNm (nm a pixel),
+      pixelNmY (the same, the pixels being square: the file's PixelSizeY where it is
+      within 0.1 % of X), mag, fovUm (the image's width), kV, wdMm, detector, gain,
+      offset, device, date, time, warning (or ''), squared (null, or where the pixels
+      were made square: { width, imageH, pixelNmX, pixelNmY } as acquired) }.
+-   head: everything but the pixels (pixels and warning null), at the cost of the
+-   checks alone: whatever would refuse the file refuses it here too.
++   head: everything but the pixels (null), at the cost of the checks alone: whatever
++   would refuse the file refuses it here too. view: the pixels a Uint16Array over the
++   file's own bytes where they are its grey levels as they are (16 bits in this machine's
++   order, at an even offset, the strips one after another, black the lowest level, the
++   pixels square): no copy (b2, sem.js: a decoded image costs nothing but the file it
++   is); else a copy, as without it.
+    Throws SemReadError with the reason a file is not taken. */
+ function readTescanTiff(bytes, fileName = '', opts = {}){
+   if (bytes.length < 8) throw new SemReadError('not a TIFF');
+@@ -140,32 +145,37 @@ function readTescanTiff(bytes, fileName = '', opts = {}){
+     throw new SemReadError(`an image of ${width} × ${imageH} px of ${+pxX.toPrecision(4)} × ${+pxY.toPrecision(4)} nm: in square pixels ${sq.w} × ${sq.h} px, larger than the page can draw (${LIMIT_TEXT})`);
+   if (!sq && over(width, imageH)) throw new SemReadError(`an image of ${width} × ${imageH} px${strip ? ' (its info bar left out)' : ''}: larger than the page can draw (${LIMIT_TEXT})`);
+ 
+-  let pixels = null, warning = null;
++  // (the bar's border read from the strips as stored, the header alone too: alike there
++  // as in the levels made of them)
++  const warning = strip && !uniformRun(bytes, dv, parts, le, bits, imageH*width, width)
++    ? `the row under the image (row ${imageH + 1}) is not the info bar's uniform border: the bar may not be where Tescan puts it, so check the image's bottom edge` : '';
++  let pixels = null, view = false;
+   if (!opts.head){
+-    // The frame's grey levels, on 16 bits (an 8-bit file × 257: 255 → 65535); a 16-bit
+-    // strip in the machine's order, at an even offset, copied whole.
+-    pixels = new Uint16Array(need);
+-    for (let k = 0, at = 0; k < parts.length; k += 2){
+-      const o = parts[k], c = parts[k + 1];
+-      if (bits === 16){
+-        if (le === LITTLE && (bytes.byteOffset + o) % 2 === 0) pixels.set(new Uint16Array(bytes.buffer, bytes.byteOffset + o, c), at);
+-        else for (let j = 0; j < c; j++) pixels[at + j] = dv.getUint16(o + 2*j, le);
+-      } else for (let j = 0; j < c; j++) pixels[at + j] = bytes[o + j]*257;
+-      at += c;
+-    }
+-    // WhiteIsZero: turned into the usual sense, black the lowest level.
+-    if (photo === 0) for (let i = 0; i < pixels.length; i++) pixels[i] = 65535 - pixels[i];
+-    warning = '';
+-    if (strip){
+-      const row = pixels.subarray(imageH*width, (imageH + 1)*width);
+-      if (row.some(v=> v !== row[0])) warning = `the row under the image (row ${imageH + 1}) is not the info bar's uniform border: the bar may not be where Tescan puts it, so check the image's bottom edge`;
++    const o0 = parts[0], whole = parts.every((v, k)=> k % 2 || !k || v === parts[k - 2] + parts[k - 1]*bpp);
++    if (opts.view && bits === 16 && le === LITTLE && photo === 1 && whole && (bytes.byteOffset + o0) % 2 === 0){
++      pixels = new Uint16Array(bytes.buffer, bytes.byteOffset + o0, need); view = !sq;
++    } else {
++      // The frame's grey levels, on 16 bits (an 8-bit file × 257: 255 → 65535); a 16-bit
++      // strip in the machine's order, at an even offset, copied whole.
++      pixels = new Uint16Array(need);
++      for (let k = 0, at = 0; k < parts.length; k += 2){
++        const o = parts[k], c = parts[k + 1];
++        if (bits === 16){
++          if (le === LITTLE && (bytes.byteOffset + o) % 2 === 0) pixels.set(new Uint16Array(bytes.buffer, bytes.byteOffset + o, c), at);
++          else for (let j = 0; j < c; j++) pixels[at + j] = dv.getUint16(o + 2*j, le);
++        } else for (let j = 0; j < c; j++) pixels[at + j] = bytes[o + j]*257;
++        at += c;
++      }
++      // WhiteIsZero: turned into the usual sense, black the lowest level.
++      if (photo === 0) for (let i = 0; i < pixels.length; i++) pixels[i] = 65535 - pixels[i];
+     }
++    // (from the file's own levels where they are viewed: they are only read)
+     if (sq) pixels = squarePixels(pixels, width, imageH, sq.w, sq.h);
+   }
+   const W = sq ? sq.w : width, H = sq ? sq.h : imageH, pixelNm = sq ? sq.p : pxX;
+   const base = fileName.replace(/\.[^.]+$/, '');
+   return {
+-    width: W, height: sq ? H : height, imageH: H, strip, bits, pixels, meta: { main, sem },
++    width: W, height: sq ? H : height, imageH: H, strip, bits, pixels, view, meta: { main, sem },
+     name: main.Sign || main.OrigFileName || base, pixelNm, pixelNmY: sq ? sq.p : pxY,
+     mag: num(main.Magnification), fovUm: pixelNm*W/1000,
+     kV: num(sem.HV || sem.AcceleratorVoltage)/1000, wdMm: num(sem.WD)*1000,
+@@ -175,6 +185,20 @@ function readTescanTiff(bytes, fileName = '', opts = {}){
+   };
+ }
+ 
++// Are the frame's n samples from `from` (as stored, its strips' parts) all one level?
++function uniformRun(bytes, dv, parts, le, bits, from, n){
++  let first = -1;
++  for (let k = 0, at = 0; k < parts.length && n > 0; k += 2){
++    const o = parts[k], c = parts[k + 1];
++    for (let j = from - at; j >= 0 && j < c && n > 0; j++, n--, from++){
++      const v = bits === 16 ? dv.getUint16(o + 2*j, le) : bytes[o + j];
++      if (first < 0) first = v; else if (v !== first) return false;
++    }
++    at += c;
++  }
++  return true;
++}
++
+ /* ---- Square pixels ----
+    An image whose pixels are pxX nm wide and pxY nm tall is brought to square pixels
+    of the finer of the two: along the finer side the pixels stay as acquired, along
+@@ -232,15 +256,9 @@ function hashBytes(b){
+   for (let i = 0; i < b.length; i++){ h ^= b[i]; h = Math.imul(h, 0x01000193); }
+   return (h >>> 0).toString(16).padStart(8, '0') + '-' + b.length;
+ }
+-// base64 in chunks: one String.fromCharCode over megabytes overflows the call stack.
+-// The browser's own (toBase64, fromBase64), where it has them, give the same, sooner:
+-// 13 ms, not 50, for a 8.6 MB file.
+-function toB64(bytes){
+-  if (bytes.toBase64) return bytes.toBase64();
+-  let s = '';
+-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+-  return btoa(s);
+-}
++// A file's base64 read into its bytes: a project of v517 or before held it so (sem.js
++// semRestore; b2 keeps the bytes, and makes no base64). The browser's own (fromBase64),
++// where it has it, gives the same, sooner.
+ function fromB64(b64){
+   if (Uint8Array.fromBase64) return Uint8Array.fromBase64(b64);
+   const s = atob(b64), b = new Uint8Array(s.length);
+@@ -323,12 +341,13 @@ function cardKey(c, w, h){
+   return { pk: `${c.x},${c.y},${c.w},${c.h}|${cw}x${ch}`, w: cw, h: ch };
+ }
+ function cardLevels(r, c, w, h){ const K = cardKey(c, w, h); return { ...K, px: resample(r.pixels, r.width, c, K.w, K.h) }; }
+-/* A file dropped, read whole: { id, r, small, st (its default crop's statistics),
+-   card (its card as its own group takes it whole), b64 }. Throws SemReadError where
+-   it is not taken. */
++/* A file dropped, read whole: { id, r (its pixels viewed in its bytes where they can
++   be), small, st (its default crop's statistics), card (its card as its own group takes
++   it whole), bytes }. Throws SemReadError where it is not taken. To b2 its base64 too,
++   11.9 MB for a 2048 × 2176 image of 8.9 MB, kept beside it. */
+ function readFile(bytes, name){
+-  const id = hashBytes(bytes), r = readTescanTiff(bytes, name), c = { x: 0, y: 0, w: r.width, h: r.imageH };
+-  return { id, r, small: reducedCopy(r), st: cropStats(r.pixels, r.width, c), card: cardLevels(r, c, r.width, r.imageH), b64: toB64(bytes) };
++  const id = hashBytes(bytes), r = readTescanTiff(bytes, name, { view: true }), c = { x: 0, y: 0, w: r.width, h: r.imageH };
++  return { id, r, small: reducedCopy(r), st: cropStats(r.pixels, r.width, c), card: cardLevels(r, c, r.width, r.imageH), bytes };
+ }
+ 
+-export { readTescanTiff, SemReadError, keyValues, hashBytes, toB64, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels, readFile, squarePixels, axisWeights, MAX_SIDE, MAX_PIXELS };
++export { readTescanTiff, SemReadError, keyValues, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels, readFile, squarePixels, axisWeights, MAX_SIDE, MAX_PIXELS };
+diff --git a/sem-read.worker.js b/sem-read.worker.js
+index ee1b170..c0152a0 100644
+--- a/sem-read.worker.js
++++ b/sem-read.worker.js
+@@ -3,18 +3,23 @@
+ 
+    sem.js sends each file's bytes ({ seq, buf, name }); this reads it whole
+    (sem-read.js readFile: its id, the image, its reduced copy, its default crop's
+-   statistics and group card, its base64) and sends it back, the arrays handed over,
+-   not copied: { seq, id, r, small, st, card, b64 }, or { seq, error } with the reason
+-   it is not taken (a SemReadError), or { seq, fault, kind } for anything else (out of
+-   memory). One file at a time, in the order sent.
++   statistics and group card) and sends it back, the arrays handed over, not copied:
++   { seq, id, r (its pixels null), px (the pixels where they are a copy, else null: they
++   are the bytes'), small, st, card, buf (the bytes themselves, back) }, or { seq, error }
++   with the reason it is not taken (a SemReadError), or { seq, fault, kind } for anything
++   else (out of memory). One file at a time, in the order sent. One worker for every SEM
++   tab (b2, sem.js), let go when none has read for a while. To b2 it made the file's
++   base64 too, and sent a copy of the pixels where they were the bytes.
+ ========================================================= */
+ import { readFile, SemReadError } from './sem-read.js';
+ 
+ self.onmessage = e =>{
+   const { seq, buf, name } = e.data;
+   try {
+-    const out = readFile(new Uint8Array(buf), name), move = [out.r.pixels.buffer, out.small.px.buffer, out.st.hist.buffer, out.card.px.buffer];
+-    self.postMessage({ seq, ...out }, move);
++    const out = readFile(new Uint8Array(buf), name), px = out.r.view ? null : out.r.pixels;
++    const move = [buf, out.small.px.buffer, out.st.hist.buffer, out.card.px.buffer];
++    if (px) move.push(px.buffer);
++    self.postMessage({ seq, id: out.id, r: { ...out.r, pixels: null }, px, small: out.small, st: out.st, card: out.card, buf }, move);
+   } catch(err){
+     self.postMessage(err instanceof SemReadError ? { seq, error: err.message } : { seq, fault: String(err && err.message || err), kind: err && err.name });
+   }
+diff --git a/sem.js b/sem.js
+index e6f92f1..277bf07 100644
+--- a/sem.js
++++ b/sem.js
+@@ -1,4 +1,4 @@
+-import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, flashFieldInvalid } from './utils.js';
++import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid } from './utils.js';
+ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
+ 
+ /* =========================================================
+@@ -7,18 +7,215 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+    a rectangle in the original's pixels, inside the image (the info bar is never in
+    it); the image itself is never changed.
+ 
+-   A file's bytes live in the module state as base64 (RawRef), not as a Uint8Array:
+-   db.js encode() turns a typed array into a plain array of numbers, eight bytes each
+-   in IndexedDB and a decimal each in a .json, and the undo stack compares snapshots
+-   by JSON.stringify on every edit. A RawRef serialises in JSON as its id alone
+-   (toJSON), so a snapshot compares at the cost of its crops; encode() copies its
+-   fields (id, b64) and leaves the method, so a saved project and a .json keep the
+-   bytes. The decoded image is a cache keyed by the id (a hash of the bytes), bounded
+-   (see The decoded images); what is drawn of it (its curve, thumbnail, group card,
+-   the editor's image) is kept with what it was drawn from, and drawn again only when
+-   that changes.
++   A file's bytes live in the module state as they are, a Uint8Array in a RawRef: the
++   undo stack compares snapshots by JSON.stringify on every edit, and a RawRef
++   serialises in JSON as its id alone (toJSON), so a snapshot compares at the cost of its
++   crops. db.js keeps the array itself in a tab parked and in its history, and stores it
++   once, by its hash, in the bytes store; a project file holds it as base64. To b2 the
++   module kept the base64 (11.9 MB for a file of 8.9 MB), read into bytes again at every
++   decoding; a project of then is read as it is (semRestore).
++
++   MADE PER TAB (b2): createSem is the module's factory (utils.js registerModule), each
++   open SEM tab that is awake an instance of its own, made of its copy of index.html's
++   section (root) and a layer (for the drag's ghost). Its elements are found in root,
++   never in the page: its ids are the page's only while it is on show, and a reading
++   going on while its tab is hidden writes into its own. What the files are made into is
++   the module's, for every instance, keyed by the file (its id, a hash of its bytes, see
++   The files): its bytes, one array a file whichever tabs hold it; its header, reduced
++   copy and card (imgs); its image at full size, a view of its bytes where they are its
++   levels (full); its crops' statistics and its curves (statsCache, lutCache). What an
++   instance draws of them is its own: the editor's image at full size, let go as its tab
++   is hidden, and the thumbnails and cards, as it is trimmed; drawn again as it is shown.
+ ========================================================= */
+-(function(){
++class RawRef {
++  constructor(id, bytes){ this.id = id; this.bytes = bytes; }
++  toJSON(){ return 'raw:' + this.id; }
++}
++// (hashBytes, fromB64: sem-read.js, shared with the worker that reads the files)
++
++/* ---- The files ----
++   A file is known by its id (sem-read.js hashBytes: FNV-1a and its length). Its bytes
++   are one array whichever tabs hold it: a file read or restored in a tab while another
++   tab, a history or a tab asleep holds it takes the array held (rawOf), its own let go;
++   the same id, length and bytes (compared: the id is a 32-bit hash). What it is made
++   into (imgs) goes with its last RawRef (gone). */
++const raws = new Map();   // id → WeakRef of the RawRef of its bytes
++const gone = typeof FinalizationRegistry === 'function' ? new FinalizationRegistry(id =>{
++  const w = raws.get(id);
++  if (w && w.deref()) return;   // (made again since)
++  raws.delete(id); imgs.delete(id); full.delete(id);
++  for (const m of [statsCache, lutCache]) for (const k of [...m.keys()]) if (k.startsWith(id + '|')) m.delete(k);
++}) : null;
++function sameBytes(a, b){
++  if (a === b) return true;
++  if (!a || !b || a.length !== b.length) return false;
++  const n = a.byteOffset % 4 || b.byteOffset % 4 ? 0 : a.length >> 2;
++  if (n){ const x = new Uint32Array(a.buffer, a.byteOffset, n), y = new Uint32Array(b.buffer, b.byteOffset, n); for (let i = 0; i < n; i++) if (x[i] !== y[i]) return false; }
++  for (let i = 4*n; i < a.length; i++) if (a[i] !== b[i]) return false;
++  return true;
++}
++function rawOf(id, bytes){
++  const w = raws.get(id), had = w && w.deref();
++  if (had && sameBytes(had.bytes, bytes)) return had;
++  const r = new RawRef(id, bytes);
++  if (typeof WeakRef === 'function' && !had){ raws.set(id, new WeakRef(r)); if (gone) gone.register(r, id); }
++  return r;
++}
++
++/* ---- What the files are made into ----
++   imgs: id → { r (readTescanTiff's header: its numbers and warning, no pixels), small
++   (sem-read.js reducedCopy, some 160 px across, for the thumbnails), card (its group
++   card's levels last made, sem-read.js cardLevels) }, null where its bytes do not read:
++   some 0.15 MB an image of 2048², kept while the file is held (the last 512 at most), so
++   that a tab woken draws its thumbnails without reading its images whole.
++   full: id → { px (its levels at full size), size (bytes beyond its file's: none for a
++   view of them), used }. For a file of 16 bits in this machine's order (Tescan's) the
++   levels are a view of its bytes, made at once and costing nothing (sem-read.js view);
++   for another (8 bits, the other order, pixels made square) a copy, 2 bytes a pixel,
++   read again in some 11 ms (2048², 8 bits). Kept: those of the files of the instance on
++   show and of a reading, the copies within DEC_BUDGET (three such images; the one in the
++   editor, the latest used, among them), the least recently used let go first; the others
++   let go after the task (evict), read again from the bytes when asked for. To b2 every
++   image of the tab's list was kept decoded, a copy, whatever its tab did, and others to
++   128 MB (to v487 every image ever loaded, till the page was reloaded). */
++const DEC_BUDGET = 32*2**20;
++const imgs = new Map(), full = new Map();
++let used = 0, evictTimer = 0;
++function imgOf(f){
++  const id = f.raw.id;
++  let e = imgs.get(id);
++  if (e === undefined){
++    let r = null;
++    try { r = f.raw.bytes ? readTescanTiff(f.raw.bytes, f.name, { head: true }) : null; } catch(err){ r = null; }
++    e = r && { r, small: null, card: null };
++    imgs.set(id, e);
++    if (imgs.size > 512) imgs.delete(imgs.keys().next().value);
++  }
++  return e;
++}
++// What a file's header says (readTescanTiff's numbers, its pixels unread), null where its
++// bytes do not read: a restore learns which images still read, and their sizes.
++const info = f =>{ const e = imgOf(f); return e ? e.r : null; };
++// Its levels at full size, null where they do not read.
++function pixelsOf(f){
++  const id = f.raw.id, e = full.get(id);
++  if (e){ e.used = ++used; return e.px; }
++  if (!info(f)) return null;
++  let r;
++  try { r = readTescanTiff(f.raw.bytes, f.name, { view: true }); } catch(err){ imgs.set(id, null); return null; }
++  full.set(id, { px: r.pixels, size: r.view ? 0 : r.pixels.byteLength, used: ++used });
++  scheduleEvict();
++  return r.pixels;
++}
++// The image whole ({ width, imageH, pixels… }: what sem-read.js reads from), or null.
++function decoded(f){ const r = info(f), px = r && pixelsOf(f); return px ? { ...r, pixels: px } : null; }
++function smallOf(f){
++  const e = imgOf(f);
++  if (e && !e.small){ const d = decoded(f); if (d) e.small = reducedCopy(d); }
++  return e && e.small;
++}
++// A file read: what the reading made of it, kept.
++function remember(id, r, small, card, px){
++  imgs.set(id, { r, small, card });
++  if (px) full.set(id, { px, size: px.byteLength, used: ++used });
++  scheduleEvict();
++}
++// The instances awake: { shown(), ids() (its files'), reading() (the files being read), hide() }.
++const insts = new Set();
++function scheduleEvict(){ if (!evictTimer) evictTimer = setTimeout(evict, 0); }
++function evict(){
++  evictTimer = 0;
++  const keep = new Set();
++  for (const i of insts){ i.reading().forEach(id=> keep.add(id)); if (i.shown()) i.ids().forEach(id=> keep.add(id)); }
++  let total = 0;
++  for (const [id, e] of full){ if (keep.has(id)) total += e.size; else full.delete(id); }
++  if (total <= DEC_BUDGET) return;
++  for (const [id, e] of [...full].sort((a, b)=> a[1].used - b[1].used)){
++    if (total <= DEC_BUDGET) break;
++    full.delete(id); total -= e.size;
++  }
++}
++// A section shown: an instance no longer on show lets go of the editor's image (hide), and
++// of the images at full size that only it held.
++onSectionChange(()=>{ insts.forEach(i=>{ if (!i.shown()) i.hide(); }); scheduleEvict(); });
++
++/* An image's crop as a histogram of its levels with their count, mean and spread, the
++   last 64 crops' of every tab (a file read comes with its default crop's: the worker
++   computes them); an image's whole curve as the 8-bit grey of each of its levels, the
++   last ones made (lutOf). Both keyed by what they are made from, the file's id first. */
++const statsCache = new Map(), lutCache = new Map();
++const statsKey = (id, c) => `${id}|${c.x},${c.y},${c.w},${c.h}`;
++const lru = (m, k)=>{ const v = m.get(k); if (v !== undefined){ m.delete(k); m.set(k, v); } return v; };
++function statsOf(f){
++  const key = statsKey(f.raw.id, f.crop);
++  let st = lru(statsCache, key);
++  if (st) return st;
++  st = cropStats(pixelsOf(f), info(f).width, f.crop);
++  statsCache.set(key, st);
++  if (statsCache.size > 64) statsCache.delete(statsCache.keys().next().value);
++  return st;
++}
++
++/* ---- Loading: the reading worker, one for every SEM tab ----
++   Each file is read off the page's thread, by sem-read.worker.js (sem-read.js
++   readFile), one after another, whichever tab sent it: its bytes go there and come
++   back. A tab's reading stopped (its tab closed) drops its answers; the worker goes on
++   for the other tabs' readings, else is let go at once. Idle IDLE_MS, it is let go (a
++   few MB), made again for the next file. Where none runs (a browser without module
++   workers), the files are read on the page's thread, a frame let through between two. */
++const reader = { w: null, failed: false, answered: false, seq: 0, idle: 0 };
++const pending = new Map();   // seq → { ok, owner }
++const IDLE_MS = 20000;
++function workerOf(){
++  if (reader.w || reader.failed) return reader.w;
++  try {
++    const w = new Worker(new URL('./sem-read.worker.js', import.meta.url), { type: 'module' });
++    w.onmessage = e =>{ reader.answered = true; const p = pending.get(e.data.seq); if (p){ pending.delete(e.data.seq); p.ok(e.data); } idleSoon(); };
++    // One that never answered will not run here (the file not found, no module
++    // workers): from then on the files are read on the page's thread.
++    w.onerror = e =>{ e.preventDefault(); dropWorker(!reader.answered); };
++    reader.w = w;
++  } catch(err){ reader.failed = true; reader.w = null; }
++  return reader.w;
++}
++function idleSoon(){ clearTimeout(reader.idle); reader.idle = pending.size ? 0 : setTimeout(()=>{ if (!pending.size) dropWorker(false); }, IDLE_MS); }
++// The worker let go (idle, a reading stopped, or it failed): what it had yet to answer
++// is read again, here or by the next one.
++function dropWorker(failed){
++  clearTimeout(reader.idle);
++  if (reader.w) reader.w.terminate();
++  reader.w = null; reader.answered = false;
++  if (failed) reader.failed = true;
++  const ps = [...pending.values()]; pending.clear();
++  ps.forEach(p=> p.ok({ retry: true }));
++}
++// A tab's reading stopped: its answers dropped; the worker let go if no other waits on it.
++function stopReads(owner){
++  let had = false;
++  for (const [s, p] of [...pending]) if (p.owner === owner){ pending.delete(s); p.ok({ retry: true }); had = true; }
++  if (had && !pending.size) dropWorker(false);
++}
++// A file read: { id, r (its header), px (its levels where a copy), small, st, card, bytes }.
++async function readOne(file, job, owner){
++  // (the worker taken once the bytes are in: one that would not run has said so by then)
++  const buf = await file.arrayBuffer(), w = workerOf();
++  if (w){
++    const s = ++reader.seq;
++    clearTimeout(reader.idle);
++    const res = await new Promise(ok=>{ pending.set(s, { ok, owner }); w.postMessage({ seq: s, buf, name: file.name }, [buf]); });
++    if (!res.retry || job.stopped) return res.buf ? { ...res, bytes: new Uint8Array(res.buf) } : res;
++  }
++  await new Promise(ok=> setTimeout(ok, 0));
++  if (job.stopped) return { retry: true };
++  try { const out = readFile(new Uint8Array(await file.arrayBuffer()), file.name); return { ...out, r: { ...out.r, pixels: null }, px: out.r.view ? null : out.r.pixels }; }
++  catch(err){ return err instanceof SemReadError ? { error: err.message } : { fault: String(err && err.message || err), kind: err && err.name }; }
++}
++
++const nameCtx = document.createElement('canvas').getContext('2d');
++
++// A SEM tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
++function createSem({ key, root, layer, shown }){
++  const $ = id => root.querySelector('#' + id);
+   const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+   // On the page: d significant digits, the point as a point (fmtNum, with the CSV's
+   // decimal separator and fixed decimals, is for the export).
+@@ -27,12 +224,9 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   const MIN_CROP = 64;
+   // The crop's width:height when locked.
+   const ASPECTS = { '1:1': 1, '4:3': 4/3, '3:2': 3/2, free: null };
+-
+-  class RawRef {
+-    constructor(id, b64){ this.id = id; this.b64 = b64; }
+-    toJSON(){ return 'raw:' + this.id; }
+-  }
+-  // (hashBytes, toB64, fromB64: sem-read.js, shared with the worker that reads the files)
++  // (its listeners on the window, let go with it)
++  const ac = new AbortController();
++  let dead = false;
+ 
+   /* ---- State ----
+      allFiles: every image in list order, { name (the file's), label (the sample's,
+@@ -49,79 +243,11 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   // Each group's figure settings (sem-figure.js), by the group's id; a group has none
+   // until its figure is first opened.
+   let figures = {};
+-  /* ---- The decoded images ----
+-     id → { r (readTescanTiff's), small (sem-read.js reducedCopy, some 160 px across,
+-     for the thumbnails), size (bytes), used (when last asked for), thumb and card
+-     (what was drawn of it, with what from: thumbOf, cardOf) }. Those of the images in
+-     the list are kept. The others (an image removed, which an undo may bring back; a
+-     project read in for its CSV or its saved key; a tab parked) go, the least recently
+-     used first, while all of them take more than DEC_BUDGET, and are read again from
+-     their bytes when asked for. To v487 every image ever loaded or restored stayed
+-     decoded until the page was reloaded, 8 MB for a 2048² image. */
+-  const DEC_BUDGET = 128*2**20;
+-  const decoded = new Map();
+-  let used = 0, evictTimer = 0;
+-  function cache(id, r, small){
+-    const e = { r, small: small || reducedCopy(r), used: ++used, thumb: null, card: null };
+-    // (with some 0.35 MB for what is drawn of it: its thumbnail, its card)
+-    e.size = r.pixels.byteLength + e.small.px.byteLength + 0.35e6;
+-    decoded.set(id, e);
+-    scheduleEvict();
+-    return e;
+-  }
+-  /* What a file's header says (readTescanTiff's, its pixels left unread), by id, null
+-     where the bytes no longer read: a restore learns which images still read, and their
+-     sizes, without decoding them. A project read in and out again (runWithModuleState)
+-     is decoded only as far as what runs on it asks: for its saved key not at all, for
+-     its CSV the images it includes (their statistics). The bytes so read are kept for
+-     the decoding that may follow in the same task (fresh). */
+-  const infos = new Map(), fresh = new Map();
+-  let freshTimer = 0;
+-  function info(f){
+-    const e = decoded.get(f.raw.id);
+-    if (e) return e.r;
+-    if (infos.has(f.raw.id)) return infos.get(f.raw.id);
+-    let r = null;
+-    try {
+-      const b = fromB64(f.raw.b64);
+-      r = readTescanTiff(b, f.name, { head: true });
+-      fresh.set(f.raw.id, b);
+-      if (!freshTimer) freshTimer = setTimeout(()=>{ fresh.clear(); freshTimer = 0; }, 0);
+-    } catch(err){ r = null; }
+-    infos.set(f.raw.id, r);
+-    if (infos.size > 512) infos.delete(infos.keys().next().value);
+-    return r;
+-  }
+-  // The decoded image of a file, read again from its bytes when not cached (a project
+-  // opened, an undo past a removal, an image let go). null when the bytes no longer read.
+-  function dec(f){
+-    const e = decoded.get(f.raw.id);
+-    if (e){ e.used = ++used; return e; }
+-    if (infos.get(f.raw.id) === null) return null;
+-    try {
+-      const b = fresh.get(f.raw.id) || fromB64(f.raw.b64);
+-      fresh.delete(f.raw.id);
+-      return cache(f.raw.id, readTescanTiff(b, f.name));
+-    } catch(err){ infos.set(f.raw.id, null); return null; }
+-  }
+-  // Over the budget: the images not in the list let go, the least recently used first
+-  // (after the task, so that a project read in and out again keeps the live one's).
+-  function scheduleEvict(){ if (!evictTimer) evictTimer = setTimeout(evict, 0); }
+-  function evict(){
+-    evictTimer = 0;
+-    const keep = new Set(allFiles.map(f=> f.raw.id));
+-    if (loading) loading.ids.forEach(id=> keep.add(id));
+-    let total = 0;
+-    for (const e of decoded.values()) total += e.size;
+-    if (total <= DEC_BUDGET) return;
+-    for (const [id, e] of [...decoded].filter(([id])=> !keep.has(id)).sort((a, b)=> a[1].used - b[1].used)){
+-      if (total <= DEC_BUDGET) break;
+-      decoded.delete(id); total -= e.size;
+-      // (what its header says kept; its statistics and curves gone with it)
+-      infos.set(id, { ...e.r, pixels: null });
+-      for (const m of [statsCache, lutCache]) for (const k of [...m.keys()]) if (k.startsWith(id + '|')) m.delete(k);
+-    }
+-  }
++  /* What it drew of its images (thumbOf, cardOf): id → { key (what from), cv }; its
++     editor's image (off). Drawn only on show: hidden, `stale` says what changed is drawn
++     as it is shown (its redraw). */
++  const thumbs = new Map(), cardsCv = new Map();
++  let stale = false;
+ 
+   /* ---- Intensity ----
+      Each image's grey levels go through one curve, a table of its 65536 levels:
+@@ -153,21 +279,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   // An image that is the reference of settings in use (all groups', or a group's own)
+   // that use one (marked ◎ on its thumbnail).
+   const isRef = f => [intensity, ...Object.values(groupInt)].some(I=> usesRef(I) && refFile(I) === f);
+-  // An image's crop, as a histogram of its levels with their count, mean and spread
+-  // (the last 64 crops kept).
+-  // (a file read gives its default crop's: the worker computes them)
+-  const statsCache = new Map();
+-  const statsKey = (id, c) => `${id}|${c.x},${c.y},${c.w},${c.h}`;
+-  function statsOf(f){
+-    const key = statsKey(f.raw.id, f.crop);
+-    let st = statsCache.get(key);
+-    if (st) return st;
+-    const e = dec(f);
+-    st = cropStats(e.r.pixels, e.r.width, f.crop);
+-    statsCache.set(key, st);
+-    if (statsCache.size > 64) statsCache.delete(statsCache.keys().next().value);
+-    return st;
+-  }
++  // (an image's crop's statistics: statsOf, the module's)
+   // The level below which a share q of the crop's pixels lie.
+   function levelAt(st, q){
+     const t = q*st.n; let acc = 0;
+@@ -206,8 +318,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   /* The whole curve of an image, as the 8-bit grey of each of its levels: made once for
+      what it is made from (lutKey: its crop's statistics, the reference's, the settings,
+      its correction) and kept, the last ones made (to v487 made three or four times an
+-     image at every edit). */
+-  const lutCache = new Map();
++     image at every edit). The module's (lutCache), for every tab: the key says all it is
++     made from. */
+   function lutKey(f){
+     const I = intOf(f), a = f.adj || ADJ_DEF, c = f.crop, rf = usesRef(I) ? refFile(I) : null;
+     return `${f.raw.id}|${I.mode === 'none' ? '' : `${c.x},${c.y},${c.w},${c.h}`}|${I.mode}|${I.mode === 'percentile' ? `${I.pLo},${I.pHi}` : ''}|`
+@@ -215,12 +327,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   }
+   function lutOf(f){
+     const key = lutKey(f);
+-    let lut = lutCache.get(key);
++    let lut = lru(lutCache, key);
+     if (lut) return lut;
+     lut = makeLut(f);
+     lutCache.set(key, lut);
+     // (room for two curves an image: a render never makes one twice)
+-    if (lutCache.size > Math.max(32, 2*allFiles.length + 8)) lutCache.delete(lutCache.keys().next().value);
++    if (lutCache.size > Math.max(48, 2*allFiles.length + 8)) lutCache.delete(lutCache.keys().next().value);
+     return lut;
+   }
+   function makeLut(f){
+@@ -323,7 +435,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     if (now.bad || now.dup.length || now.warn.length) alertsOf.set(line, now);
+     if (alertsOf.size > 32) alertsOf.delete(alertsOf.keys().next().value);
+   }
+-  document.getElementById('tab-sem').addEventListener('click', e=>{
++  root.addEventListener('click', e=>{
+     const btn = e.target.closest('[data-action]');
+     if (!btn) return;
+     if (btn.dataset.action === 'sem-dismiss-invalid'){ setAlerts({ bad: null }); rebuildAlerts(); }
+@@ -334,7 +446,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     const here = new Set(allFiles.map(f=> f.raw.id)), A = alerts();
+     const dup = A.dup.filter(a=> here.has(a.id)), warn = A.warn.filter(a=> here.has(a.id));
+     const bad = A.bad && (A.bad.ids.length ? A.bad.ids.some(id=> here.has(id)) : !here.size);
+-    document.getElementById('semAlerts').innerHTML = (bad ? buildAlertsHtml(A.bad.names, [], undefined, 'sem-dismiss-invalid') : '')
++    $('semAlerts').innerHTML = (bad ? buildAlertsHtml(A.bad.names, [], undefined, 'sem-dismiss-invalid') : '')
+       + (dup.length ? buildAlertsHtml([], dup.map(a=> a.html), 'Already loaded:', '', 'sem-dismiss-upload') : '')
+       + (warn.length ? buildAlertsHtml([], warn.map(a=> a.html), 'Loaded, but check:', '', 'sem-dismiss-warn') : '');
+   }
+@@ -345,72 +457,40 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   }
+ 
+   /* ---- Loading ----
+-     Each file is read off the page's thread, by sem-read.worker.js (sem-read.js
+-     readFile: its id, the image, its reduced copy, its default crop's statistics, its
+-     base64), one after another, the page answering meanwhile; the files read join the
+-     list together, one step of the history. To v487 all of it ran on the page's
+-     thread: 8 images of 2048² froze the page a frame a file, then most of a second
+-     (1.4–1.8 s in all here; the review measured 13 s to load them); now one frame of
+-     some 0.2 s, the list drawn (SEM.md §6.3).
+-     Where no worker runs (a browser without module workers), the files are read here,
+-     a frame let through between two. While files are read the module is busy
+-     (registerBusy): a tab switch asks first, and stops the reading, as closing the tab
+-     does. A reading holds the history from the state on show as it starts (UndoStack.hold),
+-     let go as it ends or is stopped: undo goes no lower meanwhile, silently, and above it
+-     undo and redo go as ever, the reading going on (to v508 both waited for its end, a
+-     banner saying so). Files dropped meanwhile are read after. */
+-  let worker = null, workerFailed = false, workerAnswered = false, seq = 0;
+-  const pending = new Map();
+-  function workerOf(){
+-    if (worker || workerFailed) return worker;
+-    try {
+-      worker = new Worker(new URL('./sem-read.worker.js', import.meta.url), { type: 'module' });
+-      worker.onmessage = e =>{ workerAnswered = true; const p = pending.get(e.data.seq); if (p){ pending.delete(e.data.seq); p(e.data); } };
+-      // One that never answered will not run here (the file not found, no module
+-      // workers): from then on the files are read on the page's thread.
+-      worker.onerror = e =>{ e.preventDefault(); dropWorker(!workerAnswered); };
+-    } catch(err){ workerFailed = true; worker = null; }
+-    return worker;
+-  }
+-  // The worker let go (a reading stopped, or it failed): what it had yet to answer
+-  // is read again, here or by the next one.
+-  function dropWorker(failed){
+-    if (worker) worker.terminate();
+-    worker = null; workerAnswered = false;
+-    if (failed) workerFailed = true;
+-    const ps = [...pending.values()]; pending.clear();
+-    ps.forEach(p=> p({ retry: true }));
+-  }
+-  async function readOne(file, job){
+-    // (the worker taken once the bytes are in: one that would not run has said so by then)
+-    const buf = await file.arrayBuffer(), w = workerOf();
+-    if (w){
+-      const s = ++seq;
+-      const res = await new Promise(ok=>{ pending.set(s, ok); w.postMessage({ seq: s, buf, name: file.name }, [buf]); });
+-      if (!res.retry || job.stopped) return res;
+-    }
+-    await new Promise(ok=> setTimeout(ok, 0));
+-    if (job.stopped) return { retry: true };
+-    try { return readFile(new Uint8Array(await file.arrayBuffer()), file.name); }
+-    catch(err){ return err instanceof SemReadError ? { error: err.message } : { fault: String(err && err.message || err), kind: err && err.name }; }
+-  }
++     Each file is read off the page's thread (readOne, the module's worker: its id, the
++     image, its reduced copy, its default crop's statistics, its bytes back), one after
++     another, the page answering meanwhile; the files read join the list together, one
++     step of the history. To v487 all of it ran on the page's thread: 8 images of 2048²
++     froze the page a frame a file, then most of a second (1.4–1.8 s in all here; the
++     review measured 13 s to load them); now one frame of some 0.2 s, the list drawn
++     (SEM.md §6.3). While files are read the tab is busy (registerBusy, busyChanged): it
++     is not let go while hidden (tabs.js), and the reading goes on there, into its own
++     list, drawn as it is shown; closing the tab stops it. To b2 a tab switch asked first,
++     and stopped it. A reading holds the history from the state on show as it starts
++     (UndoStack.hold), let go as it ends or is stopped: undo goes no lower meanwhile,
++     silently, and above it undo and redo go as ever, the reading going on (to v508 both
++     waited for its end, a banner saying so). Files dropped meanwhile are read after. */
++  const owner = {};   // (its readings', in the worker's queue)
+   // Anything but a reason (sem-read.js SemReadError) said in words: the raw message
+   // of an allocation that failed said nothing to the user (to v487).
+   const faultText = r => /RangeError|allocation|memory/i.test(`${r.kind} ${r.fault}`) ? 'too large for the memory this page has' : `not read (${r.fault})`;
+   let loading = null, waiting = 0, gen = 0;
+   let queue = Promise.resolve();
+-  registerBusy('sem', {
++  registerBusy(key, {
+     busy: ()=> loading || waiting ? 'The reading of SEM files' : null,
+-    // (the files waiting their turn go too: they were dropped into the project left)
+-    stop: ()=>{ gen++; if (loading){ loading.stopped = true; dropWorker(false); } },
++    // (the files waiting their turn go too: they were dropped into the project closed)
++    stop: ()=>{ gen++; if (loading){ loading.stopped = true; stopReads(owner); } },
+   });
+   // (each drop's promise: every file dropped so far read, so that the drop zone says it
+   // is reading until the last one is)
+   const drained = q => q.then(()=> q === queue ? null : drained(queue));
+-  setupDropzone('semDropzone', 'semFiles', list=>{
++  setupDropzone($('semDropzone'), $('semFiles'), list=>{
+     const g = gen;
+     waiting++;
+-    queue = queue.then(()=>{ waiting--; return g === gen ? loadFiles(list) : null; }).catch(err=> console.error('SEM files not read', err));
++    busyChanged(key);
++    // (its tab's time hidden, for its sleep, counted from the reading's end: tabs.js)
++    queue = queue.then(()=>{ waiting--; return g === gen ? loadFiles(list) : null; }).catch(err=> console.error('SEM files not read', err))
++      .then(()=>{ if (!dead) busyChanged(key); });
+     return drained(queue);
+   });
+   async function loadFiles(list){
+@@ -422,18 +502,19 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+         // A .hdr beside its .tif says what the TIFF carries already.
+         if (ext === 'hdr') continue;
+         if (ext !== 'tif' && ext !== 'tiff'){ bad.push(`${esc(file.name)} — not a TIFF`); continue; }
+-        const res = await readOne(file, job);
++        const res = await readOne(file, job, owner);
+         if (job.stopped) return;
+         if (res.error != null){ bad.push(`${esc(file.name)} — ${esc(res.error)}`); continue; }
+         if (res.fault != null){ bad.push(`${esc(file.name)} — ${esc(faultText(res))}`); continue; }
+         const { id, r } = res;
+         if (allFiles.some(f=> f.raw.id === id) || job.ids.has(id)){ dup.push({ id, html: esc(file.name) }); continue; }
+         job.ids.add(id);
+-        cache(id, r, res.small).card = res.card;
++        remember(id, r, res.small, res.card, res.px);
+         statsCache.set(statsKey(id, defaultCrop(r)), res.st);
+         if (r.warning) warn.push({ id, html: `${esc(file.name)} — ${esc(r.warning)}` });
+         const crop = defaultCrop(r);
+-        add.push({ name: file.name, label: r.name, raw: new RawRef(id, res.b64), crop, aspect: aspectOf(crop.w, crop.h), cropDef: true, linked: false, clamped: false, adjDef: true, ...(r.squared ? { sq: true } : {}) });
++        // (its bytes those another tab holds already, where one does: rawOf)
++        add.push({ name: file.name, label: r.name, raw: rawOf(id, res.bytes), crop, aspect: aspectOf(crop.w, crop.h), cropDef: true, linked: false, clamped: false, adjDef: true, ...(r.squared ? { sq: true } : {}) });
+       }
+     } finally { if (loading === job) loading = null; hist.release(mark); }
+     // The files read join the list as it is now, one step (an undo meanwhile may have put
+@@ -445,8 +526,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   }
+ 
+   /* ---- File list ---- */
+-  // The list's rows: its download reads a file's bytes (rawBytes) only when pressed.
+-  const listView = ()=> allFiles.map(f=> ({ name: f.name, label: f.label, included: f.included, get rawBytes(){ return fromB64(f.raw.b64); } }));
++  // The list's rows: its download gives a file's bytes (rawBytes).
++  const listView = ()=> allFiles.map(f=> ({ name: f.name, label: f.label, included: f.included, get rawBytes(){ return f.raw.bytes; } }));
+   function fileCallbacks(){
+     return {
+       onRemove(i){ const f = allFiles[i]; removeFileAt(allFiles, i, []); if (f) dropAlertsOf(f.raw.id); afterFilesChange(); },
+@@ -472,13 +553,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   function filesChanged(){
+     files = includedOf(allFiles);
+     cur = Math.min(cur, Math.max(0, files.length - 1));
+-    setTabLoaded('sem', allFiles.length);
++    setTabLoaded(key, allFiles.length);
+     // The list's rows map onto allFiles by index; the download needs the RawRef.
+-    renderUnifiedFileList('semFileTableWrap', listView(), fileCallbacks());
+-    document.getElementById('semWorkspace').style.display = files.length ? 'block' : 'none';
+-    document.getElementById('semGroupsCard').style.display = files.length ? 'block' : 'none';
++    renderUnifiedFileList($('semFileTableWrap'), listView(), fileCallbacks());
++    $('semWorkspace').style.display = files.length ? 'block' : 'none';
++    $('semGroupsCard').style.display = files.length ? 'block' : 'none';
+     syncGroups();
+     rebuildAlerts();
++    // (what it drew of images gone from its list let go: an undo draws them again)
++    const ids = new Set(allFiles.map(f=> f.raw.id));
++    for (const m of [thumbs, cardsCv]) for (const id of [...m.keys()]) if (!ids.has(id)) m.delete(id);
+     scheduleEvict();
+   }
+ 
+@@ -495,8 +579,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+      saved key). What it holds is taken as the module would have made it, whatever the
+      project says (a project file edited by hand or damaged): to v487 a crop, an index or a
+      setting that was not a number went in as it was, and the views drew NaN.
+-     - an image: its bytes and an id of the form hashBytes gives (else made from them),
+-       once (a second entry of one id is dropped); strings for its name and label; its
++     - an image: its bytes (an array; the base64 of a project of v517 or before, read
++       into one) and an id of the form hashBytes gives for bytes of their length (else
++       made from them), once (a second entry of one id is dropped), its bytes those
++       another tab holds where one does (rawOf); strings for its name and label; its
+        crop whole pixels inside the image, at least MIN_CROP a side, else the default
+        one; its ratio one of the locks; its correction within the fields' ranges; its
+        Default boxes ticked only where the crop and correction are the defaults;
+@@ -535,11 +621,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     for (const f0 of Array.isArray(s.files) ? s.files : []){
+       if (!isObj(f0)) continue;
+       const name = str(f0.name, 'image'), raw0 = f0.raw;
+-      let id = isObj(raw0) && typeof raw0.b64 === 'string' ? raw0.id : null;
+-      if (id !== null && !(typeof id === 'string' && ID_RE.test(id))){ try { id = hashBytes(fromB64(raw0.b64)); } catch(err){ id = null; } }
++      let bytes = null;
++      if (isObj(raw0)){
++        if (raw0.bytes instanceof Uint8Array) bytes = raw0.bytes;
++        else if (typeof raw0.b64 === 'string'){ try { bytes = fromB64(raw0.b64); } catch(err){ bytes = null; } }
++      }
++      let id = bytes ? raw0.id : null;
++      if (bytes && !(typeof id === 'string' && ID_RE.test(id) && +id.slice(9) === bytes.length)) id = hashBytes(bytes);
+       if (id === null){ lost.push(name); continue; }
+       if (seen.has(id)) continue;
+-      const f = { ...f0, name, label: str(f0.label, name), raw: raw0 instanceof RawRef && raw0.id === id ? raw0 : new RawRef(id, raw0.b64) };
++      const f = { ...f0, name, label: str(f0.label, name), raw: raw0 instanceof RawRef && raw0.id === id ? raw0 : rawOf(id, bytes) };
+       const r = info(f);
+       if (!r){ lost.push(name); continue; }
+       seen.add(id);
+@@ -603,6 +694,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     renderQueued = true;
+     queueMicrotask(()=>{
+       renderQueued = false;
++      // (one let go meanwhile: a state read out of it, withState)
++      if (dead) return;
+       const top = hist.states[hist.index], L = top && lineOf.get(top);
+       if (L != null && L !== line){
+         const bad = alerts().bad;
+@@ -615,12 +708,22 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+       if (figApi && figApi.open) figApi.refresh();
+     });
+   }
+-  const hist = registerHistory('sem', semSnapshot, semRestore);
+-  registerTabRedraw('sem', ()=>{ if (files.length){ fitWork(); sizeGroups(); fitView(); drawEditor(); drawHist(); } });
++  const hist = registerHistory(key, semSnapshot, semRestore);
++  // Shown (goTab, at each show; a resize): what changed while it was hidden drawn now
++  // (stale: all of it), else fitted to the page again, the editor's image made again
++  // where it was let go (hide).
++  registerTabRedraw(key, ()=>{
++    if (!files.length || dead) return;
++    if (stale){ renderAll(); return; }
++    fitWork(); sizeGroups(); loadEditorImage(); fitView(); drawEditor(); drawHist();
++  });
+ 
+   /* ---- Rendering ---- */
++  // (hidden: nothing drawn, all of it as it is shown, stale)
+   function renderAll(){
+     if (!files.length) return;
++    if (!shown()){ stale = true; return; }
++    stale = false;
+     renderNav(); renderInfo(); renderFields(); fitWork(); renderThumbs();
+     loadEditorImage(); fitView(); drawEditor();
+     renderIntensity(); renderGroups();
+@@ -629,19 +732,20 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   // view of the images drawn again, each image's only where what it is drawn from has
+   // changed (thumbOf, cardOf, loadEditorImage).
+   function refreshLevels(){
++    if (!shown()){ stale = true; return; }
+     loadEditorImage(); drawEditor();
+     renderThumbs(); renderIntensity(); renderGroups(); renderFields();
+   }
+   function renderNav(){
+     const f = files[cur];
+-    document.getElementById('semIdx').textContent = files.length ? `${cur + 1}/${files.length}` : '0/0';
+-    document.getElementById('semCurName').textContent = f ? f.label : '—';
++    $('semIdx').textContent = files.length ? `${cur + 1}/${files.length}` : '0/0';
++    $('semCurName').textContent = f ? f.label : '—';
+   }
+   function renderInfo(){
+-    const f = files[cur], e = f && dec(f);
+-    const box = document.getElementById('semInfo');
+-    if (!e){ box.innerHTML = ''; return; }
+-    const r = e.r, q = r.squared;
++    const f = files[cur], r = f && info(f);
++    const box = $('semInfo');
++    if (!r){ box.innerHTML = ''; return; }
++    const q = r.squared;
+     // Pixels made square (sem-read.js squarePixels): the image as it is now, and as acquired.
+     const rows = [
+       ['Image', `${r.width} × ${r.imageH} px${q ? `, ${q.width} × ${q.imageH} px as acquired` : ''}${r.strip ? ` (info bar of ${r.strip} rows left out)` : ''}`],
+@@ -664,10 +768,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     const f = files[cur], e = f && info(f);
+     if (!e) return;
+     const c = f.crop;
+-    ['x', 'y', 'w', 'h'].forEach(k=>{ const el = document.getElementById('semCrop' + k.toUpperCase()); if (document.activeElement !== el) el.value = String(c[k]); el.disabled = !!f.cropDef; });
+-    const asp = document.getElementById('semAspect');
++    ['x', 'y', 'w', 'h'].forEach(k=>{ const el = $('semCrop' + k.toUpperCase()); if (document.activeElement !== el) el.value = String(c[k]); el.disabled = !!f.cropDef; });
++    const asp = $('semAspect');
+     asp.value = f.aspect; asp.disabled = !!f.cropDef;
+-    document.getElementById('semCropDef').checked = !!f.cropDef;
++    $('semCropDef').checked = !!f.cropDef;
+     renderInfo();
+   }
+   // Every included image with its crop drawn on it; a press shows it in the editor, its
+@@ -676,23 +780,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   // An image's thumbnail: its reduced copy through its curve, its crop drawn on it.
+   // Drawn again only when its curve or its crop has changed (to v487 every one of them
+   // at every edit); the same canvas otherwise, put in the new row.
+-  function thumbOf(f, e){
+-    const c = f.crop, key = `${lutKey(f)}|${c.x},${c.y},${c.w},${c.h}`;
+-    if (e.thumb && e.thumb.key === key) return e.thumb.cv;
+-    const sm = e.small, k = 1/sm.k, cv = toCanvas(sm.px, sm.w, 0, 0, sm.w, sm.h, lutOf(f));
++  function thumbOf(f){
++    const c = f.crop, key = `${lutKey(f)}|${c.x},${c.y},${c.w},${c.h}`, t = thumbs.get(f.raw.id);
++    if (t && t.key === key) return t.cv;
++    const sm = smallOf(f);
++    if (!sm) return null;
++    const k = 1/sm.k, cv = toCanvas(sm.px, sm.w, 0, 0, sm.w, sm.h, lutOf(f));
+     const ctx = cv.getContext('2d');
+     ctx.fillStyle = 'rgba(0,0,0,0.55)';
+     ctx.beginPath(); ctx.rect(0, 0, cv.width, cv.height); ctx.rect(c.x*k, c.y*k, c.w*k, c.h*k); ctx.fill('evenodd');
+     ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(c.x*k + 0.5, c.y*k + 0.5, Math.max(1, c.w*k - 1), Math.max(1, c.h*k - 1));
+-    e.thumb = { key, cv };
++    thumbs.set(f.raw.id, { key, cv });
+     return cv;
+   }
+   function renderThumbs(){
+-    const box = document.getElementById('semThumbs');
++    if (!shown()){ stale = true; return; }
++    const box = $('semThumbs');
+     box.innerHTML = '';
+     files.forEach((f, i)=>{
+-      const e = dec(f); if (!e) return;
+-      const cv = thumbOf(f, e);
++      const cv = info(f) && thumbOf(f); if (!cv) return;
+       const wrap = document.createElement('div');
+       wrap.className = 'sem-thumb-wrap';
+       const b = document.createElement('button');
+@@ -716,7 +822,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+       box.appendChild(wrap);
+     });
+   }
+-  document.getElementById('semThumbs').addEventListener('click', e=>{
++  $('semThumbs').addEventListener('click', e=>{
+     const ln = e.target.closest('.sem-link');
+     if (ln){ setLinked(files[+ln.dataset.link], !files[+ln.dataset.link].linked); return; }
+     const b = e.target.closest('.sem-thumb'); if (!b) return;
+@@ -727,8 +833,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     cur = (i + files.length) % files.length;
+     renderAll();
+   }
+-  document.getElementById('semPrev').addEventListener('click', ()=> go(cur - 1));
+-  document.getElementById('semNext').addEventListener('click', ()=> go(cur + 1));
++  $('semPrev').addEventListener('click', ()=> go(cur - 1));
++  $('semNext').addEventListener('click', ()=> go(cur + 1));
+ 
+   /* ---- The crop editor ----
+      The image drawn into a canvas with the view (scale s in CSS px a pixel, and the
+@@ -737,19 +843,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+      wheel zooms about the pointer, a double click outside the crop fits the image. */
+   const view = { s: 1, ox: 0, oy: 0 };
+   // The current image at full size through its curve, made again when the image or its
+-  // curve (lutKey: its crop's statistics among what it is made from) has changed since.
+-  let off = null, offKey = null;
++  // curve (lutKey: its crop's statistics among what it is made from) has changed since,
++  // or as its tab is shown again (let go as it was hidden: hide; 17 MB for an image of
++  // 2048², made again in some 30 ms). Its pixels (toCanvas, as much again) are kept for
++  // the next curve while the image is edited, let go 2 s after the last (a curve then 9
++  // ms, not 22).
++  let off = null, offKey = null, imgTimer = 0;
+   function loadEditorImage(){
+-    const f = files[cur], e = f && dec(f);
+-    if (!e) return;
++    if (!shown()){ stale = true; return; }
++    const f = files[cur], r = f && info(f), px = r && pixelsOf(f);
++    if (!px) return;
+     const key = lutKey(f);
+     if (off && offKey === key) return;
+-    off = toCanvas(e.r.pixels, e.r.width, 0, 0, e.r.width, e.r.imageH, lutOf(f), off);
++    off = toCanvas(px, r.width, 0, 0, r.width, r.imageH, lutOf(f), off);
+     offKey = key;
++    clearTimeout(imgTimer); imgTimer = setTimeout(()=>{ if (off) off._img = null; }, 2000);
+   }
+   // (Pointer positions are taken on the canvas, which fills the pane inside its border:
+   // the view's origin.)
+-  const canvas = document.getElementById('semCropCanvas'), host = canvas.parentElement;
++  const canvas = $('semCropCanvas'), host = canvas.parentElement;
+   // The pane's size: as wide as its column, as tall as the image at that width, at
+   // most 70 % of the window's height.
+   function paneSize(){
+@@ -864,14 +976,14 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   let tool = null, drag = null, zoomBox = null;
+   function setTool(t){
+     tool = t;
+-    document.getElementById('semToolPan').classList.toggle('is-on', t === 'pan');
+-    document.getElementById('semToolZoom').classList.toggle('is-on', t === 'zoom');
++    $('semToolPan').classList.toggle('is-on', t === 'pan');
++    $('semToolZoom').classList.toggle('is-on', t === 'zoom');
+     host.closest('.plot-wrap').classList.toggle('tool-armed', !!t);
+     host.style.cursor = t === 'pan' ? 'move' : t === 'zoom' ? 'crosshair' : '';
+   }
+-  document.getElementById('semToolPan').addEventListener('click', ()=> setTool(tool === 'pan' ? null : 'pan'));
+-  document.getElementById('semToolZoom').addEventListener('click', ()=> setTool(tool === 'zoom' ? null : 'zoom'));
+-  document.getElementById('semToolFit').addEventListener('click', ()=>{ fitView(); drawEditor(); });
++  $('semToolPan').addEventListener('click', ()=> setTool(tool === 'pan' ? null : 'pan'));
++  $('semToolZoom').addEventListener('click', ()=> setTool(tool === 'zoom' ? null : 'zoom'));
++  $('semToolFit').addEventListener('click', ()=>{ fitView(); drawEditor(); });
+   host.addEventListener('pointerdown', e=>{
+     if (e.button !== 0 || !files.length) return;
+     const b = canvas.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
+@@ -955,7 +1067,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+ 
+   /* ---- Fields ---- */
+   ['X', 'Y', 'W', 'H'].forEach(K=>{
+-    const el = document.getElementById('semCrop' + K);
++    const el = $('semCrop' + K);
+     el.addEventListener('keydown', e=>{ if (e.key === 'Enter') el.blur(); });
+     el.addEventListener('change', ()=>{
+       const f = files[cur]; if (!f) return;
+@@ -973,7 +1085,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     });
+   });
+   // A new ratio keeps the crop's width and middle where it can, else its height.
+-  document.getElementById('semAspect').addEventListener('change', e=>{
++  $('semAspect').addEventListener('change', e=>{
+     const f = files[cur]; if (!f) return;
+     const r = info(f), ar = ASPECTS[e.target.value], c = f.crop;
+     f.aspect = e.target.value;
+@@ -988,7 +1100,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   });
+   // Default: the whole image less its bar, its fields locked; unticked, the fields open
+   // on it.
+-  document.getElementById('semCropDef').addEventListener('change', e=>{
++  $('semCropDef').addEventListener('change', e=>{
+     const f = files[cur]; if (!f) return;
+     f.cropDef = e.target.checked;
+     if (f.cropDef){ const r = info(f); f.crop = defaultCrop(r); f.aspect = aspectOf(f.crop.w, f.crop.h); f.clamped = false; }
+@@ -1009,7 +1121,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   // Link all: the images the selector chose, around the crop of the one in the editor
+   // (it leads); all of them linked already, it unlinks them.
+   const scopeFiles = ()=>{ const sc = scopeOf(); return files.filter(f=> sc === 'all' || (groupOf(f) && groupOf(f).id === sc)); };
+-  document.getElementById('semLinkAll').addEventListener('click', ()=>{
++  $('semLinkAll').addEventListener('click', ()=>{
+     const f = files[cur], fs = scopeFiles(); if (!f || !fs.length) return;
+     if (fs.every(g=> g.linked)) fs.forEach(g=>{ g.linked = false; g.clamped = false; });
+     else {
+@@ -1022,7 +1134,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     hist.commit();
+   });
+   function renderLinkAll(){
+-    const fs = scopeFiles(), b = document.getElementById('semLinkAll');
++    const fs = scopeFiles(), b = $('semLinkAll');
+     b.textContent = fs.length && fs.every(g=> g.linked) ? 'Unlink all' : 'Link all';
+   }
+ 
+@@ -1112,30 +1224,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   // An image as the figure will take it, through its curve, at the figure's pixels or
+   // brought down to `fit` px across.
+   function outCanvas(f, fit){
+-    const o = outOf(f), e = dec(f);
+-    if (!o) return null;
++    const o = outOf(f), px = o && pixelsOf(f);
++    if (!px) return null;
+     const k = fit ? Math.min(1, fit/Math.max(o.w, o.h)) : 1, w = Math.max(1, Math.round(o.w*k)), h = Math.max(1, Math.round(o.h*k));
+-    return toCanvas(resample(e.r.pixels, e.r.width, o.c, w, h), w, 0, 0, w, h, lutOf(f));
++    return toCanvas(resample(px, info(f).width, o.c, w, h), w, 0, 0, w, h, lutOf(f));
+   }
+   /* Its card in a group: as the figure takes it, brought down to 200 px across, from
+      the whole crop as before (sem-read.js cardLevels). Its levels are made again only
+      when the part of the original it takes or its size change (a file read comes with
+      those of its default crop, made by the worker), and put through its curve again
+-     only when that changes too: to v487 both at every edit, for every image. */
++     only when that changes too: to v487 both at every edit, for every image. The levels
++     are the module's (imgs), the canvas the instance's. */
+   function cardOf(f){
+-    const o = outOf(f), e = o && dec(f);
++    const o = outOf(f), e = o && imgOf(f);
+     if (!e) return null;
+-    const C = e.card, L = C && C.pk === cardKey(o.c, o.w, o.h).pk ? C : cardLevels(e.r, o.c, o.w, o.h), key = `${L.pk}|${lutKey(f)}`;
++    if (!(e.card && e.card.pk === cardKey(o.c, o.w, o.h).pk)){ const d = decoded(f); if (!d) return null; e.card = cardLevels(d, o.c, o.w, o.h); }
++    const L = e.card, key = `${L.pk}|${lutKey(f)}`, C = cardsCv.get(f.raw.id);
+     if (C && C.key === key) return C.cv;
+-    e.card = { ...L, key, cv: toCanvas(L.px, L.w, 0, 0, L.w, L.h, lutOf(f)) };
+-    return e.card.cv;
++    const cv = toCanvas(L.px, L.w, 0, 0, L.w, L.h, lutOf(f));
++    cardsCv.set(f.raw.id, { key, cv });
++    return cv;
+   }
+   /* A group's box: its name (plain text, a field on hover and while edited, as the
+      project's name), its scale and its figure on one side; its images in one row on
+      the other, scrolling sideways when they do not fit, each with its name under it.
+      An empty group says where its images go, its figure disabled. A group whose images
+      are all out of the figure (unticked, or the reference only) is not shown. */
+-  const nameCtx = document.createElement('canvas').getContext('2d');
+   function fitGroupName(el){
+     // Its room: the head's width less the scale and the figure's button beside it.
+     const acts = el.parentElement.querySelector('.sem-group-acts'), cs = getComputedStyle(el);
+@@ -1146,7 +1260,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     el.style.width = Math.min(nameCtx.measureText(el.value || el.placeholder).width + 24, room + 10) + 'px';
+   }
+   function renderGroups(){
+-    const box = document.getElementById('semGroups');
++    if (!shown()){ stale = true; return; }
++    const box = $('semGroups');
+     if (!box || !files.length) return;
+     box.innerHTML = groups.map(g=>{
+       const mem = g.members.map(byId).filter(m=> m && inFigure(m));
+@@ -1185,7 +1300,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   // must not change the height.
+   let groupFull = null;
+   function sizeGroups(){
+-    const box = document.getElementById('semGroups'), g = box.querySelector('.sem-group');
++    const box = $('semGroups'), g = box.querySelector('.sem-group');
+     if (!g || !box.clientWidth) return;
+     const main = document.querySelector('main'), mcs = getComputedStyle(main);
+     const pad = parseFloat(mcs.paddingLeft) + parseFloat(mcs.paddingRight);
+@@ -1209,12 +1324,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     strip.querySelector('.sem-page-prev').hidden = !(more > 1 && row.scrollLeft > 1);
+     strip.querySelector('.sem-page-next').hidden = !(more > 1 && row.scrollLeft < more - 1);
+   }
+-  window.addEventListener('resize', ()=>{ sizeGroups(); document.querySelectorAll('#semGroups .sem-group-imgs').forEach(pageArrows); fitWork(); });
++  window.addEventListener('resize', ()=>{ if (!shown()) return; sizeGroups(); root.querySelectorAll('#semGroups .sem-group-imgs').forEach(pageArrows); fitWork(); }, { signal: ac.signal });
+   /* Crop and intensity in three columns, until a field's name would be cut short ("…"):
+      then one column, the image on top, the thumbnails, the settings under them. Tried
+      in three columns at every resize (synchronously, so nothing is painted between). */
+   function fitWork(){
+-    const work = document.querySelector('.sem-work');
++    const work = root.querySelector('.sem-work');
+     if (!work || !work.offsetWidth) return;
+     const was = work.classList.contains('sem-stacked');
+     work.classList.remove('sem-stacked');
+@@ -1223,7 +1338,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     // The editor and the histogram are sized to their column: redrawn when it changes.
+     if (cut !== was && files.length){ fitView(); drawEditor(); drawHist(); }
+   }
+-  const groupsBox = document.getElementById('semGroups'), groupsCard = document.getElementById('semGroupsCard');
++  const groupsBox = $('semGroups'), groupsCard = $('semGroupsCard');
+   groupsBox.addEventListener('input', e=>{ if (e.target.classList.contains('sem-group-name')) fitGroupName(e.target); });
+   groupsBox.addEventListener('change', e=>{
+     const t = e.target;
+@@ -1263,7 +1378,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     groupsChanged();
+   }
+   // + Group: an empty group, to drag images into.
+-  document.getElementById('semAddGroup').addEventListener('click', ()=>{
++  $('semAddGroup').addEventListener('click', ()=>{
+     groups.push({ id: newGroupId(), name: 'New group', named: false, mode: 'common', members: [], keep: true });
+     groupsChanged();
+   });
+@@ -1291,7 +1406,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+       if (moved < 5) return;
+       const pic = gdrag.card.querySelector('canvas'), g = document.createElement('canvas');
+       g.width = pic.width; g.height = pic.height; g.getContext('2d').drawImage(pic, 0, 0);
+-      g.className = 'sem-drag-ghost'; document.body.appendChild(g);
++      g.className = 'sem-drag-ghost'; layer.appendChild(g);
+       gdrag.ghost = g; gdrag.card.classList.add('is-dragged');
+     }
+     gdrag.ghost.style.left = e.clientX + 'px'; gdrag.ghost.style.top = e.clientY + 'px';
+@@ -1323,7 +1438,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   groupsBox.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.classList.contains('sem-group-name')) e.target.blur(); });
+   // Reset: the groups made again from the pixel sizes. A group made again with the same
+   // images keeps its figure and its intensity.
+-  document.getElementById('semRegroup').addEventListener('click', ()=>{
++  $('semRegroup').addEventListener('click', ()=>{
+     const key = g => g.members.slice().sort().join('|');
+     const oldFig = new Map(groups.map(g=> [key(g), figures[g.id]])), oldInt = new Map(groups.map(g=> [key(g), groupInt[g.id]]));
+     groups = [];
+@@ -1368,7 +1483,6 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   }
+ 
+   /* ---- Intensity (the Crop and intensity card) ---- */
+-  const $ = id => document.getElementById(id);
+   // The fields, with the range each takes; a value outside it is refused (the field
+   // shakes and shows the last good one).
+   const INT_FIELDS = { semPLo: ['pLo', 0, 49.9], semPHi: ['pHi', 50.1, 100], semB: ['b', -100, 100], semC: ['c', 0.05, 20], semG: ['g', 0.05, 20] };
+@@ -1430,8 +1544,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   // The crop's histogram (256 bins, heights as the square root of the counts), the
+   // curve over it (level → grey), and where a linear normalisation puts black and white.
+   function drawHist(){
+-    const f = files[cur], e = f && dec(f), cv = $('semHist'), box = cv.parentElement;
+-    if (!e || !box.clientWidth) return;
++    const f = files[cur], cv = $('semHist'), box = cv.parentElement;
++    if (!(f && info(f)) || !box.clientWidth) return;
+     const dpr = window.devicePixelRatio || 1, w = box.clientWidth, h = box.clientHeight;
+     cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+     const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+@@ -1493,15 +1607,15 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+   });
+ 
+   /* ---- CSV: each image's metadata and crop ---- */
+-  registerCsvExport('sem', ()=>{
++  registerCsvExport(key, ()=>{
+     if (!files.length) return [];
+     let t = csvLine(['file', 'sample', 'magnification', 'pixel_size_nm', 'field_of_view_um', 'HV_kV', 'WD_mm', 'detector', 'detector_gain', 'detector_offset', 'date', 'time',
+       'image_width_px', 'image_height_px', 'info_bar_rows', 'crop_x_px', 'crop_y_px', 'crop_width_px', 'crop_height_px', 'crop_width_um', 'crop_height_um',
+       'crop_mean_level', 'crop_sd_level', 'crop_saturated_pct', 'intensity_settings', 'normalisation', 'reference', 'black_level', 'white_level', 'brightness_pct', 'contrast', 'gamma',
+       'group', 'scale', 'figure_x_px', 'figure_y_px', 'figure_width_px', 'figure_height_px', 'figure_pixel_nm', 'figure_out_width_px', 'figure_out_height_px']);
+     files.forEach(f=>{
+-      const e = dec(f); if (!e) return;
+-      const r = e.r, c = f.crop, um = v => fmtNum(v*r.pixelNm/1000, 6);
++      const r = info(f); if (!r) return;
++      const c = f.crop, um = v => fmtNum(v*r.pixelNm/1000, 6);
+       // The curve as applied: the levels a linear normalisation takes to black and white
+       // (none for the histogram's), and brightness, contrast and gamma with the image's
+       // correction in them.
+@@ -1516,4 +1630,54 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+     });
+     return [{ name: 'sem_images.csv', text: t }];
+   });
+-})();
++
++  /* ---- The instance (tabs.js) ---- */
++  // Not on show (a section shown: the module's hook, above): the editor's image at full
++  // size let go, and a drag under way dropped.
++  function hide(){
++    off = null; offKey = null; drag = null; zoomBox = null;
++    if (gdrag){ clearTimeout(gdrag.timer); if (gdrag.ghost) gdrag.ghost.remove(); gdrag = null; }
++  }
++  const me = { shown, hide, ids: ()=> allFiles.map(f=> f.raw.id), reading: ()=> loading ? loading.ids : [] };
++  insts.add(me);
++  return {
++    /* Its tab left for a while (tabs.js TRIM_MS): what it drew let go, the thumbnails, the
++       cards and the canvases on the page (some 0.3 MB an image, and the editor's pane),
++       all drawn again as it is shown (stale: renderAll) from what the module keeps (imgs:
++       the reduced copies and the cards' levels; the curves), none of its images read whole
++       but the one in the editor. */
++    trim(){
++      hide();
++      thumbs.clear(); cardsCv.clear();
++      $('semThumbs').innerHTML = ''; groupsBox.innerHTML = '';
++      canvas.width = canvas.height = 0; $('semHist').width = 0;
++      if (files.length) stale = true;
++    },
++    /* Let go (its tab closed or put to sleep; a state read out of it): its reading
++       stopped (its answers dropped, the worker kept for the other tabs'), its listeners on
++       the window, the figure composer where it is this tab's; what the module keeps of its
++       files stays while they are held (a tab asleep, its history). */
++    destroy(){
++      dead = true; gen++; clearTimeout(imgTimer);
++      if (loading) loading.stopped = true;
++      stopReads(owner);
++      ac.abort();
++      hide();
++      if (figApi && figApi.open){ try { figApi.close(); } catch(e){} }
++      insts.delete(me);
++      scheduleEvict();
++    },
++    /* What its sleep gives back, estimated (bytes; tabs.js: the limit by memory): its
++       elements and what it drew (canvases, 4 bytes a pixel; the editor's image, and its
++       pixels while kept), not its files' bytes, which its parked state and history keep,
++       nor what the module keeps by file. Measured (results/sem.json, 8 images of 2048²):
++       hidden awake over asleep, 2.1–2.6 MB of RSS and 929 nodes; estimated 3.5 MB. */
++    bytes(){
++      let n = 1 << 19;
++      for (const m of [thumbs, cardsCv]) for (const { cv } of m.values()) n += 4*cv.width*cv.height;
++      if (off) n += 4*off.width*off.height*(off._img ? 2 : 1);
++      return n + 4*canvas.width*canvas.height;
++    },
++  };
++}
++registerModule('sem', createSem);
+diff --git a/tests/README.md b/tests/README.md
+index e50471b..44a4855 100644
+--- a/tests/README.md
++++ b/tests/README.md
+@@ -76,6 +76,7 @@ exports) goes to `tests/out/`, which git ignores.
+ | `modules.test.mjs` | DRS, GC and EPR. A card unfolded keeps its zoom on the same files and full range, and draws the full range after a file was removed or left out while it was folded, at the width it is laid out at (EPR, GC); a label changed while folded keeps the zoom (GC). DRS: the sample on show followed through a removal before it and a move, the nearest when it is removed itself; a label changed is the card's caption at once, and its undo. GC: an interval bound flipped back to "all" that would end an interval before it starts refused, with the words a value typed is refused with; the flow's temperature T (25 °C, all/one, in `gc_info.csv` and `mean_rates.csv`), the rates at 0 °C over those at 25 °C by 298.15/273.15, a state with no T at 0 °C with its rates as they were, a file added at 25 °C. EPR: a `.DSC` of one point or none refused with why; flat spectra drawn under the global normalisation. DRS: the standard format is the Cary 5000's layout alone, the name on line 1, then `Wavelength (nm)` and `%R` or `F(R)` on line 2 (any separator, decimal mark, case or quotes), the data from line 3: `%R` so, under `;` with `,` decimals and in quotes, loads with no alert; `R%`, `%R` on line 1 or 3, `R %`, `Reflectance (%)`, a JASCO `YUNITS,%R` above `XYDATA` are read as F(R) = (1 − R)²/2R, back to the fixture's F(R), and said ('not a standard format: its header names the reflectance in %'), as is F(R) named elsewhere than on line 2; a file with no header read as F(R) and said, as is one whose columns' header names neither under a line naming R% (`Operator,R%` above `Wavelength (nm),KM`); the points that are no physical value (R outside 0–100 %, R = 0, F(R) < 0, NaN, past the doubles) left out and counted; a file with none left refused with why; the raw file downloaded as it came. DRS, the Cary 5000's own `%R` export (its layout: the name above the header, trailing commas, CRLF, 800 down to 200 nm, the instrument's footer) beside a standard F(R) export, with no alert, and a file of no standard format, with its warning: the file list's note, right of the label with no header, says `%R` or `F(R)` (its title in full; `F(R)` for a project with no reading kept); F(R) the conversion of the values written; the Results' top, F(R) and R (%) against λ side by side and the log plot under them at 2φ : 1; the R (%) plot giving the values back (and, for an F(R) file, R whose F(R) is the file's), its CSV `reflectance_R.csv` too, a file left out of both; its figure composer opening. Malformed projects: every value of a DRS, GC and EPR state put in as `null`, a string, an object in turn, restored as a project is opened: no throw, no page error; a file with nothing to show left out, said, its per-sample settings with it. |
+ | `db.test.mjs` | The form a module state takes in IndexedDB and in a project file (`db.js`), in Node: bytes as base64, a byte array held in several places written once and read back as one array, dates and other typed arrays, the older forms (bytes as arrays, a dangling reference). |
+ | `sem.test.mjs` | SEM groups by scale, an excluded image deciding nothing about its group's name or the scope selector; a renamed label shown in the navigation, thumbnails, groups and Reference, and undone; in the crop editor a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step. |
++| `b2sem.test.mjs` | SEM made per tab (b2): two SEM tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a file in both tabs one array of bytes, one reading worker for both; a reading going on in a tab left, nothing asked, its files landing in its own list as one step, its record and its "*", its tab awake past Settings' minutes till the reading's end and asleep that long after, woken drawn; a tab hidden letting go of the editor's image at once and of its thumbnails, cards and panes at its trim (tabs.js `sleepTick`), drawn again on show; asleep, woken with its whole history. |
+ 
+ ## Fixtures
+ 
+diff --git a/tests/b2sem.test.mjs b/tests/b2sem.test.mjs
+new file mode 100644
+index 0000000..8be77c1
+--- /dev/null
++++ b/tests/b2sem.test.mjs
+@@ -0,0 +1,161 @@
++/* SEM made per tab (b2): each SEM tab an instance of its own, awake while it is shown or
++   was lately, in one page. Two tabs awake at once, each its own files, view and undo
++   history, a switch to one awake only showing it (the same section, nothing restored); a
++   file in both one array of bytes, and one reading worker for both; a reading going on in
++   a tab left, nothing asked, its files landing in its own list as one step, its record
++   and its "*", its tab awake till then and its time hidden counted from its end; a tab
++   hidden letting go of the editor's image at once and of what it drew at its trim, drawn
++   again as it is shown; asleep past Settings' minutes, woken with its whole history.
++   The worker's answers held where a reading must go on (window.__hold). */
++import { test, before, after } from 'node:test';
++import assert from 'node:assert/strict';
++import { start, openModule, loadFiles, switchTab, settle, undo, moduleState, history, idb, banner, until, tabLabels } from './helpers.mjs';
++import { tif } from './fixtures.mjs';
++
++let env;
++before(async ()=>{ env = await start(); });
++after(()=> env && env.close());
++
++// The shell's tabs (tabs.js tabsNow), and its rules run as if `ms` had passed.
++const tabs = page => page.evaluate(async ()=> (await import('./tabs.js')).tabsNow());
++const awake = async page => (await tabs(page)).map(t=> t.awake);
++const tick = (page, ms)=> page.evaluate(async ms=> (await import('./tabs.js')).sleepTick(Date.now() + ms), ms);
++const MIN = 60000;
++const labels = async page => (await moduleState(page, 'sem')).files.map(f=> f.label);
++async function relabel(page, i, v){ const l = page.locator(`#semFileTableWrap .file-label[data-i="${i}"]`); await l.fill(v); await l.press('Enter'); await settle(page); }
++const thumbs = (page, n)=> page.waitForFunction(n=> document.querySelectorAll('#semThumbs .sem-thumb canvas').length === n, n);
++// (a: 16 bits, its image a view of its bytes; b, c: 8 bits, a copy)
++const A = ()=> tif('a.tif', { sign: 'A', seed: 1, pixelNm: 25, mag: 5000, bits: 16 });
++const B = ()=> tif('b.tif', { sign: 'B', seed: 2, pixelNm: 25, mag: 5000 });
++const C = ()=> tif('c.tif', { sign: 'C', seed: 3, pixelNm: 100, mag: 1250 });
++// The reading worker's answers held while __hold, delivered by __release(); the workers made counted.
++const holdWorkers = page => page.evaluate(()=>{
++  const W = window.Worker; window.__held = []; window.__hold = false; window.__made = 0;
++  const wrap = fn => e=>{ if (window.__hold && e.data && e.data.seq != null) window.__held.push(()=> fn(e)); else fn(e); };
++  window.Worker = class extends W {
++    constructor(...a){ super(...a); window.__made++; }
++    set onmessage(fn){ super.onmessage = fn && wrap(fn); }
++    get onmessage(){ return super.onmessage; }
++  };
++  window.__release = ()=>{ window.__hold = false; window.__held.splice(0).forEach(f=> f()); };
++});
++
++test('two SEM tabs awake at once: each its own files, view and undo; a file in both one array, one worker for both', async ()=>{
++  const { page, errors, close } = await env.page();
++  try {
++    await holdWorkers(page);
++    await openModule(page, 'sem'); await loadFiles(page, 'sem', [A(), B()]);
++    await relabel(page, 0, 'a-one');
++    // (its section, marked: the same element when it is shown again, not a restore's)
++    await page.evaluate(()=>{ document.querySelector('#tab-sem').dataset.mark = 'A'; });
++    await openModule(page, 'sem'); await loadFiles(page, 'sem', [C(), A()]);
++    assert.deepEqual(await awake(page), [true, true], 'both awake');
++    assert.equal(await page.locator('#tab-sem').count(), 1, 'one SEM section in the page, the one on show');
++    assert.equal(await page.locator('#semFileTableWrap tr.file-row').count(), 2);
++    assert.equal(await page.evaluate(()=> window.__made), 1, 'one reading worker for both tabs');
++    assert.ok(await page.evaluate(async ()=>{
++      const u = await import('./utils.js'), [a, b] = (await import('./tabs.js')).tabsNow().map(t=> u.getModuleState(t.id));
++      return a.files[0].raw.bytes === b.files[1].raw.bytes;
++    }), 'a.tif in both tabs: one array of its bytes');
++    await relabel(page, 0, 'c-one');
++    await switchTab(page, 0);
++    assert.equal(await page.evaluate(()=> document.querySelector('#tab-sem').dataset.mark), 'A', 'tab A\'s own section, shown again');
++    assert.deepEqual(await labels(page), ['a-one', 'B']);
++    await thumbs(page, 2);
++    assert.deepEqual(await history(page, 'sem'), { index: 2, n: 3 }, 'its history: start, files, label');
++    await relabel(page, 1, 'b-two');
++    // Undo in A undoes A's steps alone; B keeps its own.
++    await undo(page); await undo(page);
++    assert.deepEqual(await labels(page), ['A', 'B']);
++    await switchTab(page, 1);
++    assert.deepEqual(await labels(page), ['c-one', 'A']);
++    await undo(page);
++    assert.deepEqual(await labels(page), ['C', 'A']);
++    await switchTab(page, 0);
++    await undo(page, true);
++    assert.deepEqual(await labels(page), ['a-one', 'B'], 'A\'s redo, after B\'s undo');
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
++
++test('a reading goes on in a tab left: nothing asked, its files in its own list as one step, its record and its "*"; awake till its end, its time hidden counted from then', async ()=>{
++  const { page, errors, close } = await env.page();
++  try {
++    await holdWorkers(page);
++    await openModule(page, 'sem');
++    await page.evaluate(()=>{ window.__hold = true; });
++    await page.setInputFiles('#semFiles', [A(), C()]);
++    await until(()=> page.evaluate(()=> window.__held.length), { what: 'the worker\'s answer' });
++    // Left for another SEM tab: nothing asked, the reading goes on there.
++    await openModule(page, 'sem');
++    assert.equal(await banner(page), null, 'nothing asked');
++    assert.equal((await tabs(page))[0].busy, true, 'still reading, hidden');
++    await tick(page, 11*MIN);
++    assert.deepEqual(await awake(page), [true, true], 'busy: awake past the minutes');
++    await page.evaluate(()=> window.__release());
++    await until(async ()=> !(await tabs(page))[0].busy, { what: 'the reading\'s end' });
++    assert.deepEqual(await labels(page), [], 'the tab on show untouched');
++    // Its record has the files (the autosave of a tab not on show), its label the "*".
++    await until(async ()=>{ const r = (await idb(page, 'tabs')).find(x=> x.order === 0); return r && r.state.files.length === 2; }, { what: 'the record' });
++    assert.match((await tabLabels(page))[0], /\*$/);
++    await tick(page, 9*MIN);
++    assert.deepEqual(await awake(page), [true, true], '9 minutes after its end: awake');
++    await tick(page, 11*MIN);
++    assert.deepEqual(await awake(page), [false, true], '11 minutes after: asleep');
++    // Woken with what it read, drawn.
++    await switchTab(page, 0);
++    assert.deepEqual(await labels(page), ['A', 'C']);
++    await thumbs(page, 2);
++    assert.ok(await page.locator('#semGroups .sem-gimg canvas').count() === 2, 'its cards drawn on show');
++    await undo(page);
++    assert.deepEqual(await labels(page), [], 'its files one step');
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
++
++test('hidden: the editor\'s image let go at once, what it drew at its trim, drawn again on show; asleep past Settings\' minutes, woken with its whole history', async ()=>{
++  const { page, errors, close } = await env.page();
++  try {
++    await page.click('#nav button[data-tab="settings"]');
++    await page.fill('#settingSleepMin', '10'); await page.press('#settingSleepMin', 'Enter');
++    await settle(page);
++    await openModule(page, 'sem'); await loadFiles(page, 'sem', [A(), B(), C()]);
++    for (const v of ['x', 'y']) await relabel(page, 0, v);
++    const hA = await history(page, 'sem');
++    await thumbs(page, 3);
++    const shownBytes = (await tabs(page))[0].bytes;
++    // Hidden: the editor's image (256 × 256 px: its canvas, 0.25 MB, and its pixels while
++    // kept, 2 s after it was made) let go.
++    await openModule(page, 'sem');
++    const hid = (await tabs(page))[0];
++    assert.ok(shownBytes - hid.bytes >= 4*256*256, `${shownBytes} → ${hid.bytes}`);
++    // Trimmed after a minute hidden: its thumbnails, cards and panes let go.
++    await tick(page, 61000);
++    const tr = (await tabs(page))[0];
++    assert.equal(tr.trimmed, true);
++    assert.ok(tr.bytes < hid.bytes, `${hid.bytes} → ${tr.bytes}`);
++    await switchTab(page, 0);
++    await thumbs(page, 3);
++    assert.equal(await page.locator('#semGroups .sem-gimg canvas').count(), 3, 'its cards drawn again');
++    assert.ok(await page.evaluate(()=> document.querySelector('#semCropCanvas').width > 0), 'its editor drawn again');
++    assert.deepEqual(await labels(page), ['y', 'B', 'C']);
++    // Asleep after the minutes set, its history parked with it.
++    await switchTab(page, 1);
++    await tick(page, 11*MIN);
++    assert.deepEqual(await awake(page), [false, true]);
++    assert.equal((await tabs(page))[0].history, true);
++    // Woken: its state and its whole history, step by step.
++    await switchTab(page, 0);
++    assert.deepEqual(await awake(page), [true, true]);
++    assert.deepEqual(await labels(page), ['y', 'B', 'C']);
++    await thumbs(page, 3);
++    assert.deepEqual(await history(page, 'sem'), hA);
++    for (const v of ['x', 'A']){ await undo(page); assert.equal((await labels(page))[0], v); }
++    await undo(page);
++    assert.deepEqual(await labels(page), [], 'down to the empty start');
++    for (let i = 0; i < 3; i++) await undo(page, true);
++    assert.deepEqual(await labels(page), ['y', 'B', 'C'], 'and up again');
++    await thumbs(page, 3);
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
+diff --git a/tests/bytestore.test.mjs b/tests/bytestore.test.mjs
+index 4903c45..8f765de 100644
+--- a/tests/bytestore.test.mjs
++++ b/tests/bytestore.test.mjs
+@@ -179,7 +179,8 @@ test('saved: records small, holding hashes, each file\'s bytes once; back byte f
+     const rx = D.sessions.find(r=> r.title === 'X'), rs = D.sessions.find(r=> r.title === 'S'), hm = shaOf(multi);
+     const forms = rx.state.files.map(f=> JSON.stringify(f.rawBytes)).sort();
+     assert.deepEqual(forms, [...env.fx.files.xrd.map(p=> ({ __t: 'u8', h: shaOf(p) })), { __t: 'u8', h: hm, id: 0 }, { __t: 'u8', h: hm, id: 0 }].map(o=> JSON.stringify(o)).sort());
+-    assert.deepEqual(rs.state.files.map(f=> f.raw.b64), S.map(p=> ({ __t: 'b64', h: shaOf(p) })));
++    // (SEM's bytes an array since b2, as XRPD's: to b2 base64, {__t:'b64', h} stored)
++    assert.deepEqual(rs.state.files.map(f=> f.raw.bytes), S.map(p=> ({ __t: 'u8', h: shaOf(p) })));
+     for (const r of [...D.sessions, ...D.tabs]) assert.ok(!/[A-Za-z0-9+/]{200}/.test(JSON.stringify(r.state)), r.title + ': base64 in the record');
+     for (const r of D.sessions.concat(D.tabs).filter(r=> r.module === 'sem')) assert.ok(JSON.stringify(r).length < 20000, r.title + ': ' + JSON.stringify(r).length + ' characters');
+     assert.deepEqual(unheld(D), []);
+@@ -363,7 +364,7 @@ test('bytes missing or unreadable: the other files and tabs back, said so; XRPD
+     await page.waitForSelector('.pwa-confirm.show');
+     assert.match((await banner(page)).text, /“S”: 2 of its files are not stored in this browser any more; the file holds them without their bytes/);
+     await answer(page, 'ok');
+-    assert.deepEqual(JSON.parse(d.buf.toString()).state.files.map(f=> f.raw.b64 === null), [true, true, false]);
++    assert.deepEqual(JSON.parse(d.buf.toString()).state.files.map(f=> f.raw.bytes === null), [true, true, false]);
+     assert.deepEqual(errors, []);
+   } finally { await close(); }
+ });

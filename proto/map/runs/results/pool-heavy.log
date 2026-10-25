@@ -1,0 +1,29 @@
+heavy k 1 rep 0 wall 54485 work med/p95 9.6 13.6 frame p95 24.6 peak heap/worker 26.6 sum 26.6 rss 177
+heavy k 1 rep 1 wall 54518 work med/p95 9.4 14.7 frame p95 17.1 
+heavy k 1 rep 2 wall 55371 work med/p95 9.6 13.9 frame p95 17.2 
+heavy k 1 rep 3 wall 54163 work med/p95 9.6 14.9 frame p95 17.0 
+heavy k 1 rep 4 wall 54410 work med/p95 9.5 14.3 frame p95 17.0 
+{"k":1,"wallMed":54485,"jobMsMed":4435,"sameAsK1":true,"workMed":9.6,"workP95":14.3,"idleWorkMed":10,"frameP95":17.1,"workerHeapsIdle":[2.2],"rssIdleK":117,"rss0":113,"hwm":230,"peak":{"worker":26.616985321044922,"sumWorkers":26.616985321044922,"rss":177.4765625}}
+heavy k 2 rep 0 wall 29137 work med/p95 9.7 15.4 frame p95 17.6 peak heap/worker 15.2 sum 27.4 rss 201
+heavy k 2 rep 1 wall 29580 work med/p95 9.6 14.7 frame p95 17.1 
+heavy k 2 rep 2 wall 28733 work med/p95 9.5 16.1 frame p95 17.9 
+heavy k 2 rep 3 wall 28135 work med/p95 9.7 13.8 frame p95 25.0 
+heavy k 2 rep 4 wall 28286 work med/p95 9.6 12.6 frame p95 17.3 
+{"k":2,"wallMed":28733,"jobMsMed":4694,"sameAsK1":true,"workMed":9.6,"workP95":14.7,"idleWorkMed":9.6,"frameP95":17.6,"workerHeapsIdle":[1.9,1.9],"rssIdleK":126,"rss0":114,"hwm":327,"peak":{"worker":15.169944763183594,"sumWorkers":27.429378509521484,"rss":200.67578125}}
+heavy k 3 rep 0 wall 20247 work med/p95 9.7 13.9 frame p95 22.2 peak heap/worker 15.2 sum 39.6 rss 236
+heavy k 3 rep 1 wall 21551 work med/p95 10.2 16.0 frame p95 21.5 
+heavy k 3 rep 2 wall 21943 work med/p95 10.5 14.2 frame p95 17.7 
+heavy k 3 rep 3 wall 19963 work med/p95 9.7 18.5 frame p95 17.4 
+heavy k 3 rep 4 wall 20070 work med/p95 10.0 16.9 frame p95 17.8 
+{"k":3,"wallMed":20247,"jobMsMed":4983,"sameAsK1":true,"workMed":10,"workP95":16,"idleWorkMed":9.3,"frameP95":17.8,"workerHeapsIdle":[1.9,1.9,1.9],"rssIdleK":132,"rss0":114,"hwm":411,"peak":{"worker":15.239524841308594,"sumWorkers":39.59590530395508,"rss":235.671875}}
+heavy k 4 rep 0 wall 16892 work med/p95 10.3 14.3 frame p95 25.0 peak heap/worker 14.9 sum 44.9 rss 271
+heavy k 4 rep 1 wall 16479 work med/p95 10.9 14.9 frame p95 20.4 
+heavy k 4 rep 2 wall 17913 work med/p95 10.6 15.5 frame p95 21.3 
+heavy k 4 rep 3 wall 15763 work med/p95 9.7 14.5 frame p95 19.1 
+heavy k 4 rep 4 wall 16165 work med/p95 9.5 13.9 frame p95 18.3 
+{"k":4,"wallMed":16479,"jobMsMed":5271,"sameAsK1":true,"workMed":10.3,"workP95":14.5,"idleWorkMed":9.4,"frameP95":20.4,"workerHeapsIdle":[1.8,1.8,1.9,1.8],"rssIdleK":139,"rss0":114,"hwm":376,"peak":{"worker":14.869861602783203,"sumWorkers":44.85403823852539,"rss":271.390625}}
+k wallMed speedup jobMsMed
+1 54485 1.00 4435
+2 28733 1.90 4694
+3 20247 2.69 4983
+4 16479 3.31 5271

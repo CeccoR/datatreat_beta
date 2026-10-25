@@ -1,6 +1,7 @@
 /* =========================================================
    GENERIC UTILITIES
 ========================================================= */
+import { fixed, isFixed } from './db.js';
 const COLORS = [
   '#3aa0ff','#ff7a59','#5fcf6a','#d050ff','#ffcc4d','#ff5050','#4dd0e1','#c0ca33','#9575cd','#f06292',
   '#ff9800','#00bcd4','#8bc34a','#e91e63','#00897b','#ff5722','#1565c0','#f9a825','#6a1b9a','#558b2f',
@@ -8,6 +9,11 @@ const COLORS = [
   '#7b1fa2','#43a047','#fb8c00','#00838f','#c62828','#1976d2',
 ];
 function colorOf(i){return COLORS[i % COLORS.length];}
+/* Text put into markup (innerHTML, an attribute, an SVG string) goes through esc: file
+   names, labels, project and card names, and anything else a file or an imported project
+   brings (a project's .json can carry any text in any field). Up to v469 a file named
+   <img src=x onerror=…>.csv ran its script as soon as it was listed. */
+const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /* =========================================================
    CUSTOM COLOR PICKER
@@ -51,6 +57,19 @@ function _hsvToRgb(h,s,v){
   }
   return {r:Math.round(r*255),g:Math.round(g*255),b:Math.round(b*255)};
 }
+/* HSV and HSL say the same colours in different words, and the hue is the same word
+   in both. Going through these rather than through RGB keeps a hue that RGB cannot
+   hold — grey and black have none — so dragging lightness to the ends and back
+   returns the colour you started from. */
+function _hsvToHsl(h,s,v){
+  const l = v * (1 - s/2);
+  const d = Math.min(l, 1-l);
+  return {h, s: d ? (v - l) / d : 0, l};
+}
+function _hslToHsv(h,s,l){
+  const v = l + s * Math.min(l, 1-l);
+  return {h, s: v ? 2 * (1 - l/v) : 0, v};
+}
 
 /* Recently picked colours, shared by every colour picker in the app (file list and
    figure composer alike) and kept across sessions. Most recent first, no repeats. */
@@ -72,15 +91,77 @@ function pushRecentColor(hex){
   try { localStorage.setItem(CP_RECENT_KEY, JSON.stringify(_cpRecent)); } catch(e){}
 }
 
+/* A picker opened in a figure composer (inside .fig-box): its top, so that it stands
+   centred on its button where it can, and never nearer than 5 px to the composer's
+   head (the title) or foot (the buttons). As its button scrolls it follows, centred,
+   within that range, and stays 5 px from the head or the foot past it. null when the
+   button is not in a composer. */
+const COMPOSER_GAP = 5;
+/* Opening a picker in a composer: its button's panel scrolled (as far as it goes) to
+   bring the button where the popup can stand centred on it, so that it opens centred
+   rather than pinned to the foot, a swatch low in the panel being the usual case. */
+function centreInComposer(anchor, popup){
+  const box = anchor && anchor.closest && anchor.closest('.fig-box');
+  if (!box) return;
+  let p = anchor.parentElement;
+  for (; p && p !== box; p = p.parentElement){ const cs = getComputedStyle(p); if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight) break; }
+  if (!p || p === box) return;
+  const head = box.querySelector('.fig-head'), foot = box.querySelector('.fig-foot'), ph = popup.offsetHeight || 430;
+  const lo = (head ? head.getBoundingClientRect().bottom : box.getBoundingClientRect().top) + COMPOSER_GAP + ph/2;
+  const hi = (foot ? foot.getBoundingClientRect().top : box.getBoundingClientRect().bottom) - COMPOSER_GAP - ph/2;
+  const r = anchor.getBoundingClientRect(), c = r.top + r.height/2;
+  // The middle of the range where the popup can stand centred on it: from there it can
+  // follow the button as far either way (at an end of it, the first turn of the wheel
+  // one way would leave it pinned at once).
+  p.scrollTop += c - (lo + hi)/2;
+}
+/* A popup standing over the panel its button scrolls in (a composer's controls) would
+   swallow the wheel: the panel under it stopped scrolling, and the popup with it. The
+   wheel over the popup scrolls that panel instead, so the popup keeps following. */
+function forwardWheel(popup, anchorOf){
+  popup.addEventListener('wheel', e=>{
+    const a = anchorOf(); if (!a) return;
+    let p = a.parentElement;
+    for (; p && p !== document.body; p = p.parentElement){
+      const cs = getComputedStyle(p);
+      if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight) break;
+    }
+    if (!p || p === document.body) return;
+    // A popup that scrolls itself keeps the wheel while it can.
+    const own = e.target.closest && e.target.closest('.cp-popup, .pp-popup');
+    for (let q = e.target; q && q !== own && q !== popup.parentElement; q = q.parentElement){
+      const cs = getComputedStyle(q);
+      if (/(auto|scroll)/.test(cs.overflowY) && q.scrollHeight > q.clientHeight) return;
+    }
+    e.preventDefault();
+    // In lines or pages (Firefox's mouse wheel: 3 lines a notch), as the browser would.
+    p.scrollTop += e.deltaY*(e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? p.clientHeight : 1);
+  }, { passive: false });
+}
+function composerTop(anchor, rect, ph){
+  const box = anchor && anchor.closest && anchor.closest('.fig-box');
+  if (!box) return null;
+  const head = box.querySelector('.fig-head'), foot = box.querySelector('.fig-foot');
+  const lo = (head ? head.getBoundingClientRect().bottom : box.getBoundingClientRect().top) + COMPOSER_GAP;
+  const hi = (foot ? foot.getBoundingClientRect().top : box.getBoundingClientRect().bottom) - COMPOSER_GAP - ph;
+  const centred = rect.top + rect.height/2 - ph/2;
+  return hi < lo ? lo : Math.min(hi, Math.max(lo, centred));
+}
 class ColorPickerUI {
   constructor(){
     this._onChange = null;
     this._hsv = {h:0,s:1,v:1};
+    /* Black and white have no saturation to read back, so the HSL row would forget
+       it the moment lightness reached an end and hand back grey on the way up. The
+       last one that meant something is kept, as HSV keeps a hue through grey. */
+    this._hslS = 1;
     this._anchorBtn = null;
     this._build();
+    // "On the button" includes what the button holds: a press on an icon inside it
+    // must not close the popup only for the click that follows to open it again.
     document.addEventListener('pointerdown', e=>{
       if (this._el.style.display==='none') return;
-      if (!this._el.contains(e.target) && e.target !== this._anchorBtn)
+      if (!this._el.contains(e.target) && !(this._anchorBtn && this._anchorBtn.contains(e.target)))
         this.close();
     }, true);
   }
@@ -100,11 +181,17 @@ class ColorPickerUI {
         <div class="cp-rgb-row"><span>G</span><input type="range" class="cp-slider cp-g-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
         <div class="cp-rgb-row"><span>B</span><input type="range" class="cp-slider cp-b-sl" min="0" max="255"><input type="number" class="cp-num" min="0" max="255"></div>
       </div>
+      <div class="cp-hsl">
+        <div class="cp-rgb-row"><span>H</span><input type="range" class="cp-slider cp-h-sl" min="0" max="360"><input type="number" class="cp-num" min="0" max="360"></div>
+        <div class="cp-rgb-row"><span>S</span><input type="range" class="cp-slider cp-s-sl" min="0" max="100"><input type="number" class="cp-num" min="0" max="100"></div>
+        <div class="cp-rgb-row"><span>L</span><input type="range" class="cp-slider cp-l-sl" min="0" max="100"><input type="number" class="cp-num" min="0" max="100"></div>
+      </div>
       <div class="cp-presets">${CP_PRESETS.map(c=>`<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')}</div>
       <div class="cp-recent-head">Recent colors</div>
       <div class="cp-presets cp-recent"></div>`;
     document.body.appendChild(el);
     this._el = el;
+    forwardWheel(el, ()=> this._anchorBtn);
     this._map = el.querySelector('.cp-map');
     this._cursor = el.querySelector('.cp-cursor');
     this._hue = el.querySelector('.cp-hue');
@@ -114,8 +201,13 @@ class ColorPickerUI {
     this._rSl = el.querySelector('.cp-r-sl');
     this._gSl = el.querySelector('.cp-g-sl');
     this._bSl = el.querySelector('.cp-b-sl');
-    const nums = el.querySelectorAll('.cp-num');
-    this._rNum = nums[0]; this._gNum = nums[1]; this._bNum = nums[2];
+    this._hSl = el.querySelector('.cp-h-sl');
+    this._sSl = el.querySelector('.cp-s-sl');
+    this._lSl = el.querySelector('.cp-l-sl');
+    const rgbNums = el.querySelectorAll('.cp-rgb .cp-num');
+    this._rNum = rgbNums[0]; this._gNum = rgbNums[1]; this._bNum = rgbNums[2];
+    const hslNums = el.querySelectorAll('.cp-hsl .cp-num');
+    this._hNum = hslNums[0]; this._sNum = hslNums[1]; this._lNum = hslNums[2];
     this._recentEl = el.querySelector('.cp-recent');
 
     // 2D map — pointer drag
@@ -158,6 +250,19 @@ class ColorPickerUI {
     };
     [this._rNum, this._gNum, this._bNum].forEach(n=>n.addEventListener('change', onNum));
 
+    /* HSL, the same colour said the other way: hue, how much of it, how light. The
+       sliders read straight from these fields, so the hue survives a colour dragged
+       to black or grey, which going round by RGB would lose. */
+    const readHsl = (hEl, sEl, lEl)=>{
+      const cl = (v, hi)=> Math.max(0, Math.min(hi, +v || 0));
+      this._hsv = _hslToHsv(cl(hEl.value, 360) / 360, cl(sEl.value, 100) / 100, cl(lEl.value, 100) / 100);
+      this._emit();
+    };
+    [this._hSl, this._sSl, this._lSl].forEach(s=>
+      s.addEventListener('input', ()=> readHsl(this._hSl, this._sSl, this._lSl)));
+    [this._hNum, this._sNum, this._lNum].forEach(n=>
+      n.addEventListener('change', ()=> readHsl(this._hNum, this._sNum, this._lNum)));
+
     // Hex input
     this._hexIn.addEventListener('input', ()=>{
       const v = this._hexIn.value.replace(/[^0-9a-fA-F]/g,'');
@@ -187,7 +292,7 @@ class ColorPickerUI {
 
   _renderRecent(){
     this._recentEl.innerHTML = recentColors().map(c=>
-      `<div class="cp-preset" style="background:${c}" title="${c}" data-color="${c}"></div>`).join('')
+      `<div class="cp-preset" style="background:${esc(c)}" title="${esc(c)}" data-color="${esc(c)}"></div>`).join('')
       || '<span class="cp-recent-empty">none yet</span>';
   }
 
@@ -207,6 +312,17 @@ class ColorPickerUI {
     this._rSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(0,${g},${b}),rgb(255,${g},${b}))`);
     this._gSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(${r},0,${b}),rgb(${r},255,${b}))`);
     this._bSl.style.setProperty('--cp-grad',`linear-gradient(to right,rgb(${r},${g},0),rgb(${r},${g},255))`);
+    const hsl = _hsvToHsl(h, s, v);
+    const flat = hsl.l === 0 || hsl.l === 1;
+    if (!flat) this._hslS = hsl.s;
+    const H = Math.round(hsl.h*360), S = Math.round((flat ? this._hslS : hsl.s)*100), L = Math.round(hsl.l*100);
+    this._hSl.value = H; this._sSl.value = S; this._lSl.value = L;
+    this._hNum.value = H; this._sNum.value = S; this._lNum.value = L;
+    // Each slider shows where it would take the colour, the other two held still.
+    this._hSl.style.setProperty('--cp-grad',
+      `linear-gradient(to right,${[0,60,120,180,240,300,360].map(d=>`hsl(${d},${S}%,${L}%)`).join(',')})`);
+    this._sSl.style.setProperty('--cp-grad',`linear-gradient(to right,hsl(${H},0%,${L}%),hsl(${H},100%,${L}%))`);
+    this._lSl.style.setProperty('--cp-grad',`linear-gradient(to right,#000,hsl(${H},${S}%,50%),#fff)`);
   }
 
   open(anchorBtn, currentColor, onChange){
@@ -221,6 +337,7 @@ class ColorPickerUI {
     this._updateUI(false);
     this._renderRecent();
     this._el.style.display = 'block';
+    centreInComposer(anchorBtn, this._el);
     this._reposition();
     // Scroll never bubbles, but a capture-phase listener on the window still sees it
     // fire on any scrollable ancestor, so the popup can follow its button wherever
@@ -230,13 +347,20 @@ class ColorPickerUI {
     window.addEventListener('resize', this._onScroll);
   }
 
+  /* Beside its swatch, level with its top; where that would run off the bottom of the
+     window, level with its bottom instead, so that it keeps moving with the swatch as
+     the page or a panel scrolls (pinned to the window's bottom, it stood still while
+     a swatch low in a panel scrolled away under it). It stays open while scrolling.
+     In a figure composer it follows placeInComposer instead. */
   _reposition(){
     if (!this._anchorBtn) return;
     const rect = this._anchorBtn.getBoundingClientRect();
     const pw = this._el.offsetWidth || 260, ph = this._el.offsetHeight || 430;
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
-    if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+    if (top + ph > window.innerHeight - 8) top = rect.bottom + 4 - ph;
+    const inBox = composerTop(this._anchorBtn, rect, ph);
+    if (inBox != null) top = inBox;
     this._el.style.left = Math.max(8,left)+'px';
     this._el.style.top = Math.max(8,top)+'px';
   }
@@ -271,46 +395,141 @@ const CP_PALETTES = [
   { name: 'Pastel',       colors: ['#fbb4ae','#b3cde3','#ccebc5','#decbe4','#fed9a6','#ffffcc','#e5d8bd','#fddaec','#f2f2f2'] },
 ];
 
+/* Palettes the user saved from a set of colours they had already arranged. Kept
+   beside the built-in ones and offered the same way; applying either wraps, so three
+   colours over seven series run 1,2,3,1,2,3,1. */
+const USER_PAL_KEY = 'dt-user-palettes';
+// Only well-formed entries: a name and at least one colour the browser reads as one. To
+// v483 any array was taken as it was, and one entry without `colors` broke the popup.
+const isColor = c => typeof c === 'string' && c.length < 64 && CSS.supports('color', c);
+function userPalettes(){
+  let a;
+  try { a = JSON.parse(localStorage.getItem(USER_PAL_KEY)); } catch(e){ return []; }
+  if (!Array.isArray(a)) return [];
+  return a.filter(p=> p && typeof p === 'object' && Array.isArray(p.colors))
+          .map(p=> ({ name: String(p.name == null ? '' : p.name).slice(0, 80) || 'Palette', colors: p.colors.filter(isColor) }))
+          .filter(p=> p.colors.length);
+}
+function saveUserPalettes(list){
+  try { localStorage.setItem(USER_PAL_KEY, JSON.stringify(list)); } catch(e){}
+}
+
+/* The palette picker: one popup wherever colours are handed out in bulk — the file
+   list and the figure composer alike. The composer passes a scope, which adds the
+   by-panel switch at the foot, and on a bar chart a by-division one beside it;
+   everything else is the same popup. */
 class PalettePickerUI {
   constructor(){
     this._onChange = null;
     this._anchorBtn = null;
-    this._build();
+    this._opts = {};
+    this._el = document.createElement('div');
+    this._el.className = 'pp-popup';
+    this._el.style.display = 'none';
+    document.body.appendChild(this._el);
+    forwardWheel(this._el, ()=> this._anchorBtn);
     document.addEventListener('pointerdown', e=>{
       if (this._el.style.display==='none') return;
-      if (!this._el.contains(e.target) && e.target !== this._anchorBtn) this.close();
+      if (!this._el.contains(e.target) && !(this._anchorBtn && this._anchorBtn.contains(e.target))) this.close();
     }, true);
   }
-  _build(){
-    const el = document.createElement('div');
-    el.className = 'pp-popup';
-    el.style.display = 'none';
-    el.innerHTML = CP_PALETTES.map((p,i)=>{
+  _list(){ return CP_PALETTES.concat(userPalettes()); }
+  _render(){
+    const mine = userPalettes().length;
+    const rows = this._list().map((p,i)=>{
       const swatches = Array.from({length:12}, (_,k)=>
-        `<span class="pp-swatch" style="background:${p.colors[k%p.colors.length]}"></span>`).join('');
-      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${p.name}</span><div class="pp-swatches">${swatches}</div></div>`;
+        `<span class="pp-swatch" style="background:${esc(p.colors[k%p.colors.length])}"></span>`).join('');
+      const own = i >= CP_PALETTES.length;
+      return `<div class="pp-row" data-idx="${i}"><span class="pp-name">${esc(p.name)}</span>
+        <div class="pp-swatches">${swatches}</div>
+        ${own ? `<button type="button" class="pp-del" data-del="${i - CP_PALETTES.length}" title="Delete this palette">&#10005;</button>` : ''}</div>`;
     }).join('');
-    document.body.appendChild(el);
-    this._el = el;
-    el.querySelectorAll('.pp-row').forEach(row=>{
-      row.addEventListener('click', ()=>{
-        if (this._onChange) this._onChange(CP_PALETTES[+row.dataset.idx].colors);
+    // One box rather than two choices: off is "by series", the only other way there is.
+    const scope = this._opts.scope ? `
+      <div class="pp-scope">
+        <label class="pp-check"><input type="checkbox" class="pp-panel"${
+          this._opts.scope === 'panel' ? ' checked' : ''}><span>by panel</span></label>
+        ${this._opts.byDiv != null ? `<label class="pp-check"><input type="checkbox" class="pp-bydiv"${
+          this._opts.byDiv ? ' checked' : ''}><span>by division</span></label>` : ''}
+      </div>` : '';
+    this._el.innerHTML = `${rows || ''}${scope}
+      <div class="pp-save">
+        <input type="text" class="pp-save-name" placeholder="palette name" spellcheck="false">
+        <button type="button" class="btn btn-sm primary pp-save-btn">Save palette</button>
+      </div>
+      <p class="pp-hint">Saves the colours in use now. A palette shorter than the data repeats.</p>`;
+    void mine;
+  }
+  _wire(){
+    this._el.querySelectorAll('.pp-row').forEach(row=>{
+      row.addEventListener('click', e=>{
+        if (e.target.closest('.pp-del')) return;
+        const p = this._list()[+row.dataset.idx];
+        if (p && this._onChange) this._onChange(p.colors.slice());
         this.close();
       });
     });
+    this._el.querySelectorAll('.pp-del').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        const list = userPalettes();
+        list.splice(+btn.dataset.del, 1);
+        saveUserPalettes(list);
+        this._render(); this._wire(); this._reposition();
+      });
+    });
+    const scopeBox = this._el.querySelector('.pp-panel');
+    if (scopeBox) scopeBox.addEventListener('change', ()=>{
+      this._opts.scope = scopeBox.checked ? 'panel' : 'series';
+      if (this._opts.onScope) this._opts.onScope(this._opts.scope);
+    });
+    const divBox = this._el.querySelector('.pp-bydiv');
+    if (divBox) divBox.addEventListener('change', ()=>{
+      this._opts.byDiv = divBox.checked;
+      if (this._opts.onByDiv) this._opts.onByDiv(divBox.checked);
+    });
+    const nameIn = this._el.querySelector('.pp-save-name');
+    const saveBtn = this._el.querySelector('.pp-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', ()=>{
+      const colors = (this._opts.colors ? this._opts.colors() : []).filter(Boolean);
+      if (!colors.length) return;
+      // The combination as it stands, each colour kept once and in the order it is used.
+      const seen = new Set(), uniq = [];
+      for (const c of colors){ const k = String(c).toLowerCase(); if (!seen.has(k)){ seen.add(k); uniq.push(c); } }
+      const list = userPalettes();
+      const name = (nameIn.value || '').trim() || `Palette ${list.length + 1}`;
+      const at = list.findIndex(p=> p.name === name);
+      if (at >= 0) list[at] = { name, colors: uniq }; else list.push({ name, colors: uniq });
+      saveUserPalettes(list);
+      nameIn.value = '';
+      this._render(); this._wire(); this._reposition();
+    });
   }
-  open(anchorBtn, onChange){
+  open(anchorBtn, onChange, opts){
     // Clicking the same palette button again closes the picker (toggle).
     if (this._anchorBtn === anchorBtn && this._el.style.display !== 'none'){ this.close(); return; }
     if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
     this._anchorBtn = anchorBtn;
     anchorBtn.classList.add('cp-anchored');   // keep the button's border while open
     this._onChange = onChange;
+    this._opts = opts || {};
+    this._render();
+    this._wire();
     this._el.style.display = 'block';
+    centreInComposer(anchorBtn, this._el);
     this._reposition();
     if (!this._onScroll) this._onScroll = ()=> this._reposition();
     window.addEventListener('scroll', this._onScroll, true);
     window.addEventListener('resize', this._onScroll);
+  }
+  /* The caller redrew the button the popup is hanging from — a scope change rebuilds
+     the composer's sidebar — so it is pointed at the new one and stays put. */
+  reanchor(btn){
+    if (!btn || this._el.style.display === 'none') return;
+    if (this._anchorBtn) this._anchorBtn.classList.remove('cp-anchored');
+    this._anchorBtn = btn;
+    btn.classList.add('cp-anchored');
+    this._reposition();
   }
   _reposition(){
     if (!this._anchorBtn) return;
@@ -319,6 +538,8 @@ class PalettePickerUI {
     let left = rect.right + 10, top = rect.top - 4;
     if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
     if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+    const inBox = composerTop(this._anchorBtn, rect, ph);
+    if (inBox != null) top = inBox;
     this._el.style.left = Math.max(8,left)+'px';
     this._el.style.top = Math.max(8,top)+'px';
   }
@@ -329,7 +550,7 @@ class PalettePickerUI {
       window.removeEventListener('scroll', this._onScroll, true);
       window.removeEventListener('resize', this._onScroll);
     }
-    this._onChange=null; this._anchorBtn=null;
+    this._onChange=null; this._anchorBtn=null; this._opts={};
   }
 }
 
@@ -339,20 +560,49 @@ const palettePickerUI = new PalettePickerUI();
    SETTINGS
 ========================================================= */
 const SETTINGS_KEY = 'datatreat-settings';
-const settings = { decimal: '.', field: ';', plotFmt: 'png' };
+/* The tabs in the background (tabs.js): a tab not on show sleeps after sleepMin minutes
+   (its instance let go, its state and whole history kept); beyond awakeMax tabs awake, the
+   one on show among them, the one shown least lately sleeps. */
+const TAB_DEF = { sleepMin: 10, awakeMax: 20 };
+const settings = { decimal: '.', field: ';', plotFmt: 'png', ...TAB_DEF };
 // Settings (image format + CSV decimal/field) persist across sessions, like the theme.
 try {
   const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
   if (saved && typeof saved === 'object') Object.assign(settings, saved);
 } catch(e){}
+// Only the values the selects offer: the decimal separator goes into every number fmtNum
+// writes, which the modules put into markup as it is.
+if (settings.decimal !== ',') settings.decimal = '.';
+if (![';', ',', '\t'].includes(settings.field)) settings.field = ';';
+if (!['png', 'svg', 'jpeg', 'webp'].includes(settings.plotFmt)) settings.plotFmt = 'png';
 if (settings.decimal === ',' && settings.field === ',') settings.field = ';'; // guard invalid combo
+// (the tabs' numbers in their ranges: minutes 0.1–1440, tabs 1–1000)
+const inRange = (v, lo, hi, d)=> Number.isFinite(+v) && +v >= lo && +v <= hi ? +v : d;
+settings.sleepMin = inRange(settings.sleepMin, 0.1, 1440, TAB_DEF.sleepMin);
+settings.awakeMax = Math.round(inRange(settings.awakeMax, 1, 1000, TAB_DEF.awakeMax));
 function saveSettings(){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){} }
 
 function fmtNum(v, decimals){
   if (!isFinite(v)) return '';
   return v.toFixed(decimals).replace('.', settings.decimal);
 }
-function csvJoin(vals){ return vals.join(settings.field); }
+/* As fmtNum, for measured data of any scale: a value so small that `decimals`
+   decimals would keep fewer than three of its digits gets that many significant
+   digits instead — 4.7e-7 at six decimals would be written 0.000000. */
+function fmtData(v, decimals){
+  if (!isFinite(v)) return '';
+  const d = Math.max(0, Math.round(decimals) || 0);
+  const t = v !== 0 && Math.abs(v) < Math.pow(10, 2 - d) ? String(parseFloat(v.toPrecision(Math.max(3, d)))) : v.toFixed(d);
+  return t.replace('.', settings.decimal);
+}
+/* A field holding the separator, a quote or a line break goes in quotes, its quotes
+   doubled (RFC 4180): a label with a comma or a semicolon in it shifted every column
+   after it, up to v471. */
+function csvField(v){
+  const s = v == null ? '' : String(v);
+  return s.includes(settings.field) || /["\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function csvJoin(vals){ return vals.map(csvField).join(settings.field); }
 function csvLine(vals){ return csvJoin(vals) + '\n'; }
 
 (function initSettings(){
@@ -490,40 +740,27 @@ function makeDownloadLink(container, filename, text, label){
   container.appendChild(b);
 }
 
-function parseNumber(s, decSepIsComma){
-  if (s === undefined || s === null) return NaN;
-  s = String(s).trim();
-  if (decSepIsComma) s = s.replace(',', '.');
-  return parseFloat(s);
-}
-
-function detectDelim(line){
-  const counts = {';':0, ',':0, '\t':0};
-  for (const c of line){ if (counts.hasOwnProperty(c)) counts[c]++; }
-  let best=';', bestN=-1;
-  for (const k in counts){ if (counts[k]>bestN){bestN=counts[k]; best=k;} }
-  return bestN>0 ? best : ',';
-}
-
-function splitCSVLine(line, delim){
-  return line.split(delim).map(s=>s.trim().replace(/^"|"$/g,''));
-}
-
 /* =========================================================
    SHARED FILE DROPZONE
 ========================================================= */
-function setupDropzone(dropzoneId, inputId, onFiles){
-  const dz = document.getElementById(dropzoneId);
-  const input = document.getElementById(inputId);
+// (an element, or its id in the page: a module made per tab gives its own elements, found
+// in its instance, whose ids are the page's only while it is on show)
+const elOf = x => typeof x === 'string' ? document.getElementById(x) : x || null;
+function setupDropzone(dropzone, inputEl, onFiles){
+  const dz = elOf(dropzone);
+  const input = elOf(inputEl);
   if (!dz || !input) return;
 
   // Show a "Loading…" state on the dropzone while onFiles (async parsing) runs,
-  // so large XRDML files or big batches don't look like a frozen UI.
+  // so large XRDML files or big batches don't look like a frozen UI. It lasts until the
+  // last drop is read: to v491 the first of two drops in a row, ending, cleared it while
+  // the second was still being read.
+  let pending = 0;
   const runFiles = (files)=>{
-    dz.classList.add('dz-loading');
+    pending++; dz.classList.add('dz-loading');
     let ret;
     try { ret = onFiles(files); } finally {
-      Promise.resolve(ret).finally(()=> dz.classList.remove('dz-loading'));
+      Promise.resolve(ret).finally(()=>{ if (--pending === 0) dz.classList.remove('dz-loading'); });
     }
   };
 
@@ -558,11 +795,62 @@ function setupDropzone(dropzoneId, inputId, onFiles){
 }
 
 /* =========================================================
+   INCLUDED FILES
+   A file can be left out of the analysis without being removed. A module keeps every
+   file loaded in list order (`all`, what the file list shows) and analyses the ones
+   included, with its per-sample arrays (`slots`) aligned to those alone: the analysis
+   never meets an excluded file, and needs no test for one anywhere. An excluded file
+   takes its entries in those arrays with it (`held`), so including it again gives
+   back what it had; a slot it holds nothing for (one added since) starts afresh.
+   slots: [{ key, arr, make(held, file) }] — make gives the entry to put back, from the
+   one held or, given undefined, a new one.
+========================================================= */
+const isIncluded = f => f.included !== false;
+const includedOf = all => all.filter(isIncluded);
+// Where all[j] stands, or would stand, among the included files.
+function includedIndex(all, j){ let n = 0; for (let k = 0; k < j; k++) if (isIncluded(all[k])) n++; return n; }
+function setIncluded(all, j, on, slots){
+  const f = all[j];
+  if (!f || isIncluded(f) === on) return;
+  const i = includedIndex(all, j);
+  if (on){
+    const held = f.held || {};
+    // A slot shorter than the files ahead of this one is padded, not appended to,
+    // so the entry lands at this file's place.
+    slots.forEach(s=>{ while (s.arr.length < i) s.arr.push(s.make()); s.arr.splice(i, 0, s.make(held[s.key], f)); });
+    delete f.held; delete f.included;
+  } else {
+    const held = {};
+    slots.forEach(s=>{ if (i < s.arr.length) held[s.key] = s.arr.splice(i, 1)[0]; });
+    f.held = held; f.included = false;
+  }
+}
+function removeFileAt(all, j, slots){
+  if (isIncluded(all[j])){ const i = includedIndex(all, j); slots.forEach(s=>{ if (i < s.arr.length) s.arr.splice(i, 1); }); }
+  all.splice(j, 1);
+}
+// Reorder the list; an included file moves its entries to its new place among the included.
+function moveFileTo(all, from, to, slots){
+  const f = all[from], on = isIncluded(f), a = includedIndex(all, from);
+  all.splice(from, 1); all.splice(to, 0, f);
+  if (!on) return;
+  const b = includedIndex(all, to);
+  if (a !== b) slots.forEach(s=>{ if (a < s.arr.length){ const [x] = s.arr.splice(a, 1); s.arr.splice(b, 0, x); } });
+}
+
+/* =========================================================
    UNIFIED FILE LIST RENDERER
-   files: array of objects with at least {name, label}
-   callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel),
-               onColorChange(i,color), onPaletteChange(colors)}
-   extraCols: optional array of {header, render(file,i)} for additional columns
+   files: array of objects with at least {name, label} — every file loaded, included
+   or not (see INCLUDED FILES)
+   callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel)
+               (on leaving the field, not while typing),
+               onColorChange(i,color), onPaletteChange(colors), onInclude(i,on),
+               onIncludeAll(on)}
+   note: optional (file, i) => markup, the file's note, in the column right of its label
+         (DRS: how its second column was read; GC: the sample's select); none, that
+         column is left empty
+   noteHead: optional, the note column's header, plain text (GC: SAMPLE); none, it has
+         none (DRS, the others)
 ========================================================= */
 // A perfect 1:1 cross with rounded stroke caps (replaces the plain ✕ glyph).
 // Inked box 15×15, centred on (12,12) — same size as the download glyph below.
@@ -570,37 +858,58 @@ const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size
 // Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
 const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
 
-function renderUnifiedFileList(containerId, files, callbacks, extraCols){
-  const wrap = document.getElementById(containerId);
+function renderUnifiedFileList(container, files, callbacks, note, noteHead){
+  const wrap = elOf(container);
   if (!wrap) return;
   if (!files.length){ wrap.innerHTML=''; return; }
 
-  const ec = extraCols || [];
-  // colgroup: drag 5%, FILE 44%, LABEL 43%, extraCols (auto), actions fixed 58px
-  // (a fixed width guarantees the download+remove icons fit even on narrow phones)
-  let colgroup = `<colgroup><col style="width:5%"><col style="width:44%"><col style="width:43%">`;
-  for (let i = 0; i < ec.length; i++) colgroup += `<col>`;
-  colgroup += `<col style="width:58px"></colgroup>`;
+  /* The columns, the same in every module: drag and include box fixed 26px each, side by
+     side at the left edge; actions fixed 58px (a fixed width guarantees the download+remove
+     icons fit even on narrow phones); FILE, LABEL and the note, with no header but the
+     module's (GC's SAMPLE), share what those leave as 3 : 3 : 2. Their percentages add up
+     to 100%, more than is left, and a fixed table layout scales them to it, the px columns
+     kept. A drag column in % was too narrow for its grip on a phone, and the box sat on it.
+     To v501 FILE and the label shared it equally, with DRS's note (extraCols, its only
+     use) a 40px column left of the label, and the other modules had none. The label's
+     header was SAMPLE LABEL (to v511). */
+  const colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col style="width:37.5%"><col style="width:37.5%"><col style="width:25%"><col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
+  const nIn = files.filter(isIncluded).length;
 
-  let html = `<div class="table-wrap-box"><table>${colgroup}<thead><tr><th></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th><th>SAMPLE LABEL</th>`;
-  ec.forEach(c=> html += `<th>${String(c.header).toUpperCase()}</th>`);
+  let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th>`;
+  html += `<th>LABEL</th><th class="note-cell"${noteHead ? ` title="${esc(noteHead)}"` : ''}>${noteHead ? esc(noteHead) : ''}</th>`;
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
   html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
-    const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${f.color}" style="background:${f.color}" title="Pick color"></button>` : '';
-    html += `<tr class="file-row" data-i="${i}">`;
+    const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '';
+    const on = isIncluded(f);
+    html += `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
-    html += `<td class="fname" title="${f.name}"><span class="fname-inner">${swatch}<span class="fname-text">${f.name}</span></span></td>`;
-    html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${f.label.replace(/"/g,'&quot;')}"></td>`;
-    ec.forEach(c=> html += `<td>${c.render(f, i)}</td>`);
+    html += `<td class="incl-cell"><input type="checkbox" class="file-incl" data-i="${i}"${on ? ' checked' : ''} title="Include in the analysis"></td>`;
+    html += `<td class="fname" title="${esc(f.name)}"><span class="fname-inner">${swatch}<span class="fname-text">${esc(f.name)}</span></span></td>`;
+    html += `<td><input type="text" class="label-input file-label" data-i="${i}" value="${esc(f.label)}"></td>`;
+    html += `<td class="note-cell">${note ? note(f, i) : ''}</td>`;
     html += `<td class="row-acts" style="text-align:right;white-space:nowrap"><button class="dl-file del-bare dl-bare idle-dim" data-i="${i}" title="Download file">${dlIcon}</button><button class="del del-bare row-del is-danger idle-dim" data-i="${i}" title="Remove">${xIcon}</button></td>`;
     html += `</tr>`;
   });
   html += `</tbody></table></div>`;
+  // With every file left out nothing is analysed, and no card follows the list: this
+  // says why.
+  if (!nIn) html += `<p class="txt-meta file-none">No file is included in the analysis.</p>`;
   wrap.innerHTML = html;
+
+  // The header box: ticked with every file in, empty with none, the dash with some.
+  // A press includes them all, or, when all are in already, leaves them all out.
+  const inclAll = wrap.querySelector('.incl-all');
+  inclAll.indeterminate = nIn > 0 && nIn < files.length;
+  inclAll.addEventListener('change', ()=>{
+    if (callbacks.onIncludeAll) callbacks.onIncludeAll(nIn < files.length);
+  });
+  wrap.querySelectorAll('.file-incl').forEach(cb=>{
+    cb.addEventListener('change', e=>{ if (callbacks.onInclude) callbacks.onInclude(+e.target.dataset.i, e.target.checked); });
+  });
 
   // Removing files (all or one) is treated as an ordinary edit to the project — it
   // updates the draft rather than discarding it — so this only confirms the action.
@@ -613,6 +922,9 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     e.stopPropagation();
     palettePickerUI.open(palBtn, colors=>{
       if (callbacks.onPaletteChange) callbacks.onPaletteChange(colors);
+    }, {
+      // What "save palette" would keep: the colours these files are wearing now.
+      colors: ()=> [...wrap.querySelectorAll('.color-swatch')].map(b=> b.dataset.color),
     });
   });
   wrap.querySelectorAll('.color-swatch').forEach(btn=>{
@@ -625,9 +937,19 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
       });
     });
   });
+  /* A label is taken when the field is left (or on Enter), in every module: not at each
+     key, where a module redrew its plots and stored a step of the undo history, which made
+     typing slow (to v466). Escape puts back the label the field had when entered. */
   wrap.querySelectorAll('.file-label').forEach(inp=>{
-    inp.addEventListener('input', e=>{
+    inp.addEventListener('focus', ()=>{ inp.dataset.was = inp.value; });
+    inp.addEventListener('change', e=>{
+      if (e.target.value === inp.dataset.was) return;
+      inp.dataset.was = e.target.value;
       if (callbacks.onLabelChange) callbacks.onLabelChange(+e.target.dataset.i, e.target.value);
+    });
+    inp.addEventListener('keydown', e=>{
+      if (e.key === 'Enter'){ e.preventDefault(); inp.blur(); }
+      else if (e.key === 'Escape' && inp.dataset.was != null){ e.preventDefault(); e.stopPropagation(); inp.value = inp.dataset.was; inp.blur(); }
     });
   });
   wrap.querySelectorAll('.row-del').forEach(btn=>{
@@ -637,6 +959,9 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   // Per-file download of the original uploaded content, byte-for-byte. A file
   // keeps its original bytes in `rawBytes`, or a `rawFiles` list (e.g. EPR's
   // .dsc + .dta pair), or legacy decoded text in `raw` (older sessions).
+  // A part of a list with neither bytes nor text (its bytes not stored in this browser any
+  // more, v517) is not available, as a file of no bytes is: to v516 it went into the zip
+  // as an empty file, with no word.
   const originalsOf = f => {
     if (f.rawFiles && f.rawFiles.length)
       return f.rawFiles.map(rf=> rf.bytes != null ? { name:rf.name, bytes:rf.bytes } : { name:rf.name, text:rf.data ?? rf.text });
@@ -644,12 +969,13 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     if (f.raw != null) return [{ name:f.name, text:f.raw }];
     return [];
   };
+  const lostOf = f => originalsOf(f).filter(o=> o.bytes == null && o.text == null).map(o=> o.name);
   wrap.querySelectorAll('.dl-file').forEach(btn=>{
     btn.addEventListener('click', e=>{
       const f = files[+e.currentTarget.dataset.i];
       if (!f) return;
-      const orig = originalsOf(f);
-      if (!orig.length){ alert('The original file for “'+f.name+'” is not available.'); return; }
+      const orig = originalsOf(f), lost = lostOf(f);
+      if (!orig.length || lost.length){ alert('The original file for “'+(lost[0] || f.name)+'” is not available.'); return; }
       if (orig.length === 1){
         if (orig[0].bytes != null) downloadBytes(orig[0].name, orig[0].bytes);
         else downloadBlob(orig[0].name, orig[0].text);
@@ -659,20 +985,25 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
   // Download all originals as a single zip
   const dlAll = wrap.querySelector('.download-all');
   if (dlAll) dlAll.addEventListener('click', ()=>{
-    const entries = files.flatMap(originalsOf);
+    const entries = files.filter(f=> !lostOf(f).length).flatMap(originalsOf);
     if (!entries.length){ alert('No original files are available to download.'); return; }
     downloadZip('files.zip', entries);
   });
 
-  // Drag-to-reorder via pointer events (works with both mouse and touch): grab the
-  // handle and drag the row over another; the row under the pointer is the target.
+  /* Drag-to-reorder via pointer events (works with both mouse and touch): grab the
+     handle and drag. What lights is the gap the row would land in (dropGap) — a line
+     over the row it would go before, or under the last — and that is where it goes.
+     The two gaps beside the dragged row would leave it where it is: they never light,
+     and a drop there does nothing. (The line used to be the top of the row under the
+     pointer while the row went in that row's place: dragged down, it landed under
+     the row the line was over, the gap under the dragged row itself lit, and the one
+     under the last row could not be reached.) */
   const rows = [...wrap.querySelectorAll('.file-row')];
-  const rowAtY = (y)=>{
-    for (const r of rows){ const b=r.getBoundingClientRect(); if (y>=b.top && y<=b.bottom) return r; }
-    // beyond the last row → drop at the end
-    if (rows.length){ const last=rows[rows.length-1].getBoundingClientRect(); if (y>last.bottom) return rows[rows.length-1]; }
-    return null;
-  };
+  const gapAt = y =>{ const g = dropGap(rows, y); return g === drag.from || g === drag.from + 1 ? null : g; };
+  const mark = g => rows.forEach((r, k)=>{
+    r.classList.toggle('drop-before', g != null && k === g);
+    r.classList.toggle('drop-after', g === rows.length && k === rows.length - 1);
+  });
   let drag = null; // { from }
   rows.forEach(row=>{
     const handle = row.querySelector('.drag-handle');
@@ -684,31 +1015,42 @@ function renderUnifiedFileList(containerId, files, callbacks, extraCols){
     });
     handle.addEventListener('pointermove', e=>{
       if (!drag) return;
-      const target = rowAtY(e.clientY);
-      rows.forEach(r=> r.classList.toggle('drag-over', r===target && +r.dataset.i!==drag.from));
+      mark(gapAt(e.clientY));
     });
     const finish = (e)=>{
       if (!drag) return;
-      const target = rowAtY(e.clientY);
-      const to = target ? +target.dataset.i : null;
-      const from = drag.from;
-      rows.forEach(r=> r.classList.remove('drag-over', 'dragging'));
+      const g = gapAt(e.clientY), from = drag.from;
+      mark(null); rows.forEach(r=> r.classList.remove('dragging'));
       drag = null;
-      if (to!=null && to!==from && callbacks.onReorder) callbacks.onReorder(from, to);
+      // The gap before row g is, once the row is out of the list, index g − 1 if it
+      // came from above, g if from below.
+      if (g != null && callbacks.onReorder) callbacks.onReorder(from, g > from ? g - 1 : g);
     };
     handle.addEventListener('pointerup', finish);
-    handle.addEventListener('pointercancel', ()=>{ rows.forEach(r=> r.classList.remove('drag-over','dragging')); drag = null; });
+    handle.addEventListener('pointercancel', ()=>{ mark(null); rows.forEach(r=> r.classList.remove('dragging')); drag = null; });
   });
 }
 
+/* Where a row dragged in a list would land: the gap before rows[g], g = 0 … n (n:
+   after the last), taken by the side of each row's middle the pointer is on. The rows
+   are in their on-screen order, top to bottom. */
+function dropGap(rows, y){
+  let g = 0;
+  for (const r of rows){ const b = r.getBoundingClientRect(); if (y > (b.top + b.bottom)/2) g++; else break; }
+  return g;
+}
+
 function linspace(a,b,n){
-  if (n<=1) return [a];
+  if (n<=0) return [];
+  if (n===1) return [a];
   const out = new Array(n);
   for (let i=0;i<n;i++) out[i] = a + (b-a)*i/(n-1);
   return out;
 }
 function interpLinear(xs, ys, xq){
   const n = xs.length;
+  // The search below needs xs rising: a scan recorded the other way is read reversed.
+  if (n > 1 && xs[0] > xs[n-1]) return interpLinear(xs.slice().reverse(), ys.slice().reverse(), xq);
   const out = new Array(xq.length).fill(NaN);
   for (let i=0;i<xq.length;i++){
     const x = xq[i];
@@ -723,17 +1065,19 @@ function interpLinear(xs, ys, xq){
   }
   return out;
 }
+/* A centred moving average over N points. An even N has no middle point, so its
+   window is N + 1 points with the two ends at half weight: as wide, and centred on
+   the point it is for. Taken N points wide it sat half a sample to one side, and
+   moved every peak and edge with it. Near the ends the window is cut short. */
 function movingAverage(y, N){
   N = Math.max(1, Math.round(N));
   if (N<=1) return y.slice();
-  const n = y.length;
+  const n = y.length, h = Math.floor(N/2), even = N % 2 === 0;
   const out = new Array(n);
   for (let i=0;i<n;i++){
-    let lo = i - Math.floor((N-1)/2);
-    let hi = i + Math.ceil((N-1)/2);
-    lo = Math.max(0, lo); hi = Math.min(n-1, hi);
+    const lo = Math.max(0, i-h), hi = Math.min(n-1, i+h);
     let s=0,c=0;
-    for (let k=lo;k<=hi;k++){ s+=y[k]; c++; }
+    for (let k=lo;k<=hi;k++){ const w = even && (k === i-h || k === i+h) ? 0.5 : 1; s+=w*y[k]; c+=w; }
     out[i] = s/c;
   }
   return out;
@@ -762,31 +1106,34 @@ function stdArr(a){
   return Math.sqrt(v);
 }
 function maxArr(a){ return a.reduce((m,v)=> isFinite(v)&&v>m?v:m, -Infinity); }
+/* The stacked plots' normalisation (XRPD's Scherrer and Rietveld Results, EPR): every
+   trace divided by the largest of them (global), by its own (local), or by nothing (none:
+   the data as they are, the stacking only spacing them by the largest). */
+const NORM_OPTIONS = '<option value="global">Global (max of all)</option><option value="local">Local (max of each)</option><option value="none">None (data as they are)</option>';
+const normOf = v => v === 'local' || v === 'none' ? v : 'global';
 function minArr(a){ return a.reduce((m,v)=> isFinite(v)&&v<m?v:m, Infinity); }
 
 function fitLinear(x,y){
   const n = x.length;
   if (n<2) return {slope:NaN,intercept:NaN,rmse:Infinity,R2:NaN,varM:NaN,varB:NaN,covMB:NaN};
-  let sx=0,sy=0,sxx=0,sxy=0;
-  for (let i=0;i<n;i++){ sx+=x[i]; sy+=y[i]; sxx+=x[i]*x[i]; sxy+=x[i]*y[i]; }
+  // Sums about the means: raw moments lose the digits of a narrow x range far from 0.
+  let sx=0,sy=0;
+  for (let i=0;i<n;i++){ sx+=x[i]; sy+=y[i]; }
   const meanX = sx/n, meanY = sy/n;
-  const Sxx = sxx - n*meanX*meanX;
-  const Sxy = sxy - n*meanX*meanY;
+  let Sxx=0,Sxy=0,sstot=0;
+  for (let i=0;i<n;i++){ const dx=x[i]-meanX, dy=y[i]-meanY; Sxx+=dx*dx; Sxy+=dx*dy; sstot+=dy*dy; }
   const slope = Sxy/Sxx;
   const intercept = meanY - slope*meanX;
   let ssres=0;
   for (let i=0;i<n;i++){ const r = y[i]-(slope*x[i]+intercept); ssres += r*r; }
   const rmse = Math.sqrt(ssres/n);
-  let sstot=0; for (let i=0;i<n;i++){ sstot += (y[i]-meanY)*(y[i]-meanY); }
   const R2 = sstot===0 ? 1 : 1 - ssres/sstot;
-  const dof = Math.max(1, n-2);
-  const sigma2 = ssres/dof;
-  const XtX00 = sxx, XtX01 = sx, XtX11 = n;
-  const det = XtX00*XtX11 - XtX01*XtX01;
+  // Two points fix the line exactly and leave nothing to estimate its scatter from:
+  // the variances are undefined there, not zero.
   let varM=NaN, varB=NaN, covMB=NaN;
-  if (Math.abs(det) > 1e-12){
-    const inv00 = XtX11/det, inv01 = -XtX01/det, inv11 = XtX00/det;
-    varM = sigma2*inv00; varB = sigma2*inv11; covMB = sigma2*inv01;
+  if (n > 2 && Sxx > 0){
+    const sigma2 = ssres/(n-2);
+    varM = sigma2/Sxx; varB = sigma2*(1/n + meanX*meanX/Sxx); covMB = -meanX*sigma2/Sxx;
   }
   return {slope, intercept, rmse, R2, varM, varB, covMB};
 }
@@ -829,9 +1176,13 @@ function tcdf(t, df){
   const p = betainc(x, df/2, 0.5);
   return t>0 ? 1-0.5*p : 0.5*p;
 }
+// The p-quantile of Student's t. Below one degree of freedom there is none.
 function tinv(p, df){
-  let lo=0, hi=1000;
-  for (let i=0;i<100;i++){
+  if (!(df >= 1) || !(p > 0 && p < 1)) return NaN;
+  if (p < 0.5) return -tinv(1-p, df);
+  let lo=0, hi=1;
+  while (tcdf(hi, df) < p && hi < 1e15) hi *= 2;   // a bracket however heavy the tail
+  for (let i=0;i<200 && hi-lo > 1e-13*hi;i++){
     const mid=(lo+hi)/2;
     const cp = tcdf(mid, df);
     if (cp < p) lo=mid; else hi=mid;
@@ -859,23 +1210,141 @@ requestAnimationFrame(()=>{
   const maxW = Math.max(0, ...btns.map(b=> b.getBoundingClientRect().width));
   if (maxW) btns.forEach(b=> b.style.width = Math.ceil(maxW) + 'px');
 });
+/* =========================================================
+   INSTANCES — the tabs live in one page (b2)
+   A module made per tab (registerModule: a factory) has an instance of its own for each
+   open tab that is awake: its own elements, state, undo history and view. One that is
+   not made so keeps its one instance, bound to the page's ids, which its tabs take in
+   turn (tabs.js parks the others). Every registry of a module's (its history, redraw,
+   busy guard, CSV export, has-data flag) is keyed by its instance's key: an instance made
+   per tab by its tab's id, the one instance of a module not made so by the module's name.
+   Where a key is asked for, a module's name stands for the instance of it on show, or
+   shown last: a button's data-csv-mod, the project bar's data-module, a test's
+   getModuleState('xrd'). The ids belong to the instance on show: only its section (made
+   from index.html's, a copy each) and its layer (its windows and menus) are in the page,
+   the others' out of it, held by the instances, which find their elements in their own
+   section (root-scoped), never in the document.
+========================================================= */
+const _made = {};      // mod → { make, tpl: a copy of index.html's section, at: where a section goes, spare: the section itself until an instance takes it, on: the instance in the page, dropBytes, asleep }
+const _shown = {};     // mod → the key of its instance on show, or shown last
+const _modOf = {};     // key → its module
+const K = k => (k != null && Object.prototype.hasOwnProperty.call(_shown, k) && _shown[k]) || k;
+const isFactory = mod => Object.prototype.hasOwnProperty.call(_made, mod);
+const modOfKey = k => _modOf[k] || k;
+/* make(ctx) builds an instance and gives its object (API.md). ctx: { key, mod, root (its
+   section: index.html's #tab-<mod> for the first instance made for a tab, a copy of it
+   for every other), layer (a box for what it lays over the page: windows, menus; in the
+   page while it is), shown() (it is the instance on show) }. Until a tab's instance takes
+   it, the section stays in the page as it is (hidden, its ids the page's, as up to v517);
+   a copy of it as it loads is the others' template. opts.dropBytes: its tabs asleep let go
+   of their files' bytes, read back from the store as they wake (tabs.js lighten: SEM).
+   opts.asleep(key, v): the tab of that key is asleep holding v (its parked state and its
+   history's states), or, v null, no longer (woken, closed), for a module that keeps what it
+   made of a file while a tab asleep holds the file (SEM; tabs.js says it: asleep). */
+function registerModule(mod, make, opts){
+  const spare = document.getElementById('tab-' + mod), at = document.createComment('tab-' + mod);
+  spare.before(at);
+  const tpl = spare.cloneNode(true);
+  tpl.classList.remove('active');
+  _made[mod] = { make, tpl, at, spare, on: null, dropBytes: !!(opts && opts.dropBytes), asleep: opts && opts.asleep || null };
+}
+const dropsBytes = mod => isFactory(mod) && _made[mod].dropBytes;
+function asleep(mod, key, v){ const m = isFactory(mod) && _made[mod]; if (m && m.asleep){ try { m.asleep(key, v); } catch(e){} } }
+// An instance of a module made per tab; its key, the tab's id. A tab's (spare): the page's
+// section, while no instance has taken it; else, and for one read out of no tab (withState),
+// a copy, out of the page.
+function makeInstance(mod, key, spare){
+  const m = _made[mod];
+  let root = spare && m.spare;
+  if (root) m.spare = null;
+  else { root = m.tpl.cloneNode(true); guardNumberInputs(root); }   // (the page's number fields are guarded as it loads, the copies' here)
+  const layer = document.createElement('div');
+  layer.className = 'inst-layer';
+  _modOf[key] = mod;
+  // (on show: its module's in the page, on show; one read out of no tab (withState), out of
+  // the page, draws nothing, its name standing for it or not)
+  let inst = null;
+  inst = m.make({ key, mod, root, layer, shown: ()=> shownKey() === key && !!inst && m.on === inst });
+  // (its history's baseline, the state it starts with: a new tab's first change undone
+  // goes back to it, as a module's one instance restored to its default)
+  const st = _histories[key];
+  if (st && st.index < 0) st.commit(true);
+  return Object.assign(inst, { key, mod, root, layer });
+}
+/* The instance put in the page, in its module's place, the one of its module there before
+   taken out, in the same task (no layout between: the page keeps its scroll, as a module's
+   one instance kept it); that one given back. tabs.js shows it with goTab after. In, it is
+   the module's: its name stands for it. */
+function attachInstance(inst){
+  const m = _made[inst.mod], was = m.on && m.on !== inst ? m.on : null;
+  if (!inst.root.isConnected) m.at.before(inst.root);
+  if (!inst.layer.isConnected) document.body.appendChild(inst.layer);
+  m.on = inst;
+  _shown[inst.mod] = inst.key;
+  if (was) detachInstance(was);
+  return was;
+}
+function detachInstance(inst){
+  const m = _made[inst.mod];
+  if (m && m.on === inst) m.on = null;
+  inst.root.classList.remove('active');
+  inst.root.remove(); inst.layer.remove();
+}
+/* A tab of the module waking while its files' bytes are read (tabs.js): the instance of
+   the module in the page taken out, and the module's name standing for the key woken, which
+   has no instance yet (the undo keys and the ← → keys find nothing of another tab's under
+   the loader), till an instance comes in. Gives what puts the name back, should the wake be
+   given up before any instance of the key is made. */
+function vacate(mod, key){
+  const m = _made[mod], had = Object.prototype.hasOwnProperty.call(_shown, mod), was = _shown[mod];
+  if (m.on) detachInstance(m.on);
+  _shown[mod] = key;
+  return ()=>{ if (_shown[mod] !== key || _modOf[key]) return; if (had && _modOf[was]) _shown[mod] = was; else delete _shown[mod]; };
+}
+// Every registry's entry of a key let go (an instance destroyed).
+function dropKey(key){
+  [_histories, _tabRedraw, _needsRedraw, _busy, _csvExport, _hasData].forEach(r=>{ delete r[key]; });
+  const mod = _modOf[key];
+  if (mod && _shown[mod] === key) delete _shown[mod];
+  delete _modOf[key];
+}
+// The key of the instance on show (a module's section on show), or null.
+const shownKey = ()=> MODULES.includes(_activeTab) ? K(_activeTab) : null;
+/* A state put in a module and read out of it (a saved project's CSVs, its saved key): fn
+   given the key to read it by. A module made per tab makes an instance of its own for it,
+   out of the page, its name standing for that one meanwhile; the instances of the tabs
+   are left as they are. One not made so: runWithModuleState on its one instance. */
+let _tmp = 0;
+function withState(mod, state, fn){
+  if (!isFactory(mod)){ let out; runWithModuleState(mod, state, ()=>{ out = fn(mod); }); return out; }
+  const inst = makeInstance(mod, 'tmp-' + (++_tmp)), had = Object.prototype.hasOwnProperty.call(_shown, mod), was = _shown[mod];
+  try {
+    restoreModuleState(inst.key, state);
+    _shown[mod] = inst.key;
+    return fn(inst.key);
+  } finally {
+    if (had) _shown[mod] = was; else delete _shown[mod];
+    try { inst.destroy(); } finally { dropKey(inst.key); }
+  }
+}
+
 const _tabRedraw = {}, _needsRedraw = {};
 // A module registers how to redraw its current view; goTab calls it the first
 // time the tab becomes visible after a session restore flagged it.
-function registerTabRedraw(mod, fn){ _tabRedraw[mod] = fn; }
+function registerTabRedraw(key, fn){ _tabRedraw[key] = fn; }
 // Redraw only the visible tab's plots (on window resize). Hidden tabs render at
 // size 0, so redrawing them would be wasted work / could corrupt their view; they
 // are redrawn when shown (see goTab). Flag the others so they refresh on show.
 function redrawAll(){
-  const fn = _tabRedraw[_activeTab];
+  const on = shownKey(), fn = _tabRedraw[on];
   if (fn){ try{ fn(); }catch(e){} }
-  for (const m in _tabRedraw){ if (m !== _activeTab) _needsRedraw[m] = true; }
+  for (const m in _tabRedraw){ if (m !== on) _needsRedraw[m] = true; }
 }
-const VALID_TABS = ['home','tauc','xrd','gc','epr','projects','settings'];
+const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','projects','settings'];
 // The sections that keep a URL hash. Module sections are reached through an open
 // project tab, so they are deliberately not addressable.
 const HASH_TABS = ['home','projects','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sem:'DataTreat · SEM', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -885,15 +1354,22 @@ function goTab(tab, fromHash){
     b.classList.toggle('is-on', on);
     if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
+  // (a module made per tab: its instance on show, the one section of it in the page)
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
   // Plots drawn while their tab was hidden (background session restore, or any
   // resize/edit while another tab was showing) are sized to 0 or stale; redraw
   // whenever a module tab becomes visible so its charts always fit the viewport.
-  if (_tabRedraw[tab]){
-    _needsRedraw[tab] = false;
-    // Double rAF: let the tab-fade paint its first frame before the (potentially
-    // heavy) redraw runs, so switching to a loaded tab doesn't freeze the animation.
-    requestAnimationFrame(()=> requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} }));
+  const k = MODULES.includes(tab) ? K(tab) : null;
+  if (k && _tabRedraw[k]){
+    _needsRedraw[k] = false;
+    // Double rAF: the tab painted first, then the redraw (a few ms when nothing changed;
+    // a tab to draw again at another width is shown under the loader, tabs.js showLater).
+    // (by the instance shown then: one let go meanwhile has none; one woken, drawn, shows
+    // the rest of what it showed: shownAgain)
+    // (only if it is still the one on show: one taken out of the page meanwhile, another tab of
+    // its module woken in its place, would draw at no width; to v520 a wake put in the page
+    // after this call drew the instance it replaced so, to be drawn whole again when shown)
+    requestAnimationFrame(()=> requestAnimationFrame(()=>{ if (shownKey() !== k) return; const f = _tabRedraw[k]; if (f) try { f(); } catch(e){} shownAgain(k); }));
   }
   if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
   // Only the fixed sections are addressable: a module section is shown by activating
@@ -911,6 +1387,118 @@ function goTab(tab, fromHash){
 // hook list rather than imports, which would be circular.
 const _sectionHooks = [];
 function onSectionChange(fn){ _sectionHooks.push(fn); }
+/* A module running a long job (a Rietveld refinement, the reading of SEM files) says so:
+   busy() gives what runs, as a phrase ("A Rietveld refinement"), or null; stop() ends it.
+   The job belongs to the project live in the module: the tab manager asks before that
+   state leaves the module (a switch, a close). A job holds the module's history from the
+   state on show as it starts (UndoStack.hold): undo stops there, silently, and above it
+   undo and redo go as ever; a busy module whose job holds none has neither do anything,
+   silently. Up to v471 a switch left the job running, and its result went into whichever
+   project the module held when it ended; up to v508 undo and redo waited for the job to
+   end, a banner saying so at each press. An instance made per tab keeps its job going
+   when its tab is left (b2): it says when a job starts or ends (busyChanged), so that its
+   tab, never let go while busy, counts its time hidden from the job's end. */
+const _busy = {};
+function registerBusy(key, o){ _busy[key] = o; }
+function moduleBusy(k){ const o = _busy[K(k)]; try { return (o && o.busy()) || null; } catch(e){ return null; } }
+function stopModule(k){ const o = _busy[K(k)]; if (o){ try { o.stop(); } catch(e){} } }
+const _busyHooks = [];
+function onBusyChange(fn){ _busyHooks.push(fn); }
+function busyChanged(key){ _busyHooks.forEach(fn=>{ try { fn(key); } catch(e){} }); }
+/* ---- What a tab shows beside its state (b2v4) ----
+   What an instance shows that is no part of its state, so no step of its history and no
+   change unsaved: its plots' zooms, its instructions shown (its windows' too) and the scroll
+   of its lists, here for every module (shownOf), and what its module gives of its own
+   (inst.shows(): DRS's sample on show; SEM's image on show and its editor's zoom; XRPD's
+   pattern on show, its peaks picked, its phases on show and their cells' and its
+   crystallites' turns; GC's samples picked).
+   tabs.js keeps it as the tab sleeps and in the tab's record, and gives it to the instance
+   that wakes it (inst.showNext, then showAgain), so that a tab woken or reloaded shows what
+   it showed (to b2v4 the first sample of DRS, every plot at its full range, the instructions
+   shut, the lists at their top). A zoom is put back as its plot is first drawn on the range
+   it was taken on (zoomAgain, plot.js setRange: the same data), the rest once the instance
+   is drawn on show (shownAgain, goTab). Not kept: the page's own scroll, the window's, which
+   every tab shares (as in v517); a tool armed (pan, zoom, a peak being placed); a window or
+   a menu open (modal: no tab is left with one). */
+// A list's scroll, as it last moved (a hidden instance's lists read 0), and the instance it
+// is in; a zoom to put back, by the plot's svg's id, on its instance's section and layer.
+document.addEventListener('scroll', e=>{
+  const el = e.target, host = el instanceof Element && el.closest('.tab, .inst-layer');
+  if (!host || el === host) return;
+  el._at = [el.scrollTop, el.scrollLeft];
+  // (a list drawn anew since it scrolled let go: its elements are no longer the instance's)
+  const set = host._scrolled || (host._scrolled = new Set());
+  if (!set.has(el)){ for (const x of set) if (!host.contains(x)) set.delete(x); set.add(el); }
+}, { capture: true, passive: true });
+const same4 = (a, b)=> a.every((x, i)=> x === b[i]);
+// A list by its class and its place among those of that class in its instance: the same
+// state draws the same lists (an id would do, which most lists have none of).
+const listKey = (root, el)=> el.className + '#' + [...root.getElementsByClassName(el.classList[0])].filter(x=> x.className === el.className).indexOf(el);
+function shownOf(inst){
+  const out = {}, zoom = { ...(inst.root._zoomNext || {}) };
+  for (const host of [inst.root, inst.layer]) host.querySelectorAll('svg.plot[id]').forEach(svg=>{
+    const P = svg._plot;
+    if (!P || ![P.xmin, P.xmax, P.ymin, P.ymax].every(Number.isFinite)) return;
+    const v = [P.xmin, P.xmax, P.ymin, P.ymax], home = [P._origXmin, P._origXmax, P._origYmin, P._origYmax];
+    if (same4(v, home)) delete zoom[svg.id]; else zoom[svg.id] = [...v, ...home];
+  });
+  if (Object.keys(zoom).length) out.zoom = zoom;
+  // (what is still to be put back, the instance not drawn on show since it was woken)
+  const a = inst._again;
+  // (a window of its own in its layer, its instructions by its id: XRPD's standard's two)
+  const instr = a ? a.instr : [...inst.root.querySelectorAll('.instr-info.is-on'), ...inst.layer.querySelectorAll('.modal-backdrop[id] .instr-info.is-on')].map(b=>{
+    if (b.dataset.instr != null) return b.dataset.instr;
+    const c = b.closest('.an-card[data-an]');
+    if (c) return b.closest('.an-head') ? 'an' + c.dataset.an : null;
+    const w = !inst.root.contains(b) && b.closest('.modal-backdrop[id]');
+    return w && w.querySelector('.instr-info') === b ? '#' + w.id : null;
+  }).filter(k=> k != null);
+  if (instr && instr.length) out.instr = instr;
+  const scroll = a ? a.scroll : {};
+  if (!a) for (const el of inst.root._scrolled || []){
+    if (!inst.root.contains(el) || !el.className || !(el._at[0] || el._at[1])) continue;
+    scroll[listKey(inst.root, el)] = el._at;
+  }
+  if (scroll && Object.keys(scroll).length) out.scroll = scroll;
+  return out;
+}
+const finite = v => Array.isArray(v) && v.every(Number.isFinite);
+function showAgain(inst, v){
+  if (!v || typeof v !== 'object') return;
+  const z = {};
+  if (v.zoom && typeof v.zoom === 'object') for (const [id, q] of Object.entries(v.zoom)) if (finite(q) && q.length === 8) z[id] = q;
+  inst.root._zoomNext = inst.layer._zoomNext = z;
+  inst._again = { instr: Array.isArray(v.instr) ? v.instr.filter(k=> typeof k === 'string' && /^((an)?\d{1,6}|#[A-Za-z][\w-]{0,60})$/.test(k)) : [],
+    scroll: v.scroll && typeof v.scroll === 'object' ? Object.fromEntries(Object.entries(v.scroll).filter(([, q])=> finite(q) && q.length === 2)) : {} };
+}
+// A plot's range just set (plot.js): the zoom it had, where it is drawn on the same range.
+function zoomAgain(P){
+  const svg = P.svg, host = svg.id && svg.closest('.tab, .inst-layer'), z = host && host._zoomNext;
+  if (!z || !Object.prototype.hasOwnProperty.call(z, svg.id)) return;
+  const q = z[svg.id];
+  delete z[svg.id];
+  if (same4(q.slice(4), [P._origXmin, P._origXmax, P._origYmin, P._origYmax])) [P.xmin, P.xmax, P.ymin, P.ymax] = q;
+}
+// The instance of a key drawn on show (goTab): its instructions and its lists' scroll put back.
+function shownAgain(k){
+  const m = _made[_modOf[k]], inst = m && m.on;
+  if (!inst || inst.key !== k || !inst._again || shownKey() !== k) return;
+  const { instr, scroll } = inst._again, root = inst.root;
+  inst._again = null;
+  for (const k2 of instr){
+    if (k2[0] === '#'){ const w = inst.layer.querySelector(k2), btn = w && w.querySelector('.instr-info'); if (btn && !btn.classList.contains('is-on')) btn.click(); continue; }
+    const c = k2.startsWith('an') && root.querySelector('.an-card[data-an="' + k2.slice(2) + '"]');
+    const btn = c ? c.querySelector(':scope > .an-head .instr-info') : root.querySelector('.instr-info[data-instr="' + k2 + '"]');
+    const block = c ? c.querySelector(':scope > .an-body > .an-instr') : root.querySelector('.instr-block[data-instr="' + k2 + '"]');
+    if (!btn || !block || block.style.display !== 'none') continue;
+    block.style.display = ''; btn.classList.add('is-on'); btn.setAttribute('aria-expanded', 'true');
+  }
+  for (const [k2, [top, left]] of Object.entries(scroll)){
+    const i = k2.lastIndexOf('#'), cls = k2.slice(0, i), n = +k2.slice(i + 1), first = cls.split(' ')[0];
+    const el = first && [...root.getElementsByClassName(first)].filter(x=> x.className === cls)[n];
+    if (el){ el.scrollTop = top; el.scrollLeft = left; }
+  }
+}
 
 /* =========================================================
    UNDO / REDO — per-module snapshot stacks (command pattern)
@@ -918,63 +1506,251 @@ function onSectionChange(fn){ _sectionHooks.push(fn); }
    just before a reversible change. Ctrl/⌘+Z undoes, Ctrl/⌘+Y (or ⇧+Z)
    redoes, acting on the module of the currently active tab.
 ========================================================= */
+/* What two module states are compared by (a commit that changes nothing, the "*" of a
+   saved project): their JSON, with each byte array (a file's own bytes, kept for its
+   download and for reading it again) as its length and a hash of its content, taken
+   once per array. Written out, a Uint8Array is an object of index keys, about 12
+   characters a byte: with 12 XRPD patterns an edit spent 227 of its 431 ms writing
+   them, three times over (to v470). */
+const _bytesKey = new WeakMap();
+function bytesKey(b){
+  let k = _bytesKey.get(b);
+  if (k == null){
+    let h1 = 0x811c9dc5, h2 = 0x9747b28c;
+    for (let i = 0; i < b.length; i++){ h1 = Math.imul(h1 ^ b[i], 0x01000193); h2 = Math.imul(h2 ^ b[i], 0x5bd1e995); h2 ^= h2 >>> 15; }
+    k = 'bytes:' + b.length + ':' + (h1 >>> 0).toString(36) + ':' + (h2 >>> 0).toString(36);
+    _bytesKey.set(b, k);
+  }
+  return k;
+}
+/* An array fixed (db.js: an XRPD pattern's 2θ, intensities and variance factors, fixed
+   where the file is read, a spectrum's: nothing changes them after; to b2v2 frozen) is
+   written so too, once per array: its length and two hashes of its numbers as JSON has
+   them (one not finite is null, −0 is 0); one holding anything else is written out.
+   Written out, 12 patterns' arrays took 25 of the 26 ms of the key every XRPD edit takes
+   (to v490). */
+const _numsKey = new WeakMap(), _f64 = new Float64Array(1), _u32 = new Uint32Array(_f64.buffer);
+function numsKey(a){
+  let k = _numsKey.get(a);
+  if (k === undefined){
+    let h1 = 0x811c9dc5, h2 = 0x9747b28c;
+    for (let i = 0; i < a.length; i++){
+      const v = a[i];
+      let lo = 1, hi = 0x7ff80000;     // (null)
+      if (typeof v === 'number' && Number.isFinite(v)){ _f64[0] = v || 0; lo = _u32[0]; hi = _u32[1]; }
+      else if (v !== null && typeof v !== 'number'){ h1 = null; break; }
+      h1 = Math.imul(Math.imul(h1 ^ lo, 0x01000193) ^ hi, 0x01000193);
+      h2 = Math.imul(h2 ^ lo, 0x5bd1e995); h2 ^= h2 >>> 15; h2 = Math.imul(h2 ^ hi, 0x5bd1e995); h2 ^= h2 >>> 15;
+    }
+    k = h1 === null ? null : 'nums:' + a.length + ':' + (h1 >>> 0).toString(36) + ':' + (h2 >>> 0).toString(36);
+    _numsKey.set(a, k);
+  }
+  return k;
+}
+const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && isFixed(x) ? numsKey(x) || x : x);
+/* ---- What is worked out, kept (b2v3) ----
+   A result a module works out from data that never change (an array fixed, db.js: a
+   pattern's intensities, a spectrum) and from its own inputs (widths, parameters, a result
+   refined) is kept by that array (keeper's WeakMap): while a state on show, a tab asleep's
+   parked state or a history holds the array, it holds its results too, and a tab woken, an
+   undo to a state worked out before, a redraw or an export takes them as they were, not made
+   again (to b2v3 an instance kept the last ones it drew, and a tab woken made them all again:
+   an XRPD tab of 12 refined patterns 0.2 s, a DRS tab of 10 spectra 0.17 s). The key holds
+   every other input, exactly (exactKey, below); an array keeps the results of its
+   last `n` keys. An array not fixed keeps none: its results are made each time. What is kept
+   is shared: nothing writes into it (the tests freeze it, as they freeze the arrays fixed).
+   kept.made and kept.taken count, by name, the results made and those taken (tests,
+   measurements; SEM counts its files' reduced copies and cards made, sem.js). In a key an object is a number of its own (objId: the same object, the
+   same number), a value as JSON writes it but for numbers JSON has none for (exactKey: a
+   NaN, an infinity, a −0). */
+const kept = { made: {}, taken: {} };
+const _ids = new WeakMap();
+let _nid = 0;
+const objId = o => o == null || typeof o !== 'object' ? String(o) : _ids.get(o) || (_ids.set(o, ++_nid), _nid);
+const exactKey = v => JSON.stringify(v, (k, x)=> typeof x === 'number' && (!Number.isFinite(x) || Object.is(x, -0)) ? '#' + (Object.is(x, -0) ? '-0' : x) : x);
+function freezeDeep(v){
+  if (!v || typeof v !== 'object' || ArrayBuffer.isView(v) || Object.isFrozen(v)) return v;
+  Object.freeze(v);
+  for (const k in v) freezeDeep(v[k]);
+  return v;
+}
+function keeper(name, n = 4){
+  const by = new WeakMap();
+  return (data, key, make)=>{
+    const keep = isFixed(data);
+    let m = keep ? by.get(data) : null;
+    if (m && m.has(key)){
+      const v = m.get(key);
+      m.delete(key); m.set(key, v);
+      kept.taken[name] = (kept.taken[name] || 0) + 1;
+      return v;
+    }
+    const v = make();
+    kept.made[name] = (kept.made[name] || 0) + 1;
+    if (keep){
+      if (!m) by.set(data, m = new Map());
+      m.set(key, globalThis.__freezeFixed ? freezeDeep(v) : v);
+      if (m.size > n) m.delete(m.keys().next().value);
+    }
+    return v;
+  };
+}
 class UndoStack {
   constructor(snapshot, restore, limit=80){
     this._snap = snapshot; this._restore = restore; this._limit = limit;
     this.states = []; this.index = -1; this._busy = false;
+    this._key = null;       // stateKey of states[index], kept from its commit (null: unknown)
+    this._liveKey = null;   // stateKey of the live state, while the listeners of a commit run
+    this._marks = [];       // the jobs holding the history (hold): { i, the index of the state each began from; redo }
   }
   // Record the CURRENT state (called after a reversible change, and once as baseline).
   // `silent` records the state without firing change listeners — used for the
   // baseline commit after a programmatic restore (not a user edit).
   commit(silent){
     if (this._busy) return;
-    const snap = this._snap();
-    const cur = this.index >= 0 ? this.states[this.index] : null;
+    const snap = this._snap(), key = stateKey(snap);
+    const cur = this.index < 0 ? null : this._key != null ? this._key : stateKey(this.states[this.index]);
     // Skip commits that don't actually change anything (avoids dead undo steps).
-    if (cur && JSON.stringify(cur) === JSON.stringify(snap)) return;
+    if (cur === key){ this._key = key; return; }
     // Drop any redo branch, then append the new state.
     if (this.index < this.states.length - 1) this.states.length = this.index + 1;
     this.states.push(snap);
-    if (this.states.length > this._limit) this.states.shift();
+    this._trim();
     this.index = this.states.length - 1;
+    this._key = key;
     if (silent) return;
-    // Fire (and clear) any one-shot change listeners for a real, recorded change.
-    if (this._onceListeners && this._onceListeners.length){
-      const cbs = this._onceListeners; this._onceListeners = [];
-      cbs.forEach(cb=>{ try { cb(); } catch(e){} });
-    }
-    // Persistent change listeners (e.g. autosave).
-    if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
+    this._liveKey = key;
+    try {
+      // Fire (and clear) any one-shot change listeners for a real, recorded change.
+      if (this._onceListeners && this._onceListeners.length){
+        const cbs = this._onceListeners; this._onceListeners = [];
+        cbs.forEach(cb=>{ try { cb(); } catch(e){} });
+      }
+      // Persistent change listeners (e.g. autosave), and those of every history (heard).
+      if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
+      heard(this);
+    } finally { this._liveKey = null; }
   }
   onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
   onCommit(cb){ (this._listeners || (this._listeners = [])).push(cb); }
-  _apply(i){ this.index = i; this._busy = true; try { this._restore(this.states[i]); } finally { this._busy = false; } }
-  performUndo(){ if (this.index <= 0) return false; this._apply(this.index - 1); return true; }
+  // An undo or redo is a change too: the persistent listeners hear it (autosave, and
+  // the unsaved marker, which compares the state with the one last saved).
+  // (restore's second argument: a step of the history, which a job running leaves its own to)
+  _apply(i){
+    this.index = i; this._key = null; this._busy = true; try { this._restore(this.states[i], true); } finally { this._busy = false; }
+    this._hear();
+  }
+  _hear(){ if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} }); heard(this); }
+  // (no undo below the state the latest job holding the history started from)
+  performUndo(){ if (this.index <= Math.max(0, ...this._marks.map(m=> m.i))) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
-  reset(){ this.states.length = 0; this.index = -1; }
+  reset(){ this.states.length = 0; this.index = -1; this._key = null; this._marks = []; }
+  // The states kept to the limit, the oldest going: the index and the marks move down with
+  // them (a mark whose state went is at -1).
+  _trim(){ while (this.states.length > this._limit){ this.states.shift(); this.index--; this._marks.forEach(m=>{ if (m.i >= 0) m.i--; }); } }
+  /* A job holding the history (a Rietveld refinement, the reading of SEM files): hold() marks
+     the state on show as its start and gives the mark. While a mark is open undo stops at
+     the highest one (the latest job's start: below a later job's start an undo could change
+     what that job uses); above it undo and redo go as ever, over the steps taken meanwhile,
+     which the job's locked controls keep off what it uses. A redo branch is set aside (redo),
+     as a step would drop it, and put back by a release that leaves the history as it was
+     (nothing written, no step since); a job held after it from the same state, with none of
+     its own set aside, takes it over then, to put back as it ends so (the standard's run
+     and a sample's waiting for it, the standard's held first). A reset, or the history
+     parked or put back (a tab's: getModuleHistory's park, setModuleHistory), ends the marks:
+     a release after does nothing.
+     release(h, patch, quiet) closes the mark; patch(state) gives that state with what the
+     job wrote, or the state itself where none of it goes, a copy (a state's own objects, and
+     the results the states share, never changed): written into every state above the mark,
+     and into the branches the other jobs set aside (those of the jobs held since, saved
+     after its start: put back without it, a redo would take its results away), and as a
+     step of its own inserted right after the mark's state, that state so, the index with
+     it (one at the mark, the live state having the job's results, goes onto it). The open
+     marks at or above the mark's state move up one: one on the same state is a job that
+     began from it, whose step follows this one, as their results came. A mark whose state
+     went to the limit: the job's results written into every state kept, no step. The
+     change listeners hear it as an undo (quiet: a commit follows that they hear), so the
+     job's own commit at its end, the state on show the one written, adds nothing. */
+  hold(){
+    const h = { i: this.index, redo: this.states.splice(this.index + 1) };
+    this._marks.push(h);
+    return h;
+  }
+  release(h, patch, quiet){
+    const k = this._marks.indexOf(h);
+    if (k < 0) return;
+    this._marks.splice(k, 1);
+    if (!patch){
+      // (the mark held next after h, if any, the marks being in hold order: on h's state
+      // then, as every mark held since, none sitting above the state on show)
+      if (h.redo.length && this.index === h.i && this.states.length === h.i + 1){
+        const m = this._marks[k];
+        if (!m){ this.states.push(...h.redo); this._trim(); }
+        else if (!m.redo.length) m.redo = h.redo;
+      }
+      return;
+    }
+    this._marks.forEach(m=>{ m.redo = m.redo.map(patch); });
+    let moved = false;
+    for (let i = Math.max(0, h.i + 1); i < this.states.length; i++){
+      const s = patch(this.states[i]);
+      if (s !== this.states[i]){ this.states[i] = s; moved = true; }
+    }
+    const s = h.i >= 0 ? patch(this.states[h.i]) : null;
+    if (s && s !== this.states[h.i]){
+      // (a job held before h from h's state: the branch it set aside, from before both
+      // began, goes, h's step now following that state, as a step drops a redo branch)
+      this._marks.slice(0, k).forEach(m=>{ if (m.i === h.i) m.redo = []; });
+      this.states.splice(h.i + 1, 0, s);
+      if (this.index >= h.i) this.index++;
+      this._marks.forEach(m=>{ if (m.i >= h.i) m.i++; });
+      this._trim();
+      moved = true;
+    }
+    if (!moved) return;
+    this._key = null;
+    if (!quiet) this._hear();
+  }
 }
 const _histories = {};
 function registerHistory(key, snapshot, restore){
   const st = new UndoStack(snapshot, restore);
+  st.key = key;
   _histories[key] = st;
   return st;
 }
+// Listeners of every history's changes, given its key (sessions.js: the autosave and the
+// unsaved marker of the tab whose instance changed, on show or not).
+const _heard = [];
+function onAnyChange(fn){ _heard.push(fn); }
+function heard(st){ if (st.key != null) _heard.forEach(fn=>{ try { fn(st.key); } catch(e){} }); }
 document.addEventListener('keydown', e=>{
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
   const isUndo = k==='z' && !e.shiftKey;
   const isRedo = k==='y' || (k==='z' && e.shiftKey);
   if (!isUndo && !isRedo) return;
-  // Let the browser handle native text undo while editing a field
+  // Let the browser handle native text undo while editing a field: one that holds text. A
+  // box, a radio, a colour or a range has no undo of its own, and the history's goes on
+  // (up to v499 a box just ticked, which keeps the focus, held Ctrl+Z off until it lost it).
   const el = document.activeElement, tag = el && el.tagName;
-  if (tag==='INPUT' || tag==='TEXTAREA' || (el && el.isContentEditable)) return;
-  const st = _histories[_activeTab];
+  if (tag==='TEXTAREA' || (el && el.isContentEditable) || (tag==='INPUT' && !/^(checkbox|radio|range|color|file|button|submit|reset|image)$/.test(el.type))) return;
+  // (the history of the instance on show)
+  const on = shownKey(), st = on != null && _histories[on];
   if (!st) return;
+  // A job running (registerBusy): undo goes down to the state it started from, if it holds
+  // the history (UndoStack.hold), and no further; one that holds none leaves undo and redo
+  // doing nothing. Silently, the key taken either way (to v508 both waited for the job's
+  // end, a banner saying so).
+  const held = st._marks.length > 0;
+  if (!held && moduleBusy(on)){ e.preventDefault(); return; }
   const did = isUndo ? st.performUndo() : st.performRedo();
-  if (did) e.preventDefault();
+  if (did || held) e.preventDefault();
 });
 // ← / → navigate samples in the active module (mirror the on-screen ‹ › buttons).
-const SAMPLE_NAV = { tauc:['taucPrev','taucNext'], xrd:['xrdPrev','xrdNext'] };
+// Selectors: the Tauc cards are built at run time, each with its own pair, and the
+// first one on show is the one pressed (every card steps the same sample).
+const SAMPLE_NAV = { tauc:['#tab-tauc .an-prev','#tab-tauc .an-next'], xrd:['#tab-xrd .an-prev','#tab-xrd .an-next'], sem:['#semPrev','#semNext'] };
 document.addEventListener('keydown', e=>{
   if (e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -982,8 +1758,12 @@ document.addEventListener('keydown', e=>{
   if (tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT' || (el && el.isContentEditable)) return;
   const nav = SAMPLE_NAV[_activeTab];
   if (!nav) return;
-  const btn = document.getElementById(e.key==='ArrowLeft' ? nav[0] : nav[1]);
-  if (btn && btn.offsetParent!==null){ btn.click(); e.preventDefault(); }
+  // A window open over the page (the XRPD standard's, a settings dialog, a figure
+  // composer, the calendar) has the keys: any backdrop laid out, however it is shown (to
+  // v479 only one with an inline display:flex, which the composers never have).
+  if ([...document.querySelectorAll('.modal-backdrop')].some(m=> m.getClientRects().length > 0)) return;
+  const btn = [...document.querySelectorAll(e.key==='ArrowLeft' ? nav[0] : nav[1])].find(b=> b.offsetParent!==null);
+  if (btn){ btn.click(); e.preventDefault(); }
 });
 // Sticky "back to top" button — visible only once the page is scrolled down.
 (function initScrollTop(){
@@ -998,16 +1778,18 @@ document.addEventListener('keydown', e=>{
 // it (the open-tab bar carries the unsaved "*" instead); the flag still drives the
 // project bar's button visibility.
 const _hasData = {};
-function setTabLoaded(tab, has){
-  _hasData[tab] = !!has;
-  refreshProjBar(tab);
+// (by its instance's key; the project bar follows the instance on show)
+function setTabLoaded(key, has){
+  _hasData[key] = !!has;
+  const mod = modOfKey(key);
+  if (K(mod) === key) refreshProjBar(mod);
 }
 // Project-bar buttons show when the module has files OR a non-empty project name —
 // hidden only when both are empty. (Save/export still refuse an empty file list.)
 function refreshProjBar(tab){
   const nameInp = document.querySelector('.project-name-input[data-module="'+tab+'"]');
   const named = !!(nameInp && nameInp.value.trim());
-  const has = !!_hasData[tab];
+  const has = !!_hasData[K(tab)];
   const show = has || named;
   document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"], '
     + '.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
@@ -1029,9 +1811,8 @@ const ICON_RATIO = {
   default: 0.67,   // nav, save/save-as/delete/new, plot download & tools
   csv: 0.75,       // CSV export buttons (per-table / per-plot / project bar)
 };
-function fitIconCircle(svg, ratio, forceScale){
-  if (!svg) return null;
-  ratio = ratio || ICON_RATIO.default;
+// The writes before the reads: the icon's paths in one <g> to scale, with no transform.
+function iconGroup(svg){
   const NS = 'http://www.w3.org/2000/svg';
   let g = svg.querySelector('g.icon-fit');
   if (!g){
@@ -1042,6 +1823,10 @@ function fitIconCircle(svg, ratio, forceScale){
   }
   svg.style.overflow = 'visible';                 // don't clip an icon scaled past the viewBox
   g.removeAttribute('transform');
+  return g;
+}
+// The reads: the transform that fits the icon (null when it cannot be measured).
+function iconFit(svg, g, ratio, forceScale){
   let bb; try { bb = g.getBBox(); } catch(e){ return null; }
   if (!bb.width || !bb.height) return null;
   const vb = svg.viewBox && svg.viewBox.baseVal;
@@ -1062,8 +1847,23 @@ function fitIconCircle(svg, ratio, forceScale){
     s = (ratio * cmin * vbW) / (D * svgPx);
   }
   const cx = bb.x + bb.width/2, cy = bb.y + bb.height/2;
-  g.setAttribute('transform', `translate(${vcx} ${vcy}) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
-  return s;
+  return { g, s, t: `translate(${vcx} ${vcy}) scale(${s.toFixed(4)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})` };
+}
+function fitIconCircle(svg, ratio, forceScale){
+  if (!svg) return null;
+  const f = iconFit(svg, iconGroup(svg), ratio || ICON_RATIO.default, forceScale);
+  if (!f) return null;
+  f.g.setAttribute('transform', f.t);
+  return f.s;
+}
+/* Many icons at once: every write before the reads, then the reads, then the transforms,
+   so the page is laid out once for the lot. One at a time, each icon's measurement laid
+   the page out again after the last one's transform: a plot's toolbar, rebuilt at every
+   redraw, has up to seven (to v470, about 17 ms of an XRPD edit with 12 patterns). */
+function fitIconCircles(svgs, ratio){
+  const gs = svgs.map(iconGroup);
+  const fits = svgs.map((svg, i)=> iconFit(svg, gs[i], ratio || ICON_RATIO.default));
+  fits.forEach(f=>{ if (f) f.g.setAttribute('transform', f.t); });
 }
 // Back-compat alias: every caller now goes through the single circle rule.
 const fitIcon = fitIconCircle;
@@ -1091,20 +1891,20 @@ function normalizeProjIcons(mod){
    {name,text} CSV entries. The group button zips them all; per-plot/table buttons
    pick a subset by name. */
 const _csvExport = {};
-function registerCsvExport(mod, buildFn){ _csvExport[mod] = buildFn; }
-function runCsvExport(mod){
-  const b = _csvExport[mod]; if (!b) return;
-  const e = b(); if (e && e.length) downloadZip(mod+'_export.zip', e);
+function registerCsvExport(key, buildFn){ _csvExport[key] = buildFn; }
+function runCsvExport(k){
+  const key = K(k), b = _csvExport[key]; if (!b) return;
+  const e = b() || []; if (e.length) downloadZip(modOfKey(key)+'_export.zip', e);
 }
 // Download a subset of a module's CSVs by file name: a single file downloads as a
-// .csv, several bundle into a .zip.
-function downloadCsvFiles(mod, names){
-  const b = _csvExport[mod]; if (!b) return;
+// .csv, several bundle into a .zip. (a button's data-csv-mod: the instance on show)
+function downloadCsvFiles(k, names){
+  const key = K(k), b = _csvExport[key]; if (!b) return;
   const all = b() || [];
   const sel = all.filter(e=>names.includes(e.name));
   if (!sel.length) return;
   if (sel.length === 1) downloadBlob(sel[0].name, sel[0].text);
-  else downloadZip(mod+'_export.zip', sel);
+  else downloadZip(modOfKey(key)+'_export.zip', sel);
 }
 // The project CSV icon, reused on every per-view download button.
 const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
@@ -1122,11 +1922,11 @@ function makeCsvButton(mod, names, title){
 }
 // CSV export icons (per-plot / per-table) → the CSV ratio (0.75).
 function fitCsvIcons(root){
-  (root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg').forEach(s=>fitIconCircle(s, ICON_RATIO.csv));
+  fitIconCircles([...(root||document).querySelectorAll('.plot-csv-btn svg, .table-csv-btn svg')], ICON_RATIO.csv);
 }
 // Plot-toolbar download / tool icons → the default ratio.
 function fitPlotIcons(root){
-  (root||document).querySelectorAll('.plot-dl-btn .plot-btn-icon, .plot-tool-btn .plot-btn-icon').forEach(s=>fitIconCircle(s));
+  fitIconCircles([...(root||document).querySelectorAll('.plot-dl-btn .plot-btn-icon, .plot-tool-btn .plot-btn-icon')]);
 }
 // One delegated handler drives every per-view CSV button.
 document.addEventListener('click', e=>{
@@ -1139,7 +1939,7 @@ document.addEventListener('click', e=>{
 });
 // Does a module currently hold loaded data? Reported by the modules themselves
 // through setTabLoaded (it used to be read off the nav button's data dot).
-function moduleHasData(mod){ return !!_hasData[mod]; }
+function moduleHasData(k){ return !!_hasData[K(k)]; }
 
 /* =========================================================
    THEME — light / dark, remembered, defaulting to the OS preference.
@@ -1197,51 +1997,66 @@ function applyTheme(theme, persist){
 
 /* Module state access for the session manager: reuse each module's registered
    undo snapshot()/restore() as the canonical serialize/deserialize. */
-const MODULES = ['tauc','xrd','gc','epr'];
-const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR' };
-function getModuleState(mod){
-  const st = _histories[mod];
+const MODULES = ['tauc','xrd','gc','epr','sem'];
+const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM' };
+// (k: an instance's key, or a module's name for the instance of it on show: K)
+function getModuleState(k){
+  const st = _histories[K(k)];
   return st ? st._snap() : null;
 }
-function restoreModuleState(mod, state){
-  const st = _histories[mod];
+function restoreModuleState(k, state){
+  const key = K(k), st = _histories[key];
   if (!st) return;
   st._busy = true;
   try { st._restore(state); } finally { st._busy = false; }
   st.reset();
   st.commit(true); // fresh baseline (silent: a restore is not a user edit → no autosave)
   // Plots just drawn may be sized wrong if the tab is hidden; redraw on show.
-  if (_activeTab === mod){ if (_tabRedraw[mod]) requestAnimationFrame(()=>{ try { _tabRedraw[mod](); } catch(e){} }); }
-  else { _needsRedraw[mod] = true; }
+  if (shownKey() === key){ if (_tabRedraw[key]) requestAnimationFrame(()=>{ const f = _tabRedraw[key]; if (f) try { f(); } catch(e){} }); }
+  else { _needsRedraw[key] = true; }
 }
-// Undo/redo stack contents. Only one instance of each module is live, so the tab
-// manager parks the outgoing tab's history here and restores the incoming one —
-// otherwise an undo after a tab switch would replay another project's states.
-function getModuleHistory(mod){
-  const st = _histories[mod];
-  return st ? { states: st.states.slice(), index: st.index } : null;
+// Undo/redo stack contents. A module's one instance (one not made per tab) holds one
+// tab at a time, so the tab manager parks the outgoing tab's history here and restores
+// the incoming one — otherwise an undo after a tab switch would replay another
+// project's states; an instance made per tab has its tab's own, parked so as the tab
+// sleeps and put back as it wakes. The history parked (park) or put back ends the marks
+// of the jobs holding it (UndoStack.hold), stopped before: as a release of nothing
+// written, a redo branch set aside coming back where nothing came since; a release
+// after does nothing. A read alone leaves them.
+function getModuleHistory(k, park){
+  const st = _histories[K(k)];
+  if (!st) return null;
+  if (park) st._marks.slice().reverse().forEach(m=> st.release(m));
+  return { states: st.states.slice(), index: st.index };
 }
-function setModuleHistory(mod, h){
-  const st = _histories[mod];
+function setModuleHistory(k, h){
+  const st = _histories[K(k)];
   if (!st || !h) return;
-  st.states = h.states.slice(); st.index = h.index;
+  st.states = h.states.slice(); st.index = h.index; st._key = null; st._marks = [];
+}
+// The stateKey of a module's live state: the one a commit just took while its listeners
+// run (the unsaved marker's check), else taken now.
+function moduleStateKey(k){
+  const st = _histories[K(k)];
+  if (!st) return null;
+  return st._liveKey != null ? st._liveKey : stateKey(st._snap());
 }
 // Run cb once, the next time the module records a real change (edit/add/remove…).
-function onModuleChangeOnce(mod, cb){
-  const st = _histories[mod];
+function onModuleChangeOnce(k, cb){
+  const st = _histories[K(k)];
   if (st) st.onceCommit(cb);
 }
 // Persistent: fire cb on every real change commit of a module (used for autosave).
-function onModuleChange(mod, cb){
-  const st = _histories[mod];
+function onModuleChange(k, cb){
+  const st = _histories[K(k)];
   if (st) st.onCommit(cb);
 }
 // Temporarily load `state` into a module, run fn (e.g. build its CSV export from
 // the loaded globals), then restore the previous state — all with history frozen
 // so it doesn't commit, reset undo, or fire change listeners. Lets us export a
 // saved project's CSVs without disturbing what's currently open.
-function runWithModuleState(mod, state, fn){
-  const st = _histories[mod];
+function runWithModuleState(k, state, fn){
+  const st = _histories[K(k)];
   if (!st) return;
   const backup = st._snap();
   st._busy = true;
@@ -1311,9 +2126,11 @@ function updateNarrowLayout(){
 updateNarrowLayout();
 window.addEventListener('resize', updateNarrowLayout);
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
+// (a section already on show is left alone: the echo of goTab's own hash would count as one
+// chosen anew and give up a tab's show chosen since, tabs.js showLater)
 window.addEventListener('hashchange', ()=>{
   const t = location.hash.slice(1);
-  if (HASH_TABS.includes(t)) goTab(t, true);
+  if (HASH_TABS.includes(t) && t !== _activeTab) goTab(t, true);
 });
 (function initHashRoute(){
   const t = location.hash.slice(1);
@@ -1368,7 +2185,8 @@ function guardNumericInput(el, opts){
   el.addEventListener('keydown', e=>{ if (e.key==='Enter') el.blur(); });
 }
 // Auto-wire every <input type="number"> under root, reading bounds from its
-// min/max attributes (step decides integer-ness). Covers most module fields.
+// min/max attributes (step decides integer-ness). Covers most module fields; one
+// built later (a Tauc analysis card) is wired by its builder.
 function guardNumberInputs(root){
   (root || document).querySelectorAll('input[type="number"]').forEach(el=>{
     const min = el.getAttribute('min')!==null && el.min!=='' ? +el.min : null;
@@ -1534,13 +2352,15 @@ function openDateModal(baseDate, onPick, onClose){
 // In-site replacement for window.confirm(): a top-centered banner reusing the
 // PWA-toast styling. Returns a Promise<boolean> (true = confirmed).
 // Only one banner is shown at a time; a second call cancels the first.
-let _confirmBannerEl = null;
+let _confirmBannerEl = null, _confirmBannerCancel = null;
 // Two-button banner by default: resolves true (confirm) / false (cancel or X).
 // Passing altLabel adds a middle secondary button and turns it three-way, resolving
 // 'alt' when that button is clicked (e.g. Save / Don't save / Cancel).
 function confirmBanner(message, confirmLabel, altLabel){
   return new Promise(resolve=>{
-    if (_confirmBannerEl){ _confirmBannerEl.remove(); _confirmBannerEl = null; }
+    // The banner this one replaces answers "no" and goes. To v483 it was only removed:
+    // its question never settled and its Escape listener stayed on the document.
+    if (_confirmBannerCancel) _confirmBannerCancel();
     const t = document.createElement('div');
     t.className = 'pwa-toast pwa-confirm';
     t.setAttribute('role', 'alertdialog');
@@ -1564,19 +2384,88 @@ function confirmBanner(message, confirmLabel, altLabel){
     document.body.appendChild(t);
     _confirmBannerEl = t;
     requestAnimationFrame(()=> t.classList.add('show'));
-    const done = (val)=>{
-      if (_confirmBannerEl !== t){ resolve(val); return; }
-      _confirmBannerEl = null;
+    const done = (val, now)=>{
+      if (_confirmBannerEl !== t) return;   // already answered
+      _confirmBannerEl = null; _confirmBannerCancel = null;
       document.removeEventListener('keydown', onKey);
-      t.classList.remove('show');
-      setTimeout(()=> t.remove(), 200);
+      if (now) t.remove();
+      else { t.classList.remove('show'); setTimeout(()=> t.remove(), 200); }
       resolve(val);
     };
+    _confirmBannerCancel = ()=> done(false, true);
     const onKey = e=>{ if (e.key === 'Escape') done(false); };
     ok.addEventListener('click', ()=> done(true));
     if (alt) alt.addEventListener('click', ()=> done('alt'));
     x.addEventListener('click', ()=> done(false));
     document.addEventListener('keydown', onKey);
+  });
+}
+/* confirmBanner's question in a window at the centre of the screen, over the page (the
+   app's modal, .modal-backdrop and .modal-box), for one that is not to be missed: the
+   same answers, true (the primary), 'alt' (the middle button, with altLabel) or false (×,
+   Escape, a click beside the box). The primary has the focus; Tab goes round the window's
+   buttons only; Escape is its own (a window under it, the XRPD standard's, does not close
+   on it). The focus goes back where it was (o.back, else where it was when it opened)
+   before the answer is given. One at a time: a new one answers the last false, as a new
+   banner does. o.title: a heading over the message. Text only, never markup. */
+let _confirmModalCancel = null, _confirmModalN = 0;
+function confirmModal(message, confirmLabel, altLabel, o = {}){
+  return new Promise(resolve=>{
+    if (_confirmModalCancel) _confirmModalCancel();
+    const back = o.back || document.activeElement, id = 'dtConfirm' + (++_confirmModalN);
+    const bd = document.createElement('div');
+    bd.className = 'modal-backdrop confirm-modal';
+    const box = document.createElement('div');
+    box.className = 'modal-box confirm-box';
+    box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true');
+    const head = document.createElement('div'); head.className = 'confirm-head';
+    if (o.title){
+      const h = document.createElement('h3'); h.className = 'txt-head'; h.id = id + 'T'; h.textContent = o.title;
+      head.appendChild(h);
+    }
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'an-ic confirm-x'; x.title = 'Cancel'; x.setAttribute('aria-label', 'Cancel');
+    x.innerHTML = X_SVG(15);
+    head.appendChild(x);
+    const msg = document.createElement('p'); msg.className = 'confirm-msg'; msg.id = id + 'M'; msg.textContent = message;
+    box.setAttribute('aria-labelledby', o.title ? id + 'T' : id + 'M');
+    box.setAttribute('aria-describedby', id + 'M');
+    const btns = document.createElement('div'); btns.className = 'confirm-btns';
+    let alt = null;
+    if (altLabel){ alt = document.createElement('button'); alt.type = 'button'; alt.className = 'btn'; alt.textContent = altLabel; btns.appendChild(alt); }
+    const ok = document.createElement('button');
+    ok.type = 'button'; ok.className = 'btn primary'; ok.textContent = confirmLabel || 'OK';
+    btns.appendChild(ok);
+    box.append(head, msg, btns); bd.appendChild(box);
+    const keys = [x, alt, ok].filter(Boolean);
+    const done = val =>{
+      if (_confirmModalCancel !== cancel) return;   // already answered
+      _confirmModalCancel = null;
+      document.removeEventListener('keydown', onKey, true);
+      bd.remove();
+      if (back && back.isConnected && back.focus) back.focus({ preventScroll: true });
+      resolve(val);
+    };
+    const cancel = ()=> done(false);
+    // (capture, and stopped there: the standard's window, under it, closes on its own Escape)
+    const onKey = e=>{
+      if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(false); return; }
+      if (e.key !== 'Tab') return;
+      const i = keys.indexOf(document.activeElement), n = keys.length;
+      e.preventDefault();
+      keys[i < 0 ? (e.shiftKey ? n - 1 : 0) : (i + (e.shiftKey ? n - 1 : 1)) % n].focus();
+    };
+    // (a press on the box let go beside it, a text selected, is no click beside it)
+    let downOut = false;
+    bd.addEventListener('mousedown', e=>{ downOut = e.target === bd; });
+    bd.addEventListener('click', e=>{ if (e.target === bd && downOut) done(false); });
+    ok.addEventListener('click', ()=> done(true));
+    if (alt) alt.addEventListener('click', ()=> done('alt'));
+    x.addEventListener('click', cancel);
+    _confirmModalCancel = cancel;
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(bd);
+    ok.focus({ preventScroll: true });
   });
 }
 
@@ -1585,11 +2474,13 @@ function confirmBanner(message, confirmLabel, altLabel){
 ========================================================= */
 // dismissInvalidAction / dismissWarnAction are data-action values handled by the
 // owning tab's delegated click listener; when omitted, the button just removes its
-// own alert inline (no global handler needed).
+// own alert (the delegated listener under this function: no inline handler, which the
+// page's Content-Security-Policy would refuse). The names and the header are markup:
+// the callers escape what they put in them (esc).
 function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidAction, dismissWarnAction){
   const makeX = act => act
     ? `<button class="alert-dismiss close-x" data-action="${act}" title="Dismiss">${X_SVG(15)}</button>`
-    : `<button class="alert-dismiss close-x" onclick="this.closest('.alert').remove()" title="Dismiss">${X_SVG(15)}</button>`;
+    : `<button class="alert-dismiss close-x" data-dismiss-alert title="Dismiss">${X_SVG(15)}</button>`;
   let html = '';
   if (invalidNames.length)
     html += '<div class="alert bad">✕ Invalid file(s):<br>' + invalidNames.join('<br>') + makeX(dismissInvalidAction) + '</div>';
@@ -1597,6 +2488,10 @@ function buildAlertsHtml(invalidNames, warnNames, warnHeader, dismissInvalidActi
     html += '<div class="alert warn">⚠ ' + (warnHeader || 'Non-standard format — verify these files:') + '<br>' + warnNames.join('<br>') + makeX(dismissWarnAction) + '</div>';
   return html;
 }
+document.addEventListener('click', e=>{
+  const b = e.target.closest && e.target.closest('[data-dismiss-alert]');
+  if (b){ const a = b.closest('.alert'); if (a) a.remove(); }
+});
 
 function nextColor(existingFiles){
   const used = new Set(existingFiles.map(f=>f.color));
@@ -1604,57 +2499,99 @@ function nextColor(existingFiles){
   return colorOf(existingFiles.length);
 }
 
-/* Truncate a bar-chart axis label to at most 20 characters, with the ellipsis in
-   the MIDDLE (start…end) so both ends of the name stay readable. Sideways overflow
-   past the plot frame is handled separately by widening the x-range (barPlotXPad). */
-const TILT_LABEL_MAX = 20;
-function truncTiltLabel(mctx, text, cap){
-  const max = Math.max(4, Math.round(cap || TILT_LABEL_MAX));
-  if (text.length <= max) return text;
-  const keep = max - 1;                            // one char for the ellipsis
-  const front = Math.ceil(keep / 2), back = keep - front;
-  return text.slice(0, front) + '…' + text.slice(text.length - back);
+/* ---- Tilted category names under a bar chart ----
+   Every name hangs down-left from its tick and turns about the middle of its last
+   letter (Plot's tilted tick labels). On the page no name measures more than
+   BAR_NAME_MAX px: a longer one is cut in the middle (start…end) so both ends stay
+   readable, each name on its own and only where it has to be. */
+const BAR_NAME_MAX = 80;
+const TILT_MIN = 30, TILT_MAX = 60, TILT_STEP = 5;
+
+// `text` as it is, or cut in the middle until it measures at most `maxW` px.
+function cutToWidth(mctx, text, maxW){
+  if (mctx.measureText(text).width <= maxW) return text;
+  for (let keep = text.length - 1; keep >= 2; keep--){
+    const front = Math.ceil(keep / 2), back = keep - front;
+    const cut = text.slice(0, front) + '…' + text.slice(text.length - back);
+    if (mctx.measureText(cut).width <= maxW) return cut;
+  }
+  return text.slice(0, 1) + '…';
 }
 
-/* How a bar chart's category labels have to be drawn to stay apart in the width it
-   has. On a phone, or with many samples, the slot per bar shrinks until twenty
-   characters at 30° no longer fit: tilting further narrows what a label spans across
-   the axis, and a shorter name narrows it again. Returns the angle to draw at and the
-   number of characters that fits at it, so the chart keeps its footprint rather than
-   letting the names run into one another. */
-function barLabelFit(mctx, plotW, n){
-  const slot = n > 0 ? plotW / n : plotW;
-  const rot = slot < 30 ? 70 : slot < 42 ? 55 : slot < 58 ? 45 : 30;
-  const em = (mctx && mctx.measureText ? mctx.measureText('mn').width / 2 : 5) || 5;
-  // What a label may measure before its horizontal span exceeds its own slot.
-  const room = slot / Math.cos(rot * Math.PI / 180);
-  const cap = Math.max(6, Math.min(TILT_LABEL_MAX, Math.floor(room / em)));
-  return { rot, cap, sin: Math.sin(rot * Math.PI / 180), cos: Math.cos(rot * Math.PI / 180) };
-}
-/* Extra x-range padding (in data units, per side) so no 30°-tilted bar label runs
-   off the LEFT of the plot (its first character would land at a negative x). Bars
-   sit at x = 1..n inside the base range [0, n+1]; use the returned p as the range
-   [-p, n+1+p] (a small symmetric zoom-out that moves the edge bars inward). Returns
-   0 unless a label would actually cross x = 0 — i.e. only kicks in when truly needed.
-   `labelWs` = per-bar label pixel widths; plotW = drawable width px. */
-function barPlotXPad(labelWs, n, plotW, rot){
-  if (!(plotW > 0) || !(n > 0)) return 0;
-  const cos30 = Math.cos((rot == null ? 30 : rot) * Math.PI / 180);
-  let p = 0;
-  for (let k = 1; k <= n; k++){
-    const f = ((labelWs[k-1] || 0) * cos30) / plotW;   // label's tilted horizontal extent, as a fraction of plotW
-    if (f >= 0.5) return n;                             // pathological (huge label) → hard cap
-    // Bar k clears x=0 in [-p, n+1+p] when (k+p)/(n+1+2p) ≥ f. Solve for the min p.
-    const need = (f * (n + 1) - k) / (1 - 2 * f);       // > 0 only if the label crosses x=0 at base scale
-    if (need > p) p = need;
+/* Whether names `ws` px long, on ticks at `qs` px (ascending), tilted by `rot` degrees,
+   stay within [lo, hi] (unless `sides` is false) and clear of one another. A name is a
+   band `h` thick along its line: down-left it reaches w·cos + h/2·sin past its tick,
+   rightwards h/2·sin. Two bands overlap when they lie under h apart (d·sin, d the
+   ticks' distance) and the later name reaches back past the earlier's tick (w > d·cos).
+   A width of 0 is a name not drawn. */
+function tiltFits(ws, qs, lo, hi, h, rot, sides = true){
+  const r = rot * Math.PI / 180, sn = Math.sin(r), cs = Math.cos(r);
+  for (let i = 0; i < qs.length; i++){
+    if (!ws[i]) continue;
+    if (sides && (qs[i] - ws[i] * cs - h / 2 * sn < lo - 0.5 || qs[i] + h / 2 * sn > hi + 0.5)) return false;
+    for (let j = i + 1; j < qs.length; j++){
+      if (!ws[j]) continue;
+      const d = qs[j] - qs[i];
+      if (d * sn < h && ws[j] > d * cs) return false;
+    }
   }
-  return Math.max(0, p);
+  return true;
+}
+// The least tilt from `from` to `to` degrees, in 5° steps, that tiltFits; null if none.
+function tiltFor(ws, qs, lo, hi, h, sides = true, from = TILT_MIN, to = TILT_MAX){
+  for (let rot = from; rot <= to; rot += TILT_STEP) if (tiltFits(ws, qs, lo, hi, h, rot, sides)) return rot;
+  return null;
+}
+
+/* The names under a page bar chart of n categories, standing at x = 1..n of a range
+   fixed at [0, n+1] over a plot `plotW` px wide that starts `ml` px in. Each is kept
+   whole up to BAR_NAME_MAX, then all are tilted by the least angle (30–60°) that keeps
+   them between the plot's sides and apart. If no angle does, the first that keeps them
+   apart going down from 60° to 30° is taken (60° if none), the steep end first so that
+   as little as possible has to go, and only the names that would still cross the left
+   side are cut back to it. `shown[k]` false is a category with no bar, whose name is not
+   drawn. Returns { rot, labels, sin }. */
+function barNames(mctx, names, plotW, ml, shown){
+  const n = names.length, h = 12;   // a 10 px line
+  const qs = names.map((_, k)=> ml + (k + 1) * plotW / (n + 1));
+  let labels = names.map(t=> cutToWidth(mctx, t, BAR_NAME_MAX));
+  const ws = ()=> labels.map((t, k)=> (!shown || shown[k]) ? mctx.measureText(t).width : 0);
+  let rot = tiltFor(ws(), qs, ml, ml + plotW, h);
+  if (rot == null){
+    rot = TILT_MAX;
+    for (let r = TILT_MAX; r >= TILT_MIN; r -= TILT_STEP) if (tiltFits(ws(), qs, ml, ml + plotW, h, r, false)){ rot = r; break; }
+    const r = rot * Math.PI / 180;
+    labels = labels.map((t, k)=> cutToWidth(mctx, t, Math.max(0, (qs[k] - ml - h / 2 * Math.sin(r)) / Math.cos(r))));
+  }
+  return { rot, labels, sin: Math.sin(rot * Math.PI / 180) };
+}
+
+/* The y-range a bar chart needs so that no value label runs up under the series chips
+   laid on its data area, top right (GC's gases, Tauc's Eg methods). Only the bars
+   standing under the chips count, so a chart whose bars keep clear of them is drawn
+   exactly as without. `bars` are {x, dx, top, w}: category x, pixel offset in the
+   slot, top of the bar (error included) and length of its vertical label, in px; `g`
+   is the chart's geometry {W, ml, mr, mTop, plotH, gap, x0, x1}. 0 if none needs it. */
+function barChipYmax(chips, svg, bars, g){
+  if (!chips || !chips.offsetWidth) return 0;
+  const s = svg.getBoundingClientRect(), c = chips.getBoundingClientRect();
+  const left = c.left - s.left, below = c.bottom - s.top + 4;   // the chips' box, in the svg's px
+  const px = x => g.ml + (x - g.x0) / (g.x1 - g.x0) * (g.W - g.ml - g.mr);
+  let ymax = 0;
+  for (const b of bars){
+    if (px(b.x) + (b.dx || 0) + 6 < left) continue;             // a vertical label is ~12 px across
+    // Its top, at mTop + plotH·(1 − top/ymax) − gap − w, has to end below the chips.
+    const room = g.mTop + g.plotH - g.gap - b.w - below;
+    if (room > 0) ymax = Math.max(ymax, b.top * g.plotH / room);
+  }
+  return ymax;
 }
 
 /* =========================================================
    COLLAPSIBLE INSTRUCTIONS
    Each .instr-block is toggled by a small info icon placed next to the card's
-   title. Always starts collapsed on load; the choice is not remembered.
+   title. Each starts collapsed as the page loads; a tab woken or reloaded opens again
+   those it showed (b2v4: shownOf, shownAgain).
 ========================================================= */
 (function initInstrCollapse(){
   const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
@@ -1676,16 +2613,25 @@ function barPlotXPad(labelWs, n, plotW, rot){
     btn.className = 'instr-info';
     btn.setAttribute('aria-label', 'Toggle instructions');
     btn.innerHTML = INFO_SVG;
+    // (the button and its block marked alike: a module made per tab copies its section,
+    // these with it, and the one click handler below finds the block in the copy)
+    btn.dataset.instr = block.dataset.instr = String(i);
     if (heading) heading.appendChild(btn);
     else block.parentNode.insertBefore(btn, block);
-    let collapsed = true;   // always start closed; the choice is not remembered
-    const apply = ()=>{
-      block.style.display = collapsed ? 'none' : '';
-      btn.classList.toggle('is-on', !collapsed); // highlighted while instructions are shown
-      btn.setAttribute('aria-expanded', String(!collapsed));
-    };
-    apply();
-    btn.addEventListener('click', ()=>{ collapsed = !collapsed; apply(); });
+    // (closed as the page loads; a tab's own shown again as it wakes or is reloaded: shownAgain)
+    block.style.display = 'none';
+    btn.setAttribute('aria-expanded', 'false');
+  });
+  document.addEventListener('click', e=>{
+    const btn = e.target.closest && e.target.closest('.instr-info[data-instr]');
+    if (!btn) return;
+    const box = btn.closest('section, .modal-backdrop') || document;
+    const block = box.querySelector('.instr-block[data-instr="' + btn.dataset.instr + '"]');
+    if (!block) return;
+    const open = block.style.display === 'none';
+    block.style.display = open ? '' : 'none';
+    btn.classList.toggle('is-on', open); // highlighted while instructions are shown
+    btn.setAttribute('aria-expanded', String(open));
   });
 })();
 
@@ -1695,5 +2641,7 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, parseNumber, detectDelim, splitCSVLine, setupDropzone, renderUnifiedFileList, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, createDateTimeField, flashFieldInvalid, truncTiltLabel, barLabelFit, barPlotXPad, confirmBanner, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar,
+  saveSettings, TAB_DEF, registerModule, isFactory, makeInstance, attachInstance, detachInstance, dropKey, shownKey, withState, modOfKey, onAnyChange, onBusyChange, busyChanged, shownOf, showAgain, zoomAgain, keeper, kept, objId, exactKey,
+  dropsBytes, asleep, vacate, fixed
 };

@@ -1,0 +1,38 @@
+{
+ "mode": "head",
+ "N": 4,
+ "kinds": [
+  "xrd",
+  "sem",
+  "drs",
+  "gc"
+ ],
+ "variants": {
+  "parked": {
+   "shownMed": 894.3,
+   "shown": [
+    915.7,
+    900.3,
+    764.5,
+    869.1,
+    894.3
+   ],
+   "allMed": null,
+   "longMsMed": 559,
+   "longMaxMed": 437,
+   "mem": {
+    "heap": 104.5,
+    "rss": 287.9,
+    "pss": 233.7,
+    "workers": 0,
+    "frames": 0
+   }
+  }
+ },
+ "errors": [],
+ "load": [
+  2.07,
+  1.73,
+  1.28
+ ]
+}

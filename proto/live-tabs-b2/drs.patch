@@ -1,0 +1,470 @@
+diff --git a/tauc.js b/tauc.js
+index cac13e5..38eea27 100644
+--- a/tauc.js
++++ b/tauc.js
+@@ -1,4 +1,4 @@
+-import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc } from './utils.js';
++import { fmtNum, csvLine, includedOf, linspace, maxArr, minArr, fitLinear, tinv, buildAlertsHtml, guardNumericInput, esc, registerModule } from './utils.js';
+ import { boxSmooth, boxSlope, widthText, ptsNum, ptsText } from './smooth.js';
+ import { Plot } from './plot.js';
+ import { cardInfo, fileSafe, nameDownloads } from './cards.js';
+@@ -8,8 +8,50 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+ 
+ /* =========================================================
+    TAUC MODULE
++
++   MADE PER TAB (b2): createTauc is the module's factory (utils.js registerModule), each
++   open DRS tab that is awake an instance of its own, made of its copy of index.html's
++   section (root) and a layer (the kinds' menu). Its elements are found in root, a card's
++   in its card and a Results section's in it, never in the page: its ids are the page's
++   only while it is on show. Its registries go by its key, the tab's id (moduleKit). It
++   draws only on show: hidden (a state read out for its CSVs, a tab restored while another
++   is on show) it draws nothing, and its redraw draws all as it is shown; a tab shown again
++   with nothing changed and at the same width draws nothing (its draw key). It has no job
++   that runs on while hidden. API.md says how a module is made so.
+ ========================================================= */
+-(function(){
++/* Energies are hν = hc/λ, hc in eV·nm to the digits a third decimal of E_g needs: 1240 put
++   every energy 0.013% high. A spectrum's energies are made once for its array of
++   wavelengths and kept by it (`energies`), for every instance and every state that holds
++   it, and its file's record has them as no field of its own (withHv): a state of the
++   history, a tab asleep and a project saved hold the wavelengths only (to b2 they were made
++   again, a new array, at every change of the file list and every undo, and every state
++   kept its own, a project saved too). */
++const HC = 1239.842;
++const energies = new WeakMap();
++const hvOf = wl =>{ let e = energies.get(wl); if (!e) energies.set(wl, e = wl.map(x=> HC/x)); return e; };
++const withHv = f =>{ if (Array.isArray(f.wl)) Object.defineProperty(f, 'hv', { value: hvOf(f.wl), writable: true, configurable: true, enumerable: false }); return f; };
++/* A file's spectrum kept by its bytes (the file as it came, the same array in a tab's
++   states, its parked state and its record: db.js park, decode): a tab woken, which reads
++   its state back as copies, takes the arrays its history holds again, the same values,
++   rather than keeping both. */
++const spectra = new WeakMap();
++const sameArr = (a, b)=> a === b || (a.length === b.length && a.every((v, i)=> Object.is(v, b[i])));
++function keepSpectrum(f){
++  const b = f.rawBytes;
++  if (!(b instanceof Uint8Array)) return f;
++  const s = spectra.get(b);
++  if (s && sameArr(s.wl, f.wl) && sameArr(s.FR, f.FR)){ f.wl = s.wl; f.FR = s.FR; }
++  else spectra.set(b, { wl: f.wl, FR: f.FR });
++  return f;
++}
++// A DRS tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
++function createTauc({ key, root, layer, shown }){
++  const $ = id => root.querySelector('#' + id);
++  /* Hidden, nothing is drawn (API.md §6): `drawable()` says whether to draw, and when not
++     marks the instance to be drawn whole as it is shown (stale). `drawnAt`: the width it was
++     last drawn whole at, its draw key (redrawTab). */
++  let stale = false, drawnAt = '';
++  const drawable = ()=> shown() || !(stale = true);
+   /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
+      warn, read, head, left, hv[]} (each on its own native axis), and the included ones,
+      which the analysis sees, `files`, with which every per-sample list the cards keep is
+@@ -18,10 +60,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+      files were read (fileNotes: a format not standard, points left out; until dismissed);
+      every card in the history. */
+   const kit = moduleKit('tauc', {
++    root, key, layer,
+     note: readNote,
+     alerts: p =>{
+       const notes = warnDismissed ? [] : allFiles.map(f=> [f, fileNotes(f)]).filter(([, n])=> n.length).map(([f, n])=> esc(`${f.name}: ${n.join('; ')}`));
+-      document.getElementById('taucAlerts').innerHTML = p.invalid + buildAlertsHtml([], notes, 'Verify how these files were read:', '', 'tauc-dismiss-warn') + p.upload;
++      $('taucAlerts').innerHTML = p.invalid + buildAlertsHtml([], notes, 'Verify how these files were read:', '', 'tauc-dismiss-warn') + p.upload;
+     },
+     dismiss: { warn: ()=>{ warnDismissed = true; } },
+     slots,
+@@ -43,21 +86,27 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     }) }),
+     /* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
+        with both a finite number and a wavelength above 0 (none: left out); how it was read,
+-       and the points left out at its load, as its notes say them. */
++       and the points left out at its load, as its notes say them. Its energies made from
++       its wavelengths (withHv: a project to b2 holds them too, not read). */
+     file: f =>{
+       const p = finitePairs(f.wl, f.FR, x=> x > 0);
+       if (!p || !p[0].length) return null;
+-      const { read, head, left, ...g } = f, n = isObj(left) ? Object.keys(LEFT).filter(k=> num(left[k], 0) > 0) : [];
+-      return { ...g, wl: p[0], FR: p[1], warn: f.warn === true, ...(read === 'R%' ? { read } : {}), ...(head === true && f.warn === true && read !== 'R%' ? { head } : {}),
+-        ...(n.length ? { left: Object.fromEntries(n.map(k=> [k, left[k]])) } : {}) };
++      const { read, head, left, hv: _hv, ...g } = f, n = isObj(left) ? Object.keys(LEFT).filter(k=> num(left[k], 0) > 0) : [];
++      return withHv(keepSpectrum({ ...g, wl: p[0], FR: p[1], warn: f.warn === true, ...(read === 'R%' ? { read } : {}), ...(head === true && f.warn === true && read !== 'R%' ? { head } : {}),
++        ...(n.length ? { left: Object.fromEntries(n.map(k=> [k, left[k]])) } : {}) }));
+     },
+     // The notes are the restored files' own, shown again.
+     restore: (s, gone)=>{ warnDismissed = false; loadAnalyses(cardList(s.analyses, KINDS) || legacyAnalyses(s), gone); },
+-    // Re-fit at the current size, keeping the zoom.
++    /* Re-fit at the current size, keeping the zoom; a card not drawn while its tab was not
++       on show drawn now. Nothing changed since it was all drawn (nothing left undrawn while
++       hidden, the same width): nothing to draw, a tab shown again as it was left. */
+     redrawTab: ()=>{
++      const at = String(root.clientWidth);
++      if (!stale && at === drawnAt) return;
++      stale = false; drawnAt = at;
+       if (!files.length) return;
+       deck.fitNames();
+-      quietly(()=> livePanels().forEach(p=>{ if (p.hasPlot()) p.update(true); }));
++      quietly(()=> cards().forEach(a=>{ const P = panelOf(a); if (P && !isFolded(a)){ if (P.hasPlot()) P.update(true); else { P.writeStoreToInputs(); P.initPlot(); } } }));
+       renderResView();
+     },
+     csv: exportTaucZip,
+@@ -365,9 +414,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   // defaults and the least it took.
+   const OLD = { w:'N', w2:'N2', W:'M', W2:'M2' }, OLD_DEF = { N:1, N2:20, M:25, M2:100 }, OLD_MIN = { w: 1, w2: 1, W: 2, W2: 2 };
+   const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
+-  function makePanel(spec){
++  // (its elements found in its card, `card`, whether or not the card is in the page)
++  function makePanel(spec, card){
+     const { prefix, keys, windows } = spec;
+-    const $ = id => document.getElementById(prefix + id);
++    const $ = id => card.querySelector('#' + prefix + id);
+     const P = {
+       // ---- all/one analysis mode (single toggle) ----
+       // 'shared': every sample uses one common parameter set AND one common set of
+@@ -632,8 +682,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     }
+     P.syncModeButton = ()=>{ const c = $('ModeAll'); if (c) c.textContent = P.mode==='shared' ? 'all' : 'one'; };
+ 
++    // (a card folded, or its tab not on show: not drawn, brought up to date as it is shown)
++    const off = ()=> (spec.hidden && spec.hidden()) || !drawable();
+     P.initPlot = ()=>{
+-      if (spec.hidden && spec.hidden()){ plot = null; return; }
++      if (off()){ plot = null; return; }
+       plot = new Plot($('Svg'), {xlabel:'hν (eV)', ylabelSvg: spec.yLabel(P.params(currIndex)), xTickStep:0.5, noYTickLabels:true});
+       plot.attachTools(plot.svg.closest('.plot-wrap'));
+       // A spec whose lines are each sample's own has no common set to start.
+@@ -647,7 +699,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     P.shownIndex = ()=> shown;
+ 
+     P.update = preserveView =>{
+-      if (!plot || !files.length || (spec.hidden && spec.hidden())) return;
++      if (!plot || !files.length || off()) return;
+       shown = currIndex;
+       vlines = P.vlinesFor(currIndex);   // point at the current sample's interval lines
+       const p = P.params(currIndex);
+@@ -1191,7 +1243,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   function buildPanel(a, card, prev){
+     const was = live.get(a.id);
+     if (prev && was) a.states[prev] = was.panel.snapshot();
+-    const panel = makePanel(SPECS[a.type](a));
++    const panel = makePanel(SPECS[a.type](a), card);
+     if (a.states[a.type]) panel.restore(a.states[a.type]);
+     else panel.fit();
+     live.set(a.id, { panel, res: was ? was.res : null, resPlots: was ? was.resPlots : null });
+@@ -1301,10 +1353,10 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     const taucs = cards().filter(a=> a.type === 'tauc');
+     cards().forEach(u=>{
+       if (u.type !== 'urbach' || !live.has(u.id)) return;
+-      const p = 'an' + u.id, sel = document.getElementById(p + 'Ref');
++      const p = 'an' + u.id, card = deck.cardOf(u), sel = card.querySelector('#' + p + 'Ref');
+       sel.replaceChildren(new Option('None', ''), ...taucs.map(t=> new Option(t.name, String(t.id))));
+       sel.value = u.ref != null ? String(u.ref) : '';
+-      document.getElementById(p + 'LegBand').style.display = refPanel(u) ? '' : 'none';
++      card.querySelector('#' + p + 'LegBand').style.display = refPanel(u) ? '' : 'none';
+     });
+   }
+ 
+@@ -1583,6 +1635,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   }
+   kit.dropText(readDrs, had =>{
+     warnDismissed = false;
++    allFiles.slice(had).forEach(keepSpectrum);
+     afterFilesChange();
+     // Once, when the first data lands: propose optimal interval-line positions. The
+     // Tauc cards go first: the Urbach ones are placed on their regions.
+@@ -1601,18 +1654,16 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   function afterFilesChange(){
+     kit.showFiles();
+     if (files.length) setupAnalysis();
+-    else { SHOWN.forEach(id=> document.getElementById(id).style.display='none'); deck.refreshNames(); }
++    else { SHOWN.forEach(id=> $(id).style.display='none'); deck.refreshNames(); }
+     kit.commit(); // baseline + file add/remove/reorder/palette
+   }
+ 
+-  // Energy axis is hc/λ — each file stays on its own native grid. hc in eV·nm to the
+-  // digits a third decimal of E_g needs: 1240 put every energy 0.013% high.
+-  const HC = 1239.842;
++  // Energy axis is hc/λ (HC, hvOf) — each file stays on its own native grid.
+   function setupAnalysis(){
+-    files.forEach(f=>{ f.hv = f.wl.map(wl=>HC/wl); });
++    allFiles.forEach(withHv);
+     if (currIndex >= files.length) currIndex = files.length-1;
+     if (currIndex < 0) currIndex = 0;
+-    SHOWN.forEach(id=> document.getElementById(id).style.display='block');
++    SHOWN.forEach(id=> $(id).style.display='block');
+     // Every panel fitted to the files before any is drawn: an Urbach card's band is
+     // read off its reference, which may sit below it.
+     livePanels().forEach(p=> p.fit());
+@@ -1624,6 +1675,9 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     cards().forEach(see);
+     deck.refreshNames();
+     renderResView();
++    // (all drawn, on show: its draw key, the width it was drawn at; a card folded is drawn
++    // as it is unfolded, deck wake)
++    if (shown()){ stale = false; drawnAt = String(root.clientWidth); }
+   }
+ 
+   // Union of all files' ranges (for shared overlay axes)
+@@ -1633,7 +1687,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   /* ---- Results: F(R) and R (%) against λ side by side, F(R) against hν on a log axis
+      under them across the card (2φ : 1), then each card's pair of charts under its name,
+      in card order. To v497 the top was a pair, F(R) against λ and the log plot. ---- */
+-  const resList = document.getElementById('taucResList');
++  const resList = $('taucResList');
+   function resHtml(a){
+     const p = 'an' + a.id, t = a.type === 'tauc';
+     return `
+@@ -1678,14 +1732,14 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   const placeRes = ()=> cards().forEach(a=>{ const e = live.get(a.id); if (e && e.res) resList.appendChild(e.res); });
+ 
+   function renderResView(){
+-    if (!files.length) return;
++    if (!files.length || !drawable()) return;
+     // Plot 0: F(R) vs λ — reuse one Plot instance (create + attach tools once).
+     if (!resPlot0){
+-      resPlot0 = new Plot(document.getElementById('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a. u.)', xTickStep:50, noYTickLabels:true});
++      resPlot0 = new Plot($('taucResSvg0'), {xlabel:'Wavelength (nm)', ylabel:'F(R) (a. u.)', xTickStep:50, noYTickLabels:true});
+       resPlot0.attachTools(resPlot0.svg.closest('.plot-wrap'));
+     }
+     const plot0 = resPlot0; plot0.clearData();
+-    document.getElementById('taucResLegend0').innerHTML = swatchLegend(files);
++    $('taucResLegend0').innerHTML = swatchLegend(files);
+     let ymax0=-Infinity;
+     files.forEach((f,k)=>{ ymax0=Math.max(ymax0,maxArr(f.FR)); });
+     const [wl0, wl1] = unionWl();
+@@ -1706,11 +1760,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   // R (%) against λ, every sample's, on 0–100 %, all R can be.
+   function renderReflView(){
+     if (!resPlotR){
+-      resPlotR = new Plot(document.getElementById('taucResSvgR'), {xlabel:'Wavelength (nm)', ylabel:'R (%)', xTickStep:50});
++      resPlotR = new Plot($('taucResSvgR'), {xlabel:'Wavelength (nm)', ylabel:'R (%)', xTickStep:50});
+       resPlotR.attachTools(resPlotR.svg.closest('.plot-wrap'));
+     }
+     const p = resPlotR; p.clearData();
+-    document.getElementById('taucResLegendR').innerHTML = swatchLegend(files);
++    $('taucResLegendR').innerHTML = swatchLegend(files);
+     const [wl0, wl1] = unionWl();
+     p.setRange(wl0, wl1, 0, 100);
+     p.drawAxes();
+@@ -1723,11 +1777,11 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     if (!resPlotLog){
+       // A wider left margin than the default 55: powers of ten are wider tick labels
+       // than numbers, and in an export (type ×1.6) they reached the axis title.
+-      resPlotLog = new Plot(document.getElementById('taucResSvgLog'), {xlabel:'Energy (eV)', ylabel:'F(R) (a. u.)', xTickStep:0.5, yLog:true, margin:{l:66,r:20,t:15,b:40}});
++      resPlotLog = new Plot($('taucResSvgLog'), {xlabel:'Energy (eV)', ylabel:'F(R) (a. u.)', xTickStep:0.5, yLog:true, margin:{l:66,r:20,t:15,b:40}});
+       resPlotLog.attachTools(resPlotLog.svg.closest('.plot-wrap'));
+     }
+     const p = resPlotLog; p.clearData();
+-    document.getElementById('taucResLegendLog').innerHTML = swatchLegend(files);
++    $('taucResLegendLog').innerHTML = swatchLegend(files);
+     const logs = files.map(f=> f.FR.map(v=> v > 0 ? Math.log10(v) : NaN));
+     let lo = Infinity, hi = -Infinity;
+     logs.forEach(a=> a.forEach(v=>{ if (isFinite(v)){ lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
+@@ -1739,15 +1793,17 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+     // then be switched off like any other.
+     files.forEach((f,k)=> p.line(f.hv, logs[k], f.color, 1.3, undefined, { label: f.label, key: f.name, raw: { xs: f.hv, ys: f.FR } }));
+   }
++  // (an element of a card's section of the Results, found in it)
++  const resEl = (a, id)=> live.get(a.id).res.querySelector('#an' + a.id + id);
+   function renderAnalysisRes(a){
+-    if (!files.length || !live.has(a.id)) return;
++    if (!files.length || !live.has(a.id) || !drawable()) return;
+     ensureRes(a);
+     if (a.type === 'tauc') drawTaucRes(a); else drawUrbachRes(a);
+   }
+   // A plot of the section's (reused while the section lasts): R1, and an Urbach
+   // card's subtracted one, R3.
+   function resPlotOf(a, opts, which = 'R1'){
+-    const e = live.get(a.id), svg = document.getElementById('an' + a.id + which);
++    const e = live.get(a.id), svg = resEl(a, which);
+     e.resPlots = e.resPlots || {};
+     if (!e.resPlots[which] || e.resPlots[which].svg !== svg){
+       e.resPlots[which] = new Plot(svg, opts);
+@@ -1758,7 +1814,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+ 
+   // A Tauc card's pair: every sample's Tauc curve with its two fits, and the gaps.
+   function drawTaucRes(a){
+-    const P = panelOf(a), p = 'an' + a.id, $ = id => document.getElementById(p + id);
++    const P = panelOf(a), $ = id => resEl(a, id);
+     const fits = files.map((f,k)=> P.analyze(k));
+     // Effective exponent per file; when uniform, show it on the shared Tauc axis,
+     // otherwise fall back to a generic "a" (samples may use different exponents).
+@@ -1816,7 +1872,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   // under it, each with its own axes; and E_U beside them as the gaps are, plain,
+   // subtracted or both, as its chips say.
+   function drawUrbachRes(a){
+-    const P = panelOf(a), p = 'an' + a.id, $ = id => document.getElementById(p + id);
++    const P = panelOf(a), $ = id => resEl(a, id);
+     const fits = files.map((f,k)=> P.analyze(k));
+     const curves = files.map((f,k)=> ({
+       p: smoothY(f.FR.map(v=> v > 0 ? Math.log(v) : NaN), f.hv, P.params(k).w),
+@@ -1914,7 +1970,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+      {name, color, vals[], errs[]}, `chips` the plot's chip row, which the value labels
+      keep clear of. Only positive values are drawn; with none the chart is hidden. */
+   function resBars(a, shown, chips, yLabel, digits){
+-    const svg = document.getElementById('an' + a.id + 'R2'), wrap = svg.closest('.plot-wrap'), legend = document.getElementById('an' + a.id + 'RL2');
++    const svg = resEl(a, 'R2'), wrap = svg.closest('.plot-wrap'), legend = resEl(a, 'RL2');
+     svg.style.display = wrap.style.display = '';
+     if (valueBars(svg, { cats: files, series: shown, ok: v=> isFinite(v) && v > 0, digits, yLabel, chips, legend })) return;
+     svg.style.display = wrap.style.display = 'none';
+@@ -2064,4 +2120,22 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
+   });
+   // A new project starts with one Tauc card.
+   deck.start(['tauc']);
+-})();
++
++  /* ---- The instance (tabs.js) ----
++     No trim: a DRS tab's plots are all it could let go and draw again, 0.6 MB of heap for
++     10 spectra and two cards, and drawing them again takes 0.25 s (the analyses made again
++     for every sample), so its tab, hidden, keeps them until it sleeps (NOTES-drs.md). */
++  return {
++    // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
++    // menu and its listeners. Its section and layer are the shell's to take out.
++    destroy(){ kit.destroy(); },
++    /* What its tab's sleep gives back, estimated (bytes), for the tabs' limit by memory
++       (tabs.js): its elements and its plots, not its files' arrays, which its parked state
++       and its history keep. Measured, the renderer's RSS of 5 tabs awake and hidden over 5
++       asleep (NOTES-drs.md): blank none (427 elements); 10 spectra of 1201 points and a
++       Tauc card 4.2 MB, with an Urbach card too 5.3; 3 of them and both cards 3.9. So:
++       128 kB, and with files 1 MB a card and one more, and 180 bytes a point included. */
++    bytes(){ let pts = 0; files.forEach(f=>{ pts += f.wl.length; }); return (1 << 17) + (files.length ? (1 + cards().length)*(1 << 20) + 180*pts : 0); },
++  };
++}
++registerModule('tauc', createTauc);
+diff --git a/tests/b2drs.test.mjs b/tests/b2drs.test.mjs
+new file mode 100644
+index 0000000..6ae8ec7
+--- /dev/null
++++ b/tests/b2drs.test.mjs
+@@ -0,0 +1,132 @@
++/* UV-Vis DRS made per tab (b2): each DRS tab an instance of its own in one page. Two tabs
++   awake at once, each its own files, cards, parameters, view and undo history; a switch to
++   one awake only showing it (its own section, its plots as they were, not drawn again); a
++   tab hidden past Settings' minutes asleep (tabs.js sleepTick: the time taken to be later),
++   its instance let go (a WeakRef to its section emptied by a GC), woken with its state, its
++   cards (an Urbach card added from the kinds' menu, in its layer) and its whole history,
++   undone step by step to the empty start and redone. */
++import { test, before, after } from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import { start, openModule, loadFiles, switchTab, settle, undo, moduleState, history } from './helpers.mjs';
++
++let env;
++before(async ()=>{ env = await start(); });
++after(()=> env && env.close());
++
++const tabs = page => page.evaluate(async ()=> (await import('./tabs.js')).tabsNow());
++const awake = async page => (await tabs(page)).map(t=> t.awake);
++const tick = (page, ms)=> page.evaluate(async ms=> (await import('./tabs.js')).sleepTick(Date.now() + ms), ms);
++const MIN = 60000;
++const labels = async page => (await moduleState(page, 'tauc')).files.map(f=> f.label);
++async function relabel(page, i, v){ const l = page.locator(`#taucFileTableWrap .file-label[data-i="${i}"]`); await l.fill(v); await l.press('Enter'); await settle(page); }
++const exponent = async (page, v)=>{ await page.selectOption('#an1A', v); await settle(page); };
++const text = (page, sel)=> page.locator(sel).textContent();
++/* A new DRS tab, and files dropped (a DragEvent), with no element handle kept: Playwright's
++   setInputFiles keeps a hold on the input it filled, and a handle not disposed (openModule's
++   waitForSelector) on its element, and so on its instance, which a tab asleep would then
++   never let go. */
++async function newTab(page){
++  await page.click('#nav button[data-tab="home"]');
++  await page.click('.home-card[data-go="tauc"]');
++  await page.waitForFunction(()=> !!document.querySelector('#tab-tauc.active'));
++  await settle(page);
++}
++async function drop(page, files){
++  const n0 = await page.locator('#taucFileTableWrap tr.file-row').count();
++  const list = files.map(f=> [path.basename(f), fs.readFileSync(f).toString('base64')]);
++  await page.evaluate(list=>{
++    const dt = new DataTransfer();
++    for (const [name, b64] of list) dt.items.add(new File([Uint8Array.from(atob(b64), c=> c.charCodeAt(0))], name));
++    document.querySelector('#taucDropzone').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
++  }, list);
++  await page.waitForFunction(n=> document.querySelectorAll('#taucFileTableWrap tr.file-row').length >= n && !document.querySelector('.dz-loading'), n0 + files.length);
++  await settle(page);
++}
++
++test('two DRS tabs awake at once: each its own files, cards and undo; a switch to one awake only shows it, its plots not drawn again', async ()=>{
++  const { page, errors, close } = await env.page();
++  try {
++    const [d1, d2] = env.fx.files.tauc;
++    await openModule(page, 'tauc'); await loadFiles(page, 'tauc', [d1, d2]);
++    await relabel(page, 0, 'a-one');
++    await exponent(page, '2');
++    const egA = await text(page, '#an1Eg');
++    // (its section and a curve of its card's plot, marked: the same elements when it is shown again)
++    await page.evaluate(()=>{ document.querySelector('#tab-tauc').dataset.mark = 'A'; document.querySelector('#an1Svg path').dataset.mark = 'A'; });
++    await openModule(page, 'tauc'); await loadFiles(page, 'tauc', [d2]);
++    assert.deepEqual(await awake(page), [true, true], 'both awake');
++    assert.equal(await page.locator('#tab-tauc').count(), 1, 'one DRS section in the page, the one on show');
++    assert.equal(await page.inputValue('#an1A'), '0.5', 'B its own card, at the default exponent');
++    await relabel(page, 0, 'b-one');
++    await switchTab(page, 0);
++    assert.equal(await page.evaluate(()=> document.querySelector('#tab-tauc').dataset.mark), 'A', 'tab A\'s own section, shown again');
++    assert.equal(await page.locator('#an1Svg path[data-mark="A"]').count(), 1, 'its plot as it was left, not drawn again');
++    assert.deepEqual(await labels(page), ['a-one', 'drs2']);
++    assert.equal(await page.inputValue('#an1A'), '2');
++    assert.equal(await text(page, '#an1Eg'), egA);
++    assert.deepEqual(await history(page, 'tauc'), { index: 4, n: 5 }, 'its history: start, files, their lines placed, label, exponent');
++    // Undo in A undoes A's steps alone; B keeps its own.
++    await undo(page); await undo(page);
++    assert.deepEqual(await labels(page), ['drs1', 'drs2']);
++    assert.equal(await page.inputValue('#an1A'), '0.5');
++    await switchTab(page, 1);
++    assert.deepEqual(await labels(page), ['b-one']);
++    await undo(page);
++    assert.deepEqual(await labels(page), ['drs2']);
++    await switchTab(page, 0);
++    await undo(page, true); await undo(page, true);
++    assert.deepEqual(await labels(page), ['a-one', 'drs2'], 'A\'s redo, after B\'s undo');
++    assert.equal(await text(page, '#an1Eg'), egA);
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});
++
++test('a DRS tab asleep past Settings\' minutes, its instance let go; woken with its cards and its whole history', async ()=>{
++  const { page, errors, close } = await env.page();
++  try {
++    await page.evaluate(async ()=>{ const u = await import('./utils.js'); Object.assign(u.settings, { sleepMin: 10, livePolicy: 'count', liveMax: 6 }); });
++    await newTab(page); await drop(page, env.fx.files.tauc);
++    await relabel(page, 0, 'x');
++    await exponent(page, '2');
++    // An Urbach card, from the kinds' menu (in the instance's layer).
++    await page.click('#taucAddAn');
++    await page.click('.an-menu button[data-kind="urbach"]');
++    await page.waitForFunction(()=> !!document.querySelector('#an2Eu')); await settle(page);
++    await relabel(page, 1, 'y');
++    const before = { state: await moduleState(page, 'tauc'), h: await history(page, 'tauc'), eg: await text(page, '#an1Eg'), eu: await text(page, '#an2Eu') };
++    assert.notEqual(before.eu, '-');
++    await page.evaluate(async ()=>{ window.__root = new WeakRef((await import('./tabs.js')).TABS[0].inst.root); });
++    await openModule(page, 'tauc');
++    await tick(page, 9*MIN);
++    assert.deepEqual(await awake(page), [true, true], '9 minutes hidden: awake');
++    await tick(page, 11*MIN);
++    assert.deepEqual(await awake(page), [false, true], '11 minutes: asleep');
++    assert.equal((await tabs(page))[0].history, true, 'its history parked with it');
++    // Its instance let go: nothing holds its section once the page is collected.
++    const cdp = await page.context().newCDPSession(page);
++    for (let i = 0; i < 3; i++){ await cdp.send('HeapProfiler.collectGarbage'); await page.waitForTimeout(100); }
++    assert.equal(await page.evaluate(()=> window.__root.deref() === undefined), true, 'its section collected');
++    // Woken: its state, its cards and their results, its whole history.
++    await switchTab(page, 0);
++    assert.deepEqual(await awake(page), [true, true]);
++    assert.deepEqual(await moduleState(page, 'tauc'), before.state);
++    assert.deepEqual(await history(page, 'tauc'), before.h);
++    assert.equal(await text(page, '#an1Eg'), before.eg);
++    assert.equal(await text(page, '#an2Eu'), before.eu);
++    assert.ok(await page.locator('#an2Svg path').count() > 0, 'the Urbach card drawn');
++    // Undone step by step to the empty start, and redone to where it was.
++    await undo(page); assert.deepEqual(await labels(page), ['x', 'drs2']);
++    await undo(page); assert.equal(await page.locator('#an2Eu').count(), 0, 'the Urbach card undone');
++    await undo(page); assert.equal(await page.inputValue('#an1A'), '0.5');
++    await undo(page); assert.deepEqual(await labels(page), ['drs1', 'drs2']);
++    // (the files, then their lines placed: two steps)
++    await undo(page); await undo(page); assert.deepEqual(await labels(page), [], 'down to the empty start');
++    assert.equal((await history(page, 'tauc')).index, 0);
++    for (let i = 0; i < 6; i++) await undo(page, true);
++    assert.deepEqual(await moduleState(page, 'tauc'), before.state, 'and up again');
++    assert.equal(await text(page, '#an2Eu'), before.eu);
++    assert.deepEqual(errors, []);
++  } finally { await close(); }
++});

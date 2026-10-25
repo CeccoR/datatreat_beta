@@ -1,0 +1,58 @@
+{
+ "mode": "live",
+ "N": 4,
+ "kinds": [
+  "xrd",
+  "sem",
+  "drs",
+  "gc"
+ ],
+ "variants": {
+  "lazy": {
+   "shownMed": 778,
+   "shown": [
+    888,
+    853.9,
+    707.8,
+    778,
+    733.4
+   ],
+   "allMed": null,
+   "longMsMed": 434,
+   "longMaxMed": 434,
+   "mem": {
+    "heap": 14.7,
+    "rss": 203.1,
+    "pss": 150.2,
+    "workers": 0,
+    "frames": 1
+   }
+  },
+  "eager": {
+   "shownMed": 1781.7,
+   "shown": [
+    1781.7,
+    1885.5,
+    1788.1,
+    1765.7,
+    1723.2
+   ],
+   "allMed": 1889.1,
+   "longMsMed": 1212,
+   "longMaxMed": 609,
+   "mem": {
+    "heap": 108,
+    "rss": 405.1,
+    "pss": 352.1,
+    "workers": 0,
+    "frames": 4
+   }
+  }
+ },
+ "errors": [],
+ "load": [
+  0.79,
+  0.52,
+  0.82
+ ]
+}

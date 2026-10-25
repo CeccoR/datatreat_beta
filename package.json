@@ -1,0 +1,16 @@
+{
+  "name": "datatreat",
+  "private": true,
+  "type": "module",
+  "description": "DataTreat runs as it is, with no build and no dependency: this file only drives its browser tests (tests/README.md).",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-timeout=240000 --test-reporter=spec \"tests/*.test.mjs\"",
+    "test:update": "node --test --test-concurrency=1 --test-timeout=240000 --test-reporter=spec \"tests/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

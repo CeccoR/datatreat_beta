@@ -1,0 +1,250 @@
+{
+ "tree": "b2",
+ "started": "2026-10-24T16:59:54.838Z",
+ "errors": [],
+ "hiddenReading": [
+  {
+   "keys": false,
+   "readMs": 861,
+   "switchMs": 52.4,
+   "long": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "keyMs": null,
+   "raw": []
+  },
+  {
+   "keys": true,
+   "readMs": 750,
+   "switchMs": 55.3,
+   "long": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "keyMs": null,
+   "raw": []
+  },
+  {
+   "keys": false,
+   "readMs": 773,
+   "switchMs": 75.1,
+   "long": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "keyMs": null,
+   "raw": []
+  },
+  {
+   "keys": true,
+   "readMs": 827,
+   "switchMs": 116,
+   "long": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "keyMs": null,
+   "raw": []
+  },
+  {
+   "keys": false,
+   "readMs": 771,
+   "switchMs": 102.1,
+   "long": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "keyMs": null,
+   "raw": []
+  },
+  {
+   "keys": true,
+   "readMs": 794,
+   "switchMs": 99.5,
+   "long": {
+    "n": 0,
+    "sum": 0,
+    "max": 0,
+    "over200": 0,
+    "all": []
+   },
+   "keyMs": null,
+   "raw": []
+  }
+ ],
+ "hiddenRuns": [
+  {
+   "keys": false,
+   "ms": 9115,
+   "long": {
+    "n": 1,
+    "sum": 53,
+    "max": 53,
+    "over200": 0,
+    "all": []
+   },
+   "keyMs": null,
+   "raw": []
+  },
+  {
+   "keys": true,
+   "ms": 9487,
+   "long": {
+    "n": 48,
+    "sum": 3196,
+    "max": 104,
+    "over200": 0,
+    "all": [
+     104
+    ]
+   },
+   "keyMs": {
+    "n": 47,
+    "med": 73.6,
+    "max": 113.1,
+    "min": 57
+   },
+   "raw": [
+    96.5,
+    63.7,
+    69,
+    83,
+    103.8,
+    67.4,
+    88.1,
+    73,
+    105,
+    87.6,
+    85.5,
+    73.6,
+    64,
+    87.8,
+    57,
+    94.8,
+    60.4,
+    64,
+    113.1,
+    91.5,
+    62.3,
+    88.6,
+    89.6,
+    69,
+    76.5,
+    77.9,
+    67.5,
+    68.7,
+    62.2,
+    60.6,
+    91,
+    89.2,
+    62,
+    62,
+    80,
+    89.3,
+    68.7,
+    98.8,
+    66.5,
+    64.6,
+    57.5,
+    92,
+    68.3,
+    83,
+    57.4,
+    84,
+    72.6
+   ]
+  }
+ ],
+ "shownReading": {
+  "readMs": 1183,
+  "long": {
+   "n": 1,
+   "sum": 69,
+   "max": 69,
+   "over200": 0
+  }
+ },
+ "bursts": {
+  "before": {
+   "awake": 11,
+   "trimmed": 0
+  },
+  "trim": {
+   "ms": 2.7,
+   "awake": 11,
+   "trimmed": 10
+  },
+  "sleep": {
+   "ms": 19.4,
+   "awake": 1,
+   "trimmed": 10
+  }
+ },
+ "wakes": [
+  {
+   "module": "xrd",
+   "awake": false,
+   "ms": 538.6,
+   "long": {
+    "n": 1,
+    "sum": 442,
+    "max": 442,
+    "over200": 1
+   }
+  },
+  {
+   "module": "xrd",
+   "awake": false,
+   "ms": 534.7,
+   "long": {
+    "n": 1,
+    "sum": 445,
+    "max": 445,
+    "over200": 1
+   }
+  },
+  {
+   "module": "sem",
+   "awake": false,
+   "ms": 228.2,
+   "long": {
+    "n": 1,
+    "sum": 110,
+    "max": 110,
+    "over200": 0
+   }
+  },
+  {
+   "module": "sem",
+   "awake": false,
+   "ms": 333.7,
+   "long": {
+    "n": 1,
+    "sum": 231,
+    "max": 231,
+    "over200": 1
+   }
+  }
+ ],
+ "load": [
+  2.59,
+  3.78,
+  3.14
+ ]
+}

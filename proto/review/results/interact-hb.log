@@ -1,0 +1,6 @@
+head idle                   next {"n":8,"med":73,"p90":78,"max":81,"min":71} | smooth {"n":8,"med":126,"p90":146,"max":175,"min":99} | delay max 1 | long {"n":16,"sum":1491,"max":162}
+head own run                next {"n":8,"med":70,"p90":85,"max":100,"min":49} | smooth {"n":8,"med":165,"p90":202,"max":295,"min":95} | delay max 4 | long {"n":15,"sum":1767,"max":280}
+errors []
+bg idle                   next {"n":8,"med":67,"p90":74,"max":76,"min":50} | smooth {"n":8,"med":128,"p90":142,"max":145,"min":121} | delay max 1 | long {"n":14,"sum":1327,"max":133}
+bg own run                next {"n":8,"med":68,"p90":78,"max":80,"min":58} | smooth {"n":8,"med":140,"p90":146,"max":165,"min":106} | delay max 2 | long {"n":17,"sum":1650,"max":160}
+bg 1 parked refining      next {"n":8,"med":70,"p90":84,"max":85,"min":50} | smooth {"n":8,"med":136,"p90":160,"max":194,"min":102} | delay max 4 | long(span, incl. restarts) {"n":17,"sum":1974,"max":287}

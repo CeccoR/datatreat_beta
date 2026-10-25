@@ -1,4 +1,4 @@
-import { settings, redrawAll, makeCsvButton, fitCsvIcons, fitPlotIcons } from './utils.js';
+import { settings, redrawAll, makeCsvButton, fitCsvIcons, fitPlotIcons, zoomAgain } from './utils.js';
 
 /* =========================================================
    SVG PLOT HELPER (shared)
@@ -22,6 +22,9 @@ function niceTicks(min, max, n){
   return ticks;
 }
 function fixedTicks(min, max, step){
+  // Past 1000 ticks the step does not fit the range (a malformed project's 1e308 nm, say):
+  // the nice ticks instead. To v496 the loop ran on until the array ran out of memory.
+  if (!((max - min) / step <= 1000)) return niceTicks(min, max, 5);
   const ticks = [];
   const start = Math.ceil(min / step - 1e-9) * step;
   for (let v = start; v <= max + step * 1e-9; v += step) ticks.push(Math.round(v / step) * step);
@@ -46,10 +49,79 @@ function fmtTick(v){
   if (abs >= 0.1)  return parseFloat(v.toFixed(4)) + '';
   return parseFloat(v.toPrecision(3)) + '';
 }
+/* Chrome drops a baseline-shift="sub" run as far as it raises a "super" one, about
+   0.4 em, which leaves a subscript hanging well under the line; 0.2 em of the text it
+   sits in is where one belongs. Written as a number the drop also survives in exports,
+   where it is redone for the export's own label size. */
+const SUB_DROP = 0.2;
+// How far a tilted label's baseline sits under its pivot for the pivot to fall on the
+// middle of its letters (half the x-height and a little: Inter and Arial alike).
+const TILT_DY = '0.35em';
+function lowerSubs(text, fs){
+  text.querySelectorAll('tspan[baseline-shift="sub"]').forEach(t=>{
+    t.setAttribute('baseline-shift', (-SUB_DROP * fs).toFixed(2));
+    t.classList.add('plot-sub');
+  });
+}
+/* A y-axis title longer than its plot is tall goes onto two lines, split at the space
+   nearest its middle (one between words, not inside a sub/superscript); the second
+   line sits one line further in, toward the axis, the first where the single line
+   was. `src` is the title as given, SVG markup or plain text. */
+function wrapYLabel(text, src, isSvg, fs){
+  let depth = 0, plain = 0;
+  const cands = [];
+  for (let i = 0; i < src.length; i++){
+    const c = src[i];
+    if (isSvg && c === '<'){
+      const j = src.indexOf('>', i), tag = src.slice(i, j + 1);
+      if (tag.startsWith('</')) depth--; else if (!tag.endsWith('/>')) depth++;
+      i = j; continue;
+    }
+    if (c === ' ' && depth === 0) cands.push({ i, plain });
+    plain++;
+  }
+  if (!cands.length) return;
+  const best = cands.reduce((a, b)=> Math.abs(b.plain - plain/2) < Math.abs(a.plain - plain/2) ? b : a);
+  text.textContent = '';
+  [src.slice(0, best.i), src.slice(best.i + 1)].forEach((part, k)=>{
+    const t = svgEl('tspan', { x: text.getAttribute('x'), dy: k ? '1.15em' : '0' });
+    if (isSvg) t.innerHTML = part; else t.textContent = part;
+    text.appendChild(t);
+  });
+  if (isSvg) lowerSubs(text, fs);
+}
 function svgEl(tag, attrs){
   const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
   for (const k in attrs) e.setAttribute(k, attrs[k]);
   return e;
+}
+/* A tick or bar label's text: as it is, or, given runs [[text, over], …] (their texts
+   joined are the label's), each a tspan, those with `over` overlined — a negative Miller
+   index's bar (xrd-rv-model.js hklRuns). Two overlined side by side are kept 1 px apart, each its own
+   bar. Before each overlined run its minus, in a tspan not displayed (no glyph, no
+   advance), and the label whole as the text's aria-label: its text, an exported SVG's
+   too, and a screen reader read 1-11, not 111. A label without runs is set as it always
+   was. */
+function labelText(t, text, runs){
+  if (!runs){ t.textContent = text; return; }
+  t.setAttribute('aria-label', text);
+  runs.forEach(([s, over], i)=>{
+    if (over){ const m = svgEl('tspan', { display: 'none' }); m.textContent = '-'; t.appendChild(m); }
+    const r = svgEl('tspan', over ? { 'text-decoration': 'overline', ...(i && runs[i - 1][1] ? { dx: 1 } : {}) } : {});
+    r.textContent = s; t.appendChild(r);
+  });
+}
+// A figure composer is being opened from a plot's toolbar (figBtn, in attachTools).
+let _figOpening = false;
+/* An element by its id (a plot's svg, its legend), looked for from `from` outward: in its
+   plot's box, its card, its section or window first, then in the page. A module made per
+   tab (b2) has the same ids in each instance, only the one on show in the page: its
+   buttons find their own instance's elements, in the page or not. */
+function near(from, id){
+  if (!id) return null;
+  const sel = '#' + CSS.escape(id);
+  for (let a = from && from.parentElement; a; a = a.parentElement){ const e = a.querySelector(sel); if (e) return e; }
+  return document.getElementById(id);
 }
 class Plot{
   constructor(svg, opts){
@@ -76,15 +148,26 @@ class Plot{
     this._onModeChange = null;
     this._initInteraction();
   }
+  /* Read once a drawing: a redraw adds an element, then places the next one, and each
+     read after an element was added laid the page out again (every tick, box, label and
+     line: about 45 ms of an XRPD edit with 12 patterns, to v470). Kept until the task
+     ends, or until setRange starts another drawing. */
   size(){
-    const r = this.svg.getBoundingClientRect();
-    return {w: r.width||900, h: r.height||480};
+    if (!this._sz){
+      const r = this.svg.getBoundingClientRect();
+      this._sz = {w: r.width||900, h: r.height||480};
+      queueMicrotask(()=>{ this._sz = null; });
+    }
+    return this._sz;
   }
   setRange(xmin,xmax,ymin,ymax){
+    this._sz = null;
     if (xmax===xmin) xmax=xmin+1; if (ymax===ymin) ymax=ymin+1;
     this.xmin=xmin; this.xmax=xmax; this.ymin=ymin; this.ymax=ymax;
     this._origXmin=xmin; this._origXmax=xmax; this._origYmin=ymin; this._origYmax=ymax;
     this._stored=[];
+    // (the zoom it had before its tab slept or the page was reloaded, on this same range)
+    zoomAgain(this);
   }
   clearData(){
     this._stored=[]; this.gData.innerHTML=''; this.gOverlay.innerHTML='';
@@ -143,21 +226,42 @@ class Plot{
       if (!xTicks.some(v=>Math.abs(v-this.xmin)<tol)) drawXTick(this.xmin, 'start');
       if (!xTicks.some(v=>Math.abs(v-this.xmax)<tol)) drawXTick(this.xmax, 'end');
     }
+    /* A second x-axis along the top, for a quantity that is a function of x
+       (opts.topAxis = {label, of: x → value, at: value → x}): ticked at nice values of
+       its own, wherever they fall — g against the field, say, is not linear in it. */
+    const ta = this._opts.topAxis;
+    if (ta){
+      const a = ta.of(this.xmin), b = ta.of(this.xmax);
+      if (isFinite(a) && isFinite(b) && a !== b){
+        for (const v of niceTicks(Math.min(a, b), Math.max(a, b), 5)){
+          const xv = ta.at(v);
+          if (!(xv >= Math.min(this.xmin, this.xmax) && xv <= Math.max(this.xmin, this.xmax))) continue;
+          const px = this.px(xv);
+          this.gAxes.appendChild(svgEl('line',{x1:px,x2:px,y1:m.t,y2:m.t-4,stroke:'#3a414c','class':'plot-border'}));
+          const t = svgEl('text',{x:px,y:m.t-7,'font-size':10,fill:'#93a0b0','text-anchor':'middle','class':'plot-tick'});
+          t.textContent = fmtTick(v); this.gAxes.appendChild(t);
+        }
+      }
+      const tl = svgEl('text',{x:w/2,y:m.t-26,'font-size':11,fill:'#c4ccd6','text-anchor':'middle','class':'plot-label'});
+      tl.textContent = ta.label || ''; this.gAxes.appendChild(tl);
+    }
     if (!this.noYTickLabels || this._opts.yGrid){
-      for (const yv of niceTicks(this.ymin, this.ymax, 5)){
+      for (const yv of this.yTicksIn(this.ymin, this.ymax)){
         const py = this.py(yv);
         if (this._opts.yGrid)   // horizontal grid line (used by bar charts)
           this.gAxes.appendChild(svgEl('line',{x1:m.l,x2:w-m.r,y1:py,y2:py,stroke:'#262c35','class':'plot-grid'}));
         if (!this.noYTickLabels){
           const t = svgEl('text',{x:m.l-6,y:py+3,'font-size':10,fill:'#93a0b0','text-anchor':'end','class':'plot-tick'});
-          t.textContent = fmtTick(yv); this.gAxes.appendChild(t);
+          this.yTickText(t, yv); this.gAxes.appendChild(t);
         }
       }
     }
     const xl = svgEl('text',{x:w/2,y:h-4,'font-size':11,fill:'#c4ccd6','text-anchor':'middle','class':'plot-label'}); xl.textContent=this.xlabel;
     const yl = svgEl('text',{x:12,y:h/2,'font-size':11,fill:'#c4ccd6','text-anchor':'middle',transform:`rotate(-90 12 ${h/2})`,'class':'plot-label'});
-    if(this.ylabelSvg) yl.innerHTML=this.ylabelSvg; else yl.textContent=this.ylabel;
+    if(this.ylabelSvg){ yl.innerHTML=this.ylabelSvg; lowerSubs(yl, 11); } else yl.textContent=this.ylabel;
     this.gAxes.appendChild(xl); this.gAxes.appendChild(yl);
+    // Measured in place; a plot out of sight measures 0 and is redrawn when shown.
+    if (yl.getComputedTextLength() > h - 10) wrapYLabel(yl, this.ylabelSvg || this.ylabel, !!this.ylabelSvg, 11);
   }
   /* `meta` describes the trace for anything that reads a plot back rather than looks
      at it — today, the figure composer:
@@ -165,10 +269,13 @@ class Plot{
                        for readability, so a composed figure carries the CSV's numbers
        label string    what this trace is called, for plots whose legend does not
                        name every line (fits, baselines, extensions)
-     Neither is ever drawn. */
+       key   string    what this trace IS, where the label can change under it — the
+                       sample's file name rather than the label the user gives it —
+                       so settings kept for a trace find it again
+     None is ever drawn. */
   line(xs, ys, color, width, dash, meta){
     const entry = {type:'line', xs, ys, color, width, dash,
-                   raw: meta && meta.raw, label: meta && meta.label};
+                   raw: meta && meta.raw, label: meta && meta.label, key: meta && meta.key};
     this._stored.push(entry);
     return this._renderLine(entry);
   }
@@ -199,6 +306,27 @@ class Plot{
     }
     const p = svgEl('path',{d, fill:'none', stroke:entry.color, 'stroke-width':entry.width||1.5});
     if (entry.dash) p.setAttribute('stroke-dasharray', entry.dash);
+    this.gData.appendChild(p);
+    return p;
+  }
+  /* Separate straight segments in data units, pairs of points (xs[2i], ys[2i]) to
+     (xs[2i+1], ys[2i+1]), drawn as one path: the tick rows that mark a phase's
+     reflections under a refined pattern. A line would join them. */
+  segments(xs, ys, color, width, meta){
+    const entry = {type:'segments', xs, ys, color, width, label: meta && meta.label, key: meta && meta.key};
+    this._stored.push(entry);
+    return this._renderSegments(entry);
+  }
+  _renderSegments(entry, proj){
+    const {px,py} = proj || this._projector();
+    let d='';
+    for (let i=0;i+1<entry.xs.length;i+=2){
+      const x0=entry.xs[i], y0=entry.ys[i], x1=entry.xs[i+1], y1=entry.ys[i+1];
+      if (![x0,y0,x1,y1].every(isFinite)) continue;
+      if (Math.max(x0,x1)<this.xmin || Math.min(x0,x1)>this.xmax) continue; // off-view
+      d += 'M'+px(x0).toFixed(2)+','+py(y0).toFixed(2)+' L'+px(x1).toFixed(2)+','+py(y1).toFixed(2)+' ';
+    }
+    const p = svgEl('path',{d, fill:'none', stroke:entry.color, 'stroke-width':entry.width||1});
     this.gData.appendChild(p);
     return p;
   }
@@ -242,8 +370,46 @@ class Plot{
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1,y2:y1,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
     this.gData.appendChild(svgEl('line',{x1:x-4,x2:x+4,y1:y2,y2,stroke:'#fff','stroke-width':1.2,'class':'plot-errbar'}));
   }
-  tickLabel(xv, text, rot){
-    const entry = {type:'ticklabel', xv, text, rot: rot||0};
+  /* A box-and-whisker mark at data-x `xc` (+ pixel offset `dx`), `hw` px half-wide:
+     the box from the first to the third quartile, the median across it, whiskers out
+     to the furthest values within 1.5 IQR, each value beyond them a circle, and the
+     mean a cross. `st` = {q1, med, q3, lo, hi, mean, err, out[]}; `err`, the ± written
+     beside the mean, is carried for whatever reads the plot back. `meta.label` names
+     its series. */
+  box(xc, st, color, hw, dx, meta){
+    const entry = {type:'box', xc, q1:st.q1, med:st.med, q3:st.q3, lo:st.lo, hi:st.hi, mean:st.mean, err:st.err,
+                   out:(st.out||[]).slice(), color, hw:hw||14, dx:dx||0, label: meta && meta.label};
+    this._stored.push(entry);
+    return this._renderBox(entry);
+  }
+  _renderBox(e){
+    const x = this.px(e.xc) + e.dx, Y = v => this.py(v), hw = e.hw, cap = hw*0.5;
+    // The lines in the ink error bars are drawn in, which the theme and the export set.
+    const ink = { stroke:'#fff', 'stroke-width':1.2, 'class':'plot-errbar' };
+    const g = svgEl('g', {});
+    const add = (tag, at)=>{ g.appendChild(svgEl(tag, at)); };
+    add('line', {x1:x, x2:x, y1:Y(e.lo), y2:Y(e.q1), ...ink});
+    add('line', {x1:x, x2:x, y1:Y(e.q3), y2:Y(e.hi), ...ink});
+    add('line', {x1:x-cap, x2:x+cap, y1:Y(e.lo), y2:Y(e.lo), ...ink});
+    add('line', {x1:x-cap, x2:x+cap, y1:Y(e.hi), y2:Y(e.hi), ...ink});
+    add('rect', {x:x-hw, y:Math.min(Y(e.q1), Y(e.q3)), width:hw*2, height:Math.abs(Y(e.q1)-Y(e.q3)), fill:e.color});
+    add('line', {x1:x-hw, x2:x+hw, y1:Y(e.med), y2:Y(e.med), ...ink, 'stroke-width':2});
+    if (isFinite(e.mean)){
+      const r = Math.min(3.5, hw*0.4), ym = Y(e.mean);
+      add('line', {x1:x-r, x2:x+r, y1:ym-r, y2:ym+r, ...ink});
+      add('line', {x1:x-r, x2:x+r, y1:ym+r, y2:ym-r, ...ink});
+    }
+    for (const v of e.out) add('circle', {cx:x, cy:Y(v), r:2.5, fill:'none', ...ink});
+    this.gData.appendChild(g);
+    return g;
+  }
+  /* `full` is the name before it was shortened to fit the axis. The plot draws the
+     short one; anything reading the plot back — the figure composer — wants the name
+     the sample actually has, and `key` for which sample it is (as line()'s meta.key).
+     `runs`, the text in runs with some overlined (labelText); `fullRuns`, the whole
+     name's, kept for the composer, which draws that one (to v493 it had no bar there). */
+  tickLabel(xv, text, rot, full, key, runs, fullRuns){
+    const entry = {type:'ticklabel', xv, text, rot: rot||0, full: full || text, key, runs: runs || null, fullRuns: fullRuns || null};
     this._stored.push(entry);
     return this._renderTickLabel(entry);
   }
@@ -251,21 +417,24 @@ class Plot{
     const {h}=this.size(); const m=this.margin;
     const x = this.px(entry.xv);
     if (entry.rot){
-      // Tilted labels: anchor at the tick's right end so long names don't overlap
+      // Tilted labels: anchor at the tick's right end so long names don't overlap. The
+      // pivot is the middle of the last character, not its baseline: dy brings the
+      // glyphs' centre onto it, so that character sits under the tick at any angle.
       const y = h-m.b+14;
-      const t = svgEl('text',{x, y, 'font-size':10, fill:'#93a0b0', 'text-anchor':'end', 'class':'plot-tick', transform:`rotate(-${entry.rot} ${x} ${y})`});
-      t.textContent = entry.text;
+      const t = svgEl('text',{x, y, dy:TILT_DY, 'font-size':10, fill:'#93a0b0', 'text-anchor':'end', 'class':'plot-tick', transform:`rotate(-${entry.rot} ${x} ${y})`});
+      labelText(t, entry.text, entry.runs);
       this.gAxes.appendChild(t);
       return t;
     }
     const t = svgEl('text',{x, y:h-m.b+28, 'font-size':10, fill:'#93a0b0', 'text-anchor':'middle', 'class':'plot-tick'});
-    t.textContent = entry.text;
+    labelText(t, entry.text, entry.runs);
     this.gAxes.appendChild(t);
     return t;
   }
   // Value label anchored at data coords, drawn rotated (default vertical, reading
   // upward) a few px above the point — used for the numeric value above a bar. Lives
-  // in gData so it tracks pan/zoom; colour comes from CSS (.plot-errlabel).
+  // in gData so it tracks pan/zoom; colour comes from CSS (.plot-errlabel). opts.runs:
+  // the text in runs with some overlined (labelText).
   barLabel(xv, yval, text, opts){
     const entry = Object.assign({type:'barlabel', xv, yval, text}, opts||{});
     this._stored.push(entry);
@@ -278,9 +447,24 @@ class Plot{
     const t = svgEl('text',{x, y, 'font-size':entry.size||10, 'text-anchor':'start',
       'dominant-baseline':'central', 'class':'plot-errlabel', 'pointer-events':'none',
       transform:`rotate(-${rot} ${x} ${y})`});
-    t.textContent = entry.text;
+    labelText(t, entry.text, entry.runs);
     this.gData.appendChild(t);
     return t;
+  }
+  /* A vertical band over the whole plot height from x0 to x1, in data units: a span of
+     the x-axis to read the curves against. Drawn with the data (clipped, and kept in
+     exports), so it is laid down before the curves it sits behind. */
+  vband(x0, x1, color, opacity){
+    const entry = {type:'vband', x0, x1, color, opacity};
+    this._stored.push(entry);
+    return this._renderVband(entry);
+  }
+  _renderVband(entry){
+    const {h}=this.size(); const m=this.margin;
+    const a = this.px(Math.min(entry.x0, entry.x1)), b = this.px(Math.max(entry.x0, entry.x1));
+    const r = svgEl('rect',{x:a, y:m.t, width:Math.max(0, b-a), height:Math.max(0, h-m.t-m.b), fill:entry.color, 'fill-opacity':entry.opacity, 'pointer-events':'none'});
+    this.gData.appendChild(r);
+    return r;
   }
   vline(xv, color, draggable, onDrag, onDragEnd){
     const entry = {type:'vline', xv, color, draggable, onDrag, onDragEnd};
@@ -298,36 +482,56 @@ class Plot{
       // Grip dot near the top for an easy drag target
       const grip = svgEl('circle',{cx:x0, cy:m.t+15, r:7.5, fill:entry.color, 'cursor':'ew-resize'});
       this.gOverlay.appendChild(grip);
-      let dragging = false;
-      const move = (clientX)=>{
-        const rect = this.svg.getBoundingClientRect();
-        let xv2 = this.invX(clientX - rect.left);
-        xv2 = Math.max(this.xmin, Math.min(this.xmax, xv2));
-        entry.xv = xv2;
-        if (entry.onDrag) entry.onDrag(xv2);
-      };
-      const startDrag = e=>{ dragging = true; e.preventDefault(); e.stopPropagation(); };
+      const startDrag = e=>{ e.preventDefault(); e.stopPropagation(); this._dragVline(entry, e.pointerId); };
       hit.addEventListener('pointerdown', startDrag);
       grip.addEventListener('pointerdown', startDrag);
-      // Listen on svg + window so dragging survives gOverlay clears during redraws
-      this.svg.addEventListener('pointermove', e=>{ if (dragging) move(e.clientX); });
-      window.addEventListener('pointerup', ()=>{ if (dragging){ dragging = false; if (entry.onDragEnd) entry.onDragEnd(entry.xv); } });
     }
     line._value = entry.xv;
     return line;
+  }
+  /* One drag of a vline, from the press on it to its release (or cancel). The move and
+     the release are heard on the svg and the window, not on the line, so the drag
+     survives the redraws that replace the line under the pointer, and only while it
+     lasts: each render of a draggable line added both for good (to v475), and Tauc,
+     which redraws its four lines on every drag frame, sample step, parameter change and
+     pan, piled them up by the thousand. Only the pointer that pressed moves the line, so
+     two fingers on two lines drag one each (both lines took whichever moved last). */
+  _dragVline(entry, id){
+    const svg = this.svg;
+    const move = e=>{
+      if (e.pointerId !== id) return;
+      const rect = svg.getBoundingClientRect();
+      let xv2 = this.invX(e.clientX - rect.left);
+      xv2 = Math.max(this.xmin, Math.min(this.xmax, xv2));
+      entry.xv = xv2;
+      if (entry.onDrag) entry.onDrag(xv2);
+    };
+    const end = e=>{
+      if (e.pointerId !== id) return;
+      svg.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      if (entry.onDragEnd) entry.onDragEnd(entry.xv);
+    };
+    svg.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
   }
   _redrawFromStored(){
     this.gData.innerHTML=''; this.gOverlay.innerHTML='';
     const proj = this._projector();
     for (const e of this._stored){
       if (e.type==='line') this._renderLine(e, proj);
+      else if (e.type==='segments') this._renderSegments(e, proj);
       else if (e.type==='points') this._renderPoints(e, proj);
       else if (e.type==='bar') this._renderBar(e);
       else if (e.type==='barpx') this._renderBarPx(e);
       else if (e.type==='errbar') this._renderErrbar(e);
+      else if (e.type==='box') this._renderBox(e);
       else if (e.type==='ticklabel') this._renderTickLabel(e);
       else if (e.type==='barlabel') this._renderBarLabel(e);
       else if (e.type==='vline') this._renderVline(e);
+      else if (e.type==='vband') this._renderVband(e);
     }
   }
   _refresh(){ this.drawAxes(); this._redrawFromStored(); if (this._onView) this._onView(); }
@@ -359,7 +563,7 @@ class Plot{
     snapBtn.className = 'btn plot-tool-btn';
     snapBtn.title = 'Download current view';
     snapBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5a1.5 1.5 0 0 1 1.5-1.5h2l1.2-2h6.6l1.2 2h2A1.5 1.5 0 0 1 20 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3"/></svg>`;
-    const viewLeg = ()=>{ const d=col.querySelector('.plot-dl-btn'); return d && d.dataset.dlLegend ? document.getElementById(d.dataset.dlLegend) : null; };
+    const viewLeg = ()=>{ const d=col.querySelector('.plot-dl-btn'); return d && d.dataset.dlLegend ? near(d, d.dataset.dlLegend) : null; };
     snapBtn.onclick = ()=>{
       const dlBtn = col.querySelector('.plot-dl-btn');
       const baseName = dlBtn && dlBtn.dataset.dlName ? dlBtn.dataset.dlName.replace(/\.[^.]+$/, '') : 'plot';
@@ -397,14 +601,22 @@ class Plot{
     figBtn.className = 'btn plot-tool-btn';
     figBtn.title = 'Figure composer (advanced export)';
     figBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="3" y1="12" x2="21" y2="12"/></svg>`;
+    /* One composer at a time. A click while one is loading is ignored, and none opens
+       over a composer already open (this one or the SEM figure's: a press of Enter on
+       the button, still focused, reaches it under the modal). A double click before
+       figure.js had loaded opened two, the first left with no way to close (to v475). */
     figBtn.onclick = async ()=>{
+      if (_figOpening) return;
+      _figOpening = true;
       const dlBtn = wrapEl.querySelector('.plot-dl-btn');
       const legId = dlBtn && dlBtn.dataset.dlLegend;
       const name = (dlBtn && dlBtn.dataset.dlName || 'figure').replace(/\.[^.]+$/, '');
       try {
         const mod = await import('./figure.js');
-        mod.openFigureEditor(this, { legendEl: legId ? document.getElementById(legId) : null, name });
+        if (!document.querySelector('.fig-backdrop'))
+          mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name });
       } catch(err){ console.error('figure composer failed to load', err); }
+      finally { _figOpening = false; }
     };
 
     // Order, top to bottom: composer, CSV, download image, snapshot, copy, pan, zoom.
@@ -433,6 +645,22 @@ class Plot{
     fitCsvIcons(col);
     fitPlotIcons(col);
   }
+  /* A log y-axis (opts.yLog): the values drawn are the log10 of the data, ticked at
+     the whole decades in view and labelled as powers of ten. Less than two decades in
+     view, it falls back to nice steps of the exponent, labelled with the value. */
+  yTicksIn(lo, hi){
+    if (!this._opts.yLog) return niceTicks(lo, hi, 5);
+    const dec = [];
+    for (let n = Math.ceil(lo - 1e-9); n <= Math.floor(hi + 1e-9); n++) dec.push(n);
+    return dec.length >= 2 ? dec : niceTicks(lo, hi, 5);
+  }
+  yTickText(t, yv){
+    if (!this._opts.yLog) t.textContent = fmtTick(yv);
+    else if (Math.abs(yv - Math.round(yv)) < 1e-9){
+      const n = Math.round(yv);
+      t.innerHTML = `10<tspan baseline-shift="super" font-size="8">${n < 0 ? '−' + (-n) : n}</tspan>`;
+    } else t.textContent = fmtTick(Math.pow(10, yv));
+  }
   _clearCrosshair(){ if (this.gCross) this.gCross.innerHTML=''; }
   // Draw a thin crosshair + a coordinate readout at the pointer (data coordinates via invX/invY)
   _drawCrosshair(clientX, clientY){
@@ -452,11 +680,13 @@ class Plot{
     // out of the axis label's trailing parentheses). Bar plots have a categorical x
     // (no meaningful x coordinate under the pointer), so they show the y line only.
     const ylabTxt = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
-    const isBar = this._stored && this._stored.some(e=>e.type==='bar' || e.type==='barpx');
+    const isBar = this._stored && this._stored.some(e=>e.type==='bar' || e.type==='barpx' || e.type==='box');
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
     if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }
-    const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, yv, fmt);
+    const ta = this._opts.topAxis;
+    if (!isBar && ta){ const l3=svgEl('tspan',{x:tx,dy:16}); l3.textContent=`${ta.label||'x₂'} = ${(ta.fmt||fmt)(ta.of(xv))}`; t.appendChild(l3); }
+    const l2=svgEl('tspan',{x:tx,dy:isBar?0:16}); l2.textContent=axisReadout(ylabTxt, this._opts.yLog ? Math.pow(10, yv) : yv, fmt);
     t.appendChild(l2);
     this.gCross.appendChild(t);
   }
@@ -612,11 +842,15 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
     el.setAttribute('fill','#333333');
     el.setAttribute('font-family','Arial, sans-serif');
     el.setAttribute('font-size', Math.round(parseFloat(el.getAttribute('font-size')||10) * 1.6));
+    // a log axis's exponent grows with its 10
+    el.querySelectorAll('tspan[font-size]').forEach(t=> t.setAttribute('font-size', Math.round(parseFloat(t.getAttribute('font-size')) * 1.6)));
   });
   workSvg.querySelectorAll('.plot-label').forEach(el=>{
     el.setAttribute('fill','#333333');
     el.setAttribute('font-family','Arial, sans-serif');
-    el.setAttribute('font-size', Math.round(parseFloat(el.getAttribute('font-size')||11) * 1.6));
+    const fs = Math.round(parseFloat(el.getAttribute('font-size')||11) * 1.6);
+    el.setAttribute('font-size', fs);
+    el.querySelectorAll('.plot-sub').forEach(t=> t.setAttribute('baseline-shift', (-SUB_DROP * fs).toFixed(2)));
   });
 
   // Add tick marks (primary + secondary, inner + outer, mirrored on all sides)
@@ -637,11 +871,13 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
       const xTicks = plotObj._opts.xTickStep
         ? fixedTicks(rx1, rx2, plotObj._opts.xTickStep)
         : niceTicks(rx1, rx2, 5);
+      // A plot with a second x-axis along the top keeps that side for its ticks.
+      const top = !plotObj._opts.topAxis;
       for (const xv of xTicks){
         const px = toSvgX(xv);
         if (px < m.l-1 || px > w-m.r+1) continue;
         addLine(px,h-m.b+PO, px,h-m.b-PI, 1.2); // bottom
-        addLine(px,m.t-PO,   px,m.t+PI,   1.2); // top
+        if (top) addLine(px,m.t-PO,   px,m.t+PI,   1.2); // top
       }
       if (xTicks.length >= 2){
         const step = xTicks[1]-xTicks[0];
@@ -649,20 +885,29 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
           const px = toSvgX(xv);
           if (px < m.l-1 || px > w-m.r+1) continue;
           addLine(px,h-m.b+SO, px,h-m.b-SI, 0.9);
-          addLine(px,m.t-SO,   px,m.t+SI,   0.9);
+          if (top) addLine(px,m.t-SO,   px,m.t+SI,   0.9);
         }
       }
     }
 
     if (!plotObj.noYTickLabels){
-      const yTicks = niceTicks(ry1, ry2, 5);
+      const yTicks = plotObj.yTicksIn(ry1, ry2);
       for (const yv of yTicks){
         const py = toSvgY(yv);
         if (py < m.t-1 || py > h-m.b+1) continue;
         addLine(m.l-PO,   py, m.l+PI,   py, 1.2); // left
         addLine(w-m.r+PO, py, w-m.r-PI, py, 1.2); // right
       }
-      if (yTicks.length >= 2){
+      // On a log axis ticked by decades the minor ticks are the 2…9 of each.
+      const decades = plotObj._opts.yLog && yTicks.every(v=> Number.isInteger(v));
+      if (decades){
+        for (let n = Math.floor(ry1); n <= Math.ceil(ry2); n++) for (let k = 2; k <= 9; k++){
+          const py = toSvgY(n + Math.log10(k));
+          if (py < m.t-1 || py > h-m.b+1) continue;
+          addLine(m.l-SO,   py, m.l+SI,   py, 0.9);
+          addLine(w-m.r+SO, py, w-m.r-SI, py, 0.9);
+        }
+      } else if (yTicks.length >= 2){
         const step = yTicks[1]-yTicks[0];
         for (let yv = yTicks[0]-step/2; yv <= ry2+step/2; yv += step){
           const py = toSvgY(yv);
@@ -768,12 +1013,12 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
 document.addEventListener('click', e=>{
   const btn = e.target.closest('[data-dl-svg]');
   if (!btn) return;
-  const el = document.getElementById(btn.dataset.dlSvg);
-  const legEl = btn.dataset.dlLegend ? document.getElementById(btn.dataset.dlLegend) : null;
+  const el = near(btn, btn.dataset.dlSvg);
+  const legEl = btn.dataset.dlLegend ? near(btn, btn.dataset.dlLegend) : null;
   if (el) downloadSvgClean(el, btn.dataset.dlName || btn.dataset.dlSvg+'.svg', legEl);
 });
 
 
 export {
-  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, Plot, downloadSvgClean
+  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot, downloadSvgClean
 };

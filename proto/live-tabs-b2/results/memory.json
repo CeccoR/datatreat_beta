@@ -1,0 +1,132 @@
+{
+ "head": [
+  {
+   "k": 0,
+   "mem": {
+    "heap": 3.8,
+    "nodes": 3720,
+    "listeners": 522,
+    "rss": 137.2
+   }
+  },
+  {
+   "k": 1,
+   "mem": {
+    "heap": 10.9,
+    "nodes": 4971,
+    "listeners": 661,
+    "rss": 217.5
+   }
+  },
+  {
+   "k": 2,
+   "mem": {
+    "heap": 13.5,
+    "nodes": 4984,
+    "listeners": 661,
+    "rss": 234.3
+   }
+  },
+  {
+   "k": 3,
+   "mem": {
+    "heap": 16.1,
+    "nodes": 4997,
+    "listeners": 661,
+    "rss": 270.9
+   }
+  },
+  {
+   "k": 4,
+   "mem": {
+    "heap": 18.6,
+    "nodes": 5010,
+    "listeners": 661,
+    "rss": 271.6
+   }
+  }
+ ],
+ "b2": [
+  {
+   "k": 0,
+   "mem": {
+    "heap": 3.8,
+    "nodes": 3855,
+    "listeners": 525,
+    "rss": 138.6
+   }
+  },
+  {
+   "k": 1,
+   "mem": {
+    "heap": 12.3,
+    "nodes": 7220,
+    "listeners": 1035,
+    "rss": 223.4
+   },
+   "tabs": [
+    "awake",
+    "awake"
+   ]
+  },
+  {
+   "k": 2,
+   "mem": {
+    "heap": 19.3,
+    "nodes": 10574,
+    "listeners": 1545,
+    "rss": 240.2
+   },
+   "tabs": [
+    "awake",
+    "awake",
+    "awake"
+   ]
+  },
+  {
+   "k": 3,
+   "mem": {
+    "heap": 26.4,
+    "nodes": 13928,
+    "listeners": 2055,
+    "rss": 259
+   },
+   "tabs": [
+    "awake",
+    "awake",
+    "awake",
+    "awake"
+   ]
+  },
+  {
+   "k": 4,
+   "mem": {
+    "heap": 33.3,
+    "nodes": 17282,
+    "listeners": 2565,
+    "rss": 274
+   },
+   "tabs": [
+    "awake",
+    "awake",
+    "awake",
+    "awake",
+    "awake"
+   ]
+  }
+ ],
+ "headErrors": [],
+ "b2Trimmed": {
+  "heap": 14.1,
+  "nodes": 17282,
+  "listeners": 2565,
+  "rss": 250
+ },
+ "b2Asleep": {
+  "heap": 12.7,
+  "nodes": 3918,
+  "listeners": 525,
+  "rss": 214.3
+ },
+ "b2Errors": []
+}

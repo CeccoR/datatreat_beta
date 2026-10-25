@@ -1,0 +1,95 @@
+heavy rep 0 cold wall 54888 
+heavy rep 1 warm wall 54354 peak worker heap 42.4 MB, rss 212
+heavy rep 2 warm wall 54632 
+heavy rep 3 warm wall 54435 
+heavy rep 4 warm wall 53420 
+{
+ "conf": "heavy",
+ "wallCold": 54887.59999999998,
+ "wallWarmMed": 54394.55000000005,
+ "wallPerJobFresh": 51371.80000000005,
+ "perPatternWarmMed": {
+  "s00.xrdml": 4573,
+  "s01.xrdml": 4248,
+  "s02.xrdml": 4431,
+  "s03.xrdml": 3889,
+  "s04.xrdml": 4404,
+  "s05.xrdml": 4252,
+  "s06.xrdml": 5217,
+  "s07.xrdml": 4799,
+  "s08.xrdml": 4872,
+  "s09.xrdml": 4295,
+  "s10.xrdml": 5210,
+  "s11.xrdml": 4430
+ },
+ "perPatternCold": {
+  "s00.xrdml": 4439,
+  "s01.xrdml": 4704,
+  "s02.xrdml": 4682,
+  "s03.xrdml": 3830,
+  "s04.xrdml": 4508,
+  "s05.xrdml": 4306,
+  "s06.xrdml": 5344,
+  "s07.xrdml": 4863,
+  "s08.xrdml": 4771,
+  "s09.xrdml": 4148,
+  "s10.xrdml": 4938,
+  "s11.xrdml": 4343
+ },
+ "perPatternFresh": {
+  "s00.xrdml": 4335,
+  "s01.xrdml": 4406,
+  "s02.xrdml": 4047,
+  "s03.xrdml": 3849,
+  "s04.xrdml": 3998,
+  "s05.xrdml": 4008,
+  "s06.xrdml": 4959,
+  "s07.xrdml": 4174,
+  "s08.xrdml": 4630,
+  "s09.xrdml": 3683,
+  "s10.xrdml": 4948,
+  "s11.xrdml": 4317
+ },
+ "engineMsWarmMed": 4193,
+ "progressMsgsPerJobMed": 55,
+ "payBytes": 123862,
+ "resBytesMed": 12941,
+ "stdMsMed": 602.4000000000233,
+ "deterministic": true,
+ "mem0": {
+  "pageHeap": 1.3108329772949219,
+  "workerHeaps": [],
+  "rss": 95.1796875,
+  "hwm": 95.1796875
+ },
+ "memWarm": {
+  "pageHeap": 6.561637878417969,
+  "workerHeaps": [
+   2.2731971740722656
+  ],
+  "rss": 118.14453125,
+  "hwm": 225.5625
+ },
+ "memAfterKill": {
+  "pageHeap": 3.224090576171875,
+  "workerHeaps": [],
+  "rss": 120.87109375,
+  "hwm": 225.5625
+ },
+ "peakDuringRep": {
+  "worker": 42.392250061035156,
+  "sumWorkers": 42.392250061035156,
+  "rss": 212.4375
+ },
+ "load0": [
+  0.94,
+  0.35,
+  0.13
+ ],
+ "load1": [
+  1.32,
+  0.9,
+  0.45
+ ],
+ "errors": []
+}
