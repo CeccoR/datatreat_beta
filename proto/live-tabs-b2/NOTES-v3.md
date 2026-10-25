@@ -4,7 +4,8 @@ Round 3, in `b2.patch` (one git diff against HEAD, the app's files those of v517
 **Part A** (§1–§3): three of the user's decisions (2, 8, 5a). Nothing else changed, but for
 one thing found on the way and needed by the second: a reload reads the tabs' records one a
 task (§2). **Part B** (§4–§6): two more (4a, 4-loader), measured against b2v2, then the
-limit under the new policy, and the whole suite.
+limit under the new policy, and the whole suite. **The review** (§7): its findings on parts A
+and B, each reproduced, fixed at its root and tested.
 
 1. **No memory budget.** The policy, its MB, their Settings rows, every module's `bytes()`
    and what only they used are gone. The rules left: the count of tabs awake, and the
@@ -28,6 +29,14 @@ limit under the new policy, and the whole suite.
 5. **The loader over every step that may take a while** (part B): wherever a long task
    (over 100 ms) remained without it, a switch to a tab awake at another width and a reload
    with a project changed, it is now on first, a frame drawn, and off after.
+6. **The review** (§7): eight findings (nine, one found twice), none rejected. A SEM history
+   woken holds one copy of a file's bytes again (it held one a step: 104.5 MB for 32.2); a
+   file only its history holds keeps its thumbnail and cards across a wake (an undo made them
+   again: 0.54 s, a task of 0.49 s, no loader); a read of a tab's files that fails as a whole leaves the
+   tab asleep and its files stored (it woke without them and lost them); the loader over a
+   tab left for Settings and shown at another width, and over a project written to a file
+   (1.7 s); one record on show after two quick switches; a SEM crop's cards kept for an
+   undo; dead code out.
 
 ## 1. No memory budget
 
@@ -217,7 +226,7 @@ spectrum twice and its CSVs a third time. All of it is now kept.
 | DRS (tauc.js) | a card's curve as read and smoothed (`drs-curve`, 8) and its derivative (`drs-slope`); every fit of a sample and what the card makes of it, E_g, E_U, the subtracted Urbach fit (`drs-fits`, 8); the Results' R % and log F(R) | the spectrum's F(R) | the card's kind, wavelengths, exponent and widths; its lines; an Urbach card's reference's own key for the sample |
 | GC (gc.js) | a sample's tables: each gas's times, readings, flows, their integral (`gc-tables`, 8) | its first gas's readings | dates, every gas's readings, light-on, injection delay, flow's rate, T, p, mass |
 | EPR (epr.js) | a spectrum smoothed (`epr-smoothed`, 8) | its intensities | its field, the width |
-| SEM (sem.js) | header, reduced copy, card levels (`imgs`) | the file's id | — (below) |
+| SEM (sem.js) | header, reduced copy, card levels by the part of the image and the size, the last 4 (`imgs`; §7) | the file's id | — (below) |
 
 - DRS's card no longer fits its sample twice at each drawing (once for its own statistics,
   once in `analyze`): it takes `analyze`'s fits, the same calls on the same inputs. Its
@@ -299,8 +308,9 @@ Changed:
   Left at another width, or changed while hidden (its history moved: a job's results), it
   is shown under the loader: on, a frame drawn, the tab put in the page, its redraw, the
   loader off two frames after (`redrawn`, `showLater`; the window's width and zoom kept as a
-  tab is left, `view`; `changed` from `onAnyChange`). The same for a tab shown back from
-  Home, and for the tab a close lands on.
+  tab is left, `view`, for another tab or for a fixed section, §7; `changed` from
+  `onAnyChange`). The same for a tab shown back from Home, and for the tab a close lands on.
+  A project written to a file goes under the loader too (`underLoader`, §7).
 - **sessions.js** `takeSavedKey`: the saved record's key read out of an instance of its own
   (utils.js `withState`), which draws nothing, not the tab's: 140 ms where it was 466; and
   the load of such a tab waits, the loader on, till the record is read and the key taken
@@ -396,7 +406,115 @@ SEM, XRPD refined, XRPD refining in turn; 45 tabs open at N = 40):
   SEM in 420–517 ms (103–133). Every tab asleep: 295 MB (SEM, 32 tabs), 704 MB (mix, 45
   tabs; 873 after the 4 wakes).
 
+## 7. The review's findings
+
+Nine findings of three reviewers on parts A and B, eight distinct (`hideTab`'s twice). Each
+reproduced first on a fresh git-archive of HEAD (a44b222) with part B's patch (d54978fe…),
+by the reviewer's own script; each fixed at its root, with a test that fails on that tree and
+passes on this one (the same test file run with `DT_ROOT` on each); none rejected. Measured
+with `measure/review3/` (the reviewers' scripts made portable) → `results/review3.log`: a
+profile on disk, headless, one run each, part B's tree on 8991 and this one on 8990, the
+machine otherwise idle.
+
+1. **A SEM history woken held a copy of a file's bytes at each step that held it** (db.js
+   `fill`). SEM's snapshots share one RawRef a file. `unload` copies it once, so its array is
+   met once and its reference gets no id; `fill` then met that one copy at every step and made
+   a RawRef each time, its array copied (`b.slice()`) at every step but the first. Now `fill`
+   gives one result for one object met (a `Map`), as `unload` made one: the history woken
+   holds one RawRef and one array a file, as before its sleep. A record read is as before
+   (park and encode make an object a place). `p8-dupmem` (4 images 2048 × 2058 at 16 bits,
+   each relabelled, two removed; asleep, woken): the history 4 arrays, 32.2 MB, before the
+   sleep, and woken 13 arrays, 104.5 MB (the page's ArrayBuffers after two GCs 53.3 →
+   124.7 MB); now 4 arrays, 32.2 MB, and 53.3 MB; the wake 357 → 299 ms. Test: `b2sem` 4,
+   the history's RawRefs and arrays counted by file before the sleep and woken, one each
+   (c.tif, removed, in two steps).
+2. **A wake let go of what was made of a file its history alone held** (sem.js
+   `asleepHolds`). At the wake, `asleep(key, null)` found such a file not alive (the
+   history's RawRefs were `load`'s copies, in no `raws`) and dropped its header, reduced copy
+   and card; an undo bringing it back made them again, with no loader. Now SEM takes, at that
+   call, the woken history's RawRefs as the files' own (`adopt`: `rawOf` keeps each where none
+   is kept, else puts the one kept in its place), as they were before the sleep: they hold
+   what the file was made into, and its end (`gone`) lets it go. `p9-removeall` (8 images
+   2048 × 2058, Remove all, a sleep and a wake, Ctrl+Z): 542 ms, a task of 485 ms, no
+   loader, 8 reduced copies and 8 cards made; now 158 ms, the longest task 82 ms, nothing
+   made (76 ms with the tab awake throughout). Test: `b2sem` 4, an undo after the wake
+   bringing back c.tif, which the history alone held: no thumbnail or card made
+   (`kept.made`); the census above (one RawRef a file, the state's).
+3. **A read of a tab's files failing as a whole woke it without them, and lost them**
+   (tabs.js `wakeLater`). Its record, written as it woke, held no file, and a sweep deleted
+   bytes that the store held whole. Now such a wake is given up: the tab stays asleep as it
+   was (its references, its record), Home is put on show (a fixed section on show stays), a
+   banner says its files could not be read and that showing it reads them again; shown again
+   (`activateTab`: the tab on show asleep, its wake not going on), it reads them. A reload
+   keeps the records it cannot read the same way. Files the store lacks after a read that
+   worked still come back without them, said so. Test: `b2sem` 5, the bytes store's reads
+   made to throw: the banner, the tab asleep with its references, Home on show, the loader
+   off; its record holding its file and the store too after a sweep; shown again, woken with
+   it.
+4. **A tab left for Home, Projects or Settings took the window's width of the moment another
+   tab was chosen from there** (tabs.js `hideTab`; found by two reviewers). Its plots were
+   drawn at the width it was left for that section at (`onSectionChange` keeps it), which
+   `hideTab` wrote over: shown again at the new width it was not `redrawn`, and drew every
+   plot again in one long task with no loader. Now `hideTab` keeps a width kept as the tab
+   was left for a fixed section. `p7` (XRPD, 12 patterns refined; Settings, the window 1400 →
+   1100 px there, the GC tab, the XRPD tab): no loader, a task of 126 ms; now the loader on,
+   its task of 127 ms under it. Test: `b2kept` 2, DRS: Settings, the window changed there,
+   another tab, back: the loader on first.
+5. **Two switches within a switch's frames left the record of the tab left first on show**
+   (tabs.js). The records whose `active` changed were written by the step that showed the
+   tab chosen (two frames on, `showLater`; a wake's end, `loadTabIfActive`), which a second
+   switch meanwhile skipped: two records `active`, a reload showing the first. Now the tab
+   left writes its record at the switch, the tab shown its own as it is shown, and a close
+   writes every record at once (their order changed too), not after its step.
+   `p-persist`: `persistTab` takes 0.7 ms of the page's thread for an XRPD tab of 12 refined
+   (median of 7; its write queued). Test: `b2cap` 3, three GC tabs, two clicks within the
+   frames: one record `active`, the last chosen's, on show after a reload.
+6. **Dead code** (xrd-rv-model.js): `curveInputs`, `sameArr`, `sameInputs`, which xrd-rv.js
+   read to part B (`keeper` took their place), and their comment naming `curveKept`. Taken
+   out, `exactJson` kept (`curveKey`'s). Nothing else imports them (grep over the app and the
+   tests); the XRPD tests pass.
+7. **An undo or a redo of a SEM crop made its group's cards again** (sem.js `cardOf`): a
+   file kept one set of card levels, the last made. Now it keeps those of the last 4 parts
+   of the image and sizes it took (`imgs`' `cards`, a `Map`, the last used last), 0.08 MB
+   each at most (200 px across, 16 bits). Counted (the reviewer's `probe-semcard8`, 8
+   images 2048 × 2176, `kept.made`): a crop 1500 px wide made 8 cards, then undo, redo and
+   undo 8 each (32 in all); now 8, and none by the three. Test: `b2kept` 3, the fixture's
+   three images, a crop 128 px wide made, then undo, redo, undo: none made.
+8. **Writing a project to a file froze the page** (sessions.js `exportJson`,
+   `exportProjectRecord`; v517's, not part B's): its files' bytes written as base64 in one
+   task with no loader (the reviewer's 1.65–1.75 s for a SEM project of 8 images 2048 × 2176,
+   90.7 MB, in the tests' context: no IndexedDB in that task). Within the user's "no visible freeze anywhere": now under the loader, a frame
+   drawn first (tabs.js `underLoader`), from the project's bar and from Projects (a row, and
+   Export selected: on till the last is written). Test: `b2kept` 4, two images 2048 × 2058
+   written from the bar and from Projects: each long task with the loader on before it, a
+   frame drawn between, the loader off after.
+
+Left as it was: a crop typed on the tab on show makes its group's cards in its own task, with
+no loader, as any edit on show does (Not done, below).
+
 ## Tests
+
+### The review's fixes
+
+**The whole suite, `DT_ROOT=<tree> npm test`: 213 of 214 pass** in 13 min 3 s
+(`results/suite-b2v3c.log`), on a fresh git-archive copy of HEAD (a44b222) with the new
+`b2.patch` (the tree identical, file by file, to a second copy made from the delivered
+patch). The one failure, `bytestore`'s "a rename from the list writes the title alone…",
+waited 30 s for the tab's new title after a rename in Projects; run again alone on the same
+tree it passed 3 times of 3 (2.9 s each, in the log), and it passed in the run below. Its
+path (Projects' rename, `retitleProject`, `setTabTitle`) is none these fixes touch: taken
+as a failure under load. Two comments (sem.js `adopt`'s, tabs.js `underLoader`'s) were
+reworded while the suite ran, in its tree and the work tree alike, files replaced whole.
+
+Before it, on the work tree: the tests of what changed and every b2 test, `b2xrd`, `b2sem`,
+`b2drs`, `b2gcepr`, `b2cross`, `b2cap`, `b2fixed`, `b2kept`, `tabs`, `sem`, `db`,
+`bytestore`, `roundtrip`, `rvmodel`, `rvui`: **69 of 69 pass** in 4 min 41 s
+(`results/tests-b2v3c.log`). The new checks (§7) fail on part B's tree, each where it should:
+`b2sem` 4 on the history's census (a.tif and b.tif 3 RawRefs, c.tif 2 arrays), `b2sem` 5 on
+the banner (it came back without its files), `b2kept` 2 on the loader after Settings,
+`b2kept` 3 on the cards made by the undo, `b2kept` 4 on the loader before the export's long
+task, `b2cap` 3 waiting in vain for one record on show. New tests: `b2cap` 3 and `b2kept` 4;
+`b2sem` 4 and 5, `b2kept` 2 and 3 have more steps; tests/README.md's rows and count (214).
 
 ### Part B
 
@@ -494,11 +612,20 @@ it in vain (a timeout in `openModule`).
 the findings of their b2v2 version (v517's own: `crypto`, `Option`, `screen`, unused names;
 sessions.js's import of `runWithModuleState`, which part B no longer uses, taken out), the
 tests (`b2kept` too) and the measure scripts (`fixed`, `many`, `kept`, `loader`,
-`lim-series`, `lim-fx`) none.
+`lim-series`, `lim-fx`) none. The review's: db.js, sem.js, sessions.js, tabs.js and
+xrd-rv-model.js exactly part B's findings (compared line for line), `b2sem`, `b2kept`,
+`b2cap` and `measure/review3/` none.
 
 ## The patch
 
-`b2.patch`: one git diff against HEAD (49beb52, which committed part A; the app's files
+`b2.patch`, after the review: one git diff against HEAD (a44b222, which committed part B; the
+app's files b93ed5c), 39 files, +4254 −920, sha256 94b5bd99…. The review's own changes are 9
+files, +251 −63 (db.js, sem.js, sessions.js, tabs.js, xrd-rv-model.js; `b2sem`, `b2kept`,
+`b2cap`, tests/README.md). `git apply --check` is clean on a fresh git-archive of HEAD, and
+the tree it gives is identical, file by file, to the one the whole suite ran on. Part B's
+patch (d54978fe…) is in git at a44b222.
+
+Part B's, as it was: one git diff against HEAD (49beb52, which committed part A; the app's files
 b93ed5c), 39 files, +4047 −901, sha256 d54978fe…. Part B's own changes are 11 files, +602
 −169 (`tests/b2kept.test.mjs` 247 lines of them). `git apply --check` is clean on a fresh
 git-archive of HEAD, and the tree it gives is identical, file by file, to the one the whole
@@ -531,6 +658,11 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
   not: which a tab's will be is not known before it runs); one shown as it was left shows
   at once, as before. After a reload, a project tab with unsaved
   changes keeps the loader on till its saved record is read (no 0.4 s freeze after it).
+- The review (§7): **a SEM tab whose files cannot be read as it wakes stays asleep**, Home
+  on show and a banner saying so, and reads them again when shown (it woke without them, and
+  lost them); a project written to a file shows the loader; an undo or redo of a SEM crop
+  takes its cards as made; a SEM tab woken holds its history's files once (at most 0.32 MB
+  more a file for its card levels of 4 crops, awake or asleep).
 
 ## Not done, and what is left
 
@@ -545,12 +677,14 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
 - Part B: **what a module draws** is not kept beyond its instance: a woken tab draws its
   plots anew (most of its wake now: 154 ms for XRPD).
 - **A close with many tabs** writes every record again (1.27 s at 60 heavy tabs, no long
-  task). Writing only the record whose `active` changed would need the records' `order` to
+  task; since the review at the close itself, not after the tab it lands on is shown). Writing only the record whose `active` changed would need the records' `order` to
   survive gaps; not done.
 - **A reload of many tabs** reads every tab's state with its bytes, the tabs not on show too
   (0.79 s at 60 XRPD tabs of 12 patterns). Reading those lazily, as SEM's tabs asleep are,
   would make it the tab on show's alone; not asked.
 - Nothing is said to the user when a tab sleeps for the cap, as before.
+- **An edit on the tab on show** gets no loader (a crop typed: its group's cards made in its
+  task; a width typed in XRPD the first time: its processing), as in v517.
 - Measured headless on this machine, synthetic and fixture files; not in a real Chrome.
 
 ## Method, trees, housekeeping
@@ -563,6 +697,11 @@ suite passed on (and to the one the measurements ran on). Part A's patch (+3497 
   - `probe`: the scripts that looked at the state's arrays, the heap, the 60-tab reload's
     CPU profile and the wheel; their numbers are those quoted above.
 - Measurements one at a time, the machine otherwise idle (load under 1 at each start).
+- The review (§7): in the scratchpad's `b2v3/refix/`: `w` (a git-archive of HEAD a44b222 and
+  part B's patch committed in a local git, the fixes made there, served on 8990), `v3b` (the
+  same without the fixes, on 8991), `fresh` (a git-archive of HEAD with the new patch: the
+  whole suite), `probe` (the reviewers' scripts, run on both; those that give numbers are
+  `measure/review3/`).
 - `measure/many.mjs` and `measure/fixed.mjs` are new; `results/` gained `many.json`,
   `many-getall.json`, `fixed.json` and `suite-b2v3.log`.
 - Part B: in the scratchpad's `b2v3/`: `b` (HEAD 0ddc38e with part A's patch, a local git;

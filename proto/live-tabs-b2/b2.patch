@@ -68,7 +68,7 @@ index 7423f90..1ecd528 100644
    };
  }
 diff --git a/db.js b/db.js
-index 27d4831..954a3eb 100644
+index 27d4831..e13df07 100644
 --- a/db.js
 +++ b/db.js
 @@ -16,7 +16,8 @@
@@ -230,7 +230,7 @@ index 27d4831..954a3eb 100644
  }
  // A saved project's record, its state as park gives it ({ rec, state, missing }), or null
  // when it is gone.
-@@ -487,7 +524,7 @@ function fill(v, got){
+@@ -487,13 +524,22 @@ function fill(v, got){
      const b = got.get(h);
      if (!b) return null;
      const c = used.has(h) ? b.slice() : b;
@@ -239,7 +239,24 @@ index 27d4831..954a3eb 100644
      return c;
    };
    const one = x => typeof x.h === 'string' ? arr(x.h) : bytesOf(x.v);
-@@ -503,7 +540,7 @@ function fill(v, got){
+-  const go = x=>{
+-    if (Array.isArray(x)) return x.some(isObj) ? x.map(go) : x;   // (an array of numbers as read)
++  // An object met again gives the one made for it (unload's value shares an object where
++  // the value it was made of did: SEM's RawRef in every step of a history that holds its
++  // file, one array of bytes; to b2v3 a copy of the array at every step but the first). A
++  // record shares none: park and encode make an object a place.
++  const done = new Map();
++  const go = x =>{
+     if (!x || typeof x !== 'object' || x instanceof Uint8Array) return x;
++    if (!done.has(x)) done.set(x, make(x));
++    return done.get(x);
++  };
++  const make = x=>{
++    if (Array.isArray(x)) return x.some(isObj) ? x.map(go) : x;   // (an array of numbers as read)
+     if (x.__t === 'u8' && (typeof x.h === 'string' || typeof x.v === 'string')){
+       if (x.id != null && byId.has(x.id)) return byId.get(x.id);
+       const b = one(x); if (x.id != null) byId.set(x.id, b); return b;
+@@ -503,7 +549,7 @@ function fill(v, got){
        return byId.get(x.ref);
      }
      if (isRef(x)) return null;   // ({__t:'b64'} out of a text holder)
@@ -248,7 +265,7 @@ index 27d4831..954a3eb 100644
      for (const k in x) o[k] = go(x[k]);
      // a text holder as stored (SEM's RawRef): its text back, known by its hash
      if (x.b64 && typeof x.b64 === 'object' && x.b64.__t === 'b64' && typeof x.b64.h === 'string'){
-@@ -537,6 +574,65 @@ function expand(v, got){
+@@ -537,6 +583,65 @@ function expand(v, got){
    return go(v);
  }
  
@@ -1199,16 +1216,16 @@ index ee1b170..c0152a0 100644
      self.postMessage(err instanceof SemReadError ? { seq, error: err.message } : { seq, fault: String(err && err.message || err), kind: err && err.name });
    }
 diff --git a/sem.js b/sem.js
-index e6f92f1..d1d573c 100644
+index e6f92f1..bd57b2e 100644
 --- a/sem.js
 +++ b/sem.js
 @@ -1,4 +1,4 @@
 -import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, flashFieldInvalid } from './utils.js';
-+import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept } from './utils.js';
++import { csvLine, fmtNum, setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, onSectionChange, flashFieldInvalid, kept, getModuleHistory } from './utils.js';
  import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels } from './sem-read.js';
  
  /* =========================================================
-@@ -7,18 +7,248 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -7,18 +7,262 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
     a rectangle in the original's pixels, inside the image (the info bar is never in
     it); the image itself is never changed.
  
@@ -1257,9 +1274,10 @@ index e6f92f1..d1d573c 100644
 +   are one array whichever tabs hold it: a file read or restored in a tab while another
 +   tab, a history or a tab asleep holds it takes the array held (rawOf), its own let go;
 +   the same id, length and bytes (compared: the id is a 32-bit hash). A RawRef given (a
-+   history's, woken: a copy of the one it held, db.js load) is the one kept where none
-+   is. Its last RawRef gone (gone), its image at full size goes; what else it is made into
-+   (imgs: its header, reduced copy and card, no bytes, some 0.15 MB an image of 2048²)
++   state restored, a history woken: db.js load's copy of the one it held) is the one kept
++   where none is, else the one kept is taken in its place (adopt, at the wake). Its last
++   RawRef gone (gone), its image at full size goes; what else it is made into (imgs: its
++   header, reduced copy and cards, no bytes, some 0.15 MB an image of 2048²)
 +   stays while a tab asleep holds the file (heldAsleep: its state or history names it, its
 +   bytes let go, tabs.js lighten), which, woken, draws its thumbnails and cards from them
 +   without making them again (measure/wake-sem.mjs, 20 tabs of 8 images 2048 × 2176: woken
@@ -1285,9 +1303,19 @@ index e6f92f1..d1d573c 100644
 +  imgs.delete(id);
 +  for (const m of [statsCache, lutCache]) for (const k of [...m.keys()]) if (k.startsWith(id + '|')) m.delete(k);
 +}
++// A tab woken (or closed): the RawRefs its history holds, db.js load's copies of those it
++// held asleep (one a file), kept as the files' own (rawOf), or the one kept taken in their
++// place, so that a file its history alone holds is held as before its sleep, what it is
++// made into with it (b2v3: let go at the wake, made again by an undo, a task of 0.49 s for
++// 8 images of 2048², no loader), and goes with its last step (gone).
++function adopt(key){
++  const h = getModuleHistory(key);
++  if (h) for (const s of h.states) for (const f of s && Array.isArray(s.files) ? s.files : [])
++    if (f && f.raw instanceof RawRef && f.raw.bytes instanceof Uint8Array) f.raw = rawOf(f.raw.id, f.raw.bytes, f.raw);
++}
 +function asleepHolds(key, v){
 +  const was = asleepIds.get(key);
-+  if (v) asleepIds.set(key, idsIn(v)); else asleepIds.delete(key);
++  if (v) asleepIds.set(key, idsIn(v)); else { asleepIds.delete(key); adopt(key); }
 +  if (was) for (const id of was) if (!alive(id) && !heldAsleep(id)) madeGone(id);
 +}
 +const gone = typeof FinalizationRegistry === 'function' ? new FinalizationRegistry(id =>{
@@ -1313,8 +1341,11 @@ index e6f92f1..d1d573c 100644
 +
 +/* ---- What the files are made into ----
 +   imgs: id → { r (readTescanTiff's header: its numbers and warning, no pixels), small
-+   (sem-read.js reducedCopy, some 160 px across, for the thumbnails), card (its group
-+   card's levels last made, sem-read.js cardLevels) }, null where its bytes do not read:
++   (sem-read.js reducedCopy, some 160 px across, for the thumbnails), cards (its group
++   card's levels, sem-read.js cardLevels, by the part of the image they take and their
++   size: the last CARDS made or used, some 0.08 MB each, so that an undo or a redo of a
++   crop takes them; to b2v3 the last one alone, an undo making a group's again) }, null
++   where its bytes do not read:
 +   some 0.15 MB an image of 2048², kept while the file is held, by a tab awake or asleep
 +   (gone), so that a tab woken draws its thumbnails without reading its images whole (to
 +   b2v3 the last 512 at most).
@@ -1328,7 +1359,7 @@ index e6f92f1..d1d573c 100644
 +   let go after the task (evict), read again from the bytes when asked for. To b2 every
 +   image of the tab's list was kept decoded, a copy, whatever its tab did, and others to
 +   128 MB (to v487 every image ever loaded, till the page was reloaded). */
-+const DEC_BUDGET = 32*2**20;
++const DEC_BUDGET = 32*2**20, CARDS = 4;
 +const imgs = new Map(), full = new Map();
 +let used = 0, evictTimer = 0;
 +function imgOf(f){
@@ -1337,7 +1368,7 @@ index e6f92f1..d1d573c 100644
 +  if (e === undefined){
 +    let r = null;
 +    try { r = f.raw.bytes ? readTescanTiff(f.raw.bytes, f.name, { head: true }) : null; } catch(err){ r = null; }
-+    e = r && { r, small: null, card: null };
++    e = r && { r, small: null, cards: new Map() };
 +    imgs.set(id, e);
 +  }
 +  return e;
@@ -1365,7 +1396,7 @@ index e6f92f1..d1d573c 100644
 +}
 +// A file read: what the reading made of it, kept.
 +function remember(id, r, small, card, px){
-+  imgs.set(id, { r, small, card });
++  imgs.set(id, { r, small, cards: new Map(card ? [[card.pk, card]] : []) });
 +  if (px) full.set(id, { px, size: px.byteLength, used: ++used });
 +  scheduleEvict();
 +}
@@ -1468,7 +1499,7 @@ index e6f92f1..d1d573c 100644
    const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
    // On the page: d significant digits, the point as a point (fmtNum, with the CSV's
    // decimal separator and fixed decimals, is for the export).
-@@ -27,12 +257,9 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -27,12 +271,9 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    const MIN_CROP = 64;
    // The crop's width:height when locked.
    const ASPECTS = { '1:1': 1, '4:3': 4/3, '3:2': 3/2, free: null };
@@ -1484,7 +1515,7 @@ index e6f92f1..d1d573c 100644
  
    /* ---- State ----
       allFiles: every image in list order, { name (the file's), label (the sample's,
-@@ -49,79 +276,11 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -49,79 +290,11 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // Each group's figure settings (sem-figure.js), by the group's id; a group has none
    // until its figure is first opened.
    let figures = {};
@@ -1569,7 +1600,7 @@ index e6f92f1..d1d573c 100644
  
    /* ---- Intensity ----
       Each image's grey levels go through one curve, a table of its 65536 levels:
-@@ -153,21 +312,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -153,21 +326,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // An image that is the reference of settings in use (all groups', or a group's own)
    // that use one (marked ◎ on its thumbnail).
    const isRef = f => [intensity, ...Object.values(groupInt)].some(I=> usesRef(I) && refFile(I) === f);
@@ -1592,7 +1623,7 @@ index e6f92f1..d1d573c 100644
    // The level below which a share q of the crop's pixels lie.
    function levelAt(st, q){
      const t = q*st.n; let acc = 0;
-@@ -206,8 +351,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -206,8 +365,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    /* The whole curve of an image, as the 8-bit grey of each of its levels: made once for
       what it is made from (lutKey: its crop's statistics, the reference's, the settings,
       its correction) and kept, the last ones made (to v487 made three or four times an
@@ -1603,7 +1634,7 @@ index e6f92f1..d1d573c 100644
    function lutKey(f){
      const I = intOf(f), a = f.adj || ADJ_DEF, c = f.crop, rf = usesRef(I) ? refFile(I) : null;
      return `${f.raw.id}|${I.mode === 'none' ? '' : `${c.x},${c.y},${c.w},${c.h}`}|${I.mode}|${I.mode === 'percentile' ? `${I.pLo},${I.pHi}` : ''}|`
-@@ -215,12 +360,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -215,12 +374,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    }
    function lutOf(f){
      const key = lutKey(f);
@@ -1618,7 +1649,7 @@ index e6f92f1..d1d573c 100644
      return lut;
    }
    function makeLut(f){
-@@ -323,7 +468,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -323,7 +482,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      if (now.bad || now.dup.length || now.warn.length) alertsOf.set(line, now);
      if (alertsOf.size > 32) alertsOf.delete(alertsOf.keys().next().value);
    }
@@ -1627,7 +1658,7 @@ index e6f92f1..d1d573c 100644
      const btn = e.target.closest('[data-action]');
      if (!btn) return;
      if (btn.dataset.action === 'sem-dismiss-invalid'){ setAlerts({ bad: null }); rebuildAlerts(); }
-@@ -334,7 +479,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -334,7 +493,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      const here = new Set(allFiles.map(f=> f.raw.id)), A = alerts();
      const dup = A.dup.filter(a=> here.has(a.id)), warn = A.warn.filter(a=> here.has(a.id));
      const bad = A.bad && (A.bad.ids.length ? A.bad.ids.some(id=> here.has(id)) : !here.size);
@@ -1636,7 +1667,7 @@ index e6f92f1..d1d573c 100644
        + (dup.length ? buildAlertsHtml([], dup.map(a=> a.html), 'Already loaded:', '', 'sem-dismiss-upload') : '')
        + (warn.length ? buildAlertsHtml([], warn.map(a=> a.html), 'Loaded, but check:', '', 'sem-dismiss-warn') : '');
    }
-@@ -345,72 +490,40 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -345,72 +504,40 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    }
  
    /* ---- Loading ----
@@ -1731,7 +1762,7 @@ index e6f92f1..d1d573c 100644
      return drained(queue);
    });
    async function loadFiles(list){
-@@ -422,18 +535,19 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -422,18 +549,19 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
          // A .hdr beside its .tif says what the TIFF carries already.
          if (ext === 'hdr') continue;
          if (ext !== 'tif' && ext !== 'tiff'){ bad.push(`${esc(file.name)} — not a TIFF`); continue; }
@@ -1754,7 +1785,7 @@ index e6f92f1..d1d573c 100644
        }
      } finally { if (loading === job) loading = null; hist.release(mark); }
      // The files read join the list as it is now, one step (an undo meanwhile may have put
-@@ -445,8 +559,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -445,8 +573,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    }
  
    /* ---- File list ---- */
@@ -1765,7 +1796,7 @@ index e6f92f1..d1d573c 100644
    function fileCallbacks(){
      return {
        onRemove(i){ const f = allFiles[i]; removeFileAt(allFiles, i, []); if (f) dropAlertsOf(f.raw.id); afterFilesChange(); },
-@@ -472,13 +586,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -472,13 +600,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    function filesChanged(){
      files = includedOf(allFiles);
      cur = Math.min(cur, Math.max(0, files.length - 1));
@@ -1786,7 +1817,7 @@ index e6f92f1..d1d573c 100644
      scheduleEvict();
    }
  
-@@ -495,8 +612,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -495,8 +626,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
       saved key). What it holds is taken as the module would have made it, whatever the
       project says (a project file edited by hand or damaged): to v487 a crop, an index or a
       setting that was not a number went in as it was, and the views drew NaN.
@@ -1799,7 +1830,7 @@ index e6f92f1..d1d573c 100644
         crop whole pixels inside the image, at least MIN_CROP a side, else the default
         one; its ratio one of the locks; its correction within the fields' ranges; its
         Default boxes ticked only where the crop and correction are the defaults;
-@@ -535,11 +654,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -535,11 +668,16 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      for (const f0 of Array.isArray(s.files) ? s.files : []){
        if (!isObj(f0)) continue;
        const name = str(f0.name, 'image'), raw0 = f0.raw;
@@ -1819,7 +1850,7 @@ index e6f92f1..d1d573c 100644
        const r = info(f);
        if (!r){ lost.push(name); continue; }
        seen.add(id);
-@@ -603,6 +727,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -603,6 +741,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      renderQueued = true;
      queueMicrotask(()=>{
        renderQueued = false;
@@ -1828,7 +1859,7 @@ index e6f92f1..d1d573c 100644
        const top = hist.states[hist.index], L = top && lineOf.get(top);
        if (L != null && L !== line){
          const bad = alerts().bad;
-@@ -615,12 +741,22 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -615,12 +755,22 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
        if (figApi && figApi.open) figApi.refresh();
      });
    }
@@ -1853,7 +1884,7 @@ index e6f92f1..d1d573c 100644
      renderNav(); renderInfo(); renderFields(); fitWork(); renderThumbs();
      loadEditorImage(); fitView(); drawEditor();
      renderIntensity(); renderGroups();
-@@ -629,19 +765,20 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -629,19 +779,20 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // view of the images drawn again, each image's only where what it is drawn from has
    // changed (thumbOf, cardOf, loadEditorImage).
    function refreshLevels(){
@@ -1880,7 +1911,7 @@ index e6f92f1..d1d573c 100644
      // Pixels made square (sem-read.js squarePixels): the image as it is now, and as acquired.
      const rows = [
        ['Image', `${r.width} × ${r.imageH} px${q ? `, ${q.width} × ${q.imageH} px as acquired` : ''}${r.strip ? ` (info bar of ${r.strip} rows left out)` : ''}`],
-@@ -664,10 +801,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -664,10 +815,10 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      const f = files[cur], e = f && info(f);
      if (!e) return;
      const c = f.crop;
@@ -1894,7 +1925,7 @@ index e6f92f1..d1d573c 100644
      renderInfo();
    }
    // Every included image with its crop drawn on it; a press shows it in the editor, its
-@@ -676,23 +813,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -676,23 +827,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // An image's thumbnail: its reduced copy through its curve, its crop drawn on it.
    // Drawn again only when its curve or its crop has changed (to v487 every one of them
    // at every edit); the same canvas otherwise, put in the new row.
@@ -1928,7 +1959,7 @@ index e6f92f1..d1d573c 100644
        const wrap = document.createElement('div');
        wrap.className = 'sem-thumb-wrap';
        const b = document.createElement('button');
-@@ -716,7 +855,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -716,7 +869,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
        box.appendChild(wrap);
      });
    }
@@ -1937,7 +1968,7 @@ index e6f92f1..d1d573c 100644
      const ln = e.target.closest('.sem-link');
      if (ln){ setLinked(files[+ln.dataset.link], !files[+ln.dataset.link].linked); return; }
      const b = e.target.closest('.sem-thumb'); if (!b) return;
-@@ -727,8 +866,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -727,8 +880,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      cur = (i + files.length) % files.length;
      renderAll();
    }
@@ -1948,7 +1979,7 @@ index e6f92f1..d1d573c 100644
  
    /* ---- The crop editor ----
       The image drawn into a canvas with the view (scale s in CSS px a pixel, and the
-@@ -737,19 +876,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -737,19 +890,25 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
       wheel zooms about the pointer, a double click outside the crop fits the image. */
    const view = { s: 1, ox: 0, oy: 0 };
    // The current image at full size through its curve, made again when the image or its
@@ -1980,7 +2011,7 @@ index e6f92f1..d1d573c 100644
    // The pane's size: as wide as its column, as tall as the image at that width, at
    // most 70 % of the window's height.
    function paneSize(){
-@@ -864,14 +1009,14 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -864,14 +1023,14 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    let tool = null, drag = null, zoomBox = null;
    function setTool(t){
      tool = t;
@@ -2000,7 +2031,7 @@ index e6f92f1..d1d573c 100644
    host.addEventListener('pointerdown', e=>{
      if (e.button !== 0 || !files.length) return;
      const b = canvas.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
-@@ -955,7 +1100,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -955,7 +1114,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
  
    /* ---- Fields ---- */
    ['X', 'Y', 'W', 'H'].forEach(K=>{
@@ -2009,7 +2040,7 @@ index e6f92f1..d1d573c 100644
      el.addEventListener('keydown', e=>{ if (e.key === 'Enter') el.blur(); });
      el.addEventListener('change', ()=>{
        const f = files[cur]; if (!f) return;
-@@ -973,7 +1118,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -973,7 +1132,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      });
    });
    // A new ratio keeps the crop's width and middle where it can, else its height.
@@ -2018,7 +2049,7 @@ index e6f92f1..d1d573c 100644
      const f = files[cur]; if (!f) return;
      const r = info(f), ar = ASPECTS[e.target.value], c = f.crop;
      f.aspect = e.target.value;
-@@ -988,7 +1133,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -988,7 +1147,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    });
    // Default: the whole image less its bar, its fields locked; unticked, the fields open
    // on it.
@@ -2027,7 +2058,7 @@ index e6f92f1..d1d573c 100644
      const f = files[cur]; if (!f) return;
      f.cropDef = e.target.checked;
      if (f.cropDef){ const r = info(f); f.crop = defaultCrop(r); f.aspect = aspectOf(f.crop.w, f.crop.h); f.clamped = false; }
-@@ -1009,7 +1154,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1009,7 +1168,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // Link all: the images the selector chose, around the crop of the one in the editor
    // (it leads); all of them linked already, it unlinks them.
    const scopeFiles = ()=>{ const sc = scopeOf(); return files.filter(f=> sc === 'all' || (groupOf(f) && groupOf(f).id === sc)); };
@@ -2036,7 +2067,7 @@ index e6f92f1..d1d573c 100644
      const f = files[cur], fs = scopeFiles(); if (!f || !fs.length) return;
      if (fs.every(g=> g.linked)) fs.forEach(g=>{ g.linked = false; g.clamped = false; });
      else {
-@@ -1022,7 +1167,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1022,7 +1181,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      hist.commit();
    });
    function renderLinkAll(){
@@ -2045,7 +2076,7 @@ index e6f92f1..d1d573c 100644
      b.textContent = fs.length && fs.every(g=> g.linked) ? 'Unlink all' : 'Link all';
    }
  
-@@ -1112,30 +1257,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1112,30 +1271,40 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // An image as the figure will take it, through its curve, at the figure's pixels or
    // brought down to `fit` px across.
    function outCanvas(f, fit){
@@ -2058,10 +2089,13 @@ index e6f92f1..d1d573c 100644
 +    return toCanvas(resample(px, info(f).width, o.c, w, h), w, 0, 0, w, h, lutOf(f));
    }
    /* Its card in a group: as the figure takes it, brought down to 200 px across, from
-      the whole crop as before (sem-read.js cardLevels). Its levels are made again only
-      when the part of the original it takes or its size change (a file read comes with
-      those of its default crop, made by the worker), and put through its curve again
+-     the whole crop as before (sem-read.js cardLevels). Its levels are made again only
+-     when the part of the original it takes or its size change (a file read comes with
+-     those of its default crop, made by the worker), and put through its curve again
 -     only when that changes too: to v487 both at every edit, for every image. */
++     the whole crop as before (sem-read.js cardLevels). Its levels are made only for a
++     part of the original or a size not among the last CARDS it took (a file read comes
++     with those of its default crop, made by the worker), and put through its curve again
 +     only when that changes too: to v487 both at every edit, for every image. The levels
 +     are the module's (imgs), the canvas the instance's. */
    function cardOf(f){
@@ -2069,8 +2103,16 @@ index e6f92f1..d1d573c 100644
 +    const o = outOf(f), e = o && imgOf(f);
      if (!e) return null;
 -    const C = e.card, L = C && C.pk === cardKey(o.c, o.w, o.h).pk ? C : cardLevels(e.r, o.c, o.w, o.h), key = `${L.pk}|${lutKey(f)}`;
-+    if (!(e.card && e.card.pk === cardKey(o.c, o.w, o.h).pk)){ const d = decoded(f); if (!d) return null; e.card = cardLevels(d, o.c, o.w, o.h); kept.made['sem-card'] = (kept.made['sem-card'] || 0) + 1; }
-+    const L = e.card, key = `${L.pk}|${lutKey(f)}`, C = cardsCv.get(f.raw.id);
++    const pk = cardKey(o.c, o.w, o.h).pk;
++    let L = e.cards.get(pk);
++    if (L) e.cards.delete(pk);   // (the last used, last)
++    else {
++      const d = decoded(f); if (!d) return null;
++      L = cardLevels(d, o.c, o.w, o.h); kept.made['sem-card'] = (kept.made['sem-card'] || 0) + 1;
++      if (e.cards.size >= CARDS) e.cards.delete(e.cards.keys().next().value);
++    }
++    e.cards.set(pk, L);
++    const key = `${L.pk}|${lutKey(f)}`, C = cardsCv.get(f.raw.id);
      if (C && C.key === key) return C.cv;
 -    e.card = { ...L, key, cv: toCanvas(L.px, L.w, 0, 0, L.w, L.h, lutOf(f)) };
 -    return e.card.cv;
@@ -2087,7 +2129,7 @@ index e6f92f1..d1d573c 100644
    function fitGroupName(el){
      // Its room: the head's width less the scale and the figure's button beside it.
      const acts = el.parentElement.querySelector('.sem-group-acts'), cs = getComputedStyle(el);
-@@ -1146,7 +1293,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1146,7 +1315,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      el.style.width = Math.min(nameCtx.measureText(el.value || el.placeholder).width + 24, room + 10) + 'px';
    }
    function renderGroups(){
@@ -2097,7 +2139,7 @@ index e6f92f1..d1d573c 100644
      if (!box || !files.length) return;
      box.innerHTML = groups.map(g=>{
        const mem = g.members.map(byId).filter(m=> m && inFigure(m));
-@@ -1185,7 +1333,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1185,7 +1355,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // must not change the height.
    let groupFull = null;
    function sizeGroups(){
@@ -2106,7 +2148,7 @@ index e6f92f1..d1d573c 100644
      if (!g || !box.clientWidth) return;
      const main = document.querySelector('main'), mcs = getComputedStyle(main);
      const pad = parseFloat(mcs.paddingLeft) + parseFloat(mcs.paddingRight);
-@@ -1209,12 +1357,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1209,12 +1379,12 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      strip.querySelector('.sem-page-prev').hidden = !(more > 1 && row.scrollLeft > 1);
      strip.querySelector('.sem-page-next').hidden = !(more > 1 && row.scrollLeft < more - 1);
    }
@@ -2121,7 +2163,7 @@ index e6f92f1..d1d573c 100644
      if (!work || !work.offsetWidth) return;
      const was = work.classList.contains('sem-stacked');
      work.classList.remove('sem-stacked');
-@@ -1223,7 +1371,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1223,7 +1393,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      // The editor and the histogram are sized to their column: redrawn when it changes.
      if (cut !== was && files.length){ fitView(); drawEditor(); drawHist(); }
    }
@@ -2130,7 +2172,7 @@ index e6f92f1..d1d573c 100644
    groupsBox.addEventListener('input', e=>{ if (e.target.classList.contains('sem-group-name')) fitGroupName(e.target); });
    groupsBox.addEventListener('change', e=>{
      const t = e.target;
-@@ -1263,7 +1411,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1263,7 +1433,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      groupsChanged();
    }
    // + Group: an empty group, to drag images into.
@@ -2139,7 +2181,7 @@ index e6f92f1..d1d573c 100644
      groups.push({ id: newGroupId(), name: 'New group', named: false, mode: 'common', members: [], keep: true });
      groupsChanged();
    });
-@@ -1291,7 +1439,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1291,7 +1461,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
        if (moved < 5) return;
        const pic = gdrag.card.querySelector('canvas'), g = document.createElement('canvas');
        g.width = pic.width; g.height = pic.height; g.getContext('2d').drawImage(pic, 0, 0);
@@ -2148,7 +2190,7 @@ index e6f92f1..d1d573c 100644
        gdrag.ghost = g; gdrag.card.classList.add('is-dragged');
      }
      gdrag.ghost.style.left = e.clientX + 'px'; gdrag.ghost.style.top = e.clientY + 'px';
-@@ -1323,7 +1471,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1323,7 +1493,7 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    groupsBox.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.classList.contains('sem-group-name')) e.target.blur(); });
    // Reset: the groups made again from the pixel sizes. A group made again with the same
    // images keeps its figure and its intensity.
@@ -2157,7 +2199,7 @@ index e6f92f1..d1d573c 100644
      const key = g => g.members.slice().sort().join('|');
      const oldFig = new Map(groups.map(g=> [key(g), figures[g.id]])), oldInt = new Map(groups.map(g=> [key(g), groupInt[g.id]]));
      groups = [];
-@@ -1368,7 +1516,6 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1368,7 +1538,6 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    }
  
    /* ---- Intensity (the Crop and intensity card) ---- */
@@ -2165,7 +2207,7 @@ index e6f92f1..d1d573c 100644
    // The fields, with the range each takes; a value outside it is refused (the field
    // shakes and shows the last good one).
    const INT_FIELDS = { semPLo: ['pLo', 0, 49.9], semPHi: ['pHi', 50.1, 100], semB: ['b', -100, 100], semC: ['c', 0.05, 20], semG: ['g', 0.05, 20] };
-@@ -1430,8 +1577,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1430,8 +1599,8 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    // The crop's histogram (256 bins, heights as the square root of the counts), the
    // curve over it (level → grey), and where a linear normalisation puts black and white.
    function drawHist(){
@@ -2176,7 +2218,7 @@ index e6f92f1..d1d573c 100644
      const dpr = window.devicePixelRatio || 1, w = box.clientWidth, h = box.clientHeight;
      cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
      const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-@@ -1493,15 +1640,15 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1493,15 +1662,15 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    });
  
    /* ---- CSV: each image's metadata and crop ---- */
@@ -2195,7 +2237,7 @@ index e6f92f1..d1d573c 100644
        // The curve as applied: the levels a linear normalisation takes to black and white
        // (none for the histogram's), and brightness, contrast and gamma with the image's
        // correction in them.
-@@ -1516,4 +1663,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
+@@ -1516,4 +1685,32 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
      });
      return [{ name: 'sem_images.csv', text: t }];
    });
@@ -2230,7 +2272,7 @@ index e6f92f1..d1d573c 100644
 +}
 +registerModule('sem', createSem, { dropBytes: true, asleep: asleepHolds });
 diff --git a/sessions.js b/sessions.js
-index 4fb1645..58f3ad9 100644
+index 4fb1645..c91c901 100644
 --- a/sessions.js
 +++ b/sessions.js
 @@ -7,14 +7,15 @@
@@ -2251,7 +2293,7 @@ index 4fb1645..58f3ad9 100644
           setTabDirty, setTabProject, onTabActivated, onTabLoaded, onCloseSave, initTabs,
 -         persistTab, persistAll, isRestoring, isLive, ensureLive, UNTITLED, notice, renderTabs } from './tabs.js';
 +         persistTab, persistAll, isRestoring, isLive, ensureLive, notice, renderTabs,
-+         keyOf, tabOfKey, stateOf, isEmpty, UNTITLED } from './tabs.js';
++         keyOf, tabOfKey, stateOf, isEmpty, UNTITLED, underLoader } from './tabs.js';
  
  // Row action icons: the exact CSV/JSON glyphs used in the module toolbars
  // (text over a right-pointing arrow) and the rounded X for delete.
@@ -2424,7 +2466,7 @@ index 4fb1645..58f3ad9 100644
  }
  
  /* ---- Project files (.datatreat) ----
-@@ -292,39 +301,42 @@ async function doubtsAbout(file, obj){
+@@ -292,39 +301,43 @@ async function doubtsAbout(file, obj){
  }
  
  /* ---- Export current module as .datatreat ---- */
@@ -2441,7 +2483,8 @@ index 4fb1645..58f3ad9 100644
    const cur = curProject();
    const title = (inp && inp.value.trim()) || (cur ? cur.title : (MODULE_LABELS[mod]||mod));
 -  await downloadProject({ module: mod, title, createdAt: now, updatedAt: now, state: encode(getModuleState(mod)) });
-+  await downloadProject({ module: mod, title, createdAt: now, updatedAt: now, state: encode(getModuleState(keyOf(t))) });
++  // (under the loader: its files' bytes written as base64, a task of 1.7 s for 8 SEM images)
++  await underLoader(()=> downloadProject({ module: mod, title, createdAt: now, updatedAt: now, state: encode(getModuleState(keyOf(t))) }));
  }
  
  /* ---- Save as… — custom in-page modal (no browser prompt) ---- */
@@ -2479,7 +2522,19 @@ index 4fb1645..58f3ad9 100644
    _saveAsBusy = true;
    let id;
    try {
-@@ -471,7 +483,8 @@ async function exportProjectCsv(rec){
+@@ -374,8 +387,9 @@ const lostSay = (title, n)=> '“' + title + '”: ' + n + (n > 1 ? ' of its fil
+ /* ---- Export a saved project record / import a project file ---- */
+ // The record as stored now, its bytes read with it and put back where encode writes them:
+ // the same file, signature included, as the project's export from its bar (to v516 the
+-// record held them as such).
+-async function exportProjectRecord(rec){
++// record held them as such); under the loader, as that one.
++function exportProjectRecord(rec){ return underLoader(()=> exportRecord(rec)); }
++async function exportRecord(rec){
+   let got;
+   try { got = await exportedProject(rec.id); }
+   catch(e){ notice('“' + rec.title + '” could not be exported: its files could not be read from this browser\'s storage.'); return; }
+@@ -471,7 +485,8 @@ async function exportProjectCsv(rec){
    try { got = await readProject(rec.id); }
    catch(e){ notice('“' + rec.title + '”: its files could not be read from this browser\'s storage.'); return; }
    if (!got){ goneProject(rec); return; }
@@ -2489,7 +2544,7 @@ index 4fb1645..58f3ad9 100644
  }
  async function renameProject(rec, t){
    t = (t||'').trim();
-@@ -497,13 +510,13 @@ async function deleteProjectRec(rec){
+@@ -497,13 +512,13 @@ async function deleteProjectRec(rec){
  // Project-bar trash button: delete the project this tab holds, then close the tab.
  //  • Saved project → confirm "delete «name»" (Delete + cancel).
  //  • Never saved   → nothing is stored yet, so just confirm losing the work.
@@ -2506,7 +2561,7 @@ index 4fb1645..58f3ad9 100644
      if (cur) await deleteProject(cur.id);
      closeTab(t.id);
      renderList();
-@@ -545,18 +558,20 @@ document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml ===
+@@ -545,18 +560,20 @@ document.querySelectorAll('.proj-save').forEach(b=>{ if (b.dataset.origHtml ===
  document.addEventListener('click', async e=>{
    const b = e.target.closest('.proj-save, .proj-saveas, .proj-csv, .proj-json, .proj-del, .proj-new');
    if (!b || b.disabled) return;
@@ -2536,7 +2591,7 @@ index 4fb1645..58f3ad9 100644
    else if (b.classList.contains('proj-new'))    newProject();
  });
  // Mini-home modal: pick a technique → a blank project opens in a new tab.
-@@ -589,7 +604,7 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
+@@ -589,7 +606,7 @@ document.querySelectorAll('.project-name-input').forEach(inp=>{
      refreshProjBar(mod);
      const t = activeTab();
      if (t) setTabTitle(t.id, inp.value.trim());   // the tab label tracks the field
@@ -2545,7 +2600,7 @@ index 4fb1645..58f3ad9 100644
    });
    inp.addEventListener('focus', ()=> fitNameField(modOf()));   // click triggers adaptivity
    inp.addEventListener('blur',  ()=> fitNameField(modOf()));   // empty → ghost width; filled → ellipsis
-@@ -693,12 +708,16 @@ document.querySelector('#nav button[data-tab="projects"]').addEventListener('cli
+@@ -693,12 +710,16 @@ document.querySelector('#nav button[data-tab="projects"]').addEventListener('cli
  renderList();
  
  /* ---- Tab wiring ---- */
@@ -2566,7 +2621,7 @@ index 4fb1645..58f3ad9 100644
  
  /* ---- The single project bar ----
     One bar serves every module: only one tab is live, so its selectors (name field,
-@@ -740,16 +759,20 @@ onTabActivated(tab=>{
+@@ -740,16 +761,20 @@ onTabActivated(tab=>{
    const inp = nameInput(mod);
    if (inp) inp.value = tab.title || '';
    for (const id of _savedRead.keys()) if (id !== tab.id) _savedRead.delete(id);
@@ -2594,7 +2649,7 @@ index 4fb1645..58f3ad9 100644
    }
    refreshProjBar(mod);
    normalizeProjIcons(mod);
-@@ -767,28 +790,34 @@ onSectionChange(tab=>{
+@@ -767,28 +792,34 @@ onSectionChange(tab=>{
    }
  });
  // A saved, unchanged tab is what was saved: once its state is live, that is what later
@@ -2637,7 +2692,7 @@ index 4fb1645..58f3ad9 100644
  
  initTabs();
  // The bytes no record holds any more, a while after the page loads (v517); what the
-@@ -803,7 +832,11 @@ onDbClosed(()=> notice('DataTreat was updated in another window: reload this one
+@@ -803,7 +834,11 @@ onDbClosed(()=> notice('DataTreat was updated in another window: reload this one
  // desktop⇄mobile switch reloads the page, tab close, refresh) so changes made in
  // the last few seconds aren't lost to the debounce. Best-effort: visibilitychange
  // (hidden) fires early enough for IndexedDB to commit; pagehide is the backstop.
@@ -2677,7 +2732,7 @@ index 982d8d5..046f0bc 100644
    './xrd-cryst.js',
    './xrd-instr.js',
 diff --git a/tabs.js b/tabs.js
-index 7eb3489..eaf344d 100644
+index 7eb3489..44249de 100644
 --- a/tabs.js
 +++ b/tabs.js
 @@ -4,34 +4,65 @@
@@ -2859,7 +2914,7 @@ index 7eb3489..eaf344d 100644
    const st = t.state || DEFAULT_STATE[t.module];
    let hist = t.hist;
    try { if (st != null) restoreModuleState(t.module, decode(st)); }
-@@ -102,30 +163,230 @@ function loadTab(t){
+@@ -102,30 +163,242 @@ function loadTab(t){
      // its restore had got, partly the tab before's data.
      hist = null;
      try { restoreModuleState(t.module, decode(DEFAULT_STATE[t.module])); } catch(e2){}
@@ -2888,9 +2943,10 @@ index 7eb3489..eaf344d 100644
 +  if (!stay) goTab(t.module);
 +}
 +// The tab left: its time hidden counted from now, and its last show now; the window it was
-+// left at.
++// left at, unless it was left before for a fixed section, where it was (onSectionChange: the
++// window may have changed since, its plots not).
 +function hideTab(t){
-+  if (t && t.inst){ t.hidAt = t.seenAt = Date.now(); t.view = viewNow(); }
++  if (t && t.inst){ t.hidAt = t.seenAt = Date.now(); if (!(_onFixed && t.view != null)) t.view = viewNow(); }
 +}
 +/* An awake tab shown again draws what changed while it was hidden (its redraw, two frames
 +   after its show: utils.js goTab): nothing, shown at the size it was left at and unchanged
@@ -2957,11 +3013,14 @@ index 7eb3489..eaf344d 100644
 +   One read a tab, whatever wakes ask for it meanwhile. Given up should the tab be left
 +   (another tab shown), closed, or woken otherwise by then: it stays asleep as it was, its
 +   references kept. A fixed section shown meanwhile (Home) stays on show, the tab woken
-+   behind it. Files whose bytes are not stored any more (cleared, evicted), or not read at
-+   all (the read failed as a whole), come back as none, as at a reload, said so: the module
-+   shows them so (SEM: out of its list, said in its alerts; an undo to a state that held
-+   one, the same), the rest of the tab as it was. A promise, done once the tab is woken or
-+   the wake given up. */
++   behind it. Files whose bytes are not stored any more (cleared, evicted) come back as
++   none, as at a reload, said so: the module shows them so (SEM: out of its list, said in
++   its alerts; an undo to a state that held one, the same), the rest of the tab as it was.
++   A read that fails as a whole (none of the store's read) gives the wake up: the tab stays
++   asleep as it was, its references and its record, Home on show, said so, and its next
++   show reads again, as a reload keeps the records it could not read (to b2v3 it woke
++   without its files, and its record, written then, let go of them for good). A promise,
++   done once the tab is woken or the wake given up. */
 +function wakeLater(t){
 +  const st = t.state, h = t.hist, back = vacate(t.module, t.id);
 +  if (!t.waking || t.waking.st !== st || t.waking.h !== h) t.waking = { st, h, p: load([st, h && h.states]) };
@@ -2969,11 +3028,17 @@ index 7eb3489..eaf344d 100644
 +  return w.p.then(({ v: [s, states], lost, failed })=>{
 +    if (t.waking === w) t.waking = null;
 +    if (t.inst || t.state !== st || t.hist !== h || t.id !== _activeId || !tabById(t.id)){ back(); return; }
++    const name = '“' + (t.title || UNTITLED) + '”: ';
++    if (failed){
++      back();
++      if (!_onFixed) goTab('home');
++      notice(name + 'its files could not be read from this browser\'s storage. The tab stays as it was: show it again to read them again.');
++      return;
++    }
 +    t.state = s; t.hist = h && { ...h, states };
 +    const p = wakeTab(t, _onFixed);
-+    const n = failed ? 0 : [...refsIn(st)].filter(x=> lost.has(x)).length, name = '“' + (t.title || UNTITLED) + '”: ';
-+    if (failed) notice(name + 'its files could not be read from this browser\'s storage: it comes back without them.');
-+    else if (n) notice(name + n + (n > 1 ? ' of its files are' : ' of its files is') + ' not stored in this browser any more: it comes back without '
++    const n = [...refsIn(st)].filter(x=> lost.has(x)).length;
++    if (n) notice(name + n + (n > 1 ? ' of its files are' : ' of its files is') + ' not stored in this browser any more: it comes back without '
 +      + (n > 1 ? 'them.' : 'it.'));
 +    return p;
 +  });
@@ -3075,9 +3140,11 @@ index 7eb3489..eaf344d 100644
 +  if (t && !isLive(t)) return loadTab(t);
  }
  // Deferred loader guarded against fast switching: if the user has already moved on
- // to another tab by the time this runs, do nothing — only the final tab loads.
+-// to another tab by the time this runs, do nothing — only the final tab loads.
 -function loadTabIfActive(t){
-+function loadTabIfActive(t, was){
++// to another tab by the time this runs, do nothing — only the final tab loads. `all`: every
++// tab's record written once it is loaded (a reload's), else its own.
++function loadTabIfActive(t, all){
    if (!t || t.id !== _activeId) return;  // superseded — the newer switch owns the loader
 -  loadTab(t);
 -  persistAll();
@@ -3087,8 +3154,9 @@ index 7eb3489..eaf344d 100644
 +  keepLimits();
 +  const p = loadTab(t);
 +  const done = ()=>{
-+    // (the records whose `active` changed: to v517 every tab's, rewritten at each switch)
-+    if (was === undefined) persistAll(); else { persistTab(was); persistTab(t); }
++    // (its record, now on show; the tab left wrote its own at the switch: to v517 every
++    // tab's, rewritten at each switch)
++    if (all) persistAll(); else persistTab(t);
 +    keepLimits();
 +    // Charts finish drawing a frame after the restore; drop the loader once they have.
 +    requestAnimationFrame(()=> requestAnimationFrame(hideModuleLoader));
@@ -3099,7 +3167,25 @@ index 7eb3489..eaf344d 100644
  }
  
  /* ---- Project bar sync -----------------------------------------------------
-@@ -182,13 +443,15 @@ window.addEventListener('load', ()=> setTimeout(revealApp, 0));
+@@ -167,6 +440,17 @@ function showModuleLoader(){
+   _loaderEl.classList.add('show');
+ }
+ function hideModuleLoader(){ if (_loaderEl) _loaderEl.classList.remove('show'); }
++/* A step that is no tab's and may take a while (a project written to a file, its bytes as
++   base64: some 1.7 s for one of 8 SEM images of 2048², one task with no loader to b2v3):
++   the loader on and a frame drawn first, fn, and the loader off once every such step is
++   done. */
++let _under = 0;
++async function underLoader(fn){
++  if (!_under++) showModuleLoader();
++  await new Promise(r=> afterPaint(r));
++  try { return await fn(); }
++  finally { if (!--_under) hideModuleLoader(); }
++}
+ 
+ // A banner that asks nothing, shown once none is on show: confirmBanner shows one at a
+ // time, and a new one would answer a question asked (a delete, a close) with no.
+@@ -182,13 +466,15 @@ window.addEventListener('load', ()=> setTimeout(revealApp, 0));
  setTimeout(revealApp, 2500);
  
  /* ---- Open / activate / close --------------------------------------------- */
@@ -3121,7 +3207,7 @@ index 7eb3489..eaf344d 100644
    if (!running) return true;
    if (!await confirmBanner(running + ' is running in “' + (t.title || UNTITLED) + '”: leaving this tab stops it.', 'Stop it and leave')) return false;
    stopModule(t.module);
-@@ -196,48 +459,62 @@ async function mayLeaveLive(){
+@@ -196,43 +482,67 @@ async function mayLeaveLive(){
  }
  // A tab chosen in the bar: shown at once, unless leaving the live one would stop a job.
  async function switchTo(id){
@@ -3170,14 +3256,24 @@ index 7eb3489..eaf344d 100644
 -  if (_activeId === id){ goTab(t.module); return; }
 +  // Already the active tab (we were just off on a fixed section) → only show it back
 +  // (its wake reading its files' bytes still: under the loader, which its end takes away;
-+  // one to draw again, under the loader).
-+  if (_activeId === id){ if (redrawn(t)) return showLater(t); showTab(t); if (t.waking) showModuleLoader(); return; }
++  // one to draw again, under the loader; a wake given up, its files not read: read again).
++  if (_activeId === id){
++    if (redrawn(t)) return showLater(t);
++    showTab(t);
++    if (t.waking) showModuleLoader();
++    else if (!isLive(t)){ showModuleLoader(); afterPaint(()=> loadTabIfActive(t)); }
++    return;
++  }
 +  const was = activeTab();
    stashActive();
 +  hideTab(was);
    _activeId = id;
++  // The record of the tab left, at once (its `active` changed): a step superseded within its
++  // frames writes nothing after (to b2v3 the step wrote it with the tab shown's, and where it
++  // was superseded never: two records on show, a reload showing the first).
++  persistTab(was);
 +  if (isLive(t)){
-+    const kept = ()=>{ persistTab(was); persistTab(t); keepLimits(); };
++    const kept = ()=>{ persistTab(t); keepLimits(); };
 +    if (redrawn(t)) return showLater(t, kept);
 +    hideModuleLoader();
 +    showTab(t);
@@ -3190,13 +3286,7 @@ index 7eb3489..eaf344d 100644
    renderTabs();
    goTab(t.module);
    syncProjectBar(t);                    // project bar is cheap + data-independent: build it now
-   showModuleLoader();                   // mask the chart build until it's ready
--  afterPaint(()=> loadTabIfActive(t));  // heavy restore after paint, skipped if superseded
-+  afterPaint(()=> loadTabIfActive(t, was));  // heavy restore after paint, skipped if superseded
- }
- 
- // Home / Projects / Settings belong to no tab, so none is highlighted while one of
-@@ -245,6 +522,8 @@ function activateTab(id){
+@@ -245,6 +555,8 @@ function activateTab(id){
  onSectionChange(tab=>{
    const fixed = !MODULES.includes(tab);
    if (fixed) hideModuleLoader();   // never leave the loader hanging over a fixed section
@@ -3205,7 +3295,7 @@ index 7eb3489..eaf344d 100644
    if (_onFixed === fixed) return;
    _onFixed = fixed;
    renderTabs();
-@@ -255,16 +534,22 @@ onSectionChange(tab=>{
+@@ -255,16 +567,25 @@ onSectionChange(tab=>{
  function closeTab(id){
    const i = tabIndex(id);
    if (i < 0) return;
@@ -3224,15 +3314,18 @@ index 7eb3489..eaf344d 100644
 -  if (!next){ renderTabs(); goTab('home'); persistAll(); return; }
 +  if (!next){ dropInst(t); renderTabs(); goTab('home'); persistAll(); return; }
    _activeId = next.id;
++  // (every record at once, their order and the tab on show changed: a step superseded within
++  // its frames writes nothing after)
++  persistAll();
 +  // (one awake: shown before the closed one's instance goes, the page's scroll kept; the
 +  // loader of a wake the closed one was waiting on taken away)
-+  if (isLive(next) && redrawn(next)){ dropInst(t); showLater(next, ()=>{ persistAll(); keepLimits(); }); return; }
-+  if (isLive(next)){ hideModuleLoader(); showTab(next); dropInst(t); renderTabs(); syncProjectBar(next); persistAll(); keepLimits(); return; }
++  if (isLive(next) && redrawn(next)){ dropInst(t); showLater(next, keepLimits); return; }
++  if (isLive(next)){ hideModuleLoader(); showTab(next); dropInst(t); renderTabs(); syncProjectBar(next); keepLimits(); return; }
 +  dropInst(t);
    renderTabs();
    goTab(next.module);
    syncProjectBar(next);
-@@ -358,6 +643,15 @@ function initBar(){
+@@ -358,6 +679,15 @@ function initBar(){
      if (_dragMoved){ _dragMoved = false; return; }
      switchTo(el.dataset.id);
    });
@@ -3248,7 +3341,7 @@ index 7eb3489..eaf344d 100644
    initDrag(bar);
  }
  
-@@ -429,26 +723,31 @@ function moveTab(id, to){
+@@ -429,26 +759,31 @@ function moveTab(id, to){
    persistAll();
  }
  
@@ -3286,7 +3379,7 @@ index 7eb3489..eaf344d 100644
    // Nothing to lose: an empty file list (whatever the name says) or a saved project
    // with no pending change closes straight away.
    if (isEmpty(t) || (t.projectId && !t.dirty)){ closeTab(id); return; }
-@@ -456,9 +755,7 @@ async function requestClose(id){
+@@ -456,9 +791,7 @@ async function requestClose(id){
    if (res === false) return;                               // cancel
    if (res === true){
      if (!_saveForClose) return;
@@ -3297,7 +3390,7 @@ index 7eb3489..eaf344d 100644
      if (!await _saveForClose(t)) return;                   // save aborted → keep the tab
      if (t.dirty) return;   // (changed while it was written, v517: the change is kept, unsaved)
    }
-@@ -480,21 +777,23 @@ async function initTabs(){
+@@ -480,21 +813,23 @@ async function initTabs(){
    // not read: the records stay as they are, for the next load. A file whose bytes are not
    // stored any more comes back without them (its module says so where they are needed).
    let recs = [], states = [], missing = 0;
@@ -3325,7 +3418,12 @@ index 7eb3489..eaf344d 100644
    recs = made.map(x=> x.r);
    const wanted = recs.find(r=> r.active) || recs[0];
    _activeId = wanted.id;
-@@ -512,7 +811,27 @@ async function initTabs(){
+@@ -508,11 +843,31 @@ async function initTabs(){
+   // and the charts fill in after, without freezing the boot.
+   requestAnimationFrame(()=>{
+     revealApp();
+-    requestAnimationFrame(()=>{ loadTabIfActive(at); _restoring = false; });
++    requestAnimationFrame(()=>{ loadTabIfActive(at, true); _restoring = false; });
    });
  }
  
@@ -3354,7 +3452,7 @@ index 7eb3489..eaf344d 100644
           onTabActivated, onTabLoaded, onCloseSave, initTabs, persistTab, persistAll, isRestoring,
 -         isLive, ensureLive, untitledName, notice };
 +         isLive, ensureLive, untitledName, notice, keyOf, tabOfKey, tabOf, stateOf, isEmpty,
-+         keepLimits as sleepTick, sleepTab, tabsNow };
++         keepLimits as sleepTick, sleepTab, tabsNow, underLoader };
 diff --git a/tauc.js b/tauc.js
 index cac13e5..1e215db 100644
 --- a/tauc.js
@@ -3817,7 +3915,7 @@ index cac13e5..1e215db 100644
 +}
 +registerModule('tauc', createTauc);
 diff --git a/tests/README.md b/tests/README.md
-index b6198b0..18bc76b 100644
+index b6198b0..f49b0af 100644
 --- a/tests/README.md
 +++ b/tests/README.md
 @@ -24,7 +24,7 @@ node --test tests/csv.test.mjs     # one file
@@ -3825,7 +3923,7 @@ index b6198b0..18bc76b 100644
  ```
  
 -A full run takes about 10 min (183 tests, on the machine they were written on). Each
-+A full run takes about 12 min (212 tests, on the machine they were written on). Each
++A full run takes about 12 min (214 tests, on the machine they were written on). Each
  file opens its own server and browser; each test its own browser context, so IndexedDB,
  localStorage and the open tabs start empty every time.
  
@@ -3849,9 +3947,9 @@ index b6198b0..18bc76b 100644
  | `undorun.test.mjs` | Undo and redo while a job runs, the workers' answers held so that it runs as long as the test needs. A Rietveld run: steps before it (a setting, a card folded, a label) and during it (a card unfolded, a label, a file's colour); Ctrl+Z undoes those taken during it and stops at its start, nothing undone below, nothing said (no banner, no window, no alert), the running card's panel as it was (Cancel, its progress, its rows locked, the Settings open and read only, not built again); Ctrl+Y goes back up; its result then comes in as a step of its own at its start: walking back undoes the steps taken during it (the result kept in each), then the result, then the steps before it, and forward again to the end. Refine all with steps taken between its patterns: every state holds the whole run or none of it, the patterns done kept in the card through an undo to its start. Cancelled with one pattern done: that is its step, a saved project marked unsaved by it and saved with it; cancelled before any: no step, the project still saved. The standard's run the same, its window's panel as it was; then *Refine the standard first*: the standard's step, then the sample's, the step taken meanwhile after them. A card closed during its run comes back by an undo with the pattern done; one switched to Scherrer during its run keeps it. The 80-state limit crossed during a run: undo down to the oldest state kept, the result then in every state, no step of its own. Two sample cards refining at once: the redo branch the later one set aside comes back with the earlier one's result. Two held from one state with a redo branch there: a result of either drops it, in either order. *Refine the standard first* stopped or failed before any result: the redo branch there comes back. While a sample waits for the standard's run, its rows, + CIF, Clear and Settings locked, a click on them no step; an undo during its run leaves the card's inputs as the state on show has them, its end no step of its own. The standard bearing a sample's name: Refine all ends in one step. SEM: Ctrl+Z during a reading undoes the step taken meanwhile and stops silently at its start; Ctrl+Y redoes it; the files land after it, one step, the list and the groups right. |
 +| `rvpool.test.mjs` | The Rietveld workers' pool (xrd-rv-pool.js, backlog 23): Refine all on three workers at once gives the results of one, bit for bit, written in the patterns' order, one step; the status names the patterns under way; an answer out of order waits for those before it; Cancel writes the patterns done and not those under way (s01 done past s00 under way too); an error in one lane stops the patterns not started and writes those under way, not the failed one; two windows of the app on a cap of two run two jobs at once in all (Web Locks), the slot freed going to the job that waited longest, each window its own results in order. The cap and the lanes are localStorage `datatreat-rv-workers` and `datatreat-rv-lanes`; `undorun` and `rietveld` take one lane, as their held answers and their Cancel assume. |
 +| `b2xrd.test.mjs` | XRPD made per tab (b2): two XRPD tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a refinement going on in a tab left, on the workers' pool, its results bit for bit those of one refined on show, its history's step, its record and its "*"; a tab hidden past Settings' minutes asleep (tabs.js `sleepTick`), one busy not until its job's end, the one shown least lately asleep beyond the tabs awake allowed, woken with its whole history; the LRU; a hidden tab saved as it is closed, reopened from Projects; a reload, the tab on show awake, the others woken as shown. |
-+| `b2cap.test.mjs` | The tabs awake capped (b2v3): 40 tabs opened, none refused, 20 awake (Settings' default), the one on show among them; one opened first but shown often staying awake, those asleep all shown less lately than those awake; the strip scrolling, the tab on show scrolled into it wherever it is, the wheel scrolling it sideways, a 41st tab in view; a reload, every tab back, the one on show awake. A refining XRPD tab, shown least lately, awake past the cap, the next ones asleep in its place; Settings' number changed, applied at once (5; 1, the busy tab over it till its run ends, then asleep); 25 projects opened at once from Projects, all of them, asleep. |
++| `b2cap.test.mjs` | The tabs awake capped (b2v3): 40 tabs opened, none refused, 20 awake (Settings' default), the one on show among them; one opened first but shown often staying awake, those asleep all shown less lately than those awake; the strip scrolling, the tab on show scrolled into it wherever it is, the wheel scrolling it sideways, a 41st tab in view; a reload, every tab back, the one on show awake. A refining XRPD tab, shown least lately, awake past the cap, the next ones asleep in its place; Settings' number changed, applied at once (5; 1, the busy tab over it till its run ends, then asleep); 25 projects opened at once from Projects, all of them, asleep. Two tabs chosen within a switch's frames: one record on show, the last chosen, which a reload shows. |
 +| `b2fixed.test.mjs` | Arrays fixed (db.js `fixed`, b2v3): `park` and `decode` give a fixed array back as it is and copy one not fixed, `encode` writes both out (in Node); a tab of XRPD, DRS, GC and EPR asleep holding its history's arrays, none frozen, woken with the same; `stateKey` taking a fixed array by its hash; with the tests' freezing on, a fixed array frozen. |
-+| `b2kept.test.mjs` | What is worked out, kept (b2v3): a tab woken from sleep makes none of it again (utils.js `kept.made`, counted across the wake) — XRPD's processing and Rietveld curves, DRS's fits (a Tauc and an Urbach card), GC's tables, EPR's smoothing, SEM's thumbnails and cards (its bytes let go and collected) — its plots the golden hashes of a first drawing and the same as before it slept, its CSVs byte for byte; a parameter changed (XRPD: a pattern refined again with another background degree; DRS: the exponent) makes its results again, and undo and redo take them as kept; a woken tab, and an awake one shown at another width of the window, under the loader, one at the width it was left at at once. |
++| `b2kept.test.mjs` | What is worked out, kept (b2v3): a tab woken from sleep makes none of it again (utils.js `kept.made`, counted across the wake) — XRPD's processing and Rietveld curves, DRS's fits (a Tauc and an Urbach card), GC's tables, EPR's smoothing, SEM's thumbnails and cards (its bytes let go and collected) — its plots the golden hashes of a first drawing and the same as before it slept, its CSVs byte for byte; a parameter changed (XRPD: a pattern refined again with another background degree; DRS: the exponent) makes its results again, and undo and redo take them as kept; a woken tab, and an awake one shown at another width of the window, under the loader, one at the width it was left at at once, one left for Settings and the window changed there under the loader; SEM's cards of a crop taken by an undo and a redo; a project written to a file, from its bar and from Projects, its long task under the loader, a frame drawn first. |
  | `xrdcards.test.mjs` | The analysis cards and the XRPD Scherrer card. + Add peak is left as its card is folded (by the arrow, clicked or by Enter: the button off, the guide gone, no peak placed), not by a move's folds, and as the standard's window closes (× or a click beside it). The baseline's box undone and redone step by step (the box, its window field and the state together, the live state the history step's), under all and one and in the standard's window; a select undone with the focus on it; Ctrl+Z with the focus still on the box just clicked. A card an undo or a redo brings back (closed by its ×, or added) is brought into view, its head on screen under the sticky bar, in XRPD, DRS, GC and EPR; a tab switched to and a project opened with a card more bring nothing into view. |
  | `filelist.test.mjs` | The file list, the same in every module (DRS, XRPD, GC, EPR, SEM), at 1400, 800 and 375 px: grip and include box 26 px each, FILE, LABEL and a note with no header but GC's (SAMPLE, a select of the file's sample) at 3 : 3 : 2 of the width left, actions 58 px, measured cell by cell; the note right of the label, DRS's %R or F(R) (its title in full), GC's the file's own name, the others' empty; no sideways scroll, the label field inside its cell; on a phone the field, while typed in, laid over the note and short of the actions. |
  | `gcp.test.mjs` | GC's pressure p of the flow: 1 atm by default (in a new card, for a new file, in a project saved before it), V_m = RT/p (a rate at 2 atm twice the one at 1 atm, at 1 atm 1.01325 times the one at 1 bar); its unit (atm, bar, kPa, mbar, Torr, psi) converting the values shown and written, never the pressure, switched round and back; either decimal mark, 0, below 0 or no number refused as m and Q are; all/one, a file added and one left out; the value and the unit as undo/redo steps; a malformed pressure restored at 1 atm; p in gc_info.csv after T and in mean_rates.csv before it; the parameter table at 1300 px and at 1000 px, nothing over its cell. |
@@ -3859,7 +3957,7 @@ index b6198b0..18bc76b 100644
  | `modules.test.mjs` | DRS, GC and EPR. A card unfolded keeps its zoom on the same files and full range, and draws the full range after a file was removed or left out while it was folded, at the width it is laid out at (EPR, GC); a label changed while folded keeps the zoom (GC). DRS: the sample on show followed through a removal before it and a move, the nearest when it is removed itself; a label changed is the card's caption at once, and its undo. GC: an interval bound flipped back to "all" that would end an interval before it starts refused, with the words a value typed is refused with; the flow's temperature T (25 °C, all/one, in `gc_info.csv` and `mean_rates.csv`), the rates at 0 °C over those at 25 °C by 298.15/273.15, a state with no T at 0 °C with its rates as they were, a file added at 25 °C. EPR: a `.DSC` of one point or none refused with why; flat spectra drawn under the global normalisation. DRS: the standard format is the Cary 5000's layout alone, the name on line 1, then `Wavelength (nm)` and `%R` or `F(R)` on line 2 (any separator, decimal mark, case or quotes), the data from line 3: `%R` so, under `;` with `,` decimals and in quotes, loads with no alert; `R%`, `%R` on line 1 or 3, `R %`, `Reflectance (%)`, a JASCO `YUNITS,%R` above `XYDATA` are read as F(R) = (1 − R)²/2R, back to the fixture's F(R), and said ('not a standard format: its header names the reflectance in %'), as is F(R) named elsewhere than on line 2; a file with no header read as F(R) and said, as is one whose columns' header names neither under a line naming R% (`Operator,R%` above `Wavelength (nm),KM`); the points that are no physical value (R outside 0–100 %, R = 0, F(R) < 0, NaN, past the doubles) left out and counted; a file with none left refused with why; the raw file downloaded as it came. DRS, the Cary 5000's own `%R` export (its layout: the name above the header, trailing commas, CRLF, 800 down to 200 nm, the instrument's footer) beside a standard F(R) export, with no alert, and a file of no standard format, with its warning: the file list's note, right of the label with no header, says `%R` or `F(R)` (its title in full; `F(R)` for a project with no reading kept); F(R) the conversion of the values written; the Results' top, F(R) and R (%) against λ side by side and the log plot under them at 2φ : 1; the R (%) plot giving the values back (and, for an F(R) file, R whose F(R) is the file's), its CSV `reflectance_R.csv` too, a file left out of both; its figure composer opening. Malformed projects: every value of a DRS, GC and EPR state put in as `null`, a string, an object in turn, restored as a project is opened: no throw, no page error; a file with nothing to show left out, said, its per-sample settings with it. |
  | `db.test.mjs` | The form a module state takes in IndexedDB and in a project file (`db.js`), in Node: bytes as base64, a byte array held in several places written once and read back as one array, dates and other typed arrays, the older forms (bytes as arrays, a dangling reference). |
  | `sem.test.mjs` | SEM groups by scale, an excluded image deciding nothing about its group's name or the scope selector; a renamed label shown in the navigation, thumbnails, groups and Reference, and undone; in the crop editor a 2-px drag is no edit, a 20-px one moves both linked crops in one undo step. |
-+| `b2sem.test.mjs` | SEM made per tab (b2): two SEM tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a file in both tabs one array of bytes, one reading worker for both; a reading going on in a tab left, nothing asked, its files landing in its own list as one step, its record and its "*", its tab awake past Settings' minutes till the reading's end and asleep that long after, woken drawn; a tab hidden letting go of the editor's image at once (made again as it is shown) and of nothing else till it sleeps (tabs.js `sleepTick`); asleep, woken with its whole history. A tab asleep letting go of its files' bytes once the store holds them (not while the tabs' records are being written; WeakRefs emptied by a GC; a file a tab awake holds kept), its record holding its history's files from the sweep; woken from the store with its state, history, thumbnails, cards, editor and figure, a file read back byte for byte, a tab awake's file not read again, an undo bringing back a file only its history held; one read for two wakes asked, a wake left or closed meanwhile given up (the tab asleep as it was), no key reaching another tab under the loader; a file no longer stored lost and said, the rest as it was, an undo too; Projects' CSV of its project the bar's; closed hidden with Save, saved with its files, reopened from Projects; a reload, the tab not on show back without its bytes, read as it wakes. |
++| `b2sem.test.mjs` | SEM made per tab (b2): two SEM tabs awake at once, each its own files, view and undo history, a switch to one awake only showing it (its own section, no restore); a file in both tabs one array of bytes, one reading worker for both; a reading going on in a tab left, nothing asked, its files landing in its own list as one step, its record and its "*", its tab awake past Settings' minutes till the reading's end and asleep that long after, woken drawn; a tab hidden letting go of the editor's image at once (made again as it is shown) and of nothing else till it sleeps (tabs.js `sleepTick`); asleep, woken with its whole history. A tab asleep letting go of its files' bytes once the store holds them (not while the tabs' records are being written; WeakRefs emptied by a GC; a file a tab awake holds kept), its record holding its history's files from the sweep; woken from the store with its state, history (one RawRef and one array a file, as before it slept), thumbnails, cards, editor and figure, a file read back byte for byte, a tab awake's file not read again, an undo bringing back a file only its history held, its thumbnail and card not made again; one read for two wakes asked, a wake left or closed meanwhile given up (the tab asleep as it was), no key reaching another tab under the loader; a file no longer stored lost and said, the rest as it was, an undo too; the read failing as a whole, the wake given up, the tab asleep as it was, its record and the store holding its files, shown again and woken; Projects' CSV of its project the bar's; closed hidden with Save, saved with its files, reopened from Projects; a reload, the tab not on show back without its bytes, read as it wakes. |
  
  ## Fixtures
  
@@ -3875,10 +3973,10 @@ index b6198b0..18bc76b 100644
  `answer` (the confirm banners); `download`, `exportProject`, `importProject`,
 diff --git a/tests/b2cap.test.mjs b/tests/b2cap.test.mjs
 new file mode 100644
-index 0000000..bf20920
+index 0000000..90a4f71
 --- /dev/null
 +++ b/tests/b2cap.test.mjs
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,155 @@
 +/* The tabs awake, capped (b2v3): any number of tabs open, none refused (to b2v2 a 21st was);
 +   at most Settings' number awake (20 by default), the one on show among them, the one
 +   shown least lately put to sleep beyond it, whenever it was opened: one opened first but
@@ -3887,10 +3985,12 @@ index 0000000..bf20920
 +   awake past the cap, the one shown least lately among the others sleeping in its place;
 +   all the others busy or asleep, the count over the cap until its job ends, the excess then
 +   asleep. Settings' number changed: applied at once. Projects' Open selected, 25 at once:
-+   all opened, asleep. The workers' answers held where a run must go on (window.__hold). */
++   all opened, asleep. Two tabs chosen within a switch's frames: one record on show, the
++   last chosen, as a reload shows. The workers' answers held where a run must go on
++   (window.__hold). */
 +import { test, before, after } from 'node:test';
 +import assert from 'node:assert/strict';
-+import { start, openModule, loadFiles, switchTab, settle, until, banner, ready, MODS } from './helpers.mjs';
++import { start, openModule, loadFiles, switchTab, settle, until, banner, ready, idb, MODS } from './helpers.mjs';
 +
 +let env;
 +before(async ()=>{ env = await start(); });
@@ -4009,6 +4109,25 @@ index 0000000..bf20920
 +    assert.deepEqual(await awakeAt(page), [21], 'the projects opened asleep');
 +    await switchTab(page, 46);
 +    assert.deepEqual(await awakeAt(page), [21, 46]);
++    assert.deepEqual(errors, []);
++    assert.deepEqual(await csp(), []);
++  } finally { await close(); }
++});
++
++test('two tabs chosen within a switch\'s frames: the record of the tab left first no longer on show, a reload showing the last chosen', async ()=>{
++  const { page, errors, csp, close } = await env.page();
++  try {
++    for (let i = 0; i < 3; i++) await openModule(page, 'gc');
++    await switchTab(page, 1); await switchTab(page, 0);
++    // T1 and T2 left at another width: T1 shown two frames on, under the loader (tabs.js
++    // showLater), and T2 chosen within them, in the same task
++    await page.setViewportSize({ width: 1200, height: 900 }); await page.waitForTimeout(300);
++    await page.evaluate(()=>{ const t = document.querySelectorAll('#tabBar .ptab'); t[1].click(); t[2].click(); });
++    await settle(page);
++    const flags = async ()=> (await idb(page, 'tabs')).sort((a, b)=> a.order - b.order).map(r=> r.active);
++    await until(async ()=> JSON.stringify(await flags(page)) === '[false,false,true]', { what: 'one record on show, T2\'s' });
++    await page.reload(); await ready(page); await settle(page);
++    assert.equal(await page.evaluate(()=> [...document.querySelectorAll('#tabBar .ptab')].findIndex(e=> e.classList.contains('is-on'))), 2, 'T2 on show after a reload');
 +    assert.deepEqual(errors, []);
 +    assert.deepEqual(await csp(), []);
 +  } finally { await close(); }
@@ -4581,10 +4700,10 @@ index 0000000..726e357
 +});
 diff --git a/tests/b2kept.test.mjs b/tests/b2kept.test.mjs
 new file mode 100644
-index 0000000..62e269a
+index 0000000..53129e3
 --- /dev/null
 +++ b/tests/b2kept.test.mjs
-@@ -0,0 +1,247 @@
+@@ -0,0 +1,313 @@
 +/* What is worked out, kept (b2v3): a tab woken from sleep, an undo, a redraw take what was
 +   worked out before (utils.js keeper: by the data's array and every other input), and make
 +   none of it again. Counted (utils.js kept.made: the results made, by name) across each
@@ -4595,12 +4714,13 @@ index 0000000..62e269a
 +   curves), DRS (every fit, a Tauc and an Urbach card), GC and EPR (their tables and
 +   smoothing), SEM (its thumbnails and cards, kept while the tab is asleep, its bytes let
 +   go). The tab woken shows under the loader; one awake shown at another width of the
-+   window, too (b2v3's loader). */
++   window, too, and a project written to a file (b2v3's loader). */
 +import { test, before, after } from 'node:test';
 +import assert from 'node:assert/strict';
 +import fs from 'node:fs';
 +import path from 'node:path';
-+import { start, openModule, loadFiles, switchTab, settle, undo, poke, plotSvgs, golden, download, readZip } from './helpers.mjs';
++import { start, openModule, loadFiles, switchTab, settle, undo, poke, plotSvgs, golden, download, readZip, saveAs } from './helpers.mjs';
++import { makeTiff } from './fixtures.mjs';
 +
 +let env;
 +before(async ()=>{ env = await start(); });
@@ -4784,6 +4904,16 @@ index 0000000..62e269a
 +    await page.locator('#tabBar .ptab').nth(0).locator('.ptab-label').click();
 +    assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), false, 'the same width: shown at once');
 +    await settle(page);
++    // Left for Settings, the window changed there, another tab shown, then this one: it was
++    // drawn at the width it was left for Settings at, so under the loader (b2v3: the width
++    // taken as the other tab was shown, at which it was never drawn: shown at once, drawn
++    // in one long task)
++    await page.click('#nav button[data-tab="settings"]'); await settle(page);
++    await page.setViewportSize({ width: 1400, height: 900 }); await page.waitForTimeout(400);
++    await switchTab(page, 1);
++    await page.locator('#tabBar .ptab').nth(0).locator('.ptab-label').click();
++    assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), true, 'changed while Settings was on show: the loader on first');
++    await settle(page);
 +    assert.deepEqual(errors, []);
 +    assert.deepEqual(await csp(), []);
 +  } finally { await close(); }
@@ -4828,16 +4958,71 @@ index 0000000..62e269a
 +    await settle(page);
 +    const m1 = await made(page);
 +    assert.deepEqual(diff(m0.made, m1.made), [], 'woken: no table, smoothing, thumbnail or card made again');
++    // A crop of another width: its group's cards made; undone, redone, undone, taken as kept
++    // (b2v3: a file's last card alone, made again by each)
++    await page.click('#semCropDef'); await settle(page);
++    await page.fill('#semCropW', '128'); await page.press('#semCropW', 'Enter'); await settle(page);
++    const m2 = await made(page);
++    assert.ok((m2.made['sem-card'] || 0) > (m1.made['sem-card'] || 0), 'the new crop\'s cards made');
++    for (const redo of [false, true, false]) await undo(page, redo);
++    assert.deepEqual(diff(m2.made, (await made(page)).made), [], 'undo and redo: no card made again');
++    assert.deepEqual(errors, []);
++    assert.deepEqual(await csp(), []);
++  } finally { await close(); }
++});
++
++test('a project written to a file, from its bar and from Projects: under the loader, a frame drawn first', async ()=>{
++  const { page, errors, csp, close } = await env.page();
++  try {
++    await page.click('#nav button[data-tab="home"]'); await page.click('.home-card[data-go="sem"]');
++    await page.waitForFunction(()=> !!document.querySelector('#tab-sem.active')); await settle(page);
++    // (two images of 2048² at 16 bits: written as base64 in a task of some 0.3 s)
++    await drop(page, 'sem', [1, 2].map(k=> env.fx.put(`big${k}.tif`, makeTiff({ sign: 'B' + k, seed: k, bits: 16, W: 2048, H: 2058 }))));
++    await saveAs(page, 'big'); await settle(page);
++    // Every long task from now, the loader's changes, the frames drawn
++    const watch = ()=> page.evaluate(()=>{
++      const ev = window.__ev = [], on = ()=> !!document.querySelector('.module-loader.show');
++      if (!window.__obs){
++        window.__obs = new PerformanceObserver(l=> l.getEntries().forEach(e=> window.__ev.push(['task', e.startTime, e.startTime + e.duration])));
++        window.__obs.observe({ type: 'longtask' });
++        let was = on();
++        new MutationObserver(()=>{ if (on() !== was){ was = on(); window.__ev.push([was ? 'on' : 'off', performance.now()]); } })
++          .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
++        (function f(t){ if (t) window.__ev.push(['frame', performance.now()]); requestAnimationFrame(f); })();
++      }
++      ev.length = 0;
++    });
++    const check = async what =>{
++      const ev = await page.evaluate(()=> window.__ev), tasks = ev.filter(e=> e[0] === 'task' && e[2] - e[1] > 100);
++      assert.ok(tasks.length, what + ': its long task');
++      for (const [, start] of tasks){
++        const last = ev.filter(e=> (e[0] === 'on' || e[0] === 'off') && e[1] < start).pop();
++        assert.equal(last && last[0], 'on', what + ': the loader on before its long task');
++        assert.ok(ev.some(e=> e[0] === 'frame' && e[1] > last[1] && e[1] < start), what + ': a frame drawn between');
++      }
++      assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), false, what + ': the loader off after');
++    };
++    await watch();
++    const a = await download(page, ()=> page.click('.proj-json'));
++    await settle(page);
++    await check('from its bar');
++    await page.click('#nav button[data-tab="projects"]'); await settle(page);
++    await watch();
++    const b = await download(page, ()=> page.click('#tab-projects .pr-json'));
++    await page.waitForFunction(()=> !document.querySelector('.module-loader.show'));
++    await check('from Projects');
++    assert.equal(JSON.parse(b.buf.toString('utf8')).state.files.length, 2);
++    assert.ok(a.buf.length > 20e6, 'the bytes in it');
 +    assert.deepEqual(errors, []);
 +    assert.deepEqual(await csp(), []);
 +  } finally { await close(); }
 +});
 diff --git a/tests/b2sem.test.mjs b/tests/b2sem.test.mjs
 new file mode 100644
-index 0000000..f38ad8a
+index 0000000..605ca39
 --- /dev/null
 +++ b/tests/b2sem.test.mjs
-@@ -0,0 +1,405 @@
+@@ -0,0 +1,444 @@
 +/* SEM made per tab (b2): each SEM tab an instance of its own, awake while it is shown or
 +   was lately, in one page. Two tabs awake at once, each its own files, view and undo
 +   history, a switch to one awake only showing it (the same section, nothing restored); a
@@ -4925,6 +5110,13 @@ index 0000000..f38ad8a
 +  r.onerror = ()=> rej(r.error);
 +}));
 +const shown = (page, i)=> page.locator('#tabBar .ptab').nth(i).locator('.ptab-label').click();
++// Tab i's history, by file: [its RawRefs, its arrays of bytes], one of each a file (b2v3: a
++// history woken held a copy of the array at each step that held its file, its RawRefs not the
++// file's own).
++const census = (page, i)=> page.evaluate(async i=>{ const u = await import('./utils.js'), t = (await import('./tabs.js')).TABS[i], refs = {}, arrs = {};
++  for (const s of u.getModuleHistory(t.id).states) for (const f of s.files){ (refs[f.name] ||= new Set()).add(f.raw); (arrs[f.name] ||= new Set()).add(f.raw.bytes); }
++  return Object.fromEntries(Object.keys(refs).sort().map(k=> [k, [refs[k].size, arrs[k].size]])); }, i);
++const made = page => page.evaluate(async ()=> ({ ...(await import('./utils.js')).kept.made }));
 +/* The bytes store's reads (a readonly transaction of it alone: db.js load) counted, and their
 +   end held while __holdTx; the end of the writes of the tabs' records (and so the write
 +   queue's) held while __holdW; both delivered by __releaseTx(). */
@@ -5072,6 +5264,8 @@ index 0000000..f38ad8a
 +    await page.locator('#semFileTableWrap .row-del[data-i="2"]').click(); await settle(page);
 +    assert.deepEqual(await labels(page), ['x', 'B']);
 +    const hA = await history(page, 'sem');
++    const one = { 'a.tif': [1, 1], 'b.tif': [1, 1], 'c.tif': [1, 1] };
++    assert.deepEqual(await census(page, 0), one, 'one RawRef and one array a file');
 +    // A second tab holding a.tif, awake.
 +    await newTab(page); await drop(page, [A()]);
 +    // Asleep while the tabs' records are being written (the write queue's end held): its
@@ -5102,6 +5296,7 @@ index 0000000..f38ad8a
 +    assert.equal(await page.locator('#semGroups .sem-gimg canvas').count(), 2, 'its cards drawn');
 +    assert.ok(await page.evaluate(()=> document.querySelector('#semCropCanvas').width > 0), 'its editor drawn');
 +    assert.deepEqual(await history(page, 'sem'), hA, 'its whole history');
++    assert.deepEqual(await census(page, 0), one, 'woken: one RawRef and one array a file still, c.tif in two steps');
 +    assert.ok(await page.evaluate(async ()=>{ const u = await import('./utils.js'), [a, b] = (await import('./tabs.js')).TABS;
 +      return u.getModuleState(a.id).files[0].raw.bytes === u.getModuleState(b.id).files[0].raw.bytes; }), 'a.tif one array, the tab awake\'s, not read again');
 +    assert.ok((await download(page, ()=> page.locator('#semFileTableWrap .dl-file[data-i="1"]').click())).buf.equals(B().buffer), 'b.tif byte for byte');
@@ -5110,10 +5305,15 @@ index 0000000..f38ad8a
 +    await page.waitForFunction(()=> document.querySelectorAll('.fig-backdrop .fig-svg image').length === 2);
 +    await page.keyboard.press('Escape');
 +    await page.waitForFunction(()=> !document.querySelector('.fig-backdrop'));
-+    // Undone: c.tif back from the store, then down to the empty start and up again.
++    // Undone: c.tif back from the store, its thumbnail and card as they were made before the
++    // sleep (its history alone held it), then down to the empty start and up again.
++    const m0 = await made(page);
 +    await undo(page);
 +    assert.deepEqual(await labels(page), ['x', 'B', 'C']);
 +    await thumbs(page, 3);
++    await page.waitForFunction(()=> document.querySelectorAll('#semGroups .sem-gimg canvas').length === 3);
++    const m1 = await made(page);
++    assert.deepEqual(['sem-reduced', 'sem-card'].map(k=> (m1[k] || 0) - (m0[k] || 0)), [0, 0], 'c.tif\'s thumbnail and card not made again');
 +    await undo(page);
 +    assert.deepEqual(await labels(page), ['A', 'B', 'C']);
 +    await undo(page);
@@ -5194,6 +5394,30 @@ index 0000000..f38ad8a
 +    await thumbs(page, 1);
 +    await undo(page);
 +    assert.deepEqual(await labels(page), ['B'], 'an undo, a.tif lost there too');
++    // Its files' read failing as a whole (an error injected): the wake given up, the tab
++    // asleep as it was, Home on show, said so; its record and the store holding its files
++    // still (b2v3: woken without them, its record written so, its files swept); shown again,
++    // read and woken.
++    await tick(page, 11*MIN);
++    await until(()=> light(page, 0), { what: 'its bytes let go' });
++    await gc(page);
++    await page.evaluate(()=>{ const T = IDBDatabase.prototype.transaction; window.__T = T;
++      IDBDatabase.prototype.transaction = function(s, m){ if (m !== 'readwrite' && [].concat(s).join() === 'bytes') throw new DOMException('injected', 'UnknownError'); return T.apply(this, arguments); }; });
++    await shown(page, 0);
++    await page.waitForSelector('.pwa-confirm.show');
++    assert.match((await banner(page)).text, /^“[^”]+”: its files could not be read from this browser's storage\. The tab stays as it was: show it again to read them again\.$/);
++    await answer(page, 'ok');
++    assert.deepEqual(await awake(page), [false, true]);
++    assert.ok(await light(page, 0), 'still its references');
++    assert.ok(await page.evaluate(()=> document.querySelector('#tab-home').classList.contains('active') && !document.querySelector('.module-loader.show')), 'Home on show, the loader off');
++    await page.evaluate(()=>{ IDBDatabase.prototype.transaction = window.__T; });
++    await until(async ()=>{ const r = (await idb(page, 'tabs')).find(x=> x.order === 0); return r && r.state.files.length === 1 && r.refs.includes(sha(C().buffer)); }, { what: 'its record as it was' });
++    await page.evaluate(async ()=> (await import('./db.js')).sweep());
++    assert.ok((await storeKeys(page)).includes(sha(C().buffer)), 'c.tif stored still');
++    await shown(page, 0); await settle(page);
++    assert.deepEqual(await awake(page), [true, true]);
++    assert.deepEqual(await labels(page), ['C'], 'woken with its file');
++    await thumbs(page, 1);
 +    assert.deepEqual(errors, []);
 +    assert.deepEqual(await csp(), []);
 +  } finally { await close(); }
@@ -6537,7 +6761,7 @@ index 61f5431..2cce50f 100644
    // The samples' correction, from the standard's model (host.instr).
    const model = ()=> std ? null : host.instr();
 diff --git a/xrd-rv-model.js b/xrd-rv-model.js
-index 76667d1..dd72856 100644
+index 76667d1..ad923b6 100644
 --- a/xrd-rv-model.js
 +++ b/xrd-rv-model.js
 @@ -9,6 +9,7 @@ import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metri
@@ -6563,6 +6787,34 @@ index 76667d1..dd72856 100644
    if (v && typeof v === 'object' && !ArrayBuffer.isView(v) && !Object.isFrozen(v)){ Object.freeze(v); for (const k in v) frozen(v[k]); }
    return v;
  }
+@@ -446,17 +450,10 @@ function curvesFrom(f, r, list, std){
+   const model = buildModel({ x: f.x, y: f.y, varMul: f.varMul || null, instr: instrOf(f), phases: ph, bgDegree: fs.bgDegree, bgInv: fs.bgInv, cellRange: fs.cellRange });
+   return calc(model, r.params);
+ }
+-/* What curves are built from, which kept curves are kept while the same (sameInputs;
+-   xrd-rv.js curveKept, netKept): the pattern's data (by value: a restore reads the files'
+-   arrays anew), its instrument, all the curves take from the result (exactly: a NaN is not
+-   a null, nor −0 0), each phase's structure (its prep, one object for one CIF text: prepOf)
+-   and colour. */
++/* A value as JSON, exactly: a NaN is not a null, nor −0 0 (what the curves take from a
++   result and its instrument, in the key their kept curves are kept under: xrd-rv.js
++   curveKey). */
+ const exactJson = v => JSON.stringify(v, (k, x)=> typeof x === 'number' && (!Number.isFinite(x) || Object.is(x, -0)) ? '#' + (Object.is(x, -0) ? '-0' : x) : x);
+-const curveInputs = (f, r, list) => ({ x: f.x, y: f.y, vm: f.varMul || null, ins: exactJson(instrOf(f)),
+-  res: exactJson([r.params, r.models, r.textures, r.fit, r.phases, r.cells]), ph: list.map(q=> [q.id, q.prep, q.color]) });
+-const sameArr = (a, b) => a === b || (!!a && !!b && a.length === b.length && Array.prototype.every.call(a, (v, i)=> Object.is(v, b[i])));
+-const sameInputs = (a, b) => sameArr(a.x, b.x) && sameArr(a.y, b.y) && sameArr(a.vm, b.vm) && a.ins === b.ins && a.res === b.res
+-  && a.ph.length === b.ph.length && a.ph.every((p, i)=> p.every((v, j)=> v === b.ph[i][j]));
+ // The scan's 2θ range, low end first (the host turns a scan run downwards round, and
+ // the engine takes either order).
+ const scanRange = f => { const a = f.x[0], b = f.x[f.x.length-1]; return a <= b ? [a, b] : [b, a]; };
+@@ -691,5 +688,5 @@ export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, frozen, SHAPES, shap
+   HOLDS, HOLD_KEYS, HOLD_DEFAULT, STD_HOLD_NA, START_RULE, FIT_DEF, FITS, FIT, fitTxt, DEC, readFit, cleanFit, formulaOf,
+   SIZE_ROWS, SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
+   instrOf, LAB6_ID, roleOf, irfOf, IRF_KEYS, sameIrf, phaseData, shapeOfParams, lastUnusable, bgTerms, payloadFor, resultRecord,
+-  resultPhases, curvesFrom, exactJson, curveInputs, sameArr, sameInputs, scanRange, tickRows, groupTicks,
++  resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
+   sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf };
 diff --git a/xrd-rv-pool.js b/xrd-rv-pool.js
 new file mode 100644
 index 0000000..997db42

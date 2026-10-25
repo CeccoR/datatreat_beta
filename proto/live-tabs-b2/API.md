@@ -43,9 +43,15 @@ works differently:
   off once it is drawn (tabs.js `activateTab`, `loadTabIfActive`). A tab awake shown again
   draws only what changed while hidden: nothing, shown at the width it was left at and
   unchanged (at once); all its plots at another width of the window, or its results where a
-  job ended meanwhile: then under the loader too (`redrawn`, `showLater`). A project changed
-  and reloaded keeps the loader on till its saved record is read and its key taken
-  (sessions.js `onTabLoaded` gives the promise, tabs.js `loaded` waits for it).
+  job ended meanwhile: then under the loader too (`redrawn`, `showLater`); the width it was
+  drawn at is the one it was left at, for another tab or for Home, Projects or Settings. A
+  project changed and reloaded keeps the loader on till its saved record is read and its
+  key taken (sessions.js `onTabLoaded` gives the promise, tabs.js `loaded` waits for it). A
+  step that is no tab's, a project written to a file (its bar's, Projects'), goes through
+  tabs.js `underLoader(fn)`: the loader on, a frame drawn, `fn`, the loader off. The
+  records whose `active` changes are written at the switch (the tab left) and once the tab
+  shown is (its own), so that a switch superseded within its frames leaves one record on
+  show.
 - **Busy tabs never sleep.** A busy tab (`moduleBusy(key)`) is never put to sleep. Its
   time hidden counts from the end of its job.
 - **The cap.** Any number of tabs may be open (b2v3: v517 and b2v2 refused a 21st). At most
@@ -327,7 +333,11 @@ whose predicate returns an element; return a boolean instead (NOTES-drs.md).
     state and history's states as a tab sleeps (or is restored or opened asleep) and
     `asleep(key, null)` as it wakes or is closed; SEM keeps the ids they name (b2v3; to b2v3
     the files let go last, 32 MB at most, which some 3.4 MB a tab of 8 images 2048² asleep
-    outgrew past 9 such tabs).
+    outgrew past 9 such tabs). At a wake `asleep(key, null)` comes once the instance holds
+    its state and history: SEM then takes its history's RawRefs as the files' own (`adopt`:
+    kept and watched as before the sleep, or the one kept put in their place), so that a
+    file the history alone holds keeps what it was made into (b2v3 review: it was let go at
+    the wake, and an undo made it again, 0.43 s with no loader for 8 images).
   - **At wake**, the parked state and history are read back together (db.js `load`: an
     array the page still holds of a hash, another tab's, is taken, the rest read from the
     store in one transaction) and the tab then wakes as any other. Meanwhile the loader is
@@ -336,7 +346,13 @@ whose predicate returns an element; return a boolean instead (NOTES-drs.md).
     whatever wakes ask for it; given up if the tab is left, closed or woken otherwise
     meanwhile. Bytes the store no longer has (cleared, evicted) come back as none, said in
     a banner, and the module shows its files without them as it does after a reload (SEM:
-    out of the list, said in its alerts).
+    out of the list, said in its alerts). An array met in several places comes back one
+    (db.js `fill` gives one object for one met, as `unload` made one: to the review a history
+    woken held a copy of a file's bytes at each step that held it). A read that fails as a
+    whole gives the wake up (b2v3 review): the tab stays asleep, its references and its
+    record as they were, Home on show, a banner saying so; its next show reads again (to
+    the review it woke without its files, and its record, written then, lost them for
+    good).
   - **Who waits.** `tabs.js ensureLive()` returns the wake's promise: Save, Save as, the
     exports, the CSVs, Delete and a close that saves await it. A tab asleep saved as it is
     closed stores its references, the bytes being in the store. Projects' CSVs and exports
@@ -380,7 +396,7 @@ Keep at **module level**, shared by instances:
   | | `drs-reflectance`, `drs-log` | its F(R) | the Results' R % and log F(R) |
   | GC | `gc-tables` (8) | its first gas's readings | a sample's tables (times, readings, flows, their integral), by its dates, readings, light-on, injection delay and flow parameters |
   | EPR | `epr-smoothed` (8) | its intensities | a spectrum smoothed, by its field and the width |
-  | SEM | (`imgs`) | its file's id | its header, reduced copy and card levels, while a tab awake or asleep holds the file (§9) |
+  | SEM | (`imgs`) | its file's id | its header, reduced copy and card levels (by the part of the image and the size, the last 4), while a tab awake or asleep holds the file (§9) |
 
   Not kept: what is drawn (a plot's paths, the DOM: a tab asleep has none; awake it keeps
   them), the transforms made as a plot is drawn (a normalisation, an offset), and a few
