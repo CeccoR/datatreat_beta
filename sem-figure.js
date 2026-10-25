@@ -138,7 +138,7 @@ const letterOf = (k, style) => { const c = String.fromCharCode(97 + (k % 26)) + 
    opens, let go when it closes. */
 let host = null, F = null, lastL = null;
 let lastPlot = { w: 0, h: 0 };   // the plot of the last drawing (mm), for its locked fields
-const urls = new Map();   // id|full → { key, url }: an image's PNG, made once while it does not change
+const urls = new Map();   // id → { key, url }: an image's PNG for the preview, made once while it does not change
 let saveTimer = null;     // an edit not yet gone back to the module (commit)
 
 // The images in panel order: the saved order, then any image not in it, in the file
@@ -169,12 +169,16 @@ function gridOf(n){
   const cols = Math.max(1, F.cols), rows = Math.max(1, F.rows), bCols = Math.max(1, F.bCols);
   return { cols, rows, bCols, bRows: Math.max(F.bRows, Math.ceil(n/(rows*cols*bCols))) };
 }
+/* An image's PNG: the preview's (520 px across) kept while it does not change; the
+   export's, at the figure's pixels, made for that export and not kept (to b2 kept till
+   the composer closed: a PNG of each image at full size, some 3 MB of text for 2048²). */
 function urlOf(m, full){
-  const k = m.id + (full ? '|full' : '|prev'), c = urls.get(k);
+  if (full){ const cv = m.canvas(0); return cv ? cv.toDataURL('image/png') : ''; }
+  const c = urls.get(m.id);
   if (c && c.key === m.key) return c.url;
-  const cv = m.canvas(full ? 0 : 520);
+  const cv = m.canvas(520);
   const url = cv ? cv.toDataURL('image/png') : '';
-  urls.set(k, { key: m.key, url });
+  urls.set(m.id, { key: m.key, url });
   return url;
 }
 

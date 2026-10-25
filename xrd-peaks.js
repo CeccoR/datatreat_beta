@@ -7,7 +7,7 @@
    file, its own parameters, and the Caglioti fit of its widths that corrects the
    samples' sizes for the instrument's).
 ========================================================= */
-import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf } from './utils.js';
+import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
 
@@ -25,6 +25,13 @@ const idOf = o => o == null ? '-' : typeof o !== 'object' && typeof o !== 'funct
 const sizeOf = el => { if (!el) return '-'; const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
 // (a plot at the range it was drawn with: not zoomed nor panned)
 const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin === P._origYmin && P.ymax === P._origYmax;
+/* A pattern's processing (reprocessOne), kept by its intensities (utils.js keeper): its
+   smoothing and baseline by their widths (k1), its peaks by those and the peak search and
+   the peaks added and removed by hand (k2); and the standard's instrumental model by its
+   processing (modelOf). A tab woken, an undo to widths used before, a card made again
+   take them as made (to b2v3 a card kept its own, and a tab woken made all again: 67 ms
+   for 12 patterns). */
+const smoothKept = keeper('xrd-smoothing'), procKept = keeper('xrd-peaks', 8), modelOf = new WeakMap();
 
 // Index of the grid point nearest to a 2θ, by bisection: an axis need not be even (a scan
 // with points left out, xrd-instr.js, or listed positions). Up to v484 it was taken as
@@ -695,24 +702,25 @@ export function createPeakAnalysis(host, root, o){
     const k1 = [idOf(f.y), idOf(f.x), pr.smoothW, pr.blOn ? pr.snipW : 'off'].join('|');
     return { k1, k2: [k1, idOf(f.varMul), pr.pkHeight, pr.pkProm, pr.pkDist, (manualPeaks[i]||[]).join(), (removedPeaks[i]||[]).join()].join('|') };
   }
-  function reprocessOne(i, was = [processed[i]]){
-    const { k1, k2 } = procKeys(i);
-    const same = was.find(q=> q && q.k2 === k2);
-    if (same){ processed[i] = same; return; }
+  function reprocessOne(i){
+    const { k1, k2 } = procKeys(i), f = files()[i];
+    processed[i] = procKept(f.y, k2, ()=> processOf(i, f, k1, k2));
+  }
+  function processOf(i, f, k1, k2){
     const pr = getFileParams(i);
-    const f = files()[i];
     const x = f.x;
     const yraw       = f.y;
-    const near = was.find(q=> q && q.k1 === k1);
-    const smoothed   = near ? near.smoothed : boxSmooth(x, yraw, pr.smoothW);   // display + detection
-    // SNIP baseline (estimate/fallback/standard); switched off, none: the pattern from zero
-    const snip       = near ? near.snip : pr.blOn ? computeBaseline(x, smoothed, pr.snipW) : new Array(smoothed.length).fill(0);
-    /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
-       profile — on the raw counts the noise stops it short — and the smoothing, a box
-       w wide convolved into every peak, widens them in turn: the width is the
-       user's to keep small against the peak widths, the raw pattern drawn beside it. */
-    const detSub     = near ? near.subtracted : smoothed.map((v,j)=>Math.max(0, v-snip[j]));
-    const rawSub     = near ? near.rawSub : yraw.map((v,j)=>v-snip[j]);
+    const { smoothed, snip, detSub } = smoothKept(yraw, k1, ()=>{
+      const smoothed = boxSmooth(x, yraw, pr.smoothW);   // display + detection
+      // SNIP baseline (estimate/fallback/standard); switched off, none: the pattern from zero
+      const snip = pr.blOn ? computeBaseline(x, smoothed, pr.snipW) : new Array(smoothed.length).fill(0);
+      /* For the peak search and the classic FWHM. The half-maximum walk needs a smooth
+         profile — on the raw counts the noise stops it short — and the smoothing, a box
+         w wide convolved into every peak, widens them in turn: the width is the
+         user's to keep small against the peak widths, the raw pattern drawn beside it. */
+      return { smoothed, snip, detSub: smoothed.map((v,j)=>Math.max(0, v-snip[j])) };
+    });
+    // (to b2 also the raw pattern less the baseline, a fourth array a pattern that nothing read)
     // Peak detection on the smoothed, SNIP-subtracted profile (robust to noise)
     const peaks      = findPeaks(x, detSub, pr.pkHeight, pr.pkProm, pr.pkDist);
     // Re-inject manually added peaks (survive param changes, cleared on reset); one with
@@ -740,28 +748,27 @@ export function createPeakAnalysis(host, root, o){
       pk.fwhmSig = fwhmSigma(x, detSub, pk.idx, yraw, pr.smoothW, f.varMul);
     });
     const subtracted = detSub;
-    processed[i]     = {smoothed, baseline:snip, snip, subtracted, rawSub, peaks, k1, k2};
+    return {smoothed, baseline:snip, snip, subtracted, peaks, k1, k2};
   }
   function reprocessAll(){
-    const was = processed;
     processed = [];
-    for (let i=0; i<files().length; i++) reprocessOne(i, was);
+    for (let i=0; i<files().length; i++) reprocessOne(i);
   }
 
   // The standard's peaks the instrumental width is taken from, in 2θ order, and the
-  // Caglioti fit to them (null with fewer than 3). Null with no file. Kept while the
-  // standard's processing is the same object: one object, which the samples' views take
-  // among their inputs (up to v490 made anew for each size read, a fit each time).
-  let modelKept = null;
+  // Caglioti fit to them (null with fewer than 3). Null with no file. Kept by the
+  // standard's processing (modelOf): one object, which the samples' views take among their
+  // inputs (up to v490 made anew for each size read, a fit each time).
   function instrModel(){
     if (!std || !files().length || !processed[0]) return null;
-    if (modelKept && modelKept.pr === processed[0]) return modelKept.m;
+    let m = modelOf.get(processed[0]);
+    if (m) return m;
     const pts = processed[0].peaks
       .filter(pk=>!pk.removed && isFinite(pk.fwhm))
       .map(pk=>({x:pk.pos, th:(pk.pos/2)*Math.PI/180, b:pk.fwhm, s:pk.fwhmSig}))
       .sort((a,b)=>a.x-b.x);
-    modelKept = { pr: processed[0], m: { pts, fit: fitCaglioti(pts) } };
-    return modelKept.m;
+    modelOf.set(processed[0], m = { pts, fit: fitCaglioti(pts) });
+    return m;
   }
   // The samples' correction, from the standard's model (host.instr).
   const model = ()=> std ? null : host.instr();
@@ -1656,6 +1663,10 @@ export function createPeakAnalysis(host, root, o){
     // A label or a colour changed, the card unfolded, the tab on show again or resized: each
     // view drawn again where what it shows changed.
     redraw(){ if (files().length){ updateView(true); renderTable(); renderResults(); } },
+    // What it shows beside its state (b2v4, xrd.js): the peak picked in its table, given
+    // back as its tab wakes or the page is reloaded, the state restored (which picks none).
+    shows: ()=> panel.sel != null ? { sel: panel.sel } : null,
+    showNext(v){ if (v && Number.isFinite(v.sel)) panel.sel = v.sel; },
     instrModel,
     // The downloads named after the card ("<name> - peaks.csv"), the size chart's by what it shows.
     setName(n){

@@ -501,6 +501,9 @@ main {
   display: block;
   animation: tab-fade 0.25s ease;
 }
+/* An instance's layer (a module made per tab, b2): its windows and menus, in the page
+   while the instance is; a box of no box of its own. */
+.inst-layer { display: contents; }
 @keyframes tab-fade {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }

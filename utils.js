@@ -1,6 +1,7 @@
 /* =========================================================
    GENERIC UTILITIES
 ========================================================= */
+import { fixed, isFixed } from './db.js';
 const COLORS = [
   '#3aa0ff','#ff7a59','#5fcf6a','#d050ff','#ffcc4d','#ff5050','#4dd0e1','#c0ca33','#9575cd','#f06292',
   '#ff9800','#00bcd4','#8bc34a','#e91e63','#00897b','#ff5722','#1565c0','#f9a825','#6a1b9a','#558b2f',
@@ -559,7 +560,11 @@ const palettePickerUI = new PalettePickerUI();
    SETTINGS
 ========================================================= */
 const SETTINGS_KEY = 'datatreat-settings';
-const settings = { decimal: '.', field: ';', plotFmt: 'png' };
+/* The tabs in the background (tabs.js): a tab not on show sleeps after sleepMin minutes
+   (its instance let go, its state and whole history kept); beyond awakeMax tabs awake, the
+   one on show among them, the one shown least lately sleeps. */
+const TAB_DEF = { sleepMin: 10, awakeMax: 20 };
+const settings = { decimal: '.', field: ';', plotFmt: 'png', ...TAB_DEF };
 // Settings (image format + CSV decimal/field) persist across sessions, like the theme.
 try {
   const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
@@ -571,6 +576,10 @@ if (settings.decimal !== ',') settings.decimal = '.';
 if (![';', ',', '\t'].includes(settings.field)) settings.field = ';';
 if (!['png', 'svg', 'jpeg', 'webp'].includes(settings.plotFmt)) settings.plotFmt = 'png';
 if (settings.decimal === ',' && settings.field === ',') settings.field = ';'; // guard invalid combo
+// (the tabs' numbers in their ranges: minutes 0.1–1440, tabs 1–1000)
+const inRange = (v, lo, hi, d)=> Number.isFinite(+v) && +v >= lo && +v <= hi ? +v : d;
+settings.sleepMin = inRange(settings.sleepMin, 0.1, 1440, TAB_DEF.sleepMin);
+settings.awakeMax = Math.round(inRange(settings.awakeMax, 1, 1000, TAB_DEF.awakeMax));
 function saveSettings(){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch(e){} }
 
 function fmtNum(v, decimals){
@@ -734,9 +743,12 @@ function makeDownloadLink(container, filename, text, label){
 /* =========================================================
    SHARED FILE DROPZONE
 ========================================================= */
-function setupDropzone(dropzoneId, inputId, onFiles){
-  const dz = document.getElementById(dropzoneId);
-  const input = document.getElementById(inputId);
+// (an element, or its id in the page: a module made per tab gives its own elements, found
+// in its instance, whose ids are the page's only while it is on show)
+const elOf = x => typeof x === 'string' ? document.getElementById(x) : x || null;
+function setupDropzone(dropzone, inputEl, onFiles){
+  const dz = elOf(dropzone);
+  const input = elOf(inputEl);
   if (!dz || !input) return;
 
   // Show a "Loading…" state on the dropzone while onFiles (async parsing) runs,
@@ -846,8 +858,8 @@ const X_SVG = (size=14)=> `<svg class="x-icon" viewBox="0 0 24 24" width="${size
 // Download glyph, inked box 15×15 centred on (12,12) so it matches the X exactly.
 const DL_SVG = (size=15)=> `<svg class="dl-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="4.5" x2="12" y2="15"/><polyline points="7 10.5 12 15 17 10.5"/><line x1="4.5" y1="19.5" x2="19.5" y2="19.5"/></svg>`;
 
-function renderUnifiedFileList(containerId, files, callbacks, note, noteHead){
-  const wrap = document.getElementById(containerId);
+function renderUnifiedFileList(container, files, callbacks, note, noteHead){
+  const wrap = elOf(container);
   if (!wrap) return;
   if (!files.length){ wrap.innerHTML=''; return; }
 
@@ -1198,17 +1210,135 @@ requestAnimationFrame(()=>{
   const maxW = Math.max(0, ...btns.map(b=> b.getBoundingClientRect().width));
   if (maxW) btns.forEach(b=> b.style.width = Math.ceil(maxW) + 'px');
 });
+/* =========================================================
+   INSTANCES — the tabs live in one page (b2)
+   A module made per tab (registerModule: a factory) has an instance of its own for each
+   open tab that is awake: its own elements, state, undo history and view. One that is
+   not made so keeps its one instance, bound to the page's ids, which its tabs take in
+   turn (tabs.js parks the others). Every registry of a module's (its history, redraw,
+   busy guard, CSV export, has-data flag) is keyed by its instance's key: an instance made
+   per tab by its tab's id, the one instance of a module not made so by the module's name.
+   Where a key is asked for, a module's name stands for the instance of it on show, or
+   shown last: a button's data-csv-mod, the project bar's data-module, a test's
+   getModuleState('xrd'). The ids belong to the instance on show: only its section (made
+   from index.html's, a copy each) and its layer (its windows and menus) are in the page,
+   the others' out of it, held by the instances, which find their elements in their own
+   section (root-scoped), never in the document.
+========================================================= */
+const _made = {};      // mod → { make, tpl: a copy of index.html's section, at: where a section goes, spare: the section itself until an instance takes it, on: the instance in the page, dropBytes, asleep }
+const _shown = {};     // mod → the key of its instance on show, or shown last
+const _modOf = {};     // key → its module
+const K = k => (k != null && Object.prototype.hasOwnProperty.call(_shown, k) && _shown[k]) || k;
+const isFactory = mod => Object.prototype.hasOwnProperty.call(_made, mod);
+const modOfKey = k => _modOf[k] || k;
+/* make(ctx) builds an instance and gives its object (API.md). ctx: { key, mod, root (its
+   section: index.html's #tab-<mod> for the first instance made for a tab, a copy of it
+   for every other), layer (a box for what it lays over the page: windows, menus; in the
+   page while it is), shown() (it is the instance on show) }. Until a tab's instance takes
+   it, the section stays in the page as it is (hidden, its ids the page's, as up to v517);
+   a copy of it as it loads is the others' template. opts.dropBytes: its tabs asleep let go
+   of their files' bytes, read back from the store as they wake (tabs.js lighten: SEM).
+   opts.asleep(key, v): the tab of that key is asleep holding v (its parked state and its
+   history's states), or, v null, no longer (woken, closed), for a module that keeps what it
+   made of a file while a tab asleep holds the file (SEM; tabs.js says it: asleep). */
+function registerModule(mod, make, opts){
+  const spare = document.getElementById('tab-' + mod), at = document.createComment('tab-' + mod);
+  spare.before(at);
+  const tpl = spare.cloneNode(true);
+  tpl.classList.remove('active');
+  _made[mod] = { make, tpl, at, spare, on: null, dropBytes: !!(opts && opts.dropBytes), asleep: opts && opts.asleep || null };
+}
+const dropsBytes = mod => isFactory(mod) && _made[mod].dropBytes;
+function asleep(mod, key, v){ const m = isFactory(mod) && _made[mod]; if (m && m.asleep){ try { m.asleep(key, v); } catch(e){} } }
+// An instance of a module made per tab; its key, the tab's id. A tab's (spare): the page's
+// section, while no instance has taken it; else, and for one read out of no tab (withState),
+// a copy, out of the page.
+function makeInstance(mod, key, spare){
+  const m = _made[mod];
+  let root = spare && m.spare;
+  if (root) m.spare = null;
+  else { root = m.tpl.cloneNode(true); guardNumberInputs(root); }   // (the page's number fields are guarded as it loads, the copies' here)
+  const layer = document.createElement('div');
+  layer.className = 'inst-layer';
+  _modOf[key] = mod;
+  // (on show: its module's in the page, on show; one read out of no tab (withState), out of
+  // the page, draws nothing, its name standing for it or not)
+  let inst = null;
+  inst = m.make({ key, mod, root, layer, shown: ()=> shownKey() === key && !!inst && m.on === inst });
+  // (its history's baseline, the state it starts with: a new tab's first change undone
+  // goes back to it, as a module's one instance restored to its default)
+  const st = _histories[key];
+  if (st && st.index < 0) st.commit(true);
+  return Object.assign(inst, { key, mod, root, layer });
+}
+/* The instance put in the page, in its module's place, the one of its module there before
+   taken out, in the same task (no layout between: the page keeps its scroll, as a module's
+   one instance kept it); that one given back. tabs.js shows it with goTab after. In, it is
+   the module's: its name stands for it. */
+function attachInstance(inst){
+  const m = _made[inst.mod], was = m.on && m.on !== inst ? m.on : null;
+  if (!inst.root.isConnected) m.at.before(inst.root);
+  if (!inst.layer.isConnected) document.body.appendChild(inst.layer);
+  m.on = inst;
+  _shown[inst.mod] = inst.key;
+  if (was) detachInstance(was);
+  return was;
+}
+function detachInstance(inst){
+  const m = _made[inst.mod];
+  if (m && m.on === inst) m.on = null;
+  inst.root.classList.remove('active');
+  inst.root.remove(); inst.layer.remove();
+}
+/* A tab of the module waking while its files' bytes are read (tabs.js): the instance of
+   the module in the page taken out, and the module's name standing for the key woken, which
+   has no instance yet (the undo keys and the ← → keys find nothing of another tab's under
+   the loader), till an instance comes in. Gives what puts the name back, should the wake be
+   given up before any instance of the key is made. */
+function vacate(mod, key){
+  const m = _made[mod], had = Object.prototype.hasOwnProperty.call(_shown, mod), was = _shown[mod];
+  if (m.on) detachInstance(m.on);
+  _shown[mod] = key;
+  return ()=>{ if (_shown[mod] !== key || _modOf[key]) return; if (had && _modOf[was]) _shown[mod] = was; else delete _shown[mod]; };
+}
+// Every registry's entry of a key let go (an instance destroyed).
+function dropKey(key){
+  [_histories, _tabRedraw, _needsRedraw, _busy, _csvExport, _hasData].forEach(r=>{ delete r[key]; });
+  const mod = _modOf[key];
+  if (mod && _shown[mod] === key) delete _shown[mod];
+  delete _modOf[key];
+}
+// The key of the instance on show (a module's section on show), or null.
+const shownKey = ()=> MODULES.includes(_activeTab) ? K(_activeTab) : null;
+/* A state put in a module and read out of it (a saved project's CSVs, its saved key): fn
+   given the key to read it by. A module made per tab makes an instance of its own for it,
+   out of the page, its name standing for that one meanwhile; the instances of the tabs
+   are left as they are. One not made so: runWithModuleState on its one instance. */
+let _tmp = 0;
+function withState(mod, state, fn){
+  if (!isFactory(mod)){ let out; runWithModuleState(mod, state, ()=>{ out = fn(mod); }); return out; }
+  const inst = makeInstance(mod, 'tmp-' + (++_tmp)), had = Object.prototype.hasOwnProperty.call(_shown, mod), was = _shown[mod];
+  try {
+    restoreModuleState(inst.key, state);
+    _shown[mod] = inst.key;
+    return fn(inst.key);
+  } finally {
+    if (had) _shown[mod] = was; else delete _shown[mod];
+    try { inst.destroy(); } finally { dropKey(inst.key); }
+  }
+}
+
 const _tabRedraw = {}, _needsRedraw = {};
 // A module registers how to redraw its current view; goTab calls it the first
 // time the tab becomes visible after a session restore flagged it.
-function registerTabRedraw(mod, fn){ _tabRedraw[mod] = fn; }
+function registerTabRedraw(key, fn){ _tabRedraw[key] = fn; }
 // Redraw only the visible tab's plots (on window resize). Hidden tabs render at
 // size 0, so redrawing them would be wasted work / could corrupt their view; they
 // are redrawn when shown (see goTab). Flag the others so they refresh on show.
 function redrawAll(){
-  const fn = _tabRedraw[_activeTab];
+  const on = shownKey(), fn = _tabRedraw[on];
   if (fn){ try{ fn(); }catch(e){} }
-  for (const m in _tabRedraw){ if (m !== _activeTab) _needsRedraw[m] = true; }
+  for (const m in _tabRedraw){ if (m !== on) _needsRedraw[m] = true; }
 }
 const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','projects','settings'];
 // The sections that keep a URL hash. Module sections are reached through an open
@@ -1224,15 +1354,19 @@ function goTab(tab, fromHash){
     b.classList.toggle('is-on', on);
     if (b.hasAttribute('role')) b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
+  // (a module made per tab: its instance on show, the one section of it in the page)
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+tab));
   // Plots drawn while their tab was hidden (background session restore, or any
   // resize/edit while another tab was showing) are sized to 0 or stale; redraw
   // whenever a module tab becomes visible so its charts always fit the viewport.
-  if (_tabRedraw[tab]){
-    _needsRedraw[tab] = false;
+  const k = MODULES.includes(tab) ? K(tab) : null;
+  if (k && _tabRedraw[k]){
+    _needsRedraw[k] = false;
     // Double rAF: let the tab-fade paint its first frame before the (potentially
     // heavy) redraw runs, so switching to a loaded tab doesn't freeze the animation.
-    requestAnimationFrame(()=> requestAnimationFrame(()=>{ try { _tabRedraw[tab](); } catch(e){} }));
+    // (by the instance shown then: one let go meanwhile has none; one woken, drawn, shows
+    // the rest of what it showed: shownAgain)
+    requestAnimationFrame(()=> requestAnimationFrame(()=>{ const f = _tabRedraw[k]; if (f) try { f(); } catch(e){} shownAgain(k); }));
   }
   if (MODULES.includes(tab)) normalizeProjIcons(tab); // size icons now the tab is visible
   // Only the fixed sections are addressable: a module section is shown by activating
@@ -1258,11 +1392,110 @@ function onSectionChange(fn){ _sectionHooks.push(fn); }
    undo and redo go as ever; a busy module whose job holds none has neither do anything,
    silently. Up to v471 a switch left the job running, and its result went into whichever
    project the module held when it ended; up to v508 undo and redo waited for the job to
-   end, a banner saying so at each press. */
+   end, a banner saying so at each press. An instance made per tab keeps its job going
+   when its tab is left (b2): it says when a job starts or ends (busyChanged), so that its
+   tab, never let go while busy, counts its time hidden from the job's end. */
 const _busy = {};
-function registerBusy(mod, o){ _busy[mod] = o; }
-function moduleBusy(mod){ const o = _busy[mod]; try { return (o && o.busy()) || null; } catch(e){ return null; } }
-function stopModule(mod){ const o = _busy[mod]; if (o){ try { o.stop(); } catch(e){} } }
+function registerBusy(key, o){ _busy[key] = o; }
+function moduleBusy(k){ const o = _busy[K(k)]; try { return (o && o.busy()) || null; } catch(e){ return null; } }
+function stopModule(k){ const o = _busy[K(k)]; if (o){ try { o.stop(); } catch(e){} } }
+const _busyHooks = [];
+function onBusyChange(fn){ _busyHooks.push(fn); }
+function busyChanged(key){ _busyHooks.forEach(fn=>{ try { fn(key); } catch(e){} }); }
+/* ---- What a tab shows beside its state (b2v4) ----
+   What an instance shows that is no part of its state, so no step of its history and no
+   change unsaved: its plots' zooms, its instructions shown (its windows' too) and the scroll
+   of its lists, here for every module (shownOf), and what its module gives of its own
+   (inst.shows(): DRS's sample on show; SEM's image on show and its editor's zoom; XRPD's
+   pattern on show, its peaks picked, its phases on show and their cells' and its
+   crystallites' turns; GC's samples picked).
+   tabs.js keeps it as the tab sleeps and in the tab's record, and gives it to the instance
+   that wakes it (inst.showNext, then showAgain), so that a tab woken or reloaded shows what
+   it showed (to b2v4 the first sample of DRS, every plot at its full range, the instructions
+   shut, the lists at their top). A zoom is put back as its plot is first drawn on the range
+   it was taken on (zoomAgain, plot.js setRange: the same data), the rest once the instance
+   is drawn on show (shownAgain, goTab). Not kept: the page's own scroll, the window's, which
+   every tab shares (as in v517); a tool armed (pan, zoom, a peak being placed); a window or
+   a menu open (modal: no tab is left with one). */
+// A list's scroll, as it last moved (a hidden instance's lists read 0), and the instance it
+// is in; a zoom to put back, by the plot's svg's id, on its instance's section and layer.
+document.addEventListener('scroll', e=>{
+  const el = e.target, host = el instanceof Element && el.closest('.tab, .inst-layer');
+  if (!host || el === host) return;
+  el._at = [el.scrollTop, el.scrollLeft];
+  // (a list drawn anew since it scrolled let go: its elements are no longer the instance's)
+  const set = host._scrolled || (host._scrolled = new Set());
+  if (!set.has(el)){ for (const x of set) if (!host.contains(x)) set.delete(x); set.add(el); }
+}, { capture: true, passive: true });
+const same4 = (a, b)=> a.every((x, i)=> x === b[i]);
+// A list by its class and its place among those of that class in its instance: the same
+// state draws the same lists (an id would do, which most lists have none of).
+const listKey = (root, el)=> el.className + '#' + [...root.getElementsByClassName(el.classList[0])].filter(x=> x.className === el.className).indexOf(el);
+function shownOf(inst){
+  const out = {}, zoom = { ...(inst.root._zoomNext || {}) };
+  for (const host of [inst.root, inst.layer]) host.querySelectorAll('svg.plot[id]').forEach(svg=>{
+    const P = svg._plot;
+    if (!P || ![P.xmin, P.xmax, P.ymin, P.ymax].every(Number.isFinite)) return;
+    const v = [P.xmin, P.xmax, P.ymin, P.ymax], home = [P._origXmin, P._origXmax, P._origYmin, P._origYmax];
+    if (same4(v, home)) delete zoom[svg.id]; else zoom[svg.id] = [...v, ...home];
+  });
+  if (Object.keys(zoom).length) out.zoom = zoom;
+  // (what is still to be put back, the instance not drawn on show since it was woken)
+  const a = inst._again;
+  // (a window of its own in its layer, its instructions by its id: XRPD's standard's two)
+  const instr = a ? a.instr : [...inst.root.querySelectorAll('.instr-info.is-on'), ...inst.layer.querySelectorAll('.modal-backdrop[id] .instr-info.is-on')].map(b=>{
+    if (b.dataset.instr != null) return b.dataset.instr;
+    const c = b.closest('.an-card[data-an]');
+    if (c) return b.closest('.an-head') ? 'an' + c.dataset.an : null;
+    const w = !inst.root.contains(b) && b.closest('.modal-backdrop[id]');
+    return w && w.querySelector('.instr-info') === b ? '#' + w.id : null;
+  }).filter(k=> k != null);
+  if (instr && instr.length) out.instr = instr;
+  const scroll = a ? a.scroll : {};
+  if (!a) for (const el of inst.root._scrolled || []){
+    if (!inst.root.contains(el) || !el.className || !(el._at[0] || el._at[1])) continue;
+    scroll[listKey(inst.root, el)] = el._at;
+  }
+  if (scroll && Object.keys(scroll).length) out.scroll = scroll;
+  return out;
+}
+const finite = v => Array.isArray(v) && v.every(Number.isFinite);
+function showAgain(inst, v){
+  if (!v || typeof v !== 'object') return;
+  const z = {};
+  if (v.zoom && typeof v.zoom === 'object') for (const [id, q] of Object.entries(v.zoom)) if (finite(q) && q.length === 8) z[id] = q;
+  inst.root._zoomNext = inst.layer._zoomNext = z;
+  inst._again = { instr: Array.isArray(v.instr) ? v.instr.filter(k=> typeof k === 'string' && /^((an)?\d{1,6}|#[A-Za-z][\w-]{0,60})$/.test(k)) : [],
+    scroll: v.scroll && typeof v.scroll === 'object' ? Object.fromEntries(Object.entries(v.scroll).filter(([, q])=> finite(q) && q.length === 2)) : {} };
+}
+// A plot's range just set (plot.js): the zoom it had, where it is drawn on the same range.
+function zoomAgain(P){
+  const svg = P.svg, host = svg.id && svg.closest('.tab, .inst-layer'), z = host && host._zoomNext;
+  if (!z || !Object.prototype.hasOwnProperty.call(z, svg.id)) return;
+  const q = z[svg.id];
+  delete z[svg.id];
+  if (same4(q.slice(4), [P._origXmin, P._origXmax, P._origYmin, P._origYmax])) [P.xmin, P.xmax, P.ymin, P.ymax] = q;
+}
+// The instance of a key drawn on show (goTab): its instructions and its lists' scroll put back.
+function shownAgain(k){
+  const m = _made[_modOf[k]], inst = m && m.on;
+  if (!inst || inst.key !== k || !inst._again || shownKey() !== k) return;
+  const { instr, scroll } = inst._again, root = inst.root;
+  inst._again = null;
+  for (const k2 of instr){
+    if (k2[0] === '#'){ const w = inst.layer.querySelector(k2), btn = w && w.querySelector('.instr-info'); if (btn && !btn.classList.contains('is-on')) btn.click(); continue; }
+    const c = k2.startsWith('an') && root.querySelector('.an-card[data-an="' + k2.slice(2) + '"]');
+    const btn = c ? c.querySelector(':scope > .an-head .instr-info') : root.querySelector('.instr-info[data-instr="' + k2 + '"]');
+    const block = c ? c.querySelector(':scope > .an-body > .an-instr') : root.querySelector('.instr-block[data-instr="' + k2 + '"]');
+    if (!btn || !block || block.style.display !== 'none') continue;
+    block.style.display = ''; btn.classList.add('is-on'); btn.setAttribute('aria-expanded', 'true');
+  }
+  for (const [k2, [top, left]] of Object.entries(scroll)){
+    const i = k2.lastIndexOf('#'), cls = k2.slice(0, i), n = +k2.slice(i + 1), first = cls.split(' ')[0];
+    const el = first && [...root.getElementsByClassName(first)].filter(x=> x.className === cls)[n];
+    if (el){ el.scrollTop = top; el.scrollLeft = left; }
+  }
+}
 
 /* =========================================================
    UNDO / REDO — per-module snapshot stacks (command pattern)
@@ -1287,11 +1520,12 @@ function bytesKey(b){
   }
   return k;
 }
-/* A frozen array of numbers (an XRPD pattern's 2θ, intensities and variance factors,
-   frozen where the file is read: nothing changes them after) is written so too, once per
-   array: its length and two hashes of its numbers as JSON has them (one not finite is
-   null, −0 is 0); one holding anything else is written out. Written out, 12 patterns'
-   arrays took 25 of the 26 ms of the key every XRPD edit takes (to v490). */
+/* An array fixed (db.js: an XRPD pattern's 2θ, intensities and variance factors, fixed
+   where the file is read, a spectrum's: nothing changes them after; to b2v2 frozen) is
+   written so too, once per array: its length and two hashes of its numbers as JSON has
+   them (one not finite is null, −0 is 0); one holding anything else is written out.
+   Written out, 12 patterns' arrays took 25 of the 26 ms of the key every XRPD edit takes
+   (to v490). */
 const _numsKey = new WeakMap(), _f64 = new Float64Array(1), _u32 = new Uint32Array(_f64.buffer);
 function numsKey(a){
   let k = _numsKey.get(a);
@@ -1310,7 +1544,54 @@ function numsKey(a){
   }
   return k;
 }
-const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && Object.isFrozen(x) ? numsKey(x) || x : x);
+const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && isFixed(x) ? numsKey(x) || x : x);
+/* ---- What is worked out, kept (b2v3) ----
+   A result a module works out from data that never change (an array fixed, db.js: a
+   pattern's intensities, a spectrum) and from its own inputs (widths, parameters, a result
+   refined) is kept by that array (keeper's WeakMap): while a state on show, a tab asleep's
+   parked state or a history holds the array, it holds its results too, and a tab woken, an
+   undo to a state worked out before, a redraw or an export takes them as they were, not made
+   again (to b2v3 an instance kept the last ones it drew, and a tab woken made them all again:
+   an XRPD tab of 12 refined patterns 0.2 s, a DRS tab of 10 spectra 0.17 s). The key holds
+   every other input, exactly (exactKey, below); an array keeps the results of its
+   last `n` keys. An array not fixed keeps none: its results are made each time. What is kept
+   is shared: nothing writes into it (the tests freeze it, as they freeze the arrays fixed).
+   kept.made and kept.taken count, by name, the results made and those taken (tests,
+   measurements; SEM counts its files' reduced copies and cards made, sem.js). In a key an object is a number of its own (objId: the same object, the
+   same number), a value as JSON writes it but for numbers JSON has none for (exactKey: a
+   NaN, an infinity, a −0). */
+const kept = { made: {}, taken: {} };
+const _ids = new WeakMap();
+let _nid = 0;
+const objId = o => o == null || typeof o !== 'object' ? String(o) : _ids.get(o) || (_ids.set(o, ++_nid), _nid);
+const exactKey = v => JSON.stringify(v, (k, x)=> typeof x === 'number' && (!Number.isFinite(x) || Object.is(x, -0)) ? '#' + (Object.is(x, -0) ? '-0' : x) : x);
+function freezeDeep(v){
+  if (!v || typeof v !== 'object' || ArrayBuffer.isView(v) || Object.isFrozen(v)) return v;
+  Object.freeze(v);
+  for (const k in v) freezeDeep(v[k]);
+  return v;
+}
+function keeper(name, n = 4){
+  const by = new WeakMap();
+  return (data, key, make)=>{
+    const keep = isFixed(data);
+    let m = keep ? by.get(data) : null;
+    if (m && m.has(key)){
+      const v = m.get(key);
+      m.delete(key); m.set(key, v);
+      kept.taken[name] = (kept.taken[name] || 0) + 1;
+      return v;
+    }
+    const v = make();
+    kept.made[name] = (kept.made[name] || 0) + 1;
+    if (keep){
+      if (!m) by.set(data, m = new Map());
+      m.set(key, globalThis.__freezeFixed ? freezeDeep(v) : v);
+      if (m.size > n) m.delete(m.keys().next().value);
+    }
+    return v;
+  };
+}
 class UndoStack {
   constructor(snapshot, restore, limit=80){
     this._snap = snapshot; this._restore = restore; this._limit = limit;
@@ -1342,8 +1623,9 @@ class UndoStack {
         const cbs = this._onceListeners; this._onceListeners = [];
         cbs.forEach(cb=>{ try { cb(); } catch(e){} });
       }
-      // Persistent change listeners (e.g. autosave).
+      // Persistent change listeners (e.g. autosave), and those of every history (heard).
       if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} });
+      heard(this);
     } finally { this._liveKey = null; }
   }
   onceCommit(cb){ (this._onceListeners || (this._onceListeners = [])).push(cb); }
@@ -1355,7 +1637,7 @@ class UndoStack {
     this.index = i; this._key = null; this._busy = true; try { this._restore(this.states[i], true); } finally { this._busy = false; }
     this._hear();
   }
-  _hear(){ if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} }); }
+  _hear(){ if (this._listeners) this._listeners.forEach(cb=>{ try { cb(); } catch(e){} }); heard(this); }
   // (no undo below the state the latest job holding the history started from)
   performUndo(){ if (this.index <= Math.max(0, ...this._marks.map(m=> m.i))) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
@@ -1430,9 +1712,15 @@ class UndoStack {
 const _histories = {};
 function registerHistory(key, snapshot, restore){
   const st = new UndoStack(snapshot, restore);
+  st.key = key;
   _histories[key] = st;
   return st;
 }
+// Listeners of every history's changes, given its key (sessions.js: the autosave and the
+// unsaved marker of the tab whose instance changed, on show or not).
+const _heard = [];
+function onAnyChange(fn){ _heard.push(fn); }
+function heard(st){ if (st.key != null) _heard.forEach(fn=>{ try { fn(st.key); } catch(e){} }); }
 document.addEventListener('keydown', e=>{
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
@@ -1444,14 +1732,15 @@ document.addEventListener('keydown', e=>{
   // (up to v499 a box just ticked, which keeps the focus, held Ctrl+Z off until it lost it).
   const el = document.activeElement, tag = el && el.tagName;
   if (tag==='TEXTAREA' || (el && el.isContentEditable) || (tag==='INPUT' && !/^(checkbox|radio|range|color|file|button|submit|reset|image)$/.test(el.type))) return;
-  const st = _histories[_activeTab];
+  // (the history of the instance on show)
+  const on = shownKey(), st = on != null && _histories[on];
   if (!st) return;
   // A job running (registerBusy): undo goes down to the state it started from, if it holds
   // the history (UndoStack.hold), and no further; one that holds none leaves undo and redo
   // doing nothing. Silently, the key taken either way (to v508 both waited for the job's
   // end, a banner saying so).
   const held = st._marks.length > 0;
-  if (!held && moduleBusy(_activeTab)){ e.preventDefault(); return; }
+  if (!held && moduleBusy(on)){ e.preventDefault(); return; }
   const did = isUndo ? st.performUndo() : st.performRedo();
   if (did || held) e.preventDefault();
 });
@@ -1486,16 +1775,18 @@ document.addEventListener('keydown', e=>{
 // it (the open-tab bar carries the unsaved "*" instead); the flag still drives the
 // project bar's button visibility.
 const _hasData = {};
-function setTabLoaded(tab, has){
-  _hasData[tab] = !!has;
-  refreshProjBar(tab);
+// (by its instance's key; the project bar follows the instance on show)
+function setTabLoaded(key, has){
+  _hasData[key] = !!has;
+  const mod = modOfKey(key);
+  if (K(mod) === key) refreshProjBar(mod);
 }
 // Project-bar buttons show when the module has files OR a non-empty project name —
 // hidden only when both are empty. (Save/export still refuse an empty file list.)
 function refreshProjBar(tab){
   const nameInp = document.querySelector('.project-name-input[data-module="'+tab+'"]');
   const named = !!(nameInp && nameInp.value.trim());
-  const has = !!_hasData[tab];
+  const has = !!_hasData[K(tab)];
   const show = has || named;
   document.querySelectorAll('.project-bar .proj-btn[data-module="'+tab+'"], '
     + '.project-bar[data-module="'+tab+'"] .proj-del, .project-bar[data-module="'+tab+'"] .proj-new')
@@ -1597,20 +1888,20 @@ function normalizeProjIcons(mod){
    {name,text} CSV entries. The group button zips them all; per-plot/table buttons
    pick a subset by name. */
 const _csvExport = {};
-function registerCsvExport(mod, buildFn){ _csvExport[mod] = buildFn; }
-function runCsvExport(mod){
-  const b = _csvExport[mod]; if (!b) return;
-  const e = b() || []; if (e.length) downloadZip(mod+'_export.zip', e);
+function registerCsvExport(key, buildFn){ _csvExport[key] = buildFn; }
+function runCsvExport(k){
+  const key = K(k), b = _csvExport[key]; if (!b) return;
+  const e = b() || []; if (e.length) downloadZip(modOfKey(key)+'_export.zip', e);
 }
 // Download a subset of a module's CSVs by file name: a single file downloads as a
-// .csv, several bundle into a .zip.
-function downloadCsvFiles(mod, names){
-  const b = _csvExport[mod]; if (!b) return;
+// .csv, several bundle into a .zip. (a button's data-csv-mod: the instance on show)
+function downloadCsvFiles(k, names){
+  const key = K(k), b = _csvExport[key]; if (!b) return;
   const all = b() || [];
   const sel = all.filter(e=>names.includes(e.name));
   if (!sel.length) return;
   if (sel.length === 1) downloadBlob(sel[0].name, sel[0].text);
-  else downloadZip(mod+'_export.zip', sel);
+  else downloadZip(modOfKey(key)+'_export.zip', sel);
 }
 // The project CSV icon, reused on every per-view download button.
 const CSV_BTN_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
@@ -1645,7 +1936,7 @@ document.addEventListener('click', e=>{
 });
 // Does a module currently hold loaded data? Reported by the modules themselves
 // through setTabLoaded (it used to be read off the nav button's data dot).
-function moduleHasData(mod){ return !!_hasData[mod]; }
+function moduleHasData(k){ return !!_hasData[K(k)]; }
 
 /* =========================================================
    THEME — light / dark, remembered, defaulting to the OS preference.
@@ -1705,62 +1996,64 @@ function applyTheme(theme, persist){
    undo snapshot()/restore() as the canonical serialize/deserialize. */
 const MODULES = ['tauc','xrd','gc','epr','sem'];
 const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM' };
-function getModuleState(mod){
-  const st = _histories[mod];
+// (k: an instance's key, or a module's name for the instance of it on show: K)
+function getModuleState(k){
+  const st = _histories[K(k)];
   return st ? st._snap() : null;
 }
-function restoreModuleState(mod, state){
-  const st = _histories[mod];
+function restoreModuleState(k, state){
+  const key = K(k), st = _histories[key];
   if (!st) return;
   st._busy = true;
   try { st._restore(state); } finally { st._busy = false; }
   st.reset();
   st.commit(true); // fresh baseline (silent: a restore is not a user edit → no autosave)
   // Plots just drawn may be sized wrong if the tab is hidden; redraw on show.
-  if (_activeTab === mod){ if (_tabRedraw[mod]) requestAnimationFrame(()=>{ try { _tabRedraw[mod](); } catch(e){} }); }
-  else { _needsRedraw[mod] = true; }
+  if (shownKey() === key){ if (_tabRedraw[key]) requestAnimationFrame(()=>{ const f = _tabRedraw[key]; if (f) try { f(); } catch(e){} }); }
+  else { _needsRedraw[key] = true; }
 }
-// Undo/redo stack contents. Only one instance of each module is live, so the tab
-// manager parks the outgoing tab's history here and restores the incoming one —
-// otherwise an undo after a tab switch would replay another project's states. The
-// history parked (park) or put back ends the marks of the jobs holding it
-// (UndoStack.hold), stopped before: as a release of nothing written, a redo branch set
-// aside coming back where nothing came since; a release after does nothing. A read alone
-// leaves them.
-function getModuleHistory(mod, park){
-  const st = _histories[mod];
+// Undo/redo stack contents. A module's one instance (one not made per tab) holds one
+// tab at a time, so the tab manager parks the outgoing tab's history here and restores
+// the incoming one — otherwise an undo after a tab switch would replay another
+// project's states; an instance made per tab has its tab's own, parked so as the tab
+// sleeps and put back as it wakes. The history parked (park) or put back ends the marks
+// of the jobs holding it (UndoStack.hold), stopped before: as a release of nothing
+// written, a redo branch set aside coming back where nothing came since; a release
+// after does nothing. A read alone leaves them.
+function getModuleHistory(k, park){
+  const st = _histories[K(k)];
   if (!st) return null;
   if (park) st._marks.slice().reverse().forEach(m=> st.release(m));
   return { states: st.states.slice(), index: st.index };
 }
-function setModuleHistory(mod, h){
-  const st = _histories[mod];
+function setModuleHistory(k, h){
+  const st = _histories[K(k)];
   if (!st || !h) return;
   st.states = h.states.slice(); st.index = h.index; st._key = null; st._marks = [];
 }
 // The stateKey of a module's live state: the one a commit just took while its listeners
 // run (the unsaved marker's check), else taken now.
-function moduleStateKey(mod){
-  const st = _histories[mod];
+function moduleStateKey(k){
+  const st = _histories[K(k)];
   if (!st) return null;
   return st._liveKey != null ? st._liveKey : stateKey(st._snap());
 }
 // Run cb once, the next time the module records a real change (edit/add/remove…).
-function onModuleChangeOnce(mod, cb){
-  const st = _histories[mod];
+function onModuleChangeOnce(k, cb){
+  const st = _histories[K(k)];
   if (st) st.onceCommit(cb);
 }
 // Persistent: fire cb on every real change commit of a module (used for autosave).
-function onModuleChange(mod, cb){
-  const st = _histories[mod];
+function onModuleChange(k, cb){
+  const st = _histories[K(k)];
   if (st) st.onCommit(cb);
 }
 // Temporarily load `state` into a module, run fn (e.g. build its CSV export from
 // the loaded globals), then restore the previous state — all with history frozen
 // so it doesn't commit, reset undo, or fire change listeners. Lets us export a
 // saved project's CSVs without disturbing what's currently open.
-function runWithModuleState(mod, state, fn){
-  const st = _histories[mod];
+function runWithModuleState(k, state, fn){
+  const st = _histories[K(k)];
   if (!st) return;
   const backup = st._snap();
   st._busy = true;
@@ -1830,9 +2123,11 @@ function updateNarrowLayout(){
 updateNarrowLayout();
 window.addEventListener('resize', updateNarrowLayout);
 // Deep-link support: honour the initial hash and react to hash changes / back-forward
+// (a section already on show is left alone: the echo of goTab's own hash would count as one
+// chosen anew and give up a tab's show chosen since, tabs.js showLater)
 window.addEventListener('hashchange', ()=>{
   const t = location.hash.slice(1);
-  if (HASH_TABS.includes(t)) goTab(t, true);
+  if (HASH_TABS.includes(t) && t !== _activeTab) goTab(t, true);
 });
 (function initHashRoute(){
   const t = location.hash.slice(1);
@@ -2292,7 +2587,8 @@ function barChipYmax(chips, svg, bars, g){
 /* =========================================================
    COLLAPSIBLE INSTRUCTIONS
    Each .instr-block is toggled by a small info icon placed next to the card's
-   title. Always starts collapsed on load; the choice is not remembered.
+   title. Each starts collapsed as the page loads; a tab woken or reloaded opens again
+   those it showed (b2v4: shownOf, shownAgain).
 ========================================================= */
 (function initInstrCollapse(){
   const INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none"/></svg>';
@@ -2314,16 +2610,25 @@ function barChipYmax(chips, svg, bars, g){
     btn.className = 'instr-info';
     btn.setAttribute('aria-label', 'Toggle instructions');
     btn.innerHTML = INFO_SVG;
+    // (the button and its block marked alike: a module made per tab copies its section,
+    // these with it, and the one click handler below finds the block in the copy)
+    btn.dataset.instr = block.dataset.instr = String(i);
     if (heading) heading.appendChild(btn);
     else block.parentNode.insertBefore(btn, block);
-    let collapsed = true;   // always start closed; the choice is not remembered
-    const apply = ()=>{
-      block.style.display = collapsed ? 'none' : '';
-      btn.classList.toggle('is-on', !collapsed); // highlighted while instructions are shown
-      btn.setAttribute('aria-expanded', String(!collapsed));
-    };
-    apply();
-    btn.addEventListener('click', ()=>{ collapsed = !collapsed; apply(); });
+    // (closed as the page loads; a tab's own shown again as it wakes or is reloaded: shownAgain)
+    block.style.display = 'none';
+    btn.setAttribute('aria-expanded', 'false');
+  });
+  document.addEventListener('click', e=>{
+    const btn = e.target.closest && e.target.closest('.instr-info[data-instr]');
+    if (!btn) return;
+    const box = btn.closest('section, .modal-backdrop') || document;
+    const block = box.querySelector('.instr-block[data-instr="' + btn.dataset.instr + '"]');
+    if (!block) return;
+    const open = block.style.display === 'none';
+    block.style.display = open ? '' : 'none';
+    btn.classList.toggle('is-on', open); // highlighted while instructions are shown
+    btn.setAttribute('aria-expanded', String(open));
   });
 })();
 
@@ -2333,5 +2638,7 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar
+  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, CP_PRESETS, recentColors, pushRecentColor, ColorPickerUI, colorPickerUI, CP_PALETTES, PalettePickerUI, palettePickerUI, settings, fmtNum, fmtData, csvJoin, csvLine, downloadBlob, downloadBytes, downloadZip, zipBlob, makeDownloadLink, X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, isIncluded, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, betacf, logGamma, betainc, tcdf, tinv, VALID_TABS, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState, onModuleChangeOnce, onModuleChange, runWithModuleState, getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, downloadCsvFiles, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, currentTheme, guardNumericInput, guardNumberInputs, createDateTimeField, flashFieldInvalid, cutToWidth, tiltFits, tiltFor, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, normalizeNavIcons, refreshProjBar,
+  saveSettings, TAB_DEF, registerModule, isFactory, makeInstance, attachInstance, detachInstance, dropKey, shownKey, withState, modOfKey, onAnyChange, onBusyChange, busyChanged, shownOf, showAgain, zoomAgain, keeper, kept, objId, exactKey,
+  dropsBytes, asleep, vacate, fixed
 };

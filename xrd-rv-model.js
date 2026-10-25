@@ -9,6 +9,7 @@ import { parseCif, expandAtoms, structureCell, checkComposition, cellMass, metri
 import { readXrdmlInstrumentText } from './xrd-instr.js';
 import { buildModel, calc, fitSettings, phaseSites, bgInvOn, shapeNamed } from './xrd-rietveld.js';
 import { spaceGroupName, spaceGroupSymbol } from './xrd-sg.js';
+import { fixed, isFixed } from './db.js';
 
 const PHASE_COLORS = ['#d4a72c', '#c77dff', '#ff8a65', '#7cc4ff', '#e05f8a', '#9ccc65'];
 
@@ -81,9 +82,12 @@ function prepOf(text, fileName){
 // v426 re-expressed supercells and orthohexagonal cells) does not belong to the phase now.
 const cellKey = c => [c.a, c.b, c.c, c.alpha, c.beta, c.gamma].map(v=> +(+v).toFixed(6)).join();
 /* A result is never changed once written (a new one replaces it): frozen, deep, it is shared
-   by the undo states it is in and by the curves drawn from it. (A typed array cannot be
-   frozen; a result holds none.) */
+   by the undo states it is in and by the curves drawn from it; its lists of numbers or
+   names fixed instead (db.js: shared by a state parked; a double frozen takes twice the
+   memory). (A typed array cannot be frozen; a result holds none.) */
+const isObj = x => x !== null && typeof x === 'object';
 function frozen(v){
+  if (Array.isArray(v) && (isFixed(v) || !v.some(isObj))) return fixed(v);
   if (v && typeof v === 'object' && !ArrayBuffer.isView(v) && !Object.isFrozen(v)){ Object.freeze(v); for (const k in v) frozen(v[k]); }
   return v;
 }
@@ -446,17 +450,10 @@ function curvesFrom(f, r, list, std){
   const model = buildModel({ x: f.x, y: f.y, varMul: f.varMul || null, instr: instrOf(f), phases: ph, bgDegree: fs.bgDegree, bgInv: fs.bgInv, cellRange: fs.cellRange });
   return calc(model, r.params);
 }
-/* What curves are built from, which kept curves are kept while the same (sameInputs;
-   xrd-rv.js curveKept, netKept): the pattern's data (by value: a restore reads the files'
-   arrays anew), its instrument, all the curves take from the result (exactly: a NaN is not
-   a null, nor −0 0), each phase's structure (its prep, one object for one CIF text: prepOf)
-   and colour. */
+/* A value as JSON, exactly: a NaN is not a null, nor −0 0 (what the curves take from a
+   result and its instrument, in the key their kept curves are kept under: xrd-rv.js
+   curveKey). */
 const exactJson = v => JSON.stringify(v, (k, x)=> typeof x === 'number' && (!Number.isFinite(x) || Object.is(x, -0)) ? '#' + (Object.is(x, -0) ? '-0' : x) : x);
-const curveInputs = (f, r, list) => ({ x: f.x, y: f.y, vm: f.varMul || null, ins: exactJson(instrOf(f)),
-  res: exactJson([r.params, r.models, r.textures, r.fit, r.phases, r.cells]), ph: list.map(q=> [q.id, q.prep, q.color]) });
-const sameArr = (a, b) => a === b || (!!a && !!b && a.length === b.length && Array.prototype.every.call(a, (v, i)=> Object.is(v, b[i])));
-const sameInputs = (a, b) => sameArr(a.x, b.x) && sameArr(a.y, b.y) && sameArr(a.vm, b.vm) && a.ins === b.ins && a.res === b.res
-  && a.ph.length === b.ph.length && a.ph.every((p, i)=> p.every((v, j)=> v === b.ph[i][j]));
 // The scan's 2θ range, low end first (the host turns a scan run downwards round, and
 // the engine takes either order).
 const scanRange = f => { const a = f.x[0], b = f.x[f.x.length-1]; return a <= b ? [a, b] : [b, a]; };
@@ -691,5 +688,5 @@ export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, frozen, SHAPES, shap
   HOLDS, HOLD_KEYS, HOLD_DEFAULT, STD_HOLD_NA, START_RULE, FIT_DEF, FITS, FIT, fitTxt, DEC, readFit, cleanFit, formulaOf,
   SIZE_ROWS, SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
   instrOf, LAB6_ID, roleOf, irfOf, IRF_KEYS, sameIrf, phaseData, shapeOfParams, lastUnusable, bgTerms, payloadFor, resultRecord,
-  resultPhases, curvesFrom, exactJson, curveInputs, sameArr, sameInputs, scanRange, tickRows, groupTicks,
+  resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
   sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf };

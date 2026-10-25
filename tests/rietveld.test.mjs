@@ -22,6 +22,8 @@ const label = page => page.textContent(P + 'Refine');
 test('Rietveld: one pattern refined, then Refine all cancelled', async ()=>{
   const { page, errors, close } = await env.page();
   try {
+    // (a run's patterns one at a time: on the pool's lanes the two would be done before the Cancel)
+    await page.evaluate(()=> localStorage.setItem('datatreat-rv-lanes', '1'));
     await openModule(page, 'xrd');
     await loadFiles(page, 'xrd', env.fx.files.xrd.slice(0, 2));
     await page.setInputFiles(P + 'CifInput', env.fx.cif);

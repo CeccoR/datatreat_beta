@@ -3,12 +3,12 @@
    The phases come from CIFs (the standard's LaB6 is built in); the refinement runs in
    a module worker (xrd-rietveld.worker.js) on xrd-rietveld.js, and its result is kept
    per pattern, by file name, so moving, leaving out or reloading files never puts it
-   on another pattern. The curves are not kept: they are recomputed from the refined
-   parameters, which takes milliseconds.
+   on another pattern. The curves drawn from it are kept by the pattern (curvesKept), made
+   again from the refined parameters only where what they are made from changed.
    The calculations, which touch no page, are xrd-rv-model.js's; the words and markup that
    need no page, xrd-rv-html.js's.
 ========================================================= */
-import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal } from './utils.js';
+import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper } from './utils.js';
 import { fileSafe } from './cards.js';
 import { Plot } from './plot.js';
 import { decodeText } from './textdata.js';
@@ -16,9 +16,10 @@ import { fitSettings } from './xrd-rietveld.js';
 import { shapeView } from './xrd-shape3d.js';
 import { cellView } from './xrd-cell3d.js';
 import { PHASE_COLORS, prepPhase, prepOf, cellKey, defSettings, stdSettings, listOf, depOf, MODE, HOLD_KEYS, HOLD_DEFAULT, FIT_DEF, FIT, fitTxt, readFit, cleanFit,
-  SIZE_KINDS, hklShow, plotRuns, instrOf, LAB6_ID, irfOf, sameIrf, payloadFor, resultRecord, resultPhases, curvesFrom, curveInputs, sameInputs, scanRange, tickRows, groupTicks,
+  SIZE_KINDS, hklShow, plotRuns, instrOf, LAB6_ID, irfOf, sameIrf, payloadFor, resultRecord, resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
   sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf } from './xrd-rv-model.js';
 import { esc, barIdx, solidCaption, instrLine, group, warnNote, fitLineHtml, phaseRowsHtml, cellDetailsHtml, settingsBodyHtml, widthsTableHtml, testsHtml } from './xrd-rv-html.js';
+import { lanes } from './xrd-rv-pool.js';
 
 // The instrumental standard: NIST SRM 660c LaB6, Pm-3m, a = 4.156826 Å at 22.5 °C
 // (certificate). B on 6f (x, ½, ½), x = 0.1992 (Eliseev et al., Acta Cryst. C42 (1986)
@@ -74,6 +75,28 @@ const resKey = r => !r ? '-' : Number.isFinite(r.at) ? 'at' + r.at : 'r' + idOf(
 const sizeOf = el => { if (!el) return '-'; const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
 // (a plot at the range it was drawn with: not zoomed nor panned)
 const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin === P._origYmin && P.ymax === P._origYmax;
+/* A refined pattern's curves (the calculated, its background and the reflections' ticks),
+   its difference (observed less calculated, under the plot) and its net pattern (observed
+   less background, the Results' stacked plot), kept by its intensities (utils.js keeper:
+   while a state, a tab asleep or a history holds the pattern) under all they are made
+   from: the 2θ and variance factors (the same arrays: fixed, xrd.js), the instrument, all
+   the curves take from the result (exactly: a NaN is not a null, nor −0 0; a result read
+   back by an undo is a copy, the same), each phase's structure (its prep, one object for
+   one CIF text: prepOf; the standard's LaB6, one for the page) and colour, and the role.
+   A tab woken, an undo, a redraw or the CSVs take them as drawn before: to b2v3 a card kept
+   the last pattern drawn and the Results' last 64, and a tab woken made all again (an XRPD
+   tab of 12 refined patterns, 115 ms of its wake). */
+const curvesKept = keeper('xrd-curves'), diffKept = keeper('xrd-difference'), netKept = keeper('xrd-net');
+// (and a pattern not refined, its phases' reflections where its cells put them: tickRows,
+// by the 2θ, the instrument and the phases)
+const ticksKept = keeper('xrd-ticks');
+const curveKey = (f, r, list, std) => exactJson([idOf(f.x), idOf(f.varMul), instrOf(f), [r.params, r.models, r.textures, r.fit, r.phases, r.cells],
+  list.map(q=> [q.id, idOf(q.prep), q.color]), !!std]);
+// The standard's LaB6 as read, one for every card (its curves' key holds it by identity).
+let lab6Prep = null;
+const LAB6_PREP = ()=> lab6Prep || (lab6Prep = Object.assign(prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)'),
+  // (written in P1 here only to be short: nothing to report)
+  { name: 'LaB₆ (NIST SRM 660c)', notes: [] }));
 
 const DL_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>';
 const CSV_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
@@ -106,6 +129,12 @@ export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement:
      onProgress()   the run here went on (the standard: the samples' Instrumental standard…)
      changed()      the standard's result changed (the standard): the samples' notes follow
      hidden()       the card is folded: nothing is drawn
+     unseen()       its module's instance is not on show (b2: a tab left, a run going on in
+                    it): nothing is drawn at all, the tab's redraw draws it as it is shown
+     placed()       the card is still its deck's (not closed, nor set aside by a restore):
+                    one waiting for the standard's run starts its own as that ends. None:
+                    the card in the page (to b2, when a module's one instance was the page's)
+     layer          where its settings window goes (the instance's layer, b2); none, the body
    }
    o: { prefix, standard } */
 export function createRietveld(host, root, o){
@@ -142,9 +171,7 @@ export function createRietveld(host, root, o){
   const ac = new AbortController();
   // The standard's: the built-in LaB6, its own colour apart from the CIF phases'; the
   // phase its refinement uses (pick).
-  const lab6 = { id: LAB6_ID, cif: LAB6_CIF, file: '', color: '#4cc9a0', ...stdSettings(), prep: prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)'), off: {} };
-  lab6.prep.name = 'LaB₆ (NIST SRM 660c)';
-  lab6.prep.notes = [];      // written in P1 here only to be short: nothing to report
+  const lab6 = { id: LAB6_ID, cif: LAB6_CIF, file: '', color: '#4cc9a0', ...stdSettings(), prep: LAB6_PREP(), off: {} };
   let pick = 0;
   const allPhases = ()=> std ? [lab6, ...phases] : phases;
   const curIdx = ()=> std ? 0 : Math.min(host.idx(), Math.max(0, host.files().length - 1));
@@ -153,43 +180,20 @@ export function createRietveld(host, root, o){
   const stdPhase = ()=> allPhases().find(q=> q.id === pick) || lab6;
   const phasesFor = f => std ? [stdPhase()] : phases.filter(q=> !(f && q.off[f.name]));
 
-  // ---- the worker ----
-  let worker = null, jobId = 0, cancelJob = null;
-  function getWorker(){
-    if (worker) return worker;
-    worker = new Worker(new URL('./xrd-rietveld.worker.js', import.meta.url), { type: 'module' });
-    return worker;
-  }
-  function runInWorker(payload, onProgress){
-    const w = getWorker(), id = ++jobId;
-    return new Promise((resolve, reject)=>{
-      const done = ()=>{ w.removeEventListener('message', onMsg); w.removeEventListener('error', onErr); cancelJob = null; };
-      const onMsg = e =>{
-        const d = e.data; if (!d || d.id !== id) return;
-        if (d.type === 'progress'){ if (onProgress) onProgress(d.frac, d.stage); return; }
-        done();
-        if (d.type === 'result') resolve(d.res); else reject(new Error(d.message || 'Refinement failed'));
-      };
-      const onErr = e =>{ done(); worker = null; reject(new Error(e.message || 'The refinement worker failed')); };
-      cancelJob = ()=>{ done(); try { w.terminate(); } catch(e){} worker = null; resolve(null); };
-      w.addEventListener('message', onMsg);
-      w.addEventListener('error', onErr);
-      w.postMessage({ id, ...payload });
-    });
-  }
-
+  // ---- the workers: the page's pool's (xrd-rv-pool.js); a run's jobs, its lanes (cur.lanes) ----
   // The standard's card's own instrumental profile, from its file's result (irfOf).
   function ownIrf(){ return irfOf(host.files()[0], results); }
   const irf = ()=> std ? ownIrf() : host.irf();
   const staleOf = (f, r) => !std && !!r.irf && !sameIrf(r.irf, irf());
 
-  /* A run: the patterns one by one, each result written whole once its pattern is done,
-     into the results the card holds then (a module read out and in again meanwhile, as a
-     saved project's CSV export from the Projects list does, puts back the same; the card
-     set aside by it is taken up again, xrd.js), and only for a file still loaded. Cancel,
-     a tab left (the tab manager's stop) or a kind switch ends it at once (cancel): it says
-     so, the patterns done are kept, the one under way is not written, and nothing comes of
-     the worker's answer after. Resolves to { ok, why }.
+  /* A run: the patterns on the pool's lanes (below), each result written whole once its
+     pattern and those before it are done, into the results the card holds then (a module
+     read out and in again meanwhile, as a saved project's CSV export from the Projects list
+     does, puts back the same; the card set aside by it is taken up again, xrd.js), and only
+     for a file still loaded. Cancel, a tab left (the tab manager's stop) or a kind switch
+     ends it at once (cancel): it says so, the patterns done are kept (those done behind
+     one under way written then), those under way are not, and nothing comes of their
+     workers' answers after. Resolves to { ok, why }.
      It holds the history from its start (holdHist; a sample's from its wait for the
      standard's run, press): the steps taken meanwhile are undone and redone around it, and
      as it ends, however it ends, the patterns written go into the states saved meanwhile
@@ -215,25 +219,49 @@ export function createRietveld(host, root, o){
       fell: [], bgFreed: [], n: todo.length, done: 0, tell };
     if (host.onBusy) host.onBusy();
     try {
-      for (let k = 0; k < todo.length; k++){
-        const f = todo[k], pay = payloadFor(f, run, results, std), from = pay.opts.start ? ' from its last result' : '';
-        const ph = pay.list; delete pay.list;
-        setStatus(`Refining ${f.label}${from}…`);
-        // (the stages say the rest: a start from the last result has its own)
-        // (run.frac: how far the run is, for the standard's button on the samples' cards)
-        const res = await runInWorker(pay, (frac, stage)=>{ run.frac = (k + frac)/todo.length; showProg(run.frac); if (stage) setStatus(`Refining ${f.label}: ${stage}…`);
-          if (run.tell) run.tell(run.frac, stage ? `${f.label}: ${stage}` : f.label);
-          if (host.onProgress) host.onProgress(); });
-        if (cur !== run) return { ok: false, why: 'stopped' };
-        if (!res) break;
-        // (a file taken away meanwhile: its result has no pattern to go with)
-        if (!host.allFiles().some(g=> g.name === f.name)) continue;
-        results[f.name] = resultRecord(res, ph, std, Date.now());
-        if (wrote) wrote[f.name] = results[f.name];
-        run.done++;
-        // (by name: a module read out and in again gives the same files as new objects)
-        if (f.name === (host.files()[curIdx()] || {}).name) draw();
-      }
+      /* Its patterns on the pool's lanes (xrd-rv-pool.js lanes: several at once, up to the
+         pool's cap shared with every run of every page), each payload built as its pattern
+         is taken, in order; the results written in the patterns' order, each once those
+         before it are, so that the results, the history's step and the file saved are a
+         run of one lane's, key order included. An error stops the patterns not taken; those
+         under way end and are written. (run.frac: how far the run is, for the standard's
+         button on the samples' cards) Up to backlog 23's prototype one worker, the
+         patterns one after the other. */
+      const lbl = k => todo[k].label, from = [];
+      const L = run.lanes = lanes(todo.length, {
+        payload: k =>{
+          const f = todo[k], pay = payloadFor(f, run, results, std), ph = pay.list;
+          delete pay.list;
+          from[k] = pay.opts.start ? ' from its last result' : '';
+          return { pay, ctx: { f, ph } };
+        },
+        write: (k, res, { f, ph })=>{
+          // (a file taken away meanwhile: its result has no pattern to go with)
+          if (!host.allFiles().some(g=> g.name === f.name)) return;
+          results[f.name] = resultRecord(res, ph, std, Date.now());
+          if (wrote) wrote[f.name] = results[f.name];
+          run.done++;
+          // (by name: a module read out and in again gives the same files as new objects)
+          if (f.name === (host.files()[curIdx()] || {}).name) draw();
+        },
+        // (one pattern under way: as one lane says it, its stages; several: their names and
+        // how many are done)
+        progress: (frac, on, k, stage, what)=>{
+          if (cur !== run) return;
+          run.frac = frac; showProg(frac);
+          if (on.length > 1){ if (what !== 'progress' || stage) setStatus(`Refining ${on.map(lbl).join(', ')}… (${run.done} of ${run.n} done)`); }
+          else if (what === 'start') setStatus(`Refining ${lbl(k)}${from[k]}…`);
+          else if (what === 'done' && on.length) setStatus(`Refining ${lbl(on[0])}…`);
+          else if (stage) setStatus(`Refining ${lbl(k)}: ${stage}…`);
+          // (the stages say the rest: a start from the last result has its own)
+          const t = stage ? `${lbl(k)}: ${stage}` : on.map(lbl).join(', ');
+          if (run.tell && t) run.tell(run.frac, t);
+          if (host.onProgress) host.onProgress();
+        },
+      });
+      const { error } = await L.done;
+      if (cur !== run) return { ok: false, why: 'stopped' };
+      if (error) throw error;
       setStatus([run.fell.length && `From the CIF, no last result to start from: ${run.fell.join('; ')}.`,
         run.bgFreed.length && `Scales and background refined, not held: the background's terms changed since the last result (${run.bgFreed.join(', ')}).`].filter(Boolean).join(' '));
       return { ok: true };
@@ -274,7 +302,8 @@ export function createRietveld(host, root, o){
     }
     const run = cur;
     if (!run) return;
-    if (cancelJob) cancelJob();
+    // (the jobs under way cancelled; those done behind them written, in order)
+    if (run.lanes) run.lanes.stop();
     endRun(commit);
     setStatus(run.n > 1 ? `Stopped after ${run.done} of ${run.n} patterns: the others keep what they had.` : `Stopped: ${std ? 'the standard' : 'the pattern'} keeps what it had.`);
   }
@@ -319,7 +348,7 @@ export function createRietveld(host, root, o){
     setStatus('Refining the instrumental standard first…'); syncButtons();
     const r = await sr.done;
     // (stopped from here, or by the tab manager: cancel said so)
-    if (w.cancelled || !root.isConnected){ if (!w.cancelled) releaseHist(); return; }
+    if (w.cancelled || gone || !(host.placed ? host.placed() : root.isConnected)){ if (!w.cancelled) releaseHist(); return; }
     waiting = null; hideProg(); syncButtons();
     if (!r.ok || !irf()){ releaseHist(); setStatus(r.ok ? 'The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.'
       : r.why === 'stopped' ? 'The standard\'s refinement was stopped: nothing refined.' : `The standard's refinement failed (${String(r.why).replace(/\.$/, '')}): nothing refined.`); return; }
@@ -328,17 +357,13 @@ export function createRietveld(host, root, o){
 
   // ---- the plot: observed, calculated, the background, the difference under them,
   // and a row of ticks per phase between the two ----
+  // (kept: curvesKept, above. Up to v486 a redraw built and calculated the model twice,
+  // and an undo or a tab switch again for every refined pattern in the Results: 1.5–2.5 s
+  // for twelve)
   function curvesOf(f, r){
-    const list = resultPhases(r, allPhases(), phasesFor(f)), inp = curveInputs(f, r, list);
-    if (!(curveKept && sameInputs(curveKept.inp, inp))) curveKept = { inp, c: curvesFrom(f, r, list, std) };
-    return { c: curveKept.c, list };
+    const list = resultPhases(r, allPhases(), phasesFor(f)), key = curveKey(f, r, list, std);
+    return { c: curvesKept(f.y, key, ()=>{ const { yc, bg, ticks } = curvesFrom(f, r, list, std); return { yc, bg, ticks }; }), list, key };
   }
-  /* Curves kept while what they are built from is the same (curveInputs, sameInputs): the
-     last drawn (curveKept), and each pattern's observed less its background for the Results
-     (netKept). Up to v486 a redraw built and calculated the model twice (draw, then
-     renderResults for its phases), and an undo or a tab switch, whose results come back as
-     new objects, again for every refined pattern in the Results: 1.5–2.5 s for twelve. */
-  let curveKept = null;
   /* The pattern's plot as last drawn (plotKey): the pattern, its instrument, its result,
      the phases (each one's structure, colour and tick on it, the standard's chosen) and
      the plot's size. The same again, it stays as it is (kept in view, as preserve keeps
@@ -347,7 +372,7 @@ export function createRietveld(host, root, o){
   let plotKey = '', instrTxt = '';
   const setText = (id, t)=>{ const el = $(id); if (el.textContent !== t) el.textContent = t; };
   function draw(preserve){
-    if (gone) return;
+    if (gone || (host.unseen && host.unseen())) return;
     const fs = host.files();
     syncButtons();
     renderPhases();
@@ -386,16 +411,17 @@ export function createRietveld(host, root, o){
     const prev = preserve && plot ? { xmin: plot.xmin, xmax: plot.xmax } : null;
     plot = new Plot(svg, { xlabel: '2θ (°)', ylabel: 'Intensity (counts)' });
     plot.attachTools(svg.closest('.plot-wrap'));
-    let c = null, used = phasesFor(f);
-    if (r && r.params){ try { const cv = curvesOf(f, r); c = cv.c; used = cv.list; } catch(e){ c = null; } }
+    let c = null, used = phasesFor(f), key = '';
+    if (r && r.params){ try { const cv = curvesOf(f, r); c = cv.c; used = cv.list; key = cv.key; } catch(e){ c = null; } }
     const ys = f.y, lo = Math.min(...ys), hi = Math.max(...ys), A = (hi - lo) || 1;
-    const groups = c ? groupTicks(c.ticks, used) : tickRows(f, phasesFor(f));
+    const groups = c ? groupTicks(c.ticks, used)
+      : ticksKept(f.y, exactJson([idOf(f.x), instrOf(f), used.map(q=> [q.id, idOf(q.prep), q.color])]), ()=> tickRows(f, used));
     const rowH = 0.045*A, rowGap = 0.02*A;
     const tickTop = lo - rowGap, tickBottom = tickTop - groups.length*(rowH + rowGap);
     let diff = null, off = 0;
     const [xa, xb] = scanRange(f);
     if (c){
-      diff = ys.map((v, i)=> v - c.yc[i]);
+      diff = diffKept(ys, key, ()=> ys.map((v, i)=> v - c.yc[i]));
       const dHi = Math.max(...diff), dLo = Math.min(...diff);
       off = tickBottom - rowGap - dHi;
       plot.setRange(xa, xb, off + dLo - 0.03*A, hi + 0.05*A);
@@ -428,16 +454,10 @@ export function createRietveld(host, root, o){
      across the samples). Each drawn again only when what it shows changes. ---- */
   // resNorm: the stacked patterns' normalisation (Settings…, Results), as the Scherrer card's.
   let sizeBy = 'sample', resNorm = 'global';
-  // A pattern's observed less its refined background, or null (curveKept's rule; the last 64).
-  const netKept = new Map();
+  // A pattern's observed less its refined background, or null (kept: netKept).
   function netOf(f, r){
     let list; try { list = resultPhases(r, allPhases(), phasesFor(f)); } catch(e){ return null; }
-    const inp = curveInputs(f, r, list), k = netKept.get(f.name);
-    if (k && sameInputs(k.inp, inp)) return k.y;
-    let v = null; try { const c = curvesFrom(f, r, list, std); v = Array.from(f.y, (y, i)=> y - c.bg[i]); } catch(e){}
-    netKept.delete(f.name); netKept.set(f.name, { inp, y: v });
-    if (netKept.size > 64) netKept.delete(netKept.keys().next().value);
-    return v;
+    return netKept(f.y, curveKey(f, r, list, std), ()=>{ try { const { c } = curvesOf(f, r); return Array.from(f.y, (y, i)=> y - c.bg[i]); } catch(e){ return null; } });
   }
   const refinedFiles = ()=> host.files().filter(f=> results[f.name] && results[f.name].params);
   const phaseColor = name => (allPhases().find(q=> q.prep.name === name) || {}).color || '#888';
@@ -821,17 +841,20 @@ export function createRietveld(host, root, o){
      of either, the box saying so (to v498 the 3D view kept the cell drawn last on show:
      xrd-cell3d set). */
   let cellV = null, cellKeyShown = '';
+  let cellNext = null;   // (how the cell was turned as its tab slept or the page went, by its key: showNext)
   function renderCell(){
     const q = allPhases().find(x=> x.id === sel) || null, info = $('CellInfo');
     const put = h =>{ if (h !== cellInfoHtml){ cellInfoHtml = h; info.innerHTML = h; } };
     setText('CellName', q ? q.prep.name : '');
-    if (!q){ if (cellV) cellV.set(null); cellKeyShown = ''; put('<div class="rv-empty">No phase yet: a CIF added in Phases shows its structure here.</div>'); return; }
+    if (!q){ if (cellV) cellV.set(null); cellKeyShown = ''; cellNext = null; put('<div class="rv-empty">No phase yet: a CIF added in Phases shows its structure here.</div>'); return; }
     if (!cellV) cellV = cellView($('Cell'), { side: ()=> cellSide() });
     // (by the CIF's content too: ids start again at 1 in each project and after an undo, so
     // another CIF of the same cell kept the atoms shown before, the details the new ones, to
     // v486; and by its name, which a CIF without one takes from its file's)
     const k = q.id + '|' + cellKey(q.prep.cell) + '|' + q.prep.src + '|' + q.prep.name;
     if (k !== cellKeyShown){ cellKeyShown = k; cellV.set({ name: q.id + q.prep.name, cell: q.prep.cell, atoms: q.prep.atoms }); }
+    // (the turn it had, given back on the same cell only, at its first drawing since)
+    if (cellNext){ if (cellNext.key === k) cellV.setView(cellNext); cellNext = null; }
     put(cellDetailsHtml(q, q === lab6));
   }
   // The square's side: the shorter of the box's width and what is left of its height
@@ -953,7 +976,7 @@ export function createRietveld(host, root, o){
       <div class="rvs-body"></div>
       <button class="btn primary" type="button" data-done style="width:100%;margin-top:16px">Done</button>
     </div>`;
-  document.body.appendChild(setModal);
+  (host.layer || document.body).appendChild(setModal);
   const setBody = setModal.querySelector('.rvs-body');
   let setKey = '', rebuilding = false;
   let fitNote = null;        // the Refinement section's note, when an entry was not taken
@@ -978,7 +1001,8 @@ export function createRietveld(host, root, o){
     document.removeEventListener('keydown', onSetKey, true);
     if (inBox && !$('Settings').disabled) $('Settings').focus();
   }
-  function onSetKey(e){ if (e.key === 'Escape'){ e.stopPropagation(); closeSettings(); } }
+  // (its window in the page: one of a tab not on show, b2, leaves the key to the page)
+  function onSetKey(e){ if (e.key === 'Escape' && setModal.isConnected){ e.stopPropagation(); closeSettings(); } }
   // Built again only when the phases on show change (one added or removed by an undo);
   // otherwise the inputs are set in place, keeping the focus.
   function renderSettings(){
@@ -1223,12 +1247,41 @@ export function createRietveld(host, root, o){
     },
     /* The card closed (or turned into another kind, set aside then dropped): a run going on
        ends as the kind switch ends it (cancel(false): the card goes, its last state is the
-       history's), nothing drawn after, and its worker goes with the engine's caches. Up to
-       v483 a card closed mid-run kept refining unseen, drew its 3D views on the detached
-       card when it ended, and every card that had refined left its worker alive. */
+       history's), nothing drawn after, the workers of its jobs terminated (the pool lets
+       its idle ones go after a while, xrd-rv-pool.js). Up to v483 a card closed mid-run
+       kept refining unseen, drew its 3D views on the detached card when it ended, and every
+       card that had refined left its worker alive. */
     destroy(){ gone = true; cancel(false);
-      if (worker){ try { worker.terminate(); } catch(e){} worker = null; }
       closeSettings(); setModal.remove(); if (cellV) cellV.destroy(); solidViews.forEach(({ view })=> view.destroy()); solidViews = []; ac.abort(); },
+    /* What it shows beside its state (b2v4, xrd.js): the peak picked in its table of widths,
+       how each crystallite's solid was turned (by pattern and solid, as solidTurns), the
+       phase on show (by its id and name) and how its unit cell was turned (by the cell's key,
+       cellKeyShown), given back as its tab wakes or the page is reloaded, the state restored,
+       for its next drawing. The phase on show is in its state too (sel: an undo goes back to
+       its step's, a project saved reopens on it), but a click on its row is no change, and
+       its record held the one before till the next (to b2v4 a reload showed it). */
+    shows(){
+      const turns = new Map(solidTurns);
+      solidViews.forEach(({ view, turnKey })=>{ if (view.getView) turns.set(turnKey, view.getView()); });
+      const v = {}, q = allPhases().find(x=> x.id === sel), cell = cellV && cellKeyShown ? cellV.getView() : null;
+      if (pkSel) v.pk = { ...pkSel };
+      if (turns.size) v.turns = [...turns];
+      if (q) v.sel = { id: q.id, name: q.prep.name };
+      if (cell) v.cell = { key: cellKeyShown, R: cell.R };
+      else if (cellNext) v.cell = cellNext;
+      return Object.keys(v).length ? v : null;
+    },
+    showNext(v){
+      const p = v && v.pk;
+      if (p && typeof p.file === 'string' && typeof p.lab === 'string' && Number.isFinite(p.tt) && Number.isFinite(p.ph))
+        pkSel = { file: p.file, tt: p.tt, lab: p.lab, ph: p.ph, color: typeof p.color === 'string' ? p.color : '#888' };
+      if (v && Array.isArray(v.turns)) v.turns.slice(-50).forEach(e=>{ if (Array.isArray(e) && typeof e[0] === 'string' && e[1] && typeof e[1] === 'object') solidTurns.set(e[0], e[1]); });
+      // (the phase where it is still there under its name; the cell's turn at its next drawing)
+      const s = v && v.sel, q = s && allPhases().find(x=> x.id === s.id);
+      if (q && q.prep.name === s.name) sel = q.id;
+      const c = v && v.cell;
+      cellNext = c && typeof c.key === 'string' && Array.isArray(c.R) ? { key: c.key, R: c.R } : null;
+    },
     // The card's state as saved (stateOf).
     snapshot(){ return stateOf({ phases, std, lab6, pick, start: startFrom, hold, fit, nextId, sel, results, view: res ? { sizeBy, resNorm } : null }); },
     /* step: an undo or a redo. One while a run goes on here, or waits for the standard's

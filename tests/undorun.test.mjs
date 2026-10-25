@@ -34,6 +34,8 @@ const P = '#xrdR2', S = '#xrdStdR';
    __release() every one and holds no more. With window.__fail the next refinement's result
    comes as the worker's error. Before any worker is made. */
 const holdWorkers = page => page.evaluate(()=>{
+  // (a run's patterns one at a time, as these tests take them: the pool's lanes, rvpool.test.mjs)
+  localStorage.setItem('datatreat-rv-lanes', '1');
   const W = window.Worker; window.__held = []; window.__hold = false; window.__fail = false;
   const wrap = fn => e=>{
     if (window.__fail && e.data && e.data.type === 'result'){ window.__fail = false; return fn({ data: { ...e.data, type: 'error', message: 'failed for the test' } }); }

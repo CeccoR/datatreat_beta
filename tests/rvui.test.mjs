@@ -7,12 +7,12 @@
    B: the standard's Settings hold only what applies to it, nothing disabled for good;
    the samples' keep every row.
    C: while the standard refines, its window closed, every Rietveld card's "Instrumental
-   standard…" says so (a card added meanwhile, after Home and back, a project opened and
-   the question to stop it dismissed, that card undone and redone, an undo stopped at the
-   run's start), and stops saying so when the run ends or is stopped. */
+   standard…" says so (a card added meanwhile, after Home and back, another project opened
+   and the XRPD tab shown again, nothing asked: b2, that card undone and redone, an undo
+   stopped at the run's start), and stops saying so when the run ends or is stopped. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { start, openModule, loadFiles, moduleState, until, settle, answer } from './helpers.mjs';
+import { start, openModule, loadFiles, moduleState, until, settle, banner } from './helpers.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });
@@ -253,15 +253,17 @@ test('C: the standard refining, its window closed: every card\'s Instrumental st
     await page.waitForSelector('#tab-xrd.active');
     await settle(page);
     await busyNow('xrdR2Std', 'Home and back');
-    // Another project opened: leaving asks; dismissed, it opens beside, the run goes on here.
+    // Another project opened: nothing asked, it opens on show, the run going on in the XRPD
+    // tab left (b2: each XRPD tab an instance of its own; to b2 leaving asked to stop it).
     await page.click('#nav button[data-tab="home"]');
     await page.click('.home-card[data-go="tauc"]');
-    await answer(page, 'x');
+    await page.waitForSelector('#tab-tauc.active');
+    assert.equal(await banner(page), null, 'nothing asked');
     await page.locator('#tabBar .ptab').first().locator('.ptab-label').click();
     await page.waitForSelector('#tab-xrd.active');
     await settle(page);
     assert.equal(await page.locator('#tabBar .ptab').count(), 2);
-    await busyNow('xrdR2Std', 'the question to leave dismissed');
+    await busyNow('xrdR2Std', 'the tab left and shown again');
     // Undo during the run: the card added meanwhile goes (a step taken during it); a second
     // stops at the run's start, nothing more undone, nothing said (to v508 a banner said undo
     // waited); a redo brings the card back, showing the run. Still running.

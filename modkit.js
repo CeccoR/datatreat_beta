@@ -49,16 +49,23 @@ import { decodeText } from './textdata.js';
                        its per-sample arrays drop (without)
      redrawTab()       the tab shown or resized
      csv()             the CSV export's files, [{ name, text }]
-   } */
+     root, key, layer  a module made per tab (utils.js registerModule): its instance's
+                       section, where its elements are found (root-scoped, whether or not
+                       it is in the page), the key its registries go by, and its layer (the
+                       deck's menu goes there). None: the page's ids, the module's name, the
+                       body, as a module with one instance
+   }
+   kit.destroy() lets the kit go with its instance: its deck. */
 export function moduleKit(mod, o){
-  const all = [], files = [], $ = id => document.getElementById(id);
+  const root = o.root || null, key = o.key || mod;
+  const all = [], files = [], $ = id => root ? root.querySelector('#' + id) : document.getElementById(id);
   const parts = Object.fromEntries(['invalid', 'upload', ...(o.parts || [])].map(k=> [k, '']));
   const slots = ()=> o.slots ? o.slots() : [];
   const kit = { all, files, alerts: parts };
 
   /* ---- Alerts: each dismiss button (data-action "<mod>-dismiss-<part>") empties its part,
      or does what o.dismiss says. ---- */
-  const tab = $('tab-' + mod), pre = mod + '-dismiss-';
+  const tab = root || $('tab-' + mod), pre = mod + '-dismiss-';
   kit.drawAlerts = ()=> o.alerts(parts);
   const clearAlerts = ()=>{ for (const k in parts) parts[k] = ''; };
   tab.addEventListener('click', e=>{
@@ -91,8 +98,8 @@ export function moduleKit(mod, o){
   // then `files` holds the ones included before the change.
   kit.showFiles = ()=>{
     files.splice(0, files.length, ...includedOf(all));
-    setTabLoaded(mod, all.length);
-    renderUnifiedFileList(mod + 'FileTableWrap', all, cb, o.note, o.noteHead);
+    setTabLoaded(key, all.length);
+    renderUnifiedFileList($(mod + 'FileTableWrap'), all, cb, o.note, o.noteHead);
     kit.drawAlerts();
   };
   /* (on the list's box, which stays: the list inside is drawn anew at each change, its
@@ -123,7 +130,7 @@ export function moduleKit(mod, o){
      loaded is not loaded again. Each record is { name, label, ...what it holds, color,
      rawBytes } (the file as it came, for its download); then `done(had)`, `had` the files
      there were. */
-  kit.dropText = (read, done)=> setupDropzone(mod + 'Dropzone', mod + 'Files', async list=>{
+  kit.dropText = (read, done)=> setupDropzone($(mod + 'Dropzone'), $(mod + 'Files'), async list=>{
     const had = all.length, names = new Set(all.map(f=> f.name)), bad = [], dup = [];
     for (const f of list){
       if (names.has(f.name)){ dup.push(f.name); continue; }
@@ -154,7 +161,7 @@ export function moduleKit(mod, o){
     else if (!isObj(g.held)) g.held = {};
     try { return o.file ? o.file(g) : g; } catch(e){ return null; }
   };
-  const hist = registerHistory(mod, ()=> ({ files: all.map(f=> ({ ...f })), ...o.snapshot() }), s0=>{
+  const hist = registerHistory(key, ()=> ({ files: all.map(f=> ({ ...f })), ...o.snapshot() }), s0=>{
     const s = isObj(s0) ? s0 : {}, raw = Array.isArray(s.files) ? s.files : [], kept = raw.map(keptFile), gone = new Set();
     // (an entry that is no file counts as included: it holds no included:false)
     raw.reduce((j, f, i)=>{ if (isObj(f) && f.included === false) return j; if (!kept[i]) gone.add(j); return j + 1; }, 0);
@@ -169,9 +176,11 @@ export function moduleKit(mod, o){
   });
   kit.commit = ()=> hist.commit();
   // The cards, in the module's list above its "+" bar; each change a step of the history.
-  kit.deck = d => createDeck({ list: $(mod + 'Analyses'), addBar: $(mod + 'AddBar'), addBtn: $(mod + 'AddAn'), commit: kit.commit, ...d });
-  if (o.redrawTab) registerTabRedraw(mod, o.redrawTab);
-  if (o.csv) registerCsvExport(mod, o.csv);
+  let deck = null;
+  kit.deck = d => (deck = createDeck({ list: $(mod + 'Analyses'), addBar: $(mod + 'AddBar'), addBtn: $(mod + 'AddAn'), commit: kit.commit, layer: o.layer, ...d }));
+  if (o.redrawTab) registerTabRedraw(key, o.redrawTab);
+  if (o.csv) registerCsvExport(key, o.csv);
+  kit.destroy = ()=>{ if (deck) deck.destroy(); };
   return kit;
 }
 

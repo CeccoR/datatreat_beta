@@ -1,4 +1,4 @@
-import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc } from './utils.js';
+import { settings, fmtNum, csvLine, cumtrapz, maxArr, minArr, meanArr, stdArr, buildAlertsHtml, createDateTimeField, flashFieldInvalid, guardNumericInput, fitCsvIcons, confirmBanner, esc, registerModule, fixed, keeper, objId, exactKey } from './utils.js';
 import { Plot, svgEl } from './plot.js';
 import { cardInfo, fileSafe, nameDownloads } from './cards.js';
 import { moduleKit, wideCsv, isObj, isArr, num, numStr, oneOf, dateOf, arrOf, without, cardList } from './modkit.js';
@@ -7,17 +7,45 @@ import { textLines, readTable, parseNum } from './textdata.js';
 
 /* =========================================================
    GC MODULE
+
+   MADE PER TAB (b2): createGc is the module's factory (utils.js registerModule), each open
+   GC tab that is awake an instance of its own, made of its copy of index.html's section
+   (root) and a layer (the kinds' menu). Its elements are found in root, a card's in its
+   card and in its section of the Results, never in the page: its ids are the page's only
+   while it is on show. Its registries go by its key, the tab's id (moduleKit). It draws only
+   on show: hidden (a state read out for its CSVs) it works out its tables and rates, which
+   the CSVs are made of, and draws nothing; its redraw draws all as it is shown; a tab shown
+   again with nothing changed and at the same width draws nothing (its draw key). It has no
+   job that runs on while hidden. API.md says how a module is made so.
 ========================================================= */
-(function(){
+/* A sample's tables (computeTables: each gas's times, readings, flows and their integral),
+   kept by its first gas's readings (utils.js keeper: while a state, a tab asleep or a
+   history holds the file) under all they are made from: the injections' dates, the gases'
+   readings, the light-on instant, the injection delay and the flow's rate, temperature,
+   pressure and the mass. A tab woken, an undo, a redraw and the CSVs take them as made (to
+   b2v3 every redraw made them again). The integral from the interval's start (FmInt) is
+   the card's own, made at each change of the interval: it lies on a copy. */
+const tablesKept = keeper('gc-tables', 8);
+// A GC tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
+function createGc({ key, root, layer, shown }){
+  const $ = id => root.querySelector('#' + id);
+  /* Hidden, nothing is drawn (API.md §6): `drawable()` says whether to draw, and when not
+     marks the instance to be drawn whole as it is shown (stale). `drawnAt`: the width it was
+     last drawn whole at, its draw key (redrawTab). */
+  let stale = false, drawnAt = '';
+  const drawable = ()=> shown() || !(stale = true);
   /* The module (modkit.js): every file loaded, in list order, {name, label,
      injDates:[Date], gas:{h2:[number], o2:[number]} (the gases it has), emptyRows, and
      dayMonth: true, badDates: n where they apply (readGc), and sample, the file it is a
      replicate of, where it is one (REPLICATES)}, and the included ones, which the analysis
      sees, `files`, with which the per-sample arrays each card keeps are aligned; the
      alerts under the drop zone, the dates read day first or left out and the empty cells
-     skipped among them; each card's settings in the history. */
+     skipped among them; each card's settings in the history. A gas's values, which
+     nothing changes once read, are fixed (db.js: the same array in a tab's states and its
+     parked state; to b2v2 a parked state held a copy). */
   const kit = moduleKit('gc', {
-    alerts: p =>{ document.getElementById('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + p.upload; },
+    root, key, layer,
+    alerts: p =>{ $('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + p.upload; },
     dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)) },
     // Every card's per-sample arrays. An excluded file holds its own values; one with none
     // (never so far, or in a card added since) gets the upload defaults.
@@ -41,11 +69,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
     file: f =>{
       if (!isArr(f.injDates) || !isObj(f.gas)) return null;
       const n = f.injDates.length, ks = Object.keys(f.gas), emptyRows = num(f.emptyRows, 0, v=> v >= 0);
-      if (n && ks.length && f.injDates.every(d=> dateOf(d) === d) && ks.every(k=> GASES.some(g=> g.key === k) && Array.isArray(f.gas[k]) && f.gas[k].length === n))
+      if (n && ks.length && f.injDates.every(d=> dateOf(d) === d) && ks.every(k=> GASES.some(g=> g.key === k) && Array.isArray(f.gas[k]) && f.gas[k].length === n)){
+        ks.forEach(k=> fixed(f.gas[k]));
         return emptyRows === f.emptyRows ? f : { ...f, emptyRows };
+      }
       const at = [], injDates = [], gas = {};
       Array.from(f.injDates).forEach((d, i)=>{ const v = dateOf(d); if (v){ at.push(i); injDates.push(v); } });
-      for (const g of GASES){ const a = f.gas[g.key]; if (isArr(a)) gas[g.key] = at.map(i=> Number.isFinite(a[i]) ? a[i] : NaN); }
+      for (const g of GASES){ const a = f.gas[g.key]; if (isArr(a)) gas[g.key] = fixed(at.map(i=> Number.isFinite(a[i]) ? a[i] : NaN)); }
       return injDates.length && Object.keys(gas).length ? { ...f, injDates, gas, emptyRows } : null;
     },
     // A project from before the cards had one analysis, its settings at the top level. A
@@ -53,8 +83,19 @@ import { textLines, readTable, parseNum } from './textdata.js';
     // per-sample arrays without the entries of the files the restore left out. The files'
     // samples as they should be (relink): a project from before them, each file its own.
     restore: (s, gone)=>{ relink(); deck.load(cardList(s.cards, KINDS) || [{ ...s, id: 1, type: 'rate' }],
-      src=> ({ init: { ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, without(src[k], gone)])) } }), a=>{ live.get(a.id).restore(a.init); delete a.init; }); },
-    redrawTab: ()=>{ if (files.length){ deck.fitNames(); each((c, a)=>{ if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }); } },
+      src=> ({ init: { ...src, ...Object.fromEntries(PER_SAMPLE.filter(k=> k in src).map(k=> [k, without(src[k], gone)])) } }), a=>{ live.get(a.id).restore(a.init); delete a.init; });
+      // (what its cards showed, given as its tab woke or the page was reloaded: showNext)
+      if (cardsNext){ const v = cardsNext; cardsNext = null; each((c, a)=>{ if (isObj(v[a.id])) c.showNext(v[a.id]); }); } },
+    /* Re-fit at the current size, keeping the zoom. Nothing changed since it was all drawn
+       (nothing left undrawn while hidden, the same width): nothing to draw, a tab shown
+       again as it was left. */
+    redrawTab: ()=>{
+      const at = String(root.clientWidth);
+      if (!stale && at === drawnAt) return;
+      stale = false; drawnAt = at;
+      fitCsvIcons(root);
+      if (files.length){ deck.fitNames(); each((c, a)=>{ if (!deck.isFolded(a)) c.compute(true); else c.computeQuiet(); }); }
+    },
     csv: ()=> cards().flatMap(a=> live.get(a.id).exportEntries(fileSafe(a.name))),
   });
   const { all: allFiles, files } = kit;
@@ -289,6 +330,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
        apply: any other file's record is as it was.) */
     const rest = rows.length - lost;
     if (!injDates.length) return lost ? { error: `no injection to read: ${lost} row${lost > 1 ? 's' : ''} with an injection date that does not exist${rest ? `, ${rest} with no gas value` : ''}` } : null;
+    for (const k in gas) fixed(gas[k]);
     return { injDates, gas, emptyRows, ...(dm && { dayMonth: true }), ...(badDates && { badDates }) };
   }
   kit.dropText(readGc, ()=> afterFilesChange());
@@ -302,12 +344,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
   }
 
   // (The alerts are drawn with the list, kit.showFiles: the empty-cell alert follows the files.)
+  // (all drawn, on show: its draw key, the width it was drawn at)
   function afterFilesChange(){
     kit.showFiles();
-    document.getElementById('gcAnalyses').style.display = files.length ? 'block' : 'none';
+    $('gcAnalyses').style.display = files.length ? 'block' : 'none';
     each(c=> c.renderTable());
     if (files.length) each((c, a)=>{ if (!deck.isFolded(a)) c.compute(); else c.computeQuiet(); });
     syncResults();
+    if (shown()){ stale = false; drawnAt = String(root.clientWidth); }
     kit.commit();
   }
 
@@ -427,8 +471,10 @@ import { textLines, readTable, parseNum } from './textdata.js';
         <p class="txt-caption" style="margin-top:14px">Mean Production Rate</p>${gasPlot(P(a) + 'SvgBar', 'r', { cls: 'plot-wide', csv: 'mean_rates.csv', name: 'GC_results.svg', legend: P(a) + 'BarLegend' })}
         <div id="${P(a)}BarLegend" class="legend" style="margin-top:8px"></div>`;
 
+  // (its elements found in its card, `card`, and its section of the Results, `res`, whether
+  // or not they are in the page)
   function gcCard(a, card){
-    const px = P(a), $ = id => document.getElementById(px + id);
+    const px = P(a), $ = id => card.querySelector('#' + px + id) || res.querySelector('#' + px + id);
     // The card's section of the Results, kept in card order under the Results' list.
     const res = document.createElement('div');
     res.className = 'res-an';
@@ -565,7 +611,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
       });
       html += `</tbody></table></div>`;
       wrap.innerHTML = html;
-      fitCsvIcons();
+      if (drawable()) fitCsvIcons();
 
       const delayIn = wrap.querySelector('.gcDelay'), delayBox = wrap.querySelector('.gcDelayAuto');
       guardNumericInput(delayIn, { min:0 });
@@ -712,45 +758,53 @@ import { textLines, readTable, parseNum } from './textdata.js';
     // folded (nothing in it is drawn), whose Results section is still kept up to date.
     function computeTables(){
       dataTables = files.map((f,h)=>{
-        const lightOn = lightOnDates[h];
-        const hours = d => (d - lightOn)/3600000;
-        // The injections in time order; `t`, the sample's times (the light-on instant
-        // among them), spans the plot's x-range.
-        const rows = f.injDates.map((d,i)=> ({ d: injectedAt(d), i })).sort((a,b)=>a.d-b.d);
-        const t = [...rows.map(r=> r.d), lightOn].sort((a,b)=>a-b).map(hours);
-        // Total molar flow: mL/min -> L/h -> mol/h at the molar volume of the flow's T and p.
-        const F = qOf(h)/1000*60/molarVolume(tOf(h), pOf(h));
-        const gas = {};
-        for (const k in f.gas){
-          /* Each gas on its own times: the injections it has a value for, with the
-             light-on instant inserted as an extra point carrying its last reading before
-             it (zero if the run starts after it). An empty cell is left out of this gas
-             alone, so its rate, production and mean come from the injections it has; to
-             v474 it was read as 0 %, which pulled them all down. */
-          const pts = rows.filter(r=> !noValue(f.gas[k][r.i])).map(r=> ({ d: r.d, v: f.gas[k][r.i] }));
-          if (!pts.length) continue;
-          let idxBefore = -1;
-          for (let i=0;i<pts.length;i++) if (pts[i].d < lightOn) idxBefore = i;
-          pts.push({ d: lightOn, v: idxBefore<0 ? 0 : pts[idxBefore].v });
-          pts.sort((a,b)=>a.d-b.d);
-          const tHours = pts.map(p=> hours(p.d));
-          const pct = pts.map(p=> p.v);
-          const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
-          const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
-          // From the first injection on; FmInt, from the interval's start (updateRegression).
-          const cum = cumtrapz(tHours, flowM);
-          gas[k] = { t: tHours, pct, flow, Fm: flowM, cum, FmInt: cum };
-        }
-        return {t, gas, name:f.name, label:f.label, color:f.color};
+        const ks = Object.keys(f.gas), lightOn = lightOnDates[h];
+        const key = exactKey([f.injDates.map(d=> +d), ks.map(k=> [k, objId(f.gas[k])]), +lightOn, injDelay(), qOf(h), tOf(h), pOf(h), mOf(h)]);
+        const made = tablesKept(ks.length ? f.gas[ks[0]] : null, key, ()=> tablesOf(f, h, lightOn)), gas = {};
+        for (const k in made.gas) gas[k] = { ...made.gas[k], FmInt: made.gas[k].cum };
+        return {t: made.t, gas, name:f.name, label:f.label, color:f.color};
       });
     }
+    function tablesOf(f, h, lightOn){
+      const hours = d => (d - lightOn)/3600000;
+      // The injections in time order; `t`, the sample's times (the light-on instant
+      // among them), spans the plot's x-range.
+      const rows = f.injDates.map((d,i)=> ({ d: injectedAt(d), i })).sort((a,b)=>a.d-b.d);
+      const t = [...rows.map(r=> r.d), lightOn].sort((a,b)=>a-b).map(hours);
+      // Total molar flow: mL/min -> L/h -> mol/h at the molar volume of the flow's T and p.
+      const F = qOf(h)/1000*60/molarVolume(tOf(h), pOf(h));
+      const gas = {};
+      for (const k in f.gas){
+        /* Each gas on its own times: the injections it has a value for, with the
+           light-on instant inserted as an extra point carrying its last reading before
+           it (zero if the run starts after it). An empty cell is left out of this gas
+           alone, so its rate, production and mean come from the injections it has; to
+           v474 it was read as 0 %, which pulled them all down. */
+        const pts = rows.filter(r=> !noValue(f.gas[k][r.i])).map(r=> ({ d: r.d, v: f.gas[k][r.i] }));
+        if (!pts.length) continue;
+        let idxBefore = -1;
+        for (let i=0;i<pts.length;i++) if (pts[i].d < lightOn) idxBefore = i;
+        pts.push({ d: lightOn, v: idxBefore<0 ? 0 : pts[idxBefore].v });
+        pts.sort((a,b)=>a.d-b.d);
+        const tHours = pts.map(p=> hours(p.d));
+        const pct = pts.map(p=> p.v);
+        const flow = pct.map(v=> v/100*F*1e6);             // umol/h of this gas
+        const flowM = flow.map(v=> v/mOf(h));              // per mg -> mmol/(g h)
+        // From the first injection on; FmInt, from the interval's start (updateRegression).
+        const cum = cumtrapz(tHours, flowM);
+        gas[k] = { t: tHours, pct, flow, Fm: flowM, cum };
+      }
+      return {t, gas};
+    }
+    // (its tab not on show: the tables and the rates worked out, the CSVs' and the Results'
+    // own, and nothing drawn: drawn whole as it is shown)
     function computeAndRenderGc(preserveView){
       if (!files.length) return;
       // Snapshot the current zoom before renderGcPlots() builds fresh Plot instances.
       prevView = preserveView ? viewOf($('Svg1')._plot) : null;
       computeTables();
       renderGasSel();
-      renderGcPlots();
+      if (drawable()) renderGcPlots(); else updateRegression();
     }
 
     /* The gas selector, rendered into the card and its Results section and driving one
@@ -924,13 +978,13 @@ import { textLines, readTable, parseNum } from './textdata.js';
     const hasResults = ()=> costResults.some(c=> GASES.some(g=>isFinite(c.rate[g.key])));
     function updateRegression(){
       computeRates();
-      drawGcData();
+      const draw = drawable();
+      if (draw) drawGcData();
       // Show the Results section before drawing into it: plots sized from a hidden element
       // would measure 0. It stays hidden while no sample has a valid integration interval.
       res.style.display = hasResults() ? '' : 'none';
       syncResults();
-      drawResultPlots();
-      drawBarChart();
+      if (draw){ drawResultPlots(); drawBarChart(); }
     }
 
     // The interval of sample k as far as a gas's data reach: [start, end] within the first
@@ -1116,8 +1170,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
       ],
       clear(){ [ms,Qs,Ts,Ps,startArr,endArr,lightOnDates].forEach(x=> x.length=0); dataTables=[]; costResults=[]; },
       unselect(){ gcSel = gcHov = null; },
+      /* What it shows beside its state (b2v4, gc.js shows): the sample picked in its table or
+         on its plot, its interval highlighted (intervals one per sample), by its file's name,
+         given back as its tab wakes or the page is reloaded, the card restored, where that
+         file is still a sample and the intervals still one per sample. */
+      shows: ()=> gcSel != null && intPerSample() && files[gcSel] ? { sel: files[gcSel].name } : null,
+      showNext(v){ const k = v && typeof v.sel === 'string' && intPerSample() ? files.findIndex(f=> f.name === v.sel) : -1; if (k >= 0) gcSel = k; },
       // (a file's sample changed: the bars alone are per sample)
-      bars(){ if (files.length) drawBarChart(); },
+      bars(){ if (files.length && drawable()) drawBarChart(); },
       renderTable: renderGcParamTable,
       compute: computeAndRenderGc,
       // A folded card draws nothing; its Results section is drawn all the same.
@@ -1126,7 +1186,7 @@ import { textLines, readTable, parseNum } from './textdata.js';
         computeTables(); renderGasSel(); computeRates();
         res.style.display = hasResults() ? '' : 'none';
         syncResults();
-        drawResultPlots(); drawBarChart();
+        if (drawable()){ drawResultPlots(); drawBarChart(); }
         $('ResLegend').innerHTML = dataTables.map(d=> gasLegendHtml(d, shownGases('r'))).join('');
       },
       hasResults: ()=> res.style.display !== 'none',
@@ -1188,13 +1248,14 @@ import { textLines, readTable, parseNum } from './textdata.js';
   const T_TITLE = 'the temperature at which the flow Q is measured — for a mass-flow controller, the reference temperature of its standard units (often 0 °C or 20 °C: see its datasheet), not the temperature of its body';
   const P_TITLE = 'the absolute pressure the flow Q refers to — for a mass-flow controller, the reference pressure of its standard units (usually 1 atm, 1.01325 bar: see its datasheet); for a flow measured as a volume, the absolute pressure of the gas where it is measured (ambient ≈ 1 atm)';
   const GC_INFO = `Set catalyst mass (m), carrier gas flow rate (Q), its temperature (T) and pressure (p), the light-on time and the integration interval for each sample to compute mean H₂ and O₂ production rates; the <b>H₂ / O₂</b> chips on each plot choose the gases drawn, for Analysis and for Results. An empty H₂ or O₂ cell leaves that injection out of that gas only, and the alert under the drop zone says how many were skipped. The injection dates are read month/day, as the instrument writes them, or day/month in a file where some do not exist so and every one does that way, its times going on as the rows do; a row whose date does not exist (2/30, 13/13, 13:00 PM) is left out, and the alert says either. Use the <b>all / one</b> toggles to share a value across samples or set it per sample. <b>T</b> is ${T_TITLE}. <b>p</b> is ${P_TITLE}; its unit (atm, bar, kPa, mbar, Torr = mmHg, psi) is chosen in its column's header, which converts the values shown, not the pressure. The flow is turned into moles with the molar volume of an ideal gas at that temperature and pressure, V<sub>m</sub> = RT/p (22.414 L/mol at 0 °C and 1 atm, 24.465 L/mol at 25 °C and 1 atm). A new analysis starts at 25 °C and 1 atm; a project saved before T existed keeps the 0 °C its rates were worked out at, and one saved before p, the 1 atm. The <b>injection delay</b> moves every injection on from its logged date to the moment the sample is actually injected; <b>Auto</b> uses 60.6 s. In per-sample interval mode the vertical lines are coloured by sample — hover or select a table row to highlight its interval on the plot (and vice-versa). <b>Replicates</b>: the <b>Sample</b> column of the file list says which sample each file is — its own (as it starts), or another file's, by that file's name (a label renamed changes nothing); a file that heads a group, set to another, takes its group along, and a head removed leaves its group to its next file. The time plots stay one per file; the mean-rate bar chart has one bar per sample, named after its head's label (the first included file's, the head left out), its height the mean of its included files' mean rates, each worked out with its own parameters, and its error bar the files' standard deviation (n − 1 under it; none for a single file); a file left out is out of the mean and of n. With replicates (a sample of more than one included file), mean_rates.csv has a row per sample (each gas's mean, ± and n) and mean_rates_by_file.csv a row per file, as mean_rates.csv has without them. ${cardInfo(false, true)}`;
-  const resList = document.getElementById('gcResList');
+  const resList = $('gcResList');
   const live = new Map();       // id → the card's analysis (gcCard)
+  let cardsNext = null;         // what the cards of a tab woken or reloaded showed (showNext), by id
   const placeRes = ()=> cards().forEach(a=>{ const c = live.get(a.id); if (c) resList.appendChild(c.res); });
   // The Results card is there while some card has a result to show.
   function syncResults(){
     const on = cards().filter(a=> live.has(a.id) && live.get(a.id).hasResults());
-    document.getElementById('gcResultsBar').style.display = files.length && on.length ? 'block' : 'none';
+    $('gcResultsBar').style.display = files.length && on.length ? 'block' : 'none';
     cards().forEach(a=>{ const c = live.get(a.id); if (c) c.res.classList.toggle('is-first', a === on[0]); });
   }
   function named(a){
@@ -1225,4 +1286,25 @@ import { textLines, readTable, parseNum } from './textdata.js';
 
   // A new project starts with one card.
   deck.start(['rate']);
-})();
+
+  /* ---- The instance (tabs.js) ----
+     A GC tab, hidden, holds little beyond its sleeping form (0.2 MB of heap for 10
+     exports), most of it its parameter table and file list, which it shows as they are;
+     its plots let go gave back nothing measurable, their tool buttons still holding their
+     Plots (NOTES-gc-epr.md). */
+  return {
+    // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
+    // menu and its listeners. Its section and layer are the shell's to take out.
+    destroy(){ kit.destroy(); },
+    /* What it shows beside its state (b2v4: tabs.js, utils.js shownOf): each card's own, by
+       its id (the sample picked), given back as its tab wakes or the page is reloaded, to
+       the restore. */
+    shows(){
+      const out = {};
+      each((c, a)=>{ const v = c.shows(); if (v) out[a.id] = v; });
+      return Object.keys(out).length ? { cards: out } : null;
+    },
+    showNext(v){ cardsNext = isObj(v) && isObj(v.cards) ? v.cards : null; },
+  };
+}
+registerModule('gc', createGc);

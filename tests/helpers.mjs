@@ -81,6 +81,9 @@ export async function openApp(browser, base, { viewport = { width: 1400, height:
   await page.addInitScript(()=>{
     // The same ids and choices on every run: a seeded Math.random.
     let x = 12345; Math.random = ()=>{ x = (x*1103515245 + 12345) % 2147483648; return x/2147483648; };
+    // Every array a module fixes (db.js fixed: shared by the states, never changed) frozen
+    // too, so that a write into one throws, a page error.
+    window.__freezeFixed = true;
     window.__csp = [];
     document.addEventListener('securitypolicyviolation', e=> window.__csp.push(e.violatedDirective + ' ' + e.blockedURI + ' ' + (e.sourceFile || '') + ':' + (e.lineNumber || '')));
     window.addEventListener('unhandledrejection', e=> console.error('unhandledrejection: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));

@@ -24,13 +24,17 @@ export const cardInfo = (several, results) => `Each analysis card can be renamed
    closes it, so does Escape; the anchor stays lit while it is open. A menu of our own
    rather than a <select>: the title's capitals would carry into a native list, which
    some systems draw with the select's own styling. */
-function kindMenu(kinds){
+// (in `layer`: the module's instance's, made per tab, which is in the page while its
+// instance is; else the page's body. Its listeners on the document and the window come
+// off with destroy.)
+function kindMenu(kinds, layer){
   const el = document.createElement('div');
   el.className = 'an-menu';
   el.setAttribute('role', 'menu');
   el.hidden = true;
   el.innerHTML = Object.entries(kinds).map(([k, l])=> `<button type="button" role="menuitem" data-kind="${esc(k)}">${esc(l)}</button>`).join('');
-  document.body.appendChild(el);
+  (layer || document.body).appendChild(el);
+  const ac = new AbortController(), signal = ac.signal;
   let anchor = null, pick = null, centred = false;
   const place = ()=>{
     const r = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
@@ -64,13 +68,13 @@ function kindMenu(kinds){
   });
   document.addEventListener('pointerdown', e=>{
     if (!el.hidden && !el.contains(e.target) && !anchor.contains(e.target)) close();
-  }, true);
+  }, { capture: true, signal });
   document.addEventListener('keydown', e=>{
     if (e.key === 'Escape' && !el.hidden){ e.stopPropagation(); close(); }
-  }, true);
-  window.addEventListener('scroll', ()=>{ if (!el.hidden) place(); }, true);
-  window.addEventListener('resize', ()=>{ if (!el.hidden) place(); });
-  return { open, close };
+  }, { capture: true, signal });
+  window.addEventListener('scroll', ()=>{ if (!el.hidden) place(); }, { capture: true, signal });
+  window.addEventListener('resize', ()=>{ if (!el.hidden) place(); }, { signal });
+  return { open, close, destroy(){ close(); ac.abort(); el.remove(); } };
 }
 
 /* Folding animates the body's height. The card is marked folded from the start, so its
@@ -160,12 +164,16 @@ const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
                                 going on show is left (an XRPD card's peak being placed). Not for
                                 the folds of a move, which the cards come out of as they were
      commit()                   a step of the undo history
-   } */
+     layer                      where the kinds' menu goes: the instance's layer (utils.js
+                                makeInstance), for a module made per tab; none, the page's body
+   }
+   destroy() lets the deck go (its module's instance destroyed): its menu and the listeners
+   it set on the document and the window, the animations under way. */
 export function createDeck(o){
   let recs = [];
   const live = new Map();       // id → card element
   const kinds = o.kinds, types = Object.keys(kinds), several = types.length > 1;
-  const menu = several ? kindMenu(kinds) : null;
+  const menu = several ? kindMenu(kinds, o.layer) : null;
 
   const nextId = ()=> recs.reduce((m, a)=> Math.max(m, a.id), 0) + 1;
   const newRec = type => ({ id: nextId(), type, base: '', nameAuto: true, name: '', collapsed: false, ...(o.make ? o.make(type) : {}) });
@@ -661,5 +669,6 @@ export function createDeck(o){
     fitNames(){ recs.forEach(fitName); },
     // The first cards of a new project, built as they are added but quietly (no history).
     start(typesList){ recs = []; typesList.forEach(t=>{ const a = newRec(t); recs.push(a); mount(a); }); refreshNames(); },
+    destroy(){ quiet(); if (menu) menu.destroy(); },
   };
 }

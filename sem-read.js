@@ -16,8 +16,8 @@
 
    Pixels taller or wider than they are long (PixelSizeY and PixelSizeX more than
    0.1 % apart) are brought to square ones (squarePixels). Also here, what the module
-   (sem.js) and its worker (sem-read.worker.js) both do with a file: its id, its
-   base64, the reduced copy and a crop's statistics (readFile).
+   (sem.js) and its worker (sem-read.worker.js) both do with a file: its id, the reduced
+   copy and a crop's statistics (readFile).
 ========================================================= */
 
 const TESCAN_TAG = 50431;
@@ -63,17 +63,22 @@ const sizeText = n => n < 1e3 ? `${n} bytes` : n < 1e6 ? `${+(n/1e3).toPrecision
 const LIMIT_TEXT = `${MAX_SIDE} px a side, 268 million px in all`;
 const LITTLE = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
-/* readTescanTiff(bytes: Uint8Array, fileName, { head }) → {
+/* readTescanTiff(bytes: Uint8Array, fileName, { head, view }) → {
      width, height (the frame), imageH (the image's rows), strip (the bar's rows),
      bits, pixels (Uint16Array, width × height, row by row, the frame's grey levels
-     scaled to 16 bits; the image alone where its pixels were made square), meta:
+     scaled to 16 bits; the image alone where its pixels were made square), view (the
+     pixels are the file's own bytes, not a copy: opts.view), meta:
      { main, sem } (strings), and the numbers read from it: name, pixelNm (nm a pixel),
      pixelNmY (the same, the pixels being square: the file's PixelSizeY where it is
      within 0.1 % of X), mag, fovUm (the image's width), kV, wdMm, detector, gain,
      offset, device, date, time, warning (or ''), squared (null, or where the pixels
      were made square: { width, imageH, pixelNmX, pixelNmY } as acquired) }.
-   head: everything but the pixels (pixels and warning null), at the cost of the
-   checks alone: whatever would refuse the file refuses it here too.
+   head: everything but the pixels (null), at the cost of the checks alone: whatever
+   would refuse the file refuses it here too. view: the pixels a Uint16Array over the
+   file's own bytes where they are its grey levels as they are (16 bits in this machine's
+   order, at an even offset, the strips one after another, black the lowest level, the
+   pixels square): no copy (b2, sem.js: a decoded image costs nothing but the file it
+   is); else a copy, as without it.
    Throws SemReadError with the reason a file is not taken. */
 function readTescanTiff(bytes, fileName = '', opts = {}){
   if (bytes.length < 8) throw new SemReadError('not a TIFF');
@@ -140,32 +145,37 @@ function readTescanTiff(bytes, fileName = '', opts = {}){
     throw new SemReadError(`an image of ${width} × ${imageH} px of ${+pxX.toPrecision(4)} × ${+pxY.toPrecision(4)} nm: in square pixels ${sq.w} × ${sq.h} px, larger than the page can draw (${LIMIT_TEXT})`);
   if (!sq && over(width, imageH)) throw new SemReadError(`an image of ${width} × ${imageH} px${strip ? ' (its info bar left out)' : ''}: larger than the page can draw (${LIMIT_TEXT})`);
 
-  let pixels = null, warning = null;
+  // (the bar's border read from the strips as stored, the header alone too: alike there
+  // as in the levels made of them)
+  const warning = strip && !uniformRun(bytes, dv, parts, le, bits, imageH*width, width)
+    ? `the row under the image (row ${imageH + 1}) is not the info bar's uniform border: the bar may not be where Tescan puts it, so check the image's bottom edge` : '';
+  let pixels = null, view = false;
   if (!opts.head){
-    // The frame's grey levels, on 16 bits (an 8-bit file × 257: 255 → 65535); a 16-bit
-    // strip in the machine's order, at an even offset, copied whole.
-    pixels = new Uint16Array(need);
-    for (let k = 0, at = 0; k < parts.length; k += 2){
-      const o = parts[k], c = parts[k + 1];
-      if (bits === 16){
-        if (le === LITTLE && (bytes.byteOffset + o) % 2 === 0) pixels.set(new Uint16Array(bytes.buffer, bytes.byteOffset + o, c), at);
-        else for (let j = 0; j < c; j++) pixels[at + j] = dv.getUint16(o + 2*j, le);
-      } else for (let j = 0; j < c; j++) pixels[at + j] = bytes[o + j]*257;
-      at += c;
+    const o0 = parts[0], whole = parts.every((v, k)=> k % 2 || !k || v === parts[k - 2] + parts[k - 1]*bpp);
+    if (opts.view && bits === 16 && le === LITTLE && photo === 1 && whole && (bytes.byteOffset + o0) % 2 === 0){
+      pixels = new Uint16Array(bytes.buffer, bytes.byteOffset + o0, need); view = !sq;
+    } else {
+      // The frame's grey levels, on 16 bits (an 8-bit file × 257: 255 → 65535); a 16-bit
+      // strip in the machine's order, at an even offset, copied whole.
+      pixels = new Uint16Array(need);
+      for (let k = 0, at = 0; k < parts.length; k += 2){
+        const o = parts[k], c = parts[k + 1];
+        if (bits === 16){
+          if (le === LITTLE && (bytes.byteOffset + o) % 2 === 0) pixels.set(new Uint16Array(bytes.buffer, bytes.byteOffset + o, c), at);
+          else for (let j = 0; j < c; j++) pixels[at + j] = dv.getUint16(o + 2*j, le);
+        } else for (let j = 0; j < c; j++) pixels[at + j] = bytes[o + j]*257;
+        at += c;
+      }
+      // WhiteIsZero: turned into the usual sense, black the lowest level.
+      if (photo === 0) for (let i = 0; i < pixels.length; i++) pixels[i] = 65535 - pixels[i];
     }
-    // WhiteIsZero: turned into the usual sense, black the lowest level.
-    if (photo === 0) for (let i = 0; i < pixels.length; i++) pixels[i] = 65535 - pixels[i];
-    warning = '';
-    if (strip){
-      const row = pixels.subarray(imageH*width, (imageH + 1)*width);
-      if (row.some(v=> v !== row[0])) warning = `the row under the image (row ${imageH + 1}) is not the info bar's uniform border: the bar may not be where Tescan puts it, so check the image's bottom edge`;
-    }
+    // (from the file's own levels where they are viewed: they are only read)
     if (sq) pixels = squarePixels(pixels, width, imageH, sq.w, sq.h);
   }
   const W = sq ? sq.w : width, H = sq ? sq.h : imageH, pixelNm = sq ? sq.p : pxX;
   const base = fileName.replace(/\.[^.]+$/, '');
   return {
-    width: W, height: sq ? H : height, imageH: H, strip, bits, pixels, meta: { main, sem },
+    width: W, height: sq ? H : height, imageH: H, strip, bits, pixels, view, meta: { main, sem },
     name: main.Sign || main.OrigFileName || base, pixelNm, pixelNmY: sq ? sq.p : pxY,
     mag: num(main.Magnification), fovUm: pixelNm*W/1000,
     kV: num(sem.HV || sem.AcceleratorVoltage)/1000, wdMm: num(sem.WD)*1000,
@@ -173,6 +183,20 @@ function readTescanTiff(bytes, fileName = '', opts = {}){
     device: main.Device || '', date: main.Date || '', time: main.Time || '', warning,
     squared: sq ? { width, imageH, pixelNmX: pxX, pixelNmY: pxY } : null,
   };
+}
+
+// Are the frame's n samples from `from` (as stored, its strips' parts) all one level?
+function uniformRun(bytes, dv, parts, le, bits, from, n){
+  let first = -1;
+  for (let k = 0, at = 0; k < parts.length && n > 0; k += 2){
+    const o = parts[k], c = parts[k + 1];
+    for (let j = from - at; j >= 0 && j < c && n > 0; j++, n--, from++){
+      const v = bits === 16 ? dv.getUint16(o + 2*j, le) : bytes[o + j];
+      if (first < 0) first = v; else if (v !== first) return false;
+    }
+    at += c;
+  }
+  return true;
 }
 
 /* ---- Square pixels ----
@@ -232,15 +256,9 @@ function hashBytes(b){
   for (let i = 0; i < b.length; i++){ h ^= b[i]; h = Math.imul(h, 0x01000193); }
   return (h >>> 0).toString(16).padStart(8, '0') + '-' + b.length;
 }
-// base64 in chunks: one String.fromCharCode over megabytes overflows the call stack.
-// The browser's own (toBase64, fromBase64), where it has them, give the same, sooner:
-// 13 ms, not 50, for a 8.6 MB file.
-function toB64(bytes){
-  if (bytes.toBase64) return bytes.toBase64();
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
+// A file's base64 read into its bytes: a project of v517 or before held it so (sem.js
+// semRestore; b2 keeps the bytes, and makes no base64). The browser's own (fromBase64),
+// where it has it, gives the same, sooner.
 function fromB64(b64){
   if (Uint8Array.fromBase64) return Uint8Array.fromBase64(b64);
   const s = atob(b64), b = new Uint8Array(s.length);
@@ -323,12 +341,13 @@ function cardKey(c, w, h){
   return { pk: `${c.x},${c.y},${c.w},${c.h}|${cw}x${ch}`, w: cw, h: ch };
 }
 function cardLevels(r, c, w, h){ const K = cardKey(c, w, h); return { ...K, px: resample(r.pixels, r.width, c, K.w, K.h) }; }
-/* A file dropped, read whole: { id, r, small, st (its default crop's statistics),
-   card (its card as its own group takes it whole), b64 }. Throws SemReadError where
-   it is not taken. */
+/* A file dropped, read whole: { id, r (its pixels viewed in its bytes where they can
+   be), small, st (its default crop's statistics), card (its card as its own group takes
+   it whole), bytes }. Throws SemReadError where it is not taken. To b2 its base64 too,
+   11.9 MB for a 2048 × 2176 image of 8.9 MB, kept beside it. */
 function readFile(bytes, name){
-  const id = hashBytes(bytes), r = readTescanTiff(bytes, name), c = { x: 0, y: 0, w: r.width, h: r.imageH };
-  return { id, r, small: reducedCopy(r), st: cropStats(r.pixels, r.width, c), card: cardLevels(r, c, r.width, r.imageH), b64: toB64(bytes) };
+  const id = hashBytes(bytes), r = readTescanTiff(bytes, name, { view: true }), c = { x: 0, y: 0, w: r.width, h: r.imageH };
+  return { id, r, small: reducedCopy(r), st: cropStats(r.pixels, r.width, c), card: cardLevels(r, c, r.width, r.imageH), bytes };
 }
 
-export { readTescanTiff, SemReadError, keyValues, hashBytes, toB64, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels, readFile, squarePixels, axisWeights, MAX_SIDE, MAX_PIXELS };
+export { readTescanTiff, SemReadError, keyValues, hashBytes, fromB64, reducedCopy, cropStats, resample, cardKey, cardLevels, readFile, squarePixels, axisWeights, MAX_SIDE, MAX_PIXELS };

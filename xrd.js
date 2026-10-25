@@ -1,4 +1,4 @@
-import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, X_SVG } from './utils.js';
+import { setupDropzone, renderUnifiedFileList, includedOf, setIncluded, removeFileAt, moveFileTo, buildAlertsHtml, nextColor, colorOf, setTabLoaded, registerHistory, registerTabRedraw, registerCsvExport, registerBusy, busyChanged, registerModule, fixed, X_SVG } from './utils.js';
 import { createRietveld, RV_INFO, RV_STD_INFO } from './xrd-rv.js';
 import { createPeakAnalysis, PEAKS_INFO, STD_INFO } from './xrd-peaks.js';
 import { readXrdmlScans, decodeXml } from './xrd-instr.js';
@@ -16,8 +16,25 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
    Caglioti fit that corrects the Scherrer sizes) and its Rietveld refinement (the
    instrumental profile every sample's refinement takes), each opened from its kind of
    card, both on the one standard's file.
+
+   MADE PER TAB (b2): createXrd is the module's factory (utils.js registerModule), each
+   open XRPD tab that is awake an instance of its own, made of its copy of index.html's
+   section (root) and a layer for its windows (the standard's two, each card's
+   settings, the kinds' menu). Its elements are found in root (or in the windows it
+   made), never in the page: its ids are the page's only while it is on show, and a
+   refinement going on while its tab is not on show writes into its own. Its registries
+   go by its key, the tab's id. What it draws is drawn only on show: hidden, a run's
+   results are written and drawn as the tab is shown again (its redraw, goTab). API.md
+   says how a module is made so, from this one.
 ========================================================= */
-(function(){
+/* A file's scans as read, kept by its bytes for every instance (the file's bytes are the
+   same array in the tabs, their histories and their parked states): a tab woken, or an
+   undo, reads none again, and its patterns are the same arrays as before, shared by its
+   history (to b2 one cache per module, its one instance's). */
+const reread = new WeakMap();
+// An XRPD tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
+function createXrd({ key, root, layer, shown }){
+  const $ = id => root.querySelector('#' + id);
   // Every file loaded, in list order; the analysis sees the included ones, `files`, and
   // the per-file arrays the cards keep are aligned with those.
   let allFiles = []; // {name, label, x[], y[], color}
@@ -34,25 +51,26 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
   const ascending = f => f.x.length > 1 && f.x[0] > f.x[f.x.length-1]
     ? { ...f, x: f.x.slice().reverse(), y: f.y.slice().reverse(), ...(f.varMul ? { varMul: f.varMul.slice().reverse() } : {}) } : f;
   /* A pattern's 2θ, intensities and variance factors never change once read (a file read
-     again gives new ones): frozen, so that the undo history's key of a state (stateKey)
-     takes each once, by a hash kept for it, and a view drawn from them is not drawn again
-     for a state that holds the same (to v490 every edit wrote them out, 25 ms with 12
+     again gives new ones): fixed (db.js; to b2v2 frozen, which holds a double in twice the
+     memory), so that the undo history's key of a state (stateKey) takes each once, by a
+     hash kept for it, a state parked shares them, and a view drawn from them is not drawn
+     again for a state that holds the same (to v490 every edit wrote them out, 25 ms with 12
      patterns, and every restore, an undo too, copied them anew, each view drawn again).
      A scan's arrays are made so once, 2θ ascending, and shared by the pattern loaded and
-     every restore of it; a file's of a project with no bytes are frozen where restored. */
-  const frozenArrs = f => { ['x', 'y', 'varMul'].forEach(k=>{ if (Array.isArray(f[k])) Object.freeze(f[k]); }); return f; };
-  const scanArrays = sc => sc.arrs || (sc.arrs = frozenArrs(ascending({ x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) })));
+     every restore of it; a file's of a project with no bytes are fixed where restored. */
+  const fixedArrs = f => { ['x', 'y', 'varMul'].forEach(k=> fixed(f[k])); return f; };
+  const scanArrays = sc => sc.arrs || (sc.arrs = fixedArrs(ascending({ x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) })));
 
   // Delegated click handling for dynamically generated alert dismiss buttons.
-  document.getElementById('tab-xrd').addEventListener('click', (e)=>{
+  root.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-action]');
-    if (!btn || !document.getElementById('tab-xrd').contains(btn)) return;
+    if (!btn || !root.contains(btn)) return;
     if (btn.dataset.action === 'xrd-dismiss-upload'){ xrdUploadAlerts=''; rebuildXrdAlerts(); }
     if (btn.dataset.action === 'xrd-dismiss-invalid'){ xrdLoadAlerts=''; rebuildXrdAlerts(); }
     if (btn.dataset.action === 'xrd-dismiss-notes'){ xrdNoteAlerts=''; rebuildXrdAlerts(); }
   });
   function rebuildXrdAlerts(){
-    document.getElementById('xrdAlerts').innerHTML = xrdLoadAlerts + xrdNoteAlerts + xrdUploadAlerts;
+    $('xrdAlerts').innerHTML = xrdLoadAlerts + xrdNoteAlerts + xrdUploadAlerts;
   }
 
   /* A file read (readXrdmlScans, xrd-instr.js): 2θ, the intensities on the unattenuated
@@ -137,7 +155,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     };
   }
 
-  setupDropzone('xrdDropzone', 'xrdFiles', async (fileList)=>{
+  setupDropzone($('xrdDropzone'), $('xrdFiles'), async (fileList)=>{
     // (by the patterns' names: a file of several scans is tested scan by scan, below)
     const existing = new Set(allFiles.map(f=> f.name));
     const alreadyLoaded = [];
@@ -182,10 +200,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 
   function afterFilesChange(){
     files = includedOf(allFiles);
-    setTabLoaded('xrd', allFiles.length || stdFile ? 1 : 0);
-    renderUnifiedFileList('xrdFileTableWrap', allFiles, fileCallbacks());
+    setTabLoaded(key, allFiles.length || stdFile ? 1 : 0);
+    renderUnifiedFileList($('xrdFileTableWrap'), allFiles, fileCallbacks());
     if (curIdx >= files.length) curIdx = Math.max(0, files.length-1);
-    document.getElementById('xrdAnalyses').style.display = files.length ? 'block' : 'none';
+    $('xrdAnalyses').style.display = files.length ? 'block' : 'none';
     syncResults();
     eachCard(e=> e.inst.refresh());
     hist.commit(); // baseline + file add/remove/reorder/palette
@@ -224,7 +242,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
         <div class="xrd-std-body"></div>
       </div>
     </div>`;
-    document.body.appendChild(m);
+    layer.appendChild(m);
     const box = m.querySelector('.xrd-std-box'), info0 = m.querySelector('.instr-info'), instr = m.querySelector('.xrd-std-instr');
     info0.addEventListener('click', ()=>{
       const open = instr.style.display === 'none';
@@ -235,7 +253,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     m.addEventListener('click', e=>{ if (e.target === m) closeStd(); });
     m.querySelector('.xrd-std-x').onclick = ()=> closeStd();
     m.querySelector('.xrd-std-file').addEventListener('click', e=>{ if (e.target.closest('[data-std-del]')) setStd(null); });
-    setupDropzone(id + 'Dz', id + 'Files', async fl=>{
+    setupDropzone(m.querySelector('#' + id + 'Dz'), m.querySelector('#' + id + 'Files'), async fl=>{
       // One file: of several dropped, the first; it replaces the one loaded. One pattern:
       // of a file of several scans, the first that can be read.
       const f = fl[0];
@@ -278,7 +296,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     stdRv.refresh();
     // Every card takes the standard's correction (or loses it).
     eachCard((e, a)=> a.type === 'scherrer' ? e.inst.sizesChanged() : e.inst.redraw());
-    setTabLoaded('xrd', allFiles.length || stdFile ? 1 : 0);
+    setTabLoaded(key, allFiles.length || stdFile ? 1 : 0);
     hist.commit();
   }
   function openStd(which){
@@ -300,19 +318,20 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     openModal = null;
     document.removeEventListener('keydown', onStdKey);
   }
-  function onStdKey(e){ if (e.key === 'Escape') closeStd(); }
+  // (its tab on show: an Escape in another tab is that tab's)
+  function onStdKey(e){ if (e.key === 'Escape' && shown()) closeStd(); }
 
   const stdPeaks = createPeakAnalysis({
     files: stdFiles, idx: ()=> 0, step: ()=>{}, commit: ()=> hist.commit(), instr: ()=> null,
     // The standard's peaks are the samples' correction: every Scherrer card follows.
     changed: ()=> eachCard((e, a)=>{ if (a.type === 'scherrer') e.inst.sizesChanged(); }),
-    hidden: ()=> openModal !== peaksModal,
+    hidden: ()=> openModal !== peaksModal || !shown(),
   }, peaksModal.body, { prefix: 'xrdStdA', standard: true });
   const stdRv = createRietveld({
     files: stdFiles, allFiles: stdFiles, idx: ()=> 0, step: ()=>{}, commit: ()=> hist.commit(),
     // Refined again or cleared: the samples' results say whether theirs rest on it.
     changed: ()=> eachCard((e, a)=>{ if (a.type === 'rietveld') e.inst.redraw(); }),
-    hidden: ()=> openModal !== rvModal,
+    hidden: ()=> openModal !== rvModal, unseen: ()=> !shown(), layer,
     blocked: ()=> rvCards().some(i=> i.running()) ? 'A sample refinement is running: the standard can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
     onBusy: ()=> syncRv(), ...holder(null),
     // (its run's progress on every Rietveld card's Instrumental standard…)
@@ -331,6 +350,9 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      and the card said nothing ran. */
   const parked = new Map();     // id → { inst, el }
   let restoring = false;
+  let cardsNext = null;         // what the cards of a tab woken or reloaded showed (showNext), by id
+  let patNext = null;           // and the pattern on show, by its name
+  let stdNext = null;           // and the standard's two, its window's (its Scherrer's and its Rietveld's)
   const cards = ()=> deck ? deck.records : [];
   const eachCard = fn => cards().forEach(a=>{ const e = live.get(a.id); if (e) fn(e, a); });
   const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
@@ -354,8 +376,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     rvCards().forEach(i=> i.sync());
     stdRv.sync();
     parked.forEach((e, id)=>{ if (!e.inst.active()){ parked.delete(id); e.inst.destroy(); if (e.inst.res) e.inst.res.remove(); } });
+    // (the tab's time hidden, for its sleep, counted from a job's end: tabs.js)
+    busyChanged(key);
   }
-  registerBusy('xrd', {
+  registerBusy(key, {
     busy: ()=> rvCards().some(i=> i.running()) ? 'A Rietveld refinement' : stdRv.running() ? 'The standard\'s refinement' : null,
     // (the samples first: one waiting for the standard's run stops with it)
     stop: ()=>{ rvCards().forEach(i=> i.cancel()); stdRv.cancel(); },
@@ -399,7 +423,10 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     // kept; up to v477 it went on unseen, its results lost)
     if (prev && was){ if (was.inst.cancel) was.inst.cancel(false); a.states[prev] = was.inst.snapshot(); if (was.inst.destroy) was.inst.destroy(); if (was.inst.res) was.inst.res.remove(); }
     const host = { files: ()=> files, allFiles: ()=> allFiles, idx: ()=> curIdx, step, commit: ()=> hist.commit(),
-      instr: ()=> stdPeaks.instrModel(), irf: ()=> stdRv.irf(), hidden: ()=> deck.isFolded(a),
+      instr: ()=> stdPeaks.instrModel(), irf: ()=> stdRv.irf(), hidden: ()=> deck.isFolded(a) || !shown(),
+      // (its tab not on show: nothing drawn, the tab's redraw draws it as it is shown; the
+      // card still the one of its deck, not set aside by a restore nor closed)
+      unseen: ()=> !shown(), layer, placed: ()=> !!live.get(a.id) && live.get(a.id).el === el,
       openStd: ()=> openStd(a.type === 'rietveld' ? 'rv' : 'peaks'),
       stdLoaded: ()=> !!stdFile, refineStd: tell=> stdRv.run(tell), stopStd: commit=> stdRv.cancel(commit), stdRun: ()=> stdRv.progress(),
       blocked: ()=> stdRv.running() ? 'The standard is being refined: the samples can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
@@ -423,13 +450,13 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     if (e.inst.res) e.inst.res.remove();
     syncResults();
   }
-  const resList = document.getElementById('xrdResList');
+  const resList = $('xrdResList');
   const placeRes = ()=> eachCard(e=>{ if (e.inst.res) resList.appendChild(e.inst.res); });
   // The Results: each card's section (a Scherrer card's, a Rietveld card's), under its
   // name, in card order; the card is there while one is.
   function syncResults(){
     const on = cards().filter(a=> live.has(a.id) && live.get(a.id).inst.res);
-    document.getElementById('xrdResults').style.display = files.length && on.length ? 'block' : 'none';
+    $('xrdResults').style.display = files.length && on.length ? 'block' : 'none';
     on.forEach((a, i)=> live.get(a.id).inst.res.classList.toggle('is-first', i === 0));
   }
   function named(a){
@@ -439,7 +466,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     if (e.inst.res) e.inst.res.querySelector('.res-an-title').textContent = a.name;
   }
   deck = createDeck({
-    list: document.getElementById('xrdAnalyses'), addBar: document.getElementById('xrdAddBar'), addBtn: document.getElementById('xrdAddAn'),
+    list: $('xrdAnalyses'), addBar: $('xrdAddBar'), addBtn: $('xrdAddAn'), layer,
     kinds: KINDS, info: t=> (t === 'scherrer' ? PEAKS_INFO : RV_INFO) + ' ' + cardInfo(true, true),
     body: ()=> '<div class="xrd-card"></div>', make: ()=> ({ states: {} }),
     build: buildCard, drop: dropCard, autoName: a=> KINDS[a.type], named,
@@ -480,13 +507,12 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
      used as it was, with a note where its lowest point is exactly 0. The readings are kept
      by their bytes, so an undo does not read a file again. A pattern is its scan of the
      file (f.scan; the first, none given), so a file of several gives its scans again, in
-     their order. */
-  const reread = new WeakMap();
+     their order. (reread: the module's, above) */
   function readAgain(f){
     const b = f.rawBytes;
     if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')){
       let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
-      return { f: frozenArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
+      return { f: fixedArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
     }
     let all = reread.get(b);
     if (!all){
@@ -497,7 +523,7 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
       reread.set(b, all);
     }
     const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
-    if (sc.error) return { f: frozenArrs(ascending({ ...f })), note: null };
+    if (sc.error) return { f: fixedArrs(ascending({ ...f })), note: null };
     const { varMul: _, ...rest } = f, a = scanArrays(sc);
     const g = { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };
     const old = ascending({ ...f }), n = g.y.length;
@@ -584,14 +610,20 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     stdFile = stdRead ? stdRead.f : null;
     const ci = Number.isFinite(s.curIdx) ? Math.max(0, Math.trunc(s.curIdx)) : 0;
     curIdx = Math.min(ci - [...gone].filter(j=> j < ci).length, Math.max(0, files.length-1));
+    // (a wake's or a reload's: the pattern its tab showed, by its name, over the record's state,
+    // which a step writes no sooner than the next change: showNext)
+    if (patNext != null){ const k = files.findIndex(f=> f.name === patNext); if (k >= 0) curIdx = k; patNext = null; }
     stdPeaks.restore(isObj(s.stdPeaks) ? s.stdPeaks : {});
     stdRv.restore(isObj(s.stdRv) ? s.stdRv : {}, step);
+    if (stdNext){ const v = stdNext; stdNext = null; if (isObj(v.peaks)) stdPeaks.showNext(v.peaks); if (isObj(v.rv)) stdRv.showNext(v.rv); }
     restoring = true;
     try {
       deck.load(Array.isArray(s.cards) ? s.cards.filter(c=> isObj(c) && (c.type == null || isKind(c.type))) : [],
         src=> ({ states: Object.fromEntries(Object.entries(clone(isObj(src.states) ? src.states : {})).filter(([k])=> isKind(k)).map(([k, v])=> [k, keptState(k, v, gone)]).filter(([, v])=> v)) }),
         a=> live.get(a.id).inst.restore(a.states[a.type] || {}, step));
     } finally { restoring = false; }
+    // (what its cards showed, given as its tab woke or the page was reloaded: showNext)
+    if (cardsNext){ const v = cardsNext; cardsNext = null; eachCard((e, a)=>{ if (e.inst.showNext && isObj(v[a.id])) e.inst.showNext(v[a.id]); }); }
     clearStdAlerts();
     syncStdFile();
     stdPeaks.refresh();
@@ -604,9 +636,9 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     if (notes.length) xrdNoteAlerts = buildAlertsHtml([], notes, 'Restored, with a caveat:', '', 'xrd-dismiss-notes');
     rebuildXrdAlerts();
   }
-  const hist = registerHistory('xrd', xrdSnapshot, xrdRestore);
+  const hist = registerHistory(key, xrdSnapshot, xrdRestore);
 
-  registerTabRedraw('xrd', ()=>{
+  registerTabRedraw(key, ()=>{
     deck.fitNames();
     if (files.length) eachCard((e, a)=>{ if (!deck.isFolded(a)) e.inst.redraw(); });
     if (openModal === peaksModal) stdPeaks.redraw();
@@ -620,8 +652,46 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
     out.push(...stdPeaks.csvEntries(''), ...stdRv.csvEntries('standard - '));
     return out;
   }
-  registerCsvExport('xrd', exportXrdZip);
+  registerCsvExport(key, exportXrdZip);
 
   // A new project starts with a Scherrer card and a Rietveld one.
   deck.start(['scherrer', 'rietveld']);
-})();
+
+  /* ---- The instance (tabs.js) ---- */
+  return {
+    /* Let go (its tab closed or put to sleep; a state read out for its CSVs): every run
+       stopped as Cancel does (the patterns done kept in the state the tab parks first; a
+       tab asleep was idle), every card's panel destroyed (their workers' jobs cancelled,
+       their windows, 3D views and listeners let go), the standard's two, the deck's menu,
+       the window's key listener. Its section and layer are the shell's to take out. */
+    destroy(){
+      [...rvCards()].forEach(i=>{ try { i.cancel(false); } catch(e){} });
+      try { stdRv.cancel(false); } catch(e){}
+      closeStd();
+      [...live.values(), ...parked.values()].forEach(e=>{ try { if (e.inst.destroy) e.inst.destroy(); } catch(err){} });
+      live.clear(); parked.clear();
+      [stdPeaks, stdRv].forEach(i=>{ try { i.destroy(); } catch(e){} });
+      deck.destroy();
+    },
+    /* What it shows beside its state (b2v4: tabs.js, utils.js shownOf): the pattern on show,
+       by its name, each card's own, by its id (a Scherrer card's peak picked; a Rietveld
+       card's peak picked, its crystallites' turns, its phase on show and its cell's turn),
+       and the standard's window's two alike (std), given back as its tab wakes or the page
+       is reloaded, to the restore. The pattern on show is in its state too (curIdx, v517:
+       an undo goes back to its step's, a project saved reopens on it), but a step is no
+       change, and its record held the one before till the next (to b2v4 a reload showed it). */
+    shows(){
+      const out = {}, std = {}, has = o => Object.keys(o).length > 0;
+      eachCard((e, a)=>{ const v = e.inst.shows && e.inst.shows(); if (v) out[a.id] = v; });
+      [['peaks', stdPeaks], ['rv', stdRv]].forEach(([k, i])=>{ const v = i.shows(); if (v) std[k] = v; });
+      const f = files[curIdx], v = { ...(f ? { pattern: f.name } : {}), ...(has(out) ? { cards: out } : {}), ...(has(std) ? { std } : {}) };
+      return has(v) ? v : null;
+    },
+    showNext(v){
+      cardsNext = isObj(v) && isObj(v.cards) ? v.cards : null;
+      patNext = isObj(v) && typeof v.pattern === 'string' ? v.pattern : null;
+      stdNext = isObj(v) && isObj(v.std) ? v.std : null;
+    },
+  };
+}
+registerModule('xrd', createXrd);

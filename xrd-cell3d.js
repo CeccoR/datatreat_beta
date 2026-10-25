@@ -230,6 +230,26 @@ export function cellView(container, opts = {}){
       draw();
     },
     redraw: request,
+    /* How the cell is turned, as plain numbers (JSON-safe), null at the home view; setView
+       puts one back on the phase on show (b2v4: what the Rietveld card shows, kept as its
+       tab sleeps and in its record, xrd-rv.js shows). A rotation, or near enough to be put
+       right; anything else (a mirror, a squashed matrix) is not a view and is ignored. */
+    getView(){
+      const H = viewAt(HOME_AZ, HOME_EL);
+      return !model || R.every((x, i) => x === H[i]) ? null : { R: R.slice() };
+    },
+    setView(v){
+      if (dead || !model || !v || !Array.isArray(v.R) || v.R.length !== 9) return false;
+      const M = v.R.map(Number);
+      if (!M.every(Number.isFinite)) return false;
+      const [a, b, c] = [M.slice(0, 3), M.slice(3, 6), M.slice(6, 9)], dot = (u, w) => u[0]*w[0] + u[1]*w[1] + u[2]*w[2];
+      const err = Math.max(...[a, b, c].map(u => Math.abs(dot(u, u) - 1)), Math.abs(dot(a, b)), Math.abs(dot(b, c)), Math.abs(dot(a, c)));
+      const det = dot(a, [b[1]*c[2] - b[2]*c[1], b[2]*c[0] - b[0]*c[2], b[0]*c[1] - b[1]*c[0]]);
+      if (err > 1e-3 || det < 0.5) return false;
+      R = err < 1e-12 ? M : reortho(M);
+      request();
+      return true;
+    },
     png(){
       if (dead || !model) return null;
       const Sz = S || 260, r = Math.max(2, window.devicePixelRatio || 1);

@@ -162,6 +162,12 @@
           <option value=";" selected>; (semicolon)</option>
           <option value=",">, (comma)</option>
         </select>
+        <h3 class="txt-head" style="margin:20px 0 6px">Tabs in the background</h3>
+        <div class="instr-block">A tab you leave keeps working, a refinement going on, and comes back at once. Left alone for the minutes set here, it sleeps: its state and its whole undo history are kept, and it wakes when you show it again, in about the time a project takes to open. A tab still working never sleeps. Any number of tabs can be open; beyond the tabs awake set here, the one you showed least lately sleeps first.</div>
+        <label class="txt-label" style="margin-top:0" for="settingSleepMin">Sleep after (minutes not on show)</label>
+        <input type="number" id="settingSleepMin" min="0.1" max="1440" step="0.1" value="10">
+        <label class="txt-label" style="margin-top:14px" for="settingAwakeMax">Tabs awake at most, the one on show among them</label>
+        <input type="number" id="settingAwakeMax" min="1" max="1000" step="1" value="20">
         <h3 class="txt-head" style="margin:20px 0 6px">Keyboard shortcuts</h3>
         <div class="shortcut-list">
           <div><span><span class="kbd">&#8592;</span> <span class="kbd">&#8594;</span></span><span>Previous / next sample</span></div>
@@ -404,7 +410,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v517</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v518</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;

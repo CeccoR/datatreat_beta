@@ -1,4 +1,4 @@
-import { settings, redrawAll, makeCsvButton, fitCsvIcons, fitPlotIcons } from './utils.js';
+import { settings, redrawAll, makeCsvButton, fitCsvIcons, fitPlotIcons, zoomAgain } from './utils.js';
 
 /* =========================================================
    SVG PLOT HELPER (shared)
@@ -113,6 +113,16 @@ function labelText(t, text, runs){
 }
 // A figure composer is being opened from a plot's toolbar (figBtn, in attachTools).
 let _figOpening = false;
+/* An element by its id (a plot's svg, its legend), looked for from `from` outward: in its
+   plot's box, its card, its section or window first, then in the page. A module made per
+   tab (b2) has the same ids in each instance, only the one on show in the page: its
+   buttons find their own instance's elements, in the page or not. */
+function near(from, id){
+  if (!id) return null;
+  const sel = '#' + CSS.escape(id);
+  for (let a = from && from.parentElement; a; a = a.parentElement){ const e = a.querySelector(sel); if (e) return e; }
+  return document.getElementById(id);
+}
 class Plot{
   constructor(svg, opts){
     this.svg = svg;
@@ -156,6 +166,8 @@ class Plot{
     this.xmin=xmin; this.xmax=xmax; this.ymin=ymin; this.ymax=ymax;
     this._origXmin=xmin; this._origXmax=xmax; this._origYmin=ymin; this._origYmax=ymax;
     this._stored=[];
+    // (the zoom it had before its tab slept or the page was reloaded, on this same range)
+    zoomAgain(this);
   }
   clearData(){
     this._stored=[]; this.gData.innerHTML=''; this.gOverlay.innerHTML='';
@@ -551,7 +563,7 @@ class Plot{
     snapBtn.className = 'btn plot-tool-btn';
     snapBtn.title = 'Download current view';
     snapBtn.innerHTML = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5a1.5 1.5 0 0 1 1.5-1.5h2l1.2-2h6.6l1.2 2h2A1.5 1.5 0 0 1 20 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3"/></svg>`;
-    const viewLeg = ()=>{ const d=col.querySelector('.plot-dl-btn'); return d && d.dataset.dlLegend ? document.getElementById(d.dataset.dlLegend) : null; };
+    const viewLeg = ()=>{ const d=col.querySelector('.plot-dl-btn'); return d && d.dataset.dlLegend ? near(d, d.dataset.dlLegend) : null; };
     snapBtn.onclick = ()=>{
       const dlBtn = col.querySelector('.plot-dl-btn');
       const baseName = dlBtn && dlBtn.dataset.dlName ? dlBtn.dataset.dlName.replace(/\.[^.]+$/, '') : 'plot';
@@ -602,7 +614,7 @@ class Plot{
       try {
         const mod = await import('./figure.js');
         if (!document.querySelector('.fig-backdrop'))
-          mod.openFigureEditor(this, { legendEl: legId ? document.getElementById(legId) : null, name });
+          mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name });
       } catch(err){ console.error('figure composer failed to load', err); }
       finally { _figOpening = false; }
     };
@@ -1001,8 +1013,8 @@ function downloadSvgClean(svgNode, filename, legendEl, currentView, asBlob){
 document.addEventListener('click', e=>{
   const btn = e.target.closest('[data-dl-svg]');
   if (!btn) return;
-  const el = document.getElementById(btn.dataset.dlSvg);
-  const legEl = btn.dataset.dlLegend ? document.getElementById(btn.dataset.dlLegend) : null;
+  const el = near(btn, btn.dataset.dlSvg);
+  const legEl = btn.dataset.dlLegend ? near(btn, btn.dataset.dlLegend) : null;
   if (el) downloadSvgClean(el, btn.dataset.dlName || btn.dataset.dlSvg+'.svg', legEl);
 });
 

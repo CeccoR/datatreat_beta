@@ -1,6 +1,6 @@
 import { svgEl, niceTicks, fmtTick, SUB_DROP, TILT_DY } from './plot.js';
 import { colorPickerUI, palettePickerUI, CP_PALETTES, X_SVG, tiltFits, flashFieldInvalid, dropGap, esc } from './utils.js';
-import { activeTab, TABS } from './tabs.js';
+import { tabOf, TABS } from './tabs.js';
 
 // Local saver: downloadBlob() in utils is hard-wired to text/csv, and we need
 // image mime types (and to save an already-built Blob for PNG).
@@ -1767,7 +1767,8 @@ function applySettings(snap){
    is yours to edit, and a key that followed it would file the settings under the new
    name on closing and look for them under the page's on reopening. */
 const MEM_KEY = 'dt-figure-memory';
-const memKey = ()=> ((activeTab() || {}).id || 'none') + '/' + ((srcOpts && srcOpts.name) || 'figure');
+// (the tab is the one whose instance holds the plot, on show or not: tabs.js tabOf)
+const memKey = ()=> ((tabOf(srcPlot && srcPlot.svg) || {}).id || 'none') + '/' + ((srcOpts && srcOpts.name) || 'figure');
 function loadMemory(){
   try { const o = JSON.parse(localStorage.getItem(MEM_KEY)); return (o && typeof o === 'object') ? o : {}; }
   catch(e){ return {}; }
