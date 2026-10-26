@@ -1,0 +1,29 @@
+--- /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/engine/xrd-rietveld.js	2026-10-26 07:11:51.000000000 +0000
++++ /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/gen/eng/xrd-rietveld.js	2026-10-26 11:26:41.593158557 +0000
+@@ -2356,6 +2356,8 @@
+     if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
+     const nodes = axialOn(A) ? lineNodes(model, -1 - ((k*model.rStride + r)*64 + i)*4 - j, th, A, pr.H, sollerTol(model, S*Im, pr.H, pr.eta)) : null;
+     addLine(out, x, tt, pr.H, pr.eta, Im, nodes, win);
++    // [gen] the exact size line's difference from this Lorentzian
++    if (model.sizeHook) model.sizeHook(out, { q, k, r, j, i, th, tt, I: Im, nodes, half, H: pr.H, eta: pr.eta, rest: profileAtTheta(th, U, V, W, X, Y), w: wv[i], lam: model.lines[j].lam });
+   }
+   // The tick: the line's intensity with its texture, its width the members' mean
+   // (weighed as their intensities).
+@@ -2533,6 +2535,8 @@
+       if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
+       const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, pr.H, sollerTol(model, S*I, pr.H, pr.eta)) : null;
+       addLine(out, x, tt, pr.H, pr.eta, I, nodes, win);
++      // [gen] the exact size line's difference from this Lorentzian
++      if (model.sizeHook && Ys > 0) model.sizeHook(out, { q, k, r, j, i: -1, th, tt, I, nodes, half, H: pr.H, eta: pr.eta, rest: profileAtTheta(th, U, V, W, Xr, Yr - lr*Ys), w: Ys, lam: L.lam });
+       if (ticks && j === 0 && tt >= xa && tt <= xb)
+         ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
+                      tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: pr.H, eta: pr.eta, j: 0, pk: k, r });
+@@ -4580,3 +4584,8 @@
+          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
+          fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
+          phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };
++
++// [gen] internals for the generator (read-only)
++const ENG = { BODIES, columnLengthV, shapeWidths, shapeTs, bodyFrame, quatMat, quatOfMat, quatMul, quatOfRot, profileAtTheta, tch, lowIndexPlanes,
++  textureWeights, textureAxis, memberVectors, phasePattern, lineHalf, K_SCHERRER, D2R, R2D, WIN_FWHM, TAIL_NOISE };
++export { ENG };

@@ -1,0 +1,54 @@
+--- /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/engine/xrd-rietveld.js	2026-10-26 07:11:51.000000000 +0000
++++ /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/harness/eng/xrd-rietveld.js	2026-10-26 11:21:42.757165393 +0000
+@@ -2464,7 +2464,10 @@
+ 
+ /* One phase's pattern at scale 1 into `out` (zeroed here). With `ticks`, the α1 line of
+    every reflection in the range is listed there too. */
+-function phasePattern(model, v, k, out, ticks){
++// [harness] one pattern evaluation per call
++const FS = { evals: 0, log: null, k: -1, t0: 0 };
++function phasePattern(model, v, k, out, ticks){ FS.evals++; return phasePattern_(model, v, k, out, ticks); }
++function phasePattern_(model, v, k, out, ticks){
+   out.fill(0);
+   const q = model.phases[k];
+   const cell = cellOf(model, v, k), { Gs } = metric(cell);
+@@ -2830,7 +2833,20 @@
+    user's LaB6 had suggested stopped one pass short from 0.005 at A = 0.15: the asymmetry
+    3 esd off and χ²_ν 0.3 % high (8.6 esd and 0.3 % on Si). FCJ_PASSES only stops a cycle. */
+ const FCJ_PASSES = 10;
++// [harness] each refine() of the search logged
+ function refine(model, opts = {}){
++  if (!FS.log) return refine_(model, opts);
++  const q = model.phases[FS.k], e0 = FS.evals, t0 = Date.now(), idx = q ? [...(q.iW || q.iL || []), ...(q.iR || []), ...(q.iQ || [])] : [];
++  const at = () => idx.map(i=> model.v[i]);
++  const rec = { maxIter: opts.maxIter, audit: opts.audit !== false, nFree: (opts.free || []).length, soft: !!model.shapeSoft, rotFree: !!(q && q.iR && q.iR.some(i=> (opts.free || []).includes(model.par[i].name))), from: at() };
++  try {
++    const r = refine_(model, opts);
++    Object.assign(rec, { iterations: r.iterations, evals: FS.evals - e0, ms: Date.now() - t0, chi2: r.stats.chi2*Math.max(1, r.stats.N - r.stats.P), chi2nu: r.stats.chi2, P: r.stats.P, to: at(), evalsAt: FS.evals, tAt: Date.now() - FS.t0 });
++    return r;
++  } catch(e){ Object.assign(rec, { error: String(e && e.message || e), evals: FS.evals - e0, ms: Date.now() - t0, evalsAt: FS.evals, tAt: Date.now() - FS.t0 }); throw e; }
++  finally { FS.log.push(rec); }
++}
++function refine_(model, opts = {}){
+   // The FCJ node counts held for the whole refinement (lineNodes). When the refinement
+   // has carried a line past its held count (the asymmetry, freed from 0.02, went to 0.058
+   // on the user's standard: tails 8× longer than the count was made for, and χ² 8 % off
+@@ -3699,7 +3715,7 @@
+       for (const k of searchKs){
+         const j = searchKs.indexOf(k), part = (1 - share)/searchKs.length;
+         progRaw(share + j*part, `free shape of ${nm(k)}`);
+-        const r = freeShape(model, k, res, lastFree, { ...opts, fit: F, onShape: f=> progRaw(share + (j + f)*part, `free shape of ${nm(k)}`) });
++        const r = (opts.shapeHook || freeShape)(model, k, res, lastFree, { ...opts, fit: F, onShape: f=> progRaw(share + (j + f)*part, `free shape of ${nm(k)}`) });
+         if (r && r.res){ res = r.res; shapes[model.phases[k].id] = r.info; lastFree = r.res.free; }
+         else if (r && r.rejected) warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) is not supported by the data (ΔBIC ${r.early ? 'about ' : ''}${r.dBIC >= 0 ? '+' : ''}${r.dBIC.toFixed(0)}${r.early ? ' from the trial shapes' : ''}, needs under −10): the isotropic size is kept.`);
+         else warnings.push(`${nm(k)}: the free shape (${model.phases[k].shapeType}) could not be refined; the isotropic size is kept.`);
+@@ -4580,3 +4596,9 @@
+          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
+          fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
+          phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };
++
++// [harness] internals for the methods
++const ENG = { FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
++  lowIndexAxes, lattDirection, latticeAcross, shapeWidths, shapeTs, columnLengthV, SHAPE_SOFT, SHAPE_STARTS, SHAPE_FULL, fitSettings, shapeOf, turnEsds,
++  bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern, cartOp, properOp };
++export { ENG };
