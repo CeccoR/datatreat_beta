@@ -3,23 +3,34 @@
 Eleven fictitious phases, one per Laue class, for the synthetic tests of the free shape
 (`research/free-shape/PROTOCOL.md`). They are kept simple and cheap: a small primitive cell,
 Zn at the origin and O on one site. Paths below are relative to this folder,
-`/tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/phases`.
+`$W/fs2/phases`.
 Node 22: `/opt/node22/bin/node`. The engine is the frozen b9bef5f copy, through
 `../harness/eng` (instrumented only; `../harness/make-eng.mjs`).
 
-## Changed by the pilot (2026-10-26)
+## Changed by the pilot (2026-10-26) and its verification
 
-The pilot (`../pilot`, `research/free-shape/round2/PILOT.md`) set cells, range and step by
-cost. It scaled the three costliest cells, **P−1, P2/m and Pmmm, by 0.8 in every length**
-(`scale` in `make-phases.mjs`; angles and fractional coordinates kept): their search cost
-1.5–4× the others' per evaluation, through the model's long lists. Volumes are now 28.4,
-27.6 and 26.7 Å³. The other eight are unchanged (their CIFs byte for byte). The first cells
-are in `cif-v1/`, their checks in `phases-v1.json`, `phases-nofit-v1.json` and
-`check-v1.log`; `phases.json` and `check.log` are the checks re-run on the new cells (all
-pass: the intended group and class, members = mult/2, no closest pair under 0.01°, the
-isotropic fits χ²_ν 0.97–1.01). Round 2 runs on 10–100° (the pilot's range), where the three
-have 58, 56 and 53 members against 101–112 for the others. The tables below are the first
-cells' unless the row says otherwise.
+The pilot (`../pilot`, `research/free-shape/round2/PILOT.md`) set cells and range by cost.
+**Every cell is scaled by 0.8 in every length** (`scale` in `make-phases.mjs`; angles and
+fractional coordinates kept), and round 2 runs on **10–110°**. The members in range stay equal
+across the classes, as the first cells were built for: 60–73 in 10–110° (P−1 70, P2/m 71, Pmmm
+68, P4/m 67, P4/mmm 68, −3 61, −3m 67, 6/m 69, 6/mmm 60, m−3 73, m−3m 73).
+
+The pilot's first decision scaled only P−1, P2/m and Pmmm, with 10–100°. Its verification set
+it aside: it left those three with 53–58 members against 101–112 for the others, which ties the
+Laue class to the member count in any reading over the design, and it cost more (PILOT.md §5).
+The first cells are in `cif-v1/` (`phases-v1.json`, `phases-nofit-v1.json`, `check-v1.log`), the
+first decision's in `cif-c3/` (`phases-c3.json`, `phases-nofit-c3.json`, `check-c3.log`).
+`phases.json` and `check.log` are the checks on the final cells. All pass:
+- every phase reads to its intended group and class, with the class's order of operations;
+- members = mult/2 for every reflection;
+- no pair of distinct reflections closer than 0.0109° in 10–130° (P−1 at 94°; then P2/m 0.021°,
+  the rest 0.19° or more);
+- the isotropic fits from the CIF (10 nm, ε 0.1 %): χ²_ν 0.971–1.030, D 9.89–10.14 nm, the cells
+  within 7·10⁻⁵.
+
+Volumes are 26.6–28.4 Å³. The shortest distances are 1.15–2.62 Å: 6/m's O–O is 1.15 Å, under
+the 1.4 Å the first cells kept. The phases are fictitious and the engine takes no notice; it is
+noted, not changed. The tables below are the first cells' unless the row says otherwise.
 
 ## The rule
 

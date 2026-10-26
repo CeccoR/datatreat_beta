@@ -1,4 +1,8 @@
-## Cost (11 runs: cost)
+# Pilot: the first cost runs (PILOT.md §4.1)
+
+One clean truth per class on the first cells and 10–130°/0.01°, scored with the fixed harness (`pilot/fix/rescore.mjs`: unbounded extents +∞, spheroids and square boxes paired by role). `report.mjs --tag cost-rescored`.
+
+## Cost (11 runs: cost-rescored)
 
 Per run: members in range (generator) and in the model's list; isotropic fit; today's search and report; the truth reference. Wall times in s, one process each, nice 15.
 
@@ -38,14 +42,14 @@ Mean iso+search+report: 375.4 s (median 249.0, max 1330.9); mean whole run with 
 
 Signed errors of the extents, the truth's thinnest, middle and longest (median, and the 10th–90th percentiles); the truth's most distinct axis (°, median and 90th percentile). "ref": the truth reference (refined from the truth, no search); "today": today's reported solid (kept runs). χ²_ν: the truth reference's.
 
-| solid | kernel | runs | ref thinnest | ref middle | ref longest | ref axis ° | ref χ²_ν | today kept | today thinnest | today longest | today axis ° |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| box | exact | 2 | +21 % (+12 %…+29 %) | +0 % (-14 %…+15 %) | -26 % (-49 %…-3 %) | 9.0 (13.3) | 2.53 | 2 | +22 % (+12 %…+32 %) | -25 % (-48 %…-3 %) | 7.4 (10.5) |
-| sqbox | exact | 2 | +16 % (+1 %…+30 %) | +16 % (+1 %…+30 %) | -5 % (-6 %…-5 %) | 2.6 (4.6) | 2.97 | 2 | +13 % (-3 %…+29 %) | -10 % (-14 %…-6 %) | 2.6 (4.7) |
-| cylinder | exact | 2 | +26 % (+20 %…+32 %) | +11 % (+9 %…+12 %) | +11 % (+9 %…+12 %) | 7.3 (12.2) | 1.07 | 2 | +25 % (+20 %…+31 %) | +10 % (+10 %…+11 %) | 8.3 (13.8) |
-| ellcyl | exact | 2 | +37 % (+21 %…+54 %) | +24 % (-3 %…+51 %) | -14 % (-26 %…-1 %) | 6.4 (11.5) | 4.76 | 2 | +380 % (+295 %…+465 %) | -62 % (-82 %…-43 %) | 56.0 (81.9) |
-| ellipsoid | exact | 2 | +50 % (+19 %…+80 %) | +1 % (-22 %…+24 %) | -36 % (-52 %…-20 %) | 0.0 (0.0) | 1.05 | 1 | +11 % (+11 %…+11 %) | -17 % (-17 %…-17 %) | 0.0 (0.0) |
-| spheroid | exact | 1 | +47 % (+47 %…+47 %) | +2 % (+2 %…+2 %) | +2 % (+2 %…+2 %) | 43.4 (43.4) | 1.17 | 1 | +46 % (+46 %…+46 %) | +1 % (+1 %…+1 %) | 44.1 (44.1) |
+| solid | kernel | runs | ref thinnest | ref middle | ref longest | ref unbounded | ref axis ° | ref χ²_ν | today kept | today thinnest | today longest | today axis ° |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| box | exact | 2 | +21 % (+12 %…+29 %) | +0 % (-14 %…+15 %) | -26 % (-49 %…-3 %) | 0 | 9.0 (13.3) | 2.53 | 2 | +22 % (+12 %…+32 %) | -25 % (-48 %…-3 %) | 7.4 (10.5) |
+| sqbox | exact | 2 | +16 % (+1 %…+30 %) | +16 % (+1 %…+30 %) | -5 % (-6 %…-5 %) | 0 | 2.6 (4.6) | 2.97 | 2 | +13 % (-3 %…+29 %) | -10 % (-14 %…-6 %) | 2.6 (4.7) |
+| cylinder | exact | 2 | +26 % (+20 %…+32 %) | +11 % (+9 %…+12 %) | +11 % (+9 %…+12 %) | 0 | 7.3 (12.2) | 1.07 | 2 | +25 % (+20 %…+31 %) | +10 % (+10 %…+11 %) | 8.3 (13.8) |
+| ellcyl | exact | 2 | +37 % (+21 %…+54 %) | +24 % (-3 %…+51 %) | -14 % (-26 %…-1 %) | 0 | 6.4 (11.5) | 4.76 | 2 | +380 % (+295 %…+465 %) | -62 % (-82 %…-43 %) | 56.0 (81.9) |
+| ellipsoid | exact | 2 | +50 % (+19 %…+80 %) | +1 % (-22 %…+24 %) | -36 % (-52 %…-20 %) | 0 | 0.0 (0.0) | 1.05 | 1 | +11 % (+11 %…+11 %) | -17 % (-17 %…-17 %) | 0.0 (0.0) |
+| spheroid | exact | 1 | +47 % (+47 %…+47 %) | +2 % (+2 %…+2 %) | +2 % (+2 %…+2 %) | 0 | 43.4 (43.4) | 1.17 | 1 | +46 % (+46 %…+46 %) | +1 % (+1 %…+1 %) | 44.1 (44.1) |
 
 By the model error (truth reference, all solids):
 
@@ -85,48 +89,48 @@ By Laue class (truth reference, clean truths):
 
 ## Today's search (11 runs)
 
-| set | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| truths | 11 | 6 | 4 | 1 (1) | 8 / 10 | 2 | 0 | +33 % (+295 %) | +33 % | 8.2 (48.5) | 8.2 | 4985 | 262.5 | 64.3 | 48.6 |
+| set | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | unbounded extent | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| truths | 11 | 6 | 4 | 1 (1) | 8 / 10 | 2 | 0 | 0 | +33 % (+295 %) | +33 % | 8.2 (48.5) | 8.2 | 4985 | 262.5 | 64.3 | 48.6 |
 
-| solid | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| box | 2 | 0 | 2 | 0 (0) | 1 / 2 | 1 | 0 | +36 % (+50 %) | +22 % | 7.4 (10.5) | 7.4 | 5825 | 498.2 | 116.8 | 214.9 |
-| sqbox | 2 | 2 | 0 | 0 (0) | 2 / 2 | 0 | 0 | +24 % (+31 %) | +13 % | 2.6 (4.7) | 2.6 | 5703 | 401.8 | 70.2 | 26.0 |
-| cylinder | 2 | 1 | 1 | 0 (0) | 2 / 2 | 0 | 0 | +25 % (+31 %) | +25 % | 8.3 (13.8) | 7.4 | 4269 | 187.7 | 38.1 | 12.0 |
-| ellcyl | 2 | 1 | 1 | 0 (0) | 1 / 2 | 1 | 0 | +380 % (+465 %) | +380 % | 56.0 (81.9) | 56.0 | 6462 | 192.0 | 63.9 | 6.9 |
-| ellipsoid | 2 | 1 | 0 | 1 (1) | 1 / 1 | 0 | 0 | +29 % (+29 %) | +11 % | 0.0 (0.0) | 0.0 | 3494 | 104.9 | 34.2 | 4.0 |
-| spheroid | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | +46 % (+46 %) | +46 % | 44.1 (44.1) | 44.1 | 3337 | 118.7 | 60.6 | 7.0 |
+| solid | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | unbounded extent | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| box | 2 | 0 | 2 | 0 (0) | 1 / 2 | 1 | 0 | 0 | +36 % (+50 %) | +22 % | 7.4 (10.5) | 7.4 | 5825 | 498.2 | 116.8 | 214.9 |
+| sqbox | 2 | 2 | 0 | 0 (0) | 2 / 2 | 0 | 0 | 0 | +24 % (+31 %) | +13 % | 2.6 (4.7) | 2.6 | 5703 | 401.8 | 70.2 | 26.0 |
+| cylinder | 2 | 1 | 1 | 0 (0) | 2 / 2 | 0 | 0 | 0 | +25 % (+31 %) | +25 % | 8.3 (13.8) | 7.4 | 4269 | 187.7 | 38.1 | 12.0 |
+| ellcyl | 2 | 1 | 1 | 0 (0) | 1 / 2 | 1 | 0 | 0 | +380 % (+465 %) | +380 % | 56.0 (81.9) | 56.0 | 6462 | 192.0 | 63.9 | 6.9 |
+| ellipsoid | 2 | 1 | 0 | 1 (1) | 1 / 1 | 0 | 0 | 0 | +29 % (+29 %) | +11 % | 0.0 (0.0) | 0.0 | 3494 | 104.9 | 34.2 | 4.0 |
+| spheroid | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +46 % (+46 %) | +46 % | 44.1 (44.1) | 44.1 | 3337 | 118.7 | 60.6 | 7.0 |
 
-| sphere searched as | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| sphere searched as | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | unbounded extent | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 
-| class | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| -1 | 1 | 0 | 1 | 0 (0) | 1 / 1 | 0 | 0 | +18 % (+18 %) | +10 % | 3.5 (3.5) | 3.5 | 5074 | 718.3 | 188.7 | 423.9 |
-| 2/m | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | +15 % (+15 %) | -7 % | 5.2 (5.2) | 5.2 | 8474 | 717.0 | 122.1 | 49.4 |
-| mmm | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | +18 % (+18 %) | +18 % | 1.5 (1.5) | 1.5 | 5724 | 286.1 | 44.1 | 15.9 |
-| 4/m | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | +46 % (+46 %) | +46 % | 44.1 (44.1) | 44.1 | 3337 | 118.7 | 60.6 | 7.0 |
-| 4/mmm | 1 | 0 | 1 | 0 (0) | 0 / 1 | 1 | 0 | +53 % (+53 %) | +34 % | 11.3 (11.3) | 11.3 | 6575 | 278.1 | 44.8 | 5.8 |
-| -3 | 1 | 0 | 1 | 0 (0) | 1 / 1 | 0 | 0 | +33 % (+33 %) | +33 % | 15.1 (15.1) | 13.3 | 2814 | 89.3 | 32.2 | 8.1 |
-| -3m | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | +29 % (+29 %) | +11 % | 0.0 (0.0) | 0.0 | 4834 | 162.0 | 68.5 | 5.3 |
-| 6/m | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | +273 % (+273 %) | +273 % | 23.7 (23.7) | 23.7 | 6362 | 165.7 | 77.9 | 5.4 |
-| 6/mmm | 1 | 0 | 1 | 0 (0) | 0 / 1 | 1 | 0 | +486 % (+486 %) | +486 % | 88.4 (88.4) | 88.4 | 6561 | 218.4 | 49.9 | 8.5 |
-| m-3 | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | +33 % (+33 %) | +33 % | 0.0 (0.0) | 0.0 | 2931 | 86.7 | 18.3 | 2.6 |
-| m-3m | 1 | 0 | 0 | 1 (1) | 0 / 0 | 0 | 0 | — | — | — | — | 2153 | 47.7 | 0.0 | 2.6 |
+| class | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | unbounded extent | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| -1 | 1 | 0 | 1 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +18 % (+18 %) | +10 % | 3.5 (3.5) | 3.5 | 5074 | 718.3 | 188.7 | 423.9 |
+| 2/m | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +15 % (+15 %) | -7 % | 5.2 (5.2) | 5.2 | 8474 | 717.0 | 122.1 | 49.4 |
+| mmm | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +18 % (+18 %) | +18 % | 1.5 (1.5) | 1.5 | 5724 | 286.1 | 44.1 | 15.9 |
+| 4/m | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +46 % (+46 %) | +46 % | 44.1 (44.1) | 44.1 | 3337 | 118.7 | 60.6 | 7.0 |
+| 4/mmm | 1 | 0 | 1 | 0 (0) | 0 / 1 | 1 | 0 | 0 | +53 % (+53 %) | +34 % | 11.3 (11.3) | 11.3 | 6575 | 278.1 | 44.8 | 5.8 |
+| -3 | 1 | 0 | 1 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +33 % (+33 %) | +33 % | 15.1 (15.1) | 13.3 | 2814 | 89.3 | 32.2 | 8.1 |
+| -3m | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +29 % (+29 %) | +11 % | 0.0 (0.0) | 0.0 | 4834 | 162.0 | 68.5 | 5.3 |
+| 6/m | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +273 % (+273 %) | +273 % | 23.7 (23.7) | 23.7 | 6362 | 165.7 | 77.9 | 5.4 |
+| 6/mmm | 1 | 0 | 1 | 0 (0) | 0 / 1 | 1 | 0 | 0 | +486 % (+486 %) | +486 % | 88.4 (88.4) | 88.4 | 6561 | 218.4 | 49.9 | 8.5 |
+| m-3 | 1 | 1 | 0 | 0 (0) | 1 / 1 | 0 | 0 | 0 | +33 % (+33 %) | +33 % | 0.0 (0.0) | 0.0 | 2931 | 86.7 | 18.3 | 2.6 |
+| m-3m | 1 | 0 | 0 | 1 (1) | 0 / 0 | 0 | 0 | 0 | — | — | — | — | 2153 | 47.7 | 0.0 | 2.6 |
 
-| orientation | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| on | 3 | 2 | 1 | 0 (0) | 2 / 3 | 1 | 0 | +33 % (+396 %) | +33 % | 0.0 (70.7) | 0.0 | 4775 | 155.7 | 45.6 | 5.5 |
-| near | 5 | 2 | 2 | 1 (1) | 4 / 4 | 0 | 0 | +18 % (+29 %) | +14 % | 4.4 (12.2) | 4.4 | 4848 | 371.7 | 77.4 | 100.0 |
-| generic | 3 | 2 | 1 | 0 (0) | 2 / 3 | 1 | 0 | +53 % (+229 %) | +46 % | 23.7 (40.0) | 23.7 | 5425 | 187.5 | 61.1 | 6.0 |
+| orientation | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | unbounded extent | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| on | 3 | 2 | 1 | 0 (0) | 2 / 3 | 1 | 0 | 0 | +33 % (+396 %) | +33 % | 0.0 (70.7) | 0.0 | 4775 | 155.7 | 45.6 | 5.5 |
+| near | 5 | 2 | 2 | 1 (1) | 4 / 4 | 0 | 0 | 0 | +18 % (+29 %) | +14 % | 4.4 (12.2) | 4.4 | 4848 | 371.7 | 77.4 | 100.0 |
+| generic | 3 | 2 | 1 | 0 (0) | 2 / 3 | 1 | 0 | 0 | +53 % (+229 %) | +46 % | 23.7 (40.0) | 23.7 | 5425 | 187.5 | 61.1 | 6.0 |
 
-| error (truths) | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| none | 11 | 6 | 4 | 1 (1) | 8 / 10 | 2 | 0 | +33 % (+295 %) | +33 % | 8.2 (48.5) | 8.2 | 4985 | 262.5 | 64.3 | 48.6 |
+| error (truths) | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | unbounded extent | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| none | 11 | 6 | 4 | 1 (1) | 8 / 10 | 2 | 0 | 0 | +33 % (+295 %) | +33 % | 8.2 (48.5) | 8.2 | 4985 | 262.5 | 64.3 | 48.6 |
 
-| error (spheres) | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| error (spheres) | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | unbounded extent | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 
 | run | class | solid (searched) | orient | error | iso χ²_ν | outcome | ΔBIC | ref ΔBIC | Δ | worst dim | thinnest | axis ° | axis ° holo | search ev | search s | report s |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -143,4 +147,11 @@ By Laue class (truth reference, clean truths):
 | sqbox-Pm-3-on | m-3 | sqbox | on | none | 1.63 | held | -464 | -464 | 0.00 | +33 % | +33 % | 0.0 | 0.0 | 2931 | 86.7 | 18.3 |
 
 Failures: none; records with an error: none.
+
+## Today's minimum against the truth reference's (10 kept truths)
+
+- Today's χ² more than one χ²_ν below the truth reference's: 3; of those at another solid (beyond 8° or 28 %): 2.
+- Within one χ²_ν of it: 5; of those at another solid: 0.
+- Above it by more than one χ²_ν: 2.
+- Elliptic cylinders kept: 2; the reported height paired by size with another of the truth's extents: 2. Worst extent (median) paired by role +380 %, by size whatever the role +98 %.
 

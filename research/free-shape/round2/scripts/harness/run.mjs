@@ -9,7 +9,7 @@
    whole record (JSON) to --out. node run.mjs --list [--design …] prints the rows. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadMethod, runCase, patternFor, HERE, FS2 } from './lib.mjs';
+import { loadMethod, runCase, patternFor, writeResult, HERE, FS2 } from './lib.mjs';
 const a = process.argv.slice(2), opt = {};
 for (let i = 0; i < a.length; i++){ if (a[i].startsWith('--')){ const k = a[i].slice(2); opt[k] = a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : true; } }
 const design = JSON.parse(fs.readFileSync(opt.design || path.join(FS2, 'design', 'design.json'), 'utf8'));
@@ -25,7 +25,7 @@ const t0 = Date.now();
 const out = runCase({ row, pattern, methods, shape: opt.shape || null, fit, log: !opt.nolog });
 out.wall = Date.now() - t0; out.fit = fit; out.node = process.version; out.at = new Date().toISOString(); out.design = design.version;
 out.pattern = { file: opt.draw ? 'drawn in memory, kernel ' + (opt.kernel || 'exact') : (opt.pattern || `gen/patterns/${row.id}.json`), info: pattern.info || null, n: pattern.x.length, lo: pattern.x[0], hi: pattern.x[pattern.x.length - 1] };
-if (opt.out){ fs.mkdirSync(path.dirname(path.resolve(opt.out)), { recursive: true }); fs.writeFileSync(opt.out, JSON.stringify(out)); }
+if (opt.out){ fs.mkdirSync(path.dirname(path.resolve(opt.out)), { recursive: true }); fs.writeFileSync(opt.out, writeResult(out)); }
 if (!opt.quiet){
   const f = (x, d = 1) => x == null || !Number.isFinite(x) ? '—' : x.toFixed(d);
   console.log(`${row.id} (${row.laue}, ${row.solid}${row.error ? ', ' + row.error.kind + ' ' + row.error.strength.toFixed(2) : ''}) searched as ${out.shape}: iso χ² ${f(out.iso && out.iso.chi2, 0)} (χ²_ν ${f(out.iso && out.iso.chi2nu, 3)}, ${out.iso && out.iso.evals} evals, ${out.iso && out.iso.ms} ms)`);

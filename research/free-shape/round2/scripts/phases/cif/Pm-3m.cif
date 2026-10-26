@@ -2,9 +2,9 @@ data_fs2_Pm_3m
 _chemical_name_common 'fictitious ZnO, Laue class m-3m (free-shape round 2)'
 _chemical_formula_sum 'Zn1 O1'
 _cell_formula_units_Z 1
-_cell_length_a 3.73
-_cell_length_b 3.73
-_cell_length_c 3.73
+_cell_length_a 2.984
+_cell_length_b 2.984
+_cell_length_c 2.984
 _cell_angle_alpha 90
 _cell_angle_beta 90
 _cell_angle_gamma 90

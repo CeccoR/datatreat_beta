@@ -145,8 +145,11 @@ if (want('errors')){
   const measure = {
     hump: p => { const e = p.parts.error; let a = 0, m = 0, im = 0; e.forEach((v, i)=> { a += v*step; if (v > m){ m = v; im = i; } });
       let lo = im, hi = im; while (lo > 0 && e[lo] > m/2) lo--; while (hi < e.length - 1 && e[hi] > m/2) hi++;
-      return { specFrac: p.truth.error.frac, frac: a/p.info.strongest.area, specFwhm: p.truth.error.fwhm, fwhm: x[hi] - x[lo], centre: p.truth.error.centre, at: x[im] }; },
-    impurity: p => p.truth.error.lines.map(ln=> { let a = 0; p.parts.error.forEach((v, i)=> { if (Math.abs(x[i] - ln.pos) < 1.5) a += v*step; }); return { pos: ln.pos, specFrac: ln.frac, frac: a/p.info.strongest.area }; }),
+      return { specFrac: p.truth.error.frac, frac: a/p.info.strongest.area, inRange: p.truth.error.inRange, specFwhm: p.truth.error.fwhm, fwhm: x[hi] - x[lo], centre: p.truth.error.centre, at: x[im] }; },
+    // the error's whole area over the grid against the lines' stated shares, and each line's
+    // share of its whole profile within the range
+    impurity: p => { let a = 0; p.parts.error.forEach(v=> { a += v*step; }); const spec = p.truth.error.lines.reduce((t, ln)=> t + ln.frac, 0);
+      return { specFrac: spec, frac: a/p.info.strongest.area, lines: p.truth.error.lines.map(ln=> ({ pos: ln.pos, specFrac: ln.frac, inRange: ln.inRange })) }; },
     air: p => ({ specK: p.truth.error.k, k: p.parts.error[0]/p.parts.bg[0], tau: p.truth.error.tau }),
     sizedist: p => {
       // the strongest line's integral breadth and FWHM against the same truth without the distribution

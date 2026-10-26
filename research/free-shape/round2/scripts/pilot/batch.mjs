@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* node batch.mjs --tag <name> --rows screen|tuning|truths|spheres|id,id [--method today,truth]
-                  [--lo 10 --hi 100 --step 0.01] [--kernel exact|none] [--jobs 3] [--design file]
+                  [--lo 10 --hi 110 --step 0.01] [--kernel exact|none] [--jobs 3] [--design file]
    run.mjs once per row, each in its own process under nice -n 15, --jobs at a time (default
    2; 3 for the pilot when nothing else runs, never more). Writes results/<tag>/<row>.json,
    skips those already there (a batch resumes), logs to results/<tag>/batch.log. The

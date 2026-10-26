@@ -2,17 +2,31 @@
 
 Draws one powder pattern from one truth (one row of the design), with the exact size line of
 every member (PROTOCOL.md, "The generator"). Paths are relative to this folder,
-`/tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/gen`.
+`$W/fs2/gen`.
 Node 22: `/opt/node22/bin/node`.
 
-## Set by the pilot (2026-10-26)
+## Set by the pilot (2026-10-26), and its verification
 
-Round 2 draws on **10–100° in 0.01° steps**, not the 10–130° default of `GRID` here: the pilot
-(`../pilot`, `research/free-shape/round2/PILOT.md`) narrowed the range by cost. `../pilot/run.mjs`
-passes that grid to `drawRow`; `draw.mjs` keeps the default unless given one. The pilot also
-scaled the P−1, P2/m and Pmmm cells by 0.8 (`../phases/README.md`); `checks.mjs` was re-run on
-them (`results/checks.json`; the first cells' run is `results/checks-v1.json`): all pass, the
-Lorentzian limit ≤ 4.6·10⁻¹², the plumbing 0.16–0.22 % of the peak as before.
+- **Grid.** Round 2 draws on **10–110° in 0.01° steps**: `GRID` here, the default of every caller
+  (`draw.mjs`, `../harness/run.mjs --draw`, `../pilot/run.mjs`). The pilot set cells and range by
+  cost (`research/free-shape/round2/PILOT.md`); its first choice, 10–100° with only P−1, P2/m
+  and Pmmm scaled, was set aside after its verification. The standard keeps the 10–130° it was
+  drawn and refined on (`STD_GRID`; `data/irf.json` unchanged).
+- **Cells.** Every phase is scaled by 0.8 in every length (`../phases/README.md`).
+- **Errors' areas within the range.** The hump's and each impurity line's area are now their
+  stated share of the strongest line within the pattern, as the strongest line's own area is
+  measured. Before, the hump's pseudo-Voigt carried the stated area over its whole profile, of
+  which 86–99 % fell inside 10–100° (realised 5.8–37.9 % for 5–40 % stated). Each impurity line
+  was drawn by the engine's `addPeak`, cut at ±40 FWHM and lowered at its edge, and kept 98.5 %
+  of its area. Now the hump is scaled to its area over the grid, and each impurity line is
+  drawn over the whole pattern and scaled likewise (`../pilot/fix/errors-check.mjs`: all 24 hump
+  and 23 impurity rows within 10⁻¹⁴ of the stated share).
+- **The corrections' window** is the engine's WPPM window, as before, and the README now says
+  what it does (Windows, below). The pilot's verification measured it.
+- `checks.mjs` was run again on the final cells and grid (`results/checks.json`; the first cells'
+  run is `results/checks-v1.json`). All pass: the ⟨L⟩_V identity ≤ 4.6·10⁻¹², Monte Carlo |z| ≤
+  2.37, the Lorentzian limit ≤ 3.1·10⁻¹², the plumbing 0.12–0.27 % of the peak (0.06–0.15 %
+  with a Lorentzian instrument), the errors at their spec, 0.15–0.25 s a pattern.
 
 ## Files
 
@@ -58,9 +72,22 @@ e^{+πΓL} grows to e^{160} at a sphere's support, whatever its size. Drawing pV
 would differ from the engine's TCH line by TCH's own error, 0.2 % of the peak (check 4). That
 difference would then be a model error that has nothing to do with the shape.
 
-**Windows.** Every line, together with its correction, is drawn over the whole pattern
-(`model.noise0` = 10⁻³⁰). Its tails are whole, and the phase's pattern is linear in its scale,
-which is set afterwards. Lines listed beyond 130° reach in with their tails, as in the engine.
+**Windows.** Every line the engine draws is drawn over the whole pattern (`model.noise0` =
+10⁻³⁰): its tails are whole, and the phase's pattern is linear in its scale, which is set
+afterwards. Lines listed beyond the range reach in with their tails, as in the engine. The
+correction is not: it is synthesised by FFT as the engine's WPPM lines are, over ±max(40 FWHM,
+the line's half-window), and lowered by its value at the window's edge. (The first README said
+its tails were whole; the verification showed they are not.) Against a direct synthesis with no
+window and no lowering (`../pilot/fix/pattern110.mjs`, six rows, 10–110°):
+- the drawn correction is off by at most 5·10⁻⁴ of the peak, 3·10⁻⁴ once the background's own
+  family (quadratic + 1/2θ) is taken out, for corrections of 5–18 % of the peak;
+- for the broadest lines (a 3 nm sphere) part of it is a smooth offset, +2.6·10⁻⁴ of the peak on
+  average, from the FFT's period (the folded tails, less the edge value), not from the 40-FWHM
+  window: drawing the correction over the whole pattern (`whole: true`) moved it by under
+  5·10⁻⁶ of the peak.
+
+At 30 000 counts that is 8–15 counts, against a background of at least 1 500 counts (σ ≥ 39),
+mostly taken up by the background. The data are the exact lines to that level.
 
 ## Conventions (the engine's, RIETVELD.md §10.2–10.3)
 
@@ -119,8 +146,8 @@ which is set afterwards. Lines listed beyond 130° reach in with their tails, as
   narrowest size lines (a 60 nm extent along the diffraction vector) are 0.10°/cosθ wide. That is
   three times the instrument's width at low angles, so the size dominates every line, and it
   gives at least 12 points per FWHM at the 0.01° step.
-- **Grid.** 10–130° in 0.01° steps (12 001 points; `GRID`, or a `grid` option, which the pilot
-  may narrow).
+- **Grid.** 10–110° in 0.01° steps (10 001 points; `GRID`, or a `grid` option): the pilot's
+  decision. The standard is drawn on 10–130° (`STD_GRID`).
 - **The standard.** As in round 1 (`standardIrf`, cached in `data/irf.json`):
   - LaB6 (the card's built-in CIF) drawn with that truth (zero 0.008°, sin 2θ shift −0.0171°) on
     the grid, 15 000 counts at its strongest line on 150, with Poisson noise;
@@ -139,9 +166,9 @@ draws are in `truth.error`.
 
 | kind | drawn |
 |---|---|
-| `hump` | area (5 + 35 s) % of the strongest line's (α1 + α2, as drawn); centre uniform from lo + 5° to the range's middle (15–70°); FWHM 3–10° uniform; pseudo-Voigt with η 0.5 |
+| `hump` | area (5 + 35 s) % of the strongest line's (α1 + α2, as drawn), both within the range; centre uniform from lo + 5° to the range's middle (15–60°); FWHM 3–10° uniform; pseudo-Voigt with η 0.5, scaled to that area over the grid |
 | `sizedist` | σ = 0.1 + 0.4 s, volume-weighted, ⟨L⟩_V kept (above) |
-| `impurity` | 1–3 lines (uniform), each (1 + 9 s) % of the strongest line's area, uniform over lo + 2° … hi − 2°; each a Kα1/Kα2 pair with the instrument's profile and a 100 nm Lorentzian size, no axial asymmetry |
+| `impurity` | 1–3 lines (uniform), each (1 + 9 s) % of the strongest line's area within the range, uniform over lo + 2° … hi − 2°; each a Kα1/Kα2 pair with the instrument's profile and a 100 nm Lorentzian size, no axial asymmetry, drawn over the whole pattern and scaled to that area over the grid |
 | `air` | (0.5 + 2.5 s) × the background at the range's start, decaying as e^{−(2θ − lo)/τ}, τ 2–6° uniform |
 | `po` | March–Dollase r = 0.95 − 0.25 s, or 1/r for half the draws (needles), on an axis drawn uniformly among the phase's distinct Laue families of the seven low-index planes (cubic: 100, 110, 111); drawn with the engine's own member weights (phase option po, `p1.PO`) |
 
@@ -210,9 +237,9 @@ savePattern('patterns/' + row.id + '.json', pat);   // x, y, instr, irf, truth, 
    nodes and λ, against the engine's own lines, on a box 10×15×25 and 3×4×6 nm on Pm-3m and P-1.
    It catches a wrong intensity, position or node in the correction, which the limit check
    cannot (zero times anything is zero).
-   - Max |Δ| over the peak: 0.16–0.22 % with the instrument (TCH against a true convolution,
-     and the 2θ against the d* map).
-   - 0.06–0.13 % with a Lorentzian instrument (U = V = W = 0: the d* map and the axial wings
+   - Max |Δ| over the peak: 0.12–0.27 % with the instrument (TCH against a true convolution,
+     and the 2θ against the d* map; 0.16–0.22 % on 10–130° before the cells were scaled).
+   - 0.06–0.15 % with a Lorentzian instrument (U = V = W = 0: the d* map and the axial wings
      alone).
 5. **Integral breadth of a drawn size line.** One member per solid, drawn by the same synthesis
    at 60° with no instrument (H 10⁻⁶ °), on a grid of Γ/40 over ±55°.
@@ -221,11 +248,12 @@ savePattern('patterns/' + row.id + '.json', pat);   // x, y, instr, irf, truth, 
    - 0.986–0.998 with the area integrated over the ±55° window. The rest is the Porod tails
      beyond it, 0.2–1.4 % for 2–21 nm.
 6. **Errors**, each on one drawn pattern (box 5×9×16 nm, Pm-3m, s = 0.5):
-   - hump: area 21.1 % of the strongest line (spec 22.5 %: the part beyond 10° is outside the
-     pattern, the centre being 17.6°); FWHM 5.95° (drawn 5.94°).
+   - hump: area 22.5 % of the strongest line within the range (spec 22.5 %; 93.1 % of the whole
+     pseudo-Voigt lies inside, the centre being 17.2°); FWHM 5.95° (drawn 5.94°).
    - sizedist (σ 0.3): the strongest line's integral breadth unchanged (ratio 1.00), its FWHM
      0.97 of the single size's (the top sharper).
-   - impurity: one line at 60.7°, 5.36 % within ±1.5° (spec 5.5 %).
+   - impurity: one line at 52.3°, 5.50 % over the range (spec 5.5 %; 99.9 % of its whole profile
+     inside).
    - air: 1.75× the background at 10° (spec 1.75).
    - po (r 1.21 on [110]): every reflection's intensity ratio with/without equals the March–Dollase
      average over its members, computed here from the phase's frame (max relative difference
@@ -233,10 +261,11 @@ savePattern('patterns/' + row.id + '.json', pat);   // x, y, instr, irf, truth, 
      span r⁻³ to r^{1.5} (0.56–1.33), which the free shape sees member by member.
 7. **Time per pattern.** One box at random per Laue class, exact lines, noise; one process,
    nice 15, this 4-vCPU machine.
-   - 0.43–0.71 s (170–187 members); 1.2–1.5 s with a size distribution (σ 0.5).
-   - The phase's least value is (0.7–105)·10⁻⁴ of its peak: never negative. The extremes (a 2 nm
+   - 0.15–0.25 s (60–73 members, 10–110°); 0.42–0.63 s with a size distribution (σ 0.5). On
+     the first cells and 10–130° (170–187 members): 0.43–0.71 s and 1.2–1.5 s.
+   - The phase's least value is (0.4–57)·10⁻⁴ of its peak: never negative. The extremes (a 2 nm
      sphere, a 2×12×60 nm box, a 60×2 nm disc) also stay positive.
-   - 231 patterns (198 truths + 33 spheres) take about 2.5 min.
+   - 231 patterns (198 truths + 33 spheres) take about 1 min (2.5 min on the first cells).
 
 ## Not checked or left as is
 

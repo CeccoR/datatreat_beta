@@ -1,0 +1,32 @@
+data_fs2_P4m
+_chemical_name_common 'fictitious ZnO4, Laue class 4/m (free-shape round 2)'
+_chemical_formula_sum 'Zn1 O4'
+_cell_formula_units_Z 1
+_cell_length_a 3.50
+_cell_length_b 3.50
+_cell_length_c 4.32
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_space_group_name_H-M_alt 'P 4/m'
+_space_group_IT_number 83
+loop_
+_space_group_symop_operation_xyz
+'x,y,z'
+'-y,x,z'
+'-x,-y,-z'
+'-x,-y,z'
+'y,-x,-z'
+'y,-x,z'
+'x,y,-z'
+'-y,x,-z'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_U_iso_or_equiv
+Zn1 Zn 0 0 0 1 0.0063
+O1 O 0.3 0.2 0.5 1 0.0080

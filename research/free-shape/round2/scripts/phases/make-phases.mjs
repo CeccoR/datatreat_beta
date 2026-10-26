@@ -10,10 +10,13 @@
    equivalent). Cells of 52–56 Å³, the low end of the 50–90 Å³ asked: in the search every
    member is drawn with its own width, so a pattern's cost goes with its members, about
    3.4 members per Å³ in 10–130° whatever the class (README).
-   The pilot (../pilot, research/free-shape/round2/PILOT.md) scaled the three costliest
-   cells, P-1, P2/m and Pmmm, by 0.8 in every length (`scale`): their long model lists
-   (the free angles stretch them) made an evaluation 1.5–4× the others'. The first cells
-   are kept in cif-v1/. Run: node make-phases.mjs */
+   The pilot (../pilot, research/free-shape/round2/PILOT.md) set cells and range by cost:
+   every cell is scaled by 0.8 in every length (`scale`; angles and fractional coordinates
+   kept), with the range 10–110°. That keeps the classes' members equal (60–73 in range)
+   as the first cells had them (170–187 in 10–130°). Its first decision scaled only the
+   three costliest, P-1, P2/m and Pmmm, with 10–100°: dearer, and it left those three
+   with half the others' members. The first cells are kept in cif-v1/. Run: node
+   make-phases.mjs */
 import fs from 'node:fs';
 import path from 'node:path';
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -35,21 +38,21 @@ export const PHASES = [
     O: [[0.30, 0, 0.70]] },
   { id: 'Pmmm',   laue: 'mmm',   sg: 'P m m m',   it: 47,  gens: ['2z', '2y'],       cell: [3.36, 3.59, 4.32, 90, 90, 90], scale: 0.8,
     O: [[0.5, 0.5, 0.5]] },
-  { id: 'P4m',    laue: '4/m',   sg: 'P 4/m',     it: 83,  gens: ['4z'],             cell: [3.50, 3.50, 4.32, 90, 90, 90],
+  { id: 'P4m',    laue: '4/m',   sg: 'P 4/m',     it: 83,  gens: ['4z'],             cell: [3.50, 3.50, 4.32, 90, 90, 90], scale: 0.8,
     O: [[0.30, 0.20, 0.5]] },
-  { id: 'P4mmm',  laue: '4/mmm', sg: 'P 4/m m m', it: 123, gens: ['4z', '2x'],       cell: [3.91, 3.91, 3.41, 90, 90, 90],
+  { id: 'P4mmm',  laue: '4/mmm', sg: 'P 4/m m m', it: 123, gens: ['4z', '2x'],       cell: [3.91, 3.91, 3.41, 90, 90, 90], scale: 0.8,
     O: [[0.5, 0.5, 0.5]] },
-  { id: 'P-3',    laue: '-3',    sg: 'P -3',      it: 147, gens: ['3z'],             cell: [3.46, 3.46, 5.10, 90, 90, 120],
+  { id: 'P-3',    laue: '-3',    sg: 'P -3',      it: 147, gens: ['3z'],             cell: [3.46, 3.46, 5.10, 90, 90, 120], scale: 0.8,
     O: [[0.35, 0.30, 0.30]] },
-  { id: 'P-3m1',  laue: '-3m',   sg: 'P -3 m 1',  it: 164, gens: ['3z', '2110'],     cell: [3.28, 3.28, 5.64, 90, 90, 120],
+  { id: 'P-3m1',  laue: '-3m',   sg: 'P -3 m 1',  it: 164, gens: ['3z', '2110'],     cell: [3.28, 3.28, 5.64, 90, 90, 120], scale: 0.8,
     O: [[1/3, 2/3, 0.27]] },
-  { id: 'P6m',    laue: '6/m',   sg: 'P 6/m',     it: 175, gens: ['6z'],             cell: [4.10, 4.10, 3.64, 90, 90, 120],
+  { id: 'P6m',    laue: '6/m',   sg: 'P 6/m',     it: 175, gens: ['6z'],             cell: [4.10, 4.10, 3.64, 90, 90, 120], scale: 0.8,
     O: [[0.45, 0.15, 0.5]] },
-  { id: 'P6mmm',  laue: '6/mmm', sg: 'P 6/m m m', it: 191, gens: ['6z', '2110'],     cell: [3.59, 3.59, 4.69, 90, 90, 120],
+  { id: 'P6mmm',  laue: '6/mmm', sg: 'P 6/m m m', it: 191, gens: ['6z', '2110'],     cell: [3.59, 3.59, 4.69, 90, 90, 120], scale: 0.8,
     O: [[1/3, 2/3, 0.5]] },
-  { id: 'Pm-3',   laue: 'm-3',   sg: 'P m -3',    it: 200, gens: ['2z', '2y', '3111'], cell: [3.75, 3.75, 3.75, 90, 90, 90],
+  { id: 'Pm-3',   laue: 'm-3',   sg: 'P m -3',    it: 200, gens: ['2z', '2y', '3111'], cell: [3.75, 3.75, 3.75, 90, 90, 90], scale: 0.8,
     O: [[0.27, 0, 0.5]] },
-  { id: 'Pm-3m',  laue: 'm-3m',  sg: 'P m -3 m',  it: 221, gens: ['4z', '3111'],     cell: [3.73, 3.73, 3.73, 90, 90, 90],
+  { id: 'Pm-3m',  laue: 'm-3m',  sg: 'P m -3 m',  it: 221, gens: ['4z', '3111'],     cell: [3.73, 3.73, 3.73, 90, 90, 90], scale: 0.8,
     O: [[0.5, 0.5, 0.5]] },
 ];
 

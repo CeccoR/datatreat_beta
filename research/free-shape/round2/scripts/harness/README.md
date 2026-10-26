@@ -13,7 +13,7 @@ per Laue class. Each run goes like this:
    rotations and the body's own symmetry.
 
 Nothing here touches the app's files. Paths are relative to this folder,
-`/tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/harness`.
+`$W/fs2/harness`.
 Node 22: `/opt/node22/bin/node`.
 
 ## The engine copy
@@ -48,10 +48,20 @@ No arithmetic changes. The anchors were checked unique on b9bef5f.
   centrosymmetric, so these, with axes taken without sign, cover the Laue group.
   `holoRotations(id)` gives the lattice's holohedry the same way: integer operations, entries
   −1…1, that keep the reciprocal metric.
-- **`compareSolids(fit, ref, { rots, loose })`** is round 1's, with the rotations given.
-  - Dimensions are paired by size within the body's axis classes.
+- **`compareSolids(fit, ref, { rots, loose })`** is round 1's, with the rotations given, and
+  one change from the pilot's verification:
+  - Dimensions are paired within the body's axis classes (`CLASSES`): by size within a class, by
+    role across classes. A box's and an ellipsoid's three extents are one class. A square box,
+    cylinder, spheroid and elliptic cylinder have two: the section (x, y) and the height or
+    axis (z), as the engine parametrises them. Round 1 paired the spheroid and the square box
+    by size: a spheroid fit with its aspect flipped (an oblate truth read prolate) had the
+    truth's symmetry axis compared with one of the fit's in-plane axes, which the spheroid
+    leaves undefined, so the reported angle followed an arbitrary spin of the fit (32° reported
+    for an 89° error on spheroid-P-1-generic). By role, it is the angle between the two
+    symmetry axes, and the extents are compared role by role.
   - Axes the ref ties within 4 % are tried in every order (a cube's, a square's) or left out of
-    the orientation (a ball's, a round section's).
+    the orientation (a ball's, a round section's, and a spheroid's axis when its two extents
+    are within 4 %: a ball).
   - Axes are compared without sign; the best rotation is taken.
   - It returns `dimErr`, `dimMax`, `orient` (the worst defined axis, °) and `principal` (the
     ref's most distinct axis, °).
@@ -62,6 +72,11 @@ No arithmetic changes. The anchors were checked unique on b9bef5f.
 - **`canonical(id, solid)`** and **`canonicalDir(id, u)`** give the fundamental zone and the
   canonical frame (the rule below).
 - `sameSolid` and `basins` take the phase id: modulo its class.
+- **Records** (`writeResult`, `readResult`): an unbounded extent (a width refined to 0) is
+  Infinity, and so is its error. JSON writes Infinity as null, which the first pilot report
+  then dropped from its medians as if it were a missing value. `writeResult` spells it out
+  ("Infinity"); `readResult` reads it back, and reads null in `dims`, `dimErr` and `dimMax` of
+  the older records as Infinity.
 - `truthOf(row)` gives the truth's solid and its parameters as the model reads them
   (sphere-equivalent widths, the quaternion of R): the truth reference's start.
 - `modelPattern(row, …)` is a stand-in pattern drawn with the model's own Lorentzian lines and
@@ -96,21 +111,38 @@ that agrees with it on every row.
 2. **The second axis** is the one of larger extent of the other two. If their extents are equal
    (a square's edges, a cube's), each is tried in turn.
 3. **Over the class's rotations,** the normal goes where `canonicalDir` puts it. Among the
-   rotations that do so equally (its stabiliser, within 10⁻⁹ rad), the second axis goes nearest
-   its own family's first member. Remaining ties go by the direction order on the normal, then
-   on the second axis.
-4. **Axes** point toward their families' members, or by the order when normal to them. The third
-   axis is the cross product that keeps the frame proper, so it can be written as a quaternion.
-   Dimensions stay in their slots. The tied edges of a square or a cube go to the first tied
-   slot.
-5. **A cylinder or spheroid** is its axis alone, with x along axis × z_Cartesian (or
+   rotations that do so equally (its stabiliser, within 10⁻⁹ rad), the second axis decides by
+   the lattice row it lies on or nearest: of its family's members, the one nearest G·e, the
+   first of those by the direction order; then G·e nearest that row. Remaining ties go by the
+   direction order on the normal, then on the second axis. Where the candidates' normals or
+   second axes come from different families (a cube's axes, a square's edges), the simpler
+   family goes first (Σ indices², then the direction order).
+4. **Axes** point toward their rows, or by the order when normal to them. The third axis is the
+   cross product that keeps the frame proper, so it can be written as a quaternion.
+5. **Slots.** Within each class of interchangeable slots (a box's or an ellipsoid's three, a
+   section's two), the normal takes the first, then the second axis, then the third; the
+   dimensions go with their axes. A relabelled body (its slots permuted within a class, with
+   its extents) has one canonical form. A cube's axes take the principal axis's slot and the
+   first other.
+
+**Why rows, not distances.** The first form placed the second axis nearest its family's first
+member. Where that member is the normal's own row (⟨100⟩ about [100] in m−3m, ⟨110⟩ about [111]),
+every image of the second axis is equally far from it, and a turn of 0.01° chose another image:
+5 of the design's 66 'on' frames read a canonical frame 30–90° away when turned 0.01° (the
+pilot's verification). Keyed on the row an axis lies on, a lattice frame and the same frame
+turned a little read the same; the zone's boundaries lie where an axis is equally near two rows.
+One boundary remains at lattice frames: the engine names a direction by the simplest row within
+10° (SNAP_DEG), and an axis exactly 10° from such a row changes family with any turn. In these
+phases that is a* of P2/m (β = 100°, a* is 10.000° from [100]); `test.mjs` counts and leaves out
+the 4 lattice frames it touches.
+6. **A cylinder or spheroid** is its axis alone, with x along axis × z_Cartesian (or
    x_Cartesian when the axis is along z).
 
 `canonical` returns `{ axes, R, normal, second, labels, families }`. `labels` are [uvw] where
 the axis is within 0.5° of a row with indices up to 12, else its coordinates scaled to the
 largest 1.
 
-## Tests (`node test.mjs`: 15 814 checks, 0 failed, 19 s; `--run` adds two runs on stand-in patterns, 15 822, 1 min)
+## Tests (`node test.mjs`: 44 062 checks, 0 failed, 1 min; `--run` adds two runs on stand-in patterns)
 
 1. **The class's rotations.**
    - There are as many as the class has proper operations (1, 2, 4, 4, 8, 3, 6, 6, 12, 12, 24),
@@ -135,6 +167,21 @@ largest 1.
    - Each of the 124 directions [uvw] (|indices| ≤ 2) in each phase reads as the engine names
      its family (`lattDirection`).
    - A low-index row turned 2° reads within 2° of that family's first member, under its name.
+5. **Pairing by role** (added by the pilot's verification), 40 random frames:
+   - a spheroid 16.2 × 16.2 × 7.6 read 8.1 × 8.1 × 28.3 with its axis θ off (0–90°): principal
+     and orient are θ, whatever the fit's spin about its own axis (0, 10, 45, 80°), and the
+     extents are paired by role;
+   - a near-cube square box 6 × 6 × 6.4 read 6.3 × 6.3 × 5.9 with its height θ off: principal
+     θ, the height −7.8 %;
+   - a spheroid within 4 % of a ball has no defined axis.
+6. **canonical near the lattice and relabelled** (added by the pilot's verification):
+   - every lattice frame (each low-index axis with its first three normal rows, both ways),
+     each solid, turned 10⁻⁶° and 0.01° about 8 random axes: 27 648 turned frames, each within
+     twice the turn of the unturned frame's canonical form, slot by slot (worst 7·10⁻⁷° beyond
+     the turn); the 4 lattice frames at the engine's naming limit (a* of P2/m) are counted and
+     left out;
+   - 440 relabelled boxes, ellipsoids, elliptic cylinders and square boxes: the same canonical
+     frame and extents, slot by slot.
 
 5. **`--run`, stand-in patterns** (the model's own Lorentzian lines, 10–90° in 0.02°).
    - A box 3×7×12 nm in P4/m at a generic orientation: the baseline and the truth reference end
@@ -197,7 +244,9 @@ And these:
 - `row`, `phase`, `laue`, `truth`;
 - `pattern`: the file or the kernel, and the generator's `info`.
 
-JSON writes an unbounded dimension as null: read with `readResult`.
+Unbounded extents and their errors are Infinity: records are written with `writeResult` and
+read with `readResult` (above). The smoke runs below and round 1's tables predate the pairing
+by role.
 
 ## Smoke runs (`results/smoke/`; one process each, two at a time, nice 15)
 

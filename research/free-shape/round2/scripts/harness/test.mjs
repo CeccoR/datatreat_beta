@@ -125,6 +125,79 @@ for (const P of PHASES){
 ok(canonicalDir('Pm-3m', unit([0, -1, -1])).label === '[110]', 'm-3m: [0-1-1] is not [110]');
 ok(canonicalDir('Pm-3m', unit([-1, 1, -1])).label === '[111]', 'm-3m: [-11-1] is not [111]');
 
+/* 5. Pairing by role (the pilot's verification): a spheroid or square box is paired with
+   the other's symmetry axis whatever their aspects.
+   - A spheroid fit with its aspect flipped (an oblate truth read prolate), its axis θ off
+     the truth's: principal = θ (axis to axis), the same however the fit is spun about its
+     own axis; extents by role.
+   - A near-cube square box (6 × 6 × 6.4) read 6.3 × 6.3 × 5.9 with its height θ off:
+     principal θ, the height −7.8 %.
+   - A spheroid within 4 % of a ball has no defined axis. */
+{
+  let nRole = 0;
+  for (let t = 0; t < 40; t++){
+    const F = cols(randomRotation(R0)), th = 90*R0.u(), perp = unit(cross(F[2], [R0.n(), R0.n(), R0.n()]));
+    const z2 = mv(rotAbout(perp, th), F[2]), x0 = unit(cross(z2, [R0.n(), R0.n(), R0.n()]));
+    const truth = { type: 'spheroid', dims: [16.2, 16.2, 7.6], axes: F };
+    const spins = [0, 10, 45, 80].map(a=> { const x = mv(rotAbout(z2, a), x0); return compareSolids({ type: 'spheroid', dims: [8.1, 8.1, 28.3], axes: [x, cross(z2, x), z2] }, truth); });
+    ok(spins.every(c=> Math.abs(c.principal - th) < 1e-5 && Math.abs(c.orient - th) < 1e-5), `spheroid flipped, axis ${th.toFixed(1)}° off: principal ${spins.map(c=> c.principal.toFixed(2)).join('/')}`);
+    ok(Math.abs(spins[0].dimErr[0] - (8.1/16.2 - 1)) < 1e-12 && Math.abs(spins[0].dimErr[2] - (28.3/7.6 - 1)) < 1e-12, `spheroid flipped: extents not paired by role (${spins[0].dimErr})`);
+    const sq = { type: 'sqbox', dims: [6, 6, 6.4], axes: F }, sqFit = compareSolids({ type: 'sqbox', dims: [6.3, 6.3, 5.9], axes: [mv(rotAbout(perp, th), F[0]), mv(rotAbout(perp, th), F[1]), z2] }, sq);
+    ok(Math.abs(sqFit.principal - th) < 1e-5 && Math.abs(sqFit.dimErr[2] - (5.9/6.4 - 1)) < 1e-12, `near-cube square box, height ${th.toFixed(1)}° off: principal ${sqFit.principal}, height ${sqFit.dimErr[2]}`);
+    const ball = compareSolids({ type: 'spheroid', dims: [8, 8, 8.2], axes: [x0, cross(z2, x0), z2] }, { type: 'spheroid', dims: [7.9, 7.9, 7.7], axes: F });
+    ok(ball.orient == null && ball.principal == null, `a near-ball spheroid reads an axis (${ball.orient}°)`);
+    nRole += 4;
+  }
+  console.log(`pairing by role: ${nRole} checks`);
+}
+
+/* 6. canonical near the lattice and under relabelling (the pilot's verification):
+   - every lattice frame of every phase (each low-index axis with each of its first three
+     normal rows, both as the normal and as the second axis), for each solid, turned 10⁻⁶°
+     and 0.01° about 8 random axes: the canonical frame stays within twice the turn of the
+     unturned frame's, slot by slot (the first form jumped 30–90° on 5 of the design's 66
+     'on' frames). Left out and counted: frames with an axis at the engine's naming limit,
+     SNAP_DEG (10°) from the simplest row within it, where the axis's family itself changes
+     with the turn (in these phases a* of P2/m, 10.000° from [100] as β = 100°);
+   - a body relabelled (its slots permuted within their classes, with their extents): the
+     same canonical frame and extents, slot by slot. */
+{
+  let nNear = 0, nRel = 0, worst = 0, nLimit = 0;
+  const dimsOf = type => type === 'sqbox' || REVOLUTION.has(type) ? [12, 12, 4] : [4, 7, 12];
+  const close = (a, b, type, tol) => REVOLUTION.has(type) ? angAx(a.axes[2], b.axes[2]) <= tol : [0, 1, 2].every(i=> angAx(a.axes[i], b.axes[i]) <= tol && Math.abs(a.dims[i] - b.dims[i]) < 1e-12);
+  for (const P of PHASES){
+    const id = P.id, q = phaseQ(id), rots = laueRotations(id);
+    for (const e of ENG.lowIndexAxes(q)) for (const a of ENG.latticeAcross(q, e, null, 0.01, 64).slice(0, 3)){
+      const z = unit(e), x = unit(a.vec);
+      const atLimit = [z, x, cross(z, x)].some(v=> { const L = ENG.lattDirection(q, unit(v)); return L.angle > ENG.SNAP_DEG - 0.05 && L.angle < ENG.SNAP_DEG + 0.05; });
+      if (atLimit){ nLimit++; continue; }
+      for (const F of [[x, cross(z, x), z], [z, cross(x, z), x], [cross(z, x), z, x]]) for (const type of SOLIDS){
+        const s = { type, dims: dimsOf(type), axes: F }, c0 = canonical(id, s);
+        for (const deg of [1e-6, 0.01]) for (let k = 0; k < 8; k++){
+          const T = rotAbout([R0.n(), R0.n(), R0.n()], deg), c1 = canonical(id, { ...s, axes: F.map(v=> mv(T, v)) });
+          const d = REVOLUTION.has(type) ? angAx(c0.axes[2], c1.axes[2]) : Math.max(...[0, 1, 2].map(i=> angAx(c0.axes[i], c1.axes[i])));
+          worst = Math.max(worst, d - deg);
+          ok(close(c0, c1, type, 2*deg + 2e-6), `${id} ${type} [${c0.labels.join(' ')}] turned ${deg}°: canonical [${c1.labels.join(' ')}], ${d.toFixed(4)}° away`); nNear++;
+        }
+      }
+    }
+    // relabelled bodies
+    for (let t = 0; t < 10; t++){
+      const F = cols(randomRotation(R0));
+      for (const type of ['box', 'ellipsoid', 'ellcyl', 'sqbox']){
+        const d = type === 'sqbox' ? [9, 9, 4] : [3 + 2*R0.u(), 9 + 3*R0.u(), 25 + 5*R0.u()];
+        const perm = type === 'box' || type === 'ellipsoid' ? [[1, 2, 0], [2, 0, 1], [1, 0, 2]][t % 3] : [1, 0, 2];
+        // a permutation of the slots, the frame kept proper (an odd one turns one axis over)
+        const odd = (perm[1] - perm[0])*(perm[2] - perm[0])*(perm[2] - perm[1]) < 0;
+        const axes = perm.map((k, i)=> F[k].map(v=> odd && i === 0 ? -v : v));
+        const c1 = canonical(id, { type, dims: d, axes: F }), c2 = canonical(id, { type, dims: perm.map(k=> d[k]), axes });
+        ok(close(c1, c2, type, 1e-5), `${id} ${type} relabelled ${perm}: canonical [${c1.labels}] ${c1.dims.map(v=> v.toFixed(2))} vs [${c2.labels}] ${c2.dims.map(v=> v.toFixed(2))}`); nRel++;
+      }
+    }
+  }
+  console.log(`canonical near the lattice: ${nNear} turned frames (worst ${worst.toExponential(1)}° beyond the turn); lattice frames at the naming limit, left out: ${nLimit}; relabelled: ${nRel}`);
+}
+
 if (process.argv.includes('--run')){
   // runCase smoke runs on stand-in patterns (the model's own Lorentzian lines, 10–90° in
   // 0.02°): the run reaches the search, the truth reference refines next to the truth.

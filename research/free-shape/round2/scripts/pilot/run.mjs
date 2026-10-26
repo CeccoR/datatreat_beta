@@ -2,7 +2,7 @@
 /* The pilot's one command: a design row drawn by the generator (../gen/gen.mjs drawRow, in
    memory) and refined by the harness (../harness/lib.mjs runCase) with each method, from
    one isotropic fit. Writes one JSON per run.
-   node run.mjs --row <id> [--design ../design/design.json] [--lo 10 --hi 100 --step 0.01]
+   node run.mjs --row <id> [--design ../design/design.json] [--lo 10 --hi 110 --step 0.01]
                 [--kernel exact|none] [--method today,truth] [--out file.json] [--nolog] [--quiet]
    - --kernel none draws the row with the engine's own Lorentzian lines (the in-model
      control); exact (default) with the solid's exact line shapes.
@@ -13,12 +13,13 @@
    pattern's grid, kernel, ms, the generator's info and the error's draws), stages (wall
    ms and evaluations of the isotropic fit, each method's search and report), list (the
    model's reflections, members and points), wall, and per record `search` and `report`.
-   The grid's default is the pilot's decision (PILOT.md): 10–100° in 0.01° steps. */
+   The grid's default is the generator's GRID, the pilot's decision (PILOT.md): 10–110° in
+   0.01° steps. Unbounded extents are written as "Infinity" (lib.mjs writeResult). */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { drawRow } from '../gen/gen.mjs';
-import { loadMethod, runCase, FS2 } from '../harness/lib.mjs';
+import { drawRow, GRID } from '../gen/gen.mjs';
+import { loadMethod, runCase, writeResult, FS2 } from '../harness/lib.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const a = process.argv.slice(2), opt = {};
 for (let i = 0; i < a.length; i++){ if (a[i].startsWith('--')){ const k = a[i].slice(2); opt[k] = a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : true; } }
@@ -26,8 +27,7 @@ const designFile = path.resolve(opt.design || path.join(FS2, 'design', 'design.j
 const design = JSON.parse(fs.readFileSync(designFile, 'utf8'));
 const row = design.rows.find(r=> r.id === opt.row);
 if (!row){ console.error('--row <id>: no row ' + opt.row); process.exit(2); }
-export const GRID2 = { lo: 10, hi: 100, step: 0.01 };     // the pilot's decision (PILOT.md)
-const grid = { lo: +(opt.lo || GRID2.lo), hi: +(opt.hi || GRID2.hi), step: +(opt.step || GRID2.step) };
+const grid = { lo: +(opt.lo || GRID.lo), hi: +(opt.hi || GRID.hi), step: +(opt.step || GRID.step) };
 const kernel = opt.kernel || 'exact';
 const KNOWN = { today: path.join(HERE, 'methods', 'today.mjs'), truth: path.join(FS2, 'harness', 'methods', 'truth.mjs'), baseline: path.join(FS2, 'harness', 'methods', 'baseline.mjs') };
 const methods = [];
@@ -49,7 +49,7 @@ out.records.forEach((r, i)=> {
   } else { r.search = { evals: r.evals, ms: r.ms }; out.stages[r.method] = { search: r.search }; }
 });
 out.at = new Date().toISOString(); out.node = process.version; out.design = design.version; out.host = { cpus: (await import('node:os')).cpus().length };
-if (opt.out){ fs.mkdirSync(path.dirname(path.resolve(opt.out)), { recursive: true }); fs.writeFileSync(opt.out, JSON.stringify(out)); }
+if (opt.out){ fs.mkdirSync(path.dirname(path.resolve(opt.out)), { recursive: true }); fs.writeFileSync(opt.out, writeResult(out)); }
 if (!opt.quiet){
   const f = (x, d = 1) => x == null || !Number.isFinite(x) ? '—' : x.toFixed(d);
   console.log(`${row.id} (${row.laue}, ${row.solid} ${row.dims.map(d=> f(d)).join('×')}${row.error ? ', ' + row.error.kind + ' ' + row.error.strength.toFixed(2) : ''}; ${kernel}, ${grid.lo}–${grid.hi}/${grid.step}) as ${out.shape}: draw ${drawMs} ms; iso χ²_ν ${f(out.iso && out.iso.chi2nu, 3)}, ${out.iso && out.iso.evals} ev, ${out.iso && out.iso.ms} ms; list ${out.list ? out.list.refl + ' refl, ' + out.list.members + ' members' : ''}`);

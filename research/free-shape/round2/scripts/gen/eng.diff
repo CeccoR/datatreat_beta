@@ -1,5 +1,5 @@
---- /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/engine/xrd-rietveld.js	2026-10-26 07:11:51.000000000 +0000
-+++ /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/gen/eng/xrd-rietveld.js	2026-10-26 11:26:41.593158557 +0000
+--- $W/fs2/engine/xrd-rietveld.js	2026-10-26 07:11:51.000000000 +0000
++++ $W/fs2/gen/eng/xrd-rietveld.js	2026-10-26 11:26:41.593158557 +0000
 @@ -2356,6 +2356,8 @@
      if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
      const nodes = axialOn(A) ? lineNodes(model, -1 - ((k*model.rStride + r)*64 + i)*4 - j, th, A, pr.H, sollerTol(model, S*Im, pr.H, pr.eta)) : null;

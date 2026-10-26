@@ -24,7 +24,9 @@
      from the other two) on one of the phase's lowIndexAxes, and for three-turn bodies a
      second axis on one of the three simplest lattice rows exactly normal to it
      (latticeAcross(q, e, null, 0.01, 64)): the frames the search holds; 'near' such a
-     frame turned 2–10° about a random axis; 'generic' uniform.
+     frame turned 2–10° about a random axis (for a cylinder or spheroid, an axis normal to
+     its own: the solid is its axis alone, so its axis is turned by the full 2–10°);
+     'generic' uniform.
    Run: node make-design.mjs (a few seconds; deterministic). */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -259,8 +261,13 @@ for (const r of truths){
     const o = onFrame(r, rr);
     r.R = o.R; r.frame = o.frame;
     if (r.orient === 'near'){
-      const ax = unit([rr.n(), rr.n(), rr.n()]), deg = 2 + 8*rr.u();
-      const T = rotAbout(ax, deg), C0 = [[r.R[0], r.R[3], r.R[6]], [r.R[1], r.R[4], r.R[7]], [r.R[2], r.R[5], r.R[8]]];
+      let ax = unit([rr.n(), rr.n(), rr.n()]); const deg = 2 + 8*rr.u();
+      const C0 = [[r.R[0], r.R[3], r.R[6]], [r.R[1], r.R[4], r.R[7]], [r.R[2], r.R[5], r.R[8]]];
+      // a solid of revolution is its axis alone: a turn about an axis near its own moves it
+      // by less than the turn (the first draw: 3 of the 22 under 2°), so the turn is about
+      // the random axis's part normal to it, and the solid's axis is turned by deg exactly
+      if (BODIES[r.solid].rot === 2){ const z = C0[2]; ax = unit(ax.map((t, i)=> t - dot(ax, z)*z[i])); }
+      const T = rotAbout(ax, deg);
       r.R = fromCols(C0.map(c=> mv(T, c)));
       r.frame.R0 = o.R; r.frame.tiltDeg = deg; r.frame.tiltAxis = ax;
     }
@@ -278,6 +285,9 @@ const errIdx = truths.map((r, i)=> r.errKind !== 'none' ? i : -1).filter(i=> i >
 let rStr = 0; for (let k = 0; k < 6; k++){ const rr = sT.corr(k, 6, errIdx); if (Math.abs(rr) > Math.abs(rStr)) rStr = rr; }
 const design = {
   version: VERSION, seed: SEED, protocol: 'research/free-shape/PROTOCOL.md',
+  // the seeds keep VERSION; revision 2 (the pilot's verification): a near cylinder's or
+  // spheroid's axis is turned by its full tilt (22 rows' R; the rest unchanged)
+  revision: 2,
   factors: { smallest: '2–15 nm log-uniform', ratios: 'three-extent solids: middle/smallest, largest/middle 1–6 log-uniform; two-extent: axis/section 1/6–6 log-uniform; largest ≤ 60 nm (both log-ratios shrunk in proportion where it would pass)',
     sphere: 'D 2–30 nm log-uniform', counts: '300–30000 log-uniform (strongest point of the phase above the background)', pb: '1–20 log-uniform', eps: '0–0.003 uniform (fraction)', strength: '0–1 uniform' },
   lhs: { truths: { columns: colsT, n: truths.length, minDist: +sT.dmin.toFixed(4), minDistUnannealed: +refT.toFixed(4), maxCorr: { r: +sT.rmax.r.toFixed(4), between: [colsT[sT.rmax.k], colsT[sT.rmax.l]], rows: sT.rmax.n }, maxCorrStrengthOnErrorRows: +rStr.toFixed(4), capped },
@@ -286,6 +296,37 @@ const design = {
   rows,
 };
 fs.writeFileSync(path.join(HERE, 'design.json'), JSON.stringify(design, null, 1));
+
+/* ---------- the factors as drawn ----------
+   Pearson correlations on the drawn factors (log scale for the log-uniform ones): the
+   60 nm cap shrinks the ratios of the truths with a large smallest extent, which the
+   cube's coordinates do not show. And each error kind's strength levels against its own
+   1/n bins. */
+const pear = (xs, ys) => { const n = xs.length, mx = xs.reduce((a, b)=> a + b)/n, my = ys.reduce((a, b)=> a + b)/n; let sxy = 0, sx = 0, sy = 0; for (let i = 0; i < n; i++){ sxy += (xs[i] - mx)*(ys[i] - my); sx += (xs[i] - mx)**2; sy += (ys[i] - my)**2; } return sxy/Math.sqrt(sx*sy); };
+const drawnStats = (()=> {
+  const lnS = r => Math.log(Math.min(...r.dims)), lnA = r => Math.log(Math.max(...r.dims)/Math.min(...r.dims));
+  const three = truths.filter(r=> !TWO.has(r.solid)), lr = (r, k) => Math.log(r.ratios[k]);
+  const F = { 'ln smallest': lnS, 'ln largest/smallest': lnA, 'ln counts': r=> Math.log(r.counts), 'ln pb': r=> Math.log(r.pb), 'ε': r=> r.eps };
+  const names = Object.keys(F); let worst = { r: 0 };
+  for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++){ if (i === 0 && j === 1) continue; const r = pear(truths.map(F[names[i]]), truths.map(F[names[j]])); if (Math.abs(r) > Math.abs(worst.r)) worst = { r, a: names[i], b: names[j] }; }
+  const er = truths.filter(r=> r.error);
+  for (const nm of names){ const r = pear(er.map(F[nm]), er.map(x=> x.error.strength)); if (Math.abs(r) > Math.abs(worst.r)) worst = { r, a: nm, b: 'strength' }; }
+  const terc = [...truths].sort((a, b)=> lnS(a) - lnS(b)), k = Math.round(terc.length/3);
+  const tmean = g => (g.reduce((t, r)=> t + lnA(r), 0)/g.length).toFixed(2);
+  const capT = g => g.filter(r=> Math.max(...r.dims) > 59.99).length;
+  const groups = [terc.slice(0, k), terc.slice(k, 2*k), terc.slice(2*k)];
+  const lines = [
+    `ρ(ln smallest, ln largest/smallest) ${pear(truths.map(lnS), truths.map(lnA)).toFixed(3)} over the 198 truths`,
+    `for the three-extent solids ρ(ln smallest, ln middle/smallest) ${pear(three.map(lnS), three.map(r=> lr(r, 0))).toFixed(3)}, ρ(ln smallest, ln largest/middle) ${pear(three.map(lnS), three.map(r=> lr(r, 1))).toFixed(3)}`,
+    `mean ln(largest/smallest) by tercile of the smallest extent ${groups.map(tmean).join(', ')} (at the cap ${groups.map(capT).join(', ')})`,
+    `every other pair under |ρ| ${Math.abs(worst.r).toFixed(3)} (${worst.a} × ${worst.b})`];
+  return { lines };
+})();
+const strengthBins = ['hump', 'sizedist', 'impurity', 'air', 'po'].map(kind=> {
+  const xs = truths.filter(r=> r.error && r.error.kind === kind).map(r=> r.error.strength), n = xs.length;
+  const hit = new Set(xs.map(x=> Math.min(n - 1, Math.floor(x*n))));
+  return { kind, n, empty: n - hit.size };
+});
 
 /* ---------- design.md: the balance tables ---------- */
 const tab = (rowsX, rowKey, rowVals, colKey, colVals, title) => {
@@ -310,7 +351,9 @@ const md = [`# Design ${VERSION} (seed ${SEED})`, '',
   '## The hypercube',
   `- Truths: 7 columns (${colsT.join(', ')}), sliced by solid (first six) and by error kind (strength). Minimum distance between two of the 198 points in the unit cube ${sT.dmin.toFixed(4)} (the same sliced structure before annealing: median of 20 draws ${refT.toFixed(4)}). Largest correlation between two columns ${sT.rmax.r.toFixed(4)} (${colsT[sT.rmax.k]} × ${colsT[sT.rmax.l]}, over ${sT.rmax.n} rows: the strength's correlations over the rows with an error, the others' over all), Pearson on the unit-cube coordinates.`,
   `- Spheres: 5 columns (${colsS.join(', ')}). Minimum distance ${sS.dmin.toFixed(4)} (unannealed median ${refS.toFixed(4)}); largest correlation ${sS.rmax.r.toFixed(4)} (${colsS[sS.rmax.k]} × ${colsS[sS.rmax.l]}, over ${sS.rmax.n} rows).`,
-  `- ${capped} of the 198 truths had their ratios shrunk to keep the largest extent at 60 nm.`, '',
+  `- ${capped} of the 198 truths had their ratios shrunk to keep the largest extent at 60 nm.`,
+  `- On the factors as drawn (the cap acts on them, not on the cube): ${drawnStats.lines.join('; ')}.`,
+  `- The strength column, by error-kind slice (rows, empty 1/n bins): ${strengthBins.map(b=> b.kind + ' ' + b.n + ', ' + b.empty).join('; ')}. The slices are dealt near (m + U)/n each and then given the global levels (k + ½)/198, so a slice of unequal size can miss a bin of its own.`, '',
   '## The factors per solid (min, median, max)',
   '| solid | smallest nm | largest nm | counts | peak/bg | ε % | strength (with an error) |', '|---|---|---|---|---|---|---|',
   ...SOLIDS.map(s=> { const xs = truths.filter(r=> r.solid === s), er = xs.filter(r=> r.error);

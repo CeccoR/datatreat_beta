@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* node report.mjs --tag <name>[,<name>…] [--out file.md] [--json file.json] [--sections cost,bias,baseline]
+/* node report.mjs --tag <name>[,<name>…] [--out file.md] [--json file.json] [--sections cost,bias,baseline,minima]
    Reads results/<tag>/*.json (run.mjs records) and writes the pilot's tables:
    - cost: per run and per Laue class, the members (in range, and in the model's list), ms
      per evaluation of today's search, evaluations and wall time of the isotropic fit, the
@@ -21,7 +21,9 @@ const a = process.argv.slice(2), opt = {};
 for (let i = 0; i < a.length; i++){ if (a[i].startsWith('--')){ const k = a[i].slice(2); opt[k] = a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : true; } }
 const design = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'design', 'design.json'), 'utf8'));
 const rowOf = id => design.rows.find(r=> r.id === id);
-const readResult = text => JSON.parse(text, (k, v)=> k === 'dims' && Array.isArray(v) ? v.map(d=> d == null ? Infinity : d) : v);
+// the records' unbounded extents and their errors are Infinity (lib.mjs readResult: written
+// as "Infinity", or as null by the records before writeResult)
+const { readResult, sameSolid } = await import('../harness/lib.mjs');
 const runs = [];
 const failed = [];
 for (const tag of String(opt.tag).split(',')){
@@ -30,10 +32,16 @@ for (const tag of String(opt.tag).split(',')){
   const lg = path.join(dir, 'batch.log');
   if (fs.existsSync(lg)) for (const m of fs.readFileSync(lg, 'utf8').matchAll(/\] (\S+): FAILED (\S+)/g)) failed.push({ tag, id: m[1], code: m[2] });
 }
-const f = (x, d = 1) => x == null || !Number.isFinite(x) ? '—' : x.toFixed(d);
-const pc = (x, d = 0) => x == null || !Number.isFinite(x) ? '—' : (100*x >= 0 ? '+' : '') + (100*x).toFixed(d) + ' %';
-const med = xs => { const s = xs.filter(Number.isFinite).sort((p, q)=> p - q); if (!s.length) return NaN; const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m])/2; };
-const qtl = (xs, p) => { const s = xs.filter(Number.isFinite).sort((x, y)=> x - y); if (!s.length) return NaN; const i = (s.length - 1)*p, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo])*(i - lo); };
+const f = (x, d = 1) => x === Infinity ? '∞' : x === -Infinity ? '−∞' : x == null || !Number.isFinite(x) ? '—' : x.toFixed(d);
+const pc = (x, d = 0) => x === Infinity ? '+∞' : x == null || !Number.isFinite(x) ? '—' : (100*x >= 0 ? '+' : '') + (100*x).toFixed(d) + ' %';
+/* Medians and percentiles keep ±Infinity: an extent read as unbounded is the largest error
+   a run can make, and ranks last (the first report dropped them with the NaNs, and read the
+   accuracy too good). null and NaN (an axis left undefined, a run with no value) are left
+   out. Between a finite value and Infinity a percentile is Infinity. */
+const num = x => typeof x === 'number' && !Number.isNaN(x);
+const med = xs => qtl(xs, 0.5);
+const qtl = (xs, p) => { const s = xs.filter(num).sort((x, y)=> x - y); if (!s.length) return NaN; const i = (s.length - 1)*p, lo = Math.floor(i), hi = Math.ceil(i); return lo === hi || s[lo] === s[hi] ? s[lo] : !Number.isFinite(s[hi]) || !Number.isFinite(s[lo]) ? (i - lo < 1e-12 ? s[lo] : s[hi]) : s[lo] + (s[hi] - s[lo])*(i - lo); };
+const nInf = xs => xs.filter(x=> x === Infinity).length;
 const sum = xs => xs.reduce((t, x)=> t + (Number.isFinite(x) ? x : 0), 0);
 const mean = xs => { const s = xs.filter(Number.isFinite); return s.length ? sum(s)/s.length : NaN; };
 
@@ -47,7 +55,7 @@ function digest(o){
   if (T){
     d.out = T.error ? 'error' : T.kept ? (T.held ? 'held' : 'free') : T.rejected ? (T.early ? 'early' : 'rejected') : 'none';
     d.dBIC = T.dBIC; d.sEv = T.search.evals; d.sMs = T.search.ms; d.rEv = T.report ? T.report.evals : 0; d.rMs = T.report ? T.report.ms : 0;
-    d.msEv = T.search.ms/Math.max(1, T.search.evals); d.chi2 = T.chi2Best; d.acc = T.acc || null; d.accFree = T.accFree || null; d.solidT = T.solid || null; d.rep = T.report || null;
+    d.msEv = T.search.ms/Math.max(1, T.search.evals); d.chi2 = T.chi2Best; d.acc = T.acc || null; d.accFree = T.accFree || null; d.accLoose = T.accLoose || null; d.solidT = T.solid || null; d.rep = T.report || null;
     d.TchiNu = T.chi2nu;
   }
   if (R){
@@ -71,7 +79,7 @@ function digest(o){
 }
 const D = runs.map(digest);
 const lines = [];
-const sections = String(opt.sections || 'cost,bias,baseline').split(',');
+const sections = String(opt.sections || 'cost,bias,baseline,minima').split(',');
 
 if (sections.includes('cost')){
   lines.push(`## Cost (${D.length} runs: ${[...new Set(D.map(d=> d.tag))].join(', ')})`, '',
@@ -96,14 +104,14 @@ if (sections.includes('bias')){
   const tr = D.filter(d=> d.row.kind === 'truth');
   lines.push(`## Line-shape bias (${tr.length} truths)`, '',
     'Signed errors of the extents, the truth\'s thinnest, middle and longest (median, and the 10th–90th percentiles); the truth\'s most distinct axis (°, median and 90th percentile). "ref": the truth reference (refined from the truth, no search); "today": today\'s reported solid (kept runs). χ²_ν: the truth reference\'s.', '',
-    '| solid | kernel | runs | ref thinnest | ref middle | ref longest | ref axis ° | ref χ²_ν | today kept | today thinnest | today longest | today axis ° |', '|---|---|---|---|---|---|---|---|---|---|---|---|');
+    '| solid | kernel | runs | ref thinnest | ref middle | ref longest | ref unbounded | ref axis ° | ref χ²_ν | today kept | today thinnest | today longest | today axis ° |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const k of [...new Set(tr.map(d=> d.kernel))]) for (const s of solids){
     const g = tr.filter(d=> d.solid === s && d.kernel === k); if (!g.length) continue;
     const col = (key, j) => g.map(d=> d[key] ? d[key][j] : NaN);
     const rng3 = xs => `${pc(med(xs))} (${pc(qtl(xs, 0.1))}…${pc(qtl(xs, 0.9))})`;
     const ax = (sel) => { const xs = g.map(sel); return `${f(med(xs))} (${f(qtl(xs, 0.9))})`; };
     const kept = g.filter(d=> d.acc);
-    lines.push(`| ${s} | ${k} | ${g.length} | ${rng3(col('dimR', 0))} | ${rng3(col('dimR', 1))} | ${rng3(col('dimR', 2))} | ${ax(d=> d.ref && d.ref.acc ? d.ref.acc.principal : NaN)} | ${f(med(g.map(d=> d.ref && d.ref.chi2nu)), 2)} | ${kept.length} | ${rng3(kept.map(d=> d.dimT[0]))} | ${rng3(kept.map(d=> d.dimT[2]))} | ${f(med(kept.map(d=> d.acc.principal)))} (${f(qtl(kept.map(d=> d.acc.principal), 0.9))}) |`);
+    lines.push(`| ${s} | ${k} | ${g.length} | ${rng3(col('dimR', 0))} | ${rng3(col('dimR', 1))} | ${rng3(col('dimR', 2))} | ${nInf(g.map(d=> d.ref && d.ref.acc ? d.ref.acc.dimMax : NaN))} | ${ax(d=> d.ref && d.ref.acc ? d.ref.acc.principal : NaN)} | ${f(med(g.map(d=> d.ref && d.ref.chi2nu)), 2)} | ${kept.length} | ${rng3(kept.map(d=> d.dimT[0]))} | ${rng3(kept.map(d=> d.dimT[2]))} | ${f(med(kept.map(d=> d.acc.principal)))} (${f(qtl(kept.map(d=> d.acc.principal), 0.9))}) |`);
   }
   // by error kind (the truth reference: the model's minimum next to the truth)
   lines.push('', 'By the model error (truth reference, all solids):', '', '| error | runs | ref thinnest | ref middle | ref longest | ref axis ° | ref χ²_ν |', '|---|---|---|---|---|---|---|');
@@ -129,13 +137,13 @@ if (sections.includes('bias')){
 if (sections.includes('baseline')){
   lines.push(`## Today's search (${D.length} runs)`, '');
   const show = (title, key, ks) => {
-    lines.push(`| ${title} | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |`, '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+    lines.push(`| ${title} | runs | held | free | rejected (early) | reached / judged | Δ>1 | ref ΔBIC<−10, today rejected | unbounded extent | worst dim, median (90 %) | thinnest, median | axis °, median (90 %) | axis ° holohedry, median | search ev | search s | report s | iso s |`, '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
     for (const k of ks){
       const g = D.filter(d=> (typeof key === 'function' ? key(d) : d[key]) === k); if (!g.length) continue;
       const judged = g.filter(d=> Number.isFinite(d.delta)), reached = judged.filter(d=> d.delta <= 1);
       const missed = g.filter(d=> (d.out === 'early' || d.out === 'rejected') && d.ref && d.ref.dBIC < -10);
       const kept = g.filter(d=> d.acc);
-      lines.push(`| ${k} | ${g.length} | ${g.filter(d=> d.out === 'held').length} | ${g.filter(d=> d.out === 'free').length} | ${g.filter(d=> d.out === 'rejected' || d.out === 'early').length} (${g.filter(d=> d.out === 'early').length}) | ${reached.length} / ${judged.length} | ${judged.length - reached.length} | ${missed.length} | ${kept.length ? pc(med(kept.map(d=> d.acc.dimMax))) + ' (' + pc(qtl(kept.map(d=> d.acc.dimMax), 0.9)) + ')' : '—'} | ${kept.length ? pc(med(kept.map(d=> d.dimT ? d.dimT[0] : NaN))) : '—'} | ${kept.length ? f(med(kept.map(d=> d.acc.principal))) + ' (' + f(qtl(kept.map(d=> d.acc.principal), 0.9)) + ')' : '—'} | ${kept.length ? f(med(kept.map(d=> d.acc.principalHolo))) : '—'} | ${f(mean(g.map(d=> d.sEv)), 0)} | ${f(mean(g.map(d=> d.sMs/1000)))} | ${f(mean(g.map(d=> d.rMs/1000)))} | ${f(mean(g.map(d=> d.iso && d.iso.ms/1000)))} |`);
+      lines.push(`| ${k} | ${g.length} | ${g.filter(d=> d.out === 'held').length} | ${g.filter(d=> d.out === 'free').length} | ${g.filter(d=> d.out === 'rejected' || d.out === 'early').length} (${g.filter(d=> d.out === 'early').length}) | ${reached.length} / ${judged.length} | ${judged.length - reached.length} | ${missed.length} | ${nInf(kept.map(d=> d.acc.dimMax))} | ${kept.length ? pc(med(kept.map(d=> d.acc.dimMax))) + ' (' + pc(qtl(kept.map(d=> d.acc.dimMax), 0.9)) + ')' : '—'} | ${kept.length ? pc(med(kept.map(d=> d.dimT ? d.dimT[0] : NaN))) : '—'} | ${kept.length ? f(med(kept.map(d=> d.acc.principal))) + ' (' + f(qtl(kept.map(d=> d.acc.principal), 0.9)) + ')' : '—'} | ${kept.length ? f(med(kept.map(d=> d.acc.principalHolo))) : '—'} | ${f(mean(g.map(d=> d.sEv)), 0)} | ${f(mean(g.map(d=> d.sMs/1000)))} | ${f(mean(g.map(d=> d.rMs/1000)))} | ${f(mean(g.map(d=> d.iso && d.iso.ms/1000)))} |`);
     }
     lines.push('');
   };
@@ -152,7 +160,25 @@ if (sections.includes('baseline')){
     lines.push(`| ${d.id} | ${d.laue} | ${d.solid}${d.solid !== d.search ? ' (' + d.search + ')' : ''} | ${d.orient} | ${d.err}${d.row.error ? ' ' + f(d.row.error.strength, 2) : ''} | ${f(d.iso && d.iso.chi2nu, 2)} | ${d.out} | ${f(d.dBIC, 0)} | ${f(d.ref && d.ref.dBIC, 0)} | ${f(d.delta, 2)} | ${d.acc ? pc(d.acc.dimMax) : '—'} | ${d.dimT ? pc(d.dimT[0]) : '—'} | ${f(d.acc && d.acc.principal)} | ${f(d.acc && d.acc.principalHolo)} | ${d.sEv} | ${f(d.sMs/1000)} | ${f(d.rMs/1000)} |`);
   lines.push('', `Failures: ${failed.length ? failed.map(x=> x.id + ' (' + x.code + ')').join(', ') : 'none'}; records with an error: ${D.filter(d=> d.error).map(d=> d.id).join(', ') || 'none'}.`, '');
 }
+/* minima: today's lowest minimum against the truth reference's (the minimum next to the
+   truth), on the kept truths with both: how often today's is more than one χ²_ν lower, and
+   whether it is then another solid (sameSolid: 8°, 28 %, modulo the class); the elliptic
+   cylinders whose reported height pairs, by size, with another of the truth's extents. */
+if (sections.includes('minima')){
+  const g = D.filter(d=> d.row.kind === 'truth' && d.acc && d.ref && d.ref.solid && Number.isFinite(d.chi2) && Number.isFinite(d.ref.chi2));
+  const nu = d => Math.max(1, Math.min(d.chi2, d.ref.chi2)/Math.max(1, d.iso.N - d.ref.P));
+  const lower = g.filter(d=> (d.ref.chi2 - d.chi2)/nu(d) > 1), other = d => !sameSolid(d.row.phase, d.solidT, d.ref.solid);
+  const near = g.filter(d=> Math.abs(d.ref.chi2 - d.chi2)/nu(d) <= 1);
+  lines.push(`## Today's minimum against the truth reference's (${g.length} kept truths)`, '',
+    `- Today's χ² more than one χ²_ν below the truth reference's: ${lower.length}; of those at another solid (beyond 8° or 28 %): ${lower.filter(other).length}.`,
+    `- Within one χ²_ν of it: ${near.length}; of those at another solid: ${near.filter(other).length}.`,
+    `- Above it by more than one χ²_ν: ${g.length - lower.length - near.length}.`);
+  const ec = D.filter(d=> d.solid === 'ellcyl' && d.acc && d.accLoose);
+  const swapped = ec.filter(d=> { const p = d.accLoose.pairs.find(([ri, fi])=> fi === 2); return p && p[0] !== 2; });
+  lines.push(`- Elliptic cylinders kept: ${ec.length}; the reported height paired by size with another of the truth's extents: ${swapped.length}. Worst extent (median) paired by role ${pc(med(ec.map(d=> d.acc.dimMax)))}, by size whatever the role ${pc(med(ec.map(d=> d.accLoose.dimMax)))}.`, '');
+}
 const text = lines.join('\n') + '\n';
 if (opt.out) fs.writeFileSync(opt.out, text);
-if (opt.json) fs.writeFileSync(opt.json, JSON.stringify(D.map(({ row, rep, solidT, ...d })=> d)));
+// (non-finite numbers spelled out, as writeResult does: an unbounded extent stays +∞)
+if (opt.json) fs.writeFileSync(opt.json, JSON.stringify(D.map(({ row, rep, solidT, ...d })=> d), (k, v)=> typeof v === 'number' && !Number.isFinite(v) ? String(v) : v));
 console.log(text);

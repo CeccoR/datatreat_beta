@@ -570,8 +570,8 @@
     34,
     11.1
    ],
-   "lorentz": 2.49e-16,
-   "exact": 0.129
+   "lorentz": 2.8e-16,
+   "exact": 0.133
   },
   "Pm-3m sqbox": {
    "dims": [
@@ -579,8 +579,8 @@
     15.4,
     9.75
    ],
-   "lorentz": 3.81e-16,
-   "exact": 0.149
+   "lorentz": 4.15e-16,
+   "exact": 0.145
   },
   "Pm-3m cylinder": {
    "dims": [
@@ -588,7 +588,7 @@
     3.82,
     5.95
    ],
-   "lorentz": 3.12e-12,
+   "lorentz": 3.11e-12,
    "exact": 0.164
   },
   "Pm-3m ellcyl": {
@@ -597,8 +597,8 @@
     24.6,
     5.42
    ],
-   "lorentz": 1.71e-12,
-   "exact": 0.159
+   "lorentz": 1.94e-12,
+   "exact": 0.157
   },
   "Pm-3m ellipsoid": {
    "dims": [
@@ -606,8 +606,8 @@
     15.1,
     5.6
    ],
-   "lorentz": 4.51e-16,
-   "exact": 0.164
+   "lorentz": 6.39e-16,
+   "exact": 0.165
   },
   "Pm-3m spheroid": {
    "dims": [
@@ -615,8 +615,8 @@
     2.28,
     7.27
    ],
-   "lorentz": 3.26e-16,
-   "exact": 0.159
+   "lorentz": 3.46e-16,
+   "exact": 0.162
   },
   "Pm-3m sphere": {
    "dims": [
@@ -624,8 +624,8 @@
     5.48,
     5.48
    ],
-   "lorentz": 6.09e-16,
-   "exact": 0.176
+   "lorentz": 5.18e-16,
+   "exact": 0.175
   },
   "P-1 box": {
    "dims": [
@@ -633,7 +633,7 @@
     8.51,
     3.31
    ],
-   "lorentz": 1.2e-15,
+   "lorentz": 1.4e-15,
    "exact": 0.143
   },
   "P-1 sqbox": {
@@ -660,7 +660,7 @@
     3.43,
     9.17
    ],
-   "lorentz": 2.27e-12,
+   "lorentz": 2.28e-12,
    "exact": 0.164
   },
   "P-1 ellipsoid": {
@@ -669,7 +669,7 @@
     39.6,
     2.35
    ],
-   "lorentz": 3.37e-16,
+   "lorentz": 4.49e-16,
    "exact": 0.147
   },
   "P-1 spheroid": {
@@ -687,19 +687,19 @@
     23.3,
     23.3
    ],
-   "lorentz": 4.01e-16,
+   "lorentz": 6.01e-16,
    "exact": 0.155
   }
  },
  "plumb": {
-  "instrument box 10x15x25 Pm-3m": 0.00163,
-  "instrument box 10x15x25 P-1": 0.00165,
-  "instrument box 3x4x6 Pm-3m": 0.00166,
-  "instrument box 3x4x6 P-1": 0.00223,
-  "lorentzian instrument box 10x15x25 Pm-3m": 0.000601,
-  "lorentzian instrument box 10x15x25 P-1": 0.00048,
-  "lorentzian instrument box 3x4x6 Pm-3m": 0.00121,
-  "lorentzian instrument box 3x4x6 P-1": 0.00199
+  "instrument box 10x15x25 Pm-3m": 0.00119,
+  "instrument box 10x15x25 P-1": 0.00267,
+  "instrument box 3x4x6 Pm-3m": 0.00153,
+  "instrument box 3x4x6 P-1": 0.00173,
+  "lorentzian instrument box 10x15x25 Pm-3m": 0.000617,
+  "lorentzian instrument box 10x15x25 P-1": 0.00129,
+  "lorentzian instrument box 3x4x6 Pm-3m": 0.00124,
+  "lorentzian instrument box 3x4x6 P-1": 0.00149
  },
  "breadth": {
   "box": {
@@ -790,24 +790,29 @@
  "errors": {
   "hump": {
    "specFrac": 0.225,
-   "frac": 0.211,
+   "frac": 0.225,
+   "inRange": 0.931,
    "specFwhm": 5.94,
    "fwhm": 5.95,
-   "centre": 17.6,
-   "at": 17.6
+   "centre": 17.2,
+   "at": 17.2
   },
   "sizedist": {
    "sigma": 0.3,
    "betaRatio": 1,
-   "fwhmRatio": 0.971
+   "fwhmRatio": 0.972
   },
-  "impurity": [
-   {
-    "pos": 60.7,
-    "specFrac": 0.055,
-    "frac": 0.0536
-   }
-  ],
+  "impurity": {
+   "specFrac": 0.055,
+   "frac": 0.055,
+   "lines": [
+    {
+     "pos": 52.3,
+     "specFrac": 0.055,
+     "inRange": 0.999
+    }
+   ]
+  },
   "air": {
    "specK": 1.75,
    "k": 1.75,
@@ -837,7 +842,7 @@
      1
     ]
    ],
-   "maxRelVsMD": 4.44e-16,
+   "maxRelVsMD": 3.33e-16,
    "ratioRange": [
     0.987,
     1.02
@@ -846,81 +851,81 @@
  },
  "time": {
   "P-1": {
-   "ms": 255,
-   "msSizedist": 724,
-   "nRefl": 96,
-   "members": 96,
-   "minOverPeak": 0.00551
+   "ms": 184,
+   "msSizedist": 490,
+   "nRefl": 70,
+   "members": 70,
+   "minOverPeak": 0.00529
   },
   "P2m": {
-   "ms": 399,
-   "msSizedist": 730,
-   "nRefl": 58,
-   "members": 91,
-   "minOverPeak": 0.000989
+   "ms": 188,
+   "msSizedist": 441,
+   "nRefl": 46,
+   "members": 71,
+   "minOverPeak": 0.000888
   },
   "Pmmm": {
-   "ms": 395,
-   "msSizedist": 896,
-   "nRefl": 41,
-   "members": 94,
-   "minOverPeak": 0.000499
+   "ms": 174,
+   "msSizedist": 545,
+   "nRefl": 30,
+   "members": 68,
+   "minOverPeak": 0.000479
   },
   "P4m": {
-   "ms": 470,
-   "msSizedist": 1573,
-   "nRefl": 54,
-   "members": 177,
-   "minOverPeak": 0.000833
+   "ms": 286,
+   "msSizedist": 971,
+   "nRefl": 22,
+   "members": 67,
+   "minOverPeak": 0.000432
   },
   "P4mmm": {
-   "ms": 482,
-   "msSizedist": 1353,
-   "nRefl": 41,
-   "members": 170,
-   "minOverPeak": 0.000239
+   "ms": 308,
+   "msSizedist": 664,
+   "nRefl": 19,
+   "members": 68,
+   "minOverPeak": 0.000116
   },
   "P-3": {
-   "ms": 440,
-   "msSizedist": 1494,
-   "nRefl": 61,
-   "members": 171,
-   "minOverPeak": 0.00322
+   "ms": 149,
+   "msSizedist": 490,
+   "nRefl": 23,
+   "members": 61,
+   "minOverPeak": 0.0017
   },
   "P-3m1": {
-   "ms": 571,
-   "msSizedist": 1678,
-   "nRefl": 50,
-   "members": 180,
-   "minOverPeak": 0.0105
+   "ms": 182,
+   "msSizedist": 821,
+   "nRefl": 22,
+   "members": 67,
+   "minOverPeak": 0.00565
   },
   "P6m": {
-   "ms": 651,
-   "msSizedist": 1897,
-   "nRefl": 39,
-   "members": 184,
-   "minOverPeak": 0.0000719
+   "ms": 213,
+   "msSizedist": 674,
+   "nRefl": 17,
+   "members": 69,
+   "minOverPeak": 0.0000416
   },
   "P6mmm": {
-   "ms": 744,
-   "msSizedist": 1775,
-   "nRefl": 32,
-   "members": 170,
-   "minOverPeak": 0.000114
+   "ms": 224,
+   "msSizedist": 527,
+   "nRefl": 14,
+   "members": 60,
+   "minOverPeak": 0.0000674
   },
   "Pm-3": {
-   "ms": 492,
-   "msSizedist": 1474,
-   "nRefl": 25,
-   "members": 182,
-   "minOverPeak": 0.000225
+   "ms": 159,
+   "msSizedist": 459,
+   "nRefl": 12,
+   "members": 73,
+   "minOverPeak": 0.00011
   },
   "Pm-3m": {
-   "ms": 580,
-   "msSizedist": 1511,
-   "nRefl": 20,
-   "members": 182,
-   "minOverPeak": 0.000733
+   "ms": 149,
+   "msSizedist": 423,
+   "nRefl": 10,
+   "members": 73,
+   "minOverPeak": 0.000414
   }
  }
 }

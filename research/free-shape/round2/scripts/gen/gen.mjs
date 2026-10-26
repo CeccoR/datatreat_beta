@@ -37,7 +37,11 @@ const { D2R, R2D, K_SCHERRER, BODIES, quatOfMat, tch, profileAtTheta } = ENG;
    FWHM or more. */
 export const INSTR = { lam1: 1.540598, lam2: 1.544426, ratio: 0.5, radius: 240, soller: { incident: 0.02, diffracted: 0.02 }, focusLength: 12, monochromator: false };
 export const STD_TRUTH = { U: 0.0012, V: -0.0008, W: 0.0006, X: 0.006, Y: 0.012, axL: 15, transp: -0.0171, zero: 0.008, disp: 0 };
-export const GRID = { lo: 10, hi: 130, step: 0.01 };
+// The grid round 2 draws on: the pilot's decision (research/free-shape/round2/PILOT.md,
+// 10–110° in 0.01°), the default of every caller (gen/draw.mjs, harness/run.mjs --draw,
+// pilot/run.mjs). The standard keeps the 10–130° it was drawn and refined on (STD_GRID).
+export const GRID = { lo: 10, hi: 110, step: 0.01 };
+export const STD_GRID = { lo: 10, hi: 130, step: 0.01 };
 export const gridX = (g = GRID) => { const n = Math.round((g.hi - g.lo)/g.step) + 1; return Array.from({ length: n }, (_, i)=> +(g.lo + i*g.step).toFixed(6)); };
 const LAM1 = INSTR.lam1;
 
@@ -96,7 +100,7 @@ export function standardIrf(){
     const f = path.join(DATA, 'irf.json');
     if (fs.existsSync(f)) return JSON.parse(fs.readFileSync(f, 'utf8'));
     const prep = prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)'), ph = { ...phaseOf(prep, {}), id: 0 };
-    const x = gridX();
+    const x = gridX(STD_GRID);
     const m0 = buildModel({ x, y: x.map(()=> 1), instr: INSTR, phases: [ph] });
     const P = { ...STD_TRUTH, 'p0.scale': 1, 'p0.B': 0, bg0: 150, bg1: -20, bgInv: 300 };
     setParams(m0, vecWith(m0, P));
@@ -109,7 +113,7 @@ export function standardIrf(){
     const t0 = Date.now(), res = autoRefine(m, { standard: true });
     const p = res.params;
     const irf = { U: p.U, V: p.V, W: p.W, X: p.X, Y: p.Y, asym: p.asym || 0, zero: p.zero, transp: p.transp, axL: p.axL, axP1: INSTR.soller.incident, axP2: INSTR.soller.diffracted,
-      lam1: INSTR.lam1, radius: INSTR.radius, _chi2nu: res.stats.chi2, _Rwp: res.stats.Rwp, _ms: Date.now() - t0, _truth: STD_TRUTH, _grid: GRID, _counts: 15000 };
+      lam1: INSTR.lam1, radius: INSTR.radius, _chi2nu: res.stats.chi2, _Rwp: res.stats.Rwp, _ms: Date.now() - t0, _truth: STD_TRUTH, _grid: STD_GRID, _counts: 15000 };
     fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(f, JSON.stringify(irf, null, 1));
     return irf;
   });
@@ -149,13 +153,19 @@ export function normRow(row){
   return { ...row, solid, dims: dims.map(Number), R, error: e, counts, pb, eps, phase: cifPath(row.phase), seed: row.seed ?? 1 };
 }
 
-/* The model errors' draws (PROTOCOL.md's table; strength s ∈ [0, 1], linear):
-   - hump: area (5 + 35 s) % of the strongest line's; centre uniform over the range's lower
-     half (lo + 5° to its middle), FWHM 3–10° uniform; a pseudo-Voigt, η 0.5.
+/* The model errors' draws (PROTOCOL.md's table; strength s ∈ [0, 1], linear). Every area
+   is within the pattern, as the strongest line's is measured (its α1 + α2 as drawn on the
+   grid): the stated share is the share the data hold.
+   - hump: area (5 + 35 s) % of the strongest line's within the range; centre uniform over
+     the range's lower half (lo + 5° to its middle), FWHM 3–10° uniform; a pseudo-Voigt,
+     η 0.5, scaled to that area over the grid (the tails beyond the range would otherwise
+     take up to 14 % of it: a hump at 15° with an 8° FWHM).
    - sizedist: σ = 0.1 + 0.4 s (ln of the solid's scale), volume-weighted, ⟨L⟩_V kept.
    - impurity: 1–3 lines (uniform), each (1 + 9 s) % of the strongest line's area, at
      positions uniform over lo + 2° … hi − 2°, each a Kα1/Kα2 pair with the instrument's
-     profile and a 100 nm Lorentzian size.
+     profile and a 100 nm Lorentzian size, drawn over the whole pattern (no window: the
+     engine's addPeak at ±40 FWHM, lowered at its edge, kept 98.5 % of it) and scaled to
+     that area over the grid.
    - air: (0.5 + 2.5 s) × the background at the range's start, decaying as e^{−(2θ − lo)/τ},
      τ 2–6° uniform.
    - po: March–Dollase r = 0.95 − 0.25 s, or 1/r (half the draws), on a low-index axis drawn
@@ -219,7 +229,18 @@ function truthParams(row, irf, er){
    with ⟨L⟩_V = 2∫A dL from kernels.mjs (the Lorentzian-limit check: the difference then
    tests the conventions, not the shape); 'sub': draws only the subtracted term
    (rest ⊗ the engine's Lorentzian, by Fourier synthesis) into `into` (the plumbing check). */
-function makeHook(b, mode, into){
+/* Each correction is synthesised as the engine synthesises a WPPM line (wppmLine): by FFT
+   over a window of ±max(40 FWHM, the line's half-window), lowered by its value at the
+   window's edge. Against a direct synthesis with no window and no lowering (the pilot's
+   verification, ../pilot/fix/pattern110.mjs, 6 rows on 10–110°), the drawn correction is
+   off by at most 5·10⁻⁴ of the peak, 3·10⁻⁴ once the background's family (quadratic +
+   1/2θ) is taken out: for the broadest lines (a 3 nm sphere) a smooth offset of 2.6·10⁻⁴,
+   which comes from the FFT's period (the folded tails, less the edge value), not from the
+   40-FWHM window. `whole` sets the window to hold the whole pattern: it changed the
+   correction by under 5·10⁻⁶ of the peak, so it is off by default. */
+const wholeWin = (tt, g) => { const t0 = tt*D2R/2, s0 = Math.sin(t0), c = Math.cos(t0)*D2R;
+  return Math.max(2*(s0 - Math.sin(g.lo*D2R/2)), 2*(Math.sin(Math.min(179, g.hi)*D2R/2) - s0))/c + 1; };
+function makeHook(b, mode, into, g, whole = false){
   const cache = new Map(), grow = b.sigma > 0 ? Math.exp(-3*b.sigma + 0.5*b.sigma*b.sigma) : 1;
   return (out, c) => {
     const key = c.i < 0 ? 'iso' : c.r + ',' + c.i;
@@ -234,17 +255,18 @@ function makeHook(b, mode, into){
     // the grid's step from the line's narrowest part (a size distribution's largest crystallites)
     const Hmin = grow < 1 ? tch(c.rest.HG, c.rest.HL + c.w*(c.lam/LAM1)/Math.cos(c.th)*grow).H : c.H;
     wppmLine({ x: c.q._x, out: mode === 'sub' ? into : out, tt: c.tt, lam: c.lam, I: c.I, Hi: c.rest.H, etai: c.rest.eta, WL: 0, nodes: c.nodes,
-      win: 40, winMin: c.half, Hest: c.H, Hmin, size });
+      win: 40, winMin: whole ? Math.max(c.half, wholeWin(c.tt, g)) : c.half, Hest: c.H, Hmin, size });
   };
 }
 
-/* drawRow(row, { kernel: 'exact' | 'lorentz' | 'none', grid, noise, irf }) → the pattern:
+/* drawRow(row, { kernel: 'exact' | 'lorentz' | 'none', grid, noise, irf, whole }) → the pattern
+   (whole: the corrections' window over the whole pattern, a comparison only):
    { id, x, y (counts; the expectation without noise: false), yc (expectation), parts
    { phase, bg, error }, instr, irf, truth { P (engine names, scale and background on the
    model's own basis for this grid), solid { type, dims nm, axes (R's columns), W, Q },
    error (its draws) }, info { S, peak2t, peak, bgAtPeak, strongest { hkl, tt, area },
    nRefl, nMembers, ms } }. */
-export function drawRow(row0, { kernel: kmode = 'exact', grid = GRID, noise = true, irf = standardIrf(), sub = false, ticks = false } = {}){
+export function drawRow(row0, { kernel: kmode = 'exact', grid = GRID, noise = true, irf = standardIrf(), sub = false, ticks = false, whole = false } = {}){
   const t0 = performance.now(), row = normRow(row0), prep = phasePrep(row.phase), er = errorDraws(row, prep, grid);
   const ph = phaseOf(prep, { shape: row.solid === 'sphere' ? false : row.solid, po: er && er.kind === 'po' ? er.axis : null });
   const x = gridX(grid), n = x.length, step = grid.step;
@@ -257,7 +279,7 @@ export function drawRow(row0, { kernel: kmode = 'exact', grid = GRID, noise = tr
   setParams(model, vecWith(model, { ...P, 'p1.scale': 1 }));
   const b = body(row.solid, row.dims.map(d=> 10*d), row.R, er && er.kind === 'sizedist' ? er.sigma : 0);
   const subArr = sub ? new Float64Array(n) : null;
-  if (kmode !== 'none') model.sizeHook = makeHook(b, sub ? 'sub' : kmode, subArr);
+  if (kmode !== 'none') model.sizeHook = makeHook(b, sub ? 'sub' : kmode, subArr, grid, whole);
   const c1 = calc(model, null, { internal: true }), net = c1.perPhase[0];
   let iMax = 0; for (let i = 1; i < n; i++) if (net[i] > net[iMax]) iMax = i;
   const S = row.counts/net[iMax], phase = Float64Array.from(net, t=> t*S);
@@ -272,19 +294,26 @@ export function drawRow(row0, { kernel: kmode = 'exact', grid = GRID, noise = tr
   const B = row.counts/row.pb/bgShape(x[iMax]), bg = Float64Array.from(x, t=> B*bgShape(t));
   // the error
   const err = new Float64Array(n), em = er ? { ...er } : null;
+  // (a profile scaled to an area A over the grid, as the strongest line's is measured)
+  const toArea = (v, A) => { let t = 0; for (let i = 0; i < n; i++) t += v[i]*step; const k = A/t; for (let i = 0; i < n; i++) v[i] *= k; return t; };
   if (er && er.kind === 'hump'){
-    const A = er.frac*area, hw = er.fwhm/2, hL = A/(Math.PI*hw), hG = A*Math.sqrt(Math.LN2/Math.PI)/hw;
+    const A = er.frac*area, hw = er.fwhm/2, hL = 1/(Math.PI*hw), hG = Math.sqrt(Math.LN2/Math.PI)/hw;
     for (let i = 0; i < n; i++){ const d = (x[i] - er.centre)/hw; err[i] = er.eta*hL/(1 + d*d) + (1 - er.eta)*hG*Math.exp(-Math.LN2*d*d); }
+    em.inRange = toArea(err, A);          // the share of the whole pseudo-Voigt within the range
     em.area = A;
   } else if (er && er.kind === 'impurity'){
     const Yd = widthOf(er.D);
-    for (const ln of er.lines){
-      const th1 = ln.pos/2*D2R, d = LAM1/(2*Math.sin(th1));
+    em.lines = er.lines.map(ln=> {
+      const th1 = ln.pos/2*D2R, d = LAM1/(2*Math.sin(th1)), one = new Float64Array(n);
       for (const [lam, w] of [[INSTR.lam1, 1], [INSTR.lam2, INSTR.ratio]]){
         const th = Math.asin(Math.min(1, lam/(2*d))), tt = 2*th*R2D + P.zero + P.transp*Math.sin(2*th), pr = profileAtTheta(th, P.U, P.V, P.W, P.X, P.Y + lam/LAM1*Yd);
-        addPeak(err, model.x, tt, pr.H, pr.eta, ln.frac*area*w/(1 + INSTR.ratio));
+        // the window holds the whole pattern: the line's tails whole, its edge value ~10⁻⁷
+        addPeak(one, model.x, tt, pr.H, pr.eta, w/(1 + INSTR.ratio), (Math.max(tt - grid.lo, grid.hi - tt) + 1)/pr.H);
       }
-    }
+      const inRange = toArea(one, ln.frac*area);
+      for (let i = 0; i < n; i++) err[i] += one[i];
+      return { ...ln, area: ln.frac*area, inRange };
+    });
   } else if (er && er.kind === 'air'){
     const a0 = er.k*B*bgShape(grid.lo);
     for (let i = 0; i < n; i++) err[i] = a0*Math.exp(-(x[i] - grid.lo)/er.tau);

@@ -92,6 +92,8 @@
 - Truths: 7 columns (smallest, ratio1, ratio2, counts, pb, eps, strength), sliced by solid (first six) and by error kind (strength). Minimum distance between two of the 198 points in the unit cube 0.4796 (the same sliced structure before annealing: median of 20 draws 0.1990). Largest correlation between two columns 0.0031 (pb × strength, over 99 rows: the strength's correlations over the rows with an error, the others' over all), Pearson on the unit-cube coordinates.
 - Spheres: 5 columns (D, counts, pb, eps, strength). Minimum distance 0.4762 (unannealed median 0.2247); largest correlation 0.0058 (pb × strength, over 16 rows).
 - 30 of the 198 truths had their ratios shrunk to keep the largest extent at 60 nm.
+- On the factors as drawn (the cap acts on them, not on the cube): ρ(ln smallest, ln largest/smallest) -0.125 over the 198 truths; for the three-extent solids ρ(ln smallest, ln middle/smallest) -0.119, ρ(ln smallest, ln largest/middle) -0.162; mean ln(largest/smallest) by tercile of the smallest extent 1.36, 1.29, 1.13 (at the cap 3, 9, 18); every other pair under |ρ| 0.067 (ln largest/smallest × ln pb).
+- The strength column, by error-kind slice (rows, empty 1/n bins): hump 20, 0; sizedist 20, 1; impurity 20, 0; air 20, 0; po 19, 1. The slices are dealt near (m + U)/n each and then given the global levels (k + ½)/198, so a slice of unequal size can miss a bin of its own.
 
 ## The factors per solid (min, median, max)
 | solid | smallest nm | largest nm | counts | peak/bg | ε % | strength (with an error) |

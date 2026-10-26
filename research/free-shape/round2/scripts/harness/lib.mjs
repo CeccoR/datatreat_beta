@@ -157,7 +157,13 @@ function familyRep(id, u, rots){
     const key = within ? [0, cx, L.angle] : [1, L.angle, cx];
     if (!best || key[0] < best.key[0] || (key[0] === best.key[0] && (key[1] < best.key[1] - 1e-6 || (Math.abs(key[1] - best.key[1]) <= 1e-6 && key[2] < best.key[2] - 1e-6)))) best = { key, L };
   }
-  return { vec: unit(mv(A, best.L.dir)), label: best.L.label, dir: best.L.dir };
+  return { vec: unit(mv(A, best.L.dir)), label: best.L.label, dir: best.L.dir, cx: best.L.dir.reduce((t, x)=> t + x*x, 0) };
+}
+// A family's members: the images of its first member under the class, as axes.
+function familyMembers(rep, rots){
+  const out = [];
+  for (const G of rots){ const m = unit(mv(G, rep.vec)); if (!out.some(o=> Math.abs(Math.abs(dot(o, m)) - 1) < 1e-9)) out.push(m); }
+  return out;
 }
 /* canonicalDir(id, u) → { vec, t, label, family }: the axis u (without sign) in the class's
    fundamental zone. Its family as the engine names it (familyRep); of the images G·u
@@ -177,12 +183,19 @@ export function canonicalDir(id, u, rots = laueRotations(id)){
   return { vec: best.v, t: lattCoords(q, best.v), label: dirLabel(q, best.v), family: rep.label, off: best.a*R2D };
 }
 
-/* The bodies' axis classes (round 1): the axes a turn of the base body permutes, whether
-   a tie among them leaves their directions undefined (a ball's, a round section's) or
-   only permuted (a cube's, a square's). */
-export const CLASSES = { box: [[0, 1, 2]], sqbox: [[0, 1, 2]], ellipsoid: [[0, 1, 2]], spheroid: [[0, 1, 2]], cylinder: [[0, 1], [2]], ellcyl: [[0, 1], [2]] };
+/* The bodies' axis classes: the slots that play one role. A box's or an ellipsoid's three
+   extents have none, so they are one class and are paired by size. The other four have a
+   section (x, y: a square, a circle, an ellipse) and a height or axis (z), as the engine
+   parametrises them, and are paired by role: a spheroid's or square box's symmetry axis
+   with the other's symmetry axis, whatever their aspect (round 1 paired the spheroid and
+   the square box by size, which compared an oblate truth's axis with an undefined
+   in-plane axis of a prolate fit). Whether a tie in a class leaves its directions
+   undefined (a ball's, a round section's) or only permuted (a cube's, a square's): CONT. */
+export const CLASSES = { box: [[0, 1, 2]], ellipsoid: [[0, 1, 2]], sqbox: [[0, 1], [2]], spheroid: [[0, 1], [2]], cylinder: [[0, 1], [2]], ellcyl: [[0, 1], [2]] };
 const CONT = { box: false, sqbox: false, ellipsoid: true, spheroid: true, cylinder: true, ellcyl: true };
 export const REVOLUTION = new Set(['cylinder', 'spheroid']);
+// bodies whose three axes a turn can permute when their extents are equal (a cube)
+const CUBIC = new Set(['box', 'sqbox', 'ellipsoid']);
 const lg = d => Math.log(Number.isFinite(d) ? d : 1e4);
 const TIE = 0.04;
 const perms = a => a.length <= 1 ? [a] : a.flatMap((x, i)=> perms([...a.slice(0, i), ...a.slice(i + 1)]).map(p=> [x, ...p]));
@@ -204,14 +217,27 @@ export function principalAxis(solid){
    2. The normal goes where canonicalDir puts it: over the class's rotations G (and those
       choices), the G·n nearest its family's first member. Among the G that do so equally
       (within 10⁻⁹ rad: the stabiliser, four of them for a plate normal on a 4-fold), the
-      one whose second axis G·e is nearest its own family's first member; remaining ties
-      by dirCmp on the normal, then the second axis.
-   3. Each axis is given in the sense toward its family's member; the third axis is the
-      cross product that keeps the frame proper (R, as the engine's quaternions need).
+      second axis decides by the lattice row it lies on or nearest: of the members of its
+      family, the one nearest G·e, and of those the first by the direction order (dirCmp);
+      then G·e nearest that member; remaining ties by dirCmp on the normal, then the
+      second axis. Where the candidates' normals or second axes come from different
+      families (a cube's three axes, a square's two edges), the simpler family goes first
+      (Σ indices², then dirCmp). Every key is the row an axis lies on or nearest, so a frame
+      on the lattice and the same frame turned a little read the same: the zone's
+      boundaries lie where an axis is equally near two rows, away from the lattice frames.
+      (The first form placed the second axis nearest its family's first member, which is
+      equidistant from several images when that member is the normal's own row, ⟨100⟩ about
+      [100] in m−3m: there a 0.01° turn chose another image, 30–90° away.)
+   3. Each axis is given in the sense toward its row; the third axis is the cross product
+      that keeps the frame proper (R, as the engine's quaternions need).
+   4. The slots: within each class of interchangeable slots (CLASSES: a box's or an
+      ellipsoid's three, a section's two), the normal takes the first, then the second
+      axis, then the third; the dimensions go with their axes. A body relabelled (its
+      slots permuted within a class, with their dimensions) gives one canonical form.
    A cylinder's or spheroid's frame is its axis alone: the canonical axis, with x along
    (axis × z_Cartesian), or along x_Cartesian when the axis is along z.
    Idempotent, and equal for frames related by the class's rotations or the body's own
-   symmetry (test.mjs). */
+   symmetry, for relabelled bodies, and for lattice frames turned 10⁻⁶° and 0.01° (test.mjs). */
 export function canonical(id, solid, rots = laueRotations(id)){
   const q = phaseQ(id), ax = solid.axes.map(unit), type = solid.type;
   const p = principalAxis(solid);
@@ -221,47 +247,71 @@ export function canonical(id, solid, rots = laueRotations(id)){
     const x = unit(cross(z, ref)), y = cross(z, x);
     return { type, dims: [...solid.dims], axes: [x, y, z], R: fromCols([x, y, z]), normal: 2, second: null, labels: [null, null, c.label], families: [null, null, c.family] };
   }
-  const others = [0, 1, 2].filter(i=> i !== p);
+  const others = [0, 1, 2].filter(i=> i !== p), cls = CLASSES[type], clsOf = i => cls.find(c=> c.includes(i));
   const same = (i, j) => Math.abs(lg(solid.dims[i]) - lg(solid.dims[j])) < 1e-12;
-  const seconds = same(others[0], others[1]) ? others : [solid.dims[others[0]] >= solid.dims[others[1]] ? others[0] : others[1]];
+  // equal extents are interchangeable where the body allows it: within a class (a
+  // square's edges, an ellipse's axes), or anywhere in a box, a square box, an ellipsoid
+  // (a cube's edges); an elliptic cylinder's height is never a section axis
+  const swap = (i, j) => same(i, j) && (clsOf(i) === clsOf(j) || CUBIC.has(type));
+  const seconds = swap(others[0], others[1]) ? others : [solid.dims[others[0]] >= solid.dims[others[1]] ? others[0] : others[1]];
   // a cube: every axis may be the normal
-  const normals = [0, 1, 2].every(i=> same(i, p)) ? [0, 1, 2] : [p];
+  const normals = [0, 1, 2].every(i=> swap(i, p)) ? [0, 1, 2] : [p];
   const rep = new Map(), repOf = i => rep.get(i) || (rep.set(i, familyRep(id, ax[i], rots)), rep.get(i));
-  // the sense toward the family's member; normal to it (a tie the sign cannot break), the
-  // nicer sense by dirCmp
+  const mem = new Map(), membersOf = i => mem.get(i) || (mem.set(i, familyMembers(repOf(i), rots)), mem.get(i));
+  // the simpler family first: Σ of its indices squared, then the direction order
+  const famCmp = (a, b) => (a.cx - b.cx) || dirCmp(lattCoords(q, a.vec), lattCoords(q, b.vec));
+  // the member of slot i's family nearest v, in its nicer sense
+  const rowOf = (i, v) => { let m = null, c = -1; for (const u of membersOf(i)){ const d = Math.abs(dot(u, v)); if (d > c + 1e-12){ c = d; m = u; } } return signed(q, m); };
+  // the sense toward a row; normal to it (a tie the sign cannot break), the nicer sense
   const toward = (v, r) => Math.abs(dot(v, r)) < 1e-9 ? signed(q, v) : dot(v, r) < 0 ? v.map(t=> -t) : v;
   let best = null;
   for (const G of rots) for (const pn of normals) for (const s of (normals.length > 1 ? [0, 1, 2].filter(i=> i !== pn) : seconds)){
     const rn = repOf(pn), re = repOf(s);
-    const n = toward(unit(mv(G, ax[pn])), rn.vec), e = toward(unit(mv(G, ax[s])), re.vec);
-    const an = angle(n, rn.vec), ae = angle(e, re.vec);
-    const cand = { n, e, an, ae, tn: lattCoords(q, n), te: lattCoords(q, e), rn, re };
+    const n = toward(unit(mv(G, ax[pn])), rn.vec), v = unit(mv(G, ax[s])), m = rowOf(s, v), e = toward(v, m);
+    const an = angle(n, rn.vec), ae = angle(e, m);
+    const cand = { n, e, m, an, ae, tn: lattCoords(q, n), te: lattCoords(q, e), tm: lattCoords(q, m), rn, re, pn, s };
     if (best){
-      const dn = an - best.an, de = ae - best.ae;
-      if (dn > 1e-9) continue;
-      if (Math.abs(dn) <= 1e-9){
-        if (de > 1e-9) continue;
-        if (Math.abs(de) <= 1e-9){ const c = dirCmp(cand.tn, best.tn); if (c > 0 || (c === 0 && dirCmp(cand.te, best.te) >= 0)) continue; }
+      const fn = famCmp(rn, best.rn);
+      if (fn > 0) continue;
+      if (!fn){
+        const dn = an - best.an;
+        if (dn > 1e-9) continue;
+        if (Math.abs(dn) <= 1e-9){
+          const fe = famCmp(re, best.re) || dirCmp(cand.tm, best.tm);
+          if (fe > 0) continue;
+          if (!fe){
+            const de = ae - best.ae;
+            if (de > 1e-9) continue;
+            if (Math.abs(de) <= 1e-9){ const c = dirCmp(cand.tn, best.tn); if (c > 0 || (c === 0 && dirCmp(cand.te, best.te) >= 0)) continue; }
+          }
+        }
       }
     }
     best = cand;
   }
-  // the frame: the normal in the body's slot p, the second axis in slot s — where two or
-  // three extents are equal (a square's edges, a cube's) the first of the tied slots,
-  // whichever axis it came from: their extents are equal — the third proper
-  const s = seconds.length > 1 ? others[0] : seconds[0];
-  const t = 3 - p - s, cyc = (s - p + 3) % 3 === 1;
-  const C = []; C[p] = best.n; C[s] = best.e; C[t] = unit(cyc ? cross(best.n, best.e) : cross(best.e, best.n));
-  const fam = []; fam[p] = best.rn.label; fam[s] = best.re.label; fam[t] = null;
-  return { type, dims: [...solid.dims], axes: C, R: fromCols(C), normal: p, second: s, labels: C.map(c=> dirLabel(q, c)), families: fam };
+  // the slots: the normal first in its class, then the second axis, then the third (a
+  // square's tied slots hold equal extents, whichever edge took them; a cube's axes go to
+  // the slots of the principal axis and the first other one)
+  let sP, sS;
+  if (normals.length > 1){ sP = p; sS = others[0]; }
+  else { const taken = new Set(), take = i => { const sl = clsOf(i).find(k=> !taken.has(k)); taken.add(sl); return sl; }; sP = take(p); sS = take(best.s); }
+  const sT = 3 - sP - sS, tSrc = 3 - best.pn - best.s;
+  const dims = []; dims[sP] = solid.dims[best.pn]; dims[sS] = solid.dims[best.s]; dims[sT] = solid.dims[tSrc];
+  const cyc = (sS - sP + 3) % 3 === 1;
+  const C = []; C[sP] = best.n; C[sS] = best.e; C[sT] = unit(cyc ? cross(best.n, best.e) : cross(best.e, best.n));
+  const fam = []; fam[sP] = best.rn.label; fam[sS] = best.re.label; fam[sT] = null;
+  return { type, dims, axes: C, R: fromCols(C), normal: sP, second: sS, labels: C.map(c=> dirLabel(q, c)), families: fam };
 }
 
 /* compareSolids(fit, ref, { rots, loose }) → { dimErr [rel, per paired axis, ref's
    order], dimMax, orient (° the worst defined axis after the best rotation of rots),
    principal (° the ref's most distinct axis), pairs }. Round 1's, with the rotations
-   given (default: none but the identity). Within a class the axes are paired by size;
-   axes the ref ties (within 4 %) are tried in every order (a cube's) or left out of the
-   orientation (a ball's, a round section's); axes are compared without sign. */
+   given (default: none but the identity). Axes are paired within their classes
+   (CLASSES: by role across them, by size within one); axes the ref ties (within 4 %)
+   are tried in every order (a cube's, a square's) or left out of the orientation (a
+   ball's, a round section's, and a spheroid's axis when its two extents are within 4 %:
+   a ball); axes are compared without sign. loose: the three axes paired by size whatever
+   their roles. */
 export function compareSolids(fit, ref, { rots = [[1, 0, 0, 0, 1, 0, 0, 0, 1]], loose = false } = {}){
   const type = ref.type, cls = loose ? [[0, 1, 2]] : CLASSES[type];
   const pairsets = [[]];
@@ -269,7 +319,7 @@ export function compareSolids(fit, ref, { rots = [[1, 0, 0, 0, 1, 0, 0, 0, 1]], 
   for (const c of cls){
     const rs = [...c].sort((a, b)=> ref.dims[a] - ref.dims[b]), fs = [...c].sort((a, b)=> fit.dims[a] - fit.dims[b]);
     const groups = []; for (const i of rs){ const g = groups[groups.length - 1]; if (g && Math.abs(lg(ref.dims[i]) - lg(ref.dims[g[g.length - 1]])) < TIE) g.push(i); else groups.push([i]); }
-    if (type === 'cylinder' && c.length === 2) c.forEach(i=> undefinedAx.add(i));
+    if (REVOLUTION.has(type) && c.length === 2) c.forEach(i=> undefinedAx.add(i));
     let pos = 0; const opts = [[]];
     for (const g of groups){
       const fpart = fs.slice(pos, pos + g.length); pos += g.length;
@@ -281,6 +331,7 @@ export function compareSolids(fit, ref, { rots = [[1, 0, 0, 0, 1, 0, 0, 0, 1]], 
     const nxt = []; for (const ps of pairsets) for (const o of opts) nxt.push([...ps, ...o]);
     pairsets.splice(0, pairsets.length, ...nxt);
   }
+  if (!loose && type === 'spheroid' && Math.abs(lg(ref.dims[2]) - lg(ref.dims[0])) < TIE) undefinedAx.add(2);
   const gap = i => Math.min(...[0, 1, 2].filter(j=> j !== i).map(j=> Math.abs(lg(ref.dims[i]) - lg(ref.dims[j]))));
   const prin = [0, 1, 2].filter(i=> !undefinedAx.has(i)).sort((a, b)=> gap(b) - gap(a))[0];
   let best = null;
@@ -447,8 +498,19 @@ export function basins(id, rec, { exactOnly = false, deg, ratio } = {}){
   }
   return out;
 }
-// JSON writes an unbounded dimension (Infinity) as null: read results back with this.
-export const readResult = text => JSON.parse(text, (k, v)=> k === 'dims' && Array.isArray(v) ? v.map(d=> d == null ? Infinity : d) : v);
+/* Records with numbers that are not finite. JSON writes Infinity and NaN as null, and an
+   unbounded extent (its width refined to 0) is Infinity, as is its error against the
+   truth: writeResult spells them out ("Infinity", "-Infinity", "NaN"), readResult reads
+   them back, and reads the records written before that, where null in an extent
+   (dims), an extent's error (dimErr) or the worst of them (dimMax) was Infinity. */
+export const writeResult = o => JSON.stringify(o, (k, v)=> typeof v === 'number' && !Number.isFinite(v) ? String(v) : v);
+const NONFINITE = { Infinity: Infinity, '-Infinity': -Infinity, NaN: NaN };
+export const readResult = text => JSON.parse(text, (k, v)=> {
+  if (typeof v === 'string' && v in NONFINITE) return NONFINITE[v];
+  if ((k === 'dims' || k === 'dimErr') && Array.isArray(v)) return v.map(d=> d == null ? Infinity : d);
+  if (k === 'dimMax' && v === null) return Infinity;
+  return v;
+});
 
 /* patternFor(row, { file, draw, kernel }) → the row's pattern: the generator's file
    (default ../gen/patterns/<id>.json, gen/draw.mjs), or drawn in memory by gen/gen.mjs
