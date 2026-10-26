@@ -1,0 +1,11 @@
+box-P-1-near             -1     none/lor own χ² 0.2 | box 0.0 sqbox 29599959965.1 cylinder 29725034912.7 ellcyl 93449995.9 ellipsoid 465629972.6 spheroid 29997489694.5
+ellcyl-P2m-generic       2/m    none/lor own χ² 17.9 | box 37016676.3 sqbox 13615916708.8 cylinder 13024746092.9 ellcyl 0.0 ellipsoid 158563204.2 spheroid 13024746101.8
+ellipsoid-Pmmm-generic   mmm    none/lor own χ² 0.6 | box 292271170.0 sqbox 319886663.4 cylinder 364679886.8 ellcyl 160402298.2 ellipsoid 0.0 spheroid 96298122.8
+box-P4m-near             4/m    none/lor own χ² 0.6 | box 0.0 sqbox 29324406061.9 cylinder 46821374170.1 ellcyl 1904303882.7 ellipsoid 2488742300.9 spheroid 46821374168.2
+cylinder-P4mmm-on        4/mmm  none/lor own χ² 0.0 | box 104442121.1 sqbox 106230895.0 cylinder 0.0 ellcyl 0.0 ellipsoid 3620586044.2 spheroid 8637855922.6
+spheroid-P-3-near        -3     none/lor own χ² 0.0 | box 189791353.5 sqbox 218258507.6 cylinder 149607630.0 ellcyl 435220414.3 ellipsoid -0.0 spheroid 0.0
+box-P-3m1-near           -3m    none/lor own χ² 0.0 | box 0.0 sqbox 10170424926.9 cylinder 11585389919.3 ellcyl 6763658665.5 ellipsoid 10655085492.3 spheroid 16042807560.3
+cylinder-P6m-on          6/m    none/lor own χ² 0.0 | box 483928322.9 sqbox 501905859.3 cylinder 0.0 ellcyl 0.1 ellipsoid 30737283451.6 spheroid 32358645735.5
+ellcyl-P6m-generic       6/m    none/lor own χ² 0.0 | box 227740353.8 sqbox 1636370409.4 cylinder 2651015896.8 ellcyl 0.0 ellipsoid 3158632052.0 spheroid 11498408220.8
+sqbox-Pm-3-on            m-3    none/lor own χ² 0.3 | box 0.1 sqbox 0.0 cylinder 25484564473.1 ellcyl 22354562450.2 ellipsoid 59379950962.4 spheroid 151813704887.3
+ellcyl-Pm-3m-generic     m-3m   none/lor own χ² 0.0 | box 33959845.5 sqbox 2330942224.0 cylinder 2162122244.5 ellcyl 0.0 ellipsoid 309254969.3 spheroid 3449138333.9

@@ -1,0 +1,4 @@
+ellcyl-Pm-3m-generic (m-3m, ellcyl) as ellcyl: iso χ²_ν 1.134, 240 ev, 1560 ms
+  today: held χ² 11232.83 best — ΔBIC -60 | 3130 ev 31892 ms | starts 11 | 17.17×17.24×19.42 | dims 1% -67% 191% axis 8.4°
+  fwd: held χ² 11232.82 best — ΔBIC -60 | 1789 ev 20351 ms | starts 11 | central 34 ev Δχ² -0.001 | cov 17 ev | heldDup 1 | 17.23×17.19×19.39 | dims 1% -67% 190% axis 26.8°
+  wall 54.5 s

@@ -1,0 +1,14 @@
+P-1    -1    rotations 1 holohedry 1 | 84 self-comparisons worst 1.7e-6 | 672 canonical checks | 124 directions named as the engine, 5 read 2° off a row | frames on the lattice 5, turned 3° 5
+P2m    2/m   rotations 2 holohedry 2 | 192 self-comparisons worst 1.2e-6 | 768 canonical checks | 124 directions named as the engine, 5 read 2° off a row | frames on the lattice 6, turned 3° 6
+Pmmm   mmm   rotations 4 holohedry 4 | 480 self-comparisons worst 1.7e-6 | 960 canonical checks | 124 directions named as the engine, 5 read 2° off a row | frames on the lattice 8, turned 3° 8
+P4m    4/m   rotations 4 holohedry 8 | 480 self-comparisons worst 1.5e-6 | 960 canonical checks | 124 directions named as the engine, 5 read 2° off a row | frames on the lattice 8, turned 3° 8
+P4mmm  4/mmm rotations 8 holohedry 8 | 960 self-comparisons worst 1.5e-6 | 960 canonical checks | 124 directions named as the engine, 5 read 2° off a row | frames on the lattice 8, turned 3° 8
+P-3    -3    rotations 3 holohedry 12 | 360 self-comparisons worst 1.5e-6 | 960 canonical checks | 124 directions named as the engine, 5 read 2° off a row | frames on the lattice 8, turned 3° 8
+P-3m1  -3m   rotations 6 holohedry 12 | 648 self-comparisons worst 2.1e-6 | 864 canonical checks | 124 directions named as the engine, 4 read 2° off a row | frames on the lattice 7, turned 3° 7
+P6m    6/m   rotations 6 holohedry 12 | 648 self-comparisons worst 1.7e-6 | 864 canonical checks | 124 directions named as the engine, 4 read 2° off a row | frames on the lattice 7, turned 3° 7
+P6mmm  6/mmm rotations 12 holohedry 12 | 1296 self-comparisons worst 1.7e-6 | 864 canonical checks | 124 directions named as the engine, 4 read 2° off a row | frames on the lattice 7, turned 3° 7
+Pm-3   m-3   rotations 12 holohedry 24 | 1152 self-comparisons worst 1.5e-6 | 768 canonical checks | 124 directions named as the engine, 3 read 2° off a row | frames on the lattice 6, turned 3° 6
+Pm-3m  m-3m  rotations 24 holohedry 24 | 2304 self-comparisons worst 1.5e-6 | 768 canonical checks | 124 directions named as the engine, 3 read 2° off a row | frames on the lattice 6, turned 3° 6
+pairing by role: 160 checks
+canonical near the lattice: 27648 turned frames (worst 7.1e-7° beyond the turn); lattice frames at the naming limit, left out: 4; relabelled: 440
+44062 checks, 0 failed

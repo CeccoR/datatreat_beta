@@ -1,0 +1,46 @@
+2026-10-26T18:46:18.636Z sph-wppm: 11 of 11 runs to do (spheres), 2 at a time; line lor, profile wppm; --method today
+2026-10-26T18:49:48.102Z [1/11] sphere-P2m-3: ok 209 s
+sphere-P2m-3 (2/m, sphere 22.5×22.5×22.5; exact, 10–110/0.01) as ellipsoid: draw 579 ms; iso χ²_ν 0.998, 413 ev, 29999 ms; list 88 refl, 144 members
+  today: rejected early χ² 9963.9 best 9957.9 ΔBIC 12 | search 2636 ev 178546 ms | 
+  wall 209.3 s
+2026-10-26T18:52:36.972Z [2/11] sphere-Pmmm-1: ok 169 s
+sphere-Pmmm-1 (mmm, sphere 3.4×3.4×3.4; exact, 10–110/0.01) as cylinder: draw 356 ms; iso χ²_ν 1.006, 352 ev, 25746 ms; list 41 refl, 94 members
+  today: rejected early χ² 10040.8 best — ΔBIC 181 | search 2038 ev 142434 ms | 
+  wall 168.7 s
+2026-10-26T18:53:49.412Z [3/11] sphere-P-1-2: ok 451 s
+sphere-P-1-2 (-1, sphere 28.8×28.8×28.8; exact, 10–110/0.01) as ellipsoid: draw 658 ms; iso χ²_ν 0.979, 575 ev, 71717 ms; list 214 refl, 214 members
+  today: rejected χ² 9770.3 best 9746.3 ΔBIC 25 | search 3420 ev 377981 ms | 
+  wall 450.6 s
+2026-10-26T18:54:37.117Z [4/11] sphere-P4m-2: ok 120 s
+sphere-P4m-2 (4/m, sphere 7.1×7.1×7.1; exact, 10–110/0.01) as ellcyl: draw 428 ms; iso χ²_ν 0.990, 298 ev, 15483 ms; list 33 refl, 102 members
+  today: rejected early χ² 9890.3 best — ΔBIC 250 | search 2383 ev 103919 ms | 
+  wall 120.0 s
+2026-10-26T18:55:23.911Z [5/11] sphere-P4mmm-3: ok 94 s
+sphere-P4mmm-3 (4/mmm, sphere 4.7×4.7×4.7, air 0.02; exact, 10–110/0.01) as spheroid: draw 468 ms; iso χ²_ν 1.015, 304 ev, 13509 ms; list 25 refl, 93 members
+  today: rejected early χ² 10132.4 best 10132.1 ΔBIC 9 | search 1952 ev 80212 ms | 
+  wall 94.3 s
+2026-10-26T18:56:50.583Z [6/11] sphere-P-3-1: ok 133 s
+sphere-P-3-1 (-3, sphere 2.5×2.5×2.5; exact, 10–110/0.01) as box: draw 365 ms; iso χ²_ν 1.003, 287 ev, 15392 ms; list 33 refl, 91 members
+  today: rejected early χ² 10012.8 best — ΔBIC 365 | search 2330 ev 117380 ms | 
+  wall 133.3 s
+2026-10-26T18:57:24.733Z [7/11] sphere-P-3m1-2: ok 121 s
+sphere-P-3m1-2 (-3m, sphere 3.7×3.7×3.7; exact, 10–110/0.01) as sqbox: draw 313 ms; iso χ²_ν 1.002, 271 ev, 14654 ms; list 31 refl, 104 members
+  today: rejected early χ² 10009.7 best — ΔBIC 100 | search 2206 ev 105572 ms | 
+  wall 120.7 s
+2026-10-26T18:57:46.663Z [8/11] sphere-P6m-3: ok 56 s
+sphere-P6m-3 (6/m, sphere 24.4×24.4×24.4, impurity 0.14; exact, 10–110/0.01) as sqbox: draw 260 ms; iso χ²_ν 1.252, 343 ev, 7337 ms; list 21 refl, 93 members
+  today: rejected early χ² 12499.8 best — ΔBIC 17 | search 2247 ev 48226 ms | 
+  wall 55.9 s
+2026-10-26T18:58:35.217Z [9/11] sphere-Pm-3-2: ok 49 s
+sphere-Pm-3-2 (m-3, sphere 5.1×5.1×5.1, hump 0.11; exact, 10–110/0.01) as cylinder: draw 456 ms; iso χ²_ν 1.120, 215 ev, 5927 ms; list 14 refl, 89 members
+  today: rejected early χ² 11187.4 best — ΔBIC 282 | search 1788 ev 41826 ms | 
+  wall 48.3 s
+2026-10-26T18:59:33.596Z [10/11] sphere-Pm-3m-3: ok 58 s
+sphere-Pm-3m-3 (m-3m, sphere 4.4×4.4×4.4, sizedist 0.71; exact, 10–110/0.01) as spheroid: draw 434 ms; iso χ²_ν 1.601, 326 ev, 7557 ms; list 12 refl, 89 members
+  today: free χ² 10366.6 best 10366.6 ΔBIC -3483 | search 2026 ev 40181 ms report 486 ev 9865 ms | 7.69×7.69×2.35
+  wall 58.2 s
+2026-10-26T18:59:59.350Z [11/11] sphere-P6mmm-1: ok 155 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 321 ms; iso χ²_ν 1.140, 299 ev, 9876 ms; list 20 refl, 103 members
+  today: free χ² 10959.1 best 10959.1 ΔBIC -327 | search 3376 ev 96316 ms report 1862 ev 47805 ms | 7.92×6.11×9.52
+  wall 154.4 s
+2026-10-26T18:59:59.350Z sph-wppm: 11 done, 0 failed, 13.7 min

@@ -1,0 +1,16 @@
+Checkpoint 2026-10-26T23:38Z
+
+Batches, newest first:
+- A/results/screen-wppm/: 1 ok;   wall 274.8 s
+- A/results/xs-wppm/: 110 ok; 2026-10-26T23:33:51.663Z xs-wppm: 55 done, 0 failed, 124.8 min
+- A/results/screen-lsq/: 44 ok; 2026-10-26T21:29:03.561Z screen-lsq: 44 done, 0 failed, 44.9 min
+- A/results/sph-hyb/: 11 ok; 2026-10-26T20:27:51.647Z sph-hyb: 11 done, 0 failed, 6.1 min
+- A/results/s-hyb/: 22 ok; 2026-10-26T20:21:45.242Z s-hyb: 22 done, 0 failed, 33.5 min
+- B/results/legacy/: 1 ok; 2026-10-26T20:18:57.581Z legacy: 1 done, 0 failed, 1.1 min
+- B/results/symfix/: 35 ok; 2026-10-26T20:17:34.260Z symfix: 25 done, 0 failed, 8.7 min
+
+Workflow journal (last events):
+{"type":"started","key":"v2:52cb5d4d68f4153e6250f3c74d443cb83a5ab89941e5f35d4a0166bbcf61e345","agentId":"a4350cd07b840c398","label":"verify:search-efficiency","
+{"type":"result","key":"v2:52cb5d4d68f4153e6250f3c74d443cb83a5ab89941e5f35d4a0166bbcf61e345","agentId":"a4350cd07b840c398","result":{"reproduced":["The today re
+{"type":"started","key":"v2:a8d35c188ab4320dc3f1fff413936be6ba908a1e67deae533d99d5a42a6fafd0","agentId":"ac0200724e21ce70d","label":"fix:search-efficiency","pha
+{"type":"result","key":"v2:a8d35c188ab4320dc3f1fff413936be6ba908a1e67deae533d99d5a42a6fafd0","agentId":"ac0200724e21ce70d","result":{"tried":[{"name":"today (re

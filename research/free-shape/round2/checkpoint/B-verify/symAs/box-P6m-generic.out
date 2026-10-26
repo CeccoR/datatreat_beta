@@ -1,0 +1,3 @@
+box-P6m-generic (6/m, box) as box: iso χ²_ν 1.056, 300 ev, 3150 ms
+  symAs: free χ² 10357.97 best 10357.97 ΔBIC -128 | 1725 ev 21473 ms | starts 9 | central 56 ev Δχ² -0.036 | cov 25 ev | 34.49×13.54×11.87 | dims 101% -55% -43% axis 16.5°
+  wall 25.4 s

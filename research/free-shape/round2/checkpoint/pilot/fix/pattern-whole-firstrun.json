@@ -1,0 +1,48 @@
+[
+ {
+  "id": "v-sphere3",
+  "firstForm": {
+   "corrVsMine": 0.0005033512014657736,
+   "corrVsMineDetrended": 0.0002153762818015224,
+   "meanOffset": 0.00025731791985044935
+  },
+  "meanOffset": 0.00006404967085500808,
+  "corrVsMineDetrended": 0.00026185709390115334,
+  "at2tD": 30.11,
+  "sigma": 0,
+  "lines": 24,
+  "peak": 15999.193973305852,
+  "frozenVsNone": 1.1369256517426957e-16,
+  "frozenVsLorentzKernel": 1.1369256517426957e-16,
+  "recordModelVsFrozen": 0,
+  "corrMaxRel": 0.1749353157718911,
+  "corrVsMine": 0.0003357222302148633,
+  "at2t": 30.11,
+  "tchErr": 0.001789663648060366,
+  "areaRatio": 1.0118949920672489,
+  "s": 4.295
+ },
+ {
+  "id": "v-sphere30",
+  "firstForm": {
+   "corrVsMine": 0.0001386369774186751,
+   "corrVsMineDetrended": 0.00014113253789849018,
+   "meanOffset": -0.0000011478969011610607
+  },
+  "meanOffset": -0.000005834313676288029,
+  "corrVsMineDetrended": 0.0003301224143015389,
+  "at2tD": 29.94,
+  "sigma": 0,
+  "lines": 24,
+  "peak": 124306.58967525577,
+  "frozenVsNone": 1.1706471287148124e-16,
+  "frozenVsLorentzKernel": 4.68258851485925e-16,
+  "recordModelVsFrozen": 0,
+  "corrMaxRel": 0.15734460977047793,
+  "corrVsMine": 0.0003289434095875204,
+  "at2t": 29.94,
+  "tchErr": 0.0020020497955597094,
+  "areaRatio": 1.0029069108001527,
+  "s": 5.713
+ }
+]

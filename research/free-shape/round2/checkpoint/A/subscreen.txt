@@ -1,0 +1,32 @@
+# Track A sub-screen: 22 truths of the screening set (design.json, fs2-design-v1 revision 2).
+# Rule (fixed before any variant ran): the Laue classes in the design's order
+# (-1, 2/m, mmm, 4/m, 4/mmm, -3, -3m, 6/m, 6/mmm, m-3, m-3m), c = 0..10, and the solids in
+# the order (box, sqbox, cylinder, ellcyl, ellipsoid, spheroid); class c takes the screening
+# truths of solids (2c mod 6) and (2c + 1 mod 6). Each class has 2 rows; box, sqbox,
+# cylinder and ellcyl come 4 times, ellipsoid and spheroid 3 times. 11 rows are clean and 11
+# carry an error (impurity 3, air 3, sizedist 2, hump 2, po 1); every orientation is there.
+# The same list for every variant. Spheres are not in it: their false shapes are measured on
+# the screening set's 11 spheres (screen-spheres below), the same 11 for every variant run there.
+# id  laue  solid  orient  error
+box-P-1-near  -1  box  near  none
+sqbox-P-1-on  -1  sqbox  on  sizedist
+cylinder-P2m-on  2/m  cylinder  on  impurity
+ellcyl-P2m-generic  2/m  ellcyl  generic  none
+ellipsoid-Pmmm-generic  mmm  ellipsoid  generic  none
+spheroid-Pmmm-near  mmm  spheroid  near  air
+box-P4m-near  4/m  box  near  none
+sqbox-P4m-on  4/m  sqbox  on  air
+cylinder-P4mmm-on  4/mmm  cylinder  on  none
+ellcyl-P4mmm-generic  4/mmm  ellcyl  generic  hump
+ellipsoid-P-3-generic  -3  ellipsoid  generic  impurity
+spheroid-P-3-near  -3  spheroid  near  none
+box-P-3m1-near  -3m  box  near  none
+sqbox-P-3m1-on  -3m  sqbox  on  po
+cylinder-P6m-on  6/m  cylinder  on  none
+ellcyl-P6m-generic  6/m  ellcyl  generic  none
+ellipsoid-P6mmm-generic  6/mmm  ellipsoid  generic  air
+spheroid-P6mmm-near  6/mmm  spheroid  near  hump
+box-Pm-3-near  m-3  box  near  impurity
+sqbox-Pm-3-on  m-3  sqbox  on  none
+cylinder-Pm-3m-on  m-3m  cylinder  on  sizedist
+ellcyl-Pm-3m-generic  m-3m  ellcyl  generic  none

@@ -1,0 +1,99 @@
+{
+ "mode": "lor",
+ "rows": [
+  {
+   "id": "sphere-P-1-2",
+   "solid": "sphere",
+   "laue": "-1",
+   "error": "none",
+   "counts": 21164,
+   "maxDev": 0.005007510622038936,
+   "excess": 0.004324673194859667
+  },
+  {
+   "id": "sphere-P2m-3",
+   "solid": "sphere",
+   "laue": "2/m",
+   "error": "none",
+   "counts": 2609,
+   "maxDev": 0.0035356027903546594,
+   "excess": 0.00015435531827788832
+  },
+  {
+   "id": "sphere-Pmmm-1",
+   "solid": "sphere",
+   "laue": "mmm",
+   "error": "none",
+   "counts": 6930,
+   "maxDev": 0.0014096543171820408,
+   "excess": 0.0015471345252687431
+  },
+  {
+   "id": "sphere-P4m-2",
+   "solid": "sphere",
+   "laue": "4/m",
+   "error": "none",
+   "counts": 3966,
+   "maxDev": 0.002262548607597111,
+   "excess": 0.0017177844480837563
+  },
+  {
+   "id": "sphere-P4mmm-3",
+   "solid": "sphere",
+   "laue": "4/mmm",
+   "error": "air",
+   "counts": 1493,
+   "maxDev": 0.0020191800887332354,
+   "excess": 0.00045198580911025944
+  },
+  {
+   "id": "sphere-P-3-1",
+   "solid": "sphere",
+   "laue": "-3",
+   "error": "none",
+   "counts": 6028,
+   "maxDev": 0.0026668312435507366,
+   "excess": 0.006901786011098662
+  },
+  {
+   "id": "sphere-P-3m1-2",
+   "solid": "sphere",
+   "laue": "-3m",
+   "error": "none",
+   "counts": 1974,
+   "maxDev": 0.001816744682240328,
+   "excess": 0.00031789019727467336
+  },
+  {
+   "id": "sphere-P6m-3",
+   "solid": "sphere",
+   "laue": "6/m",
+   "error": "impurity",
+   "counts": 5243,
+   "maxDev": 0.003009537104225184,
+   "excess": 0.00019563245212009137
+  },
+  {
+   "id": "sphere-P6mmm-1",
+   "skipped": "po"
+  },
+  {
+   "id": "sphere-Pm-3-2",
+   "solid": "sphere",
+   "laue": "m-3",
+   "error": "hump",
+   "counts": 1299,
+   "maxDev": 0.0026542624316343447,
+   "excess": 0.0005012599993058109
+  },
+  {
+   "id": "sphere-Pm-3m-3",
+   "solid": "sphere",
+   "laue": "m-3m",
+   "error": "sizedist",
+   "counts": 24334,
+   "maxDev": 0.06932092281910475,
+   "excess": 2.9692702831779294
+  }
+ ]
+}

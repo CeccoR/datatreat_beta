@@ -1,0 +1,60 @@
+lv box {"dims":[12.5,57.4,10.1],"maxRel":2.66e-15,"sigma05MaxRel":0.0000292,"Lv":[9.84,39.5]}
+lv sqbox {"dims":[7.6,7.6,32.8],"maxRel":3.11e-15,"sigma05MaxRel":0.0000194,"Lv":[7.06,26.3]}
+lv cylinder {"dims":[22,22,4.89],"maxRel":4.59e-12,"sigma05MaxRel":0.00000779,"Lv":[4.92,17.1]}
+lv ellcyl {"dims":[17,12,4.65],"maxRel":4.6e-12,"sigma05MaxRel":0.000011,"Lv":[4.63,12]}
+lv ellipsoid {"dims":[27,3.16,5.49],"maxRel":2.66e-15,"sigma05MaxRel":1.58e-7,"Lv":[2.48,12.9]}
+lv spheroid {"dims":[4.87,4.87,7.93],"maxRel":1.11e-15,"sigma05MaxRel":1.58e-7,"Lv":[3.65,5.77]}
+lv sphere {"dims":[2.12,2.12,2.12],"maxRel":7.77e-16,"sigma05MaxRel":1.58e-7,"Lv":[1.59,1.59]}
+mc box max|z| 1.39 max|ΔA| 0.00101 σ 0.4 table vs MC 0.000538
+mc sqbox max|z| 1.39 max|ΔA| 0.001 σ 0.4 table vs MC 0.0000865
+mc cylinder max|z| 1.33 max|ΔA| 0.00104 σ 0.4 table vs MC 0.000228
+mc ellcyl max|z| 2.37 max|ΔA| 0.00153 σ 0.4 table vs MC 0.000186
+mc ellipsoid max|z| 1.38 max|ΔA| 0.000712 σ 0.4 table vs MC 0.000707
+mc spheroid max|z| 1.85 max|ΔA| 0.00122 σ 0.4 table vs MC 0.000373
+mc sphere max|z| 2.06 max|ΔA| 0.00137 σ 0.4 table vs MC 0.00031
+limit Pm-3m box {"dims":[60,34,11.1],"lorentz":2.49e-16,"exact":0.129}
+limit Pm-3m sqbox {"dims":[15.4,15.4,9.75],"lorentz":3.81e-16,"exact":0.149}
+limit Pm-3m cylinder {"dims":[3.82,3.82,5.95],"lorentz":3.12e-12,"exact":0.164}
+limit Pm-3m ellcyl {"dims":[7.71,24.6,5.42],"lorentz":1.71e-12,"exact":0.159}
+limit Pm-3m ellipsoid {"dims":[2.45,15.1,5.6],"lorentz":4.51e-16,"exact":0.164}
+limit Pm-3m spheroid {"dims":[2.28,2.28,7.27],"lorentz":3.26e-16,"exact":0.159}
+limit Pm-3m sphere {"dims":[5.48,5.48,5.48],"lorentz":6.09e-16,"exact":0.176}
+limit P-1 box {"dims":[5.29,8.51,3.31],"lorentz":1.2e-15,"exact":0.143}
+limit P-1 sqbox {"dims":[17.5,17.5,4.11],"lorentz":6.67e-16,"exact":0.135}
+limit P-1 cylinder {"dims":[12.5,12.5,13.1],"lorentz":2e-12,"exact":0.129}
+limit P-1 ellcyl {"dims":[9.61,3.43,9.17],"lorentz":2.27e-12,"exact":0.164}
+limit P-1 ellipsoid {"dims":[11.1,39.6,2.35],"lorentz":3.37e-16,"exact":0.147}
+limit P-1 spheroid {"dims":[6.38,6.38,21.6],"lorentz":5.73e-16,"exact":0.191}
+limit P-1 sphere {"dims":[23.3,23.3,23.3],"lorentz":4.01e-16,"exact":0.155}
+plumb instrument box 10x15x25 Pm-3m 0.00163
+plumb instrument box 10x15x25 P-1 0.00165
+plumb instrument box 3x4x6 Pm-3m 0.00166
+plumb instrument box 3x4x6 P-1 0.00223
+plumb lorentzian instrument box 10x15x25 Pm-3m 0.000601
+plumb lorentzian instrument box 10x15x25 P-1 0.00048
+plumb lorentzian instrument box 3x4x6 Pm-3m 0.00121
+plumb lorentzian instrument box 3x4x6 P-1 0.00199
+breadth box {"dims":[60,19.8,4.14],"Lv_nm":5.19,"betaPeak_x_Lv":1,"betaWindow_x_Lv":0.994,"areaInWindow":0.994,"windowDeg":55}
+breadth sqbox {"dims":[4.85,4.85,8.97],"Lv_nm":5.31,"betaPeak_x_Lv":1,"betaWindow_x_Lv":0.988,"areaInWindow":0.988,"windowDeg":55}
+breadth cylinder {"dims":[6.96,6.96,9.66],"Lv_nm":5.79,"betaPeak_x_Lv":1,"betaWindow_x_Lv":0.99,"areaInWindow":0.99,"windowDeg":55}
+breadth ellcyl {"dims":[10.8,39.3,60],"Lv_nm":20.8,"betaPeak_x_Lv":1,"betaWindow_x_Lv":0.998,"areaInWindow":0.997,"windowDeg":55}
+breadth ellipsoid {"dims":[11,2.97,3],"Lv_nm":3.88,"betaPeak_x_Lv":1,"betaWindow_x_Lv":0.989,"areaInWindow":0.989,"windowDeg":55}
+breadth spheroid {"dims":[3.1,3.1,15.7],"Lv_nm":2.76,"betaPeak_x_Lv":1,"betaWindow_x_Lv":0.988,"areaInWindow":0.988,"windowDeg":55}
+breadth sphere {"dims":[2.73,2.73,2.73],"Lv_nm":2.05,"betaPeak_x_Lv":1,"betaWindow_x_Lv":0.986,"areaInWindow":0.986,"windowDeg":55}
+errors hump {"specFrac":0.225,"frac":0.211,"specFwhm":5.94,"fwhm":5.95,"centre":17.6,"at":17.6}
+errors sizedist {"sigma":0.3,"betaRatio":1,"fwhmRatio":0.971}
+errors impurity [{"pos":60.7,"specFrac":0.055,"frac":0.0536}]
+errors air {"specK":1.75,"k":1.75,"tau":2.19}
+errors po {"r":1.21,"axis":[1,1,0],"families":[[1,0,0],[1,1,0],[1,1,1]],"maxRelVsMD":4.44e-16,"ratioRange":[0.987,1.02]}
+time P-1 {"ms":255,"msSizedist":724,"nRefl":96,"members":96,"minOverPeak":0.00551}
+time P2m {"ms":399,"msSizedist":730,"nRefl":58,"members":91,"minOverPeak":0.000989}
+time Pmmm {"ms":395,"msSizedist":896,"nRefl":41,"members":94,"minOverPeak":0.000499}
+time P4m {"ms":470,"msSizedist":1573,"nRefl":54,"members":177,"minOverPeak":0.000833}
+time P4mmm {"ms":482,"msSizedist":1353,"nRefl":41,"members":170,"minOverPeak":0.000239}
+time P-3 {"ms":440,"msSizedist":1494,"nRefl":61,"members":171,"minOverPeak":0.00322}
+time P-3m1 {"ms":571,"msSizedist":1678,"nRefl":50,"members":180,"minOverPeak":0.0105}
+time P6m {"ms":651,"msSizedist":1897,"nRefl":39,"members":184,"minOverPeak":0.0000719}
+time P6mmm {"ms":744,"msSizedist":1775,"nRefl":32,"members":170,"minOverPeak":0.000114}
+time Pm-3 {"ms":492,"msSizedist":1474,"nRefl":25,"members":182,"minOverPeak":0.000225}
+time Pm-3m {"ms":580,"msSizedist":1511,"nRefl":20,"members":182,"minOverPeak":0.000733}
+gen exit 0
