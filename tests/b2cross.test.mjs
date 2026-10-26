@@ -1,4 +1,4 @@
-/* Every module made per tab (b2), together in one page: two tabs of each module (ten), each
+/* Every module made per tab (v518), together in one page: two tabs of each module (ten), each
    its own files, labels and undo history; switches across modules; the tabs awake beyond
    Settings' limit asleep, the one not shown for longest first (LRU), woken as shown with
    their whole history; every tab hidden past Settings' minutes asleep, its instance let go

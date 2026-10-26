@@ -24,7 +24,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { start, openModule, loadFiles, settle, moduleState, banner, answer, download, readZip, parseCsv, undo } from './helpers.mjs';
-import { drsCsv, caryCsv, gcCsv, eprPair } from './fixtures.mjs';
+import { drsCsv, caryCsv, eprPair } from './fixtures.mjs';
 
 let env;
 before(async ()=>{ env = await start(); });

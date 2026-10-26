@@ -1,5 +1,5 @@
-/* Arrays fixed (db.js fixed, b2v3): an array a module makes and never changes, marked so,
-   shared by park and decode, not copied, and not frozen (to b2v2 XRPD's were frozen, which
+/* Arrays fixed (db.js fixed, v518): an array a module makes and never changes, marked so,
+   shared by park and decode, not copied, and not frozen (to v517 XRPD's were frozen, which
    holds a double in twice the memory, and DRS's, GC's and EPR's were copied into every
    state parked). In Node: park and decode give a fixed array back as it is and copy one
    not fixed; encode writes both out alike. In the page, the tests' freezing of each fixed

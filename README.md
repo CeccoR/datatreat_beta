@@ -232,7 +232,7 @@ A file unticked in the file list (the box beside its name) stays loaded, with it
 
 ## Tests
 
-`tests/` holds automated browser tests (Playwright, from Node's own test runner): every module loads its files with no error, nothing from a file or a project becomes markup, projects and their files come back byte for byte, the plots match their recorded hashes, CSVs parse, a Rietveld refinement runs and stops. `npm i` once, then `npm test`; [tests/README.md](tests/README.md) says what each file covers. The app itself still needs no build and no dependency.
+`tests/` holds automated browser tests (Playwright, from Node's own test runner): every module loads its files with no error, nothing from a file or a project becomes markup, projects and their files come back byte for byte, the plots match their recorded hashes, CSVs parse, a Rietveld refinement runs and stops. `npm i` once, then `npm test`; [tests/README.md](tests/README.md) says what each file covers. `npm run lint` checks the app and the tests with ESLint (its settings in `eslint.config.mjs`): ESLint is no dependency, so it must be installed apart (ESLint 9 or later, e.g. `npm i -g eslint`). The app itself still needs no build and no dependency.
 
 ---
 

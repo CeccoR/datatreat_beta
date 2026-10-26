@@ -1,4 +1,4 @@
-/* GC and EPR made per tab (b2): each GC or EPR tab an instance of its own in one page. For
+/* GC and EPR made per tab (v518): each GC or EPR tab an instance of its own in one page. For
    each module, two tabs awake at once, each its own files, parameters, results, view and
    undo history; a switch to one awake only showing it (its own section, its plots as they
    were, not drawn again); undo and redo in one leaving the other's steps alone; a tab hidden

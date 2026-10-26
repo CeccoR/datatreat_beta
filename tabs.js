@@ -4,45 +4,36 @@
    style. A tab is a project, and its technique is just the page it shows, so any
    number of projects can be open at once, several on the same technique.
 
-   A module made per tab (utils.js registerModule: XRPD, b2) gives each tab an instance
-   of its own — its elements, state, undo history and view — so its tabs are
+   Every module is made per tab (utils.js registerModule, v518): each tab awake has an
+   instance of its own — its elements, state, undo history and view — so its tabs are
    independent and live in one page: a switch only takes one instance's section out of
    the page and puts another's in (its ids then the page's), and a job going on in a tab
    left (a refinement) goes on there, hidden. A tab not on show for settings.sleepMin
    minutes SLEEPS: its instance is let go, its state and its whole undo history parked
-   in the tab (as a module's one instance parks a tab, below), the tab staying in the
-   bar; shown again it WAKES, a new instance made of what was parked. Till then a tab
-   hidden stays as it was left. A tab busy (a job going on) never sleeps: its time hidden
-   is counted from the job's end. Any number of tabs may be open (to b2v2 at most 20); at
-   most settings.awakeMax are awake, the one on show among them: beyond, the one shown
-   least lately sleeps, whenever it was opened. A tab of SEM (utils.js dropsBytes) asleep
-   lets go of its files' bytes too, which the store holds by their hashes: read back as it
-   wakes, the loader on show meanwhile (lighten, wakeLater).
-
-   A module NOT made per tab keeps its ONE instance, bound to the page's fixed ids, and
-   only the tab of it that is live holds it. Every other tab parks its module state and
-   its undo history in its record, and a switch to it is:
-     serialize the outgoing tab → restore the incoming tab into its module.
-   The tab bar repaints first and the state loads on the next frame, so the click
-   feels immediate even when the restore takes a moment.
+   in the tab, the tab staying in the bar; shown again it WAKES, a new instance made of
+   what was parked. Till then a tab hidden stays as it was left. A tab busy (a job going
+   on) never sleeps: its time hidden is counted from the job's end. Any number of tabs may
+   be open (to v517 at most 20); at most settings.awakeMax are awake, the one on show
+   among them: beyond, the one shown least lately sleeps, whenever it was opened. A tab of
+   SEM (utils.js dropsBytes) asleep lets go of its files' bytes too, which the store holds
+   by their hashes: read back as it wakes, the loader on show meanwhile (lighten,
+   wakeLater). The tab bar repaints first and the tab is put in the page a paint later, so
+   the click feels immediate even when a wake or a redraw takes a moment.
 ========================================================= */
 import { MODULES, MODULE_LABELS, goTab, getModuleState, restoreModuleState,
          getModuleHistory, setModuleHistory, confirmBanner, moduleHasData, X_SVG,
-         onSectionChange, moduleBusy, stopModule, isFactory, makeInstance, attachInstance,
+         onSectionChange, moduleBusy, stopModule, makeInstance, attachInstance,
          detachInstance, dropKey, settings, saveSettings, onBusyChange, onAnyChange, dropsBytes, asleep, vacate, shownOf, showAgain } from './utils.js';
 import { allTabStates, putTabRec, deleteTabRec, uid, encode, park, decode, unload, load, unread, refsIn } from './db.js';
 
 const UNTITLED = 'Untitled project';
 
-/* Pristine module states, captured before anything is loaded. A brand-new tab
-   restores these, so it starts with empty files AND default parameters rather
-   than inheriting whatever the previous tab left in the shared module. A module made
-   per tab has none at load (no instance yet): a new instance is its default, its state
-   taken as the first one is made (defaultState). */
+/* A module's default state: a new tab restores it, so it starts with empty files and
+   default parameters. Taken from the first instance made of the module (wakeTab), or from
+   one made for that purpose (defaultState, for isEmpty). */
 const DEFAULT_STATE = {};
-MODULES.forEach(m=>{ if (!isFactory(m)) try { DEFAULT_STATE[m] = encode(getModuleState(m)); } catch(e){} });
 function defaultState(mod){
-  if (!(mod in DEFAULT_STATE) && isFactory(mod)){
+  if (!(mod in DEFAULT_STATE)){
     const inst = makeInstance(mod, 'default-' + mod);
     try { DEFAULT_STATE[mod] = encode(getModuleState(inst.key)); }
     finally { try { inst.destroy(); } catch(e){} dropKey(inst.key); }
@@ -52,7 +43,7 @@ function defaultState(mod){
 
 /* A tab: { id, module, title, projectId, dirty, state, hist, inst, hidAt, seenAt, view, changed, order, rec, shows }
    `state` / `hist` are only meaningful while the tab is NOT live — a live tab's state is
-   its instance's (`inst`, a module made per tab) or its module's (one not). `state` is
+   its instance's (`inst`). `state` is
    park's form (db.js): its files' bytes the module's own arrays, read back from the store
    before a tab is made of a record (v517), or, a tab asleep of a module that lets go of
    them (SEM), references to them by hash, read as it wakes (lighten). `hidAt`: when an
@@ -77,17 +68,8 @@ const activeTab = ()=> tabById(_activeId);
 const tabIndex = id => TABS.findIndex(t=> t.id === id);
 const tabByProject = pid => (pid ? TABS.find(t=> t.projectId === pid) || null : null);
 const isRestoring = ()=> _restoring;
-// The key of a tab's instance in the registries (utils.js): its own id for a module made
-// per tab, the module's name for one that is not.
-const keyOf = t => isFactory(t.module) ? t.id : t.module;
-// The tab of a registry's key: the tab of an instance made per tab, or the tab live in a
-// module's one instance (none: no tab holds it now).
-function tabOfKey(k){
-  const t = tabById(k);
-  if (t) return t;
-  const l = tabById(_liveId);
-  return l && l.module === k && !isFactory(k) ? l : null;
-}
+// A tab awake: its instance, keyed in the registries (utils.js) by the tab's id.
+const isLive = t => !!t && !!t.inst;
 // The tab whose instance holds this element (a plot's, for the figure composer), or the
 // tab on show.
 function tabOf(node){
@@ -108,19 +90,16 @@ function untitledName(module){
    Every open tab is stored, saved or not: on the next load the app comes back
    with the same tabs and the same unsaved work. A tab awake comes back asleep, woken
    when it is shown (the one on show at once). A record is written when what it holds
-   changes, and only then (b2v4): its state (the autosave), its name, its mark, its being
+   changes, and only then: its state (the autosave), its name, its mark, its being
    on show (a switch, a close), its place (a move), what it shows (showsOf). The bar's
    order is each record's `order`, a number of its own that the tabs after it in the bar
    exceed: a tab closed leaves a gap, which sorts as before, a tab opened comes after the
    last, one moved takes a number between its new neighbours'; so a close or a move writes
-   one record, not every one (to b2v4 every tab's again, its place in the bar its index:
-   1.27 s of writes at 60 XRPD tabs of 12 patterns). */
-// The module holds a tab's state only once the tab is live: between a switch and its
-// deferred load (loadTabIfActive) the active tab's state is still the one parked.
-// A tab's state as park gives it: its instance's or its module's while it is live, else
-// the one parked.
-const stateOf = t => isLive(t) ? park(getModuleState(keyOf(t))) : t.state;
-/* What a tab shows beside its state (b2v4: utils.js shownOf), no step of its history: awake,
+   one record, not every one (to v517 every tab's again, its place in the bar its index). */
+// A tab's state as park gives it: its instance's while it is awake, else the one parked
+// (a tab asleep, or chosen and not woken yet: loadTabIfActive).
+const stateOf = t => isLive(t) ? park(getModuleState(t.id)) : t.state;
+/* What a tab shows beside its state (utils.js shownOf), no step of its history: awake,
    its instance's (its plots' zooms, instructions shown, lists' scroll, and its module's own,
    inst.shows(): `own`); asleep, what it showed as it slept, or as its record holds it. */
 function showsOf(t){
@@ -188,59 +167,22 @@ window.addEventListener('pagehide', ()=>{
 // (the page come back as it was, from the browser's back-forward cache: nothing read again)
 window.addEventListener('pageshow', e=>{ if (e.persisted) try { window.sessionStorage.removeItem(SHOWS_KEY); } catch(e2){} });
 
-/* ---- State swap: a module's one instance ---------------------------------- */
-// Which tab's state is actually loaded into its module right now (a module not made per
-// tab). Tracked so a superseded switch (see loadTabIfActive) neither stashes stale data
-// nor reloads a tab that is already live.
-let _liveId = null;
-const isLive = t => !!t && (isFactory(t.module) ? !!t.inst : t.id === _liveId);
-// Park the live module state (and undo history) of the currently active tab — but
-// only if that tab is genuinely the live one. During rapid switching an outgoing
-// tab may never have been loaded (its deferred load was skipped); its record is
-// still valid on disk, so stashing the module (which holds someone else's data)
-// would corrupt it. (A tab made per tab is not parked as it is left: it goes on, hidden.)
-function stashActive(){
-  const t = activeTab();
-  if (!t || isFactory(t.module) || t.id !== _liveId) return;
-  try { t.state = park(getModuleState(t.module)); } catch(e){}   // (to v516 encode: every file's bytes base64'd again)
-  t.hist = getModuleHistory(t.module, true);   // (parked: a job's hold on it ends, utils.js)
-}
-// The tab's state could not be read: the module empty, and a banner says so.
+/* ---- A tab's instance: shown, hidden, asleep, awake ------------------------ */
+// The tab's state could not be read: its instance empty, and a banner says so.
 function damaged(t, e){
   console.warn('DataTreat: “' + t.title + '” could not be restored:', e);
   confirmBanner('“' + t.title + '” could not be opened: its ' + (MODULE_LABELS[t.module]||t.module)
     + ' project is damaged. The tab shows an empty module; what is saved stays as it is unless you save over it.', 'OK');
 }
-// Load a tab's parked state into its module. restoreModuleState resets the undo
-// stack to a fresh baseline, so the parked history is put back afterwards. If the
-// module already holds this tab's state, skip the heavy restore. A tab of a module made
-// per tab wakes instead (wakeTab).
-// (a promise where the wake waits for the files' bytes: wakeLater; a fixed section on show
-// stays, the tab woken behind it, as wakeLater's)
+// A tab asleep woken (wakeTab). (a promise where the wake waits for the files' bytes:
+// wakeLater; a fixed section on show stays, the tab woken behind it)
 function loadTab(t){
-  if (isLive(t)) return;
-  if (isFactory(t.module)) return wakeTab(t, _onFixed);
-  const st = t.state || DEFAULT_STATE[t.module];
-  let hist = t.hist;
-  try { if (st != null) restoreModuleState(t.module, decode(st)); }
-  catch(e){
-    // A state its module cannot read (a damaged or hand-edited project): the tab opens
-    // empty and says so. To v483 the error was swallowed and the module stayed as far as
-    // its restore had got, partly the tab before's data.
-    hist = null;
-    try { restoreModuleState(t.module, decode(DEFAULT_STATE[t.module])); } catch(e2){}
-    damaged(t, e);
-  }
-  if (hist) setModuleHistory(t.module, hist);
-  _liveId = t.id;
-  if (_onLoaded){ try { _onLoaded(t); } catch(e){} }
+  if (!isLive(t)) return wakeTab(t, _onFixed);
 }
-
-/* ---- Instances made per tab: shown, hidden, asleep, awake ------------------ */
 /* The tab's instance in the page, on show (the tab is the active one), in its module's
    place: the instance of that module there before taken out at once (utils.js
-   attachInstance). An instance stays in the page while another module's tab shows, as a
-   module's one instance does, hidden, until another of its module comes in or it sleeps. */
+   attachInstance). An instance stays in the page while another module's tab shows,
+   hidden, until another of its module comes in or it sleeps. */
 function showTab(t, stay){
   if (t.inst){
     attachInstance(t.inst);
@@ -255,8 +197,7 @@ function showTab(t, stay){
    left at, where it was on show till now (its view null) and its plots followed the window.
    One not on show since it was last left keeps the window it was drawn at: left before for a
    fixed section (onSectionChange), or chosen and left again before its show two frames on
-   (showLater), or woken behind a fixed section; to b2v3 the window of the moment was taken
-   for it, and shown at that width it drew every plot again in one task, with no loader. */
+   (showLater), or woken behind a fixed section. */
 function hideTab(t){
   if (t && t.inst){ t.hidAt = t.seenAt = Date.now(); if (t.view == null) t.view = viewNow(); }
 }
@@ -265,8 +206,8 @@ function hideTab(t){
    (its draw keys: a few ms); all its plots at another size of the window or zoom (an XRPD
    tab of 12 refined patterns 0.15 s, a DRS tab of 10 spectra 0.13 s in two tasks), and its
    results where a job ended meanwhile. So shown: the loader on and a frame drawn first, as
-   for a wake, then the tab, the loader off once it is drawn (b2v3: to b2v3 the page froze
-   meanwhile, the tab on show). Its plots follow the window's width, not its height. */
+   for a wake, then the tab, the loader off once it is drawn. Its plots follow the window's
+   width, not its height. */
 const viewNow = ()=> innerWidth + '@' + devicePixelRatio;
 const redrawn = t => !!t.inst && (t.changed || (t.view != null && t.view !== viewNow()));
 onAnyChange(k =>{ const t = tabById(k); if (t && t.inst && (t.id !== _activeId || _onFixed)) t.changed = true; });
@@ -278,7 +219,7 @@ function showLater(t, done){
   afterPaint(()=>{
     if (t.id !== _activeId || !t.inst) return;   // (superseded: the newer step has its own)
     // (Home, Projects or Settings chosen since: it stays on show, the tab as it was left, shown
-    // from there under the loader; to b2v3 the tab was put back over it, the click lost)
+    // from there under the loader)
     if (n !== _toFixed){ if (done) done(); return; }
     showTab(t);
     if (done) done();
@@ -287,9 +228,10 @@ function showLater(t, done){
 }
 /* A tab woken: an instance made for it, put in the page and shown (it is the active
    tab), then its parked state restored into it and its whole history put back; the
-   parked copies let go (the instance holds them now). A state it cannot read: an empty
-   instance, as a module's one instance gives. One whose files' bytes were let go
-   (lighten) reads them first (wakeLater); every other wakes at once, as here. */
+   parked copies let go (the instance holds them now). A state it cannot read (a damaged
+   or hand-edited project): an empty instance, and a banner says so (to v483 the error was
+   swallowed, the module left as far as its restore had got). One whose files' bytes were
+   let go (lighten) reads them first (wakeLater); every other wakes at once, as here. */
 function wakeTab(t, stay){
   if (dropsBytes(t.module) && (unread(t.state) || (t.hist && unread(t.hist.states)))) return wakeLater(t);
   const key = t.id, mod = t.module;
@@ -298,7 +240,7 @@ function wakeTab(t, stay){
   t.inst = inst;
   if (t.id === _activeId) showTab(t, stay);
   let hist = t.hist;
-  // (a new tab, the default restored, as a module's one instance has it: every card drawn)
+  // (a new tab, the default restored: every card drawn)
   const st = t.state != null ? t.state : DEFAULT_STATE[mod];
   // (what it showed: its module's to its restore, the rest as it is drawn, utils.js showAgain)
   if (t.shows){ if (inst.showNext){ try { inst.showNext(t.shows.own); } catch(e){} } showAgain(inst, t.shows); }
@@ -336,9 +278,8 @@ function loaded(t){
    its alerts; an undo to a state that held one, the same), the rest of the tab as it was.
    A read that fails as a whole (none of the store's read) gives the wake up: the tab stays
    asleep as it was, its references and its record, Home on show, said so, and its next
-   show reads again, as a reload keeps the records it could not read (to b2v3 it woke
-   without its files, and its record, written then, let go of them for good). A promise,
-   done once the tab is woken or the wake given up. */
+   show reads again, as a reload keeps the records it could not read. A promise, done once
+   the tab is woken or the wake given up. */
 function wakeLater(t){
   const st = t.state, h = t.hist, back = vacate(t.module, t.id);
   if (!t.waking || t.waking.st !== st || t.waking.h !== h) t.waking = { st, h, p: load([st, h && h.states]) };
@@ -443,15 +384,15 @@ onBusyChange(key=>{
   if (t && t.inst && t.id !== _activeId && !moduleBusy(key)) t.hidAt = Date.now();
   if (!_restoring) keepLimits();
 });
-// What the shell holds now, for the tests and the measurements: each tab's module, whether
-// it is awake, on show, busy, its time hidden and its last show.
+// What the shell holds now, for the tests: each tab's module, whether it is awake, on show,
+// busy, its time hidden and its last show.
 const tabsNow = ()=> TABS.map(t=> ({ id: t.id, module: t.module, title: t.title, awake: isLive(t), shown: t.id === _activeId,
-  busy: !!moduleBusy(keyOf(t)), hidAt: t.hidAt || 0, seenAt: t.seenAt || 0, history: !!t.hist, order: t.order }));
+  busy: !!moduleBusy(t.id), hidAt: t.hidAt || 0, seenAt: t.seenAt || 0, history: !!t.hist, order: t.order }));
 
-// Whatever reads the active tab's module (a save, an export, a close that saves) calls
-// this first: a switch loads the tab a frame or two after the click, and read in between
-// the module still holds the tab before it. Up to v468 closing an inactive tab with
-// "Save" saved the tab on show into the closed one's project.
+// Whatever reads the active tab's instance (a save, an export, a close that saves) calls
+// this first: a tab asleep is woken a paint after the click, and read in between it has no
+// instance yet. Up to v468 closing an inactive tab with "Save" saved the tab on show into
+// the closed one's project.
 // (a promise, to be awaited, where the wake reads its files' bytes first: wakeLater)
 function ensureLive(){
   const t = activeTab();
@@ -464,13 +405,12 @@ function loadTabIfActive(t){
   // (the tabs awake past the limit with this one put to sleep before it wakes, not after)
   keepLimits();
   // (Home, Projects or Settings chosen since its module was put on show: it stays on show, the
-  // tab asleep till it is shown from there, woken then under the loader, activateTab; to b2v3
-  // its wake put the module back over the section, the click lost)
+  // tab asleep till it is shown from there, woken then under the loader, activateTab)
   const p = _onFixed ? undefined : loadTab(t);
   const done = ()=>{
     // (its record, now on show; the tab left wrote its own at the switch: to v517 every
     // tab's, rewritten at each switch; a reload's, only those whose place or being on show
-    // it changed: to b2v4 every one)
+    // it changed)
     persistMoved();
     keepLimits();
     // Charts finish drawing a frame after the restore; drop the loader once they have.
@@ -482,12 +422,12 @@ function loadTabIfActive(t){
 }
 
 /* ---- Project bar sync -----------------------------------------------------
-   Only one module is live, so its project-name field always shows the active
+   The bar is the tab on show's, so its project-name field always shows the active
    tab's title. sessions.js owns everything else about saving. */
 let _onActivate = null, _onLoaded = null;
 // sessions.js registers what to do once a tab is activated (name field, save button
-// state, dirty markers) — it owns that logic, this module owns the tabs — and once its
-// state is live in its module (what it was saved as, to compare later changes with).
+// state, dirty markers) — it owns that logic, this module owns the tabs — and once it is
+// awake (what it was saved as, to compare later changes with).
 function onTabActivated(fn){ _onActivate = fn; }
 function onTabLoaded(fn){ _onLoaded = fn; }
 function syncProjectBar(t){
@@ -519,7 +459,7 @@ function showModuleLoader(){
 }
 function hideModuleLoader(){ if (_loaderEl) _loaderEl.classList.remove('show'); }
 /* A step that is no tab's and may take a while (a project written to a file, its bytes as
-   base64: some 1.7 s for one of 8 SEM images of 2048², one task with no loader to b2v3):
+   base64: some 1.7 s for one of 8 SEM images of 2048², one task with no loader to v517):
    the loader on and a frame drawn first, fn, and the loader off once every such step is
    done. */
 let _under = 0;
@@ -544,43 +484,22 @@ window.addEventListener('load', ()=> setTimeout(revealApp, 0));
 setTimeout(revealApp, 2500);
 
 /* ---- Open / activate / close --------------------------------------------- */
-/* A job running in a module's one instance (a module not made per tab: moduleBusy)
-   belongs to the tab live in it: once another tab takes the module, or this one is
-   parked, its result has nowhere right to go. So before that tab is left the user
-   chooses: stop the job, or stay. True when nothing runs, or it was stopped. A tab made
-   per tab is left as it is: its job goes on, hidden. */
-async function mayLeaveLive(){
-  const t = activeTab();
-  if (!t || isFactory(t.module) || t.id !== _liveId) return true;
-  const running = moduleBusy(t.module);
-  if (!running) return true;
-  if (!await confirmBanner(running + ' is running in “' + (t.title || UNTITLED) + '”: leaving this tab stops it.', 'Stop it and leave')) return false;
-  stopModule(t.module);
-  return true;
-}
-// A tab chosen in the bar: shown at once, unless leaving the live one would stop a job.
-async function switchTo(id){
-  if (id !== _activeId && !await mayLeaveLive()) return;
-  activateTab(id);
-}
 // Open a project (or a blank technique) in a NEW tab and focus it. Opening a
 // project that is already open is a no-op: it never steals focus.
-// Any number may be open (to b2v2 a 21st was refused): only the tabs awake are limited
-// (keepLimits), and one opened in the background is asleep.
+// Any number may be open: only the tabs awake are limited (keepLimits), and one opened in
+// the background is asleep. A tab left is left as it is: its job goes on, hidden (to v517
+// leaving a tab asked to stop its job). (async: its callers await it)
 async function openTab({ module, title, projectId, state, dirty, focus = true }){
   if (!MODULES.includes(module)) return null;
   if (projectId){
     const existing = tabByProject(projectId);
     if (existing) return existing;   // already open → nothing happens
   }
-  // Shown at once only if leaving the live tab stops nothing (or the user stops it);
-  // otherwise it opens beside it, as from the Projects list.
-  if (focus && !await mayLeaveLive()) focus = false;
   const t = { id: uid(), module, title: title || untitledName(module), projectId: projectId || null, dirty: !!dirty,
               state: state || null, hist: null, inst: null, hidAt: 0, seenAt: 0, order: nextOrder(), rec: null, shows: null };
   TABS.push(t);
   // focus:false opens the tab in the background — opening a project from the
-  // Projects list leaves you on that list. (asleep, a module made per tab: woken shown)
+  // Projects list leaves you on that list. (asleep: woken as it is shown)
   if (focus) activateTab(t.id);
   else { renderTabs(); held(t); if (!lighten(t)) persistTab(t); }
   return t;
@@ -603,19 +522,16 @@ function activateTab(id){
     return;
   }
   const was = activeTab();
-  stashActive();
   hideTab(was);
   _activeId = id;
   // The record of the tab left (its `active` changed), once the tab chosen is painted (to
   // v518 at the click: ~20 ms of the press before the tab was on screen); written whatever
-  // step comes next (to b2v3 the step wrote it with the tab shown's, and where it was
-  // superseded never: two records on show, a reload showing the first).
+  // step comes next, superseded or not (else two records on show, a reload showing the first).
   afterPaint(()=> persistTab(was));
-  // Every switch: the tab marked on and the loader on at the press, the tab put in the page
-  // once they are painted, the loader off once it is drawn (the user: "al click della tab
-  // cambiala istantaneamente e metti il caricamento; quando è caricata, mostrala"; to v520
-  // an awake tab was put in the page at the press, the bar and the tab on screen together
-  // 55-75 ms after it, the browser laying out the section meanwhile).
+  // Every switch: the tab marked on and the loader on at the press, so that the press is
+  // answered at once, the tab put in the page once they are painted, the loader off once it
+  // is drawn (to v520 an awake tab was put in the page at the press, the bar and the tab on
+  // screen together 55-75 ms after it, the browser laying out the section meanwhile).
   if (isLive(t)) return showLater(t, ()=>{ persistMoved(); keepLimits(); });
   // (asleep: its module put on show and the tab woken a paint after the press, unless Home,
   // Projects or Settings are chosen meanwhile: woken then when shown from there)
@@ -652,11 +568,11 @@ function closeTab(id){
   if (i < 0) return;
   const t = TABS[i], wasActive = t.id === _activeId;
   // Its job goes with it (a deleted project, a close the user agreed to).
-  if (isLive(t) && moduleBusy(keyOf(t))) stopModule(keyOf(t));
+  if (isLive(t) && moduleBusy(t.id)) stopModule(t.id);
   TABS.splice(i, 1);
   deleteTabRec(id).catch(()=>{});
   asleep(t.module, t.id, null);
-  // (a gap in the orders, which sorts as before: no other record written, b2v4)
+  // (a gap in the orders, which sorts as before: no other record written)
   clearTimeout(t.showsT); t.showsT = 0;
   if (!wasActive){ dropInst(t); renderTabs(); persistMoved(); keepLimits(); return; }
   _activeId = null;
@@ -664,7 +580,7 @@ function closeTab(id){
   if (!next){ dropInst(t); renderTabs(); goTab('home'); return; }
   _activeId = next.id;
   // (the record of the tab now on show at once: a step superseded within its frames writes
-  // nothing after; to b2v4 every record, their places too)
+  // nothing after)
   persistMoved();
   // (one awake: shown before the closed one's instance goes, the page's scroll kept; the
   // loader of a wake the closed one was waiting on taken away)
@@ -762,7 +678,11 @@ function initBar(){
     if (!el) return;
     if (x){ e.stopPropagation(); requestClose(el.dataset.id); return; }
     if (_dragMoved){ _dragMoved = false; return; }
-    switchTo(el.dataset.id);
+    // (a tab other than the one on show taken a microtask after the click, as to v521 behind
+    // the check of a job in a module's one instance: clicks dispatched in one task each act on
+    // the bar they were found in, not on the one the first drew anew)
+    const id = el.dataset.id;
+    if (id === _activeId) activateTab(id); else queueMicrotask(()=> activateTab(id));
   });
   // Tabs past the strip's width scroll in it, its scrollbar hidden: the wheel scrolls it
   // sideways too (a mouse had no way along it; a trackpad's sideways swipe is the
@@ -849,11 +769,11 @@ function moveTab(id, to){
   persistMoved();
 }
 
-// Is there any work in this tab to lose? For a live tab the module answers
+// Is there any work in this tab to lose? For a tab awake its instance answers
 // directly; a parked one is empty when its state still matches the pristine
 // default (a typed name lives on the record, not in the module state).
 function isEmpty(t){
-  if (isLive(t)) return !moduleHasData(keyOf(t));
+  if (isLive(t)) return !moduleHasData(t.id);
   if (!t.state) return true;
   // (a parked state's bytes are arrays, which JSON would write a key a byte: none in a default)
   try { return JSON.stringify(t.state, (k, x)=> x instanceof Uint8Array ? 0 : x) === JSON.stringify(defaultState(t.module)); }
@@ -862,16 +782,16 @@ function isEmpty(t){
 
 /* Closing prompts to save unless the tab is already saved and unchanged.
    sessions.js supplies the save routine (it owns the project store), which saves the
-   tab whether it is on show or not, awake or asleep (b2: to v517 the tab was shown
-   first, its state loaded into its module). */
+   tab whether it is on show or not, awake or asleep (to v517 the tab was shown first, its
+   state loaded into its module). A job going on in it stops only if the user says so. */
 let _saveForClose = null;
 function onCloseSave(fn){ _saveForClose = fn; }
 async function requestClose(id){
   const t = tabById(id);
   if (!t) return;
-  // Closing the live tab leaves it: a job running there stops only if the user says so;
-  // a job in a tab made per tab, the same (it is closed, not left).
-  if (t.id === _activeId && !await mayLeaveLive()) return;
+  // (the tab on show a microtask after the click, as to v521: a close of another tab
+  // dispatched in the same task still finds its button in the bar)
+  if (t.id === _activeId) await null;
   const running = t.inst && moduleBusy(t.id);
   if (running && !await confirmBanner(running + ' is running in “' + (t.title || UNTITLED) + '”: closing this tab stops it.', 'Stop it and close')) return;
   // Nothing to lose: an empty file list (whatever the name says) or a saved project
@@ -927,8 +847,8 @@ async function initTabs(){
     .filter(x=> x && !tabById(x.r.id)).sort((a,b)=> (a.r.order||0) - (b.r.order||0));
   if (!made.length){ renderTabs(); afterPaint(revealApp); return; }
   // (an order that does not rise from the tab before it, or is no number: one past that tab's,
-  // and written; two windows' tabs opened at once, or a record of another hand: v517's and
-  // b2v3's rise one by one)
+  // and written; two windows' tabs opened at once, or a record of another hand: v517's rise
+  // one by one)
   made.forEach((x, k)=>{ const o = x.t.order, p = k ? made[k-1].t.order : 0; if (!Number.isFinite(o) || (k && !(o > p))) x.t.order = k ? p + 1 : 0; });
   // Tabs opened while the records were being read (an upgrade held back by a window of an
   // older version, which can last): they stay as they are, the one on show live, and the
@@ -957,8 +877,7 @@ async function initTabs(){
   // and the charts fill in after, without freezing the boot.
   requestAnimationFrame(()=>{
     revealApp();
-    // (then the records whose place or being on show the restore changed, those alone: to
-    // b2v4 every one, where the wake waited for its files' bytes or its saved record)
+    // (then the records whose place or being on show the restore changed, those alone)
     requestAnimationFrame(()=>{ loadTabIfActive(at); _restoring = false; persistMoved(); _went = null; });
   });
 }
@@ -983,7 +902,7 @@ async function initTabs(){
 })();
 
 export { TABS, UNTITLED, activeTab, tabById, tabByProject, openTab, activateTab,
-         closeTab, requestClose, setTabTitle, setTabDirty, setTabProject, renderTabs,
+         closeTab, setTabTitle, setTabDirty, setTabProject, renderTabs,
          onTabActivated, onTabLoaded, onCloseSave, initTabs, persistTab, persistMoved, isRestoring,
-         isLive, ensureLive, untitledName, notice, keyOf, tabOfKey, tabOf, stateOf, isEmpty,
-         keepLimits as sleepTick, sleepTab, tabsNow, underLoader };
+         isLive, ensureLive, notice, tabOf, stateOf, isEmpty,
+         keepLimits as sleepTick, tabsNow, underLoader };

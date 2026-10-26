@@ -11,6 +11,7 @@
 import { fmtData, csvLine, X_SVG, DL_SVG as DL_ICON, downloadBytes, flashFieldInvalid, settings, fitCsvIcons, maxArr, barNames, barChipYmax, NORM_OPTIONS, normOf, confirmModal, keeper } from './utils.js';
 import { fileSafe } from './cards.js';
 import { Plot } from './plot.js';
+import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
 import { decodeText } from './textdata.js';
 import { fitSettings } from './xrd-rietveld.js';
 import { shapeView } from './xrd-shape3d.js';
@@ -83,9 +84,8 @@ const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin
    the curves take from the result (exactly: a NaN is not a null, nor −0 0; a result read
    back by an undo is a copy, the same), each phase's structure (its prep, one object for
    one CIF text: prepOf; the standard's LaB6, one for the page) and colour, and the role.
-   A tab woken, an undo, a redraw or the CSVs take them as drawn before: to b2v3 a card kept
-   the last pattern drawn and the Results' last 64, and a tab woken made all again (an XRPD
-   tab of 12 refined patterns, 115 ms of its wake). */
+   A tab woken, an undo, a redraw or the CSVs take them as drawn before: to v517 a card kept
+   the last pattern drawn and the Results' last 64, and a tab shown again made all again. */
 const curvesKept = keeper('xrd-curves'), diffKept = keeper('xrd-difference'), netKept = keeper('xrd-net');
 // (and a pattern not refined, its phases' reflections where its cells put them: tickRows,
 // by the 2θ, the instrument and the phases)
@@ -97,9 +97,6 @@ let lab6Prep = null;
 const LAB6_PREP = ()=> lab6Prep || (lab6Prep = Object.assign(prepPhase(LAB6_CIF, 'LaB6 (NIST SRM 660c)'),
   // (written in P1 here only to be short: nothing to report)
   { name: 'LaB₆ (NIST SRM 660c)', notes: [] }));
-
-const DL_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>';
-const CSV_SVG = '<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>';
 
 // The card's instructions (cards.js shows them under its title).
 export const RV_INFO = `Whole-pattern Rietveld refinement. Each phase comes from a CIF, dropped on <b>Phases</b> beside the pattern or selected with a click there (its drop zone while there is no phase, then <b>+ CIF</b> at the list's foot; several at once), the list giving each its formula and space group: its cell, its atoms and the symmetry the structure has. A file in P1, as Materials Project gives them, has its symmetry found from the atoms, so that a cubic cell is refined by <i>a</i> alone (a primitive cell of a centred lattice through its conventional cell, whose <i>a</i> and <i>V</i> are the ones reported), and its space group read off those operations; a file with its own operations is checked against its formula and Z (an origin-choice mix-up shows there). A phase's tick in the list says whether it is refined on the pattern on show: every pattern has them all at first, and each its own. The download button left of a phase's × (which removes it) saves its CIF under the file's name: its text as read, in UTF-8 whatever the file's encoding; it changes nothing, and works while a refinement runs, when the × and the tick are disabled until it ends (the run refines the phases it started with). A click on a phase shows its unit cell beside the list, in 3D (drag it to turn it, a double click puts it back), with its details under it; with no phase that box is empty. The instrumental standard (<b>Instrumental standard…</b>) is a file of its own, refined in its own window against the built-in LaB₆ (NIST SRM 660c, <i>a</i> = 4.156826 Å, held fixed) or a CIF of the standard's: its zero and its peak shape — the Thompson–Cox–Hastings pseudo-Voigt, Gaussian width² = U·tan²θ + V·tanθ + W and Lorentzian width = X·tanθ + Y/cosθ, made asymmetric by the axial divergence (through the Soller slits the file gives, Cheary–Coelho's full axial model, with the sample's and receiver's axial length L refined; without Sollers, Finger–Cox–Jephcoat's one parameter (S+H)/L: the tail of the low-angle peaks towards lower angles) — and a shift of 2θ as sin 2θ, the form of the sample's transparency, beside the zero and the displacement, become the instrument's, and each sample refines only its own broadening on top of them: a Lorentzian Y<sub>s</sub>/cosθ, which gives the crystallite size (D = Kλ/Y<sub>s</sub>, Y<sub>s</sub> in radians, K = 0.9 as in the Scherrer analysis), and X<sub>s</sub>·tanθ = 4ε·tanθ, the microstrain. The pattern is computed from Kα₁ and Kα₂ at the file's wavelengths and ratio, the Bragg–Brentano Lorentz–polarisation factor (with a monochromator only when the file has one), |F|² from the atoms (Waasmaier–Kirfel form factors with Chantler's anomalous terms), a Chebyshev background and a specimen displacement per sample; each point weighs by its counts (1/σ², σ² the counts times the attenuation). <b>Refine</b> starts from the CIF's cell, finds where the pattern's peaks are by scaling that cell, then frees the parameters stage by stage; <b>Refine all</b> does every pattern. With no refined standard they ask first, in a window over the page: refine the standard first (as its window's <b>Settings…</b> are) and then the samples, refine without it, or neither; with none loaded, load one. While the standard refines no sample does, and the other way round, so that a batch takes one instrumental profile throughout; its run shows on every card's <b>Instrumental standard…</b> (a spinner, and its progress along the button's foot), its window closed or open. <b>Settings…</b> (read only while a refinement runs) decides what Refine refines: for each phase each of the models below switched on or off and, when on, how deep (the size and the microstrain can be off too). It also sets where Refine starts: from the CIF, as above, or from each pattern's last result, with the groups of parameters ticked held at its values (whatever is new or changed since is refined) — a shape fitted, say, then held while B per site is refined. Its <b>Refinement</b> section sets, for every pattern, the least squares and the searches: the iterations allowed, the shift tolerance and the starting damping, the background's Chebyshev degree and its 1/2θ term (automatic: on when the scan starts below 20°), the cell search's range, and the free shape's trial starts, each result saying which it was refined with when they are not the defaults. Its <b>Results</b> section sets how the patterns stacked in the card's section of the Results are normalised: to the largest (global), each to its own maximum (local), or as they are (none). <b>Clear</b> removes this pattern's result, <b>Clear all</b> every pattern's. With several phases each gets its weight fraction (Hill–Howard, of the crystalline part). A phase is reported <i>not detected</i>, and left out of the refinement, when its scale is not above 3 esd, or when it is significant only through intensity under another phase's peaks with no part of the pattern its own (a candidate impurity whose lines fall on the main phase's would otherwise take up whatever misfit those peaks leave). The same CIF added twice gives two size populations of one phase. <b>Size profile</b> (with a refined standard): <i>Lorentzian</i>, a Lorentzian of the right breadth read with Scherrer's K; or <i>WPPM</i> (Whole Powder Pattern Modelling, Scardi &amp; Leoni), each line synthesised as the Fourier transform of the product of the instrument's, the size's, the strain's and the faults' coefficients — the size's being the crystallites' own common-volume function (a sphere's, or a free solid's along each member of the family), so the dimensions are the true ones and the profile's shape counts too. With <i>log-normal sizes</i> the coefficients are averaged over a distribution of width σ (of ln D): the size read is the volume-weighted mean (what the breadth measures), with the median and the number-weighted mean beside. <b>Microstrain</b>: isotropic, or <i>anisotropic</i> (Stephens: ε² a quartic form of the reflection's direction that the Laue group leaves unchanged; given as its rms and along the low-index planes' normals). <b>Planar faults</b> (after Warren): faults on a family of planes, each displacing the crystal by a vector of a family (those in the plane), the probability per plane refined: reflections whose h·R is not an integer broaden, by parity rather than by order. <b>Displacement parameters</b>: the CIF's held (0.5 Å² where it has none); one ΔB added to all of a phase's B; one B per crystallographic site (the sites from the symmetry found); or the anisotropic U<sup>ij</sup> per site, only those the site's symmetry leaves free, with B<sub>eq</sub>. Each is strongly correlated with the scale, and so with the weight fractions, with the background and, on broad peaks, with the widths: they want data to high angle. <b>Site occupancy</b>: the occupancy of one of the phase's sites refined — how strongly the site scatters against its species at full occupancy, alike at every angle (a B lowers it more the higher the angle): under 1, atoms missing (vacancies, a depleted surface) or a lighter species beside them; over 1, a heavier one. The weight fractions use the cell's mass at the refined occupancy. Every site at once would be the scale again, so a phase of one site has none to refine; the standard's structure is certified. <b>Preferred orientation</b>: March–Dollase, each reflection's members weighed by (r²·cos²α + sin²α/r)<sup>−3/2</sup>, α their angle to the normal of the chosen planes (hkl) — r under 1 when such planes lie preferentially parallel to the sample's surface (plates), over 1 when they do not (needles); <i>best axis</i> tries the low-index planes and keeps the lowest χ². For a cubic phase r has no first-order effect at 1, so it is refined from 0.8 and from 1.25 and the better kept. It changes the intensities, not the widths: an intensity misfit left in is otherwise taken up by a free shape, which widens or narrows peaks to fit it (on a SrTiO<sub>3</sub> whose Sr site scatters 0.7 of a full one, with that site held full the plates came out ⟂ ⟨310⟩; with its occupancy refined, ⟂ ⟨110⟩, as the crystals are). <b>Crystallite shape</b> (with a refined standard): the isotropic size, or a free solid — an <i>ellipsoid</i> of any proportions, a <i>spheroid</i> (two axes equal), a <i>cylinder</i>, an <i>elliptic cylinder</i> (an ellipse translated along its axis), a <i>box</i> or a <i>square-based box</i> (two edges equal: a square plate or rod) —, in any orientation. A shape that breaks the crystal's symmetry (a disc normal to one ⟨110⟩ of a cubic phase) gives the reflections of one family different widths, so each is drawn with its own and the peak is their sum; its width follows the solid's volume-weighted column length along it (Stokes &amp; Wilson), in closed form for each solid (the faces rounded off over 2° of direction during the search only: the result is the exact solid's). The fit starts from several shapes (the sphere, plates and needles along the low-index directions, slightly tilted, and random ones) and keeps the best, if it beats the isotropic size by ΔBIC under −10 (χ² divided by the isotropic fit's χ²<sub>ν</sub>, so that a misfit is not taken for evidence); else the isotropic size stays. Each solid is also refined with its axes held exactly on their nearest lattice directions — its faces lattice planes —, and kept so when that gives the lower ΔBIC and the free orientation is not better by more than its χ² allows (95 %); the free fit's angle from them is given beside. The ΔBIC of each solid against the same isotropic fit also compares the solids: under 10 is no preference, 10–30 weak (within what the search itself varies on real data), over 30 telling; and the sizes depend on the solid chosen. The result gives the solid's dimensions with their esds — true ones (diameter, height, edges, full axes): with WPPM the solid's own, else calibrated as the isotropic size, a sphere's diameter —, each axis with the simplest lattice direction within 10°, its angle from it and its angular esd (the turn of the solid that raises χ² by χ²<sub>ν</sub>, its sizes and its turns about the other axes refined again: it measures the valley of χ² the fit ends in, and of 7 free fits of synthetic boxes 2 ended 3–4 esd off, in another valley nearly as deep); two dimensions not told apart within 2 esd have no direction of their own, nor has an axis whose angular esd is over 30°. The sizes across a thin solid's faces assume ideally flat faces: a 2° spread of their orientation would shorten them by 10–30 %. The solid is drawn beside the tests with the crystal's directions on it and their uncertainty as cones (an axis the data do not fix dashed, <i>not determined</i>), and the cell's <i>a</i>, <i>b</i>, <i>c</i> in a corner for reference: drag it to turn it. Under the pattern: the difference, and a row of ticks per phase at its reflections; under them, the refinement's results across the card, by its title what it was refined with (each phase's models, the Refinement settings not the defaults), at its foot every warning. <b>Peak widths</b> (the table at the card's foot: a click keeps a peak marked on the pattern and on the Williamson–Hall plot): each reflection of a sample fitted alone (the pattern less the isotropic refinement's background and every other reflection, with a straight line for what is left, Kα₁ and Kα₂ and the instrument's asymmetry) by its own Lorentzian and Gaussian widths, to which the instrument's at that angle are added as the refinement adds them: their FWHM is the sample's alone, and the size from it is as in the Scherrer analysis. Three tests read them with no model of the shape, in their box beside the Williamson–Hall plot: <i>Williamson–Hall</i>, β·cosθ against 4·sinθ, where an isotropic size and strain put the points on one line (χ²<sub>ν</sub> about it and its probability); <i>orders</i>, Δd* = β·cosθ/λ of (h k l) and (n·h n·k n·l), equal for a size, in the ratio n for a strain, below 1 for faults that broaden by parity; and <i>prediction</i>, the same measurement on each model's own curve, which a model of the shape should match. Overlapped, weak or end-of-pattern peaks, and those no broader than the instrument within 2 esd, are listed but not used. R<sub>wp</sub>, R<sub>exp</sub> and χ² judge the fit; the values in brackets are the standard errors in the last digits, which the serially correlated residuals of a powder pattern make smaller than the real uncertainty. A refinement that stopped before converging, parameters on a bound (to be read as limits) and parameters the data do not determine are said under the results. How it all works in detail: RIETVELD.md in the repository.`;
@@ -129,12 +126,11 @@ export const RV_STD_INFO = `The instrumental standard's own Rietveld refinement:
      onProgress()   the run here went on (the standard: the samples' Instrumental standard…)
      changed()      the standard's result changed (the standard): the samples' notes follow
      hidden()       the card is folded: nothing is drawn
-     unseen()       its module's instance is not on show (b2: a tab left, a run going on in
+     unseen()       its module's instance is not on show (a tab left, a run going on in
                     it): nothing is drawn at all, the tab's redraw draws it as it is shown
-     placed()       the card is still its deck's (not closed, nor set aside by a restore):
-                    one waiting for the standard's run starts its own as that ends. None:
-                    the card in the page (to b2, when a module's one instance was the page's)
-     layer          where its settings window goes (the instance's layer, b2); none, the body
+     placed()       the card is still its deck's, not closed (samples): one waiting for the
+                    standard's run starts its own as that ends
+     layer          where its settings window goes (the instance's layer)
    }
    o: { prefix, standard } */
 export function createRietveld(host, root, o){
@@ -205,7 +201,7 @@ export function createRietveld(host, root, o){
     // A batch takes one instrumental profile throughout: no sample refines while the
     // standard does, nor the standard while a sample does. (A wait for the standard's run
     // that comes to nothing lets the history go.)
-    const why = host.blocked ? host.blocked() : '';
+    const why = host.blocked();
     if (why){ setStatus(why); releaseHist(); return { ok: false, why }; }
     const todo = list.filter(f=> phasesFor(f).length);
     if (!todo.length){
@@ -217,7 +213,7 @@ export function createRietveld(host, root, o){
     const copy = q => ({ ...q, on: { ...q.on }, dep: { ...q.dep }, off: { ...q.off } });
     const run = cur = { ph: phases.map(copy), std: copy(stdPhase()), start: startFrom, hold: hold.slice(), fit: { ...fit }, irf: std ? null : irf(),
       fell: [], bgFreed: [], n: todo.length, done: 0, tell };
-    if (host.onBusy) host.onBusy();
+    host.onBusy();
     try {
       /* Its patterns on the pool's lanes (xrd-rv-pool.js lanes: several at once, up to the
          pool's cap shared with every run of every page), each payload built as its pattern
@@ -225,8 +221,8 @@ export function createRietveld(host, root, o){
          before it are, so that the results, the history's step and the file saved are a
          run of one lane's, key order included. An error stops the patterns not taken; those
          under way end and are written. (run.frac: how far the run is, for the standard's
-         button on the samples' cards) Up to backlog 23's prototype one worker, the
-         patterns one after the other. */
+         button on the samples' cards) Up to v517 one worker, the patterns one after the
+         other. */
       const lbl = k => todo[k].label, from = [];
       const L = run.lanes = lanes(todo.length, {
         payload: k =>{
@@ -280,13 +276,13 @@ export function createRietveld(host, root, o){
     cur = null; busy = false; hideProg(); syncButtons(); draw();
     releaseHist(!commit);
     if (commit) host.commit();
-    if (std && host.changed) host.changed();
-    if (host.onBusy) host.onBusy();
+    if (std) host.changed();
+    host.onBusy();
   }
   // The history held from a run's start or a wait's (host.hold), once; let go with what the
   // run wrote (host.release), once, whichever way it ends.
-  function holdHist(){ if (!mark && host.hold){ mark = host.hold(); wrote = {}; } }
-  function releaseHist(quiet){ const m = mark, w = wrote; mark = wrote = null; if (m && host.release) host.release(m, w, quiet); }
+  function holdHist(){ if (!mark){ mark = host.hold(); wrote = {}; } }
+  function releaseHist(quiet){ const m = mark, w = wrote; mark = wrote = null; if (m) host.release(m, w, quiet); }
   const start = (list, tell)=> (curP = refine(list, tell));
   /* Ends the run at once, or a sample's wait for the standard's: Cancel, the tab manager's
      stop (a tab left, xrd.js), a kind switch (commit false: the switch commits). Up to v477
@@ -295,7 +291,7 @@ export function createRietveld(host, root, o){
   function cancel(commit = true){
     if (waiting){
       const w = waiting; waiting = null; w.cancelled = true;
-      if (w.own && host.stopStd) host.stopStd(commit);
+      if (w.own) host.stopStd(commit);
       releaseHist();
       hideProg(); syncButtons();
       setStatus(w.own ? 'Stopped, the standard\'s refinement with it: nothing refined.' : 'Stopped waiting for the standard\'s refinement: nothing refined.');
@@ -322,7 +318,7 @@ export function createRietveld(host, root, o){
     const names = all ? null : [f.name];
     const list = ()=> all ? host.files().slice() : host.files().filter(g=> names.includes(g.name));
     if (std || irf() || !list().some(g=> phasesFor(g).length)){ start(list()); return; }
-    const g = gen, loaded = !!(host.stdLoaded && host.stdLoaded());
+    const g = gen, loaded = host.stdLoaded();
     const c = await confirmModal(loaded
       ? 'The instrumental standard is not refined: without its profile the widths, and the sizes from them, include the instrument\'s. Refine it first, with the settings of its window?'
       : 'No instrumental standard is loaded: without its profile the widths, and the sizes from them, include the instrument\'s.',
@@ -348,7 +344,7 @@ export function createRietveld(host, root, o){
     setStatus('Refining the instrumental standard first…'); syncButtons();
     const r = await sr.done;
     // (stopped from here, or by the tab manager: cancel said so)
-    if (w.cancelled || gone || !(host.placed ? host.placed() : root.isConnected)){ if (!w.cancelled) releaseHist(); return; }
+    if (w.cancelled || gone || !host.placed()){ if (!w.cancelled) releaseHist(); return; }
     waiting = null; hideProg(); syncButtons();
     if (!r.ok || !irf()){ releaseHist(); setStatus(r.ok ? 'The standard\'s refinement gave no profile (its file changed meanwhile?): nothing refined.'
       : r.why === 'stopped' ? 'The standard\'s refinement was stopped: nothing refined.' : `The standard's refinement failed (${String(r.why).replace(/\.$/, '')}): nothing refined.`); return; }
@@ -372,7 +368,7 @@ export function createRietveld(host, root, o){
   let plotKey = '', instrTxt = '';
   const setText = (id, t)=>{ const el = $(id); if (el.textContent !== t) el.textContent = t; };
   function draw(preserve){
-    if (gone || (host.unseen && host.unseen())) return;
+    if (gone || host.unseen()) return;
     const fs = host.files();
     syncButtons();
     renderPhases();
@@ -389,7 +385,7 @@ export function createRietveld(host, root, o){
     if (!std){ setText('Label', f.label); setText('Idx', (k+1) + '/' + fs.length); }
     // (the Results show every pattern, the card folded or not)
     renderRes();
-    if (host.hidden && host.hidden()) return;
+    if (host.hidden()) return;
     const svg = $('Svg');
     const key = [f.name, idOf(f.x), idOf(f.y), idOf(f.varMul), idOf(instrOf(f)), resKey(r), std ? pick : '',
       allPhases().map(q=> [q.id, q.color, idOf(q.prep), q.off[f.name] ? 0 : 1].join(':')).join(), sizeOf(svg)].join('|');
@@ -610,7 +606,7 @@ export function createRietveld(host, root, o){
       const color = (allPhases().find(q=> q.id === s.id) || {}).color;
       const wrap = document.createElement('div');
       wrap.className = 'rv-solid';
-      wrap.innerHTML = `<div class="peak-box-head"><span class="txt-mini">Crystallite shape${list.length > 1 ? ' · ' + esc(s.name) : ''}</span><button class="btn table-csv-btn" title="Download PNG">${DL_SVG}</button></div><div class="rv-solid-view"></div>`;
+      wrap.innerHTML = `<div class="peak-box-head"><span class="txt-mini">Crystallite shape${list.length > 1 ? ' · ' + esc(s.name) : ''}</span><button class="btn table-csv-btn" title="Download PNG">${PLOT_DL_ICON}</button></div><div class="rv-solid-view"></div>`;
       box.appendChild(wrap);
       const view = shapeView(wrap.querySelector('.rv-solid-view'), { color, height: solidHeight(list.length) });
       view.set({ type: s.type, dims: s.dims, frame: s.frame, dirs: s.dirs, cell: s.cell, caption: solidCaption(s) });
@@ -921,7 +917,7 @@ export function createRietveld(host, root, o){
   function syncButtons(){
     const fs = host.files(), f = fs[curIdx()], on = busy || !!waiting;
     // Not now (host.blocked): a sample while the standard refines, the standard while a sample does.
-    const why = !on && host.blocked ? host.blocked() : '', b = $('Refine'), label = on ? 'Cancel' : 'Refine';
+    const why = on ? '' : host.blocked(), b = $('Refine'), label = on ? 'Cancel' : 'Refine';
     if (b.textContent !== label){ b.textContent = label; turnT = performance.now(); }
     b.disabled = !on && (!f || !!why);
     // (a wait on a run the standard's window started: Cancel ends the wait, not that run)
@@ -948,7 +944,7 @@ export function createRietveld(host, root, o){
   let stdShown = '';
   function syncStd(){
     if (std) return;
-    const run = host.stdRun ? host.stdRun() : null, b = $('Std');
+    const run = host.stdRun(), b = $('Std');
     const pct = run && Number.isFinite(run.frac) ? Math.round(Math.max(0, Math.min(1, run.frac))*100) : null;
     const k = run ? 'run:' + pct : '';
     if (k === stdShown) return;
@@ -976,7 +972,7 @@ export function createRietveld(host, root, o){
       <div class="rvs-body"></div>
       <button class="btn primary" type="button" data-done style="width:100%;margin-top:16px">Done</button>
     </div>`;
-  (host.layer || document.body).appendChild(setModal);
+  host.layer.appendChild(setModal);
   const setBody = setModal.querySelector('.rvs-body');
   let setKey = '', rebuilding = false;
   let fitNote = null;        // the Refinement section's note, when an entry was not taken
@@ -1001,7 +997,7 @@ export function createRietveld(host, root, o){
     document.removeEventListener('keydown', onSetKey, true);
     if (inBox && !$('Settings').disabled) $('Settings').focus();
   }
-  // (its window in the page: one of a tab not on show, b2, leaves the key to the page)
+  // (its window in the page: one of a tab not on show leaves the key to the page)
   function onSetKey(e){ if (e.key === 'Escape' && setModal.isConnected){ e.stopPropagation(); closeSettings(); } }
   // Built again only when the phases on show change (one added or removed by an undo);
   // otherwise the inputs are set in place, keeping the focus.
@@ -1172,7 +1168,7 @@ export function createRietveld(host, root, o){
       // A result refined with the phase is no longer the model's: it goes with it.
       Object.keys(results).forEach(k=>{ if ((results[k].phases || []).includes(id)) delete results[k]; });
       draw(true); renderSettings(); host.commit();
-      if (std && host.changed) host.changed();
+      if (std) host.changed();
       return;
     }
     /* A tick or choice locked (lockRows): its click cancelled, which puts its state back,
@@ -1199,7 +1195,7 @@ export function createRietveld(host, root, o){
     if (busy || waiting){ cancel(); return; }
     press(false);
   };
-  $('Clear').onclick = ()=>{ const f = host.files()[curIdx()]; if (!f || locked() || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); if (std && host.changed) host.changed(); };
+  $('Clear').onclick = ()=>{ const f = host.files()[curIdx()]; if (!f || locked() || !results[f.name]) return; delete results[f.name]; draw(true); host.commit(); if (std) host.changed(); };
   if (!std){
     // (the standard is one pattern: its window has neither)
     $('RefineAll').onclick = ()=>{ if (!quick() && !busy && !waiting) press(true); };
@@ -1228,11 +1224,9 @@ export function createRietveld(host, root, o){
     redraw(){ draw(true); },
     // The standard's profile for the samples (the standard's card).
     irf: ownIrf,
-    // A run going on here (its own worker's: not a wait for the standard's), or either
-    // (active), ending it as Cancel does, and the buttons as the other cards' runs leave
-    // them (host.blocked).
+    // A run going on here (its own workers': not a wait for the standard's), ending it as
+    // Cancel does, and the buttons as the other cards' runs leave them (host.blocked).
     running: ()=> busy,
-    active: ()=> busy || !!waiting,
     // The run going on here and how far it is, or null (the standard's card: its button on
     // the samples' cards, syncStd).
     progress: ()=> busy && cur ? { frac: cur.frac } : null,
@@ -1242,7 +1236,7 @@ export function createRietveld(host, root, o){
     // The standard refined for a sample ("Refine the standard first", host.refineStd).
     run(tell){
       if (busy){ if (cur) cur.tell = tell; return { own: false, done: curP }; }
-      const why = host.blocked ? host.blocked() : '';
+      const why = host.blocked();
       return why ? { why } : { own: true, done: start(host.files().slice(), tell) };
     },
     /* The card closed (or turned into another kind, set aside then dropped): a run going on
@@ -1253,13 +1247,13 @@ export function createRietveld(host, root, o){
        card that had refined left its worker alive. */
     destroy(){ gone = true; cancel(false);
       closeSettings(); setModal.remove(); if (cellV) cellV.destroy(); solidViews.forEach(({ view })=> view.destroy()); solidViews = []; ac.abort(); },
-    /* What it shows beside its state (b2v4, xrd.js): the peak picked in its table of widths,
+    /* What it shows beside its state (xrd.js shows): the peak picked in its table of widths,
        how each crystallite's solid was turned (by pattern and solid, as solidTurns), the
        phase on show (by its id and name) and how its unit cell was turned (by the cell's key,
        cellKeyShown), given back as its tab wakes or the page is reloaded, the state restored,
        for its next drawing. The phase on show is in its state too (sel: an undo goes back to
        its step's, a project saved reopens on it), but a click on its row is no change, and
-       its record held the one before till the next (to b2v4 a reload showed it). */
+       its record held the one before till the next (to v517 a reload showed it). */
     shows(){
       const turns = new Map(solidTurns);
       solidViews.forEach(({ view, turnKey })=>{ if (view.getView) turns.set(turnKey, view.getView()); });
@@ -1311,11 +1305,10 @@ export function createRietveld(host, root, o){
       results = resultsOf(s);
       if (keep && wrote) Object.assign(results, wrote);
       sizeBy = s.sizeBy === 'peak' ? 'peak' : 'sample'; resNorm = normOf(s.resNorm);
-      // A run going on is the module's own, read out and in again (a saved project's CSVs,
-      // runWithModuleState; a run is stopped before another project comes in): it goes on
-      // into the results restored; or stepped through (above). Nothing running,
-      // the last run's words go (they were about the state before: "Stopped…" otherwise
-      // showed on the next project), and a choice still open is dropped (press).
+      // A run going on goes on into the results restored: an undo or a redo stepped through
+      // (above). Nothing running, the last run's words go (they were about the state before;
+      // to v517 "Stopped…" showed on the next project the module's one instance held), and a
+      // choice still open is dropped (press).
       gen++;
       if (!busy && !waiting) setStatus('');
       syncButtons();
@@ -1347,7 +1340,7 @@ function resHtml(p){
             <p class="txt-caption">Refinement: observed less the background</p>
             <div class="plot-wrap">
               <svg class="plot" id="${p}ResSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="${p}ResSvg" data-csv-mod="xrd" data-csv-base="rietveld_pattern.csv" data-csv-names="rietveld_pattern.csv" data-dl-base="XRPD_results_rietveld.svg" data-dl-name="XRPD_results_rietveld.svg" data-dl-legend="${p}ResLegend">${DL_SVG}</button>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}ResSvg" data-csv-mod="xrd" data-csv-base="rietveld_pattern.csv" data-csv-names="rietveld_pattern.csv" data-dl-base="XRPD_results_rietveld.svg" data-dl-name="XRPD_results_rietveld.svg" data-dl-legend="${p}ResLegend">${PLOT_DL_ICON}</button>
             </div>
             <div id="${p}ResLegend" class="legend"></div>
           </div>
@@ -1356,7 +1349,7 @@ function resHtml(p){
             <div class="plot-wrap">
               <svg class="plot" id="${p}SizeSvg"></svg>
               <span class="plot-chips" id="${p}SizeBy"></span>
-              <button class="btn plot-dl-btn" data-size-dl data-dl-svg="${p}SizeSvg" data-csv-mod="xrd" data-csv-names="rietveld_results.csv" data-dl-name="XRPD_rietveld_size.svg" data-dl-legend="${p}SizeLegend">${DL_SVG}</button>
+              <button class="btn plot-dl-btn" data-size-dl data-dl-svg="${p}SizeSvg" data-csv-mod="xrd" data-csv-names="rietveld_results.csv" data-dl-name="XRPD_rietveld_size.svg" data-dl-legend="${p}SizeLegend">${PLOT_DL_ICON}</button>
             </div>
             <div id="${p}SizeLegend" class="legend"></div>
             <div id="${p}SizeNote" class="txt-meta"></div>
@@ -1383,7 +1376,7 @@ function rvHtml(p, std){
           <div class="pside-plot">
             <div class="plot-wrap">
               <svg class="plot" id="${p}Svg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-base="rietveld_pattern.csv" data-csv-names="rietveld_pattern.csv" data-dl-base="XRPD_rietveld.svg" data-dl-name="XRPD_rietveld.svg" data-dl-legend="${p}Legend">${DL_SVG}</button>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-base="rietveld_pattern.csv" data-csv-names="rietveld_pattern.csv" data-dl-base="XRPD_rietveld.svg" data-dl-name="XRPD_rietveld.svg" data-dl-legend="${p}Legend">${PLOT_DL_ICON}</button>
             </div>
           </div>
           <div class="pside-under">
@@ -1445,7 +1438,7 @@ ${std ? `
             <p class="txt-caption">Williamson–Hall</p>
             <div class="plot-wrap">
               <svg class="plot" id="${p}WhSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="${p}WhSvg" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" data-dl-base="XRPD_williamson_hall.svg" data-dl-name="XRPD_williamson_hall.svg" data-dl-legend="${p}WhLegend">${DL_SVG}</button>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}WhSvg" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" data-dl-base="XRPD_williamson_hall.svg" data-dl-name="XRPD_williamson_hall.svg" data-dl-legend="${p}WhLegend">${PLOT_DL_ICON}</button>
             </div>
             <div id="${p}WhLegend" class="legend"></div>
             <div class="peak-box rv-tests">
@@ -1457,7 +1450,7 @@ ${std ? `
           <div class="peak-box rv-wtable">
             <div class="peak-box-head">
               <span class="txt-mini">Peak widths</span>
-              <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" title="Download CSV">${CSV_SVG}</button>
+              <button class="btn table-csv-btn" data-csv-mod="xrd" data-csv-base="rietveld_peaks.csv" data-csv-names="rietveld_peaks.csv" title="Download CSV">${CSV_ICON}</button>
             </div>
             <div id="${p}PkWrap"></div>
           </div>

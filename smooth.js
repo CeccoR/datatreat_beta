@@ -77,29 +77,6 @@ export function boxWeights(x, i, w){
   return out;
 }
 
-/* The slope of the box-smoothed curve: exactly the secant of the line through the points
-   across the window, (L(x + w/2) − L(x − w/2))/w, cut short at the ends as the box is. A
-   window no wider than the point's two neighbours span gives the central difference (one
-   sided at the ends), as utils.js gradientArr: a moving average of that over an odd N
-   points is this secant at w = N steps. */
-export function boxSlope(x, y, w){
-  const n = y.length, out = new Array(n);
-  if (n < 2) return out.fill(NaN);
-  const s = x[n-1] < x[0] ? -1 : 1, u = k => s*x[k];
-  const L = (t, k)=>{ const d = u(k+1) - u(k); return d > 0 ? y[k] + (y[k+1] - y[k])*(t - u(k))/d : y[k]; };
-  const lo = u(0), hi = u(n-1), h = w/2;
-  let ka = 0, kb = 0;
-  for (let i = 0; i < n; i++){
-    const j0 = Math.max(0, i-1), j1 = Math.min(n-1, i+1);
-    if (!(w > u(j1) - u(j0))){ out[i] = (y[j1] - y[j0])/(x[j1] - x[j0]); continue; }
-    const a = Math.max(lo, u(i) - h), b = Math.min(hi, u(i) + h);
-    while (ka < n-2 && u(ka+1) <= a) ka++;
-    while (kb < n-2 && u(kb+1) <= b) kb++;
-    out[i] = s*(L(b, kb) - L(a, ka))/(b - a);
-  }
-  return out;
-}
-
 /* ---- A width's field (XRPD, EPR) ----
    A width is shown to 4 significant digits and kept as it is (one converted from points,
    10 × 0.0130039°, stays that); beside it, in its field, what it spans in points of the

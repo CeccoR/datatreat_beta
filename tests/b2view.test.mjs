@@ -1,9 +1,9 @@
-/* What a tab shows beside its state, kept (b2v4): the view a tab had comes back as it was
+/* What a tab shows beside its state, kept (v518): the view a tab had comes back as it was
    after a sleep and a wake and after a reload (its record), and changing it is no step of
    the history and no change unsaved ("*"). Every module: its plots' zooms, its instructions
    shown and the scroll of its lists (utils.js shownOf, for all); DRS's sample on show (no
-   part of its state: to b2v4 a woken or reloaded tab showed the first), SEM's editor's zoom
-   (to b2v4 fitted again at every show), XRPD's peaks picked (a Scherrer card's, a Rietveld
+   part of its state: to v517 a reloaded tab showed the first), SEM's editor's zoom (to v517
+   fitted again at every show), XRPD's peaks picked (a Scherrer card's, a Rietveld
    card's) and its crystallites' turns; XRPD's pattern and SEM's image on show (in their
    states too, v517, whose records held the one before a step till the next change: a reload
    showed that), and alike a Rietveld card's phase on show, the standard's window's, and
@@ -176,7 +176,7 @@ test('XRPD: the pattern on show, zooms, the instructions, the peaks picked and t
     await switchTab(page, 0); await tick(page, 11*MIN); await switchTab(page, 1);
     assert.deepEqual((await turns()).find(e=> e[0] === turn[0]), turn, 'woken: kept');
     assert.equal(await starred(page, 1), false);
-    // A step, nothing else: its record written 5 s after with the pattern (to b2v4 it held the
+    // A step, nothing else: its record written 5 s after with the pattern (to v517 it held the
     // one before till the next change, and a reload showed that)
     await page.click('#xrdA1Next'); await settle(page);
     assert.equal(await page.textContent('#xrdA1Idx'), '3/3');
@@ -190,9 +190,9 @@ test('XRPD: the pattern on show, zooms, the instructions, the peaks picked and t
 });
 
 /* XRPD's Rietveld: the phase on show (a click on its row, no step) and its unit cell turned
-   (a drag), a card's and the standard's window's. To b2v4 a reload showed the phase the
-   record held (the one before the click, till the next change wrote it), a wake or a
-   reload the cells at their home view and the window's instructions shut. */
+   (a drag), a card's and the standard's window's. To v517 a reload showed the phase the
+   record held (the one before the click, till the next change wrote it), the cells at their
+   home view and the window's instructions shut. */
 const S = '#xrdStdR';
 const cellHash = (page, pre)=> page.evaluate(pre=>{
   const cv = document.querySelector(pre + 'Cell canvas');
@@ -269,8 +269,8 @@ test('GC and EPR: zooms, the instructions and GC\'s sample picked kept through a
       const h0 = await hist(page, mod);
       for (const id of plots) await zoom(page, id);
       await instructions(page, mod);
-      // GC: the second sample picked in the card's table, its interval highlighted (to b2v4
-      // none after a wake or a reload)
+      // GC: the second sample picked in the card's table, its interval highlighted (to v517
+      // none after a reload)
       const hl = ()=> page.locator('#tab-gc .gc-int-hl').count();
       if (mod === 'gc'){ await page.locator('#tab-gc .gc-row').nth(1).locator('td').first().click(); await settle(page); assert.equal(await hl(), 2); }
       assert.equal(await hist(page, mod), h0, mod + ': no step of the history');
@@ -314,7 +314,7 @@ test('SEM: the image on show, the editor\'s zoom, the list of images and a group
     const v0 = await view(page, 'sem');
     assert.notEqual(v0.scroll[0], '0,0', 'the list scrolled');
     assert.notEqual(v0.scroll[1], '0,0', 'the group\'s row turned');
-    // Shown again and the window resized: the zoom kept (to b2v4 fitted again)
+    // Shown again and the window resized: the zoom kept (to v517 fitted again)
     await switchTab(page, 0); await switchTab(page, 1);
     assert.deepEqual((await view(page, 'sem')).ed, v0.ed, 'shown again: as it was');
     const v = await roundTrip(page, 'sem', 1, 0);
@@ -325,7 +325,7 @@ test('SEM: the image on show, the editor\'s zoom, the list of images and a group
     // Fit: fitted, no zoom kept
     await page.click('#semToolFit'); await settle(page);
     assert.equal((await page.evaluate(async ()=> (await import('./tabs.js')).activeTab().inst.shows())).ed, undefined);
-    // A step and a reload at once: the page's going keeps it (to b2v4 the record's image)
+    // A step and a reload at once: the page's going keeps it (to v517 the record's image)
     await page.click('#semNext'); await settle(page);
     assert.equal(await page.textContent('#semIdx'), '3/12');
     await page.reload(); await ready(page); await settle(page);

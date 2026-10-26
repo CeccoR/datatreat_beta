@@ -683,10 +683,9 @@ function resultsOf(s){
   return results;
 }
 
-export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, frozen, SHAPES, shapeOpt, TEXTURE_AXES, textureOpt, profileOpt, strainOpt, FAULTS, faultOpt, adpOpt,
-  MODES, MODE, STD_NA, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
-  HOLDS, HOLD_KEYS, HOLD_DEFAULT, STD_HOLD_NA, START_RULE, FIT_DEF, FITS, FIT, fitTxt, DEC, readFit, cleanFit, formulaOf,
-  SIZE_ROWS, SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
-  instrOf, LAB6_ID, roleOf, irfOf, IRF_KEYS, sameIrf, phaseData, shapeOfParams, lastUnusable, bgTerms, payloadFor, resultRecord,
+export { PHASE_COLORS, prepPhase, textKey, prepOf, cellKey, frozen, MODES, MODE, siteList, listOf, depOf, defSettings, stdSettings, cleanSettings, migrateSettings, engineOf,
+  HOLDS, HOLD_KEYS, HOLD_DEFAULT, START_RULE, FIT_DEF, FITS, FIT, fitTxt, readFit, cleanFit, formulaOf,
+  SIZE_KINDS, hklShow, hklPlain, hklRuns, plotRuns,
+  instrOf, LAB6_ID, irfOf, sameIrf, lastUnusable, payloadFor, resultRecord,
   resultPhases, curvesFrom, exactJson, scanRange, tickRows, groupTicks,
   sizesOf, sizeKinds, sizeMarks, fitUsed, csvTables, rowsFor, fitShown, naOf, autoInvOf, fitRefusal, stateOf, readState, resultsOf };

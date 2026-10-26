@@ -49,27 +49,26 @@ import { decodeText } from './textdata.js';
                        its per-sample arrays drop (without)
      redrawTab()       the tab shown or resized
      csv()             the CSV export's files, [{ name, text }]
-     root, key, layer  a module made per tab (utils.js registerModule): its instance's
-                       section, where its elements are found (root-scoped, whether or not
-                       it is in the page), the key its registries go by, and its layer (the
-                       deck's menu goes there). None: the page's ids, the module's name, the
-                       body, as a module with one instance
+     root, key, layer  its instance's (utils.js registerModule): its section, where its
+                       elements are found (root-scoped, whether or not it is in the page),
+                       the key its registries go by, and its layer (the deck's menu goes
+                       there)
    }
    kit.destroy() lets the kit go with its instance: its deck. */
 export function moduleKit(mod, o){
-  const root = o.root || null, key = o.key || mod;
-  const all = [], files = [], $ = id => root ? root.querySelector('#' + id) : document.getElementById(id);
+  const { root, key } = o;
+  const all = [], files = [], $ = id => root.querySelector('#' + id);
   const parts = Object.fromEntries(['invalid', 'upload', ...(o.parts || [])].map(k=> [k, '']));
   const slots = ()=> o.slots ? o.slots() : [];
   const kit = { all, files, alerts: parts };
 
   /* ---- Alerts: each dismiss button (data-action "<mod>-dismiss-<part>") empties its part,
      or does what o.dismiss says. ---- */
-  const tab = root || $('tab-' + mod), pre = mod + '-dismiss-';
+  const pre = mod + '-dismiss-';
   kit.drawAlerts = ()=> o.alerts(parts);
   const clearAlerts = ()=>{ for (const k in parts) parts[k] = ''; };
-  tab.addEventListener('click', e=>{
-    const btn = e.target.closest('[data-action]'), act = btn && tab.contains(btn) ? btn.dataset.action : '';
+  root.addEventListener('click', e=>{
+    const btn = e.target.closest('[data-action]'), act = btn && root.contains(btn) ? btn.dataset.action : '';
     if (!act.startsWith(pre)) return;
     const part = act.slice(pre.length);
     if (o.dismiss && o.dismiss[part]) o.dismiss[part](); else parts[part] = '';

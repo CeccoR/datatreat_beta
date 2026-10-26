@@ -1,4 +1,4 @@
-/* XRPD made per tab (b2): each XRPD tab an instance of its own, awake while it is shown or
+/* XRPD made per tab (v518): each XRPD tab an instance of its own, awake while it is shown or
    was lately, in one page. Two tabs awake at once, each its own files, view and undo
    history, a switch to one awake only showing it (the same section, nothing restored, no
    loader); a refinement going on in a tab left, on the workers' pool, its results those of

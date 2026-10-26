@@ -69,7 +69,7 @@
 /* Surface-aware: buttons sitting ON a --bar or --panel2 card re-point the single
    --plate token to the card-calibrated values, so the one shared plate rule set
    works everywhere without a second token pair in the button rules. */
-.project-bar, .peak-box, .table-box {
+.project-bar, .peak-box {
   --plate-hover: var(--cardbtn-hover);
   --plate-press: var(--cardbtn-press);
 }
@@ -136,7 +136,7 @@ body {
    tabs.js has assembled it, then fade in. */
 html.app-booting body { opacity: 0; }
 /* Tabular figures keep numeric columns/readouts aligned in the data tables */
-table, input, .stat, .pill, .plot-readout { font-variant-numeric: tabular-nums; }
+table, input, .pill, .plot-readout { font-variant-numeric: tabular-nums; }
 header {
   display: flex;
   align-items: center;
@@ -266,7 +266,7 @@ button.btn.is-saved:disabled {
    (.table-csv-btn) are THE SAME BUTTON: one shared rule block, so their aesthetics
    can never drift apart. Bare at rest (no fill/border, muted icon); hover/press use
    the single --plate token like every other icon button — their card containers
-   (.project-bar / .peak-box / .table-box, above) re-point --plate to the
+   (.project-bar / .peak-box, above) re-point --plate to the
    card-calibrated shade so it never matches the surface. Save keeps its filled look
    (border stripped); delete lights red, not accent. */
 .btn.proj-icon.proj-saveas, .btn.proj-icon.proj-csv, .btn.proj-icon.proj-json, .btn.proj-icon.proj-del, .btn.proj-icon.proj-new,
@@ -500,7 +500,7 @@ main {
 .tab.active {
   display: block;
 }
-/* An instance's layer (a module made per tab, b2): its windows and menus, in the page
+/* An instance's layer (utils.js makeInstance): its windows and menus, in the page
    while the instance is; a box of no box of its own. */
 .inst-layer { display: contents; }
 /* Cross-fade colours during a light/dark toggle (scoped to .theme-anim so it only
@@ -591,7 +591,6 @@ main {
 .mw320 { min-width: 320px; }
 .mw280 { min-width: 280px; }
 .mw260 { min-width: 260px; }
-.mw220 { min-width: 220px; }
 .mw200 { min-width: 200px; }
 /* Narrow layout: let columns shrink and stack instead of overflowing the viewport.
    .narrow-layout is set by updateNarrowLayout() in utils.js — the threshold is half
@@ -601,7 +600,6 @@ main {
 :root.narrow-layout .mw320,
 :root.narrow-layout .mw280,
 :root.narrow-layout .mw260,
-:root.narrow-layout .mw220,
 :root.narrow-layout .mw200 { min-width: 100%; }
 /* Two plots side by side, each a caption, its plot and its legend, whose captions may
    wrap to different heights (a long one beside a short one, on a narrower window):
@@ -978,28 +976,6 @@ svg.plot.plot-pair { aspect-ratio: auto; height: calc((100cqw / 1.618 - 22px - v
   background: var(--alert-bad-bg);
   color: var(--bad);
   border: 1px solid var(--alert-bad-line);
-}
-.grid2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.stat {
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-}
-.stat b {
-  color: var(--accent);
-}
-.viewswitch {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 8px;
 }
 .home-grid {
   display: grid;
@@ -1698,7 +1674,6 @@ button.btn.table-csv-btn {
   transition: opacity 0.18s, background 0.15s, color 0.15s;
 }
 .peak-box:hover .table-csv-btn,
-.table-box:hover .table-csv-btn,
 .table-csv-btn:hover {
   opacity: 1;
 }
@@ -1804,17 +1779,6 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 }
 .btn.nav-arrow:hover:not(:disabled)  { --btn-fg: var(--text); }
 .btn.nav-arrow:active:not(:disabled) { --btn-bg: var(--line); --btn-fg: var(--text); }
-
-/* Instrumental-standard picker: sits in the plot header row, aligned with and the
-   same height as the "+ Add peak" corner button. Greyed while showing its ghost
-   placeholder (nothing chosen). */
-.std-select {
-  height: 30px;
-  width: 100%;
-  max-width: 340px;
-  padding: 0 9px;
-}
-.std-select.ghost { color: var(--muted); }
 
 /* ===== Plot header row: the sample nav on the left; the plot's toolbar takes its
    right (.plot-wrap). It keeps the 30px it had when it held the action button, so
@@ -1938,15 +1902,6 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .pg-result > .cag-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .cag-alert:not(:empty) { margin-top: 12px; }
 /* ===== XRPD Rietveld card ===== */
-/* The phases from CIFs, one row each: a colour key, the name and what was read from
-   the file, its remove ×. */
-.rv-phase { display: flex; align-items: flex-start; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); }
-.rv-phase:first-child { border-top: none; }
-.rv-phase .rv-key { flex: none; width: 12px; height: 12px; border-radius: 3px; margin-top: 3px; }
-.rv-phase .rv-main { flex: 1; min-width: 0; font-size: 13px; line-height: 1.5; }
-.rv-phase .rv-main b { color: var(--text); }
-.rv-phase .rv-sub { color: var(--muted); font-size: 12px; }
-.rv-phase .rv-del { flex: none; }
 /* The side column's buttons, rows of equal widths: Refine, Refine all; Settings…, Clear,
    Clear all (three in the column's 280 px: the side padding narrowed so that "Settings…"
    keeps to one line). */
@@ -2248,22 +2203,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   width: 100%;
 }
 
-/* The "interval too small" alert sits at the end of the Parameters column;
-   give it a clear break from the stats above it. */
-#taucAlert:not(:empty), #taucUAlert:not(:empty) { margin-top: 16px; }
-
-/* ===== Tauc Eg summary table ===== */
-#taucEgTableWrap { overflow: hidden; }
-#taucEgTableWrap table { font-size: 11px; table-layout: fixed; width: 100%; }
-#taucEgTableWrap th,
-#taucEgTableWrap td { font-size: 11px; white-space: nowrap; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; }
-#taucEgTableWrap td:nth-child(2),
-#taucEgTableWrap td:nth-child(3) { text-align: center; }
-
-/* Inline field + all/one toggle row */
-.field-row { display:flex; gap:5px; align-items:stretch; }
-.field-row > input, .field-row > select { flex:1; min-width:0; }
-
 /* ===== all/one flip-chip (GC-table style, reused for Tauc & XRD fields) ===== */
 /* all/one pill: an outlined dark chip, exactly like the sample-nav arrows —
    light-grey border, dark fill, muted text at rest; hover turns the text white
@@ -2277,10 +2216,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
 }
 .mode-chip:hover  { color: var(--text); }
 .mode-chip:active { color: var(--text); background: var(--line); }
-.field-row .mode-chip { flex: 0 0 auto; align-self: center; }
-/* Two half-width sub-panels side by side */
-.field-half { display:flex; gap:10px; }
-.field-half > div { flex:1; min-width:0; }
 
 /* ===== XRD peak table box ===== */
 .peak-box {
@@ -2370,7 +2305,6 @@ span.txt-caption { margin: 0; }   /* inline sample labels sit in a flex nav row 
   line-height: 1.7;
 }
 .size-summary b { color: var(--accent); }
-.size-summary .ss-n { color: var(--muted); font-size: 12px; }
 
 /* ✕ delete button — bare glyph, no border/background; padding keeps a clickable hitbox */
 .xrd-peak-wrap .peak-row .peak-del {
@@ -2580,11 +2514,8 @@ html:has(.modal-backdrop:not([style*="none"])) { overflow: hidden; scrollbar-gut
 .newproj-card:hover { border-color: var(--accent); color: var(--accent); }
 .newproj-card .tech-icon { width: 44px; height: 26px; }
 
-/* ===== Legend markers: segment for lines, circle for scatter, square for bars ===== */
+/* ===== Legend markers: segment for lines, square for bars ===== */
 .legend i { display: inline-block; margin-right: 5px; vertical-align: middle; width: 16px; height: 3px; border-radius: 2px; }
-.legend i.mk-dot { width: 9px; height: 9px; border-radius: 50%; }
-/* Hollow ring marker (open circles in the plot, e.g. raw XRPD data) */
-.legend i.mk-ring { width: 9px; height: 9px; border-radius: 50%; background: transparent; border: 1.6px solid; box-sizing: border-box; vertical-align: middle; }
 .legend i.mk-box { width: 11px; height: 11px; border-radius: 2px; }
 /* Dashed key: matches a series drawn with a dash pattern (the GC second gas). The
    dashes come from a repeating gradient so the key uses the series colour as-is. */
@@ -2908,7 +2839,6 @@ input.fig-slabel { flex: 1; min-width: 40px; padding: 3px 5px; font-size: 13px; 
   border-top: 1px solid var(--line); padding-top: 9px;
 }
 .fig-sec > .fig-subhead:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
-.fig-kind { color: var(--muted); font-size: 10px; }
 /* Series grouped by the panel they are drawn in; a series moves by being dragged
    from one group into another. */
 .fig-group {
@@ -3095,7 +3025,7 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   .fig-row { flex-wrap: wrap; gap: 3px 8px; }
   .fig-row > span { flex: 1 0 100%; }
   .fig-row input, .fig-row select { flex: 1 1 auto; }
-  .fig-richbar, .fig-chars { margin-left: 0; }
+  .fig-richbar { margin-left: 0; }
 
   .fig-axhead, .fig-axrow { grid-template-columns: 42px repeat(5, 1fr) 54px; gap: 2px; }
   .fig-axhead span { font-size: 9px; }
@@ -3181,11 +3111,7 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
   overflow: hidden; touch-action: none; user-select: none;
 }
 .sem-crop-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.sem-crop-um { margin: 8px 0 10px; }
 .sem-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer; font-size: 13px; }
-.sem-crop-note { margin-top: 10px; }
-.sem-crop-btns { display: flex; gap: 8px; margin-top: 12px; }
-.sem-crop-btns .btn { flex: 1; }
 .sem-info-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .sem-info-row:last-child { border-bottom: 0; }
 .sem-info-row > span:last-child { text-align: right; }
@@ -3218,15 +3144,10 @@ button.sem-link:hover { color: #fff; border-color: #fff; }
 button.sem-link.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* The list's colour palette means nothing for images. */
 #semFileTableWrap .palette-pick-btn { display: none; }
-.modal-box label.sem-copy-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer; }
-.sem-copy-row .txt-meta { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
-.sem-copy-all { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
 
 /* ===== SEM: intensity ===== */
 .sem-hist canvas { display: block; width: 100%; height: 100%; }
 .sem-hist { width: 100%; height: 120px; margin-top: 10px; }
-.sem-bcg { display: flex; gap: 8px; }
-.sem-bcg > div { flex: 1; min-width: 0; }
 /* A field that the settings do not use stays in place, greyed. */
 #semWorkspace input:disabled, #semWorkspace select:disabled, #semWorkspace .btn:disabled { opacity: 0.45; cursor: default; }
 #semWorkspace .sem-check:has(input:disabled) { opacity: 0.45; cursor: default; }
@@ -3241,7 +3162,6 @@ button.sem-link.is-on { background: var(--accent); border-color: var(--accent); 
    images, the scrollbar hidden; snapping lands a page on an image's edge. The arrows
    stand outside the row, never over an image: their room is kept at both ends even
    where an arrow is not needed (hidden, not removed), so the row never shifts. */
-.sem-crop-group { margin-top: 10px; }
 .sem-group {
   display: flex; flex-direction: column; gap: 8px; height: var(--sem-group-h, auto); box-sizing: border-box;
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; margin-bottom: 12px; background: var(--panel2);

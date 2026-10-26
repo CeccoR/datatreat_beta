@@ -491,9 +491,9 @@ and redone with it (Ctrl+Z inside the open figure too).
 
 ### 6.1 How a project stores the images
 
-A project keeps each file's own bytes, as base64, in the module's state.
+A project keeps each file's own bytes: in the module's state as they are, a `Uint8Array` in a RawRef (since v518; to v517 as base64); in the browser once, by their SHA-256, in the bytes store, a project or a tab holding that key (v517); in a `.datatreat` file as base64. A record, a project saved and a project file hold a RawRef in v517's form, `{ id, b64 }`, so that v517 reads them.
 
-- **Why not a typed array.** `db.js` `encode()` turns a typed array into a plain array of numbers: eight bytes a value in IndexedDB, and a decimal each in a `.json`.
+- **Why not a typed array, to v517.** `db.js` `encode()` turned a typed array into a plain array of numbers: eight bytes a value in IndexedDB, and a decimal each in a `.json`. v517 stored the bytes apart, by their hash; v518 keeps them in the state as an array.
 - **The undo stack.** It compares snapshots with `JSON.stringify` on every edit. The bytes' holder serialises in JSON as its id alone, so a snapshot compares at the cost of its crops: 2 ms an edit with two images.
 - **Saved projects and `.json` files.** These keep the bytes. A project with the user's two images exports as a 6.5 MB `.json`.
 - **The id.** It is a hash of the bytes. A second copy of a file already loaded, whatever its name, is reported as already loaded.
@@ -539,12 +539,14 @@ The group columns are empty for an image in no group.
 
 **Reading files off the page's thread.** Each file dropped is read by a worker
 (`sem-read.worker.js`, a module file of the page's origin, as the page's script policy
-asks): its id, the image, its 160-px copy, its default crop's statistics, its card in a
-group, its base64. The page answers meanwhile; the files read join the list together,
-one step of the history, as before. While files are read the module is busy: a switch
-to another tab asks first (*The reading of SEM files is running in "…": leaving this
-tab stops it*) and stops it, nothing going into either project, as closing the tab
-does. A reading holds the history from the state on show as it starts: undo goes down to
+asks; one for every SEM tab): its id, the image, its 160-px copy, its default crop's
+statistics, its card in a group, and its bytes, sent back (to v517 its base64 too). The
+page answers meanwhile; the files read join the list together, one step of the history,
+as before. While files are read the tab is busy: the reading goes on in a tab left, its
+files joining that tab's list as one step, and the tab does not sleep until it ends
+(v518); closing the tab asks first (*The reading of SEM files is running in "…": closing
+this tab stops it*) and stops it, nothing going into the project. To v517 a switch to
+another tab asked first and stopped it. A reading holds the history from the state on show as it starts: undo goes down to
 it and no lower, silently there, and above it undo and redo go as ever, the reading going
 on; the files read join the list as one step at its end, as before (a step undone
 meanwhile cannot be redone after it, as after any new step). Up to v508 undo and redo
@@ -563,13 +565,20 @@ editor's image (its curve). An edit draws again only those whose inputs changed;
 v487 every thumbnail and card, each card resampled from its whole crop.
 - **The cards are still made from the whole crop**, not from the thumbnails' 160-px copy: a card is drawn at up to 200 px, and a crop of half the image is some 80 px of that copy, which the card would show enlarged, blurred. Kept as they are, they look as they did, pixel for pixel.
 - **The same numbers.** The statistics, the resampling and the curves are computed as before, to the last bit: the crop's sums are taken from its histogram where that is exact (a sum of squares under 2⁵², every partial sum then a whole number), else pixel by pixel as before; the resampling adds the same terms in the same order, its weights in flat arrays; a large region goes through a table of each level's whole pixel. The browser's own base64 (`fromBase64`, `toBase64`), where it has it, reads a 8.6 MB file in 13 ms, not 50.
-- **A restore** is drawn once the task that made it is over (a microtask, before anything is painted), and learns which images read from their headers alone, decoding none. A project read in and out again is not drawn: for the saved state of a tab compared on its return nothing is decoded; a saved project's CSV decodes the images it includes, for their statistics, and lets them go afterwards under the memory budget below (both timed below). To v487 both were drawn, every image of the project decoded and kept.
+- **A restore** is drawn once the task that made it is over (a microtask, before anything is painted), and learns which images read from their headers alone, decoding none. A project read in and out again is not drawn: for the saved state of a tab compared on its return nothing is decoded; a saved project's CSV decodes the images it includes, for their statistics, and lets them go afterwards, as below (both timed below). To v487 both were drawn, every image of the project decoded and kept.
 
-**Memory.** The decoded images (8.4 MB for a 2048² one) of the images in the list are
-kept; the others (an image removed, which an undo may bring back; a project read in; a
-tab parked) go, the least recently used first, once all of them take more than 128 MB,
-and are read again from their bytes when needed (what their headers say is kept). To
-v487 every image ever loaded or restored stayed decoded until the page was reloaded.
+**Memory** (v518, `sem.js` *What the files are made into*). A file's bytes are one
+array whichever tabs hold it. An image of 16 bits in Tescan's order needs no decoding:
+its levels are a view of its bytes; another (8 bits, the other order, pixels made
+square) is copied, 2 bytes a pixel. The images of the tab on show and of a reading are
+kept at full size; the copies of the others within 32 MB (three images of 2048²), the least
+recently used let go first, read again from their bytes when needed. What a file is
+made into beside (its header, its 160-px copy, its last 4 cards in a group: some
+0.15 MB an image of 2048²) is kept while any tab holds the file, awake or asleep, so
+that a tab woken draws its thumbnails and cards without reading its images whole. A tab
+asleep lets go of its files' bytes, read back from the browser's storage as it wakes.
+To v517 every image of the list was kept decoded, and the others up to 128 MB; to v487
+every image ever loaded or restored stayed decoded until the page was reloaded.
 
 **Measured** (v488, headless Chromium, eight 2048² images in two groups, v487 against
 v488, each edit the time its handler holds the page):

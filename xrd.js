@@ -17,21 +17,191 @@ const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
    instrumental profile every sample's refinement takes), each opened from its kind of
    card, both on the one standard's file.
 
-   MADE PER TAB (b2): createXrd is the module's factory (utils.js registerModule), each
+   MADE PER TAB (v518): createXrd is the module's factory (utils.js registerModule), each
    open XRPD tab that is awake an instance of its own, made of its copy of index.html's
    section (root) and a layer for its windows (the standard's two, each card's
    settings, the kinds' menu). Its elements are found in root (or in the windows it
    made), never in the page: its ids are the page's only while it is on show, and a
    refinement going on while its tab is not on show writes into its own. Its registries
    go by its key, the tab's id. What it draws is drawn only on show: hidden, a run's
-   results are written and drawn as the tab is shown again (its redraw, goTab). API.md
-   says how a module is made so, from this one.
+   results are written and drawn as the tab is shown again (its redraw, goTab). utils.js
+   registerModule says how a module is made so.
 ========================================================= */
 /* A file's scans as read, kept by its bytes for every instance (the file's bytes are the
    same array in the tabs, their histories and their parked states): a tab woken, or an
    undo, reads none again, and its patterns are the same arrays as before, shared by its
-   history (to b2 one cache per module, its one instance's). */
+   history (to v517 one cache, the module's one instance's). */
 const reread = new WeakMap();
+
+/* ---- A file read, and a state put back (pure: the module's, for every instance) ---- */
+// A scan run downwards (start above end) turned round: the plots, the peak search and
+// the Rietveld card take 2θ ascending (rawBytes keep the file as it was). On loading,
+// and on restoring a project saved by an earlier version that kept the file's order.
+const ascending = f => f.x.length > 1 && f.x[0] > f.x[f.x.length-1]
+  ? { ...f, x: f.x.slice().reverse(), y: f.y.slice().reverse(), ...(f.varMul ? { varMul: f.varMul.slice().reverse() } : {}) } : f;
+/* A pattern's 2θ, intensities and variance factors never change once read (a file read
+   again gives new ones): fixed (db.js; to v517 frozen, which holds a double in twice the
+   memory), so that the undo history's key of a state (stateKey) takes each once, by a
+   hash kept for it, a state parked shares them, and a view drawn from them is not drawn
+   again for a state that holds the same (to v490 every edit wrote them out, 25 ms with 12
+   patterns, and every restore, an undo too, copied them anew, each view drawn again).
+   A scan's arrays are made so once, 2θ ascending, and shared by the pattern loaded and
+   every restore of it; a file's of a project with no bytes are fixed where restored. */
+const fixedArrs = f => { ['x', 'y', 'varMul'].forEach(k=> fixed(f[k])); return f; };
+const scanArrays = sc => sc.arrs || (sc.arrs = fixedArrs(ascending({ x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) })));
+
+/* A file read (readXrdmlScans, xrd-instr.js): 2θ, the intensities on the unattenuated
+   scale (<intensities> as written, the raw <counts> of XRDML 2.x times the attenuation
+   factors) and each point's variance, var(y) = y·varMul, for the counting uncertainty of
+   the FWHMs and the Rietveld weights. A file it cannot read (wrong format, not
+   well-formed, not a 2θ scan, dropped past the file picker's accept filter) gives the
+   reason instead. rawBytes keeps the original bytes for byte-exact re-download; the text
+   is decoded from them in the file's own encoding (UTF-16 too, which f.text() is not).
+   The raw intensities are kept untouched (no minimum subtraction): the constant offset is
+   absorbed by the SNIP background, so the whole pipeline — analysis and fit alike — runs
+   on the true raw data and stays consistent with the CSVs.
+   Every scan of the file is a pattern (patternsOf); the caller gives each its colour. */
+async function readFile(f){
+  const rawBytes = new Uint8Array(await f.arrayBuffer());
+  const xml = new DOMParser().parseFromString(decodeXml(rawBytes), 'text/xml');
+  const scans = xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml);
+  // (kept by its bytes, as readAgain keeps its readings: up to v490 the first restore
+  // after a file was loaded, an undo, read it again)
+  reread.set(rawBytes, scans);
+  return patternsOf(f.name, rawBytes, scans);
+}
+/* A file's scans, each a pattern of its own: one scan, the file as it was read up to
+   v483; several (a series measured in one go), "<file> (scan k)" each, k counting every
+   scan of the file, its name the file's with " (scan k)" before the extension (a key of
+   the cards' results: one per pattern), the file's bytes shared, and scan (k − 1) and
+   src (the file's name) kept for reading it again and for the "already loaded" test (to
+   v483 the first scan alone was read, the others never seen). A scan that cannot be read
+   is left out (skipped says why); none readable, the file is refused with the reasons.
+   → { pats: [{ f, k, notes }], skipped, n } or { error } */
+function patternsOf(name, rawBytes, scans){
+  const n = scans.length, base = name.replace(/\.[^.]+$/, ''), ext = name.slice(base.length);
+  const ok = scans.map((sc, k)=> ({ sc, k })).filter(q=> !q.sc.error);
+  if (!ok.length) return { error: n > 1 ? scans.map((sc, k)=> `scan ${k+1}: ${sc.error}`).join('; ') : scans[0].error };
+  const pats = ok.map(({ sc, k })=>{ const a = scanArrays(sc);
+    return { k, notes: sc.notes, f: { name: n > 1 ? `${base} (scan ${k+1})${ext}` : name, label: n > 1 ? `${base} (scan ${k+1})` : base,
+      x: a.x, y: a.y, rawBytes, ...(n > 1 ? { src: name, scan: k } : {}), ...(sc.meas ? { meas: sc.meas } : {}), ...(a.varMul ? { varMul: a.varMul } : {}) } }; });
+  return { pats, n, skipped: scans.map((sc, k)=> sc.error ? `scan ${k+1} not read (${sc.error})` : null).filter(Boolean) };
+}
+
+/* A project keeps each file's arrays as the version that loaded it read them. Up to v262
+   the intensities came in with their minimum subtracted, which the Rietveld weights then
+   took for the counts: the user's LaB6, so kept, fitted at χ²_ν 3.93, R_exp 3.89 % where
+   the file itself gives 2.17 and 3.54 % (the same parameters, the esds and the weights
+   off). Restored, a file is read again from its own bytes (rawBytes), as a file loaded
+   now is, and a note names those whose arrays changed; one whose bytes were not kept is
+   used as it was, with a note where its lowest point is exactly 0. The readings are kept
+   by their bytes, so an undo does not read a file again. A pattern is its scan of the
+   file (f.scan; the first, none given), so a file of several gives its scans again, in
+   their order. (reread: the module's, above) */
+function readAgain(f){
+  const b = f.rawBytes;
+  if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')){
+    let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
+    return { f: fixedArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
+  }
+  let all = reread.get(b);
+  if (!all){
+    try {
+      const xml = new DOMParser().parseFromString(decodeXml(b instanceof Uint8Array ? b : Uint8Array.from(b)), 'text/xml');
+      all = xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml);
+    } catch (e){ all = [{ error: String(e && e.message || e) }]; }
+    reread.set(b, all);
+  }
+  const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
+  if (sc.error) return { f: fixedArrs(ascending({ ...f })), note: null };
+  const { varMul: _, ...rest } = f, a = scanArrays(sc);
+  const g = { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };
+  const old = ascending({ ...f }), n = g.y.length;
+  // (the arrays the state holds, the scan's own: nothing moved)
+  const same = old.x === g.x && old.y === g.y && old.varMul === g.varMul;
+  let moved = !same && (!old.y || old.y.length !== n || !old.x || old.x.length !== n || !!old.varMul !== !!g.varMul);
+  for (let i = 0; !same && !moved && i < n; i++)
+    moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
+  // (points left out that an earlier version, to v484, kept as no number: those)
+  const lost = sc.dropped && old.y && old.y.length === n + sc.dropped;
+  return { f: g, note: !moved ? null : lost ? `read again from the file itself, ${sc.dropped} point${sc.dropped > 1 ? 's' : ''} whose values are no finite number left out (the project held ${sc.dropped > 1 ? 'them' : 'it'} as up to v484). Results refined before are from those: refine again`
+    : 'read again from the file itself: the project held its data as an earlier version had read them (up to v262, with their minimum subtracted). Results refined before are from those: refine again' };
+}
+/* A project read in may hold anything (an imported .json): the restore takes what it reads
+   only as what it should be — a file an object with its pattern, 2θ and intensities as
+   many and two at least (else it is left out, with a note), its name and label text; an
+   index an integer in range; arrays where arrays are kept; the cards of a known kind —
+   and anything else as its default (up to v484 a curIdx that was no number made the index
+   NaN, and the cards read files[NaN].label; a file not an object, or with no arrays,
+   threw before anything was drawn). */
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+const isArr = v => Array.isArray(v) || ArrayBuffer.isView(v);
+// (a kind of KINDS' own: 'constructor', 'toString' and the like are none)
+const isKind = k => Object.prototype.hasOwnProperty.call(KINDS, k);
+function keptFile(f, i, color){
+  if (!isObj(f)) return null;
+  const name = typeof f.name === 'string' && f.name ? f.name : `file ${i+1}`;
+  const g = { ...f, name, label: typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, ''), color: typeof f.color === 'string' ? f.color : color };
+  if (!(isArr(g.varMul) && isArr(g.y) && g.varMul.length === g.y.length)) delete g.varMul;
+  let r;
+  try { r = readAgain(g); } catch (e){ return null; }
+  return isArr(r.f.x) && isArr(r.f.y) && r.f.x.length === r.f.y.length && r.f.x.length > 1 ? r : null;
+}
+/* A project from before the cards (v460): one Analysis and one Rietveld card, and the
+   standard a file among the samples, chosen in a select. It becomes the standard's own
+   file, its parameters and peaks the standard's analysis, its refinement the standard's
+   Rietveld; the samples' settings go to a Scherrer card and a Rietveld card. A standard
+   left out of the analysis was not in use: it stays a sample, left out. */
+function migrate(s){
+  // (an entry that is no file kept in its place: the restore leaves it out with its
+  // entries in the per-sample lists)
+  const all = Array.isArray(s.files) ? s.files : [], incl = all.filter(f=> !isObj(f) || f.included !== false);
+  const si = s.standardName ? incl.findIndex(f=> isObj(f) && f.name === s.standardName) : -1;
+  const cut = a => Array.isArray(a) ? a.filter((_, i)=> i !== si) : a;
+  const rv = isObj(s.rv) ? s.rv : {}, res = isObj(rv.results) ? rv.results : {};
+  const stdRes = si >= 0 && res[s.standardName] ? { [s.standardName]: res[s.standardName] } : {};
+  const smpRes = Object.fromEntries(Object.entries(res).filter(([k])=> !(si >= 0 && k === s.standardName)));
+  let ci = s.curIdx || 0; if (si >= 0 && ci > si) ci--;
+  return {
+    files: si >= 0 ? all.filter(f=> f !== incl[si]) : all,
+    std: si >= 0 ? (({ included, held, ...f })=> f)(incl[si]) : null,
+    stdPeaks: si >= 0 ? { shared: s.stdParams, perParams: [s.stdParams], manualPeaks: [(s.manualPeaks || [])[si] || []], removedPeaks: [(s.removedPeaks || [])[si] || []] } : { shared: s.stdParams },
+    stdRv: { phases: [], std: rv.std, start: rv.start, hold: rv.hold, fit: rv.fit, results: stdRes, refineB: rv.refineB },
+    curIdx: ci,
+    cards: [
+      { id: 1, type: 'scherrer', states: { scherrer: { perParams: cut(s.perParams), manualPeaks: cut(s.manualPeaks), removedPeaks: cut(s.removedPeaks), shared: s.shared, paramMode: s.paramMode, sizeBy: s.sizeBy, norm: s.norm } } },
+      { id: 2, type: 'rietveld', states: { rietveld: { ...rv, results: smpRes } } },
+    ],
+  };
+}
+// A kind's settings, the card's or kept while it is the other kind: an object, and the
+// Scherrer one's per-sample lists arrays (the file list keeps them aligned: slots), the
+// entries of the included files left out (gone: their places among the included) taken
+// out, so each file after them keeps its own.
+function keptState(k, v, gone){
+  if (!isObj(v)) return null;
+  if (k !== 'scherrer') return v;
+  const arr = a => Array.isArray(a) ? a.filter((_, i)=> !gone.has(i)) : [];
+  return { ...v, shared: isObj(v.shared) ? v.shared : {}, perParams: arr(v.perParams), manualPeaks: arr(v.manualPeaks), removedPeaks: arr(v.removedPeaks) };
+}
+
+/* ---- The cards' states ---- */
+// A slot's entries copied (copyArr); a slot that also reads a file's entry held by an
+// earlier version under 'k' + its key (heldAs: slots, in the instance).
+const copyArr = v => Array.isArray(v) ? v.slice() : [];
+const heldAs = sl => ({ ...sl, make: (v, f)=> sl.make(v === undefined && f && f.held ? f.held['k' + sl.key] : v, f) });
+// The cards' kinds, as the menu lists them, and a card's element ids by its kind.
+const KINDS = { scherrer: 'Scherrer', rietveld: 'Rietveld' };
+const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
+// A Rietveld state with what a run wrote for the patterns named (runPatch, in the
+// instance), put where it goes; null where nothing new goes.
+function withResults(rv, names, wrote, put){
+  const old = rv.results || {}, add = Object.entries(wrote).filter(([k, r])=> names.has(k) && old[k] !== r);
+  return add.length ? put({ ...rv, results: { ...old, ...Object.fromEntries(add) } }) : null;
+}
+// A card's settings copied whole (JSON: they are plain data).
+const clone = o => JSON.parse(JSON.stringify(o));
+
 // An XRPD tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createXrd({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
@@ -45,21 +215,6 @@ function createXrd({ key, root, layer, shown }){
   let xrdLoadAlerts = '';
   let xrdNoteAlerts = '';
   let xrdUploadAlerts = '';
-  // A scan run downwards (start above end) turned round: the plots, the peak search and
-  // the Rietveld card take 2θ ascending (rawBytes keep the file as it was). On loading,
-  // and on restoring a project saved by an earlier version that kept the file's order.
-  const ascending = f => f.x.length > 1 && f.x[0] > f.x[f.x.length-1]
-    ? { ...f, x: f.x.slice().reverse(), y: f.y.slice().reverse(), ...(f.varMul ? { varMul: f.varMul.slice().reverse() } : {}) } : f;
-  /* A pattern's 2θ, intensities and variance factors never change once read (a file read
-     again gives new ones): fixed (db.js; to b2v2 frozen, which holds a double in twice the
-     memory), so that the undo history's key of a state (stateKey) takes each once, by a
-     hash kept for it, a state parked shares them, and a view drawn from them is not drawn
-     again for a state that holds the same (to v490 every edit wrote them out, 25 ms with 12
-     patterns, and every restore, an undo too, copied them anew, each view drawn again).
-     A scan's arrays are made so once, 2θ ascending, and shared by the pattern loaded and
-     every restore of it; a file's of a project with no bytes are fixed where restored. */
-  const fixedArrs = f => { ['x', 'y', 'varMul'].forEach(k=> fixed(f[k])); return f; };
-  const scanArrays = sc => sc.arrs || (sc.arrs = fixedArrs(ascending({ x: sc.x, y: sc.y, ...(sc.varMul ? { varMul: sc.varMul } : {}) })));
 
   // Delegated click handling for dynamically generated alert dismiss buttons.
   root.addEventListener('click', (e)=>{
@@ -73,44 +228,6 @@ function createXrd({ key, root, layer, shown }){
     $('xrdAlerts').innerHTML = xrdLoadAlerts + xrdNoteAlerts + xrdUploadAlerts;
   }
 
-  /* A file read (readXrdmlScans, xrd-instr.js): 2θ, the intensities on the unattenuated
-     scale (<intensities> as written, the raw <counts> of XRDML 2.x times the attenuation
-     factors) and each point's variance, var(y) = y·varMul, for the counting uncertainty of
-     the FWHMs and the Rietveld weights. A file it cannot read (wrong format, not
-     well-formed, not a 2θ scan, dropped past the file picker's accept filter) gives the
-     reason instead. rawBytes keeps the original bytes for byte-exact re-download; the text
-     is decoded from them in the file's own encoding (UTF-16 too, which f.text() is not).
-     The raw intensities are kept untouched (no minimum subtraction): the constant offset is
-     absorbed by the SNIP background, so the whole pipeline — analysis and fit alike — runs
-     on the true raw data and stays consistent with the CSVs.
-     Every scan of the file is a pattern (patternsOf); the caller gives each its colour. */
-  async function readFile(f){
-    const rawBytes = new Uint8Array(await f.arrayBuffer());
-    const xml = new DOMParser().parseFromString(decodeXml(rawBytes), 'text/xml');
-    const scans = xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml);
-    // (kept by its bytes, as readAgain keeps its readings: up to v490 the first restore
-    // after a file was loaded, an undo, read it again)
-    reread.set(rawBytes, scans);
-    return patternsOf(f.name, rawBytes, scans);
-  }
-  /* A file's scans, each a pattern of its own: one scan, the file as it was read up to
-     v483; several (a series measured in one go), "<file> (scan k)" each, k counting every
-     scan of the file, its name the file's with " (scan k)" before the extension (a key of
-     the cards' results: one per pattern), the file's bytes shared, and scan (k − 1) and
-     src (the file's name) kept for reading it again and for the "already loaded" test (to
-     v483 the first scan alone was read, the others never seen). A scan that cannot be read
-     is left out (skipped says why); none readable, the file is refused with the reasons.
-     → { pats: [{ f, k, notes }], skipped, n } or { error } */
-  function patternsOf(name, rawBytes, scans){
-    const n = scans.length, base = name.replace(/\.[^.]+$/, ''), ext = name.slice(base.length);
-    const ok = scans.map((sc, k)=> ({ sc, k })).filter(q=> !q.sc.error);
-    if (!ok.length) return { error: n > 1 ? scans.map((sc, k)=> `scan ${k+1}: ${sc.error}`).join('; ') : scans[0].error };
-    const pats = ok.map(({ sc, k })=>{ const a = scanArrays(sc);
-      return { k, notes: sc.notes, f: { name: n > 1 ? `${base} (scan ${k+1})${ext}` : name, label: n > 1 ? `${base} (scan ${k+1})` : base,
-        x: a.x, y: a.y, rawBytes, ...(n > 1 ? { src: name, scan: k } : {}), ...(sc.meas ? { meas: sc.meas } : {}), ...(a.varMul ? { varMul: a.varMul } : {}) } }; });
-    return { pats, n, skipped: scans.map((sc, k)=> sc.error ? `scan ${k+1} not read (${sc.error})` : null).filter(Boolean) };
-  }
-
   /* ---- The samples ---- */
   // Every card's per-sample arrays (a Scherrer card's, and those it keeps while it is a
   // Rietveld one), for the file list to keep aligned with the included files. A file left
@@ -118,8 +235,6 @@ function createXrd({ key, root, layer, shown }){
   // they come back with it after a switch (up to v477 the kept ones were 'kA' + id: left
   // out under one kind and taken in under the other, a file's per-sample parameters and
   // peaks started afresh). A file held so by an earlier version is read under either.
-  const copyArr = v => Array.isArray(v) ? v.slice() : [];
-  const heldAs = sl => ({ ...sl, make: (v, f)=> sl.make(v === undefined && f && f.held ? f.held['k' + sl.key] : v, f) });
   function slots(){
     const out = [];
     cards().forEach(a=>{
@@ -340,42 +455,29 @@ function createXrd({ key, root, layer, shown }){
   stdRv.setName('standard');
 
   /* ---- The cards (cards.js) ---- */
-  const KINDS = { scherrer: 'Scherrer', rietveld: 'Rietveld' };
   const live = new Map();       // id → { inst, el }
-  /* A Rietveld card dropped by a state loaded while it refines, or waits for the
-     standard to (runWithModuleState: a saved project's CSVs exported from the Projects
-     list, read in and out again at once), is set aside, its run going on, and taken up
-     again, panel and all, when the state put back has it (buildCard). Up to v477 it was
-     rebuilt afresh: the run went on in a panel no longer in the page, its results lost,
-     and the card said nothing ran. */
-  const parked = new Map();     // id → { inst, el }
-  let restoring = false;
   let cardsNext = null;         // what the cards of a tab woken or reloaded showed (showNext), by id
   let patNext = null;           // and the pattern on show, by its name
   let stdNext = null;           // and the standard's two, its window's (its Scherrer's and its Rietveld's)
   const cards = ()=> deck ? deck.records : [];
   const eachCard = fn => cards().forEach(a=>{ const e = live.get(a.id); if (e) fn(e, a); });
-  const prefixOf = a => (a.type === 'scherrer' ? 'xrdA' : 'xrdR') + a.id;
 
   /* ---- The refinements running: the samples' (each Rietveld card's) and the standard's ----
-     A run belongs to the project live here: the tab manager asks before that leaves the
-     module, and stop ends every run as Cancel does (registerBusy). A sample and the
-     standard never refine at once (host.blocked): a batch takes one instrumental profile.
-     Each run holds the history (host.hold, UndoStack.hold) from the state on show as it
+     A run belongs to its tab: closing the tab asks first (tabs.js), and stop ends every
+     run as Cancel does (registerBusy). A sample and the standard never refine at once
+     (host.blocked): a batch takes one instrumental profile. Each run holds the history (host.hold, UndoStack.hold) from the state on show as it
      starts (a sample's, as it starts waiting for the standard's run): undo goes no lower
      while it runs, silently, and above it goes as ever, the running card's panel kept as it
      is (xrd-rv.js restore). As it ends (finished, stopped, failed, its card closed or
      switched) the patterns it wrote go into the states saved meanwhile and, as a step of
      their own, after the one it started from (runPatch): undoing a step taken meanwhile
      keeps them. Up to v508 undo and redo waited for every run to end. */
-  // (the Rietveld cards' panels, and those set aside by a restore)
-  const rvCards = ()=> [...[...live.values()].map(e=> e.inst).filter(i=> i.running), ...[...parked.values()].map(e=> e.inst)];
-  // A run started or ended: every Rietveld panel's buttons follow; a card set aside by a
-  // restore (parked), its run over, goes.
+  // (the Rietveld cards' panels)
+  const rvCards = ()=> [...live.values()].map(e=> e.inst).filter(i=> i.running);
+  // A run started or ended: every Rietveld panel's buttons follow.
   function syncRv(){
     rvCards().forEach(i=> i.sync());
     stdRv.sync();
-    parked.forEach((e, id)=>{ if (!e.inst.active()){ parked.delete(id); e.inst.destroy(); if (e.inst.res) e.inst.res.remove(); } });
     // (the tab's time hidden, for its sleep, counted from a job's end: tabs.js)
     busyChanged(key);
   }
@@ -393,10 +495,6 @@ function createXrd({ key, root, layer, shown }){
      standard's from its own (it may bear a sample's name). A copy, the state itself where
      nothing goes: the states' objects and the results, frozen and shared by them, are never
      changed. */
-  function withResults(rv, names, wrote, put){
-    const old = rv.results || {}, add = Object.entries(wrote).filter(([k, r])=> names.has(k) && old[k] !== r);
-    return add.length ? put({ ...rv, results: { ...old, ...Object.fromEntries(add) } }) : null;
-  }
   function runPatch(id, wrote){
     const read = l =>{ const m = new Map(l.filter(f=> 'instr' in f).map(f=> [f.name, f]));
       return f =>{ const g = isObj(f) && m.get(f.name); return g && g.rawBytes === f.rawBytes && g.instr !== f.instr ? { ...f, instr: g.instr } : f; }; };
@@ -421,21 +519,19 @@ function createXrd({ key, root, layer, shown }){
     const was = live.get(a.id);
     // (a run going on stops first, as Cancel: the patterns done go with the kind's settings
     // kept; up to v477 it went on unseen, its results lost)
-    if (prev && was){ if (was.inst.cancel) was.inst.cancel(false); a.states[prev] = was.inst.snapshot(); if (was.inst.destroy) was.inst.destroy(); if (was.inst.res) was.inst.res.remove(); }
+    if (prev && was){ if (was.inst.cancel) was.inst.cancel(false); a.states[prev] = was.inst.snapshot(); was.inst.destroy(); if (was.inst.res) was.inst.res.remove(); }
     const host = { files: ()=> files, allFiles: ()=> allFiles, idx: ()=> curIdx, step, commit: ()=> hist.commit(),
       instr: ()=> stdPeaks.instrModel(), irf: ()=> stdRv.irf(), hidden: ()=> deck.isFolded(a) || !shown(),
       // (its tab not on show: nothing drawn, the tab's redraw draws it as it is shown; the
-      // card still the one of its deck, not set aside by a restore nor closed)
+      // card still the one of its deck, not closed)
       unseen: ()=> !shown(), layer, placed: ()=> !!live.get(a.id) && live.get(a.id).el === el,
       openStd: ()=> openStd(a.type === 'rietveld' ? 'rv' : 'peaks'),
       stdLoaded: ()=> !!stdFile, refineStd: tell=> stdRv.run(tell), stopStd: commit=> stdRv.cancel(commit), stdRun: ()=> stdRv.progress(),
       blocked: ()=> stdRv.running() ? 'The standard is being refined: the samples can be refined once it ends (a batch takes one instrumental profile throughout).' : '',
       onBusy: ()=> syncRv(), ...holder(a.id),
       changed: ()=>{} };
-    let el = card.querySelector('.xrd-card');
-    const back = !prev && a.type === 'rietveld' ? parked.get(a.id) : null;
-    if (back){ parked.delete(a.id); el.replaceWith(back.el); el = back.el; }
-    const inst = back ? back.inst : a.type === 'scherrer' ? createPeakAnalysis(host, el, { prefix: prefixOf(a) }) : createRietveld(host, el, { prefix: prefixOf(a) });
+    const el = card.querySelector('.xrd-card');
+    const inst = a.type === 'scherrer' ? createPeakAnalysis(host, el, { prefix: prefixOf(a) }) : createRietveld(host, el, { prefix: prefixOf(a) });
     if (a.states[a.type]) inst.restore(a.states[a.type]);
     else if (a.type === 'scherrer') inst.restore({});
     live.set(a.id, { inst, el });
@@ -445,8 +541,7 @@ function createXrd({ key, root, layer, shown }){
     const e = live.get(a.id);
     if (!e) return;
     live.delete(a.id);
-    if (restoring && e.inst.active && e.inst.active()) parked.set(a.id, e);
-    else if (e.inst.destroy) e.inst.destroy();
+    e.inst.destroy();
     if (e.inst.res) e.inst.res.remove();
     syncResults();
   }
@@ -482,7 +577,6 @@ function createXrd({ key, root, layer, shown }){
   /* ---- Undo/redo: snapshot the reversible state. Raw patterns (x/y) are shared by
      reference; the cards' settings, peaks and results, the standard's and the files'
      order, labels and colours are captured so any change can be stepped back. ---- */
-  const clone = o => JSON.parse(JSON.stringify(o));
   function xrdSnapshot(){
     return {
       v: 2,
@@ -497,102 +591,6 @@ function createXrd({ key, root, layer, shown }){
         return { ...deck.saved(a), states };
       }),
     };
-  }
-  /* A project keeps each file's arrays as the version that loaded it read them. Up to v262
-     the intensities came in with their minimum subtracted, which the Rietveld weights then
-     took for the counts: the user's LaB6, so kept, fitted at χ²_ν 3.93, R_exp 3.89 % where
-     the file itself gives 2.17 and 3.54 % (the same parameters, the esds and the weights
-     off). Restored, a file is read again from its own bytes (rawBytes), as a file loaded
-     now is, and a note names those whose arrays changed; one whose bytes were not kept is
-     used as it was, with a note where its lowest point is exactly 0. The readings are kept
-     by their bytes, so an undo does not read a file again. A pattern is its scan of the
-     file (f.scan; the first, none given), so a file of several gives its scans again, in
-     their order. (reread: the module's, above) */
-  function readAgain(f){
-    const b = f.rawBytes;
-    if (!b || typeof b !== 'object' || !/\.(xrdml|xml)$/i.test(f.name || '')){
-      let lo = Infinity; for (const v of f.y || []) if (v < lo) lo = v;
-      return { f: fixedArrs(ascending({ ...f })), note: !b && lo === 0 ? 'its lowest point is exactly 0 and the project does not hold the file itself: its minimum may have been subtracted (as up to v262), which the Rietveld weights would take for the counts; load the file again' : null };
-    }
-    let all = reread.get(b);
-    if (!all){
-      try {
-        const xml = new DOMParser().parseFromString(decodeXml(b instanceof Uint8Array ? b : Uint8Array.from(b)), 'text/xml');
-        all = xml.getElementsByTagName('parsererror').length ? [{ error: 'not well-formed XML' }] : readXrdmlScans(xml);
-      } catch (e){ all = [{ error: String(e && e.message || e) }]; }
-      reread.set(b, all);
-    }
-    const sc = all[Number.isInteger(f.scan) && f.scan >= 0 ? f.scan : 0] || { error: 'no such scan' };
-    if (sc.error) return { f: fixedArrs(ascending({ ...f })), note: null };
-    const { varMul: _, ...rest } = f, a = scanArrays(sc);
-    const g = { ...rest, x: a.x, y: a.y, ...(a.varMul ? { varMul: a.varMul } : {}) };
-    const old = ascending({ ...f }), n = g.y.length;
-    // (the arrays the state holds, the scan's own: nothing moved)
-    const same = old.x === g.x && old.y === g.y && old.varMul === g.varMul;
-    let moved = !same && (!old.y || old.y.length !== n || !old.x || old.x.length !== n || !!old.varMul !== !!g.varMul);
-    for (let i = 0; !same && !moved && i < n; i++)
-      moved = Math.abs(old.y[i] - g.y[i]) > 1e-9*Math.max(1, Math.abs(g.y[i])) || Math.abs(old.x[i] - g.x[i]) > 1e-9 || (g.varMul && Math.abs(old.varMul[i] - g.varMul[i]) > 1e-12);
-    // (points left out that an earlier version, to v484, kept as no number: those)
-    const lost = sc.dropped && old.y && old.y.length === n + sc.dropped;
-    return { f: g, note: !moved ? null : lost ? `read again from the file itself, ${sc.dropped} point${sc.dropped > 1 ? 's' : ''} whose values are no finite number left out (the project held ${sc.dropped > 1 ? 'them' : 'it'} as up to v484). Results refined before are from those: refine again`
-      : 'read again from the file itself: the project held its data as an earlier version had read them (up to v262, with their minimum subtracted). Results refined before are from those: refine again' };
-  }
-  /* A project read in may hold anything (an imported .json): the restore takes what it reads
-     only as what it should be — a file an object with its pattern, 2θ and intensities as
-     many and two at least (else it is left out, with a note), its name and label text; an
-     index an integer in range; arrays where arrays are kept; the cards of a known kind —
-     and anything else as its default (up to v484 a curIdx that was no number made the index
-     NaN, and the cards read files[NaN].label; a file not an object, or with no arrays,
-     threw before anything was drawn). */
-  const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
-  const isArr = v => Array.isArray(v) || ArrayBuffer.isView(v);
-  // (a kind of KINDS' own: 'constructor', 'toString' and the like are none)
-  const isKind = k => Object.prototype.hasOwnProperty.call(KINDS, k);
-  function keptFile(f, i, color){
-    if (!isObj(f)) return null;
-    const name = typeof f.name === 'string' && f.name ? f.name : `file ${i+1}`;
-    const g = { ...f, name, label: typeof f.label === 'string' ? f.label : name.replace(/\.[^.]+$/, ''), color: typeof f.color === 'string' ? f.color : color };
-    if (!(isArr(g.varMul) && isArr(g.y) && g.varMul.length === g.y.length)) delete g.varMul;
-    let r;
-    try { r = readAgain(g); } catch (e){ return null; }
-    return isArr(r.f.x) && isArr(r.f.y) && r.f.x.length === r.f.y.length && r.f.x.length > 1 ? r : null;
-  }
-  /* A project from before the cards (v460): one Analysis and one Rietveld card, and the
-     standard a file among the samples, chosen in a select. It becomes the standard's own
-     file, its parameters and peaks the standard's analysis, its refinement the standard's
-     Rietveld; the samples' settings go to a Scherrer card and a Rietveld card. A standard
-     left out of the analysis was not in use: it stays a sample, left out. */
-  function migrate(s){
-    // (an entry that is no file kept in its place: the restore leaves it out with its
-    // entries in the per-sample lists)
-    const all = Array.isArray(s.files) ? s.files : [], incl = all.filter(f=> !isObj(f) || f.included !== false);
-    const si = s.standardName ? incl.findIndex(f=> isObj(f) && f.name === s.standardName) : -1;
-    const cut = a => Array.isArray(a) ? a.filter((_, i)=> i !== si) : a;
-    const rv = isObj(s.rv) ? s.rv : {}, res = isObj(rv.results) ? rv.results : {};
-    const stdRes = si >= 0 && res[s.standardName] ? { [s.standardName]: res[s.standardName] } : {};
-    const smpRes = Object.fromEntries(Object.entries(res).filter(([k])=> !(si >= 0 && k === s.standardName)));
-    let ci = s.curIdx || 0; if (si >= 0 && ci > si) ci--;
-    return {
-      files: si >= 0 ? all.filter(f=> f !== incl[si]) : all,
-      std: si >= 0 ? (({ included, held, ...f })=> f)(incl[si]) : null,
-      stdPeaks: si >= 0 ? { shared: s.stdParams, perParams: [s.stdParams], manualPeaks: [(s.manualPeaks || [])[si] || []], removedPeaks: [(s.removedPeaks || [])[si] || []] } : { shared: s.stdParams },
-      stdRv: { phases: [], std: rv.std, start: rv.start, hold: rv.hold, fit: rv.fit, results: stdRes, refineB: rv.refineB },
-      curIdx: ci,
-      cards: [
-        { id: 1, type: 'scherrer', states: { scherrer: { perParams: cut(s.perParams), manualPeaks: cut(s.manualPeaks), removedPeaks: cut(s.removedPeaks), shared: s.shared, paramMode: s.paramMode, sizeBy: s.sizeBy, norm: s.norm } } },
-        { id: 2, type: 'rietveld', states: { rietveld: { ...rv, results: smpRes } } },
-      ],
-    };
-  }
-  // A kind's settings, the card's or kept while it is the other kind: an object, and the
-  // Scherrer one's per-sample lists arrays (the file list keeps them aligned: slots), the
-  // entries of the included files left out (gone: their places among the included) taken
-  // out, so each file after them keeps its own.
-  function keptState(k, v, gone){
-    if (!isObj(v)) return null;
-    if (k !== 'scherrer') return v;
-    const arr = a => Array.isArray(a) ? a.filter((_, i)=> !gone.has(i)) : [];
-    return { ...v, shared: isObj(v.shared) ? v.shared : {}, perParams: arr(v.perParams), manualPeaks: arr(v.manualPeaks), removedPeaks: arr(v.removedPeaks) };
   }
   // step: an undo or a redo (UndoStack), which a run going on keeps its own panel through
   // (xrd-rv.js restore).
@@ -616,14 +614,11 @@ function createXrd({ key, root, layer, shown }){
     stdPeaks.restore(isObj(s.stdPeaks) ? s.stdPeaks : {});
     stdRv.restore(isObj(s.stdRv) ? s.stdRv : {}, step);
     if (stdNext){ const v = stdNext; stdNext = null; if (isObj(v.peaks)) stdPeaks.showNext(v.peaks); if (isObj(v.rv)) stdRv.showNext(v.rv); }
-    restoring = true;
-    try {
-      deck.load(Array.isArray(s.cards) ? s.cards.filter(c=> isObj(c) && (c.type == null || isKind(c.type))) : [],
-        src=> ({ states: Object.fromEntries(Object.entries(clone(isObj(src.states) ? src.states : {})).filter(([k])=> isKind(k)).map(([k, v])=> [k, keptState(k, v, gone)]).filter(([, v])=> v)) }),
-        a=> live.get(a.id).inst.restore(a.states[a.type] || {}, step));
-    } finally { restoring = false; }
+    deck.load(Array.isArray(s.cards) ? s.cards.filter(c=> isObj(c) && (c.type == null || isKind(c.type))) : [],
+      src=> ({ states: Object.fromEntries(Object.entries(clone(isObj(src.states) ? src.states : {})).filter(([k])=> isKind(k)).map(([k, v])=> [k, keptState(k, v, gone)]).filter(([, v])=> v)) }),
+      a=> live.get(a.id).inst.restore(a.states[a.type] || {}, step));
     // (what its cards showed, given as its tab woke or the page was reloaded: showNext)
-    if (cardsNext){ const v = cardsNext; cardsNext = null; eachCard((e, a)=>{ if (e.inst.showNext && isObj(v[a.id])) e.inst.showNext(v[a.id]); }); }
+    if (cardsNext){ const v = cardsNext; cardsNext = null; eachCard((e, a)=>{ if (isObj(v[a.id])) e.inst.showNext(v[a.id]); }); }
     clearStdAlerts();
     syncStdFile();
     stdPeaks.refresh();
@@ -668,21 +663,21 @@ function createXrd({ key, root, layer, shown }){
       [...rvCards()].forEach(i=>{ try { i.cancel(false); } catch(e){} });
       try { stdRv.cancel(false); } catch(e){}
       closeStd();
-      [...live.values(), ...parked.values()].forEach(e=>{ try { if (e.inst.destroy) e.inst.destroy(); } catch(err){} });
-      live.clear(); parked.clear();
+      [...live.values()].forEach(e=>{ try { e.inst.destroy(); } catch(err){} });
+      live.clear();
       [stdPeaks, stdRv].forEach(i=>{ try { i.destroy(); } catch(e){} });
       deck.destroy();
     },
-    /* What it shows beside its state (b2v4: tabs.js, utils.js shownOf): the pattern on show,
+    /* What it shows beside its state (tabs.js, utils.js shownOf): the pattern on show,
        by its name, each card's own, by its id (a Scherrer card's peak picked; a Rietveld
        card's peak picked, its crystallites' turns, its phase on show and its cell's turn),
        and the standard's window's two alike (std), given back as its tab wakes or the page
        is reloaded, to the restore. The pattern on show is in its state too (curIdx, v517:
        an undo goes back to its step's, a project saved reopens on it), but a step is no
-       change, and its record held the one before till the next (to b2v4 a reload showed it). */
+       change, and its record held the one before till the next (to v517 a reload showed it). */
     shows(){
       const out = {}, std = {}, has = o => Object.keys(o).length > 0;
-      eachCard((e, a)=>{ const v = e.inst.shows && e.inst.shows(); if (v) out[a.id] = v; });
+      eachCard((e, a)=>{ const v = e.inst.shows(); if (v) out[a.id] = v; });
       [['peaks', stdPeaks], ['rv', stdRv]].forEach(([k, i])=>{ const v = i.shows(); if (v) std[k] = v; });
       const f = files[curIdx], v = { ...(f ? { pattern: f.name } : {}), ...(has(out) ? { cards: out } : {}), ...(has(std) ? { std } : {}) };
       return has(v) ? v : null;

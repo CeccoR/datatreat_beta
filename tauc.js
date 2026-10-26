@@ -9,7 +9,7 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
 /* =========================================================
    TAUC MODULE
 
-   MADE PER TAB (b2): createTauc is the module's factory (utils.js registerModule), each
+   MADE PER TAB (v518): createTauc is the module's factory (utils.js registerModule), each
    open DRS tab that is awake an instance of its own, made of its copy of index.html's
    section (root) and a layer (the kinds' menu). Its elements are found in root, a card's
    in its card and a Results section's in it, never in the page: its ids are the page's
@@ -17,24 +17,24 @@ import { textLines, readXY, readTable, splitFields, parseNum, isNum, SEPS } from
    draws only on show: hidden (a state read out for its CSVs, a tab restored while another
    is on show) it draws nothing, and its redraw draws all as it is shown; a tab shown again
    with nothing changed and at the same width draws nothing (its draw key). It has no job
-   that runs on while hidden. API.md says how a module is made so.
+   that runs on while hidden. utils.js registerModule says how a module is made so.
 ========================================================= */
 /* Energies are hν = hc/λ, hc in eV·nm to the digits a third decimal of E_g needs: 1240 put
    every energy 0.013% high. A spectrum's energies are made once for its array of
    wavelengths and kept by it (`energies`), for every instance and every state that holds
    it, and its file's record has them as no field of its own (withHv): a state of the
-   history, a tab asleep and a project saved hold the wavelengths only (to b2 they were made
-   again, a new array, at every change of the file list and every undo, and every state
-   kept its own, a project saved too). */
+   history, a tab asleep and a project saved hold the wavelengths only (to v517 they were
+   made again, a new array, at every change of the file list and every undo, and every
+   state kept its own, a project saved too). */
 const HC = 1239.842;
 const energies = new WeakMap();
 const hvOf = wl =>{ let e = energies.get(wl); if (!e) energies.set(wl, e = wl.map(x=> HC/x)); return e; };
 const withHv = f =>{ if (Array.isArray(f.wl)) Object.defineProperty(f, 'hv', { value: hvOf(f.wl), writable: true, configurable: true, enumerable: false }); return f; };
 /* A file's spectrum, which nothing changes once read: fixed (db.js), the same arrays in a
-   tab's states and its parked state (to b2v2 a parked state held a copy). Kept by its
-   bytes (the file as it came, the same array in its states and its record): a tab of a
-   record read back (a reload, a project opened), which holds copies, takes the arrays
-   another state holds of that file, the same values, rather than keeping both. */
+   tab's states and its parked state. Kept by its bytes (the file as it came, the same
+   array in its states and its record): a tab of a record read back (a reload, a project
+   opened), which holds copies, takes the arrays another state holds of that file, the
+   same values, rather than keeping both. */
 const spectra = new WeakMap();
 const sameArr = (a, b)=> a === b || (a.length === b.length && a.every((v, i)=> Object.is(v, b[i])));
 function keepSpectrum(f){
@@ -52,18 +52,590 @@ function keepSpectrum(f){
    smoothing's points) and its derivative (and its points), every fit of a sample and what the card makes of
    them (fitsKept: its kind, its parameters, its lines, and an Urbach card's reference
    Tauc card's own key for the sample), and the Results' reflectance and log F(R). A tab
-   woken, an undo, a redraw, the Results and the CSVs take them as made (to b2v3 every
+   woken, an undo, a redraw, the Results and the CSVs take them as made (to v517 every
    redraw made every fit again, three times a sample where an Urbach card read its
-   reference: a DRS tab of 10 spectra, 0.17 s of its wake). A fit moved by a line dragged
+   reference). A fit moved by a line dragged
    is made, not kept, till the line is let go. */
 const curveKept = keeper('drs-curve', 8), slopeKept = keeper('drs-slope'), fitsKept = keeper('drs-fits', 8),
   reflKept = keeper('drs-reflectance', 1), logKept = keeper('drs-log', 1);
+
+/* ---- The analyses: how E_g and E_U are read (pure: the module's, for every instance) ---- */
+// How Eg is read off the Tauc plot; each Tauc analysis picks which its bar chart shows.
+const EG_METHODS = [
+  // Named E_g in plain text: a legend's sub run sits badly beside its swatch.
+  { key: 'x', label: 'x-axis',   name: 'E_g (x-axis)',   color: '#3aa0ff' },
+  { key: 'b', label: 'baseline', name: 'E_g (baseline)', color: '#ff7a59' },
+];
+
+/* The two ways E_U is read, told apart as GC's gases are: from ln F(R) as it is, and
+   with the reference Tauc card's baseline taken out of F(R) first (urbachSub). Lines
+   keep the sample's colour, the subtracted ones long-dashed (their fits dotted); bars
+   take the pair's two colours. Each Urbach card shows one, the other or both, in its line plot and in its
+   bar chart separately. */
+// Three line patterns, none used twice: the plain fits dashed (as every fit in the
+// Results is), the subtracted curves long-dashed, their fits dotted.
+const URB_METHODS = [
+  { key: 'p', label: 'plain',      name: 'E_U',              color: '#3aa0ff' },
+  { key: 's', label: 'subtracted', name: 'E_U (subtracted)', color: '#ff7a59' },
+];
+const URB_ALL = ()=> ({ b: URB_METHODS.map(m=> m.key) });
+
+const clampN = v => Math.max(1, Math.round(v));
+const clampM = v => Math.max(2, Math.round(v));
+// Two-sided 99% confidence: the 99.5% quantile of Student's t, the factor every
+// error reported here (Eg, E_U) is multiplied by.
+const T_Q = 0.995;
+
+/* A curve with points that have no value (F(R) < 0 under a fractional exponent, F(R) ≤ 0
+   under the logarithm) is smoothed and differentiated over the points that have one,
+   as though the others had not been measured: those stay without a value, and every
+   other point is averaged with its nearest neighbours that have one. Run over every
+   point (to v478), the moving average spread each missing point to N/2 neighbours on
+   either side, the derivative's to N2/2 more, the second derivative's as far again:
+   10 points of F(R) < 0 left 279 of 551 values of Y'' without one, which the
+   suggestion took for curvature, and no fit window could hold a point the spread had
+   reached. `fn(y, x)` runs on the points with a finite y (or those `has(i)` keeps) and
+   their x; a curve with none left out goes through it as it is. */
+function onFinite(y, x, fn, has = i=> isFinite(y[i])){
+  const ok = []; for (let i=0;i<y.length;i++) if (has(i)) ok.push(i);
+  if (ok.length === y.length) return fn(y, x);
+  const r = fn(ok.map(i=> y[i]), x && ok.map(i=> x[i])), out = new Array(y.length).fill(NaN);
+  ok.forEach((i, j)=> out[i] = r[j]);
+  return out;
+}
+/* The smoothing and the derivative are numbers of points, N and N2: the curve's centred
+   moving average over N points, and that over N2 of its central differences (to v520 again:
+   v515 to v519 made them widths in eV, smooth.js). */
+const smoothY = (y, N)=> onFinite(y, null, v=> movingAverage(v, N));
+// dy/dx smoothed over N points.
+const slopeOf = (y, x, N)=> onFinite(y, x, (v, e)=> movingAverage(gradientArr(v, e), N));
+
+// Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
+// minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
+// by the y-range makes the criterion robust — it locks onto the steep linear edge
+// instead of a flat low-value stretch that merely has a small absolute RMSE.
+// `Ys` is the curve as analysed: already smoothed. The window is chosen on it, where
+// noise does not pick it, and the line fitted to `Yraw`, the data themselves, inside
+// it: fitted to smoothed values its residuals are averaged together, no longer
+// independent, and every error came out too small (a "99%" interval held the truth
+// 72% of the time at N = 5, 37% at N = 15). `n` is how many points it was fitted on.
+// A window is M points that have a value: one without (F(R) at or below zero, see
+// onFinite) is left out, and the window reaches past it. One holding such a point was
+// passed over (to v478), so a few of F(R) < 0 through the baseline region left it no
+// window to fit. With `strict` it still is, and only a point whose energy has no value
+// is left out: the subtracted Urbach curve gives none to those of F(R) ≤ 0, which the
+// plain curve leaves out, so a point there without a value is one where the Tauc
+// baseline lies above F(R), which the card reports. (v515 to v519 slid a window of a
+// width in eV; to v520 M points again, as to v514.)
+function scanRegr(hv, Ys, M, x1, x2, Yraw, strict){
+  const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
+  const idxSel = [];
+  for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi && (strict || isFinite(Ys[i]))) idxSel.push(i);
+  let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,NRMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
+  if (idxSel.length < M) return best;
+  let bestScore = Infinity;
+  for (let s=0; s<=idxSel.length-M; s++){
+    const block = idxSel.slice(s, s+M);
+    const yb = block.map(i=>Ys[i]);
+    if (yb.some(v=>!isFinite(v))) continue;
+    const xb = block.map(i=>hv[i]);
+    const r = fitLinear(xb, yb);
+    const range = Math.max(...yb) - Math.min(...yb);
+    const nrmse = range>0 ? r.rmse/range : Infinity;
+    const score = nrmse / r.R2;
+    if (score < bestScore){
+      bestScore = score;
+      best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB, n:M};
+    }
+  }
+  if (!Yraw || Yraw === Ys || !best.bestIdx.length) return best;
+  const idx = best.bestIdx.filter(i=> isFinite(Yraw[i]));
+  if (idx.length < 3) return {...best, slope:NaN, intercept:NaN, R2:NaN, NRMSE:Infinity, varM:NaN, varB:NaN, covMB:NaN, n:idx.length};
+  const yr = idx.map(i=> Yraw[i]), r = fitLinear(idx.map(i=> hv[i]), yr), range = Math.max(...yr) - Math.min(...yr);
+  return {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE: range > 0 ? r.rmse/range : Infinity,
+          bestIdx:best.bestIdx, varM:r.varM, varB:r.varB, covMB:r.covMB, n:idx.length};
+}
+
+/* ---- v515's window choice, for the projects saved by v515 to v519 (makePanel toPoints) ----
+   Their regression windows were widths in eV: a window W wide slid through the interval
+   (from each of its points every point up to W above it, while its end was in it, a point
+   within 10⁻⁹ eV of the end in it), fitted where it held 3 points with a value spread over
+   half its width at least, the one with the least NRMSE/R² on the curve smoothed by a box
+   w wide (smooth.js boxSmooth) chosen. Its points, `bestIdx` of v515's scanRegr, are what
+   the width spanned there: kept here to convert those projects, and for nothing else. */
+function scanW(hv, Ys, W, x1, x2){
+  const lo = Math.min(x1, x2), hi = Math.max(x1, x2), TOL = 1e-9, sel = [];
+  for (let i = 0; i < hv.length; i++) if (hv[i] >= lo && hv[i] <= hi && isFinite(Ys[i])) sel.push(i);
+  sel.sort((a, b)=> hv[a] - hv[b]);
+  const E = sel.map(i=> hv[i]);
+  let best = [], bs = Infinity;
+  for (let s = 0, e = 0; s < E.length && E[s] + W <= hi + TOL; s++){
+    if (e < s) e = s;
+    while (e + 1 < E.length && E[e+1] <= E[s] + W + TOL) e++;
+    if (e - s < 2 || E[e] - E[s] < W/2 - TOL) continue;
+    // (in the points' own order, as v515 fitted them)
+    const b = sel.slice(s, e+1);
+    if (b[0] > b[b.length-1]) b.reverse();
+    const yb = b.map(i=> Ys[i]), r = fitLinear(b.map(i=> hv[i]), yb), range = Math.max(...yb) - Math.min(...yb);
+    const score = (range > 0 ? r.rmse/range : Infinity)/r.R2;
+    if (score < bs){ bs = score; best = b; }
+  }
+  return best;
+}
+
+/* Eg from the two Tauc fits: where the Tauc line crosses the x-axis, and where it
+   crosses the baseline. Each error is the fit's own (co)variances carried through
+   the formula, every term scaled by the t factor of the fit it comes from. */
+function taucEg(regs, regs2, M, M2){
+  let Eg=NaN, EgErr=NaN, EgInt=NaN, EgIntErr=NaN;
+  if ([regs.slope,regs.intercept,regs2.slope,regs2.intercept].every(isFinite)){
+    const xInt = (regs2.intercept - regs.intercept)/(regs.slope - regs2.slope);
+    const dxdb1 = -1/(regs.slope-regs2.slope), dxdb2 = 1/(regs.slope-regs2.slope);
+    // x = (b2 − b1)/(m1 − m2), so ∂x/∂m1 = −(b2 − b1)/(m1 − m2)² = −∂x/∂m2. With the
+    // sign the other way the slope–intercept covariances, strongly negative this far
+    // from hν = 0, added to the variance instead of taking from it.
+    const dxdm1 = -(regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
+    const dxdm2 = -dxdm1;
+    const t1 = tinv(T_Q, (regs.n || M)-2), t2 = tinv(T_Q, (regs2.n || M2)-2);
+    const varX = dxdb1*dxdb1*regs.varB*t1*t1 + dxdb2*dxdb2*regs2.varB*t2*t2 +
+                 dxdm1*dxdm1*regs.varM*t1*t1 + dxdm2*dxdm2*regs2.varM*t2*t2 +
+                 2*dxdb1*dxdm1*regs.covMB*t1*t1 + 2*dxdb2*dxdm2*regs2.covMB*t2*t2;
+    EgInt = xInt;
+    EgIntErr = varX>0 ? Math.sqrt(varX) : NaN;
+  }
+  ({ x: Eg, err: EgErr } = xCross(regs, M));
+  return {Eg,EgErr,EgInt,EgIntErr};
+}
+// Where a fitted line crosses y = 0, −b/m, and its error: the slope and intercept
+// variances and their covariance carried through, times the fit's t factor.
+function xCross(r, M){
+  if (!(r.slope !== 0 && isFinite(r.slope))) return { x: NaN, err: NaN };
+  const x = -r.intercept/r.slope;
+  if (![r.varM, r.varB, r.covMB].every(isFinite)) return { x, err: NaN };
+  const v = (r.intercept**2/r.slope**4)*r.varM + (1/r.slope**2)*r.varB - 2*(r.intercept/r.slope**3)*r.covMB;
+  return { x, err: v >= 0 ? Math.sqrt(v)*tinv(T_Q, (r.n || M)-2) : NaN };
+}
+// The inverse of a fit's slope, and its error σ_m/m² times the fit's t factor.
+function invSlope(r, M){
+  const m = r.slope;
+  if (!isFinite(m) || m === 0) return { v: NaN, err: NaN };
+  return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, (r.n || M)-2) : NaN };
+}
+// The Urbach energy is the inverse of the tail's slope in ln F(R) against hν.
+function urbachEu(regs, M){ const s = invSlope(regs, M); return { Eu: s.v, EuErr: s.err }; }
+
+const fmtE = (v, e, unit, k = 3, scale = 1)=> !isFinite(v) ? '-'
+  : isFinite(e) ? `${(v*scale).toFixed(k)} ± ${(e*scale).toFixed(k)} ${unit}` : `${(v*scale).toFixed(k)} ${unit}`;
+
+// ---- Auto-suggested Tauc interval lines ----
+// Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
+// linear/constant background has zero curvature, so it cancels). The "zero zones"
+// are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
+// ε = 10%·max|Y''|. The outer 10% of the energy range on each side is skimmed off
+// first: the tails are where the spectrum is noisiest and the moving averages are
+// one-sided, so neither ε nor the bounds are taken from them. The region bounds are
+// found from each end of what is kept inward: the first start of a sustained run of
+// CONT points with |Y''| >= ε (interpolated). (v515 to v519 asked for a run half the
+// derivative's width in eV; to v520 CONT points again.)
+const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
+const SUGG_CONT   = 25;     // required consecutive points above ε
+const SUGG_TAIL   = 0.10;   // fraction of the energy range skimmed off each end
+// Read over the points that have a slope (onFinite): one without has no curvature.
+// A non-finite |Y''| left (a repeated energy) counts as none: it made ε an absolute 0.1
+// (Math.max with NaN is NaN) and stood "above ε" in every run (to v478).
+function curvatureEdge(c, p){
+  const ok = []; for (let i=0;i<c.hv.length;i++) if (isFinite(c.dYs[i])) ok.push(i);
+  const hv = ok.map(i=> c.hv[i]), n = hv.length;
+  if (n < 7) return null;
+  const d2  = movingAverage(gradientArr(ok.map(i=> c.dYs[i]), hv), p.N2);      // Y''
+  // energy-ascending order of indices, so we can scan by energy regardless of layout
+  const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
+  const eLo = hv[ord[0]], eHi = hv[ord[n-1]], cut = SUGG_TAIL * (eHi - eLo);
+  let a = 0, b = n-1;                                           // kept span, energy order
+  while (a < n && hv[ord[a]] < eLo + cut) a++;
+  while (b >= 0 && hv[ord[b]] > eHi - cut) b--;
+  if (b - a < 2) return null;
+  const ax = j =>{ const v = Math.abs(d2[ord[j]]); return isFinite(v) ? v : 0; };
+  let A = 0; for (let j=a;j<=b;j++) A = Math.max(A, ax(j));
+  const eps = SUGG_THRESH * (A || 1);
+  const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
+  const inR = j => j>=a && j<=b;
+  // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
+  const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
+  let v1=hv[ord[a]], v2=hv[ord[b]];
+  for (let j=a;j<=b;j++){ if (runGE(j,+1)){ v1 = j>a?cross(j-1,j):hv[ord[j]]; break; } }
+  for (let j=b;j>=a;j--){ if (runGE(j,-1)){ v2 = j<b?cross(j+1,j):hv[ord[j]]; break; } }
+  return { v1, v2 };
+}
+
+/* ---- The parameters, and how a card shows them ---- */
+/* The fields of the parameters, by key: the exponent, A, and the numbers of points, N,
+   the curve's smoothing, N2, the derivative's, M and M2, the regression windows (the
+   spec's windows say which is whose), to v514 and from v520 again. v515 to v519 kept
+   widths in eV in their place, w, w2, W and W2 (EV: makePanel toPoints); LEAST, the
+   fewest points each takes. */
+const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
+const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM };
+const EV = { N:'w', N2:'w2', M:'W', M2:'W2' }, LEAST = { N: 1, N2: 1, M: 2, M2: 2 };
+const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
+const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
+/* The Tauc exponents, as [F(R)·hν]^a: the transition each stands for (`name`, the
+   card's automatic name), and how it is written where it shows (the select, the
+   axes); a fraction as such. */
+const EXPONENTS = [
+  { a: 0.5, label: '0.5', gap: 'Indirect', name: 'allowed indirect' },
+  { a: 2,   label: '2',   gap: 'Direct',   name: 'allowed direct' },
+  { a: 2/3, label: '2/3', gap: 'Direct',   name: 'forbidden direct',   forbidden: true },
+  { a: 1/3, label: '1/3', gap: 'Indirect', name: 'forbidden indirect', forbidden: true },
+];
+const expOf = a => EXPONENTS.find(e=> Math.abs(e.a - a) < 1e-9);
+const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
+const URBACH_COLOR = '#ff7f0e';
+// On the Urbach card, the tail with the Tauc baseline subtracted, in colours of its
+// own: the curve, and its fit (solid in its window, dashed beyond), as the plain ones
+// are drawn.
+const URB_SUB_COLORS = { curve: '#b46cff', fit: '#00acc1' };
+const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
+/* The defaults, in points (v514's, and from v520 again): no smoothing, the derivative's
+   over 20, the Tauc region's window 25, the baseline's 100, the Urbach region's 25. v515
+   to v519's in eV, for the states they saved (makePanel toPoints): 0, 0.15, 0.2 and 0.5;
+   the Urbach card's 0, 0.15 and 0.15. */
+const TAUC_DEF = { a:0.5, N:1, N2:20, M:25, M2:100 }, URB_DEF = { N:1, N2:20, M:25 };
+const TAUC_EV = { w:0, w2:0.15, W:0.2, W2:0.5 }, URB_EV = { w:0, w2:0.15, W:0.15 };
+// The analyses' kinds, as the menus list them; the card titles set them in capitals.
+const KINDS = { tauc: 'Tauc Plot', urbach: 'Urbach Energy' };
+// Where Urbach lines rest with nothing to go by: a quarter and three quarters in.
+const restLines = (lo, d)=> ({ v1: lo + 0.25*d, v2: lo + 0.75*d });
+/* What the Tauc baseline's own uncertainty adds to the subtracted slope s. With the
+   window and its points held, s = Σ w_i·ln(F_i − F_b,i), w_i = (hν_i − mean)/S_xx, is a
+   function of the baseline's slope and intercept through F_b = Y_b^(1/a)/hν,
+   Y_b = m_b·hν + b_b, so
+     J_m = ∂s/∂m_b = −Σ w_i·hν_i·F_b'(Y_i)/(F_i − F_b,i),  J_b = ∂s/∂b_b = −Σ w_i·F_b'(Y_i)/(F_i − F_b,i),
+   F_b'(Y) = (1/a)·Y^(1/a − 1)/hν where Y > 0 (F_b is nothing, and so is its change,
+   where it is not), and
+     Var_b(s) = J Σ_b Jᵀ = J_m² σ²_m + J_b² σ²_b + 2 J_m J_b σ_mb,
+   Σ_b the baseline fit's covariance. Its square root is returned times that fit's t
+   factor (99%, n_b − 2), as each fit's term is in E_g (baseline). The derivatives are
+   exact (no step to take), and finite wherever the window's points have a logarithm. */
+function subBaselineSlopeErr(regs, Yraw, rb, ta, hv, FR, Mb){
+  if (!isFinite(regs.slope) || !regs.bestIdx || ![rb.varM, rb.varB, rb.covMB].every(isFinite)) return NaN;
+  // The fit's own points: those of its window with a logarithm (scanRegr).
+  const idx = regs.bestIdx.filter(i=> isFinite(Yraw[i]));
+  if (idx.length < 3) return NaN;
+  const mx = idx.reduce((t, i)=> t + hv[i], 0)/idx.length;
+  const sxx = idx.reduce((t, i)=> t + (hv[i] - mx)**2, 0);
+  let Jm = 0, Jb = 0;
+  idx.forEach(i=>{
+    const e = hv[i], y = rb.slope*e + rb.intercept;
+    if (!(y > 0)) return;
+    const dF = Math.pow(y, 1/ta - 1)/(ta*e), d = FR[i] - Math.pow(y, 1/ta)/e, w = (e - mx)/sxx;
+    Jm -= w*e*dF/d; Jb -= w*dF/d;
+  });
+  const v = Jm*Jm*rb.varM + Jb*Jb*rb.varB + 2*Jm*Jb*rb.covMB;
+  if (!isFinite(v)) return NaN;
+  return Math.sqrt(Math.max(0, v))*tinv(T_Q, (rb.n || Mb) - 2);
+}
+
+/* ---- Card markup ---- */
+const CARD_INFO = cardInfo(true, true);
+const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. Where F(R) &lt; 0, [F(R)·hν]<sup>a</sup> has no value for a = 0.5, 2/3 or 1/3: those points are left out, as though not measured, of the smoothing, the derivatives, the suggestion and the fits. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
+const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, each with its own axes: the plain curves and fits above, the subtracted ones under them (empty, and saying why, when there is nothing to subtract); the chips on the E<sub>U</sub> chart show the plain E<sub>U</sub>, the subtracted one or both. ${CARD_INFO}`;
+const navRow = p => `
+        <div class="plot-nav-row">
+          <div class="plot-nav-left">
+            <button class="btn nav-arrow an-prev" id="${p}Prev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
+            <span id="${p}Idx" class="pill nav-count" style="margin:0">1/1</span>
+            <button class="btn nav-arrow an-next" id="${p}Next" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
+            <span class="txt-caption" id="${p}CurrentLabel">—</span>
+          </div>
+        </div>`;
+// At the foot of the parameter column, after what it holds.
+const suggestBtn = (p, title)=> `
+          <button class="btn plot-action-btn" id="${p}Suggest" title="${title}">&#10022; Suggest intervals</button>`;
+// A plot's box (modcharts.js). The download names follow the analysis name (named); a
+// CSV is offered only where there is one to give.
+const box = (id, legend, csv, extra, cls)=> plotWrap(id, { legend, mod: 'tauc', csv: csv ? '-' : '', extra, cls });
+// An item [colour, text, attributes, key class]: 'mk-ldash' (long dashes) or 'mk-dots'
+// draws its key in that pattern.
+const legend = (id, items)=> `<div class="legend" id="${id}">${items.map(([c, t, x, d])=> `<span${x || ''}>${d ? `<i class="${d}" style="color:${c}"></i>` : `<i style="background:${c}"></i>`}${t}</span>`).join('')}</div>`;
+
+function taucBody(p){
+  return `
+      <div class="row" style="align-items:flex-start">
+        <div class="col mw520" style="flex:2">
+          ${navRow(p)}
+          ${box(p + 'Svg', p + 'Legend', true)}
+          ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff5050', 'Tauc linear region'], ['#d050ff', 'baseline']])}
+        </div>
+        <div class="col mw280" style="align-self:flex-start">
+          <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines). Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
+          <div class="param-grid">
+            <label class="txt-label" for="${p}A">Tauc exponent</label>
+            <select id="${p}A" class="pg-field an-exp">
+              ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label} (${e.name})</option>`).join('')}
+            </select>
+            <label class="txt-label" for="${p}N">[F(R)hν]<sup id="${p}NExp">0.5</sup> smoothing window</label>
+            <input type="number" class="pg-field" id="${p}N" value="1" min="1">
+            <label class="txt-label" for="${p}N2">Derivative smoothing window</label>
+            <input type="number" class="pg-field" id="${p}N2" value="20" min="1">
+            <label class="txt-label" for="${p}M">Tauc linear region regression window</label>
+            <input type="number" class="pg-field" id="${p}M" value="25" min="2">
+            <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
+            <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
+            <label class="txt-label" for="${p}M2">Baseline regression window</label>
+            <input type="number" class="pg-field" id="${p}M2" value="100" min="2">
+            <div class="pg-stat">NRMSE: <b id="${p}RMSE2">-</b></div>
+            <div class="pg-stat">R²: <b id="${p}R22">-</b></div>
+            <div class="pg-result">
+              <div class="pg-stat">E<sub>g</sub> (x-axis): <b id="${p}Eg">-</b></div>
+              <div class="pg-stat">E<sub>g</sub> (baseline): <b id="${p}EgInt">-</b></div>
+            </div>
+          </div>
+          <div id="${p}Alert"></div>${suggestBtn(p, 'Propose optimal Tauc-region and baseline intervals from the absorption edge')}
+        </div>
+      </div>`;
+}
+function urbachBody(p){
+  return `
+      <div class="row" style="align-items:flex-start">
+        <div class="col mw520" style="flex:2">
+          ${navRow(p)}
+          ${box(p + 'Svg', p + 'Legend', false)}
+          ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff7f0e', 'Urbach region'],
+            [URB_SUB_COLORS.curve, 'smoothed, Tauc baseline subtracted', ` id="${p}LegSub"`], [URB_SUB_COLORS.fit, 'Urbach region, subtracted', ` id="${p}LegSubFit"`],
+            ['rgba(255,80,80,0.35)', 'Tauc linear region', ` id="${p}LegBand"`]])}
+        </div>
+        <div class="col mw280" style="align-self:flex-start">
+          <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own. Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
+          <div class="param-grid">
+            <label class="txt-label" for="${p}Ref">Tauc reference</label>
+            <select id="${p}Ref" class="pg-field an-ref" title="The Tauc analysis whose linear region the Urbach region is placed on"></select>
+            <label class="txt-label" for="${p}N">ln[F(R)] smoothing window</label>
+            <input type="number" class="pg-field" id="${p}N" value="1" min="1">
+            <label class="txt-label" for="${p}N2">Derivative smoothing window</label>
+            <input type="number" class="pg-field" id="${p}N2" value="20" min="1">
+            <label class="txt-label" for="${p}M">Urbach linear region regression window</label>
+            <input type="number" class="pg-field" id="${p}M" value="25" min="2">
+            <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
+            <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
+            <div class="pg-stat pg-gap" title="The fit with the reference Tauc card's baseline taken out of F(R)">NRMSE (subtracted): <b id="${p}RMSE1s">-</b></div>
+            <div class="pg-stat" title="The fit with the reference Tauc card's baseline taken out of F(R)">R² (subtracted): <b id="${p}R21s">-</b></div>
+            <div class="pg-result">
+              <div class="pg-stat">E<sub>U</sub>: <b id="${p}Eu">-</b></div>
+              <div class="pg-stat">E<sub>U</sub> (subtracted): <b id="${p}EuS">-</b></div>
+            </div>
+          </div>
+          <div id="${p}Alert"></div>${suggestBtn(p, "Place the Urbach region from 1 eV below the middle of the reference's Tauc linear region to where that region starts (with no reference: at 25% and 75% of the span)")}
+        </div>
+      </div>`;
+}
+const cardBody = a => ({ tauc: taucBody, urbach: urbachBody }[a.type])('an' + a.id);
+const cardInfoOf = t => ({ tauc: TAUC_INFO, urbach: URBACH_INFO }[t]);
+
+/* ---- The states: a per-sample entry, a card's settings ---- */
+// A per-sample entry copied, its lines too (slots).
+const copyPer = p => p ? {...p, vlines: p.vlines ? {...p.vlines} : undefined} : {};
+// A card's settings copied whole (JSON: they are plain data).
+const clone = o => JSON.parse(JSON.stringify(o));
+
+/* ---- Reading a file ---- */
+/* A spectrum (textdata.js: its encoding, separator, decimal mark and quotes found from
+   the file), read in this order (from v510; the other formats as GC reads its own):
+   - the standard format (drsStandard): its first two columns, the wavelength (nm) and
+     %R or F(R) as its header says, read with no word, as to v509;
+   - any other file: the columns its header names (drsColumns), read with a warning;
+   - columns not named, or not one way only: the file is not loaded, and the alert says
+     why (the error).
+   The points that are no physical value are left out (drsPoints). The file itself is
+   kept as it came (rawBytes), for its download; a project keeps what was read, and opens
+   as it was. One with no point left is not loaded, and the alert says so (one whose rows
+   all had an empty cell went without a word, to v494). To v509 every file was read from
+   its first two columns, the second as a header above it said: F(R) with no header (two
+   bare columns of numbers), %R under a line naming it (a JASCO export's YUNITS,%R), and
+   a row with an empty cell between its numbers (350,,0.5) left out, without a word. */
+function readDrs(text){
+  const lines = textLines(text), t = readXY(lines), std = t && drsStandard(lines, t), c = std || drsColumns(lines);
+  if (c.error) return { error: c.error };
+  const { wl, FR, left } = drsPoints(c.t, c.R);
+  if (!wl.length) return { error: Object.keys(left).length ? `no point with a physical value: ${leftText(left)}` : NO_DATA };
+  return { wl, FR, warn: !std, ...(c.R ? { read: 'R%' } : std ? {} : { head: true }), ...(Object.keys(left).length ? { left } : {}) };
+}
+/* The standard format, the Cary 5000's export, as the user's own files are: the sample's
+   name on the first line, the columns' header on the second, "Wavelength (nm)" then "%R"
+   (the reflectance in percent, R = value/100 and F(R) = (1 − R)²/2R) or "F(R)", nothing
+   else in either (a unit after F(R), "(a.u.)" say, makes it another format), any case,
+   any separators after them, and the data from the third, two columns of numbers
+   (readXY), under whatever separator and decimal mark the reader finds (lines as it
+   counts them: a blank one is none). Its rows are read from their first two fields: a
+   row with an empty cell between its numbers (350,,0.5) gives 350 and nothing, and is
+   left out, as to v509; the Cary writes none (each row is "wavelength,%R,"). Under a run
+   of spaces, which may split the names too, the header is read whole, its quotes
+   dropped. The one place that decides the standard (to v501 any header naming R% or
+   F(R), on any line above the data, was standard, with no word).
+   → { R: whether the column is %R, t: the two columns (readXY) } or null */
+const STD_WL = /^wavelength\s*\(\s*nm\s*\)$/i, STD_R = /^%\s*r$/i, STD_F = /^f\s*\(\s*r\s*\)$/i;
+const STD_LINE = /^wavelength\s*\(\s*nm\s*\)\s+(\S.*)$/i;
+function drsStandard(lines, t){
+  if (t.rows.findIndex(r=> isFinite(parseNum(r[0])) && isFinite(parseNum(r[1]))) !== 2) return null;
+  let h = null;
+  if (t.sep[0] === ' '){ const m = STD_LINE.exec(lines[1].replace(/"/g, '').trim()); h = m && m[1].trim(); }
+  else { const f = splitFields(lines[1], t.sep); while (f.length && f[f.length - 1] === '') f.pop(); h = f.length === 2 && STD_WL.test(f[0]) ? f[1] : null; }
+  return h && (STD_R.test(h) || STD_F.test(h)) ? { R: STD_R.test(h), t } : null;
+}
+/* Any other file: its columns found by their names in its header, as GC finds its own
+   (textdata.js readTable): the header the first line naming a wavelength column and one
+   of F(R) or %R, the data the lines under it, the separator the one under which most
+   lines are data (both those columns numbers), each column read by its place in the
+   header, so that an empty cell in another column shifts nothing (350,,50 under
+   "Wavelength,,%R" is 350 and 50). A first such line with no data under it (a title
+   whose words under spaces name them, "Kubelka-Munk F(R) vs wavelength") is no header:
+   the one nearest above the first line of data is, as drsReading read up from the data
+   to v509. The names, any case:
+     the wavelength in nm: Wavelength, λ or nm, with or without its unit, "(nm)", "[nm]",
+       "/nm", "nm", "in nm", ", nm", "_nm", "nm." ("Wavelength nm."); a wavelength in
+       another unit, Å, µm, eV, cm⁻¹… ("(eV)", "in eV"), is not read: said;
+     F(R): F(R) anywhere in the name ("F(R) (a.u.)");
+     the reflectance in percent: R%, %R, R %, % R, R (%), R [%], Reflectance (%)…
+   Other columns are not read. Under a run of single spaces, which splits names too, the
+   header's names are its words, each with the unit after it ('Wavelength (nm) R (%)':
+   two; 'Wavelength nm % R': two, as drsReading read such a line whole to v509); under
+   runs of two or more, its fields, else its words so.
+   Columns named one way only, a wavelength and one of F(R) or %R: read, the second as it
+   is named. Two wavelength columns, both F(R) and %R, two of either (a Cary export of
+   several samples side by side), no such header: not read, and the error says why (to
+   v509 those with two columns of numbers were read, as F(R) when no header named it; the
+   others were refused with no reason).
+   → { R: whether the column is %R, t: { rows: each line's two cells, x, y } } or { error } */
+const R_HEAD = /^(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))$/i, F_HEAD = /f\s*\(r\)/i;
+const WL_HEAD = /^((wavelength|λ)([\s,_]*(in\s+)?(\(\s*nm\.?\s*\)|\[\s*nm\.?\s*\]|\/\s*nm\.?|nm\.?))?|nm\.?)$/i, WL_UNIT = /^(wavelength|λ)([\s,_]*(in\s+)?(\(.*\)|\[.*\]|\/.*)|,?\s+in\s+\S.*)$/i;
+const kindOf = s => WL_HEAD.test(s) ? 'wl' : F_HEAD.test(s) ? 'F' : R_HEAD.test(s) ? 'R' : WL_UNIT.test(s) ? 'unit' : '';
+/* A line's words, each with what follows it in brackets, a lone '%' or '/unit': "% R" one
+   word, its '%' not the word's before it; "Wavelength nm", "Wavelength in eV" one word. */
+const WORDS = /((wavelength|λ),?\s+(in\s+[^\s([/]+|nm\.?(?=\s|$))|%\s*r(?![^\s([/])|[^\s([/]+)(\s*(\([^)]*\)|\[[^\]]*\]|%(?=\s|$)(?!\s+r(\s|$))|\/\s*[^\s([]+))*|\S+/gi;
+const words = f => f.join(' ').match(WORDS) || [];
+// The columns `names` names, when a wavelength and F(R) or %R among them (n: how many).
+function columnsOf(names, n){
+  const c = { wl: [], F: [], R: [] };
+  names.forEach((s, i)=>{ const k = kindOf(s); if (c[k]) c[k].push(i); });
+  if (!c.wl.length || !(c.F.length + c.R.length)) return null;
+  return { ...c, x: c.wl[0], y: Math.min(...c.F, ...c.R), ...(n ? { n } : {}) };
+}
+function drsHead(f, sep){
+  const c = sep === ' ' ? null : columnsOf(f);
+  if (c || sep[0] !== ' ') return c;
+  const w = words(f);
+  return columnsOf(w, w.length);
+}
+const NO_HEAD = 'no header naming its columns: the wavelength in nm, and F(R) or %R', NO_DATA = 'no line of data read under its header';
+// Whether a line is two numbers (its first two fields not empty) under `sep`.
+const twoNums = (l, sep)=>{ const v = splitFields(l, sep).filter(c=> c !== ''); return isNum(v[0]) && isNum(v[1]); };
+function drsColumns(lines){
+  const isRow = (r, c)=> isNum(r[c.x]) && isNum(r[c.y]), d = lines.findIndex(l=> SEPS.some(s=> twoNums(l, s)));
+  let tb = readTable(lines, drsHead, isRow), h = d;
+  // A line naming them with no data under it is no header: read again from the one
+  // nearest above the first line of data.
+  if (!tb){ while (--h >= 0 && !SEPS.some(s=> drsHead(splitFields(lines[h], s), s))); if (h > 0) tb = readTable(lines.slice(h), drsHead, isRow); }
+  if (!tb) return { error: noColumns(lines, d) };
+  const c = tb.cols, many = [c.wl.length > 1 && `${c.wl.length} wavelength columns`,
+    c.F.length && c.R.length ? 'both F(R) and %R' : c.F.length > 1 ? `${c.F.length} F(R) columns` : c.R.length > 1 && `${c.R.length} %R columns`].filter(Boolean);
+  if (many.length) return { error: `which columns to read cannot be told: its header names ${many.join(' and ')}` };
+  const rows = tb.rows.map(r=> [r[c.x], r[c.y]]), x = [], y = [];
+  for (const r of rows){ const a = parseNum(r[0]), b = parseNum(r[1]); if (isFinite(a) && isFinite(b)){ x.push(a); y.push(b); } }
+  return { R: c.R.length > 0, t: { rows, x, y } };
+}
+/* Why no columns were found: the line nearest above the first line of data `d` (two
+   numbers) that names any column of the kinds read is the header, and says what it lacks,
+   its names read as the data's separator splits them (one under which that line is two
+   numbers) into two or more: of those, the one naming the most kinds, the first so; under
+   any other only when none does (a header written with ',' over data with ';', which
+   ';' leaves whole). Its names both kinds there: a header with no line of data read under
+   it (a ',' both the separator and the decimal mark, a blank cell under a run of spaces,
+   more names than the data have fields, the header with one separator and the data with
+   another). No such line: no header. */
+function noColumns(lines, d){
+  const at = d < 0 ? SEPS : SEPS.filter(s=> twoNums(lines[d], s));
+  // A line's names under each separator in `ss` (under spaces its fields and its words, as
+  // drsHead reads them), `min` or more, the kinds each names: the one naming the most.
+  const named = (l, ss, min)=> ss.flatMap(s=>{ const f = splitFields(l, s); return s === '  ' ? [f, words(f)] : [s === ' ' ? words(f) : f]; })
+    .filter(ns=> ns.length >= min).map(ns=>{ const k = {}; for (const n of ns){ const t = kindOf(n); if (t && !k[t]) k[t] = n; } return { k, n: !!(k.wl || k.unit) + !!(k.F || k.R) }; })
+    .reduce((a, b)=> b.n > (a ? a.n : 0) ? b : a, null);
+  for (let i = (d < 0 ? lines.length : d) - 1; i >= 0; i--){
+    const { k } = named(lines[i], at, 2) || named(lines[i], SEPS, 1) || {};
+    if (!k) continue;
+    if (k.wl && (k.F || k.R)) return NO_DATA;
+    const u = k.unit && k.unit.length > 40 ? k.unit.slice(0, 39) + '…' : k.unit;
+    return 'its header names ' + [!k.wl && (u ? `the wavelength in another unit than nm (${u})` : 'no wavelength column in nm'), !k.F && !k.R && 'no F(R) or %R column'].filter(Boolean).join(' and ');
+  }
+  return NO_HEAD;
+}
+/* The points of a spectrum that are physical values, the others left out and counted by
+   why: a wavelength not above 0 (wl), a reflectance outside 0–100 % (r) or of 0, where
+   F(R) is ∞ (zero), F(R) below 0 (neg), a value that is no finite number (inf: a NaN or
+   an Inf written in the file, a number past the doubles' range). To v494 they were kept,
+   and the analysis left out of each curve it made the values it could not take (F(R) ≤ 0
+   under a logarithm). */
+function drsPoints(t, R){
+  const wl = [], FR = [], left = {}, out = k =>{ left[k] = (left[k] || 0) + 1; };
+  t.x.forEach((x, i)=>{
+    const v = t.y[i], F = R ? (1 - v/100)**2/(2*v/100) : v;
+    if (!(x > 0)) out('wl');
+    else if (R && !(v >= 0 && v <= 100)) out('r');
+    else if (!isFinite(F)) out(R ? 'zero' : 'inf');
+    else if (F < 0) out('neg');
+    else { wl.push(x); FR.push(F); }
+  });
+  // (the rows x and y leave out: a wavelength beside a number that is no finite one)
+  for (const r of t.rows) if (isFinite(parseNum(r[0])) && (isNum(r[1]) || /^[+-]?(nan|inf(inity)?)$/i.test(String(r[1] || '').trim())) && !isFinite(parseNum(r[1]))) out('inf');
+  return { wl, FR, left };
+}
+// The points left out, said: how many, and why.
+const LEFT = { wl: 'a wavelength not above 0', r: 'R outside 0–100 %', zero: 'R = 0 %, where F(R) is infinite', neg: 'F(R) < 0', inf: 'a value that is no finite number' };
+function leftText(left){
+  const ks = Object.keys(LEFT).filter(k=> left[k] > 0), n = ks.reduce((t, k)=> t + left[k], 0);
+  return `${n} point${n > 1 ? 's' : ''} left out (${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')})`;
+}
+/* What the alert says of a file: how a file of no standard format was read (drsColumns),
+   and the points left out (to v501 the files of a non-standard format were named, no
+   more). A file in the standard format has no word on how it was read: the file list's
+   note says it (to v501 an R% file was said here, the Cary's own export as well; to v501
+   a header naming R% or F(R) anywhere above the data was a standard format). A file with
+   no header naming F(R) or %R is refused (from v510): only a project saved before holds
+   one, read as F(R), and says so as it did (none). */
+const WARNS = { R: 'not a standard format: its header names the reflectance in %, read as %R', F: 'not a standard format: its header names F(R), read as F(R)',
+  none: 'no header naming the columns F(R) or R%: read as F(R)' };
+const warnOf = f => f.read === 'R%' ? 'R' : f.head ? 'F' : 'none';
+function fileNotes(f){
+  const out = [];
+  if (f.warn) out.push(WARNS[warnOf(f)]);
+  if (f.left && Object.keys(LEFT).some(k=> f.left[k] > 0)) out.push(leftText(f.left));
+  return out;
+}
+/* The file list's note, right of the label (to v501 a column of its own left of it): how
+   the file was read, %R (the reflectance in percent, converted to F(R)) or F(R), its title
+   saying it in full: the second column of the standard format; in any other, the column
+   its header names (to v509 the second column there too), and a format not standard. A
+   project saved before the R% reading holds none: F(R), as it was read. */
+const READS = { R: ['%R', 'read as the reflectance in %, converted to F(R)'], F: ['F(R)', 'read as F(R)'] };
+function readNote(f){
+  const [t, how] = READS[f.read === 'R%' ? 'R' : 'F'], w = f.warn && warnOf(f);
+  const title = !w ? `second column ${how}` : w === 'none' ? `second column ${how}, with no header naming it` : `the ${t} column its header names, ${how}; not a standard format`;
+  return `<span title="${esc(title)}">${esc(t)}</span>`;
+}
+
+/* The reflectance in percent from F(R), whatever the file's second column was read as:
+   the exact inverse of F = (1 − R)²/2R, R = 1 + F − √(F² + 2F), written as
+   1/(1 + F + √(F² + 2F)), the same number without the two near-equal terms that cancel
+   where F is large. For a file read as R% it gives its own values back, to round-off.
+   F(R) < 0 (a project from before the points that are no physical value were left out
+   may hold it) has none. */
+const reflOf = F => F >= 0 ? 100/(1 + F + Math.sqrt(F*F + 2*F)) : NaN;
+
 // A DRS tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createTauc({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
-  /* Hidden, nothing is drawn (API.md §6): `drawable()` says whether to draw, and when not
-     marks the instance to be drawn whole as it is shown (stale). `drawnAt`: the width it was
-     last drawn whole at, its draw key (redrawTab). */
+  /* Hidden, nothing is drawn (utils.js registerModule): `drawable()` says whether to draw,
+     and when not marks the instance to be drawn whole as it is shown (stale). `drawnAt`:
+     the width it was last drawn whole at, its draw key (redrawTab). */
   let stale = false, drawnAt = '';
   const drawable = ()=> shown() || !(stale = true);
   /* The module (modkit.js): every file loaded, in list order, {name, label, wl[], FR[],
@@ -101,7 +673,7 @@ function createTauc({ key, root, layer, shown }){
     /* A file as a restore takes it (modkit RESTORED): its wavelengths and F(R), the points
        with both a finite number and a wavelength above 0 (none: left out); how it was read,
        and the points left out at its load, as its notes say them. Its energies made from
-       its wavelengths (withHv: a project to b2 holds them too, not read). */
+       its wavelengths (withHv: a project to v517 holds them too, not read). */
     file: f =>{
       const p = finitePairs(f.wl, f.FR, x=> x > 0);
       if (!p || !p[0].length) return null;
@@ -113,7 +685,7 @@ function createTauc({ key, root, layer, shown }){
     restore: (s, gone)=>{
       warnDismissed = false;
       // (a wake's or a reload's: the sample its tab showed, by its file's name, else its place)
-      if (toShow){ const k = files.findIndex(f=> f.name === toShow.name); currIndex = k >= 0 ? k : num(toShow.sample, 0, Number.isInteger); toShow = null; }
+      if (sampleNext){ const k = files.findIndex(f=> f.name === sampleNext.name); currIndex = k >= 0 ? k : num(sampleNext.sample, 0, Number.isInteger); sampleNext = null; }
       loadAnalyses(cardList(s.analyses, KINDS) || legacyAnalyses(s), gone);
     },
     /* Re-fit at the current size, keeping the zoom; a card not drawn while its tab was not
@@ -134,215 +706,8 @@ function createTauc({ key, root, layer, shown }){
   let warnDismissed = false;
   let currIndex=0;                    // the sample every analysis card shows
   // (the sample a tab woken or reloaded showed: its next restore shows it, inst.showNext)
-  let toShow = null;
+  let sampleNext = null;
   let resPlot0=null, resPlotR=null, resPlotLog=null; // the Results' top plots (created once)
-  // How Eg is read off the Tauc plot; each Tauc analysis picks which its bar chart shows.
-  const EG_METHODS = [
-    // Named E_g in plain text: a legend's sub run sits badly beside its swatch.
-    { key: 'x', label: 'x-axis',   name: 'E_g (x-axis)',   color: '#3aa0ff' },
-    { key: 'b', label: 'baseline', name: 'E_g (baseline)', color: '#ff7a59' },
-  ];
-
-  /* The two ways E_U is read, told apart as GC's gases are: from ln F(R) as it is, and
-     with the reference Tauc card's baseline taken out of F(R) first (urbachSub). Lines
-     keep the sample's colour, the subtracted ones long-dashed (their fits dotted); bars
-     take the pair's two colours. Each Urbach card shows one, the other or both, in its line plot and in its
-     bar chart separately. */
-  // Three line patterns, none used twice: the plain fits dashed (as every fit in the
-  // Results is), the subtracted curves long-dashed, their fits dotted.
-  const URB_METHODS = [
-    { key: 'p', label: 'plain',      name: 'E_U',              color: '#3aa0ff' },
-    { key: 's', label: 'subtracted', name: 'E_U (subtracted)', color: '#ff7a59' },
-  ];
-  const URB_ALL = ()=> ({ b: URB_METHODS.map(m=> m.key) });
-
-  const clampN = v => Math.max(1, Math.round(v));
-  const clampM = v => Math.max(2, Math.round(v));
-  // Two-sided 99% confidence: the 99.5% quantile of Student's t, the factor every
-  // error reported here (Eg, E_U) is multiplied by.
-  const T_Q = 0.995;
-
-  /* A curve with points that have no value (F(R) < 0 under a fractional exponent, F(R) ≤ 0
-     under the logarithm) is smoothed and differentiated over the points that have one,
-     as though the others had not been measured: those stay without a value, and every
-     other point is averaged with its nearest neighbours that have one. Run over every
-     point (to v478), the moving average spread each missing point to N/2 neighbours on
-     either side, the derivative's to N2/2 more, the second derivative's as far again:
-     10 points of F(R) < 0 left 279 of 551 values of Y'' without one, which the
-     suggestion took for curvature, and no fit window could hold a point the spread had
-     reached. `fn(y, x)` runs on the points with a finite y (or those `has(i)` keeps) and
-     their x; a curve with none left out goes through it as it is. */
-  function onFinite(y, x, fn, has = i=> isFinite(y[i])){
-    const ok = []; for (let i=0;i<y.length;i++) if (has(i)) ok.push(i);
-    if (ok.length === y.length) return fn(y, x);
-    const r = fn(ok.map(i=> y[i]), x && ok.map(i=> x[i])), out = new Array(y.length).fill(NaN);
-    ok.forEach((i, j)=> out[i] = r[j]);
-    return out;
-  }
-  /* The smoothing and the derivative are numbers of points, N and N2: the curve's centred
-     moving average over N points, and that over N2 of its central differences (to v520 again:
-     v515 to v519 made them widths in eV, smooth.js boxSmooth and boxSlope). */
-  const smoothY = (y, N)=> onFinite(y, null, v=> movingAverage(v, N));
-  // dy/dx smoothed over N points.
-  const slopeOf = (y, x, N)=> onFinite(y, x, (v, e)=> movingAverage(gradientArr(v, e), N));
-
-  // Best linear fit inside [x1,x2]: slide an M-point window and pick the one that
-  // minimises NRMSE/R², where NRMSE = RMSE / (max-min of the window's y). Normalising
-  // by the y-range makes the criterion robust — it locks onto the steep linear edge
-  // instead of a flat low-value stretch that merely has a small absolute RMSE.
-  // `Ys` is the curve as analysed: already smoothed. The window is chosen on it, where
-  // noise does not pick it, and the line fitted to `Yraw`, the data themselves, inside
-  // it: fitted to smoothed values its residuals are averaged together, no longer
-  // independent, and every error came out too small (a "99%" interval held the truth
-  // 72% of the time at N = 5, 37% at N = 15). `n` is how many points it was fitted on.
-  // A window is M points that have a value: one without (F(R) at or below zero, see
-  // onFinite) is left out, and the window reaches past it. One holding such a point was
-  // passed over (to v478), so a few of F(R) < 0 through the baseline region left it no
-  // window to fit. With `strict` it still is, and only a point whose energy has no value
-  // is left out: the subtracted Urbach curve gives none to those of F(R) ≤ 0, which the
-  // plain curve leaves out, so a point there without a value is one where the Tauc
-  // baseline lies above F(R), which the card reports. (v515 to v519 slid a window of a
-  // width in eV; to v520 M points again, as to v514.)
-  function scanRegr(hv, Ys, M, x1, x2, Yraw, strict){
-    const lo = Math.min(x1,x2), hi=Math.max(x1,x2);
-    const idxSel = [];
-    for (let i=0;i<hv.length;i++) if (hv[i]>=lo && hv[i]<=hi && (strict || isFinite(Ys[i]))) idxSel.push(i);
-    let best = {slope:NaN,intercept:NaN,R2:NaN,RMSE:Infinity,NRMSE:Infinity,bestIdx:[],varM:NaN,varB:NaN,covMB:NaN};
-    if (idxSel.length < M) return best;
-    let bestScore = Infinity;
-    for (let s=0; s<=idxSel.length-M; s++){
-      const block = idxSel.slice(s, s+M);
-      const yb = block.map(i=>Ys[i]);
-      if (yb.some(v=>!isFinite(v))) continue;
-      const xb = block.map(i=>hv[i]);
-      const r = fitLinear(xb, yb);
-      const range = Math.max(...yb) - Math.min(...yb);
-      const nrmse = range>0 ? r.rmse/range : Infinity;
-      const score = nrmse / r.R2;
-      if (score < bestScore){
-        bestScore = score;
-        best = {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE:nrmse, bestIdx:block, varM:r.varM, varB:r.varB, covMB:r.covMB, n:M};
-      }
-    }
-    if (!Yraw || Yraw === Ys || !best.bestIdx.length) return best;
-    const idx = best.bestIdx.filter(i=> isFinite(Yraw[i]));
-    if (idx.length < 3) return {...best, slope:NaN, intercept:NaN, R2:NaN, NRMSE:Infinity, varM:NaN, varB:NaN, covMB:NaN, n:idx.length};
-    const yr = idx.map(i=> Yraw[i]), r = fitLinear(idx.map(i=> hv[i]), yr), range = Math.max(...yr) - Math.min(...yr);
-    return {slope:r.slope, intercept:r.intercept, R2:r.R2, RMSE:r.rmse, NRMSE: range > 0 ? r.rmse/range : Infinity,
-            bestIdx:best.bestIdx, varM:r.varM, varB:r.varB, covMB:r.covMB, n:idx.length};
-  }
-
-  /* ---- v515's window choice, for the projects saved by v515 to v519 (makePanel toPoints) ----
-     Their regression windows were widths in eV: a window W wide slid through the interval
-     (from each of its points every point up to W above it, while its end was in it, a point
-     within 10⁻⁹ eV of the end in it), fitted where it held 3 points with a value spread over
-     half its width at least, the one with the least NRMSE/R² on the curve smoothed by a box
-     w wide (smooth.js boxSmooth) chosen. Its points, `bestIdx` of v515's scanRegr, are what
-     the width spanned there: kept here to convert those projects, and for nothing else. */
-  function scanW(hv, Ys, W, x1, x2){
-    const lo = Math.min(x1, x2), hi = Math.max(x1, x2), TOL = 1e-9, sel = [];
-    for (let i = 0; i < hv.length; i++) if (hv[i] >= lo && hv[i] <= hi && isFinite(Ys[i])) sel.push(i);
-    sel.sort((a, b)=> hv[a] - hv[b]);
-    const E = sel.map(i=> hv[i]);
-    let best = [], bs = Infinity;
-    for (let s = 0, e = 0; s < E.length && E[s] + W <= hi + TOL; s++){
-      if (e < s) e = s;
-      while (e + 1 < E.length && E[e+1] <= E[s] + W + TOL) e++;
-      if (e - s < 2 || E[e] - E[s] < W/2 - TOL) continue;
-      // (in the points' own order, as v515 fitted them)
-      const b = sel.slice(s, e+1);
-      if (b[0] > b[b.length-1]) b.reverse();
-      const yb = b.map(i=> Ys[i]), r = fitLinear(b.map(i=> hv[i]), yb), range = Math.max(...yb) - Math.min(...yb);
-      const score = (range > 0 ? r.rmse/range : Infinity)/r.R2;
-      if (score < bs){ bs = score; best = b; }
-    }
-    return best;
-  }
-
-  /* Eg from the two Tauc fits: where the Tauc line crosses the x-axis, and where it
-     crosses the baseline. Each error is the fit's own (co)variances carried through
-     the formula, every term scaled by the t factor of the fit it comes from. */
-  function taucEg(regs, regs2, M, M2){
-    let Eg=NaN, EgErr=NaN, EgInt=NaN, EgIntErr=NaN;
-    if ([regs.slope,regs.intercept,regs2.slope,regs2.intercept].every(isFinite)){
-      const xInt = (regs2.intercept - regs.intercept)/(regs.slope - regs2.slope);
-      const dxdb1 = -1/(regs.slope-regs2.slope), dxdb2 = 1/(regs.slope-regs2.slope);
-      // x = (b2 − b1)/(m1 − m2), so ∂x/∂m1 = −(b2 − b1)/(m1 − m2)² = −∂x/∂m2. With the
-      // sign the other way the slope–intercept covariances, strongly negative this far
-      // from hν = 0, added to the variance instead of taking from it.
-      const dxdm1 = -(regs2.intercept-regs.intercept)/Math.pow(regs.slope-regs2.slope,2);
-      const dxdm2 = -dxdm1;
-      const t1 = tinv(T_Q, (regs.n || M)-2), t2 = tinv(T_Q, (regs2.n || M2)-2);
-      const varX = dxdb1*dxdb1*regs.varB*t1*t1 + dxdb2*dxdb2*regs2.varB*t2*t2 +
-                   dxdm1*dxdm1*regs.varM*t1*t1 + dxdm2*dxdm2*regs2.varM*t2*t2 +
-                   2*dxdb1*dxdm1*regs.covMB*t1*t1 + 2*dxdb2*dxdm2*regs2.covMB*t2*t2;
-      EgInt = xInt;
-      EgIntErr = varX>0 ? Math.sqrt(varX) : NaN;
-    }
-    ({ x: Eg, err: EgErr } = xCross(regs, M));
-    return {Eg,EgErr,EgInt,EgIntErr};
-  }
-  // Where a fitted line crosses y = 0, −b/m, and its error: the slope and intercept
-  // variances and their covariance carried through, times the fit's t factor.
-  function xCross(r, M){
-    if (!(r.slope !== 0 && isFinite(r.slope))) return { x: NaN, err: NaN };
-    const x = -r.intercept/r.slope;
-    if (![r.varM, r.varB, r.covMB].every(isFinite)) return { x, err: NaN };
-    const v = (r.intercept**2/r.slope**4)*r.varM + (1/r.slope**2)*r.varB - 2*(r.intercept/r.slope**3)*r.covMB;
-    return { x, err: v >= 0 ? Math.sqrt(v)*tinv(T_Q, (r.n || M)-2) : NaN };
-  }
-  // The inverse of a fit's slope, and its error σ_m/m² times the fit's t factor.
-  function invSlope(r, M){
-    const m = r.slope;
-    if (!isFinite(m) || m === 0) return { v: NaN, err: NaN };
-    return { v: 1/m, err: isFinite(r.varM) && r.varM >= 0 ? Math.sqrt(r.varM)/(m*m)*tinv(T_Q, (r.n || M)-2) : NaN };
-  }
-  // The Urbach energy is the inverse of the tail's slope in ln F(R) against hν.
-  function urbachEu(regs, M){ const s = invSlope(regs, M); return { Eu: s.v, EuErr: s.err }; }
-
-  const fmtE = (v, e, unit, k = 3, scale = 1)=> !isFinite(v) ? '-'
-    : isFinite(e) ? `${(v*scale).toFixed(k)} ± ${(e*scale).toFixed(k)} ${unit}` : `${(v*scale).toFixed(k)} ${unit}`;
-
-  // ---- Auto-suggested Tauc interval lines ----
-  // Second-derivative method. The Tauc region is the span where Y'' is NON-zero (a
-  // linear/constant background has zero curvature, so it cancels). The "zero zones"
-  // are the flat pre-edge (low E) and post-edge (high E) regions, |Y''| < ε with
-  // ε = 10%·max|Y''|. The outer 10% of the energy range on each side is skimmed off
-  // first: the tails are where the spectrum is noisiest and the moving averages are
-  // one-sided, so neither ε nor the bounds are taken from them. The region bounds are
-  // found from each end of what is kept inward: the first start of a sustained run of
-  // CONT points with |Y''| >= ε (interpolated). (v515 to v519 asked for a run half the
-  // derivative's width in eV; to v520 CONT points again.)
-  const SUGG_THRESH = 0.10;   // ε as a fraction of max|Y''|
-  const SUGG_CONT   = 25;     // required consecutive points above ε
-  const SUGG_TAIL   = 0.10;   // fraction of the energy range skimmed off each end
-  // Read over the points that have a slope (onFinite): one without has no curvature.
-  // A non-finite |Y''| left (a repeated energy) counts as none: it made ε an absolute 0.1
-  // (Math.max with NaN is NaN) and stood "above ε" in every run (to v478).
-  function curvatureEdge(c, p){
-    const ok = []; for (let i=0;i<c.hv.length;i++) if (isFinite(c.dYs[i])) ok.push(i);
-    const hv = ok.map(i=> c.hv[i]), n = hv.length;
-    if (n < 7) return null;
-    const d2  = movingAverage(gradientArr(ok.map(i=> c.dYs[i]), hv), p.N2);      // Y''
-    // energy-ascending order of indices, so we can scan by energy regardless of layout
-    const ord = [...Array(n).keys()].sort((a,b)=>hv[a]-hv[b]);
-    const eLo = hv[ord[0]], eHi = hv[ord[n-1]], cut = SUGG_TAIL * (eHi - eLo);
-    let a = 0, b = n-1;                                           // kept span, energy order
-    while (a < n && hv[ord[a]] < eLo + cut) a++;
-    while (b >= 0 && hv[ord[b]] > eHi - cut) b--;
-    if (b - a < 2) return null;
-    const ax = j =>{ const v = Math.abs(d2[ord[j]]); return isFinite(v) ? v : 0; };
-    let A = 0; for (let j=a;j<=b;j++) A = Math.max(A, ax(j));
-    const eps = SUGG_THRESH * (A || 1);
-    const cross = (j,k) => { const t=(ax(j)-eps)/((ax(j)-ax(k))||1); return hv[ord[j]] + t*(hv[ord[k]]-hv[ord[j]]); };
-    const inR = j => j>=a && j<=b;
-    // sustained run of CONT points (from j, stepping dir) all with |Y''| >= eps
-    const runGE = (j,dir) => { for (let m=0;m<SUGG_CONT;m++){ const jj=j+dir*m; if (!inR(jj) || ax(jj)<eps) return false; } return true; };
-    let v1=hv[ord[a]], v2=hv[ord[b]];
-    for (let j=a;j<=b;j++){ if (runGE(j,+1)){ v1 = j>a?cross(j-1,j):hv[ord[j]]; break; } }
-    for (let j=b;j>=a;j--){ if (runGE(j,-1)){ v2 = j<b?cross(j+1,j):hv[ord[j]]; break; } }
-    return { v1, v2 };
-  }
 
   /* =========================================================
      ANALYSIS PANEL
@@ -355,15 +720,6 @@ function createTauc({ key, root, layer, shown }){
      folded out of sight (`hidden`) is not drawn: it is brought up to date when it
      is unfolded.
   ========================================================= */
-  /* The fields of the parameters, by key: the exponent, A, and the numbers of points, N,
-     the curve's smoothing, N2, the derivative's, M and M2, the regression windows (the
-     spec's windows say which is whose), to v514 and from v520 again. v515 to v519 kept
-     widths in eV in their place, w, w2, W and W2 (EV: makePanel toPoints); LEAST, the
-     fewest points each takes. */
-  const FIELD = { a:'A', N:'N', N2:'N2', M:'M', M2:'M2' };
-  const CLAMP = { a: v => v, N: clampN, N2: clampN, M: clampM, M2: clampM };
-  const EV = { N:'w', N2:'w2', M:'W', M2:'W2' }, LEAST = { N: 1, N2: 1, M: 2, M2: 2 };
-  const median = a =>{ const s = a.slice().sort((x, y)=> x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m])/2; };
   // (its elements found in its card, `card`, whether or not the card is in the page)
   function makePanel(spec, card){
     const { prefix, keys, windows } = spec;
@@ -749,31 +1105,6 @@ function createTauc({ key, root, layer, shown }){
     return P;
   }
 
-  const sup = v => `<tspan baseline-shift="super" font-size="8">${v}</tspan>`;
-  /* The Tauc exponents, as [F(R)·hν]^a: the transition each stands for (`name`, the
-     card's automatic name), and how it is written where it shows (the select, the
-     axes); a fraction as such. */
-  const EXPONENTS = [
-    { a: 0.5, label: '0.5', gap: 'Indirect', name: 'allowed indirect' },
-    { a: 2,   label: '2',   gap: 'Direct',   name: 'allowed direct' },
-    { a: 2/3, label: '2/3', gap: 'Direct',   name: 'forbidden direct',   forbidden: true },
-    { a: 1/3, label: '1/3', gap: 'Indirect', name: 'forbidden indirect', forbidden: true },
-  ];
-  const expOf = a => EXPONENTS.find(e=> Math.abs(e.a - a) < 1e-9);
-  const fmtA = a =>{ const e = expOf(a); return e ? e.label : String(+(+a).toFixed(4)); };
-  const URBACH_COLOR = '#ff7f0e';
-  // On the Urbach card, the tail with the Tauc baseline subtracted, in colours of its
-  // own: the curve, and its fit (solid in its window, dashed beyond), as the plain ones
-  // are drawn.
-  const URB_SUB_COLORS = { curve: '#b46cff', fit: '#00acc1' };
-  const TAUC_COLORS = { regs: '#ff5050', regs2: '#d050ff' };
-  /* The defaults, in points (v514's, and from v520 again): no smoothing, the derivative's
-     over 20, the Tauc region's window 25, the baseline's 100, the Urbach region's 25. v515
-     to v519's in eV, for the states they saved (makePanel toPoints): 0, 0.15, 0.2 and 0.5;
-     the Urbach card's 0, 0.15 and 0.15. */
-  const TAUC_DEF = { a:0.5, N:1, N2:20, M:25, M2:100 }, URB_DEF = { N:1, N2:20, M:25 };
-  const TAUC_EV = { w:0, w2:0.15, W:0.2, W2:0.5 }, URB_EV = { w:0, w2:0.15, W:0.15 };
-
   /* =========================================================
      ANALYSIS CARDS
      The workspace is a list of analysis cards, each a Tauc plot or an Urbach energy
@@ -784,8 +1115,6 @@ function createTauc({ key, root, layer, shown }){
      reference: by default the nearest Tauc card above it, or one chosen by hand, or
      none.
   ========================================================= */
-  // As the menus list them; the card titles set them in capitals.
-  const KINDS = { tauc: 'Tauc Plot', urbach: 'Urbach Energy' };
   let deck = null;            // the cards (cards.js): the records, in card order, and their cards
   const cards = ()=> deck ? deck.records : [];
   const live = new Map();     // id → { panel, res, resPlots, seen }
@@ -812,8 +1141,6 @@ function createTauc({ key, root, layer, shown }){
     const xs = idx.map(k=> files[i].hv[k]);
     return [Math.min(...xs), Math.max(...xs)];
   }
-  // Where Urbach lines rest with nothing to go by: a quarter and three quarters in.
-  const restLines = (lo, d)=> ({ v1: lo + 0.25*d, v2: lo + 0.75*d });
 
   function taucSpec(a){
     return {
@@ -891,35 +1218,6 @@ function createTauc({ key, root, layer, shown }){
     const EuErrBase = subBaselineSlopeErr(regs, Yraw, r, ta, hv, FR, T.params(k).M2)/(m*m);
     return { Fb, Yraw, Ys, regs, inside, lost, neg, blocked, Eu: fit.Eu, EuErr: Math.hypot(fit.EuErr, EuErrBase), EuErrFit: fit.EuErr, EuErrBase };
   }
-  /* What the Tauc baseline's own uncertainty adds to the subtracted slope s. With the
-     window and its points held, s = Σ w_i·ln(F_i − F_b,i), w_i = (hν_i − mean)/S_xx, is a
-     function of the baseline's slope and intercept through F_b = Y_b^(1/a)/hν,
-     Y_b = m_b·hν + b_b, so
-       J_m = ∂s/∂m_b = −Σ w_i·hν_i·F_b'(Y_i)/(F_i − F_b,i),  J_b = ∂s/∂b_b = −Σ w_i·F_b'(Y_i)/(F_i − F_b,i),
-     F_b'(Y) = (1/a)·Y^(1/a − 1)/hν where Y > 0 (F_b is nothing, and so is its change,
-     where it is not), and
-       Var_b(s) = J Σ_b Jᵀ = J_m² σ²_m + J_b² σ²_b + 2 J_m J_b σ_mb,
-     Σ_b the baseline fit's covariance. Its square root is returned times that fit's t
-     factor (99%, n_b − 2), as each fit's term is in E_g (baseline). The derivatives are
-     exact (no step to take), and finite wherever the window's points have a logarithm. */
-  function subBaselineSlopeErr(regs, Yraw, rb, ta, hv, FR, Mb){
-    if (!isFinite(regs.slope) || !regs.bestIdx || ![rb.varM, rb.varB, rb.covMB].every(isFinite)) return NaN;
-    // The fit's own points: those of its window with a logarithm (scanRegr).
-    const idx = regs.bestIdx.filter(i=> isFinite(Yraw[i]));
-    if (idx.length < 3) return NaN;
-    const mx = idx.reduce((t, i)=> t + hv[i], 0)/idx.length;
-    const sxx = idx.reduce((t, i)=> t + (hv[i] - mx)**2, 0);
-    let Jm = 0, Jb = 0;
-    idx.forEach(i=>{
-      const e = hv[i], y = rb.slope*e + rb.intercept;
-      if (!(y > 0)) return;
-      const dF = Math.pow(y, 1/ta - 1)/(ta*e), d = FR[i] - Math.pow(y, 1/ta)/e, w = (e - mx)/sxx;
-      Jm -= w*e*dF/d; Jb -= w*dF/d;
-    });
-    const v = Jm*Jm*rb.varM + Jb*Jb*rb.varB + 2*Jm*Jb*rb.covMB;
-    if (!isFinite(v)) return NaN;
-    return Math.sqrt(Math.max(0, v))*tinv(T_Q, (rb.n || Mb) - 2);
-  }
   function urbachSpec(a){
     return {
       kind: 'urbach',
@@ -996,104 +1294,6 @@ function createTauc({ key, root, layer, shown }){
     currIndex = k;
     quietly(()=> livePanels().forEach(p=>{ p.writeStoreToInputs(); p.update(); }));
   }
-
-  /* ---- Card markup ---- */
-  const CARD_INFO = cardInfo(true, true);
-  const TAUC_INFO = `Drag the vertical lines to set the Tauc linear regression region (red) and the baseline (magenta), or press <b>✦ Suggest intervals</b> to place them automatically from the absorption edge (second-derivative method), for every sample: one common set in <b>all</b> mode, each sample its own in <b>one</b> mode. Within each interval the best fit is chosen by sliding a window (its size is the regression-window value) and minimising <b>NRMSE/R²</b>, where <b>NRMSE = RMSE / (y<sub>max</sub>−y<sub>min</sub>)</b> of the window. Normalising by the y-range keeps the fit on the steep linear part instead of a flat low-value stretch that only has a small absolute RMSE, so it is markedly more stable. E<sub>g</sub> is extracted from both the x-axis intersection and the baseline intersection of the regression line. The <b>Tauc exponent</b> is 2 for direct allowed transitions, 0.5 for indirect allowed, 2/3 for direct forbidden and 1/3 for indirect forbidden ones; changing it places the lines again, as Suggest does (every sample in <b>all</b> mode, the one on show in <b>one</b> mode). Energies are hν = hc/λ (hc = 1239.842 eV·nm). The curve is smoothed with a centred moving average to choose each window, and the line is then fitted to the unsmoothed data inside it: fitted to smoothed values, whose residuals are no longer independent, its errors would come out too small. Where F(R) &lt; 0, [F(R)·hν]<sup>a</sup> has no value for a = 0.5, 2/3 or 1/3: those points are left out, as though not measured, of the smoothing, the derivatives, the suggestion and the fits. <b>Errors</b>: each E<sub>g</sub> uncertainty is the regression's own, its slope and intercept variances and their covariance propagated through the formula, multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom for each fit). E<sub>g</sub> from the baseline combines both fits and treats them as independent. ${CARD_INFO}`;
-  const URBACH_INFO = `Below the band gap the absorption tail is exponential, F(R) ∝ exp(hν / E<sub>U</sub>), so <b>ln[F(R)]</b> against hν is a straight line of slope 1 / E<sub>U</sub>. The <b>Tauc reference</b> is the Tauc analysis this one is read against: its linear region is the red band on the plot, and <b>✦ Suggest intervals</b> places the Urbach region, for every sample, below it, where the tail is: from 1 eV under the middle of the Tauc linear region up to where that region starts; the regression window then finds the straightest stretch of the tail inside it by itself. The region follows the reference: when a sample's Tauc linear region moves (its lines, parameters, Suggest), the sample's Urbach region is placed on it again once the change is made (a Tauc line released, a value confirmed), and a new reference places them all. By default the reference is the nearest Tauc card above this one; one chosen by hand stays wherever the cards are moved. With <b>None</b> there is no band and nothing to follow, and the suggestion puts the lines at 25% and 75% of each sample's energy span. Drag the orange lines to set the region by hand: they stay until the reference's region moves again. The lines are always each sample's own: <b>all / one</b> here sets the parameters only. Within the region the best window of the regression-window size is chosen by minimising <b>NRMSE/R²</b> and fitted on the unsmoothed data, as for Tauc. <b>E<sub>U</sub> = 1 / slope</b>; its error is the slope's standard error carried through (σ<sub>m</sub> / m²), multiplied by <b>Student's t at 99% confidence</b> (two-sided, M − 2 degrees of freedom). Points with F(R) ≤ 0 have no logarithm and are left out. <b>Subtracted</b>: the same, with the reference's Tauc baseline taken out of F(R) first. That baseline is a line in the Tauc plot, Y<sub>b</sub> = m·hν + b in [F(R)·hν]<sup>a</sup>, so in F(R) it is <b>F<sub>b</sub> = Y<sub>b</sub><sup>1/a</sup> / hν</b> where Y<sub>b</sub> > 0 (nothing where it is not); ln[F(R) − F<sub>b</sub>] is smoothed and fitted between the same lines, by the same rules, for a second slope and E<sub>U</sub> (subtracted). Its error adds, in quadrature, the fit's own (as for E<sub>U</sub>) and the Tauc baseline's carried through the subtraction: with the window held, the slope's derivatives with respect to the baseline's slope and intercept, J (exact, through F<sub>b</sub>), give its variance J Σ J<sup>T</sup>, Σ the baseline fit's covariance, whose square root, times that fit's own t factor (99%, two-sided, the reference card's baseline regression window − 2 degrees of freedom), is divided by slope² as above; the card's tooltip gives the two parts. The two fits are taken as independent, although the baseline and the Urbach region may share points. On the card's plot its curve is purple and its fit teal (solid in its window, dashed beyond), drawn as the plain ones are; with no reference there is nothing to subtract, and where the baseline lies above F(R) in the region there is no fit, which the card says. In the Results the Urbach plot is two, each with its own axes: the plain curves and fits above, the subtracted ones under them (empty, and saying why, when there is nothing to subtract); the chips on the E<sub>U</sub> chart show the plain E<sub>U</sub>, the subtracted one or both. ${CARD_INFO}`;
-
-
-  const navRow = p => `
-          <div class="plot-nav-row">
-            <div class="plot-nav-left">
-              <button class="btn nav-arrow an-prev" id="${p}Prev" aria-label="Previous sample" title="Previous sample (&#8592;)">‹</button>
-              <span id="${p}Idx" class="pill nav-count" style="margin:0">1/1</span>
-              <button class="btn nav-arrow an-next" id="${p}Next" aria-label="Next sample" title="Next sample (&#8594;)">›</button>
-              <span class="txt-caption" id="${p}CurrentLabel">—</span>
-            </div>
-          </div>`;
-  // At the foot of the parameter column, after what it holds.
-  const suggestBtn = (p, title)=> `
-            <button class="btn plot-action-btn" id="${p}Suggest" title="${title}">&#10022; Suggest intervals</button>`;
-  // A plot's box (modcharts.js). The download names follow the analysis name (named); a
-  // CSV is offered only where there is one to give.
-  const box = (id, legend, csv, extra, cls)=> plotWrap(id, { legend, mod: 'tauc', csv: csv ? '-' : '', extra, cls });
-  // An item [colour, text, attributes, key class]: 'mk-ldash' (long dashes) or 'mk-dots'
-  // draws its key in that pattern.
-  const legend = (id, items)=> `<div class="legend" id="${id}">${items.map(([c, t, x, d])=> `<span${x || ''}>${d ? `<i class="${d}" style="color:${c}"></i>` : `<i style="background:${c}"></i>`}${t}</span>`).join('')}</div>`;
-
-  function taucBody(p){
-    return `
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            ${navRow(p)}
-            ${box(p + 'Svg', p + 'Legend', true)}
-            ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff5050', 'Tauc linear region'], ['#d050ff', 'baseline']])}
-          </div>
-          <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one common setup for every sample. one: each sample fully independent (parameters and interval lines). Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
-            <div class="param-grid">
-              <label class="txt-label" for="${p}A">Tauc exponent</label>
-              <select id="${p}A" class="pg-field an-exp">
-                ${EXPONENTS.map(e=> `<option value="${e.a}"${e.a === 0.5 ? ' selected' : ''}>${e.label} (${e.name})</option>`).join('')}
-              </select>
-              <label class="txt-label" for="${p}N">[F(R)hν]<sup id="${p}NExp">0.5</sup> smoothing window</label>
-              <input type="number" class="pg-field" id="${p}N" value="1" min="1">
-              <label class="txt-label" for="${p}N2">Derivative smoothing window</label>
-              <input type="number" class="pg-field" id="${p}N2" value="20" min="1">
-              <label class="txt-label" for="${p}M">Tauc linear region regression window</label>
-              <input type="number" class="pg-field" id="${p}M" value="25" min="2">
-              <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
-              <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
-              <label class="txt-label" for="${p}M2">Baseline regression window</label>
-              <input type="number" class="pg-field" id="${p}M2" value="100" min="2">
-              <div class="pg-stat">NRMSE: <b id="${p}RMSE2">-</b></div>
-              <div class="pg-stat">R²: <b id="${p}R22">-</b></div>
-              <div class="pg-result">
-                <div class="pg-stat">E<sub>g</sub> (x-axis): <b id="${p}Eg">-</b></div>
-                <div class="pg-stat">E<sub>g</sub> (baseline): <b id="${p}EgInt">-</b></div>
-              </div>
-            </div>
-            <div id="${p}Alert"></div>${suggestBtn(p, 'Propose optimal Tauc-region and baseline intervals from the absorption edge')}
-          </div>
-        </div>`;
-  }
-  function urbachBody(p){
-    return `
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            ${navRow(p)}
-            ${box(p + 'Svg', p + 'Legend', false)}
-            ${legend(p + 'Legend', [['#6a7585', 'original'], ['#3aa0ff', 'smoothed'], ['#5fcf6a', 'derivative'], ['#ff7f0e', 'Urbach region'],
-              [URB_SUB_COLORS.curve, 'smoothed, Tauc baseline subtracted', ` id="${p}LegSub"`], [URB_SUB_COLORS.fit, 'Urbach region, subtracted', ` id="${p}LegSubFit"`],
-              ['rgba(255,80,80,0.35)', 'Tauc linear region', ` id="${p}LegBand"`]])}
-          </div>
-          <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Parameters <button type="button" class="mode-chip" id="${p}ModeAll" title="all: one set of parameters for every sample. one: each sample its own. The interval lines are always each sample's own. Switching to one, every sample starts from the common setup; back to all, the common setup is the shown sample's.">all</button></div>
-            <div class="param-grid">
-              <label class="txt-label" for="${p}Ref">Tauc reference</label>
-              <select id="${p}Ref" class="pg-field an-ref" title="The Tauc analysis whose linear region the Urbach region is placed on"></select>
-              <label class="txt-label" for="${p}N">ln[F(R)] smoothing window</label>
-              <input type="number" class="pg-field" id="${p}N" value="1" min="1">
-              <label class="txt-label" for="${p}N2">Derivative smoothing window</label>
-              <input type="number" class="pg-field" id="${p}N2" value="20" min="1">
-              <label class="txt-label" for="${p}M">Urbach linear region regression window</label>
-              <input type="number" class="pg-field" id="${p}M" value="25" min="2">
-              <div class="pg-stat">NRMSE: <b id="${p}RMSE1">-</b></div>
-              <div class="pg-stat">R²: <b id="${p}R21">-</b></div>
-              <div class="pg-stat pg-gap" title="The fit with the reference Tauc card's baseline taken out of F(R)">NRMSE (subtracted): <b id="${p}RMSE1s">-</b></div>
-              <div class="pg-stat" title="The fit with the reference Tauc card's baseline taken out of F(R)">R² (subtracted): <b id="${p}R21s">-</b></div>
-              <div class="pg-result">
-                <div class="pg-stat">E<sub>U</sub>: <b id="${p}Eu">-</b></div>
-                <div class="pg-stat">E<sub>U</sub> (subtracted): <b id="${p}EuS">-</b></div>
-              </div>
-            </div>
-            <div id="${p}Alert"></div>${suggestBtn(p, "Place the Urbach region from 1 eV below the middle of the reference's Tauc linear region to where that region starts (with no reference: at 25% and 75% of the span)")}
-          </div>
-        </div>`;
-  }
-  const cardBody = a => ({ tauc: taucBody, urbach: urbachBody }[a.type])('an' + a.id);
-  const cardInfoOf = t => ({ tauc: TAUC_INFO, urbach: URBACH_INFO }[t]);
 
   /* ---- Cards: the panel on each (the deck builds, folds and moves the cards) ---- */
   // The card is in the page: the panel finds its elements there by id. Number fields are
@@ -1262,7 +1462,6 @@ function createTauc({ key, root, layer, shown }){
   // starts from the card's defaults, as a file uploaded into it does. (A panel's own
   // entry of a project of v515 to v519, in eV, is converted as it comes back: P.back; one
   // of a kind not on show, when that kind is restored.)
-  const copyPer = p => p ? {...p, vlines: p.vlines ? {...p.vlines} : undefined} : {};
   function slots(){
     const out = [];
     cards().forEach(a=>{
@@ -1279,7 +1478,6 @@ function createTauc({ key, root, layer, shown }){
   /* ---- Undo/redo (kit.snapshot): every analysis card, its kind, name, fold, reference,
      and the line positions and parameters of both its kinds, beside the files' records
      (their spectra shared by reference). ---- */
-  const clone = o => JSON.parse(JSON.stringify(o));
   // Projects from before the analysis cards had one Tauc analysis, kept at the top
   // level, and an Urbach one beside it: the Tauc card comes first, and the Urbach one,
   // if it was on, follows it, read against it.
@@ -1311,188 +1509,6 @@ function createTauc({ key, root, layer, shown }){
   // has its panel restored in place.
   const loadAnalyses = (list, gone)=> deck.load(list, s=> readAnalysis(s, gone), a=> panelOf(a).restore(a.states[a.type] || {}));
 
-  /* A spectrum (textdata.js: its encoding, separator, decimal mark and quotes found from
-     the file), read in this order (from v510; the other formats as GC reads its own):
-     - the standard format (drsStandard): its first two columns, the wavelength (nm) and
-       %R or F(R) as its header says, read with no word, as to v509;
-     - any other file: the columns its header names (drsColumns), read with a warning;
-     - columns not named, or not one way only: the file is not loaded, and the alert says
-       why (the error).
-     The points that are no physical value are left out (drsPoints). The file itself is
-     kept as it came (rawBytes), for its download; a project keeps what was read, and opens
-     as it was. One with no point left is not loaded, and the alert says so (one whose rows
-     all had an empty cell went without a word, to v494). To v509 every file was read from
-     its first two columns, the second as a header above it said: F(R) with no header (two
-     bare columns of numbers), %R under a line naming it (a JASCO export's YUNITS,%R), and
-     a row with an empty cell between its numbers (350,,0.5) left out, without a word. */
-  function readDrs(text){
-    const lines = textLines(text), t = readXY(lines), std = t && drsStandard(lines, t), c = std || drsColumns(lines);
-    if (c.error) return { error: c.error };
-    const { wl, FR, left } = drsPoints(c.t, c.R);
-    if (!wl.length) return { error: Object.keys(left).length ? `no point with a physical value: ${leftText(left)}` : NO_DATA };
-    return { wl, FR, warn: !std, ...(c.R ? { read: 'R%' } : std ? {} : { head: true }), ...(Object.keys(left).length ? { left } : {}) };
-  }
-  /* The standard format, the Cary 5000's export, as the user's own files are: the sample's
-     name on the first line, the columns' header on the second, "Wavelength (nm)" then "%R"
-     (the reflectance in percent, R = value/100 and F(R) = (1 − R)²/2R) or "F(R)", nothing
-     else in either (a unit after F(R), "(a.u.)" say, makes it another format), any case,
-     any separators after them, and the data from the third, two columns of numbers
-     (readXY), under whatever separator and decimal mark the reader finds (lines as it
-     counts them: a blank one is none). Its rows are read from their first two fields: a
-     row with an empty cell between its numbers (350,,0.5) gives 350 and nothing, and is
-     left out, as to v509; the Cary writes none (each row is "wavelength,%R,"). Under a run
-     of spaces, which may split the names too, the header is read whole, its quotes
-     dropped. The one place that decides the standard (to v501 any header naming R% or
-     F(R), on any line above the data, was standard, with no word).
-     → { R: whether the column is %R, t: the two columns (readXY) } or null */
-  const STD_WL = /^wavelength\s*\(\s*nm\s*\)$/i, STD_R = /^%\s*r$/i, STD_F = /^f\s*\(\s*r\s*\)$/i;
-  const STD_LINE = /^wavelength\s*\(\s*nm\s*\)\s+(\S.*)$/i;
-  function drsStandard(lines, t){
-    if (t.rows.findIndex(r=> isFinite(parseNum(r[0])) && isFinite(parseNum(r[1]))) !== 2) return null;
-    let h = null;
-    if (t.sep[0] === ' '){ const m = STD_LINE.exec(lines[1].replace(/"/g, '').trim()); h = m && m[1].trim(); }
-    else { const f = splitFields(lines[1], t.sep); while (f.length && f[f.length - 1] === '') f.pop(); h = f.length === 2 && STD_WL.test(f[0]) ? f[1] : null; }
-    return h && (STD_R.test(h) || STD_F.test(h)) ? { R: STD_R.test(h), t } : null;
-  }
-  /* Any other file: its columns found by their names in its header, as GC finds its own
-     (textdata.js readTable): the header the first line naming a wavelength column and one
-     of F(R) or %R, the data the lines under it, the separator the one under which most
-     lines are data (both those columns numbers), each column read by its place in the
-     header, so that an empty cell in another column shifts nothing (350,,50 under
-     "Wavelength,,%R" is 350 and 50). A first such line with no data under it (a title
-     whose words under spaces name them, "Kubelka-Munk F(R) vs wavelength") is no header:
-     the one nearest above the first line of data is, as drsReading read up from the data
-     to v509. The names, any case:
-       the wavelength in nm: Wavelength, λ or nm, with or without its unit, "(nm)", "[nm]",
-         "/nm", "nm", "in nm", ", nm", "_nm", "nm." ("Wavelength nm."); a wavelength in
-         another unit, Å, µm, eV, cm⁻¹… ("(eV)", "in eV"), is not read: said;
-       F(R): F(R) anywhere in the name ("F(R) (a.u.)");
-       the reflectance in percent: R%, %R, R %, % R, R (%), R [%], Reflectance (%)…
-     Other columns are not read. Under a run of single spaces, which splits names too, the
-     header's names are its words, each with the unit after it ('Wavelength (nm) R (%)':
-     two; 'Wavelength nm % R': two, as drsReading read such a line whole to v509); under
-     runs of two or more, its fields, else its words so.
-     Columns named one way only, a wavelength and one of F(R) or %R: read, the second as it
-     is named. Two wavelength columns, both F(R) and %R, two of either (a Cary export of
-     several samples side by side), no such header: not read, and the error says why (to
-     v509 those with two columns of numbers were read, as F(R) when no header named it; the
-     others were refused with no reason).
-     → { R: whether the column is %R, t: { rows: each line's two cells, x, y } } or { error } */
-  const R_HEAD = /^(r\s*%|%\s*r|(r|reflectance)\s*(\(\s*%\s*\)|\[\s*%\s*\]))$/i, F_HEAD = /f\s*\(r\)/i;
-  const WL_HEAD = /^((wavelength|λ)([\s,_]*(in\s+)?(\(\s*nm\.?\s*\)|\[\s*nm\.?\s*\]|\/\s*nm\.?|nm\.?))?|nm\.?)$/i, WL_UNIT = /^(wavelength|λ)([\s,_]*(in\s+)?(\(.*\)|\[.*\]|\/.*)|,?\s+in\s+\S.*)$/i;
-  const kindOf = s => WL_HEAD.test(s) ? 'wl' : F_HEAD.test(s) ? 'F' : R_HEAD.test(s) ? 'R' : WL_UNIT.test(s) ? 'unit' : '';
-  /* A line's words, each with what follows it in brackets, a lone '%' or '/unit': "% R" one
-     word, its '%' not the word's before it; "Wavelength nm", "Wavelength in eV" one word. */
-  const WORDS = /((wavelength|λ),?\s+(in\s+[^\s([/]+|nm\.?(?=\s|$))|%\s*r(?![^\s([/])|[^\s([/]+)(\s*(\([^)]*\)|\[[^\]]*\]|%(?=\s|$)(?!\s+r(\s|$))|\/\s*[^\s([]+))*|\S+/gi;
-  const words = f => f.join(' ').match(WORDS) || [];
-  // The columns `names` names, when a wavelength and F(R) or %R among them (n: how many).
-  function columnsOf(names, n){
-    const c = { wl: [], F: [], R: [] };
-    names.forEach((s, i)=>{ const k = kindOf(s); if (c[k]) c[k].push(i); });
-    if (!c.wl.length || !(c.F.length + c.R.length)) return null;
-    return { ...c, x: c.wl[0], y: Math.min(...c.F, ...c.R), ...(n ? { n } : {}) };
-  }
-  function drsHead(f, sep){
-    const c = sep === ' ' ? null : columnsOf(f);
-    if (c || sep[0] !== ' ') return c;
-    const w = words(f);
-    return columnsOf(w, w.length);
-  }
-  const NO_HEAD = 'no header naming its columns: the wavelength in nm, and F(R) or %R', NO_DATA = 'no line of data read under its header';
-  // Whether a line is two numbers (its first two fields not empty) under `sep`.
-  const twoNums = (l, sep)=>{ const v = splitFields(l, sep).filter(c=> c !== ''); return isNum(v[0]) && isNum(v[1]); };
-  function drsColumns(lines){
-    const isRow = (r, c)=> isNum(r[c.x]) && isNum(r[c.y]), d = lines.findIndex(l=> SEPS.some(s=> twoNums(l, s)));
-    let tb = readTable(lines, drsHead, isRow), h = d;
-    // A line naming them with no data under it is no header: read again from the one
-    // nearest above the first line of data.
-    if (!tb){ while (--h >= 0 && !SEPS.some(s=> drsHead(splitFields(lines[h], s), s))); if (h > 0) tb = readTable(lines.slice(h), drsHead, isRow); }
-    if (!tb) return { error: noColumns(lines, d) };
-    const c = tb.cols, many = [c.wl.length > 1 && `${c.wl.length} wavelength columns`,
-      c.F.length && c.R.length ? 'both F(R) and %R' : c.F.length > 1 ? `${c.F.length} F(R) columns` : c.R.length > 1 && `${c.R.length} %R columns`].filter(Boolean);
-    if (many.length) return { error: `which columns to read cannot be told: its header names ${many.join(' and ')}` };
-    const rows = tb.rows.map(r=> [r[c.x], r[c.y]]), x = [], y = [];
-    for (const r of rows){ const a = parseNum(r[0]), b = parseNum(r[1]); if (isFinite(a) && isFinite(b)){ x.push(a); y.push(b); } }
-    return { R: c.R.length > 0, t: { rows, x, y } };
-  }
-  /* Why no columns were found: the line nearest above the first line of data `d` (two
-     numbers) that names any column of the kinds read is the header, and says what it lacks,
-     its names read as the data's separator splits them (one under which that line is two
-     numbers) into two or more: of those, the one naming the most kinds, the first so; under
-     any other only when none does (a header written with ',' over data with ';', which
-     ';' leaves whole). Its names both kinds there: a header with no line of data read under
-     it (a ',' both the separator and the decimal mark, a blank cell under a run of spaces,
-     more names than the data have fields, the header with one separator and the data with
-     another). No such line: no header. */
-  function noColumns(lines, d){
-    const at = d < 0 ? SEPS : SEPS.filter(s=> twoNums(lines[d], s));
-    // A line's names under each separator in `ss` (under spaces its fields and its words, as
-    // drsHead reads them), `min` or more, the kinds each names: the one naming the most.
-    const named = (l, ss, min)=> ss.flatMap(s=>{ const f = splitFields(l, s); return s === '  ' ? [f, words(f)] : [s === ' ' ? words(f) : f]; })
-      .filter(ns=> ns.length >= min).map(ns=>{ const k = {}; for (const n of ns){ const t = kindOf(n); if (t && !k[t]) k[t] = n; } return { k, n: !!(k.wl || k.unit) + !!(k.F || k.R) }; })
-      .reduce((a, b)=> b.n > (a ? a.n : 0) ? b : a, null);
-    for (let i = (d < 0 ? lines.length : d) - 1; i >= 0; i--){
-      const { k } = named(lines[i], at, 2) || named(lines[i], SEPS, 1) || {};
-      if (!k) continue;
-      if (k.wl && (k.F || k.R)) return NO_DATA;
-      const u = k.unit && k.unit.length > 40 ? k.unit.slice(0, 39) + '…' : k.unit;
-      return 'its header names ' + [!k.wl && (u ? `the wavelength in another unit than nm (${u})` : 'no wavelength column in nm'), !k.F && !k.R && 'no F(R) or %R column'].filter(Boolean).join(' and ');
-    }
-    return NO_HEAD;
-  }
-  /* The points of a spectrum that are physical values, the others left out and counted by
-     why: a wavelength not above 0 (wl), a reflectance outside 0–100 % (r) or of 0, where
-     F(R) is ∞ (zero), F(R) below 0 (neg), a value that is no finite number (inf: a NaN or
-     an Inf written in the file, a number past the doubles' range). To v494 they were kept,
-     and the analysis left out of each curve it made the values it could not take (F(R) ≤ 0
-     under a logarithm). */
-  function drsPoints(t, R){
-    const wl = [], FR = [], left = {}, out = k =>{ left[k] = (left[k] || 0) + 1; };
-    t.x.forEach((x, i)=>{
-      const v = t.y[i], F = R ? (1 - v/100)**2/(2*v/100) : v;
-      if (!(x > 0)) out('wl');
-      else if (R && !(v >= 0 && v <= 100)) out('r');
-      else if (!isFinite(F)) out(R ? 'zero' : 'inf');
-      else if (F < 0) out('neg');
-      else { wl.push(x); FR.push(F); }
-    });
-    // (the rows x and y leave out: a wavelength beside a number that is no finite one)
-    for (const r of t.rows) if (isFinite(parseNum(r[0])) && (isNum(r[1]) || /^[+-]?(nan|inf(inity)?)$/i.test(String(r[1] || '').trim())) && !isFinite(parseNum(r[1]))) out('inf');
-    return { wl, FR, left };
-  }
-  // The points left out, said: how many, and why.
-  const LEFT = { wl: 'a wavelength not above 0', r: 'R outside 0–100 %', zero: 'R = 0 %, where F(R) is infinite', neg: 'F(R) < 0', inf: 'a value that is no finite number' };
-  function leftText(left){
-    const ks = Object.keys(LEFT).filter(k=> left[k] > 0), n = ks.reduce((t, k)=> t + left[k], 0);
-    return `${n} point${n > 1 ? 's' : ''} left out (${ks.map(k=> `${left[k]} with ${LEFT[k]}`).join(', ')})`;
-  }
-  /* What the alert says of a file: how a file of no standard format was read (drsColumns),
-     and the points left out (to v501 the files of a non-standard format were named, no
-     more). A file in the standard format has no word on how it was read: the file list's
-     note says it (to v501 an R% file was said here, the Cary's own export as well; to v501
-     a header naming R% or F(R) anywhere above the data was a standard format). A file with
-     no header naming F(R) or %R is refused (from v510): only a project saved before holds
-     one, read as F(R), and says so as it did (none). */
-  const WARNS = { R: 'not a standard format: its header names the reflectance in %, read as %R', F: 'not a standard format: its header names F(R), read as F(R)',
-    none: 'no header naming the columns F(R) or R%: read as F(R)' };
-  const warnOf = f => f.read === 'R%' ? 'R' : f.head ? 'F' : 'none';
-  function fileNotes(f){
-    const out = [];
-    if (f.warn) out.push(WARNS[warnOf(f)]);
-    if (f.left && Object.keys(LEFT).some(k=> f.left[k] > 0)) out.push(leftText(f.left));
-    return out;
-  }
-  /* The file list's note, right of the label (to v501 a column of its own left of it): how
-     the file was read, %R (the reflectance in percent, converted to F(R)) or F(R), its title
-     saying it in full: the second column of the standard format; in any other, the column
-     its header names (to v509 the second column there too), and a format not standard. A
-     project saved before the R% reading holds none: F(R), as it was read. */
-  const READS = { R: ['%R', 'read as the reflectance in %, converted to F(R)'], F: ['F(R)', 'read as F(R)'] };
-  function readNote(f){
-    const [t, how] = READS[f.read === 'R%' ? 'R' : 'F'], w = f.warn && warnOf(f);
-    const title = !w ? `second column ${how}` : w === 'none' ? `second column ${how}, with no header naming it` : `the ${t} column its header names, ${how}; not a standard format`;
-    return `<span title="${esc(title)}">${esc(t)}</span>`;
-  }
   kit.dropText(readDrs, had =>{
     warnDismissed = false;
     allFiles.slice(had).forEach(keepSpectrum);
@@ -1610,13 +1626,6 @@ function createTauc({ key, root, layer, shown }){
     renderLogView();
     cards().forEach(renderAnalysisRes);
   }
-  /* The reflectance in percent from F(R), whatever the file's second column was read as:
-     the exact inverse of F = (1 − R)²/2R, R = 1 + F − √(F² + 2F), written as
-     1/(1 + F + √(F² + 2F)), the same number without the two near-equal terms that cancel
-     where F is large. For a file read as R% it gives its own values back, to round-off.
-     F(R) < 0 (a project from before the points that are no physical value were left out
-     may hold it) has none. */
-  const reflOf = F => F >= 0 ? 100/(1 + F + Math.sqrt(F*F + 2*F)) : NaN;
   // R (%) against λ, every sample's, on 0–100 %, all R can be.
   function renderReflView(){
     if (!resPlotR){
@@ -1981,19 +1990,19 @@ function createTauc({ key, root, layer, shown }){
   /* ---- The instance (tabs.js) ----
      Its tab, hidden, keeps its plots until it sleeps: they are all it could let go and draw
      again, 0.6 MB of heap for 10 spectra and two cards, and drawing them again takes 0.25 s
-     (the analyses made again for every sample; NOTES-drs.md). */
+     (the analyses made again for every sample; measured at v518). */
   return {
     // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
     // menu and its listeners. Its section and layer are the shell's to take out.
     destroy(){ kit.destroy(); },
-    /* What it shows beside its state (utils.js shownOf, tabs.js: kept as its tab sleeps and
-       in its record, b2v4): the sample every card shows, by its file's name and its place
-       among the included; none, the first. To b2v4 a tab woken or reloaded showed the first:
-       the sample is no part of the state, so that stepping it is no step of the history and
-       no change unsaved (as in v517). */
-    shows: ()=> currIndex > 0 && files[currIndex] ? { sample: currIndex, name: files[currIndex].name } : null,
+    /* What it shows beside its state (tabs.js, utils.js shownOf: kept as its tab sleeps and
+       in its record): the sample every card shows, by its file's name and its place among
+       the included; none, the first. To v517 a tab shown again or reloaded showed the
+       first: the sample is no part of the state, so that stepping it is no step of the
+       history and no change unsaved (as in v517). */
+    shows(){ return currIndex > 0 && files[currIndex] ? { sample: currIndex, name: files[currIndex].name } : null; },
     // (shown by its next restore: a wake's, a reload's)
-    showNext: v =>{ toShow = isObj(v) ? v : null; },
+    showNext(v){ sampleNext = isObj(v) ? v : null; },
   };
 }
 registerModule('tauc', createTauc);

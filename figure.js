@@ -158,7 +158,7 @@ function seriesFromPlot(plot, legendEl){
   // placed, coloured, textured and divided as bars are, and drawn as boxes.
   const groups = new Map();
   for (const e of stored){
-    if (e.type !== 'bar' && e.type !== 'barpx' && e.type !== 'box') continue;
+    if (e.type !== 'barpx' && e.type !== 'box') continue;
     const color = e.color || '#3aa0ff';
     // Grouped by the name the plot gave the bar when it has one, else by colour.
     const gk = e.label || color;
@@ -170,10 +170,10 @@ function seriesFromPlot(plot, legendEl){
       g.xs.push(e.xc); g.ys.push(e.mean); g.errs.push(isFinite(e.err) ? e.err : 0); g.keys.push(null);
       continue;
     }
-    g.xs.push(e.type === 'barpx' ? e.xc : (e.x0 + e.x1) / 2);
-    g.ys.push(e.type === 'barpx' ? e.y1 : e.y1);
+    g.xs.push(e.xc);
+    g.ys.push(e.y1);
     g.errs.push(0);
-    g.keys.push(e.type === 'barpx' ? (e.xc + '@' + (e.dx || 0)) : null);
+    g.keys.push(e.xc + '@' + (e.dx || 0));
   }
   if (groups.size){
     const errs = new Map();
@@ -729,7 +729,7 @@ function drawFigure(svg, ink, paper, extra){
     const oX = mL + ((W - mL - mR) - innerW) * fx;
     const oY = mT + ((H - mT - mB) - innerH) * fy;
     const cw = innerW / F.cols, ch = innerH / F.rows;
-    return { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch };
+    return { xRot, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch };
   };
   // Tilt chosen automatically: the least, from 30° to 90° in 5° steps, at which every
   // panel's names stay between its sides and clear of one another; failing that 90°.
@@ -753,7 +753,7 @@ function drawFigure(svg, ink, paper, extra){
     lay = layoutFor(rot, false);
   } else lay = layoutFor(Math.max(0, Math.min(90, F.catRot || 0)), true);
   lastCatRot = lay.xRot;
-  const { xRot, xRad, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch } = lay;
+  const { xRot, xDrop, legendH, mL, mR, mT, mB, innerW, innerH, oX, oY, cw, ch } = lay;
   lastInner = { w: +(innerW / PX_MM).toFixed(2), h: +(innerH / PX_MM).toFixed(2) };
 
   F.panels.forEach((p, pi)=>{
@@ -2302,17 +2302,6 @@ const alignPicker = {
   },
 };
 
-// One end of the manual range for the currently selected column / row. Shows the
-// resolved auto value when nothing has been typed yet, so the field starts sensible.
-function manNum(label, bag, end){
-  const i = F.rangePanel | 0;
-  const cur = F[bag][i];
-  const r = computeRanges();
-  const auto = bag === 'xMan' ? (r.xOf[i] || [0,1]) : (r.yOf[i] || [0,1]);
-  const v = cur ? cur[end] : auto[end];
-  return `<label class="fig-row"><span>${label}</span>${numField(`data-man="${bag}" data-end="${end}"`, +(+shownOf(bag === 'yMan' ? 'y' : 'x', v)).toPrecision(6), -1e12, 1e12)}</label>`;
-}
-
 /* Axis-title editor: an ordinary text field over the ^{}/_{} notation, plus the two
    things that notation is for and a tray of characters a keyboard does not offer. */
 const RICH_CHARS = 'α β γ δ ε ζ η θ κ λ μ ν ξ π ρ σ τ φ χ ψ ω Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω · × ÷ ± ∓ ° ′ ″ Å ℏ ∞ ≈ ≠ ≤ ≥ → ← ↔ ‰ √ ∫ ∂ ∆ ⟨ ⟩'.split(' ');
@@ -2700,18 +2689,6 @@ function catLabel(el, x, runs, px){
     const t = svgEl('tspan', over ? { 'text-decoration': 'overline', ...(g ? { dx: g } : {}) } : {});
     t.textContent = s; el.appendChild(t);
   });
-}
-
-/* The name of one bar: the category it stands on, failing that its place in the series.
-   Where several bar series share those categories — raw against corrected, H2 against
-   O2 — the category alone would name two different bars the same, so the series it
-   came from is kept alongside it. */
-function barName(s, j){
-  const cat = F.cats && F.cats.find(c=> c.x === s.xs[j]);
-  if (!cat) return `${s.label} ${j + 1}`;
-  const txt = catText(s.xs[j]);
-  const many = F.series.some(t=> t.kind === 'bar' && t.id !== s.id);
-  return many ? `${txt} ${s.label}` : txt;
 }
 
 /* Divisions: colour groups inside one bar series. A bar chart draws one quantity per

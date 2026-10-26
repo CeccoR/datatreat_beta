@@ -242,5 +242,5 @@ function testsHtml(phs){
   return html;
 }
 
-export { esc, SYSTEM_NAMES, modelsLine, summaryOf, refinedOf, SUBS, barHtml, hklHtml, IDX_IN, IDX_PAIR, barIdx, optBars, formulaPretty,
+export { esc, modelsLine, summaryOf, refinedOf, hklHtml, barIdx, optBars, formulaPretty,
   f3, fmtP, solidCaption, instrLine, group, warnNote, fitLineHtml, phaseRowsHtml, cellDetailsHtml, settingsBodyHtml, widthsTableHtml, testsHtml };

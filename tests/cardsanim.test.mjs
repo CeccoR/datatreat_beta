@@ -14,8 +14,9 @@
      or by its arrow goes on from where it had got to, its height sampled frame by frame with
      no jump (XRPD, DRS, GC, EPR); a move undone and a kind switched back: nothing animated;
      a card a step leaves in its place not put in again (the focus kept in it);
-   - nothing animated by a tab switched to, a project opened, a CSV export's state, the
-     start, nor with the motion reduced; a step's animations ended at once by such a load. */
+   - nothing animated by a tab switched to, a project opened, a project's CSVs read, the
+     start, nor with the motion reduced; a step's animations ended at once by a state
+     loaded. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, settle, moduleState, switchTab } from './helpers.mjs';
@@ -426,7 +427,7 @@ test('(4) a card still growing folded or unfolded by the next step or by its arr
   } finally { await close(); }
 });
 
-test('(3) nothing animated by a tab switch, a project opened, a CSV export\'s state, the start; nor with the motion reduced', async ()=>{
+test('(3) nothing animated by a tab switch, a project opened, a project\'s CSVs read, the start; nor with the motion reduced', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await record(page);
@@ -451,32 +452,33 @@ test('(3) nothing animated by a tab switch, a project opened, a CSV export\'s st
     await switchTab(page, 1); await rest(page, mod);
     await exact(page, mod, 'tab 2');
     assert.deepEqual(await calls(page), [], 'tab switches: nothing animated');
-    // A project opened (the tab's restore of it) and a CSV export's state, read in and out.
+    // A project opened (the tab's restore of it), and a project's CSVs read (in an instance of
+    // their own: utils.js withState).
     await page.evaluate(async m=>{ const u = await import('./utils.js'), db = await import('./db.js'); u.restoreModuleState(m, db.decode(window.__both)); }, mod);
     await rest(page, mod);
     await exact(page, mod, 'project opened');
-    await page.evaluate(async m=>{ const u = await import('./utils.js'), s = u.getModuleState(m); u.runWithModuleState(m, { ...s, cards: s.cards.map(c=> ({ ...c, collapsed: !c.collapsed })).slice(1) }, ()=>{}); }, mod);
+    await page.evaluate(async m=>{ const u = await import('./utils.js'), s = u.getModuleState(m); u.withState(m, { ...s, cards: s.cards.map(c=> ({ ...c, collapsed: !c.collapsed })).slice(1) }, ()=>{}); }, mod);
     await rest(page, mod);
-    assert.deepEqual(await calls(page), [], 'a project opened, a CSV export\'s state: nothing animated');
-    await exact(page, mod, 'CSV export\'s state');
-    // Such a load while a card an undo brought back grows, and while the copy of one a redo
-    // took away shrinks, ends them at once.
+    assert.deepEqual(await calls(page), [], 'a project opened, its CSVs read: nothing animated');
+    await exact(page, mod, 'CSVs read');
+    // A state loaded (its history put back after, as a wake does) while a card an undo brought
+    // back grows, and while the copy of one a redo took away shrinks, ends them at once.
     const left = m => page.evaluate(m=>{ const l = document.getElementById(m + 'Analyses'); return { copies: [...l.children].filter(e=> !e.classList.contains('an-card') && !e.classList.contains('an-add-bar')).length, animated: [...l.querySelectorAll('.an-card')].filter(e=> e.getAnimations().length || e.getAttribute('style')).length }; }, m);
-    const csvState = ()=> page.evaluate(async m=>{ const u = await import('./utils.js'); u.runWithModuleState(m, u.getModuleState(m), ()=>{}); }, mod);
+    const loaded = ()=> page.evaluate(async m=>{ const u = await import('./utils.js'), h = u.getModuleHistory(m); u.restoreModuleState(m, u.getModuleState(m)); u.setModuleHistory(m, h); }, mod);
     await closeCard(page, mod, 1);
     await pace(page, PACE);
     await key(page); await inside(page, 60);
     assert.equal((await left(mod)).animated, 1, 'a card growing');
-    await csvState();
-    assert.deepEqual(await left(mod), { copies: 0, animated: 0 }, 'a CSV export\'s state over a growth: ended at once');
+    await loaded();
+    assert.deepEqual(await left(mod), { copies: 0, animated: 0 }, 'a state loaded over a growth: ended at once');
     await rest(page, mod);
-    await exact(page, mod, 'after a CSV export\'s state over a growth');
+    await exact(page, mod, 'after a state loaded over a growth');
     await key(page, true); await inside(page, 60);
     assert.equal((await left(mod)).copies, 1, 'a copy shrinking');
-    await csvState();
-    assert.deepEqual(await left(mod), { copies: 0, animated: 0 }, 'a CSV export\'s state over a copy shrinking: ended at once');
+    await loaded();
+    assert.deepEqual(await left(mod), { copies: 0, animated: 0 }, 'a state loaded over a copy shrinking: ended at once');
     await rest(page, mod);
-    await exact(page, mod, 'after a CSV export\'s state over a copy shrinking');
+    await exact(page, mod, 'after a state loaded over a copy shrinking');
     await pace(page, 1);
     // The motion reduced: the steps put at once, the card back in view all the same.
     await page.emulateMedia({ reducedMotion: 'reduce' });

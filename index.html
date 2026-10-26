@@ -410,11 +410,9 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v521</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v522</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
-  <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js;
-       each analysis module is its own file and can be added independently. -->
   <!-- Save project as… dialog -->
   <div id="projSaveAsModal" class="modal-backdrop" style="display:none">
     <div class="modal-box">
@@ -426,7 +424,6 @@
       </div>
     </div>
   </div>
-  <!-- SEM: copy the current crop to other images -->
   <!-- New project: a mini home that asks which technique to start, then opens a tab -->
   <div id="projNewModal" class="modal-backdrop" style="display:none">
     <div class="modal-box">
@@ -447,6 +444,9 @@
   <button id="scrollTopBtn" type="button" aria-label="Back to top" title="Back to top">&#8593;</button>
   <!-- The section in the URL hash shown before paint, and the service worker -->
   <script src="boot-body.js"></script>
+  <!-- Native ES modules (no bundler). Shared code in utils.js / plot.js; each analysis
+       module is its own file, registered per tab (utils.js registerModule) as it loads,
+       before tabs.js. -->
   <script type="module" src="utils.js"></script>
   <script type="module" src="plot.js"></script>
   <script type="module" src="tauc.js"></script>

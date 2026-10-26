@@ -9,21 +9,21 @@ import { decodeText } from './textdata.js';
 /* =========================================================
    EPR MODULE
 
-   MADE PER TAB (b2): createEpr is the module's factory (utils.js registerModule), each
+   MADE PER TAB (v518): createEpr is the module's factory (utils.js registerModule), each
    open EPR tab that is awake an instance of its own, made of its copy of index.html's
    section (root) and a layer (the kinds' menu). Its elements are found in root, a card's
    in its card, never in the page: its ids are the page's only while it is on show. Its
    registries go by its key, the tab's id (moduleKit). It draws only on show: hidden (a
    state read out for its CSVs) it draws nothing, and its redraw draws all as it is shown;
    a tab shown again with nothing changed and at the same width draws nothing (its draw
-   key). It has no job that runs on while hidden. API.md says how a module is made so.
+   key). It has no job that runs on while hidden. utils.js registerModule says how a module
+   is made so.
 ========================================================= */
 /* A spectrum's field and intensities, which nothing changes once read: fixed (db.js), the
-   same arrays in a tab's states and its parked state (to b2v2 a parked state held a copy).
-   Kept by its .DTA's bytes (the file as it came, the same array in its states and its
-   record): a tab of a record read back (a reload, a project opened), which holds copies,
-   takes the arrays another state holds of that file, the same values, rather than keeping
-   both. */
+   same arrays in a tab's states and its parked state. Kept by its .DTA's bytes (the file
+   as it came, the same array in its states and its record): a tab of a record read back
+   (a reload, a project opened), which holds copies, takes the arrays another state holds
+   of that file, the same values, rather than keeping both. */
 const spectra = new WeakMap();
 const sameArr = (a, b)=> a === b || (a.length === b.length && a.every((v, i)=> Object.is(v, b[i])));
 const dtaOf = f =>{ const r = Array.isArray(f.rawFiles) && f.rawFiles.find(r=> r && /\.dta$/i.test(r.name)); return r && r.bytes instanceof Uint8Array ? r.bytes : null; };
@@ -38,16 +38,119 @@ function keepSpectrum(f){
 }
 /* A spectrum smoothed over a card's width, kept by its intensities (utils.js keeper: while
    a state, a tab asleep or a history holds the spectrum) under its field and the width: a
-   tab woken, an undo, a redraw and the CSVs take it as made (to b2v3 every drawing made it
+   tab woken, an undo, a redraw and the CSVs take it as made (to v517 every drawing made it
    twice a spectrum, and the CSVs again). */
 const smoothKept = keeper('epr-smoothed', 8);
 const smoothedOf = (f, w)=> smoothKept(f.a, exactKey([objId(f.b), w]), ()=> boxSmooth(f.b, f.a, w));
+
+/* ---- Reading a pair, .DTA and .DSC (pure: the module's, for every instance) ---- */
+// A .DSC's parameters, a name and its value a line.
+function parseDsc(text){
+  const p = {};
+  for (const line of text.split(/\r?\n/)){
+    const m = line.match(/^(\w+)\s+(.*)/);
+    if (m) p[m[1]] = m[2].trim();
+  }
+  return p;
+}
+
+// A .DSC value without the quotes it may be written in ('G', 'mT').
+const dscWord = v => String(v || '').replace(/['"]/g, '').trim();
+/* The field axis in mT, rescaled to 9.5 GHz. XMIN/XWID are in the unit XUNI
+   names, Gauss unless it says mT; with no MWFQ there is no frequency to rescale
+   by, and the field is the one measured. */
+// h·(9.5 GHz)/μ_B, in mT: the field of g = 1 at 9.5 GHz, so that g = G_AT_95 / B.
+const G_AT_95 = 6.62607015e-34 * 9.5e9 / 9.2740100783e-24 * 1e3;
+function buildBAxis(p){
+  const npts  = parseInt(p.XPTS);
+  const toG   = dscWord(p.XUNI).toLowerCase() === 'mt' ? 10 : 1;
+  const xmin  = parseFloat(p.XMIN) * toG;  // Gauss
+  const xwid  = parseFloat(p.XWID) * toG;  // Gauss
+  const mwfq  = parseFloat(p.MWFQ);        // Hz
+  const k     = mwfq > 0 ? 9.5e8 / mwfq : 0.1;
+  const b = [];
+  for (let i = 0; i < npts; i++)
+    b.push((xmin + xwid * i / (npts - 1)) * k);
+  return b;
+}
+
+/* A pair read: the spectrum, or { error } saying why it cannot be: a field axis needs
+   two points at least and its start and width (with XPTS 1 every field was NaN, to
+   v483), and the data must be in a format the reader knows and as long as XPTS says. */
+async function processPair(stem, dtaFile, dscFile){
+  const dscBytes = new Uint8Array(await dscFile.arrayBuffer());
+  const p = parseDsc(decodeText(dscBytes));
+  const npts = parseInt(p.XPTS);
+  if (!(npts >= 2)) return { error: p.XPTS == null ? 'its .DSC gives no XPTS, the number of points' : `XPTS ${dscWord(p.XPTS)}: a spectrum needs two points at least` };
+  if (!isFinite(parseFloat(p.XMIN)) || !isFinite(parseFloat(p.XWID))) return { error: 'its .DSC gives no field axis (XMIN and XWID)' };
+
+  const bigEndian = (p.BSEQ || 'BIG') !== 'LIT';
+  const dtaBuf = await dtaFile.arrayBuffer();
+  const view = new DataView(dtaBuf);
+  /* The values as IRFMT stores them (64-bit floats unless it says otherwise), and
+     for complex data (IKKF CPLX) the real part of each real/imaginary pair: read
+     as plain doubles, those came out as garbage or stretched over twice the axis. */
+  const fmt = dscWord(p.IRFMT).split(',')[0].toUpperCase() || 'D';
+  const READ = { D: [8, (o, le)=> view.getFloat64(o, le)], F: [4, (o, le)=> view.getFloat32(o, le)],
+                 I: [4, (o, le)=> view.getInt32(o, le)],   S: [2, (o, le)=> view.getInt16(o, le)], C: [1, o=> view.getInt8(o)] };
+  if (!READ[fmt]) return { error: `IRFMT ${fmt}: a data format not read` };
+  const [size, read] = READ[fmt];
+  const stride = dscWord(p.IKKF).split(',')[0].toUpperCase() === 'CPLX' ? 2 : 1;
+  if (dtaBuf.byteLength < npts * stride * size) return { error: `its .DTA holds fewer than the ${npts} points its .DSC gives` };
+  const s = [];
+  for (let i = 0; i < npts; i++)
+    s.push(read(i * stride * size, !bigEndian));
+
+  const b = buildBAxis(p);
+
+  // linear baseline correction
+  const n = s.length;
+  const slope = (s[n-1] - s[0]) / (b[n-1] - b[0] || 1);
+  const a = s.map((v, i) => v - (s[0] + slope * (b[i] - b[0])));
+
+  // Whether the field was rescaled to 9.5 GHz: with no MWFQ it is the one measured.
+  return { name: stem, label: stem, b, a, rescaled: parseFloat(p.MWFQ) > 0,
+           rawFiles: [ { name: dscFile.name, bytes: dscBytes },
+                       { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
+}
+
+/* ---- A card's kinds, instructions, defaults and markup ---- */
+const KINDS = { spectra: 'Stacked Spectra' };
+const EPR_INFO = `Spectra are stacked for visual comparison, each normalized to the largest peak-to-peak (global) or to its own (local), or left as they are (none: the stacking only spaces them). The <b>smoothing</b> takes at each point the mean of the line through the points over a window w wide (mT, on the field as plotted) centred on it, a box convolution, cut short at the ends; 0 is none. Being a width on the field axis, one setting smooths alike spectra recorded at different steps; its field shows beside it the points it spans at their steps (a range when the steps differ). The field axis is each spectrum's field <b>rescaled to 9.5 GHz</b>, B·(9.5 GHz / ν) with ν the microwave frequency of its .DSC (MWFQ), so that spectra recorded at different frequencies line up by g; the CSV gives the field the same way (Bfield_mT_at_9.5GHz). The top axis reads <b>g = hν / (μ<sub>B</sub>·B)</b> at 9.5 GHz. A file without its frequency is shown on the field it was measured at, and then no g axis can be drawn. ${cardInfo(false, false)}`;
+// (the smoothing a width in mT, 0.2 about 10 points of a 1024-point, 20-mT sweep; to v510
+// a number of points, `smooth`, 10: readCard converts it)
+const DEF = { norm: 'global', smoothW: 0.2 };
+const P = a => 'epr' + a.id;
+const cardBody = a => `
+      <div class="row" style="align-items:flex-start">
+        <div class="col mw520" style="flex:2">${plotWrap(P(a) + 'Svg', { mod: 'epr', csv: 'epr_spectra.csv', name: 'EPR.svg', legend: P(a) + 'Legend' })}
+          <div id="${P(a)}Legend" class="legend"></div>
+        </div>
+        <div class="col mw260" style="align-self:flex-start">
+          <div class="txt-mini param-head">Parameters</div>
+          <label class="txt-label" for="${P(a)}Norm">Normalization</label>
+          <select id="${P(a)}Norm">${NORM_OPTIONS}</select>
+          <label class="txt-label" for="${P(a)}Smooth">Smoothing width (mT)</label>
+          <label class="wfield" title="The smoothing box's width, in mT on the plotted field (0: none); beside it, the points it spans at the spectra's steps"><input type="text" inputmode="decimal" id="${P(a)}Smooth" value="${DEF.smoothW}" autocomplete="off" aria-describedby="${P(a)}SmoothPts"><span class="wf-pts" id="${P(a)}SmoothPts"></span></label>
+        </div>
+      </div>`;
+/* The smoothed column: the box w wide (smooth.js; to v510 a moving average over N
+   points), then the user's normalisation — the background taken as the first point and
+   divided by the peak-to-peak (local = own, global = largest across samples), matching
+   the on-screen divisor; none: the smoothed trace as it is, background and all. */
+function smoothedOut(sms, norm){
+  if (norm==='none') return sms;
+  const ppks = sms.map(sm => (maxArr(sm)-minArr(sm)) || 1);
+  const gPP = Math.max(...ppks);
+  return sms.map((sm, k)=>{ const bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP; return sm.map(v=>(v-bg)/div); });
+}
+
 // An EPR tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createEpr({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
-  /* Hidden, nothing is drawn (API.md §6): `drawable()` says whether to draw, and when not
-     marks the instance to be drawn whole as it is shown (stale). `drawnAt`: the width it was
-     last drawn whole at, its draw key (redrawTab). */
+  /* Hidden, nothing is drawn (utils.js registerModule): `drawable()` says whether to draw,
+     and when not marks the instance to be drawn whole as it is shown (stale). `drawnAt`:
+     the width it was last drawn whole at, its draw key (redrawTab). */
   let stale = false, drawnAt = '';
   const drawable = ()=> shown() || !(stale = true);
   /* The module (modkit.js): every file loaded, in list order, {name, label, b[], a[]}, and
@@ -90,75 +193,6 @@ function createEpr({ key, root, layer, shown }){
     csv: ()=> files.length ? cards().map(a=> ({ name: `${fileSafe(a.name)} - epr_spectra.csv`, text: cardCsv(a) })) : [],
   });
   const { all: allFiles, files } = kit;
-
-  function parseDsc(text){
-    const p = {};
-    for (const line of text.split(/\r?\n/)){
-      const m = line.match(/^(\w+)\s+(.*)/);
-      if (m) p[m[1]] = m[2].trim();
-    }
-    return p;
-  }
-
-  // A .DSC value without the quotes it may be written in ('G', 'mT').
-  const dscWord = v => String(v || '').replace(/['"]/g, '').trim();
-  /* The field axis in mT, rescaled to 9.5 GHz. XMIN/XWID are in the unit XUNI
-     names, Gauss unless it says mT; with no MWFQ there is no frequency to rescale
-     by, and the field is the one measured. */
-  // h·(9.5 GHz)/μ_B, in mT: the field of g = 1 at 9.5 GHz, so that g = G_AT_95 / B.
-  const G_AT_95 = 6.62607015e-34 * 9.5e9 / 9.2740100783e-24 * 1e3;
-  function buildBAxis(p){
-    const npts  = parseInt(p.XPTS);
-    const toG   = dscWord(p.XUNI).toLowerCase() === 'mt' ? 10 : 1;
-    const xmin  = parseFloat(p.XMIN) * toG;  // Gauss
-    const xwid  = parseFloat(p.XWID) * toG;  // Gauss
-    const mwfq  = parseFloat(p.MWFQ);        // Hz
-    const k     = mwfq > 0 ? 9.5e8 / mwfq : 0.1;
-    const b = [];
-    for (let i = 0; i < npts; i++)
-      b.push((xmin + xwid * i / (npts - 1)) * k);
-    return b;
-  }
-
-  /* A pair read: the spectrum, or { error } saying why it cannot be: a field axis needs
-     two points at least and its start and width (with XPTS 1 every field was NaN, to
-     v483), and the data must be in a format the reader knows and as long as XPTS says. */
-  async function processPair(stem, dtaFile, dscFile){
-    const dscBytes = new Uint8Array(await dscFile.arrayBuffer());
-    const p = parseDsc(decodeText(dscBytes));
-    const npts = parseInt(p.XPTS);
-    if (!(npts >= 2)) return { error: p.XPTS == null ? 'its .DSC gives no XPTS, the number of points' : `XPTS ${dscWord(p.XPTS)}: a spectrum needs two points at least` };
-    if (!isFinite(parseFloat(p.XMIN)) || !isFinite(parseFloat(p.XWID))) return { error: 'its .DSC gives no field axis (XMIN and XWID)' };
-
-    const bigEndian = (p.BSEQ || 'BIG') !== 'LIT';
-    const dtaBuf = await dtaFile.arrayBuffer();
-    const view = new DataView(dtaBuf);
-    /* The values as IRFMT stores them (64-bit floats unless it says otherwise), and
-       for complex data (IKKF CPLX) the real part of each real/imaginary pair: read
-       as plain doubles, those came out as garbage or stretched over twice the axis. */
-    const fmt = dscWord(p.IRFMT).split(',')[0].toUpperCase() || 'D';
-    const READ = { D: [8, (o, le)=> view.getFloat64(o, le)], F: [4, (o, le)=> view.getFloat32(o, le)],
-                   I: [4, (o, le)=> view.getInt32(o, le)],   S: [2, (o, le)=> view.getInt16(o, le)], C: [1, o=> view.getInt8(o)] };
-    if (!READ[fmt]) return { error: `IRFMT ${fmt}: a data format not read` };
-    const [size, read] = READ[fmt];
-    const stride = dscWord(p.IKKF).split(',')[0].toUpperCase() === 'CPLX' ? 2 : 1;
-    if (dtaBuf.byteLength < npts * stride * size) return { error: `its .DTA holds fewer than the ${npts} points its .DSC gives` };
-    const s = [];
-    for (let i = 0; i < npts; i++)
-      s.push(read(i * stride * size, !bigEndian));
-
-    const b = buildBAxis(p);
-
-    // linear baseline correction
-    const n = s.length;
-    const slope = (s[n-1] - s[0]) / (b[n-1] - b[0] || 1);
-    const a = s.map((v, i) => v - (s[0] + slope * (b[i] - b[0])));
-
-    // Whether the field was rescaled to 9.5 GHz: with no MWFQ it is the one measured.
-    return { name: stem, label: stem, b, a, rescaled: parseFloat(p.MWFQ) > 0,
-             rawFiles: [ { name: dscFile.name, bytes: dscBytes },
-                         { name: dtaFile.name, bytes: new Uint8Array(dtaBuf) } ] };
-  }
 
   setupDropzone($('eprDropzone'), $('eprFiles'), async (fileList)=>{
     const existingStems = new Set(allFiles.map(f=>f.name));
@@ -206,25 +240,6 @@ function createEpr({ key, root, layer, shown }){
 
   /* ---- The analysis cards (cards.js): each its own normalisation and smoothing of the
      same spectra, stacked on its own plot ---- */
-  const KINDS = { spectra: 'Stacked Spectra' };
-  const EPR_INFO = `Spectra are stacked for visual comparison, each normalized to the largest peak-to-peak (global) or to its own (local), or left as they are (none: the stacking only spaces them). The <b>smoothing</b> takes at each point the mean of the line through the points over a window w wide (mT, on the field as plotted) centred on it, a box convolution, cut short at the ends; 0 is none. Being a width on the field axis, one setting smooths alike spectra recorded at different steps; its field shows beside it the points it spans at their steps (a range when the steps differ). The field axis is each spectrum's field <b>rescaled to 9.5 GHz</b>, B·(9.5 GHz / ν) with ν the microwave frequency of its .DSC (MWFQ), so that spectra recorded at different frequencies line up by g; the CSV gives the field the same way (Bfield_mT_at_9.5GHz). The top axis reads <b>g = hν / (μ<sub>B</sub>·B)</b> at 9.5 GHz. A file without its frequency is shown on the field it was measured at, and then no g axis can be drawn. ${cardInfo(false, false)}`;
-  // (the smoothing a width in mT, 0.2 about 10 points of a 1024-point, 20-mT sweep; to v510
-  // a number of points, `smooth`, 10: readCard converts it)
-  const DEF = { norm: 'global', smoothW: 0.2 };
-  const P = a => 'epr' + a.id;
-  const cardBody = a => `
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">${plotWrap(P(a) + 'Svg', { mod: 'epr', csv: 'epr_spectra.csv', name: 'EPR.svg', legend: P(a) + 'Legend' })}
-            <div id="${P(a)}Legend" class="legend"></div>
-          </div>
-          <div class="col mw260" style="align-self:flex-start">
-            <div class="txt-mini param-head">Parameters</div>
-            <label class="txt-label" for="${P(a)}Norm">Normalization</label>
-            <select id="${P(a)}Norm">${NORM_OPTIONS}</select>
-            <label class="txt-label" for="${P(a)}Smooth">Smoothing width (mT)</label>
-            <label class="wfield" title="The smoothing box's width, in mT on the plotted field (0: none); beside it, the points it spans at the spectra's steps"><input type="text" inputmode="decimal" id="${P(a)}Smooth" value="${DEF.smoothW}" autocomplete="off" aria-describedby="${P(a)}SmoothPts"><span class="wf-pts" id="${P(a)}SmoothPts"></span></label>
-          </div>
-        </div>`;
   // The card's fields show its record; a change is taken on confirm, not while typing
   // (the normalisation a <select>, its change a deliberate pick; the smoothing a guarded decimal
   // field, whose change only fires with a value from 0; its points follow what is typed).
@@ -344,16 +359,6 @@ function createEpr({ key, root, layer, shown }){
       { raw: { xs: files[k].b, ys: out[k] }, label: files[k].label, key: files[k].name }));
   }
 
-  /* The smoothed column: the box w wide (smooth.js; to v510 a moving average over N
-     points), then the user's normalisation — the background taken as the first point and
-     divided by the peak-to-peak (local = own, global = largest across samples), matching
-     the on-screen divisor; none: the smoothed trace as it is, background and all. */
-  function smoothedOut(sms, norm){
-    if (norm==='none') return sms;
-    const ppks = sms.map(sm => (maxArr(sm)-minArr(sm)) || 1);
-    const gPP = Math.max(...ppks);
-    return sms.map((sm, k)=>{ const bg = sm[0] ?? 0, div = norm==='local' ? ppks[k] : gPP; return sm.map(v=>(v-bg)/div); });
-  }
   function cardCsv(a){
     const sms = files.map(f=> smoothedOf(f, a.smoothW));
     const out = smoothedOut(sms, a.norm);
@@ -379,7 +384,7 @@ function createEpr({ key, root, layer, shown }){
   /* ---- The instance (tabs.js) ----
      An EPR tab, hidden, holds little beyond its sleeping form (0.4 MB of heap for 10
      spectra); its plots let go gave back 0.1 MB, their tool buttons still holding their
-     Plots (NOTES-gc-epr.md). */
+     Plots (measured at v518). */
   return {
     // Let go (its tab closed or put to sleep; a state read out for its CSVs): the deck's
     // menu and its listeners. Its section and layer are the shell's to take out.

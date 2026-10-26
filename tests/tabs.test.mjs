@@ -1,7 +1,7 @@
 /* Tabs: closing an inactive tab with "Save" saves that tab's project; the unsaved marker
    follows the state across a switch, an undo and a reload; a running job (a busy guard
    registered by hand), holding no mark of the history, leaves undo doing nothing,
-   silently, goes on in its tab left (b2: GC made per tab), which never sleeps while it
+   silently, goes on in its tab left (v518: GC made per tab), which never sleeps while it
    runs, and is asked about before its tab is closed. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -62,7 +62,7 @@ test('the unsaved marker: an edit after a switch marks it, its undo clears it, a
   } finally { await close(); }
 });
 
-test('a running job: undo does nothing, its tab left goes on and stays awake (b2), closing it asks, Stop it and close stops it', async ()=>{
+test('a running job: undo does nothing, its tab left goes on and stays awake, closing it asks, Stop it and close stops it', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     for (const f of env.fx.files.gc){ await openModule(page, 'gc'); await loadFiles(page, 'gc', [f]); }
@@ -87,8 +87,8 @@ test('a running job: undo does nothing, its tab left goes on and stays awake (b2
     assert.equal(await banner(page), null, 'no banner');
     assert.equal(await page.locator('.confirm-modal').count(), 0, 'no question either');
     assert.deepEqual((await moduleState(page, 'gc')).files.map(f=> f.name), files, 'nothing undone');
-    // 2) another tab chosen: nothing asked, the job going on in the tab left (b2: each GC
-    // tab an instance of its own; to b2 leaving asked to stop it)
+    // 2) another tab chosen: nothing asked, the job going on in the tab left (v518: each GC
+    // tab an instance of its own; to v517 leaving asked to stop it)
     await switchTab(page, 0);
     assert.equal(await banner(page), null, 'nothing asked');
     assert.equal(await activeLabel(page), 'GC · Untitled project*'); assert.equal(await stops(), 0);

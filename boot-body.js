@@ -12,8 +12,8 @@
     var btn = document.querySelector('#nav button[data-tab="'+t+'"]');
     if (sec && btn){
       document.querySelectorAll('.tab.active').forEach(function(e){ e.classList.remove('active'); });
-      document.querySelectorAll('#nav button.active').forEach(function(e){ e.classList.remove('active'); e.setAttribute('aria-selected','false'); });
-      sec.classList.add('active'); btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+      document.querySelectorAll('#nav button.is-on').forEach(function(e){ e.classList.remove('is-on'); e.setAttribute('aria-selected','false'); });
+      sec.classList.add('active'); btn.classList.add('is-on'); btn.setAttribute('aria-selected','true');
     }
   } catch(e){}
 })();

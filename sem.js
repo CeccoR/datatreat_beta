@@ -11,13 +11,13 @@ import { readTescanTiff, readFile, SemReadError, hashBytes, fromB64, reducedCopy
    undo stack compares snapshots by JSON.stringify on every edit, and a RawRef
    serialises in JSON as its id alone (toJSON), so a snapshot compares at the cost of its
    crops. db.js keeps the array itself in a tab parked and in its history, and stores it
-   once, by its hash, in the bytes store; a project file holds it as base64. To b2 the
+   once, by its hash, in the bytes store; a project file holds it as base64. To v517 the
    module kept the base64 (11.9 MB for a file of 8.9 MB), read into bytes again at every
    decoding; a project of then is read as it is (semRestore). Records, projects saved and
    project files hold a RawRef as v517 held its own, { id, b64 } (db.js isRaw), so that
    v517 reads them; db.js reads it back as { id, bytes }.
 
-   MADE PER TAB (b2): createSem is the module's factory (utils.js registerModule), each
+   MADE PER TAB (v518): createSem is the module's factory (utils.js registerModule), each
    open SEM tab that is awake an instance of its own, made of its copy of index.html's
    section (root) and a layer (for the drag's ghost). Its elements are found in root,
    never in the page: its ids are the page's only while it is on show, and a reading
@@ -49,12 +49,11 @@ class RawRef {
    header, reduced copy and cards, no bytes, some 0.15 MB an image of 2048²)
    stays while a tab asleep holds the file (heldAsleep: its state or history names it, its
    bytes let go, tabs.js lighten), which, woken, draws its thumbnails and cards from them
-   without making them again (measure/wake-sem.mjs, 20 tabs of 8 images 2048 × 2176: woken
+   without making them again (measured at v518, 20 tabs of 8 images 2048 × 2176: woken
    in 0.30–0.56 s, the longest task 56–118 ms; where they were made again, 0.67–0.93 s and
    368–551 ms), and goes with the last tab asleep that holds it (woken, its RawRef holds it
-   again; closed). To b2v3 it stayed for the files let go last, 32 MB at most: past some
-   26 tabs asleep of 8 such images, the first put to sleep made theirs again. Its
-   statistics and curves go with them, if their caches still hold them. */
+   again; closed). Its statistics and curves go with them, if their caches still hold
+   them. */
 const raws = new Map();   // id → WeakRef of the RawRef of its bytes
 const alive = id =>{ const w = raws.get(id); return !!(w && w.deref()); };
 // The files of each tab asleep, by its key (registerModule's asleep, from tabs.js): the ids
@@ -76,8 +75,7 @@ function madeGone(id){
 // A tab woken (or closed): the RawRefs its history holds, db.js load's copies of those it
 // held asleep (one a file), kept as the files' own (rawOf), or the one kept taken in their
 // place, so that a file its history alone holds is held as before its sleep, what it is
-// made into with it (b2v3: let go at the wake, made again by an undo, a task of 0.49 s for
-// 8 images of 2048², no loader), and goes with its last step (gone).
+// made into with it, and goes with its last step (gone).
 function adopt(key){
   const h = getModuleHistory(key);
   if (h) for (const s of h.states) for (const f of s && Array.isArray(s.files) ? s.files : [])
@@ -114,11 +112,11 @@ function rawOf(id, bytes, r0){
    (sem-read.js reducedCopy, some 160 px across, for the thumbnails), cards (its group
    card's levels, sem-read.js cardLevels, by the part of the image they take and their
    size: the last CARDS made or used, some 0.08 MB each, so that an undo or a redo of a
-   crop takes them; to b2v3 the last one alone, an undo making a group's again) }, null
+   crop takes them; to v517 the last one alone, an undo making a group's again) }, null
    where its bytes do not read:
    some 0.15 MB an image of 2048², kept while the file is held, by a tab awake or asleep
    (gone), so that a tab woken draws its thumbnails without reading its images whole (to
-   b2v3 the last 512 at most).
+   v517 the last 512 at most).
    full: id → { px (its levels at full size), size (bytes beyond its file's: none for a
    view of them), used }. For a file of 16 bits in this machine's order (Tescan's) the
    levels are a view of its bytes, made at once and costing nothing (sem-read.js view);
@@ -126,8 +124,8 @@ function rawOf(id, bytes, r0){
    read again in some 11 ms (2048², 8 bits). Kept: those of the files of the instance on
    show and of a reading, the copies within DEC_BUDGET (three such images; the one in the
    editor, the latest used, among them), the least recently used let go first; the others
-   let go after the task (evict), read again from the bytes when asked for. To b2 every
-   image of the tab's list was kept decoded, a copy, whatever its tab did, and others to
+   let go after the task (evict), read again from the bytes when asked for. To v517 every
+   image of the list was kept decoded, a copy, whatever its tab did, and others to
    128 MB (to v487 every image ever loaded, till the page was reloaded). */
 const DEC_BUDGET = 32*2**20, CARDS = 4;
 const imgs = new Map(), full = new Map();
@@ -165,8 +163,7 @@ function smallOf(f){
   return e && e.small;
 }
 // A file read: what the reading made of it, kept; added to what was kept of it, a file read
-// again (in another tab, or after its removal), its reduced copy and its cards kept (to b2v3
-// taken for the reading's, its other crops' cards made again by an undo or a wake).
+// again (in another tab, or after its removal), its reduced copy and its cards kept.
 function remember(id, r, small, card, px){
   const was = imgs.get(id), cards = was ? was.cards : new Map();
   if (card){ cards.delete(card.pk); cards.set(card.pk, card); if (cards.size > CARDS) cards.delete(cards.keys().next().value); }
@@ -267,17 +264,184 @@ async function readOne(file, job, owner){
 
 const nameCtx = document.createElement('canvas').getContext('2d');
 
+/* ---- What every instance draws and checks with: pure, the module's ---- */
+// File names and what a file says about itself go into the page as text, never as markup.
+const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// On the page: d significant digits, the point as a point (fmtNum, with the CSV's
+// decimal separator and fixed decimals, is for the export).
+const sig = (v, d) => Number.isFinite(v) ? String(+v.toPrecision(d)) : '—';
+
+/* ---- Crop rules ---- */
+// The smallest crop side (px); an image smaller than it is taken whole.
+const MIN_CROP = 64;
+// The crop's width:height when locked.
+const ASPECTS = { '1:1': 1, '4:3': 4/3, '3:2': 3/2, free: null };
+// The ratio named by a crop of w × h, if it is one of the locks (within 1 %).
+const aspectOf = (w, h) => Object.keys(ASPECTS).find(k=> ASPECTS[k] && Math.abs(w/h/ASPECTS[k] - 1) < 0.01) || 'free';
+// A rectangle made to fit an image W × H: whole pixels, sides at least MIN_CROP (or
+// the image's), inside it, and at ratio r when locked (the longer side shortened).
+function fitCrop(c, W, H, r){
+  let w = Math.round(Math.min(Math.max(c.w, Math.min(MIN_CROP, W)), W));
+  let h = Math.round(Math.min(Math.max(c.h, Math.min(MIN_CROP, H)), H));
+  if (r){
+    if (w/h > r) w = Math.max(Math.min(MIN_CROP, W), Math.round(h*r));
+    else h = Math.max(Math.min(MIN_CROP, H), Math.round(w/r));
+    w = Math.min(w, W); h = Math.min(h, H);
+  }
+  const x = Math.round(Math.min(Math.max(0, c.x), W - w)), y = Math.round(Math.min(Math.max(0, c.y), H - h));
+  return { x, y, w, h };
+}
+const sameCrop = (a, b) => ['x', 'y', 'w', 'h'].every(k=> a[k] === b[k]);
+const defaultCrop = r => ({ x: 0, y: 0, w: r.width, h: r.imageH });
+const isDefaultCrop = f =>{ const r = info(f), d = r && defaultCrop(r); return !!d && ['x', 'y', 'w', 'h'].every(k=> f.crop[k] === d[k]); };
+// A crop as the rules make it: whole pixels, inside the image, its sides at least
+// MIN_CROP (or the image's).
+const validCrop = (c, r) => ['x', 'y', 'w', 'h'].every(k=> Number.isInteger(c[k])) && c.x >= 0 && c.y >= 0
+  && c.w >= Math.min(MIN_CROP, r.width) && c.h >= Math.min(MIN_CROP, r.imageH) && c.x + c.w <= r.width && c.y + c.h <= r.imageH;
+// Set a file's crop from another's (a copy, the linked crop): narrowed to fit where
+// its image is smaller, and marked so.
+function takeCrop(f, c, aspect){
+  const r = info(f); if (!r) return;
+  const got = fitCrop(c, r.width, r.imageH, ASPECTS[aspect]);
+  f.crop = got; f.aspect = aspect;
+  f.clamped = got.x !== c.x || got.y !== c.y || got.w !== c.w || got.h !== c.h;
+  f.cropDef = isDefaultCrop(f);
+}
+/* A resize from c0 by the pointer's move (dx, dy, image pixels) with handle hd: the
+   opposite side or corner stays; with a locked ratio a corner scales both sides by
+   the mean of the two moves, a side the other dimension about its middle. */
+function resized(c0, hd, dx, dy, W, H, r){
+  const L = hd.includes('w'), R = hd.includes('e'), T = hd.includes('n'), B = hd.includes('s');
+  let x0 = c0.x, x1 = c0.x + c0.w, y0 = c0.y, y1 = c0.y + c0.h;
+  const minW = Math.min(MIN_CROP, W), minH = Math.min(MIN_CROP, H);
+  if (!r){
+    if (L) x0 = Math.min(Math.max(0, x0 + dx), x1 - minW);
+    if (R) x1 = Math.max(Math.min(W, x1 + dx), x0 + minW);
+    if (T) y0 = Math.min(Math.max(0, y0 + dy), y1 - minH);
+    if (B) y1 = Math.max(Math.min(H, y1 + dy), y0 + minH);
+    return { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
+  }
+  let w, h;
+  if ((L || R) && (T || B)){
+    const sw = (c0.w + (R ? dx : -dx))/c0.w, sh = (c0.h + (B ? dy : -dy))/c0.h, k = (sw + sh)/2;
+    w = c0.w*k;
+    // room from the corner that stays
+    const roomW = R ? W - x0 : x1, roomH = B ? H - y0 : y1;
+    w = Math.max(Math.max(minW, minH*r), Math.min(w, roomW, roomH*r)); h = w/r;
+    return fitCrop({ x: R ? x0 : x1 - w, y: B ? y0 : y1 - h, w, h }, W, H, r);
+  }
+  const cx = c0.x + c0.w/2, cy = c0.y + c0.h/2;
+  if (L || R){
+    w = c0.w + (R ? dx : -dx);
+    const room = R ? W - x0 : x1;
+    w = Math.max(Math.max(minW, minH*r), Math.min(w, room, H*r)); h = w/r;
+    return fitCrop({ x: R ? x0 : x1 - w, y: cy - h/2, w, h }, W, H, r);
+  }
+  h = c0.h + (B ? dy : -dy);
+  const room = B ? H - y0 : y1;
+  h = Math.max(Math.max(minH, minW/r), Math.min(h, room, W/r)); w = h*r;
+  return fitCrop({ x: cx - w/2, y: B ? y0 : y1 - h, w, h }, W, H, r);
+}
+// The handles, in image pixels: corners and the middle of each side.
+const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+function handlePoints(c){
+  const xs = { w: c.x, m: c.x + c.w/2, e: c.x + c.w }, ys = { n: c.y, m: c.y + c.h/2, s: c.y + c.h };
+  return HANDLES.map(hd=> [xs[hd.includes('w') ? 'w' : hd.includes('e') ? 'e' : 'm'], ys[hd.includes('n') ? 'n' : hd.includes('s') ? 's' : 'm']]);
+}
+const CURSOR = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', move: 'move', pan: 'grab' };
+
+/* ---- Intensity: the settings' defaults and fields, the curves into a canvas ---- */
+const INT_DEF = { mode: 'percentile', pLo: 0.5, pHi: 99.5, ref: null, b: 0, c: 1, g: 1, def: true };
+// Settings at their defaults (the reference aside, which they do not reset).
+const isIntDef = I => ['mode', 'pLo', 'pHi', 'b', 'c', 'g'].every(k=> I[k] === INT_DEF[k]);
+const isAdjDef = a => !a || ['b', 'c', 'g'].every(k=> a[k] === ADJ_DEF[k]);
+const ADJ_DEF = { b: 0, c: 1, g: 1 };
+// The fields, with the range each takes; a value outside it is refused (the field
+// shakes and shows the last good one).
+const INT_FIELDS = { semPLo: ['pLo', 0, 49.9], semPHi: ['pHi', 50.1, 100], semB: ['b', -100, 100], semC: ['c', 0.05, 20], semG: ['g', 0.05, 20] };
+const ADJ_FIELDS = { semBi: ['b', -100, 100], semCi: ['c', 0.05, 20], semGi: ['g', 0.05, 20] };
+// The level below which a share q of the crop's pixels lie.
+function levelAt(st, q){
+  const t = q*st.n; let acc = 0;
+  for (let v = 0; v < 65535; v++){ acc += st.hist[v]; if (acc > t) return v; }
+  return 65534;
+}
+// A region of 16-bit levels (row length W) through a curve, into a canvas (`into`, the
+// editor's, drawn over where it is the size: its memory kept); a large one through a
+// table of each level's whole pixel, a row at a time (the same pixels, sooner).
+function toCanvas(px, W, x0, y0, w, h, lut, into){
+  const cv = into && into.width === w && into.height === h ? into : document.createElement('canvas');
+  if (cv !== into){ cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d'), img = cv._img || ctx.createImageData(w, h), d = new Uint32Array(img.data.buffer);
+  if (w*h > 65536){
+    const t = new Uint32Array(65536);
+    for (let v = 0; v < 65536; v++){ const g = lut[v]; t[v] = 0xff000000 | g << 16 | g << 8 | g; }
+    for (let y = 0; y < h; y++) levelsRow(px, (y0 + y)*W + x0, t, d, y*w, w);
+    cv._img = img;
+  } else for (let y = 0; y < h; y++){
+    const row = (y0 + y)*W + x0, o = y*w;
+    for (let x = 0; x < w; x++){ const g = lut[px[row + x]]; d[o + x] = 0xff000000 | g << 16 | g << 8 | g; }
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv;
+}
+function levelsRow(px, row, t, d, o, w){ for (let x = 0; x < w; x++) d[o + x] = t[px[row + x]]; }
+
+/* ---- Groups and scale: the rules ---- */
+// Two images within 10 % of pixel size are in one group.
+const GROUP_TOL = 1.10;
+// The reference is always one of the figure's images (v442: no reference kept out).
+const inFigure = f => f.included !== false;
+const pixelOf = f => { const r = info(f); return r ? r.pixelNm : NaN; };
+// The groups' box is 4φ : 1 at full screen (sizeGroups).
+const PHI4 = 4*(1 + Math.sqrt(5))/2;
+/* A group's row of images, wider than the box: an arrow at each end where there is
+   more, boxed, as tall as the images and outside the row, turns a page — the row
+   slides by what it shows, landing on an image's edge (scroll snap). A finger can
+   also swipe it. */
+function pageArrows(row){
+  const strip = row.parentElement, more = row.scrollWidth - row.clientWidth;
+  strip.querySelector('.sem-page-prev').hidden = !(more > 1 && row.scrollLeft > 1);
+  strip.querySelector('.sem-page-next').hidden = !(more > 1 && row.scrollLeft < more - 1);
+}
+// A finger holds an image this long (ms) before it drags it.
+const HOLD_MS = 300;
+
+/* ---- Files and fields ---- */
+// Anything but a reason (sem-read.js SemReadError) said in words: the raw message
+// of an allocation that failed said nothing to the user (to v487).
+const faultText = r => /RangeError|allocation|memory/i.test(`${r.kind} ${r.fault}`) ? 'too large for the memory this page has' : `not read (${r.fault})`;
+const magText = r => !(r.mag > 0) ? '' : r.mag >= 1000 ? `${(r.mag/1000).toPrecision(3)} kx` : `${r.mag.toPrecision(3)} x`;
+// The chain on a thumbnail: its crop linked to the other linked images'.
+const LINK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
+// A field's number, or null (the field shakes) where it is none or out of lo–hi.
+function readField(el, lo, hi){
+  const v = parseFloat(String(el.value).trim().replace(',', '.'));
+  if (!Number.isFinite(v) || v < lo || v > hi){ flashFieldInvalid(el); return null; }
+  return v;
+}
+
+/* ---- A state put back: what it is checked against (semRestore) ---- */
+const MODES = ['none', 'percentile', 'meansd', 'hist'];
+const ID_RE = /^[0-9a-f]{8}-\d+$/;
+const isNum = v => typeof v === 'number' && Number.isFinite(v);
+const inRange = (v, lo, hi, d) => isNum(v) && v >= lo && v <= hi ? v : d;
+const isKey = k => typeof k === 'string' && k !== '' && !(k in Object.prototype);
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+// Settings: those saved before the Default boxes (v442) are default where their
+// values are; a Default ticked over other values is unticked.
+function intensityOf(v){
+  const o = isObj(v) ? v : {}, I = { ...INT_DEF };
+  if (MODES.includes(o.mode)) I.mode = o.mode;
+  for (const [k, lo, hi] of Object.values(INT_FIELDS)) I[k] = inRange(o[k], lo, hi, INT_DEF[k]);
+  I.ref = typeof o.ref === 'string' ? o.ref : null;
+  I.def = typeof o.def === 'boolean' ? o.def && isIntDef(I) : isIntDef(I);
+  return I;
+}
+
 // A SEM tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createSem({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
-  const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  // On the page: d significant digits, the point as a point (fmtNum, with the CSV's
-  // decimal separator and fixed decimals, is for the export).
-  const sig = (v, d) => Number.isFinite(v) ? String(+v.toPrecision(d)) : '—';
-  // The smallest crop side (px); an image smaller than it is taken whole.
-  const MIN_CROP = 64;
-  // The crop's width:height when locked.
-  const ASPECTS = { '1:1': 1, '4:3': 4/3, '3:2': 3/2, free: null };
   // (its listeners on the window, let go with it)
   const ac = new AbortController();
   let dead = false;
@@ -298,11 +462,13 @@ function createSem({ key, root, layer, shown }){
   // Each group's figure settings (sem-figure.js), by the group's id; a group has none
   // until its figure is first opened.
   let figures = {};
-  /* What it drew of its images (thumbOf, cardOf): id → { key (what from), cv }; its
-     editor's image (off). Drawn only on show: hidden, `stale` says what changed is drawn
-     as it is shown (its redraw). */
+  // What it drew of its images (thumbOf, cardOf): id → { key (what from), cv }; its
+  // editor's image (off).
   const thumbs = new Map(), cardsCv = new Map();
+  /* Hidden, nothing is drawn (utils.js registerModule): `drawable()` says whether to draw,
+     and when not marks the instance to be drawn whole as it is shown (stale: its redraw). */
   let stale = false;
+  const drawable = ()=> shown() || !(stale = true);
 
   /* ---- Intensity ----
      Each image's grey levels go through one curve, a table of its 65536 levels:
@@ -318,11 +484,6 @@ function createSem({ key, root, layer, shown }){
      others are made to.
      The settings (normalisation, reference, contrast, brightness, gamma) are those of
      all groups, `intensity`, unless a group has its own (groupInt). */
-  const INT_DEF = { mode: 'percentile', pLo: 0.5, pHi: 99.5, ref: null, b: 0, c: 1, g: 1, def: true };
-  // Settings at their defaults (the reference aside, which they do not reset).
-  const isIntDef = I => ['mode', 'pLo', 'pHi', 'b', 'c', 'g'].every(k=> I[k] === INT_DEF[k]);
-  const isAdjDef = a => !a || ['b', 'c', 'g'].every(k=> a[k] === ADJ_DEF[k]);
-  const ADJ_DEF = { b: 0, c: 1, g: 1 };
   let intensity = { ...INT_DEF };
   // A group's own settings, by the group's id, where it has them.
   let groupInt = {};
@@ -335,12 +496,6 @@ function createSem({ key, root, layer, shown }){
   // that use one (marked ◎ on its thumbnail).
   const isRef = f => [intensity, ...Object.values(groupInt)].some(I=> usesRef(I) && refFile(I) === f);
   // (an image's crop's statistics: statsOf, the module's)
-  // The level below which a share q of the crop's pixels lie.
-  function levelAt(st, q){
-    const t = q*st.n; let acc = 0;
-    for (let v = 0; v < 65535; v++){ acc += st.hist[v]; if (acc > t) return v; }
-    return 65534;
-  }
   /* The normalisation of an image: { lo, hi }, the levels taken to black and white
      (linear), or { table }, each level's value on 0–1 (the histogram's). */
   function normOf(f){
@@ -403,60 +558,9 @@ function createSem({ key, root, layer, shown }){
     }
     return lut;
   }
-  // A region of 16-bit levels (row length W) through a curve, into a canvas (`into`, the
-  // editor's, drawn over where it is the size: its memory kept); a large one through a
-  // table of each level's whole pixel, a row at a time (the same pixels, sooner).
-  function toCanvas(px, W, x0, y0, w, h, lut, into){
-    const cv = into && into.width === w && into.height === h ? into : document.createElement('canvas');
-    if (cv !== into){ cv.width = w; cv.height = h; }
-    const ctx = cv.getContext('2d'), img = cv._img || ctx.createImageData(w, h), d = new Uint32Array(img.data.buffer);
-    if (w*h > 65536){
-      const t = new Uint32Array(65536);
-      for (let v = 0; v < 65536; v++){ const g = lut[v]; t[v] = 0xff000000 | g << 16 | g << 8 | g; }
-      for (let y = 0; y < h; y++) levelsRow(px, (y0 + y)*W + x0, t, d, y*w, w);
-      cv._img = img;
-    } else for (let y = 0; y < h; y++){
-      const row = (y0 + y)*W + x0, o = y*w;
-      for (let x = 0; x < w; x++){ const g = lut[px[row + x]]; d[o + x] = 0xff000000 | g << 16 | g << 8 | g; }
-    }
-    ctx.putImageData(img, 0, 0);
-    return cv;
-  }
-  function levelsRow(px, row, t, d, o, w){ for (let x = 0; x < w; x++) d[o + x] = t[px[row + x]]; }
 
-  /* ---- Crop rules ---- */
-  // The ratio named by a crop of w × h, if it is one of the locks (within 1 %).
-  const aspectOf = (w, h) => Object.keys(ASPECTS).find(k=> ASPECTS[k] && Math.abs(w/h/ASPECTS[k] - 1) < 0.01) || 'free';
-  // A rectangle made to fit an image W × H: whole pixels, sides at least MIN_CROP (or
-  // the image's), inside it, and at ratio r when locked (the longer side shortened).
-  function fitCrop(c, W, H, r){
-    let w = Math.round(Math.min(Math.max(c.w, Math.min(MIN_CROP, W)), W));
-    let h = Math.round(Math.min(Math.max(c.h, Math.min(MIN_CROP, H)), H));
-    if (r){
-      if (w/h > r) w = Math.max(Math.min(MIN_CROP, W), Math.round(h*r));
-      else h = Math.max(Math.min(MIN_CROP, H), Math.round(w/r));
-      w = Math.min(w, W); h = Math.min(h, H);
-    }
-    const x = Math.round(Math.min(Math.max(0, c.x), W - w)), y = Math.round(Math.min(Math.max(0, c.y), H - h));
-    return { x, y, w, h };
-  }
-  const sameCrop = (a, b) => ['x', 'y', 'w', 'h'].every(k=> a[k] === b[k]);
-  const defaultCrop = r => ({ x: 0, y: 0, w: r.width, h: r.imageH });
-  const isDefaultCrop = f =>{ const r = info(f), d = r && defaultCrop(r); return !!d && ['x', 'y', 'w', 'h'].every(k=> f.crop[k] === d[k]); };
-  // A crop as the rules make it: whole pixels, inside the image, its sides at least
-  // MIN_CROP (or the image's).
-  const validCrop = (c, r) => ['x', 'y', 'w', 'h'].every(k=> Number.isInteger(c[k])) && c.x >= 0 && c.y >= 0
-    && c.w >= Math.min(MIN_CROP, r.width) && c.h >= Math.min(MIN_CROP, r.imageH) && c.x + c.w <= r.width && c.y + c.h <= r.imageH;
-  // Set a file's crop from another's (a copy, the linked crop): narrowed to fit where
-  // its image is smaller, and marked so.
-  function takeCrop(f, c, aspect){
-    const r = info(f); if (!r) return;
-    const got = fitCrop(c, r.width, r.imageH, ASPECTS[aspect]);
-    f.crop = got; f.aspect = aspect;
-    f.clamped = got.x !== c.x || got.y !== c.y || got.w !== c.w || got.h !== c.h;
-    f.cropDef = isDefaultCrop(f);
-  }
-  // The linked crop: every linked image takes the one just set.
+  /* ---- The linked crop ---- */
+  // Every linked image takes the one just set.
   function propagate(f){
     if (!f.linked) return;
     allFiles.forEach(g=>{ if (g !== f && g.linked) takeCrop(g, f.crop, f.aspect); });
@@ -464,21 +568,17 @@ function createSem({ key, root, layer, shown }){
 
   /* ---- Alerts ----
      What an upload found (files refused, files already loaded, files loaded with a
-     warning) and the images a project opened could not read. They belong to the tab
-     they were made in, by its line of history: each snapshot carries the line it was
-     taken on (lineOf); a state put back from one (an undo, a redo, the live state put
-     back after runWithModuleState) is on that line, any other (a tab's state, a project
-     opened, a project read in for its CSV or its saved key) starts a new one, and a tab
-     switched back to, its history with it, is on that history's line again (settled
-     after the task: queueRender). So another tab never shows them, and its own show
-     again when it is back. Within its tab, each is about files: those it names (an
-     image loaded with a warning, the image a file dropped is a copy of), or, for the
-     refused and the unreadable, which name files never loaded, those in the list when
-     it was made (none: while the list is empty). It shows while those files are in the
-     list, and goes when they go: an image removed takes its own with it, Remove all all
-     of them. An undo, and a project read in and out again (runWithModuleState), leave
-     them as they are: to v487 every restore wiped them, though they are about the
-     upload, not the state. */
+     warning) and the images a project opened could not read. They belong to the
+     instance, its tab's, by its line of history: each snapshot carries the line it was
+     taken on (lineOf); a state put back from one (an undo, a redo) is on that line, any
+     other (a tab's state as it wakes; a project read in for its CSV or its saved key, in
+     an instance of its own: utils.js withState) starts a new one. Within its tab, each is
+     about files: those it names (an image loaded with a warning, the image a file dropped
+     is a copy of), or, for the refused and the unreadable, which name files never loaded,
+     those in the list when it was made (none: while the list is empty). It shows while
+     those files are in the list, and goes when they go: an image removed takes its own
+     with it, Remove all all of them. An undo leaves them as they are: to v487 every
+     restore wiped them, though they are about the upload, not the state. */
   const lineOf = new WeakMap();
   let line = 0, lines = 0;
   // A line's alerts, the last 32 lines': { bad: { names (markup), ids } | null, dup, warn: [{ id, html }] }.
@@ -520,15 +620,12 @@ function createSem({ key, root, layer, shown }){
      review measured 13 s to load them); now one frame of some 0.2 s, the list drawn
      (SEM.md §6.3). While files are read the tab is busy (registerBusy, busyChanged): it
      is not let go while hidden (tabs.js), and the reading goes on there, into its own
-     list, drawn as it is shown; closing the tab stops it. To b2 a tab switch asked first,
-     and stopped it. A reading holds the history from the state on show as it starts
+     list, drawn as it is shown; closing the tab stops it. To v517 a tab switch asked
+     first, and stopped it. A reading holds the history from the state on show as it starts
      (UndoStack.hold), let go as it ends or is stopped: undo goes no lower meanwhile,
      silently, and above it undo and redo go as ever, the reading going on (to v508 both
      waited for its end, a banner saying so). Files dropped meanwhile are read after. */
   const owner = {};   // (its readings', in the worker's queue)
-  // Anything but a reason (sem-read.js SemReadError) said in words: the raw message
-  // of an allocation that failed said nothing to the user (to v487).
-  const faultText = r => /RangeError|allocation|memory/i.test(`${r.kind} ${r.fault}`) ? 'too large for the memory this page has' : `not read (${r.fault})`;
   let loading = null, waiting = 0, gen = 0;
   let queue = Promise.resolve();
   registerBusy(key, {
@@ -595,7 +692,6 @@ function createSem({ key, root, layer, shown }){
       onRemoveAll(){ allFiles.length = 0; setAlerts({ bad: null, dup: [], warn: [] }); afterFilesChange(); },
     };
   }
-  const magText = r => !(r.mag > 0) ? '' : r.mag >= 1000 ? `${(r.mag/1000).toPrecision(3)} kx` : `${r.mag.toPrecision(3)} x`;
 
   function afterFilesChange(){
     filesChanged();
@@ -647,25 +743,9 @@ function createSem({ key, root, layer, shown }){
        in one group, a scale of the two; the index of the image shown at least 0.
      Its line of history (Alerts) is the snapshot's, else a new one.
      It is drawn after the task (queueRender), and the restore itself decodes none of
-     its images (info): a project read in and out again (runWithModuleState) is not
-     drawn, and its saved key decodes nothing; its CSV decodes the images it includes,
-     for their statistics (let go after, under the budget). */
-  const MODES = ['none', 'percentile', 'meansd', 'hist'];
-  const ID_RE = /^[0-9a-f]{8}-\d+$/;
-  const isNum = v => typeof v === 'number' && Number.isFinite(v);
-  const inRange = (v, lo, hi, d) => isNum(v) && v >= lo && v <= hi ? v : d;
-  const isKey = k => typeof k === 'string' && k !== '' && !(k in Object.prototype);
-  const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
-  // Settings: those saved before the Default boxes (v442) are default where their
-  // values are; a Default ticked over other values is unticked.
-  function intensityOf(v){
-    const o = isObj(v) ? v : {}, I = { ...INT_DEF };
-    if (MODES.includes(o.mode)) I.mode = o.mode;
-    for (const [k, lo, hi] of Object.values(INT_FIELDS)) I[k] = inRange(o[k], lo, hi, INT_DEF[k]);
-    I.ref = typeof o.ref === 'string' ? o.ref : null;
-    I.def = typeof o.def === 'boolean' ? o.def && isIntDef(I) : isIntDef(I);
-    return I;
-  }
+     its images (info): a state read in and out again (utils.js withState) is not drawn,
+     and its saved key decodes nothing; its CSV decodes the images it includes, for their
+     statistics (let go after: evict). */
   function semRestore(s){
     line = lineOf.has(s) ? lineOf.get(s) : ++lines;
     if (!isObj(s)) s = {};
@@ -740,12 +820,9 @@ function createSem({ key, root, layer, shown }){
     queueRender();
   }
   /* Drawn once the task that restored is over (a microtask, before the page is painted):
-     a project read in and out again in one go (runWithModuleState: a saved project's
-     CSV, the saved key of a tab) is never drawn, the live one being drawn as it was.
-     To v487 both were, every image of the project read in decoded for it. Then too the
-     line of history is settled: a tab switched back to has had its history put back
-     (tabs.js, after the restore), and the state on show is that history's, on its line
-     (Alerts); an alert of images not read, made on the line the restore began, goes with it. */
+     a state read into an instance of its own and out again in one go (utils.js withState:
+     a saved project's CSV, the saved key of a tab) is never drawn, that instance let go
+     first (dead); to v487 it was, every image of the project read in decoded for it. */
   let renderQueued = false;
   function queueRender(){
     if (renderQueued) return;
@@ -754,12 +831,6 @@ function createSem({ key, root, layer, shown }){
       renderQueued = false;
       // (one let go meanwhile: a state read out of it, withState)
       if (dead) return;
-      const top = hist.states[hist.index], L = top && lineOf.get(top);
-      if (L != null && L !== line){
-        const bad = alerts().bad;
-        alertsOf.delete(line); line = L;
-        if (bad) setAlerts({ bad });
-      }
       rebuildAlerts();
       renderAll();
       // An undo with the figure open: it shows the settings now in force.
@@ -777,10 +848,9 @@ function createSem({ key, root, layer, shown }){
   });
 
   /* ---- Rendering ---- */
-  // (hidden: nothing drawn, all of it as it is shown, stale)
   function renderAll(){
     if (!files.length) return;
-    if (!shown()){ stale = true; return; }
+    if (!drawable()) return;
     stale = false;
     renderNav(); renderInfo(); renderFields(); fitWork(); renderThumbs();
     loadEditorImage(); fitView(); drawEditor();
@@ -790,7 +860,7 @@ function createSem({ key, root, layer, shown }){
   // view of the images drawn again, each image's only where what it is drawn from has
   // changed (thumbOf, cardOf, loadEditorImage).
   function refreshLevels(){
-    if (!shown()){ stale = true; return; }
+    if (!drawable()) return;
     loadEditorImage(); drawEditor();
     renderThumbs(); renderIntensity(); renderGroups(); renderFields();
   }
@@ -834,7 +904,6 @@ function createSem({ key, root, layer, shown }){
   }
   // Every included image with its crop drawn on it; a press shows it in the editor, its
   // chain links its crop to the other linked images'.
-  const LINK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
   // An image's thumbnail: its reduced copy through its curve, its crop drawn on it.
   // Drawn again only when its curve or its crop has changed (to v487 every one of them
   // at every edit); the same canvas otherwise, put in the new row.
@@ -852,7 +921,7 @@ function createSem({ key, root, layer, shown }){
     return cv;
   }
   function renderThumbs(){
-    if (!shown()){ stale = true; return; }
+    if (!drawable()) return;
     const box = $('semThumbs');
     box.innerHTML = '';
     files.forEach((f, i)=>{
@@ -908,7 +977,7 @@ function createSem({ key, root, layer, shown }){
   // ms, not 22).
   let off = null, offKey = null, imgTimer = 0;
   function loadEditorImage(){
-    if (!shown()){ stale = true; return; }
+    if (!drawable()) return;
     const f = files[cur], r = f && info(f), px = r && pixelsOf(f);
     if (!px) return;
     const key = lutKey(f);
@@ -929,7 +998,7 @@ function createSem({ key, root, layer, shown }){
   }
   /* The editor's zoom, of the image it was set on: { id, k (its scale against the image
      fitted), cx, cy (the image's point at the pane's centre) }; none, the image fitted. Kept
-     as the pane changes size, at a show, a resize or an undo (to b2v4 each of these fitted
+     as the pane changes size, at a show, a resize or an undo (to v517 each of these fitted
      the image again), and as the tab sleeps or the page is reloaded (inst.shows, tabs.js);
      another image is shown fitted, and Fit (or a double click with a tool on) fits it. */
   let ed = null;
@@ -986,13 +1055,6 @@ function createSem({ key, root, layer, shown }){
       ctx.strokeStyle = 'rgba(100,160,255,0.7)'; ctx.lineWidth = 1; ctx.strokeRect(zx + 0.5, zy + 0.5, zw, zh);
     }
   }
-  // The handles, in image pixels: corners and the middle of each side.
-  const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
-  function handlePoints(c){
-    const xs = { w: c.x, m: c.x + c.w/2, e: c.x + c.w }, ys = { n: c.y, m: c.y + c.h/2, s: c.y + c.h };
-    return HANDLES.map(hd=> [xs[hd.includes('w') ? 'w' : hd.includes('e') ? 'e' : 'm'], ys[hd.includes('n') ? 'n' : hd.includes('s') ? 's' : 'm']]);
-  }
-  const CURSOR = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', move: 'move', pan: 'grab' };
   function hitTest(px, py, touch){
     const f = files[cur], c = f.crop, rad = touch ? 18 : 9;
     const pts = handlePoints(c);
@@ -1008,41 +1070,6 @@ function createSem({ key, root, layer, shown }){
     if (alongX && Math.abs(py - Y0) <= rad) return 'n';
     if (alongX && Math.abs(py - Y1) <= rad) return 's';
     return px >= X0 && px <= X1 && py >= Y0 && py <= Y1 ? 'move' : 'pan';
-  }
-  /* A resize from c0 by the pointer's move (dx, dy, image pixels) with handle hd: the
-     opposite side or corner stays; with a locked ratio a corner scales both sides by
-     the mean of the two moves, a side the other dimension about its middle. */
-  function resized(c0, hd, dx, dy, W, H, r){
-    const L = hd.includes('w'), R = hd.includes('e'), T = hd.includes('n'), B = hd.includes('s');
-    let x0 = c0.x, x1 = c0.x + c0.w, y0 = c0.y, y1 = c0.y + c0.h;
-    const minW = Math.min(MIN_CROP, W), minH = Math.min(MIN_CROP, H);
-    if (!r){
-      if (L) x0 = Math.min(Math.max(0, x0 + dx), x1 - minW);
-      if (R) x1 = Math.max(Math.min(W, x1 + dx), x0 + minW);
-      if (T) y0 = Math.min(Math.max(0, y0 + dy), y1 - minH);
-      if (B) y1 = Math.max(Math.min(H, y1 + dy), y0 + minH);
-      return { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
-    }
-    let w, h;
-    if ((L || R) && (T || B)){
-      const sw = (c0.w + (R ? dx : -dx))/c0.w, sh = (c0.h + (B ? dy : -dy))/c0.h, k = (sw + sh)/2;
-      w = c0.w*k;
-      // room from the corner that stays
-      const roomW = R ? W - x0 : x1, roomH = B ? H - y0 : y1;
-      w = Math.max(Math.max(minW, minH*r), Math.min(w, roomW, roomH*r)); h = w/r;
-      return fitCrop({ x: R ? x0 : x1 - w, y: B ? y0 : y1 - h, w, h }, W, H, r);
-    }
-    const cx = c0.x + c0.w/2, cy = c0.y + c0.h/2;
-    if (L || R){
-      w = c0.w + (R ? dx : -dx);
-      const room = R ? W - x0 : x1;
-      w = Math.max(Math.max(minW, minH*r), Math.min(w, room, H*r)); h = w/r;
-      return fitCrop({ x: R ? x0 : x1 - w, y: cy - h/2, w, h }, W, H, r);
-    }
-    h = c0.h + (B ? dy : -dy);
-    const room = B ? H - y0 : y1;
-    h = Math.max(Math.max(minH, minW/r), Math.min(h, room, W/r)); w = h*r;
-    return fitCrop({ x: cx - w/2, y: B ? y0 : y1 - h, w, h }, W, H, r);
   }
   /* The toolbar on the image, as on the plots: Fit, Pan and Zoom area. With no tool on,
      the image stays fitted and still, the wheel scrolls the page, and a drag works the
@@ -1226,12 +1253,8 @@ function createSem({ key, root, layer, shown }){
      image keeps its pixels and its crop. Groups can be renamed, an image moved to
      another or to a new one, and empty groups added (kept, as one emptied by hand, until
      removed); Reset starts again. */
-  const GROUP_TOL = 1.10;
-  // The reference is always one of the figure's images (v442: no reference kept out).
-  const inFigure = f => f.included !== false;
   const byId = id => allFiles.find(f=> f.raw.id === id);
   const groupOf = f => groups.find(g=> g.members.includes(f.raw.id)) || null;
-  const pixelOf = f => { const r = info(f); return r ? r.pixelNm : NaN; };
   // A group's images in the figure: they alone decide its name, its scale, its place
   // and where a new image goes. An excluded image stays a member, so that it comes back
   // where it was when included again, but decides nothing while the group has images in
@@ -1346,7 +1369,7 @@ function createSem({ key, root, layer, shown }){
     el.style.width = Math.min(nameCtx.measureText(el.value || el.placeholder).width + 24, room + 10) + 'px';
   }
   function renderGroups(){
-    if (!shown()){ stale = true; return; }
+    if (!drawable()) return;
     const box = $('semGroups');
     if (!box || !files.length) return;
     box.innerHTML = groups.map(g=>{
@@ -1381,7 +1404,6 @@ function createSem({ key, root, layer, shown }){
      group now (the page's and the card's margins). The images take what the height
      leaves under the head and over their names, never under 80 px (on a phone, where
      4φ : 1 would leave next to nothing, the box grows instead). */
-  const PHI4 = 4*(1 + Math.sqrt(5))/2;
   // The full-screen width, worked out once, at the first layout: resizing the window
   // must not change the height.
   let groupFull = null;
@@ -1400,15 +1422,6 @@ function createSem({ key, root, layer, shown }){
     const H = Math.round(full/PHI4), img = Math.max(80, Math.floor(H - chrome));
     box.style.setProperty('--sem-img', img + 'px');
     box.style.setProperty('--sem-group-h', Math.max(H, Math.ceil(chrome + img)) + 'px');
-  }
-  /* A group's row of images, wider than the box: an arrow at each end where there is
-     more, boxed, as tall as the images and outside the row, turns a page — the row
-     slides by what it shows, landing on an image's edge (scroll snap). A finger can
-     also swipe it. */
-  function pageArrows(row){
-    const strip = row.parentElement, more = row.scrollWidth - row.clientWidth;
-    strip.querySelector('.sem-page-prev').hidden = !(more > 1 && row.scrollLeft > 1);
-    strip.querySelector('.sem-page-next').hidden = !(more > 1 && row.scrollLeft < more - 1);
   }
   window.addEventListener('resize', ()=>{ if (!shown()) return; sizeGroups(); root.querySelectorAll('#semGroups .sem-group-imgs').forEach(pageArrows); fitWork(); }, { signal: ac.signal });
   /* Crop and intensity in three columns, until a field's name would be cut short ("…"):
@@ -1473,7 +1486,6 @@ function createSem({ key, root, layer, shown }){
      one), and the drop moves it there. A press without a move does nothing. A finger
      first holds the image still a moment: a swipe over the images scrolls the page. */
   let gdrag = null;
-  const HOLD_MS = 300;
   const dropTargets = ()=> groupsCard.querySelectorAll('[data-drop]');
   groupsBox.addEventListener('pointerdown', e=>{
     const card = e.target.closest('.sem-gimg');
@@ -1569,10 +1581,6 @@ function createSem({ key, root, layer, shown }){
   }
 
   /* ---- Intensity (the Crop and intensity card) ---- */
-  // The fields, with the range each takes; a value outside it is refused (the field
-  // shakes and shows the last good one).
-  const INT_FIELDS = { semPLo: ['pLo', 0, 49.9], semPHi: ['pHi', 50.1, 100], semB: ['b', -100, 100], semC: ['c', 0.05, 20], semG: ['g', 0.05, 20] };
-  const ADJ_FIELDS = { semBi: ['b', -100, 100], semCi: ['c', 0.05, 20], semGi: ['g', 0.05, 20] };
   /* The images the settings apply to (the selector over the thumbnails): All, every
      image alike (`intensity`); or the groups, each its own (groupInt), the one shown
      being the group of the image in the editor. Going from All to the groups, every
@@ -1651,11 +1659,6 @@ function createSem({ key, root, layer, shown }){
     ctx.strokeStyle = accent; ctx.lineWidth = 1.6; ctx.beginPath();
     for (let x = 0; x <= w; x++){ const y = h - 3 - lut[Math.min(65535, Math.round(x/w*65535))]/255*(h - 6); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.stroke();
-  }
-  function readField(el, lo, hi){
-    const v = parseFloat(String(el.value).trim().replace(',', '.'));
-    if (!Number.isFinite(v) || v < lo || v > hi){ flashFieldInvalid(el); return null; }
-    return v;
   }
   for (const [id, [k, lo, hi]] of Object.entries(INT_FIELDS)){
     const el = $(id);
@@ -1742,11 +1745,11 @@ function createSem({ key, root, layer, shown }){
       insts.delete(me);
       scheduleEvict();
     },
-    /* What it shows beside its state (b2v4: tabs.js, utils.js shownOf): the image on show,
+    /* What it shows beside its state (tabs.js, utils.js shownOf): the image on show,
        by its id, and the editor's zoom, given back as the tab wakes or the page is reloaded,
        to the restore. The image on show is in its state too (cur, v517: an undo goes back to
        its step's, a project saved reopens on it), but a step is no change, and its record held
-       the one before till the next (to b2v4 a reload showed it). */
+       the one before till the next (to v517 a reload showed it). */
     shows(){
       const f = files[cur];
       return f || ed ? { ...(f ? { img: f.raw.id } : {}), ...(ed ? { ed: { ...ed } } : {}) } : null;

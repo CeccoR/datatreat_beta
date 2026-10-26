@@ -1,4 +1,4 @@
-/* What the page stores, and how much it writes (b2v4). The origin's storage asked to be kept
+/* What the page stores, and how much it writes (v518). The origin's storage asked to be kept
    (navigator.storage.persist), once a load, only where it is not, saying nothing, and
    nothing broken in a browser without the API. The open tabs' records written only where
    what they hold changed: a hidden tab closed writes none, the tab on show closed the one
@@ -107,7 +107,7 @@ test('a close, a move and a reload write only the records that changed; the orde
     const [t1, t2, t3, t4, t5] = await ids(page);
     assert.deepEqual(await bar(page), ['T1', 'T2', 'T3', 'T4', 'T5']);
 
-    // A hidden tab closed: its record deleted, no other written (to b2v4 the four others again)
+    // A hidden tab closed: its record deleted, no other written (to v517 the four others again)
     let w = await writes(page, async ()=>{ await page.locator('#tabBar .ptab').nth(1).locator('.ptab-x').click(); await answer(page, 'alt'); });
     assert.deepEqual(w, [['delete', t2]], 'a hidden tab closed: its record deleted, none written');
     // The tab on show closed: the one now on show written, as on show, alone
@@ -180,12 +180,10 @@ test('records of v517\'s form read as they were; two on show or two of one order
   } finally { await close(); }
 });
 
-/* SEM's files as v517 writes them: to b2v4 a tab's record and a project saved held each as
-   { id, bytes: {__t:'u8', h} } and a project file as { id, bytes: {__t:'u8', v} }, which
-   v517 (a window of it on the same database, or the app rolled back) read as no file: it
-   showed none, said its bytes no longer read, and its next switch wrote the tab's record
-   without them, their bytes swept. Now { id, b64 } as v517's, the bytes stored once by their
-   SHA-256 alike; read back by b2 as ever. */
+/* SEM's files as v517 writes them, { id, b64 }, the bytes stored once by their SHA-256
+   alike, so that v517 (a window of it on the same database, or the app rolled back) reads
+   them: { id, bytes } it would read as no file, show none, and write the tab's record
+   without them at its next switch, their bytes swept. Read back as ever. */
 test('SEM\'s files in v517\'s form: a tab\'s record, awake and asleep, a project saved { id, b64: {__t:\'b64\', h} }, a project file { id, b64 }; read back byte for byte', async ()=>{
   const { page, errors, csp, close } = await env.page();
   const F = env.fx.files.sem.slice(0, 2), sha = p => createHash('sha256').update(fs.readFileSync(p)).digest('hex');

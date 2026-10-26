@@ -8,7 +8,7 @@
    the samples' keep every row.
    C: while the standard refines, its window closed, every Rietveld card's "Instrumental
    standard…" says so (a card added meanwhile, after Home and back, another project opened
-   and the XRPD tab shown again, nothing asked: b2, that card undone and redone, an undo
+   and the XRPD tab shown again, nothing asked: v518, that card undone and redone, an undo
    stopped at the run's start), and stops saying so when the run ends or is stopped. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -254,7 +254,7 @@ test('C: the standard refining, its window closed: every card\'s Instrumental st
     await settle(page);
     await busyNow('xrdR2Std', 'Home and back');
     // Another project opened: nothing asked, it opens on show, the run going on in the XRPD
-    // tab left (b2: each XRPD tab an instance of its own; to b2 leaving asked to stop it).
+    // tab left (v518: each XRPD tab an instance of its own; to v517 leaving asked to stop it).
     await page.click('#nav button[data-tab="home"]');
     await page.click('.home-card[data-go="tauc"]');
     await page.waitForSelector('#tab-tauc.active');

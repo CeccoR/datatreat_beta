@@ -186,9 +186,11 @@ was proposed; nothing here is in the code yet.
   origin of its own (a custom domain for the Pages site, or a dedicated host), and until
   then publish nothing else under `ceccor.github.io` that runs untrusted code.
 - **Number arrays as typed arrays.** The patterns, spectra and curves are plain arrays of
-  numbers. Chromium stores a frozen one at 16 bytes an element against 8 (measured with
-  the b2 prototype, proto/live-tabs-b2/NOTES-drs.md), which is why v518 shares them through
-  a registry instead of freezing them. `Float64Array` would hold them at 8 bytes,
-  contiguous, and hand them to the workers without conversion. Against: map, filter and
-  slice return typed arrays, JSON writes them as objects, so the code that builds them
-  and every saved format would change. To take only if memory comes to need it.
+  numbers. Chromium stores a frozen one at 16 bytes an element against 8 (measured for
+  v518 in Chromium 141: 400 arrays of 5000 doubles, the heap after a GC; the prototype's
+  notes, proto/live-tabs-b2/NOTES-drs.md, are in commit fabb05b), which is why v518
+  shares them through a registry instead of freezing them. `Float64Array` would hold them
+  at 8 bytes, contiguous, and hand them to the workers without conversion. Against: map,
+  filter and slice return typed arrays, JSON writes them as objects, so the code that
+  builds them and every saved format would change. To take only if memory comes to need
+  it.

@@ -1,4 +1,4 @@
-/* The tabs awake, capped (b2v3): any number of tabs open, none refused (to b2v2 a 21st was);
+/* The tabs awake, capped (v518): any number of tabs open, none refused (to v517 a 21st was);
    at most Settings' number awake (20 by default), the one on show among them, the one
    shown least lately put to sleep beyond it, whenever it was opened: one opened first but
    shown often stays awake. 40 tabs: 20 awake, the bar scrolling, the tab on show scrolled
@@ -136,7 +136,7 @@ test('a busy tab awake past the cap, the excess asleep at its job\'s end; Settin
   } finally { await close(); }
 });
 
-test('two tabs chosen within a switch\'s frames: the record of the tab left first no longer on show, a reload showing the last chosen; the first shown under the loader', async ()=>{
+test('two tabs chosen within a switch\'s frames: the record of the tab left first no longer on show, a reload showing the last chosen; the first shown under the loader; two tabs closed in one task, both closed', async ()=>{
   const { page, errors, csp, close } = await env.page();
   try {
     for (let i = 0; i < 3; i++) await openModule(page, 'gc');
@@ -149,8 +149,8 @@ test('two tabs chosen within a switch\'s frames: the record of the tab left firs
     const flags = async ()=> (await idb(page, 'tabs')).sort((a, b)=> a.order - b.order).map(r=> r.active);
     await until(async ()=> JSON.stringify(await flags(page)) === '[false,false,true]', { what: 'one record on show, T2\'s' });
     // T1, chosen and left again before its show, still drawn at the width it was left at
-    // before: shown, under the loader (b2v3: the width of that moment taken for it, at which
-    // it was never drawn: shown at once, every plot drawn in one long task)
+    // before: shown, under the loader (not at the width of that moment, at which it was never
+    // drawn: shown at once, every plot drawn in one long task)
     await page.locator('#tabBar .ptab').nth(1).locator('.ptab-label').click();
     assert.equal(await page.evaluate(()=> !!document.querySelector('.module-loader.show')), true, 'T1 shown: the loader on first');
     await settle(page);
@@ -158,6 +158,11 @@ test('two tabs chosen within a switch\'s frames: the record of the tab left firs
     await until(async ()=> JSON.stringify(await flags(page)) === '[false,false,true]', { what: 'T2\'s record on show again' });
     await page.reload(); await ready(page); await settle(page);
     assert.equal(await page.evaluate(()=> [...document.querySelectorAll('#tabBar .ptab')].findIndex(e=> e.classList.contains('is-on'))), 2, 'T2 on show after a reload');
+    // T0 on show and T1 closed in the same task, their buttons found first: both closed
+    await switchTab(page, 0);
+    await page.evaluate(()=>{ const t = document.querySelectorAll('#tabBar .ptab'); t[0].querySelector('.ptab-x').click(); t[1].querySelector('.ptab-x').click(); });
+    await until(async ()=> await page.locator('#tabBar .ptab').count() === 1, { what: 'T0 and T1 closed' });
+    await settle(page);
     assert.deepEqual(errors, []);
     assert.deepEqual(await csp(), []);
   } finally { await close(); }

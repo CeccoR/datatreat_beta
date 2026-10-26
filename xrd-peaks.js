@@ -10,6 +10,7 @@
 import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
+import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
 
 /* A view (a plot, a table, a chart, a legend) is drawn again only when what it is drawn
    from changed: each keeps the key of its inputs as last drawn, the objects among them by
@@ -29,8 +30,7 @@ const atOrigin = P => P.xmin === P._origXmin && P.xmax === P._origXmax && P.ymin
    smoothing and baseline by their widths (k1), its peaks by those and the peak search and
    the peaks added and removed by hand (k2); and the standard's instrumental model by its
    processing (modelOf). A tab woken, an undo to widths used before, a card made again
-   take them as made (to b2v3 a card kept its own, and a tab woken made all again: 67 ms
-   for 12 patterns). */
+   take them as made (to v517 a card kept its own, and a tab shown again made all again). */
 const smoothKept = keeper('xrd-smoothing'), procKept = keeper('xrd-peaks', 8), modelOf = new WeakMap();
 
 // Index of the grid point nearest to a 2Î¸, by bisection: an axis need not be even (a scan
@@ -347,8 +347,6 @@ const FWHM_BASE  = '#b5292c';  // dark red, base (contrasts with the dark backgr
 const FWHM_HOVER = '#ff5a5a';  // brighter red, transient hover
 const FWHM_SEL   = '#ff0000';  // pure red, permanent selection
 
-const DL_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="7 10.5 12 15.5 17 10.5"/><line x1="5" y1="20" x2="19" y2="20"/></svg>`;
-const CSV_ICON = `<svg class="plot-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><text x="12" y="11" font-size="8.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" style="font-family:sans-serif">CSV</text><line x1="6" y1="18" x2="15" y2="18"/><polyline points="12.5 15.5 16 18 12.5 20.5"/></svg>`;
 const LEGEND = `<div class="legend">
               <span><i style="background:#6a7585"></i>raw</span>
               <span><i style="background:#3aa0ff"></i>smoothed</span>
@@ -377,6 +375,7 @@ export const STD_INFO = `A measured standard (large, strain-free crystallites â€
      changed()        its peaks or sizes changed: the standard's, every card's sizes follow;
                       a card's, its Results section is redrawn by itself
      openStd()        open the standard's modal (samples)
+     allFiles()       every file loaded, for the steps of those left out (samples)
      hidden()         the card is folded: nothing is drawn
    }
    o: { prefix, standard } */
@@ -392,7 +391,7 @@ export function createPeakAnalysis(host, root, o){
           <div class="pside-plot">
             <div class="plot-wrap">
               <svg class="plot" id="${p}Svg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-names="standard.csv" data-dl-name="XRPD_standard.svg">${DL_ICON}</button>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-names="standard.csv" data-dl-name="XRPD_standard.svg">${PLOT_DL_ICON}</button>
             </div>
           </div>
           <div class="pside-under">${LEGEND}</div>
@@ -435,7 +434,7 @@ export function createPeakAnalysis(host, root, o){
             </div>
             <div class="plot-wrap">
               <svg class="plot" id="${p}Svg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-base="diffractograms.csv,peaks.csv" data-csv-names="diffractograms.csv,peaks.csv" data-dl-base="XRPD_sample.svg" data-dl-name="XRPD_sample.svg">${DL_ICON}</button>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}Svg" data-csv-mod="xrd" data-csv-base="diffractograms.csv,peaks.csv" data-csv-names="diffractograms.csv,peaks.csv" data-dl-base="XRPD_sample.svg" data-dl-name="XRPD_sample.svg">${PLOT_DL_ICON}</button>
             </div>
             ${LEGEND}
           </div>
@@ -497,7 +496,7 @@ export function createPeakAnalysis(host, root, o){
             <p class="txt-caption">Analysis</p>
             <div class="plot-wrap">
               <svg class="plot" id="${p}ResSvg"></svg>
-              <button class="btn plot-dl-btn" data-dl-svg="${p}ResSvg" data-csv-mod="xrd" data-csv-base="diffractograms.csv" data-csv-names="diffractograms.csv" data-dl-base="XRPD_results_analysis.svg" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="${p}ResLegend">${DL_ICON}</button>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}ResSvg" data-csv-mod="xrd" data-csv-base="diffractograms.csv" data-csv-names="diffractograms.csv" data-dl-base="XRPD_results_analysis.svg" data-dl-name="XRPD_results_analysis.svg" data-dl-legend="${p}ResLegend">${PLOT_DL_ICON}</button>
             </div>
             <div id="${p}ResLegend" class="legend"></div>
           </div>
@@ -507,7 +506,7 @@ export function createPeakAnalysis(host, root, o){
             <div class="plot-wrap">
               <svg class="plot" id="${p}SizeBarSvg"></svg>
               <span class="plot-chips" id="${p}SizeBy"></span>
-              <button class="btn plot-dl-btn" data-dl-svg="${p}SizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="${p}SizeBarLegend">${DL_ICON}</button>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}SizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="${p}SizeBarLegend">${PLOT_DL_ICON}</button>
             </div>
             <div id="${p}SizeBarLegend" class="legend"></div>
             <div id="${p}SizeByNote" class="txt-meta"></div>
@@ -720,7 +719,7 @@ export function createPeakAnalysis(host, root, o){
          user's to keep small against the peak widths, the raw pattern drawn beside it. */
       return { smoothed, snip, detSub: smoothed.map((v,j)=>Math.max(0, v-snip[j])) };
     });
-    // (to b2 also the raw pattern less the baseline, a fourth array a pattern that nothing read)
+    // (to v517 also the raw pattern less the baseline, a fourth array a pattern that nothing read)
     // Peak detection on the smoothed, SNIP-subtracted profile (robust to noise)
     const peaks      = findPeaks(x, detSub, pr.pkHeight, pr.pkProm, pr.pkDist);
     // Re-inject manually added peaks (survive param changes, cleared on reset); one with
@@ -875,7 +874,7 @@ export function createPeakAnalysis(host, root, o){
     const k = Math.min(curIdx(), fs.length - 1);
     if (label && label.textContent !== fs[k].label) label.textContent = fs[k].label;
     if (!std && $$('Idx').textContent !== (k+1)+'/'+fs.length) $$('Idx').textContent = (k+1)+'/'+fs.length;
-    if (host.hidden && host.hidden()) return;
+    if (host.hidden()) return;
     drawAnalysisInto(k, preserveView);
   }
 
@@ -1302,7 +1301,7 @@ export function createPeakAnalysis(host, root, o){
     updateView(true);
     renderTable();
     renderResults();
-    if (host.changed) host.changed();
+    host.changed();
     host.commit();
   }
 
@@ -1361,7 +1360,7 @@ export function createPeakAnalysis(host, root, o){
     if (paramMode.blWin==='shared') reprocessAll(); else reprocessOne(curIdx());
     updateView(true);
     renderTable(); renderResults();
-    if (host.changed) host.changed();
+    host.changed();
     host.commit();
   });
   Object.entries(FIELD_INPUT).forEach(([key, id])=>{
@@ -1381,7 +1380,7 @@ export function createPeakAnalysis(host, root, o){
       if (paramMode[modeOf(key)]==='shared') reprocessAll(); else reprocessOne(curIdx());
       updateView(true);      // the analysis is live
       renderTable(); renderResults();
-      if (host.changed) host.changed();
+      host.changed();
       host.commit();
     };
     el.addEventListener('change', apply);
@@ -1487,7 +1486,7 @@ export function createPeakAnalysis(host, root, o){
        card unfolded) and under no window (the standard's over the cards, a figure composer,
        the calendar, a settings window): a window is any backdrop laid out, as the composers
        and the calendar have no inline display to read. */
-    const onShow = ()=> root.isConnected && root.getClientRects().length > 0 && !(host.hidden && host.hidden())
+    const onShow = ()=> root.isConnected && root.getClientRects().length > 0 && !host.hidden()
       && ![...document.querySelectorAll('.modal-backdrop')].some(m=> m.getClientRects().length > 0 && !m.contains(root));
     // Capture phase + stopImmediatePropagation so that while add-peak is armed
     // it claims the arrow keys before the document-level sample-nav handler
@@ -1663,9 +1662,9 @@ export function createPeakAnalysis(host, root, o){
     // A label or a colour changed, the card unfolded, the tab on show again or resized: each
     // view drawn again where what it shows changed.
     redraw(){ if (files().length){ updateView(true); renderTable(); renderResults(); } },
-    // What it shows beside its state (b2v4, xrd.js): the peak picked in its table, given
+    // What it shows beside its state (xrd.js shows): the peak picked in its table, given
     // back as its tab wakes or the page is reloaded, the state restored (which picks none).
-    shows: ()=> panel.sel != null ? { sel: panel.sel } : null,
+    shows(){ return panel.sel != null ? { sel: panel.sel } : null; },
     showNext(v){ if (v && Number.isFinite(v.sel)) panel.sel = v.sel; },
     instrModel,
     // The downloads named after the card ("<name> - peaks.csv"), the size chart's by what it shows.
@@ -1702,7 +1701,7 @@ export function createPeakAnalysis(host, root, o){
       s = obj(s);
       const fs = files(), n = fs.length, st = fs.map(f=> meanStep(f.x));
       // (and the steps of the files left out, which come back with their entries)
-      const stAll = st.concat(!std && host.allFiles ? host.allFiles().filter(f=> f.included === false).map(f=> meanStep(f.x)) : []);
+      const stAll = st.concat(!std ? host.allFiles().filter(f=> f.included === false).map(f=> meanStep(f.x)) : []);
       const arr = (a, make)=> Array.isArray(a) ? a.slice(0, n).concat(Array.from({ length: Math.max(0, n - a.length) }, make)) : Array.from({ length: n }, make);
       const sh = obj(s.shared), pm = std ? {} : obj(s.paramMode);
       for (const k in FIELD_MIN) shared[k] = numOf(sh, k) ?? SHARED_DEF[k];

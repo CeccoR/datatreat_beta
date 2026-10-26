@@ -90,7 +90,7 @@ export const isNum = s => s != null && (NUM.test(s = String(s).trim()) || GROUPE
 /* The separator a file is written with: the one under which `fit(rows, sep)`, its lines
    split into fields, takes the most, on a tie the first of SEPS. `fit` gives { score,
    ...what it read } or null (none, or not this separator). → { sep, rows, ...that } or null. */
-export function bestSep(lines, fit){
+function bestSep(lines, fit){
   let best = null;
   for (const sep of SEPS){
     const rows = lines.map(l=> splitFields(l, sep)), r = fit(rows, sep);

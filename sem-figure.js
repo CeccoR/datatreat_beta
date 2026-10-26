@@ -170,7 +170,7 @@ function gridOf(n){
   return { cols, rows, bCols, bRows: Math.max(F.bRows, Math.ceil(n/(rows*cols*bCols))) };
 }
 /* An image's PNG: the preview's (520 px across) kept while it does not change; the
-   export's, at the figure's pixels, made for that export and not kept (to b2 kept till
+   export's, at the figure's pixels, made for that export and not kept (to v517 kept till
    the composer closed: a PNG of each image at full size, some 3 MB of text for 2048²). */
 function urlOf(m, full){
   if (full){ const cv = m.canvas(0); return cv ? cv.toDataURL('image/png') : ''; }
@@ -698,5 +698,3 @@ export function openSemFigure(h){
     titles: { svg: 'Save the figure as a vector file, with the images in it', png: 'Save the figure as an image at the chosen dpi', copy: 'Copy the figure to the clipboard' },
   });
 }
-
-export { FIG_DEF, niceBar, lenText };

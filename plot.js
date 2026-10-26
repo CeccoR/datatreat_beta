@@ -114,9 +114,9 @@ function labelText(t, text, runs){
 // A figure composer is being opened from a plot's toolbar (figBtn, in attachTools).
 let _figOpening = false;
 /* An element by its id (a plot's svg, its legend), looked for from `from` outward: in its
-   plot's box, its card, its section or window first, then in the page. A module made per
-   tab (b2) has the same ids in each instance, only the one on show in the page: its
-   buttons find their own instance's elements, in the page or not. */
+   plot's box, its card, its section or window first, then in the page. A module has the
+   same ids in each instance, only the one on show in the page: its buttons find their own
+   instance's elements, in the page or not. */
 function near(from, id){
   if (!id) return null;
   const sel = '#' + CSS.escape(id);
@@ -330,18 +330,6 @@ class Plot{
     this.gData.appendChild(p);
     return p;
   }
-  bar(x0, x1, y0, y1, color){
-    const entry = {type:'bar', x0, x1, y0, y1, color};
-    this._stored.push(entry);
-    return this._renderBar(entry);
-  }
-  _renderBar(entry){
-    const px0=this.px(entry.x0), px1=this.px(entry.x1);
-    const py0=this.py(entry.y0), py1=this.py(entry.y1);
-    const r = svgEl('rect',{x:Math.min(px0,px1), y:Math.min(py0,py1), width:Math.abs(px1-px0), height:Math.abs(py0-py1), fill:entry.color});
-    this.gData.appendChild(r);
-    return r;
-  }
   /* Bar with a fixed PIXEL width, centred at data-x `xc` (+ optional pixel offset `dx`).
      Width stays constant regardless of the sample count or the zoom level — only the
      centre reprojects. `hw` is the half-width in px. */
@@ -524,7 +512,6 @@ class Plot{
       if (e.type==='line') this._renderLine(e, proj);
       else if (e.type==='segments') this._renderSegments(e, proj);
       else if (e.type==='points') this._renderPoints(e, proj);
-      else if (e.type==='bar') this._renderBar(e);
       else if (e.type==='barpx') this._renderBarPx(e);
       else if (e.type==='errbar') this._renderErrbar(e);
       else if (e.type==='box') this._renderBox(e);
@@ -680,7 +667,7 @@ class Plot{
     // out of the axis label's trailing parentheses). Bar plots have a categorical x
     // (no meaningful x coordinate under the pointer), so they show the y line only.
     const ylabTxt = this.ylabel || (this.ylabelSvg ? this.ylabelSvg.replace(/<[^>]*>/g,'') : '') || 'y';
-    const isBar = this._stored && this._stored.some(e=>e.type==='bar' || e.type==='barpx' || e.type==='box');
+    const isBar = this._stored && this._stored.some(e=>e.type==='barpx' || e.type==='box');
     const tx = m.l+8;
     const t=svgEl('text',{x:tx,y:m.t+14,'font-size':12,'text-anchor':'start',fill:'#f0f4f6',stroke:'#0b0f12','stroke-width':3.5,'paint-order':'stroke','font-family':'monospace','class':'plot-readout'});
     if (!isBar){ const l1=svgEl('tspan',{x:tx}); l1.textContent=axisReadout(this.xlabel||'x', xv, fmt); t.appendChild(l1); }
@@ -1020,5 +1007,5 @@ document.addEventListener('click', e=>{
 
 
 export {
-  niceStep, niceTicks, fixedTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot, downloadSvgClean
+  niceTicks, fmtTick, axisReadout, svgEl, SUB_DROP, TILT_DY, Plot
 };
