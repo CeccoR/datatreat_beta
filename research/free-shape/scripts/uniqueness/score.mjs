@@ -54,7 +54,19 @@ export function analyse(r, ref, jk = null){
   const iv = {}, out0 = {};
   const dimApp = i => {
     const ax = appAx(i), D = rep.dims[i];
-    if (!ax) return [D, D];
+    if (!ax){
+      /* fix (critic, problem 4): a spheroid's or a cylinder's round section has no axis entry in
+         the record of the app's report, but the card shows the diameter ± esd (bodyShapeOf dims[0]):
+         rebuilt here as bodyShapeOf takes it, the reported fit's own linear esd D·σ(ln W) and, when
+         held, the held/free difference in quadrature (the free fit refitted from the search's free
+         exact end). It used to be [D, D]: zero-width intervals counted as determined. */
+      if (!roundXY || i > 1 || !Number.isFinite(D)) return [D, D];
+      const s = u.reported.sLogW ? u.reported.sLogW[i] : NaN;
+      if (!Number.isFinite(s)) return [0, Infinity];
+      const fr = u.minima.find(x=> x.src === "free-of-held");
+      let sd = D*s; if (m.held && fr && Number.isFinite(fr.solid.dims[i])) sd = Math.hypot(sd, D - fr.solid.dims[i]);
+      return [Math.max(0, D - 2*sd), D + 2*sd];
+    }
     const g = ax.group >= 0 && u.app.groups[ax.group];
     const sd = g ? g.Desd : ax.Desd, Dc = g ? g.D : D;
     if (!Number.isFinite(Dc)) return [Number.isFinite(ax.Dmin) ? ax.Dmin : 0, Infinity];

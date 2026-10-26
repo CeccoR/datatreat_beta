@@ -13,6 +13,13 @@ synthetic SrTiO₃ patterns. The user's samples (33A…38D, LaB6_real) were not 
 machine. Twelve sample-like proxies stand in for them (§3.2), and every statement about
 the samples rests on those proxies.
 
+**Revised after review** (2026-10-26). A review of the first version found 15 problems;
+all were real. The fixes changed the recommendation: the background degree is now picked
+with the shape and the search run again at that degree, which removes most of the proxies'
+bias. Rules and thresholds were then checked on runs not used to set them: fresh noise on
+the synthetic truths, twelve fresh proxies, two misfits that are not a hump, and fresh
+isotropic nulls. The scripts of the review are in `scripts/fix/`.
+
 ## Contents
 
 1. [Summary](#1-summary)
@@ -30,71 +37,86 @@ the samples rests on those proxies.
 **What to do**, in order (§7 has the plan, the risks and the checks):
 
 1. **Forward-difference Jacobians, and no covariance in the intermediate refinements.**
-   This halves the cost of the search and loses nothing:
+   This halves the cost of the search:
    - 0.51× the pattern evaluations (1813 against 3551 a search, mean of 110 runs);
    - 0.59× the wall time (15.0 s against 25.2 s, 6 runs timed in pairs);
-   - the same outcome on 110 of 110 runs, and the same solid within 0.2 % at the 90th
-     percentile;
-   - it reaches the best χ² on 94 of 98 runs, against 93 for today's search.
-2. **Report one solid with its resolution.** This costs no pattern evaluation on clean
-   data:
-   - each extent is a column length, with today's esd taken in the width and widened to
-     the search's own refinement ends within Δ 6;
-   - each direction takes today's angular esd, but only where its extent is told apart
-     from the other two;
-   - when the residuals flag a misfit, a delete-one-line jackknife widens both (about
-     2100 evaluations).
-
-   Scored on 80 synthetic runs and the 12 proxies, this calls 225 quantities determined,
-   and all 225 lie within 25 % or 10° of the truth. Today's report calls 294 determined,
-   of which 28 are wrong (16 of those on the proxies).
-3. **When the misfit flag fires, choose the background degree together with the shape, by
-   BIC** (about 1800 evaluations). On the proxies the median thickness error falls from
-   17.6 % to 5.5 %. BIC never chose a higher degree on the synthetic truths, so on clean
-   data the step would only cost time.
-4. **Optional: successive halving of the brief trials.** It brings the search to 0.35× the
-   evaluations and 0.39× the wall time. On one proxy, though, the search ends 11 χ²_ν
-   above the best: halving needs a guard, which is untested.
+   - the same outcome (held, free or rejected) on 110 of 110 runs, and the same reach;
+   - but the reported solid differs from the app's by more than 5 % or 2° on 6 of 92
+     kept runs: other near-equivalent minima, on elliptic cylinders and proxies (§4.6).
+2. **Pick the background degree with the shape, and search again at that degree.** After
+   the search, refit the kept solid at degree 12; where BIC prefers it, at 18 too; where the
+   pick moves, refine again from the CIF at that degree. On the proxies the unmodelled hump
+   is what biases the shape, and this removes most of the bias:
+   - u01–u12: thickness error 18 % → 2 % (median; worst 8 %), normal 5.8° → 0.0°, held on
+     [110] 1 → 11 of 12;
+   - v01–v12, fresh proxies not used to set anything: 20 % → 2 % (worst 8 %), 6.0° → 0.0°;
+   - refitting at the new degree without a new search, as the first version proposed, gave
+     6 % and left the normal where it was;
+   - one refit at degree 12 separates all 24 proxies (BIC better by 133–1220) from all 34
+     runs without a hump (worse by 30–50), including the 2 fresh proxies the misfit flag
+     misses;
+   - cost: about 1000–1500 evaluations on every run, and on a run whose pick moves about
+     12 500 in all with step 1 (2.1× today's 5960).
+3. **Report one solid with its resolution:** E_L(12.5) extents (today's esds in the width,
+   widened to the search's own ends within Δ 12.5, as column lengths), today's angular
+   radius, a direction only where its extent is told apart, and the jackknife on every run
+   whose pick moved or whose misfit flag fired.
+   - On the 80 synthetic runs and 12 proxies it was built on: 223 quantities called
+     determined, none beyond 25 % or 10° of the truth, 212 (95 %) inside their own stated
+     interval. Today's report: 247 called, 21 beyond 25 % or 10°, 184 (74 %) inside.
+   - HOLD1
+   - On the 24 proxies at the picked degree: 50 claims, 49 inside their stated interval.
+4. **Optional: successive halving of the brief trials** (0.35× the evaluations, 0.39× the
+   wall time). Under misfit at degree 6 it misses the lowest χ² on u11 by 11.4 χ²_ν, and
+   there it reports the truth's own solid: the lowest χ² is not the target until the misfit
+   is modelled.
 
 **What the data allow.** This answers the user's point: if seven shapes share one χ², the
 result is numerical rather than physical.
-- **Most near-equivalent minima are one minimum seen many times.** The backlog's grouping
-  (8°, e^0.25) gives 303 "morphologies within Δ 10" over the 90 synthetic runs. Refined
-  and merged by each minimum's own esds, these come down to 32 over the 80 runs that keep a
-  solid (§5.1).
-- **A χ² barrier test splits the rest.** Of 19 near-equivalent minima, 9 lie in the best's
-  own valley, along a length the data do not fix. The other 10 are distinct: another plate
-  normal, or the axis on another extent, behind barriers of 1.2 to over 1000 χ²_ν. All 10
-  are on proxies or elliptic cylinders (§5.2).
-- **So the result is one solid.** A distinct alternative is named only when a parametric
-  bootstrap gives it at least a 5 % chance of being the better one. That means
-  Δ ≤ 12.5 χ²_ν (§5.3).
-- **The thickness and the plate normal are well determined:**
-  - thinnest dimension error median 1.5 %;
-  - normal error median 0.0°, 8.0° at the 90th percentile.
-
-  The long dimensions are not (largest dimension error median 7 %, 90th percentile 29 %).
+- **Most near-equivalent minima are one minimum seen many times.** On the 80 runs that
+  keep a solid, the backlog's grouping finds 164 other morphologies within Δ 10. Merged by
+  each minimum's own resolution, the same ends fall into 24 other minima, plus at most 17
+  that the analysis' cap left unrefined: 4–7× fewer (§5.1).
+- **A χ² barrier test splits the rest** (27 runs). Of 19 near-equivalent minima, 9 lie in
+  the best's own valley, along a length the data do not fix. 10 are distinct, behind
+  barriers of 1.2 to over 1000 χ²_ν, all on proxies or elliptic cylinders in that sample.
+  On all 80 runs, 22 plausible minima lie beyond 25 % or 10° of the reported solid, 15 of
+  them on elliptic cylinders (§5.2).
+- **So the result is one solid.** A distinct alternative is named only when Δ ≤ 12.5, which
+  a parametric bootstrap puts at a 5 % chance of winning in χ² if the fitted model were
+  true (§5.3). Under a flagged misfit that calibration fails: with replicas that carry the
+  misfit, a competitor 6–12.5 χ²_ν behind wins half the time, and the χ² winner has the
+  smallest largest-dimension error of the minima on only 15 of 120 replicas (§5.3b). The model term comes first.
+- **The thickness is well determined:** 1.5 % median error. **The plate normal** is exact
+  where the truth lies on a lattice direction and the app holds it there (0.0°, 59 of 61
+  runs); off the lattice it is 3.4° median, 9.3° at the 90th percentile (§3.4). The long
+  dimensions are not determined (largest dimension error median 7 %, 90th percentile 29 %).
   Nor is the solid's class: the truth's class ranks first by χ² in 11 of 26 runs.
-- **On the proxies the search does reach the best χ²,** but the unmodelled signal biases
-  that best: the thickness reads 6–28 % thin and the normal 5–9° off. No interval removes
-  a bias. A model term (point 3) removes two thirds of it on the thickness.
+- **"No solid supported" is not "no shape".** The app rejects 10 synthetic anisotropic
+  runs; on 7 of them the truth's own solid gains more than any isotropic null. The card
+  says "not supported at the app's threshold". A null-based threshold set on 46 nulls
+  fails on 46 fresh ones (4 kept) and needs a margin (§5.5).
 
-| Headline (how measured in §3) | Today (bf228ee) | Recommended (points 1–3) |
+| Headline (how measured in §3) | Today (bf228ee) | Recommended (§7 steps 1–6) |
 |---|---|---|
 | Pattern evaluations a search, 110 runs | 3551 | 1813 |
 | Wall time a search, 6 runs timed in pairs | 25.2 s | 15.0 s |
 | Runs reaching the best χ² (Δ ≤ 1), on one reference | 93/98 | 94/98 |
-| Synthetic: truth inside the 95 % interval, thinnest / middle / longest (80 runs) | 89 / 79 / 88 % | 95 / 96 / 93 % |
-| Quantities called determined: right / wrong (80 synthetic + 12 proxies) | 266 / 28 | 225 / 0 |
-| Proxies: thickness inside its interval | 1/12 | 12/12 |
-| Proxies: median thickness error | 17.6 % | 5.5 % (background picked) |
+| Synthetic, 80 runs: truth inside the 95 % interval, thinnest / middle / longest | 89 / 79 / 88 % | 98 / 96 / 93 % |
+| 80 synthetic runs + 12 proxies, degree 6: claims; beyond 25 % or 10°; inside the stated interval | 247; 21; 184 (74 %) | 223; 0; 212 (95 %) |
+| HOLD2 |
+| Proxies u01–u12: thickness error, median; normal error, median | 18 %; 5.8° | 2 %; 0.0° (picked degree, searched again) |
+| Fresh proxies v01–v12: the same | 20 %; 6.0° | 2 %; 0.0° |
+| Evaluations on a run whose pick moves (proxy means) | 5962 | about 12 500 |
 
-![Summary: searches on one reference, and reporting rules scored alike](fig/synthesis.png)
+![Summary: searches on one reference, reporting rules scored alike, and the proxies through the background pick](fig/synthesis.png)
 
-*Left: every full-set search's mean evaluations against the runs it misses (Δ > 1). A hollow
-marker means a proxy lands beyond Δ 3. Right: quantities each reporting rule calls
-determined, split into accurate and not. Produced by `scripts/writer/` from the studies'
-results.*
+*Left: every full-set search's mean evaluations against the runs it misses (Δ > 1). A
+hollow marker means a proxy lands beyond Δ 3. Middle: quantities each reporting rule calls
+determined at degree 6, split into those whose truth lies inside the stated interval, those
+within 25 % or 10° but outside it, and those beyond. Right: each proxy's thickness and
+normal errors at degree 6, refitted at the picked degree, and searched again there.
+`scripts/writer/fig-synthesis.mjs`, from the studies' and the review's results.*
 
 ## 2. The problem
 
@@ -204,7 +226,7 @@ The harness lives in `scripts/harness/` and its API is in `README.md` there.
 | Sample-like proxies u01–u12 | 12 | 12 | {110} box plates 1.6–2.6 nm thick, 10–23 nm across, turned 0–45° in plane (one 6° off); Sr site 1 − 0.64/t (0.60–0.75), ΔB 0.02–0.38; plus an **unmodelled hump** at 30° (FWHM 6°, 14–37 % of (110)'s area, BACKLOG's "broad component") |
 | Fixture controls | 2 | 2 | `fx-s00`, `fx-s05`: the repository's test patterns (one width law, no anisotropy), s11 refined as their standard |
 | *Added in review:* hold-out seeds | 30 | 60 (seeds 4–5) | the synthetic truths again, fresh noise; no rule or threshold was set on them |
-| *Added in review:* fresh proxies v01–v12 | 12 | 12 | drawn once from the ranges of u01–u12 by a fixed generator (`fix/cases-extra.mjs`): {110} box plates 1.6–2.6 nm thick, 10–25 nm across, turned 0–45°, a quarter tilted 3–8°, hump 13–33 % of (110)'s area |
+| *Added in review:* fresh proxies v01–v12 | 12 | 12 | drawn once from the ranges of u01–u12 by a fixed generator (`scripts/fix/cases-extra.mjs`): {110} box plates 1.6–2.6 nm thick, 10–25 nm across, turned 0–45°, a quarter tilted 3–8°, hump 13–33 % of (110)'s area |
 | *Added in review:* other misfits | 8 | 8 | four plates (box-plate110, cyl-disc110, ell-plate110, sqbox-plate001) with a misfit that is not a hump: *air*, a low-angle exponential 600·e^(−(2θ − 10°)/5°) outside the Chebyshev + 1/2θ family; *mix*, a second population of the same solid at half the dimensions with 30 % of the volume |
 | *Added in review:* isotropic nulls | 2 | 46 (seeds 24–46) | iso-7 and iso-20 again, to test the null threshold of §5.5 on fresh draws |
 
@@ -252,7 +274,7 @@ The baseline batch ran 110 runs in 23.2 min, at 2 processes:
     axis on a lattice direction give 0.0° median and 0.0° at the 90th percentile, because 59
     of them are held there. The 19 runs whose truth is off the lattice (the rand and off8
     cases) give 3.4° median, 9.3° at the 90th percentile and 24.9° at worst: that is the
-    resolution figure (`fix/tools/misc.mjs`).
+    resolution figure (`scripts/fix/tools/misc.mjs`).
 - **Where it fails:**
   - long dimensions (the 30 × 25 × 2 plate 34 % off);
   - in-plane turns of plates (13° worst-axis error);
@@ -266,7 +288,8 @@ The baseline batch ran 110 runs in 23.2 min, at 2 processes:
   - normal 4.9–9.0° off [110] on 10 of 12;
   - the longest dimension unbounded or 2–11× too long on 5 of 12.
 
-  The search reaches its best; the best is not the truth.
+  The search reaches its best; at degree 6 the best is not the truth. With the background
+  degree picked and the search run again, it nearly is (§6.3).
 
 ![The app's search on 110 runs](fig/baseline-cases.png)
 
@@ -363,7 +386,7 @@ they go. On u11 that loses the lowest χ² and gains accuracy.
 **On the proxies the lowest χ² is not the most accurate.** Over the 12 proxies and the five
 full-set searches (app, fwd, c1, a4, cfam), the search with the lowest Δ also has the
 smallest normal error on 3 of 12, and the smallest largest-dimension error on 3 of 12
-(`fix/tools/proxacc.mjs`). Reach is a fair target where the model fits. Under misfit it is
+(`scripts/fix/tools/proxacc.mjs`). Reach is a fair target where the model fits. Under misfit it is
 not, until the misfit is modelled (§6.3).
 
 ![Optimiser variants on 18 pilot runs](fig/opt-variants.png)
@@ -519,7 +542,7 @@ Two of a4's misses are flat valleys along a long dimension rather than other mor
 **The ends feed the report.** The recommended report (§6) widens its intervals to the
 search's own refinement ends within Δ 12.5, so a cheaper search also changes the report. It
 was rebuilt from each search's ends around the app's reported solid, on the 80 kept
-synthetic runs (`tables/ends-from-cheaper-searches.md`, `fix/src/ends-check.mjs --tau 12.5`):
+synthetic runs (`tables/ends-from-cheaper-searches.md`, `scripts/writer/ends-check.mjs --tau 12.5`):
 
 | Ends from | Thinnest / middle / longest covered | Extents determined: accurate |
 |---|---|---|
@@ -538,7 +561,7 @@ With c1 or a4 the report loses a little coverage and makes 1–4 claims beyond 2
   - the same reach as the app's (94 and 93 of 98 on one reference);
   - the report built from its ends is as good (§4.5 table).
   - **Risk:** the reported solid differs from the app's by more than 5 % or 2° on 6 of 92
-    kept runs (`fix/tools/fwdsame.mjs`). These are near-equivalent minima:
+    kept runs (`scripts/fix/tools/fwdsame.mjs`). These are near-equivalent minima:
     ecyl-plate110#2 (the app 18.3 × 9.5 × 2.5 nm, normal on [110]; fwd 20.8 × 2.9 × 8.6 nm,
     the axis on another extent, 243 % and 27° apart, at Δ 0.45 against 0.00),
     ecyl-plate110-t20#2 (10 %, 19.5°), and four proxies on the long extent (u03 9 %, u06
@@ -586,7 +609,7 @@ runs.
 analysis' extra starts, and the analysis refines at most 4 candidates a run besides the
 converged ends (`uniq-core.mjs`, maxExtra 4), so an unrefined end never becomes a minimum.
 Taking only the app's search's own ends within Δ 10 on the 80 runs (984 ends,
-`fix/tools/merge-ends.mjs`, no pattern evaluated):
+`scripts/fix/tools/merge-ends.mjs`, no pattern evaluated):
 - 965 lie within the resolution of a refined minimum; besides each run's best, these fall
   into 24 minima;
 - 19 (15 of them brief ends) lie within no refined minimum's resolution, because the cap
@@ -656,7 +679,7 @@ minima (Δ ≤ 12.55) that lie beyond 25 % or 10° of the reported solid number 
 15 on elliptic cylinders, 3 on ellipsoids (ell-ribbon-rand #2 at Δ 0.8 and 45°, #3 at 1.3
 and 36°), 2 on spheroids (sph-mild001 #1 at Δ 3.3 and 30°, #2 at 2.0 and 45°), 1 on a box
 (box-needle111 #2, Δ 0.5, 30°) and 1 on a cylinder (cyl-disc111-off8 #2, Δ 7.8)
-(`fix/tools/misc.mjs`).
+(`scripts/fix/tools/misc.mjs`).
 
 **This is the distinction the user drew.** A minimum in one valley along a length is not
 another shape: it means that length is poorly bounded, and it belongs in that length's
@@ -708,6 +731,31 @@ not the misfit. Whether the χ²-best is the closer to the truth is another ques
 
 ![Bootstrap calibration](fig/uniq-bootstrap.png)
 
+### 5.3b The same question under misfit (added in review)
+
+**Method** (`scripts/fix/u-bootmis.mjs`). For the 10 proxies with at least 2 minima within Δ 30 (the
+uniqueness study's minima, up to 5 a run), 12 replicas each were drawn from the proxies' own
+generator: the truth plus the hump, fresh Poisson noise (seeds 1001–1012). Every minimum was
+refitted from its own vector on each replica, exactly as `u-boot.mjs` refits them (12
+iterations, every parameter free). That is 120 replicas and 168 competitor-replica pairs,
+70 552 evaluations and 622 s at degree 6 (`tables/fix-bootmis.md`).
+
+| Δ on the data | Pairs | Competitor wins (observed) | Predicted by the fitted-model calibration |
+|---|---|---|---|
+| 0–1 | 12 | 0.67 | 0.46 |
+| 1–3 | 48 | 0.40 | 0.31 |
+| 3–6 | 24 | 0.46 | 0.15 |
+| 6–12.5 | 72 | 0.54 | 0.08 |
+| over 12.5 | 12 | 0.00 | 0.04 |
+
+**Under misfit the ranking of minima below Δ 12.5 is noise.** A competitor 6–12.5 χ²_ν worse
+on the data wins on half the replicas. The data's best wins on 58 of 120. The replica's
+winner has the smallest largest-dimension error of the minima on only 15 of 120 (the
+normal's on 55). The fitted-model bootstrap could not see this: its replicas are drawn
+around the best fit's own pattern, where the best is exact by construction. So, under a
+flagged misfit, naming "the best minimum" or an alternative by Δ means little. The model term
+of §6.3 comes first.
+
 ### 5.4 How well each quantity is determined
 
 These are the methods tried for the reported fit's own intervals (uniqueness study). The
@@ -715,7 +763,7 @@ scores are at 10°, on 80 synthetic runs (240 extents, 194 directions) and 12 pr
 
 | Method | What it is | Cost beyond today's report | Result |
 |---|---|---|---|
-| today's esds | linear esd of each dimension (held/free difference in quadrature); angular esd by profile (`turnEsds`), 2σ | 0 | synthetic: 172 extents called determined, 6 wrong; 65 directions, 4 wrong (box-plate110-off8 in-plane edges claimed within 8–13°, really 90° off). Proxies: 4 of 15 extents and 12 of 28 directions wrong. (Rescored with a spheroid's and a cylinder's diameter given its esd, which the first scoring had left at zero width: `fix/src/score.mjs`) |
+| today's esds | linear esd of each dimension (held/free difference in quadrature); angular esd by profile (`turnEsds`), 2σ | 0 | synthetic: 172 extents called determined, 6 wrong; 65 directions, 4 wrong (box-plate110-off8 in-plane edges claimed within 8–13°, really 90° off). Proxies: 4 of 15 extents and 12 of 28 directions wrong. (Rescored with a spheroid's and a cylinder's diameter given its esd, which the first scoring had left at zero width: `scripts/uniqueness/score.mjs`, as corrected) |
 | bootstrap check of those esds | claimed σ against the spread of the best over 20 replicas | (offline) | Fisher σ ln W 1.61× the spread (median); the app's Desd 0.98×; the app's angular esd 0.91×, but under half the spread in 21 of 81 axes |
 | Fisher eigen-analysis | the shape block of the covariance in tolerance units; name the loose combinations | 0 | loose combinations over 91 runs: the in-plane turn 42, the long width 36, both 17. Names the truth's worst error in 17 of 30 runs where it exceeds tolerance. As intervals too conservative (102 extents determined) |
 | profile likelihood of each width | ln W stepped, everything else refined (4 iterations), 2σ crossings | 943 (5.5 s) synthetic, 1755 (11.7 s) proxies | synthetic 198 determined, 2 wrong (long extents 24 % and 30 % off); proxies 25 determined, 8 wrong: overconfident under misfit |
@@ -743,8 +791,15 @@ isotropic truths: 7 nm searched as a box and 20 nm as a cylinder, 23 realisation
 - **Real shapes are lost.** Of the 10 anisotropic truths the app rejects, the truth's own
   refinement gains 9.6–21.4 on 7, above every null.
 - **A null threshold** (a gain of about 8 for three-width bodies, about 6.5 for two) would
-  keep those 7 and still reject every null. How those 7 would then be reported after a
-  full search was not measured.
+  keep those 7 and still reject the 46 nulls it was set on. How those 7 would then be
+  reported after a full search was not measured.
+- **On fresh nulls it does not hold** (added in review: seeds 24–46 of iso-7 and iso-20, 46
+  runs, `scripts/fix/tools/null-hold.mjs`). The box nulls gain up to 8.4 (3 of 23 above 8) and the
+  cylinder nulls up to 7.7 (1 of 23 above 6.5): 4 of 46 would be kept. The thresholds sat
+  just above the first 46's maxima (7.6, 6.1). Over all 92 nulls the 99th percentiles are
+  8.3 and 7.0 and the maxima 8.4 and 7.7. A threshold with a margin, about 10 for three
+  widths and 9 for two, would still keep the 7 truths' own gains (11.3–21.4 for three
+  widths, 9.6–10.3 for two), the two-width ones narrowly.
 
 ![Gain on isotropic nulls against the thresholds](fig/uniq-null.png)
 
@@ -796,7 +851,7 @@ unique. The plate normal is called determined in 34 of 72 runs, although 67 are 
 
 *Filled: called determined. Green: accurate. Orange: not. Totals at the foot: today 254
 right and 26 wrong claims, condP 254 and 2, condD 248 and 0. `scripts/uniqueness/fig-matrix.mjs`
-on the rescored `score.json` (`fix/src/score.mjs`: a round section's diameter with its esd). Interval half-width against the actual error per
+on the rescored `score.json` (`scripts/uniqueness/score.mjs`, as corrected: a round section's diameter with its esd). Interval half-width against the actual error per
 quantity: `fig/uniq-intervals.png`.*
 
 ## 6. One result with its resolution
@@ -884,7 +939,7 @@ but by construction: the refit starts from the degree-6 solid and stays in its b
 no lattice frame and runs no search, and on 10 of 12 proxies it kept the solid held at the
 degree-6 frame, 4.9–9.0° off [110].
 
-**Searched again at the picked degree** (added in review; `fix/u-pipe.mjs` in `fix/root18`).
+**Searched again at the picked degree** (added in review; `scripts/fix/u-pipe.mjs` in the work folder's `fix/root18`).
 The whole refinement ran again from the CIF with a degree-18 background: the app's search,
 its report, the misfit flag and the jackknife. It ran on the 12 proxies and on the 12 fresh
 ones (v01–v12, drawn once from the same ranges; nothing was set on them).
@@ -960,49 +1015,86 @@ A narrower or structured misfit may not be absorbed, and a size distribution is 
 ### 6.4 The studies' rules scored alike, and the merged rule
 
 The presentation study scored coverage, and the uniqueness study scored claims. Here both
-are scored both ways on the same runs, with their own intervals
+are scored both ways on the same runs, with their own intervals, and every claim is also
+checked against its own printed interval or radius ("holds as stated", §3.3)
 (`scripts/writer/cross.mjs`, `tables/rules-scored-alike.md`). The merged rule takes:
-- E_L6's extents;
+- E_L(12.5)'s extents (§6.1);
 - today's angular radius, 2σ of `turnEsds` (no direction where the esd exceeds 30°);
-- the D rule, on E_L6's extents;
-- the jackknife when the worst segment flags.
+- the jackknife over reflections where the misfit flag fires: D·e^(±2 sd) and 2·rms turn
+  (an unbounded estimate keeps its interval; an infinite sd opens only the upper end);
+- the D rule, on the extents.
 
-| Rule (80 synthetic runs) | Thinnest / middle / longest covered | Extents determined: accurate | Directions covered | Directions determined: accurate | Runs resolved: accurate in full |
-|---|---|---|---|---|---|
-| today (P0, 2.45σ cones) | 71 / 63 / 70 | 146: 134 | 184/194 | 39: 36 | 3: 3 |
-| today (2σ, as the uniqueness study takes it) | 66 / 46 / 57 | 186: 178 | 178/194 | 65: 61 | 21: 20 |
-| E_L6 alone | 76 / 77 / 74 | 170: 170 | 186/189 | 21: 21 | 7: 7 |
-| **merged rule** | **76 / 77 / 74** | **170: 170** | **190/194** | **48: 48** | **12: 12** |
-| condP | 73 / 73 / 71 | 198: 196 | 190/194 | 51: 51 | 15: 15 |
-| condD | 76 / 74 / 73 | 192: 192 | 192/194 | 49: 49 | 15: 15 |
+Today's report is rebuilt once, as the presentation study rebuilt it (linear esds with the
+held/free difference, cones 2.45σ), with a spheroid's and a cylinder's diameter given the
+esd the card shows (`scripts/presentation/approaches.mjs`; the first scoring had left that interval open
+in this rebuild and at zero width in the uniqueness study's, §5.4).
 
-| Rule (12 proxies, all flagged) | Thinnest / middle / longest covered | Extents determined: accurate | Directions covered | Directions determined: accurate | Thinnest hi/lo (median) |
-|---|---|---|---|---|---|
-| today (2σ) | 1 / 11 / 11 | 15: 11 | 9/36 | 28: 16 | 1.08 |
-| E_L6 alone | 1 / 10 / 5 | 14: 10 | 28/36 | 11: 11 | 1.08 |
-| **merged rule** | **12 / 11 / 11** | **1: 1** | **35/36** | **6: 6** | **1.91** |
-| condP | 12 / 11 / 12 | 3: 3 | 35/36 | 4: 4 | 1.91 |
-| condD | 12 / 12 / 12 | 3: 3 | 36/36 | 4: 4 | 1.91 |
+**At background degree 6, on the runs the rules were developed on:**
 
-The two "today" rows reconstruct the same report from the same recorded esds. They differ
-in how fitted axes are paired with the truth's, in how grouped extents are handled, and in
-the cone (2.45σ against 2σ). The comparison holds within each row.
+| Rule (80 synthetic runs) | Thinnest / middle / longest covered | Extents determined: within 25 %, holding as stated | Directions determined: within 10°, holding as stated | Runs resolved: accurate in full |
+|---|---|---|---|---|
+| today's report | 71 / 63 / 70 | 178: 166, 145 | 39: 36, 33 | 12: 12 |
+| E_L(6) alone | 76 / 77 / 74 | 170: 170, 162 | 21: 21, 20 | 7: 7 |
+| merged rule with E_L(6) | 76 / 77 / 74 | 170: 170, 162 | 48: 48, 44 | 12: 12 |
+| **merged rule with E_L(12.5)** | **78 / 77 / 74** | **169: 169, 163** | **46: 46, 42** | **10: 10** |
+| condP | 73 / 73 / 71 | 198: 196, 178 | 51: 51, 47 | 15: 15 |
+| condD | 76 / 74 / 73 | 192: 192, 180 | 49: 49, 47 | 15: 15 |
 
-**The merged rule makes no wrong claim on either set.** It has condP's coverage or better
-on the synthetic runs, and it costs nothing beyond today's report unless the flag fires
-(then about 2100 evaluations for the jackknife). It claims fewer extents than condP (170
-against 198): it gives up the long extents that only a profile tightens, which is where
-condP's 2 wrong claims were. condP's profile costs about +1040 evaluations a run; it buys
-28 more determined extents and 3 more directions, with 2 of the extents wrong.
+| Rule (12 proxies, flagged) | Thinnest / middle / longest covered | Extents determined: within 25 %, holding as stated | Directions determined: within 10°, holding as stated | Thinnest hi/lo (median) |
+|---|---|---|---|---|
+| today's report | 1 / 11 / 11 | 15: 11, 4 | 15: 13, 2 | 1.08 |
+| E_L(6) alone | 1 / 10 / 5 | 14: 10, 3 | 11: 11, 3 | 1.08 |
+| **merged rule with E_L(12.5)** | **12 / 12 / 10** | **1: 1, 1** | **7: 7, 6** | **1.91** |
+| condP | 12 / 11 / 12 | 3: 3, 3 | 4: 4, 3 | 1.91 |
+| condD | 12 / 12 / 12 | 3: 3, 3 | 4: 4, 4 | 1.91 |
 
-**Under misfit it says what the proxies allow and no more:**
-- the thickness as a range (median hi/lo 1.91), which contains the truth on 12 of 12;
-- the normal to within about 10° of [110];
-- the lateral size as a lower bound or a wide range.
+**Within tolerance is not the same as holding as stated.** The merged rule makes no claim
+beyond 25 % or 10° on either set. Against its own printed intervals it holds on 163 of 169
+synthetic extents, 42 of 46 directions, 1 of 1 proxy extent and 6 of 7 proxy directions:
+212 of 223, 95 %, about what a 95 % interval should give. The misses
+(`tables/fix-claims-outside.txt`) are two thicknesses just outside intervals of about ±5 %
+(ecyl-ribbon001 #1: 3.68 nm (3.49–3.84) against 3.40; ell-block-t25 #2: 5.56 (5.27–5.89)
+against 6.00), the round sections of two discs, counted twice each (cyl-disc111-off8 #1:
+10.5 nm (9.8–12.0) against 12.7; cyl-disc110 #3: 17.6 (15.8–21.3) against 15.3), four normals
+3.4–9.4° off with radii of 3.2–7.3° (box-plate110-off8 #3, cyl-disc-rand #3,
+cyl-disc111-off8 #3, ell-ribbon-rand #2), and on the proxies u11's normal, given as 4.9° from [110] within 3.1° while the truth is
+on [110]. Today's report holds as stated on 184 of 247 claims (74 %) and makes 21 claims
+beyond 25 % or 10° (6 on the proxies).
 
-The jackknife was measured at background degree 6. After the background pick of §6.3
-the misfit flag may not fire. Whether it does, and how wide the jackknife is then, is the
-first thing to measure (§8).
+**On runs no rule was set on.**
+
+HOLDOUT_SYN
+
+*Fresh proxies at degree 6* (v01–v12): the flag fires on 10 of 12; it misses v03 (worst
+segment 1.17) and v11 (1.24), the two with the smallest humps (13 and 15 % of (110)). The
+merged rule covers the thickness on 11 of 12 and the longest extent on only 7. It calls 3
+extents and 4 directions determined; all 4 directions are within 10°, but 1 extent is beyond
+25 % (v11's middle, 13.9 nm (12.6–17.0) against 19.2) and only 3 of the 7 claims hold as
+stated. Three of the four misses are on the two unflagged runs; the fourth is v09's normal,
+4.8° off with a radius of 3.7° after the jackknife. A flag at 1.25 lets mild misfits through, and
+no threshold on the worst segment would catch v03 (1.17) without firing on clean runs (the
+first 80 reach 1.21).
+
+**After the background pick (§6.3), on both proxy sets searched again at degree 18:**
+
+| Rule at the picked degree | Thinnest / middle / longest covered | Extents determined: within 25 %, holding as stated | Directions determined: within 10°, holding as stated | Thinnest hi/lo (median) |
+|---|---|---|---|---|
+| u01–u12, jackknife on every run whose pick moved | 11 / 11 / 12 | 18: 18, 17 | 12: 12, 12 | 1.36 |
+| u01–u12, jackknife only where the flag still fires (2) | 11 / 11 / 12 | 24: 24, 23 | 14: 14, 14 | 1.10 |
+| v01–v12, jackknife on every run whose pick moved | 12 / 12 / 12 | 11: 11, 11 | 9: 9, 9 | 1.36 |
+| v01–v12, jackknife only where the flag still fires (0) | 12 / 12 / 11 | 19: 19, 19 | 11: 11, 8 | 1.13 |
+
+The flag mostly stops firing once the hump is modelled (2 of 24). Before the fresh proxies
+were run, the cheaper order (jackknife only where the flag still fires) was the candidate.
+On them it put 3 of 11 directions outside their radius: v04, v07 and v08, free fits whose
+normals sit 3.7–5.0° off with radii of 1.9–3.3°. With the jackknife on every run whose pick
+moved, 49 of 50 claims over the 24 proxies hold as stated. The one miss is u08's
+thickness, 2.48 nm (2.36–2.61) against 2.30, on a plate held on [110] while the truth is
+tilted 6°.
+
+**condP and condD** are kept for comparison. condP's width profiles cost about +1040
+evaluations a run; they buy 29 more determined extents than the merged rule on the
+synthetic runs, 2 of them beyond 25 %. condD adds the minima stage, +3570 a run.
 
 ### 6.5 The result card
 
@@ -1031,15 +1123,17 @@ proposal, joining both studies' vocabularies:
 - **Size over all directions:** the harmonic mean column length as one sphere's diameter,
   ±3 %. It is the isotropic fit's reading, and within 3 % on 78 of 80 synthetic runs (1.0 %
   median error).
-- **A discrete alternative** is named only when it is distinct (§5.2) and Δ ≤ 12.5. For
-  example: *or along [1-1-1] (Δ 6.2, flip 14 %)*. This needs the minima stage of §5.1.
+- **A discrete alternative** is named only when it is distinct (§5.2) and Δ ≤ 12.5, and only
+  where no misfit is flagged or the model term has removed it: under a flagged misfit the
+  ranking of minima below Δ 12.5 is noise (§5.3b). For example: *or along [1-1-1] (Δ 6.2,
+  flip 14 %)*. This needs the minima stage of §5.1.
 - **The model's part:**
   - the misfit flag;
   - the background degree picked, and the spread of the values over the degrees;
   - a sentence that the solid's class is not determined by the data, and that the lengths
     hold for every class within the plausible set.
 
-**Example cards**, written by `fix/src/cards.mjs` from the runs' records (the merged rule with
+**Example cards**, written by `scripts/writer/cards.mjs` from the runs' records (the merged rule with
 E_L(12.5); the bracketed check against the truth is for this write-up, not for the card).
 They include the cases where the rule fails.
 
@@ -1163,44 +1257,48 @@ u09 the merged rule widens the thickness and the normal as in the card above.
 
 ## 7. Recommendation and plan
 
-The steps are ordered by gain over risk. Each is independent of the ones after it.
+The steps are ordered by gain over risk. Steps 1–4 are independent of each other; step 6
+needs step 5.
 
 | Step | What | Expected gain (measured on the harness) | Risk | Check before release |
 |---|---|---|---|---|
-| 1 | **Forward differences** in every refinement of the search (one displaced point a non-linear column, the pattern at v reused); **no covariance** in intermediate refinements; the returned fit's covariance once, central | evaluations 3551 → 1813 a search (0.51×); wall 25.2 → 15.0 s (paired); outcomes 110/110 unchanged | none seen: columns within 10⁻⁴ of central; outcomes, solids and the report unchanged | the engine suites; this harness's 110 runs, which must give the same outcomes |
+| 1 | **Forward differences** in every refinement of the search (one displaced point a non-linear column, the pattern at v reused); **no covariance** in intermediate refinements; the returned fit's covariance once, central | evaluations 3551 → 1813 a search (0.51×); wall 25.2 → 15.0 s (paired); outcome (held, free, rejected) unchanged on 110/110; the same reach | the reported solid differs by more than 5 % or 2° on 6 of 92 kept runs: near-equivalent minima of elliptic cylinders and proxies (§4.6) | the engine suites; this harness's 110 runs |
 | 2 | **Held-frame dedupe** (a frame equal to one already refined, up to axis signs) | −88 evaluations a run (2.5 %); identical results by construction | none | |
-| 3 | **Keep the search's ends** (each refinement's solid and χ²) in `freeShape`'s result; report **E_L6**: today's esds in the width, widened to the ends within Δ 6, in column lengths, paired by column length | synthetic coverage 89/79/88 % → 95/96/93 %; no open or negative lower limits; 0 evaluations | brief ends have rounded faces (χ² within about 1 %); built on the app's search: a cheaper search's ends give slightly less (§4.5) | |
-| 4 | **D rule** for directions; today's `turnEsds` radius (2σ) | wrong direction claims 4 → 0 on synthetic runs; 0 evaluations | fewer directions stated (48 against 65) | |
-| 5 | **Misfit flag** (worst segment χ²_ν > 1.25, one segment a line) and **jackknife** over reflections when it fires | proxies: thickness covered 1/12 → 12/12, wrong claims 16 → 0; ~2100 evaluations (11 s) on flagged runs only | threshold set on one kind of misfit (a hump at 30°); unknown on real misfits | the user's 33A…38D: does it fire, and how wide is the thickness? |
-| 6 | **Card**: habit, resolution level, labels per length and direction, size over all directions, the model's part | one result in physical terms (§6.5) | wording; the class line needs a decision | |
-| 7 | **Background degree chosen with the shape** (6/12/18 by BIC, after the search), when the misfit flag fires | proxies' thickness error 17.6 % → 5.5 %; ~1800 evaluations (10–20 s) on flagged runs | interaction with step 5 untested; the rule of running it only on flagged runs is untested (BIC kept degree 6 on all 26 synthetic runs where it was tried) | flag and jackknife after the pick, on the proxies and the real files |
-| 8 | Optional: **halving** of the brief trials (2 → 4 → 8 iterations, keep 6 then 3) **with a misfit guard** (do not halve when the best brief's χ²_ν exceeds 1 + 3√(2/ν)) | a further 0.35/0.51 → −31 % on clean data | u11 lands at Δ 11.4 without the guard; the guard is untested; 2 wrong report claims from its ends | the harness's 110 runs with the guard |
-| 9 | Optional: **distinct alternatives** (the minima of §5.1, barrier or merge by resolution, flip ≥ 5 %) as a "check other morphologies" action | names the u02, u03, u04, u07, u09, u10 alternatives; removes condP's 2 wrong long extents | +2500–3800 evaluations (15–25 s) | |
-| 10 | Later: **keep threshold from isotropic nulls** (a gain of about 8 χ²_ν, three widths; 6.5, two) instead of ΔBIC < −10 | keeps 7 of 10 real mild shapes the app now rejects; rejects all 46 nulls | nulls at one size per body and one noise level | nulls over sizes, counts and bodies; the 7 through the full search and card |
+| 3 | **Keep the search's ends** (each refinement's solid and χ²) in `freeShape`'s result; report **E_L(12.5)**: today's esds in the width, widened to the ends within Δ 12.5, in column lengths, paired by column length | synthetic coverage 89/79/88 % → 98/96/93 %; no open or negative lower limits; 0 evaluations | brief ends have rounded faces (χ² within about 1 %); a cheaper search's ends give slightly less (§4.5) | |
+| 4 | **D rule** for directions; today's `turnEsds` radius (2σ) | directions beyond 10°: 3 of 39 → 0 of 46 on the synthetic runs; 0 evaluations | fewer directions stated | |
+| 5 | **Background degree chosen with the shape**: refit the kept solid at degree 12; when BIC prefers it, at 18 too; when the pick moves, refine again from the CIF at that degree (search and report) | proxies: thickness error 18 % → 2 % (median), normal 5.8° → 0.0°; fresh proxies 20 % → 2 %, 6.0° → 0.0°; catches the 2 fresh proxies the flag misses | +1000–1500 evaluations on every kept run; about 16 700 in all on a run whose pick moves (2.8× today, 2.1× with step 1); tested on one kind of misfit, a smooth hump: a size distribution is neither seen nor removed (§6.3) | the user's 33A…38D: the pick, and the solid before and after |
+| 6 | **Misfit flag** (worst segment χ²_ν > 1.25) and **jackknife** over reflections on every run whose pick moved or whose flag fired | on the 24 proxies at the picked degree, 49 of 50 claims hold as stated; about 2000 evaluations (10–20 s) on those runs | the flag alone misses mild humps (2 of 12 fresh proxies, §6.4); step 5 must come first | the user's files: does the flag still fire after the pick? |
+| 7 | **Card**: habit, resolution level, labels per length and direction, size over all directions, the model's part; "one size" worded as "not supported at the app's threshold" | one result in physical terms (§6.5) | wording; the class line needs a decision | |
+| 8 | Optional: **halving** of the brief trials (2 → 4 → 8 iterations, keep 6 then 3) | a further 0.35/0.51 → −31 % on clean data | its ends cost the report 1 claim beyond 25 % (§4.5); under misfit at degree 6 it stops in other basins (u11, which there was the truth's solid); untested at the picked degree | the harness's 110 runs, and the proxies after step 5 |
+| 9 | Optional: **distinct alternatives** (the minima of §5.1, barrier or merge by resolution, flip ≥ 5 %) as a "check other morphologies" action, only where no misfit is flagged or after step 5 | names the u02, u03, u04, u07, u09, u10 alternatives; removes condP's 2 wrong long extents | +2500–3800 evaluations (15–25 s); under a flagged misfit the ranking below Δ 12.5 is noise (§5.3b) | |
+| 10 | Later: **keep threshold from isotropic nulls** (a gain of about 8 χ²_ν, three widths; 6.5, two) instead of ΔBIC < −10 | keeps up to 7 of 10 real mild shapes the app now rejects; but on 46 fresh nulls the thresholds 8 and 6.5 keep 4 (§5.5): they need a margin, which costs some of the 7 | nulls at one size per body and one noise level | nulls over sizes, counts and bodies; the 7 through the full search and card |
 
-**Expected cost on clean data** after steps 1–7, synthetic means:
+**Expected cost on clean data** after steps 1–6, synthetic means:
 
-| Part | Today | After steps 1–7 |
+| Part | Today | After steps 1–6 |
 |---|---|---|
 | Search | 3577 | about 1800 |
 | Report (unchanged) | 2506 | 2506 |
-| Total | 6083 | about 4300 (−29 %) |
+| Refit at degree 12 (step 5) | — | 1000–1500 |
+| Total | 6083 | about 5300–5800 (−5 to −13 %) |
 
 The report's own profiles (`turnEsds`, the ball-pair profiles) are 4-iteration refinements
 too. Forward differences there would likely halve that 2506 as well, which is untested; if
-so, the total would be about 3050 (−50 %).
+so, the total would be about 4100–4600.
 
-**Expected cost on flagged data**, proxy means:
+**Expected cost on a run whose pick moves**, proxy means:
 
-| Part | Today | After steps 1–7 |
+| Part | Today | After steps 1–6 |
 |---|---|---|
-| Search | 4367 | 2337 (fwd, measured) |
-| Report | 1595 | 1595 |
-| Jackknife | — | 2103 |
-| Background pick | — | about 1800 |
-| Total | 5962 | about 7800 (+31 %) |
+| Search at degree 6 | 4367 | 2337 (fwd, measured) |
+| Report at degree 6 | 1595 | — (made at the picked degree instead) |
+| Refits at 12 and 18, with their isotropic fits | — | about 2970 |
+| Isotropic fit, search and report at 18 | — | about 520 + 2350 (fwd, assumed 0.51×) + 2330 |
+| Jackknife | — | about 1950 |
+| Total | 5962 | about 12 500 (2.1×) |
 
-For that, the thickness bias falls by two thirds and the report makes no wrong claims.
+For that, the thickness bias on the proxies falls from 18–20 % to 2 % (median), the normal
+from 6° to 0°, and 49 of 50 claims hold as stated.
 
 **Not to do:**
 - Broyden updates;
@@ -1219,22 +1317,25 @@ For that, the thickness bias falls by two thirds and the report makes no wrong c
 
 - **The real samples.**
   - 33A…38D and LaB6_real were not available. The proxies' hump at 30° is an assumption
-    taken from BACKLOG and RIETVELD.md, and the misfit flag's threshold (1.25) was set
-    between 1.207 (the worst synthetic run) and 1.311 (the mildest proxy).
-  - Real misfits are untested: size distributions, strain, stacking faults, a wrong
-    background.
-  - Run on the real files: steps 1, 5 and 7, the flag, the jackknife, and the background
-    pick.
-- **The background pick and the flag.** Does the flag still fire after the background
-  degree is picked, and how wide is the jackknife then? Both were measured at degree 6.
-  The backlog's amorphous-hump term, the direct fix, was not tried.
-- **Halving's guard** (step 8) was not run. Its ranking after 2 iterations measures speed
-  of convergence, not destination.
+    taken from BACKLOG and RIETVELD.md. The misfit flag's threshold (1.25) was set between
+    1.207 (the worst of the first 80 synthetic runs) and 1.311 (the mildest proxy), and
+    misses 2 of 12 fresh proxies (§6.4).
+  - Real misfits are mostly untested: a size distribution was tried (*mix*, §6.3) and is
+    neither flagged nor removed; strain, stacking faults and structured backgrounds were not.
+  - Run on the real files: steps 1, 5 and 6, and look at the pick, the solid before and
+    after it, and whether the flag still fires.
+- **The model term.** A degree-18 Chebyshev absorbs a smooth 6° hump. The backlog's
+  amorphous-hump term, the direct model, was not tried; nor were narrower misfits.
+- **Forward differences at the picked degree** were not run: the cost of step 5 assumes the
+  0.51× measured at degree 6.
+- **Halving** (step 8) was not run at the picked degree. Its ranking after 2 iterations
+  measures speed of convergence, not destination.
 - **fwd with the widths-screened starts** was not combined. Forward differences in the
   report's profiles (`turnEsds`) were not tried.
 - **The free minimum near a held frame.** box-plate110-off8 seed 2: every search holds the
-  plate on [110] while the free minimum lies 8° off, 2–3 χ²_ν lower. This is a weakness of
-  the free refinement near a held frame, not of the starts.
+  plate on [110] while the free minimum lies 8° off, 2–3 χ²_ν lower. u08 after the pick is
+  held on [110] while its truth is tilted 6°, and its thickness reads 8 % thick, outside its
+  interval. This is a weakness of the held-frame rule near the lattice, not of the starts.
 - **Flat valleys.** Along poorly bounded lengths the refinement's shift test stops early,
   and χ² keeps falling towards the best: up to 7.8 χ²_ν short on u05, 5.8 on u03, 4.8 on
   box-plate110-off8#2, 3.7 on u12, 1.9 on u08 (§5.2). This inflates "near-equivalent
@@ -1244,10 +1345,13 @@ For that, the thickness bias falls by two thirds and the report makes no wrong c
 - **The barrier test** uses a straight path, an upper bound. A nudged elastic band could
   merge some "distinct" minima.
 - **Calibration samples.**
-  - c = 8 comes from 51 pairs in 33 runs.
-  - The isotropic nulls cover one size per body and one count level.
+  - c = 8 comes from 51 pairs in 33 runs, under the fitted model; under misfit there is no
+    usable calibration below Δ 12.5 (§5.3b, 168 pairs).
+  - The isotropic nulls cover one size per body and one count level (92 draws).
   - The solid-class comparison used seed 1 only.
-  - Verdicts rest on 3 noise seeds per case.
+  - Verdicts rest on 3 noise seeds per case; the hold-out adds 2 more (§6.4).
+  - The proxies, old and fresh, share one generator: a box plate on {110} with one kind of
+    hump.
 - **Strong patterns.** Level 3 ("in-plane shape resolved") never occurred at these counts
   (strongest line 1100). Stronger patterns were not run.
 - **Other lattices.** All cases are cubic SrTiO₃. The symmetry code in the comparisons
@@ -1264,7 +1368,11 @@ For that, the thickness bias falls by two thirds and the report makes no wrong c
 - [`scripts/`](scripts/README.md): every script behind the numbers and figures, in the
   work folder's layout, with how to rebuild the frozen engine (`git archive bf228ee`) and
   rerun each study. A run from this copy gave 4225 (app), 1799 (a4) and 1383 (c1)
-  evaluations on box-plate110 seed 1, as in the batches.
+  evaluations on box-plate110 seed 1, as in the batches. The review's pipeline
+  (`scripts/fix/u-pipe.mjs`) gave the same 4225 evaluations and χ² 5458.6 for the search.
+  `scripts/fix/` holds the review's runs and tools; four study scripts were corrected in
+  place (`uniqueness/score.mjs`, `presentation/approaches.mjs`, `presentation/eval.mjs`,
+  `writer/cross.mjs`), as `scripts/README.md` lists.
 - `tables/`: the summary tables quoted here.
 
   | Tables | Study |
@@ -1275,6 +1383,7 @@ For that, the thickness bias falls by two thirds and the report makes no wrong c
   | `uniq-*.md` | uniqueness: scores at 10° and 15°, verdicts, cards, classes |
   | `pres-eval-*.md` | every interval approach on synthetic runs and proxies |
   | `common-reference.md`, `rules-scored-alike.md`, `ends-from-cheaper-searches.md` | this write-up's rescoring |
+  | `fix-*` | the review: the pipeline at the picked degree run by run (`fix-pipeline.md`, `fix-pipe-*.json`), the hold-out (`fix-holdout.md`), the bootstrap under misfit, the fresh nulls, the claims outside their stated intervals, the generated cards, the merge of ends, the comparison of fwd's and the app's solids, and the smaller checks (`fix-misc.txt`) |
 
 - `fig/`: PNG with its SVG source.
 
@@ -1285,7 +1394,7 @@ For that, the thickness bias falls by two thirds and the report makes no wrong c
   | `opt-variants`, `opt-full-fwd`, `opt-full-c1`, `opt-path`, `opt-barriers` | optimizer |
   | `uniq-minima`, `uniq-bootstrap`, `uniq-null`, `uniq-claims`, `uniq-intervals` | uniqueness |
   | `pres-coverage`, `pres-forest`, `pres-invariants`, `pres-mock` | presentation |
-  | `synthesis` | this write-up |
+  | `synthesis` | this write-up (redrawn in review, three panels) |
 
 - **Not in the repository:** the per-run results (about 75 MB of JSON), the engine copies,
   and any data file of the user's.

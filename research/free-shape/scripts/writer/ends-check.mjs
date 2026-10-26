@@ -4,12 +4,14 @@
 // ends of fwd, c1 (optimiser study) or a4, cfam (starts study) instead, around the same reported
 // solid (the app's, whose esds the uniqueness study recorded), on the 80 synthetic runs that kept a
 // solid. Reads results only; runs nothing.
-//   node ends-check.mjs <fs folder> [--md out.md]
+//   node ends-check.mjs <fs folder> [--tau 12.5] [--md out.md]
+// (fix: --tau, the Δ of the ends taken; 6 as first published, 12.5 as recommended after review)
 import fs from 'node:fs';
 import path from 'node:path';
 
 const FS = path.resolve(process.argv[2] || '.');
 const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
+const TAU = +(arg('--tau') || 6);
 const { loadRun, CASES, alignL, Lprin, inside } = await import(path.join(FS, 'presentation/plib.mjs'));
 const { E_L } = await import(path.join(FS, 'presentation/approaches.mjs'));
 const { readResult } = await import(path.join(FS, 'harness/lib.mjs'));
@@ -35,8 +37,8 @@ const srt = s => s.dims.map(d => Number.isFinite(d) ? d : Infinity).sort((x, y) 
 const same = (a, b) => { if (!a || !b || a.type !== b.type) return false; const x = srt(a), y = srt(b);
   return x.every((d, i) => (d === Infinity && y[i] === Infinity) || Math.abs(Math.log(d / y[i])) < 0.05); };
 
-const L = ['E_L6 on the 80 synthetic runs that kept a solid, with the ends of each search (around the app\'s reported solid and its esds). covered = the truth inside the interval; determined: hi/lo ≤ 1.25²; accurate: within 25 %. "same solid": the search reported the app\'s solid type with every dimension within 5 % (sorted; orientation not compared).', '',
-  '| ends from | runs | same solid | ends within Δ 6 a run (mean) | thinnest covered | middle covered | longest covered | median hi/lo thin / mid / long | extents determined: accurate | principal axis covered (of claimed) |',
+const L = [`E_L(${TAU}) on the`+' 80 synthetic runs that kept a solid, with the ends of each search (around the app\'s reported solid and its esds). covered = the truth inside the interval; determined: hi/lo ≤ 1.25²; accurate: within 25 %. "same solid": the search reported the app\'s solid type with every dimension within 5 % (sorted; orientation not compared).', '',
+  `| ends from | runs | same solid | ends within Δ ${TAU} a run (mean) | thinnest covered | middle covered | longest covered | median hi/lo thin / mid / long | extents determined: accurate | principal axis covered (of claimed) |`,
   '|---|---|---|---|---|---|---|---|---|---|'];
 for (const [name, src] of Object.entries(SRC)) {
   const S = { n: 0, same: 0, ends: 0, cov: [0, 0, 0], f: [[], [], []], det: 0, acc: 0, pc: 0, pn: 0 };
@@ -47,7 +49,7 @@ for (const [name, src] of Object.entries(SRC)) {
     if (src) { const r = recOf(src, c.id, seed); if (!r || !r.kept) continue; base = r; }
     S.n++; if (same(base.solid, R.base.solid)) S.same++;
     const R2 = { ...R, base: { ...R.base, log: base.log, chi2Best: base.chi2Best, chi2nu: base.chi2nu } };
-    const res = E_L(6)(R2);
+    const res = E_L(TAU)(R2);
     S.ends += (res.spread ? 1 : 0) && 0;
     const al = alignL(res.solid, R.truth), tv = Lprin(R.truth), est = Lprin(res.solid);
     const ord = [0, 1, 2].sort((x, y) => tv[x] - tv[y]);
@@ -63,7 +65,7 @@ for (const [name, src] of Object.entries(SRC)) {
     const L0 = (base.log || []).filter(l => l.to && Number.isFinite(l.c));
     const ex = L0.filter(l => !l.soft || ['ellipsoid', 'spheroid'].includes(l.to.type));
     const c0 = Math.min(...(ex.length ? ex : L0).map(l => l.c), base.chi2Best ?? Infinity), nu0 = Math.max(1, base.chi2nu || 1);
-    S.ends += L0.filter(l => (l.c - c0) / nu0 <= 6).length;
+    S.ends += L0.filter(l => (l.c - c0) / nu0 <= TAU).length;
   }
   const med = a => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)].toFixed(2) : '—'; };
   L.push(`| ${name} | ${S.n} | ${S.same} | ${(S.ends / S.n).toFixed(1)} | ${S.cov[0]}/${S.n} | ${S.cov[1]}/${S.n} | ${S.cov[2]}/${S.n} | ${S.f.map(med).join(' / ')} | ${S.acc}/${S.det} | ${S.pc}/${S.pn} |`);

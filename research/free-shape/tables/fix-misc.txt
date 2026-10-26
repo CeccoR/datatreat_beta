@@ -1,0 +1,36 @@
+1. normal error, on-lattice truths: 61 runs (59 held), median 0.0°, p90 0.0°, max 19.5°; off-lattice (rand, off8): 19 runs (6 held), median 3.4°, p90 9.3°, max 24.9°; all 80: median 0.0°, p90 8.0°
+2. far plausible minima on 80 synthetic runs: 22 in 14 runs; by solid {"box":1,"cylinder":1,"ellcyl":15,"ellipsoid":3,"spheroid":2}
+   box-needle111#2 Δ 0.46 51 % 30.4°
+   cyl-disc111-off8#2 Δ 7.81 26 % 8.7°
+   ecyl-plate110#1 Δ 0.26 22 % 10.9°
+   ecyl-plate110#1 Δ 9.02 111 % 6.6°
+   ecyl-plate110#2 Δ 2.18 16 % 19.5°
+   ecyl-plate110#2 Δ 5.00 48 % 5.3°
+   ecyl-plate110#3 Δ 0.41 13 % 13.9°
+   ecyl-plate110#3 Δ 1.48 17 % 11.7°
+   ecyl-plate110-t20#2 Δ 0.77 17 % 25.4°
+   ecyl-plate110-t20#2 Δ 1.53 40 % 26.7°
+   ecyl-plate110-t20#3 Δ 4.28 14 % 18.1°
+   ecyl-plate110-t20#3 Δ 4.73 14 % 15.5°
+   ecyl-rand#3 Δ 0.19 22 % 28.7°
+   ecyl-rand#3 Δ 0.44 16 % 10.5°
+   ecyl-ribbon001#1 Δ 2.02 42 % 10.5°
+   ecyl-ribbon001#2 Δ 5.03 39 % 13.4°
+   ecyl-ribbon001#2 Δ 5.95 108 % 15.7°
+   ell-ribbon-rand#2 Δ 0.80 34 % 44.6°
+   ell-ribbon-rand#2 Δ 12.20 44 % 45.1°
+   ell-ribbon-rand#3 Δ 1.25 94 % 35.9°
+   sph-mild001#1 Δ 3.34 49 % 30.3°
+   sph-mild001#2 Δ 1.96 42 % 45.0°
+3. null maxima: box 7.6, cylinder 6.1; rejected anisotropic truths (synthetic): 10
+   box-block-rand#1 box search gain — truth gain 11.4 above every null of its width count
+   box-block-rand#2 box search gain 4.2 truth gain 4.1 
+   box-block-rand#3 box search gain 3.1 truth gain 3.0 
+   ecyl-rand#1 ellcyl search gain 13.5 truth gain 11.3 above every null of its width count
+   ecyl-rand#2 ellcyl search gain — truth gain 16.1 above every null of its width count
+   ell-block-t25#1 ellipsoid search gain — truth gain 21.4 above every null of its width count
+   sph-mild001#3 spheroid search gain 8.8 truth gain 9.6 above every null of its width count
+   sqbox-block-rand#1 sqbox search gain — truth gain 10.3 above every null of its width count
+   sqbox-block-rand#2 sqbox search gain — truth gain 9.8 above every null of its width count
+   sqbox-block-rand#3 sqbox search gain 4.1 truth gain 3.8 
+4. proxies (12): first by χ² {"ellcyl":5,"box":5,"ellipsoid":2}, by BIC {}

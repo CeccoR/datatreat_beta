@@ -16,7 +16,8 @@ for (const c of CASES.filter(c=> c.kind === SET)) for (const s of c.seeds) runs.
 
 const SAME = { P0_app, P0w, 'E_app2': E_app(2), 'E_app6': E_app(6), 'E_app2c': E_app(2, { conv: true }), 'E_appW2': E_appW(2), 'E_appW4': E_appW(4), 'E_appW6': E_appW(6), 'E_appW10': E_appW(10), P1_profile, 'E_prof2': E_prof(2), 'E_prof6': E_prof(6), 'P2_env2': P2_envelope(2), 'P2_env6': P2_envelope(6), 'P2_env10': P2_envelope(10), P3_credible, P3_mixture, P3_points, P3_pointsH };
 // in column lengths, paired by alignL: every run (no other solid needed)
-const LEN = { 'E_L2': E_L(2), 'E_L4': E_L(4), 'E_L6': E_L(6), 'E_L10': E_L(10) };
+// fix: E_L12 (Δ 12.5, the bootstrap's 5 % flip) beside the others
+const LEN = { 'E_L2': E_L(2), 'E_L4': E_L(4), 'E_L6': E_L(6), 'E_L10': E_L(10), 'E_L12': E_L(12.5) };
 const CROSS = { P4_classes: (R, o)=> P4_classes(R, o), 'P4_classes68': (R, o)=> P4_classes(R, { ...o, p: 0.68 }), P5_occam: (R, o)=> P5_occam(R, o), 'P5_occam4': (R, o)=> P5_occam(R, { ...o, tau: 4 }), P6_all: (R, o)=> P6_all(R, o), P6_occam: (R, o)=> P6_all(R, { ...o, occam: true }) };
 
 /* evaluations an approach needs beyond the app's search: the app's own report (turnEsds),

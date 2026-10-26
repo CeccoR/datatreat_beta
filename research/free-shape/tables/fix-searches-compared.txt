@@ -1,0 +1,82 @@
+synth 80 runs: max dim diff median 0.00 % p90 0.12 %; >5 %: 2 ; orient >2°: 2
+    ecyl-plate110#2 243% 27.3°
+    ecyl-plate110-t20#2 10% 19.5°
+sample 12 runs: max dim diff median 0.33 % p90 12.02 %; >5 %: 4 ; orient >2°: 0
+    u03#1 9% 0.5°
+    u06#1 8% 0.3°
+    u08#1 12% 0.3°
+    u12#1 19% 0.5°
+
+u01#1
+  app (baseline)       Δ   0.01 free dims 4/79/-17 normal 6.1 orient 6.1
+  fwd                  Δ   0.00 free dims 4/79/-17 normal 6.1 orient 6.1
+  c1 = fwd + halving   Δ   0.11 free dims 5/73/-17 normal 6.1 orient 6.1
+  a4                   Δ   0.05 free dims 4/72/-17 normal 6.0 orient 6.0
+  cfam                 Δ   0.06 free dims 5/71/-16 normal 6.0 orient 6.0
+u02#1
+  app (baseline)       Δ   1.28 free dims 26/59/-18 normal 5.8 orient 56.3
+  fwd                  Δ   1.33 free dims 26/59/-18 normal 5.7 orient 56.3
+  c1 = fwd + halving   Δ   0.12 free dims 22/69/-19 normal 5.8 orient 56.7
+  a4                   Δ   2.03 free dims -4/215/-20 normal 4.8 orient 4.9
+  cfam                 Δ   2.03 free dims -4/215/-20 normal 4.8 orient 4.9
+u03#1
+  app (baseline)       Δ   1.09 free dims 58/281/-22 normal 6.5 orient 56.0
+  fwd                  Δ   0.45 free dims 52/245/-22 normal 6.4 orient 56.4
+  c1 = fwd + halving   Δ   0.95 free dims 56/255/-22 normal 6.4 orient 56.2
+  a4                   Δ   2.69 free dims 20/0/-22 normal 5.6 orient 29.6
+  cfam                 Δ   2.69 free dims 20/0/-22 normal 5.6 orient 29.5
+u04#1
+  app (baseline)       Δ   0.42 held dims -3/-7/-6 normal 0.0 orient 0.0
+  fwd                  Δ   0.42 held dims -3/-7/-6 normal 0.0 orient 0.0
+  c1 = fwd + halving   Δ   0.93 held dims -3/-7/-6 normal 0.0 orient 0.0
+  a4                   Δ   0.55 held dims -3/-7/-6 normal 0.0 orient 0.0
+  cfam                 Δ   0.55 held dims -3/-7/-6 normal 0.0 orient 0.0
+u05#1
+  app (baseline)       Δ   0.00 free dims -11/973/-28 normal 5.3 orient 5.6
+  fwd                  Δ   0.05 free dims -11/944/-28 normal 5.4 orient 5.6
+  c1 = fwd + halving   Δ   0.95 free dims -12/1316/-27 normal 5.2 orient 8.4
+  a4                   Δ   0.44 free dims -12/72659/-28 normal 5.4 orient 6.1
+  cfam                 Δ   0.44 free dims -12/72659/-28 normal 5.4 orient 6.1
+u06#1
+  app (baseline)       Δ   1.00 free dims 9/218/-17 normal 5.8 orient 56.3
+  fwd                  Δ   0.45 free dims 6/243/-17 normal 5.8 orient 56.5
+  c1 = fwd + halving   Δ   0.24 free dims 4/205/-16 normal 5.7 orient 56.8
+  a4                   Δ   0.62 free dims 5/196/-16 normal 5.7 orient 56.7
+  cfam                 Δ   0.62 free dims 5/196/-16 normal 5.7 orient 56.7
+u07#1
+  app (baseline)       Δ   0.45 free dims -5/71/-22 normal 5.7 orient 5.7
+  fwd                  Δ   0.40 free dims -5/70/-22 normal 5.7 orient 5.7
+  c1 = fwd + halving   Δ   0.00 free dims -5/69/-21 normal 5.7 orient 5.7
+  a4                   Δ   0.78 free dims -5/62/-21 normal 5.6 orient 5.6
+  cfam                 Δ   0.64 free dims -6/96/-22 normal 6.0 orient 6.0
+u08#1
+  app (baseline)       Δ   0.84 free dims 15/20/-13 normal 1.8 orient 51.8
+  fwd                  Δ   1.17 free dims 16/35/-13 normal 2.0 orient 51.6
+  c1 = fwd + halving   Δ   1.08 free dims 18/23/-13 normal 1.9 orient 51.5
+  a4                   Δ   2.25 free dims 19/3/-11 normal 1.5 orient 51.7
+  cfam                 Δ   1.54 free dims 20/3/-11 normal 1.5 orient 51.6
+u09#1
+  app (baseline)       Δ   0.00 free dims 54/17/-16 normal 9.0 orient 30.7
+  fwd                  Δ   0.00 free dims 54/17/-16 normal 9.0 orient 30.7
+  c1 = fwd + halving   Δ   0.00 free dims 54/18/-16 normal 9.0 orient 30.6
+  a4                   Δ   0.32 free dims 37/27186/-18 normal 8.6 orient 8.6
+  cfam                 Δ   0.02 free dims 54/20/-16 normal 9.0 orient 30.7
+u10#1
+  app (baseline)       Δ   0.16 free dims -12/0/-23 normal 5.9 orient 28.9
+  fwd                  Δ   0.16 free dims -12/0/-23 normal 5.9 orient 28.9
+  c1 = fwd + halving   Δ   0.27 free dims 7/0/-23 normal 6.8 orient 11.6
+  a4                   Δ   0.22 free dims -12/0/-22 normal 5.8 orient 28.1
+  cfam                 Δ   0.27 free dims 7/0/-23 normal 6.8 orient 11.7
+u11#1
+  app (baseline)       Δ   0.44 free dims -0/101/-12 normal 4.9 orient 4.9
+  fwd                  Δ   0.39 free dims -0/102/-12 normal 4.9 orient 4.9
+  c1 = fwd + halving   Δ  11.44 held dims -1/-6/-8 normal 0.0 orient 0.0
+  a4                   Δ   0.21 free dims -2/161/-13 normal 5.2 orient 5.2
+  cfam                 Δ   0.21 free dims -2/161/-13 normal 5.2 orient 5.2
+u12#1
+  app (baseline)       Δ   4.19 free dims 38/6/-19 normal 6.2 orient 55.3
+  fwd                  Δ   2.80 free dims 39/26/-20 normal 6.7 orient 55.0
+  c1 = fwd + halving   Δ   0.13 free dims 26/67/-21 normal 6.9 orient 56.2
+  a4                   Δ   0.14 free dims 26/68/-21 normal 6.9 orient 56.1
+  cfam                 Δ   0.53 free dims 27/70/-21 normal 7.0 orient 55.9
+proxies 12: lowest-Δ search also has the smallest normal error on 3, smallest max dim error on 3

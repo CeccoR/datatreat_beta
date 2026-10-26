@@ -1,0 +1,554 @@
+Determined claims whose truth lies outside the stated interval or radius (scripts/writer/cross.mjs --misses).
+
+#### 80 synthetic runs and 12 proxies, degree 6 (the studies' runs)
+== synth: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 39 determined quantities outside their stated interval or radius
+   box-plate100#2 mid extent 12.81 (12.10–15.61) nm, truth 12.00
+   box-plate100#2 long extent 15.08 (12.10–15.61) nm, truth 16.00
+   box-plate100#3 mid extent 12.85 (12.80–15.49) nm, truth 12.00
+   box-plate100#3 long extent 15.73 (12.80–15.49) nm, truth 16.00
+   box-needle111#1 thin extent 3.84 (4.27–4.62) nm, truth 4.00
+   box-needle111#1 mid extent 5.28 (4.27–4.62) nm, truth 5.00
+   box-needle111#2 thin extent 4.17 (4.24–4.63) nm, truth 4.00
+   box-needle111#2 mid extent 4.74 (4.24–4.63) nm, truth 5.00
+   box-needle111#3 thin extent 4.23 (4.34–4.66) nm, truth 4.00
+   box-needle111#3 mid extent 4.81 (4.34–4.66) nm, truth 5.00
+   box-plate110-off8#2 mid extent 11.34 (10.26–12.42) nm, truth 13.00
+   box-plate110-off8#2 mid direction 90.0° off, radius 9.3°, beyond 10°
+   box-plate110-off8#2 long direction 90.0° off, radius 9.3°, beyond 10°
+   box-plate110-off8#3 thin direction 6.1° off, radius 4.6°
+   box-plate111-big#3 mid extent 19.73 (16.38–23.08) nm, truth 25.00, beyond 25 %
+   ell-needle100#1 thin extent 4.70 (5.48–5.91) nm, truth 5.00
+   ell-needle100#1 mid extent 7.23 (5.48–5.91) nm, truth 7.00
+   ell-needle100#1 long direction 12.7° off, radius 8.9°, beyond 10°
+   ell-ribbon-rand#1 mid extent 12.21 (11.00–14.64) nm, truth 9.00, beyond 25 %
+   ell-ribbon-rand#1 long extent 13.49 (11.00–14.64) nm, truth 24.00, beyond 25 %
+   ell-ribbon-rand#2 mid extent 9.84 (10.13–14.69) nm, truth 9.00
+   ell-ribbon-rand#2 long extent 16.80 (10.13–14.69) nm, truth 24.00, beyond 25 %
+   ell-ribbon-rand#2 thin direction 9.4° off, radius 8.9°
+   ell-ribbon-rand#3 mid extent 8.98 (11.11–13.94) nm, truth 9.00
+   ell-ribbon-rand#3 long extent 25.42 (11.11–13.94) nm, truth 24.00
+   ell-block-t25#2 thin extent 7.42 (8.66–9.67) nm, truth 8.00
+   ell-block-t25#2 mid extent 11.98 (8.66–9.67) nm, truth 11.00
+   ell-block-t25#3 thin extent 7.01 (6.18–7.85) nm, truth 8.00
+   ell-block-t25#3 mid extent 14.21 (12.46–16.63) nm, truth 11.00, beyond 25 %
+   ell-plate111#1 mid extent 20.00 (19.09–21.34) nm, truth 18.00
+   ell-plate111#1 long extent 20.43 (19.09–21.34) nm, truth 22.00
+   sph-mild001#1 long extent 20.30 (16.48–24.12) nm, truth 16.00, beyond 25 %
+   cyl-disc111-off8#3 thin direction 5.6° off, radius 5.3°
+   ecyl-plate110#1 thin extent 8.64 (7.65–9.64) nm, truth 2.50, beyond 25 %
+   ecyl-plate110#1 mid extent 2.91 (2.78–3.05) nm, truth 10.00, beyond 25 %
+   ecyl-plate110#1 long extent 21.61 (17.60–25.62) nm, truth 16.00, beyond 25 %
+   ecyl-ribbon001#1 thin extent 11.24 (10.18–12.31) nm, truth 4.00, beyond 25 %
+   ecyl-ribbon001#1 long extent 3.68 (3.54–3.83) nm, truth 30.00, beyond 25 %
+   ecyl-ribbon001#3 long extent 3.70 (3.50–3.89) nm, truth 30.00, beyond 25 %
+== synth: today (uniqueness rebuild: linear esds, 2σ): 31 determined quantities outside their stated interval or radius
+   box-plate100#2 mid extent 12.81 (12.10–15.61) nm, truth 12.00
+   box-plate100#2 long extent 15.08 (12.10–15.61) nm, truth 16.00
+   box-plate100#3 mid extent 12.85 (12.80–15.73) nm, truth 12.00
+   box-plate100#3 long extent 15.73 (12.80–15.73) nm, truth 16.00
+   box-needle111#2 thin extent 4.17 (4.17–4.74) nm, truth 4.00
+   box-needle111#2 mid extent 4.74 (4.17–4.74) nm, truth 5.00
+   box-needle111#3 thin extent 4.23 (4.23–4.81) nm, truth 4.00
+   box-needle111#3 mid extent 4.81 (4.23–4.81) nm, truth 5.00
+   box-plate110-off8#2 mid extent 11.34 (10.26–12.42) nm, truth 13.00
+   box-plate110-off8#2 long direction 90.0° off, radius 7.6°, beyond 10°
+   box-plate110-off8#3 thin direction 6.1° off, radius 3.8°
+   box-plate110-off8#3 mid direction 89.1° off, radius 7.6°, beyond 10°
+   box-plate110-off8#3 long direction 89.1° off, radius 7.9°, beyond 10°
+   box-plate111-big#3 mid extent 19.73 (16.38–23.08) nm, truth 25.00, beyond 25 %
+   sqbox-rod111#2 thin direction 10.0° off, radius 9.6°
+   ell-needle100#1 long direction 12.7° off, radius 7.2°, beyond 10°
+   ell-ribbon-rand#1 mid extent 12.21 (11.00–14.64) nm, truth 9.00, beyond 25 %
+   ell-ribbon-rand#1 long extent 13.49 (11.00–14.64) nm, truth 24.00, beyond 25 %
+   ell-ribbon-rand#2 thin direction 9.4° off, radius 7.3°
+   ell-block-t25#3 thin extent 7.01 (6.18–7.85) nm, truth 8.00
+   ell-block-t25#3 mid extent 14.21 (12.46–16.63) nm, truth 11.00, beyond 25 %
+   ell-plate111#1 mid extent 20.00 (19.09–21.34) nm, truth 18.00
+   ell-plate111#1 long extent 20.43 (19.09–21.34) nm, truth 22.00
+   sph-mild001#1 long extent 20.30 (16.48–24.12) nm, truth 16.00, beyond 25 %
+   cyl-disc-rand#3 thin direction 3.4° off, radius 3.2°
+   cyl-disc111-off8#3 thin direction 5.6° off, radius 4.3°
+   ecyl-plate110#1 thin extent 2.91 (2.78–3.05) nm, truth 2.50
+   ecyl-plate110#1 mid extent 8.64 (7.65–9.64) nm, truth 10.00
+   ecyl-plate110#1 long extent 21.61 (17.60–25.62) nm, truth 16.00, beyond 25 %
+   ecyl-ribbon001#1 thin extent 3.68 (3.54–3.83) nm, truth 4.00
+   ecyl-ribbon001#3 thin extent 3.70 (3.50–3.89) nm, truth 4.00
+== synth: E_L6: 9 determined quantities outside their stated interval or radius
+   box-plate110-off8#3 thin direction 6.1° off, radius 5.1°
+   ell-needle100#1 thin extent 3.52 (3.40–3.68) nm, truth 3.75
+   ell-block-t25#2 thin extent 5.56 (5.27–5.89) nm, truth 6.00
+   cyl-disc110#3 mid extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc110#3 long extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc111-off8#1 mid extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#1 long extent 10.50 (9.79–12.02) nm, truth 12.73
+   ecyl-ribbon001#1 thin extent 3.68 (3.50–3.84) nm, truth 3.40
+   ecyl-ribbon001#3 thin extent 3.70 (3.48–3.90) nm, truth 3.40
+== synth: E_L6 + D rule: 9 determined quantities outside their stated interval or radius
+   box-plate110-off8#3 thin direction 6.1° off, radius 5.1°
+   ell-needle100#1 thin extent 3.52 (3.40–3.68) nm, truth 3.75
+   ell-block-t25#2 thin extent 5.56 (5.27–5.89) nm, truth 6.00
+   cyl-disc110#3 mid extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc110#3 long extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc111-off8#1 mid extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#1 long extent 10.50 (9.79–12.02) nm, truth 12.73
+   ecyl-ribbon001#1 thin extent 3.68 (3.50–3.84) nm, truth 3.40
+   ecyl-ribbon001#3 thin extent 3.70 (3.48–3.90) nm, truth 3.40
+== synth: E_L6 + D rule + jackknife when flagged: 9 determined quantities outside their stated interval or radius
+   box-plate110-off8#3 thin direction 6.1° off, radius 5.1°
+   ell-needle100#1 thin extent 3.52 (3.40–3.68) nm, truth 3.75
+   ell-block-t25#2 thin extent 5.56 (5.27–5.89) nm, truth 6.00
+   cyl-disc110#3 mid extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc110#3 long extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc111-off8#1 mid extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#1 long extent 10.50 (9.79–12.02) nm, truth 12.73
+   ecyl-ribbon001#1 thin extent 3.68 (3.50–3.84) nm, truth 3.40
+   ecyl-ribbon001#3 thin extent 3.70 (3.48–3.90) nm, truth 3.40
+== synth: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 12 determined quantities outside their stated interval or radius
+   box-plate110-off8#3 thin direction 6.1° off, radius 3.8°
+   ell-needle100#1 thin extent 3.52 (3.40–3.68) nm, truth 3.75
+   ell-ribbon-rand#2 thin direction 9.4° off, radius 7.3°
+   ell-block-t25#2 thin extent 5.56 (5.27–5.89) nm, truth 6.00
+   cyl-disc110#3 mid extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc110#3 long extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc-rand#3 thin direction 3.4° off, radius 3.2°
+   cyl-disc111-off8#1 mid extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#1 long extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#3 thin direction 5.6° off, radius 4.3°
+   ecyl-ribbon001#1 thin extent 3.68 (3.50–3.84) nm, truth 3.40
+   ecyl-ribbon001#3 thin extent 3.70 (3.48–3.90) nm, truth 3.40
+== synth: merged rule with E_L10: 10 determined quantities outside their stated interval or radius
+   box-plate110-off8#3 thin direction 6.1° off, radius 3.8°
+   ell-ribbon-rand#2 thin direction 9.4° off, radius 7.3°
+   ell-block-t25#2 thin extent 5.56 (5.27–5.89) nm, truth 6.00
+   cyl-disc110#3 mid extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc110#3 long extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc-rand#3 thin direction 3.4° off, radius 3.2°
+   cyl-disc111-off8#1 mid extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#1 long extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#3 thin direction 5.6° off, radius 4.3°
+   ecyl-ribbon001#1 thin extent 3.68 (3.49–3.84) nm, truth 3.40
+== synth: merged rule with E_L12 (Δ 12.5): 10 determined quantities outside their stated interval or radius
+   box-plate110-off8#3 thin direction 6.1° off, radius 3.8°
+   ell-ribbon-rand#2 thin direction 9.4° off, radius 7.3°
+   ell-block-t25#2 thin extent 5.56 (5.27–5.89) nm, truth 6.00
+   cyl-disc110#3 mid extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc110#3 long extent 17.63 (15.78–21.27) nm, truth 15.28
+   cyl-disc-rand#3 thin direction 3.4° off, radius 3.2°
+   cyl-disc111-off8#1 mid extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#1 long extent 10.50 (9.79–12.02) nm, truth 12.73
+   cyl-disc111-off8#3 thin direction 5.6° off, radius 4.3°
+   ecyl-ribbon001#1 thin extent 3.68 (3.49–3.84) nm, truth 3.40
+== synth: condP (uniqueness): 24 determined quantities outside their stated interval or radius
+   box-plate110-off8#3 thin direction 6.1° off, radius 3.8°
+   sqbox-plate-rand#2 mid extent 16.39 (15.97–19.71) nm, truth 20.00
+   sqbox-plate-rand#2 long extent 16.39 (15.97–19.71) nm, truth 20.00
+   sqbox-plate-rand#3 thin extent 4.26 (4.05–4.47) nm, truth 4.00
+   ell-ribbon-rand#2 thin direction 9.4° off, radius 7.3°
+   sph-prolate111#2 thin extent 5.11 (5.04–5.29) nm, truth 5.00
+   sph-prolate111#2 mid extent 5.11 (5.04–5.29) nm, truth 5.00
+   sph-mild001#1 long extent 20.30 (17.16–24.71) nm, truth 16.00, beyond 25 %
+   cyl-disc110#3 mid extent 20.77 (18.67–23.55) nm, truth 18.00
+   cyl-disc110#3 long extent 20.77 (18.67–23.55) nm, truth 18.00
+   cyl-disc-rand#3 thin direction 3.4° off, radius 3.2°
+   cyl-disc111-off8#1 thin extent 2.12 (2.06–2.20) nm, truth 2.00
+   cyl-disc111-off8#1 mid extent 12.37 (12.11–14.14) nm, truth 15.00
+   cyl-disc111-off8#1 long extent 12.37 (12.11–14.14) nm, truth 15.00
+   cyl-disc111-off8#3 thin direction 5.6° off, radius 4.3°
+   ecyl-plate110#1 thin extent 2.91 (2.81–3.02) nm, truth 2.50
+   ecyl-plate110#1 mid extent 8.64 (7.95–9.41) nm, truth 10.00
+   ecyl-plate110#1 long extent 21.61 (18.97–26.57) nm, truth 16.00, beyond 25 %
+   ecyl-plate110#2 long extent 18.29 (16.81–23.23) nm, truth 16.00
+   ecyl-plate110-t20#1 thin extent 2.59 (2.51–2.68) nm, truth 2.50
+   ecyl-plate110-t20#1 mid extent 9.17 (8.52–9.86) nm, truth 10.00
+   ecyl-ribbon001#1 thin extent 3.68 (3.55–3.83) nm, truth 4.00
+   ecyl-ribbon001#1 long extent 37.41 (33.01–47.89) nm, truth 30.00
+   ecyl-ribbon001#3 thin extent 3.70 (3.56–3.85) nm, truth 4.00
+== synth: condD (uniqueness): 14 determined quantities outside their stated interval or radius
+   sqbox-plate-rand#2 mid extent 16.39 (15.97–19.71) nm, truth 20.00
+   sqbox-plate-rand#2 long extent 16.39 (15.97–19.71) nm, truth 20.00
+   sqbox-plate-rand#3 thin extent 4.26 (4.05–4.47) nm, truth 4.00
+   sph-prolate111#2 thin extent 5.11 (5.04–5.29) nm, truth 5.00
+   sph-prolate111#2 mid extent 5.11 (5.04–5.29) nm, truth 5.00
+   cyl-disc110#3 mid extent 20.77 (18.67–23.55) nm, truth 18.00
+   cyl-disc110#3 long extent 20.77 (18.67–23.55) nm, truth 18.00
+   cyl-disc-rand#3 thin direction 3.4° off, radius 3.2°
+   cyl-disc111-off8#1 thin extent 2.12 (2.06–2.20) nm, truth 2.00
+   cyl-disc111-off8#1 mid extent 12.37 (12.11–14.14) nm, truth 15.00
+   cyl-disc111-off8#1 long extent 12.37 (12.11–14.14) nm, truth 15.00
+   cyl-disc111-off8#3 thin direction 5.6° off, radius 4.3°
+   ecyl-plate110-t20#1 thin extent 2.59 (2.51–2.93) nm, truth 2.50
+   ecyl-plate110-t20#1 mid extent 9.17 (8.45–9.86) nm, truth 10.00
+== sample: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 24 determined quantities outside their stated interval or radius
+   u01#1 thin extent 2.00 (1.92–2.08) nm, truth 2.40
+   u01#1 thin direction 6.1° off, radius 3.9°
+   u02#1 thin extent 1.63 (1.57–1.70) nm, truth 2.00
+   u02#1 thin direction 5.8° off, radius 1.7°
+   u03#1 thin extent 1.40 (1.35–1.45) nm, truth 1.80, beyond 25 %
+   u03#1 thin direction 6.5° off, radius 1.5°
+   u05#1 thin extent 1.16 (1.10–1.22) nm, truth 1.60, beyond 25 %
+   u05#1 thin direction 5.3° off, radius 0.7°
+   u06#1 thin extent 1.84 (1.77–1.91) nm, truth 2.20
+   u06#1 thin direction 5.8° off, radius 2.0°
+   u07#1 thin extent 1.57 (1.50–1.64) nm, truth 2.00, beyond 25 %
+   u07#1 thin direction 5.7° off, radius 1.0°
+   u08#1 thin extent 2.01 (1.93–2.09) nm, truth 2.30
+   u08#1 thin direction 1.8° off, radius 1.2°
+   u09#1 thin extent 2.11 (2.03–2.19) nm, truth 2.50
+   u09#1 thin direction 9.0° off, radius 1.5°
+   u10#1 thin extent 1.47 (1.41–1.54) nm, truth 1.90, beyond 25 %
+   u10#1 thin direction 5.9° off, radius 1.3°
+   u10#1 mid direction 28.6° off, radius 8.7°, beyond 10°
+   u10#1 long direction 28.9° off, radius 8.7°, beyond 10°
+   u11#1 thin extent 2.28 (2.17–2.38) nm, truth 2.60
+   u11#1 thin direction 4.9° off, radius 0.9°
+   u12#1 thin extent 1.70 (1.64–1.76) nm, truth 2.10
+   u12#1 thin direction 6.2° off, radius 4.0°
+== sample: today (uniqueness rebuild: linear esds, 2σ): 36 determined quantities outside their stated interval or radius
+   u01#1 thin extent 2.00 (1.92–2.08) nm, truth 2.40
+   u01#1 thin direction 6.1° off, radius 3.2°
+   u02#1 thin extent 1.63 (1.57–1.70) nm, truth 2.00
+   u02#1 thin direction 5.8° off, radius 1.4°
+   u02#1 mid direction 90.0° off, radius 2.2°, beyond 10°
+   u02#1 long direction 89.9° off, radius 1.9°, beyond 10°
+   u03#1 thin extent 1.40 (1.35–1.45) nm, truth 1.80, beyond 25 %
+   u03#1 thin direction 6.5° off, radius 1.2°
+   u03#1 mid direction 89.8° off, radius 3.0°, beyond 10°
+   u03#1 long direction 89.9° off, radius 2.8°, beyond 10°
+   u05#1 thin extent 1.16 (1.10–1.22) nm, truth 1.60, beyond 25 %
+   u05#1 thin direction 5.3° off, radius 0.6°
+   u06#1 thin extent 1.84 (1.77–1.91) nm, truth 2.20
+   u06#1 thin direction 5.8° off, radius 1.6°
+   u06#1 mid direction 85.0° off, radius 3.7°, beyond 10°
+   u06#1 long direction 85.0° off, radius 3.5°, beyond 10°
+   u07#1 thin extent 1.57 (1.50–1.64) nm, truth 2.00, beyond 25 %
+   u07#1 thin direction 5.7° off, radius 0.8°
+   u07#1 long direction 5.7° off, radius 4.5°
+   u08#1 thin extent 2.01 (1.93–2.09) nm, truth 2.30
+   u08#1 thin direction 1.8° off, radius 1.0°
+   u08#1 mid direction 90.0° off, radius 2.3°, beyond 10°
+   u08#1 long direction 90.0° off, radius 2.2°, beyond 10°
+   u09#1 thin extent 2.11 (2.03–2.19) nm, truth 2.50
+   u09#1 thin direction 9.0° off, radius 1.2°
+   u10#1 thin extent 1.47 (1.41–1.54) nm, truth 1.90, beyond 25 %
+   u10#1 thin direction 5.9° off, radius 1.1°
+   u10#1 mid direction 28.6° off, radius 7.1°, beyond 10°
+   u10#1 long direction 28.9° off, radius 7.1°, beyond 10°
+   u11#1 thin extent 2.28 (2.17–2.38) nm, truth 2.60
+   u11#1 thin direction 4.9° off, radius 0.8°
+   u11#1 long direction 4.9° off, radius 4.0°
+   u12#1 thin extent 1.70 (1.64–1.76) nm, truth 2.10
+   u12#1 thin direction 6.2° off, radius 3.3°
+   u12#1 mid direction 80.0° off, radius 4.2°, beyond 10°
+   u12#1 long direction 79.9° off, radius 3.2°, beyond 10°
+== sample: E_L6: 19 determined quantities outside their stated interval or radius
+   u01#1 thin extent 2.00 (1.92–2.08) nm, truth 2.40
+   u01#1 thin direction 6.1° off, radius 5.0°
+   u02#1 thin extent 1.63 (1.58–1.70) nm, truth 2.00
+   u03#1 thin extent 1.40 (1.35–1.45) nm, truth 1.80, beyond 25 %
+   u03#1 thin direction 6.5° off, radius 4.5°
+   u05#1 thin extent 1.16 (1.11–1.22) nm, truth 1.60, beyond 25 %
+   u05#1 thin direction 5.3° off, radius 0.9°
+   u06#1 thin extent 1.84 (1.77–1.91) nm, truth 2.20
+   u06#1 thin direction 5.8° off, radius 2.6°
+   u07#1 thin extent 1.57 (1.51–1.64) nm, truth 2.00, beyond 25 %
+   u08#1 thin extent 2.01 (1.94–2.09) nm, truth 2.30
+   u08#1 thin direction 1.8° off, radius 1.5°
+   u09#1 thin extent 2.11 (2.03–2.20) nm, truth 2.50
+   u09#1 thin direction 9.0° off, radius 2.6°
+   u10#1 thin extent 1.47 (1.41–1.54) nm, truth 1.90, beyond 25 %
+   u11#1 thin extent 2.28 (2.18–2.38) nm, truth 2.60
+   u11#1 thin direction 4.9° off, radius 1.3°
+   u12#1 thin extent 1.70 (1.64–1.76) nm, truth 2.10
+   u12#1 thin direction 6.2° off, radius 4.8°
+== sample: E_L6 + D rule: 19 determined quantities outside their stated interval or radius
+   u01#1 thin extent 2.00 (1.92–2.08) nm, truth 2.40
+   u01#1 thin direction 6.1° off, radius 5.0°
+   u02#1 thin extent 1.63 (1.58–1.70) nm, truth 2.00
+   u03#1 thin extent 1.40 (1.35–1.45) nm, truth 1.80, beyond 25 %
+   u03#1 thin direction 6.5° off, radius 4.5°
+   u05#1 thin extent 1.16 (1.11–1.22) nm, truth 1.60, beyond 25 %
+   u05#1 thin direction 5.3° off, radius 0.9°
+   u06#1 thin extent 1.84 (1.77–1.91) nm, truth 2.20
+   u06#1 thin direction 5.8° off, radius 2.6°
+   u07#1 thin extent 1.57 (1.51–1.64) nm, truth 2.00, beyond 25 %
+   u08#1 thin extent 2.01 (1.94–2.09) nm, truth 2.30
+   u08#1 thin direction 1.8° off, radius 1.5°
+   u09#1 thin extent 2.11 (2.03–2.20) nm, truth 2.50
+   u09#1 thin direction 9.0° off, radius 2.6°
+   u10#1 thin extent 1.47 (1.41–1.54) nm, truth 1.90, beyond 25 %
+   u11#1 thin extent 2.28 (2.18–2.38) nm, truth 2.60
+   u11#1 thin direction 4.9° off, radius 1.3°
+   u12#1 thin extent 1.70 (1.64–1.76) nm, truth 2.10
+   u12#1 thin direction 6.2° off, radius 4.8°
+== sample: E_L6 + D rule + jackknife when flagged: 1 determined quantities outside their stated interval or radius
+   u11#1 thin direction 4.9° off, radius 3.1°
+== sample: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 1 determined quantities outside their stated interval or radius
+   u11#1 thin direction 4.9° off, radius 3.1°
+== sample: merged rule with E_L10: 1 determined quantities outside their stated interval or radius
+   u11#1 thin direction 4.9° off, radius 3.1°
+== sample: merged rule with E_L12 (Δ 12.5): 1 determined quantities outside their stated interval or radius
+   u11#1 thin direction 4.9° off, radius 3.1°
+== sample: condP (uniqueness): 1 determined quantities outside their stated interval or radius
+   u11#1 thin direction 4.9° off, radius 3.1°
+== sample: condD (uniqueness): 0 determined quantities outside their stated interval or radius
+
+#### Fresh proxies v01-v12, degree 6
+== sample: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 22 determined quantities outside their stated interval or radius
+   v01#1 thin extent 1.57 (1.51–1.64) nm, truth 2.00, beyond 25 %
+   v01#1 thin direction 5.5° off, radius 2.2°
+   v02#1 thin extent 1.65 (1.57–1.73) nm, truth 2.20, beyond 25 %
+   v02#1 thin direction 9.0° off, radius 1.1°
+   v03#1 thin extent 2.33 (2.23–2.43) nm, truth 2.60
+   v04#1 thin extent 1.43 (1.35–1.51) nm, truth 1.90, beyond 25 %
+   v04#1 thin direction 7.8° off, radius 0.9°
+   v05#1 thin extent 1.60 (1.53–1.67) nm, truth 2.00, beyond 25 %
+   v05#1 thin direction 5.8° off, radius 1.1°
+   v06#1 thin extent 1.85 (1.76–1.95) nm, truth 2.30
+   v06#1 thin direction 8.0° off, radius 1.6°
+   v07#1 thin extent 1.73 (1.65–1.81) nm, truth 2.10
+   v07#1 thin direction 6.0° off, radius 1.2°
+   v08#1 thin extent 1.52 (1.43–1.60) nm, truth 1.90, beyond 25 %
+   v08#1 thin direction 4.2° off, radius 1.1°
+   v09#1 thin extent 1.46 (1.38–1.55) nm, truth 1.90, beyond 25 %
+   v09#1 thin direction 4.8° off, radius 0.9°
+   v10#1 thin extent 1.54 (1.47–1.61) nm, truth 2.00, beyond 25 %
+   v10#1 thin direction 7.8° off, radius 1.2°
+   v11#1 mid extent 13.88 (12.51–15.26) nm, truth 19.20, beyond 25 %
+   v12#1 thin extent 1.81 (1.74–1.88) nm, truth 2.20
+   v12#1 thin direction 6.8° off, radius 1.9°
+== sample: today (uniqueness rebuild: linear esds, 2σ): 39 determined quantities outside their stated interval or radius
+   v01#1 thin extent 1.57 (1.51–1.64) nm, truth 2.00, beyond 25 %
+   v01#1 thin direction 5.5° off, radius 1.8°
+   v01#1 mid direction 90.0° off, radius 4.5°, beyond 10°
+   v01#1 long direction 89.9° off, radius 4.2°, beyond 10°
+   v02#1 thin extent 1.65 (1.57–1.73) nm, truth 2.20, beyond 25 %
+   v02#1 thin direction 9.0° off, radius 0.9°
+   v02#1 long direction 9.3° off, radius 5.2°
+   v03#1 thin extent 2.33 (2.23–2.43) nm, truth 2.60
+   v03#1 thin direction 3.0° off, radius 2.7°
+   v03#1 mid direction 87.8° off, radius 9.0°, beyond 10°
+   v03#1 long direction 87.8° off, radius 9.0°, beyond 10°
+   v04#1 thin extent 1.43 (1.35–1.51) nm, truth 1.90, beyond 25 %
+   v04#1 thin direction 7.8° off, radius 0.7°
+   v05#1 thin extent 1.60 (1.53–1.67) nm, truth 2.00, beyond 25 %
+   v05#1 thin direction 5.8° off, radius 0.9°
+   v05#1 mid direction 90.0° off, radius 1.9°, beyond 10°
+   v05#1 long direction 90.0° off, radius 2.0°, beyond 10°
+   v06#1 thin extent 1.85 (1.76–1.95) nm, truth 2.30
+   v06#1 thin direction 8.0° off, radius 1.3°
+   v06#1 mid direction 7.3° off, radius 5.3°
+   v06#1 long direction 10.8° off, radius 5.3°, beyond 10°
+   v07#1 thin extent 1.73 (1.65–1.81) nm, truth 2.10
+   v07#1 thin direction 6.0° off, radius 1.0°
+   v07#1 mid direction 12.5° off, radius 3.2°, beyond 10°
+   v07#1 long direction 12.6° off, radius 3.3°, beyond 10°
+   v08#1 thin extent 1.52 (1.43–1.60) nm, truth 1.90, beyond 25 %
+   v08#1 thin direction 4.2° off, radius 0.9°
+   v09#1 thin extent 1.46 (1.38–1.55) nm, truth 1.90, beyond 25 %
+   v09#1 thin direction 4.8° off, radius 0.7°
+   v09#1 mid direction 24.1° off, radius 8.9°, beyond 10°
+   v09#1 long direction 24.4° off, radius 8.9°, beyond 10°
+   v10#1 thin extent 1.54 (1.47–1.61) nm, truth 2.00, beyond 25 %
+   v10#1 thin direction 7.8° off, radius 1.0°
+   v10#1 long direction 8.9° off, radius 7.7°
+   v11#1 mid extent 13.88 (12.51–15.26) nm, truth 19.20, beyond 25 %
+   v12#1 thin extent 1.81 (1.74–1.88) nm, truth 2.20
+   v12#1 thin direction 6.8° off, radius 1.5°
+   v12#1 mid direction 90.0° off, radius 2.4°, beyond 10°
+   v12#1 long direction 89.9° off, radius 1.9°, beyond 10°
+== sample: E_L6: 17 determined quantities outside their stated interval or radius
+   v01#1 thin extent 1.57 (1.51–1.64) nm, truth 2.00, beyond 25 %
+   v01#1 thin direction 5.5° off, radius 5.0°
+   v02#1 thin extent 1.65 (1.58–1.76) nm, truth 2.20, beyond 25 %
+   v03#1 thin extent 2.33 (2.23–2.44) nm, truth 2.60
+   v04#1 thin extent 1.43 (1.35–1.51) nm, truth 1.90, beyond 25 %
+   v04#1 thin direction 7.8° off, radius 1.0°
+   v05#1 thin extent 1.60 (1.53–1.67) nm, truth 2.00, beyond 25 %
+   v06#1 thin extent 1.85 (1.76–1.96) nm, truth 2.30
+   v07#1 thin extent 1.73 (1.65–1.81) nm, truth 2.10
+   v07#1 thin direction 6.0° off, radius 5.7°
+   v08#1 thin extent 1.52 (1.44–1.61) nm, truth 1.90, beyond 25 %
+   v09#1 thin extent 1.46 (1.38–1.55) nm, truth 1.90, beyond 25 %
+   v10#1 thin extent 1.54 (1.47–1.61) nm, truth 2.00, beyond 25 %
+   v10#1 thin direction 7.8° off, radius 5.7°
+   v11#1 mid extent 13.88 (12.64–16.95) nm, truth 19.20, beyond 25 %
+   v12#1 thin extent 1.81 (1.75–1.88) nm, truth 2.20
+   v12#1 thin direction 6.8° off, radius 5.2°
+== sample: E_L6 + D rule: 17 determined quantities outside their stated interval or radius
+   v01#1 thin extent 1.57 (1.51–1.64) nm, truth 2.00, beyond 25 %
+   v01#1 thin direction 5.5° off, radius 5.0°
+   v02#1 thin extent 1.65 (1.58–1.76) nm, truth 2.20, beyond 25 %
+   v03#1 thin extent 2.33 (2.23–2.44) nm, truth 2.60
+   v04#1 thin extent 1.43 (1.35–1.51) nm, truth 1.90, beyond 25 %
+   v04#1 thin direction 7.8° off, radius 1.0°
+   v05#1 thin extent 1.60 (1.53–1.67) nm, truth 2.00, beyond 25 %
+   v06#1 thin extent 1.85 (1.76–1.96) nm, truth 2.30
+   v07#1 thin extent 1.73 (1.65–1.81) nm, truth 2.10
+   v07#1 thin direction 6.0° off, radius 5.7°
+   v08#1 thin extent 1.52 (1.44–1.61) nm, truth 1.90, beyond 25 %
+   v09#1 thin extent 1.46 (1.38–1.55) nm, truth 1.90, beyond 25 %
+   v10#1 thin extent 1.54 (1.47–1.61) nm, truth 2.00, beyond 25 %
+   v10#1 thin direction 7.8° off, radius 5.7°
+   v11#1 mid extent 13.88 (12.64–16.95) nm, truth 19.20, beyond 25 %
+   v12#1 thin extent 1.81 (1.75–1.88) nm, truth 2.20
+   v12#1 thin direction 6.8° off, radius 5.2°
+== sample: E_L6 + D rule + jackknife when flagged: 2 determined quantities outside their stated interval or radius
+   v03#1 thin extent 2.33 (2.23–2.44) nm, truth 2.60
+   v11#1 mid extent 13.88 (12.64–16.95) nm, truth 19.20, beyond 25 %
+== sample: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 4 determined quantities outside their stated interval or radius
+   v03#1 thin extent 2.33 (2.23–2.44) nm, truth 2.60
+   v03#1 thin direction 3.0° off, radius 2.7°
+   v09#1 thin direction 4.8° off, radius 3.7°
+   v11#1 mid extent 13.88 (12.64–16.95) nm, truth 19.20, beyond 25 %
+== sample: merged rule with E_L10: 4 determined quantities outside their stated interval or radius
+   v03#1 thin extent 2.33 (2.23–2.44) nm, truth 2.60
+   v03#1 thin direction 3.0° off, radius 2.7°
+   v09#1 thin direction 4.8° off, radius 3.7°
+   v11#1 mid extent 13.88 (12.64–16.95) nm, truth 19.20, beyond 25 %
+== sample: merged rule with E_L12 (Δ 12.5): 4 determined quantities outside their stated interval or radius
+   v03#1 thin extent 2.33 (2.23–2.44) nm, truth 2.60
+   v03#1 thin direction 3.0° off, radius 2.7°
+   v09#1 thin direction 4.8° off, radius 3.7°
+   v11#1 mid extent 13.88 (12.64–16.95) nm, truth 19.20, beyond 25 %
+== sample: condP (uniqueness): 3 determined quantities outside their stated interval or radius
+   v03#1 thin extent 2.33 (2.23–2.43) nm, truth 2.60
+   v03#1 thin direction 3.0° off, radius 2.7°
+   v11#1 mid extent 13.88 (12.51–15.26) nm, truth 19.20, beyond 25 %
+== sample: condD (uniqueness): 3 determined quantities outside their stated interval or radius
+   v03#1 thin extent 2.33 (2.23–2.43) nm, truth 2.60
+   v03#1 thin direction 3.0° off, radius 2.7°
+   v11#1 mid extent 13.88 (12.51–15.26) nm, truth 19.20, beyond 25 %
+
+#### Proxies u01-u12 at degree 18, jackknife on every run whose pick moved
+== sample: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 2 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.37–2.59) nm, truth 2.30
+   u08#1 mid extent 11.59 (10.48–12.71) nm, truth 16.00, beyond 25 %
+== sample: today (uniqueness rebuild: linear esds, 2σ): 2 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.37–2.59) nm, truth 2.30
+   u08#1 mid extent 11.59 (10.48–12.71) nm, truth 16.00, beyond 25 %
+== sample: E_L6: 2 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.38–2.60) nm, truth 2.30
+   u08#1 mid extent 11.59 (10.58–15.89) nm, truth 16.00, beyond 25 %
+== sample: E_L6 + D rule: 2 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.38–2.60) nm, truth 2.30
+   u08#1 mid extent 11.59 (10.58–15.89) nm, truth 16.00, beyond 25 %
+== sample: E_L6 + D rule + jackknife when flagged: 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: merged rule with E_L10: 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: merged rule with E_L12 (Δ 12.5): 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: condP (uniqueness): 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: condD (uniqueness): 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+
+#### Proxies u01-u12 at degree 18, jackknife only where the flag still fires
+== sample: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 2 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.37–2.59) nm, truth 2.30
+   u08#1 mid extent 11.59 (10.48–12.71) nm, truth 16.00, beyond 25 %
+== sample: today (uniqueness rebuild: linear esds, 2σ): 2 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.37–2.59) nm, truth 2.30
+   u08#1 mid extent 11.59 (10.48–12.71) nm, truth 16.00, beyond 25 %
+== sample: E_L6: 2 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.38–2.60) nm, truth 2.30
+   u08#1 mid extent 11.59 (10.58–15.89) nm, truth 16.00, beyond 25 %
+== sample: E_L6 + D rule: 2 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.38–2.60) nm, truth 2.30
+   u08#1 mid extent 11.59 (10.58–15.89) nm, truth 16.00, beyond 25 %
+== sample: E_L6 + D rule + jackknife when flagged: 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: merged rule with E_L10: 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: merged rule with E_L12 (Δ 12.5): 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: condP (uniqueness): 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+== sample: condD (uniqueness): 1 determined quantities outside their stated interval or radius
+   u08#1 thin extent 2.48 (2.36–2.61) nm, truth 2.30
+
+#### Fresh proxies v01-v12 at degree 18, jackknife on every run whose pick moved
+== sample: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 5 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.26–11.17) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 2.3°
+   v06#1 mid extent 11.39 (11.18–14.20) nm, truth 11.00
+   v07#1 thin direction 5.0° off, radius 4.0°
+   v08#1 thin direction 3.7° off, radius 3.3°
+== sample: today (uniqueness rebuild: linear esds, 2σ): 5 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.26–11.17) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 1.9°
+   v06#1 mid extent 11.39 (11.18–14.32) nm, truth 11.00
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°
+== sample: E_L6: 2 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.34–11.27) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 2.4°
+== sample: E_L6 + D rule: 2 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.34–11.27) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 2.4°
+== sample: E_L6 + D rule + jackknife when flagged: 1 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.15–11.40) nm, truth 11.80
+== sample: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 1 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.15–11.40) nm, truth 11.80
+== sample: merged rule with E_L10: 0 determined quantities outside their stated interval or radius
+== sample: merged rule with E_L12 (Δ 12.5): 0 determined quantities outside their stated interval or radius
+== sample: condP (uniqueness): 4 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.26–11.17) nm, truth 11.80
+   v06#1 mid extent 11.39 (11.18–14.32) nm, truth 11.00
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°
+== sample: condD (uniqueness): 4 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.26–11.17) nm, truth 11.80
+   v06#1 mid extent 11.39 (11.18–14.32) nm, truth 11.00
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°
+
+#### Fresh proxies v01-v12 at degree 18, jackknife only where the flag still fires
+== sample: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 5 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.26–11.17) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 2.3°
+   v06#1 mid extent 11.39 (11.18–14.20) nm, truth 11.00
+   v07#1 thin direction 5.0° off, radius 4.0°
+   v08#1 thin direction 3.7° off, radius 3.3°
+== sample: today (uniqueness rebuild: linear esds, 2σ): 5 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.26–11.17) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 1.9°
+   v06#1 mid extent 11.39 (11.18–14.32) nm, truth 11.00
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°
+== sample: E_L6: 2 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.34–11.27) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 2.4°
+== sample: E_L6 + D rule: 2 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.34–11.27) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 2.4°
+== sample: E_L6 + D rule + jackknife when flagged: 2 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.34–11.27) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 2.4°
+== sample: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 4 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.34–11.27) nm, truth 11.80
+   v04#1 thin direction 5.0° off, radius 1.9°
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°
+== sample: merged rule with E_L10: 3 determined quantities outside their stated interval or radius
+   v04#1 thin direction 5.0° off, radius 1.9°
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°
+== sample: merged rule with E_L12 (Δ 12.5): 3 determined quantities outside their stated interval or radius
+   v04#1 thin direction 5.0° off, radius 1.9°
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°
+== sample: condP (uniqueness): 4 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.26–11.17) nm, truth 11.80
+   v06#1 mid extent 11.39 (11.18–14.32) nm, truth 11.00
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°
+== sample: condD (uniqueness): 4 determined quantities outside their stated interval or radius
+   v03#1 mid extent 10.21 (9.26–11.17) nm, truth 11.80
+   v06#1 mid extent 11.39 (11.18–14.32) nm, truth 11.00
+   v07#1 thin direction 5.0° off, radius 3.3°
+   v08#1 thin direction 3.7° off, radius 2.7°

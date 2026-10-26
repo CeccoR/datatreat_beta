@@ -28,6 +28,17 @@ export function P0_app(R){
   }
   // a body of revolution's round section: no direction (its axis keeps the app's)
   if (ROUND[rep.type]){ cone[0] = cone[1] = NOCONE; }
+  /* fix (critic, problem 4): the round section's extent. The record of the app's report has no
+     axis entry for it, but the card shows the diameter ± esd (bodyShapeOf dims[0]); it used to be
+     left open, [0, ∞). Rebuilt as bodyShapeOf takes it: the reported fit's D·σ(ln W) and, when
+     held, the held/free difference in quadrature. */
+  if (ROUND[rep.type]) for (const i of [0, 1]){
+    const D = rep.dims[i], s = u.reported.sLogW ? u.reported.sLogW[i] : NaN;
+    if (!Number.isFinite(D) || !Number.isFinite(s)) continue;
+    const fr = (u.minima || []).find(x=> x.src === "free-of-held");
+    let sd = D*s; if (u.reported.held && fr && Number.isFinite(fr.solid.dims[i])) sd = Math.hypot(sd, D - fr.solid.dims[i]);
+    iv[i] = [Math.max(0, D - 2*sd), D + 2*sd];
+  }
   return { solid: rep, iv, cone, est: rep.dims.slice() };
 }
 

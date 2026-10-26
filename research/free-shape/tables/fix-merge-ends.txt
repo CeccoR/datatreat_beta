@@ -1,0 +1,4 @@
+80 kept synthetic runs
+backlog grouping (8°, e^0.25): others within Δ 10: 164
+ends within Δ 10 of the best: 984; represented by a refined minimum (merged by resolution): 965; not represented: 19 (15 brief), forming 17 groups at the rule's floors in 12 runs
+refined minima within Δ 10 other than the best: 32; refined minima other than the best that represent at least one of the search's ends within Δ 10: 24
