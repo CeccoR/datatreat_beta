@@ -11,7 +11,7 @@
    - baseline: today's search per run, and by solid, class, orientation and error kind:
      reach (Δ ≤ 1 against the truth reference), outcome, accuracy, evaluations, time.
    Δ = (today's best exact χ² − the lower of today's and the truth reference's) / max(1, χ²_ν
-   of that lower fit). The truth reference's ΔBIC against the isotropic fit says whether the
+   of that lower fit), on truths only and not on early rejections (round 1's rule). The truth reference's ΔBIC against the isotropic fit says whether the
    data support the shape at all (a rejection is a miss only where it is under −10). */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,7 +26,7 @@ const runs = [];
 const failed = [];
 for (const tag of String(opt.tag).split(',')){
   const dir = path.join(HERE, 'results', tag);
-  for (const f of fs.readdirSync(dir).filter(f=> f.endsWith('.json'))) runs.push({ tag, ...readResult(fs.readFileSync(path.join(dir, f), 'utf8')) });
+  for (const f of fs.readdirSync(dir).filter(f=> f.endsWith('.json'))){ const o = readResult(fs.readFileSync(path.join(dir, f), 'utf8')); if (o && Array.isArray(o.records)) runs.push({ tag, ...o }); }
   const lg = path.join(dir, 'batch.log');
   if (fs.existsSync(lg)) for (const m of fs.readFileSync(lg, 'utf8').matchAll(/\] (\S+): FAILED (\S+)/g)) failed.push({ tag, id: m[1], code: m[2] });
 }
@@ -55,7 +55,9 @@ function digest(o){
     if (o.iso && Number.isFinite(R.chi2Best)) d.ref.dBIC = (R.chi2Best - o.iso.chi2)/Math.max(1, o.iso.chi2nu) + (R.P - o.iso.P)*Math.log(N);
   }
   const best = Math.min(...[d.chi2, d.ref && d.ref.chi2].filter(Number.isFinite));
-  if (Number.isFinite(d.chi2) && Number.isFinite(best)){
+  // reach is judged on truths with a truth reference, and not on early rejections: their
+  // only ends are the brief refinements (round 1's rule)
+  if (row.kind === 'truth' && d.ref && d.out !== 'early' && Number.isFinite(d.chi2) && Number.isFinite(best)){
     const Pb = d.ref && d.ref.chi2 === best ? d.ref.P : (T && T.P) || (d.ref && d.ref.P);
     d.delta = (d.chi2 - best)/Math.max(1, best/Math.max(1, N - Pb));
   }

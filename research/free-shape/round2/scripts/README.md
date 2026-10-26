@@ -3,7 +3,7 @@
 The pilot's numbers come from these scripts. They run in Node 22 on a frozen copy of the
 engine at commit `b9bef5f`. They are research code: the app loads none of them, and nothing
 in the app was changed to run them. The results are not in the repository. There is one JSON
-per run, about 0.7 MB for the pilot. `../PILOT.md` quotes their tables.
+per run, under 1 MB in all for the pilot. `../PILOT.md` quotes their tables.
 
 The folders keep the layout of the work folder they ran in (`fs2/`). Each folder has its own
 README with its API and its checks.

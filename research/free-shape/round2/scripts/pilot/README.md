@@ -52,6 +52,9 @@ node decide.mjs; node narrow.mjs --hi 100; node lreading.mjs
 - `screen/`: today's search and the truth reference on the 77 screening runs, at the decided
   cells and grid. Round 2's reference; the 11 cost truths were run first, as its verification.
 - `inmodel/`: three of the pilot truths drawn with the engine's own Lorentzian lines.
+- `<tag>/report.md`: `report.mjs`'s tables for each tag (in the repository as
+  `research/free-shape/round2/tables/pilot-*.md`). `screen-digest.json` holds one line per
+  screening run, as `report.mjs --json` writes it.
 
 ## The decision (PILOT.md has the numbers)
 
