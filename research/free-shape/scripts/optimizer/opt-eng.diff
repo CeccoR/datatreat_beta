@@ -1,5 +1,5 @@
---- /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs/harness/eng/xrd-rietveld.js	2026-10-25 23:16:12.636483730 +0000
-+++ /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs/optimizer/h/eng/xrd-rietveld.js	2026-10-26 01:07:15.036879762 +0000
+--- $W/fs/harness/eng/xrd-rietveld.js	2026-10-25 23:16:12.636483730 +0000
++++ $W/fs/optimizer/h/eng/xrd-rietveld.js	2026-10-26 01:07:15.036879762 +0000
 @@ -2355,6 +2355,7 @@
      const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
      if (tt + dHi + half < xa || tt + dLo - half > xb) continue;

@@ -552,3 +552,176 @@ Determined claims whose truth lies outside the stated interval or radius (script
    v06#1 mid extent 11.39 (11.18–14.32) nm, truth 11.00
    v07#1 thin direction 5.0° off, radius 3.3°
    v08#1 thin direction 3.7° off, radius 2.7°
+
+#### Synthetic hold-out (seeds 4-5)
+== synth: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 21 determined quantities outside their stated interval or radius
+   box-needle111#4 thin extent 4.09 (4.30–4.58) nm, truth 4.00
+   box-needle111#4 mid extent 4.86 (4.30–4.58) nm, truth 5.00
+   box-needle111#5 thin extent 4.27 (4.31–4.72) nm, truth 4.00
+   box-needle111#5 mid extent 4.78 (4.31–4.72) nm, truth 5.00
+   box-plate110-off8#4 thin extent 3.19 (3.02–3.37) nm, truth 3.00
+   ell-plate110#5 thin extent 3.18 (3.04–3.31) nm, truth 3.00
+   ell-needle100#4 thin extent 5.28 (5.61–6.04) nm, truth 5.00
+   ell-needle100#4 mid extent 6.50 (5.61–6.04) nm, truth 7.00
+   ell-needle100#5 thin extent 5.18 (5.60–6.10) nm, truth 5.00
+   ell-needle100#5 mid extent 6.73 (5.60–6.10) nm, truth 7.00
+   ell-ribbon-rand#4 mid extent 9.10 (10.03–15.63) nm, truth 9.00
+   ell-ribbon-rand#4 long extent 21.75 (10.03–15.63) nm, truth 24.00
+   ell-ribbon-rand#5 mid extent 11.66 (10.22–14.49) nm, truth 9.00, beyond 25 %
+   ell-ribbon-rand#5 long extent 13.15 (10.22–14.49) nm, truth 24.00, beyond 25 %
+   ell-plate111#4 mid extent 17.68 (19.33–23.37) nm, truth 18.00
+   sph-mild001#4 thin extent 8.77 (8.12–9.43) nm, truth 10.00
+   sph-mild001#4 mid extent 8.77 (8.12–9.43) nm, truth 10.00
+   ecyl-plate110#4 mid extent 8.71 (7.76–9.66) nm, truth 10.00
+   ecyl-plate110-t20#4 thin extent 17.61 (13.99–21.24) nm, truth 2.50, beyond 25 %
+   ecyl-plate110-t20#4 mid extent 2.90 (2.80–3.00) nm, truth 10.00, beyond 25 %
+   ecyl-plate110-t20#4 long extent 10.53 (9.57–11.49) nm, truth 16.00, beyond 25 %
+== synth: today (uniqueness rebuild: linear esds, 2σ): 19 determined quantities outside their stated interval or radius
+   box-needle111#4 thin extent 4.09 (4.09–4.86) nm, truth 4.00
+   box-needle111#4 mid extent 4.86 (4.09–4.86) nm, truth 5.00
+   box-needle111#5 thin extent 4.27 (4.27–4.78) nm, truth 4.00
+   box-needle111#5 mid extent 4.78 (4.27–4.78) nm, truth 5.00
+   box-plate110-off8#4 thin extent 3.19 (3.02–3.37) nm, truth 3.00
+   box-plate110-off8#5 long direction 90.0° off, radius 9.4°, beyond 10°
+   ell-plate110#5 thin extent 3.18 (3.04–3.31) nm, truth 3.00
+   ell-needle100#4 thin extent 5.28 (5.28–6.50) nm, truth 5.00
+   ell-needle100#4 mid extent 6.50 (5.28–6.50) nm, truth 7.00
+   ell-needle100#5 thin extent 5.18 (5.18–6.73) nm, truth 5.00
+   ell-needle100#5 mid extent 6.73 (5.18–6.73) nm, truth 7.00
+   ell-needle100#5 long direction 11.1° off, radius 8.6°, beyond 10°
+   ell-ribbon-rand#5 mid extent 11.66 (10.22–14.49) nm, truth 9.00, beyond 25 %
+   ell-ribbon-rand#5 long extent 13.15 (10.22–14.49) nm, truth 24.00, beyond 25 %
+   sph-mild001#4 thin extent 8.77 (8.12–9.43) nm, truth 10.00
+   sph-mild001#4 mid extent 8.77 (8.12–9.43) nm, truth 10.00
+   cyl-disc-rand#4 thin direction 3.3° off, radius 3.2°
+   ecyl-plate110#4 mid extent 8.71 (7.76–9.66) nm, truth 10.00
+   ecyl-plate110-t20#4 thin extent 2.90 (2.80–3.00) nm, truth 2.50
+== synth: E_L6: 9 determined quantities outside their stated interval or radius
+   box-plate110-off8#4 thin extent 3.19 (3.03–3.38) nm, truth 3.00
+   ell-plate110#5 thin extent 2.38 (2.28–2.49) nm, truth 2.25
+   sph-mild001#4 thin extent 6.58 (5.50–6.89) nm, truth 7.50
+   cyl-disc111-off8#4 mid extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#4 long extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#5 mid extent 10.60 (9.90–12.25) nm, truth 12.73
+   cyl-disc111-off8#5 long extent 10.60 (9.90–12.25) nm, truth 12.73
+   ecyl-plate110#4 mid extent 7.39 (6.67–8.30) nm, truth 8.49
+   ecyl-plate110-t20#4 long extent 17.61 (14.61–22.18) nm, truth 13.58, beyond 25 %
+== synth: E_L6 + D rule: 9 determined quantities outside their stated interval or radius
+   box-plate110-off8#4 thin extent 3.19 (3.03–3.38) nm, truth 3.00
+   ell-plate110#5 thin extent 2.38 (2.28–2.49) nm, truth 2.25
+   sph-mild001#4 thin extent 6.58 (5.50–6.89) nm, truth 7.50
+   cyl-disc111-off8#4 mid extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#4 long extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#5 mid extent 10.60 (9.90–12.25) nm, truth 12.73
+   cyl-disc111-off8#5 long extent 10.60 (9.90–12.25) nm, truth 12.73
+   ecyl-plate110#4 mid extent 7.39 (6.67–8.30) nm, truth 8.49
+   ecyl-plate110-t20#4 long extent 17.61 (14.61–22.18) nm, truth 13.58, beyond 25 %
+== synth: E_L6 + D rule + jackknife when flagged: 9 determined quantities outside their stated interval or radius
+   box-plate110-off8#4 thin extent 3.19 (3.03–3.38) nm, truth 3.00
+   ell-plate110#5 thin extent 2.38 (2.28–2.49) nm, truth 2.25
+   sph-mild001#4 thin extent 6.58 (5.50–6.89) nm, truth 7.50
+   cyl-disc111-off8#4 mid extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#4 long extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#5 mid extent 10.60 (9.90–12.25) nm, truth 12.73
+   cyl-disc111-off8#5 long extent 10.60 (9.90–12.25) nm, truth 12.73
+   ecyl-plate110#4 mid extent 7.39 (6.67–8.30) nm, truth 8.49
+   ecyl-plate110-t20#4 long extent 17.61 (14.61–22.18) nm, truth 13.58, beyond 25 %
+== synth: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 10 determined quantities outside their stated interval or radius
+   box-plate110-off8#4 thin extent 3.19 (3.03–3.38) nm, truth 3.00
+   ell-plate110#5 thin extent 2.38 (2.28–2.49) nm, truth 2.25
+   sph-mild001#4 thin extent 6.58 (5.50–6.89) nm, truth 7.50
+   cyl-disc-rand#4 thin direction 3.3° off, radius 3.2°
+   cyl-disc111-off8#4 mid extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#4 long extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#5 mid extent 10.60 (9.90–12.25) nm, truth 12.73
+   cyl-disc111-off8#5 long extent 10.60 (9.90–12.25) nm, truth 12.73
+   ecyl-plate110#4 mid extent 7.39 (6.67–8.30) nm, truth 8.49
+   ecyl-plate110-t20#4 long extent 17.61 (14.61–22.18) nm, truth 13.58, beyond 25 %
+== synth: merged rule with E_L10: 10 determined quantities outside their stated interval or radius
+   box-plate110-off8#4 thin extent 3.19 (3.03–3.38) nm, truth 3.00
+   ell-plate110#5 thin extent 2.38 (2.28–2.49) nm, truth 2.25
+   sph-mild001#4 thin extent 6.58 (5.50–6.89) nm, truth 7.50
+   cyl-disc-rand#4 thin direction 3.3° off, radius 3.2°
+   cyl-disc111-off8#4 mid extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#4 long extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#5 mid extent 10.60 (9.90–12.25) nm, truth 12.73
+   cyl-disc111-off8#5 long extent 10.60 (9.90–12.25) nm, truth 12.73
+   ecyl-plate110#4 mid extent 7.39 (6.67–8.30) nm, truth 8.49
+   ecyl-plate110-t20#4 long extent 17.61 (14.46–22.18) nm, truth 13.58, beyond 25 %
+== synth: merged rule with E_L12 (Δ 12.5): 10 determined quantities outside their stated interval or radius
+   box-plate110-off8#4 thin extent 3.19 (3.03–3.38) nm, truth 3.00
+   ell-plate110#5 thin extent 2.38 (2.28–2.49) nm, truth 2.25
+   sph-mild001#4 thin extent 6.58 (5.50–6.89) nm, truth 7.50
+   cyl-disc-rand#4 thin direction 3.3° off, radius 3.2°
+   cyl-disc111-off8#4 mid extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#4 long extent 10.30 (9.62–12.34) nm, truth 12.73
+   cyl-disc111-off8#5 mid extent 10.60 (9.90–12.25) nm, truth 12.73
+   cyl-disc111-off8#5 long extent 10.60 (9.90–12.25) nm, truth 12.73
+   ecyl-plate110#4 mid extent 7.39 (6.67–8.30) nm, truth 8.49
+   ecyl-plate110-t20#4 long extent 17.61 (14.46–22.18) nm, truth 13.58, beyond 25 %
+
+#### Misfit runs (air, mix)
+== misfit: today (P0_app: linear esds, held/free in quadrature, cones 2.45σ): 7 determined quantities outside their stated interval or radius
+   box-plate110-mix#1 thin extent 1.59 (1.52–1.67) nm, truth 2.00, beyond 25 %
+   box-plate110-mix#1 thin direction 7.0° off, radius 2.6°
+   cyl-disc110-mix#1 thin extent 2.11 (2.04–2.18) nm, truth 2.40
+   ell-plate110-mix#1 thin extent 2.53 (2.31–2.76) nm, truth 3.00
+   sqbox-plate001-air#1 thin direction 7.7° off, radius 3.8°
+   sqbox-plate001-mix#1 thin extent 2.37 (2.25–2.48) nm, truth 3.00, beyond 25 %
+   sqbox-plate001-mix#1 thin direction 10.2° off, radius 2.5°, beyond 10°
+== misfit: today (uniqueness rebuild: linear esds, 2σ): 7 determined quantities outside their stated interval or radius
+   box-plate110-mix#1 thin extent 1.59 (1.52–1.67) nm, truth 2.00, beyond 25 %
+   box-plate110-mix#1 thin direction 7.0° off, radius 2.1°
+   cyl-disc110-mix#1 thin extent 2.11 (2.04–2.18) nm, truth 2.40
+   ell-plate110-mix#1 thin extent 2.53 (2.31–2.76) nm, truth 3.00
+   sqbox-plate001-air#1 thin direction 7.7° off, radius 3.1°
+   sqbox-plate001-mix#1 thin extent 2.37 (2.25–2.48) nm, truth 3.00, beyond 25 %
+   sqbox-plate001-mix#1 thin direction 10.2° off, radius 2.0°, beyond 10°
+== misfit: E_L6: 7 determined quantities outside their stated interval or radius
+   box-plate110-mix#1 thin extent 1.59 (1.52–1.68) nm, truth 2.00, beyond 25 %
+   box-plate110-mix#1 thin direction 7.0° off, radius 4.6°
+   cyl-disc110-mix#1 thin extent 2.11 (2.05–2.18) nm, truth 2.40
+   ell-plate110-mix#1 thin extent 1.90 (1.74–2.08) nm, truth 2.25
+   sqbox-plate001-air#1 thin direction 7.7° off, radius 6.0°
+   sqbox-plate001-mix#1 thin extent 2.37 (2.26–2.49) nm, truth 3.00, beyond 25 %
+   sqbox-plate001-mix#1 thin direction 10.2° off, radius 3.6°, beyond 10°
+== misfit: E_L6 + D rule: 7 determined quantities outside their stated interval or radius
+   box-plate110-mix#1 thin extent 1.59 (1.52–1.68) nm, truth 2.00, beyond 25 %
+   box-plate110-mix#1 thin direction 7.0° off, radius 4.6°
+   cyl-disc110-mix#1 thin extent 2.11 (2.05–2.18) nm, truth 2.40
+   ell-plate110-mix#1 thin extent 1.90 (1.74–2.08) nm, truth 2.25
+   sqbox-plate001-air#1 thin direction 7.7° off, radius 6.0°
+   sqbox-plate001-mix#1 thin extent 2.37 (2.26–2.49) nm, truth 3.00, beyond 25 %
+   sqbox-plate001-mix#1 thin direction 10.2° off, radius 3.6°, beyond 10°
+== misfit: E_L6 + D rule + jackknife when flagged: 7 determined quantities outside their stated interval or radius
+   box-plate110-mix#1 thin extent 1.59 (1.52–1.68) nm, truth 2.00, beyond 25 %
+   box-plate110-mix#1 thin direction 7.0° off, radius 4.6°
+   cyl-disc110-mix#1 thin extent 2.11 (2.05–2.18) nm, truth 2.40
+   ell-plate110-mix#1 thin extent 1.90 (1.74–2.08) nm, truth 2.25
+   sqbox-plate001-air#1 thin direction 7.7° off, radius 6.0°
+   sqbox-plate001-mix#1 thin extent 2.37 (2.26–2.49) nm, truth 3.00, beyond 25 %
+   sqbox-plate001-mix#1 thin direction 10.2° off, radius 3.6°, beyond 10°
+== misfit: merged rule: E_L6, today's radius, D rule, jackknife when flagged: 7 determined quantities outside their stated interval or radius
+   box-plate110-mix#1 thin extent 1.59 (1.52–1.68) nm, truth 2.00, beyond 25 %
+   box-plate110-mix#1 thin direction 7.0° off, radius 2.1°
+   cyl-disc110-mix#1 thin extent 2.11 (2.05–2.18) nm, truth 2.40
+   ell-plate110-mix#1 thin extent 1.90 (1.74–2.08) nm, truth 2.25
+   sqbox-plate001-air#1 thin direction 7.7° off, radius 3.1°
+   sqbox-plate001-mix#1 thin extent 2.37 (2.26–2.49) nm, truth 3.00, beyond 25 %
+   sqbox-plate001-mix#1 thin direction 10.2° off, radius 2.0°, beyond 10°
+== misfit: merged rule with E_L10: 7 determined quantities outside their stated interval or radius
+   box-plate110-mix#1 thin extent 1.59 (1.52–1.68) nm, truth 2.00, beyond 25 %
+   box-plate110-mix#1 thin direction 7.0° off, radius 2.1°
+   cyl-disc110-mix#1 thin extent 2.11 (2.05–2.18) nm, truth 2.40
+   ell-plate110-mix#1 thin extent 1.90 (1.74–2.08) nm, truth 2.25
+   sqbox-plate001-air#1 thin direction 7.7° off, radius 3.1°
+   sqbox-plate001-mix#1 thin extent 2.37 (2.26–2.50) nm, truth 3.00, beyond 25 %
+   sqbox-plate001-mix#1 thin direction 10.2° off, radius 2.0°, beyond 10°
+== misfit: merged rule with E_L12 (Δ 12.5): 7 determined quantities outside their stated interval or radius
+   box-plate110-mix#1 thin extent 1.59 (1.52–1.68) nm, truth 2.00, beyond 25 %
+   box-plate110-mix#1 thin direction 7.0° off, radius 2.1°
+   cyl-disc110-mix#1 thin extent 2.11 (2.05–2.18) nm, truth 2.40
+   ell-plate110-mix#1 thin extent 1.90 (1.74–2.08) nm, truth 2.25
+   sqbox-plate001-air#1 thin direction 7.7° off, radius 3.1°
+   sqbox-plate001-mix#1 thin extent 2.37 (2.26–2.50) nm, truth 3.00, beyond 25 %
+   sqbox-plate001-mix#1 thin direction 10.2° off, radius 2.0°, beyond 10°

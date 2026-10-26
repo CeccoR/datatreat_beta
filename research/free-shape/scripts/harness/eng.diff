@@ -1,5 +1,5 @@
---- /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs/engine/xrd-rietveld.js	2026-10-25 22:49:37.000000000 +0000
-+++ /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs/harness/eng/xrd-rietveld.js	2026-10-25 23:16:12.636483730 +0000
+--- $W/fs/engine/xrd-rietveld.js	2026-10-25 22:49:37.000000000 +0000
++++ $W/fs/harness/eng/xrd-rietveld.js	2026-10-25 23:16:12.636483730 +0000
 @@ -2464,7 +2464,10 @@
  
  /* One phase's pattern at scale 1 into `out` (zeroed here). With `ticks`, the α1 line of

@@ -8,7 +8,7 @@ isotropic fit, and measures each: pattern evaluations, wall time, every refineme
 their errors against the truth. Nothing here touches the app's files.
 
 Paths below are relative to this folder,
-`/tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs/harness`.
+`$W/fs/harness`.
 Node 22: `/opt/node22/bin/node`.
 
 ## What the fixtures are (and the user's samples are not here)
