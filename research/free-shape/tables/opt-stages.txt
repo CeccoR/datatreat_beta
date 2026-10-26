@@ -1,0 +1,24 @@
+baseline: 102 runs, 3670 evaluations a run
+  brief        11.00 refines/run   2300 evals/run (63 %)  7.7 it/refine  209 evals/refine
+  full+polish  3.82 refines/run    722 evals/run (20 %)  6.9 it/refine  189 evals/refine
+  exact/refit  0.86 refines/run     99 evals/run (3 %)  3.7 it/refine  115 evals/refine
+  held         2.82 refines/run    549 evals/run (15 %)  10.1 it/refine  195 evals/refine
+f-fwd: 102 runs, 1874 evaluations a run
+  brief        11.00 refines/run   1184 evals/run (63 %)  7.7 it/refine  108 evals/refine
+  full+polish  3.83 refines/run    352 evals/run (19 %)  6.9 it/refine  92 evals/refine
+  exact/refit  0.86 refines/run     53 evals/run (3 %)  4.4 it/refine  61 evals/refine
+  held         2.84 refines/run    267 evals/run (14 %)  9.8 it/refine  94 evals/refine
+  cov          0.90 refines/run     18 evals/run (1 %)  0.0 it/refine  20 evals/refine
+f-c1: 102 runs, 1302 evaluations a run
+  brief        20.00 refines/run    652 evals/run (50 %)  2.2 it/refine  33 evals/refine
+  full+polish  3.79 refines/run    314 evals/run (24 %)  6.1 it/refine  83 evals/refine
+  exact/refit  0.86 refines/run     46 evals/run (4 %)  3.8 it/refine  54 evals/refine
+  held         2.85 refines/run    271 evals/run (21 %)  9.9 it/refine  95 evals/refine
+  cov          0.90 refines/run     18 evals/run (1 %)  0.0 it/refine  20 evals/refine
+f-c4: 102 runs, 1204 evaluations a run
+  brief        20.00 refines/run    652 evals/run (54 %)  2.2 it/refine  33 evals/refine
+  full+polish  3.79 refines/run    314 evals/run (26 %)  6.1 it/refine  83 evals/refine
+  exact/refit  0.88 refines/run     49 evals/run (4 %)  3.9 it/refine  55 evals/refine
+  heldBrief    2.63 refines/run    146 evals/run (12 %)  5.8 it/refine  56 evals/refine
+  held         0.94 refines/run     25 evals/run (2 %)  2.8 it/refine  27 evals/refine
+  cov          0.90 refines/run     18 evals/run (1 %)  0.0 it/refine  20 evals/refine

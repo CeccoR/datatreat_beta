@@ -1,0 +1,272 @@
+--- /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs/harness/eng/xrd-rietveld.js	2026-10-25 23:16:12.636483730 +0000
++++ /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs/optimizer/h/eng/xrd-rietveld.js	2026-10-26 01:07:15.036879762 +0000
+@@ -2355,6 +2355,7 @@
+     const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
+     if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
+     const nodes = axialOn(A) ? lineNodes(model, -1 - ((k*model.rStride + r)*64 + i)*4 - j, th, A, pr.H, sollerTol(model, S*Im, pr.H, pr.eta)) : null;
++    if (MJ && MJ.k === k){ mjMember(model, MJ, k, r, j, i, th, tt, Im, ws, { U, V, W, X, Y: Y + ws*wv[i], A }, pr, half, nodes, win, S); continue; }
+     addLine(out, x, tt, pr.H, pr.eta, Im, nodes, win);
+   }
+   // The tick: the line's intensity with its texture, its width the members' mean
+@@ -2465,8 +2466,9 @@
+ /* One phase's pattern at scale 1 into `out` (zeroed here). With `ticks`, the α1 line of
+    every reflection in the range is listed there too. */
+ // [harness] one pattern evaluation per call
+-const FS = { evals: 0, log: null, k: -1, t0: 0 };
+-function phasePattern(model, v, k, out, ticks){ FS.evals++; return phasePattern_(model, v, k, out, ticks); }
++const FS = { evals: 0, log: null, k: -1, t0: 0, mj: 0, mjMs: 0, pts: 0 };
++let MJ = null;
++function phasePattern(model, v, k, out, ticks){ FS.evals++; FS.pts += model.n; return phasePattern_(model, v, k, out, ticks); }
+ function phasePattern_(model, v, k, out, ticks){
+   out.fill(0);
+   const q = model.phases[k];
+@@ -2741,6 +2743,157 @@
+   // The F² caches now hold the last displaced cell: the next evaluation at v recomputes.
+   return cols;
+ }
++/* jacobian with the options of refine's opts.x (fwd, member). */
++function jacobianX(model, v, st, free, cols, X){
++  if (!X.fwd && !X.member) return jacobian(model, v, st, free, cols);
++  const n = model.n, np = model.phases.length;
++  const tmpA = new Float64Array(n), tmpB = new Float64Array(n);
++  const done = X.member ? memberJacobian(model, v, st, free, cols, X) : null;
++  free.forEach((j, a)=>{
++    if (done && done.has(j)) return;
++    const p = model.par[j], col = cols[a];
++    if (p.linear){ col.set(p.group === 'bg' ? model.basis[p.basis] : st.pats[p.phase]); return; }
++    col.fill(0);
++    const h = diffStep(model, j, v);
++    let up = v[j] + h, dn = v[j] - h;
++    if (X.fwd){ dn = v[j]; if (up > p.hi){ up = v[j]; dn = Math.max(p.lo, v[j] - h); } }
++    else { if (up > p.hi) up = v[j]; if (dn < p.lo) dn = v[j]; }
++    if (up === dn) return;
++    const vu = v.slice(), vd = v.slice(); vu[j] = up; vd[j] = dn;
++    const ks = p.group === 'phase' ? [p.phase] : [...Array(np).keys()];
++    for (const k of ks){
++      const S = v[model.phases[k].iScale]; if (!S) continue;
++      // the pattern at v is st's (this refinement's, same node counts)
++      const A = up === v[j] ? st.pats[k] : (phasePattern(model, vu, k, tmpA), tmpA);
++      const B = dn === v[j] ? st.pats[k] : (phasePattern(model, vd, k, tmpB), tmpB);
++      const f = S/(up - dn);
++      for (let i = 0; i < n; i++) col[i] += f*(A[i] - B[i]);
++    }
++  });
++  return cols;
++}
++/* Broyden's rank-one update of the non-linear columns after an accepted step, in the
++   correlation-scaled variables (D the columns' weighted norms); the linear columns are
++   exact (the phases at scale 1 at the new v, the background's basis). One phase. */
++function broydenUpdate(model, v, st, free, cols, bro){
++  const n = model.n, w = model.w;
++  const nl = [];
++  free.forEach((j, a)=> { const p = model.par[j]; if (p.linear){ cols[a].set(p.group === 'bg' ? model.basis[p.basis] : st.pats[p.phase]); } else nl.push(a); });
++  if (!nl.length) return;
++  // each phase's scale moved: the columns are S·∂P/∂θ
++  model.phases.forEach((q, k)=>{
++    const S0 = bro.vOld[q.iScale], S1 = bro.vNew[q.iScale];
++    if (S0 > 0 && S1 !== S0) for (const a of nl){ const p = model.par[free[a]]; if (p.group !== 'phase' || p.phase === k){ const c = cols[a], f = S1/S0; for (let i = 0; i < n; i++) c[i] *= f; } }
++  });
++  const dth = nl.map(a=> { const j = free[a]; return bro.logW.has(j) && bro.vOld[j] > 0 ? Math.log(bro.vNew[j]/bro.vOld[j]) : bro.vNew[j] - bro.vOld[j]; });
++  const D2 = nl.map(a=> { const c = cols[a]; let t = 0; for (let i = 0; i < n; i++) t += w[i]*c[i]*c[i]; return t > 0 ? t : 1; });
++  let den = 0; nl.forEach((a, b)=> { den += dth[b]*dth[b]*D2[b]; });
++  if (!(den > 0)) return;
++  const r = new Float64Array(n);
++  model.phases.forEach((q, k)=>{ const S = bro.vNew[q.iScale], P1 = bro.pNew[k], P0 = bro.pOld[k]; if (S) for (let i = 0; i < n; i++) r[i] += S*(P1[i] - P0[i]); });
++  nl.forEach((a, b)=>{ const c = cols[a], d = dth[b]; if (d) for (let i = 0; i < n; i++) r[i] -= c[i]*d; });
++  nl.forEach((a, b)=>{ const c = cols[a], f = dth[b]*D2[b]/den; if (f) for (let i = 0; i < n; i++) c[i] += f*r[i]; });
++}
++/* The member pass: for each phase drawn with a body (Lorentzian lines, not WPPM), the
++   columns of its free W, R (from each member's ∂line/∂Y and shapeWidths' ∂w/∂θ), X_s
++   (∂H_L/∂X = sinθ·∂H_L/∂Y, Stephens' strain off), its overall B (−2s²·line) and refined
++   occupancies (∂ln F²/∂occ·line). Returns the set of parameter indices filled. */
++function memberJacobian(model, v, st, free, cols, X){
++  const done = new Set(), n = model.n;
++  model.phases.forEach((q, k)=>{
++    if (!q.iW || q.wppm || !shapeActive(q, v)) return;
++    const S = v[q.iScale]; if (!S) return;
++    const t0 = Date.now();
++    const colOf = j => { const a = free.indexOf(j); return a >= 0 ? cols[a] : null; };
++    // the widths' derivatives in each free W and R (central; one-sided at a bound)
++    const shp = [];
++    for (const j of [...q.iW, ...q.iR]){
++      const c = colOf(j); if (!c) continue;
++      const p = model.par[j], h = diffStep(model, j, v);
++      let up = v[j] + h, dn = v[j] - h; if (up > p.hi) up = v[j]; if (dn < p.lo) dn = v[j];
++      if (up === dn){ c.fill(0); done.add(j); continue; }
++      const vu = v.slice(), vd = v.slice(); vu[j] = up; vd[j] = dn;
++      const wu = shapeWidths(model, q, vu), wd = shapeWidths(model, q, vd);
++      shp.push({ col: c, dw: wu.map((u, r)=> { const o = new Float64Array(u.length); for (let i = 0; i < u.length; i++) o[i] = (u[i] - wd[r][i])/(up - dn); return o; }) });
++    }
++    const xs = q.iS ? null : colOf(q.iXs);
++    // the intensity parameters: ∂ln I/∂p per reflection and line (F², F² of Kα2, DW)
++    const ints = [];
++    const cell = cellOf(model, v, k), { Gs } = metric(cell);
++    const f20 = Float64Array.from(phaseF2(model, q, cell, Gs, v)), f2b0 = q.f2b === q.f2 ? f20 : Float64Array.from(q.f2b), d0 = Float64Array.from(q.d);
++    const cB = q.iB != null ? colOf(q.iB) : null;
++    if (cB) ints.push({ col: cB, dl: [d0.map(d=> -2*0.25/(d*d)), d0.map(d=> -2*0.25/(d*d))] });
++    for (const os of (q.occSites || [])){
++      const c = colOf(os.iOcc); if (!c) continue;
++      const p = model.par[os.iOcc], h = diffStep(model, os.iOcc, v);
++      let up = v[os.iOcc] + h, dn = v[os.iOcc] - h; if (up > p.hi) up = v[os.iOcc]; if (dn < p.lo) dn = v[os.iOcc];
++      const vu = v.slice(), vd = v.slice(); vu[os.iOcc] = up; vd[os.iOcc] = dn;
++      const fu = Float64Array.from(phaseF2(model, q, cell, Gs, vu)), fub = q.f2b === q.f2 ? fu : Float64Array.from(q.f2b);
++      const fd = Float64Array.from(phaseF2(model, q, cell, Gs, vd)), fdb = q.f2b === q.f2 ? fd : Float64Array.from(q.f2b);
++      const dl = (a, b, z) => a.map((t, r)=> z[r] > 0 ? (t - b[r])/(up - dn)/z[r] : 0);
++      ints.push({ col: c, dl: [dl(fu, fd, f20), dl(fub, fdb, f2b0)] });
++    }
++    phaseF2(model, q, cell, Gs, v);   // the caches back at v
++    if (!shp.length && !xs && !ints.length) return;
++    for (const o of shp) o.col.fill(0);
++    if (xs) xs.fill(0);
++    for (const o of ints) o.col.fill(0);
++    // the columns interleaved point by point while the members are added (one buffer)
++    const outs = [...shp.map(o=> o.col), ...(xs ? [xs] : []), ...ints.map(o=> o.col)], nc = outs.length;
++    MJ = { k, shp, xs, ints, A: new Float64Array(n), B: new Float64Array(n), C: new Float64Array(n), hY: X.hY || 1e-6, central: !!X.mjCentral, cut: X.mjCut || 0,
++      sk: new Float64Array(shp.length + 1), ik: new Float64Array(ints.length), nc, buf: new Float64Array(n*nc) };
++    try { phasePattern_(model, v, k, new Float64Array(n)); }
++    finally { const buf = MJ.buf; MJ = null; for (let c = 0; c < nc; c++){ const o = outs[c]; for (let p = 0; p < n; p++) o[p] = buf[p*nc + c]; } }
++    for (const o of shp) done.add(o.col === null ? -1 : free[cols.indexOf(o.col)]);
++    if (xs) done.add(q.iXs);
++    for (const o of ints) done.add(free[cols.indexOf(o.col)]);
++    FS.mj++; FS.mjMs += Date.now() - t0;
++  });
++  return done;
++}
++/* One member's line in the member pass: drawn at its Y (into C: the intensity columns)
++   and at Y ± h (A, B: its derivative), then added into the columns over its window. */
++function mjMember(model, M, k, r, j, i, th, tt, Im, ws, pf, pr, half, nodes, win, S){
++  const x = model.x, n = x.length, { U, V, W, X, Y, A: Ax } = pf, h = M.hY;
++  const key = -1 - ((k*model.rStride + r)*64 + i)*4 - j, on = axialOn(Ax);
++  // the member's line at its Y (C) and at Y + h (A): a forward difference per member
++  // (the lines are smooth in Y), or at Y − h too (B) when M.central
++  const pa = profileAtTheta(th, U, V, W, X, Y + h), ha = lineHalf(model, pa.H, pa.eta, S*Im);
++  const na = on ? lineNodes(model, key, th, Ax, pa.H, sollerTol(model, S*Im, pa.H, pa.eta)) : null;
++  addLine(M.A, x, tt, pa.H, pa.eta, Im, na, ha/pa.H);
++  let hb = 0, hh = h, B = M.C;
++  if (M.central){
++    const pb = profileAtTheta(th, U, V, W, X, Math.max(0, Y - h)); hb = lineHalf(model, pb.H, pb.eta, S*Im); hh = (Y + h) - Math.max(0, Y - h);
++    const nb = on ? lineNodes(model, key, th, Ax, pb.H, sollerTol(model, S*Im, pb.H, pb.eta)) : null;
++    addLine(M.B, x, tt, pb.H, pb.eta, Im, nb, hb/pb.H); B = M.B;
++  }
++  const n0 = on ? lineNodes(model, key, th, Ax, pr.H, sollerTol(model, S*Im, pr.H, pr.eta)) : null;
++  addLine(M.C, x, tt, pr.H, pr.eta, Im, n0, win);
++  const [dLo, dHi] = axialReach(th, Ax), sp = dHi - dLo, hm = Math.max(half, ha, hb, WIN_MIN);
++  const i0 = Math.max(0, lowerBound(x, tt + dLo - hm - sp) - 1), xe = tt + dHi + hm + sp;
++  const f = S/hh, sn = Math.sin(th);
++  const ns = M.shp.length, ni = M.ints.length, xs = M.xs, A = M.A, C = M.C;
++  const sk = M.sk, ik = M.ik, nc = M.nc, buf = M.buf;
++  for (let s = 0; s < ns; s++) sk[s] = ws*M.shp[s].dw[r][i];
++  if (xs) sk[ns] = sn;
++  for (let s = 0; s < ni; s++) ik[s] = M.ints[s].dl[j][r]*S;
++  const nd = ns + (xs ? 1 : 0);
++  // the derivative's tails under M.cut of its largest value are left out (M.cut 0: none)
++  let thr = 0;
++  if (M.cut > 0){ let mx = 0; const pc = lowerBound(x, tt); for (let p = Math.max(0, pc - 3); p < Math.min(n, pc + 4); p++){ const t = Math.abs(A[p] - B[p]); if (t > mx) mx = t; } thr = M.cut*mx; }
++  for (let p = i0; p < n; p++){
++    if (x[p] > xe) break;
++    const a = A[p], c = C[p], b = B[p];
++    if (a === 0 && c === 0 && b === 0) continue;
++    A[p] = 0; C[p] = 0; if (B !== C) B[p] = 0;
++    const o = p*nc;
++    for (let s = 0; s < ni; s++) buf[o + nd + s] += ik[s]*c;
++    const e = a - b;
++    if (e < thr && e > -thr) continue;
++    const d = f*e;
++    for (let s = 0; s < nd; s++) buf[o + s] += sk[s]*d;
++  }
++}
+ function normalEq(model, cols, st){
+   const m = cols.length, n = model.n, w = model.w, y = model.y, yc = st.yc;
+   const A = new Float64Array(m*m), g = new Float64Array(m), wr = new Float64Array(n);
+@@ -2884,7 +3037,7 @@
+    any start up to 10⁻³, and for the damping that rejections add, as before. */
+ const LAM_START = 1e-3;
+ function refineHeld(model, opts){
+-  const t0 = Date.now();
++  const t0 = Date.now(), X = opts.x || {};
+   const names = opts.free || model.par.filter(p=> p.refine).map(p=> p.name);
+   const free = [...new Set(names.map(nm=> model.index[nm]).filter(i=> i != null))];
+   const m = free.length, maxIter = opts.maxIter || 40, n = model.n;
+@@ -2923,8 +3076,14 @@
+     v = vl; st.bg.set(linSt.bg); st.yc.set(linSt.yc); st.chi2 = linSt.chi2;
+     return before - linSt.chi2 > 0.01*chiRed(before);
+   };
+-  for (; m && it < maxIter; it++){
+-    jacobian(model, v, st, free, cols);
++  const logW = new Set((X.logW || []).filter(j=> free.includes(j)));
++  let jFresh = false, jAge = 0, bro = null, predMin = NaN;
++  for (; m && !X.covOnly && it < maxIter; it++){
++    if (!X.broyden || !bro || jAge >= X.broyden - 1){ jacobianX(model, v, st, free, cols, X); jFresh = true; jAge = 0; }
++    else { broydenUpdate(model, v, st, free, cols, bro); jFresh = false; jAge++; }
++    bro = null;
++    // the widths in log: ∂y/∂ln W = W·∂y/∂W (at W > 0)
++    if (logW.size) free.forEach((j, a)=> { if (logW.has(j) && v[j] > 0){ const c = cols[a], w = v[j]; for (let i = 0; i < n; i++) c[i] *= w; } });
+     const { A, g } = normalEq(model, cols, st);
+     const act = [];
+     for (let a = 0; a < m; a++) if (A[a*m + a] > 0 && !onBound(free[a], g[a])) act.push(a);
+@@ -2932,6 +3091,7 @@
+     const { As, gs, D, k } = scaled(A, g, m, act);
+     // esds at this point, for the shift/esd test
+     const chInv = cholInverse(cholesky(As, k), k), cr = chiRed(st.chi2);
++    { let pr = 0; for (let a = 0; a < k; a++){ let t = 0; for (let b = 0; b < k; b++) t += chInv[a*k + b]*gs[b]; pr += gs[a]*t; } predMin = st.chi2 - (pr > 0 && Number.isFinite(pr) ? pr : 0); }
+     let accepted = false, maxRatio = 0;
+     /* 12 tries, and on until λ reaches 10k: a correlation-scaled matrix of k parameters
+        has no eigenvalue above k, so from there the step is a short one down the gradient,
+@@ -2953,9 +3113,9 @@
+         const j = free[act[a]], p = model.par[j];
+         let d = ds[a]/D[a];
+         if (p.maxStep && Math.abs(d) > p.maxStep){ d = Math.sign(d)*p.maxStep; clamped.push(j); }
+-        let nv = v[j] + d;
++        let nv = logW.has(j) && v[j] > 0 ? v[j]*Math.exp(Math.max(-3, Math.min(3, d))) : v[j] + d;
+         if (nv < p.lo) nv = p.lo; else if (nv > p.hi) nv = p.hi;
+-        const sig = Math.sqrt(Math.max(0, chInv[a*k + a])*cr)/D[a], r = sig > 0 ? Math.abs(nv - v[j])/sig : 0;
++        const sig = Math.sqrt(Math.max(0, chInv[a*k + a])*cr)/D[a], r = sig > 0 ? (logW.has(j) && v[j] > 0 ? Math.abs(Math.log(nv/v[j])) : Math.abs(nv - v[j]))/sig : 0;
+         maxRatio = Math.max(maxRatio, r);
+         if (clamped[clamped.length - 1] !== j) maxRatioZ = Math.max(maxRatioZ, r);
+         vn[j] = nv;
+@@ -2977,6 +3137,7 @@
+       }
+       if (next){
+         const rel = (st.chi2 - next.chi2)/next.chi2;
++        if (X.broyden) bro = { vOld: v.slice(), vNew: vn.slice(), pOld: st.pats.map(P=> Float64Array.from(P)), pNew: next.pats, logW };
+         v = vn; const t = st; st = next;
+         if (next === trial) trial = t; else trialZ = t;
+         const lamUsed = lam;
+@@ -2988,6 +3149,7 @@
+       lam *= 10;
+     }
+     if (opts.onProgress) opts.onProgress((it + 1)/maxIter, { iteration: it + 1, chi2: chiRed(st.chi2), lambda: lam });
++    if (X.broyden && !jFresh && (!accepted || converged) && it + 1 < maxIter){ converged = false; why = ''; bro = null; jAge = X.broyden; if (!accepted) lam = lam0; continue; }
+     if (!accepted){ converged = true; why = 'no step lowers χ²'; }
+     if (converged && linLeft > 0 && linSolve()){ converged = false; why = ''; lam = lam0; continue; }
+     if (converged){ if (accepted) it++; break; }
+@@ -3003,10 +3165,10 @@
+      in atBound, for the reader to take the value as a limit. U, V, W with H_G² on its
+      floor have no meaningful curvature (∂y/∂W ∝ 1/√W there, the esd follows the
+      difference step): esd NaN, and listed in atBound. */
+-  st = evaluate(model, v, st);
++  if (!X.noCov) st = evaluate(model, v, st);
+   const esd = {}, atBound = [], esdHeld = {};
+   let corr = null, cov = null, tied = [];
+-  if (m){
++  if (m && !X.noCov){
+     jacobian(model, v, st, free, cols);
+     const { A, g } = normalEq(model, cols, st);
+     const act = [];
+@@ -3058,7 +3220,7 @@
+   const freeNames = free.map(j=> model.par[j].name);
+   return { params: getParams(model), esd, corr, cov, free: freeNames, atBound,
+            undetermined: freeNames.filter(nm=> !Number.isFinite(esd[nm]) && !atBound.includes(nm)), tied, esdHeld,
+-           stats, iterations: it, converged, why, ms: Date.now() - t0 };
++           stats, iterations: it, converged, why, ms: Date.now() - t0, predMin };
+ }
+ 
+ /* ---------- starting points ---------- */
+@@ -4600,5 +4762,6 @@
+ // [harness] internals for the methods
+ const ENG = { FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
+   lowIndexAxes, lattDirection, latticeAcross, shapeWidths, shapeTs, columnLengthV, SHAPE_SOFT, SHAPE_STARTS, SHAPE_FULL, fitSettings, shapeOf, turnEsds,
+-  bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern };
++  bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern,
++  jacobian, jacobianX, memberJacobian, diffStep, phasePattern_, solveLinear, assemble, buildModel, shapeActive };
+ export { ENG };

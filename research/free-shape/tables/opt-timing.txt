@@ -1,0 +1,24 @@
+c1: run, app s (first, second), c1 s (first, second), evals app/c1
+  box-plate110-1     26.9, 27.4   11.2, 10.2   4225/1383
+  cyl-disc110-1      14.1, 14.0   4.9, 5.4   2468/720
+  ecyl-plate110-1    28.3, 28.1   11.4, 10.4   4272/1542
+  ell-plate110-1     19.6, 19.8   6.8, 7.1   3325/1011
+  u03-1              34.9, 35.4   15.0, 15.0   4836/1823
+  u09-1              22.9, 23.9   8.7, 8.8   3792/1314
+  mean: app 24.6 s, c1 9.6 s, wall ratio 0.39 (first-method only 0.40), evaluation ratio 0.34; ms per evaluation app 6.44, c1 7.38
+c4: run, app s (first, second), c4 s (first, second), evals app/c4
+  box-plate110-1     28.9, 32.2   11.0, 11.6   4225/1367
+  cyl-disc110-1      14.5, 14.2   4.8, 5.0   2468/720
+  ecyl-plate110-1    26.9, 26.8   10.1, 9.8   4272/1432
+  ell-plate110-1     21.0, 19.8   7.0, 7.1   3325/1022
+  u03-1              35.3, 34.8   13.2, 13.8   4836/1662
+  u09-1              24.7, 24.4   8.3, 8.3   3792/1244
+  mean: app 25.3 s, c4 9.2 s, wall ratio 0.36 (first-method only 0.36), evaluation ratio 0.32; ms per evaluation app 6.62, c4 7.39
+fwd: run, app s (first, second), fwd s (first, second), evals app/fwd
+  box-plate110-1     28.6, 29.8   17.4, 16.6   4225/2171
+  cyl-disc110-1      14.2, 15.0   7.9, 7.4   2468/1213
+  ecyl-plate110-1    27.4, 26.4   16.6, 15.7   4272/2249
+  ell-plate110-1     21.3, 21.9   12.1, 12.3   3325/1662
+  u03-1              35.5, 35.2   22.2, 23.6   4836/2721
+  u09-1              23.1, 24.4   13.9, 13.9   3792/1975
+  mean: app 25.2 s, fwd 15.0 s, wall ratio 0.59 (first-method only 0.60), evaluation ratio 0.52; ms per evaluation app 6.61, fwd 7.49

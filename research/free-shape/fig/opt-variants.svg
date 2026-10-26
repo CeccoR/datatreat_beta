@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="638" viewBox="0 0 900 638" font-family="Inter, Helvetica, Arial, sans-serif">
+<rect width="900" height="638" fill="#fcfcfb"/>
+<text x="16" y="24" font-size="14" font-weight="600" fill="#0b0b0b">Optimiser variants on the 18 pilot runs: cost against the app's search</text>
+<line x1="150" x2="150" y1="46" y2="562" stroke="#e4e3df" stroke-width="1"/>
+<text x="150" y="578" font-size="11" text-anchor="middle" fill="#52514e">0.00</text>
+<line x1="236.36363636363637" x2="236.36363636363637" y1="46" y2="562" stroke="#e4e3df" stroke-width="1"/>
+<text x="236.36363636363637" y="578" font-size="11" text-anchor="middle" fill="#52514e">0.25</text>
+<line x1="322.72727272727275" x2="322.72727272727275" y1="46" y2="562" stroke="#e4e3df" stroke-width="1"/>
+<text x="322.72727272727275" y="578" font-size="11" text-anchor="middle" fill="#52514e">0.50</text>
+<line x1="409.09090909090907" x2="409.09090909090907" y1="46" y2="562" stroke="#e4e3df" stroke-width="1"/>
+<text x="409.09090909090907" y="578" font-size="11" text-anchor="middle" fill="#52514e">0.75</text>
+<line x1="495.45454545454544" x2="495.45454545454544" y1="46" y2="562" stroke="#e4e3df" stroke-width="1"/>
+<text x="495.45454545454544" y="578" font-size="11" text-anchor="middle" fill="#52514e">1.00</text>
+<line x1="150" x2="530" y1="562" y2="562" stroke="#8a8984" stroke-width="1"/>
+<text x="340" y="596" font-size="12" text-anchor="middle" fill="#0b0b0b">pattern-evaluation equivalents, fraction of the baseline (same runs)</text>
+<line x1="495.45454545454544" x2="495.45454545454544" y1="46" y2="562" stroke="#8a8984" stroke-dasharray="3 3"/>
+<text x="574" y="40" font-size="11" fill="#52514e">reached (Δ ≤ 1) · same outcome · same solid · Δ max</text>
+<text x="142" y="71" font-size="12" text-anchor="end" fill="#0b0b0b">c7</text>
+<line x1="150" x2="257.3610835194923" y1="67" y2="67" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="257.3610835194923" cy="67" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="266.3610835194923" y="71" font-size="11" fill="#52514e">0.31</text>
+<text x="574" y="71" font-size="11" fill="#52514e">15/16 · 18/18 · 16/18 · 2.1</text>
+<text x="142" y="93" font-size="12" text-anchor="end" fill="#0b0b0b">c5</text>
+<line x1="150" x2="262.0856696114244" y1="89" y2="89" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="262.0856696114244" cy="89" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="271.0856696114244" y="93" font-size="11" fill="#52514e">0.32</text>
+<text x="574" y="93" font-size="11" fill="#52514e">14/16 · 18/18 · 18/18 · 1.9</text>
+<text x="142" y="115" font-size="12" text-anchor="end" fill="#0b0b0b">c6</text>
+<line x1="150" x2="262.56069593045015" y1="111" y2="111" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="262.56069593045015" cy="111" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="271.56069593045015" y="115" font-size="11" fill="#52514e">0.33</text>
+<text x="574" y="115" font-size="11" fill="#52514e">14/16 · 18/18 · 17/18 · 3.0</text>
+<text x="142" y="137" font-size="12" text-anchor="end" fill="#0b0b0b">c4</text>
+<line x1="150" x2="267.98113138700927" y1="133" y2="133" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="267.98113138700927" cy="133" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="276.98113138700927" y="137" font-size="11" fill="#52514e">0.34</text>
+<text x="574" y="137" font-size="11" fill="#52514e">16/16 · 18/18 · 17/18 · 1.0</text>
+<text x="142" y="159" font-size="12" text-anchor="end" fill="#0b0b0b">c1</text>
+<line x1="150" x2="277.30191807924496" y1="155" y2="155" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="277.30191807924496" cy="155" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="286.30191807924496" y="159" font-size="11" fill="#52514e">0.37</text>
+<text x="574" y="159" font-size="11" fill="#52514e">16/16 · 18/18 · 17/18 · 1.0</text>
+<text x="142" y="181" font-size="12" text-anchor="end" fill="#0b0b0b">c8</text>
+<line x1="150" x2="279.5101485352567" y1="177" y2="177" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="279.5101485352567" cy="177" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="288.5101485352567" y="181" font-size="11" fill="#52514e">0.37</text>
+<text x="574" y="181" font-size="11" fill="#52514e">15/16 · 18/18 · 16/18 · 2.5</text>
+<text x="142" y="203" font-size="12" text-anchor="end" fill="#0b0b0b">member</text>
+<line x1="150" x2="283.5855552810916" y1="199" y2="199" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="283.5855552810916" cy="199" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="292.5855552810916" y="203" font-size="11" fill="#52514e">0.39</text>
+<text x="574" y="203" font-size="11" fill="#52514e">15/16 · 18/18 · 18/18 · 2.0</text>
+<text x="142" y="225" font-size="12" text-anchor="end" fill="#0b0b0b">c3</text>
+<line x1="150" x2="286.5764859944943" y1="221" y2="221" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="286.5764859944943" cy="221" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="295.5764859944943" y="225" font-size="11" fill="#52514e">0.40</text>
+<text x="574" y="225" font-size="11" fill="#52514e">13/16 · 18/18 · 17/18 · 2.6</text>
+<text x="142" y="247" font-size="12" text-anchor="end" fill="#0b0b0b">c9</text>
+<line x1="150" x2="300.2726502414323" y1="243" y2="243" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="300.2726502414323" cy="243" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="309.2726502414323" y="247" font-size="11" fill="#52514e">0.43</text>
+<text x="574" y="247" font-size="11" fill="#52514e">15/16 · 18/18 · 16/18 · 2.5</text>
+<text x="142" y="269" font-size="12" text-anchor="end" fill="#0b0b0b">fwd</text>
+<line x1="150" x2="325.9548839868155" y1="265" y2="265" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="325.9548839868155" cy="265" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="334.9548839868155" y="269" font-size="11" fill="#52514e">0.51</text>
+<text x="574" y="269" font-size="11" fill="#52514e">15/16 · 18/18 · 18/18 · 2.0</text>
+<text x="142" y="291" font-size="12" text-anchor="end" fill="#0b0b0b">broy3</text>
+<line x1="150" x2="357.0703917379206" y1="287" y2="287" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="357.0703917379206" cy="287" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="366.0703917379206" y="291" font-size="11" fill="#52514e">0.60</text>
+<text x="574" y="291" font-size="11" fill="#52514e">15/16 · 18/18 · 16/18 · 2.5</text>
+<text x="142" y="313" font-size="12" text-anchor="end" fill="#0b0b0b">halving</text>
+<line x1="150" x2="371.5728168722861" y1="309" y2="309" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="371.5728168722861" cy="309" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="380.5728168722861" y="313" font-size="11" fill="#52514e">0.64</text>
+<text x="574" y="313" font-size="11" fill="#52514e">15/16 · 18/18 · 17/18 · 1.1</text>
+<text x="142" y="335" font-size="12" text-anchor="end" fill="#0b0b0b">halvingDedup</text>
+<line x1="150" x2="384.3856889368195" y1="331" y2="331" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="384.3856889368195" cy="331" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="393.3856889368195" y="335" font-size="11" fill="#52514e">0.68</text>
+<text x="574" y="335" font-size="11" fill="#52514e">15/16 · 18/18 · 17/18 · 1.1</text>
+<text x="142" y="357" font-size="12" text-anchor="end" fill="#0b0b0b">stride2</text>
+<line x1="150" x2="402.1722149470444" y1="353" y2="353" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="402.1722149470444" cy="353" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="411.1722149470444" y="357" font-size="11" fill="#52514e">0.73</text>
+<text x="574" y="357" font-size="11" fill="#52514e">15/16 · 18/18 · 15/18 · 2.5</text>
+<text x="142" y="379" font-size="12" text-anchor="end" fill="#0b0b0b">sur4</text>
+<line x1="150" x2="402.2337224419845" y1="375" y2="375" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="402.2337224419845" cy="375" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="411.2337224419845" y="379" font-size="11" fill="#52514e">0.73</text>
+<text x="574" y="379" font-size="11" fill="#52514e">14/16 · 18/18 · 15/18 · 3.1</text>
+<text x="142" y="401" font-size="12" text-anchor="end" fill="#0b0b0b">brief4</text>
+<line x1="150" x2="411.93208002064983" y1="397" y2="397" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="411.93208002064983" cy="397" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="420.93208002064983" y="401" font-size="11" fill="#52514e">0.76</text>
+<text x="574" y="401" font-size="11" fill="#52514e">14/16 · 18/18 · 17/18 · 2.5</text>
+<text x="142" y="423" font-size="12" text-anchor="end" fill="#0b0b0b">briefShape</text>
+<line x1="150" x2="423.20946160530514" y1="419" y2="419" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="423.20946160530514" cy="419" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="432.20946160530514" y="423" font-size="11" fill="#52514e">0.79</text>
+<text x="574" y="423" font-size="11" fill="#52514e">14/16 · 18/18 · 17/18 · 3.1</text>
+<text x="142" y="445" font-size="12" text-anchor="end" fill="#0b0b0b">briefShapeXs</text>
+<line x1="150" x2="426.00826532280837" y1="441" y2="441" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="426.00826532280837" cy="441" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="435.00826532280837" y="445" font-size="11" fill="#52514e">0.80</text>
+<text x="574" y="445" font-size="11" fill="#52514e">13/16 · 18/18 · 16/18 · 3.1</text>
+<text x="142" y="467" font-size="12" text-anchor="end" fill="#0b0b0b">heldBrief</text>
+<line x1="150" x2="446.03126659720334" y1="463" y2="463" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="446.03126659720334" cy="463" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="455.03126659720334" y="467" font-size="11" fill="#52514e">0.86</text>
+<text x="574" y="467" font-size="11" fill="#52514e">15/16 · 18/18 · 18/18 · 2.0</text>
+<text x="142" y="489" font-size="12" text-anchor="end" fill="#0b0b0b">nocov</text>
+<line x1="150" x2="458.38708631153884" y1="485" y2="485" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="458.38708631153884" cy="485" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="467.38708631153884" y="489" font-size="11" fill="#52514e">0.89</text>
+<text x="574" y="489" font-size="11" fill="#52514e">15/16 · 18/18 · 18/18 · 2.0</text>
+<text x="142" y="511" font-size="12" text-anchor="end" fill="#0b0b0b">sur8</text>
+<line x1="150" x2="477.22510152466526" y1="507" y2="507" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="477.22510152466526" cy="507" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="486.22510152466526" y="511" font-size="11" fill="#52514e">0.95</text>
+<text x="574" y="511" font-size="11" fill="#52514e">13/16 · 18/18 · 16/18 · 3.1</text>
+<text x="142" y="533" font-size="12" text-anchor="end" fill="#0b0b0b">dedup</text>
+<line x1="150" x2="479.10850466039335" y1="529" y2="529" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="479.10850466039335" cy="529" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="488.10850466039335" y="533" font-size="11" fill="#52514e">0.95</text>
+<text x="574" y="533" font-size="11" fill="#52514e">16/16 · 18/18 · 18/18 · 0.9</text>
+<text x="142" y="555" font-size="12" text-anchor="end" fill="#0b0b0b">logW</text>
+<line x1="150" x2="519.5602053627294" y1="551" y2="551" stroke="#e4e3df" stroke-width="2"/>
+<circle cx="519.5602053627294" cy="551" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="528.5602053627294" y="555" font-size="11" fill="#52514e">1.07</text>
+<text x="574" y="555" font-size="11" fill="#52514e">13/16 · 18/18 · 15/18 · 2.8</text>
+<circle cx="150" cy="620" r="5" fill="#2a78d6"/><text x="160" y="624" font-size="11" fill="#52514e">reached every run the baseline reached, same outcomes</text>
+<circle cx="530" cy="620" r="5" fill="#eb6834"/><text x="540" y="624" font-size="11" fill="#52514e">lost a run or changed an outcome</text>
+</svg>

@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="390" viewBox="0 0 1100 390" font-family="Inter, Helvetica, Arial, sans-serif" font-size="11">
+<rect width="1100" height="390" fill="#fcfcfb"/>
+<text x="12" y="20" font-size="13" font-weight="600" fill="#0b0b0b">The other minima the analysis found (main), within Δ 30 of the best</text>
+<text x="12" y="37" fill="#52514e">Each dot: one converged minimum other than the best, refined exact with its orientation free; compared with the reported solid modulo m-3m.</text>
+<text x="70" y="62" font-weight="600" fill="#0b0b0b">how far in extent</text>
+<line x1="70" x2="70" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="70" y="344" text-anchor="middle" fill="#52514e">0</text>
+<line x1="130" x2="130" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="130" y="344" text-anchor="middle" fill="#52514e">5</text>
+<line x1="190" x2="190" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="190" y="344" text-anchor="middle" fill="#52514e">10</text>
+<line x1="250" x2="250" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="250" y="344" text-anchor="middle" fill="#52514e">15</text>
+<line x1="310" x2="310" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="310" y="344" text-anchor="middle" fill="#52514e">20</text>
+<line x1="370" x2="370" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="370" y="344" text-anchor="middle" fill="#52514e">25</text>
+<line x1="430" x2="430" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="430" y="344" text-anchor="middle" fill="#52514e">30</text>
+<line x1="70" x2="430" y1="330" y2="330" stroke="#e4e3df"/>
+<text x="65" y="334" text-anchor="end" fill="#52514e">0.01</text>
+<line x1="70" x2="430" y1="243.33333333333334" y2="243.33333333333334" stroke="#e4e3df"/>
+<text x="65" y="247.33333333333334" text-anchor="end" fill="#52514e">0.1</text>
+<line x1="70" x2="430" y1="156.66666666666669" y2="156.66666666666669" stroke="#e4e3df"/>
+<text x="65" y="160.66666666666669" text-anchor="end" fill="#52514e">1</text>
+<line x1="70" x2="430" y1="70" y2="70" stroke="#e4e3df"/>
+<text x="65" y="74" text-anchor="end" fill="#52514e">10</text>
+<line x1="70" x2="430" y1="330" y2="330" stroke="#52514e"/>
+<line x1="70" x2="70" y1="70" y2="330" stroke="#52514e"/>
+<text x="250" y="360" text-anchor="middle" fill="#52514e">Δ = (χ² − χ²_best)/χ²_ν</text>
+<text transform="translate(32,200) rotate(-90)" text-anchor="middle" fill="#52514e">largest extent ratio, |ln|</text>
+<text x="520" y="62" font-weight="600" fill="#0b0b0b">how far in orientation</text>
+<line x1="520" x2="520" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="520" y="344" text-anchor="middle" fill="#52514e">0</text>
+<line x1="580" x2="580" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="580" y="344" text-anchor="middle" fill="#52514e">5</text>
+<line x1="640" x2="640" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="640" y="344" text-anchor="middle" fill="#52514e">10</text>
+<line x1="700" x2="700" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="700" y="344" text-anchor="middle" fill="#52514e">15</text>
+<line x1="760" x2="760" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="760" y="344" text-anchor="middle" fill="#52514e">20</text>
+<line x1="820" x2="820" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="820" y="344" text-anchor="middle" fill="#52514e">25</text>
+<line x1="880" x2="880" y1="70" y2="330" stroke="#e4e3df"/>
+<text x="880" y="344" text-anchor="middle" fill="#52514e">30</text>
+<line x1="520" x2="880" y1="330" y2="330" stroke="#e4e3df"/>
+<text x="515" y="334" text-anchor="end" fill="#52514e">0</text>
+<line x1="520" x2="880" y1="286.6666666666667" y2="286.6666666666667" stroke="#e4e3df"/>
+<text x="515" y="290.6666666666667" text-anchor="end" fill="#52514e">15</text>
+<line x1="520" x2="880" y1="243.33333333333334" y2="243.33333333333334" stroke="#e4e3df"/>
+<text x="515" y="247.33333333333334" text-anchor="end" fill="#52514e">30</text>
+<line x1="520" x2="880" y1="200" y2="200" stroke="#e4e3df"/>
+<text x="515" y="204" text-anchor="end" fill="#52514e">45</text>
+<line x1="520" x2="880" y1="156.66666666666669" y2="156.66666666666669" stroke="#e4e3df"/>
+<text x="515" y="160.66666666666669" text-anchor="end" fill="#52514e">60</text>
+<line x1="520" x2="880" y1="113.33333333333331" y2="113.33333333333331" stroke="#e4e3df"/>
+<text x="515" y="117.33333333333331" text-anchor="end" fill="#52514e">75</text>
+<line x1="520" x2="880" y1="70" y2="70" stroke="#e4e3df"/>
+<text x="515" y="74" text-anchor="end" fill="#52514e">90</text>
+<line x1="520" x2="880" y1="330" y2="330" stroke="#52514e"/>
+<line x1="520" x2="520" y1="70" y2="330" stroke="#52514e"/>
+<text x="700" y="360" text-anchor="middle" fill="#52514e">Δ = (χ² − χ²_best)/χ²_ν</text>
+<text transform="translate(482,200) rotate(-90)" text-anchor="middle" fill="#52514e">worst axis angle (°)</text>
+<polyline points="220.6,330.0 220.6,70.0" fill="none" stroke="#52514e" stroke-width="1" stroke-dasharray="4 3"/>
+<polyline points="670.6,330.0 670.6,70.0" fill="none" stroke="#52514e" stroke-width="1" stroke-dasharray="4 3"/>
+<circle cx="75.5" cy="189.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-needle111#2 Δ 0.46 (full) extents 4.5×39.8×4.2 |ln| 0.41 worst 30.4°</title></circle>
+<circle cx="525.5" cy="242.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-needle111#2 Δ 0.46 (full) extents 4.5×39.8×4.2 |ln| 0.41 worst 30.4°</title></circle>
+<circle cx="112.4" cy="314.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-off8#1 Δ 3.54 (extra) extents 11.2×13.2×3.1 |ln| 0.02 worst 2.4°</title></circle>
+<circle cx="562.4" cy="323.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-off8#1 Δ 3.54 (extra) extents 11.2×13.2×3.1 |ln| 0.02 worst 2.4°</title></circle>
+<circle cx="85.9" cy="232.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-off8#2 Δ 1.33 (free-of-held) extents 15.8×11.4×3.1 |ln| 0.13 worst 3.8°</title></circle>
+<circle cx="535.9" cy="319.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-off8#2 Δ 1.33 (free-of-held) extents 15.8×11.4×3.1 |ln| 0.13 worst 3.8°</title></circle>
+<circle cx="194.6" cy="216.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-off8#3 Δ 10.39 (held) extents 13.2×10.6×3.1 |ln| 0.20 worst 9.9°</title></circle>
+<circle cx="644.6" cy="301.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-off8#3 Δ 10.39 (held) extents 13.2×10.6×3.1 |ln| 0.20 worst 9.9°</title></circle>
+<circle cx="227.8" cy="234.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-t20#1 Δ 13.15 (held) extents 11.3×2.0×9.6 |ln| 0.13 worst 25.2°</title></circle>
+<circle cx="677.8" cy="257.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-t20#1 Δ 13.15 (held) extents 11.3×2.0×9.6 |ln| 0.13 worst 25.2°</title></circle>
+<circle cx="363.2" cy="233.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-t20#2 Δ 24.43 (held) extents 9.4×10.7×2.1 |ln| 0.13 worst 35.3°</title></circle>
+<circle cx="813.2" cy="228.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>box-plate110-t20#2 Δ 24.43 (held) extents 9.4×10.7×2.1 |ln| 0.13 worst 35.3°</title></circle>
+<circle cx="88.9" cy="329.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>cyl-disc111-off8#2 Δ 1.58 (full) extents 15.4×15.4×2.0 |ln| 0.01 worst 8.3°</title></circle>
+<circle cx="538.9" cy="305.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>cyl-disc111-off8#2 Δ 1.58 (full) extents 15.4×15.4×2.0 |ln| 0.01 worst 8.3°</title></circle>
+<circle cx="163.7" cy="211.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>cyl-disc111-off8#2 Δ 7.81 (held) extents 12.3×12.3×2.1 |ln| 0.23 worst 8.7°</title></circle>
+<circle cx="613.7" cy="304.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>cyl-disc111-off8#2 Δ 7.81 (held) extents 12.3×12.3×2.1 |ln| 0.23 worst 8.7°</title></circle>
+<circle cx="239.3" cy="188.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>cyl-disc111-off8#3 Δ 14.11 (extra) extents 12.7×12.7×2.1 |ln| 0.43 worst 9.8°</title></circle>
+<circle cx="689.3" cy="301.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>cyl-disc111-off8#3 Δ 14.11 (extra) extents 12.7×12.7×2.1 |ln| 0.43 worst 9.8°</title></circle>
+<circle cx="73.2" cy="217.2" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#1 Δ 0.26 (full) extents 22.7×10.6×2.5 |ln| 0.20 worst 10.9°</title></circle>
+<circle cx="523.2" cy="298.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#1 Δ 0.26 (full) extents 22.7×10.6×2.5 |ln| 0.20 worst 10.9°</title></circle>
+<circle cx="178.3" cy="167.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#1 Δ 9.02 (extra) extents 10.3×2.8×45.6 |ln| 0.75 worst 6.6°</title></circle>
+<circle cx="628.3" cy="311.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#1 Δ 9.02 (extra) extents 10.3×2.8×45.6 |ln| 0.75 worst 6.6°</title></circle>
+<circle cx="75.4" cy="232.2" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#2 Δ 0.45 (free-of-held) extents 20.9×9.5×2.5 |ln| 0.13 worst 2.2°</title></circle>
+<circle cx="525.4" cy="323.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#2 Δ 0.45 (free-of-held) extents 20.9×9.5×2.5 |ln| 0.13 worst 2.2°</title></circle>
+<circle cx="96.2" cy="228.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#2 Δ 2.18 (held) extents 15.8×10.1×2.5 |ln| 0.15 worst 19.5°</title></circle>
+<circle cx="546.2" cy="273.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#2 Δ 2.18 (held) extents 15.8×10.1×2.5 |ln| 0.15 worst 19.5°</title></circle>
+<circle cx="130.0" cy="191.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#2 Δ 5.00 (brief) extents 10.0×2.8×27.1 |ln| 0.39 worst 5.3°</title></circle>
+<circle cx="580.0" cy="314.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#2 Δ 5.00 (brief) extents 10.0×2.8×27.1 |ln| 0.39 worst 5.3°</title></circle>
+<circle cx="74.9" cy="234.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#3 Δ 0.41 (extra) extents 11.4×2.9×17.1 |ln| 0.13 worst 13.9°</title></circle>
+<circle cx="524.9" cy="289.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#3 Δ 0.41 (extra) extents 11.4×2.9×17.1 |ln| 0.13 worst 13.9°</title></circle>
+<circle cx="87.7" cy="226.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#3 Δ 1.48 (brief) extents 19.9×2.9×11.0 |ln| 0.16 worst 11.7°</title></circle>
+<circle cx="537.7" cy="296.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110#3 Δ 1.48 (brief) extents 19.9×2.9×11.0 |ln| 0.16 worst 11.7°</title></circle>
+<circle cx="83.1" cy="235.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#1 Δ 1.09 (full) extents 18.2×2.9×8.4 |ln| 0.12 worst 3.1°</title></circle>
+<circle cx="533.1" cy="321.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#1 Δ 1.09 (full) extents 18.2×2.9×8.4 |ln| 0.12 worst 3.1°</title></circle>
+<circle cx="108.3" cy="239.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#1 Δ 3.19 (extra) extents 2.9×9.7×16.6 |ln| 0.11 worst 3.6°</title></circle>
+<circle cx="558.3" cy="319.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#1 Δ 3.19 (extra) extents 2.9×9.7×16.6 |ln| 0.11 worst 3.6°</title></circle>
+<circle cx="79.3" cy="226.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#2 Δ 0.77 (full) extents 9.5×2.9×17.2 |ln| 0.16 worst 25.4°</title></circle>
+<circle cx="529.3" cy="256.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#2 Δ 0.77 (full) extents 9.5×2.9×17.2 |ln| 0.16 worst 25.4°</title></circle>
+<circle cx="88.4" cy="197.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#2 Δ 1.53 (extra) extents 20.7×2.9×8.5 |ln| 0.34 worst 26.7°</title></circle>
+<circle cx="538.4" cy="252.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#2 Δ 1.53 (extra) extents 20.7×2.9×8.5 |ln| 0.34 worst 26.7°</title></circle>
+<circle cx="133.8" cy="330.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#2 Δ 5.32 (held) extents 14.7×10.1×2.5 |ln| 0.00 worst 0.0°</title></circle>
+<circle cx="583.8" cy="330.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#2 Δ 5.32 (held) extents 14.7×10.1×2.5 |ln| 0.00 worst 0.0°</title></circle>
+<circle cx="121.3" cy="232.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#3 Δ 4.28 (brief) extents 10.7×2.9×15.1 |ln| 0.13 worst 18.1°</title></circle>
+<circle cx="571.3" cy="277.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#3 Δ 4.28 (brief) extents 10.7×2.9×15.1 |ln| 0.13 worst 18.1°</title></circle>
+<circle cx="126.8" cy="232.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#3 Δ 4.73 (brief) extents 10.8×2.9×14.1 |ln| 0.14 worst 15.5°</title></circle>
+<circle cx="576.8" cy="285.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-plate110-t20#3 Δ 4.73 (brief) extents 10.8×2.9×14.1 |ln| 0.14 worst 15.5°</title></circle>
+<circle cx="72.3" cy="216.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-rand#3 Δ 0.19 (full) extents 5.5×11.4×12.0 |ln| 0.20 worst 28.7°</title></circle>
+<circle cx="522.3" cy="247.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-rand#3 Δ 0.19 (full) extents 5.5×11.4×12.0 |ln| 0.20 worst 28.7°</title></circle>
+<circle cx="75.3" cy="227.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-rand#3 Δ 0.44 (extra) extents 17.0×9.5×5.1 |ln| 0.15 worst 10.5°</title></circle>
+<circle cx="525.3" cy="299.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-rand#3 Δ 0.44 (extra) extents 17.0×9.5×5.1 |ln| 0.15 worst 10.5°</title></circle>
+<circle cx="90.0" cy="229.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#1 Δ 1.67 (extra) extents 42.5×4.3×10.0 |ln| 0.14 worst 5.3°</title></circle>
+<circle cx="540.0" cy="314.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#1 Δ 1.67 (extra) extents 42.5×4.3×10.0 |ln| 0.14 worst 5.3°</title></circle>
+<circle cx="94.2" cy="196.5" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#1 Δ 2.02 (brief) extents 4.1×11.5×52.9 |ln| 0.35 worst 10.5°</title></circle>
+<circle cx="544.2" cy="299.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#1 Δ 2.02 (brief) extents 4.1×11.5×52.9 |ln| 0.35 worst 10.5°</title></circle>
+<circle cx="130.3" cy="198.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#2 Δ 5.03 (extra) extents 39.0×13.4×3.5 |ln| 0.33 worst 13.4°</title></circle>
+<circle cx="580.3" cy="291.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#2 Δ 5.03 (extra) extents 39.0×13.4×3.5 |ln| 0.33 worst 13.4°</title></circle>
+<circle cx="141.4" cy="168.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#2 Δ 5.95 (extra) extents 58.4×4.1×11.2 |ln| 0.73 worst 15.7°</title></circle>
+<circle cx="591.4" cy="284.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#2 Δ 5.95 (extra) extents 58.4×4.1×11.2 |ln| 0.73 worst 15.7°</title></circle>
+<circle cx="72.6" cy="229.9" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#3 Δ 0.21 (extra) extents 46.0×4.3×11.1 |ln| 0.14 worst 3.2°</title></circle>
+<circle cx="522.6" cy="320.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#3 Δ 0.21 (extra) extents 46.0×4.3×11.1 |ln| 0.14 worst 3.2°</title></circle>
+<circle cx="74.9" cy="243.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#3 Δ 0.41 (full) extents 12.6×4.1×49.4 |ln| 0.10 worst 7.3°</title></circle>
+<circle cx="524.9" cy="309.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ecyl-ribbon001#3 Δ 0.41 (full) extents 12.6×4.1×49.4 |ln| 0.10 worst 7.3°</title></circle>
+<circle cx="79.6" cy="202.8" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ell-ribbon-rand#2 Δ 0.80 (extra) extents 12.5×3.0×12.2 |ln| 0.29 worst 44.6°</title></circle>
+<circle cx="529.6" cy="201.2" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ell-ribbon-rand#2 Δ 0.80 (extra) extents 12.5×3.0×12.2 |ln| 0.29 worst 44.6°</title></circle>
+<circle cx="216.4" cy="194.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ell-ribbon-rand#2 Δ 12.20 (extra) extents 20.1×6.8×3.4 |ln| 0.37 worst 45.1°</title></circle>
+<circle cx="666.4" cy="199.7" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ell-ribbon-rand#2 Δ 12.20 (extra) extents 20.1×6.8×3.4 |ln| 0.37 worst 45.1°</title></circle>
+<circle cx="85.0" cy="172.1" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ell-ribbon-rand#3 Δ 1.25 (extra) extents 13.1×3.0×11.8 |ln| 0.66 worst 35.9°</title></circle>
+<circle cx="535.0" cy="226.2" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>ell-ribbon-rand#3 Δ 1.25 (extra) extents 13.1×3.0×11.8 |ln| 0.66 worst 35.9°</title></circle>
+<circle cx="110.0" cy="191.4" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>sph-mild001#1 Δ 3.34 (extra) extents 14.5×14.5×8.3 |ln| 0.40 worst 30.3°</title></circle>
+<circle cx="560.0" cy="242.6" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>sph-mild001#1 Δ 3.34 (extra) extents 14.5×14.5×8.3 |ln| 0.40 worst 30.3°</title></circle>
+<circle cx="93.6" cy="196.3" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>sph-mild001#2 Δ 1.96 (extra) extents 14.0×14.0×8.4 |ln| 0.35 worst 45.0°</title></circle>
+<circle cx="543.6" cy="200.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>sph-mild001#2 Δ 1.96 (extra) extents 14.0×14.0×8.4 |ln| 0.35 worst 45.0°</title></circle>
+<circle cx="119.5" cy="330.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>sph-oblate110#2 Δ 4.12 (extra) extents 19.9×19.9×3.0 |ln| 0.00 worst 0.0°</title></circle>
+<circle cx="569.5" cy="330.0" r="3.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>sph-oblate110#2 Δ 4.12 (extra) extents 19.9×19.9×3.0 |ln| 0.00 worst 0.0°</title></circle>
+<circle cx="86.9" cy="194.9" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u02#1 Δ 1.41 (extra) extents 21.0×20.1×1.6 |ln| 0.36 worst 89.8°</title></circle>
+<circle cx="536.9" cy="70.5" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u02#1 Δ 1.41 (extra) extents 21.0×20.1×1.6 |ln| 0.36 worst 89.8°</title></circle>
+<circle cx="98.4" cy="159.9" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u02#1 Δ 2.36 (full) extents 75.3×13.3×1.6 |ln| 0.92 worst 83.7°</title></circle>
+<circle cx="548.4" cy="88.3" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u02#1 Δ 2.36 (full) extents 75.3×13.3×1.6 |ln| 0.92 worst 83.7°</title></circle>
+<circle cx="89.1" cy="74.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u03#1 Δ 1.60 (brief) extents ∞×1.4×15.6 |ln| 9.00 worst 60.7°</title></circle>
+<circle cx="539.1" cy="154.7" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u03#1 Δ 1.60 (brief) extents ∞×1.4×15.6 |ln| 9.00 worst 60.7°</title></circle>
+<circle cx="141.9" cy="235.2" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u04#1 Δ 5.99 (full) extents 14.5×2.4×19.1 |ln| 0.12 worst 2.5°</title></circle>
+<circle cx="591.9" cy="322.8" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u04#1 Δ 5.99 (full) extents 14.5×2.4×19.1 |ln| 0.12 worst 2.5°</title></circle>
+<circle cx="144.5" cy="74.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u05#1 Δ 6.21 (full) extents ∞×1.1×11.5 |ln| 9.00 worst 32.8°</title></circle>
+<circle cx="594.5" cy="235.4" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u05#1 Δ 6.21 (full) extents ∞×1.1×11.5 |ln| 9.00 worst 32.8°</title></circle>
+<circle cx="248.1" cy="130.5" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u05#1 Δ 14.84 (extra) extents 14.4×1.2×20.3 |ln| 2.00 worst 50.6°</title></circle>
+<circle cx="698.1" cy="183.7" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u05#1 Δ 14.84 (extra) extents 14.4×1.2×20.3 |ln| 2.00 worst 50.6°</title></circle>
+<circle cx="160.5" cy="159.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u06#1 Δ 7.54 (full) extents 23.2×1.9×26.2 |ln| 0.94 worst 89.8°</title></circle>
+<circle cx="610.5" cy="70.6" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u06#1 Δ 7.54 (full) extents 23.2×1.9×26.2 |ln| 0.94 worst 89.8°</title></circle>
+<circle cx="212.5" cy="74.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u06#1 Δ 11.88 (extra) extents 18.5×∞×1.8 |ln| 9.00 worst 48.7°</title></circle>
+<circle cx="662.5" cy="189.4" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u06#1 Δ 11.88 (extra) extents 18.5×∞×1.8 |ln| 9.00 worst 48.7°</title></circle>
+<circle cx="133.6" cy="223.3" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u07#1 Δ 5.30 (full) extents 18.7×11.9×1.6 |ln| 0.17 worst 90.0°</title></circle>
+<circle cx="583.6" cy="70.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u07#1 Δ 5.30 (full) extents 18.7×11.9×1.6 |ln| 0.17 worst 90.0°</title></circle>
+<circle cx="102.7" cy="234.6" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u08#1 Δ 2.73 (extra) extents 18.2×2.0×21.2 |ln| 0.13 worst 89.8°</title></circle>
+<circle cx="552.7" cy="70.6" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u08#1 Δ 2.73 (extra) extents 18.2×2.0×21.2 |ln| 0.13 worst 89.8°</title></circle>
+<circle cx="73.8" cy="77.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u09#1 Δ 0.31 (extra) extents 101488.4×13.7×2.1 |ln| 8.28 worst 30.1°</title></circle>
+<circle cx="523.8" cy="243.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u09#1 Δ 0.31 (extra) extents 101488.4×13.7×2.1 |ln| 8.28 worst 30.1°</title></circle>
+<circle cx="202.0" cy="179.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u11#1 Δ 11.00 (full) extents 2.3×26.7×23.2 |ln| 0.55 worst 90.0°</title></circle>
+<circle cx="652.0" cy="70.1" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u11#1 Δ 11.00 (full) extents 2.3×26.7×23.2 |ln| 0.55 worst 90.0°</title></circle>
+<circle cx="195.3" cy="170.6" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u12#1 Δ 10.44 (full) extents 11.8×1.7×38.1 |ln| 0.69 worst 80.4°</title></circle>
+<circle cx="645.3" cy="97.6" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u12#1 Δ 10.44 (full) extents 11.8×1.7×38.1 |ln| 0.69 worst 80.4°</title></circle>
+<circle cx="197.4" cy="74.0" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u12#1 Δ 10.62 (extra) extents ∞×1.6×13.6 |ln| 9.00 worst 57.0°</title></circle>
+<circle cx="647.4" cy="165.4" r="3.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>u12#1 Δ 10.62 (extra) extents ∞×1.6×13.6 |ln| 9.00 worst 57.0°</title></circle>
+<text x="224.60000000000053" y="82" text-anchor="start" font-weight="400" font-size="11" fill="#52514e">flip 5 % (Δ 12.6)</text>
+<circle cx="910.0" cy="90.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1"><title>synthetic (37 minima)</title></circle><text x="920" y="94" text-anchor="start" font-weight="400" font-size="11" fill="#0b0b0b">synthetic (37 minima)</text>
+<circle cx="910.0" cy="106.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1"><title>sample-like (14)</title></circle><text x="920" y="110" text-anchor="start" font-weight="400" font-size="11" fill="#0b0b0b">sample-like (14)</text>
+</svg>

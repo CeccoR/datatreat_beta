@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="508" viewBox="0 0 940 508" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<rect width="940" height="508" fill="#fcfcfb"/>
+<text x="16" y="26" font-size="16" font-weight="600" fill="#0b0b0b">Round 1 (46 runs): pattern evaluations a run, by stage</text>
+<rect x="16" y="40" width="12" height="12" rx="2" fill="#a3a29d"/><text x="34" y="50" font-size="12" fill="#52514e">widths reading + screen (time ÷ 5.7 ms)</text>
+<rect x="287.8" y="40" width="12" height="12" rx="2" fill="#2a78d6"/><text x="305.8" y="50" font-size="12" fill="#52514e">brief refinements</text>
+<rect x="423.20000000000005" y="40" width="12" height="12" rx="2" fill="#eb6834"/><text x="441.20000000000005" y="50" font-size="12" fill="#52514e">full + polish</text>
+<rect x="533.8000000000001" y="40" width="12" height="12" rx="2" fill="#1baf7a"/><text x="551.8000000000001" y="50" font-size="12" fill="#52514e">exact faces + held frames</text>
+<line x1="250" x2="250" y1="66" y2="464" stroke="#e4e3df" stroke-width="1"/><text x="250" y="480" font-size="11" fill="#52514e" text-anchor="middle">0</text>
+<line x1="375" x2="375" y1="66" y2="464" stroke="#e4e3df" stroke-width="1"/><text x="375" y="480" font-size="11" fill="#52514e" text-anchor="middle">1.0k</text>
+<line x1="500" x2="500" y1="66" y2="464" stroke="#e4e3df" stroke-width="1"/><text x="500" y="480" font-size="11" fill="#52514e" text-anchor="middle">2.0k</text>
+<line x1="625" x2="625" y1="66" y2="464" stroke="#e4e3df" stroke-width="1"/><text x="625" y="480" font-size="11" fill="#52514e" text-anchor="middle">3.0k</text>
+<line x1="750" x2="750" y1="66" y2="464" stroke="#e4e3df" stroke-width="1"/><text x="750" y="480" font-size="11" fill="#52514e" text-anchor="middle">4.0k</text>
+<text x="500" y="498" font-size="11" fill="#52514e" text-anchor="middle">pattern evaluations a run (mean)</text>
+<text x="240" y="94" font-size="12.5" fill="#0b0b0b" text-anchor="end">app's search (11 starts)</text>
+<rect x="251" y="81" width="284.6005434782609" height="16" rx="1" fill="#2a78d6"/>
+<rect x="537.6005434782609" y="81" width="85.5353260869565" height="16" rx="1" fill="#eb6834"/>
+<rect x="625.1358695652174" y="81" width="81.88858695652175" height="16" rx="3" fill="#1baf7a"/>
+<text x="716.0244565217391" y="94" font-size="12" fill="#0b0b0b">3.7k · reached 40/41 · Δ > 3: 1</text>
+<text x="240" y="124" font-size="12.5" fill="#0b0b0b" text-anchor="end">6 screened picks</text>
+<rect x="250" y="111" width="38.006006864988535" height="16" rx="1" fill="#a3a29d"/>
+<rect x="290.00600686498854" y="111" width="156.0271739130435" height="16" rx="1" fill="#2a78d6"/>
+<rect x="448.03318077803203" y="111" width="96.47554347826087" height="16" rx="1" fill="#eb6834"/>
+<rect x="546.5087242562929" y="111" width="89.60054347826087" height="16" rx="3" fill="#1baf7a"/>
+<text x="645.1092677345538" y="124" font-size="12" fill="#0b0b0b">2.8k · reached 38/42 · Δ > 3: 1</text>
+<text x="240" y="154" font-size="12.5" fill="#0b0b0b" text-anchor="end">6 picks + sphere-like start</text>
+<rect x="250" y="141" width="28.052726926010678" height="16" rx="1" fill="#a3a29d"/>
+<rect x="280.0527269260107" y="141" width="178.63586956521738" height="16" rx="1" fill="#2a78d6"/>
+<rect x="460.68859649122805" y="141" width="86.00543478260875" height="16" rx="1" fill="#eb6834"/>
+<rect x="548.6940312738368" y="141" width="89.5271739130435" height="16" rx="3" fill="#1baf7a"/>
+<text x="647.2212051868803" y="154" font-size="12" fill="#0b0b0b">2.9k · reached 38/42 · Δ > 3: 2</text>
+<text x="240" y="184" font-size="12.5" fill="#0b0b0b" text-anchor="end">one per normal family (≤7)</text>
+<rect x="250" y="171" width="29.014302059496572" height="16" rx="1" fill="#a3a29d"/>
+<rect x="281.0143020594966" y="171" width="177.92391304347825" height="16" rx="1" fill="#2a78d6"/>
+<rect x="460.9382151029748" y="171" width="81.39673913043475" height="16" rx="1" fill="#eb6834"/>
+<rect x="544.3349542334096" y="171" width="83.60597826086962" height="16" rx="3" fill="#1baf7a"/>
+<text x="636.9409324942792" y="184" font-size="12" fill="#0b0b0b">2.8k · reached 38/41 · Δ > 3: 1</text>
+<text x="240" y="214" font-size="12.5" fill="#0b0b0b" text-anchor="end">4 picks</text>
+<rect x="250" y="201" width="29.18592677345538" height="16" rx="1" fill="#a3a29d"/>
+<rect x="281.1859267734554" y="201" width="104.97554347826087" height="16" rx="1" fill="#2a78d6"/>
+<rect x="388.16147025171625" y="201" width="99.79891304347825" height="16" rx="1" fill="#eb6834"/>
+<rect x="489.9603832951945" y="201" width="87.10869565217394" height="16" rx="3" fill="#1baf7a"/>
+<text x="586.0690789473684" y="214" font-size="12" fill="#0b0b0b">2.4k · reached 36/41 · Δ > 3: 4</text>
+<text x="240" y="244" font-size="12.5" fill="#0b0b0b" text-anchor="end">3 picks</text>
+<rect x="250" y="231" width="27.879195270785658" height="16" rx="1" fill="#a3a29d"/>
+<rect x="279.87919527078566" y="231" width="79.76358695652175" height="16" rx="1" fill="#2a78d6"/>
+<rect x="361.6427822273074" y="231" width="106.12771739130432" height="16" rx="1" fill="#eb6834"/>
+<rect x="469.7704996186117" y="231" width="86.93478260869568" height="16" rx="3" fill="#1baf7a"/>
+<text x="565.7052822273074" y="244" font-size="12" fill="#0b0b0b">2.2k · reached 36/41 · Δ > 3: 4</text>
+<text x="240" y="274" font-size="12.5" fill="#0b0b0b" text-anchor="end">2 picks</text>
+<rect x="250" y="261" width="29.66647597254007" height="16" rx="1" fill="#a3a29d"/>
+<rect x="281.66647597254007" y="261" width="54.078804347826065" height="16" rx="1" fill="#2a78d6"/>
+<rect x="337.74528032036613" y="261" width="70.22010869565219" height="16" rx="1" fill="#eb6834"/>
+<rect x="409.9653890160183" y="261" width="88.84239130434781" height="16" rx="3" fill="#1baf7a"/>
+<text x="507.80778032036613" y="274" font-size="12" fill="#0b0b0b">1.8k · reached 34/41 · Δ > 3: 4</text>
+<text x="240" y="304" font-size="12.5" fill="#0b0b0b" text-anchor="end">budget stop (2 without better)</text>
+<rect x="250" y="291" width="27.62986270022884" height="16" rx="1" fill="#a3a29d"/>
+<rect x="279.62986270022884" y="291" width="88.70652173913044" height="16" rx="1" fill="#2a78d6"/>
+<rect x="370.3363844393593" y="291" width="100.38315217391306" height="16" rx="1" fill="#eb6834"/>
+<rect x="472.71953661327234" y="291" width="87.13858695652175" height="16" rx="3" fill="#1baf7a"/>
+<text x="568.8581235697941" y="304" font-size="12" fill="#0b0b0b">2.3k · reached 36/41 · Δ > 3: 4</text>
+<text x="240" y="334" font-size="12.5" fill="#0b0b0b" text-anchor="end">4 picks, lean brief</text>
+<rect x="250" y="321" width="27.661803966437844" height="16" rx="1" fill="#a3a29d"/>
+<rect x="279.66180396643784" y="321" width="69.71467391304344" height="16" rx="1" fill="#2a78d6"/>
+<rect x="351.3764778794813" y="321" width="134.47010869565224" height="16" rx="1" fill="#eb6834"/>
+<rect x="487.84658657513353" y="321" width="82.70108695652164" height="16" rx="3" fill="#1baf7a"/>
+<text x="579.5476735316552" y="334" font-size="12" fill="#0b0b0b">2.4k · reached 37/41 · Δ > 3: 3</text>
+<text x="240" y="364" font-size="12.5" fill="#0b0b0b" text-anchor="end">4 picks, 5 brief iterations</text>
+<rect x="250" y="351" width="29.156369183829156" height="16" rx="1" fill="#a3a29d"/>
+<rect x="281.15636918382916" y="351" width="71.65760869565213" height="16" rx="1" fill="#2a78d6"/>
+<rect x="354.8139778794813" y="351" width="115.26630434782612" height="16" rx="1" fill="#eb6834"/>
+<rect x="472.0802822273074" y="351" width="84.22826086956525" height="16" rx="3" fill="#1baf7a"/>
+<text x="565.3085430968727" y="364" font-size="12" fill="#0b0b0b">2.2k · reached 33/40 · Δ > 3: 5</text>
+<text x="240" y="394" font-size="12.5" fill="#0b0b0b" text-anchor="end">4 picks, full only distinct</text>
+<rect x="250" y="381" width="27.49303966437833" height="16" rx="1" fill="#a3a29d"/>
+<rect x="279.49303966437833" y="381" width="104.97554347826087" height="16" rx="1" fill="#2a78d6"/>
+<rect x="386.4685831426392" y="381" width="91.24456521739131" height="16" rx="1" fill="#eb6834"/>
+<rect x="479.7131483600305" y="381" width="83.10597826086956" height="16" rx="3" fill="#1baf7a"/>
+<text x="571.8191266209001" y="394" font-size="12" fill="#0b0b0b">2.3k · reached 36/41 · Δ > 3: 3</text>
+<text x="240" y="424" font-size="12.5" fill="#0b0b0b" text-anchor="end">4 picks, first-brief rejection</text>
+<rect x="250" y="411" width="28.66485507246375" height="16" rx="1" fill="#a3a29d"/>
+<rect x="280.66485507246375" y="411" width="96.26902173913044" height="16" rx="1" fill="#2a78d6"/>
+<rect x="378.9338768115942" y="411" width="99.79891304347831" height="16" rx="1" fill="#eb6834"/>
+<rect x="480.7327898550725" y="411" width="87.10869565217388" height="16" rx="3" fill="#1baf7a"/>
+<text x="576.8414855072464" y="424" font-size="12" fill="#0b0b0b">2.3k · reached 36/41 · Δ > 3: 4</text>
+<text x="240" y="454" font-size="12.5" fill="#0b0b0b" text-anchor="end">4 picks, best held frame only</text>
+<rect x="250" y="441" width="29.616895499618636" height="16" rx="1" fill="#a3a29d"/>
+<rect x="281.61689549961864" y="441" width="104.97554347826087" height="16" rx="1" fill="#2a78d6"/>
+<rect x="388.5924389778795" y="441" width="99.79891304347825" height="16" rx="1" fill="#eb6834"/>
+<rect x="490.39135202135776" y="441" width="36.475543478260875" height="16" rx="3" fill="#1baf7a"/>
+<text x="535.8668954996186" y="454" font-size="12" fill="#0b0b0b">2.0k · reached 36/41 · Δ > 3: 4</text>
+</svg>

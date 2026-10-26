@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="390" viewBox="0 0 1020 390" font-family="Inter, Helvetica, Arial, sans-serif" font-size="11">
+<rect width="1020" height="390" fill="#fcfcfb"/>
+<text x="14" y="22" font-size="14" font-weight="600" fill="#0b0b0b">What the data determine: the near-equivalent fits agree on averaged column lengths, not on dimensions</text>
+<text x="14" y="40" fill="#52514e">Top rows: averages over directions and over a family’s members; bottom: the solid’s own dimensions, where the near-equivalent fits part.</text>
+<text x="330" y="86" font-weight="600" fill="#0b0b0b">synthetic truths (80 runs, τ 6)</text>
+<line x1="330" x2="330" y1="96" y2="300" stroke="#e4e3df"/>
+<text x="330" y="314" text-anchor="middle" fill="#52514e">0.1</text>
+<line x1="416.2782681486289" x2="416.2782681486289" y1="96" y2="300" stroke="#e4e3df"/>
+<text x="416.2782681486289" y="314" text-anchor="middle" fill="#52514e">1</text>
+<line x1="502.5565362972578" x2="502.5565362972578" y1="96" y2="300" stroke="#e4e3df"/>
+<text x="502.5565362972578" y="314" text-anchor="middle" fill="#52514e">10</text>
+<line x1="588.8348044458867" x2="588.8348044458867" y1="96" y2="300" stroke="#e4e3df"/>
+<text x="588.8348044458867" y="314" text-anchor="middle" fill="#52514e">100</text>
+<line x1="330" x2="630" y1="300" y2="300" stroke="#52514e"/>
+<line x1="330" x2="330" y1="96" y2="300" stroke="#52514e"/>
+<text x="480" y="330" text-anchor="middle" fill="#52514e">per cent (log)</text>
+<polyline points="408.4,108.0 442.9,108.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="408.4" cy="108.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>size over all directions (harmonic mean: one isotropic size): spread over the near-equivalent fits, median 0.8 %, 90 % 2.0 %</title></circle>
+<polyline points="417.7,119.0 451.3,119.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="417.7" cy="119.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>size over all directions (harmonic mean: one isotropic size): error from the truth, median 1.0 %, 90 % 2.5 %</title></circle>
+<text x="318.0" y="117.0" text-anchor="end" font-weight="400" font-size="11" fill="#0b0b0b">size over all directions (harmonic mean: one isotropic size)</text>
+<polyline points="450.2,142.0 488.5,142.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="450.2" cy="142.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>mean column length over all directions: spread over the near-equivalent fits, median 2.5 %, 90 % 6.9 %</title></circle>
+<polyline points="429.0,153.0 470.3,153.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="429.0" cy="153.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>mean column length over all directions: error from the truth, median 1.4 %, 90 % 4.2 %</title></circle>
+<text x="318.0" y="151.0" text-anchor="end" font-weight="400" font-size="11" fill="#0b0b0b">mean column length over all directions</text>
+<polyline points="411.9,176.0 477.1,176.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="411.9" cy="176.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>each family’s mean column length (10 per run): spread over the near-equivalent fits, median 0.9 %, 90 % 5.1 %</title></circle>
+<polyline points="431.5,187.0 472.4,187.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="431.5" cy="187.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>each family’s mean column length (10 per run): error from the truth, median 1.5 %, 90 % 4.5 %</title></circle>
+<text x="318.0" y="185.0" text-anchor="end" font-weight="400" font-size="11" fill="#0b0b0b">each family’s mean column length (10 per run)</text>
+<polyline points="454.3,210.0 503.0,210.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="454.3" cy="210.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>the shortest member’s column length (≈ thickness): spread over the near-equivalent fits, median 2.8 %, 90 % 10.1 %</title></circle>
+<polyline points="431.7,221.0 477.1,221.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="431.7" cy="221.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>the shortest member’s column length (≈ thickness): error from the truth, median 1.5 %, 90 % 5.1 %</title></circle>
+<text x="318.0" y="219.0" text-anchor="end" font-weight="400" font-size="11" fill="#0b0b0b">the shortest member’s column length (≈ thickness)</text>
+<polyline points="469.3,244.0 520.1,244.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="469.3" cy="244.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>each member’s column length, sorted in its family (34): spread over the near-equivalent fits, median 4.1 %, 90 % 16.0 %</title></circle>
+<polyline points="442.5,255.0 497.8,255.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="442.5" cy="255.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>each member’s column length, sorted in its family (34): error from the truth, median 2.0 %, 90 % 8.8 %</title></circle>
+<text x="318.0" y="253.0" text-anchor="end" font-weight="400" font-size="11" fill="#0b0b0b">each member’s column length, sorted in its family (34)</text>
+<polyline points="487.1,278.0 546.9,278.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="487.1" cy="278.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>the solid’s principal column lengths (3: its dimensions): spread over the near-equivalent fits, median 6.6 %, 90 % 32.7 %</title></circle>
+<polyline points="460.2,289.0 514.9,289.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="460.2" cy="289.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>the solid’s principal column lengths (3: its dimensions): error from the truth, median 3.2 %, 90 % 13.9 %</title></circle>
+<text x="318.0" y="287.0" text-anchor="end" font-weight="400" font-size="11" fill="#0b0b0b">the solid’s principal column lengths (3: its dimensions)</text>
+<text x="670" y="86" font-weight="600" fill="#0b0b0b">sample-like proxies (12 runs, τ 6)</text>
+<line x1="670" x2="670" y1="96" y2="300" stroke="#e4e3df"/>
+<text x="670" y="314" text-anchor="middle" fill="#52514e">0.1</text>
+<line x1="756.2782681486289" x2="756.2782681486289" y1="96" y2="300" stroke="#e4e3df"/>
+<text x="756.2782681486289" y="314" text-anchor="middle" fill="#52514e">1</text>
+<line x1="842.5565362972578" x2="842.5565362972578" y1="96" y2="300" stroke="#e4e3df"/>
+<text x="842.5565362972578" y="314" text-anchor="middle" fill="#52514e">10</text>
+<line x1="928.8348044458867" x2="928.8348044458867" y1="96" y2="300" stroke="#e4e3df"/>
+<text x="928.8348044458867" y="314" text-anchor="middle" fill="#52514e">100</text>
+<line x1="670" x2="970" y1="300" y2="300" stroke="#52514e"/>
+<line x1="670" x2="670" y1="96" y2="300" stroke="#52514e"/>
+<text x="820" y="330" text-anchor="middle" fill="#52514e">per cent (log)</text>
+<polyline points="775.1,108.0 784.0,108.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="775.1" cy="108.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>size over all directions (harmonic mean: one isotropic size): spread over the near-equivalent fits, median 1.7 %, 90 % 2.1 %</title></circle>
+<polyline points="854.8,119.0 865.4,119.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="854.8" cy="119.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>size over all directions (harmonic mean: one isotropic size): error from the truth, median 13.9 %, 90 % 18.4 %</title></circle>
+<polyline points="832.4,142.0 848.7,142.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="832.4" cy="142.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>mean column length over all directions: spread over the near-equivalent fits, median 7.6 %, 90 % 11.8 %</title></circle>
+<polyline points="798.0,153.0 828.3,153.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="798.0" cy="153.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>mean column length over all directions: error from the truth, median 3.0 %, 90 % 6.8 %</title></circle>
+<polyline points="776.8,176.0 817.8,176.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="776.8" cy="176.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>each family’s mean column length (10 per run): spread over the near-equivalent fits, median 1.7 %, 90 % 5.2 %</title></circle>
+<polyline points="838.7,187.0 856.1,187.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="838.7" cy="187.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>each family’s mean column length (10 per run): error from the truth, median 9.0 %, 90 % 14.4 %</title></circle>
+<polyline points="807.7,210.0 826.6,210.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="807.7" cy="210.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>the shortest member’s column length (≈ thickness): spread over the near-equivalent fits, median 3.9 %, 90 % 6.5 %</title></circle>
+<polyline points="863.2,221.0 872.4,221.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="863.2" cy="221.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>the shortest member’s column length (≈ thickness): error from the truth, median 17.4 %, 90 % 22.2 %</title></circle>
+<polyline points="828.7,244.0 872.7,244.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="828.7" cy="244.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>each member’s column length, sorted in its family (34): spread over the near-equivalent fits, median 6.9 %, 90 % 22.4 %</title></circle>
+<polyline points="854.9,255.0 879.8,255.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="854.9" cy="255.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>each member’s column length, sorted in its family (34): error from the truth, median 13.9 %, 90 % 27.0 %</title></circle>
+<polyline points="857.7,278.0 932.6,278.0" fill="none" stroke="#2a78d6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="857.7" cy="278.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>the solid’s principal column lengths (3: its dimensions): spread over the near-equivalent fits, median 15.0 %, 90 % 110.6 %</title></circle>
+<polyline points="865.2,289.0 926.0,289.0" fill="none" stroke="#eb6834" stroke-width="3" stroke-linecap="round" stroke-opacity="0.5"/>
+<circle cx="865.2" cy="289.0" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>the solid’s principal column lengths (3: its dimensions): error from the truth, median 18.3 %, 90 % 92.6 %</title></circle>
+<circle cx="330.0" cy="350.0" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="1.5"><title>spread</title></circle>
+<text x="340.0" y="354.0" text-anchor="start" font-weight="400" font-size="11" fill="#0b0b0b">spread over the fits within Δ ≤ τ (same solid and the other solids): dot median, bar to the 90th percentile</text>
+<circle cx="330.0" cy="368.0" r="4.5" fill="#eb6834" stroke="#fcfcfb" stroke-width="1.5"><title>error</title></circle>
+<text x="340.0" y="372.0" text-anchor="start" font-weight="400" font-size="11" fill="#0b0b0b">error of the reported fit from the truth: dot median, bar to the 90th percentile</text>
+</svg>

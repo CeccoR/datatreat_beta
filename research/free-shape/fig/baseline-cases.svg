@@ -1,0 +1,553 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="912" height="778" viewBox="0 0 912 778" font-family="Inter, Helvetica, Arial, sans-serif" font-size="10">
+<rect width="912" height="778" fill="#fcfcfb"/>
+<text x="8" y="16" font-size="12" fill="#0b0b0b" font-weight="600">Free shape, the app's search (bf228ee): 110 runs</text>
+<text x="8" y="31" fill="#52514e">filled: reached (Δ ≤ 1, dashed line); hollow: not; ×: rejected (no solid). Errors of the reported solid against the truth.</text>
+<text x="142" y="69" text-anchor="end" fill="#0b0b0b">box-plate110</text>
+<rect x="146" y="58" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="84" text-anchor="end" fill="#0b0b0b">box-plate110-t20</text>
+<text x="142" y="99" text-anchor="end" fill="#0b0b0b">box-plate100</text>
+<rect x="146" y="88" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="114" text-anchor="end" fill="#0b0b0b">box-needle111</text>
+<text x="142" y="129" text-anchor="end" fill="#0b0b0b">box-ribbon001</text>
+<rect x="146" y="118" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="144" text-anchor="end" fill="#0b0b0b">box-block-rand</text>
+<text x="142" y="159" text-anchor="end" fill="#0b0b0b">box-plate110-off8</text>
+<rect x="146" y="148" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="174" text-anchor="end" fill="#0b0b0b">box-plate111-big</text>
+<text x="142" y="189" text-anchor="end" fill="#0b0b0b">sqbox-plate001</text>
+<rect x="146" y="178" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="204" text-anchor="end" fill="#0b0b0b">sqbox-plate110-t15</text>
+<text x="142" y="219" text-anchor="end" fill="#0b0b0b">sqbox-rod111</text>
+<rect x="146" y="208" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="234" text-anchor="end" fill="#0b0b0b">sqbox-block-rand</text>
+<text x="142" y="249" text-anchor="end" fill="#0b0b0b">sqbox-plate-rand</text>
+<rect x="146" y="238" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="264" text-anchor="end" fill="#0b0b0b">ell-plate110</text>
+<text x="142" y="279" text-anchor="end" fill="#0b0b0b">ell-needle100</text>
+<rect x="146" y="268" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="294" text-anchor="end" fill="#0b0b0b">ell-ribbon-rand</text>
+<text x="142" y="309" text-anchor="end" fill="#0b0b0b">ell-block-t25</text>
+<rect x="146" y="298" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="324" text-anchor="end" fill="#0b0b0b">ell-plate111</text>
+<text x="142" y="339" text-anchor="end" fill="#0b0b0b">sph-oblate110</text>
+<rect x="146" y="328" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="354" text-anchor="end" fill="#0b0b0b">sph-prolate111</text>
+<text x="142" y="369" text-anchor="end" fill="#0b0b0b">sph-oblate-rand</text>
+<rect x="146" y="358" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="384" text-anchor="end" fill="#0b0b0b">sph-mild001</text>
+<text x="142" y="399" text-anchor="end" fill="#0b0b0b">cyl-disc110</text>
+<rect x="146" y="388" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="414" text-anchor="end" fill="#0b0b0b">cyl-rod100</text>
+<text x="142" y="429" text-anchor="end" fill="#0b0b0b">cyl-disc-rand</text>
+<rect x="146" y="418" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="444" text-anchor="end" fill="#0b0b0b">cyl-disc111-off8</text>
+<text x="142" y="459" text-anchor="end" fill="#0b0b0b">ecyl-plate110</text>
+<rect x="146" y="448" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="474" text-anchor="end" fill="#0b0b0b">ecyl-plate110-t20</text>
+<text x="142" y="489" text-anchor="end" fill="#0b0b0b">ecyl-ribbon001</text>
+<rect x="146" y="478" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="504" text-anchor="end" fill="#0b0b0b">ecyl-rand</text>
+<text x="142" y="519" text-anchor="end" fill="#0b0b0b">iso-7</text>
+<rect x="146" y="508" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="534" text-anchor="end" fill="#0b0b0b">iso-20</text>
+<text x="142" y="549" text-anchor="end" fill="#0b0b0b">u01</text>
+<rect x="146" y="538" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="564" text-anchor="end" fill="#0b0b0b">u02</text>
+<text x="142" y="579" text-anchor="end" fill="#0b0b0b">u03</text>
+<rect x="146" y="568" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="594" text-anchor="end" fill="#0b0b0b">u04</text>
+<text x="142" y="609" text-anchor="end" fill="#0b0b0b">u05</text>
+<rect x="146" y="598" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="624" text-anchor="end" fill="#0b0b0b">u06</text>
+<text x="142" y="639" text-anchor="end" fill="#0b0b0b">u07</text>
+<rect x="146" y="628" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="654" text-anchor="end" fill="#0b0b0b">u08</text>
+<text x="142" y="669" text-anchor="end" fill="#0b0b0b">u09</text>
+<rect x="146" y="658" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="684" text-anchor="end" fill="#0b0b0b">u10</text>
+<text x="142" y="699" text-anchor="end" fill="#0b0b0b">u11</text>
+<rect x="146" y="688" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="714" text-anchor="end" fill="#0b0b0b">u12</text>
+<text x="142" y="729" text-anchor="end" fill="#0b0b0b">fx-s00</text>
+<rect x="146" y="718" width="756" height="15" fill="#f2f1ee" opacity="0.6"/>
+<text x="142" y="744" text-anchor="end" fill="#0b0b0b">fx-s05</text>
+<text x="150" y="52" fill="#52514e" font-weight="600">evaluations</text>
+<line x1="150" x2="150" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="150" y="764" text-anchor="middle" fill="#52514e">0k</text>
+<line x1="196.62729250854835" x2="196.62729250854835" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="196.62729250854835" y="764" text-anchor="middle" fill="#52514e">2k</text>
+<line x1="243.2545850170967" x2="243.2545850170967" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="243.2545850170967" y="764" text-anchor="middle" fill="#52514e">4k</text>
+<line x1="289.881877525645" x2="289.881877525645" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="289.881877525645" y="764" text-anchor="middle" fill="#52514e">6k</text>
+<circle cx="248.5" cy="62.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #1 evaluations: 4225</title></circle>
+<circle cx="232.0" cy="65.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #2 evaluations: 3517</title></circle>
+<circle cx="241.9" cy="68.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #3 evaluations: 3943</title></circle>
+<circle cx="258.2" cy="77.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #1 evaluations: 4642</title></circle>
+<circle cx="251.9" cy="80.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #2 evaluations: 4372</title></circle>
+<circle cx="252.5" cy="83.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #3 evaluations: 4397</title></circle>
+<circle cx="240.1" cy="92.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #1 evaluations: 3864</title></circle>
+<circle cx="235.5" cy="95.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #2 evaluations: 3667</title></circle>
+<circle cx="239.1" cy="98.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #3 evaluations: 3821</title></circle>
+<circle cx="263.7" cy="107.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #1 evaluations: 4876</title></circle>
+<circle cx="233.9" cy="110.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #2 evaluations: 3597</title></circle>
+<circle cx="250.5" cy="113.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #3 evaluations: 4311</title></circle>
+<circle cx="255.4" cy="122.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #1 evaluations: 4523</title></circle>
+<circle cx="265.1" cy="125.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #2 evaluations: 4939</title></circle>
+<circle cx="287.1" cy="128.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #3 evaluations: 5879</title></circle>
+<circle cx="238.2" cy="137.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-block-rand #1 evaluations: 3784</title></circle>
+<circle cx="205.9" cy="140.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-block-rand #2 evaluations: 2396</title></circle>
+<circle cx="206.2" cy="143.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-block-rand #3 evaluations: 2411</title></circle>
+<circle cx="243.6" cy="152.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #1 evaluations: 4015</title></circle>
+<circle cx="227.5" cy="155.5" r="3.2" fill="#fcfcfb" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #2 evaluations: 3326</title></circle>
+<circle cx="238.2" cy="158.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #3 evaluations: 3783</title></circle>
+<circle cx="229.8" cy="167.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #1 evaluations: 3424</title></circle>
+<circle cx="231.6" cy="170.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #2 evaluations: 3501</title></circle>
+<circle cx="246.7" cy="173.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #3 evaluations: 4147</title></circle>
+<circle cx="239.5" cy="182.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #1 evaluations: 3837</title></circle>
+<circle cx="228.4" cy="185.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #2 evaluations: 3364</title></circle>
+<circle cx="227.5" cy="188.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #3 evaluations: 3325</title></circle>
+<circle cx="225.9" cy="197.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #1 evaluations: 3256</title></circle>
+<circle cx="230.1" cy="200.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #2 evaluations: 3434</title></circle>
+<circle cx="231.3" cy="203.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #3 evaluations: 3489</title></circle>
+<circle cx="232.9" cy="212.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #1 evaluations: 3555</title></circle>
+<circle cx="229.4" cy="215.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #2 evaluations: 3407</title></circle>
+<circle cx="222.1" cy="218.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #3 evaluations: 3093</title></circle>
+<circle cx="236.1" cy="227.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-block-rand #1 evaluations: 3694</title></circle>
+<circle cx="228.2" cy="230.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-block-rand #2 evaluations: 3356</title></circle>
+<circle cx="202.0" cy="233.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-block-rand #3 evaluations: 2232</title></circle>
+<circle cx="247.2" cy="242.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #1 evaluations: 4171</title></circle>
+<circle cx="228.0" cy="245.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #2 evaluations: 3345</title></circle>
+<circle cx="226.4" cy="248.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #3 evaluations: 3275</title></circle>
+<circle cx="227.5" cy="257.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #1 evaluations: 3325</title></circle>
+<circle cx="236.7" cy="260.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #2 evaluations: 3720</title></circle>
+<circle cx="225.0" cy="263.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #3 evaluations: 3216</title></circle>
+<circle cx="294.9" cy="272.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #1 evaluations: 6216</title></circle>
+<circle cx="233.8" cy="275.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #2 evaluations: 3593</title></circle>
+<circle cx="229.0" cy="278.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #3 evaluations: 3387</title></circle>
+<circle cx="246.9" cy="287.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #1 evaluations: 4158</title></circle>
+<circle cx="249.3" cy="290.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #2 evaluations: 4258</title></circle>
+<circle cx="239.8" cy="293.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #3 evaluations: 3851</title></circle>
+<circle cx="224.5" cy="302.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #1 evaluations: 3197</title></circle>
+<circle cx="223.8" cy="305.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #2 evaluations: 3167</title></circle>
+<circle cx="218.8" cy="308.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #3 evaluations: 2953</title></circle>
+<circle cx="229.4" cy="317.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #1 evaluations: 3406</title></circle>
+<circle cx="242.9" cy="320.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #2 evaluations: 3983</title></circle>
+<circle cx="235.9" cy="323.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #3 evaluations: 3686</title></circle>
+<circle cx="212.6" cy="332.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #1 evaluations: 2687</title></circle>
+<circle cx="205.1" cy="335.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #2 evaluations: 2362</title></circle>
+<circle cx="204.5" cy="338.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #3 evaluations: 2338</title></circle>
+<circle cx="205.0" cy="347.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #1 evaluations: 2357</title></circle>
+<circle cx="206.0" cy="350.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #2 evaluations: 2403</title></circle>
+<circle cx="204.9" cy="353.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #3 evaluations: 2355</title></circle>
+<circle cx="200.1" cy="362.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #1 evaluations: 2148</title></circle>
+<circle cx="207.3" cy="365.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #2 evaluations: 2458</title></circle>
+<circle cx="210.5" cy="368.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #3 evaluations: 2595</title></circle>
+<circle cx="205.6" cy="377.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #1 evaluations: 2384</title></circle>
+<circle cx="205.1" cy="380.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #2 evaluations: 2364</title></circle>
+<circle cx="199.3" cy="383.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #3 evaluations: 2116</title></circle>
+<circle cx="207.5" cy="392.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #1 evaluations: 2468</title></circle>
+<circle cx="212.3" cy="395.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #2 evaluations: 2673</title></circle>
+<circle cx="222.9" cy="398.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #3 evaluations: 3126</title></circle>
+<circle cx="225.3" cy="407.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #1 evaluations: 3232</title></circle>
+<circle cx="211.3" cy="410.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #2 evaluations: 2631</title></circle>
+<circle cx="223.0" cy="413.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #3 evaluations: 3133</title></circle>
+<circle cx="212.8" cy="422.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #1 evaluations: 2692</title></circle>
+<circle cx="217.7" cy="425.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #2 evaluations: 2906</title></circle>
+<circle cx="223.7" cy="428.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #3 evaluations: 3160</title></circle>
+<circle cx="209.4" cy="437.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #1 evaluations: 2546</title></circle>
+<circle cx="217.2" cy="440.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #2 evaluations: 2882</title></circle>
+<circle cx="235.8" cy="443.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #3 evaluations: 3680</title></circle>
+<circle cx="249.6" cy="452.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #1 evaluations: 4272</title></circle>
+<circle cx="267.4" cy="455.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #2 evaluations: 5034</title></circle>
+<circle cx="240.2" cy="458.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #3 evaluations: 3867</title></circle>
+<circle cx="267.0" cy="467.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #1 evaluations: 5019</title></circle>
+<circle cx="300.0" cy="470.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #2 evaluations: 6434</title></circle>
+<circle cx="280.5" cy="473.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #3 evaluations: 5598</title></circle>
+<circle cx="259.6" cy="482.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #1 evaluations: 4701</title></circle>
+<circle cx="253.1" cy="485.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #2 evaluations: 4423</title></circle>
+<circle cx="269.6" cy="488.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #3 evaluations: 5130</title></circle>
+<circle cx="203.9" cy="497.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-rand #1 evaluations: 2314</title></circle>
+<circle cx="270.3" cy="500.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-rand #2 evaluations: 5161</title></circle>
+<circle cx="243.3" cy="503.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-rand #3 evaluations: 4001</title></circle>
+<circle cx="207.1" cy="512.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>iso-7 #1 evaluations: 2450</title></circle>
+<circle cx="206.9" cy="515.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>iso-7 #2 evaluations: 2440</title></circle>
+<circle cx="207.8" cy="518.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>iso-7 #3 evaluations: 2481</title></circle>
+<circle cx="194.4" cy="527.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>iso-20 #1 evaluations: 1905</title></circle>
+<circle cx="199.2" cy="530.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>iso-20 #2 evaluations: 2110</title></circle>
+<circle cx="197.1" cy="533.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>iso-20 #3 evaluations: 2022</title></circle>
+<circle cx="233.7" cy="542.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u01 #1 evaluations: 3590</title></circle>
+<circle cx="254.2" cy="557.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u02 #1 evaluations: 4469</title></circle>
+<circle cx="262.7" cy="572.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u03 #1 evaluations: 4836</title></circle>
+<circle cx="247.3" cy="587.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u04 #1 evaluations: 4174</title></circle>
+<circle cx="278.6" cy="602.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u05 #1 evaluations: 5515</title></circle>
+<circle cx="256.9" cy="617.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u06 #1 evaluations: 4587</title></circle>
+<circle cx="234.6" cy="632.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u07 #1 evaluations: 3630</title></circle>
+<circle cx="249.2" cy="647.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u08 #1 evaluations: 4256</title></circle>
+<circle cx="238.4" cy="662.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u09 #1 evaluations: 3792</title></circle>
+<circle cx="256.2" cy="677.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u10 #1 evaluations: 4556</title></circle>
+<circle cx="242.1" cy="692.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u11 #1 evaluations: 3951</title></circle>
+<circle cx="267.6" cy="707.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u12 #1 evaluations: 5044</title></circle>
+<circle cx="182.8" cy="719.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>fx-s00 #0 evaluations: 1409</title></circle>
+<circle cx="182.7" cy="734.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>fx-s05 #0 evaluations: 1401</title></circle>
+<text x="338" y="52" fill="#52514e" font-weight="600">Δ (χ²_ν), to 30</text>
+<line x1="338" x2="338" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="338" y="764" text-anchor="middle" fill="#52514e">0</text>
+<line x1="388" x2="388" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="388" y="764" text-anchor="middle" fill="#52514e">10</text>
+<line x1="438" x2="438" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="438" y="764" text-anchor="middle" fill="#52514e">20</text>
+<line x1="488" x2="488" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="488" y="764" text-anchor="middle" fill="#52514e">30</text>
+<line x1="343" x2="343" y1="58" y2="752" stroke="#52514e" stroke-width="1" stroke-dasharray="3 2"/>
+<circle cx="338.0" cy="62.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="65.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="68.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="77.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="80.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="83.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="92.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="95.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="98.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="107.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.2" cy="110.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #2 Δ (χ²_ν), to 30: 0.05</title></circle>
+<circle cx="338.0" cy="113.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="122.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="125.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="128.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="137.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-block-rand #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<text x="340" y="143.5" fill="#52514e">×</text>
+<text x="340" y="146.5" fill="#52514e">×</text>
+<circle cx="338.0" cy="152.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="348.2" cy="155.5" r="3.2" fill="#fcfcfb" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #2 Δ (χ²_ν), to 30: 2.04</title></circle>
+<circle cx="338.0" cy="158.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="167.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="170.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="173.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="182.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="185.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="188.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="197.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="200.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="203.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="212.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="215.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.6" cy="218.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #3 Δ (χ²_ν), to 30: 0.13</title></circle>
+<circle cx="338.0" cy="227.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-block-rand #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.5" cy="230.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-block-rand #2 Δ (χ²_ν), to 30: 0.10</title></circle>
+<text x="340" y="236.5" fill="#52514e">×</text>
+<circle cx="338.0" cy="242.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="245.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="248.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="257.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="260.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="263.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="272.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="275.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="278.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="287.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="290.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="293.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="302.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="305.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="308.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="317.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="320.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="323.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="332.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="335.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="338.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="347.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="350.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="353.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="362.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="365.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="368.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.1" cy="377.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #1 Δ (χ²_ν), to 30: 0.02</title></circle>
+<circle cx="338.0" cy="380.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="342.1" cy="383.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #3 Δ (χ²_ν), to 30: 0.82</title></circle>
+<circle cx="338.0" cy="392.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="395.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="398.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="407.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="410.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="339.5" cy="413.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #3 Δ (χ²_ν), to 30: 0.29</title></circle>
+<circle cx="338.0" cy="422.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="425.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="428.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="437.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="440.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="443.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="452.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="455.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="458.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="467.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="470.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="473.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="482.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.4" cy="485.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #2 Δ (χ²_ν), to 30: 0.08</title></circle>
+<circle cx="338.0" cy="488.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<text x="340" y="500.5" fill="#52514e">×</text>
+<circle cx="338.0" cy="500.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-rand #2 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="503.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-rand #3 Δ (χ²_ν), to 30: 0.00</title></circle>
+<text x="340" y="515.5" fill="#52514e">×</text>
+<text x="340" y="518.5" fill="#52514e">×</text>
+<text x="340" y="521.5" fill="#52514e">×</text>
+<text x="340" y="530.5" fill="#52514e">×</text>
+<text x="340" y="533.5" fill="#52514e">×</text>
+<text x="340" y="536.5" fill="#52514e">×</text>
+<circle cx="338.0" cy="542.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u01 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="557.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u02 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="572.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u03 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="587.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u04 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="602.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u05 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="617.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u06 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="632.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u07 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="342.2" cy="647.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u08 #1 Δ (χ²_ν), to 30: 0.84</title></circle>
+<circle cx="338.0" cy="662.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u09 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="677.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u10 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="692.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u11 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<circle cx="338.0" cy="707.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u12 #1 Δ (χ²_ν), to 30: 0.00</title></circle>
+<text x="340" y="722.5" fill="#52514e">×</text>
+<text x="340" y="737.5" fill="#52514e">×</text>
+<text x="526" y="52" fill="#52514e" font-weight="600">normal / axis error (°)</text>
+<line x1="526" x2="526" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="526" y="764" text-anchor="middle" fill="#52514e">0</text>
+<line x1="576" x2="576" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="576" y="764" text-anchor="middle" fill="#52514e">10</text>
+<line x1="626" x2="626" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="626" y="764" text-anchor="middle" fill="#52514e">20</text>
+<line x1="676" x2="676" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="676" y="764" text-anchor="middle" fill="#52514e">30</text>
+<circle cx="526.0" cy="62.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="65.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="68.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="77.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="80.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="83.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="92.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="95.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="98.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="107.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="110.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="113.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="122.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="125.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="128.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #3 normal / axis error (°): 0.00</title></circle>
+<text x="528" y="140.5" fill="#52514e">×</text>
+<text x="528" y="143.5" fill="#52514e">×</text>
+<text x="528" y="146.5" fill="#52514e">×</text>
+<circle cx="566.0" cy="152.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #1 normal / axis error (°): 8.00</title></circle>
+<circle cx="566.0" cy="155.5" r="3.2" fill="#fcfcfb" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #2 normal / axis error (°): 8.00</title></circle>
+<circle cx="556.4" cy="158.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #3 normal / axis error (°): 6.08</title></circle>
+<circle cx="526.0" cy="167.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="170.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="173.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="182.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="185.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="188.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="197.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="200.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="203.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="212.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="215.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="218.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #3 normal / axis error (°): 0.00</title></circle>
+<text x="528" y="230.5" fill="#52514e">×</text>
+<text x="528" y="233.5" fill="#52514e">×</text>
+<text x="528" y="236.5" fill="#52514e">×</text>
+<circle cx="539.1" cy="242.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #1 normal / axis error (°): 2.63</title></circle>
+<circle cx="572.6" cy="245.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #2 normal / axis error (°): 9.32</title></circle>
+<circle cx="572.6" cy="248.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #3 normal / axis error (°): 9.32</title></circle>
+<circle cx="526.0" cy="257.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="260.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="263.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="589.3" cy="272.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #1 normal / axis error (°): 12.67</title></circle>
+<circle cx="526.0" cy="275.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="278.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="542.7" cy="287.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #1 normal / axis error (°): 3.35</title></circle>
+<circle cx="549.1" cy="290.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #2 normal / axis error (°): 4.62</title></circle>
+<circle cx="537.5" cy="293.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #3 normal / axis error (°): 2.30</title></circle>
+<text x="528" y="305.5" fill="#52514e">×</text>
+<circle cx="526.0" cy="305.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="308.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="317.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="320.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="323.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="543.9" cy="332.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #1 normal / axis error (°): 3.59</title></circle>
+<circle cx="526.0" cy="335.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="338.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="347.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="350.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="353.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="533.3" cy="362.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #1 normal / axis error (°): 1.46</title></circle>
+<circle cx="530.0" cy="365.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #2 normal / axis error (°): 0.81</title></circle>
+<circle cx="531.7" cy="368.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #3 normal / axis error (°): 1.14</title></circle>
+<circle cx="596.2" cy="377.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #1 normal / axis error (°): 14.04</title></circle>
+<circle cx="526.0" cy="380.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #2 normal / axis error (°): 0.00</title></circle>
+<text x="528" y="386.5" fill="#52514e">×</text>
+<circle cx="526.0" cy="392.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="395.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="398.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="407.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="410.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="413.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="536.5" cy="422.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #1 normal / axis error (°): 2.09</title></circle>
+<circle cx="527.2" cy="425.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #2 normal / axis error (°): 0.23</title></circle>
+<circle cx="543.1" cy="428.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #3 normal / axis error (°): 3.41</title></circle>
+<circle cx="566.0" cy="437.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #1 normal / axis error (°): 8.00</title></circle>
+<circle cx="529.6" cy="440.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #2 normal / axis error (°): 0.73</title></circle>
+<circle cx="554.0" cy="443.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #3 normal / axis error (°): 5.61</title></circle>
+<circle cx="623.4" cy="452.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #1 normal / axis error (°): 19.47</title></circle>
+<circle cx="526.0" cy="455.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="458.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="467.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="470.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="473.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #3 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="482.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="485.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #2 normal / axis error (°): 0.00</title></circle>
+<circle cx="526.0" cy="488.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #3 normal / axis error (°): 0.00</title></circle>
+<text x="528" y="500.5" fill="#52514e">×</text>
+<text x="528" y="503.5" fill="#52514e">×</text>
+<circle cx="650.7" cy="503.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-rand #3 normal / axis error (°): 24.95</title></circle>
+<text x="528" y="515.5" fill="#52514e">×</text>
+<text x="528" y="518.5" fill="#52514e">×</text>
+<text x="528" y="521.5" fill="#52514e">×</text>
+<text x="528" y="530.5" fill="#52514e">×</text>
+<text x="528" y="533.5" fill="#52514e">×</text>
+<text x="528" y="536.5" fill="#52514e">×</text>
+<circle cx="556.4" cy="542.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u01 #1 normal / axis error (°): 6.08</title></circle>
+<circle cx="554.8" cy="557.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u02 #1 normal / axis error (°): 5.75</title></circle>
+<circle cx="558.3" cy="572.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u03 #1 normal / axis error (°): 6.47</title></circle>
+<circle cx="526.0" cy="587.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u04 #1 normal / axis error (°): 0.00</title></circle>
+<circle cx="552.7" cy="602.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u05 #1 normal / axis error (°): 5.35</title></circle>
+<circle cx="554.9" cy="617.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u06 #1 normal / axis error (°): 5.78</title></circle>
+<circle cx="554.6" cy="632.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u07 #1 normal / axis error (°): 5.72</title></circle>
+<circle cx="534.8" cy="647.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u08 #1 normal / axis error (°): 1.76</title></circle>
+<circle cx="571.0" cy="662.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u09 #1 normal / axis error (°): 8.99</title></circle>
+<circle cx="555.4" cy="677.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u10 #1 normal / axis error (°): 5.88</title></circle>
+<circle cx="550.5" cy="692.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u11 #1 normal / axis error (°): 4.90</title></circle>
+<circle cx="556.9" cy="707.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u12 #1 normal / axis error (°): 6.19</title></circle>
+<text x="528" y="722.5" fill="#52514e">×</text>
+<text x="528" y="737.5" fill="#52514e">×</text>
+<text x="714" y="52" fill="#52514e" font-weight="600">largest dim error (%), to 100</text>
+<line x1="714" x2="714" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="714" y="764" text-anchor="middle" fill="#52514e">0</text>
+<line x1="751.5" x2="751.5" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="751.5" y="764" text-anchor="middle" fill="#52514e">25</text>
+<line x1="789" x2="789" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="789" y="764" text-anchor="middle" fill="#52514e">50</text>
+<line x1="826.5" x2="826.5" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="826.5" y="764" text-anchor="middle" fill="#52514e">75</text>
+<line x1="864" x2="864" y1="58" y2="752" stroke="#e4e3df" stroke-width="1"/>
+<text x="864" y="764" text-anchor="middle" fill="#52514e">100</text>
+<circle cx="718.0" cy="62.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #1 largest dim error (%), to 100: 2.68</title></circle>
+<circle cx="717.9" cy="65.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #2 largest dim error (%), to 100: 2.59</title></circle>
+<circle cx="722.2" cy="68.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110 #3 largest dim error (%), to 100: 5.49</title></circle>
+<circle cx="724.4" cy="77.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #1 largest dim error (%), to 100: 6.92</title></circle>
+<circle cx="723.3" cy="80.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #2 largest dim error (%), to 100: 6.20</title></circle>
+<circle cx="726.4" cy="83.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-t20 #3 largest dim error (%), to 100: 8.24</title></circle>
+<circle cx="727.2" cy="92.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #1 largest dim error (%), to 100: 8.80</title></circle>
+<circle cx="724.2" cy="95.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #2 largest dim error (%), to 100: 6.78</title></circle>
+<circle cx="724.6" cy="98.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate100 #3 largest dim error (%), to 100: 7.08</title></circle>
+<circle cx="723.4" cy="107.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #1 largest dim error (%), to 100: 6.29</title></circle>
+<circle cx="721.9" cy="110.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #2 largest dim error (%), to 100: 5.26</title></circle>
+<circle cx="722.6" cy="113.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-needle111 #3 largest dim error (%), to 100: 5.76</title></circle>
+<circle cx="726.4" cy="122.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #1 largest dim error (%), to 100: 8.28</title></circle>
+<circle cx="719.8" cy="125.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #2 largest dim error (%), to 100: 3.86</title></circle>
+<circle cx="724.6" cy="128.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-ribbon001 #3 largest dim error (%), to 100: 7.07</title></circle>
+<text x="716" y="140.5" fill="#52514e">×</text>
+<text x="716" y="143.5" fill="#52514e">×</text>
+<text x="716" y="146.5" fill="#52514e">×</text>
+<circle cx="734.7" cy="152.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #1 largest dim error (%), to 100: 13.79</title></circle>
+<circle cx="733.1" cy="155.5" r="3.2" fill="#fcfcfb" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #2 largest dim error (%), to 100: 12.74</title></circle>
+<circle cx="737.3" cy="158.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate110-off8 #3 largest dim error (%), to 100: 15.56</title></circle>
+<circle cx="818.4" cy="167.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #1 largest dim error (%), to 100: 69.63</title></circle>
+<circle cx="718.8" cy="170.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #2 largest dim error (%), to 100: 3.19</title></circle>
+<circle cx="758.0" cy="173.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>box-plate111-big #3 largest dim error (%), to 100: 29.33</title></circle>
+<circle cx="720.3" cy="182.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #1 largest dim error (%), to 100: 4.22</title></circle>
+<circle cx="717.9" cy="185.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #2 largest dim error (%), to 100: 2.60</title></circle>
+<circle cx="716.2" cy="188.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate001 #3 largest dim error (%), to 100: 1.48</title></circle>
+<circle cx="725.6" cy="197.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #1 largest dim error (%), to 100: 7.75</title></circle>
+<circle cx="723.8" cy="200.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #2 largest dim error (%), to 100: 6.50</title></circle>
+<circle cx="721.0" cy="203.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate110-t15 #3 largest dim error (%), to 100: 4.69</title></circle>
+<circle cx="730.1" cy="212.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #1 largest dim error (%), to 100: 10.75</title></circle>
+<circle cx="715.8" cy="215.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #2 largest dim error (%), to 100: 1.20</title></circle>
+<circle cx="723.2" cy="218.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-rod111 #3 largest dim error (%), to 100: 6.17</title></circle>
+<text x="716" y="230.5" fill="#52514e">×</text>
+<text x="716" y="233.5" fill="#52514e">×</text>
+<text x="716" y="236.5" fill="#52514e">×</text>
+<circle cx="722.8" cy="242.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #1 largest dim error (%), to 100: 5.84</title></circle>
+<circle cx="741.1" cy="245.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #2 largest dim error (%), to 100: 18.07</title></circle>
+<circle cx="738.3" cy="248.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sqbox-plate-rand #3 largest dim error (%), to 100: 16.18</title></circle>
+<circle cx="724.5" cy="257.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #1 largest dim error (%), to 100: 7.01</title></circle>
+<circle cx="717.6" cy="260.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #2 largest dim error (%), to 100: 2.40</title></circle>
+<circle cx="722.2" cy="263.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate110 #3 largest dim error (%), to 100: 5.45</title></circle>
+<circle cx="714.0" cy="272.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #1 largest dim error (%), to 100: 0.00</title></circle>
+<circle cx="719.3" cy="275.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #2 largest dim error (%), to 100: 3.54</title></circle>
+<circle cx="719.3" cy="278.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-needle100 #3 largest dim error (%), to 100: 3.50</title></circle>
+<circle cx="779.7" cy="287.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #1 largest dim error (%), to 100: 43.77</title></circle>
+<circle cx="759.0" cy="290.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #2 largest dim error (%), to 100: 29.99</title></circle>
+<circle cx="722.9" cy="293.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-ribbon-rand #3 largest dim error (%), to 100: 5.92</title></circle>
+<text x="716" y="305.5" fill="#52514e">×</text>
+<circle cx="729.9" cy="305.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #2 largest dim error (%), to 100: 10.63</title></circle>
+<circle cx="757.8" cy="308.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-block-t25 #3 largest dim error (%), to 100: 29.20</title></circle>
+<circle cx="730.7" cy="317.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #1 largest dim error (%), to 100: 11.13</title></circle>
+<circle cx="772.1" cy="320.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #2 largest dim error (%), to 100: 38.75</title></circle>
+<circle cx="746.6" cy="323.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ell-plate111 #3 largest dim error (%), to 100: 21.72</title></circle>
+<circle cx="716.8" cy="332.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #1 largest dim error (%), to 100: 1.87</title></circle>
+<circle cx="715.8" cy="335.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #2 largest dim error (%), to 100: 1.21</title></circle>
+<circle cx="717.9" cy="338.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate110 #3 largest dim error (%), to 100: 2.58</title></circle>
+<circle cx="724.7" cy="347.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #1 largest dim error (%), to 100: 7.17</title></circle>
+<circle cx="728.6" cy="350.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #2 largest dim error (%), to 100: 9.72</title></circle>
+<circle cx="720.8" cy="353.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-prolate111 #3 largest dim error (%), to 100: 4.54</title></circle>
+<circle cx="719.6" cy="362.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #1 largest dim error (%), to 100: 3.73</title></circle>
+<circle cx="718.1" cy="365.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #2 largest dim error (%), to 100: 2.73</title></circle>
+<circle cx="722.2" cy="368.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-oblate-rand #3 largest dim error (%), to 100: 5.50</title></circle>
+<circle cx="754.3" cy="377.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #1 largest dim error (%), to 100: 26.88</title></circle>
+<circle cx="726.1" cy="380.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>sph-mild001 #2 largest dim error (%), to 100: 8.09</title></circle>
+<text x="716" y="386.5" fill="#52514e">×</text>
+<circle cx="715.5" cy="392.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #1 largest dim error (%), to 100: 1.02</title></circle>
+<circle cx="724.5" cy="395.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #2 largest dim error (%), to 100: 6.97</title></circle>
+<circle cx="737.1" cy="398.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc110 #3 largest dim error (%), to 100: 15.38</title></circle>
+<circle cx="719.1" cy="407.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #1 largest dim error (%), to 100: 3.41</title></circle>
+<circle cx="720.1" cy="410.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #2 largest dim error (%), to 100: 4.04</title></circle>
+<circle cx="721.1" cy="413.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-rod100 #3 largest dim error (%), to 100: 4.72</title></circle>
+<circle cx="718.8" cy="422.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #1 largest dim error (%), to 100: 3.23</title></circle>
+<circle cx="729.2" cy="425.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #2 largest dim error (%), to 100: 10.14</title></circle>
+<circle cx="732.5" cy="428.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc-rand #3 largest dim error (%), to 100: 12.34</title></circle>
+<circle cx="740.3" cy="437.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #1 largest dim error (%), to 100: 17.55</title></circle>
+<circle cx="719.2" cy="440.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #2 largest dim error (%), to 100: 3.46</title></circle>
+<circle cx="759.2" cy="443.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>cyl-disc111-off8 #3 largest dim error (%), to 100: 30.14</title></circle>
+<circle cx="864.0" cy="452.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #1 largest dim error (%), to 100: 245.73</title></circle>
+<circle cx="735.4" cy="455.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #2 largest dim error (%), to 100: 14.29</title></circle>
+<circle cx="723.8" cy="458.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110 #3 largest dim error (%), to 100: 6.51</title></circle>
+<circle cx="726.5" cy="467.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #1 largest dim error (%), to 100: 8.34</title></circle>
+<circle cx="725.8" cy="470.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #2 largest dim error (%), to 100: 7.87</title></circle>
+<circle cx="727.0" cy="473.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-plate110-t20 #3 largest dim error (%), to 100: 8.65</title></circle>
+<circle cx="864.0" cy="482.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #1 largest dim error (%), to 100: 211.71</title></circle>
+<circle cx="723.7" cy="485.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #2 largest dim error (%), to 100: 6.44</title></circle>
+<circle cx="864.0" cy="488.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-ribbon001 #3 largest dim error (%), to 100: 283.61</title></circle>
+<text x="716" y="500.5" fill="#52514e">×</text>
+<text x="716" y="503.5" fill="#52514e">×</text>
+<circle cx="726.3" cy="503.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>ecyl-rand #3 largest dim error (%), to 100: 8.19</title></circle>
+<text x="716" y="515.5" fill="#52514e">×</text>
+<text x="716" y="518.5" fill="#52514e">×</text>
+<text x="716" y="521.5" fill="#52514e">×</text>
+<text x="716" y="530.5" fill="#52514e">×</text>
+<text x="716" y="533.5" fill="#52514e">×</text>
+<text x="716" y="536.5" fill="#52514e">×</text>
+<circle cx="833.2" cy="542.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u01 #1 largest dim error (%), to 100: 79.44</title></circle>
+<circle cx="801.8" cy="557.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u02 #1 largest dim error (%), to 100: 58.50</title></circle>
+<circle cx="864.0" cy="572.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u03 #1 largest dim error (%), to 100: 280.50</title></circle>
+<circle cx="723.8" cy="587.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u04 #1 largest dim error (%), to 100: 6.52</title></circle>
+<circle cx="864.0" cy="602.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u05 #1 largest dim error (%), to 100: 973.38</title></circle>
+<circle cx="864.0" cy="617.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u06 #1 largest dim error (%), to 100: 217.93</title></circle>
+<circle cx="820.2" cy="632.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u07 #1 largest dim error (%), to 100: 70.80</title></circle>
+<circle cx="744.2" cy="647.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u08 #1 largest dim error (%), to 100: 20.15</title></circle>
+<circle cx="795.1" cy="662.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u09 #1 largest dim error (%), to 100: 54.05</title></circle>
+<circle cx="714.0" cy="677.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u10 #1 largest dim error (%), to 100: 0.00</title></circle>
+<circle cx="864.0" cy="692.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u11 #1 largest dim error (%), to 100: 101.46</title></circle>
+<circle cx="771.2" cy="707.5" r="3.2" fill="#2a78d6" stroke="#2a78d6" stroke-width="1.4"><title>u12 #1 largest dim error (%), to 100: 38.12</title></circle>
+<text x="716" y="722.5" fill="#52514e">×</text>
+<text x="716" y="737.5" fill="#52514e">×</text>
+</svg>
