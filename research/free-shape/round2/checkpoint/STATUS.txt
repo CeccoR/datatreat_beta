@@ -1,7 +1,7 @@
-Checkpoint 2026-10-27T01:47Z
+Checkpoint 2026-10-27T02:16Z
 
 Batches, newest first:
-- A/results/xs-lsq/: 3 ok;   wall 239.3 s
+- A/results/xs-lsq/: 55 ok; 2026-10-27T02:13:56.862Z xs-lsq: 55 done, 0 failed, 39.3 min
 - A/results/screen-wppm/: 53 ok; 2026-10-27T01:34:19.436Z screen-wppm: 16 done, 0 failed, 43.7 min
 - A/results/xs-wppm/: 110 ok; 2026-10-26T23:33:51.663Z xs-wppm: 55 done, 0 failed, 124.8 min
 - A/results/screen-lsq/: 44 ok; 2026-10-26T21:29:03.561Z screen-lsq: 44 done, 0 failed, 44.9 min
@@ -10,7 +10,7 @@ Batches, newest first:
 - B/results/legacy/: 1 ok; 2026-10-26T20:18:57.581Z legacy: 1 done, 0 failed, 1.1 min
 
 Workflow journal (last events):
-{"type":"result","key":"v2:a8d35c188ab4320dc3f1fff413936be6ba908a1e67deae533d99d5a42a6fafd0","agentId":"ac0200724e21ce70d","result":{"tried":[{"name":"today (re
-{"type":"started","key":"v2:f32301217c4f0571b875b8156f57678d1b9fc8dc3b0aabf700643692dc29b62a","agentId":"a149ec0037a5064d7","label":"explore:line-shape","phase"
 {"type":"started","key":"v2:827b4c0196b881e0c4c950f486a2469b117fbba991481da1c92ba1cc15c7f783","agentId":"ad3e9b0f0bbf123a5","label":"explore:search-efficiency",
 {"type":"started","key":"v2:f32301217c4f0571b875b8156f57678d1b9fc8dc3b0aabf700643692dc29b62a","agentId":"a0d33f37432d4d9dd","label":"explore:line-shape","phase"
+{"type":"result","key":"v2:f32301217c4f0571b875b8156f57678d1b9fc8dc3b0aabf700643692dc29b62a","agentId":"a0d33f37432d4d9dd","result":{"tried":[{"name":"lor: toda
+{"type":"started","key":"v2:d50748edd7c110764f2d2bf2f0ebf656f7ea1fdf3847f81fc7ae595a46cb0dce","agentId":"a354a8434b272d756","label":"verify:line-shape","phase":

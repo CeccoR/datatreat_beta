@@ -102,3 +102,52 @@ same synthesis routine the generator uses for its correction term: against the g
 pattern without noise it is 0.29 % of the peak off (median; 90th percentile 0.65 %), the TCH
 line's own error in the generator's main term. Its accuracy is close to an exact model's by
 construction; (b) is this folder's own tables and the engine's TCH line.
+
+## Findings (final, 2026-10-27)
+
+Medians unless said; "worst" is the largest |extent error| of a run, +∞ when an extent is read
+unbounded; axis is the truth's most distinct axis. Scored by the pilot's report.mjs rules
+(analyse.mjs). Validation rows were never run or read.
+
+**The line alone and in the pattern** (`line-errors.json`, 200 random members per solid in the
+design's ranges; `pattern/`, the generator's pattern without noise at the truth, 21 sub-screen
+rows without texture):
+
+| model | line: max \|Δ\| of the peak (90 %) | ⟨L⟩_V read ÷ true | pattern: max \|Δ\| (90 %) | excess χ²_ν (90 %) |
+|---|---|---|---|---|
+| lor | 17.5 % (18.6) | 1.163 | 13.0 % (16.1) | 0.81 (3.94) |
+| ib (a) | 17.0 % (18.3) | 1.097 | 11.7 % (15.3) | 0.66 (2.94) |
+| mom (b1) | 5.4 % (6.9) | 1.042 | 4.2 % (6.0) | 0.10 (0.24) |
+| lsq (b2) | 4.5 % (6.4) | 1.000 | 3.6 % (5.6) | 0.04 (0.12) |
+| wppm (c) | — | — | 0.29 % (0.65) | 0.000 (0.007) |
+
+The exact lines of different solids at one ⟨L⟩_V differ by 1–12 % of the peak (`linediff.md`:
+ball against a box edge 4.8 %, against a cylinder across 1.7 %; a box edge and a cylinder along
+its axis are the same line). The Lorentzian is 11.5–21 % off every one of them, the lsq line
+2.5–8 %.
+
+**The 77-run screening set** (`screen-final*.md`; lor is the pilot's run):
+
+| model | truth ref: thinnest / worst (90 %) / axis ° | search: kept | reach | worst (90 %) | thinnest | axis ° (90 %) | clean: worst / axis / anisotropy | spheres kept | s/run (ev, ms/ev) |
+|---|---|---|---|---|---|---|---|---|---|
+| lor | +19 % / +38 % (+101) / 5.0 | 60/66 | 58/63 | +42 % (+290) | +20 % | 6.8 (79.0) | +32 % / 7.6 / 0.74 | 3/11 | 115 (3990, 14.6) |
+| lsq | +1 % / +13 % (+338) / 3.1 | 65/66 | 65/66 | +16 % (+232) | +1 % | 4.3 (31.8) | +10 % / 3.8 / 0.95 | 2/11 | 99 (3552, 14.1) |
+| wppm | +0 % / +4 % (+410) / 1.3 | 66/66 | 62/66 | +4 % (+335) | +0 % | 1.6 (14.4) | +2 % / 0.9 / 0.99 | 2/11 | 254 (3331, 33.9) |
+
+(s/run: isotropic fit + search + report, the runs' own time; lor ran on 3 processes in the pilot,
+lsq and wppm on 2 beside track B's 2: the evaluations and `bench-*.json`, run back to back under
+one load, are the like-for-like cost: lsq 3.4–8.1 ms an evaluation against lor 4.0–7.6, wppm
+12.4–78.6, 2.4–13× lor's, the more the more members.)
+
+**The solids** (`xconf3.md`, `nested.md`; 11 clean sub-screen rows × 6 solids, early rejection
+off): right / nested-family member (box ↔ square box, elliptic cylinder ↔ cylinder, ellipsoid ↔
+spheroid) / another family:
+
+| model | by χ² | by BIC |
+|---|---|---|
+| lor | 5 / 1 / 5 | 6 / 1 / 4 |
+| lsq | 7 / 3 / 1 | 6 / 2 / 3 |
+| wppm | 7 / 4 / 0 | 7 / 3 / 1 |
+
+`why.md` sets each row's column-length mismatch and noise-free in-model separation beside each
+model's noisy separation.
