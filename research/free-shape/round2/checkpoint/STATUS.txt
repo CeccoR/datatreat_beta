@@ -1,7 +1,7 @@
-Checkpoint 2026-10-27T00:08Z
+Checkpoint 2026-10-27T00:38Z
 
 Batches, newest first:
-- A/results/screen-wppm/: 26 ok;   wall 123.1 s
+- A/results/screen-wppm/: 33 ok;   wall 354.6 s
 - A/results/xs-wppm/: 110 ok; 2026-10-26T23:33:51.663Z xs-wppm: 55 done, 0 failed, 124.8 min
 - A/results/screen-lsq/: 44 ok; 2026-10-26T21:29:03.561Z screen-lsq: 44 done, 0 failed, 44.9 min
 - A/results/sph-hyb/: 11 ok; 2026-10-26T20:27:51.647Z sph-hyb: 11 done, 0 failed, 6.1 min
