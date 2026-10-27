@@ -1,0 +1,167 @@
+[
+ {
+  "id": "box-P-1-near",
+  "laue": "-1",
+  "solid": "box",
+  "distinct": 36,
+  "members": 70,
+  "counts": 971,
+  "rival": "ellcyl",
+  "colRms": 0.011146912301187417,
+  "inModel": 3.5790819179991455,
+  "sep": {
+   "lor": -2.4705219020297773,
+   "wppm": 26.008803212378215
+  }
+ },
+ {
+  "id": "ellcyl-P2m-generic",
+  "laue": "2/m",
+  "solid": "ellcyl",
+  "distinct": 36,
+  "members": 71,
+  "counts": 18195,
+  "rival": "box",
+  "colRms": 0.013660467314842996,
+  "inModel": 7.766986471667976,
+  "sep": {
+   "lor": 5.455281442332869,
+   "wppm": 31.801069024795236
+  }
+ },
+ {
+  "id": "ellipsoid-Pmmm-generic",
+  "laue": "mmm",
+  "solid": "ellipsoid",
+  "distinct": 38,
+  "members": 68,
+  "counts": 1066,
+  "rival": "spheroid",
+  "colRms": 0.008393465830601403,
+  "inModel": 1.0672428510548428,
+  "sep": {
+   "lor": 13.167809795687877,
+   "wppm": 0.2978290688716498
+  }
+ },
+ {
+  "id": "box-P4m-near",
+  "laue": "4/m",
+  "solid": "box",
+  "distinct": 37,
+  "members": 67,
+  "counts": 9487,
+  "rival": "ellcyl",
+  "colRms": 0.017321578681387232,
+  "inModel": 15.898366649900519,
+  "sep": {
+   "lor": 28.6622594430493,
+   "wppm": 21.762683647850796
+  }
+ },
+ {
+  "id": "cylinder-P4mmm-on",
+  "laue": "4/mmm",
+  "solid": "cylinder",
+  "distinct": 8,
+  "members": 68,
+  "counts": 21916,
+  "rival": "ellcyl",
+  "colRms": 2.693587745529064e-7,
+  "inModel": -0.00008274930868499945,
+  "sep": {
+   "lor": -24.386589184149393,
+   "wppm": -1.2817005853730203
+  }
+ },
+ {
+  "id": "spheroid-P-3-near",
+  "laue": "-3",
+  "solid": "spheroid",
+  "distinct": 13,
+  "members": 61,
+  "counts": 1225,
+  "rival": "ellipsoid",
+  "colRms": 5.767477031006752e-7,
+  "inModel": -0.00046745405982229855,
+  "sep": {
+   "lor": 0.0005308140803010812,
+   "wppm": -0.7598448747333024
+  }
+ },
+ {
+  "id": "box-P-3m1-near",
+  "laue": "-3m",
+  "solid": "box",
+  "distinct": 34,
+  "members": 67,
+  "counts": 906,
+  "rival": "ellcyl",
+  "colRms": 0.015703636622076557,
+  "inModel": 0.4950939420878532,
+  "sep": {
+   "lor": 0.0037213539444997524,
+   "wppm": 1.5750130642843732
+  }
+ },
+ {
+  "id": "cylinder-P6m-on",
+  "laue": "6/m",
+  "solid": "cylinder",
+  "distinct": 9,
+  "members": 69,
+  "counts": 949,
+  "rival": "ellcyl",
+  "colRms": 4.622990521045576e-7,
+  "inModel": -3.465181365153718e-8,
+  "sep": {
+   "lor": 0.014002709724638301,
+   "wppm": -3.3905755914402107
+  }
+ },
+ {
+  "id": "ellcyl-P6m-generic",
+  "laue": "6/m",
+  "solid": "ellcyl",
+  "distinct": 40,
+  "members": 69,
+  "counts": 4107,
+  "rival": "box",
+  "colRms": 0.013154859835229744,
+  "inModel": 0.17568775115891297,
+  "sep": {
+   "lor": 22.454782796079787,
+   "wppm": 0.27722408864353554
+  }
+ },
+ {
+  "id": "sqbox-Pm-3-on",
+  "laue": "m-3",
+  "solid": "sqbox",
+  "distinct": 11,
+  "members": 73,
+  "counts": 4203,
+  "rival": "box",
+  "colRms": 5.590749847020915e-7,
+  "inModel": 0.0013887031241972521,
+  "sep": {
+   "lor": 0.05609657442385041,
+   "wppm": -0.012765440974429281
+  }
+ },
+ {
+  "id": "ellcyl-Pm-3m-generic",
+  "laue": "m-3m",
+  "solid": "ellcyl",
+  "distinct": 42,
+  "members": 73,
+  "counts": 2192,
+  "rival": "ellipsoid",
+  "colRms": 0.014873143310803718,
+  "inModel": 0.5763752424119523,
+  "sep": {
+   "lor": 78.87876501169038,
+   "wppm": 44.17610927828481
+  }
+ }
+]

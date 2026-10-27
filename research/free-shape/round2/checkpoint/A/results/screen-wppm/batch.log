@@ -165,3 +165,64 @@ ellcyl-P-3-on (-3, ellcyl 3.5×5.1×5.2, impurity 0.28; exact, 10–110/0.01) as
   today: held χ² 15109.6 best 15109.6 ΔBIC -1474 | search 5559 ev 236536 ms report 1026 ev 44476 ms | 5.29×3.39×5.06 | dims -3% 3% -2% orient 0.0° (holo 0.0°) principal 0.0°
   truth: held χ² 15109.6 best 15109.6 ΔBIC — | search 1393 ev 58477 ms | 3.39×5.29×5.06 | dims -3% 3% -2% orient 0.0° (holo 0.0°) principal 0.0°
   wall 354.6 s
+2026-10-27T00:40:10.944Z [25/44] ellcyl-P-3m1-near: ok 198 s
+ellcyl-P-3m1-near (-3m, ellcyl 10.8×60.0×16.6, sizedist 0.93; exact, 10–110/0.01) as ellcyl: draw 543 ms; iso χ²_ν 1.456, 425 ev, 11427 ms; list 31 refl, 104 members
+  today: free χ² 10390.9 best 10390.9 ΔBIC -2805 | search 4208 ev 119534 ms report 1574 ev 42597 ms | —×10.45×16.75 | dims -3% —% 1% orient 24.1° (holo 24.1°) principal 5.1°
+  truth: free χ² 10389.3 best 10389.3 ΔBIC — | search 891 ev 23893 ms | 10.60×—×23.04 | dims -2% —% 39% orient 21.7° (holo 21.7°) principal 5.8°
+  wall 198.1 s
+2026-10-27T00:41:32.655Z [26/44] ellcyl-P-1-near: ok 1638 s
+ellcyl-P-1-near (-1, ellcyl 5.0×35.8×21.2, po 0.82; exact, 10–110/0.01) as ellcyl: draw 391 ms; iso χ²_ν 7.765, 2407 ev, 371429 ms; list 214 refl, 214 members
+  today: free χ² 35733.8 best 35733.8 ΔBIC -5334 | search 6280 ev 804705 ms report 1869 ev 221391 ms | —×29.30×4.33 | dims 489% —% -80% orient 87.8° (holo 87.8°) principal 87.8°
+  truth: free χ² 35995.6 best 35995.6 ΔBIC — | search 1939 ev 240016 ms | 5.02×27.59×— | dims 1% -23% —% orient 13.0° (holo 13.0°) principal 7.6°
+  wall 1638.3 s
+2026-10-27T00:43:07.744Z [27/44] ellcyl-P6mmm-on: ok 177 s
+ellcyl-P6mmm-on (6/mmm, ellcyl 4.3×11.7×34.2; exact, 10–110/0.01) as ellcyl: draw 323 ms; iso χ²_ν 33.570, 481 ev, 12109 ms; list 20 refl, 103 members
+  today: held χ² 9807.0 best 9806.8 ΔBIC -9675 | search 5158 ev 117203 ms report 1332 ev 28713 ms | 4.27×11.69×34.30 | dims 0% -0% 0% orient 0.0° (holo 0.0°) principal 0.0°
+  truth: held χ² 9807.0 best 9807.0 ΔBIC — | search 835 ev 18158 ms | 4.27×11.69×34.32 | dims 0% -0% 0% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 176.7 s
+2026-10-27T00:44:00.936Z [28/44] ellcyl-Pm-3-near: ok 148 s
+ellcyl-Pm-3-near (m-3, ellcyl 3.1×17.2×7.5; exact, 10–110/0.01) as ellcyl: draw 315 ms; iso χ²_ν 1.074, 322 ev, 5844 ms; list 14 refl, 89 members
+  today: free χ² 9951.7 best 9951.7 ΔBIC -672 | search 4129 ev 79450 ms report 2355 ev 45020 ms | 17.24×3.16×7.45 | dims 1% 0% -0% orient 4.0° (holo 4.0°) principal 2.5°
+  truth: free χ² 9977.7 best 9977.7 ΔBIC — | search 890 ev 17391 ms | 3.21×18.68×7.49 | dims 3% 8% 0% orient 81.2° (holo 6.5°) principal 4.1°
+  wall 148.2 s
+2026-10-27T00:50:39.857Z screen-wppm: 16 of 44 runs to do (box-P2m-generic,box-Pmmm-on,box-P4mmm-generic,box-P-3-on,box-P6m-generic,box-P6mmm-on,box-Pm-3m-generic,sqbox-P2m-near,sqbox-Pmmm-generic,sqbox-P4mmm-near,sqbox-P-3-generic,sqbox-P6m-near,sqbox-P6mmm-generic,sqbox-Pm-3m-near,cylinder-P-1-generic,cylinder-Pmmm-near,cylinder-P4m-generic,cylinder-P-3-near,cylinder-P-3m1-generic,cylinder-P6mmm-near,cylinder-Pm-3-generic,ellcyl-P-1-near,ellcyl-Pmmm-on,ellcyl-P4m-near,ellcyl-P-3-on,ellcyl-P-3m1-near,ellcyl-P6mmm-on,ellcyl-Pm-3-near,ellipsoid-P-1-on,ellipsoid-P2m-near,ellipsoid-P4m-on,ellipsoid-P4mmm-near,ellipsoid-P-3m1-on,ellipsoid-P6m-near,ellipsoid-Pm-3-on,ellipsoid-Pm-3m-near,spheroid-P-1-generic,spheroid-P2m-on,spheroid-P4m-generic,spheroid-P4mmm-on,spheroid-P-3m1-generic,spheroid-P6m-on,spheroid-Pm-3-generic,spheroid-Pm-3m-on), 2 at a time; line lor, profile wppm; --method today,truth
+2026-10-27T01:00:22.636Z [1/16] ellipsoid-P2m-near: ok 583 s
+ellipsoid-P2m-near (2/m, ellipsoid 6.5×9.9×22.0; exact, 10–110/0.01) as ellipsoid: draw 627 ms; iso χ²_ν 3.781, 753 ev, 53200 ms; list 88 refl, 144 members
+  today: held χ² 9782.7 best 9782.4 ΔBIC -7379 | search 3661 ev 268809 ms report 3038 ev 207317 ms | 21.63×9.91×6.60 | dims 1% 0% -2% orient 4.3° (holo 4.3°) principal 4.3°
+  truth: free χ² 9782.4 best 9782.4 ΔBIC — | search 753 ev 52102 ms | 6.58×9.90×21.66 | dims 1% 0% -2% orient 3.5° (holo 3.5°) principal 3.4°
+  wall 582.3 s
+2026-10-27T01:07:21.150Z [2/16] ellipsoid-P4m-on: ok 419 s
+ellipsoid-P4m-on (4/m, ellipsoid 2.6×2.9×12.7, hump 0.29; exact, 10–110/0.01) as ellipsoid: draw 328 ms; iso χ²_ν 4.451, 562 ev, 26430 ms; list 33 refl, 102 members
+  today: held χ² 12249.5 best 12249.1 ΔBIC -7216 | search 4555 ev 215589 ms report 2334 ev 111040 ms | 2.89×2.64×12.68 | dims -0% -1% 0% orient 0.0° (holo 0.0°) principal 0.0°
+  truth: free χ² 12249.3 best 12249.3 ΔBIC — | search 1362 ev 64791 ms | 2.64×2.89×12.80 | dims -0% -2% 1% orient 2.0° (holo 2.0°) principal 2.0°
+  wall 418.4 s
+2026-10-27T01:11:12.143Z [3/16] ellipsoid-P4mmm-near: ok 231 s
+ellipsoid-P4mmm-near (4/mmm, ellipsoid 2.9×7.3×41.9, sizedist 0.49; exact, 10–110/0.01) as ellipsoid: draw 419 ms; iso χ²_ν 9.769, 788 ev, 23171 ms; list 25 refl, 93 members
+  today: free χ² 10569.3 best 10569.3 ΔBIC -8858 | search 3672 ev 125706 ms report 1584 ev 52836 ms | 2.65×10.21×— | dims -9% 41% —% orient 14.5° (holo 14.5°) principal 8.3°
+  truth: free χ² 10569.3 best 10569.3 ΔBIC — | search 839 ev 28544 ms | 2.65×10.21×— | dims -9% 41% —% orient 14.5° (holo 14.5°) principal 8.3°
+  wall 230.9 s
+2026-10-27T01:11:57.444Z [4/16] ellipsoid-P-1-on: ok 1277 s
+ellipsoid-P-1-on (-1, ellipsoid 4.4×15.4×25.2; exact, 10–110/0.01) as ellipsoid: draw 635 ms; iso χ²_ν 2.734, 2785 ev, 430026 ms; list 214 refl, 214 members
+  today: held χ² 9886.7 best 9885.4 ΔBIC -6347 | search 3921 ev 520020 ms report 1918 ev 225951 ms | 4.44×15.15×25.46 | dims 1% -2% 1% orient 0.0° (holo 0.0°) principal 0.0°
+  truth: free χ² 9885.4 best 9885.4 ΔBIC — | search 770 ev 100118 ms | 4.44×15.09×25.52 | dims 1% -2% 1% orient 0.8° (holo 0.8°) principal 0.4°
+  wall 1277.1 s
+2026-10-27T01:14:42.747Z [5/16] ellipsoid-P6m-near: ok 165 s
+ellipsoid-P6m-near (6/m, ellipsoid 8.6×31.2×60.0; exact, 10–110/0.01) as ellipsoid: draw 354 ms; iso χ²_ν 1.105, 328 ev, 6876 ms; list 21 refl, 93 members
+  today: held χ² 10031.6 best 10030.3 ΔBIC -887 | search 3866 ev 81952 ms report 3117 ev 63034 ms | 25.71×8.85×106.03 | dims 3% -18% 77% orient 19.0° (holo 19.0°) principal 6.8°
+  truth: free χ² 10030.3 best 10030.3 ΔBIC — | search 619 ev 12748 ms | 8.72×26.27×84.84 | dims 1% -16% 41% orient 17.2° (holo 17.2°) principal 0.6°
+  wall 165.1 s
+2026-10-27T01:15:40.102Z [6/16] ellipsoid-P-3m1-on: ok 268 s
+ellipsoid-P-3m1-on (-3m, ellipsoid 12.2×25.5×39.5; exact, 10–110/0.01) as ellipsoid: draw 328 ms; iso χ²_ν 1.304, 334 ev, 9571 ms; list 31 refl, 104 members
+  today: held χ² 9865.4 best 9864.7 ΔBIC -2403 | search 3632 ev 108184 ms report 4669 ev 132436 ms | 12.05×23.69×44.91 | dims -1% -7% 14% orient 30.0° (holo 30.0°) principal 0.0°
+  truth: free χ² 9864.7 best 9864.7 ΔBIC — | search 595 ev 17098 ms | 11.96×22.92×52.61 | dims -2% -10% 33% orient 29.3° (holo 29.3°) principal 6.3°
+  wall 267.8 s
+2026-10-27T01:16:43.572Z [7/16] ellipsoid-Pm-3-on: ok 121 s
+ellipsoid-Pm-3-on (m-3, ellipsoid 2.4×11.7×60.0, po 0.23; exact, 10–110/0.01) as ellipsoid: draw 326 ms; iso χ²_ν 1.518, 564 ev, 7066 ms; list 14 refl, 89 members
+  today: free χ² 10360.9 best 10360.9 ΔBIC -3116 | search 2823 ev 58450 ms report 1591 ev 35637 ms | —×2.36×— | dims -1% —% —% orient 77.2° (holo 16.5°) principal 13.1°
+  truth: held χ² 10141.6 best 10141.6 ΔBIC — | search 874 ev 19068 ms | 2.43×11.86×62.04 | dims 2% 2% 3% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 120.7 s
+2026-10-27T01:16:56.872Z [8/16] ellipsoid-Pm-3m-near: ok 77 s
+ellipsoid-Pm-3m-near (m-3m, ellipsoid 14.0×36.6×60.0; exact, 10–110/0.01) as ellipsoid: draw 306 ms; iso χ²_ν 1.000, 301 ev, 3459 ms; list 12 refl, 89 members
+  today: held χ² 9953.2 best 9953.1 ΔBIC -18 | search 2629 ev 30120 ms report 3522 ev 37747 ms | 51.58×38.80×14.11 | dims 1% 6% -14% orient 3.6° (holo 3.6°) principal 3.2°
+  truth: free χ² 9953.2 best 9953.2 ΔBIC — | search 470 ev 4859 ms | 13.89×38.44×54.75 | dims -1% 5% -9% orient 4.3° (holo 4.3°) principal 3.6°
+  wall 76.6 s
