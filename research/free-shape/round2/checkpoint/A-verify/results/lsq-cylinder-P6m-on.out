@@ -1,0 +1,4 @@
+cylinder-P6m-on (6/m, cylinder 5.7×5.7×6.4; exact, 10–110/0.01) as cylinder: draw 408 ms; iso χ²_ν 1.006, 271 ev, 2027 ms; list 21 refl, 93 members
+  today: held χ² 9999.6 best — ΔBIC -32 | search 2422 ev 28708 ms report 1085 ev 13847 ms | 5.61×5.61×6.07 | dims -1% -1% -5% orient 0.0° (holo 0.0°) principal 0.0°
+  truth: held χ² 9999.6 best — ΔBIC — | search 637 ev 7334 ms | 5.61×5.61×6.07 | dims -1% -1% -5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 52.5 s

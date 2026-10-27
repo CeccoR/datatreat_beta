@@ -1,0 +1,4 @@
+sqbox-Pm-3-on (m-3, sqbox 10.9×10.9×15.2; exact, 10–110/0.01) as sqbox: draw 349 ms; iso χ²_ν 1.589, 296 ev, 1499 ms; list 14 refl, 89 members
+  today: held χ² 15492.8 best — ΔBIC -227 | search 3095 ev 23445 ms report 766 ev 5338 ms | 15.85×15.85×15.85 | dims 46% 46% 4% orient 0.0° (holo 0.0°) principal 0.0°
+  truth: held χ² 15492.8 best — ΔBIC — | search 1521 ev 11418 ms | 15.85×15.85×15.85 | dims 46% 46% 4% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 42.2 s
