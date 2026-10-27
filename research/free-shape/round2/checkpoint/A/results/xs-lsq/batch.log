@@ -1,0 +1,13 @@
+2026-10-27T01:34:36.794Z xs-lsq: 55 of 66 runs to do (subclean × box,sqbox,cylinder,ellcyl,ellipsoid,spheroid), 2 at a time; line lsq, profile lorentz; --method today
+2026-10-27T01:42:49.011Z [1/55] box-P-1-near as sqbox: ok 492 s
+box-P-1-near (-1, box 6.7×13.7×60.0; exact, 10–110/0.01) as sqbox: draw 413 ms; iso χ²_ν 2.481, 867 ev, 45300 ms; list 214 refl, 214 members
+  today: free χ² 11794.7 best 11794.7 ΔBIC -5192 | search 10500 ev 414175 ms report 751 ev 32054 ms | 51.43×51.43×6.57
+  wall 492.1 s
+2026-10-27T01:43:44.125Z [2/55] box-P-1-near as cylinder: ok 547 s
+box-P-1-near (-1, box 6.7×13.7×60.0; exact, 10–110/0.01) as cylinder: draw 419 ms; iso χ²_ν 2.481, 867 ev, 44946 ms; list 214 refl, 214 members
+  today: free χ² 11915.4 best 11915.4 ΔBIC -5152 | search 11138 ev 470027 ms report 724 ev 31670 ms | 69.67×69.67×6.58
+  wall 547.2 s
+2026-10-27T01:46:48.409Z [3/55] box-P-1-near as ellcyl: ok 239 s
+box-P-1-near (-1, box 6.7×13.7×60.0; exact, 10–110/0.01) as ellcyl: draw 388 ms; iso χ²_ν 2.481, 867 ev, 45644 ms; list 214 refl, 214 members
+  today: free χ² 10689.4 best 10689.4 ΔBIC -5628 | search 4028 ev 149684 ms report 1190 ev 43408 ms | 68.48×8.07×14.56
+  wall 239.3 s

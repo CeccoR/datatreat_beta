@@ -39,3 +39,44 @@ ellipsoid-Pm-3m-near (m-3m, ellipsoid 14.0×36.6×60.0; exact, 10–110/0.01) as
   today: held χ² 9953.2 best 9953.1 ΔBIC -18 | search 2629 ev 30120 ms report 3522 ev 37747 ms | 51.58×38.80×14.11 | dims 1% 6% -14% orient 3.6° (holo 3.6°) principal 3.2°
   truth: free χ² 9953.2 best 9953.2 ΔBIC — | search 470 ev 4859 ms | 13.89×38.44×54.75 | dims -1% 5% -9% orient 4.3° (holo 4.3°) principal 3.6°
   wall 76.6 s
+2026-10-27T01:27:22.947Z [9/16] spheroid-P2m-on: ok 626 s
+spheroid-P2m-on (2/m, spheroid 3.2×3.2×12.0, impurity 0.85; exact, 10–110/0.01) as spheroid: draw 324 ms; iso χ²_ν 61.534, 1445 ev, 85361 ms; list 88 refl, 144 members
+  today: held χ² 284333.7 best 284171.1 ΔBIC -5354 | search 3706 ev 352217 ms report 1226 ev 115634 ms | 2.99×2.99×11.33 | dims -6% -6% -6% orient 0.0° (holo 0.0°) principal 0.0°
+  truth: free χ² 284158.6 best 284158.6 ΔBIC — | search 757 ev 72073 ms | 2.97×2.97×10.72 | dims -6% -6% -11% orient 1.4° (holo 1.4°) principal 1.4°
+  wall 625.9 s
+2026-10-27T01:29:00.813Z [10/16] spheroid-P-1-generic: ok 737 s
+spheroid-P-1-generic (-1, spheroid 16.2×16.2×7.6, po 0.50; exact, 10–110/0.01) as spheroid: draw 427 ms; iso χ²_ν 2.484, 653 ev, 91445 ms; list 214 refl, 214 members
+  today: free χ² 17664.4 best 17664.4 ΔBIC -2842 | search 3301 ev 424348 ms report 726 ev 92146 ms | 8.74×8.74×31.08 | dims -46% -46% 308% orient 88.0° (holo 88.0°) principal 88.0°
+  truth: free χ² 18013.0 best 18013.0 ΔBIC — | search 1035 ev 128381 ms | 14.62×14.62×7.70 | dims -10% -10% 1% orient 33.2° (holo 33.2°) principal 33.2°
+  wall 737.1 s
+2026-10-27T01:30:03.047Z [11/16] spheroid-P4m-generic: ok 160 s
+spheroid-P4m-generic (4/m, spheroid 22.9×22.9×14.2; exact, 10–110/0.01) as spheroid: draw 363 ms; iso χ²_ν 1.013, 359 ev, 11826 ms; list 33 refl, 102 members
+  today: free χ² 10049.2 best 10049.2 ΔBIC -40 | search 2565 ev 80252 ms report 1647 ev 50334 ms | 22.63×22.63×14.27 | dims -1% -1% 1% orient 8.5° (holo 0.6°) principal 8.5°
+  truth: free χ² 10049.2 best 10049.2 ΔBIC — | search 534 ev 16997 ms | 22.63×22.63×14.27 | dims -1% -1% 1% orient 8.4° (holo 0.7°) principal 8.4°
+  wall 160.0 s
+2026-10-27T01:32:14.079Z [12/16] spheroid-P4mmm-on: ok 193 s
+spheroid-P4mmm-on (4/mmm, spheroid 9.5×9.5×3.6, hump 0.78; exact, 10–110/0.01) as spheroid: draw 355 ms; iso χ²_ν 5.184, 493 ev, 17454 ms; list 25 refl, 93 members
+  today: held χ² 12680.2 best 12677.8 ΔBIC -7531 | search 2632 ev 90580 ms report 2176 ev 72102 ms | 9.26×9.26×3.55 | dims -3% -3% -0% orient 0.0° (holo 0.0°) principal 0.0°
+  truth: free χ² 12677.8 best 12677.8 ΔBIC — | search 376 ev 12488 ms | 9.40×9.40×3.52 | dims -1% -1% -1% orient 6.0° (holo 6.0°) principal 6.0°
+  wall 193.2 s
+2026-10-27T01:32:24.884Z [13/16] spheroid-P-3m1-generic: ok 142 s
+spheroid-P-3m1-generic (-3m, spheroid 14.9×14.9×3.3; exact, 10–110/0.01) as spheroid: draw 351 ms; iso χ²_ν 3.347, 333 ev, 13393 ms; list 31 refl, 104 members
+  today: free χ² 10066.0 best 10066.0 ΔBIC -6951 | search 2316 ev 92017 ms report 544 ev 20163 ms | 14.99×14.99×3.34 | dims 1% 1% -0% orient 0.1° (holo 0.1°) principal 0.1°
+  truth: free χ² 10066.0 best 10066.0 ΔBIC — | search 388 ev 15614 ms | 14.99×14.99×3.34 | dims 1% 1% -0% orient 0.1° (holo 0.1°) principal 0.1°
+  wall 141.7 s
+2026-10-27T01:33:13.672Z [14/16] spheroid-Pm-3-generic: ok 49 s
+spheroid-Pm-3-generic (m-3, spheroid 30.9×30.9×9.4; exact, 10–110/0.01) as spheroid: draw 335 ms; iso χ²_ν 1.068, 290 ev, 4030 ms; list 14 refl, 89 members
+  today: free χ² 10114.4 best 10114.4 ΔBIC -493 | search 2118 ev 27482 ms report 900 ev 11071 ms | 31.07×31.07×9.77 | dims 1% 1% 4% orient 6.0° (holo 4.6°) principal 6.0°
+  truth: free χ² 10114.4 best 10114.4 ΔBIC — | search 445 ev 5612 ms | 31.07×31.07×9.77 | dims 1% 1% 4% orient 6.0° (holo 4.6°) principal 6.0°
+  wall 48.7 s
+2026-10-27T01:33:37.307Z [15/16] spheroid-P6m-on: ok 83 s
+spheroid-P6m-on (6/m, spheroid 13.8×13.8×46.7, sizedist 0.84; exact, 10–110/0.01) as spheroid: draw 504 ms; iso χ²_ν 1.029, 377 ev, 7514 ms; list 21 refl, 93 members
+  today: held χ² 10015.5 best 10010.3 ΔBIC -246 | search 2038 ev 39832 ms report 1477 ev 28035 ms | 38.39×38.39×10.24 | dims 179% 179% -78% orient 28.5° (holo 28.5°) principal 28.5°
+  truth: free χ² 10054.7 best 10054.7 ΔBIC — | search 360 ev 7075 ms | 14.88×14.88×— | dims 8% 8% —% orient 9.4° (holo 9.4°) principal 9.4°
+  wall 83.1 s
+2026-10-27T01:34:19.435Z [16/16] spheroid-Pm-3m-on: ok 66 s
+spheroid-Pm-3m-on (m-3m, spheroid 8.1×8.1×2.2; exact, 10–110/0.01) as spheroid: draw 311 ms; iso χ²_ν 1.375, 384 ev, 6910 ms; list 12 refl, 89 members
+  today: held χ² 9688.4 best 9688.4 ΔBIC -2931 | search 2138 ev 38453 ms report 758 ev 13563 ms | 7.98×7.98×2.25 | dims -1% -1% 0% orient 0.0° (holo 0.0°) principal 0.0°
+  truth: held χ² 9688.4 best 9688.4 ΔBIC — | search 343 ev 6227 ms | 7.98×7.98×2.25 | dims -1% -1% 0% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 65.6 s
+2026-10-27T01:34:19.436Z screen-wppm: 16 done, 0 failed, 43.7 min

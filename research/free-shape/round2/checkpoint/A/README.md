@@ -65,6 +65,16 @@ node analyse.mjs --v lor=../pilot/results/screen,lsq=results/screen-lsq --rows s
 node xconf.mjs --m lor=results/xs-lor,wppm=results/xs-wppm --out results/xconf.md --json results/xconf.json
 node colmatch.mjs --rows subclean; FS2A_LINE=lor node colsep.mjs --kernel none --out results/colsep-none-lor.json
 node bench.mjs --rows a,b --n 20                    # per mode (FS2A_LINE / FS2A_PROFILE)
+# after the restart (2026-10-27): the rest of screen-wppm resumed, the cross-solid fits with (b), the final tables
+node batch.mjs --tag screen-wppm --rows $(cat rest44.txt) --profile wppm --method today,truth
+node prep-xs.mjs results/s-lsq results/xs-lsq
+FS2A_NOEARLY=1 node batch.mjs --tag xs-lsq --rows subclean --shapes all --line lsq --method today
+node analyse.mjs --v lor=../pilot/results/screen,lsq=results/screen-lsq,wppm=results/screen-wppm --rows screen --out results/screen-final.md --json results/screen-final-digest.json
+node bygroup.mjs results/screen-final-digest.json; node perclass.mjs results/screen-final-digest.json; node cost.mjs results/screen-final-digest.json
+node analyse.mjs --v lor=../pilot/results/screen,ib=results/tr-ib,mom=results/tr-mom,lsq=results/s-lsq,wppm=results/s-wppm,hyb=results/s-hyb --rows subscreen --sections ref,search --out results/sub-all.md
+node xconf.mjs --m lor=results/xs-lor,lsq=results/xs-lsq,wppm=results/xs-wppm --out results/xconf3.md --json results/xconf3.json
+node nested.mjs results/xconf3.json; node why.mjs --x results/xconf3.json --out results/why.md
+node lines/linediff.mjs                             # the exact lines of different solids against each other
 ```
 
 ## Results (results/)
@@ -80,7 +90,12 @@ node bench.mjs --rows a,b --n 20                    # per mode (FS2A_LINE / FS2A
 | `xs-lor/`, `xs-wppm/` | each clean sub-screen row searched as each of the six solids, no early rejection |
 | `colmatch.json`, `colsep-*.json` | what the column lengths alone tell apart; noise-free separations |
 | `bench-*.json` | ms per phase-pattern evaluation, per mode |
-| `tr-sub.md`, `screen-lsq.md`, `screen-wppm.md`, `xconf.md`, `screen-lsq-bygroup.md` | tables |
+| `xs-lsq/` | the same with the (b) line |
+| `tr-sub.md`, `screen-lsq.md`, `xconf.md`, `screen-lsq-bygroup.md` | tables (before the restart) |
+| `sub-all.md`, `sph-all.md` | the sub-screen: truth references of every line model and today's search with lor, lsq, wppm, hyb; the spheres |
+| `screen-final*.md`, `screen-final-digest.json` | the 77-run screening set with lor, lsq, wppm: tables, by group, per class, cost |
+| `xconf3.md`, `xconf3.json`, `nested.md`, `why.md`, `linediff.md` | the solids: confusion matrices (lor, lsq, wppm), nested-family counts, what sets them apart |
+| `colsep-exact-wppm.broken.out`, `colsep-none-lor.broken.out` | colsep before its weights were fixed: wrong, kept as a record; only `colsep-none-lor.json` stands |
 
 The WPPM route (c) uses the engine's own `wppmLine` and its A(L) (`xrd-broad.js` covBase), the
 same synthesis routine the generator uses for its correction term: against the generator's
