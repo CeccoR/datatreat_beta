@@ -1,4 +1,4 @@
-Checkpoint 2026-10-30T22:25Z
+Checkpoint 2026-10-30T22:54Z
 
 Batches, newest first:
 - A/results/xs-lsq/: 55 ok; 2026-10-27T02:13:56.862Z xs-lsq: 55 done, 0 failed, 39.3 min
