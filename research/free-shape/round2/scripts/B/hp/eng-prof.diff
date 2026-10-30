@@ -1,0 +1,31 @@
+--- h/eng/xrd-rietveld.js	2026-10-26 16:38:45.288730303 +0000
++++ hp/eng/xrd-rietveld.js	2026-10-26 19:33:35.632283837 +0000
+@@ -2466,7 +2466,7 @@
+    every reflection in the range is listed there too. */
+ // [harness] one pattern evaluation per call
+ const FS = { evals: 0, log: null, k: -1, t0: 0 };
+-function phasePattern(model, v, k, out, ticks){ FS.evals++; return phasePattern_(model, v, k, out, ticks); }
++function phasePattern(model, v, k, out, ticks){ FS.evals++; const t0 = performance.now(); try { return phasePattern_(model, v, k, out, ticks); } finally { const dt = performance.now() - t0; FS.tPP = (FS.tPP || 0) + dt; if (FS.inJ){ FS.tJ = (FS.tJ || 0) + dt; FS.nJ = (FS.nJ || 0) + 1; } } }
+ function phasePattern_(model, v, k, out, ticks){
+   out.fill(0);
+   const q = model.phases[k];
+@@ -2713,7 +2713,8 @@
+    linear ones (∂y/∂S = the phase at scale 1, ∂y/∂c = its basis function), central
+    differences for the rest, recomputing only the phases a parameter touches (one-sided
+    at a bound, so the model is never evaluated outside it). */
+-function jacobian(model, v, st, free, cols){
++function jacobian(model, v, st, free, cols){ FS.inJ = true; try { return jacobian_(model, v, st, free, cols); } finally { FS.inJ = false; } }
++function jacobian_(model, v, st, free, cols){
+   const n = model.n, np = model.phases.length;
+   const tmpA = new Float64Array(n), tmpB = new Float64Array(n);
+   free.forEach((j, a)=>{
+@@ -2744,7 +2745,8 @@
+ /* [track B] jacobian with forward differences: the pattern at v is st's (this
+    refinement's, same FCJ node counts), one displaced point a non-linear column; at an
+    upper bound the point below. Linear columns exact, as jacobian's. */
+-function jacobianFwd(model, v, st, free, cols){
++function jacobianFwd(model, v, st, free, cols){ FS.inJ = true; try { return jacobianFwd_(model, v, st, free, cols); } finally { FS.inJ = false; } }
++function jacobianFwd_(model, v, st, free, cols){
+   const n = model.n, np = model.phases.length;
+   const tmpA = new Float64Array(n);
+   free.forEach((j, a)=>{

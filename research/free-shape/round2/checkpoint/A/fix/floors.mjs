@@ -14,3 +14,13 @@ for (const m of M){
   const vs = V.filter(v=> v.split('-')[0] === m);
   console.log(`${m.padEnd(5)} pooled: ${row(D.filter(d=> vs.includes(d.v) && d.dimR && d.ref && d.ref.acc))} | ` + vs.map(v=> `${v}: ${row(D.filter(d=> d.v === v && d.dimR && d.ref && d.ref.acc))}`).join(' | '));
 }
+// paired: per row and draw, the worst |extent error| and the axis of one model against another's
+const key = d=> d.id + '|' + (d.v.endsWith('2') ? 2 : 1);
+const W = (m, d) => Math.max(...d.dimR.map(x=> Math.abs(num(x))));
+const pair = (a, b) => {
+  const A = D.filter(d=> d.v.split('-')[0] === a && /-im2?$/.test(d.v) && d.dimR), B = D.filter(d=> d.v.split('-')[0] === b && /-im2?$/.test(d.v) && d.dimR);
+  let wl = 0, al = 0, n = 0; const dw = [];
+  for (const x of A){ const y = B.find(z=> key(z) === key(x)); if (!y) continue; n++; if (W(b, y) < W(a, x)) wl++; if (num(y.ref.acc.principal) < num(x.ref.acc.principal)) al++; dw.push(W(b, y) - W(a, x)); }
+  console.log(`${b} better than ${a}: worst extent in ${wl} of ${n} row-draws, axis in ${al} of ${n}; median change of the worst extent ${(100*qtl(dw, 0.5)).toFixed(1)} points`);
+};
+if (M.includes('ball')){ pair('lor', 'ball'); pair('ball', 'wppm'); pair('lor', 'wppm'); }

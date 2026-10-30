@@ -1,0 +1,102 @@
+--- $W/fs2/harness/eng/xrd-rietveld.js	2026-10-26 11:21:42.757165393 +0000
++++ $W/fs2/A/eng/xrd-rietveld.js	2026-10-30 22:14:26.684028997 +0000
+@@ -26,6 +26,8 @@
+ import { noiseCountScale } from './xrd-instr.js';
+ import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
+ import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
++// [A] the size line's Gaussian and Lorentzian parts (Track A)
++import { SIZE_MODE, BALL_K, sizeKs, NO_EARLY, WPPM_BALL } from '../lines/sizeline.mjs';
+ 
+ const D2R = Math.PI/180, R2D = 180/Math.PI;
+ const LN2 = Math.LN2;
+@@ -174,6 +176,13 @@
+ }
+ // The profile at a Bragg angle θ (radians) for the values U..Y (X and Y with the phase's
+ // own Xs, Ys added: Lorentzian widths add under convolution).
++// [A] the same with a Gaussian size width G (°, before the 1/cosθ) added in quadrature
++function profileAtThetaG(th, U, V, W, X, Y, G){
++  const t = Math.tan(th), c = Math.cos(th), g = G/c;
++  const HG = Math.sqrt(Math.max(HG2_FLOOR, U*t*t + V*t + W) + g*g);
++  const HL = Math.max(0, X*t + Y/c);
++  return tch(HG, HL);
++}
+ function profileAtTheta(th, U, V, W, X, Y){
+   const t = Math.tan(th), c = Math.cos(th);
+   const HG = Math.sqrt(Math.max(HG2_FLOOR, U*t*t + V*t + W));
+@@ -1023,6 +1032,15 @@
+     return out;
+   });
+ }
++// [A] each member's Gaussian and Lorentzian multipliers [kg, kl] on its width (sizeline.mjs)
++function shapeKs(model, q, v){
++  const base = BODIES[q.shapeType].base;
++  return shapeTs(model, q, v).map(t=>{
++    const m = t.length/3, out = new Float64Array(2*m);
++    for (let i = 0; i < m; i++) sizeKs(base, t[3*i], t[3*i + 1], t[3*i + 2], out, 2*i);
++    return out;
++  });
++}
+ function shapeMatrix(L){
+   const [l11, l21, l22, l31, l32, l33] = L;
+   return [l11*l11, l11*l21, l11*l31,  l11*l21, l21*l21 + l22*l22, l21*l31 + l22*l32,  l11*l31, l21*l31 + l22*l32, l31*l31 + l32*l32 + l33*l33];
+@@ -2346,11 +2364,11 @@
+ // counts are held per member (their keys negative, apart from the isotropic lines').
+ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw){
+   const q = model.phases[k], m = wv.length, x = model.x, xa = model.x0, xb = model.x1;
+-  const { U, V, W, X, Y, A, ws = 1 } = prof;
++  const { U, V, W, X, Y, A, ws = 1, ks = null } = prof;
+   const [dLo, dHi] = axialReach(th, A);
+   let sw = 0, sH = 0, sE = 0, tSum = 0;
+   for (let i = 0; i < m; i++){
+-    const pr = profileAtTheta(th, U, V, W, X, Y + ws*wv[i]), ti = tw ? tw[i] : 1;
++    const pr = ks ? profileAtThetaG(th, U, V, W, X, Y + ws*wv[i]*ks[2*i + 1], ws*wv[i]*ks[2*i]) : profileAtTheta(th, U, V, W, X, Y + ws*wv[i]), ti = tw ? tw[i] : 1;
+     sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
+     const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
+     if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
+@@ -2426,7 +2444,7 @@
+      at 10⁷ counts it had grown 4–5×, and with the divergence's nodes the line went
+      negative by 2·10⁻⁴ of its peak. */
+   const half = Math.max(Math.max(model.win*Hest, WIN_MIN), Math.min(halfT, WPPM_N_MAX*Math.max(Hmin, 1e-5)/16 - spread));
+-  const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi] of list) addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } : null;
++  const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi, wb] of list){ if (WPPM_BALL && wb != null) addMemberCoef(arr, n, dL, 'ball', 0, 0, 0, wb*kScale*toMedian, sigma, wi); else addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } } : null;   // [fix] WPPM_BALL
+   // (The texture's weights are in the members' weights; without a shape, in I already.)
+   const tick = ticks && tt >= xa && tt <= xb, fw = tick ? {} : null;
+   const line = { x: model.x, out, tt, lam: L.lam, I, Hi: pr.H, etai: pr.eta, WL, nodes, win: model.win, winMin: half };
+@@ -2480,6 +2498,7 @@
+   const act = shapeActive(q, v);
+   const wppm = q.wppm && !q.iL;
+   const shp = act && !wppm ? shapeWidths(model, q, v) : null, ts = act && wppm ? shapeTs(model, q, v) : null;
++  const shk = shp && q.iW && SIZE_MODE !== 'lor' ? shapeKs(model, q, v) : null;   // [A]
+   const tw = textureWeights(q, v);
+   const fa = q.iFA != null ? v[q.iFA] : 0, sigma = q.iLS != null ? v[q.iLS] : 0;
+   /* The faults' layer spacing at this cell: the table's is the starting cell's, and κ goes
+@@ -2527,8 +2546,9 @@
+       // Ys (held at 0 in its search), left out as WPPM leaves it; the legacy ellipsoid's
+       // widths add to Ys (shapeOf).
+       const lr = L.lam/lam1, Yr = Yi + lr*(shp && q.iW ? 0 : Ys) + (kappa > 0 ? L.lam*kappa/Math.PI*R2D : 0);
+-      if (shp){ shapeLine(model, k, r, j, th, tt, I, shp[r], { U, V, W, X: Xr, Y: Yr, A, ws: lr }, out, ticks && j === 0 ? ticks : null, S, f2, d, tw ? tw[r] : null); continue; }
+-      const pr = profileAtTheta(th, U, V, W, Xr, Yr);
++      if (shp){ shapeLine(model, k, r, j, th, tt, I, shp[r], { U, V, W, X: Xr, Y: Yr, A, ws: lr, ks: shk ? shk[r] : null }, out, ticks && j === 0 ? ticks : null, S, f2, d, tw ? tw[r] : null); continue; }
++      // [A] the isotropic sphere's line: its Gaussian and Lorentzian parts
++      const pr = SIZE_MODE !== 'lor' && Ys > 0 && !q.iL ? profileAtThetaG(th, U, V, W, Xr, Yr - lr*Ys*(1 - BALL_K[1]), lr*Ys*BALL_K[0]) : profileAtTheta(th, U, V, W, Xr, Yr);
+       // The axial divergence spreads the peak over shifts within [dLo, dHi] (axialReach): a
+       // line out of range by more than that is skipped before its nodes.
+       const [dLo, dHi] = axialReach(th, A);
+@@ -4451,7 +4471,7 @@
+   // 0.7 at N = 5251, none above N = e¹⁰, where a shape the held route keeps could be
+   // rejected.) The ΔBIC given is that route's: the lowest the trial shapes allow.
+   const dP = names.length - free.length, dPmin = dP - (q.iR ? q.iR.length : 0), gain = brief.length ? (chiTot(res) - brief[0].chi)/Math.max(1, res.stats.chi2) : -Infinity;
+-  if (!(gain > (10 + dPmin*Math.log(N))/2)){ setParams(model, vIso); return { rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true }; }
++  if (!NO_EARLY && !(gain > (10 + dPmin*Math.log(N))/2)){ setParams(model, vIso); return { rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true }; }
+   let best = null;
+   const finals = [];
+   // A full refinement from v; kept as the best when it is.
+@@ -4598,7 +4618,7 @@
+          phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };
+ 
+ // [harness] internals for the methods
+-const ENG = { FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
++const ENG = { SIZE_MODE, BALL_K, NO_EARLY, WPPM_BALL, shapeKs, profileAtThetaG, profileAtTheta, tch, FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
+   lowIndexAxes, lattDirection, latticeAcross, shapeWidths, shapeTs, columnLengthV, SHAPE_SOFT, SHAPE_STARTS, SHAPE_FULL, fitSettings, shapeOf, turnEsds,
+   bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern, cartOp, properOp };
+ export { ENG };

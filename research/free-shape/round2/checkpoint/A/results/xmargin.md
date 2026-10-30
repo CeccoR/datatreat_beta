@@ -17,7 +17,7 @@
 | margin m | by χ²: right solid / nested / undetermined / other family | by BIC: right / nested / undetermined / other |
 |---|---|---|
 | 0 | 5 / 1 / 0 / 5 | 6 / 1 / 0 / 4 |
-| 2 | 4 / 0 / 3 / 4 | 5 / 0 / 3 / 3 |
+| 3 | 4 / 0 / 4 / 3 | 5 / 0 / 3 / 3 |
 | 6 | 3 / 0 / 5 / 3 | 3 / 0 / 5 / 3 |
 | 10 | 3 / 0 / 5 / 3 | 3 / 0 / 5 / 3 |
 
@@ -40,7 +40,7 @@
 | margin m | by χ²: right solid / nested / undetermined / other family | by BIC: right / nested / undetermined / other |
 |---|---|---|
 | 0 | 7 / 3 / 0 / 1 | 6 / 2 / 0 / 3 |
-| 2 | 7 / 3 / 0 / 1 | 6 / 2 / 1 / 2 |
+| 3 | 7 / 2 / 1 / 1 | 6 / 2 / 1 / 2 |
 | 6 | 5 / 2 / 3 / 1 | 6 / 2 / 1 / 2 |
 | 10 | 4 / 2 / 5 / 0 | 5 / 2 / 3 / 1 |
 
@@ -63,7 +63,7 @@
 | margin m | by χ²: right solid / nested / undetermined / other family | by BIC: right / nested / undetermined / other |
 |---|---|---|
 | 0 | 7 / 4 / 0 / 0 | 7 / 3 / 0 / 1 |
-| 2 | 5 / 4 / 2 / 0 | 7 / 3 / 0 / 1 |
+| 3 | 5 / 4 / 2 / 0 | 7 / 3 / 0 / 1 |
 | 6 | 4 / 4 / 3 / 0 | 6 / 3 / 2 / 0 |
 | 10 | 4 / 3 / 4 / 0 | 5 / 1 / 5 / 0 |
 
