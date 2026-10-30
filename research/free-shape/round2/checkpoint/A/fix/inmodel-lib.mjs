@@ -7,7 +7,7 @@
 import { buildModel, setParams, ENG } from '../eng/xrd-rietveld.js';
 import { phaseOf } from '../harness/lib.mjs';
 import { drawRow, rng, poisson, hash } from '../../gen/gen.mjs';
-export function inModelPattern(row, { noise = true, seedTag = 'inmodel' } = {}){
+export function inModelPattern(row, { noise = true, seedTag = process.env.FS2A_INMODEL_SEED || 'inmodel' } = {}){   // [fix] FS2A_INMODEL_SEED: another noise draw
   const pat = drawRow(row, { noise: false, kernel: 'none' });
   const model = buildModel({ x: pat.x, y: Array.from(pat.yc), instr: pat.instr, phases: [phaseOf(row.phase, row.solid)] });
   model.noise0 = 1e-30;

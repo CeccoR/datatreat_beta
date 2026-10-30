@@ -1,0 +1,5 @@
+2026-10-30T23:22:17.467Z tr-im2-ball: 11 of 11 runs to do (subclean), 1 at a time; line lor, profile wppm; --method truth --kernel inmodel
+2026-10-30T23:24:25.808Z [1/11] box-P-1-near: ok 128 s
+box-P-1-near (-1, box 6.7×13.7×60.0; inmodel, 10–110/0.01) as box: draw 417 ms; iso χ²_ν 2.452, 994 ev, 77792 ms; list 
+  truth: free χ² 9897.4 best 9897.4 ΔBIC — | search 733 ev 49916 ms | 6.74×13.80×61.05 | dims -0% 1% 2% orient 0.2° (holo 0.2°) principal 0.1°
+  wall 128.3 s

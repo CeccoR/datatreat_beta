@@ -37,6 +37,16 @@ for (const id of ids){
     L.push(`| ${id} | ${counts} | ${c} | ${f(100*cm.cand[c].rms)} % | ${inm.map(x=> f(x)).join(' / ')} | ${ex.map(x=> f(x)).join(' / ')} | ${nz.map(x=> f(x)).join(' / ')} |`);
   }
 }
+// per model, the row's expected margin = the nearest rival family's (min over the two); counted at m
+L.push('', 'Expected margin per row (the nearest rival family, exact data), counted: right family by more than m / within ±m / another family by more than m:', '', '| model | m = 3 | m = 10 | rows within ±3 or wrong |', '|---|---|---|---|');
+for (const m of ['lor', 'lsq', 'wppm']){
+  const per = ids.map(id=> ({ id, x: Math.min(...J.filter(o=> o.id === id).map(o=> o.expected[m])) }));
+  const cnt = t => `${per.filter(o=> o.x > t).length} / ${per.filter(o=> Math.abs(o.x) <= t).length} / ${per.filter(o=> o.x < -t).length}`;
+  L.push(`| ${m} | ${cnt(3)} | ${cnt(10)} | ${per.filter(o=> o.x <= 3).map(o=> `${o.id} ${f(o.x)}`).join(', ')} |`);
+}
+const near = J.filter(o=> o.col <= 0.026), med = xs => { const t = xs.slice().sort((p, q)=> p - q); return t[(t.length - 1) >> 1]; };
+const r1 = near.map(o=> o.inmodel.ball/Math.max(o.inmodel.lor, 0.1)), r2 = near.map(o=> o.inmodel.wppm/Math.max(o.inmodel.ball, 0.1));
+L.push('', `In-model, the ${near.length} pairs within 2.6 % rms of column lengths: ball ÷ lor median ${f(med(r1), 2)} (${f(Math.min(...r1), 2)}–${f(Math.max(...r1), 2)}); wppm ÷ ball median ${f(med(r2))} (${f(Math.min(...r2))}–${f(Math.max(...r2))}) (separations under 0.1 counted as 0.1).`);
 const text = L.join('\n') + '\n';
 if (opt.out) fs.writeFileSync(opt.out, text);
 if (opt.json) fs.writeFileSync(opt.json, JSON.stringify(J));
