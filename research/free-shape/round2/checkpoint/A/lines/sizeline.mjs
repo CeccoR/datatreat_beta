@@ -17,6 +17,9 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const SIZE_MODE = process.env.FS2A_LINE || 'lor';
 export const NO_EARLY = process.env.FS2A_NOEARLY === '1';   // freeShape's early rejection off (cross-solid fits)
+// [fix] FS2A_WPPM_BALL=1: in the WPPM profile every member's size line is the ball's at the member's own
+// ⟨L⟩_V (the same line shape in every direction): the control for what the direction-dependent shape adds
+export const WPPM_BALL = process.env.FS2A_WPPM_BALL === '1';
 const G0 = 0.675;
 let TAB = null, key = null;
 if (SIZE_MODE === 'mom' || SIZE_MODE === 'lsq'){

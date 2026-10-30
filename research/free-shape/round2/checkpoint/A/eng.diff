@@ -1,11 +1,11 @@
 --- /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/harness/eng/xrd-rietveld.js	2026-10-26 11:21:42.757165393 +0000
-+++ /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/A/eng/xrd-rietveld.js	2026-10-26 16:46:17.248719966 +0000
++++ /tmp/claude-0/-home-user-datatreat-beta/51d5ad4e-64c4-51d8-8fdc-0e18be5b5240/scratchpad/fs2/A/eng/xrd-rietveld.js	2026-10-30 22:14:26.684028997 +0000
 @@ -26,6 +26,8 @@
  import { noiseCountScale } from './xrd-instr.js';
  import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
  import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
 +// [A] the size line's Gaussian and Lorentzian parts (Track A)
-+import { SIZE_MODE, BALL_K, sizeKs, NO_EARLY } from '../lines/sizeline.mjs';
++import { SIZE_MODE, BALL_K, sizeKs, NO_EARLY, WPPM_BALL } from '../lines/sizeline.mjs';
  
  const D2R = Math.PI/180, R2D = 180/Math.PI;
  const LN2 = Math.LN2;
@@ -53,6 +53,15 @@
      sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
      const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
      if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
+@@ -2426,7 +2444,7 @@
+      at 10⁷ counts it had grown 4–5×, and with the divergence's nodes the line went
+      negative by 2·10⁻⁴ of its peak. */
+   const half = Math.max(Math.max(model.win*Hest, WIN_MIN), Math.min(halfT, WPPM_N_MAX*Math.max(Hmin, 1e-5)/16 - spread));
+-  const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi] of list) addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } : null;
++  const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi, wb] of list){ if (WPPM_BALL && wb != null) addMemberCoef(arr, n, dL, 'ball', 0, 0, 0, wb*kScale*toMedian, sigma, wi); else addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } } : null;   // [fix] WPPM_BALL
+   // (The texture's weights are in the members' weights; without a shape, in I already.)
+   const tick = ticks && tt >= xa && tt <= xb, fw = tick ? {} : null;
+   const line = { x: model.x, out, tt, lam: L.lam, I, Hi: pr.H, etai: pr.eta, WL, nodes, win: model.win, winMin: half };
 @@ -2480,6 +2498,7 @@
    const act = shapeActive(q, v);
    const wppm = q.wppm && !q.iL;
@@ -87,7 +96,7 @@
  
  // [harness] internals for the methods
 -const ENG = { FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
-+const ENG = { SIZE_MODE, BALL_K, NO_EARLY, shapeKs, profileAtThetaG, profileAtTheta, tch, FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
++const ENG = { SIZE_MODE, BALL_K, NO_EARLY, WPPM_BALL, shapeKs, profileAtThetaG, profileAtTheta, tch, FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
    lowIndexAxes, lattDirection, latticeAcross, shapeWidths, shapeTs, columnLengthV, SHAPE_SOFT, SHAPE_STARTS, SHAPE_FULL, fitSettings, shapeOf, turnEsds,
    bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern, cartOp, properOp };
  export { ENG };

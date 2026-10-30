@@ -7,6 +7,8 @@
                 [--kernel exact|none] [--method today,truth] [--out file.json] [--nolog] [--quiet]
    - --kernel none draws the row with the engine's own Lorentzian lines (the in-model
      control); exact (default) with the solid's exact line shapes.
+     [fix] inmodel: this folder's own model at the truth (its FS2A_LINE / FS2A_PROFILE /
+     FS2A_WPPM_BALL mode), Poisson noise: the in-model floor of any line model.
    - methods: 'today' (methods/today.mjs: freeShape and the card's report, timed apart),
      'truth' (../harness/methods/truth.mjs: the solid refined from the truth, a reference),
      'baseline' (../harness/methods/baseline.mjs: freeShape alone), or a path.
@@ -34,12 +36,15 @@ const KNOWN = { hybrid: path.join(HERE, 'methods', 'hybrid.mjs'), today: path.jo
 const methods = [];
 for (const m of String(opt.method || 'today,truth').split(',')) methods.push(await loadMethod(KNOWN[m] || path.resolve(m)));
 const T0 = Date.now();
-const pat = drawRow(row, { kernel, grid });
+// [fix] --kernel inmodel: the pattern this process's own model draws at the truth, Poisson noise (fix/inmodel-lib.mjs)
+const pat = kernel === 'inmodel' ? { ...(await import('./fix/inmodel-lib.mjs')).inModelPattern(row), info: { kernel: 'inmodel' } } : drawRow(row, { kernel, grid });
 const drawMs = Date.now() - T0;
+const os = await import('node:os'), load0 = os.loadavg()[0], cpu0 = process.cpuUsage();   // [fix] CPU time of the fit (iso + methods), load-independent
 // runCase runs the methods in turn inside one autoRefine; each method's stats (today.mjs)
 // are read right after its own search, before the next method clears nothing of it
 const out = runCase({ row, pattern: { x: pat.x, y: pat.y, instr: pat.instr, irf: pat.irf }, methods, log: !opt.nolog, shape: opt.shape || null });
-out.line = { mode: ENG.SIZE_MODE, noEarly: ENG.NO_EARLY, ballK: ENG.BALL_K, profile: process.env.FS2A_PROFILE || 'lorentz', tables: process.env.FS2A_TABLES || null };   // [A]
+{ const c = process.cpuUsage(cpu0); out.cpu = { fitMs: (c.user + c.system)/1000, userMs: c.user/1000, sysMs: c.system/1000, load0, load1: os.loadavg()[0] }; }   // [fix]
+out.line = { mode: ENG.SIZE_MODE, noEarly: ENG.NO_EARLY, ballK: ENG.BALL_K, profile: process.env.FS2A_PROFILE || 'lorentz', tables: process.env.FS2A_TABLES || null, wppmBall: ENG.WPPM_BALL || false };   // [A]
 out.wall = Date.now() - T0;
 out.draw = { grid, kernel, ms: drawMs, n: pat.x.length, info: pat.info, error: pat.truth.error };
 out.stages = { draw: { ms: drawMs }, iso: out.iso ? { ms: out.iso.ms, evals: out.iso.evals } : null };

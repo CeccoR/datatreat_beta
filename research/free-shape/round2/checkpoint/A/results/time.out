@@ -1,0 +1,21 @@
+2026-10-30T22:15:55.890Z time: 22 rows × lor,lsq,mom,wppm, 2 at a time
+2026-10-30T22:18:02.248Z box-P-1-near lor: ok 126 s
+box-P-1-near (-1, box 6.7×13.7×60.0; exact, 10–110/0.01) as box: draw 272 ms; iso χ²_ν 2.529, 997 ev, 26934 ms; list 214 refl, 214 members
+  today: free χ² 13090.7 best — ΔBIC -4760 | search 3824 ev 73487 ms report 1323 ev 25504 ms | 71.49×7.73×18.14 | dims 15% 32% 19% orient 3.8° (holo 3.8°) principal 3.7°
+  wall 126.3 s
+2026-10-30T22:18:55.737Z sqbox-P-1-on lsq: ok 180 s
+sqbox-P-1-on (-1, sqbox 3.4×3.4×9.9, sizedist 0.19; exact, 10–110/0.01) as sqbox: draw 362 ms; iso χ²_ν 3.411, 1014 ev, 30029 ms; list 214 refl, 214 members
+  today: held χ² 10368.5 best — ΔBIC -6933 | search 5091 ev 114862 ms report 1489 ev 34421 ms | 3.37×3.37×10.17 | dims -0% -0% 3% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 179.8 s
+2026-10-30T22:20:08.721Z box-P-1-near lsq: ok 126 s
+box-P-1-near (-1, box 6.7×13.7×60.0; exact, 10–110/0.01) as box: draw 278 ms; iso χ²_ν 2.481, 867 ev, 22286 ms; list 214 refl, 214 members
+  today: free χ² 10668.3 best — ΔBIC -5637 | search 4056 ev 78128 ms report 1321 ev 25614 ms | 14.73×6.78×60.29 | dims 0% 7% 0% orient 3.1° (holo 3.1°) principal 2.6°
+  wall 126.4 s
+2026-10-30T22:22:28.000Z box-P-1-near mom: ok 139 s
+box-P-1-near (-1, box 6.7×13.7×60.0; exact, 10–110/0.01) as box: draw 278 ms; iso χ²_ν 2.496, 882 ev, 23023 ms; list 214 refl, 214 members
+  today: free χ² 10793.8 best — ΔBIC -5612 | search 4528 ev 93288 ms report 1164 ev 22526 ms | 14.03×52.23×6.79 | dims 1% 2% -13% orient 2.4° (holo 2.4°) principal 2.4°
+  wall 139.2 s
+2026-10-30T22:22:42.830Z sqbox-P-1-on mom: ok 227 s
+sqbox-P-1-on (-1, sqbox 3.4×3.4×9.9, sizedist 0.19; exact, 10–110/0.01) as sqbox: draw 316 ms; iso χ²_ν 3.421, 1010 ev, 30263 ms; list 214 refl, 214 members
+  today: free χ² 10601.7 best — ΔBIC -6846 | search 7640 ev 172430 ms report 1056 ev 23915 ms | 3.39×3.39×9.41 | dims 0% 0% -5% orient 2.0° (holo 2.0°) principal 1.9°
+  wall 227.0 s

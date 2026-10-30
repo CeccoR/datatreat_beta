@@ -27,7 +27,7 @@ import { noiseCountScale } from './xrd-instr.js';
 import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
 import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
 // [A] the size line's Gaussian and Lorentzian parts (Track A)
-import { SIZE_MODE, BALL_K, sizeKs, NO_EARLY } from '../lines/sizeline.mjs';
+import { SIZE_MODE, BALL_K, sizeKs, NO_EARLY, WPPM_BALL } from '../lines/sizeline.mjs';
 
 const D2R = Math.PI/180, R2D = 180/Math.PI;
 const LN2 = Math.LN2;
@@ -2444,7 +2444,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, 
      at 10⁷ counts it had grown 4–5×, and with the divergence's nodes the line went
      negative by 2·10⁻⁴ of its peak. */
   const half = Math.max(Math.max(model.win*Hest, WIN_MIN), Math.min(halfT, WPPM_N_MAX*Math.max(Hmin, 1e-5)/16 - spread));
-  const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi] of list) addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } : null;
+  const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi, wb] of list){ if (WPPM_BALL && wb != null) addMemberCoef(arr, n, dL, 'ball', 0, 0, 0, wb*kScale*toMedian, sigma, wi); else addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } } : null;   // [fix] WPPM_BALL
   // (The texture's weights are in the members' weights; without a shape, in I already.)
   const tick = ticks && tt >= xa && tt <= xb, fw = tick ? {} : null;
   const line = { x: model.x, out, tt, lam: L.lam, I, Hi: pr.H, etai: pr.eta, WL, nodes, win: model.win, winMin: half };
@@ -4618,7 +4618,7 @@ export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStra
          phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };
 
 // [harness] internals for the methods
-const ENG = { SIZE_MODE, BALL_K, NO_EARLY, shapeKs, profileAtThetaG, profileAtTheta, tch, FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
+const ENG = { SIZE_MODE, BALL_K, NO_EARLY, WPPM_BALL, shapeKs, profileAtThetaG, profileAtTheta, tch, FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
   lowIndexAxes, lattDirection, latticeAcross, shapeWidths, shapeTs, columnLengthV, SHAPE_SOFT, SHAPE_STARTS, SHAPE_FULL, fitSettings, shapeOf, turnEsds,
   bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern, cartOp, properOp };
 export { ENG };

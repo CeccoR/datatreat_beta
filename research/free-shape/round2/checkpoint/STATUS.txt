@@ -1,4 +1,4 @@
-Checkpoint 2026-10-27T02:46Z
+Checkpoint 2026-10-30T22:25Z
 
 Batches, newest first:
 - A/results/xs-lsq/: 55 ok; 2026-10-27T02:13:56.862Z xs-lsq: 55 done, 0 failed, 39.3 min
@@ -7,10 +7,9 @@ Batches, newest first:
 - A/results/screen-lsq/: 44 ok; 2026-10-26T21:29:03.561Z screen-lsq: 44 done, 0 failed, 44.9 min
 - A/results/sph-hyb/: 11 ok; 2026-10-26T20:27:51.647Z sph-hyb: 11 done, 0 failed, 6.1 min
 - A/results/s-hyb/: 22 ok; 2026-10-26T20:21:45.242Z s-hyb: 22 done, 0 failed, 33.5 min
-- B/results/legacy/: 1 ok; 2026-10-26T20:18:57.581Z legacy: 1 done, 0 failed, 1.1 min
 
 Workflow journal (last events):
-{"type":"started","key":"v2:d50748edd7c110764f2d2bf2f0ebf656f7ea1fdf3847f81fc7ae595a46cb0dce","agentId":"a354a8434b272d756","label":"verify:line-shape","phase":
-{"type":"failed","key":"v2:d50748edd7c110764f2d2bf2f0ebf656f7ea1fdf3847f81fc7ae595a46cb0dce","agentId":"a354a8434b272d756"}
-{"type":"started","key":"v2:588465403f7938f44d6086d160b6af49394eb57916b7ac52806b35799b08391c","agentId":"afcb1f47df8a9735b","label":"write","phase":"Write"}
 {"type":"failed","key":"v2:588465403f7938f44d6086d160b6af49394eb57916b7ac52806b35799b08391c","agentId":"afcb1f47df8a9735b"}
+{"type":"started","key":"v2:d50748edd7c110764f2d2bf2f0ebf656f7ea1fdf3847f81fc7ae595a46cb0dce","agentId":"a475ce8f1d6e3a216","label":"verify:line-shape","phase":
+{"type":"result","key":"v2:d50748edd7c110764f2d2bf2f0ebf656f7ea1fdf3847f81fc7ae595a46cb0dce","agentId":"a475ce8f1d6e3a216","result":{"reproduced":["Line alone: 
+{"type":"started","key":"v2:75486f85307271694f11fd85008f3612cdcdd9bb124b8349b9f5a1d6a8df5320","agentId":"a3567b8287a3759e4","label":"fix:line-shape","phase":"Fi

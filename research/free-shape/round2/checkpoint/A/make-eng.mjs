@@ -20,7 +20,7 @@ const once = (a, b) => { const i = s.indexOf(a); if (i < 0 || s.indexOf(a, i + 1
 once(`import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';`,
 `import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
 // [A] the size line's Gaussian and Lorentzian parts (Track A)
-import { SIZE_MODE, BALL_K, sizeKs, NO_EARLY } from '../lines/sizeline.mjs';`);
+import { SIZE_MODE, BALL_K, sizeKs, NO_EARLY, WPPM_BALL } from '../lines/sizeline.mjs';`);
 once(`function profileAtTheta(th, U, V, W, X, Y){`,
 `// [A] the same with a Gaussian size width G (°, before the 1/cosθ) added in quadrature
 function profileAtThetaG(th, U, V, W, X, Y, G){
@@ -54,7 +54,11 @@ once(`      const pr = profileAtTheta(th, U, V, W, Xr, Yr);`,
 // [A] FS2A_NOEARLY=1: no early rejection (the cross-solid fits: every solid refined to its minimum)
 once(`  if (!(gain > (10 + dPmin*Math.log(N))/2)){ setParams(model, vIso); return { rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true }; }`,
 `  if (!NO_EARLY && !(gain > (10 + dPmin*Math.log(N))/2)){ setParams(model, vIso); return { rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true }; }`);
-once(`const ENG = { FS, freeShape,`, `const ENG = { SIZE_MODE, BALL_K, NO_EARLY, shapeKs, profileAtThetaG, profileAtTheta, tch, FS, freeShape,`);
+once(`const ENG = { FS, freeShape,`, `const ENG = { SIZE_MODE, BALL_K, NO_EARLY, WPPM_BALL, shapeKs, profileAtThetaG, profileAtTheta, tch, FS, freeShape,`);
+// [fix] FS2A_WPPM_BALL=1: each member's WPPM coefficients are the ball's at the member's own ⟨L⟩_V (w = 0.75·n/⟨L⟩_V-unit,
+// so the ball's scale is w·kScale): the same ⟨L⟩_V in every direction, the line's shape no longer set by the direction
+once(`  const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi] of list) addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } : null;`,
+`  const sizeOf = list => list ? (arr, n, dL)=> { for (const [a, b, cc, sc, wi, wb] of list){ if (WPPM_BALL && wb != null) addMemberCoef(arr, n, dL, 'ball', 0, 0, 0, wb*kScale*toMedian, sigma, wi); else addMemberCoef(arr, n, dL, base, a, b, cc, sc, sigma, wi); } } : null;   // [fix] WPPM_BALL`);
 fs.writeFileSync(p + '.tmp', s); fs.renameSync(p + '.tmp', p);   // (atomic: runs may be starting)
 try { execFileSync('diff', ['-u', path.join(SRC, 'xrd-rietveld.js'), p], { encoding: 'utf8' }); }
 catch(e){ fs.writeFileSync(path.join(HERE, 'eng.diff'), e.stdout); }
