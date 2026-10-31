@@ -13,7 +13,10 @@ where it fires, and a switchable keep test without the flagged lines (`SHAPE_CHE
 turn left, and the report's two errors per parameter, the uniqueness verdict and the directions
 of extents not told apart as unordered sets (`SHAPE_MINIMA`). Step 5 (`../STEP5.md`) replaced the
 keep test by a likelihood-ratio threshold set by the Laue class (`SHAPE_KEEP`) and added the family
-verdict over the other solids, searched on request (`SHAPE_FAMILY`). It is not
+verdict over the other solids, searched on request (`SHAPE_FAMILY`). Step 6 (`../CONFIRM.md`)
+confirmed every part and tunable on the whole tuning part (154 runs), changed none, and froze the
+prototype (only comments and `RIETVELD.md` §10.8's last paragraph changed in the patch); the validation
+part was then scored once on the frozen version (`../VALIDATION.md`). It is not
 applied: the branch is unchanged. Its base is
 `9782d33` (claude/repo-code-review-sr6c8m), whose engine files equal the frozen `b9bef5f` byte for
 byte (`git diff b9bef5f 9782d33 -- 'xrd-*.js'` is empty), so the research diffs ported directly.
@@ -249,7 +252,10 @@ log-normal is a WPPM phase under any line setting.
 
 All in one block of `xrd-rietveld.js` (before `shapeActive`), but the tables' own, which
 `build-sizeline.mjs` writes into `xrd-sizeline.js`, and `WPPM_OPT`, in `xrd-broad.js` (exported by
-both modules). Every tunable is to be tuned on round 2's tuning runs.
+both modules). Every tunable was tuned on round 2's tuning runs; step 6 confirmed them on the whole
+tuning part and froze them at the defaults below, unchanged (`../CONFIRM.md` §9; `$W/fs2/step6/FROZEN.json`
+holds them as the engine read them, with the engine files' hashes the validation runs were checked
+against).
 
 | name | default | v522 | what |
 |---|---|---|---|
@@ -428,7 +434,27 @@ switches (`rule 'all'` or `'bic'`, `early` 0, `record`), which the final patch k
 - `npm run lint`: clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif, rvui,
   smoke, widths, modules): 53 of 53 pass. No test asks for a free shape, so no test runs the new parts.
 
+**9. Step 6: the confirmation and the freeze** (`../CONFIRM.md`, `../VALIDATION.md`; `$W/fs2/step6/`). Step 6's
+harness (`../scripts/step6/`: step 5's with the method `p6`, three study switches inert when unset, and a gate
+that refuses a validation row until `FROZEN.json` exists and the engine copy's hashes match it) on
+`$W/step6-app` (step 5's app copy; after the confirmation, comments and `RIETVELD.md` alone changed).
+- The defaults on the 154 tuning runs (P): on the 77 screening rows every number of steps 4 and 5 reproduced
+  (the clean intervals 78 of 82, the flagged jackknife 51 of 56, the check's catches), and the 3 of step 5's
+  F1 runs among them equal to the bit (the isotropic fit, χ², the search's evaluations, G, the outcome).
+- The frozen engine (F1, 2 rows) equals P to the bit: the isotropic fit, the search's, the stage's and the
+  report's evaluations, χ², the dimensions, the intervals, the truth reference. With v522's switches (line
+  'lor', search 'today', `WPPM_OPT` off, the check and the stage off, `rule 'bic'`; F2, sqbox-P4m-on) it
+  equals the pilot's record to the bit (337 evaluations and 13 958.114 for the isotropic fit, 3062 for the
+  search, rejected at ΔBIC −7.73, the truth reference 13 934.398).
+- `npm run lint`: clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif, rvui, smoke,
+  widths, modules): 53 of 53 pass.
+
 ## What remains to tune
+
+Step 6 confirmed the items below on the 154 tuning runs and changed none (`../CONFIRM.md`): the start cut
+(no shape lost on the 10 rows whose isotropic fit read no size), Δ* and κ, the check, the jackknife, the keep
+test, `max` 6 and `rounds` 10, the family's margins. What the validation found is in `../VALIDATION.md`; the
+list below is kept as it stood before the freeze.
 
 - **What the exact line brings with it** (step 2): WPPM reads model errors as shape more
   readily (its unbounded extents are all on rows with a model error; a 4.4 nm sphere with a size

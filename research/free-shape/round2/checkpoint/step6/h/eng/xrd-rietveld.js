@@ -1018,10 +1018,12 @@ function textureWeights(q, v){
      'today', v522's. On the 77 screening runs v2 made 0.62× v522's evaluations with the
      lsq line (0.80× the CPU of a fit on 22 of them) and with WPPM (0.75×), the outcome the
      same on 76 and 75.
-   The tunables, all to be tuned on round 2's tuning runs: SHAPE_FILL, SHAPE_CENTRAL and
-   SHAPE_FWD below; the tables' steps and their fit's span and weights (xrd-sizeline.js, written by
+   The tunables, tuned on round 2's tuning runs: SHAPE_FILL, SHAPE_CENTRAL and SHAPE_FWD below;
+   the tables' steps and their fit's span and weights (xrd-sizeline.js, written by
    research/free-shape/round2/proto/build-sizeline.mjs); the starts' families (lowIndexAxes,
-   at most 5). */
+   at most 5); SHAPE_CHECK, SHAPE_MINIMA, SHAPE_KEEP and SHAPE_FAMILY further on. All of them were
+   confirmed on the whole tuning part (154 runs) and frozen, unchanged, before the validation part
+   was scored (research/free-shape/round2/CONFIRM.md, VALIDATION.md). */
 const SHAPE_MODE = { line: 'exact', search: 'v2' };
 /* Search v2: random starts beside the class's distinct ones (the sphere-like one, a plate
    and a needle per low-index family: 11 in the six lower classes, 9 in −3m, 6/m and 6/mmm,
@@ -1071,7 +1073,7 @@ const SHAPE_FWD = process.env.PROTO_FWD || 'briefs';   // [step1]
    fit from its own; ΔBIC as the search's on the points left), a shape it no longer
    supports rejected. On the screening runs it rejected 1 of the 2 false shapes and 4 of
    the 13 shapes an error had spoiled, none read well; the 4 unbounded extents stayed.
-   Off until the tuning runs confirm it. */
+   Off: not part of the frozen prototype. */
 const SHAPE_CHECK = { on: true, z: 3.09, bin: 1, minsep: 0.3, jack: true, groups: 20, iter: 4, retest: false };
 /* The minima stage (STEP4.md), on a body's shape the search keeps (search v2; not the legacy
    ellipsoid): every true minimum refined to the same level, and each parameter given two errors.

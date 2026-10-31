@@ -1,7 +1,6 @@
-Checkpoint 2026-10-31T10:35Z
+Checkpoint 2026-10-31T11:04Z
 
 Batches, newest first:
-- A/results/tr-im2-lor/: 11 ok; 2026-10-30T23:29:42.872Z tr-im2-lor: 11 done, 0 failed, 1.7 min
 
 Workflow journal (last events):
 {"type":"started","key":"v2:75486f85307271694f11fd85008f3612cdcdd9bb124b8349b9f5a1d6a8df5320","agentId":"a3567b8287a3759e4","label":"fix:line-shape","phase":"Fi

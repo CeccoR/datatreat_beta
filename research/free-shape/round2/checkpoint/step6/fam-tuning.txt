@@ -1,0 +1,84 @@
+66 truths with a verdict (of 66 runs)
+
+| truths | right | not determined (truth among the named) | wrong |
+|---|---|---|---|
+| clean (33) | 18 | 15 (15) | 0 |
+| with an error (33) | 10 | 16 (16) | 7 |
+| all (66) | 28 | 31 (31) | 7 |
+
+Wrong: box-P-3-near (sizedist 0.87; cyl by 291.0, need 35); sqbox-Pm-3m-generic (po 0.55; cyl by 79.8, need 35); cylinder-P-1-on (hump 0.18; box by 63.6, need 35); ellcyl-P2m-on (sizedist 0.62; ball by 37.3, need 35); ellcyl-P6mmm-near (po 0.20; box by 90.2, need 35); ellipsoid-P6m-generic (po 0.79; cyl by 222.6, need 35); spheroid-P6mmm-generic (sizedist 0.59; cyl by 123.5, need 35).
+
+Not determined: the winner wrong on 14 of 31; the truth not among the named on none.
+
+Nested, the winner the truth's family (45): special truths given the special member 20 of 23; general truths given the general 17 of 22 (given the special: box-P2m-on Δ 3.3, ellcyl-P-3m1-generic Δ 1.5, ellipsoid-P2m-generic Δ 4.2, ellipsoid-P6mmm-on Δ 1.3, ellipsoid-Pm-3m-generic Δ 21.4); special truths given the general: cylinder-P-3-generic Δ 365.1, cylinder-Pm-3-on Δ 30.6, spheroid-P4mmm-near Δ 21.6.
+
+Cost against the chosen solid's run (66): search evaluations 4.16× (median 5.13×), wall 4.37× (median 4.96×); the chosen solid's χ² equal to its run's on 66.
+
+| row | error | verdict | family (by) | margin, need | within | solid (nested Δ, need) |
+|---|---|---|---|---|---|---|
+| box-P-1-generic |  | nd | box (box) | 7.1, 14 | box cyl | box (158.5, 3.84) |
+| box-P2m-on |  | nd | box (box) | 12.1, 14 | box cyl | sqbox (3.3, 3.84) |
+| box-Pmmm-near | po 0.39 | nd | cyl (ellcyl) | 23.4, 35 | cyl box | ellcyl |
+| box-P4m-generic |  | nd | cyl (ellcyl) | 0.2, 14 | cyl box ball | ellcyl |
+| box-P4mmm-on |  | right | box (box) | 65.5, 14 | box | box (8.7, 3.84) |
+| box-P-3-near | sizedist 0.87 | wrong | cyl (ellcyl) | 291.0, 35 | cyl | ellcyl |
+| box-P-3m1-generic | air 0.74 | nd | cyl (ellcyl) | 4.1, 35 | cyl box ball | ellcyl |
+| box-P6m-on |  | right | box (box) | 91.0, 14 | box | box (506.3, 3.84) |
+| box-P6mmm-near |  | right | box (box) | 28.1, 14 | box | box (5.0, 3.84) |
+| box-Pm-3-generic | impurity 0.02 | nd | cyl (ellcyl) | 11.0, 35 | cyl box | ellcyl |
+| box-Pm-3m-on | hump 0.24 | right | box (box) | 53.4, 35 | box | box (67.6, 25) |
+| sqbox-P-1-near | impurity 0.69 | nd | cyl (ellcyl) | 1.9, 35 | cyl box | ellcyl |
+| sqbox-P2m-generic | sizedist 0.40 | nd | ball (ellipsoid) | 3.3, 14 | ball cyl box | ellipsoid |
+| sqbox-Pmmm-on | impurity 0.53 | right | box (box) | 66.7, 35 | box | sqbox (6.5, 25) |
+| sqbox-P4m-near |  | right | box (box) | 153.8, 14 | box | sqbox (0.1, 3.84) |
+| sqbox-P4mmm-generic | air 0.66 | right | box (box) | 395.1, 35 | box | sqbox (2.8, 25) |
+| sqbox-P-3-on |  | right | box (box) | 28.3, 14 | box | sqbox (2.1, 3.84) |
+| sqbox-P-3m1-near | hump 0.47 | nd | cyl (ellcyl) | 18.3, 35 | cyl box | ellcyl |
+| sqbox-P6m-generic |  | right | box (box) | 50.6, 14 | box | sqbox (1.1, 3.84) |
+| sqbox-P6mmm-on |  | nd | box (box) | 2.5, 14 | box cyl | sqbox (0.3, 3.84) |
+| sqbox-Pm-3-near |  | right | box (box) | 17.5, 14 | box | sqbox (0.0, 3.84) |
+| sqbox-Pm-3m-generic | po 0.55 | wrong | cyl (ellcyl) | 79.8, 35 | cyl | ellcyl |
+| cylinder-P-1-on | hump 0.18 | wrong | box (box) | 63.6, 35 | box | box |
+| cylinder-P2m-near |  | nd | box (box) | 2.4, 14 | box cyl ball | box |
+| cylinder-Pmmm-generic |  | right | cyl (ellcyl) | 648.9, 14 | cyl | cylinder (0.9, 5.99) |
+| cylinder-P4m-on |  | nd | box (box) | 1.3, 14 | box cyl | box |
+| cylinder-P4mmm-near | impurity 0.90 | nd | box (box) | 2.3, 35 | box cyl | box |
+| cylinder-P-3-generic | po 0.98 | nd | cyl (ellcyl) | 29.6, 35 | cyl box | ellcyl (365.1, 25) |
+| cylinder-P-3m1-on |  | nd | cyl (cylinder) | 1.5, 14 | cyl box | cylinder (-48.6, 5.99) |
+| cylinder-P6m-near | air 0.00 | nd | cyl (ellcyl) | 2.1, 14 | cyl box ball | cylinder (5.9, 5.99) |
+| cylinder-P6mmm-generic |  | nd | cyl (ellcyl) | 1.1, 14 | cyl box | cylinder (1.9, 5.99) |
+| cylinder-Pm-3-on | sizedist 0.02 | right | cyl (ellcyl) | 91.7, 14 | cyl | ellcyl (30.6, 5.99) |
+| cylinder-Pm-3m-near |  | right | cyl (ellcyl) | 54.2, 14 | cyl | cylinder (1.0, 5.99) |
+| ellcyl-P-1-generic | impurity 0.44 | right | cyl (ellcyl) | 98.4, 35 | cyl | ellcyl (632.6, 25) |
+| ellcyl-P2m-on | sizedist 0.62 | wrong | ball (ellipsoid) | 37.3, 35 | ball | ellipsoid |
+| ellcyl-Pmmm-near | hump 0.67 | right | cyl (ellcyl) | 37.4, 35 | cyl | ellcyl (311.7, 25) |
+| ellcyl-P4m-generic |  | right | cyl (ellcyl) | 34.8, 14 | cyl | ellcyl (89.8, 5.99) |
+| ellcyl-P4mmm-on |  | right | cyl (ellcyl) | 20.9, 14 | cyl | ellcyl (76.5, 5.99) |
+| ellcyl-P-3-near |  | right | cyl (ellcyl) | 16.8, 14 | cyl | ellcyl (284.8, 5.99) |
+| ellcyl-P-3m1-generic |  | nd | cyl (ellcyl) | 12.5, 14 | cyl box | cylinder (1.5, 5.99) |
+| ellcyl-P6m-on |  | nd | ball (ellipsoid) | 7.6, 14 | ball cyl | ellipsoid |
+| ellcyl-P6mmm-near | po 0.20 | wrong | box (box) | 90.2, 35 | box | box |
+| ellcyl-Pm-3-generic |  | nd | cyl (ellcyl) | 6.3, 14 | cyl ball | ellcyl (32.5, 5.99) |
+| ellcyl-Pm-3m-on | air 0.27 | nd | cyl (ellcyl) | 9.3, 14 | cyl box | ellcyl (129.7, 5.99) |
+| ellipsoid-P-1-near |  | right | ball (ellipsoid) | 86.5, 14 | ball | ellipsoid (527.4, 5.99) |
+| ellipsoid-P2m-generic | air 0.45 | right | ball (ellipsoid) | 77.7, 35 | ball | spheroid (4.2, 25) |
+| ellipsoid-Pmmm-on | hump 0.86 | nd | ball (ellipsoid) | 20.3, 35 | ball cyl box | ellipsoid (219.8, 25) |
+| ellipsoid-P4m-near |  | right | ball (ellipsoid) | 23.3, 14 | ball | ellipsoid (104.9, 5.99) |
+| ellipsoid-P4mmm-generic | impurity 0.12 | nd | cyl (ellcyl) | 10.5, 35 | cyl ball | ellcyl |
+| ellipsoid-P-3-on |  | right | ball (ellipsoid) | 26.9, 14 | ball | ellipsoid (63.0, 5.99) |
+| ellipsoid-P-3m1-near |  | right | ball (ellipsoid) | 265.9, 14 | ball | ellipsoid (1947.7, 5.99) |
+| ellipsoid-P6m-generic | po 0.79 | wrong | cyl (ellcyl) | 222.6, 35 | cyl | ellcyl |
+| ellipsoid-P6mmm-on |  | nd | ball (ellipsoid) | 6.4, 14 | ball box cyl | spheroid (1.3, 5.99) |
+| ellipsoid-Pm-3-near | air 0.89 | nd | box (box) | 0.2, 14 | box cyl ball | box |
+| ellipsoid-Pm-3m-generic | sizedist 0.77 | right | ball (ellipsoid) | 185.5, 35 | ball | spheroid (21.4, 25) |
+| spheroid-P-1-on | air 0.21 | right | ball (ellipsoid) | 21.1, 14 | ball | spheroid (0.8, 5.99) |
+| spheroid-P2m-near |  | right | ball (ellipsoid) | 242.8, 14 | ball | spheroid (0.2, 5.99) |
+| spheroid-Pmmm-generic | sizedist 0.54 | right | ball (ellipsoid) | 92.1, 35 | ball | spheroid (13.3, 25) |
+| spheroid-P4m-on | impurity 0.37 | nd | ball (ellipsoid) | 4.8, 35 | ball cyl box | spheroid (0.1, 25) |
+| spheroid-P4mmm-near | po 0.05 | nd | ball (ellipsoid) | 3.7, 14 | ball cyl | ellipsoid (21.6, 5.99) |
+| spheroid-P-3-generic |  | nd | ball (ellipsoid) | 7.0, 14 | ball cyl | spheroid (0.6, 5.99) |
+| spheroid-P-3m1-on |  | nd | cyl (ellcyl) | 1.0, 14 | cyl ball | ellcyl |
+| spheroid-P6m-near | hump 1.00 | nd | ball (ellipsoid) | 23.3, 35 | ball cyl | spheroid (1.5, 25) |
+| spheroid-P6mmm-generic | sizedist 0.59 | wrong | cyl (ellcyl) | 123.5, 35 | cyl | ellcyl |
+| spheroid-Pm-3-on |  | nd | ball (ellipsoid) | 2.3, 14 | ball box cyl | spheroid (0.8, 5.99) |
+| spheroid-Pm-3m-near |  | right | ball (spheroid) | 53.4, 14 | ball | spheroid (-3.9, 5.99) |

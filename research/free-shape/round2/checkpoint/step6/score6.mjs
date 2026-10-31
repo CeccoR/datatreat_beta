@@ -49,10 +49,10 @@ for (const [nm] of M){ const xs = clean.map(r=> D[nm][r.id].acc.aniso); L.push(`
 L.push('');
 // changes row by row
 { const ch = [], lost = [], gained = [];
-  for (const r of rows){ const x = D.prototype[r.id], y = D.today[r.id]; if (!x || !y) continue;
-    if (x.out !== y.out) ch.push(`${r.id} ${y.out} → ${x.out}`);
-    if (Number.isFinite(x.delta) && x.delta > 1) lost.push(`${r.id} (Δ ${f(x.delta, 1)})`);
-    if (Number.isFinite(y.delta) && y.delta > 1) gained.push(`${r.id} (Δ ${f(y.delta, 1)})`); }
+  for (const r of rows){ const x = D.prototype[r.id], y = D.today[r.id];
+    if (x && y && x.out !== y.out) ch.push(`${r.id} ${y.out} → ${x.out}`);
+    if (x && Number.isFinite(x.delta) && x.delta > 1) lost.push(`${r.id} (Δ ${f(x.delta, 1)})`);
+    if (y && Number.isFinite(y.delta) && y.delta > 1) gained.push(`${r.id} (Δ ${f(y.delta, 1)})`); }
   L.push(`Outcome prototype ≠ today on ${ch.length}: ${ch.join('; ')}.`, '', `Not reached, prototype: ${lost.join(', ') || 'none'}. Today: ${gained.join(', ') || 'none'}.`, ''); }
 // 2. cost
 L.push('**Cost** (sums; walls in s; the prototype\'s report includes the jackknife where the check fired):', '', '| method | search evaluations | report | isotropic fit | wall: search | report | isotropic fit | ms an evaluation, search (median) |', '|---|---|---|---|---|---|---|---|');
