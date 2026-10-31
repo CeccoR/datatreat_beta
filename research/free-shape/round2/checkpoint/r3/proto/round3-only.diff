@@ -1,15 +1,17 @@
 --- step6-app/xrd-rietveld.js	2026-10-31 10:58:18.700031663 +0000
-+++ r3-app/xrd-rietveld.js	2026-10-31 16:20:18.595465236 +0000
-@@ -1113,7 +1113,42 @@
++++ r3-app/xrd-rietveld.js	2026-10-31 17:57:11.458383296 +0000
+@@ -1113,7 +1113,46 @@
     σ is right against noise (replicas 0.97 σ rms) but the truth lies 1.21 σ rms off on the clean
     rows (a bias of 0.4 σ rms from the instrument's and the line's residual misfit, and minima that
     settle apart); κ 1.2 covers 77 of their 82 extents (94 %; κ 1: 73), the combined interval 78. */
 -const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 16, deltaMisfit: 25, keep: 30, kappa: 1.2 };
 +const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 16, deltaMisfit: 25, keep: 30, kappa: 1.2,
-+  capCands: 3, capEvals: 6000 };
-+/* [round 3] (research/free-shape/round3/: POINT1.md, POINT4.md, POINT5.md; capCands 3 and capEvals 6000 from
-+   the 77 screening runs: the flagged rows' stage cost up to 17 511 evaluations against 8144 on the others,
-+   and the cap kept every lowest χ²; Infinity for both gives round 2's stage.)
++  capCands: Infinity, capEvals: 6000 };
++/* [round 3] (research/free-shape/round3/: POINT4.md, CONFIRM.md) capEvals 6000: on the 308 tuning runs the
++   flagged rows' stage ran to 17 237 evaluations uncapped (the others' to 13 225); with capEvals alone 6 rows are
++   cut (0.59× their stage), every interval kept, one held fit left held 12.7 χ²_ν above the free minimum the
++   full stage reaches. capCands 3 (the screening's choice) cut 23 rows, most of them cheap ones, and lost 16 of
++   their 55 minima within Δ*, 3 extents' and 3 axes' coverage: Infinity (off). Both Infinity: round 2's stage.
 +   The stage's cap where the per-line check of the fit before the stage fired (the keep test's
 +   check): at most capCands candidates, and no candidate or round of turns begun once the stage has spent
 +   capEvals pattern evaluations. info.minimaStage (and the report's minima) say whether the minima were
@@ -22,12 +24,14 @@
 +   minima within Δ* of the angle to the minimum's axis plus that minimum's own (its covariance; for
 +   'profile' its own profile), in place of betweenDeg. record: the profiles' points and the covariances'
 +   σ in the report (a study's: angle). A held fit's radius is at least 2·freeOff, as round 2's (esdAngle ≥ freeOff).
-+   'profile' with t 9 (round 3, POINT1.md): on the 31 clean kept truths of the screening runs it covers 31 principal
-+   axes against round 2's 27 (its 2·esdAngle is the tilt's 1-σ reading doubled, 86 % for a two-dimensional
-+   normal tilt), at 1.5× round 2's radius (median) and 2.2× the profile's trials; 5.99 (χ²₂'s 95 %) covers 30,
-+   and 9 is that times κ² = 1.2², the curvature's bias factor of the extents. 'curv' covers 30 at κ 1 but its σ
++   'profile' with t 5.99, χ²₂'s 95 % point (round 3, POINT1.md, CONFIRM.md): on the 128 clean kept truths of the
++   tuning part (not flagged) it covers 125 principal axes (98 %) against round 2's 116 (91 %; its 2·esdAngle is
++   the tilt's 1-σ reading doubled, 86 % for a two-dimensional normal tilt), at 1.34× round 2's radius (median)
++   and 2.05× the profile's trials; the screening runs had chosen 9 (5.99 × 1.2², the extents' bias factor: 31
++   of 31 against 30), which the 308 runs showed over-covering (127 of 128, 1.61×): the reading at the
++   threshold, the larger side and turn, is conservative enough without κ. 'curv' covers 125 at κ 1 but its σ
 +   runs to hundreds of degrees where two widths are nearly equal or the orientation symmetric. */
-+const SHAPE_ANGLE = { rule: 'profile', t: 9, kappa: 1, each: false, record: false, dMax: 40 };
++const SHAPE_ANGLE = { rule: 'profile', t: 5.99, kappa: 1, each: false, record: false, dMax: 40 };
 +/* [round 3] Targeted starts (search v2, a body). lines: from the isotropic fit's residual, each segment's
 +   (lineCheck's cut) extra width along its strongest reflection's normal, the derivative of the pattern in
 +   Ys as the probe; a plate on the normals of the `lines` most broadened segments and a needle on those of
@@ -44,7 +48,7 @@
  /* The keep test (STEP5.md): one size against the shape, on G, the larger gain over the isotropic fit of
     the search's free and held fits before the minima stage, in χ²/max(1, χ²_ν,iso).
     - rule 'lrt' (default): G > χ²_{k+1}(1 − alpha) + margin, a likelihood-ratio test whose degrees of
-@@ -1373,8 +1408,13 @@
+@@ -1373,8 +1412,13 @@
     rest is a second valley nearly as deep, which a profile does not see). An axis i's
     esd is then √((σ_j² + σ_k²)/2) over the turns that tilt it. The model is left as it
     was. */
@@ -59,7 +63,7 @@
    const keep = { v: model.v.slice(), esd: model.esd, cov: model.cov };
    const chiAt = (vv, free) => {
      setParams(model, vv);
-@@ -1399,6 +1439,52 @@
+@@ -1399,6 +1443,52 @@
      setParams(model, keep.v); model.esd = keep.esd; model.cov = keep.cov;
    }
  }
@@ -112,7 +116,7 @@
  /* shapeOf(model, params, k, res?) → the phase's free shape, or null when not in use:
     for a body (spheroid, cylinder, elliptic cylinder, box, square box) bodyShapeOf's; for the
     ellipsoid { type, kind: 'plate' | 'needle' | 'triaxial' | 'isometric' |
-@@ -1577,12 +1663,17 @@
+@@ -1577,12 +1667,17 @@
    // and the rest adding 0.2 % at most), and the turns about the other axes, from the
    // turned frame (r = 0 there).
    const reopt = res && res.free ? res.free.filter(nm=> model.index[nm] != null && !q.iR.includes(model.index[nm])) : [];
@@ -134,7 +138,7 @@
    const sig = [0, 1, 2].map(b=> about.includes(b) ? sigP[about.indexOf(b)] : NaN);
    const tiltEsd = i => { const [j, l] = [0, 1, 2].filter(t=> t !== i), e = Math.sqrt((sig[j]**2 + sig[l]**2)/2)*R2D;
      return held && info.freeOff && Number.isFinite(e) ? Math.max(e, info.freeOff[i]) : e; };
-@@ -1805,13 +1896,27 @@
+@@ -1805,13 +1900,27 @@
      // Δ*: delta, or deltaMisfit where the per-line check fired (the fit has a misfit)
      const dStar = chk && chk.flagged ? SHAPE_MINIMA.deltaMisfit : SHAPE_MINIMA.delta;
      const all = info.minima.map(m=> ({ m, p: minimaMatch(q, fit, { W: m.W, R: m.R }, false) })), inD = all.filter(x=> x.m.delta <= dStar);
@@ -163,7 +167,7 @@
      /* The two errors as one 95 % interval: each dimension's lo–hi, the hull of its local interval
         D·e^(±2κσ) (σ = Desd/D, the curvature's; κ = SHAPE_MINIMA.kappa; a group's member: the
         group's interval and its members' values), the minima's range, and where the check fired the
-@@ -1825,7 +1930,34 @@
+@@ -1825,7 +1934,34 @@
        const hi = [at(g && !Number.isFinite(d.Desd) ? g.D : d.D, 1), d.betweenHi, ...(g && !Number.isFinite(d.Desd) ? g.axes.map(i=> dims[i].D) : []), ...(d.jackHi != null ? [d.jackHi] : [])];
        d.sLocal = kap*sd; d.lo = Math.min(...lo); d.hi = Math.max(...hi);
      });
@@ -199,7 +203,7 @@
      setList.forEach(S=> { const jt = Math.max(0, ...axes.filter(ax=> S.axes.includes(ax.axis) && Number.isFinite(ax.jackTurn)).map(ax=> ax.jackTurn));
        S.radius = Math.max(Number.isFinite(S.esdAngle) ? 2*S.esdAngle : 0, S.betweenDeg, jt); });
    }
-@@ -2800,6 +2932,7 @@
+@@ -2800,6 +2936,7 @@
  /* One phase's pattern at scale 1 into `out` (zeroed here). With `ticks`, the α1 line of
     every reflection in the range is listed there too. */
  function phasePattern(model, v, k, out, ticks){
@@ -207,7 +211,7 @@
    out.fill(0);
    const q = model.phases[k];
    const cell = cellOf(model, v, k), { Gs } = metric(cell);
-@@ -4681,7 +4814,7 @@
+@@ -4681,7 +4818,7 @@
    const sd = nm => { const i = res && res.cov ? res.free.indexOf(nm) : -1; return i >= 0 ? Math.sqrt(res.cov[i][i]) : NaN; };
    const sW = q.iW.map(i=> sd(model.par[i].name)), wIx = q.iW.length === 2 ? [0, 0, 1] : [0, 1, 2];
    const sT = [0, 1, 2].map(b=> b < q.iR.length ? sd(model.par[q.iR[b]].name) : 0);
@@ -216,7 +220,7 @@
  }
  /* shapeMinima(model, k, ends, o) → { minima, ends, cands } or null: SHAPE_MINIMA's stage on the
     search's ends ({ v, chi, kind }), o: { names (the free parameters), lm (central, as the returned
-@@ -4699,10 +4832,16 @@
+@@ -4699,10 +4836,16 @@
    const sorted = ends.filter(e=> Number.isFinite(e.chi)).sort((x, y)=> x.chi - y.chi);
    if (!sorted.length) return null;
    const c0 = sorted[0].chi, cands = [];
@@ -235,7 +239,7 @@
    }
    // The softest turn: the turns' covariance's largest-variance direction (body frame); an
    // undetermined turn itself; else (1, 1, 1) or, for a body of revolution, (1, 1, 0).
-@@ -4732,6 +4871,7 @@
+@@ -4732,6 +4875,7 @@
      let r; try { r = refine(model, { free: o.names, ...lm }); } catch(e){ return null; }
      let cur = { res: r, v: model.v.slice() }, kicks = 0;
      for (let round = 0; round < M.rounds; round++){
@@ -243,7 +247,7 @@
        let kb = null;
        for (const u of soft(cur.res)) for (const s of [1, -1]){
          setParams(model, kick(cur.v, u, s*M.kick)); kicks++;
-@@ -4747,7 +4887,9 @@
+@@ -4747,7 +4891,9 @@
      return { ...cur, kicks };
    };
    const mins = [];
@@ -253,7 +257,7 @@
      const s = settle(c.v);
      if (!s) continue;
      const f = fitOf(s.v); f.s = minimaSigmas(model, q, s.res);
-@@ -4759,7 +4901,7 @@
+@@ -4759,7 +4905,7 @@
      const t = out.find(x=> minimaMatch(q, x.f, m.f, true).r <= 1);
      if (t){ t.n++; t.from = t.from.concat(m.from); } else out.push({ ...m, n: 1 });
    }
@@ -262,7 +266,7 @@
  }
  
  /* freeShape(model, k, res, free, opts) → { res, info }, { rejected, dBIC } or null: the
-@@ -4799,6 +4941,37 @@
+@@ -4799,6 +4945,37 @@
     parameters): { S, B, zSeg, zBin, flagged, cuts (each segment's first point, then n),
     segs (the flagged segments: { s, i0, i1, lo, hi, hkl (the strongest line), chi2nu, zSeg,
     zBin }) }. */
@@ -300,7 +304,7 @@
  function lineCheck(model, k, v, P){
    const q = model.phases[k], n = model.n, x = model.x, w = model.w, y = model.y, C = SHAPE_CHECK;
    const yc = evaluate(model, v).yc, r = new Float64Array(n);
-@@ -4954,6 +5127,7 @@
+@@ -4954,6 +5131,7 @@
    // Each solid's own parameters, its starts (functions that write one into v), how a
    // start is charted afresh before its full refinement, and a small turn of the best.
    let names, starts = [], rebase = v => v, turned, snaps = null;
@@ -308,7 +312,7 @@
    if (q.iL){
      const cholL = S => { const l11 = Math.sqrt(S[0]), l21 = S[3]/l11, l31 = S[6]/l11, l22 = Math.sqrt(Math.max(1e-30, S[4] - l21*l21)), l32 = (S[7] - l31*l21)/l22, l33 = Math.sqrt(Math.max(1e-30, S[8] - l31*l31 - l32*l32)); return [l11, l21, l22, l31, l32, l33]; };
      // S turned by R: R·S·Rᵀ.
-@@ -5011,6 +5185,19 @@
+@@ -5011,6 +5189,19 @@
        for (let c = starts.length; c < nStarts + 1; c++) for (let d = 0; d < 7; d++) gauss();
        const g = mulberry(0x85ebca6b), nFill = SHAPE_FILL + Math.max(0, nStarts - SHAPE_STARTS);
        for (let c = 0; c < nFill; c++) starts.push(put(Wof(...[0, 1, 2].map(()=> w0*Math.exp(0.8*g()))), randomTurn(g)));
@@ -328,7 +332,7 @@
      }
      // The orientation reached becomes the reference, r = 0: the chart is fresh at the
      // start of each full refinement, far from |r| = π.
-@@ -5068,10 +5255,10 @@
+@@ -5068,10 +5259,10 @@
      const vv = vIso.slice(); vv[q.iYs] = 0;
      put(vv);
      setParams(model, vv);
@@ -341,7 +345,7 @@
    brief.sort((a, b)=> a.chi - b.chi);
    // Every brief refinement threw: nothing was refined (not a ΔBIC of +∞).
    if (!brief.length){ setParams(model, vIso); return null; }
-@@ -5094,15 +5281,15 @@
+@@ -5094,15 +5285,15 @@
    let best = null;
    const finals = [];
    // A full refinement from v; kept as the best when it is.
@@ -360,7 +364,7 @@
    // (With the minima stage the stage's own turns, deterministic, both ways, polish every
    // minimum: no random turn here or in the held fit's refit below.)
    if (best && !MIN){
-@@ -5193,9 +5380,30 @@
+@@ -5193,9 +5384,30 @@
       tested against it again as above. info.minima: those within keep·nu of the lowest, each
       { chi2, delta (in nu), W, R, s, n, from, v }; nu the lowest's χ²_ν floored at 1. */
    let minima = null;
@@ -392,7 +396,7 @@
      if (st && st.minima.length){
        const m0 = st.minima[0], nu = Math.max(1, m0.res.stats.chi2), before = chiTot(free0.res);
        if (chiTot(m0.res) < before){
-@@ -5213,7 +5421,7 @@
+@@ -5213,7 +5425,7 @@
        }
        const c0 = chiTot(m0.res);
        minima = st.minima.filter(m=> (m.chi - c0)/nu <= SHAPE_MINIMA.keep).map(m=> ({ chi2: m.chi, delta: (m.chi - c0)/nu, W: m.f.W, R: m.f.R, s: m.f.s, n: m.n, from: m.from, kicks: m.kicks, v: Array.from(m.v) }));
@@ -401,7 +405,7 @@
      }
    }
    setParams(model, best.v);
-@@ -5242,6 +5450,7 @@
+@@ -5242,6 +5454,7 @@
    }
    return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
      chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check, keep: keepRec,
@@ -409,19 +413,19 @@
      ...(minima ? { minima, minimaStage: minima.stage } : null) } };
  }
  
-@@ -5307,4 +5516,4 @@
+@@ -5307,4 +5520,4 @@
  export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
           solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
           fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
 -         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT, SHAPE_CHECK, lineCheck, lineJack, SHAPE_MINIMA, SHAPE_KEEP, SHAPE_FAMILY, familyVerdict, siblingModel };
 +         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT, SHAPE_CHECK, lineCheck, lineJack, SHAPE_MINIMA, SHAPE_KEEP, SHAPE_FAMILY, familyVerdict, siblingModel, SHAPE_ANGLE, SHAPE_TARGET };
 --- step6-app/RIETVELD.md	2026-10-31 10:59:01.390950786 +0000
-+++ r3-app/RIETVELD.md	2026-10-31 16:23:59.990473182 +0000
++++ r3-app/RIETVELD.md	2026-10-31 17:57:11.460074747 +0000
 @@ -1868,6 +1868,8 @@
  
  **Frozen** (research/free-shape/round2/CONFIRM.md). The prototype's parts and tunables above (the exact line and WPPM's shortcuts, search v2 with forward differences in the brief trials alone and no random fill, the per-line check at z 3.09 with its jackknife, the minima stage with Δ* 16 / 25, κ 1.2, at most 6 minima and 10 rounds, the keep test χ²_{k+1}(0.999) + 2, the family's margins 14 / 35 and nested needs) were confirmed on the whole tuning part, 154 runs, and none changed: no shape lost where the isotropic fit read no size, the combined interval covering 155 of 165 clean extents (94 %), no false alarm of the check on 78 clean patterns, no clean null sphere kept, no clean truth given a wrong family. The validation part was then scored once on this version (VALIDATION.md).
  
-+**Round 3** (research/free-shape/round3/). Three parts added, each behind its own tunables, with round 2's behaviour given back by `SHAPE_ANGLE.rule = 'r2'`, `SHAPE_MINIMA.capCands = capEvals = Infinity` and `SHAPE_TARGET.lines = 0`. *The axes' radius* (`SHAPE_ANGLE`): round 2's 2·esdAngle is the tilt's one-σ profile reading doubled, which a two-dimensional tilt exceeds one time in seven (its validation covered 84 % of the clean principal axes); each turn's profile (turned, the rest refined again, as `turnEsds`) is now followed until χ² rises by t·χ²_ν, t = 9 (χ²₂'s 95 % 5.99 times the extents' bias factor 1.2²), on finer steps (1, 1.5, 2, 3, 4, 6, 8, 12° …), and an axis's radius is the larger reading of the turns that tilt it (a held fit's at least 2·freeOff; the minima's spread and the jackknife as before); `esdAngle` is unchanged. The covariance's σ scaled by a factor (`rule 'curv'`) was the cheaper alternative and was not taken: near-equal widths and symmetric orientations put it at hundreds of degrees. *The minima stage's cap*: where the per-line check of the fit before the stage fired, at most `capCands` 3 candidates and no candidate or round of turns begun after `capEvals` 6000 evaluations; `info.minimaStage` and the report's `minima.explored` say whether the minima were explored in full (false also where `max` left a distinct candidate out). *Targeted starts* (`SHAPE_TARGET.lines` 2): the isotropic fit's residual on each line, projected on the pattern's derivative in Ys, gives each line's extra width along its normal; a plate on the normals of the two most broadened lines and a needle on those of the two least broadened are added to the class's starts where their family is not among them (the frames of the minima found with their widths relabelled, and random starts, bought less and are off).
++**Round 3** (research/free-shape/round3/). Three parts added, each behind its own tunables, with round 2's behaviour given back by `SHAPE_ANGLE.rule = 'r2'`, `SHAPE_MINIMA.capCands = capEvals = Infinity` and `SHAPE_TARGET.lines = 0`. *The axes' radius* (`SHAPE_ANGLE`): round 2's 2·esdAngle is the tilt's one-σ profile reading doubled, which a two-dimensional tilt exceeds one time in seven (its validation covered 84 % of the clean principal axes); each turn's profile (turned, the rest refined again, as `turnEsds`) is now followed until χ² rises by t·χ²_ν, t = 5.99 (χ²₂'s 95 % point; 125 of 128 clean principal axes of the tuning part covered, against round 2's 116), on finer steps (1, 1.5, 2, 3, 4, 6, 8, 12° …), and an axis's radius is the larger reading of the turns that tilt it (a held fit's at least 2·freeOff; the minima's spread and the jackknife as before); `esdAngle` is unchanged. The covariance's σ scaled by a factor (`rule 'curv'`) was the cheaper alternative and was not taken: near-equal widths and symmetric orientations put it at hundreds of degrees. *The minima stage's cap*: where the per-line check of the fit before the stage fired, no candidate or round of turns begun after `capEvals` 6000 evaluations (a cap on the candidates, `capCands`, is off: at 3 it lost minima and coverage on cheap rows); `info.minimaStage` and the report's `minima.explored` say whether the minima were explored in full (false also where `max` left a distinct candidate out). *Targeted starts* (`SHAPE_TARGET.lines` 2): the isotropic fit's residual on each line, projected on the pattern's derivative in Ys, gives each line's extra width along its normal; a plate on the normals of the two most broadened lines and a needle on those of the two least broadened are added to the class's starts where their family is not among them (the frames of the minima found with their widths relabelled, and random starts, bought less and are off).
 +
  ### 10.9 Sizes, groups and kinds (`shapeOf`, `bodyShapeOf`)
  

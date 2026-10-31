@@ -1,0 +1,329 @@
+TAP version 13
+# Subtest: 28: a card unfolded keeps its zoom on the same data only, drawn at its size (EPR, GC)
+ok 1 - 28: a card unfolded keeps its zoom on the same data only, drawn at its size (EPR, GC)
+  ---
+  duration_ms: 15623.942268
+  type: 'test'
+  ...
+# Subtest: 29: DRS follows the sample on show through a removal and a move; a label is the caption at once
+ok 2 - 29: DRS follows the sample on show through a removal and a move; a label is the caption at once
+  ---
+  duration_ms: 1530.954112
+  type: 'test'
+  ...
+# Subtest: 30c: GC refuses an interval bound back to "all" that would end an interval before it starts
+ok 3 - 30c: GC refuses an interval bound back to "all" that would end an interval before it starts
+  ---
+  duration_ms: 1831.418959
+  type: 'test'
+  ...
+# Subtest: 30e: EPR refuses a .DSC of fewer than two points, saying why; flat spectra are drawn
+ok 4 - 30e: EPR refuses a .DSC of fewer than two points, saying why; flat spectra are drawn
+  ---
+  duration_ms: 702.442561
+  type: 'test'
+  ...
+# Subtest: 37: GC takes the flow at its temperature, 25 °C by default, 0 °C in a project saved before
+ok 5 - 37: GC takes the flow at its temperature, 25 °C by default, 0 °C in a project saved before
+  ---
+  duration_ms: 965.139576
+  type: 'test'
+  ...
+# Subtest: 38, 39: DRS reads R% by its header; only the Cary layout is standard, any other file said with how it was read, or refused; non-physical points left out
+ok 6 - 38, 39: DRS reads R% by its header; only the Cary layout is standard, any other file said with how it was read, or refused; non-physical points left out
+  ---
+  duration_ms: 1681.339553
+  type: 'test'
+  ...
+# Subtest: DRS: a Cary %R export loads with no alert, the file list says how each file was read, R (%) is plotted
+ok 7 - DRS: a Cary %R export loads with no alert, the file list says how each file was read, R (%) is plotted
+  ---
+  duration_ms: 1355.784025
+  type: 'test'
+  ...
+# Subtest: 22: tauc restores a malformed project without a throw or a page error
+ok 8 - 22: tauc restores a malformed project without a throw or a page error
+  ---
+  duration_ms: 9411.264053
+  type: 'test'
+  ...
+# Subtest: 22: gc restores a malformed project without a throw or a page error
+ok 9 - 22: gc restores a malformed project without a throw or a page error
+  ---
+  duration_ms: 5452.432312
+  type: 'test'
+  ...
+# Subtest: 22: epr restores a malformed project without a throw or a page error
+ok 10 - 22: epr restores a malformed project without a throw or a page error
+  ---
+  duration_ms: 3161.907135
+  type: 'test'
+  ...
+# Subtest: 22: a file left out by the restore takes its per-sample settings with it (GC)
+ok 11 - 22: a file left out by the restore takes its per-sample settings with it (GC)
+  ---
+  duration_ms: 685.508258
+  type: 'test'
+  ...
+# Subtest: Rietveld: one pattern refined, then Refine all cancelled
+ok 12 - Rietveld: one pattern refined, then Refine all cancelled
+  ---
+  duration_ms: 4580.081689
+  type: 'test'
+  ...
+# Subtest: A: the Structure box is empty where there is no phase, and the right phase otherwise
+ok 13 - A: the Structure box is empty where there is no phase, and the right phase otherwise
+  ---
+  duration_ms: 2710.171149
+  type: 'test'
+  ...
+# Subtest: B: the drop zone with no phase, + CIF from the first, CIFs dropped on the box
+ok 14 - B: the drop zone with no phase, + CIF from the first, CIFs dropped on the box
+  ---
+  duration_ms: 2912.025852
+  type: 'test'
+  ...
+# Subtest: C: while a run goes on, the zones are disabled and a drop is refused
+ok 15 - C: while a run goes on, the zones are disabled and a drop is refused
+  ---
+  duration_ms: 3157.729885
+  type: 'test'
+  ...
+# Subtest: A: a sample refining: its rows' × and tick locked at once, the download not; stopped, at once as before
+ok 16 - A: a sample refining: its rows' × and tick locked at once, the download not; stopped, at once as before
+  ---
+  duration_ms: 7797.233008
+  type: 'test'
+  ...
+# Subtest: B: a run that fails, and one that ends: the rows as before at once
+ok 17 - B: a run that fails, and one that ends: the rows as before at once
+  ---
+  duration_ms: 3102.822244
+  type: 'test'
+  ...
+# Subtest: C: the standard's window locks its rows while the standard refines, not while a sample does
+ok 18 - C: the standard's window locks its rows while the standard refines, not while a sample does
+  ---
+  duration_ms: 3268.383556
+  type: 'test'
+  ...
+# Subtest: a phase from its CIF: SrTiO3, the built-in LaB6; one read kept for the same text and name, the last 32
+ok 19 - a phase from its CIF: SrTiO3, the built-in LaB6; one read kept for the same text and name, the last 32
+  ---
+  duration_ms: 148.357287
+  type: 'test'
+  ...
+# Subtest: the settings made valid, a v428 project's migrated, the engine's options from them
+ok 20 - the settings made valid, a v428 project's migrated, the engine's options from them
+  ---
+  duration_ms: 6.395799
+  type: 'test'
+  ...
+# Subtest: the Refinement settings: their ranges, an entry read with either mark, the settings cleaned in FITS' order
+ok 21 - the Refinement settings: their ranges, an entry read with either mark, the settings cleaned in FITS' order
+  ---
+  duration_ms: 13.115001
+  type: 'test'
+  ...
+# Subtest: the worker's payload: from the CIF, from the last result, each reason a result cannot be started from
+ok 22 - the worker's payload: from the CIF, from the last result, each reason a result cannot be started from
+  ---
+  duration_ms: 76.485403
+  type: 'test'
+  ...
+# Subtest: the instrument read once from the file's own bytes; a result written; the profile taken from it
+ok 23 - the instrument read once from the file's own bytes; a result written; the profile taken from it
+  ---
+  duration_ms: 19.807601
+  type: 'test'
+  ...
+# Subtest: the state saved and read back: a v428 sample's, the standard's with a CIF phase, a malformed one
+ok 24 - the state saved and read back: a v428 sample's, the standard's with a CIF phase, a malformed one
+  ---
+  duration_ms: 5.533068
+  type: 'test'
+  ...
+# Subtest: the sizes charted, by sample (each phase its kinds) and by peak (a column a reflection)
+ok 25 - the sizes charted, by sample (each phase its kinds) and by peak (a column a reflection)
+  ---
+  duration_ms: 2.125639
+  type: 'test'
+  ...
+# Subtest: the CSVs: the curves, a row per pattern and quantity (the stale profile, the settings used), the peak widths
+ok 26 - the CSVs: the curves, a row per pattern and quantity (the stale profile, the settings used), the peak widths
+  ---
+  duration_ms: 1.57624
+  type: 'test'
+  ...
+# Subtest: the words: indices barred, formulae, what a phase is refined with, the instrument, the solids; names from a CIF escaped
+ok 27 - the words: indices barred, formulae, what a phase is refined with, the instrument, the solids; names from a CIF escaped
+  ---
+  duration_ms: 9.407634
+  type: 'test'
+  ...
+# Subtest: three lanes: the results those of one, bit for bit, in the patterns' order, one step
+ok 28 - three lanes: the results those of one, bit for bit, in the patterns' order, one step
+  ---
+  duration_ms: 5428.330593
+  type: 'test'
+  ...
+# Subtest: answers out of order wait for those before them; Cancel writes those done, not the ones under way
+ok 29 - answers out of order wait for those before them; Cancel writes those done, not the ones under way
+  ---
+  duration_ms: 5646.865161
+  type: 'test'
+  ...
+# Subtest: an error in one lane: the patterns not started stop, those under way are written, the failed one not
+ok 30 - an error in one lane: the patterns not started stop, those under way are written, the failed one not
+  ---
+  duration_ms: 2084.775152
+  type: 'test'
+  ...
+# Subtest: two windows on a cap of two: two jobs at once in all, the slot freed to the job waiting longest; each its own results
+ok 31 - two windows on a cap of two: two jobs at once in all, the slot freed to the job waiting longest; each its own results
+  ---
+  duration_ms: 5803.556098
+  type: 'test'
+  ...
+# Subtest: a Rietveld card closed: nothing of it stays
+ok 32 - a Rietveld card closed: nothing of it stays
+  ---
+  duration_ms: 827.486972
+  type: 'test'
+  ...
+# Subtest: a Rietveld card switched to Scherrer: nothing of it stays
+ok 33 - a Rietveld card switched to Scherrer: nothing of it stays
+  ---
+  duration_ms: 742.212416
+  type: 'test'
+  ...
+# Subtest: A: the question about the standard is a centred modal: its three answers, Escape, ×, focus
+ok 34 - A: the question about the standard is a centred modal: its three answers, Escape, ×, focus
+  ---
+  duration_ms: 6766.000345
+  type: 'test'
+  ...
+# Subtest: B: the standard's Settings show only what applies to it; the samples' every row
+ok 35 - B: the standard's Settings show only what applies to it; the samples' every row
+  ---
+  duration_ms: 1899.249557
+  type: 'test'
+  ...
+# Subtest: C: the standard refining, its window closed: every card's Instrumental standard… says so until it ends
+ok 36 - C: the standard refining, its window closed: every card's Instrumental standard… says so until it ends
+  ---
+  duration_ms: 4480.277874
+  type: 'test'
+  ...
+# Subtest: tauc: opens and loads its fixtures, no page error, no CSP violation
+ok 37 - tauc: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 712.296333
+  type: 'test'
+  ...
+# Subtest: xrd: opens and loads its fixtures, no page error, no CSP violation
+ok 38 - xrd: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 763.45237
+  type: 'test'
+  ...
+# Subtest: gc: opens and loads its fixtures, no page error, no CSP violation
+ok 39 - gc: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 522.659677
+  type: 'test'
+  ...
+# Subtest: epr: opens and loads its fixtures, no page error, no CSP violation
+ok 40 - epr: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 479.713153
+  type: 'test'
+  ...
+# Subtest: sem: opens and loads its fixtures, no page error, no CSP violation
+ok 41 - sem: opens and loads its fixtures, no page error, no CSP violation
+  ---
+  duration_ms: 529.651359
+  type: 'test'
+  ...
+# Subtest: every module in its own tab at once; Home and back
+ok 42 - every module in its own tab at once; Home and back
+  ---
+  duration_ms: 2444.97539
+  type: 'test'
+  ...
+# Subtest: under the CSP: theme before paint, the Rietveld worker, an alert dismissed
+ok 43 - under the CSP: theme before paint, the Rietveld worker, an alert dismissed
+  ---
+  duration_ms: 219.738672
+  type: 'test'
+  ...
+# Subtest: XRPD: the widths in °2θ, each field showing its points at the step of the pattern on show, as typed
+ok 44 - XRPD: the widths in °2θ, each field showing its points at the step of the pattern on show, as typed
+  ---
+  duration_ms: 1924.445513
+  type: 'test'
+  ...
+# Subtest: XRPD: the standard's widths at its own file's step; the CSV headers give the widths
+ok 45 - XRPD: the standard's widths at its own file's step; the CSV headers give the widths
+  ---
+  duration_ms: 1326.576372
+  type: 'test'
+  ...
+# Subtest: XRPD: a project to v510 at one step opens with its points as widths, and v510's results
+ok 46 - XRPD: a project to v510 at one step opens with its points as widths, and v510's results
+  ---
+  duration_ms: 1568.329772
+  type: 'test'
+  ...
+# Subtest: XRPD: a project to v510 at different steps: those chips to one, a width each, v510's results, and a note
+ok 47 - XRPD: a project to v510 at different steps: those chips to one, a width each, v510's results, and a note
+  ---
+  duration_ms: 1532.275196
+  type: 'test'
+  ...
+# Subtest: XRPD: points per sample, N = 1, values that are no number, a file left out and a Rietveld card's Scherrer settings, converted
+ok 48 - XRPD: points per sample, N = 1, values that are no number, a file left out and a Rietveld card's Scherrer settings, converted
+  ---
+  duration_ms: 1535.007125
+  type: 'test'
+  ...
+# Subtest: XRPD: a file left out of a project to v510 comes back with v510's shared baseline box
+ok 49 - XRPD: a file left out of a project to v510 comes back with v510's shared baseline box
+  ---
+  duration_ms: 1364.486016
+  type: 'test'
+  ...
+# Subtest: XRPD: files left out of a project to v510 come back with the points v510 gave them, at their own steps
+ok 50 - XRPD: files left out of a project to v510 come back with the points v510 gave them, at their own steps
+  ---
+  duration_ms: 2882.590615
+  type: 'test'
+  ...
+# Subtest: EPR: the smoothing width in mT, its points (a range at different steps), the CSV header, and projects to v510
+ok 51 - EPR: the smoothing width in mT, its points (a range at different steps), the CSV header, and projects to v510
+  ---
+  duration_ms: 2068.784831
+  type: 'test'
+  ...
+# Subtest: EPR: a value that is no number in a spectrum: the others smoothed without it, as the project reopened has them
+ok 52 - EPR: a value that is no number in a spectrum: the others smoothed without it, as the project reopened has them
+  ---
+  duration_ms: 967.954819
+  type: 'test'
+  ...
+# Subtest: the fields at 320 px, in both themes, and in a narrow side column: the points inside the field, muted, the value whole, nothing past the edge
+ok 53 - the fields at 320 px, in both themes, and in a narrow side column: the points inside the field, muted, the value whole, nothing past the edge
+  ---
+  duration_ms: 2376.917873
+  type: 'test'
+  ...
+1..53
+# tests 53
+# suites 0
+# pass 53
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 135899.098399
+EXIT 0
