@@ -24,17 +24,22 @@ at most three processes, a timeout each, resumable.
   chosen from the P records (rows a setting can change). `cmp6.mjs --v <tag>`: a variant against P row by row.
   `fam6.mjs --tag <tag>`: the family verdicts of 'general' runs.
 - `freeze6.mjs`: writes `FROZEN.json` (the engine copy's hashes, the frozen tunables read from the engine).
-- Job files: `jobs-Q.txt` (phase 1: P, the variants SC, SY, MX, RD, FAM, T), `jobs-VAL.txt` (phase 2: VP, VT,
-  VFAM), `jobs-C0.txt` and `jobs-F.txt` (checks of the engine).
+- `frozen-md.mjs`: `FROZEN.json` as `../../tables/step6-frozen.md`.
+- Job files: `jobs-Q.txt` (phase 1 as it ended: P, the variants SC, SY, MX, RD, SF2, FAM, the checks F1 and F2;
+  its T lines were moved to `jobs-R.txt` at the freeze), `jobs-V.txt` (the variants `variants6.mjs` chose),
+  `jobs-R.txt` (after the freeze: VP, the rest of T, VT, VFAM; run with `--validation`), `jobs-VAL.txt` (the
+  validation jobs alone), `jobs-F.txt` and `jobs-C0.txt` (checks of the engine).
 
 ```sh
 cd $W/fs2/step6
-node batch6.mjs jobs-Q.txt                                   # phase 1
-node score6.mjs --part tuning --p P --rows --out ../../step6-confirm.md
-node sweep6.mjs; for v in SC SY MX RD; do node cmp6.mjs --v $v; done; node fam6.mjs --tag FAM --rows
-node freeze6.mjs                                             # after the freeze's edits, lint and tests
-node batch6.mjs jobs-VAL.txt --validation                    # phase 2, once
-node score6.mjs --part validation --p VP --t VT --rows; node fam6.mjs --part validation --tag VFAM --ref VP --rows
+node batch6.mjs jobs-Q.txt                                   # phase 1 (P, variants, FAM; T in jobs-R)
+node variants6.mjs > jobs-V.txt                              # the variant jobs, put first in the queue
+node score6.mjs --part tuning --p P --best SC,SY,MX,RD,SF2 --rows   # ../../tables/step6-confirm.md
+node sweep6.mjs; for v in SC SF2 SY MX RD; do node cmp6.mjs --v $v; done; node fam6.mjs --tag FAM --rows   # step6-tunables.md
+node freeze6.mjs && node frozen-md.mjs ../../tables/step6-frozen.md   # after the edits, lint and tests
+node batch6.mjs jobs-R.txt --validation                      # phase 2, once (and the rest of T)
+node score6.mjs --part validation --p VP --t VT --rows       # ../../tables/step6-validation.md
+node fam6.mjs --part validation --tag VFAM --ref VP --rows   # ../../tables/step6-family-val.md
 ```
 
 Not in the repository: the records (`results/`), the engine copy and the app copies.

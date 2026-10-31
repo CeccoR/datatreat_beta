@@ -1,4 +1,4 @@
-# Scripts behind round 2 (`../PILOT.md`, `../AB.md`, `../STEP1.md`, `../STEP2.md`, `../STEP3.md`, `../STEP4.md`)
+# Scripts behind round 2 (`../PILOT.md`, `../AB.md`, `../STEP1.md` … `../STEP5.md`, `../CONFIRM.md`, `../VALIDATION.md`)
 
 The pilot's numbers and those of tracks A and B come from these scripts. They run in Node 22 on
 a frozen copy of the engine at commit `b9bef5f` (step 1's, `step1/`, on the app with
@@ -23,6 +23,8 @@ README with its API and its checks.
 | `step2/` | round 2's step 2 (`../STEP2.md`): WPPM made cheaper (the profile of a WPPM fit, the shortcuts `WPPM_OPT`, the exact line by default), measured against WPPM itself: patterns, the 22 sub-screen runs under one load, the finalists on the 77, the expected margins and the cross-solid searches | `setup.sh`, `make-eng.mjs`, `batch2.mjs`, `mkjobs2.mjs`, `score.mjs`, `cost2.mjs`, `ident.mjs`, `prof/`, `bench/` |
 | `step3/` | round 2's step 3 (`../STEP3.md`): the per-line check and the jackknife over lines on the exact line. `h/`: step 2's engine with a method that adds, at the fit returned, the check's data (segments, residuals dumped), the jackknife on every kept fit and the refits without the k worst segments, scored offline; `hp/`: the prototype's engine (`SHAPE_CHECK`) with its check, its jackknife and its retest, verified against `h/` | `setup.sh`, `h/methods/check.mjs`, `h/an3.mjs`, `h/rep-flag.mjs`, `h/rep-jack.mjs`, `h/rep-fix.mjs`, `hp/methods/proto.mjs`, `hp/cmpP.mjs`, `hp/rep-fixP.mjs`, `hp/verify.mjs` |
 | `step4/` | round 2's step 4 (`../STEP4.md`): the minima stage (`SHAPE_MINIMA`) on the 77 screening runs, its random-stream test, the dense reference for completeness, the parametric bootstrap of Δ* and of the local error, the two errors' coverage and widths, the directions as sets | `setup.sh`, `methods/min.mjs`, `methods/boot.mjs`, `score4.mjs`, `dirs4.mjs`, `comp4.mjs`, `turn4.mjs`, `bootan.mjs`, `esdboot.mjs` |
+| `step5/` | round 2's step 5 (`../STEP5.md`): the family (every screening row as each solid, the margin's bootstrap, the strategies) and the keep test (the nulls, the mild shapes, the rules, the quick parametric bootstrap) | `setup.sh`, `mkdesign5.mjs`, `batch5.mjs`, `methods/fam.mjs`, `methods/fboot.mjs`, `methods/lrt.mjs`, `fam5.mjs`, `fam-sub.mjs`, `fboot-an.mjs`, `keep5.mjs`, `keep-rules.mjs`, `cost5.mjs` |
+| `step6/` | round 2's step 6 (`../CONFIRM.md`, `../VALIDATION.md`): the prototype at its defaults on the 154 tuning runs against today's search, the variants a tunable needs, the family on the other 66 tuning truths, the freeze (`FROZEN.json`, a gate on validation rows), and the validation part's one scoring | `setup.sh`, `batch6.mjs`, `h/methods/p6.mjs`, `lib6.mjs`, `score6.mjs`, `sweep6.mjs`, `variants6.mjs`, `cmp6.mjs`, `fam6.mjs`, `freeze6.mjs` |
 
 Not copied, and rebuilt by their own commands (see each README): the engine copies
 (`A/eng/`, `A/harness/lib.mjs`, `B/h/eng/`, `B/hp/eng/`) and track A's line tables

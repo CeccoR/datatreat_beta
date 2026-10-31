@@ -113,7 +113,7 @@ The table of §1 holds the totals; per row in `tables/step6-confirm.md`.
   the search); the whole fit's evaluations 0.97× (the report and its jackknife cost more: 254 737 against
   201 554). An evaluation costs less (4.4 ms against 10.4, median), so on the 77 new rows, both run under one
   load here, the whole fit took 0.57× today's wall. By class the search is 0.57–0.98× today's except m−3m
-  (2.16×): today rejects four cubic truths early there, and one flagged ellipsoid (ellipsoid-Pm-3m-generic,
+  (2.16×): today rejects four of its truths there (three early), and one flagged ellipsoid (ellipsoid-Pm-3m-generic,
   a size distribution of 0.77) spent 47 813 evaluations in the minima stage, five candidates at a symmetric
   orientation where every turn is tried (§8.1).
 
