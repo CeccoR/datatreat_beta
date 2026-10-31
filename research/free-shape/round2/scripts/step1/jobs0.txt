@@ -1,0 +1,5 @@
+id-lsq lsq today all lorentz spheroid-Pm-3-generic
+id-wppm lsq today all wppm spheroid-Pm-3-generic
+v2b-lsq lsq v2 briefs lorentz cylinder-Pm-3m-on
+id-lsq lsq today all lorentz ellipsoid-P6m-near
+id-wppm lsq today all wppm spheroid-Pm-3m-on

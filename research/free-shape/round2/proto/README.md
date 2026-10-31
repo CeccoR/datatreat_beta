@@ -212,7 +212,7 @@ default 'briefs' run without the switch on 2 rows equal to the bit with the 'bri
   to be measured on the tuning runs (5 of the 77 runs have the isotropic size at 0).
 - `SHAPE_FWD` ('briefs'): forward-difference briefs reorder near-equal brief ends, both ways (step
   1: two losses of 2.7 and 4.9 χ²_ν, two gains of 828 and 217); cylinder-Pm-3m-on is kept by a
-  5 χ²_ν margin. A central re-refinement of the best brief ends, or a fourth full refinement, are
+  23 χ² margin (15 χ²_ν). A central re-refinement of the best brief ends, or a fourth full refinement, are
   the alternatives to weigh; and whether the table's linear interpolation plays a part.
 - `SHAPE_FILL` (0): the fill bought nothing under lor (35/35); under lsq it saved one row of 77
   (above), by a random start.
