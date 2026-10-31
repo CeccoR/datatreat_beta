@@ -1,5 +1,5 @@
 diff --git a/RIETVELD.md b/RIETVELD.md
-index 5fa85b6..528649e 100644
+index 5fa85b6..0807853 100644
 --- a/RIETVELD.md
 +++ b/RIETVELD.md
 @@ -1289,6 +1289,13 @@ Without a shape, the body is a sphere of diameter D. With a free shape (§10), e
@@ -53,6 +53,22 @@ index 5fa85b6..528649e 100644
  
  **The free fit refined again.** The free orientation includes the held one, so at its minimum its χ² is at most the held fit's. When the best held fit comes out below the free fit, the free search ended in a worse valley, and the free fit is refined again from the held frame, turned 0.02 rad as in the polish (§10.5): from the frame itself, on lattice directions, the refinement stops at once. It replaces the free fit when lower. On a synthetic 16 × 12 × 2.4 nm plate the free fit refined from the held frame itself stayed on it, 0.2 χ²_ν above the one refined from it turned. Without the refit, the free fit's angles and sizes (below) would measure a worse fit: on the user's 33A, with the faces rounded after the dimensions over 2°, a box's free fit, its edges 45° off in its plate, had ended 35 χ²_ν above the held one, whose edges then took ±44° esds and lost their directions (with the v425 rounding, 1.9 χ²_ν above and 4.7° off, which set the edges' esds to ±4.7°, ±0.7° and ±4.6°). Refined again, it ended 0.2 χ²_ν below the held fit and 0.2° from it, and the edges' esds were their profiles', ±4.2° and ±0.6°. With the 1° rounding the free fit ends within 0.5° of the held one, the esds ±4.6° and ±0.6°.
  
+@@ -1817,6 +1837,15 @@ The lower band holds on synthetic data too (v427): SrTiO₃ drawn from a spheroi
+ 
+ The sizes depend on the solid chosen. A spheroid's polar axis reads 4/3 of a disc's thickness, because ⟨L⟩_V along the axis is 3c/4 for the spheroid and h for the cylinder.
+ 
++**The per-line check** (prototype, `SHAPE_CHECK`; research/free-shape/round2/STEP3.md). A model error the refinement does not carry (an amorphous hump, a size distribution, an impurity, air scatter, texture) can be read as shape: with the exact line, all four unbounded extents of the 77 screening runs and both spheres that kept a shape had one. So every fit the search returns (the shape kept, or the isotropic one) is checked line by line:
++
++- **Segments.** The range is cut into one segment per line, or per group of lines that overlap: the phase's reflections at their Kα centroids, a line within max(0.3°, the mean FWHM of it and the group's last) joining the group, the cuts at the midpoints.
++- **Two statistics** of the residuals r = √w (y − y_c), each made family-wise (Bonferroni) over the pattern: the worst segment's χ² (its upper tail as a normal deviate, Wilson–Hilferty), and the worst sum of r over 1° (two-sided; a line's intensity misfit, as texture makes, shows there and may not in its χ²_ν).
++- **The flag** fires when either exceeds z = 3.09 (p = 0.001 each). On the screening runs it fired on none of the 39 clean rows (the worst 2.08) and on 29 of the 38 with an error, 14 of the 15 whose result the error had spoiled. Round 1's worst segment χ²_ν > 1.25 fired on 2 clean rows and 23 error rows.
++- **The jackknife over lines**, where it fires (`bodyShapeOf`): the segments in at most 20 contiguous groups, each weighted 0 in turn and the fit refined from itself (4 iterations, its own free parameters: a held frame stays held). Each dimension gets D·e^(±2 sd) (`jackLo`, `jackHi`) and each axis 2·rms turn (`jackTurn`) beside its esds; the check is `misfit`. On the 24 flagged truths with an error it covered 51 of 56 extents where the esds alone covered 28, at 0.24× the fit's evaluations.
++- **The keep test again** (`retest`, off): without the worst flagged segments, at most a third of them. On the screening runs it rejected 1 of the 2 false shapes and 4 of the 13 shapes an error had spoiled, and no shape that was read well; the unbounded extents stayed.
++- **What it cannot do.** Shapes a size distribution or texture makes on a sphere are spread over every line and stay (their anisotropy is 7–13 jackknife sd). A misfit that leaves no residual (a size distribution taken up whole by a held spheroid, χ²_ν 1.003) goes unseen.
++
+ ### 10.9 Sizes, groups and kinds (`shapeOf`, `bodyShapeOf`)
+ 
+ **Each dimension.**
 diff --git a/sw.js b/sw.js
 index bd2ba82..92ea13a 100644
 --- a/sw.js
@@ -278,7 +294,7 @@ index 3d1165c..a676c88 100644
 -export { wppmLine, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
 +export { WPPM_OPT, wppmLine, wppmPair, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
 diff --git a/xrd-rietveld.js b/xrd-rietveld.js
-index 2b68562..33dd252 100644
+index 2b68562..bebf552 100644
 --- a/xrd-rietveld.js
 +++ b/xrd-rietveld.js
 @@ -24,8 +24,9 @@
@@ -418,7 +434,7 @@ index 2b68562..33dd252 100644
    return A > 0 ? fcjNodes(th, A, H, nForce) : null;
  }
  /* The Soller nodes' error allowed for a line of area Sarea (the scale in it), FWHM H and
-@@ -957,6 +993,57 @@ function textureWeights(q, v){
+@@ -957,6 +993,86 @@ function textureWeights(q, v){
      return o;
    });
  }
@@ -473,10 +489,39 @@ index 2b68562..33dd252 100644
 +   unbounded disc 1693 χ²_ν above v522's fit, and the reach fell to 61 of 65 runs against
 +   64; 'briefs' made 0.62× (1.11× the CPU of 'all') and lost neither (STEP1.md). */
 +const SHAPE_FWD = 'briefs';
++/* The per-line check (STEP3.md), always made at the fit freeShape returns (the kept shape,
++   else the isotropic fit; info.check, or check beside a rejection). The range is cut into
++   one segment per line or group of overlapping lines: the phase's reflections above 1e-4 of
++   the strongest at their Kα centroids, a line within max(minsep°, the mean FWHM of it and
++   the group's last) joining the group, the cuts at the midpoints. Of the normalised
++   residuals r = √w(y − y_c) two statistics, each made family-wise (Bonferroni) over the
++   pattern: the worst segment's χ² (its upper tail as a normal deviate, Wilson–Hilferty)
++   and the worst sum of r over bin° (two-sided, which a line's intensity misfit shows and
++   its χ²_ν may not). It fires (flagged) when either exceeds z, 3.09 (p = 0.001 each).
++   On the 77 screening runs (exact lines) it fired on none of the 39 clean rows (the worst
++   2.08) and on 29 of the 38 with a model error, 14 of the 15 whose result the error had
++   spoiled (an extent beyond 25 % or unbounded, an axis beyond 10°, a sphere given a shape);
++   it missed weak air, size distributions and texture, and a strong size distribution that
++   a held spheroid took up whole (χ²_ν 1.003). Round 1's worst segment χ²_ν > 1.25 fired on
++   2 clean rows and 23 error rows. Where it fires, the report (bodyShapeOf) runs the
++   jackknife over lines (jack): the segments in at most `groups` contiguous groups, each
++   weighted 0 in turn and the fit refined from itself (iter iterations, its own free
++   parameters, so a held frame stays held), and gives each dimension D·e^(±2 sd) and each
++   axis 2·rms turn (sd and rms over the groups, (G − 1)/G) beside its esds, with the check
++   as misfit: on the 24 flagged error rows 51 of 56 extents covered against 28 by the esds
++   alone, at 0.24× the fit's evaluations (median; 12 iterations covered the same at 1.6×
++   the cost).
++   retest: where the check fires, the keep test made again without the worst flagged
++   segments, at most a third of them (the shape refitted from the kept fit, the isotropic
++   fit from its own; ΔBIC as the search's on the points left), a shape it no longer
++   supports rejected. On the screening runs it rejected 1 of the 2 false shapes and 4 of
++   the 13 shapes an error had spoiled, none read well; the 4 unbounded extents stayed.
++   Off until the tuning runs confirm it. */
++const SHAPE_CHECK = { on: true, z: 3.09, bin: 1, minsep: 0.3, jack: true, groups: 20, iter: 4, retest: false };
  // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
  // the phase is drawn as an isotropic one.
  function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> v[i] !== 0); }
-@@ -1023,6 +1110,47 @@ function shapeWidths(model, q, v){
+@@ -1023,6 +1139,47 @@ function shapeWidths(model, q, v){
      return out;
    });
  }
@@ -524,7 +569,29 @@ index 2b68562..33dd252 100644
  function shapeMatrix(L){
    const [l11, l21, l22, l31, l32, l33] = L;
    return [l11*l11, l11*l21, l11*l31,  l11*l21, l21*l21 + l22*l22, l21*l31 + l22*l32,  l11*l31, l21*l31 + l22*l32, l31*l31 + l32*l32 + l33*l33];
-@@ -1770,7 +1898,8 @@ function uvwStep(model, p, v, k){
+@@ -1500,7 +1657,20 @@ function bodyShapeOf(model, v, k, res){
+   const lone = B.rot === 3 && [0, 1, 2].filter(own).length === 1 ? [0, 1, 2].find(own) : -1;
+   const across = B.rot === 2 && axes[0].resolved ? latticeAcross(q, dirs[0].vec, dirs[0].R).map(d=> ({ ...d, esdAngle: tiltEsd(2) }))
+     : lone >= 0 && axes[order.indexOf(lone)].resolved ? latticeAcross(q, dirs[order.indexOf(lone)].vec, dirs[order.indexOf(lone)].R).map(d=> ({ ...d, esdAngle: tiltEsd(lone) })) : [];
+-  return { type, kind, dims, groups, axes, across, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)], cell: cellAxes(q, dirs[refIx].R) } };
++  // The per-line check (freeShape's info.check, SHAPE_CHECK) as misfit; where it fired, the
++  // jackknife over lines: each dimension D·e^(±2 sd) (jackLo, jackHi; an infinite sd opens the
++  // upper end alone, an unbounded dimension keeps its own), each axis 2·rms turn (jackTurn).
++  const chk = info && info.check;
++  let misfit = null;
++  if (chk){
++    misfit = { flagged: chk.flagged, zSeg: chk.zSeg, zBin: chk.zBin, segs: chk.segs.map(sg=> ({ lo: sg.lo, hi: sg.hi, hkl: sg.hkl, chi2nu: sg.chi2nu, zSeg: sg.zSeg, zBin: sg.zBin })) };
++    if (chk.flagged && SHAPE_CHECK.jack && res && res.free){
++      const jk = misfit.jack = lineJack(model, k, v, res.free, chk);
++      dims.forEach((d, i)=> { d.jackLo = Number.isFinite(d.D) ? d.D*Math.exp(-2*jk.sdF[i]) : NaN; d.jackHi = Number.isFinite(d.D) ? d.D*Math.exp(2*jk.sd[i]) : Infinity; });
++      axes.forEach(ax=> { ax.jackTurn = 2*jk.turn[ax.axis]; });
++    }
++  }
++  return { type, kind, dims, groups, axes, across, misfit, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)], cell: cellAxes(q, dirs[refIx].R) } };
+ }
+ /* lattDirection(q, e) → { dir, label, angle, tc, R, family, vec }: the lattice direction
+    [uvw] of a Cartesian unit vector e, u ∝ Bᵀe, in the conventional cell when there is
+@@ -1770,7 +1940,8 @@ function uvwStep(model, p, v, k){
  }
  function broadeningSetup(q, p, cell, list, add, nextIndex){
    const prof = PROFILES.includes(p.profile) ? p.profile : 'lorentz';
@@ -534,7 +601,7 @@ index 2b68562..33dd252 100644
    if (prof === 'lognormal'){ q.iLS = nextIndex(); add('LS', 0, 0, 1.5, 1e-4, { kind: 'dist' }); }
    const trans = (p.ops || []).filter(o=> o.R.every((x, i)=> x === [1,0,0, 0,1,0, 0,0,1][i]) && o.t.some(x=> x)).map(o=> o.t);
    if (p.strain === 'aniso'){
-@@ -2342,15 +2471,17 @@ function growFade(d, dFull){
+@@ -2342,15 +2513,17 @@ function growFade(d, dFull){
  // One line of one reflection with the free shape: a peak per member of the family, its
  // Lorentzian width Y (the instrument's and the faults', and the legacy ellipsoid's
  // isotropic Ys) + the shape's own (shapeWidths: wv, one per member, times prof.ws, the
@@ -556,7 +623,7 @@ index 2b68562..33dd252 100644
      sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
      const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
      if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
-@@ -2372,7 +2503,7 @@ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw
+@@ -2372,7 +2545,7 @@ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw
     one — and the axial divergence's nodes. The grid follows two widths, estimated as
     Lorentzians of the same breadth: the line's whole (the window) and its narrowest part
     (the step: the instrument's and the largest crystallites' sharpest member). */
@@ -565,7 +632,7 @@ index 2b68562..33dd252 100644
    const q = model.phases[k], L = model.lines[j], lam1 = model.lines[0].lam, c = Math.cos(th);
    const { U, V, W, X, Y, A } = inst, pr = profileAtTheta(th, U, V, W, X, Y);
    // The solid's base body for its members; the isotropic size (no shape, or the shape's
-@@ -2419,7 +2550,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d,
+@@ -2419,7 +2592,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d,
    // plate's sharp in-plane members inside a broad line): counted from the whole line's
    // width, 3 nodes 0.1° apart drew separate bumps, 8 % of the peak.
    // (the error allowed at the top of its narrowest component)
@@ -574,7 +641,7 @@ index 2b68562..33dd252 100644
    const spread = nodes ? nodes.reduce((s, nd)=> Math.max(s, Math.abs(nd.d)), 0) : 0;
    /* The tail rule draws no further than the grid holds at its step (an eighth of Hmin):
       a step grown for the tail costs the line's top more than the tail gains. On Si spheres
-@@ -2449,7 +2580,8 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d,
+@@ -2449,7 +2622,8 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d,
        g = { list: [mb], sw: mb[4], swx: mb[4]*mb[5] };
      }
      draw();
@@ -584,7 +651,7 @@ index 2b68562..33dd252 100644
    if (tick){
      /* The tick's FWHM (xrd-widths' expected width; the phase detection's reach of a
         line), measured on the line as drawn. 1.23·Ys, the single sphere's, had been 1.6
-@@ -2477,6 +2609,8 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2477,6 +2651,8 @@ function phasePattern(model, v, k, out, ticks){
    const act = shapeActive(q, v);
    const wppm = q.wppm && !q.iL;
    const shp = act && !wppm ? shapeWidths(model, q, v) : null, ts = act && wppm ? shapeTs(model, q, v) : null;
@@ -593,7 +660,7 @@ index 2b68562..33dd252 100644
    const tw = textureWeights(q, v);
    const fa = q.iFA != null ? v[q.iFA] : 0, sigma = q.iLS != null ? v[q.iLS] : 0;
    /* The faults' layer spacing at this cell: the table's is the starting cell's, and κ goes
-@@ -2491,6 +2625,8 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2491,6 +2667,8 @@ function phasePattern(model, v, k, out, ticks){
    }
    const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
    if (sk && sk.only && sk.k !== k) return out;
@@ -602,7 +669,7 @@ index 2b68562..33dd252 100644
    for (let r = 0; r < q.nRefl; r++){
      if (skip && (sk.only ? !skip.has(r) : skip.has(r))) continue;
      const gf = r < q.nFull ? 1 : growFade(d[r], q.dFull);
-@@ -2514,7 +2650,7 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2514,7 +2692,7 @@ function phasePattern(model, v, k, out, ticks){
        if (!fade) continue;
        const I = (j ? base2 : base)*L.w*lpFactor(model, th)*fade;
        if (wppm){
@@ -611,7 +678,7 @@ index 2b68562..33dd252 100644
          continue;
        }
        // The size (Ys, read as D = Kλ1/Ys, and the shape's widths) and the faults broaden
-@@ -2524,8 +2660,11 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2524,8 +2702,11 @@ function phasePattern(model, v, k, out, ticks){
        // Ys (held at 0 in its search), left out as WPPM leaves it; the legacy ellipsoid's
        // widths add to Ys (shapeOf).
        const lr = L.lam/lam1, Yr = Yi + lr*(shp && q.iW ? 0 : Ys) + (kappa > 0 ? L.lam*kappa/Math.PI*R2D : 0);
@@ -625,7 +692,7 @@ index 2b68562..33dd252 100644
        // The axial divergence spreads the peak over shifts within [dLo, dHi] (axialReach): a
        // line out of range by more than that is skipped before its nodes.
        const [dLo, dHi] = axialReach(th, A);
-@@ -2537,6 +2676,7 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2537,6 +2718,7 @@ function phasePattern(model, v, k, out, ticks){
          ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
                       tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: pr.H, eta: pr.eta, j: 0, pk: k, r });
      }
@@ -633,7 +700,7 @@ index 2b68562..33dd252 100644
    }
    return out;
  }
-@@ -2709,8 +2849,12 @@ function diffStep(model, j, v){
+@@ -2709,8 +2891,12 @@ function diffStep(model, j, v){
  /* The Jacobian columns of the free parameters at v (st the state there): exact for the
     linear ones (∂y/∂S = the phase at scale 1, ∂y/∂c = its basis function), central
     differences for the rest, recomputing only the phases a parameter touches (one-sided
@@ -648,7 +715,7 @@ index 2b68562..33dd252 100644
    const n = model.n, np = model.phases.length;
    const tmpA = new Float64Array(n), tmpB = new Float64Array(n);
    free.forEach((j, a)=>{
-@@ -2719,8 +2863,8 @@ function jacobian(model, v, st, free, cols){
+@@ -2719,8 +2905,8 @@ function jacobian(model, v, st, free, cols){
      col.fill(0);
      const h = diffStep(model, j, v);
      let up = v[j] + h, dn = v[j] - h;
@@ -659,7 +726,7 @@ index 2b68562..33dd252 100644
      if (up === dn) return;
      const vu = v.slice(), vd = v.slice(); vu[j] = up; vd[j] = dn;
      const ks = p.group === 'phase' ? [p.phase] : [...Array(np).keys()];
-@@ -2729,10 +2873,12 @@ function jacobian(model, v, st, free, cols){
+@@ -2729,10 +2915,12 @@ function jacobian(model, v, st, free, cols){
        // Both displaced points with the same FCJ node counts (lineNodes): refine()'s, held
        // over the whole refinement (a Jacobian is taken only inside one; up to v479 a
        // column taken outside one held counts of its own, a case that never arose).
@@ -674,7 +741,7 @@ index 2b68562..33dd252 100644
      }
    });
    // The F² caches now hold the last displaced cell: the next evaluation at v recomputes.
-@@ -2823,7 +2969,11 @@ function hgFloored(model, v, free){
+@@ -2823,7 +3011,11 @@ function hgFloored(model, v, free){
     inverse holds the variance each would have with it held. `tied` lists each such set
     (names), `esdHeld` those conditional esds. iterations and ms: over all the passes
     (passes: how many), why: the last pass's; fcjBehind: the last pass still left a line
@@ -687,7 +754,7 @@ index 2b68562..33dd252 100644
  /* refine()'s passes with fresh FCJ counts run until no line has outgrown its count. On
     synthetic standards (LaB6, Si; (S + H)/L 0.01–0.2 started from 0.005, 0.02, 0.05 and
     0.08, two profiles) at most 6 were needed, 4 from ASYM_START. The cap of 4 that the
-@@ -2907,8 +3057,8 @@ function refineHeld(model, opts){
+@@ -2907,8 +3099,8 @@ function refineHeld(model, opts){
      v = vl; st.bg.set(linSt.bg); st.yc.set(linSt.yc); st.chi2 = linSt.chi2;
      return before - linSt.chi2 > 0.01*chiRed(before);
    };
@@ -698,7 +765,7 @@ index 2b68562..33dd252 100644
      const { A, g } = normalEq(model, cols, st);
      const act = [];
      for (let a = 0; a < m; a++) if (A[a*m + a] > 0 && !onBound(free[a], g[a])) act.push(a);
-@@ -2987,10 +3137,10 @@ function refineHeld(model, opts){
+@@ -2987,10 +3179,10 @@ function refineHeld(model, opts){
       in atBound, for the reader to take the value as a limit. U, V, W with H_G² on its
       floor have no meaningful curvature (∂y/∂W ∝ 1/√W there, the esd follows the
       difference step): esd NaN, and listed in atBound. */
@@ -711,7 +778,7 @@ index 2b68562..33dd252 100644
      jacobian(model, v, st, free, cols);
      const { A, g } = normalEq(model, cols, st);
      const act = [];
-@@ -3041,7 +3191,7 @@ function refineHeld(model, opts){
+@@ -3041,7 +3233,7 @@ function refineHeld(model, opts){
    model.cov = { names: free.map(j=> model.par[j].name), cov };
    const freeNames = free.map(j=> model.par[j].name);
    return { params: getParams(model), esd, corr, cov, free: freeNames, atBound,
@@ -720,7 +787,7 @@ index 2b68562..33dd252 100644
             stats, iterations: it, converged, why, ms: Date.now() - t0 };
  }
  
-@@ -4265,6 +4415,25 @@ function autoRefine(model, opts = {}){
+@@ -4265,6 +4457,25 @@ function autoRefine(model, opts = {}){
    return finish({ res, out, lastFree, nIn, cs });
  }
  
@@ -746,7 +813,101 @@ index 2b68562..33dd252 100644
  /* freeShape(model, k, res, free, opts) → { res, info }, { rejected, dBIC } or null: the
     free shape of phase k (shapeSetup), from the isotropic refinement res. By the cubic
     symmetry the pattern does not change to first order when a sphere is deformed (Σ over
-@@ -4297,23 +4466,32 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4283,6 +4494,86 @@ function autoRefine(model, opts = {}){
+    (kept when better: see the final stage). info: { type, starts, full, chi2Iso, chi2,
+    Piso, P, N, chi2redIso, held, dBICfree, dBICheld, freeOff (the free axes' angles from
+    the held ones, °), freeW (the free fit's widths) }. */
++/* The normal's upper tail and its inverse (Acklam's quantile), and the family-wise deviate of
++   the worst of m (Bonferroni; in logs for a large z). */
++function normTail(z){ const t = 1/(1 + 0.2316419*Math.abs(z)), d = 0.3989422804014327*Math.exp(-z*z/2);
++  const p = d*t*(0.319381530 + t*(-0.356563782 + t*(1.781477937 + t*(-1.821255978 + t*1.330274429)))); return z >= 0 ? p : 1 - p; }
++function normTailInv(p){
++  if (!(p > 0)) return Infinity; if (p >= 1) return -Infinity;
++  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
++  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
++  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
++  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
++  const lowerQ = u => { if (u < 0.02425){ const q = Math.sqrt(-2*Math.log(u)); return (((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5])/((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1); }
++    const q = u - 0.5, r = q*q; return (((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q/(((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1); };
++  return p <= 0.5 ? -lowerQ(p) : lowerQ(1 - p);
++}
++const familyZ = (z, m) => z > 8 ? Math.sqrt(Math.max(0, z*z - 2*Math.log(m))) : normTailInv(Math.min(0.5, m*normTail(z)));
++/* lineCheck(model, k, v, P) → SHAPE_CHECK's check of phase k's fit at v (model.v; P refined
++   parameters): { S, B, zSeg, zBin, flagged, cuts (each segment's first point, then n),
++   segs (the flagged segments: { s, i0, i1, lo, hi, hkl (the strongest line), chi2nu, zSeg,
++   zBin }) }. */
++function lineCheck(model, k, v, P){
++  const q = model.phases[k], n = model.n, x = model.x, w = model.w, y = model.y, C = SHAPE_CHECK;
++  const yc = evaluate(model, v).yc, r = new Float64Array(n);
++  for (let i = 0; i < n; i++) r[i] = w[i] > 0 ? Math.sqrt(w[i])*(y[i] - yc[i]) : NaN;
++  // the lines at their Kα centroids (Kα1 and a 2:1 Kα2: a third of the split)
++  const L2 = model.lines.length > 1 ? model.lines[1] : null;
++  const cen = tt => { if (!L2) return tt; const th = tt/2*Math.PI/180, s = L2.lam/model.lines[0].lam*Math.sin(th);
++    return s < 1 ? tt + 2*(Math.asin(s) - th)*180/Math.PI*(L2.w/(model.lines[0].w + L2.w)) : tt; };
++  const ticks = calc(model, v, { internal: true }).ticks.filter(t=> t.phase === q.id), Imax = Math.max(0, ...ticks.map(t=> t.I));
++  const Ls = ticks.filter(t=> t.I > 1e-4*Imax && t.tt >= x[0] && t.tt <= x[n - 1])
++    .map(t=> ({ c: cen(t.tt), H: t.H > 0 ? t.H : 0.1, I: t.I, hkl: [t.h, t.k, t.l] })).sort((a, b)=> a.c - b.c);
++  const G = [];
++  for (const l of Ls){ const g = G[G.length - 1]; if (g && l.c - g.last.c < Math.max(C.minsep, (l.H + g.last.H)/2)){ g.ls.push(l); g.last = l; } else G.push({ ls: [l], last: l, first: l }); }
++  const cut = G.length ? [x[0] - 1e-9, ...G.slice(1).map((g, i)=> (G[i].last.c + g.first.c)/2), x[n - 1] + 1e-9] : [x[0] - 1e-9, x[n - 1] + 1e-9];
++  const segs = []; let i = 0;
++  for (let s = 0; s < cut.length - 1; s++){
++    const i0 = i; while (i < n && x[i] < cut[s + 1]) i++;
++    if (i - 1 < i0) continue;
++    let m = 0, c2 = 0; for (let j = i0; j < i; j++) if (Number.isFinite(r[j])){ m++; c2 += r[j]*r[j]; }
++    const a2 = 2/(9*Math.max(1, m)), top = G[s] ? G[s].ls.reduce((p, l)=> l.I > p.I ? l : p) : null;
++    segs.push({ i0, i1: i - 1, lo: x[i0], hi: x[i - 1], hkl: top ? top.hkl : null, chi2nu: c2/Math.max(1, m), z: m ? (Math.cbrt(c2/m) - (1 - a2))/Math.sqrt(a2) : 0 });
++  }
++  // the bins (bin°), by their centres
++  const per = Math.max(1, Math.round(C.bin/((x[n - 1] - x[0])/(n - 1)))), bins = [];
++  for (let i0 = 0; i0 < n; i0 += per){ let t = 0, m = 0; for (let j = i0; j < Math.min(n, i0 + per); j++) if (Number.isFinite(r[j])){ t += r[j]; m++; }
++    if (m > per/2) bins.push({ c: Math.min(n - 1, i0 + (per >> 1)), z: Math.abs(t)/Math.sqrt(m) }); }
++  const S = segs.length, B = bins.length;
++  for (const sg of segs){ sg.zSeg = familyZ(sg.z, S); sg.zBin = familyZ(Math.max(0, ...bins.filter(b=> b.c >= sg.i0 && b.c <= sg.i1).map(b=> b.z)), 2*B); }
++  const zSeg = Math.max(...segs.map(sg=> sg.zSeg)), zBin = familyZ(Math.max(0, ...bins.map(b=> b.z)), 2*B);
++  return { S, B, P, zSeg, zBin, flagged: zSeg > C.z || zBin > C.z, cuts: [...segs.map(sg=> sg.i0), n],
++    segs: segs.map((sg, s)=> ({ s, ...sg })).filter(sg=> sg.zSeg > C.z || sg.zBin > C.z).map(({ z, ...sg })=> sg) };
++}
++// The fit at v refined again (noCov, no FCJ audit) with the points of segments `drop` (index
++// ranges [i0, i1]) weighted 0, and whatever `then` reads from it; the weights, v, the esds and
++// the covariance as they were after.
++function refitWithout(model, v, drop, opts, then){
++  const w0 = model.w, keep = { v: model.v.slice(), esd: model.esd, cov: model.cov }, W = Float64Array.from(w0);
++  for (const [i0, i1] of drop) for (let i = i0; i <= i1; i++) W[i] = 0;
++  model.w = W; delete model._bgSums;
++  try { setParams(model, v); const r = refine(model, { audit: false, noCov: true, ...opts }); return then(r); }
++  catch(e){ return null; }
++  finally { model.w = w0; delete model._bgSums; setParams(model, keep.v); model.esd = keep.esd; model.cov = keep.cov; }
++}
++/* lineJack(model, k, v, free, check) → { groups, done, sd (ln D of each width's dimension;
++   sdF the finite drops alone), turn (rms °, each body axis) }: the jackknife over lines of
++   SHAPE_CHECK (the check's segments in at most `groups` contiguous groups). */
++function lineJack(model, k, v, free, check){
++  const q = model.phases[k], C = SHAPE_CHECK, S = check.cuts.length - 1, G = Math.min(S, C.groups), F = fitSettings();
++  const W0 = q.iW.map(i=> v[i]), R0 = bodyFrame(q, v), dl = W0.map(()=> 0), dF = W0.map(()=> 0), turn = [0, 0, 0];
++  let done = 0;
++  for (let g = 0; g < G; g++){
++    const a = Math.floor(g*S/G), b = Math.floor((g + 1)*S/G);
++    const o = refitWithout(model, v, [[check.cuts[a], check.cuts[b] - 1]], { free, maxIter: C.iter, shiftTol: F.shiftTol, lambda: F.lambda }, ()=> ({ W: q.iW.map(i=> model.v[i]), R: bodyFrame(q, model.v) }));
++    if (!o) continue;
++    W0.forEach((w, i)=> { const t = w === o.W[i] ? 0 : Math.log(w/o.W[i]); dl[i] += t*t; if (Number.isFinite(t)) dF[i] += t*t; });
++    for (let j = 0; j < 3; j++) turn[j] += Math.acos(Math.min(1, Math.abs(R0[j]*o.R[j] + R0[3 + j]*o.R[3 + j] + R0[6 + j]*o.R[6 + j])))**2;
++    done++;
++  }
++  const f = (G - 1)/G;
++  return { groups: G, done, sd: dl.map(t=> Math.sqrt(f*t)), sdF: dF.map(t=> Math.sqrt(f*t)), turn: turn.map(t=> Math.sqrt(f*t)*R2D) };
++}
+ const SHAPE_STARTS = 10, SHAPE_FULL = 3;
+ function freeShape(model, k, res, free, opts){
+   // The search with a body's faces rounded off (shapeWidths); never beyond it.
+@@ -4292,28 +4583,39 @@ function freeShape(model, k, res, free, opts){
+ }
+ function freeShapeRun(model, k, res, free, opts){
+   const q = model.phases[k], pf = q.pfx, vIso = model.v.slice();
++  // A rejection carries the per-line check of the isotropic fit (SHAPE_CHECK).
++  const rejectWith = o => SHAPE_CHECK.on ? { ...o, check: lineCheck(model, k, vIso, res.stats.P) } : o;
+   /* The settings (autoRefine's opts.fit): the starts and how many go to convergence; the
+      brief refinements' 8 iterations, or maxIter when fewer; the full ones' 1.5 × maxIter
       (60 by default: a body's turns take longer than a stage), λ and the shift test as
       everywhere. */
    const F = fitSettings(opts.fit), nStarts = F.shapeStarts, nFull = F.shapeFull;
@@ -786,7 +947,7 @@ index 2b68562..33dd252 100644
    // Tilted a few degrees, so that no symmetry holds the axes where they start.
    const tilt = e => unit([e[0] + 0.08*gauss(), e[1] + 0.08*gauss(), e[2] + 0.08*gauss()]);
    const axesLow = lowIndexAxes(q);
-@@ -4365,7 +4543,19 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4365,7 +4667,19 @@ function freeShapeRun(model, k, res, free, opts){
        starts.push(put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(e)));
        starts.push(put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(e)));
      }
@@ -807,7 +968,16 @@ index 2b68562..33dd252 100644
      // The orientation reached becomes the reference, r = 0: the chart is fresh at the
      // start of each full refinement, far from |r| = π.
      rebase = v => { const vv = v.slice(), R = bodyFrame(q, v); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
-@@ -4472,9 +4662,13 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4435,7 +4749,7 @@ function freeShapeRun(model, k, res, free, opts){
+   // 0.7 at N = 5251, none above N = e¹⁰, where a shape the held route keeps could be
+   // rejected.) The ΔBIC given is that route's: the lowest the trial shapes allow.
+   const dP = names.length - free.length, dPmin = dP - (q.iR ? q.iR.length : 0), gain = brief.length ? (chiTot(res) - brief[0].chi)/Math.max(1, res.stats.chi2) : -Infinity;
+-  if (!(gain > (10 + dPmin*Math.log(N))/2)){ setParams(model, vIso); return { rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true }; }
++  if (!(gain > (10 + dPmin*Math.log(N))/2)){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true }); }
+   let best = null;
+   const finals = [];
+   // A full refinement from v; kept as the best when it is.
+@@ -4472,9 +4786,13 @@ function freeShapeRun(model, k, res, free, opts){
      const refineFrom = (v, nm) => { setParams(model, rebase(v)); try { const r = refine(model, { free: nm, ...lmFull }); return { res: r, v: model.v.slice() }; } catch(e){ return null; } };
      if (BODIES[q.shapeType].base !== 'ball'){ const ex = refineFrom(best.v, names); if (ex) best = ex; }
      dBICfree = bic(best.res);
@@ -822,14 +992,15 @@ index 2b68562..33dd252 100644
        const r = refineFrom(vs, names.filter(nm=> !q.iR.some(i=> model.par[i].name === nm)));
        if (r && (!sn || chiTot(r.res) < chiTot(sn.res))) sn = r;
      }
-@@ -4510,9 +4704,20 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4510,11 +4828,35 @@ function freeShapeRun(model, k, res, free, opts){
    // Kept only when the data support it: ΔBIC under −10 — five more parameters always
    // lower χ² a little, and on an isotropic sample the shape was kept in 7 of 12 noise
    // draws with ΔBIC near +40.
 -  const cb = chiTot(best.res), dBIC = bic(best.res);
+-  if (!(dBIC < -10)){ setParams(model, vIso); return { rejected: true, dBIC }; }
 +  let cb = chiTot(best.res);
 +  const dBIC = bic(best.res);
-   if (!(dBIC < -10)){ setParams(model, vIso); return { rejected: true, dBIC }; }
++  if (!(dBIC < -10)){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC }); }
    setParams(model, best.v);
 +  // v2: the search's refinements made no covariance, and (with SHAPE_FWD 'all') forward
 +  // differences can stop a little short in a flat valley: the fit kept is refined once
@@ -841,15 +1012,31 @@ index 2b68562..33dd252 100644
 +    if (!r) try { r = refine(model, { free: best.res.free, ...lmCentral, covOnly: true }); } catch(e){ setParams(model, best.v); }
 +    if (r){ best = { res: r, v: model.v.slice() }; cb = chiTot(r); }
 +  }
++  // The per-line check of the fit kept (SHAPE_CHECK); with retest, where it fires, the keep
++  // test again without the worst flagged segments (at most a third of the segments).
++  const check = SHAPE_CHECK.on ? lineCheck(model, k, best.v, best.res.stats.P) : null;
++  if (check && check.flagged && SHAPE_CHECK.retest && check.S >= 3){
++    const worst = [...check.segs].sort((a, b)=> Math.max(b.zSeg, b.zBin) - Math.max(a.zSeg, a.zBin)).slice(0, Math.max(1, Math.floor(check.S/3)));
++    const F = fitSettings(opts.fit), lm = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda }, drop = worst.map(sg=> [sg.i0, sg.i1]);
++    const sh = refitWithout(model, best.v, drop, { free: best.res.free, ...lm }, r=> r.stats), is = refitWithout(model, vIso, drop, { free, ...lm }, r=> r.stats);
++    if (sh && is){
++      const c = st => st.chi2*Math.max(1, st.N - st.P);
++      check.retest = { dBIC: (c(sh) - c(is))/Math.max(1, is.chi2) + (sh.P - is.P)*Math.log(sh.N), segs: worst.map(sg=> sg.s) };
++      if (!(check.retest.dBIC < -10)){ setParams(model, vIso); return { rejected: true, dBIC: check.retest.dBIC, misfit: true, check }; }
++    }
++  }
    return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
-     chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW } };
+-    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW } };
++    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check } };
  }
-@@ -4579,4 +4784,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
+ 
+ /* ---------- derived quantities ---------- */
+@@ -4579,4 +4921,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
  export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
           solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
           fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
 -         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };
-+         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT };
++         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT, SHAPE_CHECK, lineCheck, lineJack };
 diff --git a/xrd-sizeline.js b/xrd-sizeline.js
 new file mode 100644
 index 0000000..c30a59e

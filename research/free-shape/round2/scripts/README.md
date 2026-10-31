@@ -1,4 +1,4 @@
-# Scripts behind round 2 (`../PILOT.md`, `../AB.md`, `../STEP1.md`, `../STEP2.md`)
+# Scripts behind round 2 (`../PILOT.md`, `../AB.md`, `../STEP1.md`, `../STEP2.md`, `../STEP3.md`)
 
 The pilot's numbers and those of tracks A and B come from these scripts. They run in Node 22 on
 a frozen copy of the engine at commit `b9bef5f` (step 1's, `step1/`, on the app with
@@ -21,6 +21,7 @@ README with its API and its checks.
 | `B/` | track B, the search's efficiency (`../AB.md` §4): an engine copy with opt-in solver options (no covariance, forward differences), today's search with knobs, the variants, the scoring, the profile, the skeptic's checks (`verify/`) | `make-eng.mjs`, `methods/var.mjs`, `methods/variants.mjs`, `run.mjs`, `batch.mjs`, `score.mjs`, `check-replica.mjs`, `prof.mjs` |
 | `step1/` | round 2's step 1 (`../STEP1.md`): search v2 with the lsq line and WPPM on the 77 screening runs, the switch `SHAPE_FWD` ('all' or 'briefs'); the prototype's harness with the switches from the environment, the batches, the scoring against track A's records, the diagnostics (`hd/`) | `setup.sh`, `make-eng.mjs`, `run.mjs`, `batch.mjs`, `score.mjs`, `ident.mjs`, `stages.mjs`, `cost.mjs`, `why.mjs`, `hd/make-diag.mjs` |
 | `step2/` | round 2's step 2 (`../STEP2.md`): WPPM made cheaper (the profile of a WPPM fit, the shortcuts `WPPM_OPT`, the exact line by default), measured against WPPM itself: patterns, the 22 sub-screen runs under one load, the finalists on the 77, the expected margins and the cross-solid searches | `setup.sh`, `make-eng.mjs`, `batch2.mjs`, `mkjobs2.mjs`, `score.mjs`, `cost2.mjs`, `ident.mjs`, `prof/`, `bench/` |
+| `step3/` | round 2's step 3 (`../STEP3.md`): the per-line check and the jackknife over lines on the exact line. `h/`: step 2's engine with a method that adds, at the fit returned, the check's data (segments, residuals dumped), the jackknife on every kept fit and the refits without the k worst segments, scored offline; `hp/`: the prototype's engine (`SHAPE_CHECK`) with its check, its jackknife and its retest, verified against `h/` | `setup.sh`, `h/methods/check.mjs`, `h/an3.mjs`, `h/rep-flag.mjs`, `h/rep-jack.mjs`, `h/rep-fix.mjs`, `hp/methods/proto.mjs`, `hp/cmpP.mjs`, `hp/rep-fixP.mjs`, `hp/verify.mjs` |
 
 Not copied, and rebuilt by their own commands (see each README): the engine copies
 (`A/eng/`, `A/harness/lib.mjs`, `B/h/eng/`, `B/hp/eng/`) and track A's line tables

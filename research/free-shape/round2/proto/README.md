@@ -6,7 +6,9 @@ a switch that keeps v522's behaviour reachable. It is a prototype, ready to swap
 tuning runs confirm the results. Round 2's step 1 (`../STEP1.md`) measured it on the 77 screening
 runs with both lines and set forward differences to the brief trials only (`SHAPE_FWD`). Step 2
 (`../STEP2.md`) made WPPM, the exact line, cheaper than lsq (`WPPM_OPT` in `xrd-broad.js`, three
-shortcuts) and made it the free shape's default size line (`SHAPE_MODE.line` 'exact'). It is not
+shortcuts) and made it the free shape's default size line (`SHAPE_MODE.line` 'exact'). Step 3
+(`../STEP3.md`) added the per-line check of every fit the search returns, the jackknife over lines
+where it fires, and a switchable keep test without the flagged lines (`SHAPE_CHECK`). It is not
 applied: the branch is unchanged. Its base is
 `9782d33` (claude/repo-code-review-sr6c8m), whose engine files equal the frozen `b9bef5f` byte for
 byte (`git diff b9bef5f 9782d33 -- 'xrd-*.js'` is empty), so the research diffs ported directly.
@@ -17,16 +19,18 @@ prototype's runs; none of it is in the repository.
 ## Files
 
 - `engine.patch`: `git diff` against `9782d33` of the app's files:
-  - `xrd-rietveld.js` (+254 −49): the switches and tunables, the lsq line, the exact line's
+  - `xrd-rietveld.js` (+395 −53): the switches and tunables, the lsq line, the exact line's
     option (`broadeningSetup`), refine's options `forward`, `noCov` and `covOnly`, freeShapeRun's
     search v2, `sameFrame`; for WPPM a reflection's two lines handed to `wppmPair`, the axial
     shift interpolated in θ (`sollerStats`), the Soller cells' cache (least recently used, 2048);
+    the per-line check (`SHAPE_CHECK`, `lineCheck`, `refitWithout`, `lineJack`: in freeShapeRun's
+    outcomes and in `bodyShapeOf`'s report);
   - `xrd-broad.js` (+157 −13): `WPPM_OPT`, the read-out from a table of the points' sinθ, cosθ,
     `wppmPair`;
   - `xrd-sizeline.js` (new, 44 kB): the lsq tables, precomputed;
   - `sw.js`: the new module in `ASSETS` (one line; `CACHE` not bumped, nor `index.html`);
   - `RIETVELD.md`: §7.3 (WPPM's shortcuts), §10.3 (the exact and lsq lines), §10.5 (search v2,
-    with step 1's figures), §10.7 (held frames).
+    with step 1's figures), §10.7 (held frames), §10.8 (the per-line check).
 - `xrd-sizeline.js`: the tables module as the patch adds it.
 - `build-sizeline.mjs`: rebuilds it (10 s) from track A's exact lines
   (`../scripts/A/lines/profiles.mjs`). `--check <A's tables.json>` compares with track A's tables:
@@ -55,7 +59,9 @@ v522's behaviour stays reachable without reverting: `SHAPE_MODE` and `WPPM_OPT` 
 `SHAPE_MODE.search = 'today'` before a model is built ('exact' is read when the model is built,
 'lsq' and 'lor' at every pattern evaluation, the search at each `freeShape`), and
 `WPPM_OPT.fast`, `.pair`, `.axial = false` for WPPM's arithmetic as v522 had it (read at every
-evaluation).
+evaluation). `SHAPE_CHECK.on = false` removes the per-line check (read at each `freeShape`; the
+search and the report are then step 2's to the bit), `.jack = false` its jackknife alone (read by
+`bodyShapeOf`).
 
 ## What changes and why
 
@@ -133,6 +139,31 @@ like it lost minima the shifted turns lost). Random starts, when any are asked f
 or the setting `shapeStarts` above its default 10, one each), come from a second stream. The
 legacy ellipsoid (`ellipsoidL`) keeps v522's search.
 
+**The per-line check** (`SHAPE_CHECK`, step 3; `../STEP3.md`, `RIETVELD.md` §10.8). The exact
+line reads a model error the refinement does not carry as shape more readily (the four unbounded
+extents of the 77 screening runs and both spheres kept with a shape all had one), so every fit the
+search returns is checked, the shape kept or the isotropic fit (`info.check`, or `check` beside a
+rejection). The range is cut into one segment per line or group of overlapping lines (the phase's
+reflections at their Kα centroids, a line within max(0.3°, the mean FWHM) of the group's last joining
+it, the cuts at the midpoints); of the residuals r = √w(y − y_c) the worst segment's χ² (as a normal
+deviate, Wilson–Hilferty) and the worst sum of r over 1° (two-sided) are each made family-wise
+(Bonferroni) over the pattern, and the flag fires when either exceeds 3.09 (p = 0.001 each). It costs
+two evaluations. On the screening runs: no false alarm on the 39 clean rows (the worst 2.08), 29 of
+the 38 error rows caught, 14 of the 15 whose result the error had spoiled; round 1's worst segment
+χ²_ν > 1.25 fired on 2 clean rows and 23 error rows, and the χ²_ν statistic alone (family-wise)
+caught 11 of the 15 (the 1° sums catch texture, whose misfit is a line's intensity). Where it
+fires, `bodyShapeOf` runs the jackknife over lines (at most 20 contiguous groups of segments, each
+weighted 0 and the fit refined from itself, 4 iterations, its own free parameters, a held frame held)
+and gives each dimension D·e^(±2 sd) (`jackLo`, `jackHi`; an infinite sd opens the upper end only)
+and each axis 2·rms turn (`jackTurn`) beside its esds, with the check as `misfit`: on the 24 flagged
+truths with an error it covers 51 of 56 extents (the esds alone 28) and 19 of 24 axes (11), at 0.24×
+the fit's evaluations; the 12 iterations of round 1 covered the same at 1.6× the cost. `retest`
+(off): the keep test made again without the worst flagged segments, at most a third of them; on the
+screening runs it rejected 1 of the 2 false shapes and 4 of the 13 shapes an error had spoiled, and
+no shape that was read well, at 0.07× the fit's evaluations where it ran. Neither widening nor a
+refit removes the false shapes of a textured sphere or of a sphere with a size distribution: their
+misfit is spread over every line.
+
 **WPPM itself is the engine's.** Track A's WPPM runs only set the phase's size profile to WPPM
 (`FS2A_PROFILE=wppm`; `FS2A_WPPM_BALL` was a control, not a model), and step 1 measured search v2
 on it so. 'exact' makes that profile the free shape's default; a phase whose profile is WPPM or
@@ -155,6 +186,10 @@ both modules). Every tunable is to be tuned on round 2's tuning runs.
 | `cylStep`, `boxStep` | 0.5°, 0.025 | — | the tables' steps (`build-sizeline.mjs --psi --box`) |
 | `fit.X`, `fit.b` | 6, 0.2 | — | the lsq fit's span (in 1/⟨L⟩_V) and weights 1/(p + b) (`--X --b`) |
 | `lowIndexAxes` | 5 families | the same | the families the deterministic starts take (unchanged) |
+| `SHAPE_CHECK.on` | `true` | — | the per-line check of the fit returned (`info.check`, `check`) |
+| `SHAPE_CHECK.z`, `.bin`, `.minsep` | 3.09, 1°, 0.3° | — | the flag's family-wise threshold (both statistics), the residual sums' width, the least separation of two segments |
+| `SHAPE_CHECK.jack`, `.groups`, `.iter` | `true`, 20, 4 | — | the jackknife over lines where the check fires: at most that many groups, that many iterations a refit |
+| `SHAPE_CHECK.retest` | `false` | — | where it fires, the keep test again without the worst flagged segments (at most a third) |
 
 ## Verification
 
@@ -257,12 +292,33 @@ harness (`../scripts/step2/`: step 1's with `WPPM_OPT` from `PROTO_WPPM`) on fro
 - `npm run lint`: clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif,
   rvui, smoke, widths, modules): 53 of 53 pass.
 
+**6. Step 3: the per-line check** (`../STEP3.md`; `$W/fs2/step3/`). Step 3's harness
+(`../scripts/step3/`) on step 2's engine (C1: the fits equal step 2's W4 records on 77 of 77, the
+check's statistics, the jackknife and the refits computed by the method) and on the prototype's (P1).
+- The prototype's search equals C1's on 77 of 77 (χ², outcome, solid, ΔBIC; its evaluations 2 more,
+  the check's); its flag and its flagged segments equal the offline statistics on 77 of 77 (|Δz| at
+  most 3·10⁻⁷); its jackknife equals the offline 4-iteration spread on the 26 flagged kept fits
+  (within 2·10⁻⁶, the offline solids being rounded).
+- `retest` on (P2, the 26 flagged kept fits): each outcome as the measured refits predict, 26 of 26
+  (5 rejected: sqbox-P4m-on, cylinder-P-3m1-generic, sqbox-P-3m1-on, cylinder-Pm-3-generic,
+  sphere-P6mmm-1).
+- The final engine: its defaults equal P1 to the bit on 3 of 3 rows; `SHAPE_CHECK.on = false` equals
+  step 2's fits on 2 of 2 (χ², the search's and the report's evaluations).
+- `npm run lint`: clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif,
+  rvui, smoke, widths, modules): 53 of 53 pass. No test asks for a free shape, so no test runs the
+  check.
+
 ## What remains to tune
 
 - **What the exact line brings with it** (step 2): WPPM reads model errors as shape more
   readily (its unbounded extents are all on rows with a model error; a 4.4 nm sphere with a size
-  distribution keeps a spheroid at ΔBIC −3483): the per-line χ²_ν flag and the jackknife are to
-  carry that. A phase with a free shape asked for is a WPPM phase whatever its profile: its
+  distribution keeps a spheroid at ΔBIC −3483). Step 3's check flags 14 of the 15 spoiled results
+  and none of 39 clean ones, and its jackknife widens the flagged ones; the false shapes of a
+  textured sphere and of a sphere with a size distribution stay (flagged), as do the unbounded
+  extents. To confirm on the 154 tuning runs: the flag's false alarms on the clean rows (nominal
+  0.2 % a pattern; none of 39 here), its catch of the spoiled results, the jackknife's coverage and
+  `retest` (off), then the validation once. What the card says of `misfit` is the result card's
+  (later). A phase with a free shape asked for is a WPPM phase whatever its profile: its
   isotropic size is WPPM's sphere's reading, and a project saved with a Lorentzian free shape is
   searched again. `WPPM_OPT.pair` changes the pattern by 10⁻⁵ of the peak (path noise in flat
   valleys, both ways); `false` costs 0.52× today instead of 0.42×. The lsq and Lorentzian lines

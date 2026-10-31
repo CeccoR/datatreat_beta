@@ -1,0 +1,3 @@
+F1 . default default default default default box-Pm-3-near
+F1 . default default default default default cylinder-P4mmm-on
+F1 . default default default default default sphere-P6m-3
