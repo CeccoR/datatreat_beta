@@ -196,6 +196,50 @@ function addMemberCoef(out, n, dL, base, a, b, c, scale, sigma, weight){
    there continuously, and what it leaves out goes to the background. Read between grid
    points by cubic (Catmull–Rom) interpolation. */
 const N_MIN = 64, N_MAX = 16384;
+/* What a WPPM evaluation costs, and its shortcuts (research/free-shape/round2/STEP2.md: on a
+   free shape's fit the read-out had taken 62 % of the CPU, the axial nodes 23 %, the FFTs 7 %,
+   the common factor 3 %, the members' size coefficients 1 %): the points' sin θ and cos θ from
+   a table made once per grid (trigOf); the common factor's exponentials by recurrence in L (two
+   products a point against three exponentials) and the read-out by reciprocals, the edge value
+   taken off the period first (within 2·10⁻¹² of the peak of the direct arithmetic); a
+   reflection's Kα1 and Kα2 lines by one FFT (wppmPair, within 1.5·10⁻⁵ of the peak of the two
+   drawn apart); and a line's axial shift from Soller cells interpolated in θ
+   (xrd-rietveld.js sollerStats, within 10⁻⁹). On round 2's 22 sub-screen runs a free shape's
+   whole fit cost 0.42× the CPU it had taken by the Lorentzian line, 2.13× by WPPM without
+   them. */
+/* The pattern's points' sin θ and cos θ (θ = 2θ/2), made once per grid and kept with it: the
+   read-out took a sine and a cosine a point over the whole window (±40 FWHM), three
+   quarters to six sevenths of a WPPM evaluation. */
+const TRIG = new WeakMap();
+// (the read-out's unwrapped period, one array per length)
+const PADS = new Map();
+const padOf = n => { let a = PADS.get(n); if (!a){ a = new Float64Array(n); PADS.set(n, a); } return a; };
+function trigOf(x){
+  const n = x.length;
+  let t = TRIG.get(x);
+  if (t && t.n === n && t.x0 === x[0] && t.x1 === x[n - 1]) return t;
+  const S = new Float64Array(n), C = new Float64Array(n);
+  for (let i = 0; i < n; i++){ const th = x[i]*D2R/2; S[i] = Math.sin(th); C[i] = Math.cos(th); }
+  t = { n, x0: x[0], x1: x[n - 1], S, C };
+  TRIG.set(x, t);
+  return t;
+}
+/* commonFactor(com, nL, H, eta, W, gq, dL) → the points it filled: the instrument's pseudo-Voigt
+   and the Lorentzian terms' coefficients at L = i·dL, i ≤ nL, to where they no longer count.
+   e1 = e^{−π(H+W)L}, e2 = e^{−gq L² − πWL} by recurrence: e2's ratio q grows by e^{−2gq dL²} a
+   step. */
+function commonFactor(com, nL, H, eta, W, gq, dL){
+  const r1 = Math.exp(-Math.PI*(H + W)*dL), s2 = Math.exp(-2*gq*dL*dL);
+  let e1 = 1, e2 = 1, q = Math.exp(-gq*dL*dL - Math.PI*W*dL);
+  for (let i = 0; i <= nL; i++){
+    const v = eta*e1 + (1 - eta)*e2;
+    com[i] = v;
+    if (v < 1e-8 && i > 2) return i;
+    e1 *= r1; e2 *= q; q *= s2;
+    if (e2 < 1e-280){ e2 = 0; q = 0; }
+  }
+  return nL;
+}
 // The points a line's grid needs, uncapped (widths and spread in °): over N_MAX, its step
 // grows.
 const wppmPoints = (Hest, Hmin, spread, win, winMin) => 16*(Math.max(win*Hest, winMin) + spread)/Math.max(Hmin, 1e-5);
@@ -219,11 +263,7 @@ function wppmLine(o){
   const H = o.Hi*c1, eta = o.etai, W = o.WL || 0, gq = Math.PI*Math.PI*H*H/(4*LN2);
   let nL = N >> 1;
   const com = o._com && o._com.length >= nL + 1 ? o._com : new Float64Array(nL + 1);
-  for (let i = 0; i <= nL; i++){
-    const L = i*dL, v = (eta*Math.exp(-Math.PI*H*L) + (1 - eta)*Math.exp(-gq*L*L))*Math.exp(-Math.PI*W*L);
-    com[i] = v;
-    if (v < 1e-8 && i > 2){ nL = i; break; }
-  }
+  nL = commonFactor(com, nL, H, eta, W, gq, dL);
   const size = new Float64Array(nL + 1);
   if (o.size) o.size(size, nL + 1, dL); else size.fill(1);
   // The divergence's nodes: e^{−2πi L δ_k} by recurrence in L.
@@ -251,19 +291,22 @@ function wppmLine(o){
   fftPlus(p);
   // re[m]: the profile at δ_m (m ≥ N/2 the negative side). Lowered by its edge value.
   const edge = re[N >> 1], half = (N >> 1)*dd;
-  const at = m => re[((m % N) + N) % N];
+  /* The period unwrapped and lowered, from m = −N/2 − 2 to N/2 + 5 (|f| ≤ N/2 and the
+     read-out's four neighbours), so that a point reads its neighbours without wrapping. */
+  const off = (N >> 1) + 2, pad = padOf(N + 8);
   const xLo = 2*Math.asin(Math.max(-1, Math.min(1, s0 - half*lam/2)))/D2R, xHi = 2*Math.asin(Math.max(-1, Math.min(1, s0 + half*lam/2)))/D2R;
+  const { S, C } = trigOf(x);
   let i = lowerBound(x, xLo);
+  for (let k = 0; k < N + 8; k++){ const m = k - off; pad[k] = re[m < 0 ? m + N : m >= N ? m - N : m] - edge; }
+  const kf = 2/(lam*dd), ki = I*D2R/lam, gHi = N + 2;
   for (const n = x.length; i < n; i++){
-    const xi = x[i];
-    if (xi > xHi) break;
-    const th = xi*D2R/2, dl = 2*(Math.sin(th) - s0)/lam;
-    if (dl < -half || dl > half) continue;
-    const f = dl/dd, m = Math.floor(f), u = f - m;
-    const p0 = at(m - 1), p1 = at(m), p2 = at(m + 1), p3 = at(m + 2);
-    // Catmull–Rom
-    const v = p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0)));
-    out[i] += I*(v - edge)*Math.cos(th)*D2R/lam;
+    if (x[i] > xHi) break;
+    const g = (S[i] - s0)*kf + off;
+    if (!(g >= 2 && g <= gHi)) continue;
+    // (m = ⌊g⌋ by an integer truncation: Math.floor had cost half the read-out) Catmull–Rom
+    const k = g | 0, u = g - k;
+    const p0 = pad[k - 1], p1 = pad[k], p2 = pad[k + 1], p3 = pad[k + 2];
+    out[i] += ki*C[i]*(p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0))));
   }
   // o.fwhm, when given, collects the profile as drawn (less its edge value) without the
   // divergence's shifts, on its grid from δ = 0: lineFwhm reads the tick's width off it.
@@ -276,6 +319,77 @@ function wppmLine(o){
     const e0 = re[N >> 1];
     (o.fwhm.parts = o.fwhm.parts || []).push({ dd, v: Float64Array.from(re.subarray(0, (N >> 1) + 1), t=> t - e0) });
     Object.assign(o.fwhm, { s0, lam, c1 });
+  }
+}
+/* wppmPair(o1, o2): the two lines of one reflection (Kα1 and Kα2: the same d*, the same size,
+   strain and faults; the instrument and the divergence their own) as wppmLine draws each, on one
+   grid (the finer step and the wider window of the two, in δ) by one FFT: the profile is real, so
+   a line's coefficients are Hermitian, and the first line's in the real part with the second's
+   in the imaginary part come back as the first profile in re and the second in im. The size
+   coefficients, a function of L alone, are made once. Neither may carry o.fwhm (the tick's,
+   drawn alone): half the FFTs and the size coefficients of a pattern. */
+const PAIR = [{}, {}];
+function wppmPair(o1, o2){
+  const os = [o1, o2];
+  let halfD = 0, ddMin = Infinity;
+  for (let j = 0; j < 2; j++){
+    const o = os[j], P = PAIR[j], th0 = o.tt*D2R/2;
+    P.s0 = Math.sin(th0); P.c1 = Math.cos(th0)*D2R/o.lam;
+    let lo = 0, hi = 0;
+    if (o.nodes) for (const nd of o.nodes){ if (nd.d < lo) lo = nd.d; if (nd.d > hi) hi = nd.d; }
+    halfD = Math.max(halfD, (Math.max(o.win*o.Hest, o.winMin) + Math.max(-lo, hi))*P.c1);
+    ddMin = Math.min(ddMin, Math.max(o.Hmin, 1e-5)*P.c1/8);
+  }
+  let N = Math.pow(2, Math.ceil(Math.log2(Math.max(1, 2*halfD/ddMin))));
+  N = Math.min(N_MAX, Math.max(N_MIN, N));
+  const dd = 2*halfD/N, dL = 1/(N*dd), p = plan(N), re = p.re, im = p.im, H2 = N >> 1;
+  re.fill(0); im.fill(0);
+  // each line's common factor (its instrument at its angle; the Lorentzian terms alike)
+  let nLmax = 0;
+  for (let j = 0; j < 2; j++){
+    const o = os[j], P = PAIR[j], H = o.Hi*P.c1, eta = o.etai, W = o.WL || 0, gq = Math.PI*Math.PI*H*H/(4*LN2);
+    const com = P.com && P.com.length >= H2 + 1 ? P.com : (P.com = new Float64Array(Math.max(H2 + 1, 1024)));
+    const nL = commonFactor(com, H2, H, eta, W, gq, dL);
+    P.nL = nL; if (nL > nLmax) nLmax = nL;
+  }
+  const size = new Float64Array(nLmax + 1);
+  if (o1.size) o1.size(size, nLmax + 1, dL); else size.fill(1);
+  // z = a1 + i·a2 (a_j: com·size·dL times the divergence's Σ w_k e^{−2πi L δ_k})
+  for (let j = 0; j < 2; j++){
+    const o = os[j], P = PAIR[j], nodes = o.nodes && o.nodes.length ? o.nodes : null, com = P.com, nL = P.nL;
+    const m = nodes ? nodes.length : 0, cr = new Float64Array(m), ci = new Float64Array(m), er = new Float64Array(m), ei = new Float64Array(m);
+    for (let k = 0; k < m; k++){ const a = -2*Math.PI*dL*nodes[k].d*P.c1; er[k] = Math.cos(a); ei[k] = Math.sin(a); cr[k] = nodes[k].w; }
+    for (let i = 0; i <= nL; i++){
+      let sr = 1, si = 0;
+      if (m){
+        sr = 0;
+        for (let k = 0; k < m; k++){
+          sr += cr[k]; si += ci[k];
+          const r = cr[k]*er[k] - ci[k]*ei[k]; ci[k] = cr[k]*ei[k] + ci[k]*er[k]; cr[k] = r;
+        }
+      }
+      const a = com[i]*size[i]*dL, ar = a*sr, ai = a*si;
+      if (i === 0 || i === H2){ if (j) im[i] += ar; else re[i] += ar; continue; }
+      if (j){ re[i] -= ai; im[i] += ar; re[N - i] += ai; im[N - i] += ar; }
+      else { re[i] += ar; im[i] += ai; re[N - i] += ar; im[N - i] -= ai; }
+    }
+  }
+  fftPlus(p);
+  // each line read off its own part of the period, lowered by its edge value
+  const off = H2 + 2, pad = padOf(N + 8), x = o1.x, { S, C } = trigOf(x), n = x.length;
+  for (let j = 0; j < 2; j++){
+    const o = os[j], P = PAIR[j], src = j ? im : re, edge = src[H2], out = o.out, lam = o.lam, s0 = P.s0;
+    for (let k = 0; k < N + 8; k++){ const m = k - off; pad[k] = src[m < 0 ? m + N : m >= N ? m - N : m] - edge; }
+    const half = H2*dd, kf = 2/(lam*dd), ki = o.I*D2R/lam, gHi = N + 2;
+    const xLo = 2*Math.asin(Math.max(-1, Math.min(1, s0 - half*lam/2)))/D2R, xHi = 2*Math.asin(Math.max(-1, Math.min(1, s0 + half*lam/2)))/D2R;
+    for (let i = lowerBound(x, xLo); i < n; i++){
+      if (x[i] > xHi) break;
+      const g = (S[i] - s0)*kf + off;
+      if (!(g >= 2 && g <= gHi)) continue;
+      const k = g | 0, u = g - k;
+      const p0 = pad[k - 1], p1 = pad[k], p2 = pad[k + 1], p3 = pad[k + 2];
+      out[i] += ki*C[i]*(p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0))));
+    }
   }
 }
 /* lineFwhm(f) → the FWHM in 2θ (°) of the profile wppmLine collected in f: the sum of its
@@ -441,4 +555,4 @@ function faultKappa(table, r, alpha){
   return s/table.dLayer;
 }
 
-export { wppmLine, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
+export { wppmLine, wppmPair, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };

@@ -24,7 +24,7 @@
 import { metric, reflections, latticeNames, latticeParams, cellFrom, cellMass, atomOrbits, siteAdpBasis, adpU, betaOf } from './xrd-cryst.js';
 import { lineForWavelength, f0, fprime, atomicMass } from './xrd-data.js';
 import { noiseCountScale } from './xrd-instr.js';
-import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
+import { wppmLine, wppmPair, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
 import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
 
 const D2R = Math.PI/180, R2D = 180/Math.PI;
@@ -424,8 +424,9 @@ function fcjNodes(th, A, H, nForce){
    refinement: a count that changed with U..Y or the asymmetry moved χ² in steps and a
    derivative by up to 10×. refine() checks the counts at its end (model.fcjAudit) and
    runs again when the widths or the asymmetry have outgrown them. The largest shortfall
-   of a tail longer than FCJ_MAX_NODES allow is kept in model.fcjShort. */
-function lineNodes(model, key, th, A, H, tol){
+   of a tail longer than FCJ_MAX_NODES allow is kept in model.fcjShort. interp: a WPPM
+   line's, whose single Soller node is interpolated in θ (sollerNodes). */
+function lineNodes(model, key, th, A, H, tol, interp){
   // A search for where the peaks are needs only where each one's weight lies: its
   // centroid (cellSearch; the asymmetry costs it nothing then).
   if (model.fcjCentroid) return typeof A === 'object' ? sollerCentroid(th, A) : axialNodes(th, A, H, 1);
@@ -437,17 +438,17 @@ function lineNodes(model, key, th, A, H, tol){
     // (A line first met under a hold goes through lineNodesOf, which records its count:
     // taken from here, the audit after the refinement found none recorded and ran again.)
     const c = cache.get(key);
-    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
-    const nodes = lineNodesOf(model, key, th, A, H, tol);
-    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, nodes });
+    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && c.ip === !!interp && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
+    const nodes = lineNodesOf(model, key, th, A, H, tol, interp);
+    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, ip: !!interp, nodes });
     return nodes;
   }
   return lineNodesOf(model, key, th, A, H);
 }
-function lineNodesOf(model, key, th, A, H, tol){
+function lineNodesOf(model, key, th, A, H, tol, interp){
   const fz = model.fcjFreeze;
   if (!fz){
-    const nd = axialNodes(th, A, H, undefined, tol), au = model.fcjAudit;
+    const nd = axialNodes(th, A, H, undefined, tol, interp), au = model.fcjAudit;
     if (nd && nd.short > (model.fcjShort || 1)) model.fcjShort = nd.short;
     // refine()'s check after a refinement: has a line outgrown its held count?
     // (A count down to 1/1.13 of the one needed leaves the profile within 0.1 % of the
@@ -459,13 +460,13 @@ function lineNodesOf(model, key, th, A, H, tol){
   }
   let n = fz.get(key);
   if (n === undefined){
-    const nd = axialNodes(th, A, H, undefined, tol);
+    const nd = axialNodes(th, A, H, undefined, tol, interp);
     n = nd ? nd.n : 0;
     fz.set(key, n);
     if (nd && nd.short > (model.fcjShort || 1)) model.fcjShort = nd.short;
     return nd;
   }
-  return axialNodes(th, A, H, n || undefined, tol);
+  return axialNodes(th, A, H, n || undefined, tol, interp);
 }
 
 /* Axial divergence through Soller slits: the full axial model of Cheary & Coelho, J. Appl.
@@ -557,12 +558,17 @@ function sollerGrid(g){
 /* A line's cells: their shifts' means and variances, which depend on θ and the geometry
    alone (the width only bins them): kept for the last SOLLER_LINES_MAX lines, so that a
    refinement recomputes them only where θ or L moved (on the user's samples, refined in
-   4–5 s with them computed at every call, against under 1 s with FCJ). */
-const SOLLER_LINES = new Map(), SOLLER_LINES_MAX = 512;
+   4–5 s with them computed at every call, against under 1 s with FCJ). The least recently
+   used goes first, and 2048 are kept (512, the oldest first, to v522): a Jacobian's column
+   of a cell parameter moves every line's θ, and the oldest dropped first then took the
+   lines at v with it, to be computed again at the next column; and WPPM's lines keep two
+   cells each (sollerStats), 856 for a triclinic phase's 214 reflections
+   (research/free-shape/round2/STEP2.md). */
+const SOLLER_LINES = new Map(), SOLLER_LINES_MAX = 2048;
 function sollerCells(th, g){
   const key = g.key + '|' + th;
   let C = SOLLER_LINES.get(key);
-  if (C) return C;
+  if (C){ SOLLER_LINES.delete(key); SOLLER_LINES.set(key, C); return C; }
   const G = sollerGrid(g);
   const tt = 2*th, c2 = Math.cos(tt), s2 = Math.sin(tt);
   if (G.empty || Math.abs(s2) < 1e-9) return null;
@@ -605,7 +611,29 @@ function sollerCells(th, g){
   SOLLER_LINES.set(key, C);
   return C;
 }
-function sollerNodes(th, g, H, nForce, tol = SOLLER_TOL){
+/* interp (a WPPM line's: wppmLineOf): where the line takes one node, its shift, spread and
+   reach from the cells at the two nearest multiples of SOLLER_DQ in θ, linearly. A Jacobian's
+   column of a cell parameter (and a trial step) moves θ by far less than that, and every such
+   θ had cost the whole of sollerCells (a few thousand arccosines: the axial nodes had taken
+   23 % of a WPPM fit's CPU), now an interpolation between two kept. Linear in θ over 10⁻⁴
+   rad: the shift within about 10⁻⁷° of the cells' own at 2θ = 10° (its second derivative
+   there ≈ 14°/rad²), continuous in θ; the patterns within 10⁻⁹ of the peak of the cells'
+   own (research/free-shape/round2/STEP2.md). */
+const SOLLER_DQ = 1e-4;
+function sollerStats(th, g){
+  const f = th/SOLLER_DQ, k = Math.floor(f), t = f - k, a = sollerCells(k*SOLLER_DQ, g), b = sollerCells((k + 1)*SOLLER_DQ, g);
+  if (!a || !b) return null;
+  const l = (p, q) => p + t*(q - p);
+  return { mean: l(a.mean, b.mean), sd: l(a.sd, b.sd), lo: l(a.lo, b.lo), hi: l(a.hi, b.hi) };
+}
+function sollerNodes(th, g, H, nForce, tol = SOLLER_TOL, interp = false){
+  if (interp && !(nForce > 1)){
+    const st = sollerStats(th, g);
+    if (st){
+      const r = st.sd/H;
+      if (nForce ? nForce === 1 : st.hi - st.lo < 0.05*H || 4*r*r <= tol){ const one = [{ d: st.mean, w: 1 }]; one.n = 1; return one; }
+    }
+  }
   const C = sollerCells(th, g);
   if (!C) return null;
   const { mu, va, cw, lo, hi, mean, sd } = C, nc = cw.length, span = hi - lo, r = sd/H;
@@ -653,8 +681,8 @@ function sollerCentroid(th, g){
 /* The axial divergence of a model: FCJ's A, a number (none at 0), or the Soller model's
    geometry, an object (axialOf); its nodes, and the reach of its shifts (deg). tol: the
    Soller nodes' error allowed, of the peak (sollerTol). */
-function axialNodes(th, A, H, nForce, tol){
-  if (A && typeof A === 'object') return sollerNodes(th, A, H, nForce, tol);
+function axialNodes(th, A, H, nForce, tol, interp){
+  if (A && typeof A === 'object') return sollerNodes(th, A, H, nForce, tol, interp);
   return A > 0 ? fcjNodes(th, A, H, nForce) : null;
 }
 /* The Soller nodes' error allowed for a line of area Sarea (the scale in it), FWHM H and
@@ -2371,8 +2399,10 @@ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw
    solid along its direction (shapeTs), over the log-normal distribution when there is
    one — and the axial divergence's nodes. The grid follows two widths, estimated as
    Lorentzians of the same breadth: the line's whole (the window) and its narrowest part
-   (the step: the instrument's and the largest crystallites' sharpest member). */
-function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, ts, tw){
+   (the step: the instrument's and the largest crystallites' sharpest member). A line drawn
+   whole on one grid, but for a tick's, goes to pend when given, for phasePattern to draw it
+   with the reflection's other line by one FFT (wppmPair). */
+function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, ts, tw, pend){
   const q = model.phases[k], L = model.lines[j], lam1 = model.lines[0].lam, c = Math.cos(th);
   const { U, V, W, X, Y, A } = inst, pr = profileAtTheta(th, U, V, W, X, Y);
   // The solid's base body for its members; the isotropic size (no shape, or the shape's
@@ -2419,7 +2449,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, 
   // plate's sharp in-plane members inside a broad line): counted from the whole line's
   // width, 3 nodes 0.1° apart drew separate bumps, 8 % of the peak.
   // (the error allowed at the top of its narrowest component)
-  const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin, sollerTol(model, S*I, Hmin, tq.eta)) : null;
+  const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin, sollerTol(model, S*I, Hmin, tq.eta), true) : null;
   const spread = nodes ? nodes.reduce((s, nd)=> Math.max(s, Math.abs(nd.d)), 0) : 0;
   /* The tail rule draws no further than the grid holds at its step (an eighth of Hmin):
      a step grown for the tail costs the line's top more than the tail gains. On Si spheres
@@ -2449,7 +2479,8 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, 
       g = { list: [mb], sw: mb[4], swx: mb[4]*mb[5] };
     }
     draw();
-  } else wppmLine({ ...line, Hest, Hmin, size: sizeOf(members), fwhm: fw });
+  } else if (pend && !fw) pend.push({ ...line, Hest, Hmin, size: sizeOf(members) });
+  else wppmLine({ ...line, Hest, Hmin, size: sizeOf(members), fwhm: fw });
   if (tick){
     /* The tick's FWHM (xrd-widths' expected width; the phase detection's reach of a
        line), measured on the line as drawn. 1.23·Ys, the single sphere's, had been 1.6
@@ -2491,6 +2522,8 @@ function phasePattern(model, v, k, out, ticks){
   }
   const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
   if (sk && sk.only && sk.k !== k) return out;
+  // A reflection's two lines drawn together (wppmPair), but for the ticks' calc
+  const pend = wppm && !ticks && model.lines.length === 2 ? [] : null;
   for (let r = 0; r < q.nRefl; r++){
     if (skip && (sk.only ? !skip.has(r) : skip.has(r))) continue;
     const gf = r < q.nFull ? 1 : growFade(d[r], q.dFull);
@@ -2514,7 +2547,7 @@ function phasePattern(model, v, k, out, ticks){
       if (!fade) continue;
       const I = (j ? base2 : base)*L.w*lpFactor(model, th)*fade;
       if (wppm){
-        wppmLineOf(model, k, r, j, th, tt, I, { U: Ui, V: Vi, W: Wi, X: Xi, Y: Yi, A }, { eps, kappa, sigma, Ys: v[q.iYs] }, out, ticks && j === 0 ? ticks : null, S, f2, d, ts ? ts[r] : null, ts && tw ? tw[r] : null);
+        wppmLineOf(model, k, r, j, th, tt, I, { U: Ui, V: Vi, W: Wi, X: Xi, Y: Yi, A }, { eps, kappa, sigma, Ys: v[q.iYs] }, out, ticks && j === 0 ? ticks : null, S, f2, d, ts ? ts[r] : null, ts && tw ? tw[r] : null, pend);
         continue;
       }
       // The size (Ys, read as D = Kλ1/Ys, and the shape's widths) and the faults broaden
@@ -2537,6 +2570,7 @@ function phasePattern(model, v, k, out, ticks){
         ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
                      tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: pr.H, eta: pr.eta, j: 0, pk: k, r });
     }
+    if (pend && pend.length){ if (pend.length === 2) wppmPair(pend[0], pend[1]); else wppmLine(pend[0]); pend.length = 0; }
   }
   return out;
 }
