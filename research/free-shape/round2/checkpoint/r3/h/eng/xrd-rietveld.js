@@ -1114,8 +1114,11 @@ const SHAPE_CHECK = { on: true, z: 3.09, bin: 1, minsep: 0.3, jack: true, groups
    rows (a bias of 0.4 σ rms from the instrument's and the line's residual misfit, and minima that
    settle apart); κ 1.2 covers 77 of their 82 extents (94 %; κ 1: 73), the combined interval 78. */
 const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 16, deltaMisfit: 25, keep: 30, kappa: 1.2,
-  capCands: Infinity, capEvals: Infinity };
-/* [round 3] The stage's cap where the per-line check of the fit before the stage fired (the keep test's
+  capCands: 3, capEvals: 6000 };
+/* [round 3] (research/free-shape/round3/: POINT1.md, POINT4.md, POINT5.md; capCands 3 and capEvals 6000 from
+   the 77 screening runs: the flagged rows' stage cost up to 17 511 evaluations against 8144 on the others,
+   and the cap kept every lowest χ²; Infinity for both gives round 2's stage.)
+   The stage's cap where the per-line check of the fit before the stage fired (the keep test's
    check): at most capCands candidates, and no candidate or round of turns begun once the stage has spent
    capEvals pattern evaluations. info.minimaStage (and the report's minima) say whether the minima were
    explored in full: `explored` false when the cap, or max, left a distinct candidate or a round out.
@@ -1126,8 +1129,13 @@ const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kic
    times kappa·√5.99 (χ²₂'s 95 %), the larger of the two turns. each: the radius the largest over the
    minima within Δ* of the angle to the minimum's axis plus that minimum's own (its covariance; for
    'profile' its own profile), in place of betweenDeg. record: the profiles' points and the covariances'
-   σ in the report (a study's: angle). A held fit's radius is at least its freeOff, as its esdAngle. */
-const SHAPE_ANGLE = { rule: 'r2', t: 5.99, kappa: 1, each: false, record: false, dMax: 40 };
+   σ in the report (a study's: angle). A held fit's radius is at least 2·freeOff, as round 2's (esdAngle ≥ freeOff).
+   'profile' with t 9 (round 3, POINT1.md): on the 31 clean kept truths of the screening runs it covers 31 principal
+   axes against round 2's 27 (its 2·esdAngle is the tilt's 1-σ reading doubled, 86 % for a two-dimensional
+   normal tilt), at 1.5× round 2's radius (median) and 2.2× the profile's trials; 5.99 (χ²₂'s 95 %) covers 30,
+   and 9 is that times κ² = 1.2², the curvature's bias factor of the extents. 'curv' covers 30 at κ 1 but its σ
+   runs to hundreds of degrees where two widths are nearly equal or the orientation symmetric. */
+const SHAPE_ANGLE = { rule: 'profile', t: 9, kappa: 1, each: false, record: false, dMax: 40 };
 /* [round 3] Targeted starts (search v2, a body). lines: from the isotropic fit's residual, each segment's
    (lineCheck's cut) extra width along its strongest reflection's normal, the derivative of the pattern in
    Ys as the probe; a plate on the normals of the `lines` most broadened segments and a needle on those of
@@ -1136,7 +1144,10 @@ const SHAPE_ANGLE = { rule: 'r2', t: 5.99, kappa: 1, each: false, record: false,
    relabelled (a box's or an ellipsoid's five other orders, an elliptic cylinder's height on either side,
    a body of revolution's or a square box's two swapped, a square box also turned 45° about its height),
    each refined briefly and the framesFull best of them in full, their ends for the stage. */
-const SHAPE_TARGET = { lines: 0, frames: 0, framesFull: 2 };
+// (lines 2, round 3, POINT5.md: on the 66 screening truths 3 rows lower than without, one of them a clean
+// truth by 1293 χ²_ν, at 1.08× the search's evaluations; frames 1 bought 2 rows at 1.17×, 4 random starts 2
+// at 1.10×, and are off)
+const SHAPE_TARGET = { lines: 2, frames: 0, framesFull: 2 };
 const EVAL_COUNT = { n: 0 };
 /* The keep test (STEP5.md): one size against the shape, on G, the larger gain over the isotropic fit of
    the search's free and held fits before the minima stage, in χ²/max(1, χ²_ν,iso).
@@ -1444,7 +1455,8 @@ function turnProfiles(model, v, res, about, turn, names, o){
         const d = (chiAt(turn(b, sg*deg*D2R), names(b)) - c0)/nu;
         if (!Number.isFinite(d)){ pts.push([deg, Infinity]); break; }
         pts.push([deg, d]);
-        if (d >= Math.max(1, o.dMax || 1)) break;
+        // followed to dMax, and until a default step has reached 1 (the esd's own reading)
+        if (d >= Math.max(1, o.dMax || 1) && pts.some(([dg, dd])=> TURN_STEPS.includes(dg) && dd >= 1)) break;
       }
       return pts;
     };
@@ -1931,7 +1943,7 @@ function bodyShapeOf(model, v, k, res){
       axes.forEach(ax=> {
         let r = tiltBy(own, ax.axis);
         if (!Number.isFinite(r)) r = fallback(ax.axis);   // a held fit's covariance has no turns: its profile's σ
-        if (held && info.freeOff) r = Math.max(r, info.freeOff[ax.axis]);
+        if (held && info.freeOff) r = Math.max(r, 2*info.freeOff[ax.axis]);   // as round 2's 2·esdAngle, esdAngle ≥ freeOff
         let rm = ax.betweenDeg;
         if (AN.each){
           rm = 0;

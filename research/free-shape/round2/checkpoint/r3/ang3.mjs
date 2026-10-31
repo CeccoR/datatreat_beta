@@ -58,3 +58,7 @@ if (process.argv.includes('--rows')){
 console.log(L.join('\n'));
 if (process.argv.includes('--miss')){ const o = JSON.parse(arg('miss', '{}'));
   for (const x of X.filter(groups.clean)){ const a = one(x, o); if (a && !a.cov) console.log('miss', x.row.id, f(a.e, 2), f(a.R, 2), 'r2', f(a.E, 2)); } }
+// --check: the engine's own radius (records made at rule 'profile', t 9) against the offline reading
+if (process.argv.includes('--check')){ let n = 0, bad = [];
+  for (const x of X){ const a = one(x, { rule: 'profile', t: 9, side: 'max', each: false }); if (!a || a.E == null) continue; n++; if (Math.abs(a.R - a.E) > 1e-6*Math.max(1, a.R)) bad.push(`${x.row.id} ${f(a.R, 4)} ${f(a.E, 4)}`); }
+  console.log(`check: engine radius = offline profile t 9 on ${n - bad.length} of ${n}${bad.length ? ': ' + bad.join(', ') : ''}`); }
