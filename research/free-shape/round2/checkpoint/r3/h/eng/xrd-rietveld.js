@@ -1114,10 +1114,12 @@ const SHAPE_CHECK = { on: true, z: 3.09, bin: 1, minsep: 0.3, jack: true, groups
    rows (a bias of 0.4 σ rms from the instrument's and the line's residual misfit, and minima that
    settle apart); κ 1.2 covers 77 of their 82 extents (94 %; κ 1: 73), the combined interval 78. */
 const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 16, deltaMisfit: 25, keep: 30, kappa: 1.2,
-  capCands: 3, capEvals: 6000 };
-/* [round 3] (research/free-shape/round3/: POINT1.md, POINT4.md, POINT5.md; capCands 3 and capEvals 6000 from
-   the 77 screening runs: the flagged rows' stage cost up to 17 511 evaluations against 8144 on the others,
-   and the cap kept every lowest χ²; Infinity for both gives round 2's stage.)
+  capCands: Infinity, capEvals: 6000 };
+/* [round 3] (research/free-shape/round3/: POINT4.md, CONFIRM.md) capEvals 6000: on the 308 tuning runs the
+   flagged rows' stage ran to 17 237 evaluations uncapped (the others' to 13 225); with capEvals alone 6 rows are
+   cut (0.59× their stage), every interval kept, one held fit left held 12.7 χ²_ν above the free minimum the
+   full stage reaches. capCands 3 (the screening's choice) cut 23 rows, most of them cheap ones, and lost 16 of
+   their 55 minima within Δ*, 3 extents' and 3 axes' coverage: Infinity (off). Both Infinity: round 2's stage.
    The stage's cap where the per-line check of the fit before the stage fired (the keep test's
    check): at most capCands candidates, and no candidate or round of turns begun once the stage has spent
    capEvals pattern evaluations. info.minimaStage (and the report's minima) say whether the minima were
@@ -1130,12 +1132,14 @@ const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kic
    minima within Δ* of the angle to the minimum's axis plus that minimum's own (its covariance; for
    'profile' its own profile), in place of betweenDeg. record: the profiles' points and the covariances'
    σ in the report (a study's: angle). A held fit's radius is at least 2·freeOff, as round 2's (esdAngle ≥ freeOff).
-   'profile' with t 9 (round 3, POINT1.md): on the 31 clean kept truths of the screening runs it covers 31 principal
-   axes against round 2's 27 (its 2·esdAngle is the tilt's 1-σ reading doubled, 86 % for a two-dimensional
-   normal tilt), at 1.5× round 2's radius (median) and 2.2× the profile's trials; 5.99 (χ²₂'s 95 %) covers 30,
-   and 9 is that times κ² = 1.2², the curvature's bias factor of the extents. 'curv' covers 30 at κ 1 but its σ
+   'profile' with t 5.99, χ²₂'s 95 % point (round 3, POINT1.md, CONFIRM.md): on the 128 clean kept truths of the
+   tuning part (not flagged) it covers 125 principal axes (98 %) against round 2's 116 (91 %; its 2·esdAngle is
+   the tilt's 1-σ reading doubled, 86 % for a two-dimensional normal tilt), at 1.34× round 2's radius (median)
+   and 2.05× the profile's trials; the screening runs had chosen 9 (5.99 × 1.2², the extents' bias factor: 31
+   of 31 against 30), which the 308 runs showed over-covering (127 of 128, 1.61×): the reading at the
+   threshold, the larger side and turn, is conservative enough without κ. 'curv' covers 125 at κ 1 but its σ
    runs to hundreds of degrees where two widths are nearly equal or the orientation symmetric. */
-const SHAPE_ANGLE = { rule: 'profile', t: 9, kappa: 1, each: false, record: false, dMax: 40 };
+const SHAPE_ANGLE = { rule: 'profile', t: 5.99, kappa: 1, each: false, record: false, dMax: 40 };
 /* [round 3] Targeted starts (search v2, a body). lines: from the isotropic fit's residual, each segment's
    (lineCheck's cut) extra width along its strongest reflection's normal, the derivative of the pattern in
    Ys as the probe; a plate on the normals of the `lines` most broadened segments and a needle on those of
