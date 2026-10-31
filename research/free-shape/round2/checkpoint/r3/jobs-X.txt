@@ -6,3 +6,10 @@ PX sqbox-P4mmm-generic-a p MIN_SET=capCands=99;capEvals=1e12
 PX ellcyl-P-3m1-generic-a p MIN_SET=capCands=99;capEvals=1e12
 PX ellcyl-P6mmm-on-a p MIN_SET=capCands=99;capEvals=1e12
 PX ellipsoid-Pmmm-generic-a p MIN_SET=capCands=99;capEvals=1e12
+PX ellipsoid-Pm-3m-near-a p MIN_SET=capCands=99;capEvals=1e12
+PX spheroid-P6mmm-near-a p MIN_SET=capCands=99;capEvals=1e12
+PX box-P-3-near-b p MIN_SET=capCands=99;capEvals=1e12
+PX box-Pm-3-generic-b p MIN_SET=capCands=99;capEvals=1e12
+PX box-Pm-3m-near-b p MIN_SET=capCands=99;capEvals=1e12
+PX sqbox-Pmmm-on-b p MIN_SET=capCands=99;capEvals=1e12
+PX sqbox-Pm-3m-generic-b p MIN_SET=capCands=99;capEvals=1e12
