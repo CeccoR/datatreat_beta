@@ -51,7 +51,7 @@ Against what the confirmation measured on the tuning part (`CONFIRM.md`):
 | clean spheres kept; error spheres kept | 0/12; 4/10 | 0/5; 2/6 | held |
 | truths kept | 131/132 | 65/66 | held |
 | reach | 127/132 | 64/65 | held |
-| family: clean truths given a wrong family | 0/33 (and 0/33 in step 5) | FAMILY_PENDING | FAMILY_READ |
+| family: clean truths given a wrong family | 0/33 (and 0/33 in step 5) | 0/33 | held |
 
 **What it shows.** On data it never saw, the frozen prototype keeps the real shapes (65 of 66; the one
 rejected holds no shape the data support), keeps no clean sphere, reads the clean solids within 1 % (worst
@@ -60,7 +60,7 @@ and costs 0.85× today's evaluations and 0.53× its wall. Today's search, on the
 29 % long (worst, median), the anisotropy at 0.77, and its esds cover 22 % of the clean extents.
 **Shortfalls** (§9): the angles' intervals cover 84 % of the clean axes; size distributions remain the
 prototype's blind spot (an unflagged false shape on a sphere, 4 of the 5 spoiled error rows the check missed,
-4 of the 6 extents the jackknife left out, 6 unbounded extents with an error); FAMILY_SHORT.
+4 of the 6 extents the jackknife left out, 6 unbounded extents with an error); and three flagged error rows given a wrong family by 64–147 χ²_ν.
 
 ## 2. What was run
 
@@ -74,7 +74,7 @@ prototype's blind spot (an unflagged false shape on a sphere, 4 of the 5 spoiled
 |---|---|---|---|
 | VP | the frozen prototype at its defaults | 77 | 40 min |
 | VT | today's search | 77 | 79 min |
-| VFAM | `SHAPE_FAMILY.solids 'general'` (the 4-search comparison) on the 66 truths | 66 | VFAM_MIN |
+| VFAM | `SHAPE_FAMILY.solids 'general'` (the 4-search comparison) on the 66 truths | 66 | 109 min |
 
 - **Scoring** is the confirmation's (`score6.mjs --part validation --p VP --t VT`, `fam6.mjs`): reach against
   the best known of each line over the run and its truth reference (no variants were run here, so the best
@@ -151,7 +151,7 @@ prototype's blind spot (an unflagged false shape on a sphere, 4 of the 5 spoiled
 
 - **One false alarm**: spheroid-Pm-3-near (clean, 16 × 16 × 8.9 nm), its worst segment at z 3.14 against
   3.09. At the nominal 0.2 % a pattern, 116 clean patterns over both parts expect 0.23; one is consistent with
-  it. Its cost: Δ* 25 and the jackknife's widening (its extents still within 2.4 %); the shape is kept (ΔBIC −437).
+  it. Its cost: Δ* 25 and the jackknife (its intervals widened from 2.2 to 2.4 %, its axis radius to 13°); the shape is kept (ΔBIC −437) and its extents and axis covered.
 - **Detections**: 28 of 39 error rows; humps, impurities and texture nearly always, air 5 of 8, size
   distributions 3 of 7.
 - **Spoiled results caught: 13 of 18** (tuning: 25 of 31). Missed: four size distributions (0.08, 0.41 on a
@@ -178,7 +178,28 @@ prototype's blind spot (an unflagged false shape on a sphere, 4 of the 5 spoiled
 
 ## 8. The family
 
-FAMILY_SECTION
+The 4-search comparison (`solids: 'general'`) on the 66 validation truths, the frozen margins
+(`tables/step6-family-val.md`):
+
+| 66 truths | right | not determined (truth among those named) | wrong |
+|---|---|---|---|
+| clean (33) | **22** | 11 (11) | **0** |
+| with an error (33) | 9 | 21 (21) | 3 |
+| the tuning part, clean / error (step 5 and `CONFIRM.md`, 132) | 37 / 17 | 29 / 39 | 0 / 10 |
+
+- **No clean truth is given a wrong family** (0 of 33; 0 of 99 clean truths over the three sets), and
+  "not determined" always names the truth's family among those within the margin (32 of 32).
+- **The three wrong verdicts are flagged error rows**, by 64–147 χ²_ν against the 35 the flag asks: a hump
+  of 0.71 makes a cylinder a box, a size distribution of 0.31 a cylinder a ball, texture of 0.61 an ellipsoid
+  a cylinder. As on the tuning part (10 of 66 error truths), a model error moves the family beyond any margin
+  the noise sets.
+- **Nested.** Where the winner is the truth's family (57): on the clean rows every one is right (special
+  truths the special member 17 of 17, general truths the general 15 of 15). The seven exceptions are error
+  rows: two special truths given the general member (texture 0.67, Δ 520; an impurity of 0.09, Δ 28.1 against
+  25) and five general truths given the special one (Δ −0.0 to 22.6, each under its need: a hump, texture,
+  a size distribution, air).
+- **Cost** 4.75× the chosen solid's search evaluations (median 5.2×), 4.8× its wall; the chosen solid's χ²
+  equal to its own run's on 66 of 66.
 
 ## 9. Shortfalls
 
@@ -187,11 +208,11 @@ Reported as found; nothing was changed after the results were seen.
 1. **The angles' intervals are too narrow on unique fits**: 27 of 32 clean principal axes (84 %), 86 of 97
    over both parts. The profile's 2·esdAngle alone under-states a well-determined axis by up to 1.9×.
    To fix in a later round (a factor on the angles, set on tuning rows), with a new validation set.
-2. **Size distributions.** A sphere with σ 0.41 is kept as a cylinder with no flag (G 78); four of the five
+2. **Size distributions.** A 13.8 nm sphere with a size distribution of 0.41 (σ 0.26) is kept as a cylinder with no flag (G 78); four of the five
    spoiled error rows the check misses and four of the six extents the jackknife leaves out are size
    distributions; one unflagged unbounded extent. Step 5's reading holds: this needs the distribution in the
    model.
-3. **Model errors and the family**: FAMILY_RISK.
+3. **Model errors and the family**: three flagged error rows are given a wrong family (a hump, a size distribution, texture) by 64–147 χ²_ν, beyond the 35 the flag asks; no clean truth is (0 of 33). A margin cannot remove these.
 4. **Cost tail.** One flagged row spends 18 652 evaluations in the minima stage; 4/m and −3m cost 1.2–1.3×
    today's search there. The whole fit is still 0.53× today's wall.
 5. **Small counts.** 33 clean truths and 5 clean spheres: the coverage figures carry a binomial sd of about

@@ -16,7 +16,7 @@ minima) and a uniqueness verdict; keeps a shape by a likelihood-ratio threshold 
 request, says which family of solid the data tell apart. Confirmed unchanged on the 154 tuning runs and
 frozen, it was scored once on the 77 validation runs against today's search: 65 of 66 truths kept (61), no
 clean sphere kept (2 of 5), the clean extents read within 1 % (worst, median; today +28 %) and the anisotropy
-at 1.00 (0.77), intervals covering 80 of 80 clean extents (today's esds 17 of 76), FAMILY_SUMMARY, at 0.85×
+at 1.00 (0.77), intervals covering 80 of 80 clean extents (today's esds 17 of 76), no clean truth given a wrong family (0 of 33), at 0.85×
 today's evaluations and 0.53× its wall. Its shortfalls: the angles' intervals cover 84 % of the clean axes,
 and a size distribution or texture can still make a shape, an unflagged one or a wrong family where the
 model lacks the error.
