@@ -45,7 +45,7 @@ row), `ang3.mjs` and `ang3b.mjs` (the angles over a grid from the recorded profi
   The four clean truths still not reached are cylinder-P-3m1-on-a (66 χ²_ν), ellcyl-P4mmm-on-a (1163, flagged
   by the check at z 9.1, the misfit being the search's), sqbox-P6m-generic-b (15.7) and ellcyl-P-3m1-near-a (2.7).
 - **Nothing else moves**: the outcomes (2 changed, both flagged texture rows), the accuracy of the kept truths,
-  the extents' intervals, the keep test, the check (the same rows flagged but one) are round 2's; the parts
+  the extents' intervals, the keep test and the check's flags (107 and 108 of 154 error rows) are round 2's; the parts
   touch the starts, the stage's tail and the reported radius only.
 
 ## 3. Point 1 on the tuning part: t changed from 9 to 5.99
@@ -71,11 +71,13 @@ The kept truths' principal axes, every rule read from the same profiles (`tables
 - **The three misses at t 5.99**: spheroid-P4m-generic-a (37.5° against 24.3°: a near-sphere with a second
   minimum), sqbox-P6m-generic-b (4.6° against 1.4°: the clean truth 15.7 χ²_ν above its truth reference, the
   square turned about its axis, a search miss) and cylinder-P2m-generic-b (0.99° against 0.87°). Round 2's
-  twelve misses were all 1.1–1.9 times their radius on well-determined fits, as its validation found.
+  twelve: ten at 1.03–1.5 times their radius, spheroid-P4m-generic-a at 1.9 and sqbox-P6m-generic-b at 4.7, as
+  its validation found (up to 1.9×).
 - **The curvature** covers 125 at κ 1, but on the 38 unflagged error rows its median radius is 11.9° against
   the profile's 7.9° for one more axis, and it states hundreds of degrees on near-degenerate axes: not taken.
-- **Unique fits**: of 51 clean unique fits with the axis off the lattice and free, 2 lie beyond the t-5.99 radius
-  (round 2's: 1 beyond its, but 12 misses overall, most on unique fits at the 1-σ edge).
+- **Unique free fits** (51 clean, the axis off the lattice): 2 lie beyond the t-5.99 radius and 1 beyond round
+  2's; round 2's other misses are held fits and fits with several minima, where its 2·esdAngle is also the
+  radius.
 
 ## 4. Point 4 on the tuning part: the candidate cap dropped
 
@@ -103,8 +105,8 @@ better; they are round 2's figures, round 3 changes none of these parts (`tables
 - **The jackknife** (flagged kept truths, round 3's reported interval): size distributions 24 of 42 extents
   (57 %; 3 unbounded) and 12 of 17 axes; textures 66 of 83 (80 %; 9 unbounded) and 24 of 37; humps 32/38, 14/16;
   impurities 45/45, 17/18; air 11/11, 4/4.
-- **The keep test**: no clean sphere kept (0 of 22); 14 of 22 error spheres kept, 9 of them a size distribution
-  or texture (6 flagged), as round 2 found. These are the repository's `BACKLOG.md` item, not this round's.
+- **The keep test**: no clean sphere kept (0 of 22); 14 of 22 error spheres kept (both rounds), 11 of them a size
+  distribution (6) or texture (5), 7 of the 11 flagged, as round 2 found. These are the repository's `BACKLOG.md` item, not this round's.
 
 ## 7. The freeze
 

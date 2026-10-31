@@ -1,3 +1,5 @@
 F0 box-P-1-near-a p ANGLE_SET=rule=r2,MIN_SET=capCands=99;capEvals=1e12,TARGET_SET=lines=0
 F1 box-Pm-3-near-a p -
 F1 ellipsoid-Pmmm-generic-a p -
+F2 box-Pm-3m-on-a p ANGLE_SET=record=true
+F2 ellcyl-P-3m1-generic-a p ANGLE_SET=record=true

@@ -73,13 +73,15 @@ evaluations about 2× round 2's (box-Pm-3-near-a 809 → 1797). The curvature co
 
 ## Decision
 
-`SHAPE_ANGLE.rule 'profile'`, **t = 9**, `each` off. t 9 is χ²₂'s 95 % point 5.99 times κ² = 1.2², the factor
-the curvature needed on the extents (`../round2/STEP4.md` §6) for the instrument's and the line's bias; the
-screening runs cannot tell 5.99 (30 of 31) from 9 (31 of 31) and round 2's lesson was that the tuning part's
-coverage ran 7 points above the validation's, so the threshold takes the bias factor the extents showed. The
-curvature, cheaper, is not taken: it misstates exactly the near-degenerate axes. `esdAngle` stays round 2's
-1-σ figure; `radius` is the 95 % statement. The confirmation reads t over a grid on the 308 tuning runs
-(`CONFIRM.md` §3).
+On the screening runs: `SHAPE_ANGLE.rule 'profile'`, `each` off, and t 9, χ²₂'s 95 % point 5.99 times κ² = 1.2²,
+the factor the curvature needed on the extents (`../round2/STEP4.md` §6), since 77 runs could not tell 5.99 (30 of
+31) from 9 (31 of 31) and round 2's tuning coverage had run 7 points above its validation's. The curvature,
+cheaper, is not taken: it misstates exactly the near-degenerate axes. `esdAngle` stays round 2's 1-σ figure;
+`radius` is the 95 % statement.
+
+**Changed at the confirmation** (`CONFIRM.md` §3): on the 308 tuning runs t 9 covered 127 of 128 clean axes
+(2.2 sd above 95 %) and t 5.99 125 (97.7 %); the profile's reading, the larger side and turn, is already
+conservative by about 1.4 against a two-dimensional normal tilt, the factor κ was to supply. **Frozen: t = 5.99.**
 
 ## Files
 

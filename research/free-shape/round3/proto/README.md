@@ -18,8 +18,8 @@ the branch is unchanged. `$W` is the work folder (the session's scratchpad), not
 
 | part | tunables (default; round 2's) | what |
 |---|---|---|
-| the axes' radius | `SHAPE_ANGLE` { `rule` 'profile' ('r2'), `t` 9, `kappa` 1, `each` false, `record` false, `dMax` 40 } | 'profile': each turn's profile (`turnProfiles`, turnEsds's own refinement at each turn, on the steps 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 45, 60°) read where χ² rises by t·χ²_ν (`turnRead`; the larger side), an axis's radius the larger reading of the turns that tilt it, a held fit's at least 2·freeOff, then with the minima's betweenDeg and, where the check fired, the jackknife's turn. 'curv': the covariance's σ of each turn × kappa·√5.99 instead. `each`: the hull over the minima within Δ* of each minimum's angle plus its own reading. `record`: the profiles' points and the covariance's σ (the report's `minima.angle`, a study's). `esdAngle` is round 2's (read on the default steps from the same points). |
-| the stage's cap | `SHAPE_MINIMA.capCands` 3 (Infinity), `.capEvals` 6000 (Infinity) | where the per-line check of the fit before the stage fired (the keep test's), at most capCands candidates, and no candidate or round of turns begun once the stage has spent capEvals pattern evaluations (`EVAL_COUNT`). `info.minimaStage` gains `left` (distinct candidates beyond the limit, counted up to 12), `skipped`, `capped`, `explored`, `evals`, `flagged`; the report's `minima.explored`. |
+| the axes' radius | `SHAPE_ANGLE` { `rule` 'profile' ('r2'), `t` 5.99, `kappa` 1, `each` false, `record` false, `dMax` 40 } | 'profile': each turn's profile (`turnProfiles`, turnEsds's own refinement at each turn, on the steps 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 45, 60°) read where χ² rises by t·χ²_ν (`turnRead`; the larger side), an axis's radius the larger reading of the turns that tilt it, a held fit's at least 2·freeOff, then with the minima's betweenDeg and, where the check fired, the jackknife's turn. 'curv': the covariance's σ of each turn × kappa·√5.99 instead. `each`: the hull over the minima within Δ* of each minimum's angle plus its own reading. `record`: the profiles' points and the covariance's σ (the report's `minima.angle`, a study's). `esdAngle` is round 2's (read on the default steps from the same points). |
+| the stage's cap | `SHAPE_MINIMA.capEvals` 6000 (Infinity), `.capCands` Infinity (Infinity; 3 was screened and dropped) | where the per-line check of the fit before the stage fired (the keep test's), at most capCands candidates, and no candidate or round of turns begun once the stage has spent capEvals pattern evaluations (`EVAL_COUNT`). `info.minimaStage` gains `left` (distinct candidates beyond the limit, counted up to 12), `skipped`, `capped`, `explored`, `evals`, `flagged`; the report's `minima.explored`. |
 | targeted starts | `SHAPE_TARGET` { `lines` 2 (0), `frames` 0, `framesFull` 2 } | `lines`: `lineBroadening` (the isotropic fit's residual on each segment of the per-line check projected on the derivative in Ys) gives each line's extra width; a plate on the normals of the `lines` most broadened (z > 2), a needle on those of the `lines` least broadened (z < −2), a family among the low-index starts skipped. `frames`: the lowest distinct ends' frames with their widths relabelled, refined briefly, the framesFull best in full, before the stage. `info.target` records them; the ends' kinds carry `-line` / `-frame`. |
 
 Also: `EVAL_COUNT` (a counter of pattern evaluations, `phasePattern`), `minimaSigmas` returns each turn's σ
@@ -37,11 +37,15 @@ against round 2's `FROZEN.json` hashes). Every run deterministic, nice 15, three
    report's 2025 evaluations, esdAngle, radius and lo–hi, all equal. With `record` on (T0rec, S0) the search and
    every reported number are equal too; the report adds `minima.angle` and costs 2.0× (the profiles followed
    to Δχ²/χ²_ν 40).
-2. **Each part alone.** The defaults (F1) on box-Pm-3-near-a equal TL's search to the bit (χ² 10 081.515, 3859
+2. **Each part alone.** The screening's defaults (F1: t 9, capCands 3) on box-Pm-3-near-a equal TL's search to the bit (χ² 10 081.515, 3859
    evaluations): the cap does not fire there; the radius alone changes (principal axis 0.51° → 2.29°), the
    report 809 → 1797 evaluations. On ellipsoid-Pmmm-generic-a (flagged) the defaults equal the cap's screening
    variant's stage (capped: 3 candidates, 4 left) with the lines' starts added: χ² 26 270.619 as uncapped, the
    stage 17 237 → 8316 evaluations.
 3. **The confirmation's records** (`../CONFIRM.md`): the engine's `radius` equals `ang3.mjs`'s offline
-   profile reading at t 9 on every kept truth with a record (`check`, below).
-4. **Lint and tests**: see `../CONFIRM.md` §freeze.
+   profile reading at t 9 on 260 of 260 kept truths with a record (`--check`).
+4. **The frozen defaults** (F2: t 5.99, capEvals alone) on box-Pm-3m-on-a equal PY (the evaluation cap alone) and
+   on ellcyl-P-3m1-generic-a PX (uncapped; its stage under 6000) to the bit: χ², the search's and the stage's
+   evaluations; the radius equals the offline reading at t 5.99 on both.
+5. **Lint and tests** on `$W/r3-app` at the freeze: `npm run lint` clean; the engine's tests (rietveld, rvmodel,
+   rvpool, rvsplit, rvlock, rvcif, rvui, smoke, widths, modules) 53 of 53 pass. No test asks for a free shape.

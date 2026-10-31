@@ -21,14 +21,15 @@ function one(x, o){
   const A = x.r.report.minima.angle, about = A.about, fp = iv.fp, rep = x.r.report;
   const DS = x.flag ? 25 : 16, inD = A.minima.filter(m=> m.delta <= DS);
   const tilt = (rd, i) => { const r = about.filter(b=> b !== i).map(rd); return r.some(v=> !Number.isFinite(v)) ? NaN : Math.max(0, ...r); };
-  const rd = o.rule === 'profile' ? readP(A.prof, o.t, o.side) : readC(A.sigC, o.k);
   const axr = rep.axes.find(a=> a.axis === fp);
-  let r = tilt(rd, fp);
+  // 'r2' offline: round 2's 2·esdAngle (a held fit's esdAngle at least freeOff), the minima's largest angle
+  const rd = o.rule === 'r2' ? null : o.rule === 'profile' ? readP(A.prof, o.t, o.side) : readC(A.sigC, o.k);
+  let r = o.rule === 'r2' ? (axr && Number.isFinite(axr.esdAngle) ? 2*axr.esdAngle : 0) : tilt(rd, fp);
   if (!Number.isFinite(r)) r = axr && Number.isFinite(axr.esdAngle) ? axr.esdAngle*(o.rule === 'profile' ? Math.sqrt(o.t) : o.k*Math.sqrt(5.99)) : 0;
-  if (A.held && A.freeOff) r = Math.max(r, 2*A.freeOff[fp]);   // as round 2: 2·esdAngle with esdAngle ≥ freeOff
+  if (A.held && A.freeOff && o.rule !== 'r2') r = Math.max(r, 2*A.freeOff[fp]);   // as round 2: 2·esdAngle with esdAngle ≥ freeOff
   let rm = 0;
   for (const m of inD){ const a = m.ang[fp]; if (a == null) continue;
-    if (!o.each){ rm = Math.max(rm, a); continue; }
+    if (!o.each || o.rule === 'r2'){ rm = Math.max(rm, a); continue; }
     const j = m.perm[fp], rdm = o.rule === 'profile' ? (m.prof ? readP(m.prof, o.t, o.side) : null) : (m.sigC ? readC(m.sigC, o.k) : null);
     const loc = rdm ? tilt(rdm, j) : NaN; rm = Math.max(rm, a + (Number.isFinite(loc) ? loc : r)); }
   const jt = x.flag && axr && Number.isFinite(axr.jackTurn) ? axr.jackTurn : 0;
@@ -43,11 +44,11 @@ for (const k of [1, 1.2, 1.5, 2, 2.5, 3]) for (const each of [false, true]) grid
 const L = [`axes: ${tags.join(',')} ${part}${sub ? ' ' + sub : ''}, ${X.length} kept truths with a record`, '', `| rule | ${Object.keys(groups).map(g=> g + ' (covered / n, median radius °)').join(' | ')} | clean: radius ÷ round 2's, median |`, `|---|${Object.keys(groups).map(()=> '---|').join('')}---|`];
 for (const o of grid){
   const cells = Object.entries(groups).map(([, sel])=> {
-    const ys = X.filter(sel).map(x=> o.rule === 'r2' ? (()=> { const iv = intervals(x); return iv.ax ? { e: iv.ax.e, R: iv.ax.rE, cov: iv.ax.E } : null; })() : one(x, o)).filter(Boolean);
+    const ys = X.filter(sel).map(x=> one(x, o)).filter(Boolean);
     return `${ys.filter(y=> y.cov).length}/${ys.length}, ${f(med(ys.map(y=> y.R)), 1)}`;
   });
-  const rat = X.filter(groups.clean).map(x=> { const a = o.rule === 'r2' ? null : one(x, o), iv = intervals(x); return a && iv.ax && iv.ax.rE > 0 ? a.R/iv.ax.rE : NaN; }).filter(Number.isFinite);
-  L.push(`| ${o.rule === 'r2' ? 'round 2 (2·esdAngle, betweenDeg)' : o.rule === 'profile' ? `profile t ${o.t}${o.side === 'mean' ? ' (sides mean)' : ''}${o.each ? ', each' : ''}` : `curv κ ${o.k}${o.each ? ', each' : ''}`} | ${cells.join(' | ')} | ${f(med(rat), 2)} |`);
+  const rat = X.filter(groups.clean).map(x=> { const a = one(x, o), b = one(x, { rule: 'r2' }); return a && b && b.R > 0 ? a.R/b.R : NaN; }).filter(Number.isFinite);
+  L.push(`| ${o.rule === 'r2' ? 'round 2 (2·esdAngle, betweenDeg), offline' : o.rule === 'profile' ? `profile t ${o.t}${o.side === 'mean' ? ' (sides mean)' : ''}${o.each ? ', each' : ''}` : `curv κ ${o.k}${o.each ? ', each' : ''}`} | ${cells.join(' | ')} | ${f(med(rat), 2)} |`);
 }
 if (process.argv.includes('--rows')){
   L.push('', '| row | flag | error ° | round 2 | profile 5.99 | profile 9 | curv 1 | curv 1.5 | minima ≤ Δ* |', '|---|---|---|---|---|---|---|---|---|');
@@ -57,8 +58,8 @@ if (process.argv.includes('--rows')){
 }
 console.log(L.join('\n'));
 if (process.argv.includes('--miss')){ const o = JSON.parse(arg('miss', '{}'));
-  for (const x of X.filter(groups.clean)){ const a = one(x, o); if (a && !a.cov) console.log('miss', x.row.id, f(a.e, 2), f(a.R, 2), 'r2', f(a.E, 2)); } }
+  for (const x of X.filter(groups.clean)){ const a = one(x, o); if (a && !a.cov) console.log('miss', x.row.id, 'error', f(a.e, 2), 'radius', f(a.R, 2), 'engine', f(a.E, 2)); } }
 // --check: the engine's own radius (records made at rule 'profile', t 9) against the offline reading
 if (process.argv.includes('--check')){ let n = 0, bad = [];
-  for (const x of X){ const a = one(x, { rule: 'profile', t: 9, side: 'max', each: false }); if (!a || a.E == null) continue; n++; if (Math.abs(a.R - a.E) > 1e-6*Math.max(1, a.R)) bad.push(`${x.row.id} ${f(a.R, 4)} ${f(a.E, 4)}`); }
-  console.log(`check: engine radius = offline profile t 9 on ${n - bad.length} of ${n}${bad.length ? ': ' + bad.join(', ') : ''}`); }
+  for (const x of X){ const a = one(x, { rule: 'profile', t: +arg('checkT', 5.99), side: 'max', each: false }); if (!a || a.E == null) continue; n++; if (Math.abs(a.R - a.E) > 1e-6*Math.max(1, a.R)) bad.push(`${x.row.id} ${f(a.R, 4)} ${f(a.E, 4)}`); }
+  console.log(`check: engine radius = offline profile t ${arg('checkT', 5.99)} on ${n - bad.length} of ${n}${bad.length ? ': ' + bad.join(', ') : ''}`); }
