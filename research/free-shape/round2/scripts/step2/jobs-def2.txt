@@ -1,0 +1,6 @@
+D3lor h3 lor today default default default sqbox-Pm-3-on
+D3lor h3 lor today default default default spheroid-P-3-near
+D3lsq h3 lsq v2 default default default sqbox-Pm-3-on
+D3lsq h3 lsq v2 default default default spheroid-P-3-near
+D3wp h3 lsq v2 default wppm - sqbox-Pm-3-on
+D3wp h3 lsq v2 default wppm - spheroid-P-3-near

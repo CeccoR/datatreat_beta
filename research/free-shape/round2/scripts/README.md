@@ -1,4 +1,4 @@
-# Scripts behind round 2 (`../PILOT.md`, `../AB.md`)
+# Scripts behind round 2 (`../PILOT.md`, `../AB.md`, `../STEP1.md`, `../STEP2.md`)
 
 The pilot's numbers and those of tracks A and B come from these scripts. They run in Node 22 on
 a frozen copy of the engine at commit `b9bef5f` (step 1's, `step1/`, on the app with
@@ -20,6 +20,7 @@ README with its API and its checks.
 | `A/` | track A, the size line's shape (`../AB.md` §3): an engine copy with switchable line models (lor, ib, mom, lsq, WPPM, the ball control), the exact lines and the lsq/mom tables, the screening runs, the cross-solid fits, the margins and separations, the cost under one load, the skeptic's checks (`verify/`) | `make-eng.mjs`, `lines/build-tables.mjs`, `lines/line-errors.mjs`, `lines/pattern-check.mjs`, `run.mjs`, `batch.mjs`, `analyse.mjs`, `xconf.mjs`, `why.mjs`, `fix/time.mjs`, `fix/xmargin.mjs`, `fix/shapesep.mjs`, `fix/sepcmp.mjs`, `fix/floors.mjs` |
 | `B/` | track B, the search's efficiency (`../AB.md` §4): an engine copy with opt-in solver options (no covariance, forward differences), today's search with knobs, the variants, the scoring, the profile, the skeptic's checks (`verify/`) | `make-eng.mjs`, `methods/var.mjs`, `methods/variants.mjs`, `run.mjs`, `batch.mjs`, `score.mjs`, `check-replica.mjs`, `prof.mjs` |
 | `step1/` | round 2's step 1 (`../STEP1.md`): search v2 with the lsq line and WPPM on the 77 screening runs, the switch `SHAPE_FWD` ('all' or 'briefs'); the prototype's harness with the switches from the environment, the batches, the scoring against track A's records, the diagnostics (`hd/`) | `setup.sh`, `make-eng.mjs`, `run.mjs`, `batch.mjs`, `score.mjs`, `ident.mjs`, `stages.mjs`, `cost.mjs`, `why.mjs`, `hd/make-diag.mjs` |
+| `step2/` | round 2's step 2 (`../STEP2.md`): WPPM made cheaper (the profile of a WPPM fit, the shortcuts `WPPM_OPT`, the exact line by default), measured against WPPM itself: patterns, the 22 sub-screen runs under one load, the finalists on the 77, the expected margins and the cross-solid searches | `setup.sh`, `make-eng.mjs`, `batch2.mjs`, `mkjobs2.mjs`, `score.mjs`, `cost2.mjs`, `ident.mjs`, `prof/`, `bench/` |
 
 Not copied, and rebuilt by their own commands (see each README): the engine copies
 (`A/eng/`, `A/harness/lib.mjs`, `B/h/eng/`, `B/hp/eng/`) and track A's line tables

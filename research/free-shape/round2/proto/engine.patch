@@ -1,18 +1,34 @@
 diff --git a/RIETVELD.md b/RIETVELD.md
-index 5fa85b6..282c50c 100644
+index 5fa85b6..528649e 100644
 --- a/RIETVELD.md
 +++ b/RIETVELD.md
-@@ -1711,6 +1711,9 @@ w(\mathbf u) = 0.75\,\frac{|\mathbf t|}{\langle L\rangle_{V,\text{base}}(\hat{\m
+@@ -1289,6 +1289,13 @@ Without a shape, the body is a sphere of diameter D. With a free shape (§10), e
+ 
+ **Cost.** On a synthetic SrTiO₃ pattern (2θ 15–120°, 5251 points), a sphere refines in about 3 s, a log-normal distribution in 8–16 s, and a free cylinder in 35–50 s. A free solid with log-normal sizes takes minutes: about 5 on the user's 33A. A broad distribution holds large crystallites whose narrow profiles set the grid, and every trial shape of the search pays for it. The log-normal average of a cylinder or a box is tabulated in ln ℓ₀ every σ/10 for each member and read by cubic interpolation (to 4·10⁻⁶); computed point by point, that case took 17–23 minutes.
+ 
++**Shortcuts** (a prototype after v522: `WPPM_OPT` in `xrd-broad.js`, each switch on by default and `false` for v522's arithmetic; round 2 of the free-shape research, `research/free-shape/round2/STEP2.md`). In a free shape's fit by WPPM the read-out had taken 62 % of the CPU, the axial nodes 23 %, the FFTs 7 %, the common factor 3 % and the members' size coefficients 1 %. The read-out now takes each point's sinθ and cosθ from a table made once per grid and its cell by an integer truncation (the same numbers to the bit); and
++- `fast`: the common factor's exponentials by recurrence in L and the read-out by reciprocals (within 2·10⁻¹² of the peak);
++- `pair`: a reflection's Kα1 and Kα2 lines on one grid, the finer step and the wider window of the two, by one FFT: each line's coefficients are Hermitian, so the first in the real part and the second in the imaginary part come back as the two profiles; the size coefficients, a function of L alone, made once (within 1.5·10⁻⁵ of the peak of the lines drawn apart);
++- `axial`: a line with one axial node takes its shift from the Soller cells at the two nearest multiples of 10⁻⁴ rad in θ, linearly (within 10⁻⁹ of the peak), so that a cell parameter's Jacobian column no longer computes every line's cells again; the cells are kept for the 2048 lines last used (512, the oldest first, before).
++
++On round 2's 22 sub-screen runs a free shape's whole fit by WPPM cost 0.42× the CPU of v522's fit by the Lorentzian (2.13× before), with the same outcome, reach and accuracy, and the generator's exact patterns are drawn as before (0.29 % of the peak off, median).
++
+ **Needs the standard's profile** (§6.5). Without it, H and η would hold the sample's broadening too.
+ 
+ ### 7.4 A log-normal distribution of sizes
+@@ -1711,7 +1718,11 @@ w(\mathbf u) = 0.75\,\frac{|\mathbf t|}{\langle L\rangle_{V,\text{base}}(\hat{\m
  - **W** holds the solid's parameters: the widths (°) of spheres of its diameters, edges or axes.
  - **Dimensions.** D = Kλ/(W·π/180): an ellipsoid's full axes, a cylinder's diameter and height, a box's edges, each read as the isotropic size is. By the Lorentzian model that is a Scherrer reading, not a true dimension (§7.2: spheres of one size read 1.0–1.7× their diameter); by WPPM the true one (below).
  - **In the profile.** The member's width enters the Lorentzian as (Y + w)/cosθ, Y being the instrument's (Kα2's w is λ2/λ1 times Kα1's, §3.8). The solid's widths are the whole size: the phase's isotropic Y_s is held at 0 during the shape fit, and while the shape is in use neither profile reads it (a Y_s set by hand changes nothing; refined, it is undetermined). The legacy ellipsoid (`ellipsoidL`, Lorentzian only) is the exception: its widths add to Y_s, and its reported sizes include it.
-+- **The lsq line** (a prototype after v522: `SHAPE_MODE.line`, 'lsq' by default, 'lor' v522's Lorentzian above; round 2 of the free-shape research, `research/free-shape/round2/AB.md` §3). The member's width w enters the Lorentzian as kl·w and the Gaussian as kg·w, in quadrature with the instrument's: (kg, kl) make the TCH line that best fits the solid's exact line along the member, by weighted least squares over |x| ≤ 6/⟨L⟩_V with weights 1/(p + 0.2). They are read from tables (`xrd-sizeline.js`, written by `research/free-shape/round2/proto/build-sizeline.mjs`) by the reduced shape along the member: one entry for the ball family; for the cylinder and the elliptic cylinder the angle ψ from the axis in the scaled body, every 0.5°, linear between; for the box the sorted direction ratios β = b/a, γ = c/a, every 0.025, bilinear. The isotropic sphere of a phase whose free shape is asked for takes the ball's entry, so that the shape is kept or not against its like (§10.8); other phases keep the Lorentzian Y_s.
++- **The lsq line** (a prototype after v522: `SHAPE_MODE.line` 'lsq', step 1's default; 'lor' v522's Lorentzian above; round 2 of the free-shape research, `research/free-shape/round2/AB.md` §3). The member's width w enters the Lorentzian as kl·w and the Gaussian as kg·w, in quadrature with the instrument's: (kg, kl) make the TCH line that best fits the solid's exact line along the member, by weighted least squares over |x| ≤ 6/⟨L⟩_V with weights 1/(p + 0.2). They are read from tables (`xrd-sizeline.js`, written by `research/free-shape/round2/proto/build-sizeline.mjs`) by the reduced shape along the member: one entry for the ball family; for the cylinder and the elliptic cylinder the angle ψ from the axis in the scaled body, every 0.5°, linear between; for the box the sorted direction ratios β = b/a, γ = c/a, every 0.025, bilinear. The isotropic sphere of a phase whose free shape is asked for takes the ball's entry, so that the shape is kept or not against its like (§10.8); other phases keep the Lorentzian Y_s.
 +  - **Why.** The Lorentzian is 11.5–21 % of the peak off every solid's exact line and reads ⟨L⟩_V 13–25 % long; the lsq line is 2.5–8 % off and reads it within 1.5 % out of sample. A reflection's members of different widths add up to a line more Lorentzian than one, so the Lorentzian model also collapses their spread: it pulls a solid toward equant the more members a reflection has (in m−3m it read a quarter of the anisotropy). On round 2's 77 synthetic screening runs the lsq line kept 65 of 66 true shapes against 60, read the thinnest extent +1 % against +20 % and the worst +16 % against +42 % (medians), at the same cost.
 +  - **What it changes.** The dimensions are then read as the solid's, within a few per cent, not as Scherrer readings, and so is the isotropic size of a phase with a free shape asked for, smaller than the Lorentzian's (which read ⟨L⟩_V 13–25 % long). Its line errors are 2.5–8 % of the peak: in expectation two of round 2's 11 clean rows go to the wrong family of solid (§10.8); WPPM (§7.3) has none.
  - **By WPPM** (§7.3), each member's line is instead the transform of the base body's common-volume function along it, at ℓ = L·|**t**|·(π/180)/(Kλ₁). The widths W then read as the solid's dimensions with no calibration: the sphere's 0.75 above does not enter.
++- **The exact line** (`SHAPE_MODE.line` 'exact', the prototype's default since round 2's step 2, `research/free-shape/round2/STEP2.md`): a phase with a body for its free shape is built as a WPPM phase whatever size profile it names, so its members' lines are the exact ones above and its isotropic sphere the ball's. With §7.3's shortcuts a fit costs less than the lsq line's (0.42× against 0.74× v522's CPU on round 2's 22 sub-screen runs), and in expectation it puts none of round 2's 11 clean rows in the wrong family of solid, where lsq puts two.
  
  | Solid | Base | Width parameters | Turns | Notes |
-@@ -1761,6 +1764,15 @@ This chart has no gimbal lock. Its esds are small turns about the body's own axe
+ |---|---|---|---|---|
+@@ -1761,6 +1772,15 @@ This chart has no gimbal lock. Its esds are small turns about the body's own axe
  3. **Full:** the best 3 (`SHAPE_FULL`, the setting `shapeFull`, 1–20) are refined to convergence (60 iterations: 1.5 × `maxIter`, as are the polish and the refinements of §10.6–10.7).
  4. **Polish:** up to 2 more refinements from the best, turned by 0.02 rad about a random axis. The refinement can stop where the axes sit on a symmetric orientation: there the first-order effects of a turn cancel over a family, the esds blow up, and the shift test passes at once.
  
@@ -28,7 +44,7 @@ index 5fa85b6..282c50c 100644
  ### 10.6 Flat faces: rounded for the search, exact for the result
  
  **The problem.** A flat face makes the column length kink wherever a direction lies in it. Every member of a family lying in a face is then a V-shaped valley of χ² in the orientation, which least squares cannot settle into. A disc on the user's SrTiO₃ stopped anywhere between χ² 6364 and 6427, depending on its start.
-@@ -1780,7 +1792,7 @@ A crystallite's faces are lattice planes more often than not, and a held axis is
+@@ -1780,7 +1800,7 @@ A crystallite's faces are lattice planes more often than not, and a held axis is
  1. **The first axis** is chosen among the axes lying within 10° of a lattice direction: the one whose width (∝ 1/dimension) stands farthest from the other two (a plate's normal). For a body of revolution it is its own axis. It is snapped to its simplest lattice direction within 10°. Choosing merely the axis nearest a lattice direction had held a plate's whole frame on an in-plane axis 0.5° from [1-13].
  2. **The second axis.** For a body with three axes, the second axis goes, in turn, on each of the lattice directions (indices ≤ 3) lying within 0.01° of normal to the first that are among the 3 simplest, or the simplest within 10° of one of the free fit's other two axes (the first axis's rule). Each placement is a candidate frame: the candidate goes to whichever of the two axes it is nearer, and the third axis completes the frame, right-handed. A body of revolution holds its axis alone. Up to v426 only the 3 simplest were tried: a synthetic 16 × 10 × 3 nm box with its edges on [120] and [-210] about [001] was tried on [100], [010] and [110] alone and stayed free (Δχ² 29–40 for the nearest of them); it is now held on [120] in 2 draws of 2 (Δχ² 2.7 and 4.1 for its three turns).
  
@@ -49,13 +65,228 @@ index bd2ba82..92ea13a 100644
    './xrd-rietveld.worker.js',
    './xrd-widths.js',
    './xrd-shape3d.js',
+diff --git a/xrd-broad.js b/xrd-broad.js
+index 3d1165c..a676c88 100644
+--- a/xrd-broad.js
++++ b/xrd-broad.js
+@@ -196,6 +196,39 @@ function addMemberCoef(out, n, dL, base, a, b, c, scale, sigma, weight){
+    there continuously, and what it leaves out goes to the background. Read between grid
+    points by cubic (Catmull–Rom) interpolation. */
+ const N_MIN = 64, N_MAX = 16384;
++/* WPPM_OPT: a WPPM evaluation made cheaper, each shortcut behind a switch, all on (false keeps
++   v522's arithmetic reachable; a script sets them before evaluating). Round 2 of the free-shape
++   research, step 2 (research/free-shape/round2/STEP2.md): on step 1's engine the read-out took
++   62 % of a WPPM fit's CPU, the axial divergence's nodes 23 %, the FFTs 7 %, the common factor
++   3 %, the members' size coefficients 1 %.
++   - fast: the same line by shorter arithmetic, not to the bit (within 2·10⁻¹² of the peak):
++     the common factor's exponentials by recurrence in L (two products a point against three
++     exponentials) and the read-out by reciprocals, the edge value taken off the period first;
++   - pair: a reflection's two lines (Kα1, Kα2) on one grid by one FFT (wppmPair; with fast's
++     arithmetic): within 1.5·10⁻⁵ of the peak of the lines drawn apart (each its own grid);
++   - axial: a line drawn with one axial node (most of a sample's lines) takes its shift from
++     the Soller cells at the two nearest multiples of 10⁻⁴ rad in θ, linearly
++     (xrd-rietveld.js sollerStats): within 10⁻⁹ of the peak; a Jacobian's column of a cell
++     parameter no longer computes every line's cells again. */
++const WPPM_OPT = { fast: true, pair: true, axial: true };
++/* The pattern's points' sin θ and cos θ (θ = 2θ/2), made once per grid and kept with it: the
++   read-out took a sine and a cosine a point over the whole window (±40 FWHM), three
++   quarters to six sevenths of a WPPM evaluation (round 2's free-shape step 2). The same
++   numbers as before, so the profile is unchanged to the bit. */
++const TRIG = new WeakMap();
++// (the read-out's unwrapped period, one array per length)
++const PADS = new Map();
++const padOf = n => { let a = PADS.get(n); if (!a){ a = new Float64Array(n); PADS.set(n, a); } return a; };
++function trigOf(x){
++  const n = x.length;
++  let t = TRIG.get(x);
++  if (t && t.n === n && t.x0 === x[0] && t.x1 === x[n - 1]) return t;
++  const S = new Float64Array(n), C = new Float64Array(n);
++  for (let i = 0; i < n; i++){ const th = x[i]*D2R/2; S[i] = Math.sin(th); C[i] = Math.cos(th); }
++  t = { n, x0: x[0], x1: x[n - 1], S, C };
++  TRIG.set(x, t);
++  return t;
++}
+ // The points a line's grid needs, uncapped (widths and spread in °): over N_MAX, its step
+ // grows.
+ const wppmPoints = (Hest, Hmin, spread, win, winMin) => 16*(Math.max(win*Hest, winMin) + spread)/Math.max(Hmin, 1e-5);
+@@ -218,11 +251,24 @@ function wppmLine(o){
+   // The common factor (instrument, Lorentzian terms), to where it no longer counts.
+   const H = o.Hi*c1, eta = o.etai, W = o.WL || 0, gq = Math.PI*Math.PI*H*H/(4*LN2);
+   let nL = N >> 1;
+-  const com = o._com && o._com.length >= nL + 1 ? o._com : new Float64Array(nL + 1);
+-  for (let i = 0; i <= nL; i++){
+-    const L = i*dL, v = (eta*Math.exp(-Math.PI*H*L) + (1 - eta)*Math.exp(-gq*L*L))*Math.exp(-Math.PI*W*L);
+-    com[i] = v;
+-    if (v < 1e-8 && i > 2){ nL = i; break; }
++  const com = o._com && o._com.length >= nL + 1 ? o._com : new Float64Array(nL + 1), fast = WPPM_OPT.fast;
++  if (fast){
++    // e1 = e^{−π(H+W)L}, e2 = e^{−gq L² − πWL} at L = i·dL: e2's ratio q grows by e^{−2gq dL²} a step
++    const r1 = Math.exp(-Math.PI*(H + W)*dL), s2 = Math.exp(-2*gq*dL*dL);
++    let e1 = 1, e2 = 1, q = Math.exp(-gq*dL*dL - Math.PI*W*dL);
++    for (let i = 0; i <= nL; i++){
++      const v = eta*e1 + (1 - eta)*e2;
++      com[i] = v;
++      if (v < 1e-8 && i > 2){ nL = i; break; }
++      e1 *= r1; e2 *= q; q *= s2;
++      if (e2 < 1e-280){ e2 = 0; q = 0; }
++    }
++  } else {
++    for (let i = 0; i <= nL; i++){
++      const L = i*dL, v = (eta*Math.exp(-Math.PI*H*L) + (1 - eta)*Math.exp(-gq*L*L))*Math.exp(-Math.PI*W*L);
++      com[i] = v;
++      if (v < 1e-8 && i > 2){ nL = i; break; }
++    }
+   }
+   const size = new Float64Array(nL + 1);
+   if (o.size) o.size(size, nL + 1, dL); else size.fill(1);
+@@ -251,19 +297,37 @@ function wppmLine(o){
+   fftPlus(p);
+   // re[m]: the profile at δ_m (m ≥ N/2 the negative side). Lowered by its edge value.
+   const edge = re[N >> 1], half = (N >> 1)*dd;
+-  const at = m => re[((m % N) + N) % N];
++  /* The period unwrapped, from m = −N/2 − 2 to N/2 + 5 (|f| ≤ N/2 and the read-out's four
++     neighbours), so that a point reads its neighbours without wrapping; m = ⌊f⌋ by an
++     integer truncation (Math.floor had cost half the read-out). The same numbers as
++     before. */
++  const off = (N >> 1) + 2, pad = padOf(N + 8);
+   const xLo = 2*Math.asin(Math.max(-1, Math.min(1, s0 - half*lam/2)))/D2R, xHi = 2*Math.asin(Math.max(-1, Math.min(1, s0 + half*lam/2)))/D2R;
++  const { S, C } = trigOf(x);
+   let i = lowerBound(x, xLo);
++  if (fast){
++    for (let k = 0; k < N + 8; k++){ const m = k - off; pad[k] = re[m < 0 ? m + N : m >= N ? m - N : m] - edge; }
++    const kf = 2/(lam*dd), ki = I*D2R/lam, gHi = N + 2;
++    for (const n = x.length; i < n; i++){
++      if (x[i] > xHi) break;
++      const g = (S[i] - s0)*kf + off;
++      if (!(g >= 2 && g <= gHi)) continue;
++      const k = g | 0, u = g - k;
++      const p0 = pad[k - 1], p1 = pad[k], p2 = pad[k + 1], p3 = pad[k + 2];
++      out[i] += ki*C[i]*(p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0))));
++    }
++  } else {
++  for (let k = 0; k < N + 8; k++){ const m = k - off; pad[k] = re[m < 0 ? m + N : m >= N ? m - N : m]; }
+   for (const n = x.length; i < n; i++){
+-    const xi = x[i];
+-    if (xi > xHi) break;
+-    const th = xi*D2R/2, dl = 2*(Math.sin(th) - s0)/lam;
++    if (x[i] > xHi) break;
++    const dl = 2*(S[i] - s0)/lam;
+     if (dl < -half || dl > half) continue;
+-    const f = dl/dd, m = Math.floor(f), u = f - m;
+-    const p0 = at(m - 1), p1 = at(m), p2 = at(m + 1), p3 = at(m + 2);
++    const f = dl/dd, t = f | 0, m = t > f ? t - 1 : t, u = f - m, k = m + off;
++    const p0 = pad[k - 1], p1 = pad[k], p2 = pad[k + 1], p3 = pad[k + 2];
+     // Catmull–Rom
+     const v = p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0)));
+-    out[i] += I*(v - edge)*Math.cos(th)*D2R/lam;
++    out[i] += I*(v - edge)*C[i]*D2R/lam;
++  }
+   }
+   // o.fwhm, when given, collects the profile as drawn (less its edge value) without the
+   // divergence's shifts, on its grid from δ = 0: lineFwhm reads the tick's width off it.
+@@ -278,6 +342,86 @@ function wppmLine(o){
+     Object.assign(o.fwhm, { s0, lam, c1 });
+   }
+ }
++/* wppmPair(o1, o2): the two lines of one reflection (Kα1 and Kα2: the same d*, the same size,
++   strain and faults; the instrument and the divergence their own) as wppmLine draws each, on one
++   grid (the finer step and the wider window of the two, in δ) by one FFT: the profile is real, so
++   a line's coefficients are Hermitian, and the first line's in the real part with the second's
++   in the imaginary part come back as the first profile in re and the second in im. The size
++   coefficients, a function of L alone, are made once. With WPPM_OPT.fast's arithmetic. Neither
++   may carry o.fwhm (the tick's, drawn alone). Round 2's free-shape step 2: half the FFTs and
++   the size coefficients of a pattern. */
++const PAIR = [{}, {}];
++function wppmPair(o1, o2){
++  const os = [o1, o2];
++  let halfD = 0, ddMin = Infinity;
++  for (let j = 0; j < 2; j++){
++    const o = os[j], P = PAIR[j], th0 = o.tt*D2R/2;
++    P.s0 = Math.sin(th0); P.c1 = Math.cos(th0)*D2R/o.lam;
++    let lo = 0, hi = 0;
++    if (o.nodes) for (const nd of o.nodes){ if (nd.d < lo) lo = nd.d; if (nd.d > hi) hi = nd.d; }
++    halfD = Math.max(halfD, (Math.max(o.win*o.Hest, o.winMin) + Math.max(-lo, hi))*P.c1);
++    ddMin = Math.min(ddMin, Math.max(o.Hmin, 1e-5)*P.c1/8);
++  }
++  let N = Math.pow(2, Math.ceil(Math.log2(Math.max(1, 2*halfD/ddMin))));
++  N = Math.min(N_MAX, Math.max(N_MIN, N));
++  const dd = 2*halfD/N, dL = 1/(N*dd), p = plan(N), re = p.re, im = p.im, H2 = N >> 1;
++  re.fill(0); im.fill(0);
++  // each line's common factor (its instrument at its angle; the Lorentzian terms alike)
++  let nLmax = 0;
++  for (let j = 0; j < 2; j++){
++    const o = os[j], P = PAIR[j], H = o.Hi*P.c1, eta = o.etai, W = o.WL || 0, gq = Math.PI*Math.PI*H*H/(4*LN2);
++    const com = P.com && P.com.length >= H2 + 1 ? P.com : (P.com = new Float64Array(Math.max(H2 + 1, 1024)));
++    const r1 = Math.exp(-Math.PI*(H + W)*dL), s2 = Math.exp(-2*gq*dL*dL);
++    let e1 = 1, e2 = 1, q = Math.exp(-gq*dL*dL - Math.PI*W*dL), nL = H2;
++    for (let i = 0; i <= nL; i++){
++      const v = eta*e1 + (1 - eta)*e2;
++      com[i] = v;
++      if (v < 1e-8 && i > 2){ nL = i; break; }
++      e1 *= r1; e2 *= q; q *= s2;
++      if (e2 < 1e-280){ e2 = 0; q = 0; }
++    }
++    P.nL = nL; if (nL > nLmax) nLmax = nL;
++  }
++  const size = new Float64Array(nLmax + 1);
++  if (o1.size) o1.size(size, nLmax + 1, dL); else size.fill(1);
++  // z = a1 + i·a2 (a_j: com·size·dL times the divergence's Σ w_k e^{−2πi L δ_k})
++  for (let j = 0; j < 2; j++){
++    const o = os[j], P = PAIR[j], nodes = o.nodes && o.nodes.length ? o.nodes : null, com = P.com, nL = P.nL;
++    const m = nodes ? nodes.length : 0, cr = new Float64Array(m), ci = new Float64Array(m), er = new Float64Array(m), ei = new Float64Array(m);
++    for (let k = 0; k < m; k++){ const a = -2*Math.PI*dL*nodes[k].d*P.c1; er[k] = Math.cos(a); ei[k] = Math.sin(a); cr[k] = nodes[k].w; }
++    for (let i = 0; i <= nL; i++){
++      let sr = 1, si = 0;
++      if (m){
++        sr = 0;
++        for (let k = 0; k < m; k++){
++          sr += cr[k]; si += ci[k];
++          const r = cr[k]*er[k] - ci[k]*ei[k]; ci[k] = cr[k]*ei[k] + ci[k]*er[k]; cr[k] = r;
++        }
++      }
++      const a = com[i]*size[i]*dL, ar = a*sr, ai = a*si;
++      if (i === 0 || i === H2){ if (j) im[i] += ar; else re[i] += ar; continue; }
++      if (j){ re[i] -= ai; im[i] += ar; re[N - i] += ai; im[N - i] += ar; }
++      else { re[i] += ar; im[i] += ai; re[N - i] += ar; im[N - i] -= ai; }
++    }
++  }
++  fftPlus(p);
++  // each line read off its own part of the period, lowered by its edge value
++  const off = H2 + 2, pad = padOf(N + 8), x = o1.x, { S, C } = trigOf(x), n = x.length;
++  for (let j = 0; j < 2; j++){
++    const o = os[j], P = PAIR[j], src = j ? im : re, edge = src[H2], out = o.out, lam = o.lam, s0 = P.s0;
++    for (let k = 0; k < N + 8; k++){ const m = k - off; pad[k] = src[m < 0 ? m + N : m >= N ? m - N : m] - edge; }
++    const half = H2*dd, kf = 2/(lam*dd), ki = o.I*D2R/lam, gHi = N + 2;
++    const xLo = 2*Math.asin(Math.max(-1, Math.min(1, s0 - half*lam/2)))/D2R, xHi = 2*Math.asin(Math.max(-1, Math.min(1, s0 + half*lam/2)))/D2R;
++    for (let i = lowerBound(x, xLo); i < n; i++){
++      if (x[i] > xHi) break;
++      const g = (S[i] - s0)*kf + off;
++      if (!(g >= 2 && g <= gHi)) continue;
++      const k = g | 0, u = g - k;
++      const p0 = pad[k - 1], p1 = pad[k], p2 = pad[k + 1], p3 = pad[k + 2];
++      out[i] += ki*C[i]*(p1 + 0.5*u*(p2 - p0 + u*(2*p0 - 5*p1 + 4*p2 - p3 + u*(3*(p1 - p2) + p3 - p0))));
++    }
++  }
++}
+ /* lineFwhm(f) → the FWHM in 2θ (°) of the profile wppmLine collected in f: the sum of its
+    parts (a solid drawn in groups of members, each on its own grid, read linearly), its
+    half maximum found between the finest grid's points. NaN if none. */
+@@ -441,4 +585,4 @@ function faultKappa(table, r, alpha){
+   return s/table.dLayer;
+ }
+ 
+-export { wppmLine, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
++export { WPPM_OPT, wppmLine, wppmPair, wppmPoints, N_MAX as WPPM_N_MAX, lineFwhm, addMemberCoef, covBase, supportOf, quarticInvariants, evalQuartic, faultTable, faultKappa, gaussLegendre as glNodes };
 diff --git a/xrd-rietveld.js b/xrd-rietveld.js
-index 2b68562..dfc47ed 100644
+index 2b68562..33dd252 100644
 --- a/xrd-rietveld.js
 +++ b/xrd-rietveld.js
-@@ -26,6 +26,7 @@ import { lineForWavelength, f0, fprime, atomicMass } from './xrd-data.js';
+@@ -24,8 +24,9 @@
+ import { metric, reflections, latticeNames, latticeParams, cellFrom, cellMass, atomOrbits, siteAdpBasis, adpU, betaOf } from './xrd-cryst.js';
+ import { lineForWavelength, f0, fprime, atomicMass } from './xrd-data.js';
  import { noiseCountScale } from './xrd-instr.js';
- import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
+-import { wppmLine, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
++import { WPPM_OPT, wppmLine, wppmPair, wppmPoints, WPPM_N_MAX, lineFwhm, addMemberCoef, quarticInvariants, evalQuartic, faultTable, faultKappa } from './xrd-broad.js';
  import { gaussLegendre, lowerBound, inv3n, hklText } from './xrd-math.js';
 +import { SIZE_LINE } from './xrd-sizeline.js';
  
@@ -76,23 +307,139 @@ index 2b68562..dfc47ed 100644
  /* The half-width (°) a line of FWHM H, mixing eta and area A (in the units of y times
     degrees, the scale included) is drawn over: ±max(WIN_FWHM·H, WIN_MIN), and as far as its
     Lorentzian part, ηA·H/(2π x²) beyond a few H, stays above TAIL_NOISE of the pattern's
-@@ -957,6 +966,52 @@ function textureWeights(q, v){
+@@ -425,7 +434,7 @@ function fcjNodes(th, A, H, nForce){
+    derivative by up to 10×. refine() checks the counts at its end (model.fcjAudit) and
+    runs again when the widths or the asymmetry have outgrown them. The largest shortfall
+    of a tail longer than FCJ_MAX_NODES allow is kept in model.fcjShort. */
+-function lineNodes(model, key, th, A, H, tol){
++function lineNodes(model, key, th, A, H, tol, interp){
+   // A search for where the peaks are needs only where each one's weight lies: its
+   // centroid (cellSearch; the asymmetry costs it nothing then).
+   if (model.fcjCentroid) return typeof A === 'object' ? sollerCentroid(th, A) : axialNodes(th, A, H, 1);
+@@ -437,17 +446,17 @@ function lineNodes(model, key, th, A, H, tol){
+     // (A line first met under a hold goes through lineNodesOf, which records its count:
+     // taken from here, the audit after the refinement found none recorded and ran again.)
+     const c = cache.get(key);
+-    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
+-    const nodes = lineNodesOf(model, key, th, A, H, tol);
+-    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, nodes });
++    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && c.ip === !!interp && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
++    const nodes = lineNodesOf(model, key, th, A, H, tol, interp);
++    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, ip: !!interp, nodes });
+     return nodes;
+   }
+   return lineNodesOf(model, key, th, A, H);
+ }
+-function lineNodesOf(model, key, th, A, H, tol){
++function lineNodesOf(model, key, th, A, H, tol, interp){
+   const fz = model.fcjFreeze;
+   if (!fz){
+-    const nd = axialNodes(th, A, H, undefined, tol), au = model.fcjAudit;
++    const nd = axialNodes(th, A, H, undefined, tol, interp), au = model.fcjAudit;
+     if (nd && nd.short > (model.fcjShort || 1)) model.fcjShort = nd.short;
+     // refine()'s check after a refinement: has a line outgrown its held count?
+     // (A count down to 1/1.13 of the one needed leaves the profile within 0.1 % of the
+@@ -459,13 +468,13 @@ function lineNodesOf(model, key, th, A, H, tol){
+   }
+   let n = fz.get(key);
+   if (n === undefined){
+-    const nd = axialNodes(th, A, H, undefined, tol);
++    const nd = axialNodes(th, A, H, undefined, tol, interp);
+     n = nd ? nd.n : 0;
+     fz.set(key, n);
+     if (nd && nd.short > (model.fcjShort || 1)) model.fcjShort = nd.short;
+     return nd;
+   }
+-  return axialNodes(th, A, H, n || undefined, tol);
++  return axialNodes(th, A, H, n || undefined, tol, interp);
+ }
+ 
+ /* Axial divergence through Soller slits: the full axial model of Cheary & Coelho, J. Appl.
+@@ -557,12 +566,17 @@ function sollerGrid(g){
+ /* A line's cells: their shifts' means and variances, which depend on θ and the geometry
+    alone (the width only bins them): kept for the last SOLLER_LINES_MAX lines, so that a
+    refinement recomputes them only where θ or L moved (on the user's samples, refined in
+-   4–5 s with them computed at every call, against under 1 s with FCJ). */
+-const SOLLER_LINES = new Map(), SOLLER_LINES_MAX = 512;
++   4–5 s with them computed at every call, against under 1 s with FCJ). The least recently
++   used goes first, and 2048 are kept (512 up to round 2's free-shape step 2): a Jacobian's
++   column of a cell parameter moves every line's θ, and the oldest dropped first then took
++   the lines at v with it, to be computed again at the next column; and WPPM's lines keep two
++   cells each (sollerStats), 856 for a triclinic phase's 214 reflections. The same numbers,
++   kept longer. */
++const SOLLER_LINES = new Map(), SOLLER_LINES_MAX = 2048;
+ function sollerCells(th, g){
+   const key = g.key + '|' + th;
+   let C = SOLLER_LINES.get(key);
+-  if (C) return C;
++  if (C){ SOLLER_LINES.delete(key); SOLLER_LINES.set(key, C); return C; }
+   const G = sollerGrid(g);
+   const tt = 2*th, c2 = Math.cos(tt), s2 = Math.sin(tt);
+   if (G.empty || Math.abs(s2) < 1e-9) return null;
+@@ -605,7 +619,29 @@ function sollerCells(th, g){
+   SOLLER_LINES.set(key, C);
+   return C;
+ }
+-function sollerNodes(th, g, H, nForce, tol = SOLLER_TOL){
++/* interp (WPPM_OPT.axial, a WPPM line's): where the line takes one node, its shift, spread and
++   reach from the cells at the two nearest multiples of SOLLER_DQ in θ, linearly. A Jacobian's
++   column of a cell parameter (and a trial step) moves θ by far less than that, and every such
++   θ had cost the whole of sollerCells (a few thousand arccosines; on step 1's engine the axial
++   nodes took 23 % of a WPPM fit's CPU), now an interpolation between two kept. Linear in θ over
++   10⁻⁴ rad: the shift within about 10⁻⁷° of the cells' own at 2θ = 10° (its second derivative
++   there ≈ 14°/rad²), continuous in θ; the patterns within 10⁻⁹ of the peak of the cells'
++   own (round 2's free-shape step 2). */
++const SOLLER_DQ = 1e-4;
++function sollerStats(th, g){
++  const f = th/SOLLER_DQ, k = Math.floor(f), t = f - k, a = sollerCells(k*SOLLER_DQ, g), b = sollerCells((k + 1)*SOLLER_DQ, g);
++  if (!a || !b) return null;
++  const l = (p, q) => p + t*(q - p);
++  return { mean: l(a.mean, b.mean), sd: l(a.sd, b.sd), lo: l(a.lo, b.lo), hi: l(a.hi, b.hi) };
++}
++function sollerNodes(th, g, H, nForce, tol = SOLLER_TOL, interp = false){
++  if (interp && !(nForce > 1)){
++    const st = sollerStats(th, g);
++    if (st){
++      const r = st.sd/H;
++      if (nForce ? nForce === 1 : st.hi - st.lo < 0.05*H || 4*r*r <= tol){ const one = [{ d: st.mean, w: 1 }]; one.n = 1; return one; }
++    }
++  }
+   const C = sollerCells(th, g);
+   if (!C) return null;
+   const { mu, va, cw, lo, hi, mean, sd } = C, nc = cw.length, span = hi - lo, r = sd/H;
+@@ -653,8 +689,8 @@ function sollerCentroid(th, g){
+ /* The axial divergence of a model: FCJ's A, a number (none at 0), or the Soller model's
+    geometry, an object (axialOf); its nodes, and the reach of its shifts (deg). tol: the
+    Soller nodes' error allowed, of the peak (sollerTol). */
+-function axialNodes(th, A, H, nForce, tol){
+-  if (A && typeof A === 'object') return sollerNodes(th, A, H, nForce, tol);
++function axialNodes(th, A, H, nForce, tol, interp){
++  if (A && typeof A === 'object') return sollerNodes(th, A, H, nForce, tol, interp);
+   return A > 0 ? fcjNodes(th, A, H, nForce) : null;
+ }
+ /* The Soller nodes' error allowed for a line of area Sarea (the scale in it), FWHM H and
+@@ -957,6 +993,57 @@ function textureWeights(q, v){
      return o;
    });
  }
 +/* Round 2 of the free-shape research (a prototype after v522: research/free-shape/round2/
 +   AB.md §1, its two results adopted), each behind a switch that keeps v522's behaviour
 +   reachable for comparison (a test or a script sets it before building a model):
-+   - line, the size line of a free shape's members and of its phase's isotropic sphere, in
-+     the Lorentzian profile (WPPM draws the exact line, §7.3, and reads neither): 'lsq', the
-+     engine's TCH pseudo-Voigt with the Gaussian and Lorentzian FWHM that best fit the
-+     solid's exact line along the member (sizeLineKs; AB §3), or 'lor', v522's Lorentzian
-+     of FWHM 0.675/⟨L⟩_V. The Lorentzian is 11.5–21 % of the peak off every solid's exact
-+     line, reads ⟨L⟩_V 13–25 % long, and pulls a solid toward equant the more members a
-+     reflection has (m−3m read a quarter of the anisotropy); lsq is 2.5–8 % off at the same
-+     cost (0.99× the CPU on the 22 sub-screen rows). On the 77 screening runs it kept 65 of
-+     66 truths against 60, the thinnest extent +1 % against +20 %, the worst +16 % against
-+     +42 % (medians);
++   - line, the size line of a free shape's members and of its phase's isotropic sphere:
++     'exact', the solid's own line by WPPM (§7.3): a phase with a body for its free shape is
++     built as a WPPM phase (read when the model is built), each member's line the transform
++     of the solid's common-volume function along it, its isotropic sphere the ball's;
++     'lsq', in the Lorentzian profile the engine's TCH pseudo-Voigt with the Gaussian and
++     Lorentzian FWHM that best fit the solid's exact line along the member (sizeLineKs; AB
++     §3); or 'lor', v522's Lorentzian of FWHM 0.675/⟨L⟩_V (a WPPM phase reads neither). The
++     Lorentzian is 11.5–21 % of the peak off every solid's exact line, reads ⟨L⟩_V 13–25 %
++     long, and pulls a solid toward equant the more members a reflection has (m−3m read a
++     quarter of the anisotropy); lsq is 2.5–8 % off at the same cost and puts two of 11
++     clean rows in the wrong family of solid in expectation; the exact line none. With
++     WPPM_OPT's shortcuts (xrd-broad.js: the read-out from tables, a reflection's two lines
++     by one FFT, the axial shift interpolated in θ) a fit by the exact line cost 0.42× v522's
++     CPU on the 22 sub-screen rows (lsq 0.74×, WPPM before them 2.13×), with WPPM's outcome,
++     reach and accuracy (STEP2.md);
 +   - search, freeShapeRun's: 'v2' (AB §4, STEP1.md: forward differences in the brief
 +     trials, no covariance in the search's refinements, the returned fit refined once more
 +     by central differences with its covariance, a held frame refined once per orbit of the
@@ -104,7 +451,7 @@ index 2b68562..dfc47ed 100644
 +   SHAPE_FWD below; the tables' steps and their fit's span and weights (xrd-sizeline.js, written by
 +   research/free-shape/round2/proto/build-sizeline.mjs); the starts' families (lowIndexAxes,
 +   at most 5). */
-+const SHAPE_MODE = { line: 'lsq', search: 'v2' };
++const SHAPE_MODE = { line: 'exact', search: 'v2' };
 +/* Search v2: random starts beside the class's distinct ones (the sphere-like one, a plate
 +   and a needle per low-index family: 11 in the six lower classes, 9 in −3m, 6/m and 6/mmm,
 +   7 in cubic), plus one for each start the setting shapeStarts asks above its default.
@@ -129,7 +476,7 @@ index 2b68562..dfc47ed 100644
  // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
  // the phase is drawn as an isotropic one.
  function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> v[i] !== 0); }
-@@ -1023,6 +1078,47 @@ function shapeWidths(model, q, v){
+@@ -1023,6 +1110,47 @@ function shapeWidths(model, q, v){
      return out;
    });
  }
@@ -177,7 +524,17 @@ index 2b68562..dfc47ed 100644
  function shapeMatrix(L){
    const [l11, l21, l22, l31, l32, l33] = L;
    return [l11*l11, l11*l21, l11*l31,  l11*l21, l21*l21 + l22*l22, l21*l31 + l22*l32,  l11*l31, l21*l31 + l22*l32, l31*l31 + l32*l32 + l33*l33];
-@@ -2342,15 +2438,17 @@ function growFade(d, dFull){
+@@ -1770,7 +1898,8 @@ function uvwStep(model, p, v, k){
+ }
+ function broadeningSetup(q, p, cell, list, add, nextIndex){
+   const prof = PROFILES.includes(p.profile) ? p.profile : 'lorentz';
+-  q.wppm = prof !== 'lorentz';
++  // (SHAPE_MODE.line 'exact': a phase with a body for its free shape is a WPPM phase)
++  q.wppm = prof !== 'lorentz' || (SHAPE_MODE.line === 'exact' && !!BODIES[shapeTypeOf(p.shape)]);
+   if (prof === 'lognormal'){ q.iLS = nextIndex(); add('LS', 0, 0, 1.5, 1e-4, { kind: 'dist' }); }
+   const trans = (p.ops || []).filter(o=> o.R.every((x, i)=> x === [1,0,0, 0,1,0, 0,0,1][i]) && o.t.some(x=> x)).map(o=> o.t);
+   if (p.strain === 'aniso'){
+@@ -2342,15 +2471,17 @@ function growFade(d, dFull){
  // One line of one reflection with the free shape: a peak per member of the family, its
  // Lorentzian width Y (the instrument's and the faults', and the legacy ellipsoid's
  // isotropic Ys) + the shape's own (shapeWidths: wv, one per member, times prof.ws, the
@@ -199,7 +556,35 @@ index 2b68562..dfc47ed 100644
      sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
      const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
      if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
-@@ -2477,6 +2575,8 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2372,7 +2503,7 @@ function shapeLine(model, k, r, j, th, tt, I, wv, prof, out, ticks, S, f2, d, tw
+    one — and the axial divergence's nodes. The grid follows two widths, estimated as
+    Lorentzians of the same breadth: the line's whole (the window) and its narrowest part
+    (the step: the instrument's and the largest crystallites' sharpest member). */
+-function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, ts, tw){
++function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, ts, tw, pend){
+   const q = model.phases[k], L = model.lines[j], lam1 = model.lines[0].lam, c = Math.cos(th);
+   const { U, V, W, X, Y, A } = inst, pr = profileAtTheta(th, U, V, W, X, Y);
+   // The solid's base body for its members; the isotropic size (no shape, or the shape's
+@@ -2419,7 +2550,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d,
+   // plate's sharp in-plane members inside a broad line): counted from the whole line's
+   // width, 3 nodes 0.1° apart drew separate bumps, 8 % of the peak.
+   // (the error allowed at the top of its narrowest component)
+-  const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin, sollerTol(model, S*I, Hmin, tq.eta)) : null;
++  const nodes = axialOn(A) ? lineNodes(model, (k*model.rStride + r)*4 + j, th, A, Hmin, sollerTol(model, S*I, Hmin, tq.eta), WPPM_OPT.axial) : null;
+   const spread = nodes ? nodes.reduce((s, nd)=> Math.max(s, Math.abs(nd.d)), 0) : 0;
+   /* The tail rule draws no further than the grid holds at its step (an eighth of Hmin):
+      a step grown for the tail costs the line's top more than the tail gains. On Si spheres
+@@ -2449,7 +2580,8 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d,
+       g = { list: [mb], sw: mb[4], swx: mb[4]*mb[5] };
+     }
+     draw();
+-  } else wppmLine({ ...line, Hest, Hmin, size: sizeOf(members), fwhm: fw });
++  } else if (pend && !fw) pend.push({ ...line, Hest, Hmin, size: sizeOf(members) });   // (drawn with its pair: phasePattern)
++  else wppmLine({ ...line, Hest, Hmin, size: sizeOf(members), fwhm: fw });
+   if (tick){
+     /* The tick's FWHM (xrd-widths' expected width; the phase detection's reach of a
+        line), measured on the line as drawn. 1.23·Ys, the single sphere's, had been 1.6
+@@ -2477,6 +2609,8 @@ function phasePattern(model, v, k, out, ticks){
    const act = shapeActive(q, v);
    const wppm = q.wppm && !q.iL;
    const shp = act && !wppm ? shapeWidths(model, q, v) : null, ts = act && wppm ? shapeTs(model, q, v) : null;
@@ -208,7 +593,25 @@ index 2b68562..dfc47ed 100644
    const tw = textureWeights(q, v);
    const fa = q.iFA != null ? v[q.iFA] : 0, sigma = q.iLS != null ? v[q.iLS] : 0;
    /* The faults' layer spacing at this cell: the table's is the starting cell's, and κ goes
-@@ -2524,8 +2624,11 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2491,6 +2625,8 @@ function phasePattern(model, v, k, out, ticks){
+   }
+   const sk = model.skip, skip = sk && sk.k === k ? sk.rs : null;
+   if (sk && sk.only && sk.k !== k) return out;
++  // WPPM_OPT.pair: a reflection's two lines drawn together (wppmPair), but for the ticks' calc
++  const pend = wppm && WPPM_OPT.pair && !ticks && model.lines.length === 2 ? [] : null;
+   for (let r = 0; r < q.nRefl; r++){
+     if (skip && (sk.only ? !skip.has(r) : skip.has(r))) continue;
+     const gf = r < q.nFull ? 1 : growFade(d[r], q.dFull);
+@@ -2514,7 +2650,7 @@ function phasePattern(model, v, k, out, ticks){
+       if (!fade) continue;
+       const I = (j ? base2 : base)*L.w*lpFactor(model, th)*fade;
+       if (wppm){
+-        wppmLineOf(model, k, r, j, th, tt, I, { U: Ui, V: Vi, W: Wi, X: Xi, Y: Yi, A }, { eps, kappa, sigma, Ys: v[q.iYs] }, out, ticks && j === 0 ? ticks : null, S, f2, d, ts ? ts[r] : null, ts && tw ? tw[r] : null);
++        wppmLineOf(model, k, r, j, th, tt, I, { U: Ui, V: Vi, W: Wi, X: Xi, Y: Yi, A }, { eps, kappa, sigma, Ys: v[q.iYs] }, out, ticks && j === 0 ? ticks : null, S, f2, d, ts ? ts[r] : null, ts && tw ? tw[r] : null, pend);
+         continue;
+       }
+       // The size (Ys, read as D = Kλ1/Ys, and the shape's widths) and the faults broaden
+@@ -2524,8 +2660,11 @@ function phasePattern(model, v, k, out, ticks){
        // Ys (held at 0 in its search), left out as WPPM leaves it; the legacy ellipsoid's
        // widths add to Ys (shapeOf).
        const lr = L.lam/lam1, Yr = Yi + lr*(shp && q.iW ? 0 : Ys) + (kappa > 0 ? L.lam*kappa/Math.PI*R2D : 0);
@@ -222,7 +625,15 @@ index 2b68562..dfc47ed 100644
        // The axial divergence spreads the peak over shifts within [dLo, dHi] (axialReach): a
        // line out of range by more than that is skipped before its nodes.
        const [dLo, dHi] = axialReach(th, A);
-@@ -2709,8 +2812,12 @@ function diffStep(model, j, v){
+@@ -2537,6 +2676,7 @@ function phasePattern(model, v, k, out, ticks){
+         ticks.push({ phase: q.id, h: q.lab ? q.lab[3*r] : q.h[r], k: q.lab ? q.lab[3*r + 1] : q.k[r], l: q.lab ? q.lab[3*r + 2] : q.l[r],
+                      tt, d: d[r], mult: q.mult[r], F2: f2[r], I: S*I, H: pr.H, eta: pr.eta, j: 0, pk: k, r });
+     }
++    if (pend && pend.length){ if (pend.length === 2) wppmPair(pend[0], pend[1]); else wppmLine(pend[0]); pend.length = 0; }
+   }
+   return out;
+ }
+@@ -2709,8 +2849,12 @@ function diffStep(model, j, v){
  /* The Jacobian columns of the free parameters at v (st the state there): exact for the
     linear ones (∂y/∂S = the phase at scale 1, ∂y/∂c = its basis function), central
     differences for the rest, recomputing only the phases a parameter touches (one-sided
@@ -237,7 +648,7 @@ index 2b68562..dfc47ed 100644
    const n = model.n, np = model.phases.length;
    const tmpA = new Float64Array(n), tmpB = new Float64Array(n);
    free.forEach((j, a)=>{
-@@ -2719,8 +2826,8 @@ function jacobian(model, v, st, free, cols){
+@@ -2719,8 +2863,8 @@ function jacobian(model, v, st, free, cols){
      col.fill(0);
      const h = diffStep(model, j, v);
      let up = v[j] + h, dn = v[j] - h;
@@ -248,7 +659,7 @@ index 2b68562..dfc47ed 100644
      if (up === dn) return;
      const vu = v.slice(), vd = v.slice(); vu[j] = up; vd[j] = dn;
      const ks = p.group === 'phase' ? [p.phase] : [...Array(np).keys()];
-@@ -2729,10 +2836,12 @@ function jacobian(model, v, st, free, cols){
+@@ -2729,10 +2873,12 @@ function jacobian(model, v, st, free, cols){
        // Both displaced points with the same FCJ node counts (lineNodes): refine()'s, held
        // over the whole refinement (a Jacobian is taken only inside one; up to v479 a
        // column taken outside one held counts of its own, a case that never arose).
@@ -263,7 +674,7 @@ index 2b68562..dfc47ed 100644
      }
    });
    // The F² caches now hold the last displaced cell: the next evaluation at v recomputes.
-@@ -2823,7 +2932,11 @@ function hgFloored(model, v, free){
+@@ -2823,7 +2969,11 @@ function hgFloored(model, v, free){
     inverse holds the variance each would have with it held. `tied` lists each such set
     (names), `esdHeld` those conditional esds. iterations and ms: over all the passes
     (passes: how many), why: the last pass's; fcjBehind: the last pass still left a line
@@ -276,7 +687,7 @@ index 2b68562..dfc47ed 100644
  /* refine()'s passes with fresh FCJ counts run until no line has outgrown its count. On
     synthetic standards (LaB6, Si; (S + H)/L 0.01–0.2 started from 0.005, 0.02, 0.05 and
     0.08, two profiles) at most 6 were needed, 4 from ASYM_START. The cap of 4 that the
-@@ -2907,8 +3020,8 @@ function refineHeld(model, opts){
+@@ -2907,8 +3057,8 @@ function refineHeld(model, opts){
      v = vl; st.bg.set(linSt.bg); st.yc.set(linSt.yc); st.chi2 = linSt.chi2;
      return before - linSt.chi2 > 0.01*chiRed(before);
    };
@@ -287,7 +698,7 @@ index 2b68562..dfc47ed 100644
      const { A, g } = normalEq(model, cols, st);
      const act = [];
      for (let a = 0; a < m; a++) if (A[a*m + a] > 0 && !onBound(free[a], g[a])) act.push(a);
-@@ -2987,10 +3100,10 @@ function refineHeld(model, opts){
+@@ -2987,10 +3137,10 @@ function refineHeld(model, opts){
       in atBound, for the reader to take the value as a limit. U, V, W with H_G² on its
       floor have no meaningful curvature (∂y/∂W ∝ 1/√W there, the esd follows the
       difference step): esd NaN, and listed in atBound. */
@@ -300,7 +711,7 @@ index 2b68562..dfc47ed 100644
      jacobian(model, v, st, free, cols);
      const { A, g } = normalEq(model, cols, st);
      const act = [];
-@@ -3041,7 +3154,7 @@ function refineHeld(model, opts){
+@@ -3041,7 +3191,7 @@ function refineHeld(model, opts){
    model.cov = { names: free.map(j=> model.par[j].name), cov };
    const freeNames = free.map(j=> model.par[j].name);
    return { params: getParams(model), esd, corr, cov, free: freeNames, atBound,
@@ -309,7 +720,7 @@ index 2b68562..dfc47ed 100644
             stats, iterations: it, converged, why, ms: Date.now() - t0 };
  }
  
-@@ -4265,6 +4378,25 @@ function autoRefine(model, opts = {}){
+@@ -4265,6 +4415,25 @@ function autoRefine(model, opts = {}){
    return finish({ res, out, lastFree, nIn, cs });
  }
  
@@ -335,7 +746,7 @@ index 2b68562..dfc47ed 100644
  /* freeShape(model, k, res, free, opts) → { res, info }, { rejected, dBIC } or null: the
     free shape of phase k (shapeSetup), from the isotropic refinement res. By the cubic
     symmetry the pattern does not change to first order when a sphere is deformed (Σ over
-@@ -4297,23 +4429,32 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4297,23 +4466,32 @@ function freeShapeRun(model, k, res, free, opts){
       (60 by default: a body's turns take longer than a stage), λ and the shift test as
       everywhere. */
    const F = fitSettings(opts.fit), nStarts = F.shapeStarts, nFull = F.shapeFull;
@@ -375,7 +786,7 @@ index 2b68562..dfc47ed 100644
    // Tilted a few degrees, so that no symmetry holds the axes where they start.
    const tilt = e => unit([e[0] + 0.08*gauss(), e[1] + 0.08*gauss(), e[2] + 0.08*gauss()]);
    const axesLow = lowIndexAxes(q);
-@@ -4365,7 +4506,19 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4365,7 +4543,19 @@ function freeShapeRun(model, k, res, free, opts){
        starts.push(put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(e)));
        starts.push(put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(e)));
      }
@@ -396,7 +807,7 @@ index 2b68562..dfc47ed 100644
      // The orientation reached becomes the reference, r = 0: the chart is fresh at the
      // start of each full refinement, far from |r| = π.
      rebase = v => { const vv = v.slice(), R = bodyFrame(q, v); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
-@@ -4472,9 +4625,13 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4472,9 +4662,13 @@ function freeShapeRun(model, k, res, free, opts){
      const refineFrom = (v, nm) => { setParams(model, rebase(v)); try { const r = refine(model, { free: nm, ...lmFull }); return { res: r, v: model.v.slice() }; } catch(e){ return null; } };
      if (BODIES[q.shapeType].base !== 'ball'){ const ex = refineFrom(best.v, names); if (ex) best = ex; }
      dBICfree = bic(best.res);
@@ -411,7 +822,7 @@ index 2b68562..dfc47ed 100644
        const r = refineFrom(vs, names.filter(nm=> !q.iR.some(i=> model.par[i].name === nm)));
        if (r && (!sn || chiTot(r.res) < chiTot(sn.res))) sn = r;
      }
-@@ -4510,9 +4667,20 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4510,9 +4704,20 @@ function freeShapeRun(model, k, res, free, opts){
    // Kept only when the data support it: ΔBIC under −10 — five more parameters always
    // lower χ² a little, and on an isotropic sample the shape was kept in 7 of 12 noise
    // draws with ΔBIC near +40.
@@ -433,12 +844,12 @@ index 2b68562..dfc47ed 100644
    return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
      chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW } };
  }
-@@ -4579,4 +4747,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
+@@ -4579,4 +4784,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
  export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
           solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
           fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
 -         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed };
-+         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE };
++         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT };
 diff --git a/xrd-sizeline.js b/xrd-sizeline.js
 new file mode 100644
 index 0000000..c30a59e

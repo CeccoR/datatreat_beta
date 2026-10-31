@@ -1,10 +1,12 @@
-# Round 2 prototype: the lsq size line and search v2 in the engine
+# Round 2 prototype: the exact and lsq size lines and search v2 in the engine
 
 A patch of the app's Rietveld engine that carries round 2's two adopted results (`../AB.md` §1):
 the lsq size line (track A) and the cheaper search (track B), each the free shape's default behind
 a switch that keeps v522's behaviour reachable. It is a prototype, ready to swap in once round 2's
 tuning runs confirm the results. Round 2's step 1 (`../STEP1.md`) measured it on the 77 screening
-runs with both lines and set forward differences to the brief trials only (`SHAPE_FWD`). It is not
+runs with both lines and set forward differences to the brief trials only (`SHAPE_FWD`). Step 2
+(`../STEP2.md`) made WPPM, the exact line, cheaper than lsq (`WPPM_OPT` in `xrd-broad.js`, three
+shortcuts) and made it the free shape's default size line (`SHAPE_MODE.line` 'exact'). It is not
 applied: the branch is unchanged. Its base is
 `9782d33` (claude/repo-code-review-sr6c8m), whose engine files equal the frozen `b9bef5f` byte for
 byte (`git diff b9bef5f 9782d33 -- 'xrd-*.js'` is empty), so the research diffs ported directly.
@@ -15,12 +17,16 @@ prototype's runs; none of it is in the repository.
 ## Files
 
 - `engine.patch`: `git diff` against `9782d33` of the app's files:
-  - `xrd-rietveld.js` (+197 −29): the switches and tunables, the lsq line, refine's options
-    `forward`, `noCov` and `covOnly`, freeShapeRun's search v2, `sameFrame`;
+  - `xrd-rietveld.js` (+254 −49): the switches and tunables, the lsq line, the exact line's
+    option (`broadeningSetup`), refine's options `forward`, `noCov` and `covOnly`, freeShapeRun's
+    search v2, `sameFrame`; for WPPM a reflection's two lines handed to `wppmPair`, the axial
+    shift interpolated in θ (`sollerStats`), the Soller cells' cache (least recently used, 2048);
+  - `xrd-broad.js` (+157 −13): `WPPM_OPT`, the read-out from a table of the points' sinθ, cosθ,
+    `wppmPair`;
   - `xrd-sizeline.js` (new, 44 kB): the lsq tables, precomputed;
   - `sw.js`: the new module in `ASSETS` (one line; `CACHE` not bumped, nor `index.html`);
-  - `RIETVELD.md`: §10.3 (the lsq line), §10.5 (search v2, with step 1's figures), §10.7 (held
-    frames).
+  - `RIETVELD.md`: §7.3 (WPPM's shortcuts), §10.3 (the exact and lsq lines), §10.5 (search v2,
+    with step 1's figures), §10.7 (held frames).
 - `xrd-sizeline.js`: the tables module as the patch adds it.
 - `build-sizeline.mjs`: rebuilds it (10 s) from track A's exact lines
   (`../scripts/A/lines/profiles.mjs`). `--check <A's tables.json>` compares with track A's tables:
@@ -44,13 +50,38 @@ git apply research/free-shape/round2/proto/engine.patch        # git apply -R to
 node research/free-shape/round2/proto/build-sizeline.mjs        # only to rebuild the tables
 ```
 
-v522's behaviour stays reachable without reverting: `SHAPE_MODE` is exported by
-`xrd-rietveld.js`; set `SHAPE_MODE.line = 'lor'` and/or `SHAPE_MODE.search = 'today'` before a
-model is built (the line is read at every pattern evaluation, the search at each `freeShape`).
+v522's behaviour stays reachable without reverting: `SHAPE_MODE` and `WPPM_OPT` are exported by
+`xrd-rietveld.js`; set `SHAPE_MODE.line = 'lor'` (or 'lsq', step 1's default) and/or
+`SHAPE_MODE.search = 'today'` before a model is built ('exact' is read when the model is built,
+'lsq' and 'lor' at every pattern evaluation, the search at each `freeShape`), and
+`WPPM_OPT.fast`, `.pair`, `.axial = false` for WPPM's arithmetic as v522 had it (read at every
+evaluation).
 
 ## What changes and why
 
-**The lsq size line** (`SHAPE_MODE.line`, AB §1 item 2, §3.1–§3.5). Each member's size line is
+**The exact size line, by default** (`SHAPE_MODE.line` 'exact'; `../STEP2.md`). A phase with a body
+for its free shape is built as a WPPM phase whatever size profile it names (`broadeningSetup`): its
+members' lines are the transforms of the solid's common-volume function along each (the engine's
+own WPPM, `wppmLineOf` with `shapeTs`, unchanged), and its isotropic sphere is the ball's. The
+switch is read when a model is built. Why: in expectation it puts none of the 11 clean rows in
+another family of solid where lsq puts two (AB §3.6), reads the extents and the anisotropy
+closest to the truth (AB §3.3), and with step 2's shortcuts a fit by it costs 0.42× v522's CPU
+against lsq's 0.74× (22 sub-screen rows, one load). 'lsq' and 'lor' stay reachable.
+
+**WPPM's shortcuts** (`WPPM_OPT` in `xrd-broad.js`, all on; `../STEP2.md`; `RIETVELD.md` §7.3).
+On step 1's engine a WPPM fit spent 96 % of its CPU in `phasePattern`: the read-out 62 %, the axial
+nodes 23 %, the FFTs 7 %, the common factor 3 %, the members' size coefficients 1 %. Bit for bit
+(no switch): the read-out takes the points' sinθ and cosθ from a table made once per grid and its
+cell by an integer truncation (a sine, a cosine and `Math.floor` a point: 16–20 ns, now 9), and the Soller
+cells are kept for the 2048 lines last used (512, oldest first, before). `fast`: the common
+factor's exponentials by recurrence, the read-out by reciprocals (2·10⁻¹² of the peak). `pair`: a
+reflection's Kα1 and Kα2 lines on one grid by one FFT, one in the real part and one in the
+imaginary part, the size coefficients made once (`wppmPair`; 1.5·10⁻⁵ of the peak). `axial`: a
+line with one axial node takes its shift from the cells at the two nearest multiples of 10⁻⁴ rad in
+θ, linearly (`sollerStats`; 10⁻⁹ of the peak), so a cell parameter's Jacobian column no longer
+computes every line's cells again. `false` gives v522's arithmetic.
+
+**The lsq size line** (`SHAPE_MODE.line` 'lsq', step 1's default, AB §1 item 2, §3.1–§3.5). Each member's size line is
 still the engine's TCH pseudo-Voigt, but its width w (the sphere-calibrated 0.675/⟨L⟩_V) enters as
 a Gaussian kg·w, in quadrature with the instrument's, and a Lorentzian kl·w, where (kg, kl) make
 the TCH line that best fits the solid's exact line along that member (weighted least squares over
@@ -102,21 +133,21 @@ like it lost minima the shifted turns lost). Random starts, when any are asked f
 or the setting `shapeStarts` above its default 10, one each), come from a second stream. The
 legacy ellipsoid (`ellipsoidL`) keeps v522's search.
 
-**WPPM is not part of the patch.** The exact line for the free shape is the engine's own WPPM
-profile (a phase's Size profile WPPM, `wppmLineOf` with `shapeTs`), which track A used unchanged:
-its `FS2A_PROFILE=wppm` only set the phase's profile, and `FS2A_WPPM_BALL` was a control (the
-ball's line in every direction), not a model. There was nothing to port; the line switch does not
-apply to a WPPM phase, and search v2 does (measured in step 1: verification 4).
+**WPPM itself is the engine's.** Track A's WPPM runs only set the phase's size profile to WPPM
+(`FS2A_PROFILE=wppm`; `FS2A_WPPM_BALL` was a control, not a model), and step 1 measured search v2
+on it so. 'exact' makes that profile the free shape's default; a phase whose profile is WPPM or
+log-normal is a WPPM phase under any line setting.
 
 ## Switches and tunables
 
 All in one block of `xrd-rietveld.js` (before `shapeActive`), but the tables' own, which
-`build-sizeline.mjs` writes into `xrd-sizeline.js`. Every tunable is to be tuned on round 2's
-tuning runs.
+`build-sizeline.mjs` writes into `xrd-sizeline.js`, and `WPPM_OPT`, in `xrd-broad.js` (exported by
+both modules). Every tunable is to be tuned on round 2's tuning runs.
 
 | name | default | v522 | what |
 |---|---|---|---|
-| `SHAPE_MODE.line` | `'lsq'` | `'lor'` | the size line of a free shape's members and of its phase's isotropic sphere |
+| `SHAPE_MODE.line` | `'exact'` (step 1: `'lsq'`) | `'lor'` | the size line of a free shape's members and of its phase's isotropic sphere; 'exact' read when a model is built |
+| `WPPM_OPT.fast`, `.pair`, `.axial` | `true` | `false` | WPPM's shortcuts (any WPPM phase): the arithmetic, a reflection's two lines by one FFT, the axial shift interpolated in θ |
 | `SHAPE_MODE.search` | `'v2'` | `'today'` | freeShapeRun's search |
 | `SHAPE_FILL` | 0 | (fill to 11) | v2: random starts beside the class's distinct ones |
 | `SHAPE_CENTRAL` | `true` | — | v2: the kept fit refined once more by central differences (`false`: its covariance alone) |
@@ -203,12 +234,44 @@ default 'briefs' run without the switch on 2 rows equal to the bit with the 'bri
 - `npm run lint` clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif,
   rvui, smoke, widths, modules): 53 of 53 pass.
 
+**5. Step 2: WPPM's shortcuts and the exact line** (`../STEP2.md`; `$W/fs2/step2/h/`). Step 2's
+harness (`../scripts/step2/`: step 1's with `WPPM_OPT` from `PROTO_WPPM`) on frozen copies of step
+1's engine and step 2's; runs at nice 15, three processes.
+- No switch (`WPPM_OPT` all off; step 2's read-out tables and Soller cache only): the patterns
+  equal step 1's to the bit (11 rows × 8 parameter points, WPPM and the Lorentzian profile), and
+  the 22 sub-screen WPPM runs equal step 1's records on 22 of 22 (iso, evaluations, χ², outcome,
+  dimensions, report), at 0.55× their CPU; lsq with v2 equals step 1's lsq records on 22 of 22.
+- The switches against step 1's WPPM: patterns within 1.6·10⁻¹² of the peak (`fast`),
+  1.3·10⁻⁵ (`pair`), 1.7·10⁻¹⁰ (`fast`, `axial`); against the generator 0.29 % of the peak
+  (median) for all, as before. CPU of a fit on the 22 sub-screen runs under one load, × today
+  (the Lorentzian, v522's search, equal to the pilot's records on 22 of 22): step 1's WPPM 2.13,
+  no switch 1.18, `fast`+`pair` 0.80, `fast`+`axial` 0.52, all three 0.42; lsq with v2 0.74. The
+  same outcome on 22 of 22 for each; on the 77 screening runs all three: outcome changed on 1
+  (spheroid-P2m-on free → held, step 1's threshold case), reach 62/66, accuracy, anisotropy and
+  spheres as step 1's WPPM, 0.98× its search evaluations, 0.20× its CPU; expected family margins
+  8 / 3 / 0 as track A's WPPM; the cross-solid searches give its confusion and margin counts.
+- The final engine with no switch set ('exact', the shortcuts on, the phase's profile the
+  Lorentzian) equals those runs to the bit on 3 of 3 rows; 'lor' with 'today' equals the pilot's
+  records on 2 of 2; 'lsq' with v2 step 1's lsq records on 2 of 2; a WPPM phase with `WPPM_OPT`
+  off step 1's WPPM records on 2 of 2.
+- `npm run lint`: clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif,
+  rvui, smoke, widths, modules): 53 of 53 pass.
+
 ## What remains to tune
 
-- **The starts when the isotropic fit reads no size** (step 1): the deterministic starts sit at
+- **What the exact line brings with it** (step 2): WPPM reads model errors as shape more
+  readily (its unbounded extents are all on rows with a model error; a 4.4 nm sphere with a size
+  distribution keeps a spheroid at ΔBIC −3483): the per-line χ²_ν flag and the jackknife are to
+  carry that. A phase with a free shape asked for is a WPPM phase whatever its profile: its
+  isotropic size is WPPM's sphere's reading, and a project saved with a Lorentzian free shape is
+  searched again. `WPPM_OPT.pair` changes the pattern by 10⁻⁵ of the peak (path noise in flat
+  valleys, both ways); `false` costs 0.52× today instead of 0.42×. The lsq and Lorentzian lines
+  still compute the Soller cells at every θ (about four fifths of an lsq evaluation with the cell
+  free); the axial interpolation would serve them too, untested.
+- **The starts when the isotropic fit reads no size** (step 1, under lsq): the deterministic starts sit at
   w0's floor (1e-3°, about 8 µm), where the lsq line's slope is small (its Gaussian part enters in
   quadrature); on ellipsoid-Pm-3-on every start of the class stopped at once and only one of
-  v522's random fill starts got away. A floor on w0 tied to the instrument, or `SHAPE_FILL` > 0,
+  v522's random fill starts got away (WPPM holds it, in step 1 and here). A floor on w0 tied to the instrument, or `SHAPE_FILL` > 0,
   to be measured on the tuning runs (5 of the 77 runs have the isotropic size at 0).
 - `SHAPE_FWD` ('briefs'): forward-difference briefs reorder near-equal brief ends, both ways (step
   1: two losses of 2.7 and 4.9 χ²_ν, two gains of 828 and 217); cylinder-Pm-3m-on is kept by a
@@ -226,8 +289,9 @@ default 'briefs' run without the switch on 2 rows equal to the bit with the 'bri
 - The random turn (AB §4.6): v2 keeps v522's turns; the minima stage of the protocol is to make
   the result independent of them.
 - What the user sees: a phase with a free shape asked for now reports its isotropic size (when
-  the shape is rejected) by the ball's lsq line, smaller than the Lorentzian's Scherrer reading
-  (which read ⟨L⟩_V 13–25 % long); the card's texts (`RV_INFO`: "a Lorentzian Y_s/cosθ") and the
+  the shape is rejected) by the ball's exact line (lsq: the ball's lsq line), smaller than the
+  Lorentzian's Scherrer reading (which read ⟨L⟩_V 13–25 % long); the card's texts (`RV_INFO`: "a Lorentzian Y_s/cosθ") and the
   version (`sw.js` CACHE, the app's version) are not touched.
 - The legacy ellipsoid (v522's search kept) is not measured; WPPM with 'all' was not run (step
-  1 ran WPPM with the setting lsq chose).
+  1 ran WPPM with the setting lsq chose). Not measured with WPPM's shortcuts: the log-normal
+  profile, FCJ's axial model, a single wavelength.
