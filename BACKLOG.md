@@ -37,6 +37,15 @@ was proposed; nothing here is in the code yet.
   in widths, a peak left unpaired at a cost, in place of the sweep; (2) with a CIF at
   hand (the Rietveld card's phases), each peak given its calculated hkl, so that the
   reflections are named, (110), (200)…, alike in every sample.
+- **Free shape: a size distribution and a texture refined with the solid (round 2's open
+  limits).** Round 2 (research/free-shape/round2/VALIDATION.md) leaves both as model errors
+  the solid takes up: a log-normal size distribution gives every sphere carrying one a
+  shape, texture almost every one (49–54 of 60), and both push the solid's family wrong
+  beyond any margin; the per-line check flags about half. To try: the solid's scale as a
+  log-normal with a refined σ (the line the volume-weighted mean of A(L), tabulated in σ so
+  the exact line stays cheap; σ kept only when it pays, as the keep test does), and
+  March–Dollase refined with the shape on a low-index axis. Measure whether shape and σ,
+  shape and texture separate, on a design with these errors over-represented.
 - **Free shape: starts chosen from the peak widths, and the near-equivalent minima
   (prototype, v472).** Tried outside the app, in a copy of the engine that counts the
   pattern's evaluations, on 20 cases with the box and the Sr site refined: the twelve
