@@ -1,6 +1,6 @@
 # Step 6: the tunables on the 154 tuning runs
 
-Read by `../scripts/step6/` from the records in `$W/fs2/step6/results/` (P: the prototype at its defaults; SC, SY, MX, RD: the variants on the rows a setting can change; FAM: the 4-search family comparison on the 66 tuning truths outside the screening set). `../CONFIRM.md` reads them.
+Read by `../scripts/step6/` from the records in `$W/fs2/step6/results/` (P: the prototype at its defaults; SC, SF2, SY, MX, RD: the variants on the rows a setting can change; FAM: the 4-search family comparison on the 66 tuning truths outside the screening set). `../CONFIRM.md` reads them.
 
 ## Δ* and κ (sweep6.mjs)
 
@@ -62,39 +62,53 @@ Read by `../scripts/step6/` from the records in `$W/fs2/step6/results/` (P: the 
 | flagged (49) | 16 (35) | 1.3 | 60/117 (51 %) | 101 | 4.1 % | 27 / 28 / 30 of 49 | 35/49 | 10 |
 | flagged (49) | 16 (35) | 1.5 | 65/117 (56 %) | 101 | 4.7 % | 27 / 28 / 30 of 49 | 35/49 | 11 |
 
-## SC: the start cut: four random starts (PROTO_FILL=4) on the 10 rows whose isotropic fit read no size (cmp6.mjs)
+## SC: four random starts (PROTO_FILL=4) on the 10 rows whose isotropic fit read no size and on the 3 clean rows not reached (cmp6.mjs)
 
 | row | error | outcome ref → SC | Δχ² (χ²_ν) | solid changed | worst ref → var | minima ≤ Δ* | covered E (extents, axis) ref → var | search ev ref → var (stage) |
 |---|---|---|---|---|---|---|---|---|
 | box-Pmmm-near | po | free → free | 0.00 |  | +∞ → +∞ | 1 → 1 | 3/3, ax → 3/3, ax | 6361 → 6852 (834 → 834) |
 | box-P-3m1-near | none | free → free | 0.00 |  | +191 % → +191 % | 2 → 2 | 3/3, ax → 3/3, ax | 7492 → 7771 (6034 → 5939) |
+| sqbox-Pmmm-generic | none | free → free | -6.54 | +0 %, +0 %, -1 %; 7.8° | +1 % → +1 % | 3 → 4 | 2/2, ax → 2/2, ax | 3090 → 4837 (1473 → 2661) |
 | sqbox-P4mmm-near | none | free → free | 0.00 |  | +1 % → +1 % | 1 → 1 | 2/2, ax → 2/2, ax | 3605 → 4056 (1214 → 1214) |
+| sqbox-P6m-generic | none | free → free | -59.02 | +0 %, +0 %, +3 %; 12.7° | +3 % → +0 % | 2 → 1 | 2/2, ax → 2/2, ax | 2202 → 1994 (761 → 239) |
 | cylinder-P-3m1-on | none | held → held | 0.00 |  | +0 % → +0 % | 1 → 1 | 2/2, ax → 2/2, ax | 2220 → 2580 (640 → 640) |
 | ellcyl-Pmmm-near | hump | free → free | -45.91 | -40 %, -6 %, +64 %; 11.5° | +7 % → +65 % | 1 → 1 | 3/3, · → 1/3, ax | 6853 → 4201 (4041 → 333) |
+| ellcyl-P6m-on | none | free → free | 0.00 |  | +562 % → +562 % | 1 → 1 | 0/3, · → 0/3, · | 2563 → 3289 (305 → 305) |
 | ellipsoid-Pmmm-on | hump | held → held | 0.00 |  | +7 % → +7 % | 1 → 1 | 2/3, ax → 2/3, ax | 7030 → 6976 (2910 → 3825) |
 | ellipsoid-P4m-on | hump | held → held | 0.00 |  | +1 % → +1 % | 1 → 1 | 3/3, ax → 3/3, ax | 3470 → 3771 (761 → 761) |
 | ellipsoid-P4mmm-near | sizedist | free → free | 0.00 |  | +∞ → +∞ | 1 → 1 | 2/3, ax → 2/3, ax | 2958 → 3448 (460 → 460) |
 | ellipsoid-Pm-3-on | po | held → held | 0.00 |  | +3 % → +3 % | 1 → 1 | 3/3, ax → 3/3, ax | 3477 → 3869 (1297 → 1297) |
 | spheroid-P-3m1-on | none | held → held | 0.00 |  | +1 % → +1 % | 2 → 2 | 2/2, ax → 2/2, ax | 1457 → 1845 (432 → 432) |
 
-SC against P on 10 rows: outcome changed 0; returned χ² lower by more than 0.1 χ²_ν on 1, higher on 0; solid changed 1; search evaluations 44923 → 45369 (1.010×), the stage's 18623 → 15735 (0.845×); extents and axes covered 34 → 33 of 37.
+SC against P on 13 rows: outcome changed 0; returned χ² lower by more than 0.1 χ²_ν on 3, higher on 0; solid changed 3; search evaluations 52778 → 55489 (1.051×), the stage's 21162 → 18940 (0.895×); extents and axes covered 40 → 39 of 47.
 
-## SY: the start cut: the starts' width floored at the instrument's FWHM at mid-range (PROTO_Y0F=1), the same rows (cmp6.mjs)
+## SF2: two random starts (PROTO_FILL=2, v522's fill in 6/m) on the 2 clean 6/m rows not reached (cmp6.mjs)
+
+| row | error | outcome ref → SF2 | Δχ² (χ²_ν) | solid changed | worst ref → var | minima ≤ Δ* | covered E (extents, axis) ref → var | search ev ref → var (stage) |
+|---|---|---|---|---|---|---|---|---|
+| sqbox-P6m-generic | none | free → free | 0.00 |  | +3 % → +3 % | 2 → 2 | 2/2, ax → 2/2, ax | 2202 → 2412 (761 → 761) |
+| ellcyl-P6m-on | none | free → free | 0.00 |  | +562 % → +562 % | 1 → 1 | 0/3, · → 0/3, · | 2563 → 3043 (305 → 305) |
+
+SF2 against P on 2 rows: outcome changed 0; returned χ² lower by more than 0.1 χ²_ν on 0, higher on 0; solid changed 0; search evaluations 4765 → 5455 (1.145×), the stage's 1066 → 1066 (1.000×); extents and axes covered 3 → 3 of 7.
+
+## SY: the starts' width floored at the instrument's FWHM at mid-range (PROTO_Y0F=1), the 10 rows and 2 of the clean rows not reached (cmp6.mjs)
 
 | row | error | outcome ref → SY | Δχ² (χ²_ν) | solid changed | worst ref → var | minima ≤ Δ* | covered E (extents, axis) ref → var | search ev ref → var (stage) |
 |---|---|---|---|---|---|---|---|---|
 | box-Pmmm-near | po | free → free | -0.39 |  | +∞ → +∞ | 1 → 1 | 3/3, ax → 3/3, ax | 6361 → 4116 (834 → 470) |
 | box-P-3m1-near | none | free → free | -0.05 | +14 %, +0 %, +0 %; 0.3° | +191 % → +231 % | 2 → 3 | 3/3, ax → 3/3, ax | 7492 → 6466 (6034 → 4848) |
 | sqbox-P4mmm-near | none | free → free | -0.00 |  | +1 % → +1 % | 1 → 1 | 2/2, ax → 2/2, ax | 3605 → 3511 (1214 → 1013) |
+| sqbox-P6m-generic | none | free → free | 0.00 |  | +3 % → +3 % | 2 → 2 | 2/2, ax → 2/2, ax | 2202 → 2202 (761 → 761) |
 | cylinder-P-3m1-on | none | held → held | 0.00 |  | +0 % → +0 % | 1 → 1 | 2/2, ax → 2/2, ax | 2220 → 2562 (640 → 1211) |
 | ellcyl-Pmmm-near | hump | free → free | -3.06 |  | +7 % → +5 % | 1 → 1 | 3/3, · → 3/3, ax | 6853 → 3635 (4041 → 1172) |
+| ellcyl-P6m-on | none | free → free | 0.00 |  | +562 % → +562 % | 1 → 1 | 0/3, · → 0/3, · | 2563 → 2563 (305 → 305) |
 | ellipsoid-Pmmm-on | hump | held → held | 0.00 |  | +7 % → +7 % | 1 → 1 | 2/3, ax → 2/3, ax | 7030 → 5947 (2910 → 3590) |
 | ellipsoid-P4m-on | hump | held → held | 0.00 |  | +1 % → +1 % | 1 → 1 | 3/3, ax → 3/3, ax | 3470 → 3914 (761 → 691) |
 | ellipsoid-P4mmm-near | sizedist | free → free | -0.00 |  | +∞ → +∞ | 1 → 1 | 2/3, ax → 2/3, ax | 2958 → 3103 (460 → 461) |
 | ellipsoid-Pm-3-on | po | held → held | -0.00 |  | +3 % → +3 % | 1 → 1 | 3/3, ax → 3/3, ax | 3477 → 4486 (1297 → 2817) |
 | spheroid-P-3m1-on | none | held → held | 0.00 |  | +1 % → +1 % | 2 → 2 | 2/2, ax → 2/2, ax | 1457 → 1457 (432 → 432) |
 
-SY against P on 10 rows: outcome changed 0; returned χ² lower by more than 0.1 χ²_ν on 2, higher on 0; solid changed 1; search evaluations 44923 → 39197 (0.873×), the stage's 18623 → 16705 (0.897×); extents and axes covered 34 → 35 of 37.
+SY against P on 12 rows: outcome changed 0; returned χ² lower by more than 0.1 χ²_ν on 2, higher on 0; solid changed 1; search evaluations 49688 → 43962 (0.885×), the stage's 19689 → 17771 (0.903×); extents and axes covered 37 → 38 of 44.
 
 ## MX: the minima stage with max 3, on the 22 rows whose stage took more than 3 candidates (cmp6.mjs)
 
