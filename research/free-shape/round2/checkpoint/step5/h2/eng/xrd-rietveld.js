@@ -1116,7 +1116,21 @@ const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kic
    'all': any gain over 0 (a study's: every shape goes on). early: the brief trials' best gain must
    exceed early × what the rule needs by the held route. record: the test's numbers in info.keep (or
    keep beside a rejection), with the per-line check of the search's fit before the stage. */
-const SHAPE_KEEP = { rule: 'bic', bic: 10, early: 0.5, record: true };
+const SHAPE_KEEP = { rule: 'lrt', alpha: 0.001, margin: 2, misfit: true, bic: 10, early: 0.5, record: false };
+/* laueTerms(q): the deformations of a sphere phase q's pattern sees to first order, the symmetric traceless
+   tensors its Laue class leaves invariant: (1/|G|)·Σ (1 + 2cos θ + 2cos 2θ) over its operations (θ the
+   proper part's angle): 5 in −1, 3 in 2/m, 2 in mmm, 1 in the tetragonal, trigonal and hexagonal classes,
+   0 in the cubic ones. */
+function laueTerms(q){
+  const L = q.laue || [];
+  if (!L.length) return 5;
+  let s = 0;
+  for (const R of L){ const det = R[0]*(R[4]*R[8] - R[5]*R[7]) - R[1]*(R[3]*R[8] - R[5]*R[6]) + R[2]*(R[3]*R[7] - R[4]*R[6]);
+    const c = Math.max(-1, Math.min(1, ((det < 0 ? -1 : 1)*(R[0] + R[4] + R[8]) - 1)/2)); s += 1 + 2*c + 2*(2*c*c - 1); }
+  return Math.max(0, Math.round(s/L.length));
+}
+// The χ²_ν upper quantile at tail p (Wilson–Hilferty).
+function chi2Upper(nu, p){ const z = normTailInv(p), t = 2/(9*nu); return nu*Math.pow(Math.max(0, 1 - t + z*Math.sqrt(t)), 3); }
 /* The family (STEP5.md): which solid the data tell apart. solids: 'none' (only the one asked for),
    'general' (also its nested partner and the three general members: box, elliptic cylinder,
    ellipsoid) or 'all' (the six), each searched as the one asked for, from the same isotropic fit
@@ -1125,7 +1139,7 @@ const SHAPE_KEEP = { rule: 'bic', bic: 10, early: 0.5, record: true };
    family determined when the runner-up lies margin χ²_ν above it (marginMisfit where the winner's
    per-line check fired); within it the general member only where it beats its special one by
    nest[family] χ²_ν (else 'the special one; the general is not supported'). */
-const SHAPE_FAMILY = { solids: 'none', margin: 10, marginMisfit: 25, nest: { box: 3.84, cyl: 5.99, ball: 5.99 } };
+const SHAPE_FAMILY = { solids: 'none', margin: 14, marginMisfit: 35, nest: { box: 3.84, cyl: 5.99, ball: 5.99 }, nestMisfit: 25 };
 const FAMILY_OF = { box: 'box', sqbox: 'box', cylinder: 'cyl', ellcyl: 'cyl', ellipsoid: 'ball', spheroid: 'ball', sphere: 'ball' };
 const FAMILY_GENERAL = { box: 'box', cyl: 'ellcyl', ball: 'ellipsoid' }, FAMILY_SPECIAL = { box: 'sqbox', cyl: 'cylinder', ball: 'spheroid' };
 /* familyVerdict(fits, iso, nu, o) → { family, by, margin, need, determined, within, solid, nested, tried,
@@ -1143,7 +1157,7 @@ function familyVerdict(fits, iso, nu, o){
   const within = order.filter(F=> fam[F].c - fam[W].c < need);
   const g = by[FAMILY_GENERAL[W]], sp = by[FAMILY_SPECIAL[W]];
   let nested = null, solid = fam[W].type;
-  if (g && sp){ const delta = c(sp) - c(g); nested = { general: g.type, special: sp.type, delta, need: o.nest[W], supported: delta >= o.nest[W] }; solid = nested.supported ? g.type : sp.type; }
+  if (g && sp){ const delta = c(sp) - c(g); const nn = g.flagged ? o.nestMisfit : o.nest[W]; nested = { general: g.type, special: sp.type, delta, need: nn, supported: delta >= nn }; solid = nested.supported ? g.type : sp.type; }
   return { family: W, by: fam[W].type, margin, need, determined: within.length === 1, within, solid, nested, tried: Object.keys(by),
     rivals: Object.fromEntries(order.map(F=> [F, { by: fam[F].type, delta: fam[F].c - fam[W].c }])) };
 }
@@ -5064,9 +5078,12 @@ function freeShapeRun(model, k, res, free, opts){
   // rejected.) The ΔBIC given is that route's: the lowest the trial shapes allow.
   const dP = names.length - free.length, dPmin = dP - (q.iR ? q.iR.length : 0), gain = brief.length ? (chiTot(res) - brief[0].chi)/Math.max(1, res.stats.chi2) : -Infinity;
   // (SHAPE_KEEP) the gain the rule needs with dp more parameters than the isotropic fit
-  const KP = SHAPE_KEEP, need = dp => KP.rule === 'all' ? 0 : KP.bic + dp*Math.log(N);
-  const keepRec = KP.record ? { rule: KP.rule, nu: Math.max(1, res.stats.chi2), gainBrief: gain, dPfree: dP, dPheld: dPmin } : null;
-  if (!(gain > KP.early*need(dPmin))){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true, ...(keepRec ? { keep: { ...keepRec, early: KP.early*need(dPmin) } } : null) }); }
+  // 'lrt': a gain over χ²_{k+1}(1 − alpha) + margin whatever the route, k the class's visible terms
+  // (laueTerms); 'bic': ΔBIC < −bic by the route's parameters; 'all': any gain (a study's).
+  const KP = SHAPE_KEEP, kVis = laueTerms(q), needLrt = chi2Upper(kVis + 1, KP.alpha) + KP.margin;
+  const need = dp => KP.rule === 'all' ? 0 : KP.rule === 'lrt' ? needLrt : KP.bic + dp*Math.log(N);
+  const keepRec = { rule: KP.rule, k: kVis, nu: Math.max(1, res.stats.chi2), gainBrief: gain, dPfree: dP, dPheld: dPmin };
+  if (!(gain > KP.early*need(dPmin))){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC: dPmin*Math.log(N) - gain, early: true, keep: { ...keepRec, need: need(dPmin), early: KP.early*need(dPmin) } }); }
   let best = null;
   const finals = [];
   // A full refinement from v; kept as the best when it is.
@@ -5152,13 +5169,18 @@ function freeShapeRun(model, k, res, free, opts){
   // draws with ΔBIC near +40.
   let cb = chiTot(best.res);
   let dBIC = bic(best.res);
-  if (keepRec){
+  {
     const g = r => (chiTot(res) - chiTot(r))/keepRec.nu;
     Object.assign(keepRec, { gainFree: bestFree ? g(bestFree.res) : held ? NaN : g(best.res), gainHeld: held ? g(best.res) : Number.isFinite(dBICheld) ? keepRec.dPheld*Math.log(N) - dBICheld : NaN,
-      held, gain: g(best.res), dP: best.res.stats.P - res.stats.P, need: need(best.res.stats.P - res.stats.P) });
-    if (SHAPE_CHECK.on){ const c = lineCheck(model, k, best.v, best.res.stats.P); Object.assign(keepRec, { flagged: c.flagged, zSeg: c.zSeg, zBin: c.zBin }); }
+      held, gain: g(best.res), dP: best.res.stats.P - res.stats.P, need: need(best.res.stats.P - res.stats.P), dBIC });
+    // G: the larger gain of the free and held fits (the free one includes the held frame)
+    keepRec.G = Math.max(keepRec.gain, Number.isFinite(keepRec.gainFree) ? keepRec.gainFree : -Infinity);
+    // The per-line check of the fit before the stage: where it fires the shape needs ΔBIC < −bic too ('lrt', misfit)
+    if (SHAPE_CHECK.on && (KP.record || (KP.rule === 'lrt' && KP.misfit && keepRec.G > needLrt))){ const c = lineCheck(model, k, best.v, best.res.stats.P); Object.assign(keepRec, { flagged: c.flagged, zSeg: c.zSeg, zBin: c.zBin }); }
   }
-  if (!(KP.rule === 'all' ? cb < chiTot(res) : dBIC < -KP.bic)){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC, ...(keepRec ? { keep: keepRec } : null) }); }
+  const keptBy = KP.rule === 'all' ? cb < chiTot(res) : KP.rule === 'lrt' ? keepRec.G > needLrt && (!KP.misfit || !keepRec.flagged || dBIC < -KP.bic) : dBIC < -KP.bic;
+  keepRec.kept = keptBy;
+  if (!keptBy){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC, keep: keepRec }); }
   /* The minima stage (SHAPE_MINIMA): the search's ends refined to the same level and merged. A
      free minimum below the search's free fit takes its place, and the held frame (when held) is
      tested against it again as above. info.minima: those within keep·nu of the lowest, each
@@ -5212,7 +5234,7 @@ function freeShapeRun(model, k, res, free, opts){
     }
   }
   return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
-    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check, ...(keepRec ? { keep: keepRec } : null),
+    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check, keep: keepRec,
     ...(minima ? { minima, minimaStage: minima.stage } : null) } };
 }
 

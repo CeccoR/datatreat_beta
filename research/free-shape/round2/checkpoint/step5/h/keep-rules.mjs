@@ -61,3 +61,32 @@ export function table(L){
 }
 export { cl, er, calib, score, by };
 if (opt.rules) table(rules());
+// ---- step 5's candidates: per body, per body and symmetry (k: the class's visible terms), with the check ----
+const K = { tric: 5, mono: 3, orth: 2, tetr: 1, trig: 1, hex: 1, cub: 0 };
+const grp = o => K[o.sys] >= 3 ? 'low' : 'high';
+export function candidates(margin = 2){
+  const L = [];
+  const Tb = calib(cl(cal), 0.99, margin), Tm = calib(cl(cal), 1, margin), Tbs = calib(cl(cal), 1, margin, o=> o.solid + '|' + grp(o));
+  const Tpool = Math.max(...cl(cal).map(o=> o.G)) + margin;
+  const withCheck = (r, nm) => ({ name: r.name + nm, keep: o=> r.keep(o) && (!o.flag || o.dBIC < -10) });
+  const base = [
+    { name: `G > ${(Tpool).toFixed(1)} (every body: the clean nulls' max + ${margin})`, keep: o=> o.G > Tpool },
+    { name: `G > the body's clean nulls' 99 % + ${margin}`, keep: o=> o.G > Tb[o.solid], T: Tb },
+    { name: `G > the body's clean nulls' max + ${margin}`, keep: o=> o.G > Tm[o.solid], T: Tm },
+    { name: `G > the body's max + ${margin} in its symmetry group (−1, 2/m | the rest)`, keep: o=> o.G > Tbs[o.solid + '|' + grp(o)], T: Tbs },
+  ];
+  for (const r of base){ L.push(r); L.push(withCheck(r, '; flagged: also ΔBIC < −10')); }
+  return L;
+}
+if (opt.cand){ const L = candidates(+(opt.margin ?? 2)); table([rules()[0], ...L]); for (const r of L) if (r.T) console.log(r.name, JSON.stringify(Object.fromEntries(Object.entries(r.T).map(([k, v])=> [k, +v.toFixed(1)])))); }
+// ---- the likelihood-ratio test with the class's dof: G > χ²_{k+1}(1 − α) + margin ----
+export function lrtRules(){
+  const L = [];
+  for (const [a, m] of [[0.01, 0], [0.001, 0], [0.001, 2], [0.0001, 0]]){
+    const T = o => chi2q(K[o.sys] + 1, a) + m;
+    const r = { name: `G > χ²_{k+1}(${1 - a}) + ${m}`, keep: o=> o.G > T(o), Tk: [0, 1, 2, 3, 5].map(k=> chi2q(k + 1, a) + m) };
+    L.push(r, { name: r.name + '; flagged: also ΔBIC < −10', keep: o=> r.keep(o) && (!o.flag || o.dBIC < -10) });
+  }
+  return L;
+}
+if (opt.lrt){ const L = lrtRules(); table(L); for (const r of L) if (r.Tk) console.log(r.name, 'k = 0, 1, 2, 3, 5:', r.Tk.map(x=> x.toFixed(1)).join(', ')); }
