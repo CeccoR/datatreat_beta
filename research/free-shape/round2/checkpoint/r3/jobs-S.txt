@@ -1,3 +1,7 @@
+CP ellipsoid-Pmmm-generic-a p MIN_SET=capCands=3;capEvals=6000
+CP ellipsoid-Pm-3m-near-a p MIN_SET=capCands=3;capEvals=6000
+CP ellcyl-P6mmm-on-a p MIN_SET=capCands=3;capEvals=6000
+CP box-P4m-near-a p MIN_SET=capCands=3;capEvals=6000
 # round 3 screening: S0 the defaults with the angles recorded; DR the dense reference; TL, TF targeted starts; RF random fill
 S0 box-P-1-near-a p ANGLE_SET=record=true;each=true
 S0 box-P2m-generic-a p ANGLE_SET=record=true;each=true

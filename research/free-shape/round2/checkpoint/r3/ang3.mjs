@@ -25,7 +25,7 @@ function one(x, o){
   const axr = rep.axes.find(a=> a.axis === fp);
   let r = tilt(rd, fp);
   if (!Number.isFinite(r)) r = axr && Number.isFinite(axr.esdAngle) ? axr.esdAngle*(o.rule === 'profile' ? Math.sqrt(o.t) : o.k*Math.sqrt(5.99)) : 0;
-  if (A.held && A.freeOff) r = Math.max(r, A.freeOff[fp]);
+  if (A.held && A.freeOff) r = Math.max(r, 2*A.freeOff[fp]);   // as round 2: 2·esdAngle with esdAngle ≥ freeOff
   let rm = 0;
   for (const m of inD){ const a = m.ang[fp]; if (a == null) continue;
     if (!o.each){ rm = Math.max(rm, a); continue; }
@@ -40,13 +40,14 @@ const grid = [{ rule: 'r2' }];
 for (const t of [4, 5.99, 9, 12, 16, 25]) for (const each of [false, true]) grid.push({ rule: 'profile', t, side: 'max', each });
 grid.push({ rule: 'profile', t: 9, side: 'mean', each: false }, { rule: 'profile', t: 12, side: 'mean', each: false });
 for (const k of [1, 1.2, 1.5, 2, 2.5, 3]) for (const each of [false, true]) grid.push({ rule: 'curv', k, each });
-const L = [`axes: ${tags.join(',')} ${part}${sub ? ' ' + sub : ''}, ${X.length} kept truths with a record`, '', `| rule | ${Object.keys(groups).map(g=> g + ' (covered / n, median radius °)').join(' | ')} |`, `|---|${Object.keys(groups).map(()=> '---|').join('')}`];
+const L = [`axes: ${tags.join(',')} ${part}${sub ? ' ' + sub : ''}, ${X.length} kept truths with a record`, '', `| rule | ${Object.keys(groups).map(g=> g + ' (covered / n, median radius °)').join(' | ')} | clean: radius ÷ round 2's, median |`, `|---|${Object.keys(groups).map(()=> '---|').join('')}---|`];
 for (const o of grid){
   const cells = Object.entries(groups).map(([, sel])=> {
     const ys = X.filter(sel).map(x=> o.rule === 'r2' ? (()=> { const iv = intervals(x); return iv.ax ? { e: iv.ax.e, R: iv.ax.rE, cov: iv.ax.E } : null; })() : one(x, o)).filter(Boolean);
     return `${ys.filter(y=> y.cov).length}/${ys.length}, ${f(med(ys.map(y=> y.R)), 1)}`;
   });
-  L.push(`| ${o.rule === 'r2' ? 'round 2 (2·esdAngle, betweenDeg)' : o.rule === 'profile' ? `profile t ${o.t}${o.side === 'mean' ? ' (sides mean)' : ''}${o.each ? ', each' : ''}` : `curv κ ${o.k}${o.each ? ', each' : ''}`} | ${cells.join(' | ')} |`);
+  const rat = X.filter(groups.clean).map(x=> { const a = o.rule === 'r2' ? null : one(x, o), iv = intervals(x); return a && iv.ax && iv.ax.rE > 0 ? a.R/iv.ax.rE : NaN; }).filter(Number.isFinite);
+  L.push(`| ${o.rule === 'r2' ? 'round 2 (2·esdAngle, betweenDeg)' : o.rule === 'profile' ? `profile t ${o.t}${o.side === 'mean' ? ' (sides mean)' : ''}${o.each ? ', each' : ''}` : `curv κ ${o.k}${o.each ? ', each' : ''}`} | ${cells.join(' | ')} | ${f(med(rat), 2)} |`);
 }
 if (process.argv.includes('--rows')){
   L.push('', '| row | flag | error ° | round 2 | profile 5.99 | profile 9 | curv 1 | curv 1.5 | minima ≤ Δ* |', '|---|---|---|---|---|---|---|---|---|');
@@ -55,3 +56,5 @@ if (process.argv.includes('--rows')){
     L.push(`| ${x.row.id} | ${x.flag ? 'F' : ''}${x.clean ? '' : x.ek} | ${f(a.e, 2)} | ${f(a.E, 2)} | ${f(a.R, 2)} | ${f(b.R, 2)} | ${f(c.R, 2)} | ${f(d.R, 2)} | ${x.r.report.minima.n} |`); }
 }
 console.log(L.join('\n'));
+if (process.argv.includes('--miss')){ const o = JSON.parse(arg('miss', '{}'));
+  for (const x of X.filter(groups.clean)){ const a = one(x, o); if (a && !a.cov) console.log('miss', x.row.id, f(a.e, 2), f(a.R, 2), 'r2', f(a.E, 2)); } }
