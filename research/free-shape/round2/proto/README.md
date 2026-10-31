@@ -11,7 +11,9 @@ shortcuts) and made it the free shape's default size line (`SHAPE_MODE.line` 'ex
 where it fires, and a switchable keep test without the flagged lines (`SHAPE_CHECK`). Step 4
 (`../STEP4.md`) added the minima stage: every true minimum refined to the same level, no random
 turn left, and the report's two errors per parameter, the uniqueness verdict and the directions
-of extents not told apart as unordered sets (`SHAPE_MINIMA`). It is not
+of extents not told apart as unordered sets (`SHAPE_MINIMA`). Step 5 (`../STEP5.md`) replaced the
+keep test by a likelihood-ratio threshold set by the Laue class (`SHAPE_KEEP`) and added the family
+verdict over the other solids, searched on request (`SHAPE_FAMILY`). It is not
 applied: the branch is unchanged. Its base is
 `9782d33` (claude/repo-code-review-sr6c8m), whose engine files equal the frozen `b9bef5f` byte for
 byte (`git diff b9bef5f 9782d33 -- 'xrd-*.js'` is empty), so the research diffs ported directly.
@@ -22,20 +24,25 @@ prototype's runs; none of it is in the repository.
 ## Files
 
 - `engine.patch`: `git diff` against `9782d33` of the app's files:
-  - `xrd-rietveld.js` (+650 −58): the switches and tunables, the lsq line, the exact line's
+  - `xrd-rietveld.js` (+785 −59): the switches and tunables, the lsq line, the exact line's
     option (`broadeningSetup`), refine's options `forward`, `noCov` and `covOnly`, freeShapeRun's
     search v2, `sameFrame`; for WPPM a reflection's two lines handed to `wppmPair`, the axial
     shift interpolated in θ (`sollerStats`), the Soller cells' cache (least recently used, 2048);
     the per-line check (`SHAPE_CHECK`, `lineCheck`, `refitWithout`, `lineJack`: in freeShapeRun's
     outcomes and in `bodyShapeOf`'s report); the minima stage (`SHAPE_MINIMA`, `minimaMatch`,
     `minimaSigmas`, `shapeMinima`: in freeShapeRun after the held frames, and in `bodyShapeOf` the
-    two errors, `lo`–`hi`, `radius`, `minima`, and the directions' `sets`);
+    two errors, `lo`–`hi`, `radius`, `minima`, and the directions' `sets`); the keep test
+    (`SHAPE_KEEP`, `laueTerms`, `chi2Upper`: in freeShapeRun's early rejection and keep test,
+    `info.keep`, the report's `keep`); the family (`SHAPE_FAMILY`, `familyVerdict`, `siblingModel`,
+    `shapeFamily`: in `freeShape`, `info.family`, the report's `family`; `buildModel` keeps what it was
+    built from as `model.build`); `opts.sphereStart` (a study's: the sphere-like start alone);
   - `xrd-broad.js` (+157 −13): `WPPM_OPT`, the read-out from a table of the points' sinθ, cosθ,
     `wppmPair`;
   - `xrd-sizeline.js` (new, 44 kB): the lsq tables, precomputed;
   - `sw.js`: the new module in `ASSETS` (one line; `CACHE` not bumped, nor `index.html`);
   - `RIETVELD.md`: §7.3 (WPPM's shortcuts), §10.3 (the exact and lsq lines), §10.5 (search v2,
-    with step 1's figures), §10.7 (held frames), §10.8 (the per-line check, the minima stage).
+    with step 1's figures), §10.7 (held frames), §10.8 (the per-line check, the minima stage, the
+    keep test by the Laue class, the family).
 - `xrd-sizeline.js`: the tables module as the patch adds it.
 - `build-sizeline.mjs`: rebuilds it (10 s) from track A's exact lines
   (`../scripts/A/lines/profiles.mjs`). `--check <A's tables.json>` compares with track A's tables:
@@ -68,7 +75,11 @@ evaluation). `SHAPE_CHECK.on = false` removes the per-line check (read at each `
 search and the report are then step 2's to the bit), `.jack = false` its jackknife alone (read by
 `bodyShapeOf`). `SHAPE_MINIMA.on = false` removes the minima stage (read at each `freeShape`): the
 search and the report are then step 3's to the bit, the report adding only `sets` (each axis's
-`set`; the directions of extents not told apart) and `minima: null`.
+`set`; the directions of extents not told apart) and `minima: null`. `SHAPE_KEEP.rule = 'bic'` gives
+v522's keep test back (read at each `freeShape`; with `record` false the search is step 4's to the bit,
+the record and the report adding only `keep`, the test's numbers, and `family: null`).
+`SHAPE_FAMILY.solids` 'none' (the default) searches the solid asked for alone; 'general' or 'all' adds
+the family verdict.
 
 ## What changes and why
 
@@ -197,6 +208,38 @@ clean rows' combined intervals cover 78 of 82 dimensions (95 %, median half-widt
 32 principal axes; 13 of the dense reference's 17 true minima found on clean rows, 10 of 17 on
 error rows.
 
+**The keep test by the Laue class** (`SHAPE_KEEP`, step 5; `../STEP5.md`, `RIETVELD.md` §10.8). The
+shape is kept when G, the larger gain of the search's free and held fits over the isotropic fit
+(χ²/max(1, χ²_ν,iso), before the minima stage), exceeds χ²_{k+1}(1 − alpha) + margin: k the
+symmetric traceless deformations of a sphere the phase's Laue class leaves invariant (`laueTerms`:
+(1/|G|)·Σ (1 + 2cos θ + 2cos 2θ) over its operations; 5 in −1, 3 in 2/m, 2 in mmm, 1 uniaxial, 0
+cubic), which the pattern sees to first order; alpha 0.001 and margin 2 give 24.7, 20.7, 18.6, 16.1,
+13.2 whatever the solid and the route. Where the per-line check of the fit tested fires (two
+evaluations, made only when G passes), ΔBIC < −10 is needed as well. The early rejection takes half the
+need. Why: clean null spheres' gains average about k + 1 per class (360 runs: the 22 tuning spheres ×
+the six solids × 5 noise draws), so ΔBIC (28–56 for a three-width body) asked 1.3–4× what noise reaches,
+and a threshold per solid set on its own nulls failed on fresh draws (4–6 of 144). The rule keeps no
+clean null of 360 (144 fresh), 78 of 86 mild clean shapes against ΔBIC's 71, every shape ΔBIC keeps,
+and 138 of 300 error nulls against ΔBIC's 133: a size distribution or texture makes a shape of a sphere
+far beyond any threshold. The cost is ΔBIC's (953 against 947 evaluations a null search). The test's
+numbers are `info.keep` (or `keep` beside a rejection) and the report's `keep`: `k`, `G`, the routes'
+gains and parameters, `need`, `dBIC`, `flagged`, `kept`.
+
+**The family** (`SHAPE_FAMILY`, step 5; `../STEP5.md`, `RIETVELD.md` §10.8). Off by default
+(`solids: 'none'`). With 'general' the solid asked for is searched again as its nested partner and as
+the three general members (box, elliptic cylinder, ellipsoid), each in a sibling model built as the
+model was (`model.build`, `siblingModel`: the phase's solid changed, the isotropic fit's values by
+name) from the same isotropic fit, as the app searches (`shapeFamily`); 'all' searches the six. The
+verdict (`familyVerdict`, `info.family`, the report's `family`): each family by its best member's χ²;
+determined when the runner-up lies `margin` 14 χ²_ν above the winner, `marginMisfit` 35 where the
+winner's check fired (the 5 % points of a T bootstrap on 45 tuning rows); within the winner the general
+member only where it beats the special one by `nest` (3.84, 5.99, 5.99: the 95 % χ² of the extra
+widths; `nestMisfit` 25 flagged), else the special one with the general not supported. On the 66
+screening truths 26 right, 37 not determined (the truth among the families named on 34), 3 wrong (all
+flagged, a size distribution or a hump); on the 33 clean ones 19, 14, 0. 'general' gave all six's
+verdict on 66 of 66 rows (388 of 396 whichever solid was asked for) at 4.5× the chosen search (all six
+6.7×).
+
 **WPPM itself is the engine's.** Track A's WPPM runs only set the phase's size profile to WPPM
 (`FS2A_PROFILE=wppm`; `FS2A_WPPM_BALL` was a control, not a model), and step 1 measured search v2
 on it so. 'exact' makes that profile the free shape's default; a phase whose profile is WPPM or
@@ -229,6 +272,13 @@ both modules). Every tunable is to be tuned on round 2's tuning runs.
 | `SHAPE_MINIMA.k`, `.floorLn`, `.floorDeg`, `.capDeg` | 2, 0.02, 1°, 10° | — | the merge after refinement: within k local σ, floored, the angles capped; capDeg also marks a symmetric orientation (every turn tried) |
 | `SHAPE_MINIMA.delta`, `.deltaMisfit`, `.keep` | 16, 25, 30 | — | Δ* in χ²_ν (deltaMisfit where the per-line check fired); the minima listed in `info.minima` |
 | `SHAPE_MINIMA.kappa` | 1.2 | — | the local error's factor in the combined interval `lo`–`hi` (the curvature's σ times κ) |
+| `SHAPE_KEEP.rule` | `'lrt'` | `'bic'` | the keep test: 'lrt' G > χ²_{k+1}(1 − alpha) + margin, k by the Laue class (`laueTerms`); 'bic' ΔBIC < −bic; 'all' any gain (a study's) |
+| `SHAPE_KEEP.alpha`, `.margin` | 0.001, 2 | — | the threshold's tail and margin (24.7, 20.7, 18.6, 16.1, 13.2 for k = 5, 3, 2, 1, 0) |
+| `SHAPE_KEEP.misfit`, `.bic` | `true`, 10 | (10) | 'lrt': where the per-line check of the fit tested fires, also ΔBIC < −bic; 'bic': the threshold |
+| `SHAPE_KEEP.early`, `.record` | 0.5, `false` | (0.5 of the held route's) | the brief trials must gain early × the rule's need; record: the check made on every test (a study's) |
+| `SHAPE_FAMILY.solids` | `'none'` | — | the other solids searched for the family verdict: 'general' (the nested partner and the three general members) or 'all' |
+| `SHAPE_FAMILY.margin`, `.marginMisfit` | 14, 35 | — | the runner-up family's χ²_ν above the winner for a determined family (marginMisfit where the winner's check fired) |
+| `SHAPE_FAMILY.nest`, `.nestMisfit` | 3.84, 5.99, 5.99; 25 | — | the general member's gain over its special one (box, cylinder, ball families) to be supported; nestMisfit where its check fired |
 
 ## Verification
 
@@ -363,6 +413,21 @@ this step's changes).
 - `npm run lint`: clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif, rvui,
   smoke, widths, modules): 53 of 53 pass. No test asks for a free shape, so no test runs the stage.
 
+**8. Step 5: the keep test and the family** (`../STEP5.md`; `$W/fs2/step5/`). Step 5's harness
+(`../scripts/step5/`: step 4's with `--shape`, derived rows and the methods `fam`, `fboot`, `lrt`) on
+`$W/step5-app` (step 4's app copy with this step's changes); the study ran with `SHAPE_KEEP`'s study
+switches (`rule 'all'` or `'bic'`, `early` 0, `record`), which the final patch keeps.
+- `SHAPE_KEEP.rule = 'bic'` (F0, 3 rows) equals step 4's S2 records to the bit: the isotropic fit, the
+  search's and the stage's evaluations, χ², the outcome; the record adds `keep` and `family: null`.
+- The defaults (F1, 4 runs): G equals the study's records on 4 of 4; the check at keep costs two
+  evaluations where G passes; a mild ellipsoid ΔBIC rejected is kept (G 23.6, need 16.1), a triclinic
+  null is rejected (21.1, need 24.7), the textured sphere stays kept (flagged, ΔBIC −341).
+- `SHAPE_FAMILY.solids = 'general'` (F2, 2 rows): the verdicts match the X2 study's margins within the
+  stage's difference (3.9 against 3.5; 9.3 as 9.3), the nested verdicts as X2's, the report carries
+  `family`.
+- `npm run lint`: clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif, rvui,
+  smoke, widths, modules): 53 of 53 pass. No test asks for a free shape, so no test runs the new parts.
+
 ## What remains to tune
 
 - **What the exact line brings with it** (step 2): WPPM reads model errors as shape more
@@ -407,6 +472,15 @@ this step's changes).
   large part), Δ* (16 and 25) and κ (1.2) from 77 screening runs and a bootstrap on 68 of them: to
   confirm on the 154 tuning runs, then validate once. `max` 3 or `rounds` 3 are the cheaper
   settings to weigh.
+- The keep test (step 5): the class law (null gains ≈ χ²_{k+1}) rests on 12 clean spheres, 2 a class,
+  5 draws each; the triclinic tail on one sphere (G 21.1). To confirm on the 154 tuning runs with
+  more spheres, then validate once. Model errors are not a threshold's: every rule keeps the shapes a
+  size distribution or texture makes on a sphere (the per-line check flags about half). The rejection's
+  warning (`autoRefine`) still says "needs under −10": a card text, to change with the result card.
+- The family (step 5): margins 14 / 35 and the nested needs from a bootstrap of 45 rows (10 replicas
+  each; 17 flagged); three flagged error rows name a wrong family by 77–303 χ²_ν. 'general' costs
+  4.5× the search (the rivals run with the stage); whether the app offers it as an action, and how the
+  card states the verdict, is the result card's.
 - What the user sees: a phase with a free shape asked for now reports its isotropic size (when
   the shape is rejected) by the ball's exact line (lsq: the ball's lsq line), smaller than the
   Lorentzian's Scherrer reading (which read ⟨L⟩_V 13–25 % long); the card's texts (`RV_INFO`: "a Lorentzian Y_s/cosθ") and the
