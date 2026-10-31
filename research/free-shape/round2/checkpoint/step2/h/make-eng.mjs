@@ -41,11 +41,13 @@ export { ENG };
   s = s.replace(m[0], `const SHAPE_FWD = process.env.PROTO_FWD || '${m[1]}';   // [step1]`); }
 s = s.replace('SHAPE_MODE: typeof SHAPE_MODE', 'SHAPE_FWD, SHAPE_MODE: typeof SHAPE_MODE');
 fs.writeFileSync(p, s);
-// [step2] WPPM_OPT from PROTO_WPPM: 'fast' (the arithmetic), 'pair' (fast and the pairs)
+// [step2] WPPM_OPT from PROTO_WPPM when it is set ('' all off; flags fast, pair (fast and the pairs), axial),
+// else the copy's defaults
 { const b = path.join(DST, 'xrd-broad.js'); let t = fs.readFileSync(b, 'utf8');
-  const W0 = 'const WPPM_OPT = { fast: false, pair: false, axial: false };';
-  if (t.includes(W0)){
-    t = t.replace(W0, "const WPPM_OPT = { fast: /fast|pair/.test(process.env.PROTO_WPPM || ''), pair: /pair/.test(process.env.PROTO_WPPM || ''), axial: /axial/.test(process.env.PROTO_WPPM || '') };   // [step2]");
+  const m = t.match(/^const WPPM_OPT = (\{[^}]*\});/m);
+  if (m){
+    const E = "(process.env.PROTO_WPPM || '')";
+    t = t.replace(m[0], `const WPPM_OPT = process.env.PROTO_WPPM != null ? { fast: /fast|pair/.test(${E}), pair: /pair/.test(${E}), axial: /axial/.test(${E}) } : ${m[1]};   // [step2]`);
     fs.writeFileSync(b, t);
   } }
 console.log('eng/ from ' + SRC);

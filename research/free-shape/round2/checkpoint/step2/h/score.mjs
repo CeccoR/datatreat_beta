@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* score.mjs: step 1's tables, one size line at a time, scored as the pilot and AB.md score.
-   node score.mjs --line lsq|wppm --v today=<dir>,v2a=<dir>,... --best <dir>,<dir>,... [--out file.md] [--json file.json]
+   node score.mjs --line lsq|wppm --v today=<dir>,v2a=<dir>,... --best <dir>,<dir>,... [--rows sub] [--out file.md] [--json file.json]
    Paths relative to this folder. The first variant is the reference (today's search on the
    same line: track A's records); each record's 'today' method is read.
    - outcome (held / free / rejected, early apart) and its changes against the reference;
@@ -23,7 +23,8 @@ const HERE = path.dirname(new URL(import.meta.url).pathname), FS2 = path.resolve
 const a = process.argv.slice(2), opt = {};
 for (let i = 0; i < a.length; i++){ if (a[i].startsWith('--')){ opt[a[i].slice(2)] = a[i + 1]; i++; } }
 const design = JSON.parse(fs.readFileSync(path.join(FS2, 'design', 'design.json'), 'utf8'));
-const rows = design.rows.filter(r=> r.screen && r.split !== 'validation');
+const SUB = fs.readFileSync(path.join(FS2, 'A', 'subscreen.txt'), 'utf8').split('\n').filter(l=> l && !l.startsWith('#')).map(l=> l.split(/\s+/)[0]);
+const rows = design.rows.filter(r=> r.screen && r.split !== 'validation' && (opt.rows !== 'sub' || SUB.includes(r.id)));   // [step2] --rows sub: the 22 sub-screen rows
 const V = opt.v.split(',').map(s=> { const [name, d] = s.split('='); return { name, dir: path.resolve(HERE, d) }; });
 const bestDirs = (opt.best || '').split(',').filter(Boolean).map(d=> path.resolve(HERE, d));
 const rd = f => fs.existsSync(f) ? readResult(fs.readFileSync(f, 'utf8')) : null;
@@ -67,7 +68,7 @@ const R0 = V[0].name, L = [];
 const truths = rows.filter(r=> r.kind === 'truth'), spheres = rows.filter(r=> r.kind === 'sphere');
 const kept = x => x && (x.out === 'held' || x.out === 'free');
 // 1. overall
-L.push(`## ${opt.line}: the 77 screening runs`, '', `Reference: ${R0}. Reach against the best known exact χ² of each run over every record on this line (${bestDirs.map(d=> '$W/' + path.relative(path.resolve(FS2, '..'), d)).join(', ')}).`, '');
+L.push(`## ${opt.line}: the ${rows.length === 77 ? '77 screening runs' : rows.length + ' runs (' + (opt.rows === 'sub' ? 'the sub-screen' : '') + ')'}`, '', `Reference: ${R0}. Reach against the best known exact χ² of each run over every record on this line (${bestDirs.map(d=> '$W/' + path.relative(path.resolve(FS2, '..'), d)).join(', ')}).`, '');
 L.push('| variant | runs | held / free / rejected (early) | outcome ≠ ' + R0 + ' | reached / judged | unbounded | worst (90 %) | thinnest | axis ° (90 %) | spheres kept | search evaluations | × ' + R0 + ' (per run median) |', '|---|---|---|---|---|---|---|---|---|---|---|---|');
 const evRef = sum(rows.map(r=> D[R0][r.id] ? D[R0][r.id].ev : 0));
 for (const v of V){

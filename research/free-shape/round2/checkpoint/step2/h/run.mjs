@@ -43,7 +43,7 @@ const drawMs = Date.now() - T0;
 const cpu0 = process.cpuUsage();   // [proto] CPU of the fit (iso + methods), the draw left out
 const out = runCase({ row, pattern: { x: pat.x, y: pat.y, instr: pat.instr, irf: pat.irf }, methods, log: !opt.nolog });
 { const c = process.cpuUsage(cpu0); out.cpu = { fitMs: (c.user + c.system)/1000 }; }
-out.mode = { ...ENG.SHAPE_MODE, fwd: ENG.SHAPE_FWD, profile: process.env.PROTO_PROFILE || 'lorentz' };   // [proto] [step1]
+out.mode = { ...ENG.SHAPE_MODE, fwd: ENG.SHAPE_FWD, profile: process.env.PROTO_PROFILE || 'lorentz', wppm: process.env.PROTO_WPPM || '' };   // [proto] [step1] [step2]
 out.wall = Date.now() - T0;
 out.draw = { grid, kernel, ms: drawMs, n: pat.x.length, info: pat.info, error: pat.truth.error };
 out.stages = { draw: { ms: drawMs }, iso: out.iso ? { ms: out.iso.ms, evals: out.iso.evals } : null };

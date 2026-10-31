@@ -1892,7 +1892,8 @@ function uvwStep(model, p, v, k){
 }
 function broadeningSetup(q, p, cell, list, add, nextIndex){
   const prof = PROFILES.includes(p.profile) ? p.profile : 'lorentz';
-  q.wppm = prof !== 'lorentz';
+  // (SHAPE_MODE.line 'exact': a phase with a body for its free shape is a WPPM phase)
+  q.wppm = prof !== 'lorentz' || (SHAPE_MODE.line === 'exact' && !!BODIES[shapeTypeOf(p.shape)]);
   if (prof === 'lognormal'){ q.iLS = nextIndex(); add('LS', 0, 0, 1.5, 1e-4, { kind: 'dist' }); }
   const trans = (p.ops || []).filter(o=> o.R.every((x, i)=> x === [1,0,0, 0,1,0, 0,0,1][i]) && o.t.some(x=> x)).map(o=> o.t);
   if (p.strain === 'aniso'){
@@ -4791,7 +4792,7 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
          fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
-         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE };
+         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT };
 
 const ENG = { FS, freeShape, freeShapeRun, refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
   lowIndexAxes, lattDirection, latticeAcross, shapeWidths, shapeTs, columnLengthV, SHAPE_SOFT, SHAPE_STARTS, SHAPE_FULL, fitSettings, shapeOf, turnEsds,
