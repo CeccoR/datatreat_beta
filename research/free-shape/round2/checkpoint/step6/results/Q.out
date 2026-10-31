@@ -260,3 +260,12 @@
 2026-10-31T11:02:42.639Z ok T box-Pm-3m-on t 19 s
 2026-10-31T11:03:32.116Z ok T sqbox-Pmmm-on t 49 s
 2026-10-31T11:04:31.532Z ok T sqbox-P2m-generic t 119 s
+2026-10-31T11:06:39.639Z ok T sqbox-P-1-near t 252 s
+2026-10-31T11:06:53.936Z ok SC sqbox-P6m-generic p 14 s
+2026-10-31T11:07:07.286Z ok SC ellcyl-P6m-on p 28 s
+2026-10-31T11:07:09.153Z ok SF2 sqbox-P6m-generic p 15 s
+2026-10-31T11:07:21.936Z ok SC sqbox-Pmmm-generic p 42 s
+2026-10-31T11:07:23.618Z ok SY sqbox-P6m-generic p 14 s
+2026-10-31T11:07:35.126Z ok SF2 ellcyl-P6m-on p 28 s
+2026-10-31T11:07:46.897Z ok SY ellcyl-P6m-on p 25 s
+2026-10-31T11:07:46.898Z jobs-Q.txt: done, 269 ok, 0 failed
