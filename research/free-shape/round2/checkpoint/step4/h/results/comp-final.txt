@@ -1,0 +1,24 @@
+completeness: S2 against DR2, Δ* 16
+
+| row | ref. minima ≤ Δ* | found | default ≤ Δ* | default lowest − reference lowest (χ²_ν) | unique: default / ref. | ref. search evals × default | ref. stage candidates |
+|---|---|---|---|---|---|---|---|
+| box-P-3m1-near | 6 | 3 | 2 | 0.05 | no / no | 3.7 | 24 |
+| box-P2m-generic | 1 | 1 | 1 | 0.00 | yes / yes | 2.4 | 2 |
+| box-Pm-3m-generic | 1 | 1 | 1 | 0.00 | yes / yes | 1.8 | 5 |
+| cylinder-P-3m1-generic | 4 | 3 | 3 | 0.00 | no / no | 2.7 | 13 |
+| cylinder-P2m-on | 1 | 1 | 1 | 0.00 | yes / yes | 3.3 | 3 |
+| cylinder-Pm-3m-on | 1 | 0 | 0 | 1514.20 | yes / yes | 1.1 | 1 |
+| ellcyl-P-3m1-near | 3 | 1 | 1 | 4.04 | no / no | 3.2 | 8 |
+| ellcyl-P2m-generic | 1 | 1 | 1 | -0.00 | yes / yes | 2.7 | 1 |
+| ellcyl-Pm-3m-generic | 3 | 2 | 2 | 0.00 | no / no | 5.1 | 18 |
+| ellipsoid-P-3m1-on | 1 | 1 | 2 | 0.00 | no / yes | 4.3 | 24 |
+| ellipsoid-P2m-near | 1 | 1 | 1 | -0.00 | yes / yes | 2.7 | 1 |
+| ellipsoid-Pm-3m-near | 1 | 1 | 1 | -0.00 | yes / yes | 4.8 | 21 |
+| spheroid-P-3m1-generic | 1 | 1 | 1 | 0.00 | yes / yes | 3.5 | 1 |
+| spheroid-P2m-on | 1 | 1 | 1 | 0.19 | yes / yes | 3.3 | 3 |
+| spheroid-Pm-3m-on | 1 | 1 | 1 | -0.00 | yes / yes | 3.9 | 1 |
+| sqbox-P-3m1-on | 5 | 2 | 2 | 4.97 | no / no | 1.7 | 9 |
+| sqbox-P2m-near | 1 | 1 | 1 | 0.00 | yes / yes | 2.8 | 1 |
+| sqbox-Pm-3m-near | 1 | 1 | 1 | 0.00 | yes / yes | 4.0 | 3 |
+
+rows 18: true minima 34, found 23 (68 %); reach 15/18; uniqueness verdict the same on 17/18; reference cost 2.97× the default's search (stage included)

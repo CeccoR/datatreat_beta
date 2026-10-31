@@ -9,14 +9,14 @@
    J: C with the jackknife (flagged rows).
    Δ* from --delta (default 12.5). Also the uniqueness verdicts, the stage's cost, and the changes
    against step 3's P1 (the same search without the stage).
-   --kappa, --kappaA: the local errors (extents, angles) scaled.
+   --kappa, --kappaA: the local errors (extents, angles) scaled; --deltaF: Δ* where the check fired.
    node score4.mjs [--tag S1] [--delta 12.5] [--kappa 1] [--kappaA 1] [--rows] */
 import fs from 'node:fs';
 import path from 'node:path';
 import { readResult, compareSolids, laueRotations, phaseQ, ENG, fromCols, dimOf, mv } from './lib.mjs';
 const HERE = path.dirname(new URL(import.meta.url).pathname), FS2 = path.resolve(HERE, '..', '..');
 const arg = (k, d) => process.argv.includes('--' + k) ? process.argv[process.argv.indexOf('--' + k) + 1] : d;
-const tag = arg('tag', 'S1'), DSTAR = +arg('delta', 12.5), KAP = +arg('kappa', 1), KAPA = +arg('kappaA', 1), REF = arg('ref', path.join(FS2, 'step3/hp/results/P1'));
+const tag = arg('tag', 'S1'), DSTAR = +arg('delta', 12.5), DSTARF = +arg('deltaF', arg('delta', 12.5)), KAP = +arg('kappa', 1), KAPA = +arg('kappaA', 1), REF = arg('ref', path.join(FS2, 'step3/hp/results/P1'));
 const design = JSON.parse(fs.readFileSync(path.join(FS2, 'design', 'design.json'), 'utf8'));
 const ONE = new Set(['cylinder', 'spheroid', 'sqbox']), REV = new Set(['cylinder', 'spheroid']);
 const BOD = ENG.BODIES;
@@ -34,12 +34,12 @@ export function load(t = tag, dir = path.join(HERE, 'results', t)){
 const lg = d => Math.log(Number.isFinite(d) ? d : 1e4);
 const hull = (...iv) => [Math.min(...iv.map(i=> i[0])), Math.max(...iv.map(i=> i[1]))];
 // the minima within Δ* paired with the reported fit (engine's minimaMatch)
-export function pairedMinima(x, dstar = DSTAR){
+export function pairedMinima(x, dstar = x.flag ? DSTARF : DSTAR){
   const r = x.r, type = r.solid.type, q = qq(x.o.phase, type), fit = { W: r.solid.W, R: fromCols(r.solid.axes) };
   return (r.info.minima || []).filter(m=> m.delta <= dstar).map(m=> ({ m, p: ENG.minimaMatch(q, fit, { W: m.W, R: m.R }, false) }));
 }
 // per truth extent and the principal axis: the intervals
-export function intervals(x, dstar = DSTAR){
+export function intervals(x, dstar = x.flag ? DSTARF : DSTAR){
   const r = x.r, T = x.o.truth, type = r.solid.type, rep = r.report, nW = rep.dims.length, wIx = nW === 2 ? [0, 0, 1] : [0, 1, 2];
   const acc = compareSolids(r.solid, T, { rots: laueRotations(x.o.phase) });
   const PM = pairedMinima(x, dstar), out = { ext: [], ax: null, n: PM.length };
@@ -82,7 +82,7 @@ if (process.argv[1] && process.argv[1].endsWith('score4.mjs')){
   const X = load();
   const kept = X.filter(x=> x.truth && x.r.kept);
   const L = [];
-  L.push(`tag ${tag}, Δ* ${DSTAR}, κ ${KAP}, κ_angle ${KAPA}: ${X.length} runs, ${kept.length} kept truths`);
+  L.push(`tag ${tag}, Δ* ${DSTAR} (flagged ${DSTARF}), κ ${KAP}, κ_angle ${KAPA}: ${X.length} runs, ${kept.length} kept truths`);
   // the stage: cost, minima, uniqueness, changes against P1
   const st = X.filter(x=> x.r.info && x.r.info.minimaStage);
   const sumS = X.reduce((t, x)=> t + x.r.search.evals - (x.r.min ? x.r.min.evals : 0), 0), sumM = X.reduce((t, x)=> t + (x.r.min ? x.r.min.evals : 0), 0), sumP = X.reduce((t, x)=> t + (x.p ? x.p.search.evals : 0), 0);

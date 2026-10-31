@@ -1,0 +1,4 @@
+| rows | extents | sd of z, F replicas: median, rms | T replicas: bias in σ, median |bias|, rms | |bias| > 2 | sd of z, T |
+|---|---|---|---|---|---|
+| clean | 82 | 0.93, 0.97 | 0.25, 0.41 | 0 | 0.91 |
+| error | 78 | 0.79, 0.88 | 1.44, 32.01 | 33 | 0.68 |

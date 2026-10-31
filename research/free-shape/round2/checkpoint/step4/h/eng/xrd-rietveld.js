@@ -1073,9 +1073,45 @@ const SHAPE_FWD = process.env.PROTO_FWD || 'briefs';   // [step1]
    the 13 shapes an error had spoiled, none read well; the 4 unbounded extents stayed.
    Off until the tuning runs confirm it. */
 const SHAPE_CHECK = { on: true, z: 3.09, bin: 1, minsep: 0.3, jack: true, groups: 20, iter: 4, retest: false };
-/* The minima stage (STEP4.md), on a body's kept shape (search v2): every true minimum refined to
-   the same level. MINIMA-DOC */
-const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 12.5, keep: 30 };
+/* The minima stage (STEP4.md), on a body's shape the search keeps (search v2; not the legacy
+   ellipsoid): every true minimum refined to the same level, and each parameter given two errors.
+   - The ends: every refinement end of the search (the brief trials, the full refinements, the
+     exact faces' fit, the held frames), each with its vector; those within collect·ν of the lowest
+     (ν its χ²_ν, floored at 1), one of each minimum (the class's operations and the body's own
+     relabellings, every width within preLn of the larger and every axis within preDeg: minimaMatch),
+     at most max of them, the lowest first.
+   - Each refined to the same level (shapeMinima's settle): exact faces, central differences, the
+     orientation free, the covariance at its end; then turned by ±kick rad about its softest turn
+     (the turns' covariance's largest-variance direction; at a symmetric orientation, where even that
+     turn's σ is over capDeg, about every turn's) and refined again, the lower kept, while a round
+     gains (at most rounds rounds, again only while the gain is over gain·ν). No random number: with
+     the stage on, the search's polish and its held fit's refit, each from a random 0.02 rad turn
+     (AB.md §4.6: up to 7.5 χ²_ν on a flat valley), are not made.
+   - Merged again: two minima are one when every width lies within k times the larger local σ
+     (floored at floorLn of the larger width) and every axis within k times the larger tilt σ
+     (floored at floorDeg, capped at capDeg), modulo the class and the body's relabellings.
+   - The lowest free minimum replaces the search's free fit when lower; a held frame is then tested
+     against it as before (held only while the free fit is no better by the 95 % χ² of its turns).
+   - The true minima: those within delta (Δ*, in ν) of the lowest; info.minima lists those within
+     keep. The report (bodyShapeOf) gives each dimension its local error (Desd, the curvature) and
+     the minima's range (betweenLo–betweenHi), each axis its local error (esdAngle, the profile) and
+     the largest angle to its paired axis over the minima (betweenDeg); unique when one minimum lies
+     within Δ*; the interval lo–hi the hull of D·e^(±2κσ_local) (κ = kappa), the minima's range and,
+     where the per-line check fired, the jackknife's; each axis's radius the largest of 2·esdAngle,
+     betweenDeg and jackTurn.
+   On the 77 screening runs (exact line): 2 candidates a run (median; at most 6), 44 of the 68 kept
+   shapes with one minimum within Δ* (16, 25 where the check fired); the stage cost 0.86× the search's evaluations (0.28× the
+   whole fit's) and changed 2 outcomes, both flagged error rows, to a free fit 6 and 31 χ²_ν lower.
+   Against a dense reference (40 starts, 10 full refinements, 24 candidates; 18 rows) it found 13
+   of the 17 true minima of the clean rows and 10 of 17 on error rows. delta: Δ* from the parametric
+   bootstrap on the tuning rows: the flips against the data's Δ fit Φ(−Δ/√(4Δ + c)) with c 30–42
+   (5 % at 15.9 and 17.4) without a model error, 129–190 (24.9–28.7) with one (deltaMisfit, where
+   the per-line check fires); round 1's own model, Δ_r ~ N(δ, 4δ + c), gives c 8.5 (12.6), as round 1
+   found, but under-predicts the flips beyond 12.5 (10 % of 40 against 2 %). kappa: the curvature's
+   σ is right against noise (replicas 0.97 σ rms) but the truth lies 1.21 σ rms off on the clean
+   rows (a bias of 0.4 σ rms from the instrument's and the line's residual misfit, and minima that
+   settle apart); κ 1.2 covers 77 of their 82 extents (94 %; κ 1: 73), the combined interval 78. */
+const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 16, deltaMisfit: 25, keep: 30, kappa: 1.2 };
 // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
 // the phase is drawn as an isotropic one.
 function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> v[i] !== 0); }
@@ -1695,14 +1731,32 @@ function bodyShapeOf(model, v, k, res){
   let minima = null;
   if (info && info.minima && info.minima.length){
     const fit = { W, R }, wIx = nW === 2 ? [0, 0, 1] : [0, 1, 2];
-    const all = info.minima.map(m=> ({ m, p: minimaMatch(q, fit, { W: m.W, R: m.R }, false) })), inD = all.filter(x=> x.m.delta <= SHAPE_MINIMA.delta);
+    // Δ*: delta, or deltaMisfit where the per-line check fired (the fit has a misfit)
+    const dStar = chk && chk.flagged ? SHAPE_MINIMA.deltaMisfit : SHAPE_MINIMA.delta;
+    const all = info.minima.map(m=> ({ m, p: minimaMatch(q, fit, { W: m.W, R: m.R }, false) })), inD = all.filter(x=> x.m.delta <= dStar);
     dims.forEach((d, j)=> { const i = wIx.indexOf(j), Ds = [d.D, ...inD.map(x=> Dof(x.p.Wb[i]))]; d.betweenLo = Math.min(...Ds); d.betweenHi = Math.max(...Ds); });
     groups.forEach(g=> { const Ds = [g.D, ...inD.map(x=> Dof(g.axes.reduce((t, i)=> t + x.p.Wb[i], 0)/g.axes.length))]; g.betweenLo = Math.min(...Ds); g.betweenHi = Math.max(...Ds); });
     const angOf = ix => { const a = inD.flatMap(x=> ix.map(i=> x.p.ang[i])).filter(Number.isFinite); return a.length ? Math.max(...a)*R2D : 0; };
     axes.forEach(ax=> { ax.betweenDeg = angOf([ax.axis]); });
     setList.forEach(S=> { S.betweenDeg = angOf(S.axes); });
-    minima = { delta: SHAPE_MINIMA.delta, n: inD.length, unique: inD.length <= 1,
+    minima = { delta: dStar, n: inD.length, unique: inD.length <= 1,
       list: all.map(({ m, p })=> ({ delta: m.delta, n: m.n, dims: m.W.map(Dof), angle: Math.max(0, ...p.ang.filter(Number.isFinite))*R2D })) };
+    /* The two errors as one 95 % interval: each dimension's lo–hi, the hull of its local interval
+       D·e^(±2κσ) (σ = Desd/D, the curvature's; κ = SHAPE_MINIMA.kappa; a group's member: the
+       group's interval and its members' values), the minima's range, and where the check fired the
+       jackknife's (jackLo–jackHi); each axis's and each set's radius (°), the largest of 2·esdAngle
+       (the profile's), betweenDeg and, where the check fired, jackTurn. */
+    const kap = SHAPE_MINIMA.kappa;
+    dims.forEach((d, j)=> {
+      const g = groups.find(t=> t.axes.includes(j)), sd = Number.isFinite(d.Desd) ? d.Desd/d.D : g && Number.isFinite(g.Desd) ? g.Desd/g.D : NaN;
+      const at = (D, t) => Number.isFinite(D) ? (Number.isFinite(sd) ? D*Math.exp(2*t*kap*sd) : D) : t > 0 ? Infinity : (Number.isFinite(d.Dmin) ? d.Dmin : D);
+      const lo = [at(g && !Number.isFinite(d.Desd) ? g.D : d.D, -1), d.betweenLo, ...(g && !Number.isFinite(d.Desd) ? g.axes.map(i=> dims[i].D) : []), ...(Number.isFinite(d.jackLo) ? [d.jackLo] : [])];
+      const hi = [at(g && !Number.isFinite(d.Desd) ? g.D : d.D, 1), d.betweenHi, ...(g && !Number.isFinite(d.Desd) ? g.axes.map(i=> dims[i].D) : []), ...(d.jackHi != null ? [d.jackHi] : [])];
+      d.sLocal = kap*sd; d.lo = Math.min(...lo); d.hi = Math.max(...hi);
+    });
+    axes.forEach(ax=> { ax.radius = Math.max(Number.isFinite(ax.esdAngle) ? 2*ax.esdAngle : 0, ax.betweenDeg, Number.isFinite(ax.jackTurn) ? ax.jackTurn : 0); });
+    setList.forEach(S=> { const jt = Math.max(0, ...axes.filter(ax=> S.axes.includes(ax.axis) && Number.isFinite(ax.jackTurn)).map(ax=> ax.jackTurn));
+      S.radius = Math.max(Number.isFinite(S.esdAngle) ? 2*S.esdAngle : 0, S.betweenDeg, jt); });
   }
   return { type, kind, dims, groups, axes, sets: setList, across, misfit, minima, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)], cell: cellAxes(q, dirs[refIx].R) } };
 }

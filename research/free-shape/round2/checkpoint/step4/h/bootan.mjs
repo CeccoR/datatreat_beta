@@ -25,8 +25,11 @@ for (const f of fs.readdirSync(dir).filter(f=> f.endsWith('.json'))){
     for (const ty of ['F', 'T']){
       const B = b[ty];
       const d0 = B.nf[m].c - B.nf[0].c;   // noise-free: in χ² (χ²_ν there is far under 1)
-      const reps = B.reps.map(rr=> (rr[m].c - rr[0].c)/Math.max(1, rr[0].nu)).filter(Number.isFinite);
-      P.push({ id: o.row, clean: !row.error, ek: row.error ? row.error.kind : 'none', ty, m, D: b.minima[m].delta, d0, reps });
+      // a replica where both refits end at one minimum (every width within 2 %) is no contest: left out
+      const same = rr => rr[m].W && rr[0].W && rr[m].W.every((w, i)=> Math.abs(Math.log(Math.max(w, 1e-9)/Math.max(rr[0].W[i], 1e-9))) < 0.02);
+      const ok = B.reps.filter(rr=> Number.isFinite(rr[m].c) && Number.isFinite(rr[0].c));
+      const reps = ok.filter(rr=> !same(rr)).map(rr=> (rr[m].c - rr[0].c)/Math.max(1, rr[0].nu));
+      P.push({ id: o.row, clean: !row.error, ek: row.error ? row.error.kind : 'none', ty, m, D: b.minima[m].delta, d0, reps, merged: ok.length - reps.length });
     }
   }
 }
@@ -34,24 +37,28 @@ for (const f of fs.readdirSync(dir).filter(f=> f.endsWith('.json'))){
 const fitC = S => { let best = null; for (let c = 0.5; c <= 400; c *= 1.05){ let ll = 0;
   for (const p of S) for (const x of p.reps){ const v = Math.max(1e-6, 4*Math.max(0, p.d0) + c); ll += -0.5*Math.log(v) - (x - p.d0)**2/(2*v); }
   if (!best || ll > best.ll) best = { c, ll }; } return best ? best.c : NaN; };
-const dstar = c => (2*1.645**2 + Math.sqrt((2*1.645**2)**2 + 4*1.645**2*c))/2;   // Δ/√(4Δ + c) = 1.645
+const dstar = c => (4*1.645**2 + Math.sqrt(16*1.645**4 + 4*1.645**2*c))/2;   // Δ/√(4Δ + c) = 1.645
+// c of the rule itself: the flips (Δ_r < 0) against the data's Δ, p = Φ(−Δ/√(4Δ + c)), by maximum likelihood
+const fitRule = S => { let best = null; for (let c = 0.25; c <= 2000; c *= 1.05){ let ll = 0;
+  for (const p of S){ const pr = Math.min(1 - 1e-9, Math.max(1e-9, Phi(-p.D/Math.sqrt(4*p.D + c)))); for (const x of p.reps) ll += x < 0 ? Math.log(pr) : Math.log(1 - pr); }
+  if (!best || ll > best.ll) best = { c, ll }; } return best ? best.c : NaN; };
 const f = (x, d = 2) => Number.isFinite(x) ? x.toFixed(d) : '—';
 const L = [`tag ${tag}: ${nRows} rows, ${P.length/2} pairs; bootstrap ${evals} evaluations, ${(ms/1000).toFixed(0)} s (${f(evals/searchEv, 1)}× those rows' searches)`, ''];
-L.push('| replicas | rows | pairs | replicas | c (ML) | Δ* at 5 % | flips, all | flips Δ<6 obs / pred c=8 / fitted | flips 6–12.5 | flips >12.5 | δ/Δ median |', '|---|---|---|---|---|---|---|---|---|---|---|');
+L.push('| replicas | rows | pairs | replicas (no contest) | c, round 1\'s model (ML) | Δ* | c of the rule (flips on the data\'s Δ, ML) | Δ* | flips, all | flips Δ<6 obs / pred c=8 / fitted | flips 6–12.5 | flips >12.5 | δ/Δ median |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|');
 const groups = [['F, clean rows', p=> p.ty === 'F' && p.clean], ['F, error rows', p=> p.ty === 'F' && !p.clean], ['T, clean rows', p=> p.ty === 'T' && p.clean], ['T, error rows', p=> p.ty === 'T' && !p.clean]];
 const out = {};
 for (const [nm, g] of groups){
-  const S = P.filter(g), c = fitC(S); out[nm] = { c, dstar: dstar(c) };
+  const S = P.filter(g), c = fitC(S), cr = fitRule(S); out[nm] = { c, dstar: dstar(c), cRule: cr, dstarRule: dstar(cr) };
   const bin = (lo, hi) => { const B = S.filter(p=> p.D >= lo && p.D < hi), n = B.reduce((t, p)=> t + p.reps.length, 0), fl = B.reduce((t, p)=> t + p.reps.filter(x=> x < 0).length, 0);
     const pr = cc => B.reduce((t, p)=> t + p.reps.length*Phi(-p.D/Math.sqrt(4*p.D + cc)), 0)/Math.max(1, n);
     return n ? `${fl}/${n} = ${f(fl/n)} / ${f(pr(8))} / ${f(pr(c))}` : '—'; };
   const ratio = S.map(p=> p.d0/Math.max(1e-9, p.D)).sort((a, b)=> a - b);
-  L.push(`| ${nm} | ${new Set(S.map(p=> p.id)).size} | ${S.length} | ${S.reduce((t, p)=> t + p.reps.length, 0)} | ${f(c, 1)} | ${f(dstar(c), 1)} | ${bin(0, Infinity)} | ${bin(0, 6)} | ${bin(6, 12.5)} | ${bin(12.5, Infinity)} | ${f(ratio[ratio.length >> 1])} |`);
+  L.push(`| ${nm} | ${new Set(S.map(p=> p.id)).size} | ${S.length} | ${S.reduce((t, p)=> t + p.reps.length, 0)} (${S.reduce((t, p)=> t + p.merged, 0)}) | ${f(c, 1)} | ${f(dstar(c), 1)} | ${f(cr, 1)} | ${f(dstar(cr), 1)} | ${bin(0, Infinity)} | ${bin(0, 6)} | ${bin(6, 12.5)} | ${bin(12.5, Infinity)} | ${f(ratio[ratio.length >> 1])} |`);
 }
-L.push('', '| row | error | pair | Δ data | δ F | flips F | δ T | flips T |', '|---|---|---|---|---|---|---|---|');
+L.push('', '| row | error | pair | Δ data | δ F | flips F (no contest) | δ T | flips T (no contest) |', '|---|---|---|---|---|---|---|---|');
 for (const p of P.filter(p=> p.ty === 'F')){
   const t = P.find(q=> q.ty === 'T' && q.id === p.id && q.m === p.m);
-  L.push(`| ${p.id} | ${p.ek} | 0–${p.m} | ${f(p.D, 1)} | ${f(p.d0, 1)} | ${p.reps.filter(x=> x < 0).length}/${p.reps.length} | ${t ? f(t.d0, 1) : '—'} | ${t ? t.reps.filter(x=> x < 0).length + '/' + t.reps.length : '—'} |`);
+  L.push(`| ${p.id} | ${p.ek} | 0–${p.m} | ${f(p.D, 1)} | ${f(p.d0, 1)} | ${p.reps.filter(x=> x < 0).length}/${p.reps.length} (${p.merged}) | ${t ? f(t.d0, 1) : '—'} | ${t ? t.reps.filter(x=> x < 0).length + '/' + t.reps.length + ' (' + t.merged + ')' : '—'} |`);
 }
 console.log(L.join('\n'));
 if (arg('json')) fs.writeFileSync(arg('json'), JSON.stringify(out));
