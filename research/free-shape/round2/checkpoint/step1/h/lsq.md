@@ -1,6 +1,6 @@
 ## lsq: the 77 screening runs
 
-Reference: today. Reach against the best known exact χ² of each run over every record on this line (A/results/screen-lsq, A/results/s-lsq, A/results/sph-lsq, A/results/tr-lsq, A/results/xs-lsq, ../proto-h/results/t2, ../proto-h/results/t4, ../proto-h3/results/why, ../proto-h3/results/why-today, ../proto-h3/results/fwdb, ../proto-h3/results/polc, step1/h/results/id-lsq, step1/h/results/chk-v2b, step1/h/results/v2a-lsq, step1/h/results/v2b-lsq).
+Reference: today. Reach against the best known exact χ² of each run over every record on this line ($W/fs2/A/results/screen-lsq, $W/fs2/A/results/s-lsq, $W/fs2/A/results/sph-lsq, $W/fs2/A/results/tr-lsq, $W/fs2/A/results/xs-lsq, $W/proto-h/results/t2, $W/proto-h/results/t4, $W/proto-h3/results/why, $W/proto-h3/results/why-today, $W/proto-h3/results/fwdb, $W/proto-h3/results/polc, $W/fs2/step1/h/results/id-lsq, $W/fs2/step1/h/results/chk-v2b, $W/fs2/step1/h/results/v2a-lsq, $W/fs2/step1/h/results/v2b-lsq, $W/fs2/step1/h/results/def-lsq, $W/fs2/step1/hd/results/d-fill, $W/fs2/step1/hd/results/d-none).
 
 | variant | runs | held / free / rejected (early) | outcome ≠ today | reached / judged | unbounded | worst (90 %) | thinnest | axis ° (90 %) | spheres kept | search evaluations | × today (per run median) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -82,7 +82,7 @@ Search evaluations per Laue class, × today:
 | ellcyl-Pmmm-on | mmm | air | free, 3437, 0.00, +3 %, +1 %, 6.7° | free, 1688, 0.00, +3 %, +1 %, 6.7° | free, 1937, 0.00, +3 %, +1 %, 6.7° |
 | ellcyl-P4m-near | 4/m | sizedist | free, 3342, 0.00, +2 %, +2 %, 1.0° | free, 1703, 0.00, +2 %, +2 %, 1.0° | free, 2062, 0.00, +2 %, +2 %, 1.0° |
 | ellcyl-P4mmm-generic | 4/mmm | hump | free, 3165, 0.00, +266 %, +266 %, 11.2° | free, 1646, 0.00, +266 %, +266 %, 11.2° | free, 2038, 0.00, +266 %, +266 %, 11.2° |
-| ellcyl-P-3-on | -3 | impurity | free, 6308, 0.00, +29 %, +17 %, 25.1° | free, 2827, 2.67, +32 %, +21 %, 8.7° | free, 4005, 2.66, +32 %, +21 %, 8.7° |
+| ellcyl-P-3-on | -3 | impurity | free, 6308, 0.00, +29 %, +17 %, 25.1° | free, 2827, 2.67, +32 %, +21 %, 8.7° | free, 4005, 2.67, +32 %, +21 %, 8.7° |
 | ellcyl-P-3m1-near | -3m | sizedist | free, 4114, 0.05, +∞, -4 %, 18.6° | free, 1998, 0.00, +∞, -4 %, 18.4° | free, 2690, 0.00, +∞, -4 %, 18.4° |
 | ellcyl-P6m-generic | 6/m | none | free, 3832, 0.00, +307 %, +307 %, 25.3° | free, 1562, 0.00, +307 %, +307 %, 25.3° | free, 1997, 0.00, +307 %, +307 %, 25.3° |
 | ellcyl-P6mmm-on | 6/mmm | none | free, 6639, 828.19, +253 %, +186 %, 86.7° | free, 3034, 0.00, +5 %, +1 %, 0.5° | free, 4673, 0.00, +5 %, +1 %, 0.5° |

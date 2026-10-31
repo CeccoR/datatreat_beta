@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+process.env.PROTO_PROFILE = 'wppm';
+const { buildModel, ENG } = await import('./engp/xrd-rietveld.js');
+const { phaseOf, truthOf, FS2 } = await import('../lib.mjs');
+const { drawRow } = await import('../../../gen/gen.mjs');
+const design = JSON.parse(fs.readFileSync(FS2 + '/design/design.json', 'utf8'));
+const row = design.rows.find(r=> r.id === process.argv[2]);
+const pat = drawRow(row, {});
+console.log(Object.keys(pat), Object.keys(pat.truth), pat.truth.P);
+const model = buildModel({ x: pat.x, y: Array.from(pat.y), instr: pat.instr, phases: [phaseOf(row.phase, row.solid)] });
+console.log(model.par.map(p=> p.name + (p.linear ? '(lin)' : '')).join(' '));
+console.log('n', model.n, 'refl', model.phases[0].nRefl, 'members', model.phases[0].mv.reduce((s, m)=> s + m.length/3, 0));

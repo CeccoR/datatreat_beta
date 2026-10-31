@@ -67,7 +67,7 @@ const R0 = V[0].name, L = [];
 const truths = rows.filter(r=> r.kind === 'truth'), spheres = rows.filter(r=> r.kind === 'sphere');
 const kept = x => x && (x.out === 'held' || x.out === 'free');
 // 1. overall
-L.push(`## ${opt.line}: the 77 screening runs`, '', `Reference: ${R0}. Reach against the best known exact χ² of each run over every record on this line (${bestDirs.map(d=> path.relative(FS2, d)).join(', ')}).`, '');
+L.push(`## ${opt.line}: the 77 screening runs`, '', `Reference: ${R0}. Reach against the best known exact χ² of each run over every record on this line (${bestDirs.map(d=> '$W/' + path.relative(path.resolve(FS2, '..'), d)).join(', ')}).`, '');
 L.push('| variant | runs | held / free / rejected (early) | outcome ≠ ' + R0 + ' | reached / judged | unbounded | worst (90 %) | thinnest | axis ° (90 %) | spheres kept | search evaluations | × ' + R0 + ' (per run median) |', '|---|---|---|---|---|---|---|---|---|---|---|---|');
 const evRef = sum(rows.map(r=> D[R0][r.id] ? D[R0][r.id].ev : 0));
 for (const v of V){

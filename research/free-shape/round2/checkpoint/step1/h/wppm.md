@@ -1,6 +1,6 @@
 ## wppm: the 77 screening runs
 
-Reference: today. Reach against the best known exact χ² of each run over every record on this line (A/results/screen-wppm, A/results/s-wppm, A/results/sph-wppm, A/results/tr-wppm, A/results/xs-wppm, step1/h/results/id-wppm, step1/h/results/v2b-wppm).
+Reference: today. Reach against the best known exact χ² of each run over every record on this line ($W/fs2/A/results/screen-wppm, $W/fs2/A/results/s-wppm, $W/fs2/A/results/sph-wppm, $W/fs2/A/results/tr-wppm, $W/fs2/A/results/xs-wppm, $W/fs2/step1/h/results/id-wppm, $W/fs2/step1/h/results/v2b-wppm).
 
 | variant | runs | held / free / rejected (early) | outcome ≠ today | reached / judged | unbounded | worst (90 %) | thinnest | axis ° (90 %) | spheres kept | search evaluations | × today (per run median) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
