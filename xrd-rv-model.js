@@ -216,7 +216,7 @@ const FITS = [
   { k: 'zeroRange', label: 'Zero scan range (°)', role: 'std', said: v => `zero scan ±${v}°`,
     title: "The standard's zero is scanned over ± this before its refinement (the zero and the specimen's displacement together). Beyond 1° its bounds widen with it. The standard only." },
   { k: 'shapeStarts', label: 'Shape trial starts', int: true, shape: true, said: v => `${v} shape starts`,
-    title: "The free shape's search: the starting shapes beside the sphere-like one. The plates and needles along the low-index directions are always run, random shapes fill up to this. More: slower, less likely to miss the best solid." },
+    title: "The free shape's search: the sphere-like start, plates and needles along the low-index directions and on the lines the isotropic fit leaves most and least broadened are always run; each start above the default (10) adds a random shape. More: slower, less likely to miss the best solid." },
   { k: 'shapeFull', label: 'Shape full refinements', int: true, shape: true, said: v => `${v} shape starts refined fully`,
     title: "The free shape's best trial starts refined to convergence." },
 ];
@@ -435,12 +435,14 @@ function resultPhases(r, all, own){
 }
 // The curves themselves: the phases with the free shape when its parameters are there
 // and the models the result used (a size or strain switched off among them), whatever
-// the settings say now.
+// the settings say now. A solid refined to v522 under the Lorentzian profile was drawn by
+// its Lorentzian line, which the engine keeps for it alone (lorentzShape): from v523 a
+// solid is drawn by WPPM, and a Refine from such a result searches it again.
 function curvesFrom(f, r, list, std){
   const ph = phaseData(list, std).map(q=>{
-    const md = (r.models || {})[q.id] || {};
-    return { ...q, shape: shapeOfParams(r.params, q.id), po: r.textures && r.textures[q.id] ? r.textures[q.id].hkl : null, size: md.size !== false,
-      profile: profileOpt(md.profile), strain: md.strain === 'off' ? 'off' : strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp),
+    const md = (r.models || {})[q.id] || {}, shape = shapeOfParams(r.params, q.id), profile = profileOpt(md.profile);
+    return { ...q, shape, lorentzShape: !!shape && profile === 'lorentz', po: r.textures && r.textures[q.id] ? r.textures[q.id].hkl : null, size: md.size !== false,
+      profile, strain: md.strain === 'off' ? 'off' : strainOpt(md.strain), faults: md.faults || null, adp: adpOpt(md.adp),
       occ: Array.isArray(md.occ) ? md.occ : null };
   });
   // Built as the result's model was: its background terms and reflection list are those

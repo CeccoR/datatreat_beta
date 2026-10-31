@@ -398,10 +398,12 @@ function summarise(model, res, phases, opts){
       solids.push({ id: q.id, name: nm, type: sh.type === 'ellipsoidL' ? 'ellipsoid' : sh.type, kind: sh.kind, dims: sh.solid.dims, frame, dirs: dirs.slice(0, 3), cell: sh.solid.cell });
       if (info && Number.isFinite(info.chi2)){
         const dChi = info.chi2 - info.chi2Iso, dBIC = dChi/Math.max(1, info.chi2redIso) + (info.P - info.Piso)*Math.log(info.N);
-        // (A shape is reported only when kept, i.e. at ΔBIC under −10; one rejected is in
-        // the warnings with its ΔBIC.)
-        lines.push({ label: 'vs isotropic', value: `ΔBIC ${dBIC.toFixed(0)} (shape supported: under −10)`,
-          title: `${info.carried ? 'The last result\u2019s search (this refinement started from it, the shape not searched again): ' : ''}χ² ${info.chi2Iso.toFixed(0)} → ${info.chi2.toFixed(0)} with ${info.P - info.Piso} more parameters; BIC with χ² divided by the isotropic fit's χ²_ν (${info.chi2redIso.toFixed(2)}), so that a misfit of the model is not counted as evidence.${Number.isFinite(info.dBICheld) ? ` Orientation free: ΔBIC ${info.dBICfree.toFixed(0)}; held on the lattice: ${info.dBICheld.toFixed(0)}.` : ''} Between solids: under 10 no preference; 10–30 weak, within what the search itself varies on real data; over 30 telling, more so between solids with as many parameters. The sizes depend on the solid (a spheroid's polar axis reads 4/3 as much as a disc's thickness: the column length along the axis is ¾ of the one, all of the other)` });
+        // (A shape is reported only when kept: by v523's keep test, info.keep, its gain over
+        // the threshold of its Laue class, or before by ΔBIC under −10; one rejected is in the
+        // warnings.)
+        const kp = info.keep;
+        lines.push({ label: 'vs isotropic', value: kp ? `ΔBIC ${dBIC.toFixed(0)}` : `ΔBIC ${dBIC.toFixed(0)} (shape supported: under −10)`,
+          title: `${info.carried ? 'The last result\u2019s search (this refinement started from it, the shape not searched again): ' : ''}${kp ? `Kept: its gain over the isotropic size, ${kp.G.toFixed(1)} χ²_ν, is over the ${kp.need.toFixed(1)} its Laue class needs (χ² of ${kp.k + 1} degrees of freedom at 99.9 % + 2: the deformations of a sphere the class lets the pattern see)${kp.flagged ? ', and as the fit misses some lines (the per-line check) its ΔBIC is under −10 too' : ''}. ` : ''}χ² ${info.chi2Iso.toFixed(0)} → ${info.chi2.toFixed(0)} with ${info.P - info.Piso} more parameters; BIC with χ² divided by the isotropic fit's χ²_ν (${info.chi2redIso.toFixed(2)}), so that a misfit of the model is not counted as evidence.${Number.isFinite(info.dBICheld) ? ` Orientation free: ΔBIC ${info.dBICfree.toFixed(0)}; held on the lattice: ${info.dBICheld.toFixed(0)}.` : ''} Between solids: under 10 no preference; 10–30 weak, within what the search itself varies on real data; over 30 telling, more so between solids with as many parameters. The sizes depend on the solid (a spheroid's polar axis reads 4/3 as much as a disc's thickness: the column length along the axis is ¾ of the one, all of the other)` });
         row(nm, 'shape_dBIC', dBIC, NaN);
       }
       if (ln) sizeDist(q, nm, lines, true);
