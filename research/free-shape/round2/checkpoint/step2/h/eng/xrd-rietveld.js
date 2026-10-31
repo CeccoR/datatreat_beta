@@ -446,9 +446,9 @@ function lineNodes(model, key, th, A, H, tol, interp){
     // (A line first met under a hold goes through lineNodesOf, which records its count:
     // taken from here, the audit after the refinement found none recorded and ran again.)
     const c = cache.get(key);
-    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
+    if (c && c.th === th && c.H === H && c.tol === tol && c.g === A.key && c.n0 === n0 && c.ip === !!interp && !model.fcjAudit && !(model.fcjFreeze && n0 === undefined)) return c.nodes;
     const nodes = lineNodesOf(model, key, th, A, H, tol, interp);
-    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, nodes });
+    cache.set(key, { th, H, tol, g: A.key, n0: model.fcjFreeze ? model.fcjFreeze.get(key) : undefined, ip: !!interp, nodes });
     return nodes;
   }
   return lineNodesOf(model, key, th, A, H);
@@ -567,11 +567,11 @@ function sollerGrid(g){
    alone (the width only bins them): kept for the last SOLLER_LINES_MAX lines, so that a
    refinement recomputes them only where θ or L moved (on the user's samples, refined in
    4–5 s with them computed at every call, against under 1 s with FCJ). The least recently
-   used goes first, and there is room for three times a low-symmetry pattern's lines: a
-   Jacobian's column of a cell parameter moves every line's θ, and with the oldest dropped
-   first (and 512 kept) each such column had pushed the lines at v out, to be computed again
-   at the next column (on a triclinic free shape, four fifths of an lsq evaluation and a
-   quarter of a WPPM one; round 2's free-shape step 2). The same numbers, kept longer. */
+   used goes first, and 2048 are kept (512 up to round 2's free-shape step 2): a Jacobian's
+   column of a cell parameter moves every line's θ, and the oldest dropped first then took
+   the lines at v with it, to be computed again at the next column; and WPPM's lines keep two
+   cells each (sollerStats), 856 for a triclinic phase's 214 reflections. The same numbers,
+   kept longer. */
 const SOLLER_LINES = new Map(), SOLLER_LINES_MAX = 2048;
 function sollerCells(th, g){
   const key = g.key + '|' + th;
@@ -620,12 +620,13 @@ function sollerCells(th, g){
   return C;
 }
 /* interp (WPPM_OPT.axial, a WPPM line's): where the line takes one node, its shift, spread and
-   reach from the cells at the two nearest multiples of SOLLER_DQ in θ, linearly — a Jacobian's
+   reach from the cells at the two nearest multiples of SOLLER_DQ in θ, linearly. A Jacobian's
    column of a cell parameter (and a trial step) moves θ by far less than that, and every such
-   θ had cost the whole of sollerCells (a few thousand arccosines), now an interpolation between
-   two kept. Linear in θ over 10⁻⁴ rad: the shift within about 10⁻⁷° of the cells' own at
-   2θ = 10° (its second derivative there ≈ 14°/rad²), continuous in θ. Round 2's free-shape
-   step 2. */
+   θ had cost the whole of sollerCells (a few thousand arccosines; on step 1's engine the axial
+   nodes took 23 % of a WPPM fit's CPU), now an interpolation between two kept. Linear in θ over
+   10⁻⁴ rad: the shift within about 10⁻⁷° of the cells' own at 2θ = 10° (its second derivative
+   there ≈ 14°/rad²), continuous in θ; the patterns within 10⁻⁹ of the peak of the cells'
+   own (round 2's free-shape step 2). */
 const SOLLER_DQ = 1e-4;
 function sollerStats(th, g){
   const f = th/SOLLER_DQ, k = Math.floor(f), t = f - k, a = sollerCells(k*SOLLER_DQ, g), b = sollerCells((k + 1)*SOLLER_DQ, g);
@@ -995,16 +996,21 @@ function textureWeights(q, v){
 /* Round 2 of the free-shape research (a prototype after v522: research/free-shape/round2/
    AB.md §1, its two results adopted), each behind a switch that keeps v522's behaviour
    reachable for comparison (a test or a script sets it before building a model):
-   - line, the size line of a free shape's members and of its phase's isotropic sphere, in
-     the Lorentzian profile (WPPM draws the exact line, §7.3, and reads neither): 'lsq', the
-     engine's TCH pseudo-Voigt with the Gaussian and Lorentzian FWHM that best fit the
-     solid's exact line along the member (sizeLineKs; AB §3), or 'lor', v522's Lorentzian
-     of FWHM 0.675/⟨L⟩_V. The Lorentzian is 11.5–21 % of the peak off every solid's exact
-     line, reads ⟨L⟩_V 13–25 % long, and pulls a solid toward equant the more members a
-     reflection has (m−3m read a quarter of the anisotropy); lsq is 2.5–8 % off at the same
-     cost (0.99× the CPU on the 22 sub-screen rows). On the 77 screening runs it kept 65 of
-     66 truths against 60, the thinnest extent +1 % against +20 %, the worst +16 % against
-     +42 % (medians);
+   - line, the size line of a free shape's members and of its phase's isotropic sphere:
+     'exact', the solid's own line by WPPM (§7.3): a phase with a body for its free shape is
+     built as a WPPM phase (read when the model is built), each member's line the transform
+     of the solid's common-volume function along it, its isotropic sphere the ball's;
+     'lsq', in the Lorentzian profile the engine's TCH pseudo-Voigt with the Gaussian and
+     Lorentzian FWHM that best fit the solid's exact line along the member (sizeLineKs; AB
+     §3); or 'lor', v522's Lorentzian of FWHM 0.675/⟨L⟩_V (a WPPM phase reads neither). The
+     Lorentzian is 11.5–21 % of the peak off every solid's exact line, reads ⟨L⟩_V 13–25 %
+     long, and pulls a solid toward equant the more members a reflection has (m−3m read a
+     quarter of the anisotropy); lsq is 2.5–8 % off at the same cost and puts two of 11
+     clean rows in the wrong family of solid in expectation; the exact line none. With
+     WPPM_OPT's shortcuts (xrd-broad.js: the read-out from tables, a reflection's two lines
+     by one FFT, the axial shift interpolated in θ) a fit by the exact line cost 0.42× v522's
+     CPU on the 22 sub-screen rows (lsq 0.74×, WPPM before them 2.13×), with WPPM's outcome,
+     reach and accuracy (STEP2.md);
    - search, freeShapeRun's: 'v2' (AB §4, STEP1.md: forward differences in the brief
      trials, no covariance in the search's refinements, the returned fit refined once more
      by central differences with its covariance, a held frame refined once per orbit of the
@@ -1016,7 +1022,7 @@ function textureWeights(q, v){
    SHAPE_FWD below; the tables' steps and their fit's span and weights (xrd-sizeline.js, written by
    research/free-shape/round2/proto/build-sizeline.mjs); the starts' families (lowIndexAxes,
    at most 5). */
-const SHAPE_MODE = { line: 'lsq', search: 'v2' };
+const SHAPE_MODE = { line: 'exact', search: 'v2' };
 /* Search v2: random starts beside the class's distinct ones (the sphere-like one, a plate
    and a needle per low-index family: 11 in the six lower classes, 9 in −3m, 6/m and 6/mmm,
    7 in cubic), plus one for each start the setting shapeStarts asks above its default.

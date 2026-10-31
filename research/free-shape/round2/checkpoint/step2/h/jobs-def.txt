@@ -1,0 +1,3 @@
+D3 h3 default default default default default sqbox-Pm-3-on
+D3 h3 default default default default default cylinder-P6m-on
+D3 h3 default default default default default box-P-1-near

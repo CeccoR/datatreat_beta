@@ -196,12 +196,12 @@ function addMemberCoef(out, n, dL, base, a, b, c, scale, sigma, weight){
    there continuously, and what it leaves out goes to the background. Read between grid
    points by cubic (Catmull–Rom) interpolation. */
 const N_MIN = 64, N_MAX = 16384;
-/* WPPM_OPT: a WPPM evaluation made cheaper, each behind a switch that keeps v522's arithmetic
-   reachable (all false; a script sets them before evaluating). Round 2 of the free-shape
+/* WPPM_OPT: a WPPM evaluation made cheaper, each shortcut behind a switch, all on (false keeps
+   v522's arithmetic reachable; a script sets them before evaluating). Round 2 of the free-shape
    research, step 2 (research/free-shape/round2/STEP2.md): on step 1's engine the read-out took
    62 % of a WPPM fit's CPU, the axial divergence's nodes 23 %, the FFTs 7 %, the common factor
    3 %, the members' size coefficients 1 %.
-   - fast: the same line by shorter arithmetic, not to the bit (within 4·10⁻¹⁴ of the peak):
+   - fast: the same line by shorter arithmetic, not to the bit (within 2·10⁻¹² of the peak):
      the common factor's exponentials by recurrence in L (two products a point against three
      exponentials) and the read-out by reciprocals, the edge value taken off the period first;
    - pair: a reflection's two lines (Kα1, Kα2) on one grid by one FFT (wppmPair; with fast's

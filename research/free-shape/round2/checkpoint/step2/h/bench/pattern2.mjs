@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 const a = process.argv.slice(2), opt = {};
 for (let i = 0; i < a.length; i++) if (a[i].startsWith('--')) opt[a[i].slice(2)] = a[i + 1];
-const E0 = await import('../eng0/xrd-rietveld.js'), E1 = await import('../eng/xrd-rietveld.js');
+const E0 = await import('../eng0/xrd-rietveld.js'), E1 = await import('../' + (process.env.ENGDIR || 'eng') + '/xrd-rietveld.js');
 const { phaseOf, FS2 } = await import('../lib.mjs');
 const { drawRow } = await import('../../../gen/gen.mjs');
 const design = JSON.parse(fs.readFileSync(FS2 + '/design/design.json', 'utf8'));

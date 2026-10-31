@@ -1,0 +1,11 @@
+box-P-1-near
+ellcyl-P2m-generic
+ellipsoid-Pmmm-generic
+box-P4m-near
+cylinder-P4mmm-on
+spheroid-P-3-near
+box-P-3m1-near
+cylinder-P6m-on
+ellcyl-P6m-generic
+sqbox-Pm-3-on
+ellcyl-Pm-3m-generic
