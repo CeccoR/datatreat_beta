@@ -13,7 +13,7 @@ const arg = (k, d) => process.argv.includes('--' + k) ? process.argv[process.arg
 const REF = arg('ref', 'DR'), TAG = arg('tag', 'S1'), DS = +arg('delta', 12.5);
 const rd = (t, f) => readResult(fs.readFileSync(path.join(HERE, 'results', t, f), 'utf8')).records[0];
 const f = (x, d = 1) => Number.isFinite(x) ? x.toFixed(d) : '—';
-const L = [`completeness: ${TAG} against ${REF}, Δ* ${DS}`, '', '| row | ref. minima ≤ Δ* | found | default ≤ Δ* | default's lowest − ref.'s (χ²_ν) | unique: default / ref. | ref. search evals × default | ref. stage candidates |', '|---|---|---|---|---|---|---|---|'];
+const L = [`completeness: ${TAG} against ${REF}, Δ* ${DS}`, '', '| row | ref. minima ≤ Δ* | found | default ≤ Δ* | default lowest − reference lowest (χ²_ν) | unique: default / ref. | ref. search evals × default | ref. stage candidates |', '|---|---|---|---|---|---|---|---|'];
 let nT = 0, nF = 0, nReach = 0, nRows = 0, agree = 0, evR = 0, evD = 0;
 for (const fn of fs.readdirSync(path.join(HERE, 'results', REF)).filter(x=> x.endsWith('.json'))){
   const o = readResult(fs.readFileSync(path.join(HERE, 'results', REF, fn), 'utf8')), R = o.records[0], D = rd(TAG, fn);

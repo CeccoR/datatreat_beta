@@ -1,6 +1,7 @@
 /* [step4] ENG also carries SHAPE_MINIMA, shapeMinima and minimaMatch; FS.min counts the minima stage's
-   evaluations and wall time (shapeMinima wrapped); PROTO_TURNSEED, when set, seeds the search's random
-   turns (the polish and the refit) instead of v522's 0x9e3779b9.
+   evaluations and wall time (shapeMinima wrapped); PROTO_TURNSEED, when set, seeds the search's main
+   random stream instead of v522's 0x9e3779b9: the starts' small tilts and, with the stage off, the
+   turns before the polish and the refit (with the stage on there are none).
    [step3] ENG also carries SHAPE_CHECK, lineCheck and lineJack where the copy has them.
    Step 2's harness engine (step 1's make-eng.mjs, extended): the patched app copy's engine files
    (an argument, e.g. $W/step2-app or $W/step1-app) copied to eng/, xrd-rietveld.js instrumented with

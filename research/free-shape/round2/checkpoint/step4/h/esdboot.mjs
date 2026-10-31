@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Step 4: the local error (curvature) against the bootstrap (results/BT, BOOT_ALL): for the lowest
+/* Step 4: the local error (curvature) against the bootstrap (results/BT2, BOOT_ALL): for the lowest
    minimum of each kept row, each extent's ln D on the replicas against its claimed σ (σ_W/W, the
    stage's covariance: S1's info.minima[0].s). F: Poisson draws of the fitted pattern: sd of
    (ln D_r − ln D_nf)/σ measures the noise calibration. T: draws of the generator's own counts: the
@@ -8,14 +8,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readResult, compareSolids, laueRotations, ENG, dimOf, cols } from './lib.mjs';
 const HERE = path.dirname(new URL(import.meta.url).pathname);
+const arg = (k, d) => process.argv.includes('--' + k) ? process.argv[process.argv.indexOf('--' + k) + 1] : d;
+const TAG = arg('tag', 'BT2'), REFT = arg('ref', 'S2');   // node esdboot.mjs [--tag BT2] [--ref S2] [--rows]
 const design = JSON.parse(fs.readFileSync(path.join(HERE, '..', '..', 'design', 'design.json'), 'utf8'));
 const f = (x, d = 2) => Number.isFinite(x) ? x.toFixed(d) : '—';
 const sdv = a => { const m = a.reduce((t, x)=> t + x, 0)/a.length; return Math.sqrt(a.reduce((t, x)=> t + (x - m)**2, 0)/Math.max(1, a.length - 1)); };
 const rmsv = a => Math.sqrt(a.reduce((t, x)=> t + x*x, 0)/a.length);
 const rowsOut = [], agg = { clean: { F: [], Tb: [], Ts: [] }, error: { F: [], Tb: [], Ts: [] } };
-for (const fn of fs.readdirSync(path.join(HERE, 'results', 'BT')).filter(x=> x.endsWith('.json'))){
-  const o = readResult(fs.readFileSync(path.join(HERE, 'results', 'BT', fn), 'utf8')), r = o.records[0], b = r.boot;
-  const s1 = readResult(fs.readFileSync(path.join(HERE, 'results', 'S1', fn), 'utf8')).records[0];
+for (const fn of fs.readdirSync(path.join(HERE, 'results', TAG)).filter(x=> x.endsWith('.json'))){
+  const o = readResult(fs.readFileSync(path.join(HERE, 'results', TAG, fn), 'utf8')), r = o.records[0], b = r.boot;
+  const s1 = readResult(fs.readFileSync(path.join(HERE, 'results', REFT, fn), 'utf8')).records[0];
   if (!b || !b.F || !s1.info || !s1.info.minima || !o.truth) continue;
   const row = design.rows.find(x=> x.id === o.row), m0 = s1.info.minima[0], B = ENG.BODIES[s1.solid.type];
   const Wx = w => B.axes(w), sol = w => ({ type: s1.solid.type, dims: Wx(w).map(dimOf), axes: cols(m0.R) });

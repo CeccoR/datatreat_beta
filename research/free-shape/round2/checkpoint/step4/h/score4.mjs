@@ -9,13 +9,14 @@
    J: C with the jackknife (flagged rows).
    Δ* from --delta (default 12.5). Also the uniqueness verdicts, the stage's cost, and the changes
    against step 3's P1 (the same search without the stage).
-   node score4.mjs [--tag S1] [--delta 12.5] [--rows] [--json out.json] */
+   --kappa, --kappaA: the local errors (extents, angles) scaled.
+   node score4.mjs [--tag S1] [--delta 12.5] [--kappa 1] [--kappaA 1] [--rows] */
 import fs from 'node:fs';
 import path from 'node:path';
 import { readResult, compareSolids, laueRotations, phaseQ, ENG, fromCols, dimOf, mv } from './lib.mjs';
 const HERE = path.dirname(new URL(import.meta.url).pathname), FS2 = path.resolve(HERE, '..', '..');
 const arg = (k, d) => process.argv.includes('--' + k) ? process.argv[process.argv.indexOf('--' + k) + 1] : d;
-const tag = arg('tag', 'S1'), DSTAR = +arg('delta', 12.5), REF = arg('ref', path.join(FS2, 'step3/hp/results/P1'));
+const tag = arg('tag', 'S1'), DSTAR = +arg('delta', 12.5), KAP = +arg('kappa', 1), KAPA = +arg('kappaA', 1), REF = arg('ref', path.join(FS2, 'step3/hp/results/P1'));
 const design = JSON.parse(fs.readFileSync(path.join(FS2, 'design', 'design.json'), 'utf8'));
 const ONE = new Set(['cylinder', 'spheroid', 'sqbox']), REV = new Set(['cylinder', 'spheroid']);
 const BOD = ENG.BODIES;
@@ -47,7 +48,7 @@ export function intervals(x, dstar = DSTAR){
     const j = wIx[fi], d = rep.dims[j], D = r.solid.dims[fi], Dt = T.dims[ri];
     if (D === Infinity){ out.ext.push({ inf: true, Dt }); continue; }
     const g = rep.groups && rep.groups.find(g=> g.axes.includes(j));
-    const s = Number.isFinite(d.Desd) ? d.Desd/D : g && Number.isFinite(g.Desd) ? g.Desd/g.D : 0;
+    const s = KAP*(Number.isFinite(d.Desd) ? d.Desd/D : g && Number.isFinite(g.Desd) ? g.Desd/g.D : 0);
     let L = Number.isFinite(d.Desd) || !g ? [D*Math.exp(-2*s), D*Math.exp(2*s)] : hull([g.D*Math.exp(-2*s), g.D*Math.exp(2*s)], ...g.axes.map(i=> [rep.dims[i].D, rep.dims[i].D]));
     const Lw = 2*s < 1 ? [D/(1 + 2*s), D/(1 - 2*s)] : [D/(1 + 2*s), Infinity];
     const pts = PM.map(({ p })=> dimOf(p.Wb[fi]));
@@ -66,7 +67,7 @@ export function intervals(x, dstar = DSTAR){
   const prin = [0, 1, 2].filter(i=> !und.has(i)).sort((p, q)=> gap(q) - gap(p))[0];
   if (prin != null && acc.principal != null){
     const fp = acc.pairs.find(p=> p[0] === prin)[1], ax = rep.axes.find(a=> a.axis === fp);
-    const rL = ax && Number.isFinite(ax.esdAngle) ? 2*ax.esdAngle : 0;
+    const rL = ax && Number.isFinite(ax.esdAngle) ? 2*KAPA*ax.esdAngle : 0;
     const sp = Math.max(0, ...PM.map(({ p })=> p.ang[fp]).filter(Number.isFinite))*180/Math.PI;
     const rC = Math.max(rL, sp), rJ = Math.max(rC, x.flag && ax && Number.isFinite(ax.jackTurn) ? ax.jackTurn : 0);
     out.ax = { e: acc.principal, rL, sp, rC, rJ, L: acc.principal <= rL, C: acc.principal <= rC, J: acc.principal <= rJ };
@@ -81,7 +82,7 @@ if (process.argv[1] && process.argv[1].endsWith('score4.mjs')){
   const X = load();
   const kept = X.filter(x=> x.truth && x.r.kept);
   const L = [];
-  L.push(`tag ${tag}, Δ* ${DSTAR}: ${X.length} runs, ${kept.length} kept truths`);
+  L.push(`tag ${tag}, Δ* ${DSTAR}, κ ${KAP}, κ_angle ${KAPA}: ${X.length} runs, ${kept.length} kept truths`);
   // the stage: cost, minima, uniqueness, changes against P1
   const st = X.filter(x=> x.r.info && x.r.info.minimaStage);
   const sumS = X.reduce((t, x)=> t + x.r.search.evals - (x.r.min ? x.r.min.evals : 0), 0), sumM = X.reduce((t, x)=> t + (x.r.min ? x.r.min.evals : 0), 0), sumP = X.reduce((t, x)=> t + (x.p ? x.p.search.evals : 0), 0);
@@ -115,12 +116,12 @@ if (process.argv[1] && process.argv[1].endsWith('score4.mjs')){
   const zs = Ez.map(e=> Math.abs(e.z)).sort((a, b)=> a - b);
   L.push('', `local z on clean rows (${zs.length}): median |z| ${f(med(zs))} (normal 0.67), 90 % ${f(zs[Math.floor(0.9*zs.length)])}, rms of |z|<5 ${f(Math.sqrt(zs.filter(z=> z < 5).reduce((t, z)=> t + z*z, 0)/zs.filter(z=> z < 5).length))}, |z|>2: ${zs.filter(z=> z > 2).length}, >3: ${zs.filter(z=> z > 3).length}, >5: ${zs.filter(z=> z > 5).length}`);
   // uniqueness verdicts
-  L.push('', '| kept truths | unique (one minimum) | unique and L covers all | unique, L misses | several | several: L covers | several: C covers, L not | several: neither |', '|---|---|---|---|---|---|---|---|');
+  L.push('', '| kept truths | unique (one minimum) | unique and L covers all | unique, L misses | several | several: L covers | several: C covers, L not | several: neither | with the jackknife (J): unique covered / several covered |', '|---|---|---|---|---|---|---|---|---|');
   for (const [nm, g] of groups){
     const G = kept.filter(g).map(x=> ({ x, i: intervals(x) }));
-    const okL = ({ i })=> i.ext.every(e=> e.inf || e.L) && (!i.ax || i.ax.L), okC = ({ i })=> i.ext.every(e=> e.inf || e.C) && (!i.ax || i.ax.C);
+    const okL = ({ i })=> i.ext.every(e=> e.inf || e.L) && (!i.ax || i.ax.L), okC = ({ i })=> i.ext.every(e=> e.inf || e.C) && (!i.ax || i.ax.C), okJ = ({ i })=> i.ext.every(e=> e.inf || e.J) && (!i.ax || i.ax.J);
     const U = G.filter(t=> t.i.n <= 1), S = G.filter(t=> t.i.n > 1);
-    L.push(`| ${nm} | ${pc(U.length, G.length)} | ${U.filter(okL).length} | ${U.filter(t=> !okL(t)).length} (${U.filter(t=> !okL(t)).map(t=> t.x.row.id).join(', ')}) | ${S.length} | ${S.filter(okL).length} | ${S.filter(t=> !okL(t) && okC(t)).length} | ${S.filter(t=> !okC(t)).length} (${S.filter(t=> !okC(t)).map(t=> t.x.row.id).join(', ')}) |`);
+    L.push(`| ${nm} | ${pc(U.length, G.length)} | ${U.filter(okL).length} | ${U.filter(t=> !okL(t)).length} (${U.filter(t=> !okL(t)).map(t=> t.x.row.id).join(', ')}) | ${S.length} | ${S.filter(okL).length} | ${S.filter(t=> !okL(t) && okC(t)).length} | ${S.filter(t=> !okC(t)).length} (${S.filter(t=> !okC(t)).map(t=> t.x.row.id).join(', ')}) | ${U.filter(okJ).length}/${U.length} / ${S.filter(okJ).length}/${S.length} |`);
   }
   if (process.argv.includes('--rows')){
     L.push('', '| row | error | flag | outcome | minima ≤ Δ* (≤ keep) | extents: e (L/C) | principal e°, rL/rC | stage evals × search |', '|---|---|---|---|---|---|---|---|');

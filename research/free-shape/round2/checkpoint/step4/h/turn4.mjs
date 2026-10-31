@@ -9,10 +9,11 @@ import path from 'node:path';
 import { readResult, compareSolids, laueRotations } from './lib.mjs';
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const rd = (t, f) => { const p = path.join(HERE, 'results', t, f); return fs.existsSync(p) ? readResult(fs.readFileSync(p, 'utf8')) : null; };
+const TAGS = process.env.TAGS ? process.env.TAGS.split(',') : ['S1', 'T1', 'T2'];   // node turn4.mjs, or TAGS=S2,U1,U2
 const f = (x, d = 2) => Number.isFinite(x) ? x.toFixed(d) : '—';
 const L = ['| row | today: free χ² spread (χ²_ν) | stage: lowest χ² spread | outcomes | extents, largest difference | axis, largest angle |', '|---|---|---|---|---|---|'];
-for (const fn of fs.readdirSync(path.join(HERE, 'results', 'T1')).filter(x=> x.endsWith('.json'))){
-  const O = ['S1', 'T1', 'T2'].map(t=> rd(t, fn)).filter(Boolean); if (O.length < 3) continue;
+for (const fn of fs.readdirSync(path.join(HERE, 'results', TAGS[1])).filter(x=> x.endsWith('.json'))){
+  const O = TAGS.map(t=> rd(t, fn)).filter(Boolean); if (O.length < 3) continue;
   const R = O.map(o=> o.records[0]), nu = Math.max(1, R[0].chi2nu), st = R.map(r=> r.info && r.info.minimaStage);
   const spread = a => (Math.max(...a) - Math.min(...a))/nu;
   const today = st.every(Boolean) ? spread(st.map(s=> s.before)) : NaN, stage = st.every(Boolean) ? spread(st.map(s=> s.after)) : NaN;
