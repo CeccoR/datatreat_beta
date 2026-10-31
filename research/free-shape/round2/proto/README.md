@@ -3,7 +3,9 @@
 A patch of the app's Rietveld engine that carries round 2's two adopted results (`../AB.md` §1):
 the lsq size line (track A) and the cheaper search (track B), each the free shape's default behind
 a switch that keeps v522's behaviour reachable. It is a prototype, ready to swap in once round 2's
-tuning runs confirm the results. It is not applied: the branch is unchanged. Its base is
+tuning runs confirm the results. Round 2's step 1 (`../STEP1.md`) measured it on the 77 screening
+runs with both lines and set forward differences to the brief trials only (`SHAPE_FWD`). It is not
+applied: the branch is unchanged. Its base is
 `9782d33` (claude/repo-code-review-sr6c8m), whose engine files equal the frozen `b9bef5f` byte for
 byte (`git diff b9bef5f 9782d33 -- 'xrd-*.js'` is empty), so the research diffs ported directly.
 
@@ -13,11 +15,12 @@ prototype's runs; none of it is in the repository.
 ## Files
 
 - `engine.patch`: `git diff` against `9782d33` of the app's files:
-  - `xrd-rietveld.js` (+185 −29): the switches and tunables, the lsq line, refine's options
+  - `xrd-rietveld.js` (+197 −29): the switches and tunables, the lsq line, refine's options
     `forward`, `noCov` and `covOnly`, freeShapeRun's search v2, `sameFrame`;
   - `xrd-sizeline.js` (new, 44 kB): the lsq tables, precomputed;
   - `sw.js`: the new module in `ASSETS` (one line; `CACHE` not bumped, nor `index.html`);
-  - `RIETVELD.md`: §10.3 (the lsq line), §10.5 (search v2), §10.7 (held frames).
+  - `RIETVELD.md`: §10.3 (the lsq line), §10.5 (search v2, with step 1's figures), §10.7 (held
+    frames).
 - `xrd-sizeline.js`: the tables module as the patch adds it.
 - `build-sizeline.mjs`: rebuilds it (10 s) from track A's exact lines
   (`../scripts/A/lines/profiles.mjs`). `--check <A's tables.json>` compares with track A's tables:
@@ -63,18 +66,22 @@ pulls the solids toward equant with the symmetry (m−3m read a quarter of the a
 2.5–8 % off at the same cost (0.99× the CPU) and on the 77 screening runs kept 65 of 66 truths
 against 60, with the thinnest extent +1 % against +20 % and the worst +16 % against +42 %.
 
-**Forward differences, no intermediate covariance, one central pass** (`SHAPE_MODE.search` 'v2',
-AB §1 item 1, §4.2 (1), (2)). `refine` takes three options: `forward` (the Jacobian by forward
-differences: one displaced point a non-linear column, the pattern at v reused from the state,
-the point below at an upper bound; the covariance stays central), `noCov` (no covariance at the
-end) and `covOnly` (no iterations, the covariance alone). Every refinement of the search (brief,
-full, polish, exact, held, refit) runs with `forward` and `noCov`; once the outcome is decided,
-the fit kept is refined once more as v522 refines (central, with its covariance:
-`SHAPE_CENTRAL`), so that what autoRefine reads (esds, covariance) is made as before. Why: half
-the evaluations of every Jacobian with the iterations unchanged, and the intermediate covariances
-were never read (0.525× the evaluations on the 77 runs; the central pass +0.006×). Track B ran
-a covariance-only pass before its central pass and accounted it out of the cost; the prototype
-does not run it, and ends bit for bit where B's accounting said (verification 2).
+**Forward differences in the brief trials, no intermediate covariance, one central pass**
+(`SHAPE_MODE.search` 'v2', AB §1 item 1, §4.2 (1), (2); `../STEP1.md`). `refine` takes three
+options: `forward` (the Jacobian by forward differences: one displaced point a non-linear column,
+the pattern at v reused from the state, the point below at an upper bound; the covariance stays
+central), `noCov` (no covariance at the end) and `covOnly` (no iterations, the covariance alone).
+Every refinement of the search runs with `noCov`; the brief trials also with `forward`, and with
+`SHAPE_FWD` 'all' the full refinements, the polish, the exact faces, the held frames and the
+refit as well. Once the outcome is decided, the fit kept is refined once more as v522 refines
+(central, with its covariance: `SHAPE_CENTRAL`), so that what autoRefine reads (esds, covariance)
+is made as before. Why: the intermediate covariances were never read, and forward differences
+halve a Jacobian. On lor (B) they changed one outcome of 77 in every refinement; under lsq, in
+the full refinements they stall short in flat valleys (cylinder-Pm-3m-on, verification 2), and on
+the 77 screening runs 'all' reached 61 of 65 runs where 'briefs' reached 64 (v522 64 of 66), at
+0.476× against 0.615× v522's evaluations (step 1, verification 4). Track B ran a covariance-only
+pass before its central pass and accounted it out of the cost; the prototype does not run it,
+and ends bit for bit where B's accounting said (verification 2).
 
 **Held frames once per orbit** (search v2, AB §4.2 (3)). A lattice frame that a rotation of the
 Laue class takes onto one already tried, axis for axis without sign (equal axes either way where
@@ -99,7 +106,7 @@ legacy ellipsoid (`ellipsoidL`) keeps v522's search.
 profile (a phase's Size profile WPPM, `wppmLineOf` with `shapeTs`), which track A used unchanged:
 its `FS2A_PROFILE=wppm` only set the phase's profile, and `FS2A_WPPM_BALL` was a control (the
 ball's line in every direction), not a model. There was nothing to port; the line switch does not
-apply to a WPPM phase, and search v2 does (unmeasured there).
+apply to a WPPM phase, and search v2 does (measured in step 1: verification 4).
 
 ## Switches and tunables
 
@@ -113,6 +120,7 @@ tuning runs.
 | `SHAPE_MODE.search` | `'v2'` | `'today'` | freeShapeRun's search |
 | `SHAPE_FILL` | 0 | (fill to 11) | v2: random starts beside the class's distinct ones |
 | `SHAPE_CENTRAL` | `true` | — | v2: the kept fit refined once more by central differences (`false`: its covariance alone) |
+| `SHAPE_FWD` | `'briefs'` | (central everywhere) | v2: the refinements by forward differences: the brief trials alone, or `'all'` |
 | `cylStep`, `boxStep` | 0.5°, 0.025 | — | the tables' steps (`build-sizeline.mjs --psi --box`) |
 | `fit.X`, `fit.b` | 6, 0.2 | — | the lsq fit's span (in 1/⟨L⟩_V) and weights 1/(p + b) (`--X --b`) |
 | `lowIndexAxes` | 5 families | the same | the families the deterministic starts take (unchanged) |
@@ -179,16 +187,35 @@ refine SrTiO₃ isotropically), and the lsq line only touches phases with a free
 side: the browser never runs the free-shape path in the tests; it is verified in Node only (1, 2),
 on the same module.
 
+**4. Step 1: the 77 screening runs** (`../STEP1.md`; `$W/fs2/step1/`). The patched copy with
+`SHAPE_FWD` added, driven by the same harness, against track A's records of today's search on
+each line (lsq: `fs2/A/results/screen-lsq`; WPPM: `screen-wppm`, the phase's profile WPPM as A ran
+it). Today's search re-run on 2 rows a line: equal to the bit (iso, evaluations, χ², outcome,
+dimensions, report); 'all' equal to the bit with verification 2's lsq + v2 on its 22 rows; the
+default 'briefs' run without the switch on 2 rows equal to the bit with the 'briefs' runs.
+- lsq: 'all' 0.476× today's search evaluations, outcome changed on 2 (cylinder-Pm-3m-on held →
+  free unbounded, +1693 χ²_ν; ellipsoid-Pm-3-on held → early rejection), reach 61/65; 'briefs'
+  0.615×, outcome changed on 1 (ellipsoid-Pm-3-on), reach 64/65 against today's 64/66; CPU of the
+  whole fit on the 22 sub-screen rows, one load, 0.80× today's ('all' 0.73×).
+- WPPM with 'briefs': 0.617× the evaluations, CPU 0.75× on the 22 rows (against track A's one-load
+  measure), outcome changed on 2 (ellipsoid-Pm-3-on free → held, a 217 χ²_ν gain;
+  spheroid-P2m-on held → free), reach 62/66 as today.
+- `npm run lint` clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif,
+  rvui, smoke, widths, modules): 53 of 53 pass.
+
 ## What remains to tune
 
-- **Forward differences under the lsq line.** The one loss above is the open question AB §6
-  step 1 named (B's mechanisms measured on lor only). Before the swap: the 154 tuning runs (or at
-  least the 77 screening runs) with the defaults against lsq-today; if losses like
-  cylinder-Pm-3m-on recur, central differences in the full refinements (forward in the briefs
-  only: an estimated 0.7× today's evaluations rather than 0.48×) or a central re-refinement of the
-  best brief ends; whether the table's linear interpolation (kinks in ψ, β, γ) plays a part.
-- `SHAPE_FILL` (0): the fill bought nothing under lor (35/35) nor under lsq (10/10 here); with
-  WPPM unmeasured.
+- **The starts when the isotropic fit reads no size** (step 1): the deterministic starts sit at
+  w0's floor (1e-3°, about 8 µm), where the lsq line's slope is small (its Gaussian part enters in
+  quadrature); on ellipsoid-Pm-3-on every start of the class stopped at once and only one of
+  v522's random fill starts got away. A floor on w0 tied to the instrument, or `SHAPE_FILL` > 0,
+  to be measured on the tuning runs (5 of the 77 runs have the isotropic size at 0).
+- `SHAPE_FWD` ('briefs'): forward-difference briefs reorder near-equal brief ends, both ways (step
+  1: two losses of 2.7 and 4.9 χ²_ν, two gains of 828 and 217); cylinder-Pm-3m-on is kept by a
+  5 χ²_ν margin. A central re-refinement of the best brief ends, or a fourth full refinement, are
+  the alternatives to weigh; and whether the table's linear interpolation plays a part.
+- `SHAPE_FILL` (0): the fill bought nothing under lor (35/35); under lsq it saved one row of 77
+  (above), by a random start.
 - `SHAPE_CENTRAL`: under lsq (the 22 rows here) the pass cost 41 evaluations (median, 32–113)
   and lowered χ² by at most 0.004 χ²_ν (under lor, B: at most 0.61); the covariance it makes is the
   reason to keep it, and `false` (the covariance alone, about 18) is the cheaper choice to weigh.
@@ -202,4 +229,5 @@ on the same module.
   the shape is rejected) by the ball's lsq line, smaller than the Lorentzian's Scherrer reading
   (which read ⟨L⟩_V 13–25 % long); the card's texts (`RV_INFO`: "a Lorentzian Y_s/cosθ") and the
   version (`sw.js` CACHE, the app's version) are not touched.
-- WPPM with search v2, and the legacy ellipsoid (v522's search kept), are not measured.
+- The legacy ellipsoid (v522's search kept) is not measured; WPPM with 'all' was not run (step
+  1 ran WPPM with the setting lsq chose).

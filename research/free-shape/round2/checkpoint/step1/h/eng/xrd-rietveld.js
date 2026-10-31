@@ -979,12 +979,13 @@ function textureWeights(q, v){
      cost (0.99× the CPU on the 22 sub-screen rows). On the 77 screening runs it kept 65 of
      66 truths against 60, the thinnest extent +1 % against +20 %, the worst +16 % against
      +42 % (medians);
-   - search, freeShapeRun's: 'v2' (AB §4: forward differences and no covariance in the
-     search's refinements, the returned fit refined once more by central differences with
-     its covariance, a held frame refined once per orbit of the class, the class's distinct
-     starts alone, the turns on a stream of their own) or 'today', v522's. On the 77 runs v2
-     made 0.49× the evaluations in 0.55× the search's time, with the same outcome on 76
-     (measured with the 'lor' line).
+   - search, freeShapeRun's: 'v2' (AB §4, STEP1.md: forward differences in the brief
+     trials, no covariance in the search's refinements, the returned fit refined once more
+     by central differences with its covariance, a held frame refined once per orbit of the
+     class, the class's distinct starts alone, the turns on a stream of their own) or
+     'today', v522's. On the 77 screening runs v2 made 0.62× v522's evaluations with the
+     lsq line (0.80× the CPU of a fit on 22 of them) and with WPPM (0.75×), the outcome the
+     same on 76 and 75.
    The tunables, all to be tuned on round 2's tuning runs: SHAPE_FILL, SHAPE_CENTRAL and
    SHAPE_FWD below; the tables' steps and their fit's span and weights (xrd-sizeline.js, written by
    research/free-shape/round2/proto/build-sizeline.mjs); the starts' families (lowIndexAxes,
@@ -994,7 +995,9 @@ const SHAPE_MODE = { line: 'lsq', search: 'v2' };
    and a needle per low-index family: 11 in the six lower classes, 9 in −3m, 6/m and 6/mmm,
    7 in cubic), plus one for each start the setting shapeStarts asks above its default.
    0: none (AB §4.2, symA: where v522 filled up with random starts, 35 of the 77 runs, they
-   cost 15 % of the evaluations and changed no outcome). */
+   cost 15 % of the evaluations and changed no outcome with the Lorentzian line; with the
+   lsq line one: an ellipsoid whose isotropic fit read no size, all the class's starts
+   stopping at once at w0's floor, which one of v522's random starts had escaped; STEP1.md). */
 const SHAPE_FILL = 0;
 /* Search v2: the returned fit refined once more by central differences, its covariance
    from that pass (true), or its covariance alone (false). The pass costs an iteration (44
@@ -1002,10 +1005,13 @@ const SHAPE_FILL = 0;
    (median), at most 0.61, where forward differences had stopped short in a flat valley. */
 const SHAPE_CENTRAL = true;
 /* Search v2: which of the search's refinements take their Jacobian by forward differences:
-   'all' (the briefs, the full refinements, the polish, the exact faces, the held frames and
-   the refit) or 'briefs' (the brief refinements alone; the others by central differences,
-   still without a covariance). */
-const SHAPE_FWD = process.env.PROTO_FWD || 'all';   // [step1]
+   'briefs' (the brief trials alone; the full refinements, the polish, the exact faces, the
+   held frames and the refit by central differences, still without a covariance) or 'all'.
+   On the 77 screening runs with the lsq line, 'all' made 0.48× v522's evaluations but a
+   full refinement could stall short in a flat valley: a true 18.7 × 3.7 nm cylinder ended an
+   unbounded disc 1693 χ²_ν above v522's fit, and the reach fell to 61 of 65 runs against
+   64; 'briefs' made 0.62× (1.11× the CPU of 'all') and lost neither (STEP1.md). */
+const SHAPE_FWD = process.env.PROTO_FWD || 'briefs';   // [step1]
 // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
 // the phase is drawn as an isotropic one.
 function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> v[i] !== 0); }
@@ -4437,10 +4443,10 @@ function freeShapeRun(model, k, res, free, opts){
      (60 by default: a body's turns take longer than a stage), λ and the shift test as
      everywhere. */
   const F = fitSettings(opts.fit), nStarts = F.shapeStarts, nFull = F.shapeFull;
-  /* Search v2 (SHAPE_MODE): every refinement of the search by forward differences and
-     without a covariance (lmX), the returned fit refined once more as v522 refined it
-     (lmCentral), held frames once per orbit of the class, the class's distinct starts.
-     The legacy ellipsoid keeps v522's search. */
+  /* Search v2 (SHAPE_MODE): the brief trials by forward differences (SHAPE_FWD 'all':
+     every refinement), no refinement of the search with a covariance (lmX), the returned
+     fit refined once more as v522 refined it (lmCentral), held frames once per orbit of the
+     class, the class's distinct starts. The legacy ellipsoid keeps v522's search. */
   const v2 = SHAPE_MODE.search === 'v2' && !q.iL, lmX = v2 ? { forward: true, noCov: true } : null;
   const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda, ...lmX };
   const lmCentral = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
@@ -4679,10 +4685,10 @@ function freeShapeRun(model, k, res, free, opts){
   const dBIC = bic(best.res);
   if (!(dBIC < -10)){ setParams(model, vIso); return { rejected: true, dBIC }; }
   setParams(model, best.v);
-  // v2: the search's refinements made no covariance, and forward differences can stop a
-  // little short in a flat valley: the fit kept is refined once more by central
-  // differences, its covariance from there (SHAPE_CENTRAL), else, or should that throw,
-  // given its covariance alone. (Its ΔBIC and outcome are the search's.)
+  // v2: the search's refinements made no covariance, and (with SHAPE_FWD 'all') forward
+  // differences can stop a little short in a flat valley: the fit kept is refined once
+  // more by central differences, its covariance from there (SHAPE_CENTRAL), else, or should
+  // that throw, given its covariance alone. (Its ΔBIC and outcome are the search's.)
   if (v2){
     let r = null;
     if (SHAPE_CENTRAL) try { r = refine(model, { free: best.res.free, ...lmCentral }); } catch(e){ setParams(model, best.v); }

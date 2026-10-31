@@ -1,5 +1,5 @@
 diff --git a/RIETVELD.md b/RIETVELD.md
-index 5fa85b6..5757ace 100644
+index 5fa85b6..282c50c 100644
 --- a/RIETVELD.md
 +++ b/RIETVELD.md
 @@ -1711,6 +1711,9 @@ w(\mathbf u) = 0.75\,\frac{|\mathbf t|}{\langle L\rangle_{V,\text{base}}(\hat{\m
@@ -16,14 +16,14 @@ index 5fa85b6..5757ace 100644
  3. **Full:** the best 3 (`SHAPE_FULL`, the setting `shapeFull`, 1–20) are refined to convergence (60 iterations: 1.5 × `maxIter`, as are the polish and the refinements of §10.6–10.7).
  4. **Polish:** up to 2 more refinements from the best, turned by 0.02 rad about a random axis. The refinement can stop where the axes sit on a symmetric orientation: there the first-order effects of a turn cancel over a family, the esds blow up, and the shift test passes at once.
  
-+**Search v2** (a prototype after v522: `SHAPE_MODE.search`, 'v2' by default, 'today' v522's above; round 2, AB.md §4). The same stages at about half the cost:
-+- every refinement of the search takes its Jacobian by forward differences (one displaced point a column, the pattern at the current values reused; at an upper bound the point below: refine's `forward`), and makes no covariance (`noCov`, which no one read). The iterations a refinement takes did not change;
++**Search v2** (a prototype after v522: `SHAPE_MODE.search`, 'v2' by default, 'today' v522's above; round 2, AB.md §4 and STEP1.md). The same stages at about 0.6× the cost:
++- the brief trials take their Jacobian by forward differences (one displaced point a column, the pattern at the current values reused; at an upper bound the point below: refine's `forward`); the full refinements, the polish, the exact faces, the held frames and the refit keep central differences (`SHAPE_FWD` 'briefs'; 'all' puts them on forward differences too). No refinement of the search makes a covariance (`noCov`, which no one read). Forward differences everywhere made 0.48× the evaluations, but in a flat valley a full refinement could stall short of where central differences went on: with the lsq line a synthetic 18.7 × 3.7 nm cylinder ended an unbounded disc, 1693 χ²_ν above v522's fit;
 +- the fit kept is refined once more by central differences, its covariance from that pass (`SHAPE_CENTRAL`). It lowered χ² by 0.0003 χ²_ν at the median, at most 0.61, where forward differences had stopped short in a flat valley;
-+- the starts are the class's distinct ones alone: the sphere-like one, and a plate and a needle per low-index family (11 in the six lower classes, 9 in −3m, 6/m and 6/mmm, 7 in cubic). No random fill (`SHAPE_FILL` = 0): where it existed it cost 15 % of the evaluations and changed no outcome. The setting `shapeStarts` above its default adds random starts, drawn from a stream of their own;
++- the starts are the class's distinct ones alone: the sphere-like one, and a plate and a needle per low-index family (11 in the six lower classes, 9 in −3m, 6/m and 6/mmm, 7 in cubic). No random fill (`SHAPE_FILL` = 0): where it existed it cost 15 % of the evaluations and, with the Lorentzian line, changed no outcome; with the lsq line it changed one (an ellipsoid whose isotropic fit read no size: every start of the class stopped at once, near zero width, where one of v522's random starts had got away). The setting `shapeStarts` above its default adds random starts, drawn from a stream of their own;
 +- the turns before the polish and the refit draw from the seeded stream past v522's random starts, so they are v522's whatever the starts: in a flat valley the turn alone decides which free minimum is returned (up to 7.5 χ²_ν on a synthetic cylinder);
 +- a held frame that a rotation of the class takes onto one tried already is not refined again (§10.7).
 +
-+On round 2's 77 screening runs (the Lorentzian line) it made 0.49× the pattern evaluations in 0.55× the search's time; the outcome (held, free, rejected) was the same on 76, the solid changed on 2 of 63 kept. The legacy ellipsoid keeps v522's search.
++On round 2's 77 synthetic screening runs, with the lsq line, it made 0.62× v522's pattern evaluations (0.80× the CPU of a whole fit, on 22 of them); the outcome (held, free, rejected) was the same on 76, and 64 of 65 runs reached the lowest χ² known against 64 of 66. With WPPM: 0.62× the evaluations, 0.75× the CPU, the same outcome on 75, the same reach (62 of 66). The legacy ellipsoid keeps v522's search.
 +
  ### 10.6 Flat faces: rounded for the search, exact for the result
  
@@ -50,7 +50,7 @@ index bd2ba82..92ea13a 100644
    './xrd-widths.js',
    './xrd-shape3d.js',
 diff --git a/xrd-rietveld.js b/xrd-rietveld.js
-index 2b68562..7dfe4f6 100644
+index 2b68562..dfc47ed 100644
 --- a/xrd-rietveld.js
 +++ b/xrd-rietveld.js
 @@ -26,6 +26,7 @@ import { lineForWavelength, f0, fprime, atomicMass } from './xrd-data.js';
@@ -76,7 +76,7 @@ index 2b68562..7dfe4f6 100644
  /* The half-width (°) a line of FWHM H, mixing eta and area A (in the units of y times
     degrees, the scale included) is drawn over: ±max(WIN_FWHM·H, WIN_MIN), and as far as its
     Lorentzian part, ηA·H/(2π x²) beyond a few H, stays above TAIL_NOISE of the pattern's
-@@ -957,6 +966,41 @@ function textureWeights(q, v){
+@@ -957,6 +966,52 @@ function textureWeights(q, v){
      return o;
    });
  }
@@ -93,14 +93,15 @@ index 2b68562..7dfe4f6 100644
 +     cost (0.99× the CPU on the 22 sub-screen rows). On the 77 screening runs it kept 65 of
 +     66 truths against 60, the thinnest extent +1 % against +20 %, the worst +16 % against
 +     +42 % (medians);
-+   - search, freeShapeRun's: 'v2' (AB §4: forward differences and no covariance in the
-+     search's refinements, the returned fit refined once more by central differences with
-+     its covariance, a held frame refined once per orbit of the class, the class's distinct
-+     starts alone, the turns on a stream of their own) or 'today', v522's. On the 77 runs v2
-+     made 0.49× the evaluations in 0.55× the search's time, with the same outcome on 76
-+     (measured with the 'lor' line).
-+   The tunables, all to be tuned on round 2's tuning runs: SHAPE_FILL and SHAPE_CENTRAL
-+   below; the tables' steps and their fit's span and weights (xrd-sizeline.js, written by
++   - search, freeShapeRun's: 'v2' (AB §4, STEP1.md: forward differences in the brief
++     trials, no covariance in the search's refinements, the returned fit refined once more
++     by central differences with its covariance, a held frame refined once per orbit of the
++     class, the class's distinct starts alone, the turns on a stream of their own) or
++     'today', v522's. On the 77 screening runs v2 made 0.62× v522's evaluations with the
++     lsq line (0.80× the CPU of a fit on 22 of them) and with WPPM (0.75×), the outcome the
++     same on 76 and 75.
++   The tunables, all to be tuned on round 2's tuning runs: SHAPE_FILL, SHAPE_CENTRAL and
++   SHAPE_FWD below; the tables' steps and their fit's span and weights (xrd-sizeline.js, written by
 +   research/free-shape/round2/proto/build-sizeline.mjs); the starts' families (lowIndexAxes,
 +   at most 5). */
 +const SHAPE_MODE = { line: 'lsq', search: 'v2' };
@@ -108,17 +109,27 @@ index 2b68562..7dfe4f6 100644
 +   and a needle per low-index family: 11 in the six lower classes, 9 in −3m, 6/m and 6/mmm,
 +   7 in cubic), plus one for each start the setting shapeStarts asks above its default.
 +   0: none (AB §4.2, symA: where v522 filled up with random starts, 35 of the 77 runs, they
-+   cost 15 % of the evaluations and changed no outcome). */
++   cost 15 % of the evaluations and changed no outcome with the Lorentzian line; with the
++   lsq line one: an ellipsoid whose isotropic fit read no size, all the class's starts
++   stopping at once at w0's floor, which one of v522's random starts had escaped; STEP1.md). */
 +const SHAPE_FILL = 0;
 +/* Search v2: the returned fit refined once more by central differences, its covariance
 +   from that pass (true), or its covariance alone (false). The pass costs an iteration (44
 +   evaluations, median) against 18 for the covariance alone, and lowered χ² by 0.0003 χ²_ν
 +   (median), at most 0.61, where forward differences had stopped short in a flat valley. */
 +const SHAPE_CENTRAL = true;
++/* Search v2: which of the search's refinements take their Jacobian by forward differences:
++   'briefs' (the brief trials alone; the full refinements, the polish, the exact faces, the
++   held frames and the refit by central differences, still without a covariance) or 'all'.
++   On the 77 screening runs with the lsq line, 'all' made 0.48× v522's evaluations but a
++   full refinement could stall short in a flat valley: a true 18.7 × 3.7 nm cylinder ended an
++   unbounded disc 1693 χ²_ν above v522's fit, and the reach fell to 61 of 65 runs against
++   64; 'briefs' made 0.62× (1.11× the CPU of 'all') and lost neither (STEP1.md). */
++const SHAPE_FWD = 'briefs';
  // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
  // the phase is drawn as an isotropic one.
  function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> v[i] !== 0); }
-@@ -1023,6 +1067,47 @@ function shapeWidths(model, q, v){
+@@ -1023,6 +1078,47 @@ function shapeWidths(model, q, v){
      return out;
    });
  }
@@ -166,7 +177,7 @@ index 2b68562..7dfe4f6 100644
  function shapeMatrix(L){
    const [l11, l21, l22, l31, l32, l33] = L;
    return [l11*l11, l11*l21, l11*l31,  l11*l21, l21*l21 + l22*l22, l21*l31 + l22*l32,  l11*l31, l21*l31 + l22*l32, l31*l31 + l32*l32 + l33*l33];
-@@ -2342,15 +2427,17 @@ function growFade(d, dFull){
+@@ -2342,15 +2438,17 @@ function growFade(d, dFull){
  // One line of one reflection with the free shape: a peak per member of the family, its
  // Lorentzian width Y (the instrument's and the faults', and the legacy ellipsoid's
  // isotropic Ys) + the shape's own (shapeWidths: wv, one per member, times prof.ws, the
@@ -188,7 +199,7 @@ index 2b68562..7dfe4f6 100644
      sw += ti; sH += ti*pr.H; sE += ti*pr.eta; tSum += ti;
      const Im = I/m*ti, half = lineHalf(model, pr.H, pr.eta, S*Im), win = half/pr.H;
      if (tt + dHi + half < xa || tt + dLo - half > xb) continue;
-@@ -2477,6 +2564,8 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2477,6 +2575,8 @@ function phasePattern(model, v, k, out, ticks){
    const act = shapeActive(q, v);
    const wppm = q.wppm && !q.iL;
    const shp = act && !wppm ? shapeWidths(model, q, v) : null, ts = act && wppm ? shapeTs(model, q, v) : null;
@@ -197,7 +208,7 @@ index 2b68562..7dfe4f6 100644
    const tw = textureWeights(q, v);
    const fa = q.iFA != null ? v[q.iFA] : 0, sigma = q.iLS != null ? v[q.iLS] : 0;
    /* The faults' layer spacing at this cell: the table's is the starting cell's, and κ goes
-@@ -2524,8 +2613,11 @@ function phasePattern(model, v, k, out, ticks){
+@@ -2524,8 +2624,11 @@ function phasePattern(model, v, k, out, ticks){
        // Ys (held at 0 in its search), left out as WPPM leaves it; the legacy ellipsoid's
        // widths add to Ys (shapeOf).
        const lr = L.lam/lam1, Yr = Yi + lr*(shp && q.iW ? 0 : Ys) + (kappa > 0 ? L.lam*kappa/Math.PI*R2D : 0);
@@ -211,7 +222,7 @@ index 2b68562..7dfe4f6 100644
        // The axial divergence spreads the peak over shifts within [dLo, dHi] (axialReach): a
        // line out of range by more than that is skipped before its nodes.
        const [dLo, dHi] = axialReach(th, A);
-@@ -2709,8 +2801,12 @@ function diffStep(model, j, v){
+@@ -2709,8 +2812,12 @@ function diffStep(model, j, v){
  /* The Jacobian columns of the free parameters at v (st the state there): exact for the
     linear ones (∂y/∂S = the phase at scale 1, ∂y/∂c = its basis function), central
     differences for the rest, recomputing only the phases a parameter touches (one-sided
@@ -226,7 +237,7 @@ index 2b68562..7dfe4f6 100644
    const n = model.n, np = model.phases.length;
    const tmpA = new Float64Array(n), tmpB = new Float64Array(n);
    free.forEach((j, a)=>{
-@@ -2719,8 +2815,8 @@ function jacobian(model, v, st, free, cols){
+@@ -2719,8 +2826,8 @@ function jacobian(model, v, st, free, cols){
      col.fill(0);
      const h = diffStep(model, j, v);
      let up = v[j] + h, dn = v[j] - h;
@@ -237,7 +248,7 @@ index 2b68562..7dfe4f6 100644
      if (up === dn) return;
      const vu = v.slice(), vd = v.slice(); vu[j] = up; vd[j] = dn;
      const ks = p.group === 'phase' ? [p.phase] : [...Array(np).keys()];
-@@ -2729,10 +2825,12 @@ function jacobian(model, v, st, free, cols){
+@@ -2729,10 +2836,12 @@ function jacobian(model, v, st, free, cols){
        // Both displaced points with the same FCJ node counts (lineNodes): refine()'s, held
        // over the whole refinement (a Jacobian is taken only inside one; up to v479 a
        // column taken outside one held counts of its own, a case that never arose).
@@ -252,7 +263,7 @@ index 2b68562..7dfe4f6 100644
      }
    });
    // The F² caches now hold the last displaced cell: the next evaluation at v recomputes.
-@@ -2823,7 +2921,11 @@ function hgFloored(model, v, free){
+@@ -2823,7 +2932,11 @@ function hgFloored(model, v, free){
     inverse holds the variance each would have with it held. `tied` lists each such set
     (names), `esdHeld` those conditional esds. iterations and ms: over all the passes
     (passes: how many), why: the last pass's; fcjBehind: the last pass still left a line
@@ -265,7 +276,7 @@ index 2b68562..7dfe4f6 100644
  /* refine()'s passes with fresh FCJ counts run until no line has outgrown its count. On
     synthetic standards (LaB6, Si; (S + H)/L 0.01–0.2 started from 0.005, 0.02, 0.05 and
     0.08, two profiles) at most 6 were needed, 4 from ASYM_START. The cap of 4 that the
-@@ -2907,8 +3009,8 @@ function refineHeld(model, opts){
+@@ -2907,8 +3020,8 @@ function refineHeld(model, opts){
      v = vl; st.bg.set(linSt.bg); st.yc.set(linSt.yc); st.chi2 = linSt.chi2;
      return before - linSt.chi2 > 0.01*chiRed(before);
    };
@@ -276,7 +287,7 @@ index 2b68562..7dfe4f6 100644
      const { A, g } = normalEq(model, cols, st);
      const act = [];
      for (let a = 0; a < m; a++) if (A[a*m + a] > 0 && !onBound(free[a], g[a])) act.push(a);
-@@ -2987,10 +3089,10 @@ function refineHeld(model, opts){
+@@ -2987,10 +3100,10 @@ function refineHeld(model, opts){
       in atBound, for the reader to take the value as a limit. U, V, W with H_G² on its
       floor have no meaningful curvature (∂y/∂W ∝ 1/√W there, the esd follows the
       difference step): esd NaN, and listed in atBound. */
@@ -289,7 +300,7 @@ index 2b68562..7dfe4f6 100644
      jacobian(model, v, st, free, cols);
      const { A, g } = normalEq(model, cols, st);
      const act = [];
-@@ -3041,7 +3143,7 @@ function refineHeld(model, opts){
+@@ -3041,7 +3154,7 @@ function refineHeld(model, opts){
    model.cov = { names: free.map(j=> model.par[j].name), cov };
    const freeNames = free.map(j=> model.par[j].name);
    return { params: getParams(model), esd, corr, cov, free: freeNames, atBound,
@@ -298,7 +309,7 @@ index 2b68562..7dfe4f6 100644
             stats, iterations: it, converged, why, ms: Date.now() - t0 };
  }
  
-@@ -4265,6 +4367,25 @@ function autoRefine(model, opts = {}){
+@@ -4265,6 +4378,25 @@ function autoRefine(model, opts = {}){
    return finish({ res, out, lastFree, nIn, cs });
  }
  
@@ -324,19 +335,20 @@ index 2b68562..7dfe4f6 100644
  /* freeShape(model, k, res, free, opts) → { res, info }, { rejected, dBIC } or null: the
     free shape of phase k (shapeSetup), from the isotropic refinement res. By the cubic
     symmetry the pattern does not change to first order when a sphere is deformed (Σ over
-@@ -4297,23 +4418,31 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4297,23 +4429,32 @@ function freeShapeRun(model, k, res, free, opts){
       (60 by default: a body's turns take longer than a stage), λ and the shift test as
       everywhere. */
    const F = fitSettings(opts.fit), nStarts = F.shapeStarts, nFull = F.shapeFull;
 -  const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
 -  const lmFull = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
-+  /* Search v2 (SHAPE_MODE): every refinement of the search by forward differences and
-+     without a covariance (lmX), the returned fit refined once more as v522 refined it
-+     (lmCentral), held frames once per orbit of the class, the class's distinct starts.
-+     The legacy ellipsoid keeps v522's search. */
++  /* Search v2 (SHAPE_MODE): the brief trials by forward differences (SHAPE_FWD 'all':
++     every refinement), no refinement of the search with a covariance (lmX), the returned
++     fit refined once more as v522 refined it (lmCentral), held frames once per orbit of the
++     class, the class's distinct starts. The legacy ellipsoid keeps v522's search. */
 +  const v2 = SHAPE_MODE.search === 'v2' && !q.iL, lmX = v2 ? { forward: true, noCov: true } : null;
 +  const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda, ...lmX };
-+  const lmCentral = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda }, lmFull = { ...lmCentral, ...lmX };
++  const lmCentral = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
++  const lmFull = { ...lmCentral, ...lmX, ...(v2 && SHAPE_FWD === 'briefs' ? { forward: false } : null) };
    const N = res.stats.N, chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
    const y0 = Math.max(vIso[q.iYs], 1e-3);
 -  // A seeded generator (mulberry32) and Gaussian deviates.
@@ -363,7 +375,7 @@ index 2b68562..7dfe4f6 100644
    // Tilted a few degrees, so that no symmetry holds the axes where they start.
    const tilt = e => unit([e[0] + 0.08*gauss(), e[1] + 0.08*gauss(), e[2] + 0.08*gauss()]);
    const axesLow = lowIndexAxes(q);
-@@ -4365,7 +4494,19 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4365,7 +4506,19 @@ function freeShapeRun(model, k, res, free, opts){
        starts.push(put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(e)));
        starts.push(put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(e)));
      }
@@ -384,7 +396,7 @@ index 2b68562..7dfe4f6 100644
      // The orientation reached becomes the reference, r = 0: the chart is fresh at the
      // start of each full refinement, far from |r| = π.
      rebase = v => { const vv = v.slice(), R = bodyFrame(q, v); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
-@@ -4472,9 +4613,13 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4472,9 +4625,13 @@ function freeShapeRun(model, k, res, free, opts){
      const refineFrom = (v, nm) => { setParams(model, rebase(v)); try { const r = refine(model, { free: nm, ...lmFull }); return { res: r, v: model.v.slice() }; } catch(e){ return null; } };
      if (BODIES[q.shapeType].base !== 'ball'){ const ex = refineFrom(best.v, names); if (ex) best = ex; }
      dBICfree = bic(best.res);
@@ -399,7 +411,7 @@ index 2b68562..7dfe4f6 100644
        const r = refineFrom(vs, names.filter(nm=> !q.iR.some(i=> model.par[i].name === nm)));
        if (r && (!sn || chiTot(r.res) < chiTot(sn.res))) sn = r;
      }
-@@ -4510,9 +4655,20 @@ function freeShapeRun(model, k, res, free, opts){
+@@ -4510,9 +4667,20 @@ function freeShapeRun(model, k, res, free, opts){
    // Kept only when the data support it: ΔBIC under −10 — five more parameters always
    // lower χ² a little, and on an isotropic sample the shape was kept in 7 of 12 noise
    // draws with ΔBIC near +40.
@@ -408,10 +420,10 @@ index 2b68562..7dfe4f6 100644
 +  const dBIC = bic(best.res);
    if (!(dBIC < -10)){ setParams(model, vIso); return { rejected: true, dBIC }; }
    setParams(model, best.v);
-+  // v2: the search's refinements made no covariance, and forward differences can stop a
-+  // little short in a flat valley: the fit kept is refined once more by central
-+  // differences, its covariance from there (SHAPE_CENTRAL), else, or should that throw,
-+  // given its covariance alone. (Its ΔBIC and outcome are the search's.)
++  // v2: the search's refinements made no covariance, and (with SHAPE_FWD 'all') forward
++  // differences can stop a little short in a flat valley: the fit kept is refined once
++  // more by central differences, its covariance from there (SHAPE_CENTRAL), else, or should
++  // that throw, given its covariance alone. (Its ΔBIC and outcome are the search's.)
 +  if (v2){
 +    let r = null;
 +    if (SHAPE_CENTRAL) try { r = refine(model, { free: best.res.free, ...lmCentral }); } catch(e){ setParams(model, best.v); }
@@ -421,7 +433,7 @@ index 2b68562..7dfe4f6 100644
    return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
      chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW } };
  }
-@@ -4579,4 +4735,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
+@@ -4579,4 +4747,4 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
  export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
           solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
           fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
