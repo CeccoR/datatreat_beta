@@ -1,0 +1,2 @@
+FB box-P-1-near cylinder METHOD=fboot,FBOOT_R=10,FBOOT_SRC=results/X2/box-P-1-near.cylinder.json
+FB box-P2m-generic cylinder METHOD=fboot,FBOOT_R=10,FBOOT_SRC=results/X2/box-P2m-generic.cylinder.json

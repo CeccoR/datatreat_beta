@@ -23,7 +23,7 @@ for (const r of rows){
   const members = { box: ['box', 'sqbox'], cyl: ['cylinder', 'ellcyl'], ball: ['ellipsoid', 'spheroid', 'sphere'] };
   const famv = (fn) => Object.fromEntries(Object.entries(members).map(([F, ms])=> { const b = ms.filter(s=> s === 'sphere' || fits[s]).reduce((x, s)=> fn(s) < fn(x) ? s : x); return [F, { v: fn(b), by: b }]; }));
   const res = { key: r.key, solid: r.solid, laue: r.laue, counts: r.counts, D: r.solid === 'sphere' ? r.D : null, error: r.error ? r.error.kind : null, strength: r.error ? r.error.strength : null,
-    trueFam: FAM[r.solid], nu, isoSame, have, fits: Object.fromEntries(have.map(s=> [s, { c: c(s) - c('sphere'), P: P(s), kept: fits[s].kept, flagged: fits[s].flagged, z: fits[s].z, gain: fits[s].gain, ms: fits[s].ms, evals: fits[s].evals }])) };
+    trueFam: FAM[r.solid], nu, N: any.N, Piso: any.Piso, isoSame, have, fits: Object.fromEntries(have.map(s=> [s, { c: c(s) - c('sphere'), P: P(s), kept: fits[s].kept, flagged: fits[s].flagged, z: fits[s].z, gain: fits[s].gain, ms: fits[s].ms, evals: fits[s].evals }])) };
   for (const [nm, fn] of [['chi', c], ['bic', bic]]){
     const fv = famv(fn), order = Object.keys(fv).sort((x, y)=> fv[x].v - fv[y].v), W = order[0], R = order[1];
     res[nm] = { win: W, by: fv[W].by, runner: R, runnerBy: fv[R].by, margin: fv[R].v - fv[W].v, trueMargin: Math.min(...Object.keys(fv).filter(F=> F !== res.trueFam).map(F=> fv[F].v)) - fv[res.trueFam].v,
