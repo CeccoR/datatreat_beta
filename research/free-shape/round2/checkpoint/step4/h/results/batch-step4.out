@@ -1,0 +1,101 @@
+2026-10-31T05:52:19.071Z jobs-step4.txt: 108 of 108 to do, 3 at a time, timeout 3600 s
+2026-10-31T05:52:23.137Z [1/108] F0 sphere-P6m-3: ok 4 s
+sphere-P6m-3 (6/m, sphere 24.4×24.4×24.4, impurity 0.14; exact, 10–110/0.01) as sqbox: draw 175 ms; iso χ²_ν 1.252, 343 ev, 1280 ms; list 21 refl, 93 members
+  today: rejected early χ² 12499.8 best — ΔBIC 17 | search 944 ev 2490 ms | 
+  wall 4.0 s
+2026-10-31T05:52:34.029Z [2/108] F0 box-P4m-near: ok 15 s
+box-P4m-near (4/m, box 9.1×18.2×60.0; exact, 10–110/0.01) as box: draw 294 ms; iso χ²_ν 2.675, 632 ev, 2391 ms; list 33 refl, 102 members
+  today: free χ² 9825.8 best 9825.8 ΔBIC -6266 | search 1995 ev 7930 ms report 1126 ev 4183 ms | 9.08×17.97×57.57 | dims 0% -1% -4% orient 1.0° (holo 1.0°) principal 0.9°
+  wall 14.8 s
+2026-10-31T05:52:37.418Z [3/108] T1 cylinder-Pm-3m-on: ok 18 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 358 ms; iso χ²_ν 4.242, 379 ev, 1146 ms; list 12 refl, 89 members
+  today: free χ² 22116.4 best 22116.4 ΔBIC -4746 | search 5636 ev 14225 ms report 910 ev 2441 ms | 22.22×22.22×3.85 | dims 19% 19% 4% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 18.2 s
+2026-10-31T05:52:48.470Z [4/108] T1 sphere-P6mmm-1: ok 25 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 146 ms; iso χ²_ν 1.140, 299 ev, 1172 ms; list 20 refl, 103 members
+  today: free χ² 10930.7 best 10930.7 ΔBIC -351 | search 5560 ev 16445 ms report 2502 ev 7444 ms | 9.48×8.52×5.74
+  wall 25.2 s
+2026-10-31T05:52:56.461Z [5/108] T1 ellcyl-P6m-generic: ok 19 s
+ellcyl-P6m-generic (6/m, ellcyl 44.8×58.5×9.8; exact, 10–110/0.01) as ellcyl: draw 211 ms; iso χ²_ν 1.129, 404 ev, 1211 ms; list 21 refl, 93 members
+  today: free χ² 9824.3 best 9824.3 ΔBIC -1239 | search 3627 ev 10233 ms report 2638 ev 7250 ms | 43.25×57.90×9.88 | dims -3% -1% 1% orient 25.2° (holo 21.3°) principal 7.4°
+  wall 19.0 s
+2026-10-31T05:52:58.377Z [6/108] T1 box-P6m-generic: ok 24 s
+box-P6m-generic (6/m, box 5.9×30.2×60.0; exact, 10–110/0.01) as box: draw 245 ms; iso χ²_ν 1.068, 391 ev, 1337 ms; list 21 refl, 93 members
+  today: free χ² 9987.9 best 9987.9 ΔBIC -587 | search 5267 ev 17040 ms report 1794 ev 5585 ms | 26.94×5.99×80.94 | dims 1% -11% 35% orient 59.2° (holo 6.6°) principal 12.6°
+  wall 24.3 s
+2026-10-31T05:53:09.946Z [7/108] T1 sqbox-P6m-near: ok 13 s
+sqbox-P6m-near (6/m, sqbox 7.3×7.3×5.6; exact, 10–110/0.01) as sqbox: draw 238 ms; iso χ²_ν 1.026, 277 ev, 1132 ms; list 21 refl, 93 members
+  today: free χ² 10022.1 best 10022.1 ΔBIC -182 | search 2632 ev 8296 ms report 1220 ev 3679 ms | 7.27×7.27×5.64 | dims -0% -0% 0% orient 2.3° (holo 2.3°) principal 2.3°
+  wall 13.4 s
+2026-10-31T05:53:17.545Z [8/108] T1 ellipsoid-Pmmm-generic: ok 29 s
+ellipsoid-Pmmm-generic (mmm, ellipsoid 5.2×20.1×21.1; exact, 10–110/0.01) as ellipsoid: draw 248 ms; iso χ²_ν 1.321, 499 ev, 2842 ms; list 41 refl, 94 members
+  today: free χ² 10063.6 best 10063.6 ΔBIC -2322 | search 1753 ev 10994 ms report 2497 ev 14827 ms | 19.78×5.23×20.19 | dims -0% -1% -4% orient 57.4° (holo 57.4°) principal 0.9°
+  wall 29.0 s
+2026-10-31T05:53:19.251Z [9/108] T1 spheroid-P4m-generic: ok 21 s
+spheroid-P4m-generic (4/m, spheroid 22.9×22.9×14.2; exact, 10–110/0.01) as spheroid: draw 231 ms; iso χ²_ν 1.013, 359 ev, 1601 ms; list 33 refl, 102 members
+  today: free χ² 10049.2 best 10049.2 ΔBIC -40 | search 3338 ev 12874 ms report 1608 ev 6023 ms | 22.63×22.63×14.27 | dims -1% -1% 1% orient 8.5° (holo 0.6°) principal 8.5°
+  wall 20.8 s
+2026-10-31T05:53:25.540Z [10/108] T1 box-P4mmm-generic: ok 16 s
+box-P4mmm-generic (4/mmm, box 2.9×8.8×17.2; exact, 10–110/0.01) as box: draw 243 ms; iso χ²_ν 8.351, 445 ev, 2011 ms; list 25 refl, 93 members
+  today: free χ² 9956.7 best 9956.7 ΔBIC -8748 | search 2165 ev 9700 ms report 795 ev 3503 ms | 17.64×8.71×2.87 | dims 0% -1% 2% orient 0.1° (holo 0.1°) principal 0.1°
+  wall 15.5 s
+2026-10-31T05:53:30.354Z [11/108] T1 cylinder-P6mmm-near: ok 13 s
+cylinder-P6mmm-near (6/mmm, cylinder 3.4×3.4×9.1, air 0.32; exact, 10–110/0.01) as cylinder: draw 266 ms; iso χ²_ν 1.141, 404 ev, 1714 ms; list 20 refl, 103 members
+  today: free χ² 10083.4 best 10083.4 ΔBIC -1125 | search 1747 ev 6406 ms report 1147 ev 4286 ms | 3.49×3.49×9.21 | dims 1% 1% 1% orient 0.8° (holo 0.8°) principal 0.8°
+  wall 12.7 s
+2026-10-31T05:53:36.352Z [12/108] T2 cylinder-Pm-3m-on: ok 11 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 304 ms; iso χ²_ν 4.242, 379 ev, 1058 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22162.3 ΔBIC -4754 | search 2825 ev 7084 ms report 922 ev 2225 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 10.7 s
+2026-10-31T05:53:52.562Z [13/108] T2 sphere-P6mmm-1: ok 22 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 126 ms; iso χ²_ν 1.140, 299 ev, 1152 ms; list 20 refl, 103 members
+  today: free χ² 10935.9 best 10935.9 ΔBIC -347 | search 4598 ev 13291 ms report 2681 ev 7510 ms | 9.18×5.92×8.31
+  wall 22.1 s
+2026-10-31T05:53:54.680Z [14/108] T1 ellipsoid-P-3m1-on: ok 35 s
+ellipsoid-P-3m1-on (-3m, ellipsoid 12.2×25.5×39.5; exact, 10–110/0.01) as ellipsoid: draw 240 ms; iso χ²_ν 1.304, 334 ev, 1477 ms; list 31 refl, 104 members
+  today: held χ² 9865.4 best 9864.7 ΔBIC -2403 | search 4094 ev 16383 ms report 4516 ev 17192 ms | 23.69×12.05×44.89 | dims -1% -7% 14% orient 30.0° (holo 30.0°) principal 0.0°
+  wall 35.3 s
+2026-10-31T05:53:59.584Z [15/108] T2 box-P6m-generic: ok 23 s
+box-P6m-generic (6/m, box 5.9×30.2×60.0; exact, 10–110/0.01) as box: draw 212 ms; iso χ²_ν 1.068, 391 ev, 1399 ms; list 21 refl, 93 members
+  today: free χ² 9987.9 best 9987.9 ΔBIC -587 | search 4934 ev 15829 ms report 1794 ev 5660 ms | 81.34×5.99×26.93 | dims 1% -11% 36% orient 59.2° (holo 6.6°) principal 12.6°
+  wall 23.2 s
+2026-10-31T05:54:11.222Z [16/108] T2 sqbox-P6m-near: ok 12 s
+sqbox-P6m-near (6/m, sqbox 7.3×7.3×5.6; exact, 10–110/0.01) as sqbox: draw 224 ms; iso χ²_ν 1.026, 277 ev, 1097 ms; list 21 refl, 93 members
+  today: free χ² 10022.1 best 10022.1 ΔBIC -182 | search 2285 ev 6732 ms report 1220 ev 3439 ms | 7.27×7.27×5.64 | dims -0% -0% 0% orient 2.3° (holo 2.3°) principal 2.3°
+  wall 11.5 s
+2026-10-31T05:54:12.326Z [17/108] T2 ellcyl-P6m-generic: ok 20 s
+ellcyl-P6m-generic (6/m, ellcyl 44.8×58.5×9.8; exact, 10–110/0.01) as ellcyl: draw 215 ms; iso χ²_ν 1.129, 404 ev, 1315 ms; list 21 refl, 93 members
+  today: free χ² 9824.3 best 9824.2 ΔBIC -1239 | search 3851 ev 10789 ms report 2708 ev 7281 ms | 59.14×43.65×9.86 | dims -3% 1% 0% orient 24.9° (holo 21.0°) principal 7.7°
+  wall 19.7 s
+2026-10-31T05:54:23.367Z [18/108] T2 ellipsoid-Pmmm-generic: ok 29 s
+ellipsoid-Pmmm-generic (mmm, ellipsoid 5.2×20.1×21.1; exact, 10–110/0.01) as ellipsoid: draw 223 ms; iso χ²_ν 1.321, 499 ev, 2762 ms; list 41 refl, 94 members
+  today: free χ² 10063.6 best 10063.6 ΔBIC -2322 | search 1720 ev 10662 ms report 2482 ev 14886 ms | 20.19×19.78×5.23 | dims -0% -1% -4% orient 57.4° (holo 57.4°) principal 0.9°
+  wall 28.6 s
+2026-10-31T05:54:28.316Z [19/108] T2 box-P4mmm-generic: ok 16 s
+box-P4mmm-generic (4/mmm, box 2.9×8.8×17.2; exact, 10–110/0.01) as box: draw 229 ms; iso χ²_ν 8.351, 445 ev, 2083 ms; list 25 refl, 93 members
+  today: free χ² 9956.7 best 9956.7 ΔBIC -8748 | search 2158 ev 9738 ms report 795 ev 3796 ms | 8.71×17.64×2.87 | dims 0% -1% 2% orient 0.1° (holo 0.1°) principal 0.1°
+  wall 15.9 s
+2026-10-31T05:54:29.646Z [20/108] T2 spheroid-P4m-generic: ok 18 s
+spheroid-P4m-generic (4/m, spheroid 22.9×22.9×14.2; exact, 10–110/0.01) as spheroid: draw 269 ms; iso χ²_ν 1.013, 359 ev, 1607 ms; list 33 refl, 102 members
+  today: free χ² 10049.2 best 10049.2 ΔBIC -40 | search 2619 ev 10005 ms report 1648 ev 6397 ms | 22.63×22.63×14.27 | dims -1% -1% 1% orient 8.5° (holo 0.6°) principal 8.5°
+  wall 18.3 s
+2026-10-31T05:54:35.157Z [21/108] T2 cylinder-P6mmm-near: ok 12 s
+cylinder-P6mmm-near (6/mmm, cylinder 3.4×3.4×9.1, air 0.32; exact, 10–110/0.01) as cylinder: draw 226 ms; iso χ²_ν 1.141, 404 ev, 1732 ms; list 20 refl, 103 members
+  today: free χ² 10083.4 best 10083.4 ΔBIC -1125 | search 1493 ev 5677 ms report 1152 ev 4009 ms | 3.49×3.49×9.21 | dims 1% 1% 1% orient 0.8° (holo 0.8°) principal 0.8°
+  wall 11.7 s
+2026-10-31T05:55:00.774Z [22/108] T2 ellipsoid-P-3m1-on: ok 32 s
+ellipsoid-P-3m1-on (-3m, ellipsoid 12.2×25.5×39.5; exact, 10–110/0.01) as ellipsoid: draw 210 ms; iso χ²_ν 1.304, 334 ev, 1438 ms; list 31 refl, 104 members
+  today: held χ² 9865.4 best 9864.7 ΔBIC -2403 | search 3446 ev 13525 ms report 4566 ev 17138 ms | 44.89×23.69×12.05 | dims -1% -7% 14% orient 30.0° (holo 30.0°) principal 0.0°
+  wall 32.4 s
+2026-10-31T05:55:29.748Z [23/108] DR box-P2m-generic: ok 60 s
+box-P2m-generic (2/m, box 9.6×22.6×60.0, air 0.17; exact, 10–110/0.01) as box: draw 284 ms; iso χ²_ν 1.142, 510 ev, 3175 ms; list 88 refl, 144 members
+  today: free χ² 9993.9 best 9993.9 ΔBIC -1190 | search 7439 ev 46547 ms report 1622 ev 9950 ms | 21.91×9.55×59.27 | dims -1% -3% -1% orient 1.5° (holo 1.5°) principal 1.5°
+  wall 60.0 s
+2026-10-31T05:55:32.907Z [24/108] DR box-Pm-3m-generic: ok 32 s
+box-Pm-3m-generic (m-3m, box 2.7×4.6×10.3, hump 0.64; exact, 10–110/0.01) as box: draw 208 ms; iso χ²_ν 22.871, 357 ev, 1018 ms; list 12 refl, 89 members
+  today: held χ² 198788.8 best 198740.2 ΔBIC -1277 | search 9656 ev 24459 ms report 2609 ev 6292 ms | 2.67×10.32×4.45 | dims -0% -3% 0% orient 11.4° (holo 11.4°) principal 9.9°
+  wall 32.0 s
+2026-10-31T05:55:42.591Z [25/108] DR box-P-3m1-near: ok 67 s
+box-P-3m1-near (-3m, box 14.3×29.6×60.0; exact, 10–110/0.01) as box: draw 212 ms; iso χ²_ν 1.028, 489 ev, 1604 ms; list 31 refl, 104 members
+  today: held χ² 9962.1 best 9961.6 ΔBIC -281 | search 17191 ev 58459 ms report 2191 ev 7008 ms | 248.83×25.01×14.78 | dims 3% -16% 315% orient 11.9° (holo 11.9°) principal 11.8°
+  wall 67.3 s

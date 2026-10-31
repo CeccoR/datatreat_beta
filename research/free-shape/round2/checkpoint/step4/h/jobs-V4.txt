@@ -1,0 +1,6 @@
+V4a . default default default default default cylinder-Pm-3m-on CK_METHOD=min
+V4b . default default default default default cylinder-Pm-3m-on CK_METHOD=min,PROTO_TURNSEED=777
+V4a . default default default default default sphere-P6mmm-1 CK_METHOD=min
+V4b . default default default default default sphere-P6mmm-1 CK_METHOD=min,PROTO_TURNSEED=777
+V4a . default default default default default box-P-3m1-near CK_METHOD=min
+V4b . default default default default default box-P-3m1-near CK_METHOD=min,PROTO_TURNSEED=777

@@ -1,0 +1,50 @@
+2026-10-31T05:56:11.382Z jobs-V.txt: 12 of 12 to do, 3 at a time, timeout 1800 s
+2026-10-31T05:56:22.657Z [1/12] V1b cylinder-Pm-3m-on: ok 11 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 337 ms; iso χ²_ν 4.242, 379 ev, 1079 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22162.3 ΔBIC -4754 | search 2825 ev 7464 ms report 922 ev 2231 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 11.2 s
+2026-10-31T05:56:30.252Z [2/12] V2a cylinder-Pm-3m-on: ok 19 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 345 ms; iso χ²_ν 4.242, 379 ev, 1165 ms; list 12 refl, 89 members
+  today: free χ² 22093.2 best 22093.2 ΔBIC -4752 | search 5915 ev 14805 ms report 882 ev 2383 ms | 22.07×22.07×3.83 | dims 18% 18% 3% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 18.8 s
+2026-10-31T05:56:30.356Z [3/12] V1a cylinder-Pm-3m-on: ok 19 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 357 ms; iso χ²_ν 4.242, 379 ev, 1135 ms; list 12 refl, 89 members
+  today: free χ² 22093.2 best 22093.2 ΔBIC -4752 | search 5915 ev 14968 ms report 882 ev 2354 ms | 22.07×22.07×3.83 | dims 18% 18% 3% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 18.9 s
+2026-10-31T05:56:34.336Z [4/12] V2b cylinder-Pm-3m-on: ok 12 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 297 ms; iso χ²_ν 4.242, 379 ev, 961 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22162.3 ΔBIC -4754 | search 2825 ev 7791 ms report 922 ev 2462 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 11.6 s
+2026-10-31T05:56:42.362Z [5/12] V3b cylinder-Pm-3m-on: ok 12 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 322 ms; iso χ²_ν 4.242, 379 ev, 1166 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22162.3 ΔBIC -4754 | search 2937 ev 7871 ms report 922 ev 2468 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 11.9 s
+2026-10-31T05:56:47.920Z [6/12] V3a cylinder-Pm-3m-on: ok 18 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 393 ms; iso χ²_ν 4.242, 379 ev, 1208 ms; list 12 refl, 89 members
+  today: free χ² 22119.0 best 22119.0 ΔBIC -4746 | search 5280 ev 13425 ms report 934 ev 2478 ms | 22.25×22.25×3.85 | dims 19% 19% 4% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 17.6 s
+2026-10-31T05:57:09.585Z [7/12] V1a sphere-P6mmm-1: ok 35 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 165 ms; iso χ²_ν 1.140, 299 ev, 1215 ms; list 20 refl, 103 members
+  today: free χ² 10931.0 best 10931.0 ΔBIC -351 | search 8679 ev 26411 ms report 2512 ev 7314 ms | 9.50×8.52×5.75
+  wall 35.1 s
+2026-10-31T05:57:10.496Z [8/12] V1b sphere-P6mmm-1: ok 28 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 159 ms; iso χ²_ν 1.140, 299 ev, 1147 ms; list 20 refl, 103 members
+  today: free χ² 10933.0 best 10933.0 ΔBIC -349 | search 6516 ev 18940 ms report 2783 ev 7761 ms | 9.58×8.40×5.74
+  wall 28.0 s
+2026-10-31T05:57:37.118Z [9/12] V2a sphere-P6mmm-1: ok 49 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 146 ms; iso χ²_ν 1.140, 299 ev, 1190 ms; list 20 refl, 103 members
+  today: free χ² 10931.0 best 10931.0 ΔBIC -351 | search 13502 ev 39986 ms report 2512 ev 7744 ms | 9.50×8.52×5.75
+  wall 49.1 s
+2026-10-31T05:57:45.754Z [10/12] V2b sphere-P6mmm-1: ok 36 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 151 ms; iso χ²_ν 1.140, 299 ev, 1131 ms; list 20 refl, 103 members
+  today: free χ² 10933.0 best 10933.0 ΔBIC -349 | search 9393 ev 26555 ms report 2783 ev 8183 ms | 9.58×8.40×5.74
+  wall 36.1 s
+2026-10-31T05:57:48.922Z [11/12] V3a sphere-P6mmm-1: ok 38 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 169 ms; iso χ²_ν 1.140, 299 ev, 1161 ms; list 20 refl, 103 members
+  today: free χ² 10930.5 best 10930.5 ΔBIC -352 | search 9706 ev 28923 ms report 2633 ev 8047 ms | 9.49×8.53×5.75
+  wall 38.3 s
+2026-10-31T05:58:05.625Z [12/12] V3b sphere-P6mmm-1: ok 29 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 156 ms; iso χ²_ν 1.140, 299 ev, 1162 ms; list 20 refl, 103 members
+  today: free χ² 10935.9 best 10935.9 ΔBIC -347 | search 6434 ev 18877 ms report 2796 ev 8180 ms | 9.18×5.92×8.31
+  wall 28.4 s
+2026-10-31T05:58:05.626Z done

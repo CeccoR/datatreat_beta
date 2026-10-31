@@ -1,0 +1,18 @@
+2026-10-31T06:00:08.693Z jobs-V5.txt: 4 of 4 to do, 3 at a time, timeout 1800 s
+2026-10-31T06:00:18.669Z [1/4] K005a cylinder-Pm-3m-on: ok 10 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 356 ms; iso χ²_ν 4.242, 379 ev, 1110 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22154.3 ΔBIC -4754 | search 2219 ev 5923 ms report 916 ev 2396 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 9.9 s
+2026-10-31T06:00:19.826Z [2/4] K0005a cylinder-Pm-3m-on: ok 11 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 382 ms; iso χ²_ν 4.242, 379 ev, 1199 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22151.9 ΔBIC -4754 | search 2511 ev 7017 ms report 916 ev 2371 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 11.0 s
+2026-10-31T06:00:21.757Z [3/4] K0005b cylinder-Pm-3m-on: ok 13 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 375 ms; iso χ²_ν 4.242, 379 ev, 1171 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22162.3 ΔBIC -4754 | search 3147 ev 8780 ms report 922 ev 2556 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 13.0 s
+2026-10-31T06:00:30.937Z [4/4] K005b cylinder-Pm-3m-on: ok 12 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 361 ms; iso χ²_ν 4.242, 379 ev, 1040 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22162.3 ΔBIC -4754 | search 3135 ev 8315 ms report 922 ev 2390 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 12.2 s
+2026-10-31T06:00:30.937Z done

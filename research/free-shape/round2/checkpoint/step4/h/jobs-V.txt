@@ -1,0 +1,12 @@
+V1a . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=rounds=10
+V1b . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=rounds=10,PROTO_TURNSEED=777
+V2a . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=rounds=10;gain=0.1
+V2b . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=rounds=10;gain=0.1,PROTO_TURNSEED=777
+V3a . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=shift=0.001
+V3b . default default default default default cylinder-Pm-3m-on CK_METHOD=min,MIN_SET=shift=0.001,PROTO_TURNSEED=777
+V1a . default default default default default sphere-P6mmm-1 CK_METHOD=min,MIN_SET=rounds=10
+V1b . default default default default default sphere-P6mmm-1 CK_METHOD=min,MIN_SET=rounds=10,PROTO_TURNSEED=777
+V2a . default default default default default sphere-P6mmm-1 CK_METHOD=min,MIN_SET=rounds=10;gain=0.1
+V2b . default default default default default sphere-P6mmm-1 CK_METHOD=min,MIN_SET=rounds=10;gain=0.1,PROTO_TURNSEED=777
+V3a . default default default default default sphere-P6mmm-1 CK_METHOD=min,MIN_SET=shift=0.001
+V3b . default default default default default sphere-P6mmm-1 CK_METHOD=min,MIN_SET=shift=0.001,PROTO_TURNSEED=777

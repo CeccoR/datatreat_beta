@@ -34,7 +34,7 @@ const row = design.rows.find(r=> r.id === opt.row);
 if (!row){ console.error('--row <id>: no row ' + opt.row); process.exit(2); }
 const grid = { lo: +(opt.lo || GRID.lo), hi: +(opt.hi || GRID.hi), step: +(opt.step || GRID.step) };
 const kernel = opt.kernel || 'exact';
-const KNOWN = { proto: path.join(HERE, 'methods', 'proto.mjs'), today: path.join(FS2, 'pilot', 'methods', 'today.mjs'), truth: path.join(FS2, 'harness', 'methods', 'truth.mjs'), baseline: path.join(FS2, 'harness', 'methods', 'baseline.mjs') };
+const KNOWN = { min: path.join(HERE, 'methods', 'min.mjs'), boot: path.join(HERE, 'methods', 'boot.mjs'), proto: path.join(HERE, 'methods', 'proto.mjs'), today: path.join(FS2, 'pilot', 'methods', 'today.mjs'), truth: path.join(FS2, 'harness', 'methods', 'truth.mjs'), baseline: path.join(FS2, 'harness', 'methods', 'baseline.mjs') };
 const methods = [];
 for (const m of String(opt.method || 'today,truth').split(',')) methods.push(await loadMethod(KNOWN[m] || path.resolve(m)));
 const T0 = Date.now();
@@ -55,6 +55,7 @@ out.records.forEach((r, i)=> {
     r.search = st.search; r.report = st.report || null; out.list = st.list;
     if (st.check) r.check = st.check;   // [step3]
     if (st.drop) r.drop = st.drop;   // [step3] the refits without the flagged segments (methods/proto.mjs)
+    if (st.min) r.min = st.min; if (st.settings) r.settings = st.settings; if (st.boot) r.boot = st.boot;   // [step4]
     if (st.dump && opt.out) fs.writeFileSync(String(opt.out).replace(/\.json(\.part)?$/, '') + '.res.json', JSON.stringify(st.dump));   // [step3]
     out.stages[r.method] = { search: st.search, report: st.report ? { ms: st.report.ms, evals: st.report.evals } : null };
   } else { r.search = { evals: r.evals, ms: r.ms }; out.stages[r.method] = { search: r.search }; }

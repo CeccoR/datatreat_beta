@@ -1,0 +1,73 @@
+2026-10-31T06:02:16.356Z jobs-step4b.txt: 187 of 187 to do, 3 at a time, timeout 3600 s
+2026-10-31T06:02:48.471Z [1/187] S2 box-Pmmm-on: ok 32 s
+box-Pmmm-on (mmm, box 10.0×28.2×60.0, po 0.06; exact, 10–110/0.01) as box: draw 312 ms; iso χ²_ν 4.168, 599 ev, 3050 ms; list 41 refl, 94 members
+  today: free χ² 20205.3 best 20205.3 ΔBIC -5091 | search 3364 ev 16693 ms report 2421 ev 11904 ms | 9.92×263.52×27.86 | dims -1% -1% 339% orient 4.4° (holo 4.4°) principal 4.2°
+  wall 32.0 s
+2026-10-31T06:02:49.386Z [2/187] S2 box-P2m-generic: ok 33 s
+box-P2m-generic (2/m, box 9.6×22.6×60.0, air 0.17; exact, 10–110/0.01) as box: draw 289 ms; iso χ²_ν 1.142, 510 ev, 3526 ms; list 88 refl, 144 members
+  today: free χ² 9993.9 best 9993.9 ΔBIC -1190 | search 3003 ev 18703 ms report 1622 ev 10319 ms | 21.91×9.55×59.27 | dims -1% -3% -1% orient 1.5° (holo 1.5°) principal 1.5°
+  wall 32.9 s
+2026-10-31T06:03:05.811Z [3/187] S2 box-P4mmm-generic: ok 16 s
+box-P4mmm-generic (4/mmm, box 2.9×8.8×17.2; exact, 10–110/0.01) as box: draw 238 ms; iso χ²_ν 8.351, 445 ev, 2071 ms; list 25 refl, 93 members
+  today: free χ² 9956.7 best 9956.7 ΔBIC -8748 | search 2090 ev 10227 ms report 795 ev 3731 ms | 17.64×2.87×8.71 | dims 0% -1% 2% orient 0.1° (holo 0.1°) principal 0.1°
+  wall 16.3 s
+2026-10-31T06:03:07.970Z [4/187] S2 box-P4m-near: ok 19 s
+box-P4m-near (4/m, box 9.1×18.2×60.0; exact, 10–110/0.01) as box: draw 230 ms; iso χ²_ν 2.675, 632 ev, 2294 ms; list 33 refl, 102 members
+  today: free χ² 9825.8 best 9825.8 ΔBIC -6266 | search 3027 ev 12435 ms report 1126 ev 4387 ms | 9.08×17.97×57.57 | dims 0% -1% -4% orient 1.0° (holo 1.0°) principal 0.9°
+  wall 19.4 s
+2026-10-31T06:03:30.646Z [5/187] S2 box-P-1-near: ok 74 s
+box-P-1-near (-1, box 6.7×13.7×60.0; exact, 10–110/0.01) as box: draw 328 ms; iso χ²_ν 2.503, 838 ev, 10628 ms; list 214 refl, 214 members
+  today: free χ² 10102.9 best 10102.9 ΔBIC -5899 | search 3815 ev 49547 ms report 1087 ev 13599 ms | 6.73×60.78×13.71 | dims -0% 0% 1% orient 0.5° (holo 0.5°) principal 0.5°
+  wall 74.2 s
+2026-10-31T06:03:43.343Z [6/187] S2 box-P-3m1-near: ok 35 s
+box-P-3m1-near (-3m, box 14.3×29.6×60.0; exact, 10–110/0.01) as box: draw 268 ms; iso χ²_ν 1.028, 489 ev, 1646 ms; list 31 refl, 104 members
+  today: free χ² 9961.6 best 9961.6 ΔBIC -254 | search 7490 ev 26403 ms report 1960 ev 6890 ms | 174.88×25.24×14.41 | dims 1% -15% 191% orient 11.0° (holo 11.0°) principal 10.9°
+  wall 35.3 s
+2026-10-31T06:03:52.630Z [7/187] S2 box-P-3-on: ok 47 s
+box-P-3-on (-3, box 2.3×9.4×13.9, sizedist 0.12; exact, 10–110/0.01) as box: draw 300 ms; iso χ²_ν 8.708, 842 ev, 4396 ms; list 33 refl, 91 members
+  today: held χ² 10273.6 best 10273.6 ΔBIC -8788 | search 6402 ev 36450 ms report 969 ev 5503 ms | 14.91×9.58×2.32 | dims 0% 2% 7% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 46.7 s
+2026-10-31T06:04:06.967Z [8/187] S2 box-P6m-generic: ok 36 s
+box-P6m-generic (6/m, box 5.9×30.2×60.0; exact, 10–110/0.01) as box: draw 220 ms; iso χ²_ν 1.068, 391 ev, 1312 ms; list 21 refl, 93 members
+  today: free χ² 9987.9 best 9987.9 ΔBIC -587 | search 8792 ev 28983 ms report 1793 ev 5660 ms | 26.93×81.55×5.99 | dims 1% -11% 36% orient 59.2° (holo 6.6°) principal 12.6°
+  wall 36.2 s
+2026-10-31T06:04:07.200Z [9/187] S2 box-Pm-3-near: ok 15 s
+box-Pm-3-near (m-3, box 2.1×2.4×8.8, impurity 0.76; exact, 10–110/0.01) as box: draw 212 ms; iso χ²_ν 1.938, 246 ev, 912 ms; list 14 refl, 89 members
+  today: free χ² 18140.7 best 18140.7 ΔBIC -580 | search 2887 ev 8096 ms report 1899 ev 5206 ms | 2.49×2.12×9.14 | dims 3% 2% 4% orient 8.5° (holo 8.5°) principal 8.3°
+  wall 14.5 s
+2026-10-31T06:04:21.570Z [10/187] S2 box-P6mmm-on: ok 38 s
+box-P6mmm-on (6/mmm, box 3.2×13.4×40.1, impurity 0.57; exact, 10–110/0.01) as box: draw 237 ms; iso χ²_ν 1.645, 910 ev, 3031 ms; list 20 refl, 103 members
+  today: free χ² 13203.1 best 13203.1 ΔBIC -1914 | search 6573 ev 25433 ms report 2269 ev 9376 ms | 2.86×—×13.28 | dims -12% -1% —% orient 5.3° (holo 5.3°) principal 5.3°
+  wall 38.1 s
+2026-10-31T06:04:27.240Z [11/187] S2 box-Pm-3m-generic: ok 20 s
+box-Pm-3m-generic (m-3m, box 2.7×4.6×10.3, hump 0.64; exact, 10–110/0.01) as box: draw 227 ms; iso χ²_ν 22.871, 357 ev, 1050 ms; list 12 refl, 89 members
+  today: held χ² 198788.8 best 198740.2 ΔBIC -1277 | search 4993 ev 12255 ms report 2609 ev 6590 ms | 2.67×4.45×10.32 | dims -0% -3% 0% orient 11.4° (holo 11.4°) principal 9.9°
+  wall 20.2 s
+2026-10-31T06:04:53.113Z [12/187] S2 sqbox-P2m-near: ok 32 s
+sqbox-P2m-near (2/m, sqbox 5.1×5.1×9.1; exact, 10–110/0.01) as sqbox: draw 284 ms; iso χ²_ν 4.103, 417 ev, 4245 ms; list 88 refl, 144 members
+  today: free χ² 9883.7 best 9883.7 ΔBIC -7538 | search 2158 ev 19542 ms report 860 ev 7327 ms | 5.12×5.12×9.08 | dims -0% -0% 0% orient 0.5° (holo 0.5°) principal 0.5°
+  wall 31.5 s
+2026-10-31T06:04:54.642Z [13/187] S2 sqbox-Pmmm-generic: ok 27 s
+sqbox-Pmmm-generic (mmm, sqbox 6.0×6.0×6.4; exact, 10–110/0.01) as sqbox: draw 256 ms; iso χ²_ν 1.038, 417 ev, 3191 ms; list 41 refl, 94 members
+  today: free χ² 9918.9 best 9918.9 ΔBIC -396 | search 3088 ev 18411 ms report 931 ev 5392 ms | 6.00×6.00×6.39 | dims -0% -0% -1% orient 7.2° (holo 7.2°) principal 5.1°
+  wall 27.3 s
+2026-10-31T06:05:14.253Z [14/187] S2 sqbox-P4mmm-near: ok 20 s
+sqbox-P4mmm-near (4/mmm, sqbox 19.7×19.7×3.6; exact, 10–110/0.01) as sqbox: draw 223 ms; iso χ²_ν 4.966, 760 ev, 2667 ms; list 25 refl, 93 members
+  today: free χ² 10155.3 best 10155.3 ΔBIC -7904 | search 3603 ev 13193 ms report 1000 ev 3350 ms | 19.65×19.65×3.60 | dims -0% -0% -1% orient 2.2° (holo 2.2°) principal 0.7°
+  wall 19.5 s
+2026-10-31T06:05:21.922Z [15/187] S2 sqbox-P4m-on: ok 29 s
+sqbox-P4m-on (4/m, sqbox 9.1×9.1×9.0, air 0.81; exact, 10–110/0.01) as sqbox: draw 221 ms; iso χ²_ν 1.289, 300 ev, 1647 ms; list 33 refl, 102 members
+  today: held χ² 12667.2 best 12664.5 ΔBIC -151 | search 3950 ev 16763 ms report 2330 ev 10033 ms | 8.13×8.13×9.09 | dims -10% -10% 1% orient 90.0° (holo 90.0°) principal 90.0°
+  wall 28.7 s
+2026-10-31T06:05:32.563Z [16/187] S2 sqbox-P-1-on: ok 85 s
+sqbox-P-1-on (-1, sqbox 3.4×3.4×9.9, sizedist 0.19; exact, 10–110/0.01) as sqbox: draw 392 ms; iso χ²_ν 3.419, 1221 ev, 18288 ms; list 214 refl, 214 members
+  today: free χ² 10317.8 best 10317.8 ΔBIC -6928 | search 2701 ev 49221 ms report 1003 ev 17294 ms | 3.40×3.40×10.24 | dims 1% 1% 3% orient 1.8° (holo 1.8°) principal 0.5°
+  wall 85.3 s
+2026-10-31T06:05:36.896Z [17/187] S2 sqbox-P-3-generic: ok 23 s
+sqbox-P-3-generic (-3, sqbox 10.3×10.3×60.0, hump 0.84; exact, 10–110/0.01) as sqbox: draw 216 ms; iso χ²_ν 1.073, 338 ev, 1575 ms; list 33 refl, 91 members
+  today: free χ² 10427.4 best 10427.4 ΔBIC -230 | search 2778 ev 11207 ms report 2473 ev 9505 ms | 10.51×10.51×37.06 | dims 2% 2% -38% orient 2.9° (holo 2.9°) principal 2.9°
+  wall 22.6 s
+2026-10-31T06:05:45.159Z [18/187] S2 sqbox-P6m-near: ok 13 s
+sqbox-P6m-near (6/m, sqbox 7.3×7.3×5.6; exact, 10–110/0.01) as sqbox: draw 213 ms; iso χ²_ν 1.026, 277 ev, 1235 ms; list 21 refl, 93 members
+  today: free χ² 10022.1 best 10022.1 ΔBIC -182 | search 2288 ev 7310 ms report 1218 ev 3673 ms | 7.27×7.27×5.64 | dims -0% -0% 0% orient 2.3° (holo 2.3°) principal 2.3°
+  wall 12.5 s

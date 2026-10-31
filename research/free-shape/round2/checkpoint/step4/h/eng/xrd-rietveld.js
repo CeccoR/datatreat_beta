@@ -1073,6 +1073,9 @@ const SHAPE_FWD = process.env.PROTO_FWD || 'briefs';   // [step1]
    the 13 shapes an error had spoiled, none read well; the 4 unbounded extents stayed.
    Off until the tuning runs confirm it. */
 const SHAPE_CHECK = { on: true, z: 3.09, bin: 1, minsep: 0.3, jack: true, groups: 20, iter: 4, retest: false };
+/* The minima stage (STEP4.md), on a body's kept shape (search v2): every true minimum refined to
+   the same level. MINIMA-DOC */
+const SHAPE_MINIMA = { on: true, collect: 30, preLn: 0.1, preDeg: 5, max: 6, kick: 0.02, rounds: 10, gain: 0.5, shift: 0, k: 2, floorLn: 0.02, floorDeg: 1, capDeg: 10, delta: 12.5, keep: 30 };
 // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
 // the phase is drawn as an isotropic one.
 function shapeActive(q, v){ const ix = q.iL || q.iW; return !!ix && ix.some(i=> v[i] !== 0); }
@@ -1670,7 +1673,38 @@ function bodyShapeOf(model, v, k, res){
       axes.forEach(ax=> { ax.jackTurn = 2*jk.turn[ax.axis]; });
     }
   }
-  return { type, kind, dims, groups, axes, across, misfit, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)], cell: cellAxes(q, dirs[refIx].R) } };
+  /* Directions as an unordered set (STEP4.md): a box's edges not told apart, and a square box's two
+     sides (with its height when that is not told apart from them: a cube), give their directions
+     as a set, with the error of the turn about the set's normal (the third axis; a cube's, the rms
+     of the three turns). A turn is lost only where it is a true symmetry of the solid: an
+     ellipsoid's or an elliptic section's equal pair, a body of revolution's (no directions there,
+     as above). Each axis's set: its index in sets, else −1. */
+  const sets = [];
+  if (type === 'box' && groups.length) sets.push(groups[0].axes.slice());
+  if (type === 'sqbox') sets.push(apart(0, 2) ? [0, 1] : [0, 1, 2]);
+  const setList = sets.map(S=> { const nrm = S.length === 2 ? [0, 1, 2].find(i=> !S.includes(i)) : -1;
+    const e = (nrm >= 0 ? sig[nrm] : Math.sqrt((sig[0]**2 + sig[1]**2 + sig[2]**2)/3))*R2D;
+    return { axes: S, normal: nrm, esdAngle: held && info.freeOff && Number.isFinite(e) ? Math.max(e, ...S.map(i=> info.freeOff[i])) : e }; });
+  axes.forEach(ax=> { ax.set = sets.findIndex(S=> S.includes(ax.axis)); });
+  /* The minima stage (SHAPE_MINIMA): the second error, the spread over the true minima within
+     delta of the lowest (the reported fit's own value included): each dimension's range (betweenLo,
+     betweenHi) and each axis's (each set's) largest angle to its paired axis (betweenDeg, °), the
+     minima paired with the reported fit by minimaMatch; unique when one minimum lies within delta
+     (then no second error). minima.list: each minimum within keep, { delta, n, dims, angle (its
+     largest axis angle to the reported fit, °) }. */
+  let minima = null;
+  if (info && info.minima && info.minima.length){
+    const fit = { W, R }, wIx = nW === 2 ? [0, 0, 1] : [0, 1, 2];
+    const all = info.minima.map(m=> ({ m, p: minimaMatch(q, fit, { W: m.W, R: m.R }, false) })), inD = all.filter(x=> x.m.delta <= SHAPE_MINIMA.delta);
+    dims.forEach((d, j)=> { const i = wIx.indexOf(j), Ds = [d.D, ...inD.map(x=> Dof(x.p.Wb[i]))]; d.betweenLo = Math.min(...Ds); d.betweenHi = Math.max(...Ds); });
+    groups.forEach(g=> { const Ds = [g.D, ...inD.map(x=> Dof(g.axes.reduce((t, i)=> t + x.p.Wb[i], 0)/g.axes.length))]; g.betweenLo = Math.min(...Ds); g.betweenHi = Math.max(...Ds); });
+    const angOf = ix => { const a = inD.flatMap(x=> ix.map(i=> x.p.ang[i])).filter(Number.isFinite); return a.length ? Math.max(...a)*R2D : 0; };
+    axes.forEach(ax=> { ax.betweenDeg = angOf([ax.axis]); });
+    setList.forEach(S=> { S.betweenDeg = angOf(S.axes); });
+    minima = { delta: SHAPE_MINIMA.delta, n: inD.length, unique: inD.length <= 1,
+      list: all.map(({ m, p })=> ({ delta: m.delta, n: m.n, dims: m.W.map(Dof), angle: Math.max(0, ...p.ang.filter(Number.isFinite))*R2D })) };
+  }
+  return { type, kind, dims, groups, axes, sets: setList, across, misfit, minima, solid: { type, dims: [Dx, Dy, Dz], frame: [col(0), col(1), col(2)], cell: cellAxes(q, dirs[refIx].R) } };
 }
 /* lattDirection(q, e) → { dir, label, angle, tc, R, family, vec }: the lattice direction
    [uvw] of a Cartesian unit vector e, u ∝ Bᵀe, in the conventional cell when there is
@@ -2638,7 +2672,7 @@ function wppmLineOf(model, k, r, j, th, tt, I, inst, ext, out, ticks, S, f2, d, 
 
 /* One phase's pattern at scale 1 into `out` (zeroed here). With `ticks`, the α1 line of
    every reflection in the range is listed there too. */
-const FS = { evals: 0, log: null, k: -1, t0: 0 };
+const FS = { evals: 0, log: null, k: -1, t0: 0, min: { evals: 0, ms: 0 } };
 function phasePattern(model, v, k, out, ticks){ FS.evals++; return phasePattern_(model, v, k, out, ticks); }
 function phasePattern_(model, v, k, out, ticks){
   out.fill(0);
@@ -4489,6 +4523,132 @@ function sameFrame(q, v){
     return Math.abs((C[0]*x + C[1]*y + C[2]*z)*Ra[j] + (C[3]*x + C[4]*y + C[5]*z)*Ra[3 + j] + (C[6]*x + C[7]*y + C[8]*z)*Ra[6 + j]) > 1 - 1e-9;
   })));
 }
+/* minimaMatch(q, a, b, post) → { r, p, C, Wb, ang }: two fits of phase q's body, a and b ({ W: its
+   own widths, R: its frame }, with s: { w, a } their local σ along each body axis (width, tilt in
+   rad) when post), set against each other over the class's operations C and the body's
+   relabellings p (a box's or an ellipsoid's three axes with their widths, a square box's or an
+   elliptic cylinder's two across; a body of revolution's axis alone): the least over them of the
+   worst ratio, over the axes, of the width difference to its tolerance and of the angle to its
+   own (SHAPE_MINIMA: before refinement preLn of the larger width and preDeg; after it k times the
+   larger σ, floored at floorLn and floorDeg, the angle's capped at capDeg). r ≤ 1: one minimum.
+   Not compared: a body of revolution's turn about its axis, and in an ellipsoid or an elliptic
+   cylinder's section the axes of two equal widths (a true symmetry). Wb: b's widths along a's axes;
+   ang: each axis's angle (rad; NaN where not compared). */
+function minimaMatch(q, a, b, post){
+  const B = BODIES[q.shapeType], M = SHAPE_MINIMA, Wa = B.axes(a.W), Wb = B.axes(b.W), type = q.shapeType;
+  const perms = B.rot === 2 ? [[0, 1, 2]] : type === 'box' || type === 'ellipsoid' ? [[0, 1, 2], [1, 0, 2], [0, 2, 1], [2, 1, 0], [1, 2, 0], [2, 0, 1]] : [[0, 1, 2], [1, 0, 2]];
+  const rots = q._minRots || (q._minRots = q.laue.map(R=> cartOp(q.Bm, R)));
+  const fin = x => Number.isFinite(x) ? x : 0;
+  const tolW = (i, j) => post ? Math.max(M.floorLn*Math.max(Wa[i], Wb[j]), M.k*Math.max(fin(a.s.w[i]), fin(b.s.w[j]))) : M.preLn*Math.max(Wa[i], Wb[j]);
+  const tolA = (i, j) => (post ? Math.max(M.floorDeg, Math.min(M.capDeg, M.k*R2D*Math.max(Number.isFinite(a.s.a[i]) ? a.s.a[i] : Infinity, Number.isFinite(b.s.a[j]) ? b.s.a[j] : Infinity))) : M.preDeg)*D2R;
+  const ball = B.base === 'ball' || type === 'ellcyl';
+  const equal = i => [0, 1, 2].some(j=> j !== i && (type !== 'ellcyl' || (i < 2 && j < 2)) && Math.abs(Wa[i] - Wa[j]) <= tolW(i, j));
+  const shown = [0, 1, 2].map(i=> B.rot === 2 ? i === 2 : !(ball && (type !== 'ellcyl' || i < 2) && equal(i)));
+  let best = null;
+  for (const p of perms){
+    let rw = 0;
+    for (let i = 0; i < 3; i++){ const d = Math.abs(Wa[i] - Wb[p[i]]), t = tolW(i, p[i]); rw = Math.max(rw, d === 0 ? 0 : t > 0 ? d/t : Infinity); }
+    if (best && rw >= best.r) continue;
+    for (const C of rots){
+      let r = rw; const ang = [NaN, NaN, NaN];
+      for (let i = 0; i < 3 && !(best && r >= best.r); i++){
+        if (!shown[i]) continue;
+        const j = p[i], x = b.R[j], y = b.R[3 + j], z = b.R[6 + j];
+        const c = Math.abs((C[0]*x + C[1]*y + C[2]*z)*a.R[i] + (C[3]*x + C[4]*y + C[5]*z)*a.R[3 + i] + (C[6]*x + C[7]*y + C[8]*z)*a.R[6 + i]);
+        ang[i] = Math.acos(Math.min(1, c)); r = Math.max(r, ang[i]/tolA(i, j));
+      }
+      if (!best || r < best.r) best = { r, p, C, Wb: p.map(j=> Wb[j]), ang };
+    }
+  }
+  return best;
+}
+// A minimum's local σ along each body axis: its width's (from the covariance) and its tilt's (the
+// turns' about the other two axes, rms; rad).
+function minimaSigmas(model, q, res){
+  const sd = nm => { const i = res && res.cov ? res.free.indexOf(nm) : -1; return i >= 0 ? Math.sqrt(res.cov[i][i]) : NaN; };
+  const sW = q.iW.map(i=> sd(model.par[i].name)), wIx = q.iW.length === 2 ? [0, 0, 1] : [0, 1, 2];
+  const sT = [0, 1, 2].map(b=> b < q.iR.length ? sd(model.par[q.iR[b]].name) : 0);
+  return { w: [0, 1, 2].map(i=> sW[wIx[i]]), a: [0, 1, 2].map(i=> { const [j, l] = [0, 1, 2].filter(t=> t !== i); return Math.sqrt((sT[j]**2 + sT[l]**2)/2); }) };
+}
+/* shapeMinima(model, k, ends, o) → { minima, ends, cands } or null: SHAPE_MINIMA's stage on the
+   search's ends ({ v, chi, kind }), o: { names (the free parameters), lm (central, as the returned
+   fit is refined), rebase, nu (χ² per Δ unit), chiTot }. The ends within collect·nu of the lowest,
+   one of each minimum before refinement (minimaMatch at the floors preLn, preDeg), at most max of
+   them, the lowest first; each refined to the same level (settle: exact faces, central differences,
+   the free orientation, the covariance at its end), then turned by ±kick about its softest turn
+   (the covariance's largest-variance direction of the turns, no random number) and refined again,
+   the lower kept while it gains (at most rounds times, again only while the gain is over gain·nu);
+   the refined ones merged again within each other's local error (minimaMatch post), the lowest
+   first. Each minimum: { chi, res, v, f: { W, R, s }, n (ends merged into it), from (the kinds) }. */
+function shapeMinima(model, k, ends, o){ const e0 = FS.evals, t0 = Date.now(); try { return shapeMinima_(model, k, ends, o); } finally { FS.min.evals += FS.evals - e0; FS.min.ms += Date.now() - t0; } }
+function shapeMinima_(model, k, ends, o){
+  const q = model.phases[k], M = SHAPE_MINIMA;
+  const fitOf = v => ({ W: q.iW.map(i=> v[i]), R: bodyFrame(q, v) });
+  const sorted = ends.filter(e=> Number.isFinite(e.chi)).sort((x, y)=> x.chi - y.chi);
+  if (!sorted.length) return null;
+  const c0 = sorted[0].chi, cands = [];
+  for (const e of sorted){
+    if (e.chi > c0 + M.collect*o.nu || cands.length >= M.max) break;
+    const f = fitOf(e.v), same = cands.find(c=> minimaMatch(q, c.f, f, false).r <= 1);
+    if (same) same.kinds.push(e.kind); else cands.push({ ...e, f, kinds: [e.kind] });
+  }
+  // The softest turn: the turns' covariance's largest-variance direction (body frame); an
+  // undetermined turn itself; else (1, 1, 1) or, for a body of revolution, (1, 1, 0).
+  const nR = q.iR.length, rn = q.iR.map(i=> model.par[i].name);
+  // Where even the softest turn is undetermined or beyond capDeg (a symmetric orientation, where a
+  // turn has no first-order effect), every turn's direction is tried (the eigenvectors, or the body
+  // axes).
+  const soft = res => {
+    const ix = res && res.cov ? rn.map(nm=> res.free.indexOf(nm)) : null, S = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let ok = !!ix && ix.every(i=> i >= 0);
+    if (ok) for (let a = 0; a < nR; a++) for (let b = 0; b < nR; b++){ const c = res.cov[ix[a]][ix[b]]; if (!Number.isFinite(c)) ok = false; S[3*a + b] = c; }
+    if (ok && S.some(x=> x !== 0)){
+      const E = eigSym3(S).slice(0, nR);
+      return Math.sqrt(Math.max(0, E[0].val)) > M.capDeg*D2R ? E.map(e=> e.vec) : [E[0].vec];
+    }
+    return [0, 1, 2].filter(b=> b < nR).map(b=> [0, 1, 2].map(i=> i === b ? 1 : 0));
+  };
+  const kick = (v, u, phi) => {
+    const vv = o.rebase(v), R0 = bodyFrame(q, vv), T = turnAbout(u, phi);
+    const R = [0, 1, 2].flatMap(i=> [0, 1, 2].map(j=> R0[3*i]*T[j] + R0[3*i + 1]*T[3 + j] + R0[3*i + 2]*T[6 + j]));
+    quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; });
+    return vv;
+  };
+  const lm = M.shift > 0 ? { ...o.lm, shiftTol: M.shift } : o.lm;
+  const settle = v0 => {
+    setParams(model, o.rebase(v0));
+    let r; try { r = refine(model, { free: o.names, ...lm }); } catch(e){ return null; }
+    let cur = { res: r, v: model.v.slice() }, kicks = 0;
+    for (let round = 0; round < M.rounds; round++){
+      let kb = null;
+      for (const u of soft(cur.res)) for (const s of [1, -1]){
+        setParams(model, kick(cur.v, u, s*M.kick)); kicks++;
+        try { const rk = refine(model, { free: o.names, ...lm, noCov: true }); if (!kb || o.chiTot(rk) < o.chiTot(kb.res)) kb = { res: rk, v: model.v.slice() }; } catch(e){}
+      }
+      const gain = kb ? o.chiTot(cur.res) - o.chiTot(kb.res) : 0;
+      if (!(gain > 1e-3*o.nu)) break;
+      setParams(model, kb.v);
+      let rc = null; try { rc = refine(model, { free: o.names, ...lm, covOnly: true }); } catch(e){}
+      cur = rc ? { res: rc, v: model.v.slice() } : kb;
+      if (gain < M.gain*o.nu) break;
+    }
+    return { ...cur, kicks };
+  };
+  const mins = [];
+  for (const c of cands){
+    const s = settle(c.v);
+    if (!s) continue;
+    const f = fitOf(s.v); f.s = minimaSigmas(model, q, s.res);
+    mins.push({ chi: o.chiTot(s.res), res: s.res, v: s.v, f, from: c.kinds, kicks: s.kicks });
+  }
+  mins.sort((x, y)=> x.chi - y.chi);
+  const out = [];
+  for (const m of mins){
+    const t = out.find(x=> minimaMatch(q, x.f, m.f, true).r <= 1);
+    if (t){ t.n++; t.from = t.from.concat(m.from); } else out.push({ ...m, n: 1 });
+  }
+  return { minima: out, ends: sorted.length, cands: cands.length, refined: mins.length };
+}
 
 /* freeShape(model, k, res, free, opts) → { res, info }, { rejected, dBIC } or null: the
    free shape of phase k (shapeSetup), from the isotropic refinement res. By the cubic
@@ -4612,6 +4772,8 @@ function freeShapeRun(model, k, res, free, opts){
   const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda, ...lmX };
   const lmCentral = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
   const lmFull = { ...lmCentral, ...lmX, ...(v2 && SHAPE_FWD === 'briefs' ? { forward: false } : null) };
+  // The minima stage (SHAPE_MINIMA) on a body's kept shape: the search's ends, each with its vector.
+  const MIN = v2 && !!q.iW && SHAPE_MINIMA.on, ends = [];
   const N = res.stats.N, chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
   const y0 = Math.max(vIso[q.iYs], 1e-3);
   // A seeded generator (mulberry32) of Gaussian deviates.
@@ -4622,7 +4784,7 @@ function freeShapeRun(model, k, res, free, opts){
     const rnd = ()=> { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0)/4294967296; };
     return ()=> Math.sqrt(-2*Math.log(rnd() || 1e-12))*Math.cos(2*Math.PI*rnd());
   };
-  const gauss = mulberry(0x9e3779b9);
+  const gauss = mulberry(process.env.PROTO_TURNSEED ? +process.env.PROTO_TURNSEED : 0x9e3779b9);   // [step4]
   const unit = t => { const n = Math.hypot(...t); return t.map(x=> x/n); };
   const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
   // A turn by phi about the unit axis n (row-major), a product, a random turn.
@@ -4751,6 +4913,7 @@ function freeShapeRun(model, k, res, free, opts){
     try { const r = refine(model, { free: names, ...lmBrief, audit: false }); brief.push({ v: model.v.slice(), chi: chiTot(r) }); } catch(e){}
     tick();
   }
+  if (MIN) for (const b of brief) ends.push({ ...b, kind: 'brief' });
   brief.sort((a, b)=> a.chi - b.chi);
   // Every brief refinement threw: nothing was refined (not a ΔBIC of +∞).
   if (!brief.length){ setParams(model, vIso); return null; }
@@ -4770,12 +4933,15 @@ function freeShapeRun(model, k, res, free, opts){
   const full = v => {
     setParams(model, rebase(v));
     let r; try { r = refine(model, { free: names, ...lmFull }); } catch(e){ return null; }
+    if (MIN) ends.push({ v: model.v.slice(), chi: chiTot(r), kind: 'full' });
     if (!best || chiTot(r) < chiTot(best.res)) best = { res: r, v: model.v.slice() };
     tick();
     return chiTot(r);
   };
   for (const b of brief.slice(0, nFull)){ const c = full(b.v); if (c != null) finals.push(c); }
-  if (best){
+  // (With the minima stage the stage's own turns, deterministic, both ways, polish every
+  // minimum: no random turn here or in the held fit's refit below.)
+  if (best && !MIN){
     // Polish: refine() stops where the axes sit on a symmetric orientation (the first-
     // order effects of a turn cancel over a family, the esds blow up and the shift test
     // passes at once). Again from the best turned a little, until χ² stops falling.
@@ -4789,7 +4955,7 @@ function freeShapeRun(model, k, res, free, opts){
   // ΔBIC against the isotropic fit, with χ² divided by its χ²_ν (so that the model's own
   // misfit is not taken for evidence).
   const bic = r => (chiTot(r) - chiTot(res))/Math.max(1, res.stats.chi2) + (r.stats.P - res.stats.P)*Math.log(N);
-  let held = false, dBICfree = NaN, dBICheld = NaN, freeOff = null, freeW = null;
+  let held = false, dBICfree = NaN, dBICheld = NaN, freeOff = null, freeW = null, bestFree = null;
   if (q.iW){
     // A body: refined again with its exact faces (the rounded ones only steered the
     // search; an ellipsoid's or a spheroid's ball has none, and is never rounded), its
@@ -4798,7 +4964,7 @@ function freeShapeRun(model, k, res, free, opts){
     // parameters fewer. The lower ΔBIC is kept.
     model.shapeSoft = null;
     const refineFrom = (v, nm) => { setParams(model, rebase(v)); try { const r = refine(model, { free: nm, ...lmFull }); return { res: r, v: model.v.slice() }; } catch(e){ return null; } };
-    if (BODIES[q.shapeType].base !== 'ball'){ const ex = refineFrom(best.v, names); if (ex) best = ex; }
+    if (BODIES[q.shapeType].base !== 'ball'){ const ex = refineFrom(best.v, names); if (ex){ best = ex; if (MIN) ends.push({ v: ex.v, chi: chiTot(ex.res), kind: 'exact' }); } }
     dBICfree = bic(best.res);
     // The held candidates: the best of the lattice frames near the free fit. (v2: a frame a
     // rotation of the class takes onto one tried already ends where that one did, the
@@ -4808,6 +4974,7 @@ function freeShapeRun(model, k, res, free, opts){
     for (const vs of (snaps ? snaps(best.v) : [])){
       if (same){ const R = bodyFrame(q, vs); if (tried.some(T=> same(T, R))) continue; tried.push(R); }
       const r = refineFrom(vs, names.filter(nm=> !q.iR.some(i=> model.par[i].name === nm)));
+      if (r && MIN) ends.push({ v: r.v, chi: chiTot(r.res), kind: 'held' });
       if (r && (!sn || chiTot(r.res) < chiTot(sn.res))) sn = r;
     }
     if (sn){
@@ -4817,8 +4984,9 @@ function freeShapeRun(model, k, res, free, opts){
       // turned a little as in the polish — from the frame itself, on lattice directions,
       // the refinement stops at once (0.2 χ²_ν higher than turned on a synthetic plate) —
       // so that freeOff and freeW measure a free fit at least as good.
-      if (chiTot(sn.res) < chiTot(best.res)){
+      if (chiTot(sn.res) < chiTot(best.res) && !MIN){
         const fr = refineFrom(turned(sn.v), names);
+        if (fr && MIN) ends.push({ v: fr.v, chi: chiTot(fr.res), kind: 'refit' });
         if (fr && chiTot(fr.res) < chiTot(best.res)){ best = fr; dBICfree = bic(best.res); }
       }
       dBICheld = bic(sn.res);
@@ -4835,7 +5003,7 @@ function freeShapeRun(model, k, res, free, opts){
         const Rf = bodyFrame(q, best.v), Rh = bodyFrame(q, sn.v);
         freeOff = [0, 1, 2].map(i=> Math.acos(Math.min(1, Math.abs(Rf[i]*Rh[i] + Rf[3 + i]*Rh[3 + i] + Rf[6 + i]*Rh[6 + i])))*R2D);
         freeW = q.iW.map(i=> best.v[i]);
-        best = sn; held = true;
+        bestFree = best; best = sn; held = true;
       }
     }
   }
@@ -4843,8 +5011,36 @@ function freeShapeRun(model, k, res, free, opts){
   // lower χ² a little, and on an isotropic sample the shape was kept in 7 of 12 noise
   // draws with ΔBIC near +40.
   let cb = chiTot(best.res);
-  const dBIC = bic(best.res);
+  let dBIC = bic(best.res);
   if (!(dBIC < -10)){ setParams(model, vIso); return rejectWith({ rejected: true, dBIC }); }
+  /* The minima stage (SHAPE_MINIMA): the search's ends refined to the same level and merged. A
+     free minimum below the search's free fit takes its place, and the held frame (when held) is
+     tested against it again as above. info.minima: those within keep·nu of the lowest, each
+     { chi2, delta (in nu), W, R, s, n, from, v }; nu the lowest's χ²_ν floored at 1. */
+  let minima = null;
+  if (MIN){
+    const free0 = held ? bestFree : best, nu0 = Math.max(1, free0.res.stats.chi2);
+    const st = shapeMinima(model, k, ends, { names, lm: lmCentral, rebase, nu: nu0, chiTot });
+    if (st && st.minima.length){
+      const m0 = st.minima[0], nu = Math.max(1, m0.res.stats.chi2), before = chiTot(free0.res);
+      if (chiTot(m0.res) < before){
+        const mf = { res: m0.res, v: m0.v };
+        dBICfree = bic(mf.res);
+        if (held){
+          const gain = (chiTot(best.res) - chiTot(mf.res))/Math.max(1, mf.res.stats.chi2);
+          if (dBICheld < dBICfree && gain <= (q.iR.length === 2 ? 5.99 : 7.81)){
+            const Rf = bodyFrame(q, mf.v), Rh = bodyFrame(q, best.v);
+            freeOff = [0, 1, 2].map(i=> Math.acos(Math.min(1, Math.abs(Rf[i]*Rh[i] + Rf[3 + i]*Rh[3 + i] + Rf[6 + i]*Rh[6 + i])))*R2D);
+            freeW = q.iW.map(i=> mf.v[i]);
+          } else { best = mf; held = false; freeOff = null; freeW = null; }
+        } else best = mf;
+        cb = chiTot(best.res); dBIC = bic(best.res);
+      }
+      const c0 = chiTot(m0.res);
+      minima = st.minima.filter(m=> (m.chi - c0)/nu <= SHAPE_MINIMA.keep).map(m=> ({ chi2: m.chi, delta: (m.chi - c0)/nu, W: m.f.W, R: m.f.R, s: m.f.s, n: m.n, from: m.from, kicks: m.kicks, v: Array.from(m.v) }));
+      minima.stage = { ends: st.ends, cands: st.cands, refined: st.refined, before, after: c0 };
+    }
+  }
   setParams(model, best.v);
   // v2: the search's refinements made no covariance, and (with SHAPE_FWD 'all') forward
   // differences can stop a little short in a flat valley: the fit kept is refined once
@@ -4870,7 +5066,8 @@ function freeShapeRun(model, k, res, free, opts){
     }
   }
   return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
-    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check } };
+    chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check,
+    ...(minima ? { minima, minimaStage: minima.stage } : null) } };
 }
 
 /* ---------- derived quantities ---------- */
@@ -4935,9 +5132,10 @@ function displacementMm(model, disp){ return -disp*D2R*model.radius/2; }
 export { buildModel, calc, refine, cellSearch, autoRefine, fitSettings, sizeStrain, weightFractions, shapeOf, columnLengthV, SHAPE_TYPES, shapeTypeOf,
          solveLinear, getParams, setParams, rStats, tch, profileAtTheta, displacementMm,
          fcjNodes, addPeak, addPeakFCJ, addLine, shapeActive, HG2_FLOOR, K_SCHERRER, cellOf, siteU, lowIndexPlanes, strainFormsAt, PROFILES, faultOf, lpFactor,
-         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT, SHAPE_CHECK, lineCheck, lineJack };
+         phaseSites, phaseMass, OCC_MAX, axialNodes, axialOf, axialOn, axialReach, bgInvOn, KIND_GROUP, shapeNamed, SHAPE_MODE, WPPM_OPT, SHAPE_CHECK, lineCheck, lineJack, SHAPE_MINIMA };
 
 const ENG = { FS, freeShape, freeShapeRun, ...(typeof SHAPE_CHECK === 'undefined' ? {} : { SHAPE_CHECK, lineCheck, lineJack }),   // [step3]
+  ...(typeof SHAPE_MINIMA === 'undefined' ? {} : { SHAPE_MINIMA, shapeMinima, minimaMatch, minimaSigmas }),   // [step4]
   refine, setParams, getParams, evaluate, calc, rStats, bodyFrame, BODIES, quatMat, quatOfMat, quatMul, quatOfRot,
   lowIndexAxes, lattDirection, latticeAcross, shapeWidths, shapeTs, columnLengthV, SHAPE_SOFT, SHAPE_STARTS, SHAPE_FULL, fitSettings, shapeOf, turnEsds,
   bodyShapeOf, SNAP_DEG, D2R, R2D, K_SCHERRER, lowIndexPlanes, memberVectors, phasePattern, cartOp, properOp, SHAPE_FWD, SHAPE_MODE: typeof SHAPE_MODE === 'undefined' ? null : SHAPE_MODE };

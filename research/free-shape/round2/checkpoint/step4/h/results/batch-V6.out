@@ -1,0 +1,26 @@
+2026-10-31T06:01:03.923Z jobs-V6.txt: 6 of 6 to do, 3 at a time, timeout 1800 s
+2026-10-31T06:01:15.747Z [1/6] V6b cylinder-Pm-3m-on: ok 12 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 415 ms; iso χ²_ν 4.242, 379 ev, 1210 ms; list 12 refl, 89 members
+  today: held χ² 22162.3 best 22162.3 ΔBIC -4754 | search 2837 ev 7652 ms report 938 ev 2349 ms | 22.19×22.19×3.88 | dims 19% 19% 5% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 11.7 s
+2026-10-31T06:01:24.482Z [2/6] V6a cylinder-Pm-3m-on: ok 21 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 353 ms; iso χ²_ν 4.242, 379 ev, 1321 ms; list 12 refl, 89 members
+  today: free χ² 22093.5 best 22093.5 ΔBIC -4752 | search 6566 ev 16490 ms report 885 ev 2232 ms | 22.06×22.06×3.83 | dims 18% 18% 3% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 20.5 s
+2026-10-31T06:01:38.859Z [3/6] V6a sphere-P6mmm-1: ok 35 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 172 ms; iso χ²_ν 1.140, 299 ev, 1405 ms; list 20 refl, 103 members
+  today: free χ² 10930.9 best 10930.9 ΔBIC -351 | search 8058 ev 25097 ms report 2681 ev 8109 ms | 9.49×8.52×5.75
+  wall 34.8 s
+2026-10-31T06:01:43.107Z [4/6] V6a box-P4m-near: ok 19 s
+box-P4m-near (4/m, box 9.1×18.2×60.0; exact, 10–110/0.01) as box: draw 265 ms; iso χ²_ν 2.675, 632 ev, 2358 ms; list 33 refl, 102 members
+  today: free χ² 9825.8 best 9825.8 ΔBIC -6266 | search 3027 ev 11737 ms report 1126 ev 4129 ms | 9.08×17.97×57.57 | dims 0% -1% -4% orient 1.0° (holo 1.0°) principal 0.9°
+  wall 18.5 s
+2026-10-31T06:01:44.577Z [5/6] V6b sphere-P6mmm-1: ok 29 s
+sphere-P6mmm-1 (6/mmm, sphere 9.9×9.9×9.9, po 0.59; exact, 10–110/0.01) as box: draw 164 ms; iso χ²_ν 1.140, 299 ev, 1132 ms; list 20 refl, 103 members
+  today: free χ² 10933.0 best 10933.0 ΔBIC -349 | search 6542 ev 19452 ms report 2783 ev 7953 ms | 9.58×8.40×5.74
+  wall 28.7 s
+2026-10-31T06:01:59.682Z [6/6] V6b box-P4m-near: ok 21 s
+box-P4m-near (4/m, box 9.1×18.2×60.0; exact, 10–110/0.01) as box: draw 242 ms; iso χ²_ν 2.675, 632 ev, 2374 ms; list 33 refl, 102 members
+  today: free χ² 9833.2 best 9833.2 ΔBIC -6263 | search 3913 ev 15060 ms report 821 ev 3014 ms | 9.06×18.07×57.56 | dims -0% -1% -4% orient 8.7° (holo 3.0°) principal 6.1°
+  wall 20.7 s
+2026-10-31T06:01:59.682Z done
