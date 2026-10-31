@@ -1,0 +1,99 @@
+# Step 4: the two errors (`../STEP4.md` §6, §7)
+
+`score4.mjs --tag S2 --delta 16 --deltaF 25 --kappa 1.2 --rows` (κ = 1: `--kappa 1`). L the local error (D·e^(±2κσ), σ = Desd/D; angles 2·esdAngle), B the minima's range alone, C both (hull), U the hull of every minimum's own local interval, J C with the jackknife (flagged rows).
+
+## κ = 1 (the curvature as it is)
+
+| kept truths | runs | extents (unbounded) | L local | Lw (in W) | B between alone | C combined | U union | J with jackknife | med half-width L / C / U | principal axes: L / C / J | med radius L / C |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| clean, not flagged | 33 | 82 (0) | 73/82 | 73/82 | 13/82 | 75/82 | 78/82 | 75/82 | 2.6 / 2.6 / 3.1 % | 25/32 / 29/32 / 29/32 | 2.3 / 3.8° |
+| error, not flagged | 9 | 23 (0) | 15/23 | 15/23 | 6/23 | 17/23 | 18/23 | 17/23 | 2.4 / 4.5 / 4.6 % | 8/9 / 8/9 / 8/9 | 6.2 / 6.2° |
+| error, flagged | 24 | 56 (4) | 28/56 | 27/56 | 8/56 | 30/56 | 32/56 | 51/56 | 3.2 / 3.9 / 4.4 % | 10/24 / 14/24 / 21/24 | 3.0 / 4.2° |
+| all kept | 66 | 161 (4) | 116/161 | 115/161 | 27/161 | 122/161 | 128/161 | 143/161 | 2.8 / 3.3 / 3.6 % | 43/65 / 51/65 / 58/65 | 2.8 / 4.3° |
+
+## κ = 1.2 (adopted)
+
+| kept truths | runs | extents (unbounded) | L local | Lw (in W) | B between alone | C combined | U union | J with jackknife | med half-width L / C / U | principal axes: L / C / J | med radius L / C |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| clean, not flagged | 33 | 82 (0) | 77/82 | 77/82 | 13/82 | 78/82 | 80/82 | 78/82 | 3.1 / 3.1 / 3.5 % | 25/32 / 29/32 / 29/32 | 2.3 / 3.8° |
+| error, not flagged | 9 | 23 (0) | 15/23 | 17/23 | 6/23 | 17/23 | 18/23 | 17/23 | 2.9 / 5.3 / 5.3 % | 8/9 / 8/9 / 8/9 | 6.2 / 6.2° |
+| error, flagged | 24 | 56 (4) | 29/56 | 30/56 | 8/56 | 31/56 | 33/56 | 51/56 | 3.9 / 4.4 / 4.9 % | 10/24 / 14/24 / 21/24 | 3.0 / 4.2° |
+| all kept | 66 | 161 (4) | 121/161 | 124/161 | 27/161 | 126/161 | 131/161 | 146/161 | 3.4 / 3.9 / 3.9 % | 43/65 / 51/65 / 58/65 | 2.8 / 4.3° |
+
+local z on clean rows (82): median |z| 0.66 (normal 0.67), 90 % 1.76, rms of |z|<5 1.01, |z|>2: 5, >3: 2, >5: 1
+
+| kept truths | unique (one minimum) | unique and L covers all | unique, L misses | several | several: L covers | several: C covers, L not | several: neither | with the jackknife (J): unique covered / several covered |
+|---|---|---|---|---|---|---|---|---|
+| clean, not flagged | 21/33 | 19 | 2 (ellipsoid-Pmmm-generic, spheroid-Pm-3-generic) | 12 | 6 | 4 | 2 (box-P6m-generic, ellcyl-Pm-3m-generic) | 19/21 / 10/12 |
+| error, not flagged | 7/9 | 3 | 4 (box-P2m-generic, sqbox-P-1-on, ellcyl-P4mmm-generic, ellipsoid-Pm-3-on) | 2 | 0 | 1 | 1 (spheroid-P6m-on) | 4/7 / 1/2 |
+| error, flagged | 15/24 | 3 | 12 (box-Pmmm-on, sqbox-P-3-generic, cylinder-P2m-on, cylinder-Pm-3m-on, ellcyl-P4m-near, ellcyl-P-3-on, ellipsoid-P4m-on, ellipsoid-P4mmm-near, ellipsoid-P-3-generic, spheroid-P-1-generic, spheroid-P2m-on, spheroid-P6mmm-near) | 9 | 0 | 2 | 7 (box-P6mmm-on, sqbox-P4m-on, sqbox-P-3m1-on, cylinder-Pm-3-generic, ellcyl-P-1-near, ellcyl-P-3m1-near, ellipsoid-P6mmm-generic) | 12/15 / 6/9 |
+| all kept | 43/66 | 25 | 18 (box-P2m-generic, box-Pmmm-on, sqbox-P-1-on, sqbox-P-3-generic, cylinder-P2m-on, cylinder-Pm-3m-on, ellcyl-P4m-near, ellcyl-P4mmm-generic, ellcyl-P-3-on, ellipsoid-Pmmm-generic, ellipsoid-P4m-on, ellipsoid-P4mmm-near, ellipsoid-P-3-generic, ellipsoid-Pm-3-on, spheroid-P-1-generic, spheroid-P2m-on, spheroid-P6mmm-near, spheroid-Pm-3-generic) | 23 | 6 | 7 | 10 (box-P6m-generic, box-P6mmm-on, sqbox-P4m-on, sqbox-P-3m1-on, cylinder-Pm-3-generic, ellcyl-P-1-near, ellcyl-P-3m1-near, ellcyl-Pm-3m-generic, ellipsoid-P6mmm-generic, spheroid-P6m-on) | 35/43 / 17/23 |
+
+| row | error | flag | outcome | minima ≤ Δ* (≤ keep) | extents: e (L/C) | principal e°, rL/rC | stage evals × search |
+|---|---|---|---|---|---|---|---|
+| box-P-1-near | none |  | free | 1 (1) | -0% LC; 0% LC; 1% LC | 0.5 1.3/1.3 | 0.53 |
+| box-P2m-generic | air 0.17 |  | free | 1 (1) | -1% LC; -3% ··; -1% LC | 1.5 4.7/4.7 | 0.58 |
+| box-Pmmm-on | po 0.06 | F | free | 1 (1) | -1% ··; -1% LC; 148% ·· | 4.2 0.6/0.6 | 0.35 |
+| box-P4m-near | none |  | free | 2 (2) | 0% LC; -1% LC; -4% LC | 0.9 2.2/8.8 | 0.66 |
+| box-P4mmm-generic | none |  | free | 1 (1) | 0% LC; -1% LC; 2% LC | 0.1 0.1/0.1 | 0.27 |
+| box-P-3-on | sizedist 0.12 |  | held | 5 (5) | 0% LC; 2% LC; 7% ·C | 0.0 0.3/4.9 | 1.04 |
+| box-P-3m1-near | none |  | free | 2 (2) | 1% LC; -16% LC; 107% LC | 10.9 4.4/20.4 | 4.14 |
+| box-P6m-generic | none |  | free | 2 (2) | 1% LC; -11% LC; 31% LC | 12.6 2.0/12.1 | 4.16 |
+| box-P6mmm-on | impurity 0.57 | F | free | 2 (2) | -12% ··; -1% LC; ∞ | 5.3 0.9/3.4 | 1.59 |
+| box-Pm-3-near | impurity 0.76 | F | free | 3 (3) | 3% LC; 2% LC; 4% LC | 8.3 1.7/12.1 | 0.91 |
+| box-Pm-3m-generic | hump 0.64 | F | held | 1 (1) | -0% LC; -3% LC; 0% LC | 9.9 72.1/72.1 | 0.16 |
+| sqbox-P-1-on | sizedist 0.19 |  | free | 1 (1) | 1% LC; 3% ·· | 0.5 1.1/1.1 | 0.21 |
+| sqbox-P2m-near | none |  | free | 1 (1) | -0% LC; 0% LC | 0.5 0.6/0.6 | 0.28 |
+| sqbox-Pmmm-generic | none |  | free | 3 (3) | -0% LC; -1% LC | 5.1 1.7/48.2 | 0.91 |
+| sqbox-P4m-on | air 0.81 | F | held | 3 (3) | -11% ··; 1% LC | 90.0 1.3/77.3 | 1.36 |
+| sqbox-P4mmm-near | none |  | free | 1 (1) | -0% LC; -1% LC | 0.7 0.9/0.9 | 0.51 |
+| sqbox-P-3-generic | hump 0.84 | F | free | 1 (1) | 2% LC; -48% ·· | 2.9 2.7/2.7 | 0.59 |
+| sqbox-P-3m1-on | po 0.70 | F | free | 2 (2) | -2% LC; -36% ·· | 20.2 4.1/4.3 | 1.99 |
+| sqbox-P6m-near | none |  | free | 2 (2) | -0% LC; 0% LC | 2.3 2.8/6.3 | 0.45 |
+| sqbox-P6mmm-generic | impurity 0.95 | F | free | 1 (1) | -1% LC; -24% LC | 0.7 2.9/2.9 | 0.53 |
+| sqbox-Pm-3-on | none |  | held | 1 (1) | -0% LC; 0% LC | 0.0 1.9/1.9 | 0.37 |
+| sqbox-Pm-3m-near | none |  | free | 1 (1) | -1% LC; 0% LC | 0.6 2.3/2.3 | 0.32 |
+| cylinder-P-1-generic | none |  | free | 1 (1) | 0% LC; -1% LC | 0.3 0.5/0.5 | 0.15 |
+| cylinder-P2m-on | impurity 0.63 | F | held | 1 (1) | -2% LC; -21% ·· | 0.0 9.9/9.9 | 0.17 |
+| cylinder-Pmmm-near | none |  | free | 1 (1) | -2% LC; 1% LC | 1.1 2.6/2.6 | 0.16 |
+| cylinder-P4m-generic | none |  | free | 1 (1) | -2% LC; 0% LC | 0.6 0.9/0.9 | 0.18 |
+| cylinder-P4mmm-on | none |  | held | 1 (1) | -0% LC; 0% LC | — | 0.41 |
+| cylinder-P-3-near | none |  | free | 1 (2) | 5% LC; -1% LC | 0.9 4.1/4.1 | 0.81 |
+| cylinder-P-3m1-generic | po 0.92 | F | held | 4 (4) | -8% LC; -42% ·C | 13.4 12.8/60.0 | 2.31 |
+| cylinder-P6m-on | none |  | held | 1 (2) | 1% LC; -2% LC | 0.0 3.5/3.5 | 0.75 |
+| cylinder-P6mmm-near | air 0.32 |  | free | 1 (1) | 1% LC; 1% LC | 0.8 6.2/6.2 | 0.27 |
+| cylinder-Pm-3-generic | hump 0.57 | F | free | 2 (2) | 5% ··; -14% ·· | 14.3 0.8/15.1 | 0.19 |
+| cylinder-Pm-3m-on | sizedist 0.72 | F | free | 1 (1) | 17% ··; 3% ·· | 0.0 0.2/0.2 | 3.99 |
+| ellcyl-P-1-near | po 0.82 | F | free | 2 (2) | 176% ··; ∞; -159% ·C | 87.8 3.1/89.5 | 0.42 |
+| ellcyl-P2m-generic | none |  | free | 1 (1) | 1% LC; -4% LC; 0% LC | 2.6 3.7/3.7 | 0.25 |
+| ellcyl-Pmmm-on | air 0.13 |  | held | 1 (1) | 1% LC; -1% LC; 0% LC | 0.0 7.5/7.5 | 0.74 |
+| ellcyl-P4m-near | sizedist 0.26 | F | free | 1 (1) | 3% ··; 14% ··; 0% LC | 1.2 0.6/0.6 | 0.14 |
+| ellcyl-P4mmm-generic | hump 0.06 |  | free | 1 (2) | 3% ··; 6% LC; 2% ·· | 0.5 1.4/1.4 | 0.95 |
+| ellcyl-P-3-on | impurity 0.28 | F | held | 1 (1) | -3% ··; 3% LC; -2% LC | 0.0 2.2/2.2 | 0.04 |
+| ellcyl-P-3m1-near | sizedist 0.93 | F | free | 2 (2) | -4% ··; ∞; 0% LC | 5.2 4.1/4.1 | 0.84 |
+| ellcyl-P6m-generic | none |  | free | 2 (2) | -8% LC; 8% LC; 1% LC | 7.2 2.3/32.4 | 1.91 |
+| ellcyl-P6mmm-on | none |  | held | 1 (1) | 0% LC; -0% LC; 0% LC | 0.0 0.3/0.3 | 0.40 |
+| ellcyl-Pm-3-near | none |  | free | 2 (3) | 1% LC; 0% LC; -0% LC | 2.4 8.2/11.9 | 1.69 |
+| ellcyl-Pm-3m-generic | none |  | free | 2 (2) | 11% ··; -36% ··; 0% LC | 7.3 10.0/18.0 | 0.88 |
+| ellipsoid-P-1-on | none |  | held | 1 (1) | 1% LC; -2% LC; 1% LC | 0.0 1.5/1.5 | 0.12 |
+| ellipsoid-P2m-near | none |  | held | 1 (1) | 1% LC; 0% LC; -2% LC | 4.3 9.5/9.5 | 0.45 |
+| ellipsoid-Pmmm-generic | none |  | free | 1 (1) | -0% LC; -1% LC; -4% ·· | 0.9 0.7/0.7 | 0.31 |
+| ellipsoid-P4m-on | hump 0.29 | F | held | 1 (1) | -0% LC; -1% ··; 0% LC | 0.0 3.8/3.8 | 0.28 |
+| ellipsoid-P4mmm-near | sizedist 0.49 | F | free | 1 (1) | -9% ··; 34% ··; ∞ | 8.3 3.1/3.1 | 0.18 |
+| ellipsoid-P-3-generic | impurity 0.73 | F | free | 1 (1) | 3% LC; 2% LC; 77% LC | 14.5 11.2/11.2 | 6.84 |
+| ellipsoid-P-3m1-on | none |  | held | 2 (2) | -1% LC; -7% LC; 13% LC | 0.0 26.1/26.1 | 2.50 |
+| ellipsoid-P6m-near | none |  | held | 2 (2) | 3% LC; -19% LC; 57% LC | 6.8 17.6/17.6 | 3.81 |
+| ellipsoid-P6mmm-generic | air 0.94 | F | free | 2 (2) | 5% ··; -3% LC; 2% LC | 2.5 3.4/21.9 | 0.69 |
+| ellipsoid-Pm-3-on | po 0.23 |  | held | 1 (1) | 2% LC; 2% LC; 3% ·C | 0.0 11.9/11.9 | 0.60 |
+| ellipsoid-Pm-3m-near | none |  | held | 1 (1) | 1% LC; 6% LC; -15% LC | 3.2 20.3/20.3 | 2.72 |
+| spheroid-P-1-generic | po 0.50 | F | free | 1 (1) | -61% ··; 141% ·· | 88.0 1.3/1.3 | 0.24 |
+| spheroid-P2m-on | impurity 0.85 | F | free | 1 (1) | -7% ··; -11% LC | 1.3 2.8/2.8 | 0.39 |
+| spheroid-Pmmm-near | air 0.97 |  | held | 1 (1) | 0% LC; -0% LC | 6.1 12.8/12.8 | 0.45 |
+| spheroid-P4m-generic | none |  | free | 3 (3) | -1% LC; 1% LC | 8.4 13.5/31.7 | 1.78 |
+| spheroid-P4mmm-on | hump 0.78 | F | held | 1 (1) | -3% LC; -0% LC | 0.0 17.4/17.4 | 0.90 |
+| spheroid-P-3-near | none |  | held | 2 (2) | 4% LC; -7% ·C | 13.2 0.0/31.1 | 1.69 |
+| spheroid-P-3m1-generic | none |  | free | 1 (1) | 1% LC; -0% LC | 0.1 0.2/0.2 | 0.15 |
+| spheroid-P6m-on | sizedist 0.84 |  | held | 2 (2) | 103% ··; -152% ·· | 28.5 17.8/17.8 | 0.71 |
+| spheroid-P6mmm-near | hump 0.44 | F | free | 1 (1) | -6% ··; -7% ·· | 1.3 5.3/5.3 | 1.18 |
+| spheroid-Pm-3-generic | none |  | free | 1 (1) | 1% LC; 3% ·· | 6.0 3.9/3.9 | 0.20 |
+| spheroid-Pm-3m-on | none |  | held | 1 (1) | -1% LC; 0% LC | 0.0 2.6/2.6 | 0.45 |

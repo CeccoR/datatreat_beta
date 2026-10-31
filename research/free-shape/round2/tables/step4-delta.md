@@ -1,0 +1,60 @@
+# Step 4: the threshold Δ* and the local error by the parametric bootstrap (`../STEP4.md` §5, §6)
+
+`bootan.mjs --tag BT2` and `esdboot.mjs --tag BT2 --ref S2` on `$W/fs2/step4/h/results/BT2` (`methods/boot.mjs`, BOOT_ALL, 16 replicas of each kind). F: Poisson draws of the lowest minimum's calculated pattern; T: of the generator's own counts (the truth, with the row's model error).
+
+tag BT2: 68 rows, 38 pairs; bootstrap 796593 evaluations, 3587 s (3.1× those rows' searches)
+
+| replicas | rows | pairs | replicas (no contest) | c, round 1's model (ML) | Δ* | c of the rule (flips on the data's Δ, ML) | Δ* | flips, all | flips Δ<6 obs / pred c=8 / fitted | flips 6–12.5 | flips >12.5 | δ/Δ median |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| F, clean rows | 14 | 17 | 237 (35) | 8.5 | 12.6 | 29.8 | 15.9 | 53/237 = 0.22 / 0.22 / 0.22 | 43/149 = 0.29 / 0.32 / 0.32 | 6/48 = 0.13 / 0.08 / 0.08 | 4/40 = 0.10 / 0.02 / 0.02 | 0.77 |
+| F, error rows | 13 | 21 | 260 (76) | 16.8 | 14.1 | 190.4 | 28.7 | 63/260 = 0.24 / 0.12 / 0.14 | 36/97 = 0.37 / 0.25 / 0.28 | 10/60 = 0.17 / 0.07 / 0.09 | 17/103 = 0.17 / 0.02 / 0.03 | 0.55 |
+| T, clean rows | 14 | 17 | 244 (28) | 11.4 | 13.2 | 42.0 | 17.4 | 65/244 = 0.27 / 0.22 / 0.23 | 54/157 = 0.34 / 0.32 / 0.33 | 8/48 = 0.17 / 0.08 / 0.08 | 3/39 = 0.08 / 0.02 / 0.02 | 0.52 |
+| T, error rows | 13 | 21 | 286 (50) | 166.1 | 27.3 | 128.9 | 24.9 | 80/286 = 0.28 / 0.13 / 0.26 | 57/112 = 0.51 / 0.26 / 0.40 | 10/62 = 0.16 / 0.07 / 0.24 | 13/112 = 0.12 / 0.02 / 0.12 | 0.92 |
+
+| row | error | pair | Δ data | δ F | flips F (no contest) | δ T | flips T (no contest) |
+|---|---|---|---|---|---|---|---|
+| box-P-3-on | sizedist | 0–1 | 0.9 | 31.9 | 7/16 (0) | 6.9 | 13/16 (0) |
+| box-P-3-on | sizedist | 0–2 | 0.9 | 6.2 | 7/14 (2) | 4.0 | 10/16 (0) |
+| box-P-3-on | sizedist | 0–3 | 4.0 | 6.6 | 5/16 (0) | 8.0 | 5/16 (0) |
+| box-P-3m1-near | none | 0–1 | 0.4 | 0.9 | 6/16 (0) | -1.3 | 8/16 (0) |
+| box-P4m-near | none | 0–1 | 12.4 | 5.8 | 2/16 (0) | 8.1 | 2/16 (0) |
+| box-P6m-generic | none | 0–1 | 0.9 | 1.0 | 3/15 (1) | -1.1 | 6/13 (3) |
+| box-P6mmm-on | impurity | 0–1 | 12.1 | 22.7 | 0/16 (0) | 2.9 | 5/16 (0) |
+| box-Pm-3-near | impurity | 0–1 | 5.1 | -0.0 | 7/16 (0) | 9.3 | 1/16 (0) |
+| box-Pm-3-near | impurity | 0–2 | 12.6 | 12.8 | 1/16 (0) | -4.8 | 8/16 (0) |
+| cylinder-P-3-near | none | 0–1 | 17.7 | 0.0 | 2/8 (8) | 6.2 | 1/7 (9) |
+| cylinder-P-3m1-generic | po | 0–1 | 4.1 | 14.9 | 1/16 (0) | 8.9 | 4/16 (0) |
+| cylinder-P-3m1-generic | po | 0–2 | 15.9 | 7.8 | 2/16 (0) | 12.1 | 0/16 (0) |
+| cylinder-P-3m1-generic | po | 0–3 | 21.7 | 7.8 | 2/16 (0) | 12.1 | 0/16 (0) |
+| cylinder-P6m-on | none | 0–1 | 16.1 | 7.6 | 2/16 (0) | 8.4 | 2/16 (0) |
+| cylinder-Pm-3-generic | hump | 0–1 | 6.0 | 6.0 | 0/0 (16) | 15.7 | 0/0 (16) |
+| ellcyl-P-1-near | po | 0–1 | 12.2 | 348.3 | 0/16 (0) | 118.4 | 0/16 (0) |
+| ellcyl-P-3m1-near | sizedist | 0–1 | 13.5 | 0.0 | 5/16 (0) | -0.6 | 5/16 (0) |
+| ellcyl-P4mmm-generic | hump | 0–1 | 29.3 | 19.2 | 1/16 (0) | 26.9 | 0/16 (0) |
+| ellcyl-P6m-generic | none | 0–1 | 2.6 | 0.6 | 6/14 (2) | -0.5 | 10/16 (0) |
+| ellcyl-Pm-3-near | none | 0–1 | 11.7 | 12.3 | 1/16 (0) | 13.8 | 1/16 (0) |
+| ellcyl-Pm-3-near | none | 0–2 | 27.6 | 23.2 | 0/16 (0) | 26.0 | 0/16 (0) |
+| ellcyl-Pm-3m-generic | none | 0–1 | 5.7 | 4.3 | 4/12 (4) | 6.8 | 0/16 (0) |
+| ellipsoid-P-3m1-on | none | 0–1 | 0.3 | 0.2 | 4/14 (2) | -0.0 | 5/16 (0) |
+| ellipsoid-P6m-near | none | 0–1 | 0.2 | 0.2 | 8/16 (0) | 0.4 | 5/16 (0) |
+| ellipsoid-P6mmm-generic | air | 0–1 | 8.7 | 8.9 | 2/12 (4) | 7.8 | 5/14 (2) |
+| sphere-P6mmm-1 | po | 0–1 | 8.7 | 0.0 | 8/16 (0) | 7.6 | 0/16 (0) |
+| sphere-P6mmm-1 | po | 0–2 | 19.5 | 0.0 | 2/7 (9) | 21.7 | 0/16 (0) |
+| sphere-P6mmm-1 | po | 0–3 | 22.2 | 9.4 | 4/16 (0) | 27.2 | 0/16 (0) |
+| spheroid-P-3-near | none | 0–1 | 2.4 | 0.8 | 6/16 (0) | 0.5 | 5/16 (0) |
+| spheroid-P4m-generic | none | 0–1 | 5.2 | 4.5 | 2/16 (0) | 5.5 | 2/16 (0) |
+| spheroid-P4m-generic | none | 0–2 | 6.8 | 4.5 | 3/16 (0) | 5.3 | 5/16 (0) |
+| spheroid-P6m-on | sizedist | 0–1 | 1.1 | 0.6 | 0/0 (16) | 1.9 | 0/0 (16) |
+| sqbox-P-3m1-on | po | 0–1 | 2.1 | 0.0 | 1/2 (14) | 1.0 | 4/9 (7) |
+| sqbox-P4m-on | air | 0–1 | 3.3 | 0.0 | 0/1 (15) | -4.3 | 8/8 (8) |
+| sqbox-P4m-on | air | 0–2 | 5.8 | 1.8 | 8/16 (0) | -2.0 | 12/15 (1) |
+| sqbox-P6m-near | none | 0–1 | 0.6 | 0.2 | 0/0 (16) | 0.1 | 0/0 (16) |
+| sqbox-Pmmm-generic | none | 0–1 | 1.5 | 8.5 | 3/15 (1) | -4.9 | 10/16 (0) |
+| sqbox-Pmmm-generic | none | 0–2 | 4.8 | 10.2 | 1/15 (1) | 4.1 | 3/16 (0) |
+
+## The local error (curvature) against the replicas
+
+| rows | extents | sd of z, F replicas: median, rms | T replicas: bias in σ, median |bias|, rms | |bias| > 2 | sd of z, T |
+|---|---|---|---|---|---|
+| clean | 82 | 0.93, 0.97 | 0.25, 0.41 | 0 | 0.91 |
+| error | 78 | 0.79, 0.88 | 1.44, 32.01 | 33 | 0.68 |

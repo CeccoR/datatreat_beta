@@ -8,7 +8,10 @@ runs with both lines and set forward differences to the brief trials only (`SHAP
 (`../STEP2.md`) made WPPM, the exact line, cheaper than lsq (`WPPM_OPT` in `xrd-broad.js`, three
 shortcuts) and made it the free shape's default size line (`SHAPE_MODE.line` 'exact'). Step 3
 (`../STEP3.md`) added the per-line check of every fit the search returns, the jackknife over lines
-where it fires, and a switchable keep test without the flagged lines (`SHAPE_CHECK`). It is not
+where it fires, and a switchable keep test without the flagged lines (`SHAPE_CHECK`). Step 4
+(`../STEP4.md`) added the minima stage: every true minimum refined to the same level, no random
+turn left, and the report's two errors per parameter, the uniqueness verdict and the directions
+of extents not told apart as unordered sets (`SHAPE_MINIMA`). It is not
 applied: the branch is unchanged. Its base is
 `9782d33` (claude/repo-code-review-sr6c8m), whose engine files equal the frozen `b9bef5f` byte for
 byte (`git diff b9bef5f 9782d33 -- 'xrd-*.js'` is empty), so the research diffs ported directly.
@@ -19,18 +22,20 @@ prototype's runs; none of it is in the repository.
 ## Files
 
 - `engine.patch`: `git diff` against `9782d33` of the app's files:
-  - `xrd-rietveld.js` (+395 −53): the switches and tunables, the lsq line, the exact line's
+  - `xrd-rietveld.js` (+650 −58): the switches and tunables, the lsq line, the exact line's
     option (`broadeningSetup`), refine's options `forward`, `noCov` and `covOnly`, freeShapeRun's
     search v2, `sameFrame`; for WPPM a reflection's two lines handed to `wppmPair`, the axial
     shift interpolated in θ (`sollerStats`), the Soller cells' cache (least recently used, 2048);
     the per-line check (`SHAPE_CHECK`, `lineCheck`, `refitWithout`, `lineJack`: in freeShapeRun's
-    outcomes and in `bodyShapeOf`'s report);
+    outcomes and in `bodyShapeOf`'s report); the minima stage (`SHAPE_MINIMA`, `minimaMatch`,
+    `minimaSigmas`, `shapeMinima`: in freeShapeRun after the held frames, and in `bodyShapeOf` the
+    two errors, `lo`–`hi`, `radius`, `minima`, and the directions' `sets`);
   - `xrd-broad.js` (+157 −13): `WPPM_OPT`, the read-out from a table of the points' sinθ, cosθ,
     `wppmPair`;
   - `xrd-sizeline.js` (new, 44 kB): the lsq tables, precomputed;
   - `sw.js`: the new module in `ASSETS` (one line; `CACHE` not bumped, nor `index.html`);
   - `RIETVELD.md`: §7.3 (WPPM's shortcuts), §10.3 (the exact and lsq lines), §10.5 (search v2,
-    with step 1's figures), §10.7 (held frames), §10.8 (the per-line check).
+    with step 1's figures), §10.7 (held frames), §10.8 (the per-line check, the minima stage).
 - `xrd-sizeline.js`: the tables module as the patch adds it.
 - `build-sizeline.mjs`: rebuilds it (10 s) from track A's exact lines
   (`../scripts/A/lines/profiles.mjs`). `--check <A's tables.json>` compares with track A's tables:
@@ -61,7 +66,9 @@ v522's behaviour stays reachable without reverting: `SHAPE_MODE` and `WPPM_OPT` 
 `WPPM_OPT.fast`, `.pair`, `.axial = false` for WPPM's arithmetic as v522 had it (read at every
 evaluation). `SHAPE_CHECK.on = false` removes the per-line check (read at each `freeShape`; the
 search and the report are then step 2's to the bit), `.jack = false` its jackknife alone (read by
-`bodyShapeOf`).
+`bodyShapeOf`). `SHAPE_MINIMA.on = false` removes the minima stage (read at each `freeShape`): the
+search and the report are then step 3's to the bit, the report adding only `sets` (each axis's
+`set`; the directions of extents not told apart) and `minima: null`.
 
 ## What changes and why
 
@@ -164,6 +171,32 @@ no shape that was read well, at 0.07× the fit's evaluations where it ran. Neith
 refit removes the false shapes of a textured sphere or of a sphere with a size distribution: their
 misfit is spread over every line.
 
+**The minima stage** (`SHAPE_MINIMA`, step 4; `../STEP4.md`, `RIETVELD.md` §10.8). Where the
+search keeps a body's shape (v2), every refinement end of the search (brief trials, full
+refinements, the exact faces' fit, the held frames, each now kept with its vector) within 30 χ²_ν of
+the lowest goes into the stage, one of each minimum (`minimaMatch`: the class's operations and the
+body's relabellings, widths within 10 %, axes within 5°), at most 6, the lowest first. Each is
+refined to the same level (`shapeMinima`'s settle: exact faces, central differences, the
+orientation free, the covariance at the end; then ±0.02 rad about the softest turn, every turn's at
+a symmetric orientation, refined again while that gains, at most 10 rounds) and the refined ones are
+merged again within each other's local error (2σ, floors 2 % and 1°, angles capped at 10°). The
+lowest replaces the search's free fit when lower and the held frame is tested against it again.
+With the stage on, the search's polish and the held fit's refit, each from a random 0.02 rad turn
+(AB §4.6), are not made: no random number is left. The true minima lie within Δ* (`delta` 16; 25,
+`deltaMisfit`, where the per-line check fired), from a parametric bootstrap on tuning rows (round
+1's model reproduced, c 8.5 and Δ* 12.6, but its flips beyond 12.5 are 10 % at the data's Δ). The
+report keeps the local errors (`Desd`, the curvature; `esdAngle`, the profile) and adds the second
+(`betweenLo`, `betweenHi`, `betweenDeg`: the spread over the true minima, paired with the reported
+fit), the uniqueness verdict (`minima.unique`, `minima.list`), and the combined 95 % interval
+`lo`–`hi` (the hull of D·e^(±2κσ), κ = `kappa` 1.2, the minima's range and, where the check fired,
+the jackknife's) and `radius` (the largest of 2·esdAngle, betweenDeg, jackTurn). The directions of
+a box's edges not told apart and of a square box's sides are given as unordered sets (`sets`, with
+the error of the turn about the set's normal). On the 77 screening runs: 0.86× the search's
+evaluations (0.28× the whole fit's), 2 outcomes changed (flagged error rows, 6 and 31 χ²_ν lower);
+clean rows' combined intervals cover 78 of 82 dimensions (95 %, median half-width 3.1 %) and 29 of
+32 principal axes; 13 of the dense reference's 17 true minima found on clean rows, 10 of 17 on
+error rows.
+
 **WPPM itself is the engine's.** Track A's WPPM runs only set the phase's size profile to WPPM
 (`FS2A_PROFILE=wppm`; `FS2A_WPPM_BALL` was a control, not a model), and step 1 measured search v2
 on it so. 'exact' makes that profile the free shape's default; a phase whose profile is WPPM or
@@ -190,6 +223,12 @@ both modules). Every tunable is to be tuned on round 2's tuning runs.
 | `SHAPE_CHECK.z`, `.bin`, `.minsep` | 3.09, 1°, 0.3° | — | the flag's family-wise threshold (both statistics), the residual sums' width, the least separation of two segments |
 | `SHAPE_CHECK.jack`, `.groups`, `.iter` | `true`, 20, 4 | — | the jackknife over lines where the check fires: at most that many groups, that many iterations a refit |
 | `SHAPE_CHECK.retest` | `false` | — | where it fires, the keep test again without the worst flagged segments (at most a third) |
+| `SHAPE_MINIMA.on` | `true` | — | the minima stage on a body's kept shape (v2); `false`: step 3's search and report |
+| `SHAPE_MINIMA.collect`, `.max`, `.preLn`, `.preDeg` | 30, 6, 0.1, 5° | — | the ends taken (within collect·χ²_ν of the lowest), at most max distinct ones, one of each at the floors before refinement |
+| `SHAPE_MINIMA.kick`, `.rounds`, `.gain`, `.shift` | 0.02 rad, 10, 0.5, 0 | (a random 0.02 rad turn) | each minimum's turns both ways about its softest turn, at most rounds rounds, again while a round gains over gain·χ²_ν; shift > 0 a refinement's shiftTol there |
+| `SHAPE_MINIMA.k`, `.floorLn`, `.floorDeg`, `.capDeg` | 2, 0.02, 1°, 10° | — | the merge after refinement: within k local σ, floored, the angles capped; capDeg also marks a symmetric orientation (every turn tried) |
+| `SHAPE_MINIMA.delta`, `.deltaMisfit`, `.keep` | 16, 25, 30 | — | Δ* in χ²_ν (deltaMisfit where the per-line check fired); the minima listed in `info.minima` |
+| `SHAPE_MINIMA.kappa` | 1.2 | — | the local error's factor in the combined interval `lo`–`hi` (the curvature's σ times κ) |
 
 ## Verification
 
@@ -308,6 +347,22 @@ check's statistics, the jackknife and the refits computed by the method) and on 
   rvui, smoke, widths, modules): 53 of 53 pass. No test asks for a free shape, so no test runs the
   check.
 
+**7. Step 4: the minima stage** (`../STEP4.md`; `$W/fs2/step4/`). Step 4's harness
+(`../scripts/step4/`: step 3's `hp/` with `methods/min.mjs` and `methods/boot.mjs`; `make-eng.mjs`
+adds the stage's own counter `FS.min` and `PROTO_TURNSEED`) on `$W/step4-app` (step 3's app copy with
+this step's changes).
+- With `SHAPE_MINIMA.on = false` (F0, 2 rows) the prototype equals step 3's P1 to the bit: the
+  isotropic fit, the search's evaluations, χ², dimensions, the report's evaluations, esds, jackknife
+  and angular esds (the report adds only `sets`, each axis's `set`, and `minima: null`).
+- At its defaults (F1, 3 rows: a clean row with two minima, a flagged row, a held row) it equals the
+  77 runs' S2 records to the bit (the search's and the stage's evaluations, χ², the minima, the
+  report's evaluations); `lo`–`hi` and `radius` equal the offline intervals of `score4.mjs`, and Δ*
+  is 25 on the flagged row, 16 elsewhere.
+- Without the polish and the refit the stage leaves no random number in a fit: the main stream
+  seeded otherwise changes only the starts' small tilts (U1, U2).
+- `npm run lint`: clean; the engine's tests (rietveld, rvmodel, rvpool, rvsplit, rvlock, rvcif, rvui,
+  smoke, widths, modules): 53 of 53 pass. No test asks for a free shape, so no test runs the stage.
+
 ## What remains to tune
 
 - **What the exact line brings with it** (step 2): WPPM reads model errors as shape more
@@ -342,8 +397,16 @@ check's statistics, the jackknife and the refits computed by the method) and on 
   few-parameter line (lsq's two expected family errors, AB §3.6).
 - The search's settings in v2: `shapeStarts` above its default adds random starts (one each,
   from their own stream), below it changes nothing; the families' cap of 5 (`lowIndexAxes`).
-- The random turn (AB §4.6): v2 keeps v522's turns; the minima stage of the protocol is to make
-  the result independent of them.
+- The random turn (AB §4.6): with `SHAPE_MINIMA.on` (the default) there is none; with it off v2
+  keeps v522's turns. What still varies is the search's ends: seeded otherwise (the starts' small
+  tilts), 10 of 12 rows return the same lowest within 0.1 χ²_ν, box-P4m-near 7.5 χ²_ν higher (a
+  minimum no end falls into) and two flagged error rows 2 and 31 (`../STEP4.md` §3).
+- The minima stage (step 4): its completeness (13 of 17 true minima on clean rows against a dense
+  reference, 10 of 17 on error rows; a 3.2 nm unbounded disc 1514 χ²_ν lower missed on a row with
+  a size distribution), its cost (0.86× the search, of which the rounds of turns on flat valleys a
+  large part), Δ* (16 and 25) and κ (1.2) from 77 screening runs and a bootstrap on 68 of them: to
+  confirm on the 154 tuning runs, then validate once. `max` 3 or `rounds` 3 are the cheaper
+  settings to weigh.
 - What the user sees: a phase with a free shape asked for now reports its isotropic size (when
   the shape is rejected) by the ball's exact line (lsq: the ball's lsq line), smaller than the
   Lorentzian's Scherrer reading (which read ⟨L⟩_V 13–25 % long); the card's texts (`RV_INFO`: "a Lorentzian Y_s/cosθ") and the

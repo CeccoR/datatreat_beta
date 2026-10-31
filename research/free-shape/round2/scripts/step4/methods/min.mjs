@@ -7,7 +7,7 @@
    reference); CK_OFF=1 the check off. Named 'today' so that the earlier scoring reads its records. */
 const stats = {};
 const pick = a => ({ role: a.role, axis: a.axis, D: a.D, Desd: a.Desd, Dmin: a.Dmin, label: a.label, uvw: a.uvw, angle: a.angle, esdAngle: a.esdAngle, group: a.group, own: a.own, resolved: a.resolved,
-  jackTurn: a.jackTurn, e: a.e, set: a.set, betweenDeg: a.betweenDeg });
+  jackTurn: a.jackTurn, e: a.e, set: a.set, betweenDeg: a.betweenDeg, radius: a.radius });
 export default {
   name: 'today', stats,
   search(model, k, res, free, opts, E){
@@ -33,7 +33,7 @@ export default {
       let rep;
       try {
         const bs = E.bodyShapeOf(model, v, k, { ...r.res, shapes: { [q.id]: r.info } });
-        rep = { kind: bs.kind, dims: bs.dims.map(d=> ({ name: d.name, D: d.D, Desd: d.Desd, Dmin: d.Dmin, jackLo: d.jackLo, jackHi: d.jackHi, betweenLo: d.betweenLo, betweenHi: d.betweenHi })),
+        rep = { kind: bs.kind, dims: bs.dims.map(d=> ({ name: d.name, D: d.D, Desd: d.Desd, Dmin: d.Dmin, jackLo: d.jackLo, jackHi: d.jackHi, betweenLo: d.betweenLo, betweenHi: d.betweenHi, sLocal: d.sLocal, lo: d.lo, hi: d.hi })),
           groups: bs.groups, axes: bs.axes.map(pick), sets: bs.sets, misfit: bs.misfit, minima: bs.minima };
       } catch(e){ rep = { error: String(e && e.stack || e) }; }
       E.setParams(model, v);
