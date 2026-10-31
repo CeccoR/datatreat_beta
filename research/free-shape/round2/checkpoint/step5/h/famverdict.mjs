@@ -16,7 +16,7 @@ export function familyVerdict(fits, iso, nu, o){
   const within = order.filter(F=> fam[F].c - fam[W].c < need);
   const g = by[GENERAL[W]], s = by[SPECIAL[W]];
   let nested = null, solid = fam[W].type;
-  if (g && s){ const delta = (s.chi2 - g.chi2)/nu; nested = { general: g.type, special: s.type, delta, need: o.nest[W], supported: delta >= o.nest[W] }; solid = nested.supported ? g.type : s.type; }
+  if (g && s){ const delta = (s.chi2 - g.chi2)/nu; const nn = g.flagged && o.nestMisfit != null ? o.nestMisfit : o.nest[W]; nested = { general: g.type, special: s.type, delta, need: nn, supported: delta >= nn }; solid = nested.supported ? g.type : s.type; }
   return { family: W, by: fam[W].type, margin, need, determined: within.length === 1, within, solid, nested, tried: Object.keys(by),
     rivals: Object.fromEntries(order.map(F=> [F, { by: fam[F].type, delta: fam[F].c - fam[W].c }])) };
 }

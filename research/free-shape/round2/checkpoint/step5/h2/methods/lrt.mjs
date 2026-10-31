@@ -2,8 +2,8 @@
    the app runs it (the gain G recorded, KEEP_SET as fam.mjs); then LRT_B (19) replicas, Poisson draws of
    the isotropic fit's calculated pattern (seeded by the row's key): on each, the isotropic fit refined
    again from itself (central, LRT_ISO_IT 20 iterations) and the shape searched quickly (the class's
-   starts, LRT_FULL (1) full refinement, no minima stage, no check, no early rejection, every shape
-   kept); G* = (χ²_iso* − χ²_shape*)/max(1, χ²_ν,iso*). stats.lrt: { G, reps: [G*], p, evals, ms }. */
+   starts, or the sphere-like one alone unless LRT_ALLSTARTS, LRT_FULL (1) full refinement, no check, no
+   early rejection, no shape kept: no minima stage); G* = (χ²_iso* − χ²_shape*)/max(1, χ²_ν,iso*). stats.lrt: { G, reps: [G*], p, evals, ms }. */
 import fam from './fam.mjs';
 import { rng, hash } from '../lib.mjs';
 const stats = fam.stats;
@@ -15,13 +15,14 @@ export default {
     const vIso = model.v.slice(), y0 = Float64Array.from(model.y), w0 = Float64Array.from(model.w);
     const r = fam.search(model, k, res, free, opts, E, ctx);
     const kp = stats.keep, nu0 = Math.max(1, res.stats.chi2);
-    const G = kp ? Math.max(...[kp.gainFree, kp.gainHeld, kp.gain, kp.gainBrief].map(Number).filter(Number.isFinite)) : NaN;
+    const gOf = k2 => { const g = [k2.gainFree, k2.gainHeld, k2.gain].map(Number).filter(Number.isFinite); return g.length ? Math.max(...g) : k2.gainBrief; };
+    const G = kp ? gOf(kp) : NaN;
     const vEnd = model.v.slice(), lg = E.FS.log; E.FS.log = null;
     const keep = { ...E.SHAPE_KEEP }, minOn = E.SHAPE_MINIMA.on, ckOn = E.SHAPE_CHECK.on, famS = E.SHAPE_FAMILY ? E.SHAPE_FAMILY.solids : null;
     const B = +(process.env.LRT_B || 19), F = E.fitSettings(opts.fit), chiTot = rr => rr.stats.chi2*Math.max(1, rr.stats.N - rr.stats.P);
     const e1 = E.FS.evals, t1 = Date.now(), reps = [];
     try {
-      Object.assign(E.SHAPE_KEEP, { rule: 'all', early: 0, record: true }); E.SHAPE_MINIMA.on = false; E.SHAPE_CHECK.on = false; if (famS) E.SHAPE_FAMILY.solids = 'none';
+      Object.assign(E.SHAPE_KEEP, { rule: 'bic', bic: 1e9, early: 0, record: true }); E.SHAPE_CHECK.on = false; if (famS) E.SHAPE_FAMILY.solids = 'none';   // never kept: no minima stage, the gain recorded
       E.setParams(model, vIso);
       const mu = Float64Array.from(E.evaluate(model, model.v).yc);
       for (let t = 0; t < B; t++){
@@ -33,7 +34,7 @@ export default {
         const nu = Math.max(1, ri.stats.chi2), ci = chiTot(ri), vi = model.v.slice();
         let rs = null; try { rs = E.freeShape(model, k, ri, free, { ...opts, sphereStart: !process.env.LRT_ALLSTARTS, fit: { ...(opts.fit || {}), shapeFull: +(process.env.LRT_FULL || 1) } }); } catch(e){ rs = null; }
         const kk = rs ? (rs.info ? rs.info.keep : rs.keep) : null;
-        reps.push(kk ? Math.max(...[kk.gainFree, kk.gainHeld, kk.gain, kk.gainBrief].map(Number).filter(Number.isFinite)) * kk.nu/nu : NaN);
+        reps.push(kk ? gOf(kk)*kk.nu/nu : NaN);
         E.setParams(model, vi);
       }
     } finally {

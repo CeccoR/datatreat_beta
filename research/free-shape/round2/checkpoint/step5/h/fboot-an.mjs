@@ -35,6 +35,7 @@ for (const o of R){
 const fitC = P => { // max likelihood c over a grid
   let best = null; for (let c = 0.5; c <= 2000; c *= 1.05){ let ll = 0; for (const p of P){ const pf = Math.min(1 - 1e-9, Math.max(1e-9, Phi(-p.m/Math.sqrt(4*Math.max(0, p.m) + c)))); ll += p.flips*Math.log(pf) + (p.reps.length - p.flips)*Math.log(1 - pf); } if (!best || ll > best.ll) best = { c, ll }; }
   let mstar = 0; while (Phi(-mstar/Math.sqrt(4*mstar + best.c)) > 0.05 && mstar < 500) mstar += 0.1; return { c: best.c, mstar }; };
+console.log('| group | rows | replicas | flips at m < 3 (rows) | 3–10 | 10–25 | over 25 | c | m* (5 %) |\n|---|---|---|---|---|---|---|---|---|');
 for (const [nm, P] of [['all', pairs], ['clean', pairs.filter(p=> !p.error)], ['error', pairs.filter(p=> p.error)], ['flagged', pairs.filter(p=> p.flag)], ['not flagged', pairs.filter(p=> !p.flag)]]){
   if (!P.length) continue;
   const reps = P.reduce((t, p)=> t + p.reps.length, 0), fl = (lo, hi) => { const S = P.filter(p=> p.m >= lo && p.m < hi); const n = S.reduce((t, p)=> t + p.reps.length, 0); return n ? `${(S.reduce((t, p)=> t + p.flips, 0)/n).toFixed(2)} (${S.length})` : '—'; };
@@ -48,6 +49,7 @@ if (opt.rows){
 console.log('\nnested (the true family\'s special against general on its replicas, χ²_ν):');
 for (const F of ['box', 'cyl', 'ball']){
   const N0 = nests.filter(n=> n.F === F && n.truthSpecial), N1 = nests.filter(n=> n.F === F && !n.truthSpecial), r0 = N0.flatMap(n=> n.reps), r1 = N1.flatMap(n=> n.reps);
+  for (const [nm, sel] of [['clean', n=> !n.error], ['error', n=> !!n.error]]){ const r0c = N0.filter(sel).flatMap(n=> n.reps); console.log(`  ${F} special truths, ${nm}: ${N0.filter(sel).length} rows, replicas ${r0c.length}: median ${f(q(r0c, .5))}, 90 % ${f(q(r0c, .9))}, 95 % ${f(q(r0c, .95))}, max ${f(Math.max(...r0c))}`); }
   console.log(`| ${F} | special truths ${N0.length}: data ${N0.map(n=> f(n.data)).join(', ')}; replicas ${r0.length}: median ${f(q(r0, .5))}, 95 % ${f(q(r0, .95))}, 99 % ${f(q(r0, .99))} | general truths ${N1.length}: data ${N1.map(n=> f(n.data)).join(', ')}; replicas median ${f(q(r1, .5))}, 5 % ${f(q(r1, .05))} |`);
 }
 fs.writeFileSync(path.join(HERE, 'fboot-an.json'), JSON.stringify({ pairs, nests }));
