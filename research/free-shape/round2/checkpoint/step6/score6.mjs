@@ -16,7 +16,7 @@ import path from 'node:path';
 import { HERE, rowsOf, loadX, byId, intervals, bestOf, reachDelta, accOf, spoiled, outc, med, qtl, sum, f, pc, LAUE, KINDS } from './lib6.mjs';
 const a = process.argv.slice(2), opt = {};
 for (let i = 0; i < a.length; i++){ if (a[i].startsWith('--')){ const k = a[i].slice(2); opt[k] = a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : true; } }
-const part = opt.part || 'tuning', rows = rowsOf(part);
+const part = opt.part || 'tuning', rows = rowsOf(part).filter(r=> !opt.sub || (opt.sub === 'screen' ? r.screen : !r.screen));   // --sub screen|new: the screening rows or the others
 const O = { delta: +(opt.delta || 16), deltaF: +(opt.deltaF || 25), kappa: +(opt.kappa || 1.2) };
 const P = loadX(rows, String(opt.p || 'P').split(',')), T = loadX(rows, String(opt.t || '../pilot/results/screen,T').split(','));
 const extraP = String(opt.best || '').split(',').filter(Boolean).map(t=> loadX(rows, [t]));
@@ -27,7 +27,7 @@ L.push(`# Step 6: ${part} part, ${rows.length} rows (${truths.length} truths, ${
 L.push(`Δ* ${O.delta} (flagged ${O.deltaF}), κ ${O.kappa}. Reach against the best known exact χ² of the same line (prototype: exact line, its runs${extraP.length ? ' and ' + opt.best : ''} with their truth references; today: Lorentzian, its run and truth reference).`, '');
 // 1. overall
 const M = [['today', T, TI, bestT], ['prototype', P, PI, bestP]];
-const D = {};
+const D = { today: {}, prototype: {} };
 for (const [nm, X, I, best] of M) for (const x of X){ (D[nm] ||= {})[x.row.id] = { x, out: outc(x.r), delta: reachDelta(x, best), acc: accOf(x) }; }
 L.push('| method | runs | truths: held / free / rejected (early) | spheres kept: clean / error | reached / judged | unbounded | worst, median (90 %) | thinnest | axis °, median (90 %) | search evaluations (× today; per run median) | report evaluations | isotropic fit evaluations |', '|---|---|---|---|---|---|---|---|---|---|---|---|');
 const evT = sum(rows.map(r=> D.today && D.today[r.id] ? D.today[r.id].x.r.search.evals : 0));

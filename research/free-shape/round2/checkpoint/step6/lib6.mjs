@@ -53,7 +53,7 @@ export function intervals(x, o = {}){
     const B = hull([D, D], ...pts.map(t=> [t, t]));
     const C = hull(L, B);
     const J = x.flag && Number.isFinite(d.jackLo) ? hull(C, [d.jackLo, d.jackHi]) : C;
-    const E = Number.isFinite(d.lo) && Number.isFinite(d.hi) ? [d.lo, d.hi] : null;
+    const E = Number.isFinite(d.lo) && (Number.isFinite(d.hi) || d.hi === Infinity) ? [d.lo, d.hi] : null;   // an infinite jackknife sd opens the upper end
     const cov = iv => Dt >= iv[0] && Dt <= iv[1], hw = iv => Math.log(iv[1]/Math.max(1e-9, iv[0]))/2;
     out.ext.push({ Dt, D, e: Math.log(D/Dt), s, s0, z: s0 > 0 ? Math.log(D/Dt)/s0 : NaN, L: cov(L), B: cov(B), C: cov(C), J: cov(J), E: E ? cov(E) : null, hL: hw(L), hC: hw(C), hJ: hw(J), hE: E ? hw(E) : NaN, sp: hw(B) });
   }

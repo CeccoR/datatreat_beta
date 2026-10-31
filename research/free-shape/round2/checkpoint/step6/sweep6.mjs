@@ -5,7 +5,7 @@
 import { rowsOf, loadX, intervals, med, f } from './lib6.mjs';
 const a = process.argv.slice(2), opt = {};
 for (let i = 0; i < a.length; i++){ if (a[i].startsWith('--')){ opt[a[i].slice(2)] = a[i + 1]; i++; } }
-const X = loadX(rowsOf(opt.part || 'tuning'), String(opt.p || 'P').split(',')).filter(x=> x.truth && x.r.kept);
+const X = loadX(rowsOf(opt.part || 'tuning').filter(r=> !opt.sub || (opt.sub === 'screen' ? r.screen : !r.screen)), String(opt.p || 'P').split(',')).filter(x=> x.truth && x.r.kept);
 const G = [['clean (not flagged)', x=> x.clean && !x.flag], ['error, not flagged', x=> !x.clean && !x.flag], ['flagged', x=> x.flag]];
 const L = [];
 L.push('| rows | Δ* (flagged) | κ | extents covered C | J | median half-width C | axes C, κA 1 / 1.2 / 1.5 | unique | unique and C covers all |', '|---|---|---|---|---|---|---|---|---|');
