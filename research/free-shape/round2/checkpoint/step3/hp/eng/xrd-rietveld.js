@@ -1064,11 +1064,14 @@ const SHAPE_FWD = process.env.PROTO_FWD || 'briefs';   // [step1]
    parameters, so a held frame stays held), and gives each dimension D·e^(±2 sd) and each
    axis 2·rms turn (sd and rms over the groups, (G − 1)/G) beside its esds, with the check
    as misfit: on the 24 flagged error rows 51 of 56 extents covered against 28 by the esds
-   alone, at 0.27× the fit's evaluations (12 iterations: the same coverage, 0.44×).
-   retest: the keep test made again without the flagged segments (the shape refitted from
-   the kept fit, the isotropic fit from its own; ΔBIC as the search's on the points left),
-   a shape it no longer supports rejected; off: on the screening runs it removed 1 of the
-   2 false shapes and none of the 4 unbounded extents. */
+   alone, at 0.24× the fit's evaluations (median; 12 iterations covered the same at 1.6×
+   the cost).
+   retest: where the check fires, the keep test made again without the worst flagged
+   segments, at most a third of them (the shape refitted from the kept fit, the isotropic
+   fit from its own; ΔBIC as the search's on the points left), a shape it no longer
+   supports rejected. On the screening runs it rejected 1 of the 2 false shapes and 4 of
+   the 13 shapes an error had spoiled, none read well; the 4 unbounded extents stayed.
+   Off until the tuning runs confirm it. */
 const SHAPE_CHECK = { on: true, z: 3.09, bin: 1, minsep: 0.3, jack: true, groups: 20, iter: 4, retest: false };
 // Is the free shape in use at v (any L or W ≠ 0)? Until the shape stage it is not, and
 // the phase is drawn as an isotropic one.
@@ -4854,14 +4857,15 @@ function freeShapeRun(model, k, res, free, opts){
     if (r){ best = { res: r, v: model.v.slice() }; cb = chiTot(r); }
   }
   // The per-line check of the fit kept (SHAPE_CHECK); with retest, where it fires, the keep
-  // test again without the flagged segments.
+  // test again without the worst flagged segments (at most a third of the segments).
   const check = SHAPE_CHECK.on ? lineCheck(model, k, best.v, best.res.stats.P) : null;
-  if (check && check.flagged && SHAPE_CHECK.retest && check.segs.length <= check.S - 2){
-    const F = fitSettings(opts.fit), lm = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda }, drop = check.segs.map(sg=> [sg.i0, sg.i1]);
+  if (check && check.flagged && SHAPE_CHECK.retest && check.S >= 3){
+    const worst = [...check.segs].sort((a, b)=> Math.max(b.zSeg, b.zBin) - Math.max(a.zSeg, a.zBin)).slice(0, Math.max(1, Math.floor(check.S/3)));
+    const F = fitSettings(opts.fit), lm = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda }, drop = worst.map(sg=> [sg.i0, sg.i1]);
     const sh = refitWithout(model, best.v, drop, { free: best.res.free, ...lm }, r=> r.stats), is = refitWithout(model, vIso, drop, { free, ...lm }, r=> r.stats);
     if (sh && is){
       const c = st => st.chi2*Math.max(1, st.N - st.P);
-      check.retest = { dBIC: (c(sh) - c(is))/Math.max(1, is.chi2) + (sh.P - is.P)*Math.log(sh.N) };
+      check.retest = { dBIC: (c(sh) - c(is))/Math.max(1, is.chi2) + (sh.P - is.P)*Math.log(sh.N), segs: worst.map(sg=> sg.s) };
       if (!(check.retest.dBIC < -10)){ setParams(model, vIso); return { rejected: true, dBIC: check.retest.dBIC, misfit: true, check }; }
     }
   }

@@ -5,7 +5,7 @@
    the shape refitted without the flagged segments from the kept fit and the isotropic fit from its own
    (60 iterations at most, no covariance), all the flagged segments ('all', when at least 2 segments are
    left) and at most a third of the segments, the worst first ('third'): χ², N, P, the solid; model.v,
-   the weights, the esds and the covariance restored. CK_RETEST=1 sets SHAPE_CHECK.retest. Named
+   the weights, the esds and the covariance restored. CK_RETEST=1 sets SHAPE_CHECK.retest, CK_OFF=1 clears SHAPE_CHECK.on. Named
    'today' so that step 2's scoring reads its records. */
 import { solidOf } from '../lib.mjs';
 const stats = {};
@@ -16,6 +16,7 @@ export default {
   search(model, k, res, free, opts, E){
     for (const key of Object.keys(stats)) delete stats[key];
     if (process.env.CK_RETEST) E.SHAPE_CHECK.retest = true;
+    if (process.env.CK_OFF) E.SHAPE_CHECK.on = false;   // the check off: step 2's behaviour
     const q = model.phases[k], vIso = model.v.slice();
     stats.list = { refl: q.nRefl, members: q.mv ? q.mv.reduce((t, a)=> t + a.length/3, 0) : null, points: model.n };
     const e0 = E.FS.evals, t0 = Date.now();

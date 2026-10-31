@@ -50,3 +50,14 @@ if (opt.rows){
     console.log(`| ${x.row.id} | ${x.ek}${x.ek !== 'none' ? ' ' + f(x.es) : ''} | ${out} | ${x.why} | ${f(s.chi2nu, 3)} | ${f(s.zglob, 1)} | ${f(s.zdw, 1)} | ${f(s.worstC2, 3)} | ${f(s.zseg, 1)} | ${f(s.zsegDW, 1)} | ${f(s.zsegM, 1)} | ${f(s['zQ1'], 1)} | ${f(s['zQ4'], 1)} | ${f(s['zb1'], 1)} | ${f(s.conc1)} | ${s.top[0].hkl} ${f(s.top[0].tt, 1)}° |`);
   }
 }
+// the adopted rule (ADOPT, default the prototype's): per error kind, the strengths it caught and missed
+{
+  const A = new Function('x', 'return ' + (process.env.ADOPT || 'x.st.zseg > 3.09 || x.st.zb1 > 3.09'));
+  const C = new Function('x', 'return x.st.zseg > 3.09');
+  console.log(`\n| error | caught (strength; * spoiled) | missed | per-line χ² alone: caught |`);
+  console.log('|---|---|---|---|');
+  for (const kd of KINDS.slice(1)){
+    const E = X.filter(x=> x.ek === kd).sort((p, q)=> p.es - q.es), s = x=> f(x.es) + (x.harm ? '*' : '');
+    console.log(`| ${kd} | ${E.filter(A).map(s).join(', ')} | ${E.filter(x=> !A(x)).map(s).join(', ') || '—'} | ${E.filter(C).length}/${E.length} |`);
+  }
+}
