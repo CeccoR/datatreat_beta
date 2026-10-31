@@ -7,12 +7,12 @@
    together; R5 a shape under a fired flag not supported (reported as the isotropic size).
    node rep-fix.mjs [--tag C1] [--rows]   (FLAG, ZSEG as rep-jack.mjs) */
 import { load, f, truthPairs } from './an3.mjs';
-import { pOfZ, zOfP } from './ck.mjs';
+import { bonfZ } from './ck.mjs';
 import { compareSolids, laueRotations } from './lib.mjs';
-const FLAG = new Function('x', 'return ' + (process.env.FLAG || 'x.st.zseg > 3.09'));
+const FLAG = new Function('x', 'return ' + (process.env.FLAG || 'x.st.zseg > 3.09 || x.st.zb1 > 3.09'));
 const ZSEG = +(process.env.ZSEG || 3.09);
-const bz = (z, S) => zOfP(Math.min(0.5, S*pOfZ(z)));
-const flaggedSegs = x => x.st.segs.filter(s=> bz(s.z, x.st.S) > ZSEG).map(s=> s.i);
+const bz = (z, S) => bonfZ(z, S);
+const flaggedSegs = x => x.st.segs.filter(s=> s.zsB > ZSEG || (process.env.SEGBIN !== '0' && s.zbB > ZSEG)).map(s=> s.i);
 const X = load().filter(x=> x.st);
 function dropFor(x){
   const F = flaggedSegs(x), D = (x.ck.drop || []).filter(q=> q.shape && q.iso);
@@ -42,7 +42,7 @@ const evalRow = (x, st) => {
   return { lost: false, unb: s.dims.some(d=> d === Infinity), worst: acc.dimMax, axis: acc.principal, harm: !(acc.dimMax <= 0.25) || (acc.principal != null && acc.principal > 10), marked: st.marked };
 };
 const RULES = ['R0', 'R1', 'R2', 'R3', 'R4', 'R5'];
-const L = [`FLAG: ${process.env.FLAG || 'x.st.zseg > 3.09'}; flagged segments: family-wise z > ${ZSEG}`, ''];
+const L = [`FLAG: ${process.env.FLAG || 'x.st.zseg > 3.09 || x.st.zb1 > 3.09'}; flagged segments: family-wise z > ${ZSEG}`, ''];
 L.push('| rule | spheres: false shapes (marked) | error truths: kept / lost | unbounded | harmful kept (marked) | harmless kept, marked | clean truths: kept / lost | clean harmful kept (marked) | clean marked |', '|---|---|---|---|---|---|---|---|---|');
 for (const R of RULES){
   const sp = X.filter(x=> x.row.kind === 'sphere').map(x=> evalRow(x, apply(x, R)));

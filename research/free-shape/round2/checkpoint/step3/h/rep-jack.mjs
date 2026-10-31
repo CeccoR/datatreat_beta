@@ -6,12 +6,12 @@
    family-wise z exceeds ZSEG (default 3.09).
    node rep-jack.mjs [--tag C1] [--rows]   (FLAG='x.st.zseg > 3.09' ZSEG=3.09) */
 import { load, f, med, jackSpread, truthPairs, localEsd } from './an3.mjs';
-import { pOfZ, zOfP } from './ck.mjs';
-const FLAG = new Function('x', 'return ' + (process.env.FLAG || 'x.st.zseg > 3.09'));
+import { bonfZ } from './ck.mjs';
+const FLAG = new Function('x', 'return ' + (process.env.FLAG || 'x.st.zseg > 3.09 || x.st.zb1 > 3.09'));
 const ZSEG = +(process.env.ZSEG || 3.09);
 const X = load().filter(x=> x.st && x.kept && x.row.kind === 'truth');
-const bz = (z, S) => zOfP(Math.min(0.5, S*pOfZ(z)));
-export function flaggedSegs(x){ return x.st.segs.filter(s=> bz(s.z, x.st.S) > ZSEG).map(s=> s.i); }
+const bz = (z, S) => bonfZ(z, S);
+export function flaggedSegs(x){ return x.st.segs.filter(s=> s.zsB > ZSEG || (process.env.SEGBIN !== '0' && s.zbB > ZSEG)).map(s=> s.i); }
 const ONE = new Set(['cylinder', 'spheroid', 'sqbox']);   // a section of two equal extents: counted once
 const versions = {
   local: null,
@@ -44,7 +44,7 @@ function score(x, ver){
 }
 const L = [];
 const groups = [['flagged error rows', x=> !x.clean && FLAG(x)], ['flagged clean rows', x=> x.clean && FLAG(x)], ['unflagged error rows', x=> !x.clean && !FLAG(x)], ['all kept error rows', x=> !x.clean], ['all kept clean rows', x=> x.clean]];
-L.push(`FLAG: ${process.env.FLAG || 'x.st.zseg > 3.09'}; flagged segments: family-wise z > ${ZSEG}`, '');
+L.push(`FLAG: ${process.env.FLAG || 'x.st.zseg > 3.09 || x.st.zb1 > 3.09'}; flagged segments: family-wise z > ${ZSEG}`, '');
 L.push('| rows | version | runs | extents covered (unbounded apart) | extents beyond 25 %: covered | axes covered (beyond 10°: covered) | median half-width, ln D (× local) | median axis radius ° |', '|---|---|---|---|---|---|---|---|');
 for (const [gn, gf] of groups){
   const G = X.filter(gf);

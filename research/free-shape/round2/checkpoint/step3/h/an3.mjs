@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readResult, compareSolids, laueRotations } from './lib.mjs';
-import { unb64, pOfZ, zOfP } from './ck.mjs';
+import { unb64, bonfZ } from './ck.mjs';
 const HERE = path.dirname(new URL(import.meta.url).pathname), FS2 = path.resolve(HERE, '..', '..');
 const a = process.argv.slice(2), opt = {};
 for (let i = 0; i < a.length; i++){ if (a[i].startsWith('--')){ opt[a[i].slice(2)] = a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : true; } }
@@ -17,7 +17,7 @@ const ROWS = design.rows.filter(r=> r.split === 'tuning' && r.screen);
 export const f = (x, d = 2) => x === Infinity ? '∞' : x === -Infinity ? '−∞' : x == null || Number.isNaN(x) ? '—' : x.toFixed(d);
 const qtl = (xs, p) => { const s = xs.filter(x=> x != null && !Number.isNaN(x)).sort((x, y)=> x - y); if (!s.length) return NaN; const i = (s.length - 1)*p, lo = Math.floor(i), hi = Math.ceil(i); return lo === hi || !Number.isFinite(s[hi]) ? s[lo] : s[lo] + (s[hi] - s[lo])*(i - lo); };
 export const med = xs => qtl(xs, 0.5);
-const bonf = (z, S, two = false) => zOfP(Math.min(0.5, (two ? 2 : 1)*S*pOfZ(z)));   // the family-wise deviate of the worst of S
+const bonf = bonfZ;   // the family-wise deviate of the worst of S
 
 /* ---------- the statistics of one row ---------- */
 function rowStats(ck, dump){
@@ -42,6 +42,11 @@ function rowStats(ck, dump){
     s['zQ' + wdeg] = (Q - B)/Math.sqrt(2*B);
     s['zb' + wdeg] = bonf(Math.max(...zb.map(Math.abs)), B, true);
   }
+  // [the flag's segments] each segment's worst 1° bin (bins by centre), family-wise over the pattern's bins
+  { const per = Math.max(1, Math.round(1/step)), zb = [];
+    for (let i0 = 0; i0 < n; i0 += per){ let t = 0, m = 0; for (let i = i0; i < Math.min(n, i0 + per); i++){ const v = R[i]; if (Number.isFinite(v)){ t += v; m++; } } if (m > per/2) zb.push({ c: Math.min(n - 1, i0 + (per >> 1)), z: t/Math.sqrt(m) }); }
+    for (const q of segs){ const ck0 = ck.segs[q.i]; q.zb = Math.max(0, ...zb.filter(b=> b.c >= ck0.i0 && b.c <= ck0.i1).map(b=> Math.abs(b.z))); q.zbB = bonf(q.zb, zb.length, true); q.zsB = bonf(q.z, S); }
+    s.B1 = zb.length; }
   s.segs = segs;
   return s;
 }

@@ -52,17 +52,23 @@ export const zchi = (c, n) => { if (!(n > 0)) return 0; const a = 2/(9*n); retur
 // the standard normal's upper tail and its inverse (Acklam's rational approximation, refined)
 export function pOfZ(z){ const t = 1/(1 + 0.2316419*Math.abs(z)), d = 0.3989422804014327*Math.exp(-z*z/2);
   const p = d*t*(0.319381530 + t*(-0.356563782 + t*(1.781477937 + t*(-1.821255978 + t*1.330274429)))); return z >= 0 ? p : 1 - p; }
+// the upper-tail deviate z with P(Z > z) = p (Acklam's lower quantile, by symmetry)
 export function zOfP(p){
-  if (p <= 0) return Infinity; if (p >= 1) return -Infinity;
-  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
-  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  if (!(p > 0)) return Infinity; if (p >= 1) return -Infinity;
   const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
   const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
-  const q0 = 1 - p, pl = 0.02425; let x;
-  if (q0 < pl){ const q = Math.sqrt(-2*Math.log(q0)); x = (((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5])/((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1); }
-  else if (q0 <= 1 - pl){ const q = q0 - 0.5, r = q*q; x = (((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q/(((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1); }
-  else { const q = Math.sqrt(-2*Math.log(1 - q0)); x = -(((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5])/((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1); }
-  return x;
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const lowerQ = u => { const pl = 0.02425;   // Φ⁻¹(u), u ≤ 1/2
+    if (u < pl){ const q = Math.sqrt(-2*Math.log(u)); return (((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5])/((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1); }
+    const q = u - 0.5, r = q*q; return (((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q/(((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1); };
+  return p <= 0.5 ? -lowerQ(p) : lowerQ(1 - p);
+}
+// the family-wise deviate of the worst of S deviates (Bonferroni; two-sided when two), in log space for a large z
+export function bonfZ(z, S, two = false){
+  const m = (two ? 2 : 1)*S;
+  if (z > 8) return Math.sqrt(Math.max(0, z*z - 2*Math.log(m)));
+  return zOfP(Math.min(0.5, m*pOfZ(z)));
 }
 export const b64 = a => Buffer.from(new Float32Array(a).buffer).toString('base64');
 export const unb64 = s => { const b = Buffer.from(s, 'base64'); return new Float32Array(b.buffer, b.byteOffset, b.length/4); };
