@@ -201,10 +201,21 @@ function addMemberCoef(out, n, dL, base, a, b, c, scale, sigma, weight){
    there continuously, and what it leaves out goes to the background. Read between grid
    points by cubic (Catmull–Rom) interpolation. */
 const N_MIN = 64, N_MAX = 16384;
-/* WPPM_OPT.fast (round 2's free-shape step 2): the same line by shorter arithmetic, not to the
-   bit — the common factor's exponentials by recurrence in L (two products a point, against
-   three exponentials) and the read-out by reciprocals (the edge taken off the period first). */
-const WPPM_OPT = { fast: /fast|pair/.test(process.env.PROTO_WPPM || ''), pair: /pair/.test(process.env.PROTO_WPPM || ''), axial: /axial/.test(process.env.PROTO_WPPM || '') };   // [step2]
+/* WPPM_OPT: a WPPM evaluation made cheaper, each shortcut behind a switch, all on (false keeps
+   v522's arithmetic reachable; a script sets them before evaluating). Round 2 of the free-shape
+   research, step 2 (research/free-shape/round2/STEP2.md): on step 1's engine the read-out took
+   62 % of a WPPM fit's CPU, the axial divergence's nodes 23 %, the FFTs 7 %, the common factor
+   3 %, the members' size coefficients 1 %.
+   - fast: the same line by shorter arithmetic, not to the bit (within 2·10⁻¹² of the peak):
+     the common factor's exponentials by recurrence in L (two products a point against three
+     exponentials) and the read-out by reciprocals, the edge value taken off the period first;
+   - pair: a reflection's two lines (Kα1, Kα2) on one grid by one FFT (wppmPair; with fast's
+     arithmetic): within 1.5·10⁻⁵ of the peak of the lines drawn apart (each its own grid);
+   - axial: a line drawn with one axial node (most of a sample's lines) takes its shift from
+     the Soller cells at the two nearest multiples of 10⁻⁴ rad in θ, linearly
+     (xrd-rietveld.js sollerStats): within 10⁻⁹ of the peak; a Jacobian's column of a cell
+     parameter no longer computes every line's cells again. */
+const WPPM_OPT = process.env.PROTO_WPPM != null ? { fast: /fast|pair/.test((process.env.PROTO_WPPM || '')), pair: /pair/.test((process.env.PROTO_WPPM || '')), axial: /axial/.test((process.env.PROTO_WPPM || '')) } : { fast: true, pair: true, axial: true };   // [step2]
 /* The pattern's points' sin θ and cos θ (θ = 2θ/2), made once per grid and kept with it: the
    read-out took a sine and a cosine a point over the whole window (±40 FWHM), three
    quarters to six sevenths of a WPPM evaluation (round 2's free-shape step 2). The same

@@ -1,1 +1,26 @@
 2026-10-31T04:05:58.647Z jobs-def2.txt: 6 of 6 to do, 2 at a time, timeout 3600 s
+2026-10-31T04:06:19.208Z [1/6] D3lor sqbox-Pm-3-on: ok 21 s
+sqbox-Pm-3-on (m-3, sqbox 10.9×10.9×15.2; exact, 10–110/0.01) as sqbox: draw 276 ms; iso χ²_ν 1.589, 296 ev, 930 ms; list 14 refl, 89 members
+  today: held χ² 15492.8 best 15492.8 ΔBIC -227 | search 3095 ev 15762 ms report 766 ev 3302 ms | 15.85×15.85×15.85 | dims 46% 46% 4% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 20.4 s
+2026-10-31T04:06:25.675Z [2/6] D3lor spheroid-P-3-near: ok 27 s
+spheroid-P-3-near (-3, spheroid 15.5×15.5×13.1; exact, 10–110/0.01) as spheroid: draw 317 ms; iso χ²_ν 1.161, 286 ev, 1821 ms; list 33 refl, 91 members
+  today: held χ² 11540.1 best 11540.1 ΔBIC -36 | search 2698 ev 15315 ms report 1791 ev 9384 ms | 16.21×16.21×14.58 | dims 4% 4% 11% orient 33.0° (holo 33.0°) principal 33.0°
+  wall 26.9 s
+2026-10-31T04:06:38.026Z [3/6] D3lsq sqbox-Pm-3-on: ok 19 s
+sqbox-Pm-3-on (m-3, sqbox 10.9×10.9×15.2; exact, 10–110/0.01) as sqbox: draw 238 ms; iso χ²_ν 1.171, 262 ev, 907 ms; list 14 refl, 89 members
+  today: free χ² 10541.1 best 10541.1 ΔBIC -952 | search 1416 ev 8054 ms report 1899 ev 9345 ms | 12.70×12.70×12.71 | dims 17% 17% -16% orient 3.8° (holo 3.8°) principal 3.8°
+  wall 18.6 s
+2026-10-31T04:06:50.744Z [4/6] D3lsq spheroid-P-3-near: ok 25 s
+spheroid-P-3-near (-3, spheroid 15.5×15.5×13.1; exact, 10–110/0.01) as spheroid: draw 259 ms; iso χ²_ν 1.016, 258 ev, 1598 ms; list 33 refl, 91 members
+  today: held χ² 10097.9 best 10097.9 ΔBIC -39 | search 1464 ev 9526 ms report 2403 ev 13499 ms | 15.22×15.22×13.82 | dims -2% -2% 6% orient 33.0° (holo 33.0°) principal 33.0°
+  wall 24.9 s
+2026-10-31T04:06:56.623Z [5/6] D3wp sqbox-Pm-3-on: ok 19 s
+sqbox-Pm-3-on (m-3, sqbox 10.9×10.9×15.2; exact, 10–110/0.01) as sqbox: draw 211 ms; iso χ²_ν 1.165, 273 ev, 1869 ms; list 14 refl, 89 members
+  today: held χ² 9998.8 best 9998.8 ΔBIC -1394 | search 1872 ev 11066 ms report 978 ev 5236 ms | 10.84×10.84×15.28 | dims -0% -0% 0% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 18.5 s
+2026-10-31T04:07:28.354Z [6/6] D3wp spheroid-P-3-near: ok 38 s
+spheroid-P-3-near (-3, spheroid 15.5×15.5×13.1; exact, 10–110/0.01) as spheroid: draw 287 ms; iso χ²_ν 1.005, 282 ev, 4052 ms; list 33 refl, 91 members
+  today: held χ² 9980.2 best 9980.1 ΔBIC -43 | search 1172 ev 11846 ms report 2363 ev 21290 ms | 16.12×16.12×12.23 | dims 4% 4% -6% orient 13.2° (holo 13.2°) principal 13.2°
+  wall 37.5 s
+2026-10-31T04:07:28.354Z done

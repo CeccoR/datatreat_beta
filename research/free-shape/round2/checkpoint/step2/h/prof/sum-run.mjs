@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 const dir = process.argv[2], md = process.argv.includes('--md');
 const f = (x, d = 1) => Number.isFinite(x) ? x.toFixed(d) : '—';
-const K = ['read', 'fft', 'com', 'size', 'fill', 'lineNodes'];
+const K = ['read', 'fft', 'com', 'size', 'fill', 'pair', 'lineNodes'];
 const rows = [];
 for (const fn of fs.readdirSync(dir).filter(x=> x.endsWith('.json')).sort()){
   const o = JSON.parse(fs.readFileSync(path.join(dir, fn), 'utf8')), P = o.prof; if (!P) continue;

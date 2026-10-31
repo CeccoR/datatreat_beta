@@ -1,7 +1,9 @@
-/* Step 1's harness engine: the patched app copy's engine files (default ../app) copied to
-   eng/, xrd-rietveld.js instrumented with fs2/harness/make-eng.mjs's anchors (counters, the
-   refine log, the shapeHook, ENG), no arithmetic changed; the tunable SHAPE_FWD read from
-   PROTO_FWD (else the copy's default). Run after every engine edit. */
+/* Step 2's harness engine (step 1's make-eng.mjs, extended): the patched app copy's engine files
+   (an argument, e.g. $W/step2-app or $W/step1-app) copied to eng/, xrd-rietveld.js instrumented with
+   fs2/harness/make-eng.mjs's anchors (counters, the refine log, the shapeHook, ENG), no arithmetic
+   changed; the tunable SHAPE_FWD read from PROTO_FWD (else the copy's default) and, on step 2's
+   engine, WPPM_OPT from PROTO_WPPM when it is set ('' all off; flags fast, pair (implies fast),
+   axial), else the copy's defaults. Run after every engine edit. */
 import fs from 'node:fs';
 import path from 'node:path';
 const HERE = path.dirname(new URL(import.meta.url).pathname);
