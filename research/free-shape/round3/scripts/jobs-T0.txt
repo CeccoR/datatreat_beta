@@ -1,0 +1,3 @@
+T0r2 box-P-1-near-a q -
+T0p box-P-1-near-a p -
+T0rec box-P-1-near-a p ANGLE_SET=record=true;each=true
