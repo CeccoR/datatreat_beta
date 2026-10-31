@@ -55,8 +55,8 @@ stage takes.
 - **Screening stays at 77 runs** (one replicate), so each variant of a step costs what a round-2 step did:
   31 min of elapsed time for the 77 with the angles' profiles recorded (71 s a run, P−1 159 s, m−3 24 s).
 - **The tuning part doubles to 308 runs** and is run once at the end (the confirmation), with the angles'
-  record, about 2 h on three processes.
-- **The validation part is 154 runs**, run twice (round 3's prototype and round 2's frozen one), about 2 h.
+  record: 2 h 14 min of elapsed time for those and round 2's prototype on the 231 outside the screening set.
+- **The validation part is 154 runs**, run twice (round 3's prototype and round 2's frozen one): 66 min.
 - **No run of today's search (v522)**: by the user's decision, round 3 compares only with round 2's frozen
   prototype and with the truth.
 
