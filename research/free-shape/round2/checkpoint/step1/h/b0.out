@@ -1,0 +1,22 @@
+2026-10-31T01:11:02.089Z jobs0.txt: 5 of 5 to do, 3 at a time, timeout 1800 s
+2026-10-31T01:11:15.344Z [1/5] id-lsq spheroid-Pm-3-generic: ok 13 s
+spheroid-Pm-3-generic (m-3, spheroid 30.9×30.9×9.4; exact, 10–110/0.01) as spheroid: draw 268 ms; iso χ²_ν 1.049, 257 ev, 690 ms; list 14 refl, 89 members
+  today: free χ² 10158.1 best 10158.1 ΔBIC -278 | search 1929 ev 7199 ms report 1418 ev 4943 ms | 30.33×30.33×10.37 | dims -2% -2% 10% orient 7.1° (holo 7.1°) principal 7.1°
+  wall 13.2 s
+2026-10-31T01:11:28.751Z [2/5] id-wppm spheroid-Pm-3-generic: ok 27 s
+spheroid-Pm-3-generic (m-3, spheroid 30.9×30.9×9.4; exact, 10–110/0.01) as spheroid: draw 282 ms; iso χ²_ν 1.068, 290 ev, 2619 ms; list 14 refl, 89 members
+  today: free χ² 10114.4 best 10114.4 ΔBIC -493 | search 2118 ev 17220 ms report 900 ev 6369 ms | 31.07×31.07×9.77 | dims 1% 1% 4% orient 6.0° (holo 4.6°) principal 6.0°
+  wall 26.6 s
+2026-10-31T01:11:33.117Z [3/5] v2b-lsq cylinder-Pm-3m-on: ok 31 s
+cylinder-Pm-3m-on (m-3m, cylinder 18.7×18.7×3.7, sizedist 0.72; exact, 10–110/0.01) as cylinder: draw 369 ms; iso χ²_ν 4.367, 384 ev, 1135 ms; list 12 refl, 89 members
+  today: held χ² 12939.5 best 12938.0 ΔBIC -7015 | search 4477 ev 26891 ms report 438 ev 2433 ms | 19.17×19.17×3.58 | dims 3% 3% -3% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 30.9 s
+2026-10-31T01:11:51.407Z [4/5] id-lsq ellipsoid-P6m-near: ok 36 s
+ellipsoid-P6m-near (6/m, ellipsoid 8.6×31.2×60.0; exact, 10–110/0.01) as ellipsoid: draw 237 ms; iso χ²_ν 1.104, 284 ev, 945 ms; list 21 refl, 93 members
+  today: held χ² 10031.7 best 10031.7 ΔBIC -883 | search 3262 ev 16605 ms report 3750 ev 18136 ms | 26.99×9.14×61.09 | dims 6% -14% 2% orient 7.9° (holo 7.9°) principal 6.8°
+  wall 36.0 s
+2026-10-31T01:12:05.763Z [5/5] id-wppm spheroid-Pm-3m-on: ok 37 s
+spheroid-Pm-3m-on (m-3m, spheroid 8.1×8.1×2.2; exact, 10–110/0.01) as spheroid: draw 209 ms; iso χ²_ν 1.375, 384 ev, 4221 ms; list 12 refl, 89 members
+  today: held χ² 9688.4 best 9688.4 ΔBIC -2931 | search 2138 ev 23877 ms report 758 ev 8553 ms | 7.98×7.98×2.25 | dims -1% -1% 0% orient 0.0° (holo 0.0°) principal 0.0°
+  wall 36.9 s
+2026-10-31T01:12:05.763Z done
