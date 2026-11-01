@@ -32,6 +32,9 @@ on round 2's frozen engine (`$W/fs2/step6/h/eng`, its hashes checked against `FR
   by side.
 - `mkpatch.sh`: `../proto/engine.patch` and `../proto/round3-only.diff`.
 - `freeze3.mjs`: `FROZEN3.json` (the engine copy's hashes and the tunables as read).
+- After round 3 (`../V524.md`): `batch524.mjs` (batch3 with the harnesses n, v524's engine in `hN/`, and m, a variant in
+  `hM/`), `jobs-524.txt` (N, Z, Z1, Z2, M on the 77 screening runs), `sum524.mjs Z,Z1,Z2,N,M` (`tables/v524-score.md`),
+  `cmp524.py <tag>` (a tag against Z, row by row).
 - Job files: `jobs-T0.txt` (the first check), `jobs-S.txt` (screening: S0, DR, TL, TF, RF, CP), `jobs-F.txt`
   (verification), `jobs-C.txt` (confirmation: P, Q), `jobs-X.txt` (the cap's loss), `jobs-V.txt` (validation:
   VP, VQ).

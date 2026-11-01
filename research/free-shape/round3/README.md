@@ -35,6 +35,7 @@ leaves 12.7 χ²_ν above a free minimum, and the size distributions and texture
 | `POINT5.md` | targeted starts against random fill and the dense reference (`tables/screen-starts.md`) |
 | `CONFIRM.md` | the confirmation on the 308 tuning runs against round 2's prototype, the two tunables changed, the freeze (`tables/confirm-score.md`, `confirm-angles.md`, `frozen.md`) |
 | `VALIDATION.md` | the validation part, scored once, against round 2's frozen prototype (`tables/validation-score.md`) |
+| `V524.md` | after round 3: v524's search without random numbers (a fixed tilt) on the 77 screening runs, against the frozen prototype and its tilts from two other seeds (`tables/v524-score.md`, `v524-rows.md`) |
 | `proto/` | the prototype: `engine.patch` (round 2's parts and round 3's, against the branch; not applied), `round3-only.diff`, `README.md` (parts, switches, tunables, verifications) |
 | `scripts/` | every script behind the numbers, with its `README.md` and the job files |
 | `tables/` | the small tables the notes read |
