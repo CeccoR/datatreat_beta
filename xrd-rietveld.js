@@ -4458,8 +4458,11 @@ const SHAPE_FULL = 3;
    direction `toward` (Cartesian; any other where they are parallel), the axis across it turned
    as much about it, so that no symmetry holds the axes where they start. No random number: to v523
    the tilt was drawn, 0.08 rad of Gaussian noise on each component (0.1 rad across the axis on
-   average), from a seeded stream; on round 3's 77 screening runs the fixed tilt kept the reach,
-   the outcomes, the accuracy and the intervals' coverage (research/free-shape/round3/V524.md). */
+   average), from a seeded stream. On round 3's 77 screening runs v524 lies within the spread of
+   v523's tilts drawn from three seeds: the same outcomes and keep-test verdicts, reach 60 of 65
+   (60–62), clean extents in their intervals 76 of 82 (76–78), clean axes 31 of 32 (31), 1.02×
+   the search's evaluations; a clean truth only some tilts reach is missed by it as by one seed
+   (research/free-shape/round3/V524.md). */
 const SHAPE_TILT = { by: 0.1, toward: [0.31, 0.59, 0.75] };
 /* Starts on the lines the isotropic fit leaves most and least broadened: a plate on the
    normals of the SHAPE_LINE_STARTS lines most broadened, a needle on those of as many least
