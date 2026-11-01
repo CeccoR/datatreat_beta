@@ -8,7 +8,9 @@
    searched as an ellipsoid and as a spheroid: not kept (the gain under the class's
    threshold), the warning saying so. A result of v522 refined with the Lorentzian line: drawn
    with it (lorentzShape), its solid searched again from it, not carried. No random number
-   (v524): Math.random is not called in the box's refinement. Seconds each. */
+   (v524): Math.random is not called in the box's refinement. The setting shapeTiltSets (v525):
+   0 the default's result exactly; 1 the starts run twice, every end into the minima stage, χ² no
+   higher, still no random number. Seconds each. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -38,9 +40,9 @@ function draw(shape, P){
   const yc = calc(m, { ...getParams(m), ...prof, bg0: 0, 'p1.scale': 1, ...P }).yc, S = 2e4/Math.max(...yc);
   return X.map((_, i)=> { const l = yc[i]*S + 200; return Math.max(0, Math.round(l + Math.sqrt(l)*nrm())); });
 }
-const refineAs = (y, shape, start) => {
+const refineAs = (y, shape, start, fit) => {
   const model = buildModel({ x: X, y, instr: INSTR, phases: [phase(shape)] });
-  return { model, res: autoRefine(model, { standard: false, irf: IRF, ...(start ? { start, hold: [] } : null) }) };
+  return { model, res: autoRefine(model, { standard: false, irf: IRF, ...(start ? { start, hold: [] } : null), ...(fit ? { fit } : null) }) };
 };
 const TRUE = [8, 5, 3];
 const BOX = draw('box', { 'p1.Wa': widthOf(TRUE[0]), 'p1.Wb': widthOf(TRUE[1]), 'p1.Wc': widthOf(TRUE[2]) });
@@ -84,6 +86,21 @@ test('a box of 8 × 5 × 3 nm on the cube\'s axes: kept, held on ⟨100⟩, its 
   assert.equal(sh.minima.explored, true);
   assert.ok(sh.minima.n >= 1 && Array.isArray(sh.minima.list) && Array.isArray(sh.sets));
   assert.equal(sh.keep, kp);
+});
+
+test('the extra tilt sets (shapeTiltSets): 0 the default exactly; 1 twice the starts, every end in the minima stage, χ² no higher, no random number', ()=>{
+  const { res: r0 } = boxRes(), i0 = r0.shapes[1];
+  const z = refineAs(BOX, 'box', null, { shapeTiltSets: 0 }).res;
+  assert.deepEqual([z.params, z.stats, z.shapes[1]], [r0.params, r0.stats, i0], '0: the default\'s result');
+  assert.equal(i0.tiltSets, undefined);
+  const { res: r1, randoms } = counted(()=> refineAs(BOX, 'box', null, { shapeTiltSets: 1 })), i1 = r1.shapes[1];
+  assert.equal(randoms(), 0, 'no random number drawn');
+  assert.ok(i1, 'the shape kept: ' + r1.warnings.join(' | '));
+  assert.equal(i1.tiltSets, 1);
+  assert.equal(i1.starts, 2*i0.starts, 'the same starts again');
+  assert.ok(i1.full >= i0.full && i1.minimaStage.ends >= i0.minimaStage.ends + i0.starts, `ends ${i1.minimaStage.ends} against ${i0.minimaStage.ends}`);
+  assert.ok(r1.stats.chi2 <= r0.stats.chi2*(1 + 1e-9), `χ²_ν ${r1.stats.chi2} against ${r0.stats.chi2}`);
+  assert.equal(r1.fit.shapeTiltSets, 1, 'the result says the setting it was refined with');
 });
 
 test('a 5 nm sphere searched as an ellipsoid and as a spheroid: not kept, the warning gives the gain and the class\'s need', ()=>{

@@ -3498,7 +3498,8 @@ const ZERO_RANGE = 1;
    10⁻⁴–1: 0.01), lambda (λ to start each refinement from, 10⁻⁸–10³: 10⁻³), bgDegree (the
    Chebyshev terms T₀…Tₙ, 0–20: BG_DEGREE), bgInv (the 1/2θ term: true, false or 'auto',
    buildModel's rule), cellRange (0.005–0.2: CELL_RANGE), zeroRange (0.05–5°: ZERO_RANGE),
-   and shapeFull (1–20: SHAPE_FULL); a key not listed is ignored (shapeStarts, the free
+   shapeFull (1–20: SHAPE_FULL) and shapeTiltSets (0–8: the free shape's more sets of start
+   tilts, none by default; SHAPE_TILT); a key not listed is ignored (shapeStarts, the free
    shape's random starts to v523, among them). Integers are rounded. A number or a numeric
    string is read; anything else (null, a blank string, a boolean) is the default: +' ' and
    +true are numbers, 0 and 1, and had set the shift test to 10⁻⁴ or one iteration. With nothing given, or every key at its default, a
@@ -3506,7 +3507,8 @@ const ZERO_RANGE = 1;
 function fitSettings(fit){
   const f = fit || {}, out = {};
   const keys = { maxIter: [40, 1, 1000, true], shiftTol: [0.01, 1e-4, 1], lambda: [1e-3, 1e-8, 1e3], bgDegree: [BG_DEGREE, 0, 20, true],
-    cellRange: [CELL_RANGE, 0.005, 0.2], zeroRange: [ZERO_RANGE, 0.05, 5], shapeFull: [SHAPE_FULL, 1, 20, true] };
+    cellRange: [CELL_RANGE, 0.005, 0.2], zeroRange: [ZERO_RANGE, 0.05, 5], shapeFull: [SHAPE_FULL, 1, 20, true],
+    shapeTiltSets: [0, 0, SHAPE_TILT.sets, true] };
   for (const k in keys){
     const [def, lo, hi, int] = keys[k], s = f[k], x = typeof s === 'number' || (typeof s === 'string' && s.trim()) ? +s : NaN;
     out[k] = Number.isNaN(x) ? def : Math.min(hi, Math.max(lo, int ? Math.round(x) : x));
@@ -4463,7 +4465,18 @@ const SHAPE_FULL = 3;
    (60–62), clean extents in their intervals 76 of 82 (76–78), clean axes 31 of 32 (31), 1.02×
    the search's evaluations; a clean truth only some tilts reach is missed by it as by one seed
    (research/free-shape/round3/V524.md). */
-const SHAPE_TILT = { by: 0.1, toward: [0.31, 0.59, 0.75] };
+const SHAPE_TILT = { by: 0.1, toward: [0.31, 0.59, 0.75], sets: 8 };
+/* The setting shapeTiltSets (0–SHAPE_TILT.sets, default 0; v525): the same starts run again,
+   once for each of that many more tilt directions, each set's best shapeFull refined fully and
+   every end into the minima stage — about one more search a set, not tuned. Set j (1, 2, …) is
+   tilted toward the j-th of SHAPE_TILT.sets points of a golden spiral from the south pole up
+   (the fixed direction lies north): 66–68° apart, the first ones farthest from it, and the
+   same whatever the setting, so n sets are among n + 1's. Set 0 is SHAPE_TILT.toward. */
+const shapeTilt = j => {
+  if (!j) return SHAPE_TILT.toward;
+  const M = SHAPE_TILT.sets, i = j - 1, z = -1 + (2*i + 1)/M, r = Math.sqrt(1 - z*z), ph = i*2.399963229728653;
+  return [r*Math.cos(ph), r*Math.sin(ph), z];
+};
 /* Starts on the lines the isotropic fit leaves most and least broadened: a plate on the
    normals of the SHAPE_LINE_STARTS lines most broadened, a needle on those of as many least
    broadened (lineBroadening), beside the class's low-index starts. On round 3's 66 screening
@@ -4877,13 +4890,14 @@ function shapeFamily(model, k, res, free, opts, r, vIso){
    that part: it starts instead from the sphere-like solid (for the ellipsoid and the spheroid the
    sphere itself, so that their fit never ends above the isotropic one), plates and needles on the
    low-index directions and on the lines the isotropic fit leaves most and least broadened, each
-   refined briefly, and the best few to convergence. A body with faces is refined again with them
+   refined briefly, and the best few to convergence (with the setting shapeTiltSets, the same starts
+   again in that many more tilts, each set's best few too: SHAPE_TILT). A body with faces is refined again with them
    exact, and with its axes held on the lattice (kept when better); the shape is kept by the keep
    test (SHAPE_KEEP; { rejected, dBIC, early, keep, check } otherwise: early, decided on the brief
    refinements; check, the isotropic fit's per-line check); then every minimum the search fell into
    is refined to the same level (shapeMinima), the fit kept refined once more by central
    differences, and checked line by line (lineCheck). No random number: the same data give the
-   same result. info: { type, starts, full, chi2Iso, chi2, Piso, P, N, chi2redIso, held, dBICfree,
+   same result. info: { type, starts (every set's), full, tiltSets (the setting, when not 0), chi2Iso, chi2, Piso, P, N, chi2redIso, held, dBICfree,
    dBICheld, freeOff (the free axes' angles from the held ones, °), freeW (the free fit's widths),
    check, keep (the keep test's numbers: k, G, the gains of each route, need, dBIC, flagged, kept),
    minima (those within SHAPE_MINIMA.keep of the lowest: { chi2, delta (in ν), W, R, s, n, from }),
@@ -4917,7 +4931,7 @@ function freeShapeRun(model, k, res, free, opts){
      (a synthetic 18.7 × 3.7 nm cylinder ended an unbounded disc 1693 χ²_ν above). The fit
      kept is refined once more as the stages are (lmCentral), its covariance from there
      (research/free-shape/round2/AB.md §4, STEP1.md: 0.62× the evaluations of v522's search). */
-  const F = fitSettings(opts.fit), nFull = F.shapeFull;
+  const F = fitSettings(opts.fit), nFull = F.shapeFull, nSets = 1 + F.shapeTiltSets;
   const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda, forward: true, noCov: true };
   const lmCentral = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
   const lmFull = { ...lmCentral, noCov: true };
@@ -4949,9 +4963,9 @@ function freeShapeRun(model, k, res, free, opts){
     quatOfMat(R).forEach((t, i)=> { v[q.iQ[i]] = t; });
   };
   // The frame with z along e and x along a low-index direction across it (else any), tilted
-  // (SHAPE_TILT): z toward the fixed direction's part across e, x turned about z.
-  const frameAlong = e0 => {
-    const e = unit(e0), d = SHAPE_TILT.toward, ac = d.map((t, i)=> t - dot(d, e)*e[i]);
+  // (SHAPE_TILT): z toward the part across e of the direction d (the set's: shapeTilt), x turned about z.
+  const frameAlong = (e0, d) => {
+    const e = unit(e0), ac = d.map((t, i)=> t - dot(d, e)*e[i]);
     const z = turnTo(e, unit(Math.hypot(...ac) > 1e-3 ? ac : cross(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])));
     const x0 = axesLow.find(a=> Math.abs(dot(a, e)) < 0.1) || cross(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
     const xu = unit(x0.map((t, i)=> t - dot(x0, z)*z[i])), xo = turnTo(xu, cross(z, xu)), y = cross(z, xo);
@@ -4960,12 +4974,10 @@ function freeShapeRun(model, k, res, free, opts){
   // The class's distinct starts: the sphere-like one, and a plate and a needle per low-index
   // family (11 in the six lower classes, 9 in −3m, 6/m and 6/mmm, 7 in cubic). Random starts
   // beside them had cost 15 % of the evaluations and changed no outcome (AB.md §4.2), and
-  // bought less than the line starts below (round 3's POINT5.md): none since v524.
-  const starts = [put(Wof(w0, w0, w0), frameAlong(axesLow[0] || [0, 0, 1]))];
-  for (const e of axesLow){
-    starts.push(put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(e)));
-    starts.push(put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(e)));
-  }
+  // bought less than the line starts below (round 3's POINT5.md): none since v524. Each start
+  // as its widths, its axis and its kind, tilted by its set (startsOf).
+  const specs = [{ W: Wof(w0, w0, w0), e: axesLow[0] || [0, 0, 1] }];
+  for (const e of axesLow) specs.push({ W: Wof(0.5*w0, 0.7*w0, 2.5*w0), e }, { W: Wof(1.2*w0, 1.6*w0, 0.4*w0), e });
   // On the lines: a plate on the normals of the most broadened, a needle on those of the least
   // broadened (lineBroadening, |z| > 2), a lattice direction among the low-index starts' left out.
   {
@@ -4975,9 +4987,11 @@ function freeShapeRun(model, k, res, free, opts){
         const ld = lattDirection(q, sg.g); if ((ld.angle <= SNAP_DEG && lowLab.has(ld.label)) || seen.has(ld.label)) continue; seen.add(ld.label); out.push(sg); }
       return out; };
     const most = pickDir([...lb].sort((a, b)=> b.delta - a.delta), sg=> sg.z > 2), least = pickDir([...lb].sort((a, b)=> a.delta - b.delta), sg=> sg.z < -2);
-    for (const sg of most){ const f = put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(sg.g)); f.kind = 'line'; starts.push(f); }
-    for (const sg of least){ const f = put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(sg.g)); f.kind = 'line'; starts.push(f); }
+    for (const sg of most) specs.push({ W: Wof(1.2*w0, 1.6*w0, 0.4*w0), e: sg.g, kind: 'line' });
+    for (const sg of least) specs.push({ W: Wof(0.5*w0, 0.7*w0, 2.5*w0), e: sg.g, kind: 'line' });
   }
+  // The starts of set j (0: SHAPE_TILT's; 1…, the setting shapeTiltSets's), tilted toward shapeTilt(j).
+  const startsOf = j => specs.map(s=> { const f = put(s.W, frameAlong(s.e, shapeTilt(j))); if (s.kind) f.kind = s.kind; return f; });
   // The orientation reached becomes the reference, r = 0: the chart is fresh at the
   // start of each full refinement, far from |r| = π.
   const rebase = v => { const vv = v.slice(), R = bodyFrame(q, v); q.iR.forEach(i=> { vv[i] = 0; }); quatOfMat(R).forEach((t, i)=> { vv[q.iQ[i]] = t; }); return vv; };
@@ -5022,18 +5036,25 @@ function freeShapeRun(model, k, res, free, opts){
     });
   };
   names = free.filter(nm=> nm !== pf + 'Ys').concat(names);
-  const steps = starts.length + nFull + 2;
+  const steps = nSets*(specs.length + nFull) + 2;
   let done = 0;
   const tick = ()=> { done++; if (opts.onShape) opts.onShape(Math.min(1, done/steps)); };
-  const brief = [];
-  for (const put of starts){
-    const vv = vIso.slice(); vv[q.iYs] = 0;
-    put(vv);
-    setParams(model, vv);
-    try { const r = refine(model, { free: names, ...lmBrief, audit: false }); brief.push({ v: model.v.slice(), chi: chiTot(r), ...(put.kind ? { kind: 'brief-' + put.kind } : null) }); } catch(e){}
-    tick();
+  // Each set's brief refinements (sets), in turn; brief, all of them.
+  const sets = [];
+  for (let j = 0; j < nSets; j++){
+    const set = [];
+    for (const put of startsOf(j)){
+      const vv = vIso.slice(); vv[q.iYs] = 0;
+      put(vv);
+      setParams(model, vv);
+      try { const r = refine(model, { free: names, ...lmBrief, audit: false }); set.push({ v: model.v.slice(), chi: chiTot(r), ...(put.kind ? { kind: 'brief-' + put.kind } : null) }); } catch(e){}
+      tick();
+    }
+    sets.push(set);
   }
+  const brief = sets.flat();
   for (const b of brief) ends.push({ ...b, kind: b.kind || 'brief' });
+  for (const set of sets) set.sort((a, b)=> a.chi - b.chi);
   brief.sort((a, b)=> a.chi - b.chi);
   // Every brief refinement threw: nothing was refined (not a ΔBIC of +∞).
   if (!brief.length){ setParams(model, vIso); return null; }
@@ -5059,7 +5080,8 @@ function freeShapeRun(model, k, res, free, opts){
     tick();
     return chiTot(r);
   };
-  for (const b of brief.slice(0, nFull)){ const c = full(b.v, b.kind); if (c != null) finals.push(c); }
+  // Each set's best nFull (one set: the best nFull of all).
+  for (const set of sets) for (const b of set.slice(0, nFull)){ const c = full(b.v, b.kind); if (c != null) finals.push(c); }
   if (!best){ setParams(model, vIso); return null; }
   // ΔBIC against the isotropic fit, with χ² divided by its χ²_ν (so that the model's own
   // misfit is not taken for evidence).
@@ -5153,7 +5175,7 @@ function freeShapeRun(model, k, res, free, opts){
   if (!r) try { r = refine(model, { free: best.res.free, ...lmCentral, covOnly: true }); } catch(e){ setParams(model, best.v); }
   if (r){ best = { res: r, v: model.v.slice() }; cb = chiTot(r); }
   const check = lineCheck(model, k, best.v, best.res.stats.P);
-  return { res: best.res, info: { type: q.shapeType, starts: starts.length, full: finals.length,
+  return { res: best.res, info: { type: q.shapeType, starts: nSets*specs.length, full: finals.length, ...(nSets > 1 ? { tiltSets: nSets - 1 } : null),
     chi2Iso: chiTot(res), chi2: cb, Piso: res.stats.P, P: best.res.stats.P, N, chi2redIso: res.stats.chi2, held, dBICfree, dBICheld, freeOff, freeW, check, keep,
     ...(minima ? { minima, minimaStage: minima.stage } : null) } };
 }

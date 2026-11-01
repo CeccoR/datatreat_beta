@@ -172,7 +172,7 @@ test('B: the standard\'s Settings show only what applies to it; the samples\' ev
     s = await box();
     assert.deepEqual(s.rows, ['size', 'wppm', 'strain', 'faults', 'adp', 'occ', 'po']);
     assert.deepEqual(s.holds, ['linear', 'cell', 'instrument', 'sizestrain', 'shape', 'faults', 'adp', 'occ', 'texture']);
-    assert.deepEqual(s.fits, ['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeFull']);
+    assert.deepEqual(s.fits, ['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeFull', 'shapeTiltSets']);
     await page.keyboard.press('Escape');
     // The standard's settings kept whole (the rows not shown off, the groups kept).
     const st = (await moduleState(page, 'xrd')).stdRv;

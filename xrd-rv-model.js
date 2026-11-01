@@ -217,6 +217,8 @@ const FITS = [
     title: "The standard's zero is scanned over ± this before its refinement (the zero and the specimen's displacement together). Beyond 1° its bounds widen with it. The standard only." },
   { k: 'shapeFull', label: 'Shape full refinements', int: true, shape: true, said: v => `${v} shape starts refined fully`,
     title: "The free shape's search starts from the sphere-like shape and from plates and needles along the low-index directions and on the lines the isotropic fit leaves most and least broadened, each refined briefly: this many of the best are refined to convergence, before every minimum they fall into is refined to the same level. More: slower, less likely to miss the best solid." },
+  { k: 'shapeTiltSets', label: 'Shape extra tilt sets', int: true, shape: true, said: v => `${v} extra shape tilt set${v === 1 ? '' : 's'}`,
+    title: "The free shape's starts are each tilted 6° in one fixed direction, so that no symmetry holds their axes where they start. Each set adds the same starts again, tilted in another fixed direction, their best refined fully and every minimum they fall into refined with the search's: about one more search each (its time again), less likely to miss a solid that only some tilts reach. The directions are fixed (no random number): the same data and settings give the same result." },
 ];
 const FIT = Object.fromEntries(FITS.map(m=> [m.k, m]));
 // A setting as shown (twelve significant digits: 7.3 % is 0.073, not 0.07300000000000001).
