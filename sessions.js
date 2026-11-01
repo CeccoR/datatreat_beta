@@ -417,6 +417,7 @@ async function importProjectFile(file){
 /* ---- Projects list rendering ---- */
 let _cache = [];
 let _sortKey = 'updatedAt', _sortDir = -1;
+let _listDraw = 0, _redrawing = false;
 function sortRows(rows){
   const k = _sortKey;
   return rows.sort((a,b)=>{
@@ -448,7 +449,10 @@ function updateBulkState(){
   });
 }
 async function renderList(){
-  _cache = (await allProjects()).sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+  // (the latest call's read alone is drawn: an older one ending after it draws nothing)
+  const n = ++_listDraw, all = await allProjects();
+  if (n !== _listDraw) return;
+  _cache = all.sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
   const wrap = document.getElementById('sessListWrap');
   if (!wrap) return;
   const rows = sortRows(_cache.filter(passesFilter));
@@ -474,8 +478,26 @@ async function renderList(){
       + '</div></td></tr>';
   });
   html += '</tbody></table></div>';
-  wrap.innerHTML = html;
+  drawRows(wrap, html, rows);
   updateBulkState();
+}
+/* A name being typed in the list stays as it is when the list is drawn again (v526): its
+   row's new field takes the text, the caret and the focus. To v525 the list drawn anew
+   threw the field away: the Projects button shows the list drawn before and draws it again
+   a moment later, and a rename draws it again as its write is done, so a name typed then
+   (in another row's field, clicked as the rename before it is written) lost the focus and
+   what was typed after, or was renamed half typed (Chromium ends the edit of a field taken
+   out of the page). */
+function drawRows(wrap, html, rows){
+  const a = document.activeElement;
+  const tr = a && a.classList.contains('proj-rename') && wrap.contains(a) ? a.closest('tr.sess-row') : null;
+  const keep = tr && rows.some(r=> r.id === tr.dataset.id)
+    ? { id: tr.dataset.id, value: a.value, from: a.selectionStart, to: a.selectionEnd, dir: a.selectionDirection } : null;
+  _redrawing = !!keep;   // (the old field's focusout, as it leaves the page, commits nothing)
+  try { wrap.innerHTML = html; } finally { _redrawing = false; }
+  if (!keep) return;
+  const inp = [...wrap.querySelectorAll('tr.sess-row')].find(r=> r.dataset.id === keep.id).querySelector('.proj-rename');
+  inp.value = keep.value; inp.focus(); inp.setSelectionRange(keep.from, keep.to, keep.dir);
 }
 function recById(id){ return _cache.find(s=> s.id === id); }
 // (the record and its files' bytes read first, v517: to v516 the list's copy held them)
@@ -695,11 +717,14 @@ document.getElementById('sessListWrap').addEventListener('keydown', e=>{
   document.addEventListener('mouseup', ()=> wrap.querySelectorAll('.sess-row.row-press').forEach(r=>r.classList.remove('row-press')));
 })();
 document.getElementById('sessListWrap').addEventListener('change', e=>{
-  if (e.target.classList.contains('sess-check')){ updateBulkState(); return; }
-  if (e.target.classList.contains('proj-rename')){
-    const tr = e.target.closest('tr.sess-row'); const rec = recById(tr && tr.dataset.id);
-    if (rec) renameProject(rec, e.target.value);
-  }
+  if (e.target.classList.contains('sess-check')) updateBulkState();
+});
+// A name is committed as its field loses the focus (Enter blurs it): on focusout, not on
+// change, which a name carried over to a field drawn anew (drawRows) never fires (v526).
+document.getElementById('sessListWrap').addEventListener('focusout', e=>{
+  if (_redrawing || !e.target.classList.contains('proj-rename')) return;
+  const tr = e.target.closest('tr.sess-row'); const rec = recById(tr && tr.dataset.id);
+  if (rec) renameProject(rec, e.target.value);
 });
 
 document.querySelector('#nav button[data-tab="projects"]').addEventListener('click', renderList);
