@@ -116,9 +116,9 @@ const adpOpt = v => v === 'overall' || v === 'site' || v === 'aniso' ? v : 'cif'
    v428's: an isotropic size and strain, the rest off. */
 const MODES = [
   { k: 'size', label: 'Crystallite size', on: true, list: [['iso', 'isotropic'], ...SHAPES.filter(([k])=> k).map(([k, t])=> [k, 'free shape: ' + t.replace(' (two axes equal)', '')])],
-    title: "The crystallites' size broadening, Y_s/cosθ above the instrument's. Off: none (Y_s held at 0). Isotropic: one size. Free shape: a solid of any proportions and orientation, each reflection of a family with its own width; it tries several starting shapes (tens of seconds a sample, minutes with many reflections or log-normal sizes) and is kept only when the data support it against the isotropic size. Size models need the standard's profile" },
+    title: "The crystallites' size broadening, Y_s/cosθ above the instrument's. Off: none (Y_s held at 0). Isotropic: one size. Free shape: a solid of any proportions and orientation, each reflection of a family with its own width, drawn by its exact line (WPPM) whatever the size profile; it tries several starting shapes (tens of seconds a sample, minutes with many reflections or log-normal sizes) and is kept only when its gain over the isotropic size is over what noise gives a sphere in the phase's Laue class. Size models need the standard's profile" },
   { k: 'wppm', label: 'WPPM (size profile)', on: false, list: [['wppm', 'one size'], ['lognormal', 'log-normal sizes']],
-    title: "The size broadening's profile. Off: a Lorentzian, the size read with Scherrer's K = 0.9 (an apparent size: spheres of one size read 1.0–1.7 times theirs). On: Whole Powder Pattern Modelling, each line the Fourier transform of the crystallites' own common-volume function with the instrument's, the strain's and the faults' coefficients: the true dimensions, of one size or over a log-normal distribution of sizes (σ refined). Needs the crystallite size and the standard's profile" },
+    title: "The size broadening's profile. Off: a Lorentzian, the size read with Scherrer's K = 0.9 (an apparent size: spheres of one size read 1.0–1.7 times theirs); a free shape is drawn by WPPM either way. On: Whole Powder Pattern Modelling, each line the Fourier transform of the crystallites' own common-volume function with the instrument's, the strain's and the faults' coefficients: the true dimensions, of one size or over a log-normal distribution of sizes (σ refined). Needs the crystallite size and the standard's profile" },
   { k: 'strain', label: 'Microstrain', on: true, list: [['iso', 'isotropic'], ['aniso', 'anisotropic (Stephens)']],
     title: "Off: none (X_s held at 0). Isotropic: one microstrain, the Lorentzian 4ε·tanθ. Anisotropic (Stephens): ε² a quartic form of the reflection's direction that the Laue group leaves unchanged (1 more term for a cubic phase, up to 14 for a triclinic one): a strain that depends on hkl. Anisotropic needs the standard's profile" },
   { k: 'faults', label: 'Planar faults', on: false, list: FAULTS,
@@ -215,10 +215,8 @@ const FITS = [
     title: "How far the cell search scales the CIF's cell lengths, ± this: a sample's cell may be a few per cent off the file's (doping, a DFT cell, temperature). A lone phase not found is searched again over twice it. Wider: slower, and more room for a false minimum. Samples only." },
   { k: 'zeroRange', label: 'Zero scan range (°)', role: 'std', said: v => `zero scan ±${v}°`,
     title: "The standard's zero is scanned over ± this before its refinement (the zero and the specimen's displacement together). Beyond 1° its bounds widen with it. The standard only." },
-  { k: 'shapeStarts', label: 'Shape trial starts', int: true, shape: true, said: v => `${v} shape starts`,
-    title: "The free shape's search: the sphere-like start, plates and needles along the low-index directions and on the lines the isotropic fit leaves most and least broadened are always run; each start above the default (10) adds a random shape. More: slower, less likely to miss the best solid." },
   { k: 'shapeFull', label: 'Shape full refinements', int: true, shape: true, said: v => `${v} shape starts refined fully`,
-    title: "The free shape's best trial starts refined to convergence." },
+    title: "The free shape's search starts from the sphere-like shape and from plates and needles along the low-index directions and on the lines the isotropic fit leaves most and least broadened, each refined briefly: this many of the best are refined to convergence, before every minimum they fall into is refined to the same level. More: slower, less likely to miss the best solid." },
 ];
 const FIT = Object.fromEntries(FITS.map(m=> [m.k, m]));
 // A setting as shown (twelve significant digits: 7.3 % is 0.073, not 0.07300000000000001).
@@ -245,7 +243,8 @@ function readFit(m, raw){
   if (m.pct) v = +(v/100).toPrecision(12);
   return v >= m.lo && v <= m.hi ? v : null;
 }
-// Settings as saved, made valid: a key unknown, out of range or at its default is dropped.
+// Settings as saved, made valid: a key unknown (shapeStarts, the free shape's random starts, a
+// setting to v523), out of range or at its default is dropped.
 function cleanFit(s){
   const out = {};
   if (s && typeof s === 'object') FITS.forEach(m=>{
@@ -542,7 +541,8 @@ function sizeMarks(fs, results, sizeBy, colorOf){
 
 // The Refinement settings a result was refined with that are not the defaults (r.fit,
 // the worker's; none in a result of v428 or older), those that acted on it: the cell
-// search's range on a sample, the zero scan's on the standard, the shape's with a shape.
+// search's range on a sample, the zero scan's on the standard, the shape's with a shape (a
+// key no longer a setting, as a result of v523 or older may carry shapeStarts, is not said).
 function fitUsed(r, std){
   if (!r || !r.fit) return [];
   const fs = fitSettings(r.fit), isS = roleOf(r) ?? std, shaped = Object.values(r.models || {}).some(m=> m && m.shape);

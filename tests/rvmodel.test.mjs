@@ -96,7 +96,7 @@ test('the settings made valid, a v428 project\'s migrated, the engine\'s options
   assert.deepEqual(M.siteList(sto), [['Sr1', 'Sr1 (Sr)'], ['Ti1', 'Ti1 (Ti)'], ['O1', 'O1 (O, ×3)']]);
   // The rows each card shows.
   const s = M.rowsFor(false), t = M.rowsFor(true);
-  assert.deepEqual([s.fits.map(m=> m.k), s.modes.length, s.holds.length], [['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeStarts', 'shapeFull'], 7, 9]);
+  assert.deepEqual([s.fits.map(m=> m.k), s.modes.length, s.holds.length], [['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeFull'], 7, 9]);
   assert.deepEqual([t.fits.map(m=> m.k), t.modes.map(m=> m.k), t.holds.map(([k])=> k)], [['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'zeroRange'], ['adp', 'po'], ['linear', 'cell', 'instrument', 'adp', 'texture']]);
 });
 
@@ -109,15 +109,16 @@ test('the Refinement settings: their ranges, an entry read with either mark, the
     ['bgInv', false, false, true, '', false, undefined, undefined, undefined, undefined],
     ['cellRange', false, true, false, 'sample', false, 0.005, 0.2, '0.5–20', 'a number from 0.5 to 20 %'],
     ['zeroRange', false, false, false, 'std', false, 0.05, 5, '0.05–5', 'a number from 0.05 to 5°'],
-    ['shapeStarts', true, false, false, '', true, 1, 100, '1–100', 'a whole number from 1 to 100'],
     ['shapeFull', true, false, false, '', true, 1, 20, '1–20', 'a whole number from 1 to 20']]);
-  assert.deepEqual(M.FIT_DEF, { maxIter: 40, shiftTol: 0.01, lambda: 0.001, bgDegree: 6, cellRange: 0.05, zeroRange: 1, shapeStarts: 10, shapeFull: 3, bgInv: 'auto' });
+  assert.deepEqual(M.FIT_DEF, { maxIter: 40, shiftTol: 0.01, lambda: 0.001, bgDegree: 6, cellRange: 0.05, zeroRange: 1, shapeFull: 3, bgInv: 'auto' });
   const read = [['maxIter', '50', 50], ['maxIter', ' 50 ', 50], ['maxIter', '50.0', null], ['maxIter', '1,000', null], ['maxIter', '1e2', 100], ['maxIter', '0', null], ['maxIter', '', null],
     ['maxIter', '0x10', null], ['maxIter', 'Infinity', null], ['shiftTol', '0,05', 0.05], ['shiftTol', '1e-3', 0.001], ['shiftTol', '.5', 0.5], ['shiftTol', '-0', null], ['shiftTol', '1e', null],
     ['lambda', '1e-8', 1e-8], ['lambda', '1e-9', null], ['lambda', '1000', 1000], ['lambda', '1001', null], ['cellRange', '7,3', 0.073], ['cellRange', '7.3', 0.073], ['cellRange', '0', null],
     ['zeroRange', '0,5', 0.5], ['bgDegree', '12', 12], ['bgDegree', '2.5', null]];
   read.forEach(([k, raw, want])=> assert.equal(M.readFit(M.FIT[k], raw), want, `${k} ${JSON.stringify(raw)}`));
   for (const s of [undefined, null, 'x', {}, { shapeFull: 3, bgInv: 'true', maxIter: 1e9, bgDegree: 6 }]) assert.deepEqual(M.cleanFit(s), {}, JSON.stringify(s));
+  // (v524: the random starts' setting no longer one; a project of v523 or older that set it opens without it)
+  assert.deepEqual(M.cleanFit({ shapeStarts: 20, shapeFull: 5 }), { shapeFull: 5 });
   // (a key unknown, out of range, not whole or at its default dropped; the rest in FITS' order, as text)
   const c = M.cleanFit({ bgDegree: 9, maxIter: 50, lambda: 0.001, x: 1, cellRange: 0.073, bgInv: false, shapeStarts: 2.5, zeroRange: -0, shiftTol: NaN });
   assert.equal(JSON.stringify(c), '{"maxIter":50,"bgDegree":9,"bgInv":false,"cellRange":0.073}');
@@ -222,7 +223,8 @@ test('the instrument read once from the file\'s own bytes; a result written; the
     [{ k: 'maxIter', v: 20, said: 'max 20 iterations' }, { k: 'bgInv', v: false, said: '1/2θ term off' }, { k: 'cellRange', v: 0.1, said: 'cell search ±10 %' }]);
   assert.deepEqual(M.fitUsed({ fit: { cellRange: 0.1, zeroRange: 0.5, maxIter: 20 } }, true), [{ k: 'maxIter', v: 20, said: 'max 20 iterations' }, { k: 'zeroRange', v: 0.5, said: 'zero scan ±0.5°' }]);
   assert.deepEqual(M.fitUsed({ fit: { cellRange: 0.1, zeroRange: 0.5 }, standard: true }, false), [{ k: 'zeroRange', v: 0.5, said: 'zero scan ±0.5°' }], 'its own role');
-  assert.deepEqual(M.fitUsed({ fit: { shapeStarts: 3, shapeFull: 2 }, models: { 1: { shape: 'box' } } }, false), [{ k: 'shapeStarts', v: 3, said: '3 shape starts' }, { k: 'shapeFull', v: 2, said: '2 shape starts refined fully' }]);
+  // (a result of v523 or older refined with shapeStarts: not said, no longer a setting)
+  assert.deepEqual(M.fitUsed({ fit: { shapeStarts: 3, shapeFull: 2 }, models: { 1: { shape: 'box' } } }, false), [{ k: 'shapeFull', v: 2, said: '2 shape starts refined fully' }]);
   assert.deepEqual(M.fitUsed({ fit: { lambda: 0.1, shiftTol: 0.01, bgDegree: 6 } }, false), [{ k: 'lambda', v: 0.1, said: 'starting λ 0.1' }]);
   // The phases a result was refined with, and the ticks before one.
   const sto = { id: 1, prep: ph[0].prep, color: '#d4a72c', off: {} }, bto = { id: 2, prep: M.prepOf(BTO, 'BaTiO3.cif'), color: '#c77dff', off: {} };

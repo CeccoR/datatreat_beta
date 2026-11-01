@@ -3498,15 +3498,15 @@ const ZERO_RANGE = 1;
    10⁻⁴–1: 0.01), lambda (λ to start each refinement from, 10⁻⁸–10³: 10⁻³), bgDegree (the
    Chebyshev terms T₀…Tₙ, 0–20: BG_DEGREE), bgInv (the 1/2θ term: true, false or 'auto',
    buildModel's rule), cellRange (0.005–0.2: CELL_RANGE), zeroRange (0.05–5°: ZERO_RANGE),
-   shapeStarts (1–100: SHAPE_STARTS) and shapeFull (1–20: SHAPE_FULL). Integers are
-   rounded. A number or a numeric string is read; anything else (null, a blank string,
-   a boolean) is the default: +' ' and +true are numbers, 0 and 1, and had set the shift
-   test to 10⁻⁴ or one iteration. With nothing given, or every key at its default, a
+   and shapeFull (1–20: SHAPE_FULL); a key not listed is ignored (shapeStarts, the free
+   shape's random starts to v523, among them). Integers are rounded. A number or a numeric
+   string is read; anything else (null, a blank string, a boolean) is the default: +' ' and
+   +true are numbers, 0 and 1, and had set the shift test to 10⁻⁴ or one iteration. With nothing given, or every key at its default, a
    refinement is the one before they were settings. */
 function fitSettings(fit){
   const f = fit || {}, out = {};
   const keys = { maxIter: [40, 1, 1000, true], shiftTol: [0.01, 1e-4, 1], lambda: [1e-3, 1e-8, 1e3], bgDegree: [BG_DEGREE, 0, 20, true],
-    cellRange: [CELL_RANGE, 0.005, 0.2], zeroRange: [ZERO_RANGE, 0.05, 5], shapeStarts: [SHAPE_STARTS, 1, 100, true], shapeFull: [SHAPE_FULL, 1, 20, true] };
+    cellRange: [CELL_RANGE, 0.005, 0.2], zeroRange: [ZERO_RANGE, 0.05, 5], shapeFull: [SHAPE_FULL, 1, 20, true] };
   for (const k in keys){
     const [def, lo, hi, int] = keys[k], s = f[k], x = typeof s === 'number' || (typeof s === 'string' && s.trim()) ? +s : NaN;
     out[k] = Number.isNaN(x) ? def : Math.min(hi, Math.max(lo, int ? Math.round(x) : x));
@@ -3633,8 +3633,8 @@ function ownEvidence(model, v, chi2){
    the cell it started that search from throughout: the file's, or for a phase found in
    the first round but not in the second, the first round's.
    Other options: fit (fitSettings: maxIter, shiftTol and lambda go to every refine() made
-   here, the trials' and the free shape's too; cellRange, zeroRange, shapeStarts,
-   shapeFull; bgInv true or false sets the 1/2θ term, bgDegree is buildModel's), and as
+   here, the trials' and the free shape's too; cellRange, zeroRange, shapeFull; bgInv true
+   or false sets the 1/2θ term, bgDegree is buildModel's), and as
    before fit was: bgInv (default true when the pattern starts below 20°), range (cell
    search, default CELL_RANGE), maxIter, which fit's keys override; onProgress(frac,
    stageName); start, hold: from a previous result of this pattern instead of the CIF, the
@@ -4453,7 +4453,14 @@ function autoRefine(model, opts = {}){
    exact lines (rounds 2 and 3 of the free-shape research, research/free-shape/round2/ and
    round3/: tuned on 154 + 308 runs, then frozen and scored once on validation runs never
    used to set them). RIETVELD.md §10 says what each part does and why. */
-const SHAPE_STARTS = 10, SHAPE_FULL = 3;
+const SHAPE_FULL = 3;
+/* The starts' tilt: each start's axis turned `by` rad toward the part across it of the fixed
+   direction `toward` (Cartesian; any other where they are parallel), the axis across it turned
+   as much about it, so that no symmetry holds the axes where they start. No random number: to v523
+   the tilt was drawn, 0.08 rad of Gaussian noise on each component (0.1 rad across the axis on
+   average), from a seeded stream; on round 3's 77 screening runs the fixed tilt kept the reach,
+   the outcomes, the accuracy and the intervals' coverage (research/free-shape/round3/V524.md). */
+const SHAPE_TILT = { by: 0.1, toward: [0.31, 0.59, 0.75] };
 /* Starts on the lines the isotropic fit leaves most and least broadened: a plate on the
    normals of the SHAPE_LINE_STARTS lines most broadened, a needle on those of as many least
    broadened (lineBroadening), beside the class's low-index starts. On round 3's 66 screening
@@ -4872,7 +4879,7 @@ function shapeFamily(model, k, res, free, opts, r, vIso){
    test (SHAPE_KEEP; { rejected, dBIC, early, keep, check } otherwise: early, decided on the brief
    refinements; check, the isotropic fit's per-line check); then every minimum the search fell into
    is refined to the same level (shapeMinima), the fit kept refined once more by central
-   differences, and checked line by line (lineCheck). Seeded throughout: the same data give the
+   differences, and checked line by line (lineCheck). No random number: the same data give the
    same result. info: { type, starts, full, chi2Iso, chi2, Piso, P, N, chi2redIso, held, dBICfree,
    dBICheld, freeOff (the free axes' angles from the held ones, °), freeW (the free fit's widths),
    check, keep (the keep test's numbers: k, G, the gains of each route, need, dBIC, flagged, kept),
@@ -4897,7 +4904,7 @@ function freeShape(model, k, res, free, opts){
 function freeShapeRun(model, k, res, free, opts){
   const q = model.phases[k], pf = q.pfx, vIso = model.v.slice(), B = BODIES[q.shapeType];
   const rejectWith = o => ({ ...o, check: lineCheck(model, k, vIso, res.stats.P) });
-  /* The settings (autoRefine's opts.fit): the starts and how many go to convergence; the
+  /* The settings (autoRefine's opts.fit): how many of the starts go to convergence; the
      brief refinements' 8 iterations, or maxIter when fewer; the full ones' 1.5 × maxIter
      (60 by default: a body's turns take longer than a stage), λ and the shift test as
      everywhere. The brief trials take their Jacobian by forward differences (refine's
@@ -4907,7 +4914,7 @@ function freeShapeRun(model, k, res, free, opts){
      (a synthetic 18.7 × 3.7 nm cylinder ended an unbounded disc 1693 χ²_ν above). The fit
      kept is refined once more as the stages are (lmCentral), its covariance from there
      (research/free-shape/round2/AB.md §4, STEP1.md: 0.62× the evaluations of v522's search). */
-  const F = fitSettings(opts.fit), nStarts = F.shapeStarts, nFull = F.shapeFull;
+  const F = fitSettings(opts.fit), nFull = F.shapeFull;
   const lmBrief = { maxIter: Math.min(8, F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda, forward: true, noCov: true };
   const lmCentral = { maxIter: Math.round(1.5*F.maxIter), shiftTol: F.shiftTol, lambda: F.lambda };
   const lmFull = { ...lmCentral, noCov: true };
@@ -4915,19 +4922,11 @@ function freeShapeRun(model, k, res, free, opts){
   const ends = [];
   const N = res.stats.N, chiTot = r => r.stats.chi2*Math.max(1, r.stats.N - r.stats.P);
   const y0 = Math.max(vIso[q.iYs], 1e-3);
-  // A seeded generator (mulberry32) of Gaussian deviates.
-  // (The same sequence for every phase: a result must not change with the phases'
-  // ids, which follow the order they were added in.)
-  const mulberry = s0 => {
-    let seed = s0 >>> 0;
-    const rnd = ()=> { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0)/4294967296; };
-    return ()=> Math.sqrt(-2*Math.log(rnd() || 1e-12))*Math.cos(2*Math.PI*rnd());
-  };
-  const gauss = mulberry(0x9e3779b9);
   const unit = t => { const n = Math.hypot(...t); return t.map(x=> x/n); };
   const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
-  // Tilted a few degrees, so that no symmetry holds the axes where they start.
-  const tilt = e => unit([e[0] + 0.08*gauss(), e[1] + 0.08*gauss(), e[2] + 0.08*gauss()]);
+  const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+  // a turned SHAPE_TILT.by rad toward b (both unit, b across a)
+  const turnTo = (a, b) => unit(a.map((t, i)=> Math.cos(SHAPE_TILT.by)*t + Math.sin(SHAPE_TILT.by)*b[i]));
   const axesLow = lowIndexAxes(q);
   // The body's own parameters; its widths along x, y, z as its own W parameters.
   let names = [...q.iW, ...q.iR].map(i=> model.par[i].name);
@@ -4946,27 +4945,24 @@ function freeShapeRun(model, k, res, free, opts){
     q.iR.forEach(i=> { v[i] = 0; });
     quatOfMat(R).forEach((t, i)=> { v[q.iQ[i]] = t; });
   };
-  // The frame with z along e and x along a low-index direction across it (else any).
-  const frameAlong = e => {
-    const z = tilt(e), x0 = axesLow.find(a=> Math.abs(a[0]*e[0] + a[1]*e[1] + a[2]*e[2]) < 0.1) || cross(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
-    const xd = x0.map((t, i)=> t - (x0[0]*z[0] + x0[1]*z[1] + x0[2]*z[2])*z[i]), x = tilt(unit(xd)), xo = unit(x.map((t, i)=> t - (x[0]*z[0] + x[1]*z[1] + x[2]*z[2])*z[i])), y = cross(z, xo);
+  // The frame with z along e and x along a low-index direction across it (else any), tilted
+  // (SHAPE_TILT): z toward the fixed direction's part across e, x turned about z.
+  const frameAlong = e0 => {
+    const e = unit(e0), d = SHAPE_TILT.toward, ac = d.map((t, i)=> t - dot(d, e)*e[i]);
+    const z = turnTo(e, unit(Math.hypot(...ac) > 1e-3 ? ac : cross(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])));
+    const x0 = axesLow.find(a=> Math.abs(dot(a, e)) < 0.1) || cross(e, Math.abs(e[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]);
+    const xu = unit(x0.map((t, i)=> t - dot(x0, z)*z[i])), xo = turnTo(xu, cross(z, xu)), y = cross(z, xo);
     return [xo[0], y[0], z[0],  xo[1], y[1], z[1],  xo[2], y[2], z[2]];
   };
   // The class's distinct starts: the sphere-like one, and a plate and a needle per low-index
   // family (11 in the six lower classes, 9 in −3m, 6/m and 6/mmm, 7 in cubic). Random starts
-  // beside them had cost 15 % of the evaluations and changed no outcome (AB.md §4.2).
+  // beside them had cost 15 % of the evaluations and changed no outcome (AB.md §4.2), and
+  // bought less than the line starts below (round 3's POINT5.md): none since v524.
   const starts = [put(Wof(w0, w0, w0), frameAlong(axesLow[0] || [0, 0, 1]))];
   for (const e of axesLow){
     starts.push(put(Wof(0.5*w0, 0.7*w0, 2.5*w0), frameAlong(e)));
     starts.push(put(Wof(1.2*w0, 1.6*w0, 0.4*w0), frameAlong(e)));
   }
-  /* The setting shapeStarts above its default adds random starts, from a stream of their own.
-     The main stream goes on past 7 deviates for each start the class leaves short of
-     shapeStarts + 1, where v522's random starts drew them: the stream the search was tuned and
-     validated on (rounds 2 and 3), whose next deviates tilt the starts on the lines. */
-  for (let c = starts.length; c < nStarts + 1; c++) for (let d = 0; d < 7; d++) gauss();
-  const fill = mulberry(0x85ebca6b), randomTurn = ()=> quatMat(unit([fill(), fill(), fill(), fill()]));
-  for (let c = 0; c < Math.max(0, nStarts - SHAPE_STARTS); c++) starts.push(put(Wof(...[0, 1, 2].map(()=> w0*Math.exp(0.8*fill()))), randomTurn()));
   // On the lines: a plate on the normals of the most broadened, a needle on those of the least
   // broadened (lineBroadening, |z| > 2), a lattice direction among the low-index starts' left out.
   {
@@ -4989,7 +4985,7 @@ function freeShapeRun(model, k, res, free, opts){
   // fit's in-plane frame had held a plate on [1-13]); a body of revolution, its axis
   // alone. [] when no axis is within SNAP_DEG of a lattice direction.
   const snaps = v => {
-    const R = bodyFrame(q, v), col = i => [R[i], R[3 + i], R[6 + i]], dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    const R = bodyFrame(q, v), col = i => [R[i], R[3 + i], R[6 + i]];
     // The first axis held: the most telling (its width the farthest from the other
     // two: a plate's normal), not merely the nearest to a lattice direction — an
     // in-plane axis 0.5° from [1-13] had held a plate's whole frame there.

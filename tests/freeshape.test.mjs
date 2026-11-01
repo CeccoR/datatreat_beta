@@ -7,7 +7,8 @@
    the check's and the minima stage's records in the result and in the report. A 5 nm sphere
    searched as an ellipsoid and as a spheroid: not kept (the gain under the class's
    threshold), the warning saying so. A result of v522 refined with the Lorentzian line: drawn
-   with it (lorentzShape), its solid searched again from it, not carried. Seconds each. */
+   with it (lorentzShape), its solid searched again from it, not carried. No random number
+   (v524): Math.random is not called in the box's refinement. Seconds each. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -44,11 +45,14 @@ const refineAs = (y, shape, start) => {
 const TRUE = [8, 5, 3];
 const BOX = draw('box', { 'p1.Wa': widthOf(TRUE[0]), 'p1.Wb': widthOf(TRUE[1]), 'p1.Wc': widthOf(TRUE[2]) });
 let boxRun = null;
-const boxRes = ()=> boxRun || (boxRun = refineAs(BOX, 'box'));
+// (v524: the engine draws no random number; Math.random's calls are counted over the box's refinement)
+const counted = f => { const R = Math.random; let n = 0; Math.random = ()=> { n++; return R(); }; try { return { ...f(), randoms: () => n }; } finally { Math.random = R; } };
+const boxRes = ()=> boxRun || (boxRun = counted(()=> refineAs(BOX, 'box')));
 
 test('a box of 8 × 5 × 3 nm on the cube\'s axes: kept, held on ⟨100⟩, its dimensions within their 95 % intervals, the check quiet', ()=>{
-  const { model, res } = boxRes(), info = res.shapes[1];
+  const { model, res, randoms } = boxRes(), info = res.shapes[1];
   assert.ok(info, 'the shape kept: ' + res.warnings.join(' | '));
+  assert.equal(randoms(), 0, 'no random number drawn');
   assert.equal(res.models[1].profile, 'wppm', 'a body is a WPPM phase whatever the profile asked');
   // The keep test: the gain over the cubic class's threshold (k = 0: χ²₁(0.999) + 2)
   const kp = info.keep;

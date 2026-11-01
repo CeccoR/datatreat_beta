@@ -172,7 +172,7 @@ test('B: the standard\'s Settings show only what applies to it; the samples\' ev
     s = await box();
     assert.deepEqual(s.rows, ['size', 'wppm', 'strain', 'faults', 'adp', 'occ', 'po']);
     assert.deepEqual(s.holds, ['linear', 'cell', 'instrument', 'sizestrain', 'shape', 'faults', 'adp', 'occ', 'texture']);
-    assert.deepEqual(s.fits, ['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeStarts', 'shapeFull']);
+    assert.deepEqual(s.fits, ['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeFull']);
     await page.keyboard.press('Escape');
     // The standard's settings kept whole (the rows not shown off, the groups kept).
     const st = (await moduleState(page, 'xrd')).stdRv;
@@ -198,7 +198,7 @@ test('B: the standard\'s Settings show only what applies to it; the samples\' ev
       return [dis, w === 'std' ? s.stdRv.fit : (s.cards.find(c=> c.id === 2).states.rietveld.fit || {})];
     };
     assert.deepEqual(await defaults('sample', { zeroRange: 2 }), [false, {}]);
-    assert.deepEqual(await defaults('std', { shapeStarts: 20 }), [true, { shapeStarts: 20 }]);
+    assert.deepEqual(await defaults('std', { shapeFull: 5 }), [true, { shapeFull: 5 }]);
     assert.deepEqual(await defaults('std', { zeroRange: 2 }), [false, {}]);
     assert.deepEqual(errors, []);
   } finally { await close(); }
