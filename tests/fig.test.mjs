@@ -1,4 +1,4 @@
-/* The Figure module (v527, v529): three CSV files read (',' with '.' decimals and a header
+/* The Custom module (v527, v529, v531; named Figure to v530): three CSV files read (',' with '.' decimals and a header
    with units; ';' with ',' decimals and none; a line of series' titles over the header, which
    sets the first roles and the names), the Data card as an analysis card (the file's arrows,
    its number and name, a view and no step; the head on the left, the series "Series N (Cols
@@ -13,7 +13,14 @@
    the composer of a card opened and its figure kept with the card; the project saved and
    opened again; a tab asleep and woken as it was; a file removed taking its series out of
    the plots. A v528 project, its series normalised each and cropped, opening with the plot's
-   normalisation local where all were, else none, and no crop. */
+   normalisation local where all were, else none, and no crop.
+   v531: the module named Custom where it shows; the Data card's table whole (every row), in a
+   box of a Plot card's chart's size scrolling both ways, its head (the series' names over
+   their columns, the roles, the header) staying at its top; the roles' box on the file's
+   line, at the table's right; the lists of series in scrolling boxes, their heads and the
+   normalisation above them, + Add series under the Plot card's, its bottom on the chart's, the
+   list ending just above it and the Data card's at the table's foot; a series' scale and
+   offset beside its name; the parameters' three fifths and two fifths. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -71,7 +78,14 @@ const stored = (page, n, type)=> page.$eval(`#fig${n}Svg`, (s, type)=> s._plot._
   .map(e=> ({ label: e.label, xs: e.xs && [...e.xs], ys: e.ys && [...e.ys], xc: e.xc, y1: e.y1, med: e.med, text: e.full })), type);
 const cardSeries = async page => (await moduleState(page, 'fig')).cards.map(c=> c.series.map(r=> `${r.file}#${r.col}`));
 const top = (page, sel)=> page.$eval(sel, e=> e.getBoundingClientRect().top);
-const box = (page, sel)=> page.$eval(sel, e=>{ const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, w: r.width }; });
+const box = (page, sel)=> page.$eval(sel, e=>{ const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; });
+// The line of the series' names over the head: each cell's text and span.
+const nameRow = page => page.$$eval('#figHead thead tr.fig-names th', t=> t.map(e=> [e.textContent, e.colSpan]));
+// A grid's rows' split: where each field starts and how wide it is, in fifths of the grid's width.
+const split = (page, sel)=> page.$$eval(sel, gs=> gs.flatMap(g=>{
+  const r = g.getBoundingClientRect();
+  return [...g.querySelectorAll(':scope > .pg-field, :scope > .fig-ops')].map(f=>{ const q = f.getBoundingClientRect(); return [+((q.left - r.left)/r.width*5).toFixed(2), +(q.width/r.width*5).toFixed(2)]; });
+}));
 const r2 = a => a.map(v=> +v.toFixed(6));
 
 test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box cards, Add series, normalization, composer, project, sleep, a file removed', async ()=>{
@@ -93,12 +107,18 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     const hb = await box(page, '#figHead'), sb = await box(page, '#figSeries');
     assert.ok(sb.l > hb.r, 'the series right of the head');
     assert.ok(hb.w > sb.w, 'the head the wider');
-    assert.ok(Math.abs(await top(page, '#figDataCard .col.mw280 .param-head') - hb.t) < 1, 'the list from the head\'s top');
-    assert.equal(await page.locator('#figDataCard .col.mw280 #figSame').count(), 1, 'the roles\' box with the list');
+    assert.ok(Math.abs(await top(page, '#figDataCard .fig-side .param-head') - 5 - hb.t) < 1, 'the list from the head\'s top (5 px under it, as the analysis cards\' heads under their plots)');
+    // The roles' box on the file's line, at the table's right.
+    assert.equal(await page.locator('#figDataCard .pside-nav #figSame').count(), 1, 'the roles\' box on the file\'s line');
+    const sm = await box(page, '#figDataCard .fig-same'), ix = await box(page, '#figFileIdx');
+    assert.ok(Math.abs((sm.t + sm.h/2) - (ix.t + ix.h/2)) < 2, 'level with the file\'s number');
+    assert.ok(Math.abs(sm.r - hb.r) < 2, 'its right edge the table\'s');
     // The head of A: its header, the first 5 rows, the default roles; its series, "Series N (Cols x,y)".
     assert.deepEqual(await page.$$eval('#figHead .fig-hd th', t=> t.map(e=> e.textContent)), ['Time (s)', 'Signal (mV)', 'err', 'Ref [mV]']);
-    assert.equal(await page.locator('#figHead tbody tr').count(), 5);
+    assert.equal(await page.locator('#figHead tbody tr').count(), 6, 'every row');
     assert.deepEqual(await heads(page), ['x', 'y', 'y', 'y']);
+    // The series' names over their columns: the x, which all three share, blank.
+    assert.deepEqual(await nameRow(page), [['', 1], ['Signal', 1], ['err', 1], ['Ref', 1]]);
     assert.deepEqual(await labels(page), ['Series 1 (Cols 1,2)', 'Series 2 (Cols 1,3)', 'Series 3 (Cols 1,4)']);
     assert.deepEqual(await names(page), ['Signal', 'err', 'Ref']);
     // The file on show a view: no step.
@@ -108,12 +128,15 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.equal(await page.textContent('#figFileName'), 'b');
     assert.equal(await page.locator('#figHead .fig-hd').count(), 0, 'B: no header');
     assert.deepEqual(await page.$$eval('#figHead tbody tr:first-child td', t=> t.map(e=> e.textContent)), ['1,0', '8,25', '0,1']);
+    assert.equal(await page.locator('#figHead tbody tr').count(), 7, 'every row of B');
     assert.deepEqual(await names(page), ['Series 1', 'Series 2']);
+    assert.deepEqual(await nameRow(page), [['', 1], ['Series 1', 1], ['Series 2', 1]], 'no name typed: the series\' own');
     // C: its titles give the roles (each title's column x, the next ones y) and the names.
     await showFile(page, 2);
     assert.deepEqual(await heads(page), ['x', 'y', 'y', 'x', 'y']);
     assert.deepEqual(await labels(page), ['Series 1 (Cols 1,2)', 'Series 2 (Cols 1,3)', 'Series 3 (Cols 4,5)']);
     assert.deepEqual(await names(page), ['series 1 – A', 'series 1 – B', 'series 2']);
+    assert.deepEqual(await nameRow(page), [['', 1], ['series 1 – A', 1], ['series 1 – B', 1], ['series 2', 2]], 'series 2 over its x and its y');
     await page.click('#figFileNext'); await settle(page);
     assert.equal(await page.textContent('#figFileIdx'), '1/3', 'round to the first');
     await page.click('#figFilePrev'); await settle(page);
@@ -124,6 +147,7 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     await role(page, 2, 'ey');
     assert.deepEqual(await heads(page), ['x', 'y', 'ey', 'y']);
     assert.deepEqual(await names(page), ['Signal', 'Ref']);
+    assert.deepEqual(await nameRow(page), [['', 1], ['Signal', 2], ['Ref', 1]], 'a role changed: Signal over its y and its error');
     await role(page, 3, 'ey');
     assert.deepEqual(await heads(page), ['x', 'y', 'y', 'ey'], 'the error it had becomes a y');
     await undo(page);
@@ -131,6 +155,7 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     // Several x: the last y of A has an x of its own (its time), the one before keeps the first.
     await role(page, 3, 'x');
     assert.deepEqual(await names(page), ['Signal']);
+    assert.deepEqual(await nameRow(page), [['Signal', 3], ['', 1]], 'its x its own, and no series over the last x');
     await role(page, 3, 'y');
     // Same roles for all files: B takes A's first three, C A's four and its fifth a y; B said.
     await page.check('#figSame'); await settle(page);
@@ -142,12 +167,15 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     // A series renamed.
     await page.fill('#figSeries input[data-col="1"]', 'Sig A'); await page.press('#figSeries input[data-col="1"]', 'Enter'); await settle(page);
     assert.deepEqual(await names(page), ['Sig A', 'Ref']);
+    assert.deepEqual(await nameRow(page), [['', 1], ['Sig A', 2], ['Ref', 1]], 'renamed over its columns');
 
     // + XY: an empty card; the list beside the plot from its top.
     await addCard(page, 'xy');
     assert.equal(await page.inputValue('#tab-fig .an-card .an-name'), 'Plot 1');
     assert.equal(await page.textContent('#tab-fig .an-card .an-type'), 'XY plot');
-    assert.equal(await page.locator('#fig1Box').isVisible(), false, 'empty: no plot');
+    assert.equal(await page.locator('#fig1Box .plot-wrap').isVisible(), false, 'empty: no plot');
+    assert.equal(await page.locator('#fig1Empty').isVisible(), true);
+    assert.deepEqual(await box(page, '#fig1Empty').then(b=> [Math.round(b.w), Math.round(b.h)]), await box(page, '#figHead').then(b=> [Math.round(b.w), Math.round(b.h)]), 'its place the chart\'s size');
     // Add series: by file; a file's box ticks all its series, a square with some; Cancel nothing.
     const h1 = await history(page, 'fig');
     await page.click('#fig1Add'); await page.waitForSelector(PICK);
@@ -172,8 +200,17 @@ test('Figure: three CSVs, the Data card, titles, roles, names, XY / bar / box ca
     assert.equal((await stored(page, 1, 'segments')).length, 2, 'each its error bars');
     assert.equal(await page.textContent('#fig1Svg .plot-label'), 'Time (s)', 'the unit in the axis title');
     // (as DRS's cards: the svg under the toolbar's row, 36 px down, the column's head 41 px, by the plot's frame)
-    const at = await top(page, '#tab-fig .an-card .col.mw520');
-    assert.deepEqual([await top(page, '#fig1Svg') - at, await top(page, '#tab-fig .an-card .col.mw280 .param-head') - at], [36, 41], 'the list from the plot\'s top');
+    const at = await top(page, '#tab-fig .an-card .pside-nav');
+    assert.deepEqual([await top(page, '#fig1Svg') - at, await top(page, '#tab-fig .an-card .fig-side .param-head') - at], [36, 41], 'the list from the plot\'s top');
+    // The Data card's table the size of the chart.
+    const sv = await box(page, '#fig1Svg'), tb = await box(page, '#figHead');
+    assert.ok(Math.abs(sv.w - tb.w) < 1.5 && Math.abs(sv.h - tb.h) < 1.5, `the table's box the chart's size (${tb.w}×${tb.h}, ${sv.w}×${sv.h})`);
+    // A series a row: its scale and offset beside its name; the parameters' 3/5 and 2/5.
+    const nm = await box(page, '#fig1List .fig-ser >> nth=0 >> .fig-ser-name'), sc = await box(page, '#fig1List .fig-ser >> nth=0 >> [data-op="scale"]'), of = await box(page, '#fig1List .fig-ser >> nth=0 >> [data-op="offset"]');
+    assert.ok(sc.l > nm.r && of.l > sc.r, 'scale and offset right of the name');
+    assert.ok(Math.abs((nm.t + nm.h/2) - (sc.t + sc.h/2)) < 3 && Math.abs(sc.t - of.t) < 1, 'on its line');
+    for (const sel of ['#tab-fig .an-card .fig-side > .param-grid', '#fig1List .fig-ser', '#figSeries .param-grid'])
+      for (const [at, w] of await split(page, sel)) assert.ok(Math.abs(at - 3) < 0.02 && Math.abs(w - 2) < 0.02, `${sel}: the field at 3/5, 2/5 wide (${at}, ${w})`);
     // The window again: the plot's series ticked, a's box a square.
     await page.click('#fig1Add'); await page.waitForSelector(PICK);
     assert.deepEqual(await state(fileBox('a')), { on: false, part: true, mark: '7px' });
@@ -294,4 +331,64 @@ test('Figure: a v528 project, its series normalised each and cropped, opens with
     assert.deepEqual(r2(lines.map(l=> Math.max(...l.ys))), [1, 1], 'each to its own maximum');
     assert.deepEqual(errors, []);
   } finally { await close(); }
+});
+
+/* v531: a file of 25 columns and 80 rows (an x and 24 y): the Data card's table whole,
+   scrolling both ways in its box (the chart's size), its head staying at its top; its 24
+   series scrolling in theirs, from the table's top to its foot; a Plot card of the 24, its
+   list scrolling between the normalisation and + Add series, the button's bottom on the
+   chart's; the lists' rows the column's width, their fields at its three fifths. A scroll is
+   no step and no change. At 1400, 1100 and 1920 px. */
+test('Custom: the table whole and scrolling, the lists of series in their boxes, + Add series at the chart\'s foot', async ()=>{
+  const cols = 25, rows = 80;
+  fs.writeFileSync(path.join(dir, 'wide.csv'), ['Time (s)', ...Array.from({ length: cols - 1 }, (_, k)=> `Channel ${k + 1} (mV)`)].join(',') + '\n'
+    + Array.from({ length: rows }, (_, i)=> [i + 1, ...Array.from({ length: cols - 1 }, (_, k)=> (k + 1)*(i + 1)/10)].join(',')).join('\n') + '\n');
+  for (const width of [1400, 1100, 1920]){
+    const { page, errors, close } = await env.page({ viewport: { width, height: 1000 } });
+    try {
+      await openModule(page, 'fig');
+      assert.deepEqual([await page.textContent('.home-card[data-go="fig"] .txt-tile'), await page.textContent('[data-new-module="fig"] .txt-tile')], ['Custom', 'Custom']);
+      assert.equal(await page.textContent('#projectBar .pbar-tech'), 'Custom', 'named Custom');
+      assert.match(await page.title(), /· Custom$/);
+      await loadFiles(page, 'fig', [path.join(dir, 'wide.csv')]);
+      // The table: every row, in a box scrolling both ways, its head at its top as it scrolls.
+      assert.equal(await page.locator('#figHead tbody tr').count(), rows);
+      const sc = await page.$eval('#figHead', e=> [e.scrollWidth > e.clientWidth, e.scrollHeight > e.clientHeight, getComputedStyle(e).overflowX, getComputedStyle(e).overflowY]);
+      assert.deepEqual(sc, [true, true, 'auto', 'auto'], width + ': scrolling both ways');
+      assert.equal((await nameRow(page)).length, cols, 'a cell a column (the x shared: blank)');
+      const h0 = await history(page, 'fig');
+      await page.$eval('#figHead', e=>{ e.scrollTop = 400; e.scrollLeft = 200; });
+      await settle(page);
+      const hb = await box(page, '#figHead');
+      assert.ok(Math.abs(await top(page, '#figHead thead tr.fig-names') - hb.t) < 2, 'the names\' line at the box\'s top, scrolled');
+      assert.deepEqual(await history(page, 'fig'), h0, 'a scroll no step');
+      // The series of the file in their box: the head above it, its foot the table's.
+      const ls = await box(page, '#figSeries');
+      assert.ok(await page.$eval('#figSeries', e=> e.scrollHeight > e.clientHeight && getComputedStyle(e).overflowY === 'auto'), 'the 24 series scroll');
+      assert.ok(Math.abs(ls.b - hb.b) <= 2, `${width}: the list's foot the table's (${ls.b}, ${hb.b})`);
+      assert.ok(await top(page, '#figDataCard .fig-side > .param-head') < ls.t, 'the head above the list');
+      assert.equal(await page.locator('#figSeries .param-head').count(), 0);
+      const side = await box(page, '#figDataCard .fig-side'), grid = await box(page, '#figSeries .param-grid');
+      assert.ok(Math.abs(grid.w - side.w) < 1.5, `${width}: the rows the column's width, scrollbar or not (${grid.w}, ${side.w})`);
+      for (const [at, w] of await split(page, '#figSeries .param-grid')) assert.ok(Math.abs(at - 3) < 0.02 && Math.abs(w - 2) < 0.02, `the name at 3/5 (${at}, ${w})`);
+
+      // A Plot card of the 24: the list scrolls between the normalisation and + Add series.
+      await addCard(page, 'xy');
+      await page.click('#fig1Add'); await page.waitForSelector(PICK);
+      await pickFile(page, 'wide').locator('input[data-file]').check();
+      await page.click(`${PICK} [data-done]`); await settle(page);
+      assert.equal(await page.locator('#fig1List .fig-ser').count(), cols - 1);
+      const sv = await box(page, '#fig1Svg'), add = await box(page, '#fig1Add'), list = await box(page, '#fig1List'), nb = await box(page, '#fig1Norm');
+      assert.ok(Math.abs(add.b - sv.b) <= 2, `${width}: + Add series' bottom the chart's (${add.b}, ${sv.b})`);
+      assert.ok(list.b <= add.t && add.t - list.b <= 12, `the list ends just above the button (${list.b}, ${add.t})`);
+      assert.ok(nb.b <= list.t, 'the normalisation above the list');
+      assert.ok(await page.$eval('#fig1List', e=> e.scrollHeight > e.clientHeight), `the 24 series scroll (${JSON.stringify([sv, add, list])})`);
+      assert.equal(await page.locator('#fig1List #fig1Add, #fig1List #fig1Norm, #fig1List .param-head').count(), 0, 'the head, the normalisation and the button outside the list');
+      assert.ok(Math.abs(sv.w - hb.w) < 1.5 && Math.abs(sv.h - hb.h) < 1.5, 'the table the chart\'s size');
+      for (const [at, w] of await split(page, '#fig1List .fig-ser')) assert.ok(Math.abs(at - 3) < 0.02 && Math.abs(w - 2) < 0.02, `a series' operations at 3/5 (${at}, ${w})`);
+      // Nothing wider than its column (but the lists' boxes, whose thin scrollbar lies in the card's padding).
+      assert.deepEqual(await page.$$eval('#tab-fig .fig-side', ss=> ss.flatMap(s=>{ const r = s.getBoundingClientRect(); return [...s.querySelectorAll('*')].filter(e=>{ const q = e.getBoundingClientRect(); return q.width && q.right > r.right + (e.classList.contains('fig-scroll') ? 11 : 1); }).map(e=> e.className || e.tagName); })), [], 'no overflow');
+      assert.deepEqual(errors, []);
+    } finally { await close(); }
+  }
 });

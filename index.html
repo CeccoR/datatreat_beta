@@ -127,7 +127,7 @@
           <div class="home-card" data-go="fig">
             <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg></div>
             <div class="home-card-text">
-              <h3 class="txt-tile">Figure</h3>
+              <h3 class="txt-tile">Custom</h3>
               <p>Plots of your own CSV and text files: columns as x, y and their errors, XY plots, bar charts and box plots, composed into figures.</p>
             </div>
           </div>
@@ -404,14 +404,29 @@
           </div></div>
           <div class="sem-col-set">
             <div class="sem-set-head"><span class="txt-mini">Crop</span><label class="sem-check" title="The default crop: the whole image less its info bar. Ticked, the fields are locked"><input type="checkbox" id="semCropDef"> Default</label></div>
-            <div class="sem-fr sem-fr2"><div><label class="txt-label" for="semCropX">X (px)</label><input type="text" inputmode="numeric" id="semCropX"></div><div><label class="txt-label" for="semCropY">Y (px)</label><input type="text" inputmode="numeric" id="semCropY"></div></div>
-            <div class="sem-fr sem-fr3"><div><label class="txt-label" for="semCropW">Width (px)</label><input type="text" inputmode="numeric" id="semCropW"></div><div><label class="txt-label" for="semCropH">Height (px)</label><input type="text" inputmode="numeric" id="semCropH"></div><div><label class="txt-label" for="semAspect">Ratio</label><select id="semAspect"><option value="1:1">1:1 (square)</option><option value="4:3">4:3</option><option value="3:2">3:2</option><option value="free">free</option></select></div></div>
+            <div class="param-grid sem-pg">
+              <label class="txt-label" for="semCropX">X (px)</label><input class="pg-field" type="text" inputmode="numeric" id="semCropX">
+              <label class="txt-label" for="semCropY">Y (px)</label><input class="pg-field" type="text" inputmode="numeric" id="semCropY">
+              <label class="txt-label" for="semCropW">Width (px)</label><input class="pg-field" type="text" inputmode="numeric" id="semCropW">
+              <label class="txt-label" for="semCropH">Height (px)</label><input class="pg-field" type="text" inputmode="numeric" id="semCropH">
+              <label class="txt-label" for="semAspect">Ratio</label><select class="pg-field" id="semAspect"><option value="1:1">1:1 (square)</option><option value="4:3">4:3</option><option value="3:2">3:2</option><option value="free">free</option></select>
+            </div>
             <div class="sem-set-head"><span class="txt-mini">Intensity</span><label class="sem-check" title="The default normalisation (percentile stretch, 0.5–99.5 %), with no change of contrast, brightness or gamma. Ticked, the fields are locked"><input type="checkbox" id="semIntDef"> Default</label></div>
-            <div class="sem-fr sem-fr2"><div><label class="txt-label" for="semNorm">Normalisation</label><select id="semNorm"><option value="none">none (as acquired)</option><option value="percentile">percentile stretch</option><option value="meansd">mean and SD of the reference</option><option value="hist">histogram of the reference</option></select></div><div><label class="txt-label" for="semRef">Reference</label><select id="semRef"></select></div></div>
-            <div class="sem-fr sem-fr2"><div><label class="txt-label" for="semPLo">Black at (%)</label><input type="text" inputmode="decimal" id="semPLo"></div><div><label class="txt-label" for="semPHi">White at (%)</label><input type="text" inputmode="decimal" id="semPHi"></div></div>
-            <div class="sem-fr sem-fr3"><div><label class="txt-label" for="semB">Brightness (%)</label><input type="text" inputmode="decimal" id="semB"></div><div><label class="txt-label" for="semC">Contrast</label><input type="text" inputmode="decimal" id="semC"></div><div><label class="txt-label" for="semG">Gamma</label><input type="text" inputmode="decimal" id="semG"></div></div>
+            <div class="param-grid sem-pg">
+              <label class="txt-label" for="semNorm">Normalisation</label><select class="pg-field" id="semNorm"><option value="none">none (as acquired)</option><option value="percentile">percentile stretch</option><option value="meansd">mean and SD of the reference</option><option value="hist">histogram of the reference</option></select>
+              <label class="txt-label" for="semRef">Reference</label><select class="pg-field" id="semRef"></select>
+              <label class="txt-label" for="semPLo">Black at (%)</label><input class="pg-field" type="text" inputmode="decimal" id="semPLo">
+              <label class="txt-label" for="semPHi">White at (%)</label><input class="pg-field" type="text" inputmode="decimal" id="semPHi">
+              <label class="txt-label" for="semB">Brightness (%)</label><input class="pg-field" type="text" inputmode="decimal" id="semB">
+              <label class="txt-label" for="semC">Contrast</label><input class="pg-field" type="text" inputmode="decimal" id="semC">
+              <label class="txt-label" for="semG">Gamma</label><input class="pg-field" type="text" inputmode="decimal" id="semG">
+            </div>
             <div class="sem-set-head"><span class="txt-mini">This image</span><label class="sem-check" title="No correction of this image's own. Ticked, the fields are locked"><input type="checkbox" id="semAdjDef"> Default</label></div>
-            <div class="sem-fr sem-fr3"><div><label class="txt-label" for="semBi">Brightness (%)</label><input type="text" inputmode="decimal" id="semBi"></div><div><label class="txt-label" for="semCi">Contrast</label><input type="text" inputmode="decimal" id="semCi"></div><div><label class="txt-label" for="semGi">Gamma</label><input type="text" inputmode="decimal" id="semGi"></div></div>
+            <div class="param-grid sem-pg">
+              <label class="txt-label" for="semBi">Brightness (%)</label><input class="pg-field" type="text" inputmode="decimal" id="semBi">
+              <label class="txt-label" for="semCi">Contrast</label><input class="pg-field" type="text" inputmode="decimal" id="semCi">
+              <label class="txt-label" for="semGi">Gamma</label><input class="pg-field" type="text" inputmode="decimal" id="semGi">
+            </div>
           </div>
         </div>
       </div>
@@ -434,24 +449,24 @@
       <!-- The Data card: a file's head and its columns' roles (fig.js). -->
       <div class="card" id="figDataCard" style="display:none">
         <h3 class="txt-head" style="margin:0 0 12px">Data</h3>
-        <div class="instr-block">The arrows step through the files. Each column of the file shown has a role, set over it: <b>x</b>, <b>y</b>, <b>err x</b>, <b>err y</b> or <b>—</b> (not used); by default the first column is x and the others y. A line of series' titles over the header ("series 1", , , "series 2") sets the first roles instead: each title opens a group, its first column the x and the next ones, up to the next title, its y. As in Origin, a file may have several x: each y belongs to the x before it (none: its x is the row number), each err y to the y before it and each err x to the x before it, one error at most a column. A column set to err y where its y has one already takes that one's place, which becomes a y (so does an err x). Each y is a <b>series</b>, listed on the right as "Series N (Cols x,y)" (its x's column and its own) and named as its title names it (with the column's name when the title is over several y), else as the header names its column, else "Series N"; a name can be typed over (left empty, it goes back), and the column's unit, in the header as "Name (unit)", "[unit]" or "/ unit", titles the plots' axes. The roles are each file's own; <b>Same roles for all files</b> gives those of the file shown to every file, column by column. <b>+</b> under this card adds a plot.</div>
-        <div class="row" style="align-items:flex-start">
-          <div class="col mw520" style="flex:2">
-            <div class="plot-nav-row">
-              <div class="plot-nav-left">
-                <button type="button" class="btn nav-arrow" id="figFilePrev" aria-label="Previous file" title="Previous file">&#8249;</button>
-                <span id="figFileIdx" class="pill nav-count" style="margin:0">1/1</span>
-                <button type="button" class="btn nav-arrow" id="figFileNext" aria-label="Next file" title="Next file">&#8250;</button>
-                <span class="txt-caption" id="figFileName">—</span>
-              </div>
+        <div class="instr-block">The arrows step through the files. Each column of the file shown has a role, set over it: <b>x</b>, <b>y</b>, <b>err x</b>, <b>err y</b> or <b>—</b> (not used); by default the first column is x and the others y. A line of series' titles over the header ("series 1", , , "series 2") sets the first roles instead: each title opens a group, its first column the x and the next ones, up to the next title, its y. As in Origin, a file may have several x: each y belongs to the x before it (none: its x is the row number), each err y to the y before it and each err x to the x before it, one error at most a column. A column set to err y where its y has one already takes that one's place, which becomes a y (so does an err x). The table shows the whole file, scrolled inside its box; its first line names each series over its columns. Each y is a <b>series</b>, listed on the right as "Series N (Cols x,y)" (its x's column and its own) and named as its title names it (with the column's name when the title is over several y), else as the header names its column, else "Series N"; a name can be typed over (left empty, it goes back), and the column's unit, in the header as "Name (unit)", "[unit]" or "/ unit", titles the plots' axes. The roles are each file's own; <b>Same roles for all files</b> gives those of the file shown to every file, column by column. <b>+</b> under this card adds a plot.</div>
+        <!-- (as the Plot cards: the nav over the table, its box the size of their charts; the
+             series beside it from its top to its foot, scrolling in their box) -->
+        <div class="pside fig-pside">
+          <div class="plot-nav-row pside-nav">
+            <div class="plot-nav-left">
+              <button type="button" class="btn nav-arrow" id="figFilePrev" aria-label="Previous file" title="Previous file">&#8249;</button>
+              <span id="figFileIdx" class="pill nav-count" style="margin:0">1/1</span>
+              <button type="button" class="btn nav-arrow" id="figFileNext" aria-label="Next file" title="Next file">&#8250;</button>
+              <span class="txt-caption" id="figFileName">—</span>
             </div>
-            <div class="fig-head-wrap" id="figHead"></div>
-            <div id="figWarn"></div>
-          </div>
-          <div class="col mw280" style="align-self:flex-start">
-            <div class="txt-mini param-head aligned">Series of this file</div>
-            <div id="figSeries"></div>
             <label class="sem-check fig-same" title="The roles of the file shown given to every file, by the columns' places"><input type="checkbox" id="figSame"> Same roles for all files</label>
+          </div>
+          <div class="pside-plot"><div class="fig-head-wrap" id="figHead" tabindex="0" role="region" aria-label="The file's columns and rows"></div></div>
+          <div class="pside-under"><div id="figWarn"></div></div>
+          <div class="pside-col fig-side">
+            <div class="txt-mini param-head">Series of this file</div>
+            <div class="fig-scroll" id="figSeries"></div>
           </div>
         </div>
       </div>
@@ -461,7 +476,7 @@
       </div>
     </section>
 
-    <footer>DataTreat <span class="app-version">v530</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
+    <footer>DataTreat <span class="app-version">v531</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
   <!-- Save project as… dialog -->
@@ -486,7 +501,7 @@
         <button class="newproj-card" type="button" data-new-module="gc"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H10 C13 22 13 8 16 8 C19 8 19 22 22 22 H28 C32 22 31 14 34 14 C37 14 37 22 40 22 H42"/></svg><span class="txt-tile">GC</span></button>
         <button class="newproj-card" type="button" data-new-module="epr"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 14 H15 L20 5 L24 21 L29 14 H42"/></svg><span class="txt-tile">EPR</span></button>
         <button class="newproj-card" type="button" data-new-module="sem"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg><span class="txt-tile">SEM</span></button>
-        <button class="newproj-card" type="button" data-new-module="fig"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg><span class="txt-tile">Figure</span></button>
+        <button class="newproj-card" type="button" data-new-module="fig"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg><span class="txt-tile">Custom</span></button>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
         <button class="btn" type="button" data-new-cancel>Cancel</button>

@@ -753,7 +753,7 @@ const TECH_INFO = {
   gc:   'Gas Chromatography for H₂ and O₂ production-rate assessment. Computes mean H₂ and O₂ production rates over a chosen integration interval from time-resolved injection measurements.',
   epr:  'Electron Paramagnetic Resonance. Spectra comparison, smoothing and normalization.',
   sem:  'Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification, beam, detector), cropped, normalised in intensity, grouped by scale and laid out into figures with scale bars.',
-  fig:  'Figures of your own data: CSV and text files of columns, each column given a role (x, y, their errors), plotted as XY plots, bar charts and box plots and composed into figures.',
+  fig:  'Custom plots of your own data: CSV and text files of columns, each column given a role (x, y, their errors), plotted as XY plots, bar charts and box plots and composed into figures.',
 };
 const projectBar = document.getElementById('projectBar');
 const barInfoBtn = projectBar.querySelector('.pbar-info');

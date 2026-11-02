@@ -1361,7 +1361,7 @@ const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','fig','projects','setti
 // The sections that keep a URL hash. Module sections are reached through an open
 // project tab, so they are deliberately not addressable.
 const HASH_TABS = ['home','projects','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sem:'DataTreat · SEM', fig:'DataTreat · Figure', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sem:'DataTreat · SEM', fig:'DataTreat · Custom', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -2025,7 +2025,7 @@ function applyTheme(theme, persist){
 /* Module state access for the session manager: reuse each module's registered
    undo snapshot()/restore() as the canonical serialize/deserialize. */
 const MODULES = ['tauc','xrd','gc','epr','sem','fig'];
-const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM', fig:'Figure' };
+const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM', fig:'Custom' };
 // (k: an instance's key, or a module's name for the instance of it on show: K)
 function getModuleState(k){
   const st = _histories[K(k)];

@@ -6,7 +6,7 @@ import { plotWrap, viewOf, setView, valueBars } from './modcharts.js';
 import { decodeText, textLines, readColumns, parseNum, isNum, nameUnit } from './textdata.js';
 
 /* =========================================================
-   FIGURE MODULE (v527)
+   CUSTOM MODULE (v527; named Figure to v530: its key, 'fig', and its projects' kept)
 
    Plots of the user's own tables: CSV and text files of columns, read as DRS and GC read
    theirs (textdata.js: the encoding, the separator, the decimal mark, the quotes and the
@@ -21,9 +21,14 @@ import { decodeText, textLines, readColumns, parseNum, isNum, nameUnit } from '.
    titles giving its first roles and its names; the Plot cards' series picked in a window
    (Add series), one normalisation a plot (none, local, global) for the per-series one, no
    crop in x.
+   v531: the Data card's table whole, in a box of a Plot card's chart's size scrolling both
+   ways, under a line of the series' names over their columns; the roles' box on the
+   file's line; the lists of series scrolling in their boxes, beside the table or the plot
+   from its top to its foot (+ Add series under its list, its bottom on the plot's); a
+   series' scale and offset beside its name.
 
    MADE PER TAB, as every module (utils.js registerModule): createFig is the module's
-   factory, each open Figure tab that is awake an instance of its own, made of its copy of
+   factory, each open Custom tab that is awake an instance of its own, made of its copy of
    index.html's section (root) and a layer (the kinds' menu). Its elements are found in
    root, a card's in its card, never in the page. It draws only on show, and its redraw
    draws all as it is shown; a tab shown again with nothing changed and at the same width
@@ -170,24 +175,24 @@ const headOf = (t, c)=> c < 0 ? { name: 'Row', unit: '' } : t.heads && t.heads[c
 const KINDS = { xy: 'XY plot', bar: 'Bar chart', box: 'Box plot' };
 const FIG_INFO = `A plot of the series chosen under <b>Series</b>, from any of the files: <b>+ Add series</b> opens the list of the series of every file included (the Data card sets which columns are y), by file, each named as the Data card names it: those ticked are in the plot (a file's box ticks or clears all its series). <b>Normalization</b> is the plot's: <b>none</b>, <b>local</b> (each series divided by its own largest |y|) or <b>global</b> (all divided by the largest of them); then each series is multiplied by its scale (×) and, in an XY plot, its offset (+) added. An <b>XY plot</b> draws each series against its x (the row number where it has none), with its error bars. A <b>bar chart</b> takes the series' x as categories (text, or numbers as they read: 1,0 is 1), its y as the bar and its error of y as the error bar; a category shared by series has their bars side by side. A <b>box plot</b> takes each series as a group, its values down the rows (its x not used), named as the series. A series whose file is removed, or whose column is no longer a y, leaves the plot. The figure composer of the plot's toolbar composes its figure, kept with the card in the project. ${cardInfo(true, false)}`;
 const P = a => 'fig' + a.id;
-// (as the other modules' analysis cards: the plot on the left under its row of tools, the
-// column beside it from the plot's top, .param-head.aligned)
+/* (v531: as the Data card, a .pside: the plot on the left under its row of tools, the column
+   beside it spanning the plot's height exactly: its head and normalisation at the top, the
+   series scrolling in their box, + Add series at the foot, its bottom on the plot's; with
+   no series yet, an empty box of the plot's size in its place) */
 const cardBody = a => `
-      <div class="row" style="align-items:flex-start">
-        <div class="col mw520" style="flex:2">
-          <div class="plot-nav-row"></div>
-          <div id="${P(a)}Box">${plotWrap(P(a) + 'Svg', { mod: 'fig', csv: 'fig_plot.csv', name: 'Plot.svg', legend: P(a) + 'Legend' })}
-            <div id="${P(a)}Legend" class="legend"></div>
-          </div>
+      <div class="pside fig-pside">
+        <div class="plot-nav-row pside-nav"></div>
+        <div class="pside-plot" id="${P(a)}Box">${plotWrap(P(a) + 'Svg', { mod: 'fig', csv: 'fig_plot.csv', name: 'Plot.svg', legend: P(a) + 'Legend' })}
           <div class="txt-meta fig-empty" id="${P(a)}Empty">No series in this plot yet: + Add series picks them.</div>
         </div>
-        <div class="col mw280" style="align-self:flex-start">
-          <div class="txt-mini param-head aligned">Series</div>
+        <div class="pside-under"><div id="${P(a)}Legend" class="legend"></div></div>
+        <div class="pside-col fig-side">
+          <div class="txt-mini param-head">Series</div>
           <div class="param-grid">
             <label class="txt-label" for="${P(a)}Norm">Normalization</label>
             <select id="${P(a)}Norm" class="pg-field" title="none: the data as they are; local: each series divided by its own largest |y|; global: all by the largest of them">${Object.entries(NORMS).map(([k, l])=> `<option value="${k}">${l}</option>`).join('')}</select>
           </div>
-          <div class="fig-ser-list" id="${P(a)}List"></div>
+          <div class="fig-scroll fig-ser-list" id="${P(a)}List"></div>
           <button type="button" class="btn plot-action-btn" id="${P(a)}Add" title="Choose the series of this plot, by file">+ Add series</button>
         </div>
       </div>`;
@@ -208,7 +213,7 @@ function normIn(c){
 }
 const figIn = v => isObj(v) && isObj(v.scalars) && Array.isArray(v.series) ? v : null;
 
-// A Figure tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
+// A Custom tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
 function createFig({ key, root, layer, shown }){
   const $ = id => root.querySelector('#' + id);
   // Hidden, nothing is drawn: `stale` marks it to be drawn whole as it is shown, `drawnAt`
@@ -308,6 +313,24 @@ function createFig({ key, root, layer, shown }){
   /* ---- The Data card: the file on show (its arrows, as the other modules' samples: a view,
      no step of the history), its head with a role over each column, and beside it its
      series' names and the roles of all files alike ---- */
+  /* The line of the series' names over the head: each series' name over its columns (its
+     x, its y, their errors), one cell across them; a column no series has, or an x (or its
+     error) that several share, blank. A series whose columns another's split has its name
+     over each of its runs. */
+  function nameCells(ss, n){
+    const by = Array.from({ length: n }, ()=> new Set());
+    ss.forEach((s, k)=> [s.x, s.ex, s.col, s.ey].forEach(c=>{ if (c >= 0 && c < n) by[c].add(k); }));
+    const own = by.map(b=> b.size === 1 ? [...b][0] : -1), out = [];
+    for (let c = 0; c < n;){
+      let e = c + 1;
+      while (e < n && own[e] === own[c]) e++;
+      const span = e - c > 1 ? ` colspan="${e - c}"` : '';
+      if (own[c] < 0) out.push(`<th${span}></th>`);
+      else { const s = ss[own[c]]; out.push(`<th${span} class="fig-name" title="${esc(`${s.auto} (${s.cols})`)}">${esc(s.name)}</th>`); }
+      c = e;
+    }
+    return out.join('');
+  }
   const shownFile = ()=> allFiles.find(f=> f.name === shownName) || allFiles[0] || null;
   function renderData(){
     const card = $('figDataCard');
@@ -321,10 +344,19 @@ function createFig({ key, root, layer, shown }){
     $('figFileName').title = f.name;
     $('figSame').checked = same;
     const roleSel = (r, c)=> `<select data-col="${c}" aria-label="Role of column ${c + 1}">${Object.entries(ROLES).map(([k, l])=> `<option value="${k}"${k === r ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
-    $('figHead').innerHTML = `<table class="fig-cols"><thead><tr>${f.roles.map((r, c)=> `<th>${roleSel(r, c)}</th>`).join('')}</tr>`
-      + (t.head ? `<tr class="fig-hd">${t.head.map(h=> `<th>${esc(h)}</th>`).join('')}</tr>` : '') + `</thead><tbody>`
-      + t.rows.slice(0, 5).map(r=> `<tr>${r.map(c=> `<td>${esc(c)}</td>`).join('')}</tr>`).join('') + `</tbody></table>`;
     const ss = seriesOfFile(f, fi);
+    // The head: the series' names over their columns, the roles, the header. The rows, all
+    // of them, built once a file shown (its table's), its scroll kept while it stays.
+    const head = `<tr class="fig-names">${nameCells(ss, t.n)}</tr><tr class="fig-roles">${f.roles.map((r, c)=> `<th>${roleSel(r, c)}</th>`).join('')}</tr>`
+      + (t.head ? `<tr class="fig-hd">${t.head.map(h=> `<th>${esc(h)}</th>`).join('')}</tr>` : '');
+    const box = $('figHead');
+    if (box._t === t && box.querySelector('thead')) box.querySelector('thead').innerHTML = head;
+    else {
+      box._t = t;
+      box.innerHTML = `<table class="fig-cols"><thead>${head}</thead><tbody>`
+        + t.rows.map(r=> `<tr>${r.map(c=> `<td>${esc(c)}</td>`).join('')}</tr>`).join('') + `</tbody></table>`;
+      box.scrollTop = 0; box.scrollLeft = 0;
+    }
     $('figSeries').innerHTML = ss.length ? `<div class="param-grid">${ss.map(s=> `<label class="txt-label" for="figSN${s.col}" title="${esc(s.x >= 0 ? `x: column ${s.x + 1}, y: column ${s.col + 1}` : `y: column ${s.col + 1}, x: the row number`)}">${esc(`${s.auto} (${s.cols})`)}</label>`
       + `<input type="text" class="pg-field" id="figSN${s.col}" data-col="${s.col}" value="${esc(s.name)}" placeholder="${esc(s.def)}" autocomplete="off" spellcheck="false">`).join('')}</div>`
       : '<div class="txt-meta">No column of this file is a y: it has no series.</div>';
@@ -387,13 +419,14 @@ function createFig({ key, root, layer, shown }){
     const list = plotted(a), ops = OPS[a.type];
     card.querySelector('#' + P(a) + 'Norm').value = a.norm;
     card.querySelector('#' + P(a) + 'Add').disabled = !files.some(f=> seriesCols(f.roles).length);
+    // (a row each, as the parameters': the name on three fifths, the scale and offset on two)
     card.querySelector('#' + P(a) + 'List').innerHTML = list.map(({ r, s, name })=> `
           <div class="fig-ser" data-key="${esc(s.key)}">
-            <div class="fig-ser-head"><span class="fig-ser-name" title="${esc(`${s.f.label}: ${s.auto} (${s.cols})`)}">${esc(name)}</span>
-              <button type="button" class="an-ic fig-ser-x" data-act="del" title="Take this series out of the plot" aria-label="Take ${esc(name)} out of the plot">${X_SVG(13)}</button></div>
+            <div class="fig-ser-head"><button type="button" class="an-ic fig-ser-x" data-act="del" title="Take this series out of the plot" aria-label="Take ${esc(name)} out of the plot">${X_SVG(13)}</button>
+              <span class="fig-ser-name" title="${esc(`${s.f.label}: ${s.auto} (${s.cols})`)}">${esc(name)}</span></div>
             <div class="fig-ops">${ops.includes('scale') ? opField('scale', '×', r.scale, 'Scale: every value multiplied by it, after the normalization') : ''}${
               ops.includes('offset') ? opField('offset', '+', r.offset, 'Offset: added to every y, after the scale') : ''}</div>
-          </div>`).join('') + (a.series.length > list.length ? `<div class="txt-meta">${a.series.length - list.length} series of files left out not shown.</div>` : '');
+          </div>`).join('') + (a.series.length > list.length ? `<div class="txt-meta fig-ser-out">${a.series.length - list.length} series of files left out not shown.</div>` : '');
   }
   function buildCard(a, card){
     const list = card.querySelector('#' + P(a) + 'List');
@@ -520,7 +553,7 @@ function createFig({ key, root, layer, shown }){
     if (!card || !drawable()) return;
     const list = plotted(a), svg = card.querySelector('#' + P(a) + 'Svg'), legend = card.querySelector('#' + P(a) + 'Legend');
     card.querySelector('#' + P(a) + 'Empty').style.display = list.length ? 'none' : '';
-    card.querySelector('#' + P(a) + 'Box').style.display = list.length ? '' : 'none';
+    svg.closest('.plot-wrap').style.display = list.length ? '' : 'none';
     if (!list.length){ legend.innerHTML = ''; return; }
     const prev = preserveView ? viewOf(svg._plot) : null;
     const divs = divsOf(a.type, a.norm, list), data = list.map((e, k)=> dataOf(a.type, e.s.t, e.s, e.r, divs[k]));

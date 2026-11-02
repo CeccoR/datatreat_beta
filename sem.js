@@ -1424,15 +1424,17 @@ function createSem({ key, root, layer, shown }){
     box.style.setProperty('--sem-group-h', Math.max(H, Math.ceil(chrome + img)) + 'px');
   }
   window.addEventListener('resize', ()=>{ if (!shown()) return; sizeGroups(); root.querySelectorAll('#semGroups .sem-group-imgs').forEach(pageArrows); fitWork(); }, { signal: ac.signal });
-  /* Crop and intensity in three columns, until a field's name would be cut short ("…"):
-     then one column, the image on top, the thumbnails, the settings under them. Tried
-     in three columns at every resize (synchronously, so nothing is painted between). */
+  /* Crop and intensity in three columns, until a field's name would be cut short ("…"), or
+     a field (two fifths of the settings' column, v531) narrower than 90 px: then one
+     column, the image on top, the thumbnails, the settings under them. Tried in three
+     columns at every resize (synchronously, so nothing is painted between). */
   function fitWork(){
     const work = root.querySelector('.sem-work');
     if (!work || !work.offsetWidth) return;
     const was = work.classList.contains('sem-stacked');
     work.classList.remove('sem-stacked');
-    const cut = [...work.querySelectorAll('.sem-fr .txt-label')].some(l=> l.scrollWidth > l.clientWidth + 0.5);
+    const cut = [...work.querySelectorAll('.sem-pg > .txt-label')].some(l=> l.scrollWidth > l.clientWidth + 0.5)
+      || [...work.querySelectorAll('.sem-pg > .pg-field')].some(f=> f.offsetWidth && f.offsetWidth < 90);
     work.classList.toggle('sem-stacked', cut);
     // The editor and the histogram are sized to their column: redrawn when it changes.
     if (cut !== was && files.length){ fitView(); drawEditor(); drawHist(); }

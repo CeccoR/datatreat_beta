@@ -128,10 +128,12 @@ const cardBody = a => `
         </div>
         <div class="col mw260" style="align-self:flex-start">
           <div class="txt-mini param-head">Parameters</div>
-          <label class="txt-label" for="${P(a)}Norm">Normalization</label>
-          <select id="${P(a)}Norm">${NORM_OPTIONS}</select>
-          <label class="txt-label" for="${P(a)}Smooth">Smoothing width (mT)</label>
-          <label class="wfield" title="The smoothing box's width, in mT on the plotted field (0: none); beside it, the points it spans at the spectra's steps"><input type="text" inputmode="decimal" id="${P(a)}Smooth" value="${DEF.smoothW}" autocomplete="off" aria-describedby="${P(a)}SmoothPts"><span class="wf-pts" id="${P(a)}SmoothPts"></span></label>
+          <div class="param-grid">
+            <label class="txt-label" for="${P(a)}Norm">Normalization</label>
+            <select id="${P(a)}Norm" class="pg-field">${NORM_OPTIONS}</select>
+            <label class="txt-label" for="${P(a)}Smooth">Smoothing width (mT)</label>
+            <label class="pg-field wfield" title="The smoothing box's width, in mT on the plotted field (0: none); beside it, the points it spans at the spectra's steps"><input type="text" inputmode="decimal" id="${P(a)}Smooth" value="${DEF.smoothW}" autocomplete="off" aria-describedby="${P(a)}SmoothPts"><span class="wf-pts" id="${P(a)}SmoothPts"></span></label>
+          </div>
         </div>
       </div>`;
 /* The smoothed column: the box w wide (smooth.js; to v510 a moving average over N

@@ -1839,9 +1839,14 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
    (the plot sits below the sample-nav row: 35px nav + 6px gap). */
 .param-head.aligned { margin-top: 41px; }
 :root.narrow-layout .param-head.aligned { margin-top: 0; }
+/* A plot-style card's parameters (every module's: a plot on the left, its parameters on
+   the right), a row each: its name on three fifths of the column, its field on the two
+   fifths left (v531: the field's track 40 % and the name's the rest, gap included, so
+   neither a long name nor a wide field moves the split; the name wraps, the field's
+   content shrinks). */
 .param-grid {
   display: grid;
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: minmax(0, 1fr) 40%;
   column-gap: 10px;
   row-gap: 9px;
   align-items: center;
@@ -1861,7 +1866,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
   flex-wrap: wrap;
   gap: 6px;
 }
-.param-grid > .pg-field { grid-column: 2; width: 100%; margin: 0; }
+.param-grid > .pg-field { grid-column: 2; width: 100%; min-width: 0; margin: 0; }
 /* A setting switched on or off by a box at the start of its title (the Scherrer
    baseline), the box in the title's text so that they wrap together; its value's field
    beside it disabled when off. */
@@ -1872,9 +1877,11 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
 .legend .lg-bl.is-off { text-decoration: line-through; opacity: .5; }
 /* Wavelength cell: split the field column into a source preset selector (left) and
    the numeric value (right, read-only unless the preset is "Custom"). */
-.lambda-field { display: flex; gap: 6px; align-items: center; }
-.lambda-field .lambda-sel { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 4px; }
-.lambda-field .lambda-val { flex: 1 1 0; min-width: 0; }
+/* (in the field's two fifths: side by side while each has room for its value, else the
+   value under the preset) */
+.lambda-field { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lambda-field .lambda-sel { flex: 1 1 8ch; min-width: 0; padding-left: 6px; padding-right: 4px; }
+.lambda-field .lambda-val { flex: 1 1 10ch; min-width: 0; }
 .lambda-field .lambda-val[readonly] { opacity: .7; cursor: default; }
 /* Info outputs: keep them full-width where they sit, but bare (no field box) —
    they read like the titles, with the value in accent. */
@@ -3082,14 +3089,15 @@ button.btn.fig-align.cp-anchored { --btn-bd: var(--accent); --btn-fg: var(--acce
 .sem-box-head select { width: auto; flex: 1 1 90px; min-width: 0; padding-top: 4px; padding-bottom: 4px; }
 .sem-thumbs-box { flex: 1 1 0; overflow-y: auto; }
 .sem-info-box { flex: 0 0 auto; }
-/* Settings in rows of two or three fields, each with its name above it. */
+/* Settings a row each, as every plot-style card's (.param-grid: the name on three fifths,
+   the field on two; to v530 rows of two or three fields, each its name above it). A
+   name is cut short ("…") rather than wrapped: then, or with a field under 90 px, the
+   card goes to one column
+   (sem.js fitWork). */
 .sem-set-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 8px; }
 .sem-set-head:first-child { margin-top: 0; }
 .sem-set-head .sem-check { margin: 0; }
-.sem-fr { display: grid; gap: 8px; margin-bottom: 8px; }
-.sem-fr2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.sem-fr3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.sem-fr .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sem-pg > .txt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* One column: the image on top, the thumbnails in the middle, the settings under
    them. Taken on a phone, and wherever the columns would cut a field's name short
    (sem.js fitWork sets .sem-stacked). */
@@ -3273,33 +3281,62 @@ button.an-add.is-drop { border-color: var(--accent); }
 /* (empty, with no file to count on: no room taken, the box one line as its neighbours) */
 .wf-pts:empty { display: none; }
 
-/* The Figure module (fig.js). The Data card, as an analysis card: the file's arrows over
-   its head, a role over each column, scrolled sideways inside its own box when wider than
-   the card (never the page); beside it the series' names and the roles' box. */
-.fig-same { margin: 10px 0 0; }
-.fig-head-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; }
-/* (its top where an analysis card's plot is, under the arrows' row, level with the
-   column beside it: .param-head.aligned) */
-.plot-nav-row + .fig-head-wrap { margin-top: 11px; }
-:root.narrow-layout .plot-nav-row + .fig-head-wrap { margin-top: 0; }
-table.fig-cols { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* The Custom module (fig.js; to v530 named Figure). Its Data card and Plot cards are
+   .pside (v531): the nav over the table or the plot, the column beside it spanning that
+   box exactly, its head at the top (5 px under the box's top, as the analysis cards'
+   .param-head.aligned is under their plots') and its list scrolling in the room left. */
+.fig-side > .param-head { margin-top: 5px; }
+.fig-pside > .pside-col.fig-side { gap: 0; }
+/* The Data card: the roles' box at the right of the file's arrows; the file's table whole,
+   in a box of a Plot card's chart's size (its width, φ : 1), scrolling both ways inside it
+   (never the page), the series' names, the roles and the header staying at its top. */
+.fig-pside > .pside-nav { justify-content: space-between; flex-wrap: wrap; }
+.pside-nav > .fig-same { margin: 0 0 0 auto; }
+.fig-head-wrap { overflow: auto; width: 100%; aspect-ratio: 1.618; min-height: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); overscroll-behavior: contain; }
+.fig-head-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+table.fig-cols { border-collapse: separate; border-spacing: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+table.fig-cols thead { position: sticky; top: 0; z-index: 1; }
 table.fig-cols th, table.fig-cols td { padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
+table.fig-cols thead th { background: var(--panel2); }
 table.fig-cols tbody tr:last-child td { border-bottom: none; }
 table.fig-cols select { width: auto; min-width: 7ch; padding: 4px 6px; }
 table.fig-cols .fig-hd th { color: var(--muted); font-weight: 600; }
+/* (the series' names, each over its columns, between rules that mark where it starts and ends) */
+table.fig-cols .fig-names th { height: 25px; font-weight: 600; color: var(--text); max-width: 0; overflow: hidden; text-overflow: ellipsis; }
+table.fig-cols .fig-names th.fig-name { border-left: 1px solid var(--line); border-right: 1px solid var(--line); text-align: center; }
+table.fig-cols .fig-names th:first-child { border-left: none; }
+table.fig-cols .fig-names th:last-child { border-right: none; }
 #figWarn .alert { margin-top: 10px; }
-/* A Plot card: its plot, or a line saying it has no series, and beside it its
-   normalisation and the list of its series, each with its name, × and operations. */
-.fig-empty { padding: 18px 0; }
-.fig-ser-list { margin-top: 8px; }
-.fig-ser { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
-.fig-ser-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+/* The lists of series (the Data card's names, a Plot card's series) scroll in their box,
+   which takes the column's height left (flex 1 1 0: it never makes the row taller). Its
+   scrollbar thin and laid in the card's padding, so the rows keep the column's width and
+   the parameters' three fifths and two (gutter reserved: the same with or without it). */
+.fig-scroll { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  scrollbar-gutter: stable; margin-right: -10px; padding-right: 2px; }
+.fig-scroll::-webkit-scrollbar { width: 8px; }
+.fig-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+@supports not selector(::-webkit-scrollbar) { .fig-scroll { scrollbar-width: thin; } }
+.fig-scroll > .param-grid { padding: 1px 0; }
+/* Stacked on a narrow screen, the column at its own height: the lists at theirs, to a cap. */
+:root.narrow-layout .fig-scroll { flex: none; max-height: 50vh; }
+/* A Plot card: its plot, or in its place a box of its size saying it has no series; beside
+   it its normalisation, its series and + Add series, the button's bottom on the plot's. */
+.fig-empty { aspect-ratio: 1.618; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px;
+  border: 1px dashed var(--line); border-radius: 8px; }
+.fig-ser-list { margin-top: 10px; }
+.fig-side > .plot-action-btn { margin-top: 8px; flex: none; }
+/* A series a row, on the parameters' grid: × to take it out and its name on three fifths,
+   its scale (and offset) on two. */
+.fig-ser { display: grid; grid-template-columns: minmax(0, 1fr) 40%; column-gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.fig-ser:last-of-type { border-bottom: none; }
+.fig-ser-head { display: flex; align-items: center; gap: 6px; font-size: 13px; min-width: 0; }
+.fig-ser-head > .fig-ser-x { flex: none; }
 .fig-ser-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fig-ops { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
-.fig-ops:empty { display: none; }
-.fig-op { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
-.fig-op input[type="text"] { width: 7ch; padding: 3px 6px; }
-.fig-ser-list:not(:empty) { margin-bottom: 4px; }
+.fig-ops { display: flex; gap: 4px; min-width: 0; }
+.fig-op { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); margin: 0; }
+.fig-op > span { flex: none; }
+.fig-op input[type="text"] { flex: 1 1 0; width: 0; min-width: 0; padding: 3px 6px; }
+.fig-ser-out { margin-top: 6px; }
 /* Add series: the files and their series, each with its box; a file's box with some of
    its series ticked holds a small square, neither a tick nor empty. */
 .modal-box.fig-pick-box { width: min(480px, 94vw); }
