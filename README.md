@@ -1,6 +1,6 @@
 # DataTreat
 
-A browser-based scientific data analysis tool for spectroscopy and chromatography data. No installation or account required — all processing runs in your browser; no data is ever sent to any server.
+A browser-based scientific data analysis tool for spectroscopy and chromatography data, and for figures of your own CSV files. No installation or account required — all processing runs in your browser; no data is ever sent to any server.
 
 ## Getting Started
 
@@ -206,6 +206,24 @@ Tescan SEM images, read with their metadata, cropped, brought to comparable grey
 5. **Intensity.** A normalisation for all images: none, each image stretched between two percentiles of its own levels, or the mean and SD, or the whole histogram, of a reference image (one of them). Then contrast, brightness and gamma, with each image's own correction on top. The selector over the thumbnails applies them to all images alike, or to one group at a time (each group starting from All's settings; back to All, All takes the group's on show). Each set of settings has a *Default* box that locks it at its defaults. The statistics are the crop's, with saturated pixels left out.
 6. **Figure.** Each group has its own *Figure composer* button and figure, made in the plots' composer (one composer open at a time): a page in millimetres, the most compact grid (4 × 3 for 12 images), or blocks of panels set by hand (2 × 1 blocks of 2 × 2 panels), with a gap between panels and another between blocks; panels in the file list's order, reordered by the handles of the image list; each with its sample's name (placed automatically where there is room, or by hand; horizontal or vertical), letters (a), (b)… if wanted (before the name, or in any of 8 places), and scale bars (one per group at common scale, or one per image; 8 places), their length a round value or any value typed; the page's size free, with auto margins or a plot set by hand. PNG at the chosen dpi (a page too large for a PNG in the browser says so, with the largest dpi it can make), or SVG with the images in it.
 7. Export the images' metadata, crops, intensity settings and groups as CSV. The project keeps each file's own bytes; the images themselves are never changed.
+
+
+### 6. Figure (plots of your own data)
+
+New in v527: figures of your own CSV and text files, from any instrument or spreadsheet, as a module of its own (live tabs, projects, undo and redo, the view kept, as the others).
+
+**File format**: columns of text, under an optional header line and whatever title lines come before it. The separator (`;`, tab, `,` or spaces), the decimal mark (`.` or `,`), the quotes and the header are found from each file, as DRS and GC find theirs; a header's `Name (unit)`, `Name [unit]` or `Name / unit` gives the column's name and unit.
+
+**How to use**:
+
+1. **Upload the files** (several at once). The project keeps each file's own bytes, read again as it opens.
+2. **Data card.** The file chosen in its selector, its header and first 5 rows, a role over each column: *x*, *y*, *err x*, *err y* or *—* (not used); by default x, y, y, y… As in Origin, a file may have several x: each y belongs to the x before it (none: its x is the row number), each err y to the y before it and each err x to the x before it, one error at most a column: a column set to err y where its y has one already takes its place, and the one it had becomes a y (an err x the same). The roles are each file's own; *Same roles for all files* gives those of the file shown to every file by the columns' places (a file's columns past the shown one's keep the defaults; a file with fewer columns is said).
+3. **Series.** Each y is a series with its x and its errors, named as the header names its column, else "file N, series M" (N the file's place in the list, M the y's in the file), renamed in the Data card; the columns' units title the plots' axes. A series is its file and its column, not a number: as files are added, removed or moved and roles changed, the plots keep the series that still are and let the others go, and the numbers follow.
+4. **Plots.** None at first: **+** under the Data card asks for the kind, *XY plot*, *Bar chart* or *Box plot*, and adds a card (Plot 1, 2…) to which the series of any files are added. Each series has its operations (none by default): an XY plot's crop in x, normalisation (to its largest |y| in the crop), scale and offset; a bar chart's normalisation and scale; a box plot's scale. A bar chart takes the series' x as categories (text, or numbers as they read) and its err y as the error bars, the series of a category side by side; a box plot takes each series as a group, its values down the rows, named as the series. The cards are renamed, folded, moved by their ≡ grip and closed by their ×, as the analysis cards.
+5. **Figure.** Each plot's toolbar opens the figure composer on it; the figure composed is kept with its card in the project (the other modules' in the browser, by plot), and an undo step as the composer closes.
+6. Export each plot's series, as plotted, as CSV.
+
+Not yet: plots brought in from the other modules' projects; the error bars of an XY plot are not carried into the composer.
 
 ---
 
