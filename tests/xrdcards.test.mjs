@@ -107,7 +107,7 @@ const on = { box: true, win: false, state: true }, off = { box: false, win: true
 // The live state is the one the history holds at its index: an undo re-committed nothing.
 const inStep = page => page.evaluate(async ()=>{
   const u = await import('./utils.js'), h = u.getModuleHistory('xrd');
-  return u.moduleStateKey('xrd') === u.stateKey(h.states[h.index]);
+  return u.stateKey(u.getModuleState('xrd')) === u.stateKey(h.states[h.index]);
 });
 
 test('5b: the baseline box undone and redone, step by step, in all / one and in the standard\'s window', async ()=>{

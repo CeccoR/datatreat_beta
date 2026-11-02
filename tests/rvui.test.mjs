@@ -172,7 +172,16 @@ test('B: the standard\'s Settings show only what applies to it; the samples\' ev
     s = await box();
     assert.deepEqual(s.rows, ['size', 'wppm', 'strain', 'faults', 'adp', 'occ', 'po']);
     assert.deepEqual(s.holds, ['linear', 'cell', 'instrument', 'sizestrain', 'shape', 'faults', 'adp', 'occ', 'texture']);
-    assert.deepEqual(s.fits, ['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeFull', 'shapeTiltSets']);
+    assert.deepEqual(s.fits, ['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeFull', 'shapeTiltSets', 'shapeLine']);
+    // (v528: the shape's size line, a list: Lorentzian by default, the exact line kept in the card's state)
+    const lineSel = '.modal-backdrop[style*="flex"] [data-fit="shapeLine"]', fitNow = async ()=> (await moduleState(page, 'xrd')).cards.find(c=> c.id === 2).states.rietveld.fit || {};
+    assert.equal(await page.$eval(lineSel, e=> e.value), 'lorentz');
+    await page.selectOption(lineSel, 'exact');
+    await settle(page);
+    assert.deepEqual(await fitNow(), { shapeLine: 'exact' });
+    await page.selectOption(lineSel, 'lorentz');
+    await settle(page);
+    assert.deepEqual(await fitNow(), {});
     await page.keyboard.press('Escape');
     // The standard's settings kept whole (the rows not shown off, the groups kept).
     const st = (await moduleState(page, 'xrd')).stdRv;

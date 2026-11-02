@@ -1953,6 +1953,7 @@ button.btn.plot-dl-btn.is-on:active:not(:disabled) {
    the warning colour when an entry was not taken. */
 .rvs-cell { display: flex; align-items: center; gap: 8px; min-width: 0; height: 23px; }
 .rvs-row input[type="text"] { flex: none; width: 72px; height: 23px; padding: 1px 6px; font-size: 12px; }
+.rvs-cell select { max-width: 100%; }
 .rvs-range { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rvs-head button.btn.rvs-def { margin-left: auto; flex: none; padding: 2px 10px; font-size: 12px; }
 .rvs-note.is-warn { color: var(--warn); }

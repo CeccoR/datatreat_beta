@@ -1559,6 +1559,19 @@ function numsKey(a){
   return k;
 }
 const stateKey = v => JSON.stringify(v, (k, x)=> x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && isFixed(x) ? numsKey(x) || x : x);
+/* ---- What a state holds of the view alone (v528) ----
+   Pure visualization in a module's state — a card folded (cards.js `collapsed`, every
+   module's), a chart's selector of what it draws (DRS's E_g and E_U chips, egSel and urbSel;
+   GC's gases, gasSel; XRPD's size chart by sample or by peak, sizeBy) — is a step of the
+   history like any change, but no change unsaved: the "*" compares a state's content, its
+   key with those keys left out at any depth (contentKey), with the one saved. It is kept all
+   the same, silently: in the tab's record, which every change writes, and in the project at
+   its next save. A module names its own keys (registerHistory's opts.view). Not so: a card
+   closed or moved, a figure composer's state, a normalisation (which the exports and the
+   figures take), anything an export or a result reads. (Zooms, the sample on show and the
+   like are no part of the state: shownOf, below.) */
+const VIEW_KEYS = ['collapsed'];
+const contentKey = (v, drop) => JSON.stringify(v, (k, x)=> drop.has(k) ? undefined : x instanceof Uint8Array ? bytesKey(x) : Array.isArray(x) && x.length && isFixed(x) ? numsKey(x) || x : x);
 /* ---- What is worked out, kept (v518) ----
    A result a module works out from data that never change (an array fixed, db.js: a
    pattern's intensities, a spectrum) and from its own inputs (widths, parameters, a result
@@ -1606,11 +1619,14 @@ function keeper(name, n = 4){
   };
 }
 class UndoStack {
-  constructor(snapshot, restore, limit=80){
+  constructor(snapshot, restore, limit=80, view){
     this._snap = snapshot; this._restore = restore; this._limit = limit;
     this.states = []; this.index = -1; this._busy = false;
     this._key = null;       // stateKey of states[index], kept from its commit (null: unknown)
-    this._liveKey = null;   // stateKey of the live state, while the listeners of a commit run
+    this._liveKey = null;   // contentKey of the live state, while the listeners of a commit run
+    this._view = new Set([...VIEW_KEYS, ...(view || [])]);   // the keys of the view alone (contentKey)
+    this._ck = null;        // contentKey of states[index] (null: unknown)
+    this.viewOnly = false;  // the change last heard moved the view alone (a step, nothing unsaved)
     this._marks = [];       // the jobs holding the history (hold): { i, the index of the state each began from; redo }
   }
   // Record the CURRENT state (called after a reversible change, and once as baseline).
@@ -1623,28 +1639,35 @@ class UndoStack {
     // Skip commits that don't actually change anything (avoids dead undo steps).
     if (cur === key){ this._key = key; return; }
     // Drop any redo branch, then append the new state.
+    const was = this.index < 0 ? null : this.contentOf(this.states[this.index]), ck = this.contentOf(snap);
     if (this.index < this.states.length - 1) this.states.length = this.index + 1;
     this.states.push(snap);
     this._trim();
     this.index = this.states.length - 1;
-    this._key = key;
+    this._key = key; this._ck = ck;
     if (silent) return;
+    this.viewOnly = was === ck;
     // (the listeners of every history: the autosave, the unsaved marker, onAnyChange)
-    this._liveKey = key;
+    this._liveKey = ck;
     try { heard(this); } finally { this._liveKey = null; }
   }
+  // A state's key without its view (contentKey): states[index]'s kept.
+  contentOf(s){ return s === this.states[this.index] && this._ck != null ? this._ck : contentKey(s, this._view); }
   // An undo or redo is a change too: the listeners hear it (autosave, and the unsaved
   // marker, which compares the state with the one last saved).
   // (restore's second argument: a step of the history, which a job running leaves its own to)
   _apply(i){
-    this.index = i; this._key = null; this._busy = true; try { this._restore(this.states[i], true); } finally { this._busy = false; }
+    const was = this.contentOf(this.states[this.index]);
+    this.index = i; this._key = null; this._ck = null; this._busy = true; try { this._restore(this.states[i], true); } finally { this._busy = false; }
+    this._ck = contentKey(this.states[i], this._view);
+    this.viewOnly = was === this._ck;
     this._hear();
   }
   _hear(){ heard(this); }
   // (no undo below the state the latest job holding the history started from)
   performUndo(){ if (this.index <= Math.max(0, ...this._marks.map(m=> m.i))) return false; this._apply(this.index - 1); return true; }
   performRedo(){ if (this.index >= this.states.length - 1) return false; this._apply(this.index + 1); return true; }
-  reset(){ this.states.length = 0; this.index = -1; this._key = null; this._marks = []; }
+  reset(){ this.states.length = 0; this.index = -1; this._key = null; this._ck = null; this._marks = []; }
   // The states kept to the limit, the oldest going: the index and the marks move down with
   // them (a mark whose state went is at -1).
   _trim(){ while (this.states.length > this._limit){ this.states.shift(); this.index--; this._marks.forEach(m=>{ if (m.i >= 0) m.i--; }); } }
@@ -1708,13 +1731,14 @@ class UndoStack {
       moved = true;
     }
     if (!moved) return;
-    this._key = null;
+    this._key = null; this._ck = null; this.viewOnly = false;
     if (!quiet) this._hear();
   }
 }
 const _histories = {};
-function registerHistory(key, snapshot, restore){
-  const st = new UndoStack(snapshot, restore);
+// (opts.view: the keys of the module's state that hold the view alone, beside VIEW_KEYS)
+function registerHistory(key, snapshot, restore, opts){
+  const st = new UndoStack(snapshot, restore, 80, opts && opts.view);
   st.key = key;
   _histories[key] = st;
   return st;
@@ -2026,15 +2050,19 @@ function getModuleHistory(k, park){
 function setModuleHistory(k, h){
   const st = _histories[K(k)];
   if (!st || !h) return;
-  st.states = h.states.slice(); st.index = h.index; st._key = null; st._marks = [];
+  st.states = h.states.slice(); st.index = h.index; st._key = null; st._ck = null; st._marks = [];
 }
-// The stateKey of a module's live state: the one a commit just took while its listeners
-// run (the unsaved marker's check), else taken now.
+/* The key of a module's live state as the unsaved marker compares it, its view left out
+   (contentKey; v528, to v527 the whole state's stateKey): the one a commit just took while
+   its listeners run, else taken now. */
 function moduleStateKey(k){
   const st = _histories[K(k)];
   if (!st) return null;
-  return st._liveKey != null ? st._liveKey : stateKey(st._snap());
+  return st._liveKey != null ? st._liveKey : contentKey(st._snap(), st._view);
 }
+// Whether the change a module's history last heard (a commit, an undo, a redo) moved its
+// view alone: a tab never saved is no more unsaved for it (sessions.js recheckDirty).
+function viewOnlyChange(k){ const st = _histories[K(k)]; return !!st && st.viewOnly; }
 
 // Size each home card so its square icon tile spans 90% of the (common) card
 // height, centered, with equal top/bottom/left insets. The tile is absolutely
@@ -2613,7 +2641,7 @@ normalizeNavIcons();
 window.addEventListener('load', normalizeNavIcons);
 
 export {
-  COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvLine, downloadBlob, downloadBytes,
+  COLORS, colorOf, esc, stateKey, moduleStateKey, viewOnlyChange, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvLine, downloadBlob, downloadBytes,
   X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
   maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,

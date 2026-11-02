@@ -10,13 +10,16 @@
    with it (lorentzShape), its solid searched again from it, not carried. No random number
    (v524): Math.random is not called in the box's refinement. The setting shapeTiltSets (v525):
    0 the default's result exactly; 1 the starts run twice, every end into the minima stage, χ² no
-   higher, still no random number. Seconds each. */
+   higher, still no random number. The setting shapeLine (v528): the Lorentzian line by default,
+   the exact one asked; both run on the box, no random number, a result of each searched again
+   from the other. The tests of v523–v525 ask for the exact line, the one the search was tuned
+   on. Seconds each. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { CIF } from './fixtures.mjs';
 import { buildModel, calc, autoRefine, shapeOf, getParams, K_SCHERRER } from '../xrd-rietveld.js';
-import { prepPhase } from '../xrd-rv-model.js';
+import { prepPhase, fitUsed } from '../xrd-rv-model.js';
 
 const SRT = prepPhase(fs.readFileSync(CIF, 'utf8'), 'SrTiO3.cif');
 const LAM1 = 1.540598;
@@ -40,8 +43,10 @@ function draw(shape, P){
   const yc = calc(m, { ...getParams(m), ...prof, bg0: 0, 'p1.scale': 1, ...P }).yc, S = 2e4/Math.max(...yc);
   return X.map((_, i)=> { const l = yc[i]*S + 200; return Math.max(0, Math.round(l + Math.sqrt(l)*nrm())); });
 }
-const refineAs = (y, shape, start, fit) => {
-  const model = buildModel({ x: X, y, instr: INSTR, phases: [phase(shape)] });
+// (fit: the Refinement settings, as the worker takes them: the model built with the shape's line)
+const EXACT = { shapeLine: 'exact' };
+const refineAs = (y, shape, start, fit = EXACT) => {
+  const model = buildModel({ x: X, y, instr: INSTR, phases: [phase(shape)], ...(fit && fit.shapeLine ? { shapeLine: fit.shapeLine } : null) });
   return { model, res: autoRefine(model, { standard: false, irf: IRF, ...(start ? { start, hold: [] } : null), ...(fit ? { fit } : null) }) };
 };
 const TRUE = [8, 5, 3];
@@ -90,10 +95,10 @@ test('a box of 8 × 5 × 3 nm on the cube\'s axes: kept, held on ⟨100⟩, its 
 
 test('the extra tilt sets (shapeTiltSets): 0 the default exactly; 1 twice the starts, every end in the minima stage, χ² no higher, no random number', ()=>{
   const { res: r0 } = boxRes(), i0 = r0.shapes[1];
-  const z = refineAs(BOX, 'box', null, { shapeTiltSets: 0 }).res;
+  const z = refineAs(BOX, 'box', null, { ...EXACT, shapeTiltSets: 0 }).res;
   assert.deepEqual([z.params, z.stats, z.shapes[1]], [r0.params, r0.stats, i0], '0: the default\'s result');
   assert.equal(i0.tiltSets, undefined);
-  const { res: r1, randoms } = counted(()=> refineAs(BOX, 'box', null, { shapeTiltSets: 1 })), i1 = r1.shapes[1];
+  const { res: r1, randoms } = counted(()=> refineAs(BOX, 'box', null, { ...EXACT, shapeTiltSets: 1 })), i1 = r1.shapes[1];
   assert.equal(randoms(), 0, 'no random number drawn');
   assert.ok(i1, 'the shape kept: ' + r1.warnings.join(' | '));
   assert.equal(i1.tiltSets, 1);
@@ -116,7 +121,7 @@ test('a 5 nm sphere searched as an ellipsoid and as a spheroid: not kept, the wa
 
 test('a result of v522 with the Lorentzian line: drawn with it, its solid searched again from it', ()=>{
   // Drawn as refined: lorentzShape keeps the Lorentzian line for such a result (the card's curvesFrom)
-  const m0 = buildModel({ x: X, y: BOX, instr: INSTR, phases: [phase('box')] }), m1 = buildModel({ x: X, y: BOX, instr: INSTR, phases: [phase('box', { lorentzShape: true })] });
+  const m0 = buildModel({ x: X, y: BOX, instr: INSTR, phases: [phase('box')], shapeLine: 'exact' }), m1 = buildModel({ x: X, y: BOX, instr: INSTR, phases: [phase('box', { lorentzShape: true })] });
   assert.deepEqual([m0.phases[0].wppm, m1.phases[0].wppm], [true, false]);
   const { res } = boxRes(), P = res.params;
   const yW = calc(m0, P).yc, yL = calc(m1, P).yc;
@@ -129,4 +134,38 @@ test('a result of v522 with the Lorentzian line: drawn with it, its solid search
   const info = again.shapes[1];
   assert.ok(info && !info.carried && info.keep && info.check && info.minima, 'searched again, with v523\'s records');
   assert.equal(again.models[1].profile, 'wppm');
+});
+
+test('the shape\'s size line (shapeLine): Lorentzian by default, exact asked; both run on the box, each searched again from the other, no random number', ()=>{
+  // The default: the Lorentzian line (p.lorentzShape), the isotropic size the Scherrer reading
+  const mD = buildModel({ x: X, y: BOX, instr: INSTR, phases: [phase('box')] }), mE = buildModel({ x: X, y: BOX, instr: INSTR, phases: [phase('box')], shapeLine: 'exact' });
+  assert.deepEqual([mD.phases[0].wppm, mE.phases[0].wppm], [false, true]);
+  // a phase's own line wins (a result drawn as refined), and WPPM asked is exact either way
+  assert.equal(buildModel({ x: X, y: BOX, instr: INSTR, phases: [phase('box', { lorentzShape: false })] }).phases[0].wppm, true);
+  assert.equal(buildModel({ x: X, y: BOX, instr: INSTR, phases: [phase('box', { profile: 'wppm' })] }).phases[0].wppm, true);
+  const { res: rL, randoms } = counted(()=> refineAs(BOX, 'box', null, null));
+  assert.equal(randoms(), 0, 'no random number drawn');
+  assert.equal(rL.fit.shapeLine, 'lorentz', 'the default, said in the result\'s settings');
+  assert.equal(rL.models[1].profile, 'lorentz', 'the Lorentzian line');
+  assert.equal(rL.models[1].shape, 'box');
+  assert.ok(rL.shapes[1] || rL.warnings.some(t=> t.includes('is not supported by the data')), 'searched: ' + rL.warnings.join(' | '));
+  assert.ok(Number.isFinite(rL.stats.chi2));
+  const { res: rE } = boxRes();
+  assert.equal(rE.fit.shapeLine, 'exact');
+  assert.deepEqual(fitUsed(rE, false).map(u=> u.k), ['shapeLine'], 'the exact line said under its result');
+  assert.deepEqual(fitUsed(rL, false), [], 'the default not said');
+  // A result of v527 or older (no shapeLine in its settings): its line is its models'
+  const { shapeLine, ...old } = rE.fit;
+  assert.equal(shapeLine, 'exact');
+  assert.deepEqual(fitUsed({ ...rE, fit: old }, false).map(u=> u.v), ['exact']);
+  // Each from the other: its solid searched again (not carried), with the line asked
+  const startOf = r => ({ params: r.params, free: r.free, held: r.held || [], models: r.models, textures: r.textures, shapes: r.shapes, isoParams: r.isoParams, detected: r.detected, irf: IRF });
+  if (rL.shapes[1]){
+    const e = refineAs(BOX, 'box', startOf(rL), EXACT).res;
+    assert.ok(e.shapes[1] && !e.shapes[1].carried, 'Lorentzian → exact: searched again');
+    assert.equal(e.models[1].profile, 'wppm');
+  }
+  const l = refineAs(BOX, 'box', startOf(rE), null).res;
+  assert.ok(!(l.shapes[1] && l.shapes[1].carried), 'exact → Lorentzian: searched again');
+  assert.equal(l.models[1].profile, 'lorentz');
 });

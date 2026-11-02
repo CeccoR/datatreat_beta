@@ -758,8 +758,9 @@ function axialOf(model, v){
    cylinder's its diameter and height). A phase with a body is drawn by WPPM, each
    member's line the transform of the solid's common-volume function along it, and its
    isotropic size the sphere's (broadeningSetup): the widths read as the solid's true
-   dimensions. With the Lorentzian line of this calibration (v420's ellipsoid, and a body
-   refined with it to v522, drawn again as it was: p.lorentzShape) they are Scherrer
+   dimensions. With the Lorentzian line of this calibration (v420's ellipsoid, a body
+   refined with it to v522, drawn again as it was, and from v528 a body under the fit
+   setting shapeLine 'lorentz', its default: p.lorentzShape) they are Scherrer
    readings: a least-squares Lorentzian follows a crystallite's line, tails and all,
    spheres of one size read 1.0–1.7 times their diameter (RIETVELD.md §7.2), a solid's
    ⟨L⟩_V 13–25 % long, and a reflection's members of different widths add up to a line
@@ -1763,8 +1764,9 @@ function tickLabels(list, ops, M){
    site within its symmetry, U11_<label> …). p.occ: a site's label (phaseSites), or a
    list of them, whose occupancy is refined (occ_<label>; occSetup). A phase with a body
    for its free shape (p.shape) is a WPPM phase whatever its profile (the free crystallite
-   shape, above), but where p.lorentzShape asks for v522's Lorentzian line to draw a result
-   refined with it. */
+   shape, above), but where p.lorentzShape asks for the Lorentzian line: under the
+   Lorentzian profile, by the fit setting shapeLine (its default, v528: buildModel), or to
+   draw a result refined with it (v522's and older, and v528's under that setting). */
 const PROFILES = ['lorentz', 'wppm', 'lognormal'];
 // The refined sites as one key (a result's models.occ against the options now).
 const occText = a => (Array.isArray(a) ? a : a ? [a] : []).map(String).sort().join(',');
@@ -2108,12 +2110,16 @@ function latticeStretch(constraint, cell, names, lat0, r){
      or twice cellRange when that is wider: the lone phase's second search reaches 2×, and
      the reflection list must reach the cells it may place (latticeStretch). A model drawn
      again from a result is built with the result's fit (its background terms, its list).
+     shapeLine (a fit setting too, v528): the free shape's size line on a phase of the
+     Lorentzian size profile, 'lorentz' (the default) or 'exact' (WPPM); a phase's own
+     lorentzShape, true or false, wins (a result drawn again with the line it was refined
+     with: curvesFrom).
    - every phase's id (its parameters' prefix, 'p' + id) must be its own.
    The profile is the instrument's U, V, W, X, Y, shared by the phases, with each phase's
    own Lorentzian broadening on top ('p1.Xs', 'p1.Ys'): one instrumental profile, and a
    size and a strain per phase (or per population, with a CIF loaded twice).
    The model owns copies; the phases' objects are not modified. */
-function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {}, bgDegree = BG_DEGREE, bgInv, cellRange } = {}){
+function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {}, bgDegree = BG_DEGREE, bgInv, cellRange, shapeLine } = {}){
   const n = x.length, latRange = Math.max(LAT_RANGE, 2*fitSettings({ cellRange }).cellRange);
   // A scan recorded downwards is held ascending inside (the windows are found by bisection)
   // and handed back in its own order by calc().
@@ -2247,6 +2253,8 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
   const dLim = lamMax/(2*Math.sin(thLim)), dFull = (1 - LAT_RANGE)*dLim;
   const pfxSeen = new Set();
   const ph = phases.map((p, k)=>{
+    // The free shape's size line (fit setting shapeLine) where the phase does not say its own.
+    if (typeof p.lorentzShape !== 'boolean') p = { ...p, lorentzShape: shapeLine !== 'exact' };
     const id = p.id != null ? p.id : k, pfx = 'p' + id + '.';
     // Two phases under one prefix would share every parameter name: one of them could not
     // be reached by name, and getParams would give it the other's values.
@@ -2317,7 +2325,7 @@ function buildModel({ x, y, varMul = null, instr = null, phases = [], prof = {},
     esd: {}, cov: null,
     // what it was built from (by reference): a sibling with another solid (siblingModel,
     // the free shape's family)
-    build: { x, y, varMul, instr, phases, prof, bgDegree, bgInv, cellRange },
+    build: { x, y, varMul, instr, phases, prof, bgDegree, bgInv, cellRange, shapeLine },
   };
 }
 
@@ -3499,7 +3507,10 @@ const ZERO_RANGE = 1;
    Chebyshev terms T₀…Tₙ, 0–20: BG_DEGREE), bgInv (the 1/2θ term: true, false or 'auto',
    buildModel's rule), cellRange (0.005–0.2: CELL_RANGE), zeroRange (0.05–5°: ZERO_RANGE),
    shapeFull (1–20: SHAPE_FULL) and shapeTiltSets (0–8: the free shape's more sets of start
-   tilts, none by default; SHAPE_TILT); a key not listed is ignored (shapeStarts, the free
+   tilts, none by default; SHAPE_TILT) and shapeLine (the free shape's size line where the
+   phase's size profile is the Lorentzian: 'lorentz', the default, its Lorentzian of
+   Scherrer's calibration — p.lorentzShape, buildModel —, or 'exact', the solid's own line by
+   WPPM; v528); a key not listed is ignored (shapeStarts, the free
    shape's random starts to v523, among them). Integers are rounded. A number or a numeric
    string is read; anything else (null, a blank string, a boolean) is the default: +' ' and
    +true are numbers, 0 and 1, and had set the shift test to 10⁻⁴ or one iteration. With nothing given, or every key at its default, a
@@ -3514,6 +3525,7 @@ function fitSettings(fit){
     out[k] = Number.isNaN(x) ? def : Math.min(hi, Math.max(lo, int ? Math.round(x) : x));
   }
   out.bgInv = f.bgInv === true || f.bgInv === false ? f.bgInv : 'auto';
+  out.shapeLine = f.shapeLine === 'exact' ? 'exact' : 'lorentz';
   return out;
 }
 
@@ -4000,7 +4012,9 @@ function autoRefine(model, opts = {}){
          WPPM from v523 (broadeningSetup), so its solid is searched again with the exact line,
          kept or not by v523's keep test, and its isotropic size, refined again, reads the
          sphere's diameter where it read a Scherrer size. (A body under WPPM there is carried,
-         or held isotropic where v522's ΔBIC < −10 rejected it, as before.) */
+         or held isotropic where v522's ΔBIC < −10 rejected it, as before.) From v528 the
+         fit setting shapeLine chooses the line under the Lorentzian profile: a result
+         refined with the other one is searched again the same way. */
       const sameRead = !q.iW || w0 === w1;
       // The solid asked for there too and rejected by the keep test (no width in use): the same
       // option, its values the isotropic size's. (A result without models' shape: v428's.)

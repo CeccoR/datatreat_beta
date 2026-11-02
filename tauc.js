@@ -647,6 +647,8 @@ function createTauc({ key, root, layer, shown }){
      every card in the history. */
   const kit = moduleKit('tauc', {
     root, key, layer,
+    // (the charts' chips, E_g's and E_U's: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
+    view: ['egSel', 'urbSel'],
     note: readNote,
     alerts: p =>{
       const notes = warnDismissed ? [] : allFiles.map(f=> [f, fileNotes(f)]).filter(([, n])=> n.length).map(([f, n])=> esc(`${f.name}: ${n.join('; ')}`));

@@ -96,7 +96,7 @@ test('the settings made valid, a v428 project\'s migrated, the engine\'s options
   assert.deepEqual(M.siteList(sto), [['Sr1', 'Sr1 (Sr)'], ['Ti1', 'Ti1 (Ti)'], ['O1', 'O1 (O, ×3)']]);
   // The rows each card shows.
   const s = M.rowsFor(false), t = M.rowsFor(true);
-  assert.deepEqual([s.fits.map(m=> m.k), s.modes.length, s.holds.length], [['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeFull', 'shapeTiltSets'], 7, 9]);
+  assert.deepEqual([s.fits.map(m=> m.k), s.modes.length, s.holds.length], [['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'cellRange', 'shapeFull', 'shapeTiltSets', 'shapeLine'], 7, 9]);
   assert.deepEqual([t.fits.map(m=> m.k), t.modes.map(m=> m.k), t.holds.map(([k])=> k)], [['maxIter', 'shiftTol', 'lambda', 'bgDegree', 'bgInv', 'zeroRange'], ['adp', 'po'], ['linear', 'cell', 'instrument', 'adp', 'texture']]);
 });
 
@@ -110,8 +110,9 @@ test('the Refinement settings: their ranges, an entry read with either mark, the
     ['cellRange', false, true, false, 'sample', false, 0.005, 0.2, '0.5–20', 'a number from 0.5 to 20 %'],
     ['zeroRange', false, false, false, 'std', false, 0.05, 5, '0.05–5', 'a number from 0.05 to 5°'],
     ['shapeFull', true, false, false, '', true, 1, 20, '1–20', 'a whole number from 1 to 20'],
-    ['shapeTiltSets', true, false, false, '', true, 0, 8, '0–8', 'a whole number from 0 to 8']]);
-  assert.deepEqual(M.FIT_DEF, { maxIter: 40, shiftTol: 0.01, lambda: 0.001, bgDegree: 6, cellRange: 0.05, zeroRange: 1, shapeFull: 3, shapeTiltSets: 0, bgInv: 'auto' });
+    ['shapeTiltSets', true, false, false, '', true, 0, 8, '0–8', 'a whole number from 0 to 8'],
+    ['shapeLine', false, false, false, '', true, undefined, undefined, undefined, undefined]]);
+  assert.deepEqual(M.FIT_DEF, { maxIter: 40, shiftTol: 0.01, lambda: 0.001, bgDegree: 6, cellRange: 0.05, zeroRange: 1, shapeFull: 3, shapeTiltSets: 0, bgInv: 'auto', shapeLine: 'lorentz' });
   const read = [['maxIter', '50', 50], ['maxIter', ' 50 ', 50], ['maxIter', '50.0', null], ['maxIter', '1,000', null], ['maxIter', '1e2', 100], ['maxIter', '0', null], ['maxIter', '', null],
     ['maxIter', '0x10', null], ['maxIter', 'Infinity', null], ['shiftTol', '0,05', 0.05], ['shiftTol', '1e-3', 0.001], ['shiftTol', '.5', 0.5], ['shiftTol', '-0', null], ['shiftTol', '1e', null],
     ['lambda', '1e-8', 1e-8], ['lambda', '1e-9', null], ['lambda', '1000', 1000], ['lambda', '1001', null], ['cellRange', '7,3', 0.073], ['cellRange', '7.3', 0.073], ['cellRange', '0', null],
@@ -123,6 +124,10 @@ test('the Refinement settings: their ranges, an entry read with either mark, the
   // (v525: the extra tilt sets kept when not 0; a project of v524 or older has none, so 0)
   assert.deepEqual(M.cleanFit({ shapeTiltSets: 2 }), { shapeTiltSets: 2 });
   assert.deepEqual(M.cleanFit({ shapeTiltSets: 0, shapeFull: 3 }), {});
+  // (v528: the shape's size line, a choice: the exact line kept, the Lorentzian (default) and anything else dropped)
+  assert.deepEqual(M.cleanFit({ shapeLine: 'exact' }), { shapeLine: 'exact' });
+  for (const v of ['lorentz', 'wppm', true, 1]) assert.deepEqual(M.cleanFit({ shapeLine: v }), {}, String(v));
+  assert.match(M.FIT.shapeLine.full, /more accurate.*13–25 %.*tuned on the exact line.*Default: Lorentzian\.$/s);
   // (a key unknown, out of range, not whole or at its default dropped; the rest in FITS' order, as text)
   const c = M.cleanFit({ bgDegree: 9, maxIter: 50, lambda: 0.001, x: 1, cellRange: 0.073, bgInv: false, shapeStarts: 2.5, zeroRange: -0, shiftTol: NaN });
   assert.equal(JSON.stringify(c), '{"maxIter":50,"bgDegree":9,"bgInv":false,"cellRange":0.073}');
@@ -234,6 +239,11 @@ test('the instrument read once from the file\'s own bytes; a result written; the
   assert.deepEqual(M.fitUsed({ fit: { shapeTiltSets: 1 }, models: { 1: { shape: 'box' } } }, false), [{ k: 'shapeTiltSets', v: 1, said: '1 extra shape tilt set' }]);
   assert.deepEqual(M.fitUsed({ fit: { shapeTiltSets: 3 } }, false), []);
   assert.deepEqual(M.fitUsed({ fit: { shapeTiltSets: 0, shapeFull: 3 }, models: { 1: { shape: 'box' } } }, false), []);
+  // (v528: the exact line said with a free shape; a result of v523–v527, none kept, read from its models: WPPM was the exact line)
+  assert.deepEqual(M.fitUsed({ fit: { shapeLine: 'exact' }, models: { 1: { shape: 'box', profile: 'wppm' } } }, false), [{ k: 'shapeLine', v: 'exact', said: "the shape's exact size line" }]);
+  assert.deepEqual(M.fitUsed({ fit: { shapeLine: 'lorentz' }, models: { 1: { shape: 'box', profile: 'lorentz' } } }, false), []);
+  assert.deepEqual(M.fitUsed({ fit: { shapeFull: 3 }, models: { 1: { shape: 'box', profile: 'wppm' } } }, false).map(u=> u.v), ['exact']);
+  assert.deepEqual(M.fitUsed({ fit: { shapeFull: 3 }, models: { 1: { shape: 'box', profile: 'lorentz' } } }, false), [], 'v522: the Lorentzian');
   // The phases a result was refined with, and the ticks before one.
   const sto = { id: 1, prep: ph[0].prep, color: '#d4a72c', off: {} }, bto = { id: 2, prep: M.prepOf(BTO, 'BaTiO3.cif'), color: '#c77dff', off: {} };
   assert.deepEqual(M.resultPhases(res({ phases: [1, 2] }), [sto, bto], [sto]).map(q=> q.id), [1, 2]);

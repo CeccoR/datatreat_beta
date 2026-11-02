@@ -41,6 +41,9 @@ import { decodeText } from './textdata.js';
                        changed, from where the walk began
      cleared()         every file removed: the module empties what it keeps per sample
      snapshot()        the module's own state, beside its files
+     view              the keys of that state that hold the view alone: a step of the
+                       history, no change unsaved (utils.js VIEW_KEYS; a card's fold is
+                       one in every module)
      file(f)           a file's record as a restore reads it (a project read in may hold
                        anything: RESTORED, below): what it holds taken only as what it
                        should be, or null when it holds nothing to show (left out)
@@ -172,7 +175,7 @@ export function moduleKit(mod, o){
     const lost = raw.length - all.length;
     if (lost) parts.invalid = buildAlertsHtml([], [`${lost} file${lost > 1 ? 's' : ''} in the project with no data to show: left out.`], 'Restored, with a caveat:', '', pre + 'invalid');
     kit.drawAlerts();
-  });
+  }, { view: o.view });
   kit.commit = ()=> hist.commit();
   // The cards, in the module's list above its "+" bar; each change a step of the history.
   let deck = null;

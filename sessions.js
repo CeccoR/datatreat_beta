@@ -9,7 +9,7 @@
 ========================================================= */
 import { MODULES, MODULE_LABELS, esc, moduleStateKey, getModuleState,
          moduleHasData, runCsvExport, confirmBanner, normalizeProjIcons, refreshProjBar, onSectionChange,
-         moduleBusy, onAnyChange, withState } from './utils.js';
+         moduleBusy, onAnyChange, withState, viewOnlyChange } from './utils.js';
 import { allProjects, putProject, deleteProject, retitleProject, readProject, exportedProject, uid, encode, decode,
          hydrate, sweepSoon, dbBlocked, onDbBlocked, onDbClosing, onDbClosed } from './db.js';
 import { activeTab, tabById, tabByProject, openTab, closeTab, setTabTitle,
@@ -115,7 +115,8 @@ const edits = t => t ? _edits.get(t.id) || 0 : 0;
 function recheckDirty(t){
   if (!t || !isLive(t)) return;
   _edits.set(t.id, edits(t) + 1);
-  if (!t.projectId){ markDirty(t); return; }
+  // (a change of the view alone, v528: no change unsaved, nor in a tab never saved)
+  if (!t.projectId){ if (!viewOnlyChange(t.id)) markDirty(t); return; }
   const base = _savedKey.get(t.id);
   const same = !!base && base.title === (t.title || '') && base.key === stateKey(t);
   if (same){ if (t.dirty) markSaved(t); }

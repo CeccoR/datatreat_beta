@@ -304,6 +304,8 @@ function createGc({ key, root, layer, shown }){
      parked state). */
   const kit = moduleKit('gc', {
     root, key, layer,
+    // (the plots' gas chips, H₂ / O₂: the view alone, a step but no change unsaved; utils.js VIEW_KEYS)
+    view: ['gasSel'],
     alerts: p =>{ $('gcAlerts').innerHTML = p.invalid + dateAlertsHtml() + blankAlertsHtml() + p.upload; },
     dismiss: { blank: ()=> allFiles.forEach(f=> blankSeen.add(f.gas)), dates: ()=> allFiles.forEach(f=> dateSeen.add(f.gas)) },
     // Every card's per-sample arrays. An excluded file holds its own values; one with none

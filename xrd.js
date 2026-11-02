@@ -631,7 +631,9 @@ function createXrd({ key, root, layer, shown }){
     if (notes.length) xrdNoteAlerts = buildAlertsHtml([], notes, 'Restored, with a caveat:', '', 'xrd-dismiss-notes');
     rebuildXrdAlerts();
   }
-  const hist = registerHistory(key, xrdSnapshot, xrdRestore);
+  // (the size charts' by sample / by peak, a Scherrer card's and a Rietveld card's: the view
+  // alone, a step but no change unsaved; utils.js VIEW_KEYS)
+  const hist = registerHistory(key, xrdSnapshot, xrdRestore, { view: ['sizeBy'] });
 
   registerTabRedraw(key, ()=>{
     deck.fitNames();

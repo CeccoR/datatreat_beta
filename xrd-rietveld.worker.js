@@ -473,7 +473,7 @@ self.addEventListener('message', e=>{
     // The fit's settings (the card's Refinement settings): the background's terms and the
     // lattice bounds are the model's, the rest autoRefine's.
     const fit = fitSettings(opts.fit);
-    const model = buildModel({ x, y, varMul, instr, phases, bgDegree: fit.bgDegree, bgInv: fit.bgInv, cellRange: fit.cellRange });
+    const model = buildModel({ x, y, varMul, instr, phases, bgDegree: fit.bgDegree, bgInv: fit.bgInv, cellRange: fit.cellRange, shapeLine: fit.shapeLine });
     // opts.start, opts.hold: from the last result, groups held there (autoRefine).
     const res = autoRefine(model, { standard: !!opts.standard, irf: opts.irf || null, refineB: !!opts.refineB, fit, start: opts.start || null, hold: opts.hold || [],
       onProgress: (frac, stage)=> self.postMessage({ id, type: 'progress', frac, stage }) });

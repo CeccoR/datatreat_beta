@@ -147,6 +147,9 @@ function settingsBodyHtml(list, { p, std, lab6, modes: modesHere, holds: holdsHe
      "automatic" under the depths (the value locked, showing what automatic gives). */
   function fitRow(m){
     const id = p + 'Fit_' + m.k;
+    // (a choice, the shape's size line: a list under the depths)
+    if (m.choice) return `<div class="rvs-row" data-fit-row="${m.k}"><span></span><label for="${id}">${m.label}</label>`
+      + `<span class="rvs-cell"><select id="${id}" data-fit="${m.k}">${m.choice.map(([v, t])=> `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></span></div>`;
     return m.bool
       ? `<div class="rvs-row" data-fit-row="${m.k}"><input type="checkbox" id="${id}" data-fit="${m.k}"><label for="${id}">${m.label}</label>`
         + `<span class="rvs-cell"><input type="checkbox" id="${id}Auto" data-fit-auto="${m.k}"><label for="${id}Auto">automatic</label></span></div>`
