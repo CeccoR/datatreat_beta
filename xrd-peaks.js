@@ -496,7 +496,7 @@ export function createPeakAnalysis(host, root, o){
             <div class="plot-wrap">
               <svg class="plot" id="${p}SizeBarSvg"></svg>
               <span class="plot-chips" id="${p}SizeBy"></span>
-              <button class="btn plot-dl-btn" data-dl-svg="${p}SizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="${p}SizeBarLegend">${PLOT_DL_ICON}</button>
+              <button class="btn plot-dl-btn" data-dl-svg="${p}SizeBarSvg" data-csv-mod="xrd" data-csv-names="crystallite_size.csv,crystallite_size_by_peak.csv" data-dl-name="XRPD_crystallite_size.svg" data-dl-legend="${p}SizeBarLegend">${PLOT_DL_ICON}</button>
             </div>
             <div id="${p}SizeBarLegend" class="legend"></div>
             <div id="${p}SizeByNote" class="txt-meta"></div>
@@ -1260,14 +1260,17 @@ export function createPeakAnalysis(host, root, o){
     if (note && nt !== noteHtml){ noteHtml = nt; note.innerHTML = nt; }
     sizeNames();
   }
-  // The chart's downloads follow what it shows, and the card's name.
+  /* The chart's image follows what it shows, its CSVs never (v530): both, by sample and by
+     peak (the second where there is one: byPeakOk), whichever the chips show, a view alone
+     (v528); to v529 the one on show. Both named after the card. */
   let cardName = '';
+  const SIZE_CSVS = ['crystallite_size.csv', 'crystallite_size_by_peak.csv'];
   function sizeNames(){
     if (!res) return;
     const R = sizeReflections(), by = byPeakOk(R) ? sizeBy : 'sample', pre = cardName ? cardName + ' - ' : '';
     const wrap = $$('SizeBarSvg').closest('.plot-wrap');
     wrap.querySelectorAll('.plot-dl-btn, .plot-csv-btn').forEach(b=>{
-      b.dataset.csvNames = pre + (by === 'peak' ? 'crystallite_size_by_peak.csv' : 'crystallite_size.csv');
+      b.dataset.csvNames = SIZE_CSVS.map(x=> pre + x).join(',');
       if (b.classList.contains('plot-dl-btn')) b.dataset.dlName = pre + (by === 'peak' ? 'XRPD_crystallite_size_by_peak.svg' : 'XRPD_crystallite_size.svg');
     });
   }

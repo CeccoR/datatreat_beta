@@ -557,11 +557,13 @@ export function createRietveld(host, root, o){
     sizeKey = key;
     return true;
   }
-  // The size chart's downloads follow what it shows, and the card's name.
+  /* The size chart's image follows what it shows, its CSVs never (v530): both, the sizes by
+     sample (rietveld_results.csv) and by peak (rietveld_peaks.csv, where any), whichever the
+     chips show, a view alone (v528); to v529 the one on show. Both named after the card. */
   function sizeNames(){
     if (!res) return;
     res.querySelectorAll('[data-size-dl]').forEach(b=>{
-      b.dataset.csvNames = csvPre + (sizeBy === 'peak' ? 'rietveld_peaks.csv' : 'rietveld_results.csv');
+      b.dataset.csvNames = csvPre + 'rietveld_results.csv,' + csvPre + 'rietveld_peaks.csv';
       if (b.classList.contains('plot-dl-btn')) b.dataset.dlName = csvPre + (sizeBy === 'peak' ? 'XRPD_rietveld_size_by_peak.svg' : 'XRPD_rietveld_size.svg');
     });
   }
@@ -1353,7 +1355,7 @@ function resHtml(p){
             <div class="plot-wrap">
               <svg class="plot" id="${p}SizeSvg"></svg>
               <span class="plot-chips" id="${p}SizeBy"></span>
-              <button class="btn plot-dl-btn" data-size-dl data-dl-svg="${p}SizeSvg" data-csv-mod="xrd" data-csv-names="rietveld_results.csv" data-dl-name="XRPD_rietveld_size.svg" data-dl-legend="${p}SizeLegend">${PLOT_DL_ICON}</button>
+              <button class="btn plot-dl-btn" data-size-dl data-dl-svg="${p}SizeSvg" data-csv-mod="xrd" data-csv-names="rietveld_results.csv,rietveld_peaks.csv" data-dl-name="XRPD_rietveld_size.svg" data-dl-legend="${p}SizeLegend">${PLOT_DL_ICON}</button>
             </div>
             <div id="${p}SizeLegend" class="legend"></div>
             <div id="${p}SizeNote" class="txt-meta"></div>
