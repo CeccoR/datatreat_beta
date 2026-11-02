@@ -32,6 +32,7 @@ import { decodeText } from './textdata.js';
                        (to v501 `cols`, columns of the module's own, a lead one left of
                        the label)
      noteHead          that column's header, plain text (GC: SAMPLE); none: no header
+     noColor           the files' colours not shown in the list (Figure), their place kept
      noteChange(i, v, again)  a select in a file's note changed (GC's Sample): file
                        all[i], `v` its value; the module takes it, then the list is drawn
                        again (the other rows' choices may follow) and redraw('note'), a step
@@ -92,6 +93,7 @@ export function moduleKit(mod, o){
     onInclude(i, on){ setIncluded(all, i, on, slots()); changed('include'); },
     onIncludeAll(on){ all.forEach((_, j)=> setIncluded(all, j, on, slots())); changed('include'); },
     onLabelChange(i, v){ all[i].label = v; o.redraw('label'); kit.commit(); },
+    noColor: o.noColor,
     onColorChange(i, v){ all[i].color = v; o.redraw('color'); kit.commit(); },
     onPaletteChange(colors){ all.forEach((f, i)=>{ f.color = colors[i % colors.length]; }); changed('palette'); },
     onRemoveAll(){ all.length = 0; clearAlerts(); if (o.cleared) o.cleared(); changed('clear'); },

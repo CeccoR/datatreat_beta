@@ -833,7 +833,11 @@ function moveFileTo(all, from, to, slots){
    callbacks: {onRemove(i), onReorder(from,to), onRemoveAll(), onLabelChange(i,newLabel)
                (on leaving the field, not while typing),
                onColorChange(i,color), onPaletteChange(colors), onInclude(i,on),
-               onIncludeAll(on)}
+               onIncludeAll(on), noColor}
+               noColor: the files' colours not shown (Figure: a file's colour is no
+               series'); a file with no colour (SEM) has none shown either. Either way the
+               swatch's place and the palette's stay, empty, so the names keep their places
+               (to v528 SEM's names stood where the swatches are in the other modules)
    note: optional (file, i) => markup, the file's note, in the column right of its label
          (DRS: how its second column was read; GC: the sample's select); none, that
          column is left empty
@@ -863,15 +867,16 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
   const colgroup = `<colgroup><col style="width:26px"><col style="width:26px"><col style="width:37.5%"><col style="width:37.5%"><col style="width:25%"><col style="width:58px"></colgroup>`;
   const grip = `<svg class="grip-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/></svg>`;
   const nIn = files.filter(isIncluded).length;
+  const colorOf = f => callbacks.noColor ? '' : f.color, anyColor = files.some(colorOf);
 
-  let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head"><button class="palette-pick-btn" title="Apply color palette"></button><span>FILE</span></div></th>`;
+  let html = `<div class="table-wrap-box"><table class="file-table">${colgroup}<thead><tr><th></th><th class="incl-cell"><input type="checkbox" class="incl-all"${nIn ? ' checked' : ''} title="Include all files in the analysis, or none"></th><th><div class="file-head">${anyColor ? '<button class="palette-pick-btn" title="Apply color palette"></button>' : '<span class="palette-pick-btn swatch-gap" aria-hidden="true"></span>'}<span>FILE</span></div></th>`;
   html += `<th>LABEL</th><th class="note-cell"${noteHead ? ` title="${esc(noteHead)}"` : ''}>${noteHead ? esc(noteHead) : ''}</th>`;
   const dlIcon = DL_SVG(15);
   const xIcon = X_SVG(15);
   html += `<th class="row-acts" style="text-align:right;white-space:nowrap"><button class="download-all del-bare dl-bare" title="Download all (zip)">${dlIcon}</button><button class="remove-all del-bare is-danger" title="Remove all">${xIcon}</button></th></tr></thead><tbody>`;
 
   files.forEach((f, i)=>{
-    const swatch = f.color ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '';
+    const swatch = colorOf(f) ? `<button class="color-swatch" data-i="${i}" data-color="${esc(f.color)}" style="background:${esc(f.color)}" title="Pick color"></button>` : '<span class="color-swatch swatch-gap" aria-hidden="true"></span>';
     const on = isIncluded(f);
     html += `<tr class="file-row${on ? '' : ' is-excluded'}" data-i="${i}">`;
     html += `<td class="drag-cell"><span class="drag-handle" title="Drag to reorder">${grip}</span></td>`;
@@ -905,17 +910,17 @@ function renderUnifiedFileList(container, files, callbacks, note, noteHead){
     if (!await confirmBanner('Are you sure to remove all files?')) return;
     if (callbacks.onRemoveAll) callbacks.onRemoveAll();
   });
-  const palBtn = wrap.querySelector('.palette-pick-btn');
+  const palBtn = wrap.querySelector('button.palette-pick-btn');
   if (palBtn) palBtn.addEventListener('click', e=>{
     e.stopPropagation();
     palettePickerUI.open(palBtn, colors=>{
       if (callbacks.onPaletteChange) callbacks.onPaletteChange(colors);
     }, {
       // What "save palette" would keep: the colours these files are wearing now.
-      colors: ()=> [...wrap.querySelectorAll('.color-swatch')].map(b=> b.dataset.color),
+      colors: ()=> [...wrap.querySelectorAll('button.color-swatch')].map(b=> b.dataset.color),
     });
   });
-  wrap.querySelectorAll('.color-swatch').forEach(btn=>{
+  wrap.querySelectorAll('button.color-swatch').forEach(btn=>{
     btn.addEventListener('click', e=>{
       e.stopPropagation();
       colorPickerUI.open(btn, btn.dataset.color, color=>{

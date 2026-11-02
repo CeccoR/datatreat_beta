@@ -1292,6 +1292,10 @@ button.color-swatch {
    (.cp-anchored), then returns to idle once the picker closes. */
 button.color-swatch:hover,
 button.color-swatch.cp-anchored { border-color: var(--white); }
+/* No colour shown (SEM's images, the Figure's files): the swatch's and the palette's
+   place kept empty, so the names stand where the other modules' do. */
+span.swatch-gap { display: inline-block; flex-shrink: 0; width: 14px; height: 14px; visibility: hidden; }
+span.color-swatch.swatch-gap { margin-right: 5px; }
 
 /* ===== Custom Color Picker popup ===== */
 .cp-popup {
@@ -3143,8 +3147,6 @@ button.sem-link:hover { color: #fff; border-color: #fff; }
 .sem-thumb-wrap.is-out { opacity: 0.4; }
 .sem-thumb-wrap.is-out:hover { opacity: 0.8; }
 button.sem-link.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
-/* The list's colour palette means nothing for images. */
-#semFileTableWrap .palette-pick-btn { display: none; }
 
 /* ===== SEM: intensity ===== */
 .sem-hist canvas { display: block; width: 100%; height: 100%; }
@@ -3271,31 +3273,49 @@ button.an-add.is-drop { border-color: var(--accent); }
 /* (empty, with no file to count on: no room taken, the box one line as its neighbours) */
 .wf-pts:empty { display: none; }
 
-/* The Figure module (fig.js). The Data card: the file chosen and the roles' box on one line
-   (wrapped when narrow), then the file's head, a role over each column, scrolled sideways
-   inside its own box when wider than the card (never the page), and its series' names. */
-.fig-data-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 18px; margin-bottom: 10px; }
-.fig-file { flex: 0 1 320px; min-width: 0; }
-.fig-file .txt-label { margin-top: 0; }
-.fig-same { margin: 0 0 8px; }
+/* The Figure module (fig.js). The Data card, as an analysis card: the file's arrows over
+   its head, a role over each column, scrolled sideways inside its own box when wider than
+   the card (never the page); beside it the series' names and the roles' box. */
+.fig-same { margin: 10px 0 0; }
 .fig-head-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; }
+/* (its top where an analysis card's plot is, under the arrows' row, level with the
+   column beside it: .param-head.aligned) */
+.plot-nav-row + .fig-head-wrap { margin-top: 11px; }
+:root.narrow-layout .plot-nav-row + .fig-head-wrap { margin-top: 0; }
 table.fig-cols { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 table.fig-cols th, table.fig-cols td { padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
 table.fig-cols tbody tr:last-child td { border-bottom: none; }
 table.fig-cols select { width: auto; min-width: 7ch; padding: 4px 6px; }
 table.fig-cols .fig-hd th { color: var(--muted); font-weight: 600; }
-.fig-snames { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 14px; }
-.fig-sname .txt-label { margin-top: 6px; }
-/* A Plot card: its plot, or a line saying it has no series, and the list of its series,
-   each with its colour, name, × and operations. */
+#figWarn .alert { margin-top: 10px; }
+/* A Plot card: its plot, or a line saying it has no series, and beside it its
+   normalisation and the list of its series, each with its name, × and operations. */
 .fig-empty { padding: 18px 0; }
 .fig-ser-list { margin-top: 8px; }
 .fig-ser { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
 .fig-ser-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.fig-sw { flex: none; width: 12px; height: 12px; border-radius: 2px; }
 .fig-ser-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fig-ops { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
 .fig-ops:empty { display: none; }
 .fig-op { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .fig-op input[type="text"] { width: 7ch; padding: 3px 6px; }
-.fig-op-chk { cursor: pointer; }
+.fig-ser-list:not(:empty) { margin-bottom: 4px; }
+/* Add series: the files and their series, each with its box; a file's box with some of
+   its series ticked holds a small square, neither a tick nor empty. */
+.modal-box.fig-pick-box { width: min(480px, 94vw); }
+.fig-pick-body { max-height: 60vh; overflow: auto; }
+.fig-pick-file { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+.modal-box label.fig-pick-row { display: flex; align-items: center; gap: 8px; margin: 0; padding: 3px 0 3px 23px; font-size: 13px; cursor: pointer; min-width: 0; }
+.modal-box label.fig-pick-row.fig-pick-head { padding-left: 0; }
+.fig-pick-name { margin-left: auto; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fig-pick input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none; width: 15px; height: 15px; margin: 0;
+  border: 1px solid var(--line); border-radius: 3px; background: var(--panel2);
+  display: inline-grid; place-content: center; cursor: pointer;
+}
+.fig-pick input[type="checkbox"]::before { content: ''; width: 9px; height: 9px; transform: scale(0); background: var(--on-accent, #fff); }
+.fig-pick input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+.fig-pick input[type="checkbox"]:checked::before { transform: scale(1); clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
+.fig-pick input[type="checkbox"]:indeterminate { background: var(--panel2); border-color: var(--accent); }
+.fig-pick input[type="checkbox"]:indeterminate::before { transform: scale(1); width: 7px; height: 7px; border-radius: 1px; background: var(--accent); clip-path: none; }
+.fig-pick input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

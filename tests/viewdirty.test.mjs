@@ -162,7 +162,7 @@ test('EPR: a card\'s fold a step, no "*", kept; a card moved or closed "*"', asy
   } finally { await close(); }
 });
 
-test('Figure: a Plot card\'s fold a step, no "*", kept; a card moved or closed "*"; a series added "*"', async ()=>{
+test('Figure: a Plot card\'s fold a step, no "*", kept; a card moved or closed "*"; a series added "*"; the Add series window cancelled no "*"', async ()=>{
   const { page, errors, close } = await env.page();
   try {
     await openModule(page, 'fig');
@@ -171,8 +171,12 @@ test('Figure: a Plot card\'s fold a step, no "*", kept; a card moved or closed "
     await saveAs(page, 'View Figure');
     await cards(page, 'fig', 'bar', 'View Figure');
     // (what a plot draws is no view: a series added is a change)
-    const v = await page.$eval('#fig1Add', s=> [...s.options].find(o=> o.value).value);
-    await page.selectOption('#fig1Add', v); await settle(page);
+    // (the Add series window opened and cancelled: nothing)
+    await page.click('#fig1Add'); await page.click('.fig-pick:not([style*="none"]) [data-cancel]'); await settle(page);
+    assert.equal(await starred(page), false, 'the window cancelled, no "*"');
+    await page.click('#fig1Add');
+    await page.locator('.fig-pick:not([style*="none"]) input[data-key]').first().check();
+    await page.click('.fig-pick:not([style*="none"]) [data-done]'); await settle(page);
     assert.equal(await starred(page), true, 'a series added, "*"');
     assert.deepEqual(errors, []);
   } finally { await close(); }

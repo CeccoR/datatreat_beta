@@ -13,9 +13,14 @@ import { decodeText, textLines, readColumns, parseNum, isNum, nameUnit } from '.
    header found from the file). The Data card shows one file's head, the header and its
    first rows, a role over each column (x, y, its errors, or none) as Origin gives them;
    each y is a series, with the x before it and its errors. The Plot cards (cards.js),
-   none at first, each an XY plot, a bar chart or a box plot of series of any files, each
-   series with operations of its own, and the plot's figure composed (figure.js) kept with
-   the card in the project.
+   none at first, each an XY plot, a bar chart or a box plot of series of any files, its
+   normalisation, each series' scale (and an XY plot's offset), and the plot's figure
+   composed (figure.js) kept with the card in the project.
+   v529: the Data card as the other modules' analysis cards (the file's arrows, the head on
+   the left, the series' names and the roles' box on the right); a file's line of series'
+   titles giving its first roles and its names; the Plot cards' series picked in a window
+   (Add series), one normalisation a plot (none, local, global) for the per-series one, no
+   crop in x.
 
    MADE PER TAB, as every module (utils.js registerModule): createFig is the module's
    factory, each open Figure tab that is awake an instance of its own, made of its copy of
@@ -93,36 +98,59 @@ function seriesCols(roles){
 }
 // The roles of `src` given to a file of n columns, by position; those beyond it as by default.
 const rolesLike = (src, n)=> fixRoles(defRoles(n).map((d, c)=> c < src.length ? src[c] : d));
+/* A file's first roles: with a line of series' titles over its header (textdata.js
+   readColumns), each title opens a group, its first column the x and the others, up to the
+   next title, its y ("series 1",,,"series 2": x y y x); else the defaults. */
+const firstRoles = t => t.titles ? fixRoles(t.titles.map(v=> v !== '' ? 'x' : 'y')) : defRoles(t.n);
+/* A column's name from the titles: its group's title, with the column's own name when the
+   group has several columns past its x ('' with no titles). */
+function titleName(t, c){
+  if (!t.titles) return '';
+  let g = c;
+  while (g >= 0 && t.titles[g] === '') g--;
+  if (g < 0) return '';
+  let end = g + 1;
+  while (end < t.n && t.titles[end] === '') end++;
+  const h = t.heads && t.heads[c] && t.heads[c].name;
+  return end - g > 2 ? `${t.titles[g]} – ${h || 'column ' + (c + 1)}` : t.titles[g];
+}
 
-/* ---- What a series plots, after its operations (default none): an XY plot's crop in x,
-   normalisation (to the largest |y| left), scale and offset; a bar chart's normalisation
-   and scale; a box plot's scale. Kept by the series' column (utils.js keeper: while a
-   state, a tab asleep or a history holds the file) under its other columns and its
-   operations: a tab woken, an undo, a redraw and the CSVs take it as made. ---- */
-const OPS = { xy: ['norm', 'scale', 'offset', 'crop'], bar: ['norm', 'scale'], box: ['scale'] };
-const DEF_OPS = { norm: false, scale: 1, offset: 0, xlo: null, xhi: null };
+/* ---- What a series plots: its values divided by the plot's normalisation (`div`: 1 for
+   none, its own largest |y| for local, the largest of the plot's series for global), then
+   multiplied by its scale, and, in an XY plot, its offset added. A bar chart's and a box
+   plot's have no offset. To v528 each series had its own normalisation, and an XY plot's
+   series a crop in x. Kept by the series' column (utils.js keeper: while a state, a tab
+   asleep or a history holds the file) under its other columns and its operations: a tab
+   woken, an undo, a redraw and the CSVs take it as made. ---- */
+const OPS = { xy: ['scale', 'offset'], bar: ['scale'], box: ['scale'] };
+const DEF_OPS = { scale: 1, offset: 0 };
+const NORMS = { none: 'None (data as they are)', local: 'Local (max of each)', global: 'Global (max of all)' };
 const dataKept = keeper('fig-series', 8);
 const maxAbs = a =>{ let m = 0; for (const v of a) if (Math.abs(v) > m) m = Math.abs(v); return m; };
-function dataOf(kind, t, s, r){
-  const has = k => OPS[kind].includes(k);
-  const o = { norm: has('norm') && r.norm, scale: has('scale') ? r.scale : 1, offset: has('offset') ? r.offset : 0,
-    xlo: has('crop') ? r.xlo : null, xhi: has('crop') ? r.xhi : null };
+function dataOf(kind, t, s, r, div = 1){
+  const o = { div, scale: r.scale, offset: kind === 'xy' ? r.offset : 0 };
   return dataKept(t.nums[s.col], exactKey([kind, objId(t), s.x, s.ex, s.ey, o]), ()=>{
     const Y = t.nums[s.col], X = s.x >= 0 ? t.nums[s.x] : null, EX = s.ex >= 0 ? t.nums[s.ex] : null, EY = s.ey >= 0 ? t.nums[s.ey] : null;
-    const lo = o.xlo != null && o.xhi != null ? Math.min(o.xlo, o.xhi) : o.xlo, hi = o.xlo != null && o.xhi != null ? Math.max(o.xlo, o.xhi) : o.xhi;
     const xs = [], ys = [], exs = [], eys = [], cats = [];
     for (let i = 0; i < Y.length; i++){
       const y = Y[i], x = X ? X[i] : i + 1;
       if (!Number.isFinite(y)) continue;
-      if (kind === 'xy' && (!Number.isFinite(x) || (lo != null && x < lo) || (hi != null && x > hi))) continue;
+      if (kind === 'xy' && !Number.isFinite(x)) continue;
       xs.push(x); ys.push(y);
       exs.push(EX && Number.isFinite(EX[i]) ? Math.abs(EX[i]) : NaN);
       eys.push(EY && Number.isFinite(EY[i]) ? Math.abs(EY[i]) : NaN);
       if (kind === 'bar') cats.push(s.x < 0 ? String(i + 1) : Number.isFinite(X[i]) && isNum(t.rows[i][s.x]) ? String(X[i]) : String(t.rows[i][s.x]).trim());
     }
-    const m = o.scale / (o.norm ? (maxAbs(ys) || 1) : 1);
+    const m = o.scale / o.div;
     return { xs, ys: ys.map(v=> v*m + o.offset), exs, eys: eys.map(e=> e*Math.abs(m)), cats };
   });
+}
+// A plot's series' divisors (dataOf `div`) under its normalisation.
+function divsOf(kind, norm, list){
+  if (norm !== 'local' && norm !== 'global') return list.map(()=> 1);
+  const peaks = list.map(e=> maxAbs(dataOf(kind, e.s.t, e.s, DEF_OPS).ys));
+  const all = Math.max(0, ...peaks);
+  return peaks.map(p=> (norm === 'local' ? p : all) || 1);
 }
 
 /* ---- An axis's title: the columns' name and unit when those that have them share them ---- */
@@ -140,30 +168,44 @@ const headOf = (t, c)=> c < 0 ? { name: 'Row', unit: '' } : t.heads && t.heads[c
 
 /* ---- A card's kinds, instructions and markup ---- */
 const KINDS = { xy: 'XY plot', bar: 'Bar chart', box: 'Box plot' };
-const FIG_INFO = `A plot of the series chosen under <b>Series</b>, from any of the files: <b>+ Add a series</b> lists the y columns of every file included (the Data card sets which columns are y), each named as the Data card names it. An <b>XY plot</b> draws each series against its x (the row number where it has none), with its error bars; its operations crop it in x (from, to: empty is no limit), normalise it to its largest |y| left, then scale it and add the offset. A <b>bar chart</b> takes the series' x as categories (text, or numbers as they read: 1,0 is 1), its y as the bar and its error of y as the error bar; a category shared by series has their bars side by side. It can be normalised and scaled. A <b>box plot</b> takes each series as a group, its values down the rows (its x not used), named as the series; it can be scaled. A series whose file is removed, or whose column is no longer a y, leaves the plot. The figure composer of the plot's toolbar composes its figure, kept with the card in the project. ${cardInfo(true, false)}`;
+const FIG_INFO = `A plot of the series chosen under <b>Series</b>, from any of the files: <b>+ Add series</b> opens the list of the series of every file included (the Data card sets which columns are y), by file, each named as the Data card names it: those ticked are in the plot (a file's box ticks or clears all its series). <b>Normalization</b> is the plot's: <b>none</b>, <b>local</b> (each series divided by its own largest |y|) or <b>global</b> (all divided by the largest of them); then each series is multiplied by its scale (×) and, in an XY plot, its offset (+) added. An <b>XY plot</b> draws each series against its x (the row number where it has none), with its error bars. A <b>bar chart</b> takes the series' x as categories (text, or numbers as they read: 1,0 is 1), its y as the bar and its error of y as the error bar; a category shared by series has their bars side by side. A <b>box plot</b> takes each series as a group, its values down the rows (its x not used), named as the series. A series whose file is removed, or whose column is no longer a y, leaves the plot. The figure composer of the plot's toolbar composes its figure, kept with the card in the project. ${cardInfo(true, false)}`;
 const P = a => 'fig' + a.id;
+// (as the other modules' analysis cards: the plot on the left under its row of tools, the
+// column beside it from the plot's top, .param-head.aligned)
 const cardBody = a => `
       <div class="row" style="align-items:flex-start">
         <div class="col mw520" style="flex:2">
-          <div class="txt-meta fig-empty" id="${P(a)}Empty">No series in this plot yet: add them under Series.</div>
+          <div class="plot-nav-row"></div>
           <div id="${P(a)}Box">${plotWrap(P(a) + 'Svg', { mod: 'fig', csv: 'fig_plot.csv', name: 'Plot.svg', legend: P(a) + 'Legend' })}
             <div id="${P(a)}Legend" class="legend"></div>
           </div>
+          <div class="txt-meta fig-empty" id="${P(a)}Empty">No series in this plot yet: + Add series picks them.</div>
         </div>
-        <div class="col mw260" style="align-self:flex-start">
-          <div class="txt-mini param-head">Series</div>
-          <select id="${P(a)}Add" aria-label="Add a series to the plot"></select>
+        <div class="col mw280" style="align-self:flex-start">
+          <div class="txt-mini param-head aligned">Series</div>
+          <div class="param-grid">
+            <label class="txt-label" for="${P(a)}Norm">Normalization</label>
+            <select id="${P(a)}Norm" class="pg-field" title="none: the data as they are; local: each series divided by its own largest |y|; global: all by the largest of them">${Object.entries(NORMS).map(([k, l])=> `<option value="${k}">${l}</option>`).join('')}</select>
+          </div>
           <div class="fig-ser-list" id="${P(a)}List"></div>
+          <button type="button" class="btn plot-action-btn" id="${P(a)}Add" title="Choose the series of this plot, by file">+ Add series</button>
         </div>
       </div>`;
-// A field of an operation, its value as the record holds it ('' for no limit).
-const opField = (k, label, v, title)=> `<label class="fig-op" title="${title}"><span>${label}</span><input type="text" inputmode="decimal" autocomplete="off" data-op="${k}" value="${v == null ? '' : esc(String(v))}"></label>`;
+// A field of an operation, its value as the record holds it.
+const opField = (k, label, v, title)=> `<label class="fig-op" title="${title}"><span>${label}</span><input type="text" inputmode="decimal" autocomplete="off" data-op="${k}" value="${esc(String(v))}"></label>`;
 
 /* ---- What a state may hold (modkit RESTORED) ---- */
 const finiteOr = (v, d)=> Number.isFinite(v) ? v : d;
-const limitOf = v => Number.isFinite(v) ? v : null;
-const refsIn = v => Array.isArray(v) ? v.filter(r=> isObj(r) && typeof r.file === 'string' && Number.isInteger(r.col) && r.col >= 0)
-  .map(r=> ({ file: r.file, col: r.col, norm: r.norm === true, scale: finiteOr(r.scale, 1), offset: finiteOr(r.offset, 0), xlo: limitOf(r.xlo), xhi: limitOf(r.xhi) })) : [];
+const refsOk = v => Array.isArray(v) ? v.filter(r=> isObj(r) && typeof r.file === 'string' && Number.isInteger(r.col) && r.col >= 0) : [];
+// (a v527–v528 series' own normalisation and crop let go: refsOk, normIn)
+const refsIn = v => refsOk(v).map(r=> ({ file: r.file, col: r.col, scale: finiteOr(r.scale, 1), offset: finiteOr(r.offset, 0) }));
+/* A plot's normalisation; a v527–v528 card has none, its series theirs: local when every
+   one was normalised (an XY plot's or a bar chart's), else none. */
+function normIn(c){
+  if (ownKey(NORMS, c.norm)) return c.norm;
+  const rs = refsOk(c.series);
+  return c.norm === undefined && (c.type === 'xy' || c.type === 'bar') && rs.length && rs.every(r=> r.norm === true) ? 'local' : 'none';
+}
 const figIn = v => isObj(v) && isObj(v.scalars) && Array.isArray(v.series) ? v : null;
 
 // A Figure tab's instance (utils.js makeInstance: ctx { key, root, layer, shown }).
@@ -181,18 +223,20 @@ function createFig({ key, root, layer, shown }){
   let shownName = null, fileNext = null;   // the file the Data card shows (and a wake's: showNext)
   const kit = moduleKit('fig', {
     root, key, layer,
+    // (a file's colour is no series': the list keeps its place, empty)
+    noColor: true,
     alerts: p =>{ $('figAlerts').innerHTML = p.invalid + p.upload; },
     refresh: afterFilesChange,
     // A label or a colour changed: the Data card's list and the series' files say it anew.
-    redraw: ()=>{ renderData(); updateAll(true); },
+    redraw: ()=>{ renderData(); cards().forEach(a=> paintPanel(a)); updateAll(true); },
     cleared: ()=>{ shownName = null; },
-    snapshot: ()=> ({ same, cards: cards().map(a=> ({ ...deck.saved(a), series: a.series.map(r=> ({ ...r })), fig: a.fig })) }),
+    snapshot: ()=> ({ same, cards: cards().map(a=> ({ ...deck.saved(a), series: a.series.map(r=> ({ ...r })), norm: a.norm, fig: a.fig })) }),
     // A file as a restore takes it: its table read from its bytes (none: left out), its
     // roles one a column (else the defaults) made to hold, its names by column.
     file: f =>{
       const t = tableOf(f);
       if (!t) return null;
-      const roles = Array.isArray(f.roles) && f.roles.length === t.n && f.roles.every(r=> ownKey(ROLES, r)) ? fixRoles(f.roles) : defRoles(t.n);
+      const roles = Array.isArray(f.roles) && f.roles.length === t.n && f.roles.every(r=> ownKey(ROLES, r)) ? fixRoles(f.roles) : firstRoles(t);
       const names = {};
       if (isObj(f.names)) for (const k of Object.keys(f.names)) if (/^\d+$/.test(k) && +k < t.n && typeof f.names[k] === 'string' && f.names[k].trim()) names[k] = f.names[k];
       return { ...f, roles, names };
@@ -200,7 +244,7 @@ function createFig({ key, root, layer, shown }){
     restore: s =>{
       same = s.same === true;
       if (fileNext){ if (allFiles.some(f=> f.name === fileNext)) shownName = fileNext; fileNext = null; }
-      deck.load(cardList(s.cards, KINDS) || [], c=> ({ series: refsIn(c.series), fig: figIn(c.fig) }), a=> paintPanel(a));
+      deck.load(cardList(s.cards, KINDS) || [], c=> ({ series: refsIn(c.series), norm: normIn(c), fig: figIn(c.fig) }), a=> paintPanel(a));
     },
     redrawTab: ()=>{
       const at = String(root.clientWidth);
@@ -213,11 +257,11 @@ function createFig({ key, root, layer, shown }){
   });
   const { all: allFiles, files } = kit;
 
-  // Files dropped: each read as a table (textdata.js), its roles the defaults, or the file
-  // on show's with `same`; the table kept by the file's bytes.
+  // Files dropped: each read as a table (textdata.js), its roles its titles' or the
+  // defaults (firstRoles), or the file on show's with `same`; the table kept by the file's bytes.
   kit.dropText(text =>{
     const t = readTableText(text);
-    return t ? { roles: defRoles(t.n), names: {}, table: t } : { error: 'no column of numbers found' };
+    return t ? { roles: firstRoles(t), names: {}, table: t } : { error: 'no column of numbers found' };
   }, had =>{
     allFiles.slice(had).forEach(f=>{ tables.set(f.rawBytes, f.table); delete f.table; });
     const src = shownFile();
@@ -230,19 +274,22 @@ function createFig({ key, root, layer, shown }){
     $('figAnalyses').style.display = allFiles.length ? 'block' : 'none';
     prune();
     renderData();
+    cards().forEach(a=> paintPanel(a));
     updateAll();
     kit.commit();
   }
 
-  /* ---- The series: every y of every file, by its file and column (its number, "file N,
-     series M", follows the list) ---- */
+  /* ---- The series: every y of every file, by its file and column. Its number in its file
+     ("Series M (Cols a,b)": its x's column and its own) follows the roles; its name is
+     the one typed, else its title's (titleName), its header's, or "Series M". ---- */
   const keyOf = (name, col)=> name + '\n' + col;
   function seriesOfFile(f, fi){
     const t = tableOf(f);
     return seriesCols(f.roles).map((s, m)=>{
-      const auto = `file ${fi + 1}, series ${m + 1}`, h = headOf(t, s.col);
+      const auto = `Series ${m + 1}`, cols = s.x >= 0 ? `Cols ${s.x + 1},${s.col + 1}` : `Col ${s.col + 1}`;
       const given = Object.prototype.hasOwnProperty.call(f.names, s.col) ? f.names[s.col] : '';
-      return { ...s, f, t, fi, m, key: keyOf(f.name, s.col), auto, def: h.name || auto, name: given || h.name || auto };
+      const def = titleName(t, s.col) || headOf(t, s.col).name || auto;
+      return { ...s, f, t, fi, m, key: keyOf(f.name, s.col), auto, cols, def, name: given || def };
     });
   }
   // The series of the files included, by key.
@@ -258,8 +305,9 @@ function createFig({ key, root, layer, shown }){
     cards().forEach(a=>{ if (a.series.some(r=> !ys.has(keyOf(r.file, r.col)))) a.series = a.series.filter(r=> ys.has(keyOf(r.file, r.col))); });
   }
 
-  /* ---- The Data card: the file on show (a view, no step of the history), its head with a
-     role over each column, the roles of all files alike, and its series' names ---- */
+  /* ---- The Data card: the file on show (its arrows, as the other modules' samples: a view,
+     no step of the history), its head with a role over each column, and beside it its
+     series' names and the roles of all files alike ---- */
   const shownFile = ()=> allFiles.find(f=> f.name === shownName) || allFiles[0] || null;
   function renderData(){
     const card = $('figDataCard');
@@ -268,15 +316,17 @@ function createFig({ key, root, layer, shown }){
     if (!f) return;
     shownName = f.name;
     const fi = allFiles.indexOf(f), t = tableOf(f);
-    $('figFileSel').innerHTML = allFiles.map((g, i)=> `<option value="${i}"${g === f ? ' selected' : ''}>file ${i + 1} · ${esc(g.label)}</option>`).join('');
+    $('figFileIdx').textContent = `${fi + 1}/${allFiles.length}`;
+    $('figFileName').textContent = f.label;
+    $('figFileName').title = f.name;
     $('figSame').checked = same;
     const roleSel = (r, c)=> `<select data-col="${c}" aria-label="Role of column ${c + 1}">${Object.entries(ROLES).map(([k, l])=> `<option value="${k}"${k === r ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
     $('figHead').innerHTML = `<table class="fig-cols"><thead><tr>${f.roles.map((r, c)=> `<th>${roleSel(r, c)}</th>`).join('')}</tr>`
       + (t.head ? `<tr class="fig-hd">${t.head.map(h=> `<th>${esc(h)}</th>`).join('')}</tr>` : '') + `</thead><tbody>`
       + t.rows.slice(0, 5).map(r=> `<tr>${r.map(c=> `<td>${esc(c)}</td>`).join('')}</tr>`).join('') + `</tbody></table>`;
     const ss = seriesOfFile(f, fi);
-    $('figSeries').innerHTML = ss.length ? ss.map(s=> `<label class="fig-sname"><span class="txt-label">${esc(s.auto)} <span class="txt-meta">(column ${s.col + 1}${s.x >= 0 ? `, x: column ${s.x + 1}` : ', x: the row number'})</span></span>`
-      + `<input type="text" data-col="${s.col}" value="${esc(s.name)}" placeholder="${esc(s.def)}" autocomplete="off" spellcheck="false" aria-label="Name of ${esc(s.auto)}"></label>`).join('')
+    $('figSeries').innerHTML = ss.length ? `<div class="param-grid">${ss.map(s=> `<label class="txt-label" for="figSN${s.col}" title="${esc(s.x >= 0 ? `x: column ${s.x + 1}, y: column ${s.col + 1}` : `y: column ${s.col + 1}, x: the row number`)}">${esc(`${s.auto} (${s.cols})`)}</label>`
+      + `<input type="text" class="pg-field" id="figSN${s.col}" data-col="${s.col}" value="${esc(s.name)}" placeholder="${esc(s.def)}" autocomplete="off" spellcheck="false">`).join('')}</div>`
       : '<div class="txt-meta">No column of this file is a y: it has no series.</div>';
     // (the roles of all files alike: a file with fewer columns than the one on show said)
     const short = same ? allFiles.filter(g=> g !== f && tableOf(g).n < t.n) : [];
@@ -292,7 +342,10 @@ function createFig({ key, root, layer, shown }){
     updateAll(true);
     kit.commit();
   }
-  $('figFileSel').addEventListener('change', e=>{ const f = allFiles[+e.target.value]; if (f){ shownName = f.name; renderData(); } });
+  // (the file on show: a view, no step)
+  const stepFile = d =>{ const n = allFiles.length, f = shownFile(); if (n && f){ shownName = allFiles[(allFiles.indexOf(f) + d + n) % n].name; renderData(); } };
+  $('figFilePrev').addEventListener('click', ()=> stepFile(-1));
+  $('figFileNext').addEventListener('click', ()=> stepFile(1));
   $('figSame').addEventListener('change', e=>{ same = e.target.checked; rolesChanged(); });
   $('figHead').addEventListener('change', e=>{
     const sel = e.target.closest('select[data-col]'), f = shownFile();
@@ -315,44 +368,40 @@ function createFig({ key, root, layer, shown }){
   $('figSeries').addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
 
   /* ---- The Plot cards (cards.js): each its kind, its series (by file and column, each with
-     its operations) and its figure ---- */
+     its scale and offset), its normalisation and its figure ---- */
   // A card's series that are plotted (their files included), with their names made unique
-  // in it and their colours.
+  // in it (a name two files' series share: with the file's label) and their colours.
   function plotted(a, map = seriesMap()){
     const used = new Set();
     return a.series.map(r=> ({ r, s: map.get(keyOf(r.file, r.col)) })).filter(e=> e.s).map((e, k)=>{
       let name = e.s.name, n = 2;
+      if (used.has(name)) name = `${e.s.name} (${e.s.f.label})`;
       while (used.has(name)) name = `${e.s.name} (${n++})`;
       used.add(name);
       return { ...e, name, color: colorOf(k) };
     });
   }
-  // The card's list of series and its menu of those to add (drawn whether or not on show).
+  // The card's normalisation and list of series (drawn whether or not on show).
   function paintPanel(a, card = deck.cardOf(a)){
     if (!card) return;
-    const map = seriesMap(), list = plotted(a, map), on = new Set(a.series.map(r=> keyOf(r.file, r.col))), ops = OPS[a.type];
-    const add = card.querySelector('#' + P(a) + 'Add');
-    const groups = allFiles.map((f, fi)=> files.includes(f) ? [f, seriesOfFile(f, fi)] : null).filter(g=> g && g[1].length);
-    add.innerHTML = `<option value="">+ Add a series…</option>` + groups.map(([f, ss])=> `<optgroup label="${esc(`file ${allFiles.indexOf(f) + 1} · ${f.label}`)}">`
-      + ss.map(s=> `<option value="${esc(s.key)}"${on.has(s.key) ? ' disabled' : ''}>${esc(s.name)}</option>`).join('') + '</optgroup>').join('');
-    add.value = '';
-    card.querySelector('#' + P(a) + 'List').innerHTML = list.map(({ r, s, name, color })=> `
+    const list = plotted(a), ops = OPS[a.type];
+    card.querySelector('#' + P(a) + 'Norm').value = a.norm;
+    card.querySelector('#' + P(a) + 'Add').disabled = !files.some(f=> seriesCols(f.roles).length);
+    card.querySelector('#' + P(a) + 'List').innerHTML = list.map(({ r, s, name })=> `
           <div class="fig-ser" data-key="${esc(s.key)}">
-            <div class="fig-ser-head"><i class="fig-sw" style="background:${color}"></i><span class="fig-ser-name" title="${esc(`file ${s.fi + 1} · ${s.f.label}, column ${s.col + 1}`)}">${esc(name)}</span>
+            <div class="fig-ser-head"><span class="fig-ser-name" title="${esc(`${s.f.label}: ${s.auto} (${s.cols})`)}">${esc(name)}</span>
               <button type="button" class="an-ic fig-ser-x" data-act="del" title="Take this series out of the plot" aria-label="Take ${esc(name)} out of the plot">${X_SVG(13)}</button></div>
-            <div class="fig-ops">${ops.includes('norm') ? `<label class="fig-op fig-op-chk" title="Divided by its largest |y|${ops.includes('crop') ? ' within the crop' : ''}"><input type="checkbox" data-op="norm"${r.norm ? ' checked' : ''}><span>Normalize</span></label>` : ''}${
-              ops.includes('scale') ? opField('scale', '×', r.scale, 'Scale: every value multiplied by it') : ''}${
-              ops.includes('offset') ? opField('offset', '+', r.offset, 'Offset: added to every y, after the scale') : ''}${
-              ops.includes('crop') ? opField('xlo', 'x from', r.xlo, 'The crop in x: the points from this x (empty: from the first)') + opField('xhi', 'to', r.xhi, 'The crop in x: the points up to this x (empty: to the last)') : ''}</div>
+            <div class="fig-ops">${ops.includes('scale') ? opField('scale', '×', r.scale, 'Scale: every value multiplied by it, after the normalization') : ''}${
+              ops.includes('offset') ? opField('offset', '+', r.offset, 'Offset: added to every y, after the scale') : ''}</div>
           </div>`).join('') + (a.series.length > list.length ? `<div class="txt-meta">${a.series.length - list.length} series of files left out not shown.</div>` : '');
   }
   function buildCard(a, card){
-    const add = card.querySelector('#' + P(a) + 'Add'), list = card.querySelector('#' + P(a) + 'List');
-    add.addEventListener('change', ()=>{
-      const s = seriesMap().get(add.value);
-      if (!s || a.series.some(r=> keyOf(r.file, r.col) === s.key)) return;
-      a.series = [...a.series, { file: s.f.name, col: s.col, ...DEF_OPS }];
-      paintPanel(a); drawCard(a); kit.commit();
+    const list = card.querySelector('#' + P(a) + 'List');
+    card.querySelector('#' + P(a) + 'Add').addEventListener('click', ()=> openPick(a));
+    card.querySelector('#' + P(a) + 'Norm').addEventListener('change', e=>{
+      if (!ownKey(NORMS, e.target.value) || e.target.value === a.norm) return;
+      a.norm = e.target.value;
+      drawCard(a); kit.commit();
     });
     const refOf = el =>{ const row = el.closest('.fig-ser'); return row ? a.series.find(r=> keyOf(r.file, r.col) === row.dataset.key) : null; };
     list.addEventListener('click', e=>{
@@ -361,22 +410,16 @@ function createFig({ key, root, layer, shown }){
       a.series = a.series.filter(x=> x !== r);
       paintPanel(a); drawCard(a); kit.commit();
     });
-    // An operation taken as it is confirmed: a number (a limit of the crop, empty too); else
-    // the field shakes and shows the record's value again.
+    // An operation taken as it is confirmed: a number; else the field shakes and shows the
+    // record's value again.
     list.addEventListener('change', e=>{
       const el = e.target.closest('[data-op]'), r = el && refOf(el);
       if (!r) return;
-      const k = el.dataset.op;
-      let v;
-      if (k === 'norm') v = el.checked;
-      else {
-        const raw = el.value.trim();
-        v = raw === '' && (k === 'xlo' || k === 'xhi') ? null : parseNum(raw);
-        if (v !== null && (!/^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$/.test(raw) || !Number.isFinite(v))){
-          flashFieldInvalid(el); el.value = r[k] == null ? '' : String(r[k]); return;
-        }
-        el.value = v == null ? '' : String(v);
+      const k = el.dataset.op, raw = el.value.trim(), v = parseNum(raw);
+      if (!/^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$/.test(raw) || !Number.isFinite(v)){
+        flashFieldInvalid(el); el.value = String(r[k]); return;
       }
+      el.value = String(v);
       if (Object.is(r[k], v)) return;
       a.series = a.series.map(x=> x === r ? { ...r, [k]: v } : x);
       drawCard(a); kit.commit();
@@ -384,12 +427,81 @@ function createFig({ key, root, layer, shown }){
     list.addEventListener('keydown', e=>{ if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
     paintPanel(a, card);
   }
+
+  /* ---- Add series: a window of the series of every file included, by file, those of the
+     plot ticked; a file's box ticks or clears all its own, and shows a square when some
+     are ticked. Done gives the plot those ticked (the ones it had in their places, the new
+     after them in the list's order), a step; Cancel, Escape or a click outside, nothing. ---- */
+  const pick = document.createElement('div');
+  pick.className = 'modal-backdrop fig-pick';
+  pick.style.display = 'none';
+  pick.innerHTML = `<div class="modal-box fig-pick-box" role="dialog" aria-modal="true" aria-label="Add series" tabindex="-1">
+      <h3 class="txt-head" style="margin:0 0 4px">Add series</h3>
+      <p class="txt-meta fig-pick-for" style="margin:0 0 8px"></p>
+      <div class="fig-pick-body"></div>
+      <div class="dt-modal-foot"><button type="button" class="btn" data-cancel>Cancel</button><button type="button" class="btn primary" data-done>Done</button></div>
+    </div>`;
+  layer.appendChild(pick);
+  const pickBody = pick.querySelector('.fig-pick-body');
+  let pickFor = null, pickFrom = null;
+  function openPick(a){
+    if (pickFor) return;
+    pickFor = a; pickFrom = document.activeElement;
+    const on = new Set(a.series.map(r=> keyOf(r.file, r.col)));
+    pick.querySelector('.fig-pick-for').textContent = `Ticked: the series of ${a.name}.`;
+    pickBody.innerHTML = allFiles.map((f, fi)=> files.includes(f) ? [f, seriesOfFile(f, fi)] : null).filter(g=> g && g[1].length).map(([f, ss])=> `
+        <div class="fig-pick-file">
+          <label class="fig-pick-row fig-pick-head"><input type="checkbox" data-file aria-label="All the series of ${esc(f.label)}"><b>${esc(f.label)}</b></label>
+          ${ss.map(s=> `<label class="fig-pick-row"><input type="checkbox" data-key="${esc(s.key)}"${on.has(s.key) ? ' checked' : ''}><span>${esc(s.auto)} <span class="txt-meta">(${esc(s.cols)})</span></span><span class="fig-pick-name">${esc(s.name)}</span></label>`).join('')}
+        </div>`).join('');
+    pickBody.querySelectorAll('.fig-pick-file').forEach(syncPickFile);
+    pick.style.display = 'flex';
+    document.addEventListener('keydown', onPickKey, true);
+    pick.querySelector('.modal-box').focus();
+  }
+  // A file's box: ticked with all its series, empty with none, the square with some.
+  function syncPickFile(box){
+    const ss = [...box.querySelectorAll('input[data-key]')], n = ss.filter(c=> c.checked).length, all = box.querySelector('input[data-file]');
+    all.checked = n === ss.length;
+    all.indeterminate = n > 0 && n < ss.length;
+  }
+  function closePick(done){
+    const a = pickFor;
+    if (!a) return;
+    pickFor = null;
+    pick.style.display = 'none';
+    document.removeEventListener('keydown', onPickKey, true);
+    if (pickFrom && pickFrom.isConnected) pickFrom.focus();
+    pickFrom = null;
+    if (!done || !cards().includes(a)) return;
+    const want = [...pickBody.querySelectorAll('input[data-key]')].filter(c=> c.checked).map(c=> c.dataset.key), set = new Set(want);
+    const listed = new Set([...pickBody.querySelectorAll('input[data-key]')].map(c=> c.dataset.key)), map = seriesMap();
+    // (a series of a file left out, not in the window, stays)
+    const kept = a.series.filter(r=>{ const k = keyOf(r.file, r.col); return !listed.has(k) || set.has(k); });
+    const had = new Set(kept.map(r=> keyOf(r.file, r.col)));
+    const next = [...kept, ...want.filter(k=> !had.has(k) && map.has(k)).map(k=> ({ file: map.get(k).f.name, col: map.get(k).col, ...DEF_OPS }))];
+    if (next.length === a.series.length && next.every((r, i)=> r === a.series[i])) return;
+    a.series = next;
+    paintPanel(a); drawCard(a); kit.commit();
+  }
+  function onPickKey(e){ if (e.key === 'Escape' && pick.isConnected){ e.stopPropagation(); closePick(false); } }
+  pickBody.addEventListener('change', e=>{
+    const box = e.target.closest('.fig-pick-file');
+    if (!box) return;
+    if (e.target.matches('input[data-file]')) box.querySelectorAll('input[data-key]').forEach(c=>{ c.checked = e.target.checked; });
+    syncPickFile(box);
+  });
+  pick.addEventListener('click', e=>{
+    if (e.target === pick || e.target.closest('[data-cancel]')) closePick(false);
+    else if (e.target.closest('[data-done]')) closePick(true);
+  });
+
   function named(a){
     const card = deck.cardOf(a);
     if (card) nameDownloads(card.querySelector('.plot-wrap'), `${fileSafe(a.name)}.svg`, `${fileSafe(a.name)} - fig_plot.csv`);
   }
   const deck = kit.deck({
-    kinds: KINDS, title: '', info: ()=> FIG_INFO, body: cardBody, make: ()=> ({ series: [], fig: null }),
+    kinds: KINDS, title: '', info: ()=> FIG_INFO, body: cardBody, make: ()=> ({ series: [], norm: 'none', fig: null }),
     build: buildCard, drop: ()=>{}, autoName: a=> `Plot ${a.id}`, named,
     added: a=> drawCard(a),
     switched: a=>{ paintPanel(a); drawCard(a); },
@@ -411,8 +523,8 @@ function createFig({ key, root, layer, shown }){
     card.querySelector('#' + P(a) + 'Box').style.display = list.length ? '' : 'none';
     if (!list.length){ legend.innerHTML = ''; return; }
     const prev = preserveView ? viewOf(svg._plot) : null;
-    const data = list.map(e=> dataOf(a.type, e.s.t, e.s, e.r));
-    if (a.type === 'xy') drawXY(svg, list, data, prev);
+    const divs = divsOf(a.type, a.norm, list), data = list.map((e, k)=> dataOf(a.type, e.s.t, e.s, e.r, divs[k]));
+    if (a.type === 'xy') drawXY(svg, list, data, prev, a.norm);
     else if (a.type === 'bar') drawBars(svg, list, data, legend);
     else drawBoxes(svg, list, data);
     if (a.type !== 'bar') legend.innerHTML = list.map(e=> `<span><i${a.type === 'box' ? ' class="mk-box"' : ''} style="background:${e.color}"></i>${esc(e.name)}</span>`).join('');
@@ -422,7 +534,7 @@ function createFig({ key, root, layer, shown }){
       save: snap =>{ if (JSON.stringify(snap) !== JSON.stringify(a.fig)){ a.fig = snap; kit.commit(); } },
     };
   }
-  function drawXY(svg, list, data, prev){
+  function drawXY(svg, list, data, prev, norm){
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     data.forEach(d=> d.xs.forEach((x, i)=>{
       const ex = d.exs[i] || 0, ey = d.eys[i] || 0, y = d.ys[i];
@@ -432,7 +544,7 @@ function createFig({ key, root, layer, shown }){
     const pad = (y1 - y0) * 0.05 || Math.abs(y1) * 0.05 || 1;
     const plot = new Plot(svg, { xlabel: axisTitle(list.map(e=> headOf(e.s.t, e.s.x))), ylabel: axisTitle(list.map(e=> headOf(e.s.t, e.s.col))) });
     plot.setRange(x0, x1, y0 - pad, y1 + pad);
-    setView(plot, prev, list.map(e=> e.s.key + JSON.stringify(e.r)).join('\n'));
+    setView(plot, prev, list.map(e=> e.s.key + JSON.stringify(e.r)).join('\n') + '\n' + norm);
     plot.drawAxes();
     list.forEach((e, k)=>{
       const d = data[k], sx = [], sy = [];
@@ -495,9 +607,9 @@ function createFig({ key, root, layer, shown }){
   function cardCsv(a){
     const list = plotted(a);
     if (!list.length) return '';
-    const cols = [];
-    list.forEach(e=>{
-      const d = dataOf(a.type, e.s.t, e.s, e.r), t = e.s.t;
+    const cols = [], divs = divsOf(a.type, a.norm, list);
+    list.forEach((e, k)=>{
+      const d = dataOf(a.type, e.s.t, e.s, e.r, divs[k]), t = e.s.t;
       if (a.type === 'xy'){
         cols.push({ h: `${e.name} - ${axisTitle([headOf(t, e.s.x)]) || 'x'}`, v: d.xs.map(num) }, { h: e.name, v: d.ys.map(num) });
         if (e.s.ex >= 0) cols.push({ h: `${e.name} - err x`, v: d.exs.map(num) });
@@ -517,7 +629,7 @@ function createFig({ key, root, layer, shown }){
     // The file the Data card shows: kept as the tab sleeps and in its record (tabs.js).
     shows(){ return allFiles.length > 1 && shownName && shownName !== allFiles[0].name ? { file: shownName } : null; },
     showNext(v){ fileNext = isObj(v) && typeof v.file === 'string' ? v.file : null; },
-    destroy(){ kit.destroy(); },
+    destroy(){ closePick(false); pick.remove(); kit.destroy(); },
   };
 }
 registerModule('fig', createFig);

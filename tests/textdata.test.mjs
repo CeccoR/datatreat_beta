@@ -177,7 +177,14 @@ test('Figure: a table of columns in each dialect, its header or none, text colum
   }
   // No header; a title of one field over a header; a column of names; a short row padded.
   assert.equal(read('1;2\n3;4\n').head, null);
-  assert.deepEqual(read('My run\nSample;Rate;sd\nP25;12,5;1\nCN;15\n'), { sep: ';', n: 3, head: ['Sample', 'Rate', 'sd'], rows: [['P25', '12,5', '1'], ['CN', '15', '']] });
+  assert.deepEqual(read('My run\nSample;Rate;sd\nP25;12,5;1\nCN;15\n'), { sep: ';', n: 3, head: ['Sample', 'Rate', 'sd'], titles: null, rows: [['P25', '12,5', '1'], ['CN', '15', '']] });
+  // A line of series' titles over the header (v529): each over its group, blanks between.
+  const tt = read('series 1,,,series 2,\nt,a,b,t,c\n1,2,3,1,5\n2,3,4,2,6\n');
+  assert.deepEqual([tt.head, tt.titles], [['t', 'a', 'b', 't', 'c'], ['series 1', '', '', 'series 2', '']]);
+  assert.deepEqual(read('"S1";;"S2";\nx;y;x;y\n1;2,5;1;3\n').titles, ['S1', '', 'S2', ''], 'in quotes, under ;');
+  // None: no header under it; one title; a title on every column; a number; the first field blank.
+  for (const t of ['series 1,,series 2\n1,2,3\n', 'My run,,\nt,a,b\n1,2,3\n', 'A,B,C\nt,a,b\n1,2,3\n', 'S1,,2\nt,a,b\n1,2,3\n', ',S1,,S2\nt,a,b,c\n1,2,3,4\n'])
+    assert.equal(read(t).titles, null, JSON.stringify(t));
   assert.equal(read('no numbers here\nat all\n'), null);
   assert.deepEqual(['Wavelength (nm)', 'Abs [a.u.]', 'E / eV', 'Abs', '(nm)'].map(nameUnit),
     [{ name: 'Wavelength', unit: 'nm' }, { name: 'Abs', unit: 'a.u.' }, { name: 'E', unit: 'eV' }, { name: 'Abs', unit: '' }, { name: '(nm)', unit: '' }]);

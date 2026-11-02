@@ -4,7 +4,9 @@
    measured in the browser at several widths, a phone's among them (no horizontal scroll,
    the label field inside its cell, laid over the note while typed in on the phone); the
    note right of the label, DRS's how each file's second column was read (%R or F(R), its
-   title in full), GC's a select of the sample the file is (its own), the others' empty. */
+   title in full), GC's a select of the sample the file is (its own), the others' empty;
+   the names where the colour's swatch leaves them in every module, SEM's (no colour: its
+   place kept empty, v529) too. */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { start, openModule, loadFiles, MODS } from './helpers.mjs';
@@ -28,9 +30,11 @@ const measure = (page, mod)=> page.evaluate(mod=>{
       const ir = inp.getBoundingClientRect(), cr = inp.parentElement.getBoundingClientRect();
       // (GC's: its select's value, the sample the file is)
       const sel = note.querySelector('select');
-      return { w: tds.map(w), cls: tds.map(t=> t.className), note: sel ? sel.value : note.textContent, title: t && t.title,
+      const at = el => el.getBoundingClientRect().left - el.closest('td, th').getBoundingClientRect().left;
+      return { nameAt: at(r.querySelector('.fname-text')), w: tds.map(w), cls: tds.map(t=> t.className), note: sel ? sel.value : note.textContent, title: t && t.title,
         noteRightOfLabel: note.previousElementSibling === inp.parentElement, inCell: ir.left >= cr.left - 0.5 && ir.right <= cr.right + 0.5 };
     }),
+    headAt: (h => h.getBoundingClientRect().left - h.closest('th').getBoundingClientRect().left)([...table.querySelectorAll('.file-head span')].pop()),
     lead: wrap.querySelectorAll('.lead-cell').length,
     boxScroll: box.scrollWidth - box.clientWidth,
     pageScroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -42,6 +46,7 @@ for (const [vw, vh] of [[1400, 900], [800, 800], [375, 740]]){
   test(`the file list at ${vw} px: FILE, LABEL and the note at 3 : 3 : 2 in every module, the note right of the label`, async ()=>{
     const { page, errors, close } = await env.page({ viewport: { width: vw, height: vh } });
     try {
+      let at = null;
       for (const mod of MODS){
         await openModule(page, mod);
         await loadFiles(page, mod, env.fx.files[mod]);
@@ -58,6 +63,10 @@ for (const [vw, vh] of [[1400, 900], [800, 800], [375, 740]]){
           assert.equal(r.note, (NOTES[mod] || [])[i] || '', `${mod} row ${i}: its note`);
           assert.ok(r.inCell, `${mod} row ${i}: the label field inside its cell`);
         });
+        // (the names and FILE where the swatches leave them: those of the first module)
+        at = at || { name: m.rows[0].nameAt, head: m.headAt };
+        m.rows.forEach((r, i)=> assert.ok(Math.abs(r.nameAt - at.name) < 0.6, `${mod} row ${i}: its name at ${r.nameAt} px in its cell, for ${at.name}`));
+        assert.ok(Math.abs(m.headAt - at.head) < 0.6, `${mod}: FILE at ${m.headAt} px, for ${at.head}`);
         assert.equal(m.boxScroll, 0, mod + ': the list does not scroll sideways');
         assert.equal(m.pageScroll, 0, mod + ': nor the page');
       }

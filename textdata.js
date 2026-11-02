@@ -168,9 +168,12 @@ export function readTable(lines, head, isRow){
    them is a line read under the wrong separator, no row ('5;0' under ','). The data are
    the lines from the first such row on that hold a number; the header, the line just
    before them, if it is not all numbers and names two columns at least (a title of one
-   field over them is none).
-   → { sep, n (columns), head (the header's fields, or null), rows (the data's fields,
-   each n long) } or null. */
+   field over them is none). Over a header, a line of the series' titles (v529): its first
+   field one, two of them at least, none a number, and a blank between some (a title over
+   each group of columns: "series 1",,,"series 2" over x,y,y,x,y), as Origin and the
+   spreadsheets write several series side by side.
+   → { sep, n (columns), head (the header's fields, or null), titles (that line's fields,
+   or null), rows (the data's fields, each n long) } or null. */
 const TWO = /^[+-]?[\d.,]+(e[+-]?\d+)?(;|\t| +)[+-]?[\d.,]+/i;
 export function readColumns(lines){
   const t = bestSep(lines, rows =>{
@@ -189,7 +192,9 @@ export function readColumns(lines){
   const h = first > 0 ? t.rows[first - 1] : null;
   const head = h && width(h) <= n && width(h) >= Math.min(n, 2) && h.some(c=> c !== '' && !isNum(c)) ? pad(h) : null;
   const rows = t.rows.slice(first).filter((r, i)=> ok[first + i]).map(pad);
-  return { sep: t.sep, n, head, rows };
+  const tl = head && first > 1 ? t.rows[first - 2] : null, named = tl ? tl.slice(0, n).filter(c=> c !== '') : [];
+  const titles = tl && width(tl) <= n && tl[0] !== '' && named.length >= 2 && named.length < n && !named.some(isNum) ? pad(tl) : null;
+  return { sep: t.sep, n, head, titles, rows };
 }
 /* A column's name as a header writes it, and its unit: 'Wavelength (nm)', 'Wavelength
    [nm]' and 'Wavelength / nm' are Wavelength in nm; a name with none, its unit ''. */
