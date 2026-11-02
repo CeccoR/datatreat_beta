@@ -140,6 +140,8 @@ const stepping = ()=> !!histKey && histKey.eventPhase !== Event.NONE;
 /* o: {
      list, addBar, addBtn       the cards' container, the "+" bar in it (cards go above it), its button
      kinds                      { type: label }, in menu order; names are settled in this order
+     title                      the head's word before the kind ('Analysis:' by default; the
+                                Figure module's plots none, the kind alone: 'XY plot')
      info(type)                 the instructions under the title
      body(rec)                  the body's markup (prefix 'an' + rec.id for its element ids)
      make(type)                 the module's own fields of a new record
@@ -172,6 +174,7 @@ export function createDeck(o){
   const live = new Map();       // id → card element
   const kinds = o.kinds, types = Object.keys(kinds), several = types.length > 1;
   const menu = several ? kindMenu(kinds, o.layer) : null;
+  const title = o.title ?? 'Analysis:';
 
   const nextId = ()=> recs.reduce((m, a)=> Math.max(m, a.id), 0) + 1;
   const newRec = type => ({ id: nextId(), type, base: '', nameAuto: true, name: '', collapsed: false, ...(o.make ? o.make(type) : {}) });
@@ -195,7 +198,7 @@ export function createDeck(o){
     return `
         <div class="an-head">
           <button type="button" class="an-ic an-grip" title="Drag to move this analysis" aria-label="Move analysis">${GRIP_SVG}</button>
-          <h3 class="txt-head an-title">Analysis:<span class="an-kind">${kind}<button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false">${INFO_SVG}</button></span></h3>
+          <h3 class="txt-head an-title">${esc(title)}<span class="an-kind">${kind}<button type="button" class="instr-info" aria-label="Toggle instructions" aria-expanded="false">${INFO_SVG}</button></span></h3>
           <span class="an-acts">
             <button type="button" class="an-ic an-close" title="Close this analysis" aria-label="Close analysis">${X_SVG(15)}</button>
             <button type="button" class="an-ic an-fold">${CHEVRON_SVG}</button>

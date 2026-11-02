@@ -592,6 +592,9 @@ class Plot{
        over a composer already open (this one or the SEM figure's: a press of Enter on
        the button, still focused, reaches it under the modal). A double click before
        figure.js had loaded opened two, the first left with no way to close (to v475). */
+    // (a plot whose module keeps its figure, plot.figure = { load(), save(snap) }: the
+    // composer takes it from there and gives it back there, not to its memory: figure.js
+    // recallKept)
     figBtn.onclick = async ()=>{
       if (_figOpening) return;
       _figOpening = true;
@@ -601,7 +604,7 @@ class Plot{
       try {
         const mod = await import('./figure.js');
         if (!document.querySelector('.fig-backdrop'))
-          mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name });
+          mod.openFigureEditor(this, { legendEl: legId ? near(dlBtn, legId) : null, name, ...(this.figure ? { figure: this.figure } : {}) });
       } catch(err){ console.error('figure composer failed to load', err); }
       finally { _figOpening = false; }
     };

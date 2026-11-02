@@ -7,7 +7,7 @@
    file, its own parameters, and the Caglioti fit of its widths that corrects the
    samples' sizes for the instrument's).
 ========================================================= */
-import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper } from './utils.js';
+import { esc, fmtNum, csvLine, linspace, interpLinear, meanArr, stdArr, boxStats, maxArr, minArr, X_SVG, guardNumericInput, guardNumberInputs, fitCsvIcons, barNames, barChipYmax, NORM_OPTIONS, normOf, keeper } from './utils.js';
 import { svgEl, Plot, axisReadout } from './plot.js';
 import { boxSmooth, boxWeights, meanStep, widthText, ptsText } from './smooth.js';
 import { PLOT_DL_ICON, CSV_ICON } from './modcharts.js';
@@ -293,16 +293,6 @@ function scherrerD(betaDeg, pos, K, lam){
   return (K * lam / (bRad * Math.cos(thRad))) / 10; // nm (λ in Å → /10)
 }
 
-/* Tukey's box of some values: the quartiles (interpolated between order statistics),
-   whiskers out to the furthest values within 1.5 IQR of the box, the rest outliers. */
-function boxStats(vals){
-  const v = vals.filter(isFinite).sort((a,b)=>a-b), n = v.length;
-  if (!n) return null;
-  const q = p =>{ const h = (n-1)*p, i = Math.floor(h); return i+1 < n ? v[i] + (h-i)*(v[i+1]-v[i]) : v[i]; };
-  const q1 = q(0.25), med = q(0.5), q3 = q(0.75), f = 1.5*(q3 - q1);
-  const inside = v.filter(x=> x >= q1 - f && x <= q3 + f);
-  return { q1, med, q3, lo: inside[0], hi: inside[inside.length-1], out: v.filter(x=> x < q1 - f || x > q3 + f) };
-}
 /* A sample's sizes, one per peak, summarised: their mean and their spread — the
    standard deviation, with n − 1 (the peaks are a sample of the crystallites) — and
    the box of the same spread. */

@@ -1773,6 +1773,20 @@ function loadMemory(){
   try { const o = JSON.parse(localStorage.getItem(MEM_KEY)); return (o && typeof o === 'object') ? o : {}; }
   catch(e){ return {}; }
 }
+// The series of `prev` that `snap` has not, put back among its own as gone (rememberSettings).
+function keepGone(snap, prev){
+  if (prev && Array.isArray(prev.series)){
+    const same = (a, b)=> a.rest.key === b.rest.key && a.rest.kind === b.rest.kind;
+    let at = 0;
+    for (const e of prev.series){
+      if (!e || !e.rest || e.rest.key == null) continue;
+      const k = snap.series.findIndex(m=> same(m, e));
+      if (k >= 0){ at = k + 1; continue; }
+      snap.series.splice(at++, 0, { ...e, gone: true });
+    }
+  }
+  return snap;
+}
 function rememberSettings(){
   if (!F) return;
   const all = loadMemory();
@@ -1783,18 +1797,7 @@ function rememberSettings(){
   /* A series the plot is not drawing right now — a gas switched off, a sample taken
      out — keeps its settings for when it is back, in the place it had among the
      others. It is found again by key only: it is not the series of any other sample. */
-  const prev = all[memKey()];
-  if (prev && prev.series){
-    const same = (a, b)=> a.rest.key === b.rest.key && a.rest.kind === b.rest.kind;
-    let at = 0;
-    for (const e of prev.series){
-      if (!e.rest || e.rest.key == null) continue;
-      const k = snap.series.findIndex(m=> same(m, e));
-      if (k >= 0){ at = k + 1; continue; }
-      snap.series.splice(at++, 0, { ...e, gone: true });
-    }
-  }
-  all[memKey()] = snap;
+  all[memKey()] = keepGone(snap, all[memKey()]);
   const live = new Set(TABS.map(t=>t.id));
   for (const k of Object.keys(all)) if (!live.has(k.slice(0, k.indexOf('/')))) delete all[k];
   try { localStorage.setItem(MEM_KEY, JSON.stringify(all)); } catch(e){}
@@ -1805,6 +1808,27 @@ function recallSettings(){
   if (snap && typeof snap.scalars.name === 'string') F.name = snap.scalars.name;
   // Only if that preset is still around: one deleted meanwhile names nothing.
   presetSel = (snap && snap.preset && loadPresets()[snap.preset]) ? snap.preset : '';
+}
+
+/* A figure its module keeps (opts.figure: { load(), save(snap) }; the Figure module's plots,
+   whose composed figure is saved in the project with its card), in place of the per-plot
+   memory: applied as recallSettings applies the memory's, and given back as the composer
+   closes, the series it no longer draws kept as gone (keepGone). Settings that cannot be
+   applied (a project edited by hand) are left out: the figure as the plot gives it. */
+function recallKept(){
+  const snap = srcOpts.figure.load();
+  try {
+    applySettings(snap);
+    if (snap && typeof snap.scalars.name === 'string') F.name = snap.scalars.name;
+  } catch(e){ F = buildModel(srcPlot, srcOpts); }
+  presetSel = (snap && snap.preset && loadPresets()[snap.preset]) ? snap.preset : '';
+}
+function saveKept(){
+  const snap = settingsSnapshot();
+  snap.preset = presetSel;
+  let prev = null;
+  try { prev = srcOpts.figure.load(); } catch(e){}
+  srcOpts.figure.save(keepGone(snap, prev));
 }
 
 let axSel = 'all';
@@ -3722,7 +3746,7 @@ function plotKind(plot, opts){
       srcPlot = plot; srcOpts = opts || {};
       F = buildModel(plot, srcOpts);
       axSel = 'all'; presetSel = '';
-      recallSettings();
+      if (srcOpts.figure) recallKept(); else recallSettings();
       redealPalettes();
       undoStack = [snapshot()]; redoStack = [];
     },
@@ -3745,7 +3769,7 @@ function plotKind(plot, opts){
     reset: resetFigure,
     closing(){
       clearTimeout(undoTimer); undoTimer = null;   // nothing left to record once the model is gone
-      rememberSettings();
+      if (srcOpts.figure) saveKept(); else rememberSettings();
       F = null; presetBar = null; srcPlot = null; srcOpts = null;
     },
     dpi: ()=> F.dpi, file: ()=> F.name, paper: ()=> '#ffffff', font: ()=> F.font.family,

@@ -1093,6 +1093,17 @@ function stdArr(a){
   const v = a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1);
   return Math.sqrt(v);
 }
+/* Tukey's box of some values: the quartiles (interpolated between order statistics),
+   whiskers out to the furthest values within 1.5 IQR of the box, the rest outliers (XRPD's
+   crystallite sizes, the Figure module's box plots). */
+function boxStats(vals){
+  const v = vals.filter(isFinite).sort((a,b)=>a-b), n = v.length;
+  if (!n) return null;
+  const q = p =>{ const h = (n-1)*p, i = Math.floor(h); return i+1 < n ? v[i] + (h-i)*(v[i+1]-v[i]) : v[i]; };
+  const q1 = q(0.25), med = q(0.5), q3 = q(0.75), f = 1.5*(q3 - q1);
+  const inside = v.filter(x=> x >= q1 - f && x <= q3 + f);
+  return { q1, med, q3, lo: inside[0], hi: inside[inside.length-1], out: v.filter(x=> x < q1 - f || x > q3 + f) };
+}
 function maxArr(a){ return a.reduce((m,v)=> isFinite(v)&&v>m?v:m, -Infinity); }
 /* The stacked plots' normalisation (XRPD's Scherrer and Rietveld Results, EPR): every
    trace divided by the largest of them (global), by its own (local), or by nothing (none:
@@ -1341,11 +1352,11 @@ function redrawAll(){
   const fn = _tabRedraw[shownKey()];
   if (fn){ try{ fn(); }catch(e){} }
 }
-const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','projects','settings'];
+const VALID_TABS = ['home','tauc','xrd','gc','epr','sem','fig','projects','settings'];
 // The sections that keep a URL hash. Module sections are reached through an open
 // project tab, so they are deliberately not addressable.
 const HASH_TABS = ['home','projects','settings'];
-const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sem:'DataTreat · SEM', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
+const TAB_TITLES = { home:'DataTreat', tauc:'DataTreat · UV-Vis DRS', xrd:'DataTreat · XRPD', gc:'DataTreat · GC', epr:'DataTreat · EPR', sem:'DataTreat · SEM', fig:'DataTreat · Figure', projects:'DataTreat · Projects', settings:'DataTreat · Settings' };
 let _activeTab = 'home';
 function goTab(tab, fromHash){
   if (!VALID_TABS.includes(tab)) tab = 'home';
@@ -1984,8 +1995,8 @@ function applyTheme(theme, persist){
 
 /* Module state access for the session manager: reuse each module's registered
    undo snapshot()/restore() as the canonical serialize/deserialize. */
-const MODULES = ['tauc','xrd','gc','epr','sem'];
-const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM' };
+const MODULES = ['tauc','xrd','gc','epr','sem','fig'];
+const MODULE_LABELS = { tauc:'UV-Vis DRS', xrd:'XRPD', gc:'GC', epr:'EPR', sem:'SEM', fig:'Figure' };
 // (k: an instance's key, or a module's name for the instance of it on show: K)
 function getModuleState(k){
   const st = _histories[K(k)];
@@ -2603,7 +2614,7 @@ window.addEventListener('load', normalizeNavIcons);
 
 export {
   COLORS, colorOf, esc, stateKey, moduleStateKey, registerBusy, moduleBusy, stopModule, colorPickerUI, CP_PALETTES, palettePickerUI, settings, fmtNum, fmtData, csvLine, downloadBlob, downloadBytes,
-  X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr,
+  X_SVG, DL_SVG, setupDropzone, renderUnifiedFileList, dropGap, includedOf, setIncluded, removeFileAt, moveFileTo, linspace, interpLinear, movingAverage, gradientArr, cumtrapz, meanArr, stdArr, boxStats,
   maxArr, minArr, NORM_OPTIONS, normOf, fitLinear, tinv, goTab, setTabLoaded, moduleHasData, registerHistory, buildAlertsHtml, nextColor, MODULES, MODULE_LABELS, getModuleState, restoreModuleState,
   getModuleHistory, setModuleHistory, onSectionChange, registerTabRedraw, redrawAll, registerCsvExport, runCsvExport, makeCsvButton, fitCsvIcons, fitPlotIcons, applyTheme, guardNumericInput,
   guardNumberInputs, createDateTimeField, flashFieldInvalid, tiltFits, barNames, barChipYmax, confirmBanner, confirmModal, normalizeProjIcons, refreshProjBar, saveSettings, registerModule,
