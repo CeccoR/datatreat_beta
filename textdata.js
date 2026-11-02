@@ -1,7 +1,7 @@
 /* =========================================================
    TEXT DATA
    Reading a table of text as instruments and spreadsheets write it, for every module
-   that takes one (DRS, GC):
+   that takes one (DRS, GC, Figure):
    - the bytes decoded: UTF-8 with or without its byte-order mark, UTF-16 LE or BE by its
      mark or, without one, by the NUL byte beside each character of ASCII text (as
      xrd-instr.js decodeXml finds an XML file's). Blob.text() decodes UTF-8 alone (Chromium
@@ -156,4 +156,46 @@ export function readTable(lines, head, isRow){
     }
     return null;
   });
+}
+
+/* A table of columns, as the Figure module reads any file: under whatever lines come
+   before it (a title), a header naming the columns or none, then rows of fields, some of
+   them numbers (a column of names, as a bar chart's categories, is read as text). The
+   separator is the one under which the rows of the file's usual width (its most common
+   among the lines holding a number; on a tie the wider) hold the most numbers, on a tie
+   the first of SEPS: '350,5;0,523' holds two under ';' and under ',' two as well, 350 and
+   523, so ';' (first); a field that is two numbers with a ';', a tab or spaces between
+   them is a line read under the wrong separator, no row ('5;0' under ','). The data are
+   the lines from the first such row on that hold a number; the header, the line just
+   before them, if it is not all numbers and names two columns at least (a title of one
+   field over them is none).
+   → { sep, n (columns), head (the header's fields, or null), rows (the data's fields,
+   each n long) } or null. */
+const TWO = /^[+-]?[\d.,]+(e[+-]?\d+)?(;|\t| +)[+-]?[\d.,]+/i;
+export function readColumns(lines){
+  const t = bestSep(lines, rows =>{
+    const ok = rows.map(r=> r.some(isNum) && !r.some(c=> TWO.test(c)));
+    const ws = new Map();
+    rows.forEach((r, i)=>{ if (ok[i]){ const w = width(r); ws.set(w, (ws.get(w) || 0) + 1); } });
+    let n = 0, most = 0;
+    ws.forEach((k, w)=>{ if (k > most || (k === most && w > n)){ n = w; most = k; } });
+    if (!n) return null;
+    let score = 0, first = -1;
+    rows.forEach((r, i)=>{ if (ok[i] && width(r) === n){ score += r.filter(isNum).length; if (first < 0) first = i; } });
+    return { score, n, first, ok };
+  });
+  if (!t) return null;
+  const { n, first, ok } = t, pad = r => Array.from({ length: n }, (_, c)=> r[c] == null ? '' : r[c]);
+  const h = first > 0 ? t.rows[first - 1] : null;
+  const head = h && width(h) <= n && width(h) >= Math.min(n, 2) && h.some(c=> c !== '' && !isNum(c)) ? pad(h) : null;
+  const rows = t.rows.slice(first).filter((r, i)=> ok[first + i]).map(pad);
+  return { sep: t.sep, n, head, rows };
+}
+/* A column's name as a header writes it, and its unit: 'Wavelength (nm)', 'Wavelength
+   [nm]' and 'Wavelength / nm' are Wavelength in nm; a name with none, its unit ''. */
+export function nameUnit(s){
+  s = String(s == null ? '' : s).trim();
+  const m = /^(.*?)\s*(?:\(([^()]*)\)|\[([^[\]]*)\])$/.exec(s) || /^(.+?)\s+\/\s+(\S.*)$/.exec(s);
+  if (!m || !m[1].trim()) return { name: s, unit: '' };
+  return { name: m[1].trim(), unit: (m[2] ?? m[3] ?? '').trim() };
 }

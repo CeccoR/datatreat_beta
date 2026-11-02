@@ -3,10 +3,11 @@
    spaces, a trailing separator), the numbers with either decimal mark, and the separator
    found per file: the DRS spectrum and the GC export of the fixtures written in every dialect
    read back to the same numbers as the files the tests load; a GC export with ',' as both
-   separator and decimal mark is not read. */
+   separator and decimal mark is not read. The Figure module's tables (readColumns, v527): any
+   columns, a header or none, text columns, a title over them; a header's names and units. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { textEncoding, decodeText, textLines, splitFields, parseNum, isNum, readXY, readTable } from '../textdata.js';
+import { textEncoding, decodeText, textLines, splitFields, parseNum, isNum, readXY, readTable, readColumns, nameUnit } from '../textdata.js';
 import { drsCsv, gcCsv } from './fixtures.mjs';
 
 const utf16 = (s, be, bom)=>{
@@ -163,4 +164,21 @@ test("GC: ',' as both separator and decimal mark is not read; a column the heade
   // Wider than the header with no number cut in two, or with a trailing ',': read.
   assert.deepEqual(gcRead(H + '10/20/2026 9:00:00 AM,0.5089,0.2011,run 3\n10/20/2026 9:30:00 AM,0.61,0.25,\n').h2, [0.5089, 0.61]);
   assert.deepEqual(gcRead(H.replace(/,/g, ';') + '10/20/2026 9:00:00 AM;0,5089;0,2011;7;8\n').h2, [0.5089]);
+});
+
+test('Figure: a table of columns in each dialect, its header or none, text columns, a title over it; names and units', ()=>{
+  const read = t => readColumns(textLines(t));
+  const cols = { n: 3, head: ['t (s)', 'a', 'b'], rows: [['1', '2.5', '3'], ['2', '3.5', '4']] };
+  for (const [sep, dec] of [[',', '.'], [';', ','], ['\t', ','], ['\t', '.'], ['  ', ',']]){
+    const t = read(`t (s)${sep}a${sep}b\n` + cols.rows.map(r=> r.map(c=> c.replace('.', dec)).join(sep)).join('\n'));
+    assert.equal(t.sep, sep === '  ' ? '  ' : sep, `${JSON.stringify(sep)} and ${dec}`);
+    assert.deepEqual(t.head, cols.head);
+    assert.deepEqual(t.rows.map(r=> r.map(parseNum)), cols.rows.map(r=> r.map(Number)));
+  }
+  // No header; a title of one field over a header; a column of names; a short row padded.
+  assert.equal(read('1;2\n3;4\n').head, null);
+  assert.deepEqual(read('My run\nSample;Rate;sd\nP25;12,5;1\nCN;15\n'), { sep: ';', n: 3, head: ['Sample', 'Rate', 'sd'], rows: [['P25', '12,5', '1'], ['CN', '15', '']] });
+  assert.equal(read('no numbers here\nat all\n'), null);
+  assert.deepEqual(['Wavelength (nm)', 'Abs [a.u.]', 'E / eV', 'Abs', '(nm)'].map(nameUnit),
+    [{ name: 'Wavelength', unit: 'nm' }, { name: 'Abs', unit: 'a.u.' }, { name: 'E', unit: 'eV' }, { name: 'Abs', unit: '' }, { name: '(nm)', unit: '' }]);
 });
