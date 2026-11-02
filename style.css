@@ -3269,3 +3269,32 @@ button.an-add.is-drop { border-color: var(--accent); }
 .wf-pts { flex: none; min-width: 4.4em; margin: -3px 0 6px auto; line-height: 1.2; text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* (empty, with no file to count on: no room taken, the box one line as its neighbours) */
 .wf-pts:empty { display: none; }
+
+/* The Figure module (fig.js). The Data card: the file chosen and the roles' box on one line
+   (wrapped when narrow), then the file's head, a role over each column, scrolled sideways
+   inside its own box when wider than the card (never the page), and its series' names. */
+.fig-data-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 18px; margin-bottom: 10px; }
+.fig-file { flex: 0 1 320px; min-width: 0; }
+.fig-file .txt-label { margin-top: 0; }
+.fig-same { margin: 0 0 8px; }
+.fig-head-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; }
+table.fig-cols { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+table.fig-cols th, table.fig-cols td { padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
+table.fig-cols tbody tr:last-child td { border-bottom: none; }
+table.fig-cols select { width: auto; min-width: 7ch; padding: 4px 6px; }
+table.fig-cols .fig-hd th { color: var(--muted); font-weight: 600; }
+.fig-snames { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 14px; }
+.fig-sname .txt-label { margin-top: 6px; }
+/* A Plot card: its plot, or a line saying it has no series, and the list of its series,
+   each with its colour, name, × and operations. */
+.fig-empty { padding: 18px 0; }
+.fig-ser-list { margin-top: 8px; }
+.fig-ser { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
+.fig-ser-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.fig-sw { flex: none; width: 12px; height: 12px; border-radius: 2px; }
+.fig-ser-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fig-ops { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
+.fig-ops:empty { display: none; }
+.fig-op { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.fig-op input[type="text"] { width: 7ch; padding: 3px 6px; }
+.fig-op-chk { cursor: pointer; }

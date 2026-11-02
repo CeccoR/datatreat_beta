@@ -8,7 +8,7 @@
        markup injected through a file name or an imported project cannot run code. -->
   <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; base-uri 'self'">
   <title>DataTreat</title>
-  <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (UV-Vis DRS Tauc plots, XRPD, GC H₂ and O₂ rates, EPR, SEM images). All processing runs locally in your browser; no data is uploaded.">
+  <meta name="description" content="DataTreat — browser-based scientific data analysis for spectroscopy and chromatography (UV-Vis DRS Tauc plots, XRPD, GC H₂ and O₂ rates, EPR, SEM images), and figures of your own CSV files. All processing runs locally in your browser; no data is uploaded.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <!-- PWA: installable + offline app shell -->
   <link rel="manifest" href="manifest.webmanifest">
@@ -122,6 +122,13 @@
             <div class="home-card-text">
               <h3 class="txt-tile">SEM</h3>
               <p>Scanning Electron Microscopy. Tescan images read with their metadata (pixel size, magnification), cropped, normalised in intensity, grouped by scale and laid out into figures with scale bars.</p>
+            </div>
+          </div>
+          <div class="home-card" data-go="fig">
+            <div class="home-card-icon"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg></div>
+            <div class="home-card-text">
+              <h3 class="txt-tile">Figure</h3>
+              <p>Plots of your own CSV and text files: columns as x, y and their errors, XY plots, bar charts and box plots, composed into figures.</p>
             </div>
           </div>
         </div>
@@ -410,6 +417,39 @@
       </div>
     </section>
 
+    <!-- ============ FIGURE ============ -->
+    <section class="tab" id="tab-fig" role="tabpanel" tabindex="0">
+      <div class="card">
+        <h3 class="txt-head" style="margin:0 0 12px">File</h3>
+        <div class="instr-block" style="max-width:100%">CSV and text files of columns, from any instrument or spreadsheet: the separator (; tab , or spaces), the decimal mark (. or ,), the quotes and a header line are found from each file. Each file's columns are given their roles in the Data card.</div>
+        <div class="dropzone" id="figDropzone">
+          <div class="dz-icon">&#10514;</div>
+          <div class="dz-title">Drag here your files, or click to select them.</div>
+          <div class="txt-meta">.csv / .txt / .dat (columns)</div>
+          <input type="file" id="figFiles" multiple accept=".csv,.txt,.dat,.tsv,.CSV,.TXT,.DAT,.TSV" style="display:none">
+        </div>
+        <div id="figAlerts"></div>
+        <div id="figFileTableWrap"></div>
+      </div>
+      <!-- The Data card: a file's head and its columns' roles (fig.js). -->
+      <div class="card" id="figDataCard" style="display:none">
+        <h3 class="txt-head" style="margin:0 0 12px">Data</h3>
+        <div class="instr-block">Each column of the file chosen has a role, set over it: <b>x</b>, <b>y</b>, <b>err x</b>, <b>err y</b> or <b>—</b> (not used); by default the first column is x and the others y. As in Origin, a file may have several x: each y belongs to the x before it (none: its x is the row number), each err y to the y before it and each err x to the x before it, one error at most a column. A column set to err y where its y has one already takes that one's place, which becomes a y (so does an err x). Each y is a <b>series</b>, named as the header names its column, else "file N, series M" (N the file's place in the list, M the y's in the file); a name can be typed over (left empty, it goes back), and the column's unit, in the header as "Name (unit)", "[unit]" or "/ unit", titles the plots' axes. The roles are each file's own; <b>Same roles for all files</b> gives those of the file shown to every file, column by column. <b>+</b> under this card adds a plot.</div>
+        <div class="fig-data-bar">
+          <label class="fig-file"><span class="txt-label">File</span><select id="figFileSel" aria-label="The file shown"></select></label>
+          <label class="sem-check fig-same" title="The roles of the file shown given to every file, by the columns' places"><input type="checkbox" id="figSame"> Same roles for all files</label>
+        </div>
+        <div id="figWarn"></div>
+        <div class="fig-head-wrap" id="figHead"></div>
+        <div class="txt-mini param-head" style="margin-top:14px">Series of this file</div>
+        <div class="fig-snames" id="figSeries"></div>
+      </div>
+      <!-- The plot cards are built by fig.js, above the "+" bar. -->
+      <div id="figAnalyses" style="display:none">
+        <div class="an-add-bar" id="figAddBar"><button type="button" class="an-add" id="figAddAn" aria-label="Add a plot" title="Add a plot: XY, bar or box">+</button></div>
+      </div>
+    </section>
+
     <footer>DataTreat <span class="app-version">v526</span> — <a href="https://github.com/CeccoR/datatreat" target="_blank" rel="noopener">open source</a> · all processing runs in your browser, no data is sent to any server.</footer>
   </main>
 
@@ -435,6 +475,7 @@
         <button class="newproj-card" type="button" data-new-module="gc"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 22 H10 C13 22 13 8 16 8 C19 8 19 22 22 22 H28 C32 22 31 14 34 14 C37 14 37 22 40 22 H42"/></svg><span class="txt-tile">GC</span></button>
         <button class="newproj-card" type="button" data-new-module="epr"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 14 H15 L20 5 L24 21 L29 14 H42"/></svg><span class="txt-tile">EPR</span></button>
         <button class="newproj-card" type="button" data-new-module="sem"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="13" r="7"/><circle cx="24" cy="9" r="5"/><circle cx="34" cy="15" r="6"/><path d="M27 24 H41"/></svg><span class="txt-tile">SEM</span></button>
+        <button class="newproj-card" type="button" data-new-module="fig"><svg class="tech-icon" viewBox="0 0 44 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2 V24 H42"/><path d="M8 19 L16 11 L23 15 L32 5 L40 8"/></svg><span class="txt-tile">Figure</span></button>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
         <button class="btn" type="button" data-new-cancel>Cancel</button>
@@ -454,6 +495,7 @@
   <script type="module" src="epr.js"></script>
   <script type="module" src="gc.js"></script>
   <script type="module" src="sem.js"></script>
+  <script type="module" src="fig.js"></script>
   <script type="module" src="tabs.js"></script>
   <script type="module" src="sessions.js"></script>
   <!-- PWA update prompt: shown when a new service-worker version is ready -->
